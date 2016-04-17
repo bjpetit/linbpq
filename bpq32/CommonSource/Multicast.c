@@ -25,7 +25,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 void decodeblock( unsigned char in[4], unsigned char out[3]);  // Base64 Decode
 
-#ifdef WIN32
+time_t MulticastMaxAge = 48 * 60 * 60;		// 48 Hours in secs
+
+#ifndef LINBPQ
 
 HWND hMCMonitor = NULL;
 HWND MCList;
@@ -334,7 +336,7 @@ void RefreshMCLine(struct MSESSION * MSession)
 		{
 			int posn = (i * MSession->BlockCount) / 50;
 			if (MSession->BlockList[posn] == 1)
-				BlockList[i] = 'X';
+				BlockList[i] = 'Y';
 		}
 	}
 
@@ -769,8 +771,6 @@ void SaveMulticastMessage(struct MSESSION * MSession)
 		char MsgFile[MAX_PATH];
 		FILE * hFile;
 		int WriteLen=0;
-		char Mess[255];
-		int len;
 		UCHAR * ptr1 = Uncompressed;
 
 		// Make Sure MCAST directory exists
@@ -826,6 +826,8 @@ VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buff
 
 	if (MsgLen == 1 && Buffer[0] == 13)
 		return;
+
+//	return;
 
 	n = sscanf(&Buffer[1], "%s %04d %04X", Opcode, &len, &checksum);
 
@@ -894,7 +896,8 @@ VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buff
 		{
 			// We have the whole message. Decode and Save
 
-			SaveMulticastMessage(MSession);
+			if (MSession->MessageLen)				// Also need length
+				SaveMulticastMessage(MSession);
 		}
 
 		RefreshMCLine(MSession);
@@ -918,9 +921,20 @@ VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buff
 
 				if (MSession->BlockSize	!= c)
 				{
-					// We've got to sort out the mess!
+					// We based blocksize on last packet, so need to sort out mess
 
-					MSession->BlockSize	= c;
+					// Find where we put the block, and move it
+
+					UCHAR * OldLoc;
+
+					MSession->Message = realloc(MSession->Message, a);
+					MSession->BlockList = realloc(MSession->BlockList, b);
+
+					OldLoc = &MSession->Message[(MSession->BlockCount - 1) * MSession->BlockSize];
+
+					memmove(&MSession->Message[(MSession->BlockCount - 1) * c], OldLoc, MSession->BlockSize);
+		
+					MSession->BlockSize = c;	
 				}
 
 				if (MSession->BlockCount < b)
@@ -992,6 +1006,10 @@ VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buff
 				{
 					// We based blocksize on last packet, so need to sort out mess
 
+					// Find where we put the block, and move it
+					
+					UCHAR * OldLoc = &MSession->Message[(MSession->BlockCount - 1) * MSession->BlockSize];
+					memmove(&MSession->Message[(MSession->BlockCount - 1) * blocksize], OldLoc, MSession->BlockSize);
 		
 					MSession->BlockSize = blocksize;	
 				}
@@ -1430,14 +1448,118 @@ VOID MCastConTimer(ConnectionInfo * conn)
 VOID MCastTimer()
 {
 	struct MSESSION * Sess = MSessions;
+	struct MSESSION * Prev = NULL;
+
+	time_t Now = time(NULL);
 
 	while (Sess)
 	{
 		if (Sess->Completed == FALSE)
 			RefreshMCLine(Sess);
-			
+
+		if (Now - Sess->LastUpdated > MulticastMaxAge)
+		{
+			// remove from list
+
+#ifndef LINBPQ
+			ListView_DeleteItem(MCList, Sess->Index);
+#endif
+			if (Prev)
+				Prev->Next = Sess->Next;
+			else
+				MSessions = Sess->Next;
+
+			if (Sess->FileName)
+				free(Sess->FileName);
+
+			if (Sess->OrigTimeStamp)
+				free(Sess->OrigTimeStamp);
+
+			if (Sess->Message)
+				free(Sess->Message);
+
+			if (Sess->BlockList)
+				free(Sess->BlockList);
+
+			if (Sess->ID)
+				free(Sess->ID);
+
+			free(Sess);
+
+			return;				// Saves messing with chain
+
+		}
+		Prev = Sess;
 		Sess = Sess->Next;
 	}
 }
 
+int MulticastStatusHTML(char * Reply)
+{
+	char StatusPage [] = 
+		"<pre>ID    From      FileName        Size  %%  Time   Age   Blocklist"
+		"                                                   "
+		"\r\n<textarea cols=110 rows=6 name=MC>";
 
+	char StatusTail [] = "</textarea><br><br>";
+	int Len = 0;
+
+	struct MSESSION * Sess = MSessions;
+
+	if (Sess ==NULL)
+		return 0;
+
+	Len = sprintf(Reply, StatusPage);
+
+	while (Sess)
+	{
+		char Percent[16] = "???";
+		char BlockList[51] = "";
+		int i;
+		char Time[80];
+		char Agestring[80];
+		struct tm * TM;
+		time_t Age;
+
+		Age = time(NULL) - Sess->LastUpdated;
+
+		TM = gmtime(&Age);
+
+		sprintf(Agestring, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
+
+		TM = gmtime(&Sess->Created);
+
+		sprintf(Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
+
+		if (Sess->MessageLen)
+		{
+			int pcent;
+		
+			pcent = (Sess->BlocksReceived * 100) / Sess->BlockCount;
+			sprintf(Percent, "%d", pcent);
+
+		}
+
+		// Flag received blocks. Normalise to 50 wide 
+
+		memset(BlockList, '.', 50);
+
+		for (i = 0; i < 50; i++)
+		{
+			int posn = (i * Sess->BlockCount) / 50;
+			if (Sess->BlockList[posn] == 1)
+				BlockList[i] = 'Y';
+		}
+
+
+		Len += sprintf(&Reply[Len], "%04X %-10s%-15s%5d %-3s %s %s %s\r\n",
+			Sess->Key, Sess->ID, Sess->FileName,
+			Sess->MessageLen, Percent, Time, Agestring, BlockList);
+			
+		Sess = Sess->Next;
+	}
+
+	Len += sprintf(&Reply[Len], StatusTail);
+
+	return Len;
+}

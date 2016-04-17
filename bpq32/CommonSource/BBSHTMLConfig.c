@@ -172,8 +172,10 @@ char StatusPage [] =
 "<br>User&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Callsign&nbsp;&nbsp; Stream Queue<br>"
 "<select style=\"font-family: monospace;\" tabindex=1 size=10 name=call>";
 
-char StatusTail [] = 
-"</select><br><input name=Disconnect value=Disconnect type=submit><br><br>"
+char StreamEnd[] = 
+"</select><br><input name=Disconnect value=Disconnect type=submit><br><br>";
+
+char StatusTail[] = 
 "Msgs&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input readonly=readonly value=%d size=3><br>"
 "Sysop Msgs <input readonly=readonly value=%d size=3><br>"
 "Held Msgs&nbsp; <input readonly=readonly value=%d size=3><br>"
@@ -1560,7 +1562,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (ConfigTemplate)
 			free(ConfigTemplate);
 
-		ConfigTemplate = GetTemplateFromFile(4, "MainConfig.txt");
+		ConfigTemplate = GetTemplateFromFile(5, "MainConfig.txt");
 
 		SendConfigPage(Reply, RLen, Key);
 		return;
@@ -2053,7 +2055,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 
 char ** GetMultiStringInput(char * input, char * key)
 {
-	char MultiString[2048] = "";
+	char MultiString[10000] = "";
 
 	GetParam(input, key, MultiString);
 
@@ -2076,7 +2078,9 @@ char **	SeparateMultiString(char * MultiString, BOOL NoToUpper)
 	ptr2 = zalloc(strlen(MultiString) + 1);
 	DecodedString = ptr2;
 
-	// Input has crlf or lf - replace with |
+	// Input has crlf or lf - replace with 
+
+
 
 	while (*ptr1)
 	{
@@ -2107,12 +2111,14 @@ char **	SeparateMultiString(char * MultiString, BOOL NoToUpper)
 		if (ptr1)
 			*(ptr1++) = 0;
 
-		Value = realloc(Value, (Count+2)*4);
-		if (_memicmp(ptr, "file ", 5) == 0 || NoToUpper)
-			Value[Count++] = _strdup(ptr);
-		else
-			Value[Count++] = _strupr(_strdup(ptr));
-			
+		if (strlen(ptr))
+		{
+			Value = realloc(Value, (Count+2)*4);
+			if (_memicmp(ptr, "file ", 5) == 0 || NoToUpper)
+				Value[Count++] = _strdup(ptr);
+			else
+				Value[Count++] = _strupr(_strdup(ptr));
+		}
 		ptr = ptr1;
 	}
 
@@ -2441,17 +2447,17 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		ISPPOP3Interval = atoi(Temp);
 
 		GetCheckBox(input, "ISPAuth=", &SMTPAuthNeeded);
-				
+
 		GetCheckBox(input, "EnWP=", &SendWP);
+		GetCheckBox(input, "RejWFBulls=", &FilterWPBulls);
 
 		if (strstr(input, "Type=TypeB"))
-			SendWPType = 'B';
+			SendWPType = 0;
 
 		if (strstr(input, "Type=TypeP"))
-			SendWPType = 'P';
+			SendWPType = 1;
 
-		GetParam(input, "WPTO=", SendWPTO);
-		GetParam(input, "WPVIA=", SendWPVIA);
+		SendWPAddrs = GetMultiStringInput(input, "WPTO=");
 
 		RejFrom = GetMultiStringInput(input, "Rfrom=");
 		RejTo = GetMultiStringInput(input, "Rto=");
@@ -3131,6 +3137,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	char RF[2048] = "";
 	char RT[2048] = "";
 	char RA[2048] = "";
+	char WPTO[10000] = "";
 
 	SetMultiStringValue(RejFrom, RF);
 	SetMultiStringValue(RejTo, RT);
@@ -3138,6 +3145,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	SetMultiStringValue(HoldFrom, HF);
 	SetMultiStringValue(HoldTo, HT);
 	SetMultiStringValue(HoldAt, HA);
+	SetMultiStringValue(SendWPAddrs, WPTO);
 
 	
 	Len = sprintf(Reply, ConfigTemplate,
@@ -3163,8 +3171,10 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		ISPAccountName, ISPAccountPass, ISPPOP3Interval,
 		(SMTPAuthNeeded) ? CHKD  : UNC,
 		(SendWP) ? CHKD  : UNC,
-		(SendWPType == 'B') ? CHKD  : UNC,
-		(SendWPType == 'P') ? CHKD  : UNC, SendWPTO, SendWPVIA,
+		(FilterWPBulls) ? CHKD  : UNC,
+		(SendWPType == 0) ? CHKD  : UNC,
+		(SendWPType == 1) ? CHKD  : UNC,
+		WPTO,
 		RF, RT, RA, HF, HT, HA);
 
 	*ReplyLen = Len;
@@ -3364,6 +3374,12 @@ VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 		}
 	}
 
+	Len += sprintf(&Reply[Len], StreamEnd, 
+		NumberofMessages, SYSOPMsgs, HeldMsgs, SMTPMsgs);
+
+	// If there are any active multicast transfers, display them.
+
+	Len += MulticastStatusHTML(&Reply[Len]);
 
 	Len += sprintf(&Reply[Len], StatusTail, 
 		NumberofMessages, SYSOPMsgs, HeldMsgs, SMTPMsgs);

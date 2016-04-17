@@ -122,6 +122,7 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 VOID PTCSuspendPort(struct TNCINFO * TNC);
 VOID PTCReleasePort(struct TNCINFO * TNC);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
+int CheckMode(struct TNCINFO * TNC);
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
@@ -3389,6 +3390,11 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			
 			int datalen = Msg[4] + 1;
 			UINT * buffptr;
+
+			// if not configured to use PTC Rig Control, Ignore
+
+			if (TNC->RIG->PORT->PTC == NULL)
+				return;
 			
 			buffptr = GetBuff();
 

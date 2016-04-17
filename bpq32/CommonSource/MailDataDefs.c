@@ -184,8 +184,14 @@ BOOL DontNeedHomeBBS = FALSE;
 // Send WP Params
 
 BOOL SendWP;
+BOOL FilterWPBulls;
+BOOL NoWPGuesses;
+
 char SendWPVIA[81];
 char SendWPTO[11];
+
+char ** SendWPAddrs;					// Replacers WP To and VIA
+
 int SendWPType;
 
 int SMTPMsgs;

@@ -90,6 +90,7 @@ VOID APRSSecTimer();
 double Distance(double laa, double loa);
 struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
 VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
+BOOL KillOldTNC(char * Path);
 
 
 BOOL ProcessConfig();

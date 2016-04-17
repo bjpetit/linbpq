@@ -425,7 +425,7 @@ ok:
 
 		// Check Filters
 
-		if (CheckRejFilters(FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS))
+		if (CheckRejFilters(FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
@@ -550,7 +550,7 @@ ok:
 			char * ATBBS = strtok_s(NULL, seps, &Context);
 			char * To = strtok_s(NULL, seps, &Context);
 
-			if (From && To && ATBBS && CheckRejFilters(From, To, ATBBS))
+			if (From && To && ATBBS && CheckRejFilters(From, To, ATBBS, FBBHeader->MsgType))
 			{
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 				conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';

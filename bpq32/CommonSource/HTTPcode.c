@@ -1137,12 +1137,15 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
 	char * ptr, * ptr1, * ptr2, *input;
 	char c;
 	int MsgLen, WriteLen = 0;
-	char inputname[250]="bpqcfg.txt";
+	char inputname[250]="bpq32.cfg";
 	FILE *fp1;
 	char Header[256];
 	int HeaderLen;
 	char Reply[4096];
-	char Mess[80] = "Configuration Saved";
+	char Mess[256];
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
+	struct stat STAT;
 
 	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 
@@ -1210,6 +1213,35 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
 				strcat(inputname, "bpq32.cfg");
 			}
 
+			// Make a backup of the config
+
+			// Keep 4 Generations
+
+			strcpy(Backup2, inputname);
+			strcat(Backup2, ".bak.3");
+
+			strcpy(Backup1, inputname);
+			strcat(Backup1, ".bak.2");
+
+			DeleteFile(Backup2);			// Remove old .bak.3
+			MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+			strcpy(Backup2, inputname);
+			strcat(Backup2, ".bak.1");
+
+			MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+			strcpy(Backup1, inputname);
+			strcat(Backup1, ".bak");
+
+			MoveFile(Backup1, Backup2);		// Move .bak to .bak.1
+
+			CopyFile(inputname, Backup1, FALSE);	// Copy to .bak
+
+			// Get length to compare with new length
+
+			stat(inputname, &STAT);
+
 			fp1 = fopen(inputname, "wb");
 	
 			if (fp1)
@@ -1220,6 +1252,9 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
 
 			if (WriteLen != MsgLen)
 				sprintf_s(Mess, sizeof(Mess), "Failed to write Config File");
+			else
+				sprintf_s(Mess, sizeof(Mess), "Configuration Saved, Orig Length %d New Length %d", 
+					STAT.st_size, MsgLen);
 		}
 	
 		ReplyLen = sprintf(Reply, "<html><script>alert(\"%s\");window.close();</script></html>", Mess);
@@ -2001,7 +2036,7 @@ doHeader:
 		int HeaderLen;
 		char * CfgBytes;
 		int CfgLen;
-		char inputname[250]="bpqcfg.txt";
+		char inputname[250]="bpq32.cfg";
 		FILE *fp1;
 		struct stat STAT;
 		char DummyKey[] = "DummyKey";

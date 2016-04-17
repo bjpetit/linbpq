@@ -762,6 +762,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix setting MYLEVEL by scanner after manual level change.
 //	Add DEBUGLOG config param to SCS Pactor Driver to log serial port traffic
 //	Uue #myl to set SCS Pactor MYLEVEL, and add checklevel command
+//	Add Multicast RX interface to FLDIGI Driver
+//	Fix processing application aliases to a connect command.
+//	Fix Buffer loss if radio connected to PTC rig port but BPQ not configured to use it
+//	Save backups of bpq32.cfg when editing with Web interface and report old and new length
 
 #define CKernel
 
@@ -847,7 +851,6 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT UIARQExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
-UINT DragonExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -3294,9 +3297,6 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "ARDOP"))
 		return (UINT) ARDOPExtInit;
-
-	if (strstr(Value, "DRAGON"))
-		return (UINT) DragonExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

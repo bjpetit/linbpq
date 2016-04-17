@@ -903,8 +903,17 @@
 //	Fix processing of NTS Alising of @ Addresses
 //	Don't reroute Delivered NTS Messages
 //	Add option to stop users killing T messages
-//	add nmulticast Receive
-//	Fix initailising new message database format field
+//	Add multicast Receive
+//	Fix initialising new message database format field
+//	Fix "Forward Messages to BBS Call" option.
+//	Add Filter WP Bulls option and allow multiple WP "TO" addresses
+//	Fix deleting P WP messages for other stations
+//	Fix saving blank lines in forwarding config
+//	Fix paging on L@ and l<
+//	Fix removing DELETE from IMPORT XXX DELETE and allow multiple IMPORT lines in script
+//	Run DeleteRedundantMessages before renumbering messages
+//	Connect script now tries ELSE lines if prompt not received from remote BBS
+//	Send connecting call instead of BBS Name when connecting to CMS server.
 
 #include "BPQMail.h"
 #define MAIL
@@ -1124,6 +1133,7 @@ BOOL CreatePipeThread();
 int DeleteRedundantMessages();
 VOID BBSSlowTimer();
 VOID CopyConfigFile(char * ConfigName);
+BOOL CreateMulticastConsole();
 
 struct _EXCEPTION_POINTERS exinfox;
 	

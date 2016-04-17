@@ -1097,7 +1097,7 @@ BOOL ConnecttoBBS (struct UserInfo * user);
 BOOL SetupNewBBS(struct UserInfo * user);
 VOID CreateRegBackup();
 VOID SaveFilters(HWND hDlg);
-BOOL CheckRejFilters(char * From, char * To, char * ATBBS);
+BOOL CheckRejFilters(char * From, char * To, char * ATBBS, char Type);
 BOOL CheckHoldFilters(char * From, char * To, char * ATBBS);
 BOOL CheckifLocalRMSUser(char * FullTo);
 VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *Context);
@@ -1466,3 +1466,7 @@ extern char ConfigName[250];
 extern BOOL UsingingRegConfig;
 
 extern BOOL MulticastRX;
+
+extern BOOL FilterWPBulls;
+extern BOOL NoWPGuesses;
+extern char ** SendWPAddrs;					// Replacers WP To and VIA

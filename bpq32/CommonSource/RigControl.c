@@ -1692,7 +1692,6 @@ BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 	{
 		BOOL        fWriteStat;
 		DWORD       BytesWritten;
-		DWORD       ErrorFlags;
 
 #ifdef LINBPQ
 		BytesWritten = write(PORT->hDevice, PORT->TXBuffer, PORT->TXLen);

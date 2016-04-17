@@ -73,6 +73,8 @@ void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 int GetCMSHash(char * Challenge, char * Password);
 BOOL SendAMPRSMTP(CIRCUIT * conn);
 VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int MsgLen);
+VOID MCastTimer();
+VOID MCastConTimer(ConnectionInfo * conn);
 
 
 config_t cfg;
@@ -752,7 +754,7 @@ VOID GetMessageDatabase()
 		// Duff file
 
 		memset(&MsgRec, 0, sizeof (MsgRec));
-		MsgRec.status = 1;
+		MsgRec.status = 2;
 	}
 
 	// Set up control record
@@ -1289,9 +1291,12 @@ int CountConnectionsOnPort(int CheckPort)
 }
 
 
-BOOL CheckRejFilters(char * From, char * To, char * ATBBS)
+BOOL CheckRejFilters(char * From, char * To, char * ATBBS, char Type)
 {
 	char ** Calls;
+
+	if (Type == 'B' && FilterWPBulls && _stricmp(To, "WP") == 0)
+		return TRUE;
 
 	if (RejFrom && From)
 	{
@@ -3184,7 +3189,7 @@ int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call,
 		if (MsgHddrPtr[i]->status == 'K')
 			continue;
 
-		if (MsgHddrPtr[i]->number <= Start)
+		if (Start && MsgHddrPtr[i]->number >= Start)
 			continue;
 
 		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
@@ -3208,7 +3213,7 @@ int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, B
 		if (MsgHddrPtr[i]->status == 'K')
 			continue;
 
-		if (MsgHddrPtr[i]->number <= Start)
+		if (Start && MsgHddrPtr[i]->number >= Start)
 			continue;
 
 		if (_memicmp(MsgHddrPtr[i]->via, Call, strlen(Call)) == 0 ||
@@ -3421,7 +3426,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 	struct MsgInfo * Msg;
 	char * MsgBytes, * Save;
 	char FullTo[100];
-	int Index;
+	int Index = 0;
 
 	Msg = GetMsgFromNumber(msgno);
 
@@ -4090,7 +4095,7 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 	}
 	else
 	{
-		if (CheckRejFilters(From, ToCall, ATBBS))
+		if (CheckRejFilters(From, ToCall, ATBBS, MsgType))
 		{	
 			if ((conn->BBSFlags & BBS))
 			{
@@ -4864,14 +4869,21 @@ nextline:
 				HoldReason = "Message may be looping";
 
 			}
-
+	
 			if (Msg->status == 'N' && strcmp(Msg->to, "WP") == 0)
 			{
 				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
 	
 				if (Msg->type == 'P')			// Kill any processed private WP messages.
-					Msg->status = 'K';
-
+				{
+					char VIA[80];
+					
+					strcpy(VIA, Msg->via);
+					strlop(VIA, '.');
+					
+					if (strcmp(VIA, BBSName) == 0)
+						Msg->status = 'K';
+				}
 			}
 		}
 
@@ -5824,10 +5836,11 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 			if (ptr1)
 				*(ptr1++) = 0;
 
-			Value = realloc(Value, (Count+2)*4);
-			
-			Value[Count++] = _strdup(ptr);
-			
+			if (strlen(ptr))		// igonre null elements
+			{
+				Value = realloc(Value, (Count+2)*4);
+				Value[Count++] = _strdup(ptr);
+			}
 			ptr = ptr1;
 		}
 		free(Save);
@@ -6552,7 +6565,8 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 			if (Line == NULL)
 			{
 				// No more lines - Disconnect
-			
+
+				conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 				Disconnect(conn->BPQStream);
 				return FALSE;
 			}
@@ -6601,6 +6615,7 @@ InBand:
 
 		if (Cmd == 0 || _memicmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
 		{
+			conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 			Disconnect(conn->BPQStream);
 			return FALSE;
 		}
@@ -6616,6 +6631,7 @@ InBand:
 		else
 			Delay = 1000;
 
+		conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 		Disconnect(conn->BPQStream);
 
 		DParam.Delay = Delay;
@@ -6716,6 +6732,7 @@ InBand:
 					goto LoopBack;
 
 				Logprintf(LOG_BBS, conn, '?', "Nothing to do - quitting");
+				conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 				Disconnect(conn->BPQStream);
 				return FALSE;
 			}
@@ -6734,6 +6751,7 @@ InBand:
 				if (CountConnectionsOnPort(Port))
 				{								
 					Logprintf(LOG_BBS, conn, '?', "Interlocked Port is busy - quitting");
+					conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 					Disconnect(conn->BPQStream);
 					return FALSE;
 				}
@@ -6823,6 +6841,7 @@ InBand:
 			if (_memicmp(Cmd, "FILE", 4) == 0)
 			{
 				ForwardMessagestoFile(conn, &Cmd[5]);
+				conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 				Disconnect(conn->BPQStream);
 				return FALSE;
 			}
@@ -6833,6 +6852,7 @@ InBand:
 				conn->UserPointer->Total.ConnectsOut++;
 
 				SendAMPRSMTP(conn);
+				conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 				Disconnect(conn->BPQStream);
 				return FALSE;
 			}
@@ -6842,20 +6862,30 @@ InBand:
 			{
 				char * File, * Context;
 				int Num;
+				char * Temp = _strdup(Cmd);
 
-				File = strtok_s(&Cmd[6], " ", &Context);
+				File = strtok_s(&Temp[6], " ", &Context);
 
 				if (File && File[0]) 
 				{
 					Num = ImportMessages(NULL, File, TRUE);
 
-					Logprintf(LOG_BBS, NULL, '|', "Imported %d Message(s)", Num);
+					Logprintf(LOG_BBS, NULL, '|', "Imported %d Message(s) from %s", Num, File);
 
 					if (Context && _stricmp(Context, "delete") == 0)
 						DeleteFile(File);
 				}
-				Disconnect(conn->BPQStream);
-				return FALSE;
+				free(Temp);
+
+				if (Scripts[ForwardingInfo->ScriptIndex + 1] == NULL ||
+						memcmp(Scripts[ForwardingInfo->ScriptIndex +1], "TIMES", 5) == 0	||		// Only Check until script is finished
+						memcmp(Scripts[ForwardingInfo->ScriptIndex + 1], "ELSE", 4) == 0)			// Only Check until script is finished
+				{
+					conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
+					Disconnect(conn->BPQStream);
+					return FALSE;
+				}
+				goto LoopBack;
 			}
 
 			nodeprintfEx(conn, "%s\r", Cmd);
@@ -6938,6 +6968,7 @@ CheckForSID:
 
 	if (strstr(Buffer, "SORRY, NO"))			// URONODE
 	{
+		conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 		Disconnect(conn->BPQStream);
 		return FALSE;
 	}
@@ -6951,13 +6982,17 @@ CheckForSID:
 			char * Pass = User->CMSPass;
 			int Response ;
 			char RespString[12];
+			char ConnectingCall[10];
+
+			GetCallsign(conn->BPQStream, ConnectingCall);
+			strlop(ConnectingCall, ' ');
 
 			if (Pass[0] == 0)
 			{
 				Pass = User->pass;		// Old Way
 				if (Pass[0] == 0)
 				{
-					User = LookupCall(BBSName);
+					User = LookupCall(ConnectingCall);
 					if (User)
 					Pass = User->CMSPass;
 				}
@@ -7043,8 +7078,9 @@ CheckForSID:
 			}
 			else
 			{
-					Disconnect(conn->BPQStream);
-					return FALSE;
+				conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
+				Disconnect(conn->BPQStream);
+				return FALSE;
 			}
 			
 			return TRUE;
@@ -7062,12 +7098,21 @@ CheckForSID:
 			//	If a secure password is available send the new 
 			//	call|response format.
 
+			//	I think this should use the session callsign, which 
+			//	normally will be the BBS ApplCall, and not the BBS Name, 
+			//	but coudl be changed by *** LINKED
+
+
 			int i, s;
 			char FWLine[10000] = ";FW: ";
 			struct UserInfo * user;
 			char RMSCall[20];
+			char ConnectingCall[10];
 
-			strcat (FWLine, BBSName);
+			GetCallsign(conn->BPQStream, ConnectingCall);
+			strlop(ConnectingCall, ' ');
+
+			strcat (FWLine, ConnectingCall);
 			
 			for (i = 0; i <= NumberofUsers; i++)
 			{
@@ -7084,7 +7129,7 @@ CheckForSID:
 							if (s)
 							{
 								sprintf(RMSCall, "%s-%d", user->Call, s);
-								if (strcmp(RMSCall, BBSName) != 0)
+								if (strcmp(RMSCall, ConnectingCall) != 0)
 								{
 									strcat(FWLine, " ");
 									strcat(FWLine, RMSCall);
@@ -7092,7 +7137,7 @@ CheckForSID:
 							}
 							else
 							{
-								if (strcmp(user->Call, BBSName) == 0)
+								if (strcmp(user->Call, ConnectingCall) == 0)
 								{
 									// Dont include BBS call - was put on front
 									goto NoPass;
@@ -7755,10 +7800,14 @@ VOID SaveConfig(char * ConfigName)
 	SaveMultiStringValue(group,  "HoldAt", HoldAt);
 
 	SaveIntValue(group, "SendWP", SendWP);
+	SaveIntValue(group, "SendWPType", SendWPType);
+	SaveIntValue(group, "FilterWPBulls", FilterWPBulls);
+	SaveIntValue(group, "NoWPGuesses", NoWPGuesses);
 
 	SaveStringValue(group, "SendWPTO", SendWPTO);
 	SaveStringValue(group, "SendWPVIA", SendWPVIA);
-	SaveIntValue(group, "SendWPType", SendWPType);
+
+	SaveMultiStringValue(group, "SendWPAddrs", SendWPAddrs); 
 
 	// Save Forwarding Config
 
@@ -7960,7 +8009,7 @@ BOOL GetConfig(char * ConfigName)
 	if(! config_read_file(&cfg, ConfigName))
 	{
 		char Msg[256];
-		sprintf(Msg, "Config FIle Line %d - %s\n",
+		sprintf(Msg, "Config File Line %d - %s\n",
 			config_error_line(&cfg), config_error_text(&cfg));
 #ifdef WIN32
 		MessageBox(NULL, Msg, "BPQMail", MB_ICONSTOP);
@@ -8140,15 +8189,41 @@ BOOL GetConfig(char * ConfigName)
 	// Send WP Params
 	
 	SendWP = GetIntValue(group, "SendWP");
+	SendWPType = GetIntValue(group, "SendWPType");
 
 	GetStringValue(group, "SendWPTO", SendWPTO);
 	GetStringValue(group, "SendWPVIA", SendWPVIA);
-	SendWPType = GetIntValue(group, "SendWPType");
 
+	SendWPAddrs = GetMultiStringValue(group,  "SendWPAddrs"); 
+
+	FilterWPBulls = GetIntValue(group, "FilterWPBulls");
+	NoWPGuesses = GetIntValue(group, "NoWPGuesses");
+
+	if (SendWPAddrs[0] == NULL && SendWPTO[0])
+	{
+		// convert old format TO and VIA to entry in SendWPAddrs
+	
+		SendWPAddrs = realloc(SendWPAddrs, 8);		// Add entry
+
+		if (SendWPVIA[0])
+		{
+			char WP[256];
+	
+			sprintf(WP, "%s@%s", SendWPTO, SendWPVIA);
+			SendWPAddrs[0] = _strdup(WP);
+		}
+		else
+			SendWPAddrs[0] = _strdup(SendWPTO);
+
+
+		SendWPAddrs[1] = 0;
+
+		SendWPTO[0] = 0;
+		SendWPVIA[0] = 0;
+	}
 
 	GetStringValue(group, "Version", Size);
 	sscanf(Size,"%d,%d,%d,%d", &LastVer[0], &LastVer[1], &LastVer[2], &LastVer[3]);
-
 
 	for (i=1; i<=32; i++)
 	{
@@ -8460,6 +8535,7 @@ int Disconnected (Stream)
 	int n;
 	char Msg[255];
 	int len;
+	char DiscMsg[] = "DISCONNECTED    ";
 
 	for (n = 0; n <= NumberofStreams-1; n++)
 	{
@@ -8468,8 +8544,45 @@ int Disconnected (Stream)
 		if (Stream == conn->BPQStream)
 		{
 			if (conn->Active == FALSE)
-			{
 				return 0;
+
+			// if still running connect script, reenter it to see if
+			// there is an else
+
+			if (conn->BBSFlags & RunningConnectScript)
+			{
+				// We need to see if we gat as far as connnected,
+				// as if we have we need to reset the connect script 
+				// over the ELSE
+
+				struct	BBSForwardingInfo * ForwardingInfo = conn->UserPointer->ForwardingInfo;
+				char ** Scripts;
+
+				if (ForwardingInfo->TempConnectScript)
+					Scripts = ForwardingInfo->TempConnectScript;
+				else
+					Scripts = ForwardingInfo->ConnectScript;	
+
+				// First see if any script left
+
+				if (Scripts[ForwardingInfo->ScriptIndex])
+				{
+					if (ForwardingInfo->MoreLines == FALSE)
+					{
+						// Have reached end of script, so need to set back over ELSE
+					
+						ForwardingInfo->ScriptIndex--;
+						ForwardingInfo->MoreLines = TRUE;
+					}
+					
+			//	if (Scripts[ForwardingInfo->ScriptIndex] == NULL ||
+			//	_memicmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0	||		// Only Check until script is finished
+			//	_memicmp(Scripts[ForwardingInfo->ScriptIndex], "ELSE", 4) == 0)			// Only Check until script is finished
+			
+				
+					ProcessBBSConnectScript(conn, DiscMsg, 15);
+					return 0;
+				}
 			}
 
 			ClearQueue(conn);
@@ -9574,7 +9687,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		else
 			CloseConsole(conn->BPQStream);
 #endif
-
 		return;						
 	}
 
@@ -10017,7 +10129,7 @@ int DeleteRedundantMessages()
 		 if (MsgnotoMsg[Msgno] == 0)
 		 {
 			 sprintf(File, "%s/%s%c", MailDir, ffd.cFileName, 0);
-			 printf("Delete %s\n", File);
+			 Debugprintf("Tidy Mail - Delete %s\n", File);
 
 //			 if (DeletetoRecycleBin)
 				DeletetoRecycle(File);

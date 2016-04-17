@@ -606,6 +606,8 @@ VOID Renumber_Messages()
 
 	if (!NewNumber) return;
 
+	DeleteRedundantMessages();		// Make sure there aren't any old mail files, or renumber may fail
+
     memset(NewNumber, 0, s);
 
 	for (i = 0; i < 100000; i++)
@@ -888,6 +890,11 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 
 	if (strcmp(From, "SYSTEM") == 0)
 		return;							// Don't send non-deliverys SYSTEM messages
+
+	//	Dont send NDN for NDN
+
+	if (strcmp(OldMsg->title, "Non-delivery Notification") == 0)
+		return;
 
 	FromUser = LookupCall(OldMsg->from);
 

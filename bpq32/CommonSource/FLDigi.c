@@ -1107,9 +1107,6 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 	char * ptr;
 
 	//
-	//	Will be called once for each MPSK port to be mapped to a BPQ Port
-	//	The MPSK port number is in CHANNEL - A=0, B=1 etc
-	//
 	//	The Socket to connect to is in IOBASE
 	//
 

@@ -152,6 +152,7 @@
 #define IDC_OVERRIDEUNSENT              1081
 #define IDC_MAILFOR                     1082
 #define IDC_SENDWP                      1083
+#define IDC_FILTERWPB                   1084
 #define IDC_WPTYPE                      1085
 #define IDC_WPTO                        1086
 #define IDC_WPSAVE                      1087

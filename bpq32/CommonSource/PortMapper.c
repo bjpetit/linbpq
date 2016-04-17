@@ -100,6 +100,7 @@ static BOOL Send_ETH(VOID * Block, DWORD len);
 
 VOID ProcessEthARPMsg(PETHARP arpptr);
 static VOID SendARPMsg(PARPDATA Arp);
+VOID SendICMPTimeExceeded(PIPMSG IPptr);
 
 #define ARPTIMEOUT 3600
 
@@ -500,7 +501,7 @@ Pollloop:
 		{
 			if (res < 0)
 			{
-				char * error  = pcap_geterrx(adhandle) ;
+				char * error  = (char *)pcap_geterrx(adhandle) ;
 				Debugprintf(error);
 				if (OpenPCAP() == FALSE)
 					pcap_reopen_delay = 300;

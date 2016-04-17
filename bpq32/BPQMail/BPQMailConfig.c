@@ -691,14 +691,31 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 	case WPUPDATE:
 
+	
+		if (SendWPAddrs)
+		{
+			char ** Calls = SendWPAddrs;
+			char Text[10000]="";
+
+			while(Calls[0])
+			{
+				strcat(Text, Calls[0]);
+				strcat(Text, "\r\n");
+				Calls++;
+			}
+			
+			SetDlgItemText(hwndDisplay, IDC_WPTO, Text);
+		}
+		
 		SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
 		SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
+
+
 		SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_SETCURSEL, SendWPType, 0);
 
 		CheckDlgButton(hwndDisplay, IDC_SENDWP, SendWP);
-		SetDlgItemText(pHdr->hwndDisplay, IDC_WPTO, SendWPTO);
-		SetDlgItemText(pHdr->hwndDisplay, IDC_WPVIA, SendWPVIA);
-
+//		CheckDlgButton(hwndDisplay, IDC_SENDWP, NoWPGuesses);
+		CheckDlgButton(hwndDisplay, IDC_FILTERWPB, FilterWPBulls);
 
 		break;
 
@@ -1771,9 +1788,9 @@ VOID SaveWPConfig(HWND hDlg)
 
 	SendWP = IsDlgButtonChecked(hwndDisplay, IDC_SENDWP);
 	SendWPType = SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_GETCURSEL, 0, 0);
+	FilterWPBulls = IsDlgButtonChecked(hwndDisplay, IDC_FILTERWPB);
 
-	GetDlgItemText(hwndDisplay, IDC_WPTO, SendWPTO, 10);
-	GetDlgItemText(hwndDisplay, IDC_WPVIA, SendWPVIA, 80);
+	SendWPAddrs = GetMultiLineDialogParam(hDlg, IDC_WPTO);
 
 	SaveConfig(ConfigName);
 	GetConfig(ConfigName);

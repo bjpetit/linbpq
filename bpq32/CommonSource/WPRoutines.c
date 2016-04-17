@@ -646,6 +646,9 @@ VOID ProcessWPMsg(char * MailBuffer, int Size, char * FirstRLine)
 
 	ptr1 = FirstRLine;
 
+	if (ptr1 == NULL)
+		return;
+
 	while (*ptr1)
 	{
 		ptr2 = strchr(ptr1, '\r');
@@ -1144,6 +1147,7 @@ int CreateWPMessage()
 	char MsgFile[MAX_PATH];
 	FILE * hFile;
 	int WriteLen=0;
+	char ** To = SendWPAddrs;
 
 	LASTWPSendTime = time(NULL) - (86400 * 5);		// 5 days max
 
@@ -1174,53 +1178,67 @@ int CreateWPMessage()
 	if (MsgLen == 0)
 		return TRUE;
 
-	Msg = AllocateMsgRecord();
-		
-	// Set number here so they remain in sequence
-		
-	Msg->number = ++LatestMsg;
-	Msg->length = MsgLen;
-	MsgnotoMsg[Msg->number] = Msg;
-
-	strcpy(Msg->from, BBSName);	
-	strcpy(Msg->to, SendWPTO);
-
-	if (strlen(SendWPVIA) > 40)
-		SendWPVIA[40] = 0;
-
-	strcpy(Msg->via, SendWPVIA);
-
-	strcpy(Msg->title, "WP Update");
-
-	Msg->type = (SendWPType) ? 'P' : 'B';
-	Msg->status = 'N';
-				
-	sprintf_s(BID, sizeof(BID), "%d_%s", LatestMsg, BBSName);
-
-	strcpy(Msg->bid, BID);
-
-	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
-
-	BIDRec = AllocateBIDRecord();
-
-	strcpy(BIDRec->BID, Msg->bid);
-	BIDRec->mode = Msg->type;
-	BIDRec->u.msgno = LOWORD(Msg->number);
-	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
-
-	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
-	
-	hFile = fopen(MsgFile, "wb");
-	
-	if (hFile)
+	while(To[0])
 	{
-		fwrite(MailBuffer, 1, Msg->length, hFile);
-		fclose(hFile);
+		char TO[256];
+		char * VIA;
+		
+		Msg = AllocateMsgRecord();
+
+		// Set number here so they remain in sequence
+		
+		Msg->number = ++LatestMsg;
+		Msg->length = MsgLen;
+		MsgnotoMsg[Msg->number] = Msg;
+
+		strcpy(Msg->from, BBSName);	
+
+		strcpy(TO, To[0]);
+			
+		VIA = strlop(TO, '@');
+
+		if (VIA)
+		{
+			if (strlen(VIA) > 40)
+				VIA[40] = 0;
+			strcpy(Msg->via, VIA);
+		}
+		strcpy(Msg->to, TO); 
+
+		strcpy(Msg->title, "WP Update");
+
+		Msg->type = (SendWPType) ? 'P' : 'B';
+		Msg->status = 'N';
+				
+		sprintf_s(BID, sizeof(BID), "%d_%s", LatestMsg, BBSName);
+
+		strcpy(Msg->bid, BID);
+
+		Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+		BIDRec = AllocateBIDRecord();
+
+		strcpy(BIDRec->BID, Msg->bid);
+		BIDRec->mode = Msg->type;
+		BIDRec->u.msgno = LOWORD(Msg->number);
+		BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
+	
+		hFile = fopen(MsgFile, "wb");
+	
+		if (hFile)
+		{
+			fwrite(MailBuffer, 1, Msg->length, hFile);
+			fclose(hFile);
+		}
+
+		MatchMessagetoBBSList(Msg, 0);
+
+		BuildNNTPList(Msg);				// Build NNTP Groups list
+
+		To++;
 	}
-
-	MatchMessagetoBBSList(Msg, 0);
-
-	BuildNNTPList(Msg);				// Build NNTP Groups list
 
 	SaveMessageDatabase();
 	SaveBIDDatabase();

@@ -757,7 +757,8 @@ VOID CheckAndSend(struct MsgInfo * Msg, CIRCUIT * conn, struct UserInfo * bbs)
 {
 	struct BBSForwardingInfo * ForwardingInfo = bbs->ForwardingInfo;
 		
-	if ((_stricmp(bbs->Call, BBSName) != 0) || ForwardToMe)			// Dont forward to ourself - already here!
+	if ((_stricmp(bbs->Call, BBSName) != 0) ||
+		ForwardToMe && _stricmp(Msg->to, BBSName) == 0)			// Dont forward to ourself - already here! (unless ForwardToMe set)
 	{
 		if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
 		{
@@ -1312,7 +1313,8 @@ CheckWildCardedAT:
 		{
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
 
-			if ((_stricmp(bbs->Call, BBSName) != 0) || ForwardToMe)	// Dont forward to ourself - already here!
+			if ((_stricmp(bbs->Call, BBSName) != 0) ||
+				ForwardToMe && _stricmp(Msg->to, BBSName) == 0)			// Dont forward to ourself - already here! (unless ForwardToMe set)
 			{
 				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 				ForwardingInfo->MsgCount++;

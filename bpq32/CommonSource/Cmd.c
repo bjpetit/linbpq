@@ -58,6 +58,7 @@ SOCKET OpenWL2KHTTPSock();
 VOID FormatTime2(char * Time, time_t cTime);
 VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
 VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst);
+VOID FindLostBuffers();
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 char OrigCmdBuffer[81] = "";		// Command Hander input buffer
@@ -2066,6 +2067,7 @@ NoPort:
 						//	COPY ALIAS TO COMMAND _BUFFER, THEN REENTER COMMAND HANDLER
 
 						memcpy(COMMANDBUFFER, APPL->APPLALIASVAL, ALIASLEN);
+						memcpy(OrigCmdBuffer, APPL->APPLALIASVAL, ALIASLEN);	// In case original case version needed
 
 						ALIASINVOKED = TRUE;			//	 To prevent Alias Loops 	
 					}

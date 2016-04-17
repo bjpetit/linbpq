@@ -388,7 +388,7 @@ VOID CHOSTAPI(ULONG * pEAX, ULONG * pEBX, ULONG * pECX, ULONG * pEDX, VOID ** pE
 	
 #ifdef EXCLUDEBITS
 	
-		EBX = ExcludeList;
+		EBX = (ULONG)ExcludeList;
 
 #endif
 		break;

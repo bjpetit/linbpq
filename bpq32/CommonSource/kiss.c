@@ -197,9 +197,6 @@ VOID ASYDISP(struct PORTCONTROL * PortVector)
 			sprintf(Msg,"UDPKISS IP %s Port %d/%d Chan %c \n",
 				inet_ntoa(PortVector->PORTIPADDR), PortVector->ListenPort, PortVector->IOBASE, PortVector->CHANNELNUM);
 		
-
-
-
 	else
 		if (PortVector->SerialPortName)
 			sprintf(Msg,"ASYNC %s Chan %c \n", PortVector->SerialPortName, PortVector->CHANNELNUM);
@@ -384,9 +381,15 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 	else
 	{
 		if (PortVector->SerialPortName)
-			sprintf(Msg,"ASYNC %s Chan %c ", PortVector->SerialPortName, Channel);
+			if (PortVector->PROTOCOL == 2)		// NETROM
+				sprintf(Msg,"ASYNC(NETROM) %s Chan %c ", PortVector->SerialPortName, Channel);
+			else
+				sprintf(Msg,"ASYNC %s Chan %c ", PortVector->SerialPortName, Channel);
 		else
-			sprintf(Msg,"ASYNC COM%d Chan %c ", comport, Channel);
+			if (PortVector->PROTOCOL == 2)		// NETROM
+				sprintf(Msg,"ASYNC(NETROM) COM%d Chan %c ", comport, Channel);
+			else
+				sprintf(Msg,"ASYNC COM%d Chan %c ", comport, Channel);
 
 		WritetoConsoleLocal(Msg);
 
