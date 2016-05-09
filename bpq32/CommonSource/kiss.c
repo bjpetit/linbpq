@@ -103,7 +103,7 @@ VOID INITCOMMON(struct KISSINFO * PORT);
 struct PORTCONTROL * CHECKIOADDR(struct PORTCONTROL * OURPORT);
 VOID INITCOM(struct KISSINFO * PORTVEC);
 VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer);
-int ConnecttoUZ7HOTCP(NPASYINFO ASY);
+int ConnecttoTCP(NPASYINFO ASY);
 int KISSGetTCPMessage(NPASYINFO ASY);
 
 extern struct PORTCONTROL * PORTTABLE;
@@ -355,7 +355,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 				}
 			}
 			else
-				ConnecttoUZ7HOTCP(npKISSINFO);
+				ConnecttoTCP(npKISSINFO);
 		}
 		else
 		{
@@ -1622,18 +1622,18 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 }
 #endif
 
-// UZ7HO KISS Over TCP Routines
+// KISS Over TCP Routines
 
-VOID ConnecttoUZ7HOTCPThread(NPASYINFO ASY);
+VOID ConnecttoTCPThread(NPASYINFO ASY);
 
-int ConnecttoUZ7HOTCP(NPASYINFO ASY)
+int ConnecttoTCP(NPASYINFO ASY)
 {
-	_beginthread(ConnecttoUZ7HOTCPThread, 0, ASY);
+	_beginthread(ConnecttoTCPThread, 0, ASY);
 
 	return 0;
 }
 
-VOID ConnecttoUZ7HOTCPThread(NPASYINFO ASY)
+VOID ConnecttoTCPThread(NPASYINFO ASY)
 {
 	char Msg[255];
 	int err,i;
@@ -1775,9 +1775,12 @@ int KISSGetTCPMessage(NPASYINFO ASY)
 			int err = WSAGetLastError();
 
 			if (err == 10035 || err == 11)
+			{
 				InputLen = 0;
 				return 0;
-
+			}
+			Debugprintf("KISSTCP RX Error  %d received for socket %d", err, ASY->sock);
+	
 			ASY->Connected = 0;
 			closesocket(ASY->sock);
 			return 0;

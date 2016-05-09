@@ -914,6 +914,8 @@
 //	Run DeleteRedundantMessages before renumbering messages
 //	Connect script now tries ELSE lines if prompt not received from remote BBS
 //	Send connecting call instead of BBS Name when connecting to CMS server.
+//	Add BID filter to Manage Messages
+
 
 #include "BPQMail.h"
 #define MAIL

@@ -1124,6 +1124,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 	char Rline[80];
 	int RLineLen;
 	int Index;
+	time_t temp;
 
 	if (FwdMsg->type == 'P')
 		Index = PMSG;
@@ -1156,7 +1157,8 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	DataOffset = Outputptr - Output;	// Used if restarting
 
-	tm = gmtime(&FwdMsg->datereceived);	
+	memcpy(&temp, &FwdMsg->datereceived, 4);
+	tm = gmtime(&temp);	
 	
 	sprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,

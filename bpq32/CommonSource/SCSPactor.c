@@ -1781,6 +1781,31 @@ VOID SCSPoll(int Port)
 			Buffer[datalen] = 0;	// Null Terminate
 			_strupr(Buffer);
 
+			if (_memicmp(Buffer, "DD", 2) == 0)
+			{
+				// Send DD (Dirty Disconnect)
+					
+				// Uses "Hidden" feature where you can send any normal mode command
+				// in host mode by preceeding with a #
+
+				Poll[2] = 31;
+				Poll[3] = 0x1;
+				Poll[4] = 2;
+				sprintf(&Poll[5], "#DD\r");
+				CRCStuffAndSend(TNC, Poll, 8);
+			
+				// It looks like there isn't a response
+
+				TNC->Timeout = 0;	
+
+				OpenLogFile(TNC->Port);
+				WriteLogLine(TNC->Port, &Poll[5], 4);
+				CloseLogFile(TNC->Port);
+
+				ReleaseBuffer(buffptr);
+				return;
+			}
+
 				if (_memicmp(Buffer, "D", 1) == 0)
 				{
 					TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
@@ -3667,6 +3692,26 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 
 	Debugprintf("Failed to disconnect TNC - trying a forced disconnect");
 
+	// Try Normal Mode DD (Dirty Disconnect)
+					
+	// Uses "Hidden" feature where you can send any normal mode command
+	// in host mode by preceeding with a #
+
+	Poll[2] = 31;
+	Poll[3] = 0x1;
+	Poll[4] = 2;
+	sprintf(&Poll[5], "#DD\r");		// Node \r isn't sent but is there for log
+	CRCStuffAndSend(TNC, Poll, 8);
+			
+	// It looks like there isn't a response
+
+	TNC->Timeout = 0;	
+
+	OpenLogFile(TNC->Port);
+	WriteLogLine(TNC->Port, &Poll[5], 4);
+	CloseLogFile(TNC->Port);
+
+/*
 	Poll[2] = 31;
 	Poll[3] = 1;
 	Poll[4] = 0;
@@ -3768,6 +3813,7 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 
 		return;
 	}
+*/
 }
 
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)

@@ -103,6 +103,9 @@ VOID FormatTime(char * Time, time_t cTime);
 struct MsgInfo * GetMsgFromNumber(int msgno);
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP);
 BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg);
+int MulticastStatusHTML(char * Reply);
+
+
 char UNC[] = "";
 char CHKD[] = "checked=checked ";
 char sel[] = "selected";
@@ -1229,12 +1232,13 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (_stricmp(NodeURL, "/Mail/MsgInfo.txt") == 0)
 		{
 			int n, len = 0;
-			char  * FF = "", *FT = "", *FV = "";
+			char  * FF = "", *FT = "", *FB = "", *FV = "";
 			char * param, * ptr1, *ptr2;
 			struct MsgInfo * Msg;
 			char UCto[80];
 			char UCfrom[80];
 			char UCvia[80];
+			char UCbid[80];
 
 			// Get filter string
 
@@ -1242,12 +1246,13 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 			
 
 			if (param)
-			{
+ 			{
 				ptr1 = param + 4;
 				ptr2 = strchr(ptr1, '|');
 				if (ptr2){*(ptr2++) = 0; FF = ptr1; ptr1 = ptr2;}
 				ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0; FT = ptr1;ptr1 = ptr2;}
 				ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0; FV = ptr1;ptr1 = ptr2;}
+				ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0; FB = ptr1;ptr1 = ptr2;}
 			}
 
 			if (FT[0])
@@ -1256,6 +1261,8 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 				_strupr(FF);
 			if (FV[0])
 				_strupr(FV);
+			if (FB[0])
+				_strupr(FB);
 
 			for (n = NumberofMessages; n >= 1; n--)
 			{
@@ -1264,13 +1271,16 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 				strcpy(UCto, Msg->to);
 				strcpy(UCfrom, Msg->from);
 				strcpy(UCvia, Msg->via);
+				strcpy(UCbid, Msg->bid);
 
 				_strupr(UCto);
 				_strupr(UCfrom);
 				_strupr(UCvia);
+				_strupr(UCbid);
 
 				if ((!FT[0] || strstr(UCto, FT)) &&
 					(!FF[0] || strstr(UCfrom, FF)) &&
+					(!FB[0] || strstr(UCbid, FB)) &&
 					(!FV[0] || strstr(UCvia, FV)))
 				{
 					len += sprintf(&Reply[len], "%d|", Msg->number);
@@ -1759,7 +1769,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (MsgEditTemplate)
 			free(MsgEditTemplate);
 
-		MsgEditTemplate = GetTemplateFromFile(1, "MsgPage.txt");
+		MsgEditTemplate = GetTemplateFromFile(2, "MsgPage.txt");
 
 		// Refresh BBS No to BBS list
 

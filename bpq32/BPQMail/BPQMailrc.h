@@ -228,6 +228,7 @@
 #define FILTER_TO                       6007
 #define FILTER_VIA                      6008
 #define EMAILFROM                       6009
+#define FILTER_BID                      6010
 #define IDC_MSGTYPE                     6101
 #define IDC_MSGSTATUS                   6102
 #define IDC_SAVEMSG                     6103

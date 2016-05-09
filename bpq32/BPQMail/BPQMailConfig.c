@@ -53,6 +53,7 @@ char InfoBoxText[100];			// Text to display in Config Info Popup
 char Filter_FROM[20];
 char Filter_TO[20];
 char Filter_VIA[60];				// Filters for Edit Message Dialog
+char Filter_BID[16];				// Filters for Edit Message Dialog
 
 extern char LTFROMString[2048];
 extern char LTTOString[2048];
@@ -2788,12 +2789,14 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		case FILTER_FROM:
 		case FILTER_TO:
 		case FILTER_VIA:
+		case FILTER_BID:
 
 			if (HIWORD(wParam) == 0x300)
 			{
 				GetDlgItemText(hDlg, FILTER_FROM, Filter_FROM, 10);
 				GetDlgItemText(hDlg, FILTER_TO, Filter_TO, 10);
 				GetDlgItemText(hDlg, FILTER_VIA, Filter_VIA, 50);
+				GetDlgItemText(hDlg, FILTER_BID, Filter_BID, 14);
 
 				SendDlgItemMessage(hDlg, 0, LB_RESETCONTENT, 0, 0);
 				
@@ -2803,6 +2806,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 					
 					if ((!Filter_TO[0] || strstr(Msg->to, Filter_TO)) &&
 						(!Filter_FROM[0] || strstr(Msg->from, Filter_FROM)) &&
+						(!Filter_BID[0] || strstr(Msg->bid, Filter_BID)) &&
 						(!Filter_VIA[0] || strstr(Msg->via, Filter_VIA)))
 					{
 						sprintf_s(msgno, sizeof(msgno), "%d", Msg->number);

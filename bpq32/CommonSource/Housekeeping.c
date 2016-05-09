@@ -58,6 +58,8 @@ int DeleteLogFiles();
 
 VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Forwarded, int Age);
 int CreateWPMessage();
+int DeleteRedundantMessages();
+VOID CreateUserReport();
 
 int LastHouseKeepingTime;
 

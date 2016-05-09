@@ -47,6 +47,13 @@ BOOL OpenMon;
 #define BBSIDLETIME 900
 #define USERIDLETIME 900
 
+#ifdef LINBPQ
+extern BPQVECSTRUC ** BPQHOSTVECPTR;
+#else
+__declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
+#endif
+
+
 unsigned long _beginthread( void( *start_address )(VOID * DParam),
 				unsigned stack_size, VOID * DParam);
 
@@ -2048,6 +2055,11 @@ int ImportMessages(CIRCUIT * conn, char * FN, BOOL Nopopup)
 		char * Arg1, * Cmd;
 
 NextMessage:
+
+		From = NULL;
+		BID = NULL;
+		ATBBS = NULL;
+		SMTPTO[0]= 0;
 
 		Sleep(100);
 
@@ -4728,8 +4740,8 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 		free(conn->CopyBuffer);
 		conn->CopyBuffer = NULL;
 	}
-
-		// Allocate a message Record slot
+	
+	// Allocate a message Record slot
 
 		Msg = AllocateMsgRecord();
 		memcpy(Msg, conn->TempMsg, sizeof(struct MsgInfo));
@@ -5298,6 +5310,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 			if (conn->BBSFlags & FBBForwarding)
 			{
 				struct tm *tm;
+				time_t temp;
 
 				FBBHeader = &conn->FBBHeaders[conn->FBBIndex++];
 
@@ -5312,8 +5325,9 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 				// Set up R:Line, so se can add its length to the sise
 
-				tm = gmtime(&Msg->datereceived);	
-	
+				memcpy(&temp, &Msg->datereceived, 4);
+				tm = gmtime(&temp);	
+
 				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 					Msg->number, BBSName, HRoute, RlineVer);
@@ -6130,6 +6144,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 	{
 		struct MsgInfo * Msg;
 		struct tm * tm;
+		time_t temp;
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		int MsgLen;
 		char * MsgPtr;
@@ -6195,7 +6210,8 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 				MsgPtr = MsgBytes;
 		}
 
-		tm = gmtime(&Msg->datereceived);	
+		memcpy(&temp, &Msg->datereceived, 4);
+		tm = gmtime(&temp);	
 
 		len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -6313,6 +6329,8 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
 {
 	struct tm * tm;
+	time_t temp;
+
 	char * MsgBytes = ReadMessageFile(Msg->number);
 	char * MsgPtr;
 	char Line[256];
@@ -6362,7 +6380,8 @@ BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
 			MsgPtr = MsgBytes;
 	}
 
-	tm = gmtime(&Msg->datereceived);	
+	memcpy(&temp, &Msg->datereceived, 4);
+	tm = gmtime(&temp);	
 
 	len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -6894,6 +6913,8 @@ InBand:
 
 		// End of script.
 
+		ForwardingInfo->MoreLines = FALSE;
+
 		if (conn->BBSFlags & MCASTRX)
 		{
 			// No session with Multicast, so no SID
@@ -6984,7 +7005,16 @@ CheckForSID:
 			char RespString[12];
 			char ConnectingCall[10];
 
-			GetCallsign(conn->BPQStream, ConnectingCall);
+#ifdef LINBPQ
+			BPQVECSTRUC * SESS = &BPQHOSTVECTOR[0];
+#else
+			BPQVECSTRUC * SESS = (BPQVECSTRUC *)BPQHOSTVECPTR;
+#endif
+
+			SESS += conn->BPQStream - 1;
+
+			ConvFromAX25(SESS->HOSTSESSION->L4USER, ConnectingCall);
+
 			strlop(ConnectingCall, ' ');
 
 			if (Pass[0] == 0)
@@ -6992,6 +7022,7 @@ CheckForSID:
 				Pass = User->pass;		// Old Way
 				if (Pass[0] == 0)
 				{
+					strlop(ConnectingCall, '-');
 					User = LookupCall(ConnectingCall);
 					if (User)
 					Pass = User->CMSPass;
@@ -7109,7 +7140,15 @@ CheckForSID:
 			char RMSCall[20];
 			char ConnectingCall[10];
 
-			GetCallsign(conn->BPQStream, ConnectingCall);
+#ifdef LINBPQ
+			BPQVECSTRUC * SESS = &BPQHOSTVECTOR[0];
+#else
+			BPQVECSTRUC * SESS = (BPQVECSTRUC *)BPQHOSTVECPTR;
+#endif
+
+			SESS += conn->BPQStream - 1;
+
+			ConvFromAX25(SESS->HOSTSESSION->L4USER, ConnectingCall);
 			strlop(ConnectingCall, ' ');
 
 			strcat (FWLine, ConnectingCall);
@@ -8422,7 +8461,7 @@ int Connected(int Stream)
 				conn->NewUser = TRUE;
 			}
 
-			time(&user->TimeLastConnected);
+			user->TimeLastConnected = time(NULL);
 			user->Total.ConnectsIn++;
 
 			conn->UserPointer = user;
@@ -8551,7 +8590,7 @@ int Disconnected (Stream)
 
 			if (conn->BBSFlags & RunningConnectScript)
 			{
-				// We need to see if we gat as far as connnected,
+				// We need to see if we got as far as connnected,
 				// as if we have we need to reset the connect script 
 				// over the ELSE
 
@@ -9241,6 +9280,8 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		// Waiting for Enter Message Prompt
 
 		struct tm * tm;
+		time_t temp;
+
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		char * MsgPtr;
 		int MsgLen;
@@ -9278,7 +9319,8 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 				MsgPtr = MsgBytes;
 		}
 
-		tm = gmtime(&conn->FwdMsg->datereceived);	
+		memcpy(&temp, &conn->FwdMsg->datereceived, 4);
+		tm = gmtime(&temp);	
 
 		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
