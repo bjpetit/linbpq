@@ -60,7 +60,7 @@ WAVEHDR inheader[2] =
 WAVEOUTCAPS pwoc;
 WAVEINCAPS pwic;
 
-void InitSound();
+void InitSound(BOOL Quiet);
 void HostPoll();
 
 int Ticks;
@@ -71,8 +71,33 @@ LARGE_INTEGER NewTicks;
 
 int LastNow;
 
+extern void Generate50BaudTwoToneLeaderTemplate();
+extern BOOL blnDISCRepeating;
+
+#define TARGET_RESOLUTION 1         // 1-millisecond target resolution
+
 void main(int argc, char * argv[])
 {
+
+	TIMECAPS tc;
+	UINT     wTimerRes;
+	DWORD	t, lastt = 0;
+
+//	Generate50BaudTwoToneLeaderTemplate();
+//	GeneratePSKTemplates();
+
+	if (timeGetDevCaps(&tc, sizeof(TIMECAPS)) != TIMERR_NOERROR) 
+	{
+	    // Error; application can't continue.
+	}
+
+	wTimerRes = min(max(tc.wPeriodMin, TARGET_RESOLUTION), tc.wPeriodMax);
+	timeBeginPeriod(wTimerRes); 
+
+	t = timeGetTime();
+
+	Debugprintf("timeGetTime %d", t);
+
 	Debugprintf("ARDOPC Version %s", ProductVersion);
 
 	if (argc > 1)
@@ -90,14 +115,14 @@ void main(int argc, char * argv[])
 
 	GetSoundDevices();
 
-//	xxmain();
 	ardopmain();
 }
 
 unsigned int getTicks()
 {
-		QueryPerformanceCounter(&NewTicks);
-		return (int)(NewTicks.QuadPart - StartTicks.QuadPart) / Frequency.QuadPart;
+	return timeGetTime();
+//		QueryPerformanceCounter(&NewTicks);
+//		return (int)(NewTicks.QuadPart - StartTicks.QuadPart) / Frequency.QuadPart;
 }
 
 void printtick(char * msg)
@@ -199,7 +224,7 @@ void GetSoundDevices()
 	}
 }
 
-void InitSound()
+void InitSound(BOOL Report)
 {
 	int ret;
 
@@ -212,7 +237,8 @@ void InitSound()
 	else
 	{
 		ret = waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
-		Debugprintf("Opened WaveOut Device %s", pwoc.szPname);
+		if (Report)
+			Debugprintf("Opened WaveOut Device %s", pwoc.szPname);
 	}
 
     ret = waveInOpen(&hWaveIn, atoi(CaptureDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
@@ -221,7 +247,8 @@ void InitSound()
 	else
 	{
 		ret = waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
-		Debugprintf("Opened WaveIn Device %s", pwic.szPname);
+		if (Report)
+			Debugprintf("Opened WaveIn Device %s", pwic.szPname);
 	}
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
@@ -396,7 +423,7 @@ void SoundFlush()
           
 //		Debugprintf("Play complete blnEnbARQRpt = %d", blnEnbARQRpt);
 
-	if (blnEnbARQRpt > 0)	// Start Repeat Timer if frame should be repeated
+	if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
 		dttNextPlay = Now + intFrameRepeatInterval;
 
 //	Debugprintf("Now %d Now - dttNextPlay 1  = %d", Now, Now - dttNextPlay);
@@ -426,7 +453,7 @@ void SoundFlush()
 void StartCodec(char * strFault)
 {
 	strFault[0] = 0;
-	InitSound();
+	InitSound(FALSE);
 
 }
 

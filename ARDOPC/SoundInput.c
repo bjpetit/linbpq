@@ -12,7 +12,7 @@ BOOL blnLeaderFound = FALSE;
 BOOL blnLeaderDetected;
 
 int intLeaderRcvdMs = 1000;		// Leader length??
-short intPSKRefPhase;			// PSK Reference symbol in milliradians) (+/- 3142)
+//short intPSKRefPhase;			// PSK Reference symbol in milliradians) (+/- 3142)
 
 extern int intLastRcvdFrameQuality;
 extern int intReceivedLeaderLen;
@@ -22,12 +22,12 @@ extern int NErrors;
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
 
-short intFilteredMixedSamples[3600];	// Get Frame Type need 2400 and we may add 1200
+short intFilteredMixedSamples[5000];	// Get Frame Type need 2400 and we may add 1200
 int intFilteredMixedSamplesLength = 0;
 
 int intFrameType;				// Type we are decoding
 
-char strDecodeCapture[256];
+char strDecodeCapture[1024];
 
 //	Frame type parameters
 
@@ -526,6 +526,82 @@ void Filter150Hz(short * intFilterOut)
 	}
 
 }
+
+//	Function to apply 75Hz filter used in Envelope correlator
+
+void Filter75Hz(short * intFilterOut, BOOL blnInitialise, int intSamplesToFilter)
+{
+	// assumes sample rate of 12000
+	// implements  3 100 Hz wide sections   (~150 Hz wide @ - 30dB centered on 1500 Hz)
+
+	// FSF (Frequency Selective Filter) variables
+
+	static float dblR = 0.9995f;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
+	static int intN = 240;				//Length of filter 12000/50 - delays output 120 samples from input
+	static float dblRn;
+	static float dblR2;
+	static float dblCoef[3] = {0.0};			// the coefficients
+	float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
+	// The resonators 
+      
+	float dblZout_0[3] = {0.0};	// resonator outputs
+	float dblZout_1[3] = {0.0};	// resonator outputs delayed one sample
+	float dblZout_2[3] = {0.0};	// resonator outputs delayed two samples
+
+	int i, j;
+
+	float FilterOut = 0;			//  Filtered sample
+	float largest = 0;
+
+	dblRn = powf(dblR, intN);
+
+	dblR2 = powf(dblR, 2);
+
+	// Initialize the coefficients
+    
+	if (dblCoef[2] == 0)
+	{
+		for (i = 0; i <= 3; i++)
+		{
+			dblCoef[i] = 2 * dblR * cosf(2 * M_PI * (29 + i)/ intN);  // For Frequency = bin 29, 30, 31
+		}
+	}
+
+	for (i = 0; i < intSamplesToFilter; i++)
+	{
+		if (i < intN)
+			dblZin = intFilteredMixedSamples[intMFSReadPtr + i] - dblRn * 0;	// no prior mixed samples
+		else
+			dblZin = intFilteredMixedSamples[intMFSReadPtr + i] - dblRn * intFilteredMixedSamples[intMFSReadPtr + i - intN];
+
+		// Compute the Comb
+		
+		dblZComb = dblZin - dblZin_2 * dblR2;
+		dblZin_2 = dblZin_1;
+		dblZin_1 = dblZin;
+
+		// Now the resonators
+
+		for (j = 0; j < 3; j++)		   // calculate output for 3 resonators 
+		{
+			dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
+			dblZout_2[j] = dblZout_1[j];
+			dblZout_1[j] = dblZout_0[j];
+	
+			//	scale each by transition coeff and + (Even) or - (Odd) 
+
+			// Scaling also accomodates for the filter "gain" of approx 120. 
+			// These transition coefficients fairly close to optimum for WGN 0db PSK4, 100 baud (yield highest average quality) 5/24/2014
+ 
+			if (j == 0 || j == 2)
+				FilterOut -= 0.39811f * dblZout_0[j];	 // this transisiton minimizes ringing and peaks
+			else
+				FilterOut += dblZout_0[j];
+		}
+		intFilterOut[i] = (int)ceil(FilterOut * 0.0041f);	 // rescales for gain of filter
+	}
+}
+
 // Subroutine to Mix new samples with NCO to tune to nominal 1500 Hz center with reversed sideband and filter. 
 
 void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
@@ -596,7 +672,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		Debugprintf("RS Says OK without correction");
 	else
 	if (FrameOK)
-		Debugprintf("RS Says OK after correction");
+		Debugprintf("RS Says OK after %d correction(s)", NErrors);
 	else
 	{
 		Debugprintf("RS Says Can't Correct");
@@ -668,7 +744,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 //	return;
 
-//	printtick("Stary Busy");
+//	printtick("Start Busy");
 	if (State == SearchingForLeader)
 		UpdateBusyDetector(Samples);
 //	printtick("Done Busy");
@@ -702,8 +778,11 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				State = AcquireSymbolSync;
 				ResetSNPwrs();
 			}
-			nSamples -= 480;
-			Samples += 480;		// !!!! needs attention !!!
+			else
+			{
+				nSamples -= 480;
+				Samples += 480;		// !!!! needs attention !!!
+			}
 		}
 		if (State == SearchingForLeader)
 		{
@@ -719,18 +798,18 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 	// I'm going to filter all samples into intFilteredMixedSamples.
 
-	printtick("Start Mix");
+//	printtick("Start Mix");
 
 	MixNCOFilter(Samples, nSamples, dblOffsetHz); // Mix and filter new samples (Mixing consumes all intRcvdSamples)
 	nSamples = 0;	//	all used
 
-	printtick("Done Mix Samples");
+//	printtick("Done Mix Samples");
 
 	// Acquire Symbol Sync 
 
     if (State == AcquireSymbolSync)
 	{
-		if ((intFilteredMixedSamplesLength - intMFSReadPtr) > 500)
+		if ((intFilteredMixedSamplesLength - intMFSReadPtr) > 860)
 		{
 			blnSymbolSyncFound = Acquire2ToneLeaderSymbolFraming();  // adjust the pointer to the nominal symbol start based on phase
 			if (blnSymbolSyncFound)
@@ -910,7 +989,14 @@ ProcessFrame:
 
 		if (blnFrameDecodedOK)
 		{
-			if (ProtocolMode == FEC)
+			if (AccumulateStats)
+				if (IsDataFrame(intFrameType))
+					if (strstr (strMod, "PSK"))
+						intGoodPSKFrameDataDecodes++;
+					else if (strstr (strMod, "QAM"))
+						intGoodQAMFrameDataDecodes++;
+
+ 			if (ProtocolMode == FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame
 					ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);
@@ -943,6 +1029,15 @@ ProcessFrame:
 		{
 			//	Bad decode
 
+            if (AccumulateStats)
+				if (IsDataFrame(intFrameType))
+					if (strstr (strMod, "PSK"))
+						intFailedPSKFrameDataDecodes++;
+					else if (strstr (strMod, "QAM"))
+						intFailedQAMFrameDataDecodes++;
+
+
+            // Debug.WriteLine("[DecodePSKData2] bytPass = " & Format(bytPass, "X"))
 			if (ProtocolMode == FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame
@@ -1052,208 +1147,271 @@ float QuinnSpectralPeakLocator(float XkM1Re, float XkM1Im, float XkRe, float XkI
 
 BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz)
 {
-	//' Status July 6, 2015 Good performance down to MPP_5dB. Operation over 4 search ranges confirmed (50, 100, 150, 200 Hz) 
-	//       Optimized for July 6, 2015
-	// search through the samples looking for the telltail 2 tone pattern (nominal tones 1450, 1550 Hz)
+	// search through the samples looking for the telltail 50 baud 2 tone pattern (nominal tones 1475, 1525 Hz) 
 	// Find the offset in Hz (due to missmatch in transmitter - receiver tuning
-	//'  Finds the power ratio of the tones 1450 and 1550 ratioed to 1350, 1400, 1500, 1600, and 1650
-
-	float dblGoertzelReal[57];
-	float dblGoertzelImag[57];
-	float dblMag[57];
+	// Finds the S:N (power ratio of the tones 1475 and 1525 ratioed to "noise" averaged from bins at 1425, 1450, 1500, 1550, and 1575Hz)
+ 
+	float dblGoertzelReal[45];
+	float dblGoertzelImag[45];
+	float dblMag[45];
 	float dblPower;
-	float dblMaxPeak = 0.0, dblMaxPeakSN, dblInterpM, dblBinAdj, dblBinAdj1450, dblBinAdj1550;
+	float dblMaxPeak = 0.0, dblMaxPeakSN = 0.0, dblInterpM, dblBinAdj;
 	int intInterpCnt = 0;  // the count 0 to 3 of the interpolations that were < +/- .5 bin
 	int  intIatMaxPeak = 0;
 	float dblAlpha = 0.3f;  // Works well possibly some room for optimization Changed from .5 to .3 on Rev 0.1.5.3
-	float dblInterpretThreshold= 1.5f; // Good results June 6, 2014 (was .4)  ' Works well possibly some room for optimization
+	float dblInterpretThreshold= 1.0f; // Good results June 6, 2014 (was .4)  ' Works well possibly some room for optimization
 	float dblFilteredMaxPeak = 0;
 	int intStartBin, intStopBin;
 	float dblLeftCar, dblRightCar, dblBinInterpLeft, dblBinInterpRight, dblCtrR, dblCtrI, dblCtrP, dblLeftP, dblRightP;
 	float dblLeftR[3], dblLeftI[3], dblRightR[3], dblRightI[3];
 	int i;
 	int Ptr = 0;
+	float dblAvgNoisePerBin, dblCoarsePwrSN, dblBinAdj1475, dblBinAdj1525, dblCoarseOffset;
+	float dblTrialOffset, dblPowerEarly, dblSNdBPwrEarly;
 
 	if ((Length) < 960)
-		return FALSE;		// insure there are at least 960 samples (8 symbols of 120 samples)
+		return FALSE;		// ensure there are at least 960 samples (4 symbols of 240 samples)
 
 	// Compute the start and stop bins based on the tuning range Each bin is 12000/960 or 12.5 Hz/bin
-
-	if (blnARQConnected && (Now - dttLastGoodFrameTypeDecod < 15000) || TuningRange == 0)
+     
+	if ((Now - dttLastGoodFrameTypeDecod > 20000) && TuningRange > 0)
 	{
-		// Limited range tuning
-
-		dblLeftCar = 120 - 4 + *dblOffsetHz / 12.5f;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
-		dblRightCar = 120 + 4 + *dblOffsetHz / 12.5f;
-		// Calculate 4 bins total for Noise value in S/N computation
+		// this is the full search over the full tuning range selected.  Uses more CPU time and with possibly larger deviation once connected. 
 		
-		GoertzelRealImag(intNewSamples, Ptr, 960, 121 + *dblOffsetHz / 12.5f, &dblCtrR, &dblCtrI); // nominal center + 12.5 Hz
-		dblCtrP = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-		GoertzelRealImag(intNewSamples, Ptr, 960, 119 + *dblOffsetHz / 12.5f, &dblCtrR, &dblCtrI); //  center - 12.5 Hz
-		dblCtrP += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-		GoertzelRealImag(intNewSamples, Ptr, 960, 127 + *dblOffsetHz / 12.5f, &dblCtrR, &dblCtrI); // Center + 87.5 Hz
-		dblCtrP += powf(dblCtrR,2) + powf(dblCtrI, 2);
-		GoertzelRealImag(intNewSamples, Ptr, 960, 113 + *dblOffsetHz / 12.5f, &dblCtrR, &dblCtrI); // center - 87.5 Hz
-		dblCtrP += powf(dblCtrR,2) + powf(dblCtrI, 2);
+		intStartBin = ((200.0f - TuningRange) / 12.5f);
+		intStopBin = 44 - intStartBin;
 
-		// Calculate one bin above and below the two nominal 2 tone positions for Quinn Spectral Peak locator
-		GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar - 1, &dblLeftR[0], &dblLeftI[0]);
-		GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar, &dblLeftR[1], &dblLeftI[1]);
-		dblLeftP = powf(dblLeftR[1], 2) + powf(dblLeftI[1],  2);
-		GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar + 1, &dblLeftR[2], &dblLeftI[2]);
-		GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar - 1, &dblRightR[0], &dblRightI[0]);
-		GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar, &dblRightR[1], &dblRightI[1]);
-		dblRightP = powf(dblRightR[1], 2) + powf(dblRightI[1], 2);
-		GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar + 1, &dblRightR[2], &dblRightI[2]);
-		// Calculate the total power in the two tones (use product vs sum to help reject a single carrier).
-		dblPower = sqrtf(dblLeftP * dblRightP); // sqrt converts back to units of power 
-		dblSNdBPwr_1 = dblSNdBPwr;
-		dblSNdBPwr = 10 * logf(dblPower / (0.25f * dblCtrP)); // Power S:N
-                
-		if (dblSNdBPwr > 22 && dblSNdBPwr_1 > 19)
+		dblMaxPeak = 0;
+
+		// Generate the Power magnitudes for up to 45 12.5 Hz bins (a function of MCB.TuningRange) 
+  
+  
+		for (i = intStartBin; i <= intStopBin; i++)
 		{
-			// Calculate the interpolation based on the left of the two tones
+			GoertzelRealImag(intNewSamples, Ptr, 960, i + 98.0f, &dblGoertzelReal[i], &dblGoertzelImag[i]);
+				dblMag[i] = powf(dblGoertzelReal[i], 2) + powf(dblGoertzelImag[i], 2); // dblMag(i) in units of power (V^2)
+		}
 
-			dblBinInterpLeft = QuinnSpectralPeakLocator(dblLeftR[0], dblLeftI[0], dblLeftR[1], dblLeftI[1], dblLeftR[2], dblLeftI[2]);
-			// And the right of the two tones
-			dblBinInterpRight = QuinnSpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2]); 
+		// Search the bins to locate the max S:N in the two tone signal/avg noise.  
+ 
+		for (i = intStartBin + 4; i <= intStopBin - 8; i++)	// ' +/- MCB.TuningRange from nominal 
+		{
+			dblPower = sqrtf(dblMag[i + 8] * dblMag[i + 4]); // using the product to minimize sensitivity to one strong carrier vs the two tone
+			// sqrt converts back to units of power from Power ^2
 
-			if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.2f)
+			dblAvgNoisePerBin = (dblMag[i - 4] + dblMag[i - 2] + dblMag[i + 2] + dblMag[i + 6] + dblMag[i + 8]) * 0.2f;  // Simple average
+			dblMaxPeak = dblPower / dblAvgNoisePerBin;
+			if (dblMaxPeak > dblMaxPeakSN)
 			{
-				// sanity check for the interpolators
-
-				if (dblBinInterpLeft + dblBinInterpLeft > 0)
-					*dblOffsetHz = *dblOffsetHz + min((dblBinInterpLeft + dblBinInterpRight) * 6.25f, 3);  // average left and right, adjustment bounded to +/- 3Hz max
-				else
-					*dblOffsetHz = *dblOffsetHz + max((dblBinInterpLeft + dblBinInterpRight) * 6.25f, -3);
-                    
-				sprintf(strDecodeCapture, "Interp Ldr;S:N=%3.1fdB, Offset=%3.1fHz: ", dblSNdBPwr, *dblOffsetHz);
-
-				dttStartRmtLeaderMeasure = Now;
-				blnLeaderDetected = TRUE;
-
-				//if (AccumulateStats)
-				//{
-				//	With stcTuningStats
-                //     .dblLeaderSNAvg = ((.dblLeaderSNAvg * .intLeaderDetects) + dblSNdBPwr) / (1 + .intLeaderDetects)
-                //     .intLeaderDetects += 1
-                 //           End With
-				//}
-				return TRUE;
+				dblMaxPeakSN = dblMaxPeak;
+				dblCoarsePwrSN = 10 * log10f(dblMaxPeak);
+				intIatMaxPeak = i + 100;
 			}
 		}
-		Ptr += 480;
-		blnLeaderDetected = FALSE;
-		return FALSE;
-	}
+			
+		// Do the interpolation based on the two carriers at nominal 1475 and 1525Hz
 
-	// this is the full search over the full tuning range selected.  Uses more CPU time and with possibly larger deviation once connected. 
-		
-	intStartBin = ((200 - TuningRange) / 12.5f);
-		//intStopBin = ((dblMag.Length - 1) - ((200 - TuningRange) / 12.5));
-	intStopBin = ((56) - ((200 - TuningRange) / 12.5f));
-	// Generate the Power magnitudes for up to 46 12.5 Hz bins (a function of MCB.TuningRange) 
-
-	for (i = intStartBin; i <= intStopBin; i++)
-	{
-		GoertzelRealImag(intNewSamples, Ptr, 960, i + 92.0f, &dblGoertzelReal[i], &dblGoertzelImag[i]);
-			dblMag[i] = powf(dblGoertzelReal[i], 2) + powf(dblGoertzelImag[i], 2); // dblMag(i) in units of power (V^2)
-	}
-
-	//Search for the bins for the max power in the two tone signal.  
-
-	for (i = intStartBin ; i <= intStopBin - 24; i++)	// ' +/- MCB.TuningRange from nominal 
-	{
-		dblPower = sqrtf(dblMag[i + 8] * dblMag[i + 16]); // using the product to minimize sensitivity to one strong carrier vs the two tone
-		// sqrt coonverts back to units of power from Power ^2
-		if (dblPower > dblMaxPeak)
+		if (((intIatMaxPeak - 101) >= intStartBin) && ((intIatMaxPeak - 95) <= intStopBin)) // check to ensure no index errors
 		{
-			dblMaxPeak = dblPower;
-			intIatMaxPeak = i + 104;
-		}
-	}
+			// Interpolate the adjacent bins using QuinnSpectralPeakLocator
 
-		// Now compute the max peak:Noise (power)  using the product of the 2 tone bins @ 1450 and 1550 Hz (nominal...spaced at 100 Hz)
-		// Divided by the Noise power at nominal bins 1350, 1400, 1500, 1600, 1650 Hz
-		// Denominator uses average of 5 "noise" bins to reduce variation. Factor of .2 adjusts for the #Bins in the  Denom 
-		// Note sum vs product appeared more consistant with multipath poor. 
+			dblBinAdj1475 = QuinnSpectralPeakLocator(
+				dblGoertzelReal[intIatMaxPeak - 101], dblGoertzelImag[intIatMaxPeak - 101],
+				dblGoertzelReal[intIatMaxPeak - 100], dblGoertzelImag[intIatMaxPeak - 100], 
+				dblGoertzelReal[intIatMaxPeak - 99], dblGoertzelImag[intIatMaxPeak - 99]);
 
-		dblMaxPeakSN = dblMaxPeak / (0.2f * (dblMag[intIatMaxPeak - 104] + dblMag[intIatMaxPeak - 100] +
-               dblMag[intIatMaxPeak - 92] + dblMag[intIatMaxPeak - 84] + dblMag[intIatMaxPeak - 80]));
-               // 'dblMaxPeakSN = dblMaxPeak / (0.3333 * (dblMag(intIatMaxPeak - 100) + dblMag(intIatMaxPeak - 92) + dblMag(intIatMaxPeak - 84)))
-		dblSNdBPwr_2 = dblSNdBPwr_1;
-		dblSNdBPwr_1 = dblSNdBPwr;
-		dblSNdBPwr = 10 * logf(dblMaxPeakSN);
-		if (dblSNdBPwr > 29 && dblSNdBPwr_1 > 24) // These values selected during optimizatin tests 7/5/2015 @ mpp -5 dB S:N
-		{
-			// Do the interpolation based on the two carriers at nominal 1450 and 1550Hz
-    
-			if ((intIatMaxPeak - 97) >= intStartBin && (intIatMaxPeak - 87) <= intStopBin) // check to insure no index errors
+			if (dblBinAdj1475 < dblInterpretThreshold && dblBinAdj1475 > -dblInterpretThreshold)
 			{
-				// Interpolate the adjacent bins using QuinnSpectralPeakLocator
-					
-					dblBinAdj1450 = QuinnSpectralPeakLocator(dblGoertzelReal[intIatMaxPeak - 97], dblGoertzelImag[intIatMaxPeak - 97],
-							dblGoertzelReal[intIatMaxPeak - 96], dblGoertzelImag[intIatMaxPeak - 96],
-							dblGoertzelReal[intIatMaxPeak - 95], dblGoertzelImag[intIatMaxPeak - 95]);
-				if (dblBinAdj1450 < dblInterpretThreshold && dblBinAdj1450 > -dblInterpretThreshold)
-				{
-					dblBinAdj = dblBinAdj1450;
-					intInterpCnt += 1;
-				}
-
-				dblBinAdj1550 = QuinnSpectralPeakLocator(dblGoertzelReal[intIatMaxPeak - 89], dblGoertzelImag[intIatMaxPeak - 89], 
-						dblGoertzelReal[intIatMaxPeak - 88], dblGoertzelImag[intIatMaxPeak - 88], 
-						dblGoertzelReal[intIatMaxPeak - 87], dblGoertzelImag[intIatMaxPeak - 87]);
-
-				if (dblBinAdj1550 < dblInterpretThreshold && dblBinAdj1550 > -dblInterpretThreshold)
-				{
-					dblBinAdj += dblBinAdj1550;
-					intInterpCnt += 1;
-				}
-				if (intInterpCnt == 0)
-				{
-					Ptr += 480;
-					blnLeaderDetected = FALSE;
-					return FALSE;
-				}
-				else
-				{
-					dblBinAdj = dblBinAdj / intInterpCnt; // average the offsets that are within .5 bin
-					dblInterpM = intIatMaxPeak + dblBinAdj;
-				}
+				dblBinAdj = dblBinAdj1475;
+				intInterpCnt += 1;
 			}
-			else
+
+			dblBinAdj1525 = QuinnSpectralPeakLocator(
+				dblGoertzelReal[intIatMaxPeak - 97], dblGoertzelImag[intIatMaxPeak - 97], 
+				dblGoertzelReal[intIatMaxPeak - 96], dblGoertzelImag[intIatMaxPeak - 96], 
+				dblGoertzelReal[intIatMaxPeak - 95], dblGoertzelImag[intIatMaxPeak - 95]);
+
+			if (dblBinAdj1525 < dblInterpretThreshold && dblBinAdj1525 > -dblInterpretThreshold)
 			{
-				Ptr += 480; // ' ..reduces CPU loading
+				dblBinAdj += dblBinAdj1525;
+        		intInterpCnt += 1;
+			}
+
+			if (intInterpCnt == 0)
+			{				
+				if (SlowCPU)
+					Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduce CPU loading
+				else
+					Ptr += 240; // advance pointer 1 symbol (20 ms)
+		
+				blnLeaderDetected = FALSE;
 				return FALSE;
 			}
-			// update the offsetHz and setup the NCO new freq and Phase inc. Note no change to current NCOphase
-
-			*dblOffsetHz = 12.5f * (dblInterpM - 120); // compute the tuning offset in Hz using dblInterpM
+			else
+			{	
+				dblBinAdj = dblBinAdj / intInterpCnt;	 // average the offsets that are within .5 bin
+				dblCoarseOffset = 12.5f * (intIatMaxPeak + dblBinAdj - 120); // compute the Coarse tuning offset in Hz
+			}
 		}
 		else
 		{
-			Ptr += 480;  //  Ptr += 240 ' evaluate if this is OK ..reduces CPU loading
+			if (SlowCPU)
+				Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduce CPU loading
+			else
+				Ptr += 240; // advance pointer 1 symbol (20 ms) 
+		
 			blnLeaderDetected = FALSE;
 			return FALSE;
 		}
-     
-		dblNCOFreq = 3000 + *dblOffsetHz;  //Set the NCO frequency and phase inc for mixing 
-		dblNCOPhaseInc = 2 * M_PI * dblNCOFreq / 12000;
-		Ptr = Ptr + 480; // advance 4 symbols to avoid any noise in start ' optimize?
-		State = AcquireSymbolSync;
-		blnLeaderDetected = TRUE;
-        //        If MCB.AccumulateStats Then
-         //           With stcTuningStats
-        //                .dblLeaderSNAvg = ((.dblLeaderSNAvg * .intLeaderDetects) + dblSNdBPwr) / (1 + .intLeaderDetects)
-         //               .intLeaderDetects += 1
-         //           End With
-         //       End If
+            
+		// update the offsetHz and setup the NCO new freq and Phase inc. Note no change to current NCOphase
 
-		sprintf(strDecodeCapture, "Ldr;S:N=%3.1fdB, Offset=%3.1fHz: ", dblSNdBPwr, *dblOffsetHz);
-		dttStartRmtLeaderMeasure = Now;
-		return TRUE;
-}
+		// Drop into narrow search
+	}
+
+	//	NarrowSearch:
+            
+	if (dblCoarseOffset < 999)
+		dblTrialOffset = dblCoarseOffset;  // use the CoarseOffset calculation from above
+	else
+		dblTrialOffset = *dblOffsetHz; // use the prior offset value
+
+	dblLeftCar = 120 - 2 + dblTrialOffset / 12.5f;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
+	dblRightCar = 120 + 2 + dblTrialOffset / 12.5f;
+	
+	// Calculate 5 bins total for Noise values in S/N computation (calculate average noise)  ' Simple average of noise bins
+            
+	GoertzelRealImag(intNewSamples, Ptr, 960, 114 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI);  // nominal center -75 Hz
+	dblAvgNoisePerBin = powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 960, 116 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // center - 50 Hz
+	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 960, 120 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // Center 
+	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 960, 124 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // center + 50 Hz
+	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 960, 126 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI);  // center + 75 Hz
+	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
+
+	dblAvgNoisePerBin = dblAvgNoisePerBin * 0.2f; // simple average,  now units of power
+
+	// Calculate one bin above and below the two nominal 2 tone positions for Quinn Spectral Peak locator
+	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar - 1, &dblLeftR[0], &dblLeftI[0]);
+	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar, &dblLeftR[1], &dblLeftI[1]);
+	dblLeftP = powf(dblLeftR[1], 2) + powf(dblLeftI[1],  2);
+	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar + 1, &dblLeftR[2], &dblLeftI[2]);
+	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar - 1, &dblRightR[0], &dblRightI[0]);
+	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar, &dblRightR[1], &dblRightI[1]);
+	dblRightP = powf(dblRightR[1], 2) + powf(dblRightI[1], 2);
+	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar + 1, &dblRightR[2], &dblRightI[2]);
+
+	// Calculate the total power in the two tones (use product vs sum to help reject a single carrier).
+	//dblPower = sqrtf(dblLeftP * dblRightP); // sqrt converts back to units of power 
+	dblPower = min(dblLeftP, dblRightP);  //Use the lower of Left or right to reject signle carrier
+ 	// Power S:N (calculation indicates avg of 19dB at simulator setting of S:N =-5 db in 3 KHz channel)
+           
+	dblSNdBPwr = 10 * log10f(dblPower / dblAvgNoisePerBin);
+    
+
+	// Early leader detect code to calculate S:N on Front half (first 2 symbols)
+	// This appears to work well ( ver 0.5.0.5 July 20, 2016) and insures most of the leader is captured.
+	// concept is to allow more accurate framing and synb detection and reduce false leader detects
+
+	GoertzelRealImag(intNewSamples, Ptr, 480, 57 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
+	dblAvgNoisePerBin = powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 480, 58 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
+	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 480, 60 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
+	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 480, 62 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
+	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 480, 63 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz 
+	dblAvgNoisePerBin = 0.5 * (dblAvgNoisePerBin + (powf(dblCtrR, 2) + powf(dblCtrI, 2)));
+	dblLeftCar = 59 + dblTrialOffset / 25;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
+	dblRightCar = 61 + dblTrialOffset / 25;
+
+	GoertzelRealImag(intNewSamples, Ptr, 480, dblLeftCar, &dblCtrR, &dblCtrI); // LEFT carrier
+	dblLeftP = powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	GoertzelRealImag(intNewSamples, Ptr, 480, dblRightCar, &dblCtrR, &dblCtrI); // Right carrier
+	dblRightP = powf(dblCtrR, 2) + powf(dblCtrI, 2);
+	//dblPowerEarly = Sqrt(dblLeftP * dblRightP) ' sqrt converts back to units of power
+	dblPowerEarly = min(dblLeftP, dblRightP); //Use the lower of Left or right to reject signle carrier
+	dblSNdBPwrEarly = 10 * log10f(dblPowerEarly / dblAvgNoisePerBin);
+
+	// End of Early leader detect test code 
+
+
+	// The following thresholding requires the first half and the entire leader have a minium S:N for detection.
+	// These calibration values yield a sensitivity of ~ - 10 dB S:N (@ 3KHZ noise BW) with a Squelch=5, and 2 dB per squelch change
+	// The threshold for early is 1 dB lower than the threshold for the full 4 symbol leader . (compenseated for the 3 dB bandwidth difference)
+
+	if (dblSNdBPwr > (2 * Squelch) && (dblSNdBPwrEarly > (-4 + 2 * Squelch))) // The -4 value comes from - (3+1) making early threshold 1 dB lower (after 3 dB compensation for bandwidth)
+//	if (dblSNdBPwr > (Squelch + 5))  //  These give inital good performance WGN -5dB channel (3 KHz) but should be optimized. 
+	{
+		Debugprintf("Fine Search S:N= %f dB, Prior S:N= %f", dblSNdBPwr,dblSNdBPwr_1);
+
+		if (dblCoarseOffset < 999)
+			Debugprintf("  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);
+
+		// Calculate the interpolation based on the left of the two tones
+
+		dblBinInterpLeft = QuinnSpectralPeakLocator(dblLeftR[0], dblLeftI[0], dblLeftR[1], dblLeftI[1], dblLeftR[2], dblLeftI[2]);
+		
+		// And the right of the two tones
+
+		dblBinInterpRight = QuinnSpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2]);
+		Debugprintf(" QSPL Left= %f  QSPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
+        
+		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
+		{
+			if (dblBinInterpLeft + dblBinInterpLeft > 0)  // consider different bounding below
+				*dblOffsetHz = dblTrialOffset + min((dblBinInterpLeft + dblBinInterpRight) * 6.25f, 3); // average left and right, adjustment bounded to +/- 3Hz max
+			else
+				*dblOffsetHz = dblTrialOffset + max((dblBinInterpLeft + dblBinInterpRight) * 6.25f, -3);
+
+		
+			sprintf(strDecodeCapture, "Interp Ldr;S:N= %f dB, Offset= %f Hz: ", dblSNdBPwr, dblOffsetHz);
+
+			dttStartRmtLeaderMeasure = Now;
+			blnLeaderDetected = TRUE;
+
+			if (AccumulateStats)
+			{              
+				dblLeaderSNAvg = ((dblLeaderSNAvg * intLeaderDetects) + dblSNdBPwr) / (1 + intLeaderDetects); 
+				intLeaderDetects += 1;
+			}
+			dblNCOFreq = 3000 + *dblOffsetHz; // Set the NCO frequency and phase inc for mixing         
+			dblNCOPhaseInc = dbl2Pi * dblNCOFreq / 12000;
+		
+			Ptr = Ptr + 240; // advance 1 symbol to avoid any noise in start ' optimize?
+                    
+			State = AcquireSymbolSync;
+			blnLeaderDetected = TRUE;
+			dttStartRmtLeaderMeasure = Now;
+			return TRUE;
+		}
+
+		if (SlowCPU)
+			Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduced CPU loading
+		else
+			Ptr += 240; // advance pointer 1 symbol (20 ms)
+
+		blnLeaderDetected = FALSE;
+                    
+		return FALSE;
+	}
+	else
+	{
+		if (SlowCPU)
+			Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduced CPU loading
+		else
+			Ptr += 240; // advance pointer 1 symbol (20 ms)
+
+			
+		blnLeaderDetected = FALSE;
+		return FALSE;
+	}
+}	
+
 
 //	Function to look at the 2 tone leader and establishes the Symbol framing using envelope search and minimal phase error. 
 
@@ -1272,18 +1430,19 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 
 	// Use Phase of 1500 Hz leader  to establish symbol framing. Nominal phase is 0 or 180 degrees
 
-	if ((intFilteredMixedSamplesLength - intLocalPtr) < 500)
+	if ((intFilteredMixedSamplesLength - intLocalPtr) < 860)
 		return FALSE;			// not enough
 	
 	intLocalPtr = intMFSReadPtr + EnvelopeCorrelator(); // should position the pointer at the symbol boundary
 
-	// Check 3 samples either side of the intLocalPtr for minimum phase error.(closest to Pi or -Pi) 
-    
-	for (i = -3; i <= 3; i++)	 // 0 To 0 '  -2 To 2 ' for just 5 samples
+	// Check 2 samples either side of the intLocalPtr for minimum phase error.(closest to Pi or -Pi) 
+	// Could be as much as .4 Radians (~70 degrees) depending on sampling positions.
+   
+	for (i = -2; i <= 2; i++)	 // 0 To 0 '  -2 To 2 ' for just 5 samples
 	{
 		// using the full symbol seemed to work best on weak Signals (0 to -5 dB S/N) June 15, 2015
 	
-		GoertzelRealImag(intFilteredMixedSamples, intLocalPtr + i, 120, 15, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning 
+		GoertzelRealImag(intFilteredMixedSamples, intLocalPtr + i, 120, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning 
 		dblCarPh = atan2f(dblImag, dblReal);
 		dblAbsPhErr = fabsf(dblCarPh - (ceil(dblCarPh / M_PI) * M_PI));
 		if (dblAbsPhErr < dblMinAbsPhErr)
@@ -1295,11 +1454,11 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 	}
 
 	intMFSReadPtr = intLocalPtr + intIatMinErr;
-	// Debug.WriteLine("[Acquire2ToneLeaderSymbolFraming] intIatMinError=" & intIatMinErr.ToString)
+	Debugprintf("[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d", intIatMinErr);
 	State = AcquireFrameSync;
 
-	//if (AccumulateStats)
-	 //   intLeaderSyncs += 1;
+	if (AccumulateStats)
+		intLeaderSyncs++;
 
 	//Debug.WriteLine("   [Acquire2ToneLeaderSymbolSync] iAtMinError = " & intIatMinErr.ToString & "   Ptr = " & intMFSReadPtr.ToString & "  MinAbsPhErr = " & Format(dblMinAbsPhErr, "#.00"))
 	//Debug.WriteLine("   [Acquire2ToneLeaderSymbolSync]      Ph1500 @ MinErr = " & Format(dblPhaseAtMinErr, "#.000"))
@@ -1314,47 +1473,48 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 int EnvelopeCorrelator()
 {
 	// Compute the two symbol correlation with the Two tone leader template.
-	// slide the correlation one sample and repeat up to 120 steps 
+	// slide the correlation one sample and repeat up to 240 steps 
 	// keep the point of maximum or minimum correlation...and use this to identify the the symbol start. 
 
 	float dblCorMax  = -1000000.0f;		//  Preset to excessive values
 	float dblCorMin  = 1000000.0f;
 	int intJatMax = 0, intJatMin = 0;
-	float dblCorSum;
+	float dblCorSum, dblCorProduct, dblCorMaxProduct = 0.0;
 	int i,j;
-	short int150HzFilered[480];
+	short int75HzFiltered[720];
 
-	if (intFilteredMixedSamplesLength < intMFSReadPtr + 480)
+	if (intFilteredMixedSamplesLength < intMFSReadPtr + 720)
 		return -1;
 	
-	Filter150Hz(int150HzFilered); // This filter appears to help reduce avg decode distance (10 frames) by about 14%-19% at WGN-5 May 3, 2015
+	Filter75Hz(int75HzFiltered, TRUE, 720); // This filter appears to help reduce avg decode distance (10 frames) by about 14%-19% at WGN-5 May 3, 2015
 	
-	for (j = 0; j < 120; j++)
+	for (j = 0; j < 360; j++)		// Over 1.5 symbols
 	{
 		dblCorSum = 0;
-		for (i = 0; i < 240; i++)	 // over two 100 baud symbols (may be able to reduce to 1 symbol)
-		if (i < 120)
-			dblCorSum += intTwoToneLeaderTemplate[i] * int150HzFilered[120 + i + j];
-		else
-			dblCorSum -= intTwoToneLeaderTemplate[i - 120] * int150HzFilered[120 + i + j];
+		for (i = 0; i < 240; i++)	 // over 1 50 baud symbol (may be able to reduce to 1 symbol)
+		{
+			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomdates filter delay of 120 samples
+			dblCorSum += dblCorProduct;
+            if (fabsf(dblCorProduct) > dblCorMaxProduct)
+				dblCorMaxProduct = fabsf(dblCorProduct);
+		}
 
-		if (dblCorSum > dblCorMax)
+		if (fabsf(dblCorSum) > dblCorMax)
 		{
-			dblCorMax = dblCorSum;             
+			dblCorMax = fabsf(dblCorSum);
 			intJatMax = j;
-		}
-		else if (dblCorSum < dblCorMin)
-		{
-			dblCorMin = dblCorSum;
-			intJatMin = j;
-		}
+		}		
 	}
 
-	if (dblCorMax > fabsf(dblCorMin))
+	if (dblCorMax > 40 * dblCorMaxProduct)
+	{
+		Debugprintf("EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
 		return intJatMax;
+	}
 	else
-		return intJatMin + 120;
+		return -1;
 }
+ 
 
 //	Function to acquire the Frame Sync for all Frames 
 
@@ -1369,7 +1529,7 @@ BOOL AcquireFrameSyncRSB()
 	//  Locate the sync Symbol which has no phase change from the prior symbol (BPSK leader @ 1500 Hz)   
 
 	int intLocalPtr = intMFSReadPtr;
-	int intAvailableSymbols = (intFilteredMixedSamplesLength - intMFSReadPtr) / 120;
+	int intAvailableSymbols = (intFilteredMixedSamplesLength - intMFSReadPtr) / 240;
 	float dblPhaseSym1;	//' phase of the first symbol 
 	float dblPhaseSym2;	//' phase of the second symbol 
 	float dblPhaseSym3;	//' phase of the third symbol
@@ -1384,18 +1544,18 @@ BOOL AcquireFrameSyncRSB()
  
 	// Calculate the Phase for the First symbol 
 	
-	GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 120, 15, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+	GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
 	dblPhaseSym1 = atan2f(dblImag, dblReal);
-	intLocalPtr += 120;	// advance one symbol
-	GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 120, 15, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+	intLocalPtr += 240;	// advance one symbol
+	GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
 	dblPhaseSym2 = atan2f(dblImag, dblReal);
-	intLocalPtr += 120;		// advance one symbol
+	intLocalPtr += 240;		// advance one symbol
 
-	for (i = 0; i <=  intAvailableSymbols - 4; i++)
+	for (i = 0; i <=  intAvailableSymbols - 3; i++)
 	{
 		// Compute the phase of the next symbol  
 	
-		GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 120, 15, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+		GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
 		dblPhaseSym3 = atan2f(dblImag, dblReal);
 		// Compute the phase differences between sym1-sym2, sym2-sym3
 		dblPhaseDiff12 = dblPhaseSym1 - dblPhaseSym2;
@@ -1412,14 +1572,15 @@ BOOL AcquireFrameSyncRSB()
 
 		if (fabsf(dblPhaseDiff12) > 0.6667f * M_PI && fabsf(dblPhaseDiff23) < 0.3333f * M_PI)  // Tighten the margin to 60 degrees
 		{
-			intPSKRefPhase = (short)dblPhaseSym3 * 1000;
+//			intPSKRefPhase = (short)dblPhaseSym3 * 1000;
 
 			intLeaderRcvdMs = (int)ceil((intLocalPtr - 30) / 12);	 // 30 is to accomodate offset of inital pointer for filter length. 
-			intMFSReadPtr = intLocalPtr + 120;		 // Position read pointer to start of the symbol following reference symbol 
+			intMFSReadPtr = intLocalPtr + 240;		 // Position read pointer to start of the symbol following reference symbol 
+		
+			if (AccumulateStats)
+				intFrameSyncs += 1;		 // accumulate tuning stats
 	
-//	If (AccumulateStats)
-//		intFrameSyncs += 1;		 // accumulate tuning stats
-	//'strDecodeCapture &= "Sync; Phase1>2=" & Format(dblPhaseDiff12, "0.00") & " Phase2>3=" & Format(dblPhaseDiff23, "0.00") & ": "
+			//strDecodeCapture &= "Sync; Phase1>2=" & Format(dblPhaseDiff12, "0.00") & " Phase2>3=" & Format(dblPhaseDiff23, "0.00") & ": "
 	
 			return TRUE;	 // pointer is pointing to first 4FSK data symbol. (first symbol of frame type)
 		}
@@ -1427,11 +1588,11 @@ BOOL AcquireFrameSyncRSB()
 		{
 			dblPhaseSym1 = dblPhaseSym2;           
 			dblPhaseSym2 = dblPhaseSym3;
-			intLocalPtr += 120;			// advance one symbol 
+			intLocalPtr += 240;			// advance one symbol 
 		}
 	}
 
-	intMFSReadPtr = intLocalPtr - 240;		 // back up 2 symbols for next attempt (Current Sym2 will become new Sym1)
+	intMFSReadPtr = intLocalPtr - 480;		 // back up 2 symbols for next attempt (Current Sym2 will become new Sym1)
 	return FALSE;	
 }
 
@@ -1640,13 +1801,12 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 	}
 	else if (blnARQConnected)		// ' we have an ARQ connected session.
 	{
-			//if AccumulateStats Then
-              //      With stcTuningStats
-                //        .dblAvgDecodeDistance = (.dblAvgDecodeDistance * .intDecodeDistanceCount + 0.5 * (dblMinDistance1 + dblMinDistance2)) / (.intDecodeDistanceCount + 1)
-                  //      .intDecodeDistanceCount += 1
-                   // End With
-               // End If
-			
+		if (AccumulateStats)
+		{
+			dblAvgDecodeDistance = (dblAvgDecodeDistance * intDecodeDistanceCount + 0.5f * (dblMinDistance1 + dblMinDistance2)) / (intDecodeDistanceCount + 1);
+			intDecodeDistanceCount++;
+		}
+		
 		if (intIatMinDistance1 == intIatMinDistance2) // matching indexes at minimal distances so high probablity of correct decode.
 		{
 			if ((intIatMinDistance1 >= 0xE0 && intIatMinDistance1 <=0xFF) || (intIatMinDistance1 == 0x23) || 
@@ -1740,11 +1900,11 @@ int Acquire4FSKFrameType()
 	if (NewType >= 0 &&  IsShortControlFrame(NewType))		// update the constellation if a short frame (no data to follow)
 		Update4FSKConstellation(intToneMags, &intLastRcvdFrameQuality);
 
-	//if (AccumulateStats)
-	//	if (Acquire4FSKFrameType > 0)
-	//		intGoodFSKFrameTypes += 1;
-	//	else
-	//		intFailedFSKFrameTypes += 1;
+	if (AccumulateStats)
+		if (Acquire4FSKFrameType > 0)
+			intGoodFSKFrameTypes++;
+		else
+			intFailedFSKFrameTypes++;
 	
 	intMFSReadPtr += (240 * 10);			 // advance to read pointer to the next symbol (if there is one)
 	
@@ -1860,9 +2020,7 @@ void Demod1Car4FSKChar(int Start, UCHAR * Decoded)
 	static UCHAR bytSymHistory[3];
 	int j;
 	UCHAR bytData = 0;
-	
-	// If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
-    
+	   
 	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
     //    ReDim bytData(intNumOfSymbols \ 4 - 1)
 
@@ -1920,6 +2078,9 @@ void Demod1Car4FSKChar(int Start, UCHAR * Decoded)
 		Start += intSampPerSym; // advance the pointer one symbol
 	}
 
+	if (AccumulateStats)
+		intFSKSymbolCnt += 4;
+ 
 	Decoded[charIndex] = bytData;	
 	return;
 }
@@ -2120,11 +2281,7 @@ void Demod1Car8FSKChar(int Start, UCHAR * Decoded)
 	unsigned int intThreeBytes = 0;
 	int intMaxMag;
 	
-	// If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
     
-	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
-    //    ReDim bytData(intNumOfSymbols \ 4 - 1)
-
 	dblSearchFreq = intCenterFreq + (1.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
 
 	// Do one symbol
@@ -2176,6 +2333,9 @@ void Demod1Car8FSKChar(int Start, UCHAR * Decoded)
 	Decoded[charIndex++] = intThreeBytes >> 16;	
 	Decoded[charIndex++] = intThreeBytes >> 8;	
 	Decoded[charIndex++] = intThreeBytes;	
+
+	if (AccumulateStats)
+		intFSKSymbolCnt += 8;;
 
 	return;
 }
@@ -2273,11 +2433,6 @@ void Demod1Car16FSKChar(int Start, UCHAR * Decoded)
 	UCHAR bytData = 0;
 	int intMaxMag;
 	
-	// If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
-    
-	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
-    //    ReDim bytData(intNumOfSymbols \ 4 - 1)
-
 	dblSearchFreq = intCenterFreq + (7.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
 
 	// Do one symbol
@@ -2321,6 +2476,9 @@ void Demod1Car16FSKChar(int Start, UCHAR * Decoded)
 
 //	Debugprintf("Tone Mags Index %d", charIndex * 32 + 16 * j + k);
 
+	if (AccumulateStats)
+		intFSKSymbolCnt += 2;
+    
 	Decoded[charIndex++] = bytData;;	
 	return;
 }
@@ -2343,6 +2501,22 @@ BOOL Decode4FSKConReq()
  
 	FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
 
+	if (FrameOK && blnRSOK == FALSE)
+	{
+		// RS Claims to have corrected it, but check
+
+		Debugprintf("CONREQ Frame Corrected by RS");
+
+		FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+
+		// Should now be OK without connections, if not RS didn't fix it
+
+		if (blnRSOK == FALSE)
+		{
+			Debugprintf("CONREQ Still bad after RS");
+			FrameOK = FALSE;
+		}
+	}
 	memcpy(bytCall, bytFrameData1, 6);
 	DeCompressCallsign(bytCall, strCaller);
 	memcpy(bytCall, &bytFrameData1[6], 6);
@@ -2356,26 +2530,16 @@ BOOL Decode4FSKConReq()
 
 	// Recheck the returned data by reencoding
 	
-//	if (((bytCheck[12] == bytRawData[12]) || (bytCheck[13] == bytRawData[13])) && blnRSOK)
-	{
-		if (intFrameType == 0x31)
-			intBW = 200;
-		else if (intFrameType == 0x32)
-			intBW = 500;
-		else if (intFrameType == 0x33)
-			intBW = 1000;
-		else if (intFrameType == 0x34)
-			intBW = 2000;
-	
-        //    If MCB.AccumulateStats Then stcTuningStats.intGoodFSKFrameDataDecodes += 1
-        //    intTestFrameCorrectCnt += 1
+	if (intFrameType == 0x31)
+		intBW = 200;
+	else if (intFrameType == 0x32)
+		intBW = 500;
+	else if (intFrameType == 0x33)
+		intBW = 1000;
+	else if (intFrameType == 0x34)
+		intBW = 2000;
 
-		return TRUE;
-	}
-
-	//If MCB.AccumulateStats Then stcTuningStats.intFailedFSKFrameDataDecodes += 1
-
-	return FALSE;
+	return FrameOK;
 }
 
 // Function to Decode 1 carrier 4FSK 50 baud Connect Ack with timing 
@@ -2399,8 +2563,11 @@ BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
 		*intTiming = Timing;
 
 		// strRcvFrameTag = "_" & intTiming.ToString & " ms"
-        //    if (DebugLog) Debugprintf(("[DemodDecode4FSKConACK]  Remote leader timing reported: " & intTiming.ToString & " ms")
-         //   If MCB.AccumulateStats Then stcTuningStats.intGoodFSKFrameDataDecodes += 1
+  
+		if (DebugLog) Debugprintf("[DemodDecode4FSKConACK]  Remote leader timing reported: %d ms", intTiming);
+
+		if (AccumulateStats)
+			intGoodFSKFrameDataDecodes++;
          
 		//intTestFrameCorrectCnt++;
 		intReceivedLeaderLen = intLeaderRcvdMs;
@@ -2408,7 +2575,8 @@ BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
         return TRUE;
 	}
 	
-	//If MCB.AccumulateStats Then stcTuningStats.intFailedFSKFrameDataDecodes += 1
+	if (AccumulateStats)
+		intFailedFSKFrameDataDecodes++;
 
 	return FALSE;
 }
@@ -2420,6 +2588,23 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 	BOOL FrameOK;
 
 	FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+
+	if (FrameOK && blnRSOK == FALSE)
+	{
+		// RS Claims to have corrected it, but check
+
+		Debugprintf("ID Frame Corrected by RS");
+
+		FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+
+		// Should now be OK without connections, if not RS didn't fix it
+
+		if (blnRSOK == FALSE)
+		{
+			Debugprintf("ID Still bad after RS");
+			FrameOK = FALSE;
+		}
+	}
 
 	memcpy(bytCall, bytFrameData1, 6);
 	DeCompressCallsign(bytCall, strCallID);
@@ -2442,44 +2627,15 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 
         ///strRcvFrameTag = "_" & strCallID & " " & strGridSquare
 
-	// Double check decode by reencoding
+	if (AccumulateStats)
+		if (FrameOK)
+			intGoodFSKFrameDataDecodes++;
+		else
+			intFailedFSKFrameDataDecodes++;
 
-	//	Not sure if needed, but may be
 
-	if (FrameOK)
-	{
-		if (blnRSOK)
-		{
-			// Good without Correction
-		//if (AccumulateStats) intGoodFSKFrameDataDecodes++;
-			return TRUE;
-		}
-		// Good after correction
-
-		Debugprintf("ID Frame Corrected by RS");
-		return TRUE;
-	}
-
-	//   if (AccumulateStats)  intFailedFSKFrameDataDecodes++;
-	return FALSE;	// Not correctable
+	return FrameOK;	// Not correctable
 }
-
-//	RSEncode(bytDecodedRS, bytCheck, MaxCorrections, 12);
-        
-//	if ((bytCheck[12] == bytFrameData[12]) || (bytCheck[13] == bytFrameData[13]) && blnRSOK)
-//	{
-		//If MCB.AccumulateStats Then stcTuningStats.intGoodFSKFrameDataDecodes += 1
-            
-		//intTestFrameCorrectCnt += 1;
-//		return TRUE;
-//	}
-	//   If MCB.AccumulateStats Then stcTuningStats.intFailedFSKFrameDataDecodes += 1
-//	return FALSE;
-//}
-
-
-
-
 
 
  
@@ -2536,8 +2692,8 @@ void DemodulateFrame(int intFrameType)
 		break;
 		
 	
-			// 1 Carrier Data frames
-			// PSK Data
+		// 1 Carrier Data frames
+		// PSK Data
 
 					
 		case 0x40:
@@ -2548,6 +2704,14 @@ void DemodulateFrame(int intFrameType)
 		case 0x45:
 
 			DemodPSK();
+			break;
+
+		case 0x5c:
+		case 0x5d:
+
+		// 1 car 16qam
+
+			DemodQAM();
 			break;
 
 		//4FSK Data
@@ -2790,6 +2954,16 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 			break;
 
+		// 16 QAM
+
+		case 0x5C:
+		case 0x5D:
+		
+			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, &CarrierOk[0]);
+			blnDecodeOK = CarrierOk[0];
+			break;
+
+
 			// 2 Carrier Data frames
 			
 		case 0x50:
@@ -2986,11 +3160,11 @@ int Update4FSKConstellation(int * intToneMags, int * intQuality)
 	if (*intQuality < 0)
 		*intQuality = 0;
 
-	// if AccumulateStats
-	//{
-	//	int4FSKQualityCnts += 1;
-	//	int4FSKQuality += intQuality;
-	//}
+	if (AccumulateStats)
+	{
+		int4FSKQualityCnts += 1;
+		int4FSKQuality += *intQuality;
+	}
 
 	return *intQuality;
 }
@@ -3035,11 +3209,11 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 	*intQuality = max(0, (100 - 2.2 * (dblDistanceSum / (intToneMagsLength / 16))));	 // factor 2.2 emperically chosen for calibration (Qual range 25 to 100)
 //	*intQuality = max(0, (100 - 1.0 * (dblDistanceSum / (intToneMagsLength / 16))));	 // factor 2.2 emperically chosen for calibration (Qual range 25 to 100)
 
-		//If MCB.AccumulateStats Then
-        //        stcQualityStats.int16FSKQualityCnts += 1
-        //        stcQualityStats.int16FSKQuality += intQuality
-         //   End If
-
+	if(AccumulateStats)
+	{
+		int16FSKQualityCnts++;
+		int16FSKQuality += *intQuality;
+	}
 }
 
 //	Subroutine to udpate the 8FSK Constellation
@@ -3231,13 +3405,15 @@ VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float
 	{
 		*intPtr --;
 		Corrections--;
-        //        If AccumulateStats Then intAccumFSKTracking -= 1
+		if (AccumulateStats)
+			intAccumFSKTracking--;
 	}
 	else if (dblMagLate > dblMag && dblMagLate > dblMagEarly)
 	{
 		*intPtr ++;
 		Corrections++;
-       //         If AccumulateStats Then intAccumFSKTracking += 1
+		if (AccumulateStats)
+			intAccumFSKTracking++;
 	}
 }
 
@@ -3329,7 +3505,6 @@ VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier)
 	return;
 }
 
-
 //	Function to compute PSK symbol tracking (all PSK modes, used for single or multiple carrier modes) 
 
 int Track1CarPSK(int intCarFreq, char * strPSKMod, float dblUnfilteredPhase, BOOL blnInit)
@@ -3378,11 +3553,11 @@ int Track1CarPSK(int intCarFreq, char * strPSKMod, float dblUnfilteredPhase, BOO
 		dblFilteredPhaseOffset = dblPhaseOffset - dblRadiansPerSample;
 		dblPhaseAtLastTrack = dblFilteredPhaseOffset;
 	
-		//if MCB.AccumulateStats Then
-        //       stcTuningStats.intPSKTrackAttempts += 1
-        //        stcTuningStats.intAccumPSKTracking -= 1
-        // 
-
+		if (AccumulateStats)
+		{
+			intPSKTrackAttempts++;
+			intAccumPSKTracking--;
+		}
 		return -1;
 	}
 
@@ -3391,10 +3566,12 @@ int Track1CarPSK(int intCarFreq, char * strPSKMod, float dblUnfilteredPhase, BOO
 		//'Debug.WriteLine("Filtered<LastTrack: Cnt=" & intCountAtLastTrack.ToString & "  Filtered = " & Format(dblFilteredPhaseOffset, "00.000") & "  Offset = " & Format(dblPhaseOffset, "00.000") & "  Unfiltered = " & Format(dblUnfilteredPhase, "00.000"))
 		dblFilteredPhaseOffset = dblPhaseOffset + dblRadiansPerSample;
 		dblPhaseAtLastTrack = dblFilteredPhaseOffset;
-        //If MCB.AccumulateStats Then
-        //    stcTuningStats.intPSKTrackAttempts += 1
-        //  stcTuningStats.intAccumPSKTracking += 1
-	
+
+		if (AccumulateStats)
+		{
+			intPSKTrackAttempts++;
+			intAccumPSKTracking++;
+		}
 		return 1;
 	}
 	// 'Debug.WriteLine("Filtered Phase = " & Format(dblFilteredPhaseOffset, "00.000") & "  Offset = " & Format(dblPhaseOffset, "00.000") & "  Unfiltered = " & Format(dblUnfilteredPhase, "00.000"))
@@ -3505,7 +3682,85 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 	}
 }
 
+// Function to Decode one Carrier of 16QAM modulation 
 
+//	Call for each set of 4 or 8 Phase Values
+
+short intCarMagThreshold = 0;
+
+
+VOID Decode1CarQAMChar(UCHAR * Decoded, int Carrier)
+{
+	unsigned int intData;
+	UCHAR bytRawData;
+	int i, k;
+	int Start = 0;
+
+	int intPhasePtr;
+	
+	int intMagPeak = intCarMagThreshold, intAvgMin = 0, intAvgMax = 0, intCountMin = 0, intCountMax = 0;
+
+	// We calculated initial mag from reference symbol
+
+	// Now refine threshold based on magnitude averages
+ 
+	for (i = 0;  i < 8; i++)
+	{
+		if (intMags[0][i] > intCarMagThreshold)
+		{
+			intAvgMax += intMags[0][i];
+			intCountMax++;
+		}
+		else
+		{
+			intAvgMin += intMags[0][i];
+			intCountMin++;
+		}
+	}
+
+	if (intCountMin > 3 && intCountMax > 3)
+		intCarMagThreshold = ((intAvgMax / intCountMax) + (intAvgMin / intCountMin)) / 2;  // half way between the two averages
+
+//	printf("%d\n", intCarMagThreshold);
+
+	// Phase Samples are in intPhases
+
+	for (i = 0; i < 4; i++)
+	{
+
+	intData = 0;
+
+	for (k = 0; k < 2; k++)
+	{
+		intData <<= 4;
+
+		if (intPhases[Carrier][Start] < 393 && intPhases[Carrier][Start] > -393)
+		{
+		}		// Zero so no need to do anything
+		else if (intPhases[Carrier][Start] >= 393 && intPhases[Carrier][Start] < 1179)
+			intData += 1;
+		else if (intPhases[Carrier][Start] >= 1179 && intPhases[Carrier][Start] < 1965)
+			intData += 2;
+		else if (intPhases[Carrier][Start] >= 1965 && intPhases[Carrier][Start] < 2751)
+			intData += 3;
+		else if (intPhases[Carrier][Start] >= 2751 || intPhases[Carrier][Start] < -2751)
+			intData += 4;
+		else if (intPhases[Carrier][Start] >= -2751 && intPhases[Carrier][Start] < -1965)
+			intData += 5;
+		else if (intPhases[Carrier][Start] >= -1965 && intPhases[Carrier][Start] <= -1179)
+			intData += 6;
+		else 
+			intData += 7;
+
+		if (intMags[Carrier][Start] < intCarMagThreshold)
+			intData += 8;		//  add 8 to "inner circle" symbols. 
+
+		Start ++;
+
+	}
+	Decoded[charIndex++] = intData;
+	}
+}
 //	Functions to demod all PSKData frames single or multiple carriers 
 
 double dblPhaseInc;  // in milliradians
@@ -3775,7 +4030,254 @@ int Demod1CarPSKChar(int Start, int Carrier)
 		intPhasesLen++;
 		Start += intSampPerSym;
 	}
-       // If AccumulateStats Then intPSKSymbolCnt += intPhase.Length
+ 
+	if (AccumulateStats)
+		intPSKSymbolCnt += intNumOfSymbols;
+
+	return (Start - origStart);	// Symbols we've consumed
+}
+
+
+VOID InitDemodQAM()
+{
+	// Called at start of frame
+
+	int i;
+	float dblPhase, dblReal, dblImag;
+
+	intPSKMode = 8;				// 16QAM uses 8 PSK
+	PSKInitDone = TRUE;
+
+	intSampPerSym = 120;
+
+	intCarFreq = 1500;
+  
+	for (i= 0; i < intNumCar; i++)
+	{
+		if (intBaud == 100 && intCarFreq == 1500) 
+		{
+			//  These values selected for best decode percentage (92%) and best average 4PSK Quality (82) on MPP0dB channel
+			
+			intCP[i] = 18;
+			intNforGoertzel[i] = 84;
+			dblFreqBin[i] = (intCarFreq * intNforGoertzel[i]) / 12000;
+		}
+	
+		// Get initial Reference Phase
+		
+		GoertzelRealImag(intFilteredMixedSamples, intCP[i], intNforGoertzel[i], dblFreqBin[i], &dblReal, &dblImag);
+		dblPhase = atan2f(dblImag, dblReal);
+
+		// Set initial mag from REeference Phase (which should be full power)
+
+		intCarMagThreshold = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
+		intCarMagThreshold *= 0.75;
+
+		Track1CarPSK(intCarFreq, strMod, dblPhase, TRUE);
+		intPSKPhase_1[i] = 1000 * dblPhase;
+		intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+	}
+}
+
+int Demod1CarQAMChar(int Start, int Carrier);
+
+BOOL DemodQAM()
+{
+	int Used;
+	int Start = 0;
+
+	// We can't wait for the full frame as we don't have enough RAM, so
+	// we do one DMA Buffer at a time, until we run out or end of frame
+
+	// Only continue if we have enough samples
+
+	while (State == AcquireFrame)
+	{
+		if (intFilteredMixedSamplesLength < 8 * intSampPerSym + 10) // allow for a few phase corrections
+		{
+			// Move any unprocessessed data down buffer
+
+			//	(while checking process - will use cyclic buffer eventually
+
+			if (intFilteredMixedSamplesLength > 0)
+				memmove(intFilteredMixedSamples,
+					&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
+
+			return FALSE;
+		}
+		
+
+		if (PSKInitDone == 0)		// First time through
+		{	
+			if (intFilteredMixedSamplesLength < 8 * intSampPerSym + 10) 
+				return FALSE;				// Wait for at least 2 chars worth
+
+			InitDemodQAM();
+			intFilteredMixedSamplesLength -= intSampPerSym;
+			Start += intSampPerSym;	
+		}
+
+		// If this is a multicarrier mode, we must call the
+		// decode char routing for each carrier
+
+		if (intNumCar == 1)
+			intCarFreq = 1500;
+		else
+			intCarFreq = 1400 + (intNumCar / 2) * 200; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
+
+	
+		switch (intNumCar)
+		{
+		case 1:
+
+			Used = Demod1CarQAMChar(Start, 0);
+			break;
+/*
+		case 2:
+
+			Demod1CarPSKChar(Start, 0);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Used = Demod1CarPSKChar(Start, 1);
+			break;
+
+		case 4:
+
+			Demod1CarPSKChar(Start, 0);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+	
+			Demod1CarPSKChar(Start, 1);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 2);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Used = Demod1CarPSKChar(Start, 3);
+			break;
+
+		case 8:
+
+			Demod1CarPSKChar(Start, 0);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 1);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 2);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 3);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 4);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 5);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 6);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Used = Demod1CarPSKChar(Start, 7);	
+*/	
+		}
+
+		//	if we have 4 or 8 Phase samples, decode them 
+		
+		// (or each carrier)
+
+		if (intPhasesLen >= intPSKMode)
+		{
+	//		CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
+
+			Decode1CarQAMChar(bytFrameData1, 0);
+
+/*			if (intNumCar > 1)
+				Decode1CarPSKChar(bytFrameData2, 1);
+			if (intNumCar > 2)
+			{
+				Decode1CarPSKChar(bytFrameData3, 2);
+				Decode1CarPSKChar(bytFrameData4, 3);
+			}
+			if (intNumCar > 4)
+			{
+				Decode1CarPSKChar(bytFrameData5, 4);
+				Decode1CarPSKChar(bytFrameData6, 5);
+				Decode1CarPSKChar(bytFrameData7, 6);
+				Decode1CarPSKChar(bytFrameData8, 7);
+			}
+*/
+			intPhasesLen -= intPSKMode;
+
+			SymbolsLeft-=4;		// number still to decode
+		}
+
+		Start += Used; //intSampPerSym * 4;	
+		intFilteredMixedSamplesLength -= Used; //intSampPerSym * 4;
+
+		if (SymbolsLeft <= 0)	
+		{	
+			// prepare for next
+
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
+		}
+	}
+	return TRUE;
+}
+
+// Function to demodulate one carrier for all PSK frame types
+int Demod1CarQAMChar(int Start, int Carrier)
+{
+	// Converts intSample to an array of differential phase and magnitude values for the Specific Carrier Freq
+	// intPtr should be pointing to the approximate start of the first reference/training symbol (1 of 3) 
+	// intPhase() is an array of phase values (in milliradians range of 0 to 6283) for each symbol 
+	// intMag() is an array of Magnitude values (not used in PSK decoding but for constellation plotting or QAM decoding)
+	// Objective is to use Minimum Phase Error Tracking to maintain optimum pointer position
+
+	//	This is called for one DMA buffer of samples (normally 1200)
+
+	float dblReal, dblImag;
+	int intMiliRadPerSample = intCarFreq * M_PI / 6;
+	int i;
+	int intNumOfSymbols = 4;
+	int origStart = Start;;
+
+	for (i = 0; i <  intNumOfSymbols; i++)
+	{
+		GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+		intMags[Carrier][intPhasesLen] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
+		intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+		intPhases[Carrier][intPhasesLen] = -(ComputeAng1_Ang2(intPSKPhase_0[Carrier], intPSKPhase_1[Carrier]));
+
+		Corrections = Track1CarPSK(intCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
+
+		if (Corrections != 0)
+		{
+			Start += Corrections;
+
+			GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+			intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+		}
+		intPSKPhase_1[Carrier] = intPSKPhase_0[Carrier];
+		intPhasesLen++;
+		Start += intSampPerSym;
+	}
+       
+	if (AccumulateStats)
+		intQAMSymbolCnt += intNumOfSymbols;
 
 	return (Start - origStart);	// Symbols we've consumed
 }

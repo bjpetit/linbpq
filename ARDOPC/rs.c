@@ -30,6 +30,8 @@
 #include <string.h>
 #include "ecc.h"
 
+void Debugprintf(const char * format, ...);
+
 /* Encoder parity bytes */
 int pBytes[MAXDEG];
 

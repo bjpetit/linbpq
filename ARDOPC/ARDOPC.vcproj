@@ -64,6 +64,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
+				OutputFile="c:\devprogs\bpq32\ARDOPC.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
@@ -139,9 +140,11 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
+				OutputFile="\devprogs\bpq32\ARDOPC.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
+				MapFileName="ARDOPC.map"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -198,6 +201,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\CalcTemplates.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ecc.h"
 				>
 			</File>
@@ -241,6 +248,16 @@
 				RelativePath=".\Waveout.c"
 				>
 			</File>
+			<File
+				RelativePath=".\xrs.c"
+				>
+			</File>
+			<Filter
+				Name="Resource Files"
+				Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
+				UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
+				>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -251,12 +268,6 @@
 				RelativePath=".\ARDOPC.h"
 				>
 			</File>
-		</Filter>
-		<Filter
-			Name="Resource Files"
-			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
-			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
-			>
 		</Filter>
 		<File
 			RelativePath=".\ReadMe.txt"

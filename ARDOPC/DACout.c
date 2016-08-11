@@ -13,7 +13,7 @@ extern unsigned short buffer[2][1200];
 #define   DAC_DHR12R1_ADDR  0x40007408			// DAC 12 Bit Left Justified
 #define   DAC_DHR12L1_ADDR  0x40007410			// DAC 12 Bit Right Justified
 #define   CNT_FREQ			90000000			// TIM6 clock (prescaled APB1) ?? 180/2
-#define   TIM_PERIOD		(CNT_FREQ/12000)	// Generate DMS Request at this interval.
+#define   TIM_PERIOD		(CNT_FREQ/24000)	// Generate DMS Request at this interval.
 
 static void TIM6_Config(void);
 static void DAC1_Config(void);

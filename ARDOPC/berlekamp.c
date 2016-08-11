@@ -54,6 +54,8 @@ static void mul_z_poly (int src[]);
 static int ErrorLocs[256];
 int NErrors;
 
+extern int MaxErrors;
+
 /* erasure flags */
 static int ErasureLocs[256];
 static int NErasures;
@@ -83,25 +85,25 @@ Modified_Berlekamp_Massey (void)
     if (d != 0) {
 		
       /* psi2 = psi - d*D */
-      for (i = 0; i < MAXDEG; i++) psi2[i] = psi[i] ^ gmult(d, D[i]);
+      for (i = 0; i < NPAR*2; i++) psi2[i] = psi[i] ^ gmult(d, D[i]);
 		
 		
       if (L < (n-k)) {
 	L2 = n-k;
 	k = n-L;
 	/* D = scale_poly(ginv(d), psi); */
-	for (i = 0; i < MAXDEG; i++) D[i] = gmult(psi[i], ginv(d));
+	for (i = 0; i < NPAR*2; i++) D[i] = gmult(psi[i], ginv(d));
 	L = L2;
       }
 			
       /* psi = psi2 */
-      for (i = 0; i < MAXDEG; i++) psi[i] = psi2[i];
+      for (i = 0; i < NPAR*2; i++) psi[i] = psi2[i];
     }
 		
     mul_z_poly(D);
   }
 	
-  for(i = 0; i < MAXDEG; i++) Lambda[i] = psi[i];
+  for(i = 0; i < NPAR*2; i++) Lambda[i] = psi[i];
   compute_modified_omega();
 
 	
@@ -130,19 +132,19 @@ mult_polys (int dst[], int p1[], int p2[])
   int i, j;
   int tmp1[MAXDEG*2];
 	
-  for (i=0; i < (MAXDEG*2); i++) dst[i] = 0;
+  for (i=0; i < (NPAR*2*2); i++) dst[i] = 0;
 	
-  for (i = 0; i < MAXDEG; i++) {
-    for(j=MAXDEG; j<(MAXDEG*2); j++) tmp1[j]=0;
+  for (i = 0; i < NPAR*2; i++) {
+    for(j=NPAR*2; j<(NPAR*2*2); j++) tmp1[j]=0;
 		
     /* scale tmp1 by p1[i] */
-    for(j=0; j<MAXDEG; j++) tmp1[j]=gmult(p2[j], p1[i]);
+    for(j=0; j<NPAR*2; j++) tmp1[j]=gmult(p2[j], p1[i]);
     /* and mult (shift) tmp1 right by i */
-    for (j = (MAXDEG*2)-1; j >= i; j--) tmp1[j] = tmp1[j-i];
+    for (j = (NPAR*2*2)-1; j >= i; j--) tmp1[j] = tmp1[j-i];
     for (j = 0; j < i; j++) tmp1[j] = 0;
 		
     /* add into partial product */
-    for(j=0; j < (MAXDEG*2); j++) dst[j] ^= tmp1[j];
+    for(j=0; j < (NPAR*2*2); j++) dst[j] ^= tmp1[j];
   }
 }
 
@@ -172,7 +174,7 @@ void
 compute_next_omega (int d, int A[], int dst[], int src[])
 {
   int i;
-  for ( i = 0; i < MAXDEG;  i++) {
+  for ( i = 0; i < NPAR*2;  i++) {
     dst[i] = src[i] ^ gmult(d, A[i]);
   }
 }
@@ -194,26 +196,26 @@ compute_discrepancy (int lambda[], int S[], int L, int n)
 void add_polys (int dst[], int src[]) 
 {
   int i;
-  for (i = 0; i < MAXDEG; i++) dst[i] ^= src[i];
+  for (i = 0; i < NPAR*2; i++) dst[i] ^= src[i];
 }
 
 void copy_poly (int dst[], int src[]) 
 {
   int i;
-  for (i = 0; i < MAXDEG; i++) dst[i] = src[i];
+  for (i = 0; i < NPAR*2; i++) dst[i] = src[i];
 }
 
 void scale_poly (int k, int poly[]) 
 {	
   int i;
-  for (i = 0; i < MAXDEG; i++) poly[i] = gmult(k, poly[i]);
+  for (i = 0; i < NPAR*2; i++) poly[i] = gmult(k, poly[i]);
 }
 
 
 void zero_poly (int poly[]) 
 {
   int i;
-  for (i = 0; i < MAXDEG; i++) poly[i] = 0;
+  for (i = 0; i < NPAR*2; i++) poly[i] = 0;
 }
 
 
@@ -221,7 +223,7 @@ void zero_poly (int poly[])
 static void mul_z_poly (int src[])
 {
   int i;
-  for (i = MAXDEG-1; i > 0; i--) src[i] = src[i-1];
+  for (i = NPAR*2-1; i > 0; i--) src[i] = src[i-1];
   src[0] = 0;
 }
 
@@ -287,7 +289,7 @@ correct_errors_erasures (unsigned char codeword[],
   if (DEBUG) fprintf(stderr, "RS found %d errors\n", NErrors);
 
 
-  if ((NErrors <= NPAR) && NErrors > 0) { 
+  if ((NErrors <= MaxErrors) && NErrors > 0) { 
 
     /* first check for illegal error locs */
     for (r = 0; r < NErrors; r++) {
@@ -303,12 +305,12 @@ correct_errors_erasures (unsigned char codeword[],
       /* evaluate Omega at alpha^(-i) */
 
       num = 0;
-      for (j = 0; j < MAXDEG; j++) 
+      for (j = 0; j < NPAR*2; j++) 
 	num ^= gmult(Omega[j], gexp[((255-i)*j)%255]);
       
       /* evaluate Lambda' (derivative) at alpha^(-i) ; all odd powers disappear */
       denom = 0;
-      for (j = 1; j < MAXDEG; j += 2) {
+      for (j = 1; j < NPAR*2; j += 2) {
 	denom ^= gmult(Lambda[j], gexp[((255-i)*(j-1)) % 255]);
       }
       

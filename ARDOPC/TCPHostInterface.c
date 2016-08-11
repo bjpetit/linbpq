@@ -54,6 +54,7 @@ VOID * _GetBuff(char * File, int Line);
 int C_Q_COUNT(VOID *Q);
 
 void ProcessCommandFromHost(char * strCMD);
+BOOL checkcrc16(unsigned char * Data, unsigned short length);
 
 extern int port;
 
@@ -428,12 +429,11 @@ loop:
 
 			int DataLen = (ARDOPBuffer[2] << 8) + ARDOPBuffer[3]; // HI First
 			unsigned short CRC;
-			UCHAR * Data;
 			
 			if (InputLen < DataLen + 6)
 				return;					// Wait for more
 
-			MsgLen = DataLen + 6;		// d: Len CRC
+			MsgLen = DataLen + 6;		// D: Len CRC
 
 			// Check CRC
 
@@ -442,24 +442,28 @@ loop:
 			if (CRC == 0)
 				return;
 
-			Data = &ARDOPBuffer[4];
-	
-			AddDataToDataToSend(Data, DataLen);
-		
-			SendCommandToHost("RDY");
-	
-			// See if anything else in buffer
+			memcpy(Buffer, &ARDOPBuffer[4], DataLen);
 
 			InputLen -= MsgLen;
 
-			if (InputLen == 0)
-			{
-				InReceiveProcess = FALSE;
-				return;
-			}
+			if (InputLen > 0)
+				memmove(ARDOPBuffer, &ARDOPBuffer[MsgLen],  InputLen);
 
-			memmove(ARDOPBuffer, &ARDOPBuffer[MsgLen],  InputLen);
-			goto loop;
+			InReceiveProcess = TRUE;
+			AddDataToDataToSend(Buffer, DataLen);
+			SendCommandToHost("RDY");
+			InReceiveProcess = FALSE;
+	
+			// See if anything else in buffer
+
+			if (InputLen > 0)
+				goto loop;
+
+			if (InputLen < 0)
+				InputLen = 0;
+
+			return;
+
 		}
 	}
 

@@ -12,12 +12,41 @@
 
 //short buffer[BUFFER_SIZE];
 
+enum kiss_state_e {
+	KS_SEARCHING,		/* Looking for FEND to start KISS frame. */
+	KS_COLLECTING};		/* In process of collecting KISS frame. */
+
+
+#define MAX_KISS_LEN 2048	/* Spec calls for at least 1024. */
+				/* Might want to make it longer to accomodate */
+				/* maximum packet length. */
+
+#define MAX_NOISE_LEN 100
+
+
+typedef struct kiss_frame_s {
+
+	enum kiss_state_e state;
+
+	unsigned char kiss_msg[MAX_KISS_LEN];
+				/* Leading FEND is optional. */
+				/* Contains escapes and ending FEND. */
+	int kiss_len;
+
+	unsigned char noise[MAX_NOISE_LEN];
+	int noise_len;
+
+} kiss_frame_t;
+
+
+
 extern "C" {
 	void InitValidFrameTypes();
 	void GetNextFECFrame();
-	void ardopmain();
+	void direwolfmain();
 	void printtick(char * msg);
 	void Debugprintf(const char * format, ...);
+	void dw_printf(const char * format, ...);
 	void Config_ADC_DMA(void);
 	void Start_ADC_DMA(void);
 	void ProcessNewSamples(short * Samples, int nSamples);
@@ -32,10 +61,18 @@ extern "C" {
 	void Sleep(int delay);
 	void SerialSink(UCHAR c);
 	void SerialSendData(unsigned char * Msg, int Len);
+	void PollReceivedSamples();
 
 	void init_I2C1(void);
 	void initdisplay();
+	void kiss_rec_byte(kiss_frame_t *kf, unsigned char ch, int debug, void (*sendfun)(int,unsigned char*,int));
+//	void kiss_rec_byte(kiss_frame_t *kf, unsigned char ch, int debug);
+	void kiss_send_rec_packet (int chan, unsigned char *fbuf,  int flen);
+	void recv_process();
+	int xmit_process();
 }
+
+
 
 InterruptIn mybutton(USER_BUTTON);
 DigitalOut myled(LED1);
@@ -87,6 +124,7 @@ int lastchan = 0;
 // we only need room for 1 frame
 
 #define SCSBufferSize 280
+#define KISSBufferSize 1024
 
 char tx_buffer[SCSBufferSize];
 
@@ -95,6 +133,14 @@ char tx_buffer[SCSBufferSize];
 volatile int tx_in=0;
 volatile int tx_out=0;
 volatile int tx_stopped = 1;
+
+unsigned char rx_buffer[KISSBufferSize];
+
+// Circular buffer pointers
+// volatile makes read-modify-write atomic
+volatile int rx_in=0;
+volatile int rx_out=0;
+
 
 char line[80];
 
@@ -133,10 +179,9 @@ void rxcallback()
 	unsigned char c;
 	c = serial.getc();
 
-	SerialSink(c);
-//	serial2.printf("%c", c);
+	rx_buffer[rx_in] = c;
+	rx_in = (rx_in + 1) % KISSBufferSize;
 
-//	 myled = !myled;
 }
 
 void txcallback()
@@ -233,7 +278,9 @@ void tx3callback()
 }
 
 
+extern kiss_frame_t kf;		/* Accumulated KISS frame and state of decoder. */
 
+int kissdebug = 2;
 
 int main()
 {
@@ -266,23 +313,46 @@ int main()
     IWDG_ReloadCounter();
 
     /* Enable IWDG (the LSI oscillator will be enabled by hardware) */
-    IWDG_Enable();
+ //   IWDG_Enable();
 
 
 	Debugprintf("Clock Freq %d", SystemCoreClock);
 
-	init_I2C1();
+//	init_I2C1();
 
 	Debugprintf("i2c init returned");
 
-	initdisplay();
+//	initdisplay();
 
 	mybutton.fall(&pressed);
 
 	ti.attach(tick, .001);
 
-	ardopmain();
+	direwolfmain();
+
+	myled = 0;
+
+	while (1)
+	{
+		unsigned char ch;
+
+		if (rx_in != rx_out)
+		{
+			ch = rx_buffer[rx_out];
+			rx_out = (rx_out + 1) % KISSBufferSize;
+			kiss_rec_byte (&kf, ch, kissdebug, kiss_send_rec_packet);
+		}
+
+		PollReceivedSamples();
+
+		recv_process();
+
+		// See if we have anything to send
+
+		xmit_process();
+	}
 }
+
 
 extern "C" void PlatformSleep()
 {
@@ -322,6 +392,19 @@ VOID Debugprintf(const char * format, ...)
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
+
+	Serial3SendData((unsigned char *)Mess, strlen(Mess));
+
+	return;
+}
+
+VOID dw_printf(const char * format, ...)
+{
+	char Mess[1000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
 
 	Serial3SendData((unsigned char *)Mess, strlen(Mess));
 

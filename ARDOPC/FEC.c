@@ -34,7 +34,7 @@ UCHAR bytLastFECDataFrameSent;
 
 char strCurrentFrameFilename[16];
 
-int dttLastFECIDSent;
+unsigned int dttLastFECIDSent;
 
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
@@ -269,7 +269,7 @@ sendit:
 			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
 			Mod8FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
-		else
+		else		// This handles PSK and QAM
 		{
 			EncLen = EncodePSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
 			ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 

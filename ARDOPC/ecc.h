@@ -42,7 +42,7 @@
 
   ****************************************************************/
 
-#define MAXNPAR 60		//	Sets size of static tables
+#define MAXNPAR 64		//	Sets size of static tables
 
 extern int NPAR;		// Currently used number
 

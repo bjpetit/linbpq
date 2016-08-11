@@ -6,6 +6,11 @@
 BOOL blnProcessingCmdData = FALSE; // Processing a Command or Data frame
 BOOL blnHostRDY = FALSE;
 
+void SendData();
+BOOL CheckForDisconnect();
+int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
+int ComputeInterFrameInterval(int intRequestedIntervalMS);
+
 #ifndef WIN32
 
 #define strtok_s strtok_r
@@ -37,6 +42,11 @@ int _memicmp(unsigned char *a, unsigned char *b, int n)
 
 #endif
 
+extern unsigned int dttTimeoutTrip;
+#define BREAK 0x23
+extern UCHAR bytSessionID;
+
+
 //	Subroutine to add data to outbound queue (bytDataToSend)
 
 void AddDataToDataToSend(UCHAR * bytNewData, int Len)
@@ -55,6 +65,50 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);
+
+	if (ProtocolState == QUIET)
+	{
+		// Implements Transision Rule 3.1
+		// Status: apprears to work OK version 0.5.0.3
+
+		if (DebugLog) Debugprintf("[ARDOPprotocol.AddDataToDataToSend %d bytes to send in QUIET state: QUIET>ISS (Rule 3.1)", bytDataToSendLength);
+ 
+		SetARDOPProtocolState(ISS);
+		ARQState = ISSData;
+		SendData();
+	}
+	else if (ProtocolState == IRS)
+	{
+		time_t dttStartWait  = Now;
+		
+		// if Transmitting, wait. Will check for Data to Send and IRS at end of TX
+
+		if (SoundIsPlaying)
+			return;
+
+		// This is to hold off starting a repeating BREAK if in process of receiving a valid frame. 
+       
+		while ((Now - dttStartWait < 6000) && ProtocolState == IRS && (State != SearchingForLeader))
+			txSleep(20);
+
+
+		dttTimeoutTrip = Now;  //keep BREAK Repeats fairly long (preliminary value 1 - 4 seconds)
+
+		if (ProtocolState == IRS)
+		{
+			// Test ProtocolState again in case was changed during above wait loop
+                       
+			SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
+			blnEnbARQRpt = TRUE;	// setup for repeats until changeover 
+               
+			if (DebugLog) Debugprintf("[ARDOPprotocol.AddDataToDataToSend] %d bytes to send in ProtocolState: %s : Send BREAK,  New protocol state=IRStoISS (Rule 3.3)", bytDataToSendLength, ARDOPStates[ProtocolState]);
+               
+			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 1000) ; //keep BREAK Repeats fairly short (preliminary value 1 - 2 seconds)
+
+			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+		}
+	}
 }
 
 
@@ -326,9 +380,11 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "DISCONNECT") == 0)
 	{
-		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS)
+		if (ProtocolState == QUIET || ProtocolState == IRS || ProtocolState == ISS || ProtocolState == IRStoISS)
+		{
 			blnARQDisconnect = TRUE;
-
+			CheckForDisconnect();
+		}
 		goto cmddone;
 	}
 /*
@@ -357,6 +413,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, DriveLevel);
+			SendCommandToHost(cmdReply);
 			goto cmddone;
 		}
 		else
@@ -402,7 +459,10 @@ void ProcessCommandFromHost(char * strCMD)
 		int i;
 
 		if (ptrParams == 0)
+		{
 			sprintf(cmdReply, "%s %s", strCMD, strFECMode);
+			SendCommandToHost(cmdReply);
+		}
 		else
 		{
 			for (i = 0;  i < strAllDataModesLen; i++)
@@ -894,6 +954,31 @@ void ProcessCommandFromHost(char * strCMD)
                     strFault = "Not from state " & objMain.objProtocol.GetARDOPProtocolState.ToString
                 End If
 */
+
+
+	if (strcmp(strCMD, "TUNINGRANGE") == 0)
+	{
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "%s %d", strCMD, TuningRange);
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		else
+		{
+			i = atoi(ptrParams);
+
+			if (i >= 0 && i <= 200)	
+				TuningRange = i;
+			else
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+	}
+
+
 	if (strcmp(strCMD, "VERSION") == 0)
 	{
 		sprintf(cmdReply, "VERSION %s_%s", ProductName, ProductVersion);

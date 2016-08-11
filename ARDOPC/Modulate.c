@@ -14,8 +14,8 @@ void Flush();
 
 void GetTwoToneLeaderWithSync(int intSymLen)
 {
-	// Generate a 100 baud (10 ms symbol time) 2 tone leader 
-	// leader tones used are 1450 and 1550 Hz.  
+	// Generate a 50 baud (20 ms symbol time) 2 tone leader 
+    // leader tones used are 1475 and 1525 Hz.  
   
 	int intSign = 1;
 	int i, j;
@@ -26,12 +26,12 @@ void GetTwoToneLeaderWithSync(int intSymLen)
 
 	for (i = 0; i < intSymLen; i++)   //for the number of symbols needed (two symbols less than total leader length) 
 	{
-		for (j = 0; j < 120; j++)	// for 120 samples per symbol (100 baud) 
+		for (j = 0; j < 240; j++)	// for 240 samples per symbol (50 baud) 
 		{
            if (i != (intSymLen - 1)) 
-			   intSample = intSign * intTwoToneLeaderTemplate[j];
+			   intSample = intSign * int50BaudTwoToneLeaderTemplate[j];
 		   else
-			   intSample = -intSign * intTwoToneLeaderTemplate[j];
+			   intSample = -intSign * int50BaudTwoToneLeaderTemplate[j];
    
 		   SampleSink(intSample);
 		}
@@ -54,7 +54,7 @@ void SendLeaderAndSYNC(UCHAR * bytEncodedBytes, int intLeaderLen)
 
  	// Create the leader
 
-	GetTwoToneLeaderWithSync(intLeaderLenMS / 10);
+	GetTwoToneLeaderWithSync(intLeaderLenMS / 20);
 		       
 	//Create the 8 symbols (16 bit) 50 baud 4FSK frame type with Implied SessionID
 	// No reference needed for 4FSK
@@ -499,7 +499,7 @@ UCHAR GetSym8PSK(int intDataPtr, int k, int intCar, UCHAR * bytEncodedBytes, int
 	return bytSym;
 }
 
-// Function to Modulate data encoded for PSK, create
+// Function to Modulate data encoded for PSK and 16QAM, create
 // the 16 bit samples and send to sound interface
    
 
@@ -732,6 +732,58 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 			intDataPtr += 3;
 		}
 	}
+	else if (strcmp(strMod, "16QAM") == 0)
+	{
+		for (m = 0; m < intDataBytesPerCar; m++)  // For each byte of input data (all carriers) 
+		{
+			bytMask = 0xF0; // Initialize mask each new data byte
+                        
+			for (k = 0; k < 2; k++)  // for 2 symbol values per byte of data
+			{                 
+				for (n = 0; n < intSampPerSym; n++)  // Sum for all the samples of a symbols 
+				{
+					intSample = 0;
+					intCarIndex = intCarStartIndex; // initialize the carrrier index
+
+					bytSym = (bytMask & bytEncodedBytes[intDataPtr]) >> (4 * (1 - k));
+					bytSymToSend = (bytLastSym[intCarIndex] + (bytSym & 7)) & 7;  // Values 0-7
+								
+					if (intBaud == 100)
+					{
+						if (bytSym < 8)
+						{
+							if (bytSymToSend < 4) // This uses the symmetry of the symbols to reduce the table size by a factor of 2
+								intSample += intPSK100bdCarTemplate[intCarIndex][bytSymToSend][n]; // positive phase values template lookup for 8PSK.
+							else
+								intSample -= intPSK100bdCarTemplate[intCarIndex][bytSymToSend - 4][n]; // negative phase values,  subtract value of table 
+						}
+						else
+						{
+							if (bytSymToSend < 4) // This uses the symmetry of the symbols to reduce the table size by a factor of 2
+								intSample += 0.5f * intPSK100bdCarTemplate[intCarIndex][bytSymToSend][n]; // positive phase values template lookup for 8PSK.
+							else
+								intSample -= 0.5f * intPSK100bdCarTemplate[intCarIndex][bytSymToSend - 4][n]; // negative phase values,  subtract value of table 
+						}
+					}	
+					if (n == intSampPerSym - 1)		// Last sample?
+						bytLastSym[intCarIndex] = bytSymToSend;
+
+					intSample = intSample * dblCarScalingFactor; // on the last carrier rescale value based on # of carriers to bound output
+
+					if (intSample > 32700)
+						intSample = 32700;
+				
+					if (intSample < -32700)
+					  	intSample = -32700;
+					
+					SampleSink(intSample);		
+				}      
+				bytMask = bytMask >> 4;
+			}
+			intDataPtr += 1;
+		}
+	}
+
 	Flush();
 }
 
@@ -1050,9 +1102,34 @@ void SampleSink(short Sample)
 	SampleNo++;
 }
 
+extern int dttTimeoutTrip;
+#define BREAK 0x23
+extern UCHAR bytSessionID;
+
+
 void Flush()
 {
 	SoundFlush(Number);
+
+	// If Data to send and IRS, send BREAK
+
+	if (bytDataToSendLength)
+	{
+		if (ProtocolState == IRS)
+		{
+                      
+			SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
+			blnEnbARQRpt = TRUE;	// setup for repeats until changeover 
+               
+			if (DebugLog) Debugprintf("[ARDOPprotocol.AddDataToDataToSend] %d bytes to send in ProtocolState: %s : Send BREAK,  New protocol state=IRStoISS (Rule 3.3)", bytDataToSendLength, ARDOPStates[ProtocolState]);
+               
+			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 1000) ; //keep BREAK Repeats fairly short (preliminary value 1 - 2 seconds)
+	
+			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+		}
+	}
 }
+
 
 

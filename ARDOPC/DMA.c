@@ -25,7 +25,7 @@
 #define DAC_DHR12RD_ADDRESS		((uint32_t)0x40007420)
 #define DAC_DHR12R2_ADDRESS		((uint32_t)0x40007414)
 
-#define SAMPLE_RATE     12000   // 12kHz
+#define SAMPLE_RATE     24000   // 12kHz
 #define CHANNELS        1               // 1 = mono, 2 = stereo
 #define SAMPLES_PER_BLOCK 1200
 // *******************************************

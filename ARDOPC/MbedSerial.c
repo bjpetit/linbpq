@@ -31,8 +31,8 @@ void HostPoll()
 
 void SerialSink(unsigned char c)
 {
-	if (RXBPtr < 300)
-		RXBUFFER[RXBPtr++] = c;
+//	if (RXBPtr < 300)
+//		RXBUFFER[RXBPtr++] = c;
 }
 
 

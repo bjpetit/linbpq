@@ -25,6 +25,7 @@ BOOL GetNextARQFrame();
 BOOL HostInit();
 void HostPoll();
 BOOL MainPoll();
+void PlatformSleep();
 
 // Config parameters
 
@@ -33,7 +34,7 @@ char Callsign[10] = "";
 BOOL wantCWID = FALSE;
 int LeaderLength = 160;
 int TrailerLength = 0;
-int ARQTimeout = 120;
+unsigned int ARQTimeout = 120;
 int TuningRange = 100;
 int ARQConReqRepeats = 5;
 BOOL DebugLog = TRUE;
@@ -46,8 +47,29 @@ int Squelch = 5;
 enum _ARQBandwidth ARQBandwidth = B2000MAX;
 int port = 8515;
 BOOL RadioControl = FALSE;
+BOOL SlowCPU = FALSE;
+BOOL AccumulateStats = TRUE;
 
 // 
+
+// Stats
+
+//    Public Structure QualityStats
+  
+int int4FSKQuality;
+int int4FSKQualityCnts;
+int int8FSKQuality;
+int int8FSKQualityCnts;
+int int16FSKQuality;
+int int16FSKQualityCnts;
+int intFSKSymbolsDecoded;
+int intPSKQuality[2];
+int intPSKQualityCnts[2];
+int intPSKSymbolsDecoded; 
+
+int intQAMQuality;
+int intQAMQualityCnts;
+int intQAMSymbolsDecoded;
 
 BOOL blnInitializing = FALSE;
 
@@ -58,7 +80,7 @@ BOOL PlayComplete = FALSE;
 BOOL blnBusyStatus;
 BOOL newStatus;
 
-int tmrSendTimeout;
+unsigned int tmrSendTimeout;
 
 int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 int intRmtLeaderMeasure = 0;
@@ -68,7 +90,7 @@ int dttCodecStarted;
 enum _ReceiveState State;
 enum _ARDOPState ProtocolState;
 
-const char ARDOPStates[7][8] = {"OFFLINE", "DISC", "ISS", "IRS", "IDLE", "FECSEND", "FECRCV"};
+const char ARDOPStates[8][9] = {"OFFLINE", "DISC", "ISS", "IRS", "QUIET", "IRStoISS", "FECSEND", "FECRCV"};
 
 struct SEM Semaphore = {0, 0, 0, 0};
 
@@ -86,13 +108,14 @@ extern BOOL blnDISCRepeating;
 extern char strRemoteCallsign[10];
 extern char strLocalCallsign[10];
 extern char strFinalIDCallsign[10];
-extern int dttTimeoutTrip;
-extern int dttLastFECIDSent;
+extern unsigned int dttTimeoutTrip;
+extern unsigned int dttLastFECIDSent;
 extern int intFrameRepeatInterval;
 extern BOOL blnPending;
-extern int tmrIRSPendingTimeout;
-extern int tmrFinalID;
-extern int tmrPollOBQueue;
+extern unsigned int tmrIRSPendingTimeout;
+extern unsigned int tmrFinalID;
+extern unsigned int tmrPollOBQueue;
+int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
 
 int intRepeatCnt;
 
@@ -100,7 +123,7 @@ BOOL blnFramePending = FALSE;
 BOOL blnClosing = FALSE;
 BOOL blnCodecStarted = FALSE;
 
-int dttNextPlay = 0;
+unsigned int dttNextPlay = 0;
 
 
 const UCHAR bytValidFrameTypes[]=
@@ -108,7 +131,7 @@ const UCHAR bytValidFrameTypes[]=
  20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 38, 41, 44, 45,
  46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 64, 65, 66,
  67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
- 84, 85, 86, 87, 88, 89, 90, 91, 96, 97, 98, 99, 100, 101, 102, 103,
+ 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 96, 97, 98, 99, 100, 101, 102, 103,
  104, 105, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
  124, 125, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248,
@@ -124,7 +147,7 @@ UCHAR isValidFrame[256]=
 
 	1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,	// 30 - 3F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 40 - 4F
-	1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,	// 50 - 5F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,	// 50 - 5F
 	1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,	// 60 - 6F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,	// 70 - 7F
 			
@@ -158,14 +181,14 @@ int intLastRcvdFrameQuality;
 
 int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
-const char strAllDataModes[26][14] = {"8FSK.200.25", "4FSK.200.50S", "4FSK.200.50", "4PSK.200.100S",
-		"4PSK.200.100", "8PSK.200.100", "16FSK.500.25S", "16FSK.500.25", "4FSK.500.100S",
+const char strAllDataModes[27][14] = {"8FSK.200.25", "4FSK.200.50S", "4FSK.200.50", "4PSK.200.100S",
+		"4PSK.200.100", "8PSK.200.100",  "16QAM.200.100", "16FSK.500.25S", "16FSK.500.25", "4FSK.500.100S",
 		"4FSK.500.100", "4PSK.500.100", "8PSK.500.100", "4PSK.500.167", "8PSK.500.167",
 		"4FSK.1000.100", "4PSK.1000.100", "8PSK.1000.100", "4PSK.1000.167", "8PSK.1000.167", 
 		"4FSK.2000.600S", "4FSK.2000.600", "4FSK.2000.100", "4PSK.2000.100", "8PSK.2000.100",
 		"4PSK.2000.167", "8PSK.2000.167"};
 
-int strAllDataModesLen = 26;
+int strAllDataModesLen = 27;
 
  
 const char strFrameType[256][16] = {
@@ -241,7 +264,13 @@ const char strFrameType[256][16] = {
 	"16FSK.500.25.E", // 58
 	"16FSK.500.25.O",
 	"16FSK.500.25S.E",
-	"16FSK.500.25S.O", "","","","",
+	"16FSK.500.25S.O",
+	
+	// 1 Car 16QAM Data mode 200 Hz BW, 100 baud
+
+	"16QAM.200.100.E",	// 5C
+    "16QAM.200.100.O",	// 5D
+	"","",				// 5E/F
 
 	//1 Khz Bandwidth Data Modes 
 	//  4 Car 100 baud PSK
@@ -414,6 +443,38 @@ extern LARGE_INTEGER NewTicks;
 
 #endif
 
+extern int NErrors;
+
+void testRS()
+{
+	// feed random data into RS to check robustness
+
+	BOOL blnRSOK, FrameOK;
+	char bytRawData[256];
+	int DataLen = 128;
+	int intRSLen = 64;
+	int i;
+
+	for (i = 0; i < DataLen; i++)
+	{
+		bytRawData[i] = rand() % 256;
+	}
+
+	FrameOK = RSDecode(bytRawData, DataLen, intRSLen, &blnRSOK);
+
+	if (blnRSOK)
+		Debugprintf("RS Says OK without correction");
+	else
+	if (FrameOK)
+		Debugprintf("RS Says OK after correction %d Errors", NErrors);
+	else
+	{
+		Debugprintf("RS Says Can't Correct %d Errors", NErrors);
+	}
+}
+
+
+
 void ardopmain()
 {
 	blnTimeoutTriggered = FALSE;
@@ -422,6 +483,9 @@ void ardopmain()
 	InitSound();
 
 	HostInit();
+
+//	while (1)
+//		testRS();
 
 	tmrPollOBQueue = Now + 10000;
 
@@ -683,6 +747,20 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*bytQualThres = 30;
  		break;
 
+	case 0x5C:
+ 	case 0x5D:
+
+		// 100 baud 16QAM 
+  
+		*blnOdd = (1 & bytFrameType) != 0;
+		*intNumCar = 1;
+		*intDataLen = 128;
+		*intRSLen = 64;
+		strcpy(strMod, "16QAM");
+		*intBaud = 100;
+		*bytQualThres = 30;
+ 		break;
+
 	// 600 baud 4FSK 2000 Hz bandwidth 
 
 	case 0x7a:
@@ -915,6 +993,8 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 
 int NPAR = -1;	// Number of Parity Bytes - used in RS Code
 
+int MaxErrors = 0;
+
 int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 {
 	// This just returns the Parity Bytes. I don't see the point
@@ -930,6 +1010,7 @@ int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 	if (NPAR != RSLen)		// Changed RS Len, so recalc constants;
 	{
 		NPAR = RSLen;
+		MaxErrors = NPAR / 2;
 		initialize_ecc();
 	}
 
@@ -945,9 +1026,20 @@ int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 
 //	Main RS decode function
 
+extern int index_of[];
+extern int recd[];
+int Corrected[256];
+extern int tt;		//  number of errors that can be corrected 
+extern int kk;		// Info Symbols
+
+BOOL blnErrorsCorrected;
+
+#define NEWRS
 
 BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)
 {	
+#ifdef NEWRS
+
 	// Using a modified version of Henry Minsky's code
 	
 	//Copyright Henry Minsky (hqm@alum.mit.edu) 1991-2009
@@ -975,6 +1067,8 @@ BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)
 	if (NPAR != CheckLen)		// Changed RS Len, so recalc constants;
 	{
 		NPAR = CheckLen;
+		MaxErrors = NPAR /2;
+
 		initialize_ecc();
 	}
 
@@ -1028,53 +1122,105 @@ BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)
 	ptr1 = &intTemp[DataLen - 1];
 	ptr2 = bytRcv; // Last Byte of Data
 
-	for (i = 0; i < Length; i++)
+	for (i = 0; i < DataLen; i++)
 	{
 	  *(ptr2++) = *(ptr1--);
 	}
 
 	// ?? Do we need to return the check bytes ??
- 
+
+	// Yes, so we can redo RS Check on supposedly connected frame
+
+	ptr1 = &intTemp[254];	// End of Check Bytes
+
+ 	for (i = 0; i < CheckLen; i++)
+	{
+	  *(ptr2++) = *(ptr1--);
+	}
+
 	return TRUE;
 }
 
-/*
+#else
 
-Old code
+	// Old (Rick's) code
 
+	// Sets blnRSOK if OK without correction
+
+	// Returns TRUE if OK oe Corrected
+	// False if Can't correct
+
+
+	UCHAR intTemp[256];				// Work Area to pass to Decoder		
+	int i;
+	int intStartIndex;
+	UCHAR * ptr2 = intTemp;
+	UCHAR * ptr1 = bytRcv;
+	BOOL RSWasOK;
+
+	int DataLen = Length - CheckLen;
+	int PadLength = 255 - Length;		// Padding bytes needed for shortened RS codes
+
+	*blnRSOK = FALSE;
+
+	if (Length > 255 || Length < (1 + CheckLen))		//Too long or too short 
+		return FALSE;
+
+
+	if (NPAR != CheckLen)		// Changed RS Len, so recalc constants;
+	{
+		NPAR = CheckLen;
+		tt = sqrt(NPAR);
+		kk = 255-CheckLen; 
+		generate_gf();
+		gen_poly();
+	}
+	
+	intStartIndex =  255 - Length; // set the start point for shortened RS codes
+
+	//	We always work on a 255 byte buffer, prepending zeros if neccessary
+
+ 	//	Clear padding
+
+	memset(ptr2, 0, PadLength);	
+	ptr2 += PadLength;
+
+	memcpy(ptr2, ptr1, Length);
+	
 	// convert to indexed form
 
 	for(i = 0; i < 256; i++)
 	{
-		intIsave = i;
-		intIndexSave = index_of[intTemp[i]];
+//		intIsave = i;
+//		intIndexSave = index_of[intTemp[i]];
 		recd[i] = index_of[intTemp[i]];
 	}
 
-	printtick("entering decode_rs");
+//	printtick("entering decode_rs");
 
-	decode_rs();
+	blnErrorsCorrected = FALSE;
 
-	printtick("decode_rs Done");
+	RSWasOK = decode_rs();
 
-	*blnRSOK = blnErrorsCorrected;
+//	printtick("decode_rs Done");
+
+	*blnRSOK = RSWasOK;
+
+	if (RSWasOK)
+		return TRUE;
 
 	if(blnErrorsCorrected)
 	{
-		for (i = 0; i < Length - (2 * tt); i++)
+		for (i = 0; i < DataLen; i++)
 		{
-			Corrected[i] = recd[i + intStartIndex];
+			bytRcv[i] = recd[i + intStartIndex];
 		}
+		return TRUE;
 	}
-	else
-	{
-		// Just return input minus RS (can't we just use input??
 
-		memcpy(Corrected, bytRcv, Length - 2 * tt);
-		*blnRSOK = TRUE;
-	}
+	return FALSE;
 }
-*/
+#endif
 
 // Function to encode data for all PSK frame types
 
@@ -2000,7 +2146,7 @@ void CheckTimers()
 {
 	//	Check for Timeout after a send that needs to be repeated
 
-	if (blnEnbARQRpt && Now > dttNextPlay)
+	if ((blnEnbARQRpt || blnDISCRepeating) && Now > dttNextPlay)
 	{
 		// No response Timeout
 
@@ -2044,11 +2190,11 @@ void CheckTimers()
 		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
 		dttLastFECIDSent = Now;
 			
-		// If MCB.AccumulateStats Then LogStats()
+		if (AccumulateStats) LogStats();
 
 		QueueCommandToHost("DISCONNECTED");
 			
-		sprintf(HostCmd, "STATUS ARQ Timeout from Protocol State:  %d", ProtocolState);
+		sprintf(HostCmd, "STATUS ARQ Timeout from Protocol State:  %s", ARDOPStates[ProtocolState]);
 		QueueCommandToHost(HostCmd);
 		blnEnbARQRpt = FALSE;
 		//Thread.Sleep(2000)
@@ -2141,7 +2287,7 @@ BOOL MainPoll()
 	
 	// Checks to see if frame ready for playing
 
-	if (!SoundIsPlaying && !blnEnbARQRpt)		// Idle (check playing in case we call from txSleep())
+	if (!SoundIsPlaying && !blnEnbARQRpt && !blnDISCRepeating)		// Idle (check playing in case we call from txSleep())
 	{
 		if (GetNextFrame())
 		{

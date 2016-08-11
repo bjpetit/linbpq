@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.4.3.2-BPQ"
+#define ProductVersion "0.5.5.1-BPQ"
 
 //	Sound interface buffer size
 
@@ -91,6 +91,7 @@ unsigned int GenCRC16(unsigned char * Data, unsigned short length);
 void SendCommandToHost(char * Cmd);
 void UpdateBusyDetector(short * bytNewSamples);
 int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM);
+void SetARDOPProtocolState(int value);
 
 unsigned int getTicks();
 void txSleep(int mS);
@@ -157,7 +158,8 @@ enum _ReceiveState		// used for initial receive testing...later put in correct p
 	AcquireFrameSync,
 	AcquireFrameType,
 	DecodeFrameType,
-	AcquireFrame
+	AcquireFrame,
+	DecodeFramestate
 };
 
 extern enum _ReceiveState State;
@@ -185,14 +187,15 @@ enum _ARDOPState
 	DISC,
 	ISS,
 	IRS,
-	IDLE,
-	FECSend,
-	FECRcv,
+	QUIET,    // ISS in quiet state ...no transmissions) [Replaced old ISS IDLE state in version 0.5.0.0 and later]
+	IRStoISS, // IRS during transition to ISS waiting for ISS's ACK from IRS's BREAK
+ 	FECSend,
+	FECRcv
 };
 
 extern enum _ARDOPState ProtocolState;
 
-extern const char ARDOPStates[7][8];
+extern const char ARDOPStates[8][9];
 
 
 // Enum of ARQ Substates
@@ -234,7 +237,25 @@ struct SEM
 
 extern struct SEM Semaphore;
 
-extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (10 ms) of the leader
+struct SessionStats
+{
+	time_t dttSessionStart;
+	int intTotalBytesSent;
+    int intTotalBytesReceived;
+	int intFrameTypeDecodes;
+//	float ModeQuality() As Double
+	float dblSearchForLeaderAvg;
+	int intMax1MinThruput;
+	int intGearShifts;
+	BOOL blnStatsValid;
+};
+
+
+
+
+
+extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
+extern short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
 
 extern short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
     //   (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the table size from 7680 to 3840 integers
@@ -250,7 +271,7 @@ extern char Callsign[10];
 extern BOOL wantCWID;
 extern int LeaderLength;
 extern int TrailerLength;
-extern int ARQTimeout;
+extern unsigned int ARQTimeout;
 extern int TuningRange;
 extern BOOL DebugLog;
 extern int ARQConReqRepeats;
@@ -260,7 +281,8 @@ extern char CaptureDevice[];
 extern char PlaybackDevice[];
 extern int port;
 extern BOOL RadioControl;
-
+extern BOOL SlowCPU;
+extern BOOL AccumulateStats;
 
 
 extern char * CaptureDevices;
@@ -285,12 +307,13 @@ extern int FECRepeats;
 extern BOOL FECId;
 extern int Squelch;
 extern BOOL blnEnbARQRpt;
-extern int dttNextPlay;
+extern unsigned int dttNextPlay;
 
 extern UCHAR bytDataToSend[];
 extern int bytDataToSendLength;
 
 extern BOOL blnListen;
+extern BOOL AccumulateStats;
 
 extern unsigned char bytEncodedBytes[1800];
 extern int EncLen;
@@ -314,6 +337,61 @@ extern BOOL newStatus;
 // RS Variables
 
 extern int MaxCorrections;
+
+// Stats counters
+
+extern int intLeaderDetects;
+extern int intLeaderSyncs;
+extern int intAccumLeaderTracking;
+extern float dblFSKTuningSNAvg;
+extern int intGoodFSKFrameTypes;
+extern int intFailedFSKFrameTypes;
+extern int intAccumFSKTracking;
+extern int intFSKSymbolCnt;
+extern int intGoodFSKFrameDataDecodes;
+extern int intFailedFSKFrameDataDecodes;
+extern int intAvgFSKQuality;
+extern int intFrameSyncs;
+extern int intGoodPSKSummationDecodes;
+extern int intGoodFSKSummationDecodes;
+extern float dblLeaderSNAvg;
+extern int intAccumPSKLeaderTracking;
+extern float dblAvgPSKRefErr;
+extern int intPSKTrackAttempts;
+extern int intAccumPSKTracking;
+extern int intPSKSymbolCnt;
+extern int intGoodPSKFrameDataDecodes;
+extern int intFailedPSKFrameDataDecodes;
+extern int intAvgPSKQuality;
+extern float dblAvgDecodeDistance;
+extern int intDecodeDistanceCount;
+extern int intShiftUPs;
+extern int intShiftDNs;
+extern unsigned int dttStartSession;
+extern int intLinkTurnovers;
+extern int intEnvelopeCors;
+extern float dblAvgCorMaxToMaxProduct;
+
+extern int int4FSKQuality;
+extern int int4FSKQualityCnts;
+extern int int8FSKQuality;
+extern int int8FSKQualityCnts;
+extern int int16FSKQuality;
+extern int int16FSKQualityCnts;
+extern int intFSKSymbolsDecoded;
+extern int intPSKQuality[2];
+extern int intPSKQualityCnts[2];
+extern int intPSKSymbolsDecoded; 
+
+extern int intQAMQuality;
+extern int intQAMQualityCnts;
+extern int intQAMSymbolsDecoded;
+extern int intQAMSymbolCnt;
+extern int intGoodQAMFrameDataDecodes;
+extern int intFailedQAMFrameDataDecodes;
+
+
+
 
 // Has to follow enum defs
 

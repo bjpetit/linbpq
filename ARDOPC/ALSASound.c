@@ -16,6 +16,9 @@
 
 #include "ARDOPC.h"
 
+extern BOOL blnDISCRepeating;
+
+
 void Sleep(int mS)
 {
 	usleep(mS * 1000);
@@ -43,6 +46,26 @@ void InitSound();
 int Ticks;
 
 int LastNow;
+
+extern int Number;				// Number waiting to be sent
+
+snd_pcm_sframes_t MaxAvail;
+
+#include <stdarg.h>
+
+VOID Debugprintf(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	printf("%s", Mess);
+	WriteLog(Mess);
+	return;
+}
 
 void printtick(char * msg)
 {
@@ -559,6 +582,9 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, char * ErrorMsg)
 		return false;
 	}
 
+	MaxAvail = snd_pcm_avail_update(playhandle);
+	Debugprintf("Playback Buffer Size %d", (int)MaxAvail);
+
 	return true;
 }
 
@@ -588,26 +614,26 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 		if (ErrorMsg)
 			sprintf (ErrorMsg, "cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
 		else
-			fprintf (stderr, "cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
+			Debugprintf("cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
 		return false;
 	}
 	   
 	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-		fprintf (stderr, "cannot allocate capture hardware parameter structure (%s)", snd_strerror(err));
+		Debugprintf("cannot allocate capture hardware parameter structure (%s)", snd_strerror(err));
 		return false;
 	}
 				 
 	if ((err = snd_pcm_hw_params_any (rechandle, hw_params)) < 0) {
-		fprintf (stderr, "cannot initialize capture hardware parameter structure (%s)", snd_strerror(err));
+		Debugprintf("cannot initialize capture hardware parameter structure (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	if ((err = snd_pcm_hw_params_set_access (rechandle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-			fprintf (stderr, "cannot set capture access type (%s)", snd_strerror (err));
+			Debugprintf("cannot set capture access type (%s)", snd_strerror (err));
 		return false;
 	}
 	if ((err = snd_pcm_hw_params_set_format (rechandle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
-		fprintf (stderr, "cannot set capture sample format (%s)", snd_strerror(err));
+		Debugprintf("cannot set capture sample format (%s)", snd_strerror(err));
 		return false;
 	}
 	
@@ -615,7 +641,7 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 		if (ErrorMsg)
 			sprintf (ErrorMsg, "cannot set capture sample rate (%s)", snd_strerror(err));
 		else
-			fprintf (stderr, "cannot set capture sample rate (%s)", snd_strerror(err));
+			Debugprintf("cannot set capture sample rate (%s)", snd_strerror(err));
 		return false;
 	}
 	
@@ -623,15 +649,15 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	
 	if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, 1)) < 0)
 	{
-		fprintf (stderr, "cannot set rec channel count to 1 (%s)", snd_strerror(err));
+		Debugprintf("cannot set rec channel count to 1 (%s)", snd_strerror(err));
 		m_recchannels = 2;
 
 		if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, 2)) < 0)
 		{
-			fprintf (stderr, "cannot rec set channel count to 2 (%s)", snd_strerror(err));
+			Debugprintf("cannot rec set channel count to 2 (%s)", snd_strerror(err));
 			return false;
 		}
-		fprintf (stderr, "Record channel count set to 2 (%s)", snd_strerror(err));
+		Debugprintf("Record channel count set to 2 (%s)", snd_strerror(err));
 	}
 	
 	if ((err = snd_pcm_hw_params (rechandle, hw_params)) < 0) {
@@ -642,7 +668,7 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	snd_pcm_hw_params_free(hw_params);
 	
 	if ((err = snd_pcm_prepare (rechandle)) < 0) {
-		fprintf (stderr, "cannot prepare audio interface for use (%s)", snd_strerror(err));
+		Debugprintf("cannot prepare audio interface for use (%s)", snd_strerror(err));
 		return FALSE;
 	}
 
@@ -653,7 +679,7 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	{
 		if ((err = snd_pcm_readi (rechandle, buf, 128)) != 128)
 		{
-			fprintf (stderr, "read from audio interface failed (%s)",
+			Debugprintf("read from audio interface failed (%s)",
 				 snd_strerror (err));
 		}
 	}
@@ -908,7 +934,7 @@ short loopbuff[1200];		// Temp for testing - loop sent samples to decoder
 
 
 
-void InitSound()
+void InitSound(BOOL Quiet)
 {
 
 	GetInputDeviceCollection();
@@ -924,11 +950,11 @@ PollReceivedSamples()
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
 
-	if (SoundCardRead(&inbuffer[0], 1200))
+	if (SoundCardRead(&inbuffer[0][0], 1200))
 	{
 		// returns 1200 or none
 
-		short * ptr = inbuffer;
+		short * ptr = &inbuffer[0][0];
 		int i;
 
 		for (i = 0; i < 1200; i++)
@@ -1020,22 +1046,6 @@ int WriteLog(char * msg)
 
 
 
-#include <stdarg.h>
-
-VOID Debugprintf(const char * format, ...)
-{
-	char Mess[10000];
-	va_list(arglist);
-
-	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
-
-	printf("%s", Mess);
-	WriteLog(Mess);
-	return;
-}
-
 
 
 
@@ -1055,7 +1065,7 @@ unsigned short * SoundInit()
 	
 //	Called at end of transmission
 
-void SoundFlush(Number)
+void SoundFlush()
 {
 	// Append Trailer then send remaining samples
 
@@ -1073,6 +1083,10 @@ void SoundFlush(Number)
 
 	while (1)
 	{
+//		snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
+
+//		Debugprintf("Waiting for complete. Avail %d Max %d", avail, MaxAvail);
+
 		snd_pcm_status_alloca(&status);					// alloca allocates once per function, does not need a free
 
 		if ((err=snd_pcm_status(playhandle, status))!=0)
@@ -1083,7 +1097,10 @@ void SoundFlush(Number)
 	 
 		res = snd_pcm_status_get_state(status);
 
+//		Debugprintf("PCM Status = %d", res);
+
 		if (res != SND_PCM_STATE_RUNNING)				// If sound system is not running then it needs data
+//		if (MaxAvail - avail < 100)	
 		{
 			// Send complete - Restart Capture
 
@@ -1097,7 +1114,7 @@ void SoundFlush(Number)
 
 	SoundIsPlaying = FALSE;
 
-	if (blnEnbARQRpt > 0)	// Start Repeat Timer if frame should be repeated
+	if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
 		dttNextPlay = Now + intFrameRepeatInterval;
 
 	KeyPTT(FALSE);		 // Unkey the Transmitter

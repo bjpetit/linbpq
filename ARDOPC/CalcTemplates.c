@@ -2,6 +2,50 @@
 
 static int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
+void Generate50BaudTwoToneLeaderTemplate()
+{
+	int i;
+	float x, y, z;
+	int line = 0;
+
+	FILE * fp1;
+
+	char msg[80];
+	int len;
+
+	fp1 = fopen("d:\\leadercoeffs.txt", "wb");
+
+	for (i = 0; i < 240; i++)
+	{
+		y = (sin(((1500.0 - 25) / 1500) * (i / 8.0 * 2 * M_PI)));
+		z = (sin(((1500.0 + 25) / 1500) * (i / 8.0 * 2 * M_PI)));
+
+		x = intAmp * 0.55 * (y - z);
+		int50BaudTwoToneLeaderTemplate[i] = (short)x + 0.5;
+
+		if ((i - line) == 9)
+		{
+			// print the last 10 values
+
+			len = sprintf(msg, "\t%d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n",
+				int50BaudTwoToneLeaderTemplate[line],
+				int50BaudTwoToneLeaderTemplate[line + 1],
+				int50BaudTwoToneLeaderTemplate[line + 2],
+				int50BaudTwoToneLeaderTemplate[line + 3],
+				int50BaudTwoToneLeaderTemplate[line + 4],
+				int50BaudTwoToneLeaderTemplate[line + 5],
+				int50BaudTwoToneLeaderTemplate[line + 6],
+				int50BaudTwoToneLeaderTemplate[line + 7],
+				int50BaudTwoToneLeaderTemplate[line + 8],
+				int50BaudTwoToneLeaderTemplate[line + 9]);
+
+			line = i + 1;
+
+			fwrite(msg, 1, len, fp1);
+		}
+	}		
+	fclose(fp1);
+}
 /*
 void GenerateTwoToneLeaderTemplate()
 {
@@ -345,7 +389,7 @@ void GenerateFSKTemplates()
 
 
 //	Subroutine to create the PSK symbol templates for 8 tones and 8 phases at 200 baud
-
+float round(float x);
 
 VOID GeneratePSKTemplates()
 {
@@ -373,7 +417,7 @@ VOID GeneratePSKTemplates()
 
         //Dim dblPeakAmp As Double = intAmp * 0.5 ' may need to adjust 
 	
-	fp1 = fopen("s:\\PSKcoeffs.txt", "wb");
+	fp1 = fopen("d:\\PSKcoeffs.txt", "wb");
 
 		// Compute the phase inc per sample
 
@@ -394,16 +438,19 @@ VOID GeneratePSKTemplates()
 
 			for (k = 0; k <= 119; k++) // for 120 samples (one 100 baud symbol, 200 baud modes will just use half of the data)
 			{
-				float xx = intAmp * sin(M_PI * k / 119) * sin(dblAngle);
-				int xxi= (int)round(xx);
+	//			float xx = intAmp * sin(M_PI * k / 119) * sin(dblAngle);
+	//			float xx2 = round(xx);
+	//			int xxi= (int)(xx2);
 				
 	//			if (intPSK100bdCarTemplate[i][j][k] != xxi)
-				{
-					k++;
-					k--;
-				}
+	////			{
+	//				k++;
+	//				k--;
+	//			}
 		
-	//			intPSK100bdCarTemplate[i][j][k] = (short)round(intAmp * sin(M_PI * k / 119) * sin(dblAngle));  // with envelope control using Sin
+				intPSK100bdCarTemplate[i][j][k] = (short)round(intAmp * sin(dblAngle));  // with no envelope control
+	          // intPSK100bdCarTemplate(i, j, k) = intAmp * Sin(PI * k / 119) * Sin(dblAngle) ' with envelope control using Sin
+ 		
 				dblAngle += dblCarPhaseInc[i];
 				
 				if (dblAngle >= 2 * M_PI)
