@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.5.5.1-BPQ"
+#define ProductVersion "0.6.4.0-BPQ"
 
 //	Sound interface buffer size
 
@@ -120,6 +120,7 @@ void QueueCommandToHost(char * Cmd);
 #ifdef WIN32
 void ProcessNewSamples(short * Samples, int nSamples);
 VOID Debugprintf(const char * format, ...);
+VOID Statsprintf(const char * format, ...);
 void ardopmain();
 BOOL GetNextFECFrame();
 void GenerateFSKTemplates();
@@ -283,7 +284,8 @@ extern int port;
 extern BOOL RadioControl;
 extern BOOL SlowCPU;
 extern BOOL AccumulateStats;
-
+extern BOOL Use600Modes;
+extern BOOL FSKOnly;
 
 extern char * CaptureDevices;
 extern char * PlaybackDevices;
@@ -313,6 +315,11 @@ extern UCHAR bytDataToSend[];
 extern int bytDataToSendLength;
 
 extern BOOL blnListen;
+extern BOOL Monitor;
+extern BOOL AutoBreak;
+
+extern int DecodeCompleteTime;
+
 extern BOOL AccumulateStats;
 
 extern unsigned char bytEncodedBytes[1800];
@@ -322,14 +329,18 @@ extern char AuxCalls[10][10];
 extern int AuxCallsLength;
 
 extern int bytValidFrameTypesLength;
+extern int bytValidFrameTypesLengthALL;
+extern int bytValidFrameTypesLengthISS;
 
 extern BOOL blnTimeoutTriggered;
 extern int intFrameRepeatInterval;
 extern BOOL PlayComplete;
 
-extern const UCHAR bytValidFrameTypes[];
+extern const UCHAR bytValidFrameTypesALL[];
+extern const UCHAR bytValidFrameTypesISS[];
+extern const UCHAR * bytValidFrameTypes;
 
-extern const char strAllDataModes[][14];
+extern const char strAllDataModes[][15];
 extern int strAllDataModesLen;
 
 extern BOOL newStatus;

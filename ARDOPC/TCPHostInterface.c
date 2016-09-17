@@ -58,14 +58,18 @@ BOOL checkcrc16(unsigned char * Data, unsigned short length);
 
 extern int port;
 
-SOCKET TCPSock, ListenSock;
+SOCKET TCPControlSock, TCPDataSock, ListenSock, DataListenSock;
 
 BOOL CONNECTED = FALSE;
+BOOL DATACONNECTED = FALSE;
 
 // Host to TNC RX Buffer
 
 UCHAR ARDOPBuffer[8192];
 int InputLen = 0;
+
+UCHAR ARDOPDataBuffer[8192];
+int DataInputLen = 0;
 
 //	Main TX Buffer
 
@@ -106,21 +110,13 @@ void SendCommandToHost(char * strText)
 
 	UCHAR bytToSend[256];
 	int len;
-	unsigned short CRC;
 	int ret;
 	
 	len = sprintf(bytToSend,"c:%s\r", strText);
 
-	GenCRC16(bytToSend + 2, len);	 // Generate CRC starting after "c:"  
-
-	CRC = GenCRC16(bytToSend + 2, len - 2);			// Don't include c:
-
-	bytToSend[len++] = CRC >> 8;
-	bytToSend[len++] = CRC & 0xFF;
-
 	if (CONNECTED)
 	{
-		ret = send(TCPSock, bytToSend, len, 0);
+		ret = send(TCPControlSock, bytToSend, len, 0);
 		ret = WSAGetLastError();
 
 		if (CommandTrace) Debugprintf(" Command Trace TO Host  c:%s", strText);
@@ -139,7 +135,6 @@ void QueueCommandToHost(char * strText)
 
 	UCHAR * bytToSend;
 	int len, ret;
-	unsigned short CRC;
 	BOOL Queue = FALSE;
 
 	UINT * buffptr;
@@ -162,11 +157,6 @@ void QueueCommandToHost(char * strText)
 
 	len = sprintf(bytToSend,"c:%s\r", strText);
 
-	CRC = GenCRC16(bytToSend + 2, len -2);			// Don't include c:
-
-	bytToSend[len++] = CRC >> 8;
-	bytToSend[len++] = CRC & 0xFF;
-
 	if (CommandTrace) Debugprintf(" Command Trace TO Host  c:%s", strText);
 
 	if (Queue)
@@ -186,13 +176,13 @@ void QueueCommandToHost(char * strText)
 
 		C_Q_ADD(&Host_Q, buffptr);
 
-		ret = send(TCPSock, bytToSend, len, 0);
+		ret = send(TCPControlSock, bytToSend, len, 0);
 		ret = WSAGetLastError();
 
 		return;
 	}
 
-	ret = send(TCPSock, bytToSend, len, 0);
+	ret = send(TCPControlSock, bytToSend, len, 0);
 	ret = WSAGetLastError();
 	ReleaseBuffer(buffptr);
 
@@ -210,7 +200,6 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 
 	UCHAR * bytToSend;
 	int ret;
-	unsigned short CRC;
 	BOOL Queue = TRUE;
 
 	UINT * buffptr;
@@ -239,28 +228,9 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 	memcpy(&bytToSend[7], bytData, Len - 3);
 	Len +=4;				// d: and len
 
-	// Compute the CRC starting with the bytCount + Data tag + Data (skipping over the "d:")
-	CRC = GenCRC16(bytToSend + 2, Len - 2);			// Don't include c:
-
-	bytToSend[Len++] = CRC >> 8;
-	bytToSend[Len++] = CRC & 0xFF;
-
 	buffptr[1] = Len;
 
-	if (Host_Q)
-	{		
-		// Something already queued
-			
-		C_Q_ADD(&Host_Q, buffptr);
-		Debugprintf("Queueing Data to Host  Q Count = %d", C_Q_COUNT(&Host_Q));
-		return;
-	}
-
-	// Nothing on Queue, so OK to send now
-
-	C_Q_ADD(&Host_Q, buffptr);
-
-	ret = send(TCPSock, bytToSend, Len, 0);
+	ret = send(TCPDataSock, bytToSend, Len, 0);
 	ret = WSAGetLastError();
 
 	return;
@@ -268,17 +238,7 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 
 VOID ARDOPProcessCommand(UCHAR * Buffer, int MsgLen)
 {
-	unsigned int CRC;
-
-	CRC = checkcrc16(&Buffer[2], MsgLen - 2);
-
-	Buffer[MsgLen - 3] = 0;		// Remove CR
-
-	if (CRC == 0)
-	{
-		Debugprintf("ADDOP CRC Error %s", Buffer);
-		return;
-	}
+	Buffer[MsgLen - 1] = 0;		// Remove CR
 	
 	Buffer+=2;					// Skip c:
 
@@ -314,7 +274,7 @@ VOID ARDOPProcessCommand(UCHAR * Buffer, int MsgLen)
 		buffptr = (UINT *)Q[0];
 
 		if (buffptr)
-			send(TCPSock, (UCHAR *)&buffptr[2], buffptr[1], 0);
+			send(TCPControlSock, (UCHAR *)&buffptr[2], buffptr[1], 0);
 
 		return;
 	}
@@ -324,7 +284,7 @@ VOID ARDOPProcessCommand(UCHAR * Buffer, int MsgLen)
 BOOL InReceiveProcess = FALSE;		// Flag to stop reentry
 
 
-void ProcessReceivedData()
+void ProcessReceivedControl()
 {
 	int Len, MsgLen;
 	char * ptr, * ptr2;
@@ -348,14 +308,14 @@ void ProcessReceivedData()
 
 	//	We can get pretty big ones in the faster 
 				
-	Len = recv(TCPSock, &ARDOPBuffer[InputLen], 8192 - InputLen, 0);
+	Len = recv(TCPControlSock, &ARDOPBuffer[InputLen], 8192 - InputLen, 0);
 
 	if (Len == 0 || Len == SOCKET_ERROR)
 	{
 		// Does this mean closed?
 		
-		closesocket(TCPSock);
-		TCPSock = 0;
+		closesocket(TCPControlSock);
+		TCPControlSock = 0;
 
 		CONNECTED = FALSE;
 		return;					
@@ -365,7 +325,7 @@ void ProcessReceivedData()
 
 loop:
 
-	if (InputLen < 8)
+	if (InputLen < 6)
 		return;					// Wait for more to arrive (?? timeout??)
 
 	if (ARDOPBuffer[1] = ':')	// At least message looks reasonable
@@ -381,7 +341,7 @@ loop:
 
 			ptr2 = &ARDOPBuffer[InputLen];
 
-			if ((ptr2 - ptr) == 3)	// CR + CRC
+			if ((ptr2 - ptr) == 1)	// CR + CRC
 			{
 				// Usual Case - single meg in buffer
 	
@@ -402,11 +362,11 @@ loop:
 
 				//	I dont think this should happen, but...
 
-				MsgLen = InputLen - (ptr2-ptr) + 3;	// Include CR and CRC
+				MsgLen = InputLen - (ptr2-ptr) + 1;	// Include CR and CRC
 
 				memcpy(Buffer, ARDOPBuffer, MsgLen);
 
-				memmove(ARDOPBuffer, ptr + 3,  InputLen-MsgLen);
+				memmove(ARDOPBuffer, ptr + 1,  InputLen-MsgLen);
 				InputLen -= MsgLen;
 
 				InReceiveProcess = TRUE;
@@ -422,49 +382,6 @@ loop:
 				goto loop;
 			}
 		}
-
-		if (ARDOPBuffer[0] == 'D')
-		{
-			// Data = check we have it all
-
-			int DataLen = (ARDOPBuffer[2] << 8) + ARDOPBuffer[3]; // HI First
-			unsigned short CRC;
-			
-			if (InputLen < DataLen + 6)
-				return;					// Wait for more
-
-			MsgLen = DataLen + 6;		// D: Len CRC
-
-			// Check CRC
-
-			CRC = checkcrc16(&ARDOPBuffer[2], DataLen + 4);
-
-			if (CRC == 0)
-				return;
-
-			memcpy(Buffer, &ARDOPBuffer[4], DataLen);
-
-			InputLen -= MsgLen;
-
-			if (InputLen > 0)
-				memmove(ARDOPBuffer, &ARDOPBuffer[MsgLen],  InputLen);
-
-			InReceiveProcess = TRUE;
-			AddDataToDataToSend(Buffer, DataLen);
-			SendCommandToHost("RDY");
-			InReceiveProcess = FALSE;
-	
-			// See if anything else in buffer
-
-			if (InputLen > 0)
-				goto loop;
-
-			if (InputLen < 0)
-				InputLen = 0;
-
-			return;
-
-		}
 	}
 
 	// Getting bad data ?? Should we just reset ??
@@ -474,7 +391,99 @@ loop:
 }
 
 
-SOCKET OpenSocket4()
+
+
+
+void ProcessReceivedData()
+{
+	int Len, MsgLen;
+	char Buffer[8192];
+
+	if (InReceiveProcess)
+		return;
+
+	// shouldn't get several messages per packet, as each should need an ack
+	// May get message split over packets
+
+	//	Both command and data arrive here, which complicated things a bit
+
+	//	Commands start with c: and end with CR.
+	//	Data starts with d: and has a length field
+	//	“d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data, +2 Byte CRC”
+
+	//	As far as I can see, shortest frame is “c:RDY<Cr> + 2 byte CRC” = 8 bytes
+
+	//	I don't think it likely we will get packets this long, but be aware...
+
+	//	We can get pretty big ones in the faster 
+				
+	Len = recv(TCPDataSock, &ARDOPDataBuffer[DataInputLen], 8192 - DataInputLen, 0);
+
+	if (Len == 0 || Len == SOCKET_ERROR)
+	{
+		// Does this mean closed?
+		
+		closesocket(TCPDataSock);
+		TCPDataSock = 0;
+
+		DATACONNECTED = FALSE;
+		return;					
+	}
+
+	DataInputLen += Len;
+
+loop:
+
+	if (DataInputLen < 5)
+		return;					// Wait for more to arrive (?? timeout??)
+
+	if (ARDOPDataBuffer[1] == ':')	// At least message looks reasonable
+	{
+		if (ARDOPDataBuffer[0] == 'D')
+		{
+			// Data = check we have it all
+
+			int DataLen = (ARDOPDataBuffer[2] << 8) + ARDOPDataBuffer[3]; // HI First
+			
+			if (DataInputLen < DataLen + 4)
+				return;					// Wait for more
+
+			MsgLen = DataLen + 4;		// D: Len
+
+			memcpy(Buffer, &ARDOPDataBuffer[4], DataLen);
+
+			DataInputLen -= MsgLen;
+
+			if (DataInputLen > 0)
+				memmove(ARDOPDataBuffer, &ARDOPDataBuffer[MsgLen],  DataInputLen);
+
+			InReceiveProcess = TRUE;
+			AddDataToDataToSend(Buffer, DataLen);
+			InReceiveProcess = FALSE;
+	
+			// See if anything else in buffer
+
+			if (DataInputLen > 0)
+				goto loop;
+
+			if (DataInputLen < 0)
+				DataInputLen = 0;
+
+			return;
+
+		}
+	}
+
+	// Getting bad data ?? Should we just reset ??
+	
+	Debugprintf("ARDOP BadHost Message ?? %c %c %s",
+		ARDOPBuffer[0], ARDOPBuffer[1], &ARDOPBuffer[4]);
+	return;
+}
+
+
+
+SOCKET OpenSocket4(int port)
 {
 	struct sockaddr_in  local_sin;  /* Local socket - internet style */
 	struct sockaddr_in * psin;
@@ -530,7 +539,8 @@ BOOL HostInit()
 	Debugprintf("ARDOPC listening on port %d", port);
 	InitQueue();
 
-	ListenSock = OpenSocket4();
+	ListenSock = OpenSocket4(port);
+	DataListenSock = OpenSocket4(port + 1);
 	return ListenSock;
 }
 
@@ -568,9 +578,9 @@ void HostPoll()
 		{
 			if (FD_ISSET(ListenSock, &readfs))
 			{
-				TCPSock = accept(ListenSock, (struct sockaddr * )&sin, &addrlen);
+				TCPControlSock = accept(ListenSock, (struct sockaddr * )&sin, &addrlen);
 	    
-				if (TCPSock == INVALID_SOCKET)
+				if (TCPControlSock == INVALID_SOCKET)
 				{
 					Debugprintf("accept() failed error %d", WSAGetLastError());
 					return;
@@ -580,27 +590,60 @@ void HostPoll()
 				while(Host_Q)
 					ReleaseBuffer(Q_REM(&Host_Q));
 
-				ioctl(TCPSock, FIONBIO, &param);
+				ioctl(TCPControlSock, FIONBIO, &param);
 				CONNECTED = TRUE;
 				SendCommandToHost("RDY");
 			}
 		}
 	}
 
-	if (CONNECTED == FALSE)
-		return;	
+	FD_SET(DataListenSock,&readfs);
 
+	timeout.tv_sec = 0;				// No wait
+	timeout.tv_usec = 0;	
+
+	ret = select(DataListenSock + 1, &readfs, NULL, NULL, &timeout);
+
+	if (ret == -1)
+	{
+		ret = WSAGetLastError();
+		Debugprintf("%d ", ret);
+		perror("listen select");
+	}
+	else
+	{
+		if (ret)
+		{
+			if (FD_ISSET(DataListenSock, &readfs))
+			{
+				TCPDataSock = accept(DataListenSock, (struct sockaddr * )&sin, &addrlen);
+	    
+				if (TCPDataSock == INVALID_SOCKET)
+				{
+					Debugprintf("accept() failed error %d", WSAGetLastError());
+					return;
+				}
+				Debugprintf("Connected to host");
+					
+				ioctl(TCPDataSock, FIONBIO, &param);
+				DATACONNECTED = TRUE;
+			}
+		}
+	}
+
+	if (CONNECTED)
+	{
 
 	FD_ZERO(&readfs);	
 	FD_ZERO(&errorfs);
 
-	FD_SET(TCPSock,&readfs);
-	FD_SET(TCPSock,&errorfs);
+	FD_SET(TCPControlSock,&readfs);
+	FD_SET(TCPControlSock,&errorfs);
 
 	timeout.tv_sec = 0;				// No wait
 	timeout.tv_usec = 0;	
 		
-	ret = select(TCPSock + 1, &readfs, NULL, &errorfs, &timeout);
+	ret = select(TCPControlSock + 1, &readfs, NULL, &errorfs, &timeout);
 
 	if (ret == SOCKET_ERROR)
 	{
@@ -611,24 +654,68 @@ void HostPoll()
 	{
 		//	See what happened
 
-		if (FD_ISSET(TCPSock, &readfs))
+		if (FD_ISSET(TCPControlSock, &readfs))
 		{
 			GetSemaphore();
-			ProcessReceivedData();
+			ProcessReceivedControl();
 			FreeSemaphore();
 		}
 								
-		if (FD_ISSET(TCPSock, &errorfs))
+		if (FD_ISSET(TCPControlSock, &errorfs))
 		{
 Lost:	
 			Debugprintf("TCP Connection lost");
 			
 			CONNECTED = FALSE;
 
-			closesocket(TCPSock);
-			TCPSock= 0;
+			closesocket(TCPControlSock);
+			TCPControlSock= 0;
 			return;
 		}
+	}
+	}
+	if (DATACONNECTED)
+	{
+
+	FD_ZERO(&readfs);	
+	FD_ZERO(&errorfs);
+
+	FD_SET(TCPDataSock,&readfs);
+	FD_SET(TCPDataSock,&errorfs);
+
+	timeout.tv_sec = 0;				// No wait
+	timeout.tv_usec = 0;	
+		
+	ret = select(TCPDataSock + 1, &readfs, NULL, &errorfs, &timeout);
+
+	if (ret == SOCKET_ERROR)
+	{
+		Debugprintf("Data Select failed %d ", WSAGetLastError());
+		goto DCLost;
+	}
+	if (ret > 0)
+	{
+		//	See what happened
+
+		if (FD_ISSET(TCPDataSock, &readfs))
+		{
+			GetSemaphore();
+			ProcessReceivedData();
+			FreeSemaphore();
+		}
+								
+		if (FD_ISSET(TCPDataSock, &errorfs))
+		{
+DCLost:	
+			Debugprintf("TCP Connection lost");
+			
+			DATACONNECTED = FALSE;
+
+			closesocket(TCPControlSock);
+			TCPDataSock= 0;
+			return;
+		}
+	}
 	}
 }
 

@@ -32,7 +32,7 @@ void PlatformSleep();
 char GridSquare[7] = "";
 char Callsign[10] = "";
 BOOL wantCWID = FALSE;
-int LeaderLength = 160;
+int LeaderLength = 260;
 int TrailerLength = 0;
 unsigned int ARQTimeout = 120;
 int TuningRange = 100;
@@ -49,6 +49,8 @@ int port = 8515;
 BOOL RadioControl = FALSE;
 BOOL SlowCPU = FALSE;
 BOOL AccumulateStats = TRUE;
+BOOL Use600Modes = FALSE;
+BOOL FSKOnly = FALSE;
 
 // 
 
@@ -97,6 +99,8 @@ struct SEM Semaphore = {0, 0, 0, 0};
 BOOL SoundIsPlaying = FALSE;
 BOOL Capturing = TRUE;
 
+int DecodeCompleteTime;
+
 BOOL blnAbort = FALSE;
 int intRepeatCount;
 BOOL blnARQDisconnect = FALSE;
@@ -126,18 +130,37 @@ BOOL blnCodecStarted = FALSE;
 unsigned int dttNextPlay = 0;
 
 
-const UCHAR bytValidFrameTypes[]=
-{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
- 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 38, 41, 44, 45,
+const UCHAR bytValidFrameTypesALL[]=
+{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+35, 38, 41, 44, 45,
  46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 64, 65, 66,
  67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
- 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 96, 97, 98, 99, 100, 101, 102, 103,
+ 84, 85, 88, 89, 90, 91, 92, 93, 96, 97, 98, 99, 100, 101, 102, 103,
  104, 105, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
  124, 125, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248,
  249, 250, 251, 252, 253, 254, 255};
 
-int bytValidFrameTypesLength = sizeof(bytValidFrameTypes);
+const UCHAR bytValidFrameTypesISS[]=		// ACKs, NAKs, END, DISC, BREAK
+{
+ //NAK
+ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+ 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+ // BREAK, DISC, or END
+ 35, 41, 44, 
+// Con req and Con ACK
+ 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+ //ACK
+ 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+ 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
+
+
+const UCHAR * bytValidFrameTypes;
+
+int bytValidFrameTypesLengthISS = sizeof(bytValidFrameTypesISS);
+int bytValidFrameTypesLengthALL = sizeof(bytValidFrameTypesALL);
+int bytValidFrameTypesLength;
 
 UCHAR isValidFrame[256]= 
 {
@@ -147,7 +170,7 @@ UCHAR isValidFrame[256]=
 
 	1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,	// 30 - 3F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 40 - 4F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,	// 50 - 5F
+	1,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,	// 50 - 5F - 56, 57 were 167 500
 	1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,	// 60 - 6F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,	// 70 - 7F
 			
@@ -171,7 +194,7 @@ BOOL blnTimeoutTriggered = FALSE;
 //	We can't keep the audio samples for retry, but we can keep the
 //	encoded data
 
-unsigned char bytEncodedBytes[1800];		// I think the biggest is 600 bd 768 + overhead
+unsigned char bytEncodedBytes[1800] ="";		// I think the biggest is 600 bd 768 + overhead
 int EncLen;
 
 
@@ -181,14 +204,15 @@ int intLastRcvdFrameQuality;
 
 int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
-const char strAllDataModes[27][14] = {"8FSK.200.25", "4FSK.200.50S", "4FSK.200.50", "4PSK.200.100S",
+const char strAllDataModes[26][15] = {"8FSK.200.25", "4FSK.200.50S", "4FSK.200.50", "4PSK.200.100S",
 		"4PSK.200.100", "8PSK.200.100",  "16QAM.200.100", "16FSK.500.25S", "16FSK.500.25", "4FSK.500.100S",
-		"4FSK.500.100", "4PSK.500.100", "8PSK.500.100", "4PSK.500.167", "8PSK.500.167",
+		"4FSK.500.100", "4PSK.500.100", "8PSK.500.100", "16QAM.500.100",
 		"4FSK.1000.100", "4PSK.1000.100", "8PSK.1000.100", "4PSK.1000.167", "8PSK.1000.167", 
 		"4FSK.2000.600S", "4FSK.2000.600", "4FSK.2000.100", "4PSK.2000.100", "8PSK.2000.100",
 		"4PSK.2000.167", "8PSK.2000.167"};
 
-int strAllDataModesLen = 27;
+
+int strAllDataModesLen = 26;
 
  
 const char strFrameType[256][16] = {
@@ -253,11 +277,11 @@ const char strFrameType[256][16] = {
 	"8PSK.500.100.E",
 	"8PSK.500.100.O",
 
-	// 2 Car Data modes 167 baud  
-	"4PSK.500.167.E",
-	"4PSK.500.167.O",
-	"8PSK.500.167.E",
-	"8PSK.500.167.O",
+	// 2 Car Data modes 16 QAM baud  
+
+	"16QAM.500.100.E",	//54
+	"16QAM.500.100.O",
+	"", "",				// 56, 57 were 500 167 modes	
 
 	// 1 Car 16FSK mode 25 baud
 
@@ -814,32 +838,22 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*bytQualThres = 50;
 		break;
 						
-	// 167 baud testing
+	// 16 QAM 2 Carrier 
     
 	case 0x54:
 	case 0x55:
 
+		// 100 baud 16QAM
+  
 		*blnOdd = bytFrameType & 1;
 		*intNumCar = 2;
-		*intDataLen = 120;
-		*intRSLen = 40;
-		strcpy(strMod, "4PSK");
-		*intBaud = 167;
+		*intDataLen = 128;
+		*intRSLen = 64;
+		strcpy(strMod, "16QAM");
+		*intBaud = 100;
 		*bytQualThres = 50;
 		break;
 		
-	case 0x56:
-	case 0x57:
-
-		*blnOdd = bytFrameType & 1;
-		*intNumCar = 2;
-		*intDataLen = 150;
-		*intRSLen = 60;
-		strcpy(strMod, "8PSK");
-		*intBaud = 167;
-		*bytQualThres = 50;
-		break;
-
 	//' 4 Carrier Data Modes
 	//	100 baud
      	
@@ -1242,7 +1256,7 @@ int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 
 	int intCarDataCnt, intStartIndex;
 	BOOL blnOdd;
-	char strType[16];
+	char strType[18];
 	char strMod[16];
 	BOOL blnFrameTypeOK;
 	UCHAR bytQualThresh;
@@ -1327,7 +1341,7 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 
 	int intCarDataCnt, intStartIndex;
 	BOOL blnOdd;
-	char strType[16];
+	char strType[18];
 	char strMod[16];
 	BOOL blnFrameTypeOK;
 	UCHAR bytQualThresh;
@@ -2089,7 +2103,11 @@ BOOL  CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType)
 
 void ClearDataToSend()
 {
+	GetSemaphore();
 	bytDataToSendLength = 0;
+	FreeSemaphore();
+
+	QueueCommandToHost("BUFFER 0");
 }
 
 #ifdef PTC

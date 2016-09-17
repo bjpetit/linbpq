@@ -42,8 +42,6 @@ BOOL PACMode;
 
 BOOL MODE;		// Host or Term
 
-int Mode;
-
 volatile int RXBPtr;
 
 int change = 0;			// Flag for connect/disconnect reports
@@ -100,7 +98,7 @@ void SendCommandToHost(char * Cmd)
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 {
-	if (Mode == 0)
+	if (MODE == 0)
 		return;
 
 	if (strcmp(Type, "ARQ") == 0)
@@ -544,6 +542,7 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 		MODE = TRUE;
 		Debugprintf("Entering Host Mode");
 		Toggle = 0;
+		blnAbort = TRUE;			// Reset ARDOP 
 
 		return;
 	}
@@ -775,7 +774,7 @@ Loop:
 		if (RXBPtr)
 		{
 			memmove(rxbuffer, ptr, RXBPtr + 1);
-			if (Mode)
+			if (MODE)
 			{
 				// now in host mode, so pass rest up a level
 				

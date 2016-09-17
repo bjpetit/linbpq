@@ -99,7 +99,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 
 	int intSample;
 
-    char strType[16] = "";
+    char strType[18] = "";
     char strMod[16] = "";
 
 	UCHAR bytSymToSend, bytMask, bytMinQualThresh;
@@ -287,7 +287,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	short intSample;
 	unsigned int intThreeBytes = 0;
 
-    char strType[16] = "";
+    char strType[18] = "";
     char strMod[16] = "";
 
 	UCHAR bytSymToSend, bytMinQualThresh;
@@ -361,7 +361,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 	short intSample;
 	unsigned int intThreeBytes = 0;
 
-    char strType[16] = "";
+    char strType[18] = "";
     char strMod[16] = "";
 
 	UCHAR bytSymToSend, bytMask, bytMinQualThresh;
@@ -429,7 +429,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 
 	short intSample;
 
-    char strType[16] = "";
+    char strType[18] = "";
     char strMod[16] = "";
 
 	UCHAR bytSymToSend, bytMask, bytMinQualThresh;
@@ -509,7 +509,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	BOOL blnOdd;
 
 	int intSample;
-    char strType[16] = "";
+    char strType[18] = "";
     char strMod[16] = "";
 	UCHAR bytSym, bytSymToSend, bytMask, bytMinQualThresh;
 	float dblCarScalingFactor;
@@ -591,7 +591,6 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
       
 	//	We have to do each carrier for each sample, as we write
 	//	the sample immediately 
-
 
 	for (n = 0; n < intSampPerSym; n++)  // Sum for all the samples of a symbols 
 	{
@@ -744,12 +743,14 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 				{
 					intSample = 0;
 					intCarIndex = intCarStartIndex; // initialize the carrrier index
-
-					bytSym = (bytMask & bytEncodedBytes[intDataPtr]) >> (4 * (1 - k));
-					bytSymToSend = (bytLastSym[intCarIndex] + (bytSym & 7)) & 7;  // Values 0-7
-								
-					if (intBaud == 100)
+		
+					for (i = 0; i < intNumCar ; i++) // across all carriers
 					{
+						bytSym = (bytMask & bytEncodedBytes[intDataPtr + i * intDataBytesPerCar]) >> (4 * (1 - k));
+						bytSymToSend = (bytLastSym[intCarIndex] + (bytSym & 7)) & 7;  // Values 0-7
+								
+					//if (intBaud == 100) only use 100
+					//{
 						if (bytSym < 8)
 						{
 							if (bytSymToSend < 4) // This uses the symmetry of the symbols to reduce the table size by a factor of 2
@@ -764,9 +765,14 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 							else
 								intSample -= 0.5f * intPSK100bdCarTemplate[intCarIndex][bytSymToSend - 4][n]; // negative phase values,  subtract value of table 
 						}
-					}	
-					if (n == intSampPerSym - 1)		// Last sample?
-						bytLastSym[intCarIndex] = bytSymToSend;
+					//}	
+						if (n == intSampPerSym - 1)		// Last sample?
+							bytLastSym[intCarIndex] = bytSymToSend;
+					
+						intCarIndex += 1;
+						if (intCarIndex == 4)
+							intCarIndex += 1;  // skip over 1500 Hz for multi carrier modes (multi carrier modes all use even hundred Hz tones)
+					}
 
 					intSample = intSample * dblCarScalingFactor; // on the last carrier rescale value based on # of carriers to bound output
 
@@ -812,7 +818,7 @@ void RemodulateLastFrame()
 	UCHAR bytMinQualThresh;
 	BOOL blnOdd;
 
-	char strType[16] = "";
+	char strType[18] = "";
     char strMod[16] = "";
 
 	if (!FrameInfo(bytEncodedBytes[0], &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
@@ -1040,7 +1046,7 @@ void SampleSink(short Sample)
 			if (SampleNo >= intFilLen)
 			{
 				if (j == 10 || j == 20)
-					intFilteredSample +=  0.389f * dblZout_0[j];
+					intFilteredSample +=  0.377f * dblZout_0[j];
 				else if ((j & 1) == 0)	// Even
 					intFilteredSample += (int)dblZout_0[j];
 				else
@@ -1059,7 +1065,7 @@ void SampleSink(short Sample)
 			if (SampleNo >= intFilLen)
 			{
 				if (j == 5 || j == 25)
-					intFilteredSample +=  0.389f * dblZout_0[j];
+					intFilteredSample +=  0.371f * dblZout_0[j];
 				else if ((j & 1) == 0)	// Even
 					intFilteredSample += (int)dblZout_0[j];
 				else
@@ -1115,14 +1121,14 @@ void Flush()
 
 	if (bytDataToSendLength)
 	{
-		if (ProtocolState == IRS)
-		{
-                      
+		if (ProtocolState == IRS && AutoBreak)
+		{           
 			SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
 			blnEnbARQRpt = TRUE;	// setup for repeats until changeover 
                
 			if (DebugLog) Debugprintf("[ARDOPprotocol.AddDataToDataToSend] %d bytes to send in ProtocolState: %s : Send BREAK,  New protocol state=IRStoISS (Rule 3.3)", bytDataToSendLength, ARDOPStates[ProtocolState]);
                
+			txSleep(250);			// dont want break too close to ACK
 			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 1000) ; //keep BREAK Repeats fairly short (preliminary value 1 - 2 seconds)
 	
 			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);

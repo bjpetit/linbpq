@@ -63,9 +63,25 @@ VOID Debugprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf("%s", Mess);
-	WriteLog(Mess);
+	WriteLog(Mess, "ARDOPDebug");
 	return;
 }
+
+VOID Statsprintf(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	printf("%s", Mess);
+	WriteLog(Mess, "ARDOPSession");
+
+	return;
+}
+
 
 void printtick(char * msg)
 {
@@ -1015,25 +1031,37 @@ void CloseSound()
 	CloseSoundCard();
 }
 
-int WriteLog(char * msg)
+int WriteLog(char * msg, char * Log)
 {
 	FILE *file;
 	char timebuf[128];
 	time_t T;
 	struct tm * tm;
 	UCHAR Value[100];
+	struct timespec tp;
+	
+	int hh;
+	int mm;
+	int ss;
 
 	T = time(NULL);
 	tm = gmtime(&T);
 
-	sprintf(Value, "ARDOPDebug_%04d%02d%02d.log",
-				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+	clock_gettime(CLOCK_REALTIME, &tp);
+
+	sprintf(Value, "%s_%04d%02d%02d.log",
+				Log, tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
 	
 	if ((file = fopen(Value, "a")) == NULL)
 		return FALSE;
 
-	strftime(timebuf, 128,
-		"%H:%M:%S ", tm);
+	ss = tp.tv_sec % 86400;		// Secs int day
+	hh = ss / 3600;
+	mm = (ss - (hh * 3600)) / 60;
+	ss = ss % 60;
+
+	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
+		hh, mm, ss, tp.tv_nsec/1000000);
 
 	fputs(timebuf, file);
 

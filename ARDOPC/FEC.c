@@ -26,7 +26,7 @@ extern int intDataPtr;
 extern int intSampPerSym;
 extern int intDataBytesPerCar;
 extern BOOL blnOdd;
-extern char strType[16];
+extern char strType[18];
 extern char strMod[16];
 extern UCHAR bytMinQualThresh;
 
@@ -174,7 +174,7 @@ BOOL GetNextFECFrame()
 	int Len;
 	int intNumCar, intBaud, intDataLen, intRSLen;
 	BOOL blnOdd;
-    char strType[16] = "";
+    char strType[18] = "";
     char strMod[16] = "";
 
 	if (blnAbort)
@@ -253,6 +253,7 @@ sendit:
 		if (strcmp(strMod, "4FSK") == 0)
 		{
 			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
+			RemoveDataFromQueue(Len);		// No ACKS in FEC
 
 			if (bytFrameType >= 0x7A && bytFrameType <= 0x7D)
 				Mod4FSK600BdDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
@@ -262,20 +263,21 @@ sendit:
 		else if (strcmp(strMod, "16FSK") == 0)
 		{
 			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
+			RemoveDataFromQueue(Len);		// No ACKS in FEC
 			Mod16FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else if (strcmp(strMod, "8FSK") == 0)
 		{
 			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+			RemoveDataFromQueue(Len);		// No ACKS in FEC
 			Mod8FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else		// This handles PSK and QAM
 		{
 			EncLen = EncodePSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
+			RemoveDataFromQueue(Len);		// No ACKS in FEC
 			ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
-
-		RemoveDataFromQueue(Len);		// No ACKS in FEC
 		return TRUE;
 	}
 	

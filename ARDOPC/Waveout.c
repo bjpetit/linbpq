@@ -334,25 +334,22 @@ void CloseSound()
 	waveOutClose(hWaveOut);
 }
 
-int WriteLog(char * msg)
+int WriteLog(char * msg, char * Log)
 {
 	FILE *file;
 	char timebuf[128];
-	time_t T;
-	struct tm * tm;
 	UCHAR Value[100];
+	SYSTEMTIME st;
 
-	T = time(NULL);
-	tm = gmtime(&T);
-
-	sprintf(Value, "ARDOPDebug_%04d%02d%02d.log",
-				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+	GetSystemTime(&st);
+	sprintf(Value, "%s_%04d%02d%02d.log",
+				Log, st.wYear, st.wMonth, st.wDay);
 	
 	if ((file = fopen(Value, "ab")) == NULL)
 		return FALSE;
 
-	strftime(timebuf, 128,
-		"%H:%M:%S ", tm);
+	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
+		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 
 	fputs(timebuf, file);
 
@@ -376,7 +373,22 @@ VOID Debugprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf(Mess);
-	WriteLog(Mess);
+	WriteLog(Mess, "ARDOPDebug");
+
+	return;
+}
+
+VOID Statsprintf(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	printf(Mess);
+	WriteLog(Mess, "ARDOPSession");
 
 	return;
 }

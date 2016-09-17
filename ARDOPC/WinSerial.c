@@ -31,7 +31,6 @@ BOOL VCOM;
 
 char PORTNAME[80];
 
-int Mode;
 int CTS, DTR, RTS;
 
 

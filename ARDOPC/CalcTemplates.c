@@ -13,7 +13,7 @@ void Generate50BaudTwoToneLeaderTemplate()
 	char msg[80];
 	int len;
 
-	fp1 = fopen("d:\\leadercoeffs.txt", "wb");
+	fp1 = fopen("s:\\leadercoeffs.txt", "wb");
 
 	for (i = 0; i < 240; i++)
 	{
@@ -466,13 +466,7 @@ VOID GeneratePSKTemplates()
 				float xx = intAmp * sin(dblAngle);
 				int xxi= (int)round(xx);
 				
-				if (intPSK200bdCarTemplate[i][j][k] != xxi)
-				{
-					k++;
-					k--;
-				}
-
-				intPSK200bdCarTemplate[i][j][k] = (short)round(intAmp * sin(dblAngle)); // with no envelope control
+//				intPSK200bdCarTemplate[i][j][k] = (short)round(intAmp * sin(dblAngle)); // with no envelope control
 				dblAngle += dblCarPhaseInc[i];
 				if (dblAngle >= 2 * M_PI)
 					dblAngle -= 2 * M_PI;
@@ -531,7 +525,7 @@ VOID GeneratePSKTemplates()
 
 	len = sprintf(msg, "\t}}};\r\n");
 	fwrite(msg, 1, len, fp1);
-
+/*
 
 	len = sprintf(msg, "\tshort intPSK200bdCarTemplate[9][4][120] = \r\n");
 	fwrite(msg, 1, len, fp1);
@@ -581,7 +575,7 @@ VOID GeneratePSKTemplates()
 
 	len = sprintf(msg, "\t}}};\r\n");
 	fwrite(msg, 1, len, fp1);
-
+*/
 	fclose(fp1);
 	
 }

@@ -5,6 +5,7 @@
 
 BOOL blnProcessingCmdData = FALSE; // Processing a Command or Data frame
 BOOL blnHostRDY = FALSE;
+extern int intFECFramesSent;
 
 void SendData();
 BOOL CheckForDisconnect();
@@ -77,7 +78,7 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 		ARQState = ISSData;
 		SendData();
 	}
-	else if (ProtocolState == IRS)
+	else if (ProtocolState == IRS && AutoBreak)
 	{
 		time_t dttStartWait  = Now;
 		
@@ -91,6 +92,7 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 		while ((Now - dttStartWait < 6000) && ProtocolState == IRS && (State != SearchingForLeader))
 			txSleep(20);
 
+		txSleep(250);			// dont want break too close to ACK
 
 		dttTimeoutTrip = Now;  //keep BREAK Repeats fairly long (preliminary value 1 - 4 seconds)
 
@@ -212,6 +214,38 @@ void ProcessCommandFromHost(char * strCMD)
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}
 		goto cmddone;
+	}
+   
+	if (strcmp(strCMD, "AUTOBREAK") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (AutoBreak)
+				sprintf(cmdReply, "AUTOBREAK TRUE");
+			else
+				sprintf(cmdReply, "AUTOBREAK FALSE");
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+			AutoBreak = TRUE;
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			AutoBreak = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
+		}
+		goto cmddone;
+	}
+
+	if (strcmp(strCMD, "BREAK") == 0)
+	{
+		Break();
+		goto cmddone;  
 	}
 
 	if (strcmp(strCMD, "BUFFER") == 0)
@@ -470,6 +504,7 @@ void ProcessCommandFromHost(char * strCMD)
 				if (strcmp(ptrParams, strAllDataModes[i]) == 0)
 				{
 					strcpy(strFECMode, ptrParams);
+					intFECFramesSent = 0;		// Force mode to be reevaluated
 					goto cmddone;
 				}
 			}
@@ -515,6 +550,34 @@ void ProcessCommandFromHost(char * strCMD)
 
 		goto cmddone;
 	}
+
+	if (strcmp(strCMD, "FSKONLY") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (FSKOnly)
+				sprintf(cmdReply, "FSKONLY TRUE");
+			else
+				sprintf(cmdReply, "FSKONLY FALSE");
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+			FSKOnly = TRUE;
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			FSKOnly = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
+		}
+		goto cmddone;
+	}
+
+
 
 	if (strcmp(strCMD, "GRIDSQUARE") == 0)
 	{
@@ -599,6 +662,33 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		goto cmddone;
 	}
+
+	if (strcmp(strCMD, "MONITOR") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (blnListen)
+				sprintf(cmdReply, "MONITOR TRUE");
+			else
+				sprintf(cmdReply, "MONITOR FALSE");
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+			Monitor = TRUE;
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			Monitor = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
+		}
+		goto cmddone;
+	}
+   
 	if (strcmp(strCMD, "MYAUX") == 0)
 	{
 		int i, len;
@@ -692,6 +782,12 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		SetARDOPProtocolState(DISC);	// ' set state to DISC on any Protocol mode change. 
 		goto cmddone;
+	}
+
+	if (strcmp(strCMD, "PURGEBUFFER") == 0)
+	{
+		ClearDataToSend();  // Should precipitate an asynchonous BUFFER 0 reponse. 
+		goto cmddone;  
 	}
 
 /*
@@ -974,6 +1070,32 @@ void ProcessCommandFromHost(char * strCMD)
 				TuningRange = i;
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+	}
+
+	if (strcmp(strCMD, "USE600MODES") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (Use600Modes)
+				sprintf(cmdReply, "USE600MODES TRUE");
+			else
+				sprintf(cmdReply, "USE600MODES FALSE");
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+			Use600Modes = TRUE;
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			Use600Modes = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
 		}
 		goto cmddone;
 	}
