@@ -488,6 +488,37 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
+	if (strcmp(strCMD, "FASTSTART") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (fastStart)
+				sprintf(cmdReply, "FASTSTART TRUE");
+			else
+				sprintf(cmdReply, "FASTSTART FALSE");
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+			fastStart = TRUE;
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			fastStart = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
+		}
+		
+		SendCommandToHost("Ok");
+		goto cmddone;
+	}
+
+
+
+
 	if (strcmp(strCMD, "FECMODE") == 0)
 	{
 		int i;
@@ -983,7 +1014,36 @@ void ProcessCommandFromHost(char * strCMD)
                     strFault = "Syntax Err:" & strCMD
                 End If
 
-*/ 
+*/
+
+	if (strcmp(strCMD, "NO2000.167") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (skip167)
+				sprintf(cmdReply, "NO2000.167 TRUE");
+			else
+				sprintf(cmdReply, "NO2000.167 FALSE");
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+			skip167 = TRUE;
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			skip167 = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
+		}
+		
+		SendCommandToHost("Ok");
+		goto cmddone;
+	}
+
 
 	if (strcmp(strCMD, "SQUELCH") == 0)
 	{

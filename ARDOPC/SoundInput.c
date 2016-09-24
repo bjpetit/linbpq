@@ -713,13 +713,15 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 	FrameOK = RSDecode(bytRawData, intDataLen + 3 + intRSLen, intRSLen, &blnRSOK);
 
 	if (blnRSOK)
-		Debugprintf("RS Says OK without correction");
+	{}
+//		Debugprintf("RS Says OK without correction");
 	else
 	if (FrameOK)
-		Debugprintf("RS Says OK after %d correction(s)", NErrors);
+	{}
+//		Debugprintf("RS Says OK after %d correction(s)", NErrors);
 	else
 	{
-		Debugprintf("RS Says Can't Correct");
+		Debugprintf("[DemodDecode4FSKData] RS Says Can't Correct");
 		goto returnBad;
 	}
 

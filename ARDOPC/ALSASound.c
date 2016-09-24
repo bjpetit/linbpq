@@ -665,15 +665,22 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	
 	if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, 1)) < 0)
 	{
-		Debugprintf("cannot set rec channel count to 1 (%s)", snd_strerror(err));
+		if (ErrorMsg)
+			sprintf (ErrorMsg, "cannot set rec channel count to 1 (%s)", snd_strerror(err));
+		else
+			Debugprintf("cannot set rec channel count to 1 (%s)", snd_strerror(err));
+	
 		m_recchannels = 2;
 
 		if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, 2)) < 0)
 		{
-			Debugprintf("cannot rec set channel count to 2 (%s)", snd_strerror(err));
+			Debugprintf("cannot set rec channel count to 2 (%s)", snd_strerror(err));
 			return false;
 		}
-		Debugprintf("Record channel count set to 2 (%s)", snd_strerror(err));
+		if (ErrorMsg)
+			sprintf (ErrorMsg, "Record channel count set to 2 (%s)", snd_strerror(err));
+		else
+			Debugprintf("Record channel count set to 2 (%s)", snd_strerror(err));
 	}
 	
 	if ((err = snd_pcm_hw_params (rechandle, hw_params)) < 0) {

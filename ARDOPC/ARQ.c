@@ -542,10 +542,10 @@ static UCHAR DataModes1000FSK[] = {0x5A, 0x58, 0x4A, 0x68};
 
 // 2000 Non-FM
 //' These do not include the 600 baud modes for FM only.
-//'16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4FSK.2000.100, 4PSK.2000.100, 8PSK.2000.100, 8PSK.2000.167)
+//'16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4FSK.2000.100, 4PSK.2000.100, 8PSK.2000.100, 4PSK.2000.167, 8PSK.2000.167)
 //'(329, 429, 881, 1762, 3624, 6144, 10386, 17220 bytes/min) 
 
-static UCHAR DataModes2000[] = {0x5A, 0x58, 0x4A, 0x68, 0x78, 0x70, 0x72, 0x76};
+static UCHAR DataModes2000[] = {0x5A, 0x58, 0x4A, 0x68, 0x78, 0x70, 0x72, 0x74, 0x76};
 static UCHAR DataModes2000FSK[] = {0x5A, 0x58, 0x4A, 0x68, 0x78};
 
 //2000 FM
@@ -609,6 +609,10 @@ UCHAR  * GetDataModes(int intBW)
 				return DataModes2000FSK;
 			}
 			bytFrameTypesForBWLength = sizeof(DataModes2000);
+
+			if (skip167)
+				bytFrameTypesForBWLength--;		// remove 8PSK.2000.167
+
 			return DataModes2000;
 		}
 		else
@@ -1064,7 +1068,11 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 	if (blnInitialize)	//' Get the array of supported frame types in order of Most robust to least robust
 	{
 		bytFrameTypesForBW = GetDataModes(intSessionBW);
-		intFrameTypePtr = 0;
+
+		if (fastStart)
+			intFrameTypePtr = (bytFrameTypesForBWLength / 2) - 1;	// Start mid way
+		else
+			intFrameTypePtr = 0;
 		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 		if(DebugLog) Debugprintf("[ARDOPprotocol.GetNextFrameData] Initial Frame Type: %s", Name(bytCurrentFrameType));
 		*intUpDn = 0;

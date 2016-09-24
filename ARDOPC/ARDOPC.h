@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.6.4.0-BPQ"
+#define ProductVersion "0.6.4.2-BPQ"
 
 //	Sound interface buffer size
 
@@ -286,6 +286,8 @@ extern BOOL SlowCPU;
 extern BOOL AccumulateStats;
 extern BOOL Use600Modes;
 extern BOOL FSKOnly;
+extern BOOL fastStart;
+extern BOOL skip167;
 
 extern char * CaptureDevices;
 extern char * PlaybackDevices;

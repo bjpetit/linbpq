@@ -84,7 +84,7 @@ UCHAR bytDataToSend[100000] =
 
 int bytDataToSendLength = 0;
 
-UINT FREE_Q = 0;
+/*UINT FREE_Q = 0;
 
 int MAXBUFFS = 0;
 int QCOUNT = 0;
@@ -94,6 +94,7 @@ int BUFFERWAITS = 0;
 int NUMBEROFBUFFERS = 0;
 
 unsigned int Host_Q;			// Frames for Host
+*/
 
 UCHAR bytLastCMD_DataSent[256];
 
@@ -129,63 +130,7 @@ void SendCommandToHost(char * strText)
 
 void QueueCommandToHost(char * strText)
 {
-	//  This is from TNC side as identified by the leading "c:"   (Host side sends "C:")
-	// A two byte CRC appended following the <Cr>
-	// The strText cannot contain a "c:" sequence or a <Cr>
-
-	UCHAR * bytToSend;
-	int len, ret;
-	BOOL Queue = FALSE;
-
-	UINT * buffptr;
-
-	if (blnInitializing)
-		return;
-
-	if (!CONNECTED)
-		return;
-
-	buffptr = GetBuff();
-
-	//	Have to save copy for possible retry (and possibly until previous 
-	//	command is acked
-
-	if (buffptr == NULL)
-		return;
-
-	bytToSend = (UCHAR *)&buffptr[2];
-
-	len = sprintf(bytToSend,"c:%s\r", strText);
-
-	if (CommandTrace) Debugprintf(" Command Trace TO Host  c:%s", strText);
-
-	if (Queue)
-	{
-		buffptr[1] = len;
-
-		if (Host_Q)
-		{
-			// Something already queued
-		
-			C_Q_ADD(&Host_Q, buffptr);
-			Debugprintf("Queueing to Host  Q Count = %d", C_Q_COUNT(&Host_Q));
-			return;
-		}
-
-		// Nothing on Queue, so OK to send now
-
-		C_Q_ADD(&Host_Q, buffptr);
-
-		ret = send(TCPControlSock, bytToSend, len, 0);
-		ret = WSAGetLastError();
-
-		return;
-	}
-
-	ret = send(TCPControlSock, bytToSend, len, 0);
-	ret = WSAGetLastError();
-	ReleaseBuffer(buffptr);
-
+	SendCommandToHost(strText);		// no queuing in lastest code
 }
 
 //  Subroutine to add a short 3 byte tag (ARQ, FEC, ERR, or IDF) to data and send to the host 
@@ -199,25 +144,19 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 	// I think largest apcet is about 1360 bytes
 
 	UCHAR * bytToSend;
-	int ret;
-	BOOL Queue = TRUE;
+	UCHAR buff[1500];
 
-	UINT * buffptr;
+	int ret;
 
 	if (blnInitializing)
 		return;
 
 	if (CommandTrace) Debugprintf("[AddTagToDataAndSendToHost] bytes=%d Tag %s", Len, strTag);
 
-	buffptr = GetBuff();
-
 	//	Have to save copy for possible retry (and possibly until previous 
 	//	command is acked
 
-	if (buffptr == NULL)
-		return;
-
-	bytToSend = (UCHAR *)&buffptr[2];
+	bytToSend = buff;
 
 	bytToSend[0] = 'd';			// indicates data from TNC
 	bytToSend[1] = ':';
@@ -227,8 +166,6 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 	memcpy(&bytToSend[4], strTag, 3);
 	memcpy(&bytToSend[7], bytData, Len - 3);
 	Len +=4;				// d: and len
-
-	buffptr[1] = Len;
 
 	ret = send(TCPDataSock, bytToSend, Len, 0);
 	ret = WSAGetLastError();
@@ -244,37 +181,7 @@ VOID ARDOPProcessCommand(UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "RDY", 3) == 0)
 	{
-		//	Command ACK. Remove from buffer and send next if any
-
-		UINT * buffptr;
-		UINT * Q;
-	
-		buffptr = Q_REM(&Host_Q);
-
-		if (buffptr)
-		{
-//			UCHAR * buff = (UCHAR *)&buffptr[2];
-//			buff[buffptr[1] - 3] = 0;
-//			Debugprintf("Processing RDY Acked %s", buff);
-			ReleaseBuffer(buffptr);
-		}
-//		else
-//			Debugprintf("Processing RDY No Message to ACK!!!!");
-
-		// See if another
-
-		// Leave on Queue till acked
-
-		// Q may not be word aligned, so copy as bytes (for ARM5)
-
-//		Debugprintf("Processing RDY Q Count = %d", C_Q_COUNT(&Host_Q));
-
-		Q = (UINT *)&Host_Q;
-
-		buffptr = (UINT *)Q[0];
-
-		if (buffptr)
-			send(TCPControlSock, (UCHAR *)&buffptr[2], buffptr[1], 0);
+		//	Command ACK. Remove from buffer and send next if a
 
 		return;
 	}
@@ -537,7 +444,7 @@ BOOL HostInit()
 #endif
 
 	Debugprintf("ARDOPC listening on port %d", port);
-	InitQueue();
+//	InitQueue();
 
 	ListenSock = OpenSocket4(port);
 	DataListenSock = OpenSocket4(port + 1);
@@ -587,9 +494,6 @@ void HostPoll()
 				}
 				Debugprintf("Connected to host");
 					
-				while(Host_Q)
-					ReleaseBuffer(Q_REM(&Host_Q));
-
 				ioctl(TCPControlSock, FIONBIO, &param);
 				CONNECTED = TRUE;
 				SendCommandToHost("RDY");
@@ -718,6 +622,8 @@ DCLost:
 	}
 	}
 }
+
+/*
 
 // Buffer handling routines
 	
@@ -872,3 +778,4 @@ VOID * _GetBuff(char * File, int Line)
 	return Temp;
 }
 
+*/

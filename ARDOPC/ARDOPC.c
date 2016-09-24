@@ -51,8 +51,8 @@ BOOL SlowCPU = FALSE;
 BOOL AccumulateStats = TRUE;
 BOOL Use600Modes = FALSE;
 BOOL FSKOnly = FALSE;
-
-// 
+BOOL fastStart = TRUE;
+BOOL skip167 = FALSE;
 
 // Stats
 
@@ -485,16 +485,6 @@ void testRS()
 	}
 
 	FrameOK = RSDecode(bytRawData, DataLen, intRSLen, &blnRSOK);
-
-	if (blnRSOK)
-		Debugprintf("RS Says OK without correction");
-	else
-	if (FrameOK)
-		Debugprintf("RS Says OK after correction %d Errors", NErrors);
-	else
-	{
-		Debugprintf("RS Says Can't Correct %d Errors", NErrors);
-	}
 }
 
 
