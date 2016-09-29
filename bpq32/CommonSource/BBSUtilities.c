@@ -2035,8 +2035,10 @@ int ImportMessages(CIRCUIT * conn, char * FN, BOOL Nopopup)
 
 		dummyconn.UserPointer = &User;	// Was SYSOPCall, but I think that is wrong.
 		strcpy(User.Call, "IMPORT");
+		User.flags |= F_EMAIL;
 		dummyconn.sysop = TRUE;
 		dummyconn.BBSFlags = BBS;
+		
 		strcpy(dummyconn.Callsign, "IMPORT");
 	}
 
@@ -2111,6 +2113,9 @@ NextMessage:
 				fgets(Buffer, 99999, in);
 				strlop(Buffer, 10);
 				strlop(Buffer, 13);				// Remove cr and/or lf
+				if (strlen(Buffer) > 60)
+					Buffer[60] = 0;
+
 				strcpy(Msg->title, Buffer);
 
 				// Read the lines
@@ -4884,7 +4889,14 @@ nextline:
 	
 			if (Msg->status == 'N' && strcmp(Msg->to, "WP") == 0)
 			{
-				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
+				// Reject WP Bulls is set, Kill message here.
+				// It should only get here if B2 - otherwise it should be
+				// rejected earlier
+
+				if (Msg->type == 'B' && FilterWPBulls)
+					Msg->status = 'K';
+				else
+					ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
 	
 				if (Msg->type == 'P')			// Kill any processed private WP messages.
 				{
@@ -6632,6 +6644,13 @@ InBand:
 
 	ElseLoop:
 
+		// Skip any comments
+		
+		while (Cmd && ((strcmp(Cmd, " ") == 0 || Cmd[0] == ';' || Cmd[0] == '#')))
+			Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+
+		// TIMES terminates a script
+
 		if (Cmd == 0 || _memicmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
 		{
 			conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
@@ -6656,7 +6675,7 @@ InBand:
 		DParam.Delay = Delay;
 		DParam.User = conn->UserPointer;
 
-		_beginthread(ConnectDelayThread, 0, &DParam);
+		_beginthread((void (*)(void *))ConnectDelayThread, 0, &DParam);
 		
 		return FALSE;
 	}
@@ -6852,7 +6871,7 @@ InBand:
 				DParam.Delay = atoi(&Cmd[6]) * 1000;
 				DParam.conn = conn;
 
-				_beginthread(ConnectPauseThread, 0, &DParam);
+				_beginthread((void (*)(void *))ConnectPauseThread, 0, &DParam);
 
 				return TRUE;
 			}
@@ -7261,7 +7280,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 		return;
 	}
 
-	if (strstr(SID, "RMS Ex"))
+	if (strstr(SID, "RMS Ex") || (strstr(SID, "Winlink Ex")))
 	{
 		conn->RMSExpress = TRUE;
 		conn->Paclink = FALSE;
@@ -8511,15 +8530,24 @@ int Connected(int Stream)
 				conn->PageLen = user->PageLen;				// No paging for chat
 				conn->Paging = (user->PageLen > 0);
 
-				if ((user->flags & F_Temp_B2_BBS) && (user->ForwardingInfo == NULL))
+				if (user->flags & F_Temp_B2_BBS)
 				{
 					// An RMS Express user that needs a temporary BBS struct
 
-					ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+					if (user->ForwardingInfo == NULL)
+					{
+						// we now save the Forwarding info if BBS flag is cleared,
+						// so there may already be a ForwardingInfo
 
-					ForwardingInfo->AllowCompressed = TRUE;
-					B2 = ForwardingInfo->AllowB2 = TRUE;
+						user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+					}
+				
+					ForwardingInfo = user->ForwardingInfo;
+					
 					user->BBSNumber = NBBBS;
+					ForwardingInfo->AllowCompressed = TRUE;
+					B1 = ForwardingInfo->AllowB1 = FALSE;
+					B2 = ForwardingInfo->AllowB2 = TRUE;
 				}
 
 				if (conn->NewUser)
@@ -9451,9 +9479,10 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (conn->BBSFlags & MBLFORWARDING)
 	{
-			ProcessMBLLine(conn, user, Buffer, len);
+		ProcessMBLLine(conn, user, Buffer, len);
 		return;
 	}
+
 	if (conn->Flags & GETTINGUSER || conn->NewUser)		// Could be new user but dont nned name
 	{
 		if (memcmp(Buffer, ";FW:", 4) == 0 || Buffer[0] == '[')

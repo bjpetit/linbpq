@@ -26,6 +26,7 @@ struct ScanEntry
 	char PMinLevel;		// Pactor Max Level
 	char Antenna;
 //	char Supress;		// Dont report this one to WL2K
+	char ARDOPMode[6];
 	char * Cmd1;
 	int Cmd1Len;
 	char * Cmd2;

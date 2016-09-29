@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 struct MsgInfo * GetMsgFromNumber(int msgno);
-BOOL ForwardMessagetoFile(struct MsgInfo * Msg, HANDLE Handle);
+BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle);
 
 static char seps[] = " \t\r";
 

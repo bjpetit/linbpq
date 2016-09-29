@@ -3,10 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 9.00
 # Visual C++ Express 2005
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BPQAPRS", "BPQAPRS.vcproj", "{DA2D929F-0A83-49BB-9878-778E85982D47}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGLAPRS", "S:\DEV\Source\BPQ32\VCProjects\OpenGLAPRS\OpenGLAPRS.vcproj", "{7C4E90EA-7FFA-4DFB-8300-9E2D9BED5E58}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LinBPQARPS", "S:\DEV\Source\BPQ32\VCProjects\LinBPQARPS.vcproj", "{BF752A7F-EB01-4F0C-A082-3C9DF55D040E}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -17,14 +13,6 @@ Global
 		{DA2D929F-0A83-49BB-9878-778E85982D47}.Debug|Win32.Build.0 = Debug|Win32
 		{DA2D929F-0A83-49BB-9878-778E85982D47}.Release|Win32.ActiveCfg = Release|Win32
 		{DA2D929F-0A83-49BB-9878-778E85982D47}.Release|Win32.Build.0 = Release|Win32
-		{7C4E90EA-7FFA-4DFB-8300-9E2D9BED5E58}.Debug|Win32.ActiveCfg = Debug|Win32
-		{7C4E90EA-7FFA-4DFB-8300-9E2D9BED5E58}.Debug|Win32.Build.0 = Debug|Win32
-		{7C4E90EA-7FFA-4DFB-8300-9E2D9BED5E58}.Release|Win32.ActiveCfg = Release|Win32
-		{7C4E90EA-7FFA-4DFB-8300-9E2D9BED5E58}.Release|Win32.Build.0 = Release|Win32
-		{BF752A7F-EB01-4F0C-A082-3C9DF55D040E}.Debug|Win32.ActiveCfg = Debug|Win32
-		{BF752A7F-EB01-4F0C-A082-3C9DF55D040E}.Debug|Win32.Build.0 = Debug|Win32
-		{BF752A7F-EB01-4F0C-A082-3C9DF55D040E}.Release|Win32.ActiveCfg = Release|Win32
-		{BF752A7F-EB01-4F0C-A082-3C9DF55D040E}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

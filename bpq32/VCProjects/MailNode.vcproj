@@ -196,6 +196,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\Alloc.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\APRSCode.c"
 				>
 			</File>
@@ -332,7 +336,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\LzFind.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\lzhuf32.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\LzmaDec.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\LzmaEnc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\LzmaLib.c"
 				>
 			</File>
 			<File
@@ -361,6 +381,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\Moncode.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\Multicast.c"
 				>
 			</File>
 			<File

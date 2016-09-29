@@ -155,8 +155,21 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			return;
 		}
 
-		CreateMessage(conn, From, To, ATBBS, toupper(Cmd[1]), BID, NULL);	
+		if (BID && LookupTempBID(BID))
+		{
+			// Being received from another BBS
 
+			nodeprintfEx(conn, "NO - BID\r");
+
+			if (conn->BBSFlags & OUTWARDCONNECT)
+				nodeprintfEx(conn, "F>\r");				// if Outward connect must be reverse forward
+			else
+				nodeprintfEx(conn, ">\r");
+
+			return;
+		}
+
+		CreateMessage(conn, From, To, ATBBS, toupper(Cmd[1]), BID, NULL);	
 		return;
 	}
 

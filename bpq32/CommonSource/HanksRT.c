@@ -521,7 +521,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 			}
 
 			iconv(icu->iconv_toUTF8, NULL, NULL, NULL, NULL);		// Reset State Machine
-			iconv(icu->iconv_toUTF8, &Buffer, &len, &BufferBP, &left);
+			iconv(icu->iconv_toUTF8, &Buffer, &len, (char ** __restrict__)&BufferBP, &left);
 		}
 		else
 		{
@@ -529,7 +529,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 				link_toUTF8 = iconv_open("UTF-8", "CP1252");
 
 			iconv(link_toUTF8, NULL, NULL, NULL, NULL);		// Reset State Machine
-			iconv(link_toUTF8, &Buffer, &len, &BufferBP, &left);
+			iconv(link_toUTF8, &Buffer, &len, (char ** __restrict__)&BufferBP, &left);
 		}
 		len = 65536 - left;
 		Buffer = BufferB;
@@ -1741,7 +1741,7 @@ void put_text(ChatCIRCUIT * circuit, USER * user, UCHAR * buf)
 		}
 
 		iconv(icu->iconv_fromUTF8, NULL, NULL, NULL, NULL);		// Reset State Machine
-		iconv(icu->iconv_fromUTF8, &buf, &len, &BufferBP, &left);
+		iconv(icu->iconv_fromUTF8, (char ** __restrict__)&buf, &len, (char ** __restrict__)&BufferBP, &left);
 
 		len = 4096 - left;
 		buf = BufferB;

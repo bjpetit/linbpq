@@ -3152,7 +3152,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				   char * PMinLevel, char * PMaxLevel, char * PacketMode,
 				   char * RPacketMode, char * Split, char * Data, char * WinmorMode,
 				   char * Antenna, BOOL * Supress, char * Filter, char * Appl,
-				   char * MemoryBank, int * MemoryNumber)
+				   char * MemoryBank, int * MemoryNumber, char * ARDOPMode)
 {
 	char * Context;
 	char * ptr;
@@ -3162,6 +3162,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	*MemoryBank = 0;
 	*MemoryNumber = 0;
 	*Mode = 0;
+	*ARDOPMode = 0;
 	
 	ptr = strtok_s(Param, ",", &Context);
 
@@ -3215,10 +3216,12 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	while (ptr)
 	{
 		if (memcmp(ptr, "APPL=", 5) == 0)
-		{
 			strcpy(Appl, ptr + 5);
-		}
-		else if (ptr[0] == 'A')
+
+		else if (ptr[0] == 'A' && strlen(ptr) > 2 && strlen(ptr) < 7)
+			strcpy(ARDOPMode, &ptr[1]);
+
+		else if (ptr[0] == 'A' && strlen(ptr) == 2)
 			*Antenna = ptr[1];
 		
 		else if (ptr[0] == 'F')
@@ -3829,6 +3832,7 @@ CheckScan:
 		char Split, Data, PacketMode, RPacketMode, PMinLevel, PMaxLevel, Filter;
 		char Mode[10] = "";
 		char WinmorMode, Antenna;
+		char ARDOPMode[6] = "";
 		char Appl[13];
 		char * ApplCall;
 
@@ -3840,7 +3844,7 @@ CheckScan:
 	
 		MemoryBank = 0;
 		Appl[0] = 0;
-
+		ARDOPMode[0] = 0;
 		Dwell = 0.0;
 
 		if (strchr(ptr, ':'))
@@ -3869,7 +3873,7 @@ CheckScan:
 		{
 			DecodeModePtr(ptr, &Dwell, &Freq, Mode, &PMinLevel, &PMaxLevel, &PacketMode,
 				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter, &Appl[0],
-				&MemoryBank, &MemoryNumber);
+				&MemoryBank, &MemoryNumber, ARDOPMode);
 		}
 		else
 		{
@@ -4122,7 +4126,7 @@ CheckScan:
 		FreqPtr[0]->PMaxLevel = PMaxLevel;
 		FreqPtr[0]->PMinLevel = PMinLevel;
 		FreqPtr[0]->Antenna = Antenna;
-//		FreqPtr[0]->Supress = Supress;
+		strcpy(FreqPtr[0]->ARDOPMode, ARDOPMode);
 
 		strcpy(FreqPtr[0]->APPL, Appl);
 

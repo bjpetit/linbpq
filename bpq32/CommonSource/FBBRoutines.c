@@ -787,13 +787,14 @@ BOOL FBBDoForward(CIRCUIT * conn)
 					
 					// Add From and To Header for Filters
 
-					proplen = sprintf(proposal, "FC EM %s %d %d %s %s %s\r", 
+					proplen = sprintf(proposal, "FC EM %s %d %d %s %s %s %c\r", 
 						FBBHeader->BID,
 						FBBHeader->Size,
 						FBBHeader->CSize,
 						FBBHeader->From,
 						(FBBHeader->ATBBS[0]) ? FBBHeader->ATBBS : conn->UserPointer->Call, 
-						FBBHeader->To);
+						FBBHeader->To,
+						FBBHeader->MsgType);
 
 				else
 

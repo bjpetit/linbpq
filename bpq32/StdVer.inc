@@ -46,9 +46,9 @@ CAPTION "About"
 FONT 8, "System"
 BEGIN
     ICON            107,BPQICON,14,9,20,20
-    LTEXT           "G8BPQ Mail and Chat Version ",-1,39,15,101,8,
+    LTEXT           "G8BPQ Mail Version ",-1,45,15,101,8,
                     SS_NOPREFIX | NOT WS_GROUP
-    LTEXT           Verstring,-1,139,15,58,8,NOT WS_GROUP
+    LTEXT           Verstring,-1,115,15,58,8,NOT WS_GROUP
     LTEXT           VerCopyright,-1,10,32,180,13,NOT WS_GROUP | ES_CENTER   
                     
     DEFPUSHBUTTON   "OK",IDOK,88,51,30,11,BS_CENTER | BS_VCENTER | WS_GROUP

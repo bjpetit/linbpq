@@ -502,7 +502,8 @@ int main(int argc, char * argv[])
 	}
 
 #else
-	openlog("LINBPQ", LOG_PID, LOG_DAEMON);
+	struct sigaction act;
+ 	openlog("LINBPQ", LOG_PID, LOG_DAEMON);
 #ifndef MACBPQ
 	prctl(PR_SET_DUMPABLE, 1);					// Enable Core Dumps even with setcap
 #endif
@@ -595,10 +596,23 @@ int main(int argc, char * argv[])
 #ifdef WIN32
 #else
 	openlog("LINBPQ", LOG_PID, LOG_DAEMON);
-	signal(SIGHUP, SIG_IGN);
-	signal(SIGINT, sigint_handler);
-	signal(SIGTERM, sigterm_handler);
-	signal(SIGPIPE, SIG_IGN);
+ 
+	memset (&act, '\0', sizeof(act));
+ 
+	act.sa_handler = &sigint_handler; 
+	if (sigaction(SIGINT, &act, NULL) < 0) 
+		perror ("SIGINT");
+
+	act.sa_handler = &sigterm_handler; 
+	if (sigaction(SIGTERM, &act, NULL) < 0) 
+		perror ("sigaction");
+
+	act.sa_handler = SIG_IGN; 
+	if (sigaction(SIGHUP, &act, NULL) < 0) 
+		perror ("SIGHUP");
+
+	if (sigaction(SIGPIPE, &act, NULL) < 0) 
+		perror ("SIGPIPE");
 
 #endif
 
@@ -643,10 +657,7 @@ int main(int argc, char * argv[])
 			printf("Chat APPLNUM not defined\n");
 			RunChat = 0;
 		}
-
 		CopyConfigFile(ChatConfigName);
-
-
 	}
 
 	// Start Mail if requested by command line or config
@@ -681,7 +692,6 @@ int main(int argc, char * argv[])
 		printf("Config Processed\n");
 
 		BBSApplMask = 1<<(BBSApplNum-1);
-
 
 	// See if we need to warn of possible problem with BaseDir moved by installer
 
@@ -1125,7 +1135,9 @@ int main(int argc, char * argv[])
 
 				if (MaintClock < NOW)
 				{
-					MaintClock += 86400;
+					while (MaintClock < NOW)		// in case large time step
+						MaintClock += 86400;
+
 					Debugprintf("|Enter HouseKeeping");
 					DoHouseKeeping(FALSE);
 				}

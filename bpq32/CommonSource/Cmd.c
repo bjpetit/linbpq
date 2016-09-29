@@ -100,6 +100,7 @@ char REBOOTFAILED[] = "Shutdown failed\r";
 char RESTARTOK[] = "Restarting\r";
 char RESTARTFAILED[] = "Restart failed\r";
 
+UCHAR ARDOP[7] = {'A'+'A','R'+'R','D'+'D','O'+'O','P'+'P',' '+' '};		// ARDOP IN AX25
 
 int STATSTIME = 0;
 int MAXBUFFS = 0;
@@ -166,6 +167,17 @@ VOID SAVENODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 {
 	SaveNodes();
 							
+	strcpy(Bufferptr, OKMSG);
+	Bufferptr += strlen(OKMSG);
+						
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
+VOID DUMPCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char * ptr = 0;
+	*ptr = 0;
+
 	strcpy(Bufferptr, OKMSG);
 	Bufferptr += strlen(OKMSG);
 						
@@ -1784,6 +1796,10 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	int Port = Session->LISTEN;
 	int Len;
 	UCHAR CQCALL[7];
+	char Empty[] = "";
+	char * ptr1 = &OrigCmdBuffer[3];
+	UCHAR * axptr = &Msg.DIGIS[0][0];
+	char * ptr2, *Context;
 	
 	if (Port == 0)
 	{
@@ -1802,12 +1818,52 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	Msg.PORT = Port;
 	Msg.CTL = 3;			// UI
 
+	// see if a Via specified
+
+	if (_memicmp(ptr1, "via ", 4) == 0)
+	{
+		ptr2 = strtok_s(ptr1 + 4, ",", &Context);
+
+		while (ptr2)
+		{
+			if (ConvToAX25(ptr2, axptr) == 0)
+			{
+				Bufferptr += sprintf(Bufferptr, "Invalid via string\r");
+				SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+				return;
+			}
+
+			axptr += 7;
+
+			if (axptr == &Msg.DIGIS[7][0])
+			{
+				Bufferptr += sprintf(Bufferptr, "Too many digis\r");
+				SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+				return;
+			}
+			ptr1 = ptr2;
+			ptr2 = strtok_s(NULL, ",", &Context);
+		}
+		
+		//	ptr1 is start of last digi call. We need to position to data
+
+		ptr1 = strchr(ptr1, ' ');
+
+		if (ptr1 == NULL)
+			ptr1 = Empty;
+		else
+			ptr1++	;			// to message
+
+		Len = strlen(ptr1);
+
+	}
+
 	ConvToAX25("CQ", CQCALL);
 	memcpy(Msg.DEST, CQCALL, 7);
 	memcpy(Msg.ORIGIN, Session->L4USER, 7);
 	Msg.ORIGIN[6] ^= 0x1e;					// Flip SSID
 	Msg.PID = 0xf0;							// Data PID
-	memcpy(&Msg.L2DATA, &OrigCmdBuffer[3], Len);
+	memcpy(&Msg.L2DATA, ptr1, Len);
 	
 	Send_AX_Datagram(&Msg, Len + 2, Port);		// Len is Payload ie CTL, PID and Data
 
@@ -2147,7 +2203,9 @@ Downlink:
 
 		// 	if Via PACTOR or WINMOR, convert to attach and call = Digi's are in AX25STRING (+7)
 
-		if (memcmp(&axcalls[7], &WINMOR[0], 6) == 0 || memcmp(&axcalls[7], &PACTORCALL[0], 6) == 0)
+		if (memcmp(&axcalls[7], &WINMOR[0], 6) == 0 ||
+			memcmp(&axcalls[7], &ARDOP[0], 6) == 0 ||
+			memcmp(&axcalls[7], &PACTORCALL[0], 6) == 0)
 		{
 			char newcmd[80];
 
@@ -2210,6 +2268,31 @@ Downlink:
 				if (NewSess == NULL)
 					return;
 
+				// if a UZ7HO port, and the uplink is L2 or Uz7HO invert SSID bits
+
+				// We only get here if multisession
+
+				if (memcmp(EXTPORT->PORT_DLL_NAME, "UZ7HO", 5) != 0)
+					goto noFlip;
+
+				if ((Session->L4CIRCUITTYPE & BPQHOST))// host
+						goto noFlip;
+
+				if ((Session->L4CIRCUITTYPE & PACTOR))
+				{
+					// incoming is Pactorlike - see if UZ7HO
+
+					if (memcmp(Session->L4TARGET.EXTPORT->PORT_DLL_NAME, "UZ7HO", 5) != 0)
+						goto noFlip;
+					else
+						NewSess->L4USER[6] ^= 0x1e;		// UZ7HO Uplink - flip
+				}
+				else
+					
+					// Must be L2 uplink - flip
+				
+					NewSess->L4USER[6] ^= 0x1e;									// Flip SSID
+noFlip:
 				EXTPORT->ATTACHEDSESSIONS[count] = NewSess;
 
 				NewSess->KAMSESSION = count;
@@ -2304,9 +2387,7 @@ Downlink:
 		return;
 	}
 
-
 	// Get Session Entry for Downlink
-
 
 	NewSess = SetupNewSession(Session, Bufferptr);
 	if (NewSess == NULL)
@@ -2318,8 +2399,30 @@ Downlink:
 
 	memcpy(ourcall, NewSess->L4USER, 7);
 
-	if ((Session->L4CIRCUITTYPE & (BPQHOST | PACTOR)) == 0)	// SSID SWAP TEST - LEAVE ALONE FOR HOST
+	// SSID SWAP TEST - LEAVE ALONE FOR HOST or Pactor like (unless UZ7HO)
+
+	if ((Session->L4CIRCUITTYPE & BPQHOST))// host
+		goto noFlip3;
+
+	if ((Session->L4CIRCUITTYPE & PACTOR))
+	{
+		// incoming is Pactorlike - see if UZ7HO
+
+		if (memcmp(Session->L4TARGET.EXTPORT->PORT_DLL_NAME, "UZ7HO", 5) != 0)
+			goto noFlip3;
+
+		if (Session->L4TARGET.EXTPORT->MAXHOSTMODESESSIONS < 2)	// Not multisession	
+			goto noFlip3;
+
+		ourcall[6] ^= 0x1e;		// UZ7HO Uplink - flip
+	}
+	else
+		
+		// Must be L2 uplink - flip
+				
 		ourcall[6] ^= 0x1e;									// Flip SSID
+
+noFlip3:
 	
 	//	SET UP NEW SESSION (OR RESET EXISTING ONE)
 
@@ -3661,13 +3764,40 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
 	}
-
-	
 	//	GET CIRCUIT TABLE ENTRY FOR OTHER END OF LINK
 	
 	NewSess = SetupNewSession(Session, Bufferptr);
+
 	if (NewSess == NULL)
 		return;
+
+	// if a UZ7HO port, and the uplink is L2 or Uz7HO and multisession,
+	//	invert SSID bits
+
+	if (memcmp(EXTPORT->PORT_DLL_NAME, "UZ7HO", 5) != 0)
+		goto noFlip1;
+
+	if (EXTPORT->MAXHOSTMODESESSIONS < 2)	// Not multisession	
+		goto noFlip1;
+
+	if ((Session->L4CIRCUITTYPE & BPQHOST))	// host
+		goto noFlip1;
+
+	if ((Session->L4CIRCUITTYPE & PACTOR))
+	{
+		// incoming is Pactorlike - see if UZ7HO
+
+		if (memcmp(Session->L4TARGET.EXTPORT->PORT_DLL_NAME, "UZ7HO", 5) != 0)
+			goto noFlip1;
+		else
+			NewSess->L4USER[6] ^= 0x1e;		// UZ7HO Uplink - flip
+	}
+	else
+		
+		// Must be L2 uplink - flip
+				
+		NewSess->L4USER[6] ^= 0x1e;									// Flip SSID
+noFlip1:
 
 	EXTPORT->ATTACHEDSESSIONS[sess] = NewSess;
 
@@ -3848,7 +3978,7 @@ CMDX COMMANDS[] =
 	"USERS       ",1,CMDS00,0,
 	"UNPROTO     ",2,UNPROTOCMD,0,
 	"?           ",1,CMDQUERY,0,
-//	"DUMP        ",4,DUMPCMD,0,
+	"DUMP        ",4,DUMPCMD,0,
 	"MHV         ",3,MHCMD,0,
 	"MHEARD      ",1,MHCMD,0,
 	"APRSMH      ",2,APRSMHCMD,0,

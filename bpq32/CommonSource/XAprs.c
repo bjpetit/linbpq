@@ -58,6 +58,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <gtk/gtkadjustment.h>
 #include <gtk/gtkwidget.h>
 
+#define PNG_SKIP_SETJMP_CHECK
+
+#include "png.h"
 
 #define VOID void
 #define UCHAR unsigned char
@@ -123,6 +126,8 @@ void UpdateTXMessageLine(struct APRSMESSAGE * Message);
 VOID SecTimer();
 void plotLine(int x0, int y0, int x1, int y1, COLORREF rgb);
 void SelectTXMsg (GtkTreeView *tree_view, GtkTreePath *path, GtkTreeViewColumn *column, gpointer user_data);
+
+static png_color bkgColor = {127, 127, 127};
 
 struct SEM
 {
@@ -629,7 +634,9 @@ unsigned int ipaddr = 0;
 //char Host[] = "tile.openstreetmap.org";
 
 //char Host[] = "oatile1.mqcdn.com";		//SAT
-char Host[] = "otile1.mqcdn.com";
+//char Host[] = "otile1.mqcdn.com";
+
+char Host[] = "tile.thunderforest.com";
 
 char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 
@@ -727,9 +734,11 @@ VOID OSMThread()
 
 //		wsprintf(Tile, "/%02d/%d/%d.png", Zoom, x, y);
 //		wsprintf(Tile, "/tiles/1.0.0/sat/%02d/%d/%d.jpg", Zoom, x, y);
-		sprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
+//		sprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
 
-		sprintf(FN, "%s/%02d/%d/%d.jpg", OSMDir, Zoom, x, y);
+		sprintf(Tile, "/mobile-atlas/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", Zoom, x, y);
+
+		sprintf(FN, "%s/%02d/%d/%d.png", OSMDir, Zoom, x, y);
 
 		if (stat(FN, &STAT) == 0)
 		{
@@ -2023,22 +2032,90 @@ VOID LoadImageTile(int Zoom, int startx, int starty, int x, int y)
 		return; //goto NoFile;
 	}
 
+	// May be PNG or JPG
+
+	sprintf(Tile, "/%02d/%d/%d.png", Zoom, startx, starty);
+	sprintf(FN, "%s%s", OSMDir, Tile);
+
+	if (stat(FN, &STAT) == 0)
+		goto gotfile;
+
 	sprintf(Tile, "/%02d/%d/%d.jpg", Zoom, startx, starty);
 	sprintf(FN, "%s%s", OSMDir, Tile);
 
 	JPG = TRUE;
 
-	if (stat(FN, &STAT))
-	{
-		OSMGet(startx, starty, Zoom);
-		return;
-	}
+	if (stat(FN, &STAT) == 0)
+		goto gotfile;
+
+
+	OSMGet(startx, starty, Zoom);
+	return;
 
 gotfile:
-			
-	JpegFileToRGB(FN, &cx, &cy, x, y);
-	ImgChannels = 3;
 
+	if (JPG)
+	{		
+		JpegFileToRGB(FN, &cx, &cy, x, y);
+		ImgChannels = 3;
+	}
+	else
+	{
+		int offset;
+		int cxImgSize, cyImgSize;
+		UCHAR * ImageSave;
+	
+		LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
+	
+		ImgChannels = 4;
+		StartCol = x * Bytesperpixel * 256;
+		StartRow = y * 256;
+
+//		printf("WIDTH %d Height %d Bytesperpixel = %d x = %d y = %d\n", WIDTH, HEIGHT, Bytesperpixel, x, y); 
+		if (pbImage == NULL)
+		{
+			pbImage = malloc(256 * 3 * 256);
+			memset(pbImage, 0x40, 256 * 3 * 256);
+		}
+
+		ImageSave = pbImage;
+
+		offset = ((StartRow) * WIDTH * ImgChannels) + StartCol;
+
+//		printf ("x %d y %d offset %d \n", x, y, offset);
+
+			
+		for (i = 0; i < 256; i++)
+		{
+			int count, val;
+
+			offset = ((StartRow + i) * WIDTH * Bytesperpixel) + StartCol;
+
+			// this does one scan line
+				
+			for (count = 0; count < 256; count++) 
+			{
+				if (Bytesperpixel == 2)
+				{
+					val = (*(pbImage + count * 3 + 2) >> 3);
+					val |= ((*(pbImage + count * 3 + 1) >> 2) << 5);
+					val |= ((*(pbImage + count * 3 + 0) >> 3) << 11);
+					Image[offset++] = (val & 0xff);
+					Image[offset++] = (unsigned char)(val >> 8);
+				}
+				else
+				{
+					Image[offset++] = *(pbImage + count * 3 + 2);		// Blue
+					Image[offset++] = *(pbImage + count * 3 + 1);		// Green
+					Image[offset++] = *(pbImage + count * 3 + 0);		// Red	
+					offset++;
+				}
+			}
+			pbImage += 768; // used 768 pixels
+		}
+			
+		free(ImageSave);
+	}
 }
 
 
@@ -2829,12 +2906,12 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.1.0\n");
-  	printf("Copyright © 2004-2015 John Wiseman G8BPQ\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.1.1\n");
+  	printf("Copyright © 2004-2016 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
-	printf("Map Tiles Courtesy of MapQuest (www.mapquest.com)\n\n");
+	printf("Map Tiles Courtesy of thunderforest (www.thunderforest.com)\n\n");
 
 	config_init(&cfg);
 
@@ -4296,5 +4373,267 @@ void plotLineTB(int x0, int y0, int x1, int y1, COLORREF rgb)
 
 		}
 	}
+}
+
+
+png_const_charp msg;
+
+
+static png_structp png_ptr = NULL;
+static png_infop info_ptr = NULL;
+
+
+// cexcept interface
+
+static void
+png_cexcept_error(png_structp png_ptr, png_const_charp msg)
+{
+   if(png_ptr)
+     ;
+#ifndef PNG_NO_CONSOLE_IO
+   fprintf(stderr, "libpng error: %s\n", msg);
+#endif
+   {
+//      Throw msg;
+   }
+}
+
+
+int LoadImageFile (void * hwnd, char * pstrPathName,
+                png_byte **ppbImage, int *pxImgSize, int *pyImgSize,
+                int *piChannels, png_color *pBkgColor)
+{
+ 
+    // if there's an existing PNG, free the memory
+
+    if (*ppbImage)
+    {
+        free (*ppbImage);
+        *ppbImage = NULL;
+    }
+
+    PngLoadImage (pstrPathName, ppbImage, pxImgSize, pyImgSize, piChannels,
+                  pBkgColor);
+
+
+
+    if (*ppbImage != NULL)
+    {
+  //      sprintf (szTmp, "VisualPng - %s", strrchr(pstrPathName, '\\') + 1);
+   //     SetWindowText (hwnd, szTmp);
+    }
+    else
+    {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+//----------------
+// PNG image handler functions
+
+BOOL PngLoadImage (char * pstrFileName, png_byte **ppbImageData,
+                   png_uint_32 *piWidth, png_uint_32 *piHeight, int *piChannels, png_color *pBkgColor)
+{
+    static FILE        *pfFile;
+    png_byte            pbSig[8];
+    int                 iBitDepth;
+    int                 iColorType;
+    double              dGamma;
+    png_color_16       *pBackground;
+    png_uint_32         ulChannels;
+    png_uint_32         ulRowBytes;
+    png_byte           *pbImageData = *ppbImageData;
+    static png_byte   **ppbRowPointers = NULL;
+    int                 i;
+
+    // open the PNG input file
+
+    if (!pstrFileName)
+    {
+        *ppbImageData = pbImageData = NULL;
+		printf("Load PNG Failed 1\n");
+        return FALSE;
+    }
+
+	if (!(pfFile = fopen(pstrFileName, "rb")))
+	{
+		*ppbImageData = pbImageData = NULL;
+		printf("Load PNG Failed 2\n");
+		return FALSE;
+	}
+
+    // first check the eight byte PNG signature
+
+    fread(pbSig, 1, 8, pfFile);
+    if (!png_check_sig(pbSig, 8))
+    {
+        *ppbImageData = pbImageData = NULL;
+
+		if (pfFile)
+			fclose (pfFile);
+
+		printf("Bad file %s", pstrFileName);
+		unlink(pstrFileName);
+
+        return FALSE;
+    }
+
+    // create the two png(-info) structures
+
+    png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL,
+      (png_error_ptr)png_cexcept_error, (png_error_ptr)NULL);
+    if (!png_ptr)
+    {
+        *ppbImageData = pbImageData = NULL;
+		printf("Load PNG Failed 4\n");
+		return FALSE;
+    }
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr)
+    {
+        png_destroy_read_struct(&png_ptr, NULL, NULL);
+        *ppbImageData = pbImageData = NULL;
+ 		printf("Load PNG Failed 5\n");
+       return FALSE;
+    }
+
+//    Try
+    {
+        
+        // initialize the png structure
+        
+#if !defined(PNG_NO_STDIO)
+        png_init_io(png_ptr, pfFile);
+#else
+        png_set_read_fn(png_ptr, (png_voidp)pfFile, png_read_data);
+#endif
+        
+        png_set_sig_bytes(png_ptr, 8);
+        
+        // read all PNG info up to image data
+        
+        png_read_info(png_ptr, info_ptr);
+        
+        // get width, height, bit-depth and color-type
+        
+        png_get_IHDR(png_ptr, info_ptr, piWidth, piHeight, &iBitDepth,
+            &iColorType, NULL, NULL, NULL);
+        
+        // expand images of all color-type and bit-depth to 3x8 bit RGB images
+        // let the library process things like alpha, transparency, background
+        
+        if (iBitDepth == 16)
+            png_set_strip_16(png_ptr);
+        if (iColorType == PNG_COLOR_TYPE_PALETTE)
+            png_set_expand(png_ptr);
+        if (iBitDepth < 8)
+            png_set_expand(png_ptr);
+        if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
+            png_set_expand(png_ptr);
+        if (iColorType == PNG_COLOR_TYPE_GRAY ||
+            iColorType == PNG_COLOR_TYPE_GRAY_ALPHA)
+            png_set_gray_to_rgb(png_ptr);
+        
+        // set the background color to draw transparent and alpha images over.
+        if (png_get_bKGD(png_ptr, info_ptr, &pBackground))
+        {
+            png_set_background(png_ptr, pBackground, PNG_BACKGROUND_GAMMA_FILE, 1, 1.0);
+            pBkgColor->red   = (byte) pBackground->red;
+            pBkgColor->green = (byte) pBackground->green;
+            pBkgColor->blue  = (byte) pBackground->blue;
+        }
+        else
+        {
+            pBkgColor = NULL;
+        }
+        
+        // if required set gamma conversion
+        if (png_get_gAMA(png_ptr, info_ptr, &dGamma))
+            png_set_gamma(png_ptr, (double) 2.2, dGamma);
+        
+        // after the transformations have been registered update info_ptr data
+        
+        png_read_update_info(png_ptr, info_ptr);
+        
+        // get again width, height and the new bit-depth and color-type
+        
+        png_get_IHDR(png_ptr, info_ptr, piWidth, piHeight, &iBitDepth,
+            &iColorType, NULL, NULL, NULL);
+        
+        
+        // row_bytes is the width x number of channels
+        
+        ulRowBytes = png_get_rowbytes(png_ptr, info_ptr);
+        ulChannels = png_get_channels(png_ptr, info_ptr);
+        
+        *piChannels = ulChannels;
+        
+        // now we can allocate memory to store the image
+        
+        if (pbImageData)
+        {
+            free (pbImageData);
+            pbImageData = NULL;
+        }
+        if ((pbImageData = (png_byte *) malloc(ulRowBytes * (*piHeight)
+                            * sizeof(png_byte))) == NULL)
+        {
+            png_error(png_ptr, "Visual PNG: out of memory");
+        }
+        *ppbImageData = pbImageData;
+        
+        // and allocate memory for an array of row-pointers
+        
+        if ((ppbRowPointers = (png_bytepp) malloc((*piHeight)
+                            * sizeof(png_bytep))) == NULL)
+        {
+            png_error(png_ptr, "Visual PNG: out of memory");
+        }
+        
+        // set the individual row-pointers to point at the correct offsets
+        
+        for (i = 0; i < (*piHeight); i++)
+            ppbRowPointers[i] = pbImageData + i * ulRowBytes;
+        
+        // now we can go ahead and just read the whole image
+        
+        png_read_image(png_ptr, ppbRowPointers);
+        
+        // read the additional chunks in the PNG file (not really needed)
+        
+        png_read_end(png_ptr, NULL);
+         
+        // and we're done
+        
+        free (ppbRowPointers);
+        ppbRowPointers = NULL;
+
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
+        
+        // yepp, done
+    }
+/*
+    Catch (msg)
+    {
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
+        *ppbImageData = pbImageData = NULL;
+        
+        if(ppbRowPointers)
+            free (ppbRowPointers);
+
+        fclose(pfFile);
+
+        return FALSE;
+    }
+*/
+    if (pfFile)
+		fclose (pfFile);
+
+    return TRUE;
 }
 

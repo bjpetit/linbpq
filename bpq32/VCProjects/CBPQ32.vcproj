@@ -249,6 +249,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\ARDOPAX25.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CKernel\asmDOSAPI.asm"
 				>
 			</File>
@@ -331,10 +335,6 @@
 			</File>
 			<File
 				RelativePath="..\CKernel\DOSAPI.c"
-				>
-			</File>
-			<File
-				RelativePath="..\CommonSource\Dragon.c"
 				>
 			</File>
 			<File

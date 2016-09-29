@@ -4620,23 +4620,33 @@ rootok:
 	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_DGRAM;
 	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
+//	n = getaddrinfo("cms.winlink.org", NULL, &hints, &res);
 	 
 	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
 	{
 		// Switch to Cached Servers
 		
-		TCP->UseCachedCMSAddrs = TRUE;
-
 		if (res)
 		{
-			Debugprintf("Resolve CMS returned only on e host");
+			// If Host is amazonaws, allow it
+
+			remoteHost = gethostbyaddr((char *) &res->ai_addr->sa_data[2], 4, AF_INET);
+
+			if (remoteHost && strstr(_strlwr(remoteHost->h_name), "amazonaws"))
+				goto resok;
+
+			Debugprintf("Resolve CMS returned only one host");
 			freeaddrinfo(res);
 		}
 		else
 			Debugprintf("Resolve CMS Failed");
 
+		TCP->UseCachedCMSAddrs = TRUE;
+
 		goto CheckServers;
 	}
+
+resok:
 
 	saveres = res;
 
@@ -4764,6 +4774,9 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 		   		
 		TCP->CMSName[i] = _strdup(ptr1);			// Save Host Name
 		i++;
+
+		if (i >= MaxCMS)
+			break;
 	}
 
 	fclose(in);
@@ -4827,6 +4840,9 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 		Debugprintf("No Cached CMS Servers found"); 
 		return;
 	}
+
+	if (cValues > MaxCMS)
+		cValues = MaxCMS;
 
 	for (i=0, retCode=ERROR_SUCCESS; i<cValues; i++) 
 	{ 

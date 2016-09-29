@@ -83,9 +83,10 @@
 //	Add Port Names to Monitor Config and fix saving monitor option s by host
 
 
-//	Version 1.0.12.2 Dec 2015
-//	Fix buffer overrun introduced in 1.0.12.1 
+//	Version 1.0.13.1 Sept 2016
 
+//	Fix buffer overrun introduced in 1.0.12.1 
+//	Fix saving Alert and Keyword filenames
 
 #define _USE_32BIT_TIME_T
 
@@ -978,10 +979,10 @@ INT_PTR CALLBACK AlertConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 		SetDlgItemInt(hDlg, IDC_FREQ, AlertFreq, FALSE);
 		SetDlgItemInt(hDlg, IDC_DURATION, AlertDuration, FALSE);		
-		SetDlgItemText(hDlg, IDC_ALERTFILENAME, &KeyWordsName[0]);
+		SetDlgItemText(hDlg, IDC_ALERTFILENAME, &AlertFileName[0]);
 
 		CheckDlgButton(hDlg, IDC_USEKEYWORDS, UseKeywords);		
-		SetDlgItemText(hDlg, IDC_ALERTKEYNAME, &AlertFileName[0]);
+		SetDlgItemText(hDlg, IDC_ALERTKEYNAME, &KeyWordsName[0]);
 
 		return (INT_PTR)TRUE;
 

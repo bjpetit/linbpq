@@ -268,6 +268,7 @@
 #define IDD_EDITMSGTEXT                 30006
 #define IDD_UPDATECHATMAP               30007
 #define IDD_CHATCOLCONFIG               30008
+#define IDR_MENU1                       30010
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
@@ -297,8 +298,8 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30010
-#define _APS_NEXT_COMMAND_VALUE         40025
+#define _APS_NEXT_RESOURCE_VALUE        30011
+#define _APS_NEXT_COMMAND_VALUE         40027
 #define _APS_NEXT_CONTROL_VALUE         1089
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

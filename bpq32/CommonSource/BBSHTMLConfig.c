@@ -1572,7 +1572,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (ConfigTemplate)
 			free(ConfigTemplate);
 
-		ConfigTemplate = GetTemplateFromFile(5, "MainConfig.txt");
+		ConfigTemplate = GetTemplateFromFile(6, "MainConfig.txt");
 
 		SendConfigPage(Reply, RLen, Key);
 		return;
@@ -2437,7 +2437,7 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 
 		GetParam(input, "AMPRDomain=", AMPRDomain);
 
-		GetParam(input, "Domain=", MyDomain);
+		GetParam(input, "ISPDomain=", MyDomain);
 		GetParam(input, "SMTPServer=", ISPSMTPName);
 			
 		GetParam(input, "ISPSMTPPort=", Temp);
@@ -2850,8 +2850,12 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		ptr1 = GetNextParam(&ptr2);		// Pass
 		strcpy(USER->pass, ptr1);		
 		ptr1 = GetNextParam(&ptr2);		// CMS Pass
-		strcpy(USER->CMSPass, ptr1);
-		_strupr(USER->CMSPass);
+		if (memcmp("****************", ptr1, strlen(ptr1) != 0))
+		{
+			strcpy(USER->CMSPass, ptr1);
+			_strupr(USER->CMSPass);
+		}
+		
 		ptr1 = GetNextParam(&ptr2);		// QTH
 		strcpy(USER->Address, ptr1);
 		ptr1 = GetNextParam(&ptr2);		// ZIP

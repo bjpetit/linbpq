@@ -207,7 +207,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		{
 			if (TNC->ProgramPath)
 			{
-				if (strstr(TNC->ProgramPath, " TNC"))
+				if (strstr(TNC->ProgramPath, " TNC") || strstr(TNC->ProgramPath, "ARDOP"))
 				{
 					EnableMenuItem(TNC->hMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
 					EnableMenuItem(TNC->hMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);

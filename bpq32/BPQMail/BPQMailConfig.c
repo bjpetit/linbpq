@@ -68,7 +68,7 @@ VOID WINAPI OnChildDialogInit(HWND hwndDlg);
 VOID WINAPI OnTabbedDialogInit(HWND hwndDlg);
 VOID SaveWPConfig(HWND hDlg);
 PrintMessage(struct MsgInfo * Msg);
-BOOL ForwardMessagetoFile(struct MsgInfo * Msg, HANDLE Handle);
+BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle);
 VOID TidyPrompts();
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);

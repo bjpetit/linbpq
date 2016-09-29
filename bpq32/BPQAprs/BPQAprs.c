@@ -58,6 +58,11 @@
 //	Nov 2014 1.1.9.1
 //	Add Track Expire Time to config
 
+// July 2016 1.1.9.2
+//	Temporary Fix to stop crash when displaying Mpatech dumy tile
+
+// July 2016 1.1.10.1
+//	Switch to Thunderforest tile server
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
@@ -443,10 +448,10 @@ SOCKADDR_IN destaddr = {0};
 
 unsigned int ipaddr = 0;
 
-//char Host[] = "tile.openstreetmap.org";
+char Host[] = "tile.thunderforest.com";
 
 //char Host[] = "oatile1.mqcdn.com";		//SAT
-char Host[] = "otile1.mqcdn.com";
+//char Host[] = "192.168.1.124";
 
 extern short CRCTAB;
 
@@ -2963,10 +2968,12 @@ WXLoop:
 char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 //char Header[] = "Accept: */*\r\nHost: tile.openstreetmap.org\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 
+int totalLoaded = 0;
+
 VOID OSMGet(int x, int y, int zoom)
 {
 	struct OSMQUEUE * OSMRec = malloc(sizeof(struct OSMQUEUE));
-	
+
 	EnterCriticalSection(&OSMCrit);
 
 	OSMQueueCount++;
@@ -3022,12 +3029,12 @@ VOID OSMThread()
 
 		free(OSMRec);
 
-//		wsprintf(Tile, "/%02d/%d/%d.png", Zoom, x, y);
+		wsprintf(Tile, "/mobile-atlas/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", Zoom, x, y);
 //		wsprintf(Tile, "/tiles/1.0.0/sat/%02d/%d/%d.jpg", Zoom, x, y);
-		wsprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
+//		wsprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
 
 	
-		wsprintf(FN, "%s/%02d/%d/%d.jpg", OSMDir, Zoom, x, y);
+		wsprintf(FN, "%s/%02d/%d/%d.png", OSMDir, Zoom, x, y);
 
 		if (GetFileAttributes(FN) != INVALID_FILE_ATTRIBUTES)
 		{
@@ -3153,7 +3160,7 @@ VOID OSMThread()
 									}
 								}
 
-								Debugprintf("Tile %s Loaded", FN);
+								Debugprintf("Tile %s Loaded - Total %d", FN, ++totalLoaded);
 								RefreshTile(FN, Zoom, x, y);
 								EnterCriticalSection(&RefreshCrit);
 //								RefreshStationMap();
@@ -3197,6 +3204,7 @@ VOID LoadImageTile(int Zoom, int startx, int starty, int x, int y)
 	UCHAR * pbImage = NULL;
 	int ImgChannels;
 	BOOL JPG=FALSE;
+	struct stat STAT;
 
 	int Limit = (int)pow(2, Zoom);
 
@@ -3245,6 +3253,10 @@ VOID LoadImageTile(int Zoom, int startx, int starty, int x, int y)
 	{
 		// Not got it yet
 
+	
+		wsprintf(FN, "%s/DummyTile.jpg", OSMDir);
+
+
 		OSMGet(startx + x, starty + y, Zoom);
 		pbImage = malloc(256 * 3 * 256);
 		memset(pbImage, 0x80, 256 * 3 * 256);
@@ -3252,6 +3264,14 @@ VOID LoadImageTile(int Zoom, int startx, int starty, int x, int y)
 
 		goto NoFile;
 	}
+
+	
+	if (stat(FN, &STAT) == -1)
+		goto NoFile;
+
+	if (STAT.st_size > 25000)
+		JPG = FALSE;
+
 
 gotfile:
 
@@ -3436,9 +3456,9 @@ VOID RefreshTile(char * FN, int TileZoom, int Tilex, int Tiley)
 
 	__try
 	{				
-//		LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
-		pbImage =  JpegFileToRGB(FN, &cxImgSize, &cyImgSize);
-		ImgChannels = 3;
+		LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
+//		pbImage =  JpegFileToRGB(FN, &cxImgSize, &cyImgSize);
+//		ImgChannels = 3;
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{

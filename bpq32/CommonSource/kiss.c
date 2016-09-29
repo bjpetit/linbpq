@@ -1795,45 +1795,46 @@ int KISSGetTCPMessage(NPASYINFO ASY)
 			ASY->Connected = 0;
 			closesocket(ASY->sock);
 
-			if (ASY->Portvector->KISSSLAVE)
-			{
-				// Reopen Listening Socket
-
-				SOCKET sock;
-				u_long param=1;
-				BOOL bcopt=TRUE;
-				struct sockaddr_in sinx;
-
-				ASY->sock = sock = socket(AF_INET,SOCK_STREAM,0);
-				ioctl(sock, FIONBIO, &param);
-
-				sinx.sin_family = AF_INET;
-				sinx.sin_addr.s_addr = INADDR_ANY;		
-				sinx.sin_port = htons(ASY->Portvector->ListenPort);
-
-				if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
-				{
-					//	Bind Failed
-
-					int err = WSAGetLastError();
-					Consoleprintf("Bind Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
-					closesocket(sock);
-				}
-				else
-				{
-					if (listen(sock, 1) < 0)
-					{
-						int err = WSAGetLastError();
-						Consoleprintf("Listen Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
-						closesocket(sock);
-					}
-					else
-						ASY->Listening = TRUE;	
-				}
-
-			}
 			return 0;
 		}
+	}
+
+	if (ASY->Portvector->KISSSLAVE && !ASY->Connected && !ASY->Listening)
+	{
+		// Reopen Listening Socket
+
+		SOCKET sock;
+		u_long param=1;
+		BOOL bcopt=TRUE;
+		struct sockaddr_in sinx;
+
+		ASY->sock = sock = socket(AF_INET,SOCK_STREAM,0);
+		ioctl(sock, FIONBIO, &param);
+
+		sinx.sin_family = AF_INET;
+		sinx.sin_addr.s_addr = INADDR_ANY;		
+		sinx.sin_port = htons(ASY->Portvector->ListenPort);
+
+		if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
+		{
+			//	Bind Failed
+
+			int err = WSAGetLastError();
+			Consoleprintf("Bind Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+			closesocket(sock);
+		}
+		else
+		{
+			if (listen(sock, 1) < 0)
+			{
+				int err = WSAGetLastError();
+				Consoleprintf("Listen Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+				closesocket(sock);
+			}
+			else
+				ASY->Listening = TRUE;	
+		}
+
 	}
 	return 0;
 }

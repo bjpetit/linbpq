@@ -589,7 +589,7 @@ BOOL RemoveKilledMessages()
 
 }
 
-#define MESSAGE_NUMBER_MAX 65536
+#define MESSAGE_NUMBER_MAX 100000
 
 VOID Renumber_Messages()
 {

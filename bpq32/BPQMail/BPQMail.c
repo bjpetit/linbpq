@@ -915,6 +915,15 @@
 //	Connect script now tries ELSE lines if prompt not received from remote BBS
 //	Send connecting call instead of BBS Name when connecting to CMS server.
 //	Add BID filter to Manage Messages
+//	Fix handling of over long suject lines in IMPORT
+//	Allow comments before ELSE in connect script
+//	Add Copy and Clear to Multicast Window
+//	Fix possible duplicate messages with MBL forwarding
+//	Set "Permit EMail" on IMPORT dummy User.
+//	Fix repeated running of housekeeping if clock is stepped forward.
+//	Fix corruption of CMS Pass field by Web interface
+//	Kill B2 WP bulls if FilterWPBulls set
+//	Include Message Type in BPQ B2 proposal extensions
 
 
 #include "BPQMail.h"
@@ -1848,8 +1857,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				BBSSlowTimer();
 				FWDTimerProc();
 				if (MaintClock < NOW)
-				{				
-					MaintClock += 86400;					
+				{
+					while (MaintClock < NOW)		// in case large time step
+						MaintClock += 86400;
+
 					Debugprintf("|Enter HouseKeeping");
 					DoHouseKeeping(FALSE);
 				}

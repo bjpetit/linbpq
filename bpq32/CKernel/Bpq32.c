@@ -766,6 +766,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix processing application aliases to a connect command.
 //	Fix Buffer loss if radio connected to PTC rig port but BPQ not configured to use it
 //	Save backups of bpq32.cfg when editing with Web interface and report old and new length
+//	Add DD command to SCS Pactor, and use it for forced disconnect.
+//	Add ARDOP mode select to scan config
+//	ARDOP changes for ARDOP V 0.5+
 
 #define CKernel
 
@@ -851,6 +854,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT UIARQExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
+UINT ARDOPAXExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -3294,6 +3298,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
+
+	if (strstr(Value, "ARDOPAX25"))
+		return (UINT) ARDOPAXExtInit;
 
 	if (strstr(Value, "ARDOP"))
 		return (UINT) ARDOPExtInit;

@@ -85,7 +85,7 @@ struct UserRec
 	BOOL Secure;				// Authorised User
 };
 
-#define MaxCMS	10				// Numbr of addresses we can keep - currently 4 are used.
+#define MaxCMS	10				// Number of addresses we can keep - currently 4 are used.
 
 struct TCPINFO
 {
@@ -348,6 +348,7 @@ typedef struct TNCINFO
 #define H_FLDIGI 11
 #define H_UIARQ 12
 #define H_ARDOP 13
+#define H_AXARDOP 14
 
 
 	int Port;					// BPQ Port Number
@@ -374,9 +375,11 @@ typedef struct TNCINFO
 		UCHAR DEDBuffer[1000];		// For converting byte stream to messages
 	};
 
-	UCHAR * ARDOPBuffer;		// Needs to be pretty big, so Malloc
+	UCHAR * ARDOPBuffer;			// Needs to be pretty big, so Malloc
+	UCHAR * ARDOPDataBuffer;		// Needs to be pretty big, so Malloc
 
 	int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+	int DataInputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
 
 	int	MSGCOUNT;				// DED WORKING FIELD
 	int	MSGLENGTH;				// DED Msg Len
@@ -651,6 +654,7 @@ typedef struct TNCINFO
 
 	time_t WinmorRestartCodecTimer;
 	int WinmorCurrentMode;
+	char ARDOPCurrentMode[6];
 
 	int SlowTimer;
 

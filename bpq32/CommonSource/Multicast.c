@@ -27,7 +27,11 @@ void decodeblock( unsigned char in[4], unsigned char out[3]);  // Base64 Decode
 
 time_t MulticastMaxAge = 48 * 60 * 60;		// 48 Hours in secs
 
+struct MSESSION * MSessions = NULL;
+
 #ifndef LINBPQ
+
+#include "AFXRES.h"
 
 HWND hMCMonitor = NULL;
 HWND MCList;
@@ -58,11 +62,14 @@ void MCMoveWindows()
 	MoveWindow(MCList, 0, 0, rcClient.right, rcClient.bottom, TRUE);
 }
 
+void CopyMCToClipboard(HWND hWnd);
 
-static LRESULT CALLBACK MCWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK MCWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
 	LPRECT lprc;
+	struct MSESSION * Sess = MSessions;
+	struct MSESSION * Temp;
 	
 	switch (message)
 	{ 
@@ -82,13 +89,44 @@ static LRESULT CALLBACK MCWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
-		switch (wmId) {
+		switch (wmId)
+		{
 
+		case ID_EDIT_COPY:
 
-		default:
+			CopyMCToClipboard(hMCMonitor);
+			return 0;;
 
+		case ID_EDIT_CLEAR:
+	
+			while (Sess)
+			{
+				ListView_DeleteItem(MCList, Sess->Index);
+
+				if (Sess->FileName)
+					free(Sess->FileName);
+
+				if (Sess->OrigTimeStamp)
+					free(Sess->OrigTimeStamp);
+
+				if (Sess->Message)
+					free(Sess->Message);
+
+				if (Sess->BlockList)
+					free(Sess->BlockList);
+
+				if (Sess->ID)
+					free(Sess->ID);
+
+				Temp = Sess;
+				Sess = Sess->Next;
+			}
+
+			MSessions = NULL;
 			return 0;
-
+		
+		default:
+			return 0;
 		}
 
 	case WM_SYSCOMMAND:
@@ -432,6 +470,72 @@ BOOL CreateMulticastConsole()
 	return TRUE;
 
 }
+void CopyMCToClipboard(HWND hWnd)
+{
+	int i,n, len=0;
+	char * Buffer;
+	HGLOBAL	hMem;
+	char * ptr;
+
+	char Time[80];
+	char Agestring[80];
+	char From[16];
+	char Size[16];
+	char Percent[16];
+	char FileName[128];
+	char Key[16];
+	char Complete[2];
+
+	char BlockList[128];
+
+	n = ListView_GetItemCount(MCList);
+	
+	Buffer = malloc((n + 1) * 200);
+
+	len = sprintf(Buffer, "ID   From       FileName          Size  %%  Time  Age     Blocklist\r\n");
+
+	for (i=0; i<n; i++)
+	{
+		// Get Items
+		
+		ListView_GetItemText(MCList, i, 0, Key, 8);
+		ListView_GetItemText(MCList, i, 1, From, 15);
+		ListView_GetItemText(MCList, i, 2, FileName, 128);
+		ListView_GetItemText(MCList, i, 3, Size, 16);
+		ListView_GetItemText(MCList, i, 4, Percent, 16);
+		ListView_GetItemText(MCList, i, 5, Time, 80);
+		ListView_GetItemText(MCList, i, 6, Agestring, 80);
+		ListView_GetItemText(MCList, i, 7, Complete, 2);
+		ListView_GetItemText(MCList, i, 8, BlockList, 100);
+
+		// Add line to buffer
+
+		len += sprintf(&Buffer[len], "%4s %-10s %-16s %5s%4s %-6s%-6s%-2s%50s\r\n",
+			Key, From, FileName, Size, Percent, Time, Agestring, Complete, BlockList);
+	}
+	
+	hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, len+1);
+	
+	if (hMem != 0)
+	{
+		ptr = GlobalLock(hMem);
+	
+		if (OpenClipboard(MainWnd))
+		{
+			strcpy(ptr, Buffer);
+			GlobalUnlock(hMem);
+			EmptyClipboard();
+			SetClipboardData(CF_TEXT,hMem);
+			CloseClipboard();
+		}
+			else
+				GlobalFree(hMem);		
+	}
+	free(Buffer);
+}
+
+
+
 
 #else
 
@@ -470,8 +574,6 @@ static unsigned int CalcCRC(UCHAR * ptr, int Len)
 	}
 	return crcval;
 }
-
-struct MSESSION * MSessions = NULL;
 
 struct MSESSION * FindMSession(unsigned int Key)
 {
@@ -1503,6 +1605,7 @@ int MulticastStatusHTML(char * Reply)
 
 	char StatusTail [] = "</textarea><br><br>";
 	int Len = 0;
+	char Unknown[] = "???";
 
 	struct MSESSION * Sess = MSessions;
 
@@ -1520,6 +1623,8 @@ int MulticastStatusHTML(char * Reply)
 		char Agestring[80];
 		struct tm * TM;
 		time_t Age;
+		char * ID = Unknown;
+		char * FileName = Unknown;
 
 		Age = time(NULL) - Sess->LastUpdated;
 
@@ -1531,29 +1636,35 @@ int MulticastStatusHTML(char * Reply)
 
 		sprintf(Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
 
-		if (Sess->MessageLen)
+		if (Sess->MessageLen && Sess->BlockCount)
 		{
 			int pcent;
 		
 			pcent = (Sess->BlocksReceived * 100) / Sess->BlockCount;
 			sprintf(Percent, "%d", pcent);
-
 		}
 
 		// Flag received blocks. Normalise to 50 wide 
 
 		memset(BlockList, '.', 50);
 
-		for (i = 0; i < 50; i++)
+		if (Sess->BlockList)
 		{
-			int posn = (i * Sess->BlockCount) / 50;
-			if (Sess->BlockList[posn] == 1)
-				BlockList[i] = 'Y';
+			for (i = 0; i < 50; i++)
+			{
+				int posn = (i * Sess->BlockCount) / 50;
+				if (Sess->BlockList[posn] == 1)
+					BlockList[i] = 'Y';
+			}
 		}
+		if (Sess->FileName)
+			FileName = Sess->FileName;
 
+		if (Sess->ID)
+			ID = Sess->ID;
 
 		Len += sprintf(&Reply[Len], "%04X %-10s%-15s%5d %-3s %s %s %s\r\n",
-			Sess->Key, Sess->ID, Sess->FileName,
+			Sess->Key, ID, FileName,
 			Sess->MessageLen, Percent, Time, Agestring, BlockList);
 			
 		Sess = Sess->Next;
