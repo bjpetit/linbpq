@@ -1,5 +1,8 @@
 #include "ARDOPC.h"
 
+#pragma warning(disable : 4244)		// Code does lots of int float to int
+
+
 static int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
 void Generate50BaudTwoToneLeaderTemplate()

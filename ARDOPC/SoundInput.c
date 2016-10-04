@@ -9,7 +9,7 @@
 //#define max(x, y) ((x) > (y) ? (x) : (y))
 //#define min(x, y) ((x) < (y) ? (x) : (y))
 
-char strRcvFrameTag[16];
+char strRcvFrameTag[32];
 
 BOOL blnLeaderFound = FALSE;
 BOOL blnLeaderDetected;
@@ -21,6 +21,8 @@ extern int intLastRcvdFrameQuality;
 extern int intReceivedLeaderLen;
 extern UCHAR bytLastReceivedDataFrameType;
 extern int NErrors;
+extern BOOL blnBREAKCmd;
+extern UCHAR bytLastACKedDataFrameType;
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
@@ -61,8 +63,16 @@ int intPSKMode;
 
 // but as 600 Baud frames are very long (750 bytes), but only one carrier
 // may be better to store as scalar and calculate offsets into it for each carrier
+// treat 600 as 3 * 200, but still may be better
 
-int intToneMags[4][16 * MAX_RAW_LENGTH] = {0};	// Do we need one per carrier?
+// Needs 64K if ints + another 64 for MEM ARQ. (maybe able to store as shorts)
+// 48K would do if we use a scalar (600 baud, 750 bytes)
+
+// Could just about do this on Teensy 3.6 or Nucleo F7
+
+// looks like we have 4 samples for each 2 bits, which means 16 samples per byte.
+
+int intToneMags[4][16 * MAX_RAW_LENGTH] = {0};	// Need one per carrier
 
 int intToneMagsIndex[4];
 
@@ -76,12 +86,17 @@ unsigned char goodCarriers = 0;	// Carriers we have already decoded
 
 #ifdef MEMORYARQ	// Enough RAM for memory ARQ so keep all samples for a frame
 
+// This needs 20K
+
 short intPhases[8][652] = {0};	// We will decode as soon as we have 4 or 8 depending on mode
-									//	(but need one set per carrier)
+								//	(but need one set per carrier)
+
+//	We only use Mags for QAM, and max is 2 carriers 192 bytes
 
 short intMags[8][652] = {0};
 
-int  intToneMagsAvg[4][332];
+int  intToneMagsAvg[4][332];	//????
+
 short intCarPhaseAvg[8][652];	// array to accumulate phases for averaging (Memory ARQ)
 short intCarMagAvg[8][652];		// array to accumulate mags for averaging (Memory ARQ) 
  
@@ -97,7 +112,7 @@ short intMags[8][8] = {0};
 //219 /3 * 8= 73 * 8 =  584
 //163 * 4 = 652
 
-//	If we so Mem ARQ we will need a fair amount of RAM
+//	If we do Mem ARQ we will need a fair amount of RAM
 
 int intPhasesLen;
 
@@ -133,7 +148,10 @@ BOOL PSKInitDone = FALSE;
 BOOL blnSymbolSyncFound, blnFrameSyncFound;
 
 extern UCHAR bytLastARQSessionID;
-
+extern UCHAR bytCurrentFrameType;
+extern int intShiftUpDn;
+extern const char ARQSubStates[10][11];
+extern int intLastARQDataFrameToHost;
 
 // dont think I need it short intRcvdSamples[12000];		// 1 second. May need to optimise
 
@@ -173,6 +191,7 @@ int RcvdSamplesLen = 0;				// Samples in RX buffer
 
 BOOL Acquire2ToneLeaderSymbolFraming();
 BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz);
+BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN);
 BOOL AcquireFrameSyncRSB();
 int Acquire4FSKFrameType();
 
@@ -188,6 +207,7 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality);
 void Update8FSKConstellation(int * intToneMags, int * intQuality);
 
 BOOL DemodPSK();
+BOOL DemodQAM();
 
 /*
 
@@ -327,7 +347,7 @@ BOOL IsValidFrameType(UCHAR bytType)
 BOOL IsShortControlFrame(UCHAR bytType)
 {
 	if (bytType <= 0x1F) return TRUE;  // NAK
-	if (bytType == 0x23 || bytType == 0x26 || bytType == 0x29 || bytType == 0x2C || bytType == 0x2D || bytType == 0x2E) return TRUE; // BREAK, IDLE, DISC, END, ConRejBusy, ConRejBW
+	if (bytType == 0x23 || bytType == 0x24 || bytType == 0x29 || bytType == 0x2C || bytType == 0x2D || bytType == 0x2E) return TRUE; // BREAK, IDLE, DISC, END, ConRejBusy, ConRejBW
 	if (bytType >= 0xE0) return TRUE;  // ACK
 	return FALSE;
 }
@@ -694,7 +714,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 
 		memcpy(bytCorrectedData, &bytRawData[1], bytRawData[0]);    
 
-		Debugprintf("[DemodDecode4FSKData] Carrier %d already decoded", Carrier);
+		WriteDebugLog("[CorrectRawDataWithRS] Carrier %d already decoded", Carrier);
 		return bytRawData[0];			// don't do it again
 	}
 
@@ -703,7 +723,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		// return the actual data
 		
 		memcpy(bytCorrectedData, &bytRawData[1], bytRawData[0]);    
-		Debugprintf("[DemodDecode4FSKData] OK without RS");
+		WriteDebugLog("[CorrectRawDataWithRS] OK without RS");
 		CarrierOk[Carrier] = TRUE;
 		return bytRawData[0];
 	}
@@ -714,14 +734,14 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 
 	if (blnRSOK)
 	{}
-//		Debugprintf("RS Says OK without correction");
+//		WriteDebugLog("RS Says OK without correction");
 	else
 	if (FrameOK)
 	{}
-//		Debugprintf("RS Says OK after %d correction(s)", NErrors);
+//		WriteDebugLog("RS Says OK after %d correction(s)", NErrors);
 	else
 	{
-		Debugprintf("[DemodDecode4FSKData] RS Says Can't Correct");
+		WriteDebugLog("[CorrectRawDataWithRS] RS Says Can't Correct");
 		goto returnBad;
 	}
 
@@ -737,7 +757,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		//		intFailedByteCnt++;
 		//}
 
-        Debugprintf("[DemodDecode4FSKData] OK with RS %d corrections", NErrors);
+        WriteDebugLog("[CorrectRawDataWithRS] OK with RS %d corrections", NErrors);
 		totalRSErrors += NErrors;
  
 		// End of test code
@@ -747,7 +767,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		return bytRawData[0];
 	}
 	else
-        Debugprintf("[DemodDecode4FSKData] RS says ok but CRC still bad");
+        WriteDebugLog("[CorrectRawDataWithRS] RS says ok but CRC still bad");
 	
 	// return uncorrected data without byte count or RS Parity
 
@@ -760,9 +780,6 @@ returnBad:
 	CarrierOk[Carrier] = FALSE;
 	return intDataLen;
 }
-
-
-
 
 
 
@@ -804,7 +821,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	{
 		// Search for leader as long as 960 samples (8  symbols) available
 
-//		Debugprintf("Looking for Leader");
+//		WriteDebugLog("Looking for Leader");
 
 		while (State == SearchingForLeader && nSamples > 960)
 		{
@@ -814,7 +831,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		
 			if (blnLeaderFound)
 			{
-//				Debugprintf("Got Leader");
+//				WriteDebugLog("Got Leader");
 
 				dttLastLeaderDetect = Now;
                 //        stcStatus.ControlName = "lblOffset"
@@ -925,7 +942,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			State = SearchingForLeader;
 			ClearAllMixedSamples();
 			DiscardOldSamples();
-			printtick("poor frame type decode");
+			if (DebugLog) printtick("poor frame type decode");
 
 			// stcStatus.BackColor = SystemColors.Control
 			// stcStatus.Text = ""
@@ -961,20 +978,50 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			{
 				// Frame has no data so is now complete
 
+				// See if IRStoISS shortcut can be invoked
+				
+				if (ProtocolState == IRStoISS && intFrameType >= 0xe0)
+				{
+					//	In this state transition to ISS if  ACK frame 
+		
+					WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] ProtocolState=IRStoISS, substate = %s ACK received. Cease BREAKS, NewProtocolState=ISS, substate ISSData", ARQSubStates[ARQState]);
+					blnEnbARQRpt = FALSE;	// stop the BREAK repeats
+					intLastARQDataFrameToHost = -1; // initialize to illegal value to capture first new ISS frame and pass to host
+
+					if (bytCurrentFrameType == 0) //  hasn't been initialized yet
+					{
+						WriteDebugLog("[ARDOPprotocol.ProcessNewSamples, ProtocolState=IRStoISS, Initializing GetNextFrameData");
+		   				GetNextFrameData(&intShiftUpDn, 0, "", TRUE); // just sets the initial data, frame type, and sets intShiftUpDn= 0
+					}
+
+					SetARDOPProtocolState(ISS);
+					intLinkTurnovers += 1;
+					ARQState = ISSData;			
+					SendData();				 //       Send new data from outbound queue and set up repeats
+					goto skipDecode;
+				}
+     
 				// prepare for next
 
 				DiscardOldSamples();
 				ClearAllMixedSamples();
 				State = SearchingForLeader;
 				blnFrameDecodedOK = TRUE;
-				Debugprintf("[DecodeFrame] Frame: %s ", Name(intFrameType));
+				WriteDebugLog("[DecodeFrame] Frame: %s ", Name(intFrameType));
 
 				DecodeCompleteTime = Now;
 
 				goto ProcessFrame;
 			}
 
-			intSampPerSym = 12000 / intBaud;
+			if (intBaud == 50)
+				intSampPerSym = 240;
+			else if (intBaud == 100)
+				intSampPerSym = 120;
+			else if (intBaud == 167)
+				intSampPerSym = 72;
+			else if (intBaud == 600)
+				intSampPerSym = 20;
 
 			if (IsDataFrame(intFrameType))
 				SymbolsLeft = intDataLen + intRSLen + 3; // Data has a length byte
@@ -1011,7 +1058,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 			if (LastDataFrameType != intFrameType)
 			{
-				Debugprintf("New frame type - MEMARQ flags reset");
+				WriteDebugLog("New frame type - MEMARQ flags reset");
 				memset(CarrierOk, 0, sizeof(CarrierOk));
 				LastDataFrameType = intFrameType;
 
@@ -1025,7 +1072,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 #endif
 			}
 
-			Debugprintf("MEMARQ Flags %d %d %d %d %d %d %d %d",
+			WriteDebugLog("MEMARQ Flags %d %d %d %d %d %d %d %d",
 				CarrierOk[0], CarrierOk[1], CarrierOk[2], CarrierOk[3],
 				CarrierOk[4], CarrierOk[5], CarrierOk[6], CarrierOk[7]);
 		}
@@ -1063,9 +1110,67 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[0][0], &intMags[0][0], strMod, FALSE);
 
 
-		Debugprintf("Qual = %d", intLastRcvdFrameQuality);
+		WriteDebugLog("Qual = %d", intLastRcvdFrameQuality);
 		DecodeCompleteTime = Now;
 
+		// This mechanism is to skip actual decoding and reply/change state...no need to decode 
+
+		if (blnBREAKCmd && ProtocolState == IRS && ARQState == IRSData &&
+			intFrameType != bytLastACKedDataFrameType)
+		{
+			// This to immediatly go to IRStoISS if blnBREAKCmd enabled.
+		
+			//Implements protocol rule 3.4 (allows faster break) and does not require a good frame decode.
+
+			WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] Skip Data Decoding when blnBREAKCmd and ProtcolState=IRS");
+			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 2000);
+			SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)				
+			SendCommandToHost("STATUS QUEUE BREAK new Protocol State IRStoISS");
+			blnEnbARQRpt = TRUE;  // setup for repeats until changeover
+			WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] %d bytes to send in ProtocolState: %s: Send BREAK,  New state=IRStoISS (Rule 3.3)",
+					bytDataToSendLength,  ARDOPStates[ProtocolState]);
+ 			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+
+			WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] Skip Data Decoding when blnBREAKCmd and ProtcolState=IRS");
+			blnBREAKCmd = FALSE;
+			goto skipDecode;
+		}
+						
+		if (ProtocolState == IRStoISS && IsDataFrame(intFrameType))
+		{
+			//	In this state answer any data frame with BREAK 
+		    // not necessary to decode the frame ....just frame type
+
+			WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] Skip Data Decoding when ProtcolState=IRStoISS, Answer with BREAK");
+			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 2000);
+			blnEnbARQRpt = TRUE;  // setup for repeats until changeover
+ 			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+			goto skipDecode;
+		}						
+		
+		if (ProtocolState == IRStoISS && intFrameType >= 0xe0)
+		{
+			//	In this state transition to ISS if  ACK frame 
+		
+			WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] ProtocolState=IRStoISS, substate = %s ACK received. Cease BREAKS, NewProtocolState=ISS, substate ISSData", ARQSubStates[ARQState]);
+			blnEnbARQRpt = FALSE;	// stop the BREAK repeats
+			intLastARQDataFrameToHost = -1; // initialize to illegal value to capture first new ISS frame and pass to host
+
+			if (bytCurrentFrameType == 0) //  hasn't been initialized yet
+			{
+				WriteDebugLog("[ARDOPprotocol.ProcessNewSamples, ProtocolState=IRStoISS, Initializing GetNextFrameData");
+   				GetNextFrameData(&intShiftUpDn, 0, "", TRUE); // just sets the initial data, frame type, and sets intShiftUpDn= 0
+			}
+
+			SetARDOPProtocolState(ISS);
+			intLinkTurnovers += 1;
+			ARQState = ISSData;			
+			SendData();				 //       Send new data from outbound queue and set up repeats
+			goto skipDecode;
+		}
+     
 		blnFrameDecodedOK = DecodeFrame(intFrameType, bytData);
 
 ProcessFrame:	
@@ -1105,7 +1210,7 @@ ProcessFrame:
 			{
 				// Unknown Mode
 				bytData[frameLen] = 0;
-				Debugprintf("Received Data, No State %s", bytData);
+				WriteDebugLog("Received Data, No State %s", bytData);
 			}
 		}
 		else
@@ -1148,7 +1253,7 @@ ProcessFrame:
 				InitializeConnection();
 			}
 		}
-			
+skipDecode:			
 		State = SearchingForLeader;
 		ClearAllMixedSamples();
 		DiscardOldSamples();
@@ -1483,10 +1588,10 @@ BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz
 	if (dblSNdBPwr > (2 * Squelch) && (dblSNdBPwrEarly > (-4 + 2 * Squelch))) // The -4 value comes from - (3+1) making early threshold 1 dB lower (after 3 dB compensation for bandwidth)
 //	if (dblSNdBPwr > (Squelch + 5))  //  These give inital good performance WGN -5dB channel (3 KHz) but should be optimized. 
 	{
-//		Debugprintf("Fine Search S:N= %f dB, Prior S:N= %f", dblSNdBPwr,dblSNdBPwr_1);
+//		WriteDebugLog("Fine Search S:N= %f dB, Prior S:N= %f", dblSNdBPwr,dblSNdBPwr_1);
 
 //		if (dblCoarseOffset < 999)
-//			Debugprintf("  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);
+//			WriteDebugLog("  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);
 
 		// Calculate the interpolation based on the left of the two tones
 
@@ -1495,7 +1600,7 @@ BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz
 		// And the right of the two tones
 
 		dblBinInterpRight = QuinnSpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2]);
-//		Debugprintf(" QSPL Left= %f  QSPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
+//		WriteDebugLog(" QSPL Left= %f  QSPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
         
 		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
 		{
@@ -1758,10 +1863,10 @@ BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetH
 
 	if (dblSNdBPwr > (4 + Squelch) && (dblSNdBPwrEarly > (1 + Squelch))) // The -4 value comes from - (3+1) making early threshold 1 dB lower (after 3 dB compensation for bandwidth)
 	{
-		Debugprintf("Fine Search S:N= %f dB, Prior S:N= %f", dblSNdBPwr,dblSNdBPwr_1);
+		WriteDebugLog("Fine Search S:N= %f dB, Prior S:N= %f", dblSNdBPwr,dblSNdBPwr_1);
 
 //		if (dblCoarseOffset < 999)
-//			Debugprintf("  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);
+//			WriteDebugLog("  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);
 
 		// Calculate the interpolation based on the left of the two tones
 
@@ -1770,7 +1875,7 @@ BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetH
 		// And the right of the two tones
 
 		dblBinInterpRight = QuinnSpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2]);
-		Debugprintf(" QSPL Left= %f  QSPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
+		WriteDebugLog(" QSPL Left= %f  QSPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
         
 		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
 		{
@@ -1866,7 +1971,7 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 	}
 
 	intMFSReadPtr = intLocalPtr + intIatMinErr;
-	Debugprintf("[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d", intIatMinErr);
+	WriteDebugLog("[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d", intIatMinErr);
 	State = AcquireFrameSync;
 
 	if (AccumulateStats)
@@ -1920,7 +2025,7 @@ int EnvelopeCorrelator()
 
 	if (dblCorMax > 40 * dblCorMaxProduct)
 	{
-		Debugprintf("EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
+		WriteDebugLog("EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
 		return intJatMax;
 	}
 	else
@@ -2120,7 +2225,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		}
 	}
 
-//	Debugprintf("%x %x %x Sess %x pend %d conn %d", intIatMinDistance1, intIatMinDistance2,
+//	WriteDebugLog("%x %x %x Sess %x pend %d conn %d", intIatMinDistance1, intIatMinDistance2,
 //		intIatMinDistance3, bytSessionID, blnPending, blnARQConnected); 
 	
 	if (bytSessionID == 0xFF)		// ' we are in a FEC QSO, monitoring an ARQ session or have not yet reached the ARQ Pending or Connected status 
@@ -2132,7 +2237,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			sprintf(strDecodeCapture, "%s MD Decode;1 ID=H%X, Type=H29: %s, D1= %.2f, D3= %.2f",
 				 strDecodeCapture, bytLastARQSessionID, Name(intIatMinDistance1), dblMinDistance1, dblMinDistance3);
 			
-			if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+			WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 
 			return intIatMinDistance1;
 		}
@@ -2143,7 +2248,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		{
 			sprintf(strDecodeCapture, "%s MD Decode;2 ID=H%X, Type=H%X:%s, D1= %.2f, D2= %.2f",
 				 strDecodeCapture, bytSessionID, intIatMinDistance1, Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2);
-			if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+			WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 			dblOffsetLastGoodDecode = dblOffsetHz;
 			dttLastGoodFrameTypeDecode = Now;
 
@@ -2153,7 +2258,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		{
 			sprintf(strDecodeCapture, "%s MD Decode;3 ID=H%X, Type=H%X:%s, D1= %.2f, D2= %.2f",
 				 strDecodeCapture, bytSessionID, intIatMinDistance1, Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2);
-			if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+			WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 			
 			return intIatMinDistance1;
 		}
@@ -2162,14 +2267,14 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		{
 			sprintf(strDecodeCapture, "%s MD Decode;4 ID=H%X, Type=H%X:%s, D1= %.2f, D2= %.2f",
 				 strDecodeCapture, bytSessionID, intIatMinDistance1, Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2);
-			if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+			WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 
 			return intIatMinDistance2;
 		}
 
 		sprintf(strDecodeCapture, "%s MD Decode;5 Type1=H%X, Type2=H%X, D1= %.2f, D2= %.2f",
 			 strDecodeCapture, intIatMinDistance1, intIatMinDistance2, dblMinDistance1, dblMinDistance2);
-		if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+		WriteDebugLog("[Frame Type Decode Fail] %s", strDecodeCapture);
 		
 		return -1;		// indicates poor quality decode so  don't use
 
@@ -2189,12 +2294,12 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			{
 				dblOffsetLastGoodDecode = dblOffsetHz;
 				dttLastGoodFrameTypeDecode = Now;		// This allows restricting tuning changes to about +/- 4Hz from last dblOffsetHz
-				if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+				WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 				return intIatMinDistance1;
 			}
 			else
 			{
-				if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+				WriteDebugLog("[Frame Type Decode Fail] %s", strDecodeCapture);
 				return -1;		 // indicates poor quality decode so  don't use
 			}
 		}
@@ -2210,12 +2315,12 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			{
 				dblOffsetLastGoodDecode = dblOffsetHz;
 				dttLastGoodFrameTypeDecode = Now;		 // This allows restricting tuning changes to about +/- 4Hz from last dblOffsetHz
-				if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+				WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 				return intIatMinDistance1;
 			}
 			else
 			{
-				if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+				WriteDebugLog("[Frame Type Decode Fail] %s", strDecodeCapture);
 
 				return -1;	 // indicates poor quality decode so  don't use
 			}
@@ -2240,12 +2345,12 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 				{
 					dblOffsetLastGoodDecode = dblOffsetHz;
 					dttLastGoodFrameTypeDecode = Now;		 // This allows restricting tuning changes to about +/- 4Hz from last dblOffsetHz
-					if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+					WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 					return intIatMinDistance1;
 				}
 				else
 				{
-				if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+				WriteDebugLog("[Frame Type Decode Fail] %s", strDecodeCapture);
 					return -1;		 // indicates poor quality decode so  don't use
 				}
 			}
@@ -2256,7 +2361,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 				//  use looser limits here, there is no risk of protocol damage from these frames
 				if ((dblMinDistance1 < 0.4) || (dblMinDistance2 < 0.4))
 				{
-					if (DebugLog) Debugprintf("[Frame Type Decode OK  ] %s", strDecodeCapture);
+					WriteDebugLog("[Frame Type Decode OK  ] %s", strDecodeCapture);
 						
 					dblOffsetLastGoodDecode = dblOffsetHz;
 					dttLastGoodFrameTypeDecode = Now;	 // This allows restricting tuning changes to about +/- 4Hz from last dblOffsetHz
@@ -2264,7 +2369,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 				}
 				else
 				{
-					if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+					WriteDebugLog("[Frame Type Decode Fail] %s", strDecodeCapture);
 					return -1;		// indicates poor quality decode so  don't use
 				}
 			}
@@ -2273,13 +2378,13 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		{
 			sprintf(strDecodeCapture, "%s MD Decode;10  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
 				 strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, dblMinDistance1, dblMinDistance2);
-			if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+			WriteDebugLog("[Frame Type Decode Fail] %s", strDecodeCapture);
 			return -1; // indicates poor quality decode so  don't use
 		}
 	}
 	sprintf(strDecodeCapture, "%s MD Decode;11  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
 		strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, dblMinDistance1, dblMinDistance2);
-	if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+	WriteDebugLog("[Frame Type Decode Fail] %s", strDecodeCapture);
 	return -1; // indicates poor quality decode so  don't use
 }
 
@@ -2359,7 +2464,7 @@ BOOL Demod1Car4FSK()
 
 			//	(while checking process - will use cyclic buffer eventually
 
-//			Debugprintf("Corrections %d", Corrections);
+//			WriteDebugLog("Corrections %d", Corrections);
 
 			// If corrections is non-zero, we have to adjust
 			//	number left
@@ -2540,7 +2645,7 @@ BOOL Demod1Car4FSK600()
 
 			//	(while checking process - will use cyclic buffer eventually
 
-//			Debugprintf("Corrections %d", Corrections);
+//			WriteDebugLog("Corrections %d", Corrections);
 
 			// If corrections is non-zero, we have to adjust
 			//	number left
@@ -2673,7 +2778,7 @@ BOOL Demod1Car8FSK()
 
 			//	(while checking process - will use cyclic buffer eventually
 
-//			Debugprintf("Corrections %d", Corrections);
+//			WriteDebugLog("Corrections %d", Corrections);
 
 			// If corrections is non-zero, we have to adjust
 			//	number left
@@ -2826,7 +2931,7 @@ BOOL Demod1Car16FSK()
 
 			//	(while checking process - will use cyclic buffer eventually
 
-//			Debugprintf("Corrections %d", Corrections);
+//			WriteDebugLog("Corrections %d", Corrections);
 
 			// If corrections is non-zero, we have to adjust
 			//	number left
@@ -2945,7 +3050,7 @@ void Demod1Car16FSKChar(int Start, UCHAR * Decoded, int Carrier)
 		Start += intSampPerSym; // advance the pointer one symbol
 	}
 
-//	Debugprintf("Tone Mags Index %d", charIndex * 32 + 16 * j + k);
+//	WriteDebugLog("Tone Mags Index %d", charIndex * 32 + 16 * j + k);
 
 	if (AccumulateStats)
 		intFSKSymbolCnt += 2;
@@ -2976,7 +3081,7 @@ BOOL Decode4FSKConReq()
 	{
 		// RS Claims to have corrected it, but check
 
-		Debugprintf("CONREQ Frame Corrected by RS");
+		WriteDebugLog("CONREQ Frame Corrected by RS");
 
 		FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
 
@@ -2984,7 +3089,7 @@ BOOL Decode4FSKConReq()
 
 		if (blnRSOK == FALSE)
 		{
-			Debugprintf("CONREQ Still bad after RS");
+			WriteDebugLog("CONREQ Still bad after RS");
 			FrameOK = FALSE;
 		}
 	}
@@ -3035,7 +3140,7 @@ BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
 
 		// strRcvFrameTag = "_" & intTiming.ToString & " ms"
   
-		if (DebugLog) Debugprintf("[DemodDecode4FSKConACK]  Remote leader timing reported: %d ms", intTiming);
+		WriteDebugLog("[DemodDecode4FSKConACK]  Remote leader timing reported: %d ms", *intTiming);
 
 		if (AccumulateStats)
 			intGoodFSKFrameDataDecodes++;
@@ -3064,7 +3169,7 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 	{
 		// RS Claims to have corrected it, but check
 
-		Debugprintf("ID Frame Corrected by RS");
+		WriteDebugLog("ID Frame Corrected by RS");
 
 		FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
 
@@ -3072,7 +3177,7 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 
 		if (blnRSOK == FALSE)
 		{
-			Debugprintf("ID Still bad after RS");
+			WriteDebugLog("ID Still bad after RS");
 			FrameOK = FALSE;
 		}
 	}
@@ -3289,7 +3394,7 @@ void DemodulateFrame(int intFrameType)
   */
 		default:
 
-			Debugprintf("Unsupported frame type %x", intFrameType);
+			WriteDebugLog("Unsupported frame type %x", intFrameType);
 			DiscardOldSamples();
 			ClearAllMixedSamples();
 			State = SearchingForLeader;
@@ -3333,8 +3438,6 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 	int intTiming;
 	int intRcvdQuality;
 
- //       ReDim bytData(-1)
-
 	strRcvFrameTag[0] = 0;
 	//stcStatus.ControlName = "lblRcvFrame"
 
@@ -3357,7 +3460,7 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 	totalRSErrors = 0;
 
-	Debugprintf("DecodeFrame MEMARQ Flags %d %d %d %d %d %d %d %d",
+	WriteDebugLog("DecodeFrame MEMARQ Flags %d %d %d %d %d %d %d %d",
 		CarrierOk[0], CarrierOk[1], CarrierOk[2], CarrierOk[3],
 		CarrierOk[4], CarrierOk[5], CarrierOk[6], CarrierOk[7]);
 
@@ -3548,17 +3651,16 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 	}
 
-	if (DebugLog)
-		if (blnDecodeOK)
-			Debugprintf("[DecodeFrame] Frame: %s Decode PASS,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
-		else
-			Debugprintf("[DecodeFrame] Frame: %s Decode FAIL,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
+	if (blnDecodeOK)
+		WriteDebugLog("[DecodeFrame] Frame: %s Decode PASS,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
+	else
+		WriteDebugLog("[DecodeFrame] Frame: %s Decode FAIL,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
 
 	//	if a data frame with few error and quality very low, adjust
 
 	if (blnDecodeOK && (totalRSErrors / intNumCar) < (intRSLen / 4) && intLastRcvdFrameQuality < 80)
 	{
-		Debugprintf("RS Errors %d Carriers %d RLen %d Qual %d - adjusting Qual",
+		WriteDebugLog("RS Errors %d Carriers %d RLen %d Qual %d - adjusting Qual",
 			totalRSErrors, intNumCar, intRSLen, intLastRcvdFrameQuality);
 		
 		intLastRcvdFrameQuality = 80;
@@ -3579,9 +3681,9 @@ returnframe:
 
 //	if (DebugLog)
 //		if (blnDecodeOK)
-//			Debugprintf("[DecodeFrame] Frame: %s Decode PASS, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
+//			WriteDebugLog("[DecodeFrame] Frame: %s Decode PASS, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
 //		else
-//			Debugprintf("[DecodeFrame] Frame: %s Decode FAIL, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
+//			WriteDebugLog("[DecodeFrame] Frame: %s Decode FAIL, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
 
 	return blnDecodeOK;
 }
@@ -3913,12 +4015,18 @@ VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float
 
 //	Call for each set of 4 or 8 Phase Values
 
+int pskStart = 0;
+
+//#define SMALLMEM
+
 VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier)
 {
 	unsigned int int24Bits;
 	UCHAR bytRawData;
 	int k;
-	int Start = 0;
+#ifdef SMALLMEM
+	pskStart = 0;			// only save one set of pjhases
+#endif
 
 	if (CarrierOk[Carrier])	// Already decoded this carrier?
 		return;							// don't do it again
@@ -3936,17 +4044,17 @@ VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier)
 			else
 				bytRawData <<= 2;
 			
-			if (intPhases[Carrier][Start] < 786 && intPhases[Carrier][Start] > -786)
+			if (intPhases[Carrier][pskStart] < 786 && intPhases[Carrier][pskStart] > -786)
 			{
 			}		// Zero so no need to do anything
-			else if (intPhases[Carrier][Start] >= 786 && intPhases[Carrier][Start] < 2356)
+			else if (intPhases[Carrier][pskStart] >= 786 && intPhases[Carrier][pskStart] < 2356)
 				bytRawData += 1;
-			else if (intPhases[Carrier][Start] >= 2356 || intPhases[Carrier][Start] <= -2356)
+			else if (intPhases[Carrier][pskStart] >= 2356 || intPhases[Carrier][pskStart] <= -2356)
 				bytRawData += 2;
 			else
 				bytRawData += 3;
 
-			Start++;
+			pskStart++;
 		}
 
 		Decoded[charIndex] = bytRawData;
@@ -3965,25 +4073,25 @@ VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier)
 		{
 			int24Bits <<= 3;
 
-			if (intPhases[Carrier][Start] < 393 && intPhases[Carrier][Start] > -393)
+			if (intPhases[Carrier][pskStart] < 393 && intPhases[Carrier][pskStart] > -393)
 			{
 			}		// Zero so no need to do anything
-			else if (intPhases[Carrier][Start] >= 393 && intPhases[Carrier][Start] < 1179)
+			else if (intPhases[Carrier][pskStart] >= 393 && intPhases[Carrier][pskStart] < 1179)
 				int24Bits += 1;
-			else if (intPhases[Carrier][Start] >= 1179 && intPhases[Carrier][Start] < 1965)
+			else if (intPhases[Carrier][pskStart] >= 1179 && intPhases[Carrier][pskStart] < 1965)
 				int24Bits += 2;
-			else if (intPhases[Carrier][Start] >= 1965 && intPhases[Carrier][Start] < 2751)
+			else if (intPhases[Carrier][pskStart] >= 1965 && intPhases[Carrier][pskStart] < 2751)
 				int24Bits += 3;
-			else if (intPhases[Carrier][Start] >= 2751 || intPhases[Carrier][Start] < -2751)
+			else if (intPhases[Carrier][pskStart] >= 2751 || intPhases[Carrier][pskStart] < -2751)
 				int24Bits += 4;
-			else if (intPhases[Carrier][Start] >= -2751 && intPhases[Carrier][Start] < -1965)
+			else if (intPhases[Carrier][pskStart] >= -2751 && intPhases[Carrier][pskStart] < -1965)
 				int24Bits += 5;
-			else if (intPhases[Carrier][Start] >= -1965 && intPhases[Carrier][Start] <= -1179)
+			else if (intPhases[Carrier][pskStart] >= -1965 && intPhases[Carrier][pskStart] <= -1179)
 				int24Bits += 6;
 			else 
 				int24Bits += 7;
 
-			Start ++;
+			pskStart ++;
 	
 		}
 		Decoded[charIndex] = int24Bits >> 16;
@@ -4101,20 +4209,33 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 	//   It only processes phase values close to the nominal to avoid generating too large of a correction from outliers: +/- 30 deg for 4PSK, +/- 15 deg for 8PSK
 	//  Is very affective in handling initial tuning error.  
 
+	// This only works if you collect all samples before decoding them. 
+	// Can I do something similar????
+
 	short intPhaseMargin  = 2095 / intPSKMode; // Compute the acceptable phase correction range (+/-30 degrees for 4 PSK)
 	short intPhaseInc = 6284 / intPSKMode;
 	int intTest;
 	int i;
 	int intOffset, intAvgOffset, intAvgOffsetBeginning, intAvgOffsetEnd;
 	int intAccOffsetCnt = 0, intAccOffsetCntBeginning = 0, intAccOffsetCntEnd = 0;
+	int	intAccOffsetBeginning = 0, intAccOffsetEnd = 0, intAccOffset = 0;
+    int intPSKMode;
+	
+	if (strcmp(strMod, "8PSK") == 0 || strcmp(strMod, "16QAM") == 0)
+		intPSKMode = 8;
+	else
+		intPSKMode = 4;
+       
+	// Note Rev 0.6.2.4 The following phase margin value increased from 2095 (120 deg) to 2793 (160 deg) yielded an improvement in decode at low S:N
+
+	intPhaseMargin  = 2793 / intPSKMode; // Compute the acceptable phase correction range (+/-30 degrees for 4 PSK)
+	intPhaseInc = 6284 / intPSKMode;
 
 	// Compute the average offset (rotation) for all symbols within +/- intPhaseMargin of nominal
             
-	int intAccOffset = 0, intAccOffsetBeginning = 0, intAccOffsetEnd = 0;
-
 	for (i = 0; i <  intPhaseLength; i++)
 	{
-		intTest = (intPhase[i] + intPhaseInc/2) / intPhaseInc;
+		intTest = (intPhase[i] / intPhaseInc);
 		intOffset = intPhase[i] - intTest * intPhaseInc;
 
 		if ((intOffset >= 0 && intOffset <= intPhaseMargin) || (intOffset < 0 && intOffset >= -intPhaseMargin))
@@ -4142,7 +4263,7 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 	if (intAccOffsetCntEnd > 0)
 		intAvgOffsetEnd = (intAccOffsetEnd / intAccOffsetCntEnd);
      
-	//Debugprintf("[CorrectPhaseForOffset] Beginning: %d End: %d Total: %d",
+	//WriteDebugLog("[CorrectPhaseForOffset] Beginning: %d End: %d Total: %d",
 		//intAvgOffsetBeginning, intAvgOffsetEnd, intAvgOffset);
 
 	if ((intAccOffsetCntBeginning > intPhaseLength / 8) && (intAccOffsetCntEnd > intPhaseLength / 8))
@@ -4155,7 +4276,7 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 			else if (intPhase[i] < -3142)
 				intPhase[i] += 6284;
 		}
-		if (DebugLog) Debugprintf("[CorrectPhaseForTuningOffset] AvgOffsetBeginning=%d AvgOffsetEnd=%d AccOffsetCnt=%d/%d",
+		WriteDebugLog("[CorrectPhaseForTuningOffset] AvgOffsetBeginning=%d AvgOffsetEnd=%d AccOffsetCnt=%d/%d",
 				intAvgOffsetBeginning, intAvgOffsetEnd, intAccOffsetCnt, intPhaseLength);
 	}
 	else if (intAccOffsetCnt > intPhaseLength / 2)
@@ -4168,7 +4289,7 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 			else if (intPhase[i] < -3142)
 				intPhase[i] += 6284;
 		}
-		if (DebugLog) Debugprintf("[CorrectPhaseForTuningOffset] AvgOffset=%d AccOffsetCnt=%d/%d",
+		WriteDebugLog("[CorrectPhaseForTuningOffset] AvgOffset=%d AccOffsetCnt=%d/%d",
 				intAvgOffset, intAccOffsetCnt, intPhaseLength);
 
 	}
@@ -4275,6 +4396,7 @@ VOID InitDemodPSK()
 
 	intPSKMode = strMod[0] - '0';
 	PSKInitDone = TRUE;
+	intPhasesLen = 0;
 
 	if (intPSKMode == 8)
 		dblPhaseInc = 2 * M_PI * 1000 / 8;
@@ -4357,7 +4479,7 @@ BOOL DemodPSK()
 	
 	while (State == AcquireFrame)
 	{
-		if (intFilteredMixedSamplesLength < 4 * intSampPerSym + 10) // allow for a few phase corrections
+		if (intFilteredMixedSamplesLength < intPSKMode * intSampPerSym + 10) // allow for a few phase corrections
 		{
 			// Move any unprocessessed data down buffer
 
@@ -4373,7 +4495,7 @@ BOOL DemodPSK()
 
 		if (PSKInitDone == 0)		// First time through
 		{	
-			if (intFilteredMixedSamplesLength < 8 * intSampPerSym + 10) 
+			if (intFilteredMixedSamplesLength < 2 * intPSKMode * intSampPerSym + 10) 
 				return FALSE;				// Wait for at least 2 chars worth
 
 			InitDemodPSK();
@@ -4400,7 +4522,7 @@ BOOL DemodPSK()
 		case 2:
 
 			Demod1CarPSKChar(Start, 0);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Used = Demod1CarPSKChar(Start, 1);
@@ -4409,15 +4531,15 @@ BOOL DemodPSK()
 		case 4:
 
 			Demod1CarPSKChar(Start, 0);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 	
 			Demod1CarPSKChar(Start, 1);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Demod1CarPSKChar(Start, 2);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Used = Demod1CarPSKChar(Start, 3);
@@ -4426,31 +4548,31 @@ BOOL DemodPSK()
 		case 8:
 
 			Demod1CarPSKChar(Start, 0);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Demod1CarPSKChar(Start, 1);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Demod1CarPSKChar(Start, 2);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Demod1CarPSKChar(Start, 3);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Demod1CarPSKChar(Start, 4);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Demod1CarPSKChar(Start, 5);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Demod1CarPSKChar(Start, 6);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Used = Demod1CarPSKChar(Start, 7);	
@@ -4460,9 +4582,11 @@ BOOL DemodPSK()
 		
 		// (or each carrier)
 
+
 		if (intPhasesLen >= intPSKMode)
 		{
 	//		CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
+#ifdef SMALLMEM
 
 			Decode1CarPSKChar(bytFrameData1, 0);
 			if (intNumCar > 1)
@@ -4480,7 +4604,7 @@ BOOL DemodPSK()
 				Decode1CarPSKChar(bytFrameData8, 7);
 			}
 			intPhasesLen -= intPSKMode;
-
+#endif
 			if (intPSKMode == 4)
 			{
 				SymbolsLeft--;		// number still to decode
@@ -4498,6 +4622,63 @@ BOOL DemodPSK()
 
 		if (SymbolsLeft <= 0)	
 		{	
+			// if in Large memory mode, need to decode the phase samples
+
+#ifndef SMALLMEM
+
+		// Decode the phases
+
+		pskStart = 0;
+		charIndex = 0;
+
+		if (intPhasesLen >= intPSKMode)
+			CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
+
+		while (intPhasesLen >= intPSKMode)
+		{
+//			CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
+
+			Decode1CarPSKChar(bytFrameData1, 0);
+			if (intNumCar > 1)
+			{
+				pskStart -= intPSKMode;
+				Decode1CarPSKChar(bytFrameData2, 1);
+			}
+			if (intNumCar > 2)
+			{
+				pskStart -= intPSKMode;
+				Decode1CarPSKChar(bytFrameData3, 2);
+				pskStart -= intPSKMode;
+				Decode1CarPSKChar(bytFrameData4, 3);
+			}
+			if (intNumCar > 4)
+			{
+				pskStart -= intPSKMode;
+				Decode1CarPSKChar(bytFrameData5, 4);
+				pskStart -= intPSKMode;
+				Decode1CarPSKChar(bytFrameData6, 5);
+				pskStart -= intPSKMode;
+				Decode1CarPSKChar(bytFrameData7, 6);
+				pskStart -= intPSKMode;
+				Decode1CarPSKChar(bytFrameData8, 7);
+			}
+			intPhasesLen -= intPSKMode;
+
+			if (intPSKMode == 4)
+			{
+				SymbolsLeft--;		// number still to decode
+				charIndex++;
+			}
+			else
+			{
+				SymbolsLeft -=3;
+				charIndex += 3;
+			}		
+		}
+
+
+#endif
+
 			// prepare for next
 
 			DiscardOldSamples();
@@ -4522,7 +4703,7 @@ int Demod1CarPSKChar(int Start, int Carrier)
 	float dblReal, dblImag;
 	int intMiliRadPerSample = intCarFreq * M_PI / 6;
 	int i;
-	int intNumOfSymbols = 4;
+	int intNumOfSymbols = intPSKMode;
 	int origStart = Start;;
 
 	if (CarrierOk[Carrier])		// Already decoded this carrier?
@@ -4575,6 +4756,7 @@ VOID InitDemodQAM()
 
 	intPSKMode = 8;				// 16QAM uses 8 PSK
 	dblPhaseInc = 2 * M_PI * 1000 / 8;
+	intPhasesLen = 0;
 
 	PSKInitDone = TRUE;
 

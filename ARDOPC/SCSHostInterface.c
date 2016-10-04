@@ -298,7 +298,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		SCSReply[3] = 7;		// Status
 		SCSReply[4] = 3;		// Len -1
 
-		if (ProtocolState == QUIET || ProtocolState == IRS || ProtocolState == ISS)
+		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS)
 		{
 			// connected states
 
@@ -450,7 +450,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		// Disconnect
 
-		if (ProtocolState == QUIET || ProtocolState == IRS || ProtocolState == ISS)
+		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS)
 			blnARQDisconnect = TRUE;
 
 		goto AckIt;

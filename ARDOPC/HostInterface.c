@@ -11,6 +11,7 @@ void SendData();
 BOOL CheckForDisconnect();
 int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
+void Break();
 
 #ifndef WIN32
 
@@ -66,54 +67,7 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);
-
-	if (ProtocolState == QUIET)
-	{
-		// Implements Transision Rule 3.1
-		// Status: apprears to work OK version 0.5.0.3
-
-		if (DebugLog) Debugprintf("[ARDOPprotocol.AddDataToDataToSend %d bytes to send in QUIET state: QUIET>ISS (Rule 3.1)", bytDataToSendLength);
- 
-		SetARDOPProtocolState(ISS);
-		ARQState = ISSData;
-		SendData();
-	}
-	else if (ProtocolState == IRS && AutoBreak)
-	{
-		time_t dttStartWait  = Now;
-		
-		// if Transmitting, wait. Will check for Data to Send and IRS at end of TX
-
-		if (SoundIsPlaying)
-			return;
-
-		// This is to hold off starting a repeating BREAK if in process of receiving a valid frame. 
-       
-		while ((Now - dttStartWait < 6000) && ProtocolState == IRS && (State != SearchingForLeader))
-			txSleep(20);
-
-		txSleep(250);			// dont want break too close to ACK
-
-		dttTimeoutTrip = Now;  //keep BREAK Repeats fairly long (preliminary value 1 - 4 seconds)
-
-		if (ProtocolState == IRS)
-		{
-			// Test ProtocolState again in case was changed during above wait loop
-                       
-			SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
-			blnEnbARQRpt = TRUE;	// setup for repeats until changeover 
-               
-			if (DebugLog) Debugprintf("[ARDOPprotocol.AddDataToDataToSend] %d bytes to send in ProtocolState: %s : Send BREAK,  New protocol state=IRStoISS (Rule 3.3)", bytDataToSendLength, ARDOPStates[ProtocolState]);
-               
-			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 1000) ; //keep BREAK Repeats fairly short (preliminary value 1 - 2 seconds)
-
-			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-		}
-	}
 }
-
-
 
 
 // Subroutine for processing a command from Host
@@ -260,6 +214,58 @@ void ProcessCommandFromHost(char * strCMD)
 
 		goto cmddone;
 	}
+			
+	if (strcmp(strCMD, "BUSYBLOCK") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (BusyBlock)
+				sprintf(cmdReply, "BUSYBLOCK TRUE");
+			else
+				sprintf(cmdReply, "BUSYBLOCK FALSE");
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+			BusyBlock = TRUE;
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			BusyBlock = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
+		}
+		goto cmddone;
+	}
+ 
+	if (strcmp(strCMD, "BUSYDET") == 0)
+	{
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "%s %d", strCMD, BusyDet);
+			SendCommandToHost(cmdReply);
+		}
+		else
+		{
+			i = atoi(ptrParams);
+
+			if (i >= 1  && i <= 10)
+			{
+				BusyDet = i;
+			}
+			else
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+	}
+
+
+
 
 	if (strcmp(strCMD, "CAPTURE") == 0)
 	{
@@ -414,7 +420,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "DISCONNECT") == 0)
 	{
-		if (ProtocolState == QUIET || ProtocolState == IRS || ProtocolState == ISS || ProtocolState == IRStoISS)
+		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS || ProtocolState == IRStoISS)
 		{
 			blnARQDisconnect = TRUE;
 			CheckForDisconnect();
@@ -1060,7 +1066,6 @@ void ProcessCommandFromHost(char * strCMD)
 
 			if (i >= 1  && i <= 10)
 			{
-				LeaderLength = (i + 9) /10;
 				Squelch = i;
 			}
 			else
@@ -1083,15 +1088,31 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
-				/*
-            Case "TRAILER"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.TrailerLength.ToString)
-                ElseIf IsNumeric(strParameters) AndAlso (CInt(strParameters) >= 0 And CInt(strParameters) <= 200) Then
-                    MCB.TrailerLength = 10 * Math.Round(CInt(strParameters) / 10)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
+	if (strcmp(strCMD, "TRAILER") == 0)
+	{
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "%s %d", strCMD, TrailerLength);
+			SendCommandToHost(cmdReply);
+		}
+		else
+		{
+			i = atoi(ptrParams);
+
+			if (i >= 0  && i <= 200)
+			{
+				TrailerLength = (i + 9) /10;
+				TrailerLength *= 10;				// round to 10 mS
+			}
+			else
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+	}
+
+/*
             Case "TUNERANGE"
                 If ptrSpace = -1 Then
                     SendCommandToHost(strCommand & " " & MCB.TuningRange.ToString)
@@ -1179,7 +1200,7 @@ cmddone:
 		sprintf(cmdReply, "FAULT %s", strFault);
 		SendCommandToHost(cmdReply);
 	}
-	SendCommandToHost("RDY");		// signals host a new command may be sent
+//	SendCommandToHost("RDY");		// signals host a new command may be sent
 }
 
  

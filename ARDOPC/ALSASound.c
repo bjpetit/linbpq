@@ -53,6 +53,27 @@ snd_pcm_sframes_t MaxAvail;
 
 #include <stdarg.h>
 
+#include <stdarg.h>
+
+
+FILE *logfile[3] = {NULL, NULL, NULL};
+char LogName[3][20] = {"ARDOPDebug", "ARDOPException", "ARDOPSession"};
+
+#define DEBUGLOG 0
+#define EXCEPTLOG 1
+#define SESSIONLOG 2
+
+VOID CloseDebugLog()
+{	
+	if (logfile[DEBUGLOG])
+		fclose(logfile[DEBUGLOG]);
+	logfile[DEBUGLOG] = NULL;
+	if (logfile[SESSIONLOG])
+		fclose(logfile[SESSIONLOG]);
+	logfile[SESSIONLOG] = NULL;
+}
+
+
 VOID Debugprintf(const char * format, ...)
 {
 	char Mess[10000];
@@ -63,7 +84,38 @@ VOID Debugprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf("%s", Mess);
-	WriteLog(Mess, "ARDOPDebug");
+	WriteLog(Mess, DEBUGLOG);
+	return;
+}
+
+VOID WriteDebugLog(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	printf("%s", Mess);
+	WriteLog(Mess, DEBUGLOG);
+	return;
+}
+
+VOID WriteExceptionLog(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	printf("%s", Mess);
+	WriteLog(Mess, EXCEPTLOG);
+
+	fclose(logfile[EXCEPTLOG]);
+	logfile[EXCEPTLOG] = NULL;
 	return;
 }
 
@@ -77,7 +129,7 @@ VOID Statsprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf("%s", Mess);
-	WriteLog(Mess, "ARDOPSession");
+	WriteLog(Mess, SESSIONLOG);
 
 	return;
 }
@@ -1038,7 +1090,7 @@ void CloseSound()
 	CloseSoundCard();
 }
 
-int WriteLog(char * msg, char * Log)
+int WriteLog(char * msg, int Log)
 {
 	FILE *file;
 	char timebuf[128];
@@ -1057,10 +1109,11 @@ int WriteLog(char * msg, char * Log)
 	clock_gettime(CLOCK_REALTIME, &tp);
 
 	sprintf(Value, "%s_%04d%02d%02d.log",
-				Log, tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+				LogName[Log], tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
 	
-	if ((file = fopen(Value, "a")) == NULL)
-		return FALSE;
+	if (logfile[Log] == NULL)
+		if ((logfile[Log] = fopen(Value, "a")) == NULL)
+			return FALSE;
 
 	ss = tp.tv_sec % 86400;		// Secs int day
 	hh = ss / 3600;
@@ -1070,12 +1123,9 @@ int WriteLog(char * msg, char * Log)
 	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
 		hh, mm, ss, tp.tv_nsec/1000000);
 
-	fputs(timebuf, file);
-
-	fputs(msg, file);
-
-	fclose(file);
-
+	fputs(timebuf, logfile[Log]);
+	fputs(msg, logfile[Log]);
+	fflush(logfile[Log]);
 	return 0;
 }
 

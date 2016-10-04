@@ -2,6 +2,8 @@
 
 #include "ARDOPC.h"
 
+#pragma warning(disable : 4244)		// Code does lots of  float to int
+
 FILE * fp1;
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -115,7 +117,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	Debugprintf("Sending Frame Type %s", strType);
+	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
 
 	if (intBaud == 50)
 		initFilter(200);
@@ -300,7 +302,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "8FSK") != 0)
 		return;
 
-	Debugprintf("Sending Frame Type %s", strType);
+	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
 
 	initFilter(200);
 
@@ -375,7 +377,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 	if (strcmp(strMod, "16FSK") != 0)
 		return;
 
-	Debugprintf("Sending Frame Type %s", strType);
+	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
 
 	initFilter(500);
 
@@ -443,7 +445,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	Debugprintf("Sending Frame Type %s", strType);
+	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
 
 	initFilter(2000);
 
@@ -525,7 +527,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
 
-	Debugprintf("Sending Frame Type %s", strType);
+	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
 
 	if (intNumCar == 1)
 		initFilter(200);
@@ -1116,25 +1118,6 @@ extern UCHAR bytSessionID;
 void Flush()
 {
 	SoundFlush(Number);
-
-	// If Data to send and IRS, send BREAK
-
-	if (bytDataToSendLength)
-	{
-		if (ProtocolState == IRS && AutoBreak)
-		{           
-			SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
-			blnEnbARQRpt = TRUE;	// setup for repeats until changeover 
-               
-			if (DebugLog) Debugprintf("[ARDOPprotocol.AddDataToDataToSend] %d bytes to send in ProtocolState: %s : Send BREAK,  New protocol state=IRStoISS (Rule 3.3)", bytDataToSendLength, ARDOPStates[ProtocolState]);
-               
-			txSleep(250);			// dont want break too close to ACK
-			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 1000) ; //keep BREAK Repeats fairly short (preliminary value 1 - 2 seconds)
-	
-			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-		}
-	}
 }
 
 

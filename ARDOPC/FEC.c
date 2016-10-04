@@ -38,10 +38,6 @@ unsigned int dttLastFECIDSent;
 
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
-void WriteDebug(char * msg)
-{
-	Debugprintf(msg);
-}
 
 // Function to start sending FEC data 
 
@@ -181,8 +177,7 @@ BOOL GetNextFECFrame()
 	{
 		ClearDataToSend();
 
-		if (DebugLog)
-			WriteDebug("[GetNextFECFrame] FECAbort. Going to DISC state");
+		WriteDebugLog("[GetNextFECFrame] FECAbort. Going to DISC state");
 		KeyPTT(FALSE);  // insurance for PTT off
 		SetARDOPProtocolState(DISC);
 		return FALSE;
@@ -190,7 +185,7 @@ BOOL GetNextFECFrame()
 	
 	if (intFECFramesSent == -1)
 	{
-		if (DebugLog) WriteDebug("[GetNextFECFrame] intFECFramesSent = -1.  Going to DISC state");
+		WriteDebugLog("[GetNextFECFrame] intFECFramesSent = -1.  Going to DISC state");
 		
 		SetARDOPProtocolState(DISC);
 		KeyPTT(FALSE); // insurance for PTT off
@@ -199,7 +194,7 @@ BOOL GetNextFECFrame()
 	
 	if (bytDataToSendLength == 0 && FECRepeatsSent >= FECRepeats && ProtocolState == FECSend)
 	{
-		if (DebugLog) WriteDebug("[GetNextFECFrame] All data and repeats sent.  Going to DISC state");
+		WriteDebugLog("[GetNextFECFrame] All data and repeats sent.  Going to DISC state");
             
 		SetARDOPProtocolState(DISC);
 		blnEnbARQRpt = FALSE;
@@ -337,14 +332,14 @@ void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDec
 		
 		if (intFrameType == intLastFrameIDToHost && CRC == crcLastFECDataPassedToHost)
 		{
-			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Same Frame ID: %s and matching data, not passed to Host", Name(intFrameType));
+			if (CommandTrace) WriteDebugLog("[ARDOPprotocol.ProcessRcvdFECDataFrame] Same Frame ID: %s and matching data, not passed to Host", Name(intFrameType));
 			return;
 		}
 		
 		if (bytFailedDataLength > 0 && intLastFailedFrameID != intFrameType)
 		{
 			AddTagToDataAndSendToHost(bytFailedData, "ERR", bytFailedDataLength);
-			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
+			if (CommandTrace) WriteDebugLog("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
 			bytFailedDataLength = 0;
 			intLastFailedFrameID = -1;
 		}
@@ -360,7 +355,7 @@ void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDec
 			intLastFailedFrameID = -1;
 		}
 
-		if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass good data frame  ID %s to Host (%d bytes)", Name(intFrameType), frameLen);
+		if (CommandTrace) WriteDebugLog("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass good data frame  ID %s to Host (%d bytes)", Name(intFrameType), frameLen);
 	}
 	else
 	{
@@ -369,10 +364,10 @@ void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDec
 		if (bytFailedDataLength > 0 && intLastFailedFrameID != intFrameType)
 		{
 			AddTagToDataAndSendToHost(bytFailedData, "ERR", bytFailedDataLength);
-			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
+			if (CommandTrace) WriteDebugLog("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
 			bytFailedDataLength = 0;
 			intLastFrameIDToHost = intLastFailedFrameID;
-			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
+			if (CommandTrace) WriteDebugLog("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
 		}
 		memcpy(bytFailedData, bytData, frameLen);	// ' capture the current data and frame type 
 		bytFailedDataLength = frameLen;

@@ -5,7 +5,7 @@
 
 //	Nucleo uses DMA
 
-//	Linux will probably use ALSA
+//	Linux will  use ALSA
 
 //	This is the Windows Version
 
@@ -96,8 +96,6 @@ void main(int argc, char * argv[])
 
 	t = timeGetTime();
 
-	Debugprintf("timeGetTime %d", t);
-
 	Debugprintf("ARDOPC Version %s", ProductVersion);
 
 	if (argc > 1)
@@ -114,6 +112,9 @@ void main(int argc, char * argv[])
 	QueryPerformanceCounter(&StartTicks);
 
 	GetSoundDevices();
+	
+	if(!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS))
+		printf("Failed to set High Priority (%d)\n"), GetLastError();
 
 	ardopmain();
 }
@@ -128,7 +129,7 @@ unsigned int getTicks()
 void printtick(char * msg)
 {
 	QueryPerformanceCounter(&NewTicks);
-	Debugprintf("%s %i\r", msg, Now - LastNow);
+	WriteDebugLog("%s %i\r", msg, Now - LastNow);
 	LastNow = Now;
 }
 
@@ -290,11 +291,11 @@ PollReceivedSamples()
 		if (leveltimer > 100)
 		{
 			leveltimer = 0;
-			Debugprintf("Input peaks = %d, %d", min, max);
+			WriteDebugLog("Input peaks = %d, %d", min, max);
 			min = max = 0;
 		}
 
-//		Debugprintf("Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
+//		WriteDebugLog("Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
 			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
 
@@ -313,7 +314,7 @@ void StopCapture()
 	Capturing = FALSE;
 
 //	waveInStop(hWaveIn);
-//	Debugprintf("Stop Capture");
+//	WriteDebugLog("Stop Capture");
 }
 
 void DiscardOldSamples();
@@ -326,7 +327,7 @@ void StartCapture()
 	ClearAllMixedSamples();
 	State = SearchingForLeader;
 
-//	Debugprintf("Start Capture");
+//	WriteDebugLog("Start Capture");
 }
 void CloseSound()
 { 
@@ -334,34 +335,83 @@ void CloseSound()
 	waveOutClose(hWaveOut);
 }
 
-int WriteLog(char * msg, char * Log)
+#include <stdarg.h>
+
+FILE *logfile = NULL;
+
+VOID CloseDebugLog()
+{	
+	if(logfile)
+		fclose(logfile);
+	logfile = NULL;
+}
+
+VOID WriteDebugLog(const char * format, ...)
 {
-	FILE *file;
+	char Mess[10000];
+	va_list(arglist);
 	char timebuf[128];
 	UCHAR Value[100];
 	SYSTEMTIME st;
 
+	if (!DebugLog)
+		return;
+	
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	printf(Mess);
+
 	GetSystemTime(&st);
 	sprintf(Value, "%s_%04d%02d%02d.log",
-				Log, st.wYear, st.wMonth, st.wDay);
+				"ARDOPDebug", st.wYear, st.wMonth, st.wDay);
 	
-	if ((file = fopen(Value, "ab")) == NULL)
-		return FALSE;
+	if (logfile == NULL)
+		if ((logfile = fopen(Value, "ab")) == NULL)
+		return;
 
 	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
 		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 
-	fputs(timebuf, file);
+	fputs(timebuf, logfile);
 
-	fputs(msg, file);
-
-	fclose(file);
-
-	return 0;
+	fputs(Mess, logfile);
+	return;
 }
 
+VOID WriteExceptionLog(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+	char timebuf[128];
+	UCHAR Value[100];
+	FILE *logfile;
+	SYSTEMTIME st;
+	
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
 
-#include <stdarg.h>
+	printf(Mess);
+
+	GetSystemTime(&st);
+	sprintf(Value, "%s_%04d%02d%02d.log",
+				"ARDOPException", st.wYear, st.wMonth, st.wDay);
+	
+	if ((logfile = fopen(Value, "ab")) == NULL)
+		return;
+
+	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
+		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+
+	fputs(timebuf, logfile);
+
+	fputs(Mess, logfile);
+	fclose(logfile);
+
+	return;
+}
 
 VOID Debugprintf(const char * format, ...)
 {
@@ -373,10 +423,11 @@ VOID Debugprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf(Mess);
-	WriteLog(Mess, "ARDOPDebug");
+//	WriteLog(Mess, "ARDOPDebug");
 
 	return;
 }
+
 
 VOID Statsprintf(const char * format, ...)
 {
@@ -388,7 +439,7 @@ VOID Statsprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf(Mess);
-	WriteLog(Mess, "ARDOPSession");
+//	WriteLog(Mess, "ARDOPSession");
 
 	return;
 }
@@ -433,12 +484,12 @@ void SoundFlush()
 
 	//'Debug.WriteLine("[tmrPoll.Tick] Play stop. Length = " & Format(Now.Subtract(dttTestStart).TotalMilliseconds, "#") & " ms")
           
-//		Debugprintf("Play complete blnEnbARQRpt = %d", blnEnbARQRpt);
+//		WriteDebugLog("Play complete blnEnbARQRpt = %d", blnEnbARQRpt);
 
 	if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
 		dttNextPlay = Now + intFrameRepeatInterval;
 
-//	Debugprintf("Now %d Now - dttNextPlay 1  = %d", Now, Now - dttNextPlay);
+//	WriteDebugLog("Now %d Now - dttNextPlay 1  = %d", Now, Now - dttNextPlay);
 
 	KeyPTT(FALSE);		 // Unkey the Transmitter
 
@@ -499,7 +550,7 @@ BOOL KeyPTT(BOOL blnPTT)
 	else
 		RadioPTT(blnPTT);
 
-	if (DebugLog) Debugprintf("[Main.KeyPTT]  PTT-%s", BoolString[blnPTT]);
+	WriteDebugLog("[Main.KeyPTT]  PTT-%s", BoolString[blnPTT]);
 
 	blnLastPTT = blnPTT;
 	return TRUE;

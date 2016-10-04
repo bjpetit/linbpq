@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.6.4.2-BPQ"
+#define ProductVersion "0.7.2.0-BPQ"
 
 //	Sound interface buffer size
 
@@ -116,11 +116,12 @@ void GenCRC16FrameType(char * Data, int Length, UCHAR bytFrameType);
 BOOL CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType);
 char * strlop(char * buf, char delim);
 void QueueCommandToHost(char * Cmd);
+void LogStats();
 
 #ifdef WIN32
 void ProcessNewSamples(short * Samples, int nSamples);
 VOID Debugprintf(const char * format, ...);
-VOID Statsprintf(const char * format, ...);
+VOID WriteDebugLog(const char * format, ...);
 void ardopmain();
 BOOL GetNextFECFrame();
 void GenerateFSKTemplates();
@@ -188,7 +189,7 @@ enum _ARDOPState
 	DISC,
 	ISS,
 	IRS,
-	QUIET,    // ISS in quiet state ...no transmissions) [Replaced old ISS IDLE state in version 0.5.0.0 and later]
+	IDLE,     // ISS in quiet state ...no transmissions)
 	IRStoISS, // IRS during transition to ISS waiting for ISS's ACK from IRS's BREAK
  	FECSend,
 	FECRcv
@@ -253,6 +254,13 @@ struct SessionStats
 
 
 
+#define BREAK 0x23
+#define IDLEFRAME 0x24
+#define DISCFRAME 0x29
+#define END 0x2C
+#define ConRejBusy 0x2D
+#define ConRejBW 0x2E
+
 
 
 extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
@@ -310,6 +318,7 @@ extern int DriveLevel;
 extern int FECRepeats;
 extern BOOL FECId;
 extern int Squelch;
+extern int BusyDet;
 extern BOOL blnEnbARQRpt;
 extern unsigned int dttNextPlay;
 
@@ -319,6 +328,7 @@ extern int bytDataToSendLength;
 extern BOOL blnListen;
 extern BOOL Monitor;
 extern BOOL AutoBreak;
+extern BOOL BusyBlock;
 
 extern int DecodeCompleteTime;
 

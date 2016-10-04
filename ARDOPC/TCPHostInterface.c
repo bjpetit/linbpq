@@ -380,12 +380,17 @@ loop:
 
 		}
 	}
+	else
+	{
+		// Duff frame - clear buffer
 
-	// Getting bad data ?? Should we just reset ??
+		DataInputLen = 0;
+
+		// Getting bad data ?? Should we just reset ??
 	
-	Debugprintf("ARDOP BadHost Message ?? %c %c %s",
-		ARDOPBuffer[0], ARDOPBuffer[1], &ARDOPBuffer[4]);
-	return;
+		WriteDebugLog("ARDOP BadHost Message ?? %c %c %s",
+			ARDOPBuffer[0], ARDOPBuffer[1], &ARDOPBuffer[4]);
+	}
 }
 
 
@@ -407,7 +412,7 @@ SOCKET OpenSocket4(int port)
 
 	    if (sock == INVALID_SOCKET)
 		{
-	        Debugprintf("socket() failed error %d", WSAGetLastError());
+	        WriteDebugLog("socket() failed error %d", WSAGetLastError());
 			return 0;
 		}
 
@@ -496,7 +501,7 @@ void HostPoll()
 					
 				ioctl(TCPControlSock, FIONBIO, &param);
 				CONNECTED = TRUE;
-				SendCommandToHost("RDY");
+//				SendCommandToHost("RDY");
 			}
 		}
 	}
