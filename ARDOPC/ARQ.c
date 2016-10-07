@@ -915,7 +915,7 @@ int GetNumCarriers(UCHAR bytFrameType)
 	char strType[18];
 	char strMod[16];
 	
-	if (FrameInfo(bytFrameType, &dummy, &intNumCar, strMod, &dummy, &dummy, &dummy, &dummy, strType))
+	if (FrameInfo(bytFrameType, &dummy, &intNumCar, strMod, &dummy, &dummy, &dummy, (UCHAR *)&dummy, strType))
 		return intNumCar;
 	
 	return 0;
@@ -1216,13 +1216,44 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			return;			// No decode or not a ConReq
 
 		strCallsign  = strlop(bytData, ' '); // "fromcall tocall"
+		strcpy(strRemoteCallsign, bytData);
 
 		// see if connect request is to MyCallsign or any Aux call sign
         
 		if (IsCallToMe(strCallsign, &bytPendingSessionID)) // (Handles protocol rules 1.2, 1.3)
 		{
 			//WriteDebugLog("[ProcessRcvdARQFrame]1 strCallsigns(0)=" & strCallsigns(0) & "  strCallsigns(1)=" & strCallsigns(1) & "  bytPendnigSessionID=" & Format(bytPendingSessionID, "X"))
-            
+
+			// initial testing...just log Last Busy, Last Clear and Last Leader Detect  in ms
+
+			WriteDebugLog("[ProcessRcvdARQFrame] BusyBlock=%d Last Busy On=%d mS Last Busy Off=%d mS Last LeaderDetect=%d mS",
+					BusyBlock, Now - dttLastBusyOn, Now - dttLastBusyOff, Now - dttLastLeaderDetect);
+
+			
+			if (BusyBlock)
+			{
+				int intLastBusyOffToLeader  = dttLastLeaderDetect - dttLastBusyOff;
+				int intLastBusyOnToLeader = dttLastLeaderDetect - dttLastBusyOn;
+				
+				if (intLastBusyOffToLeader < 1000 || intLastBusyOnToLeader < 1000)
+				{
+					// Experimental window of 1000 ms 9/20/2016
+					
+					WriteDebugLog("[ARDOPprotocol.ProcessRcvdARQFrame] ConReq from %s blocked by BusyBlock  LastBusyOff to Leader detect= %d ms",  strCallsign, intLastBusyOffToLeader);
+
+					EncLen = Encode4FSKControl(0x2e, bytPendingSessionID, bytEncodedBytes);
+					Mod4FSKDataAndPlay(0x2e, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+
+
+					sprintf(HostCmd, "REJECTEDBUSY %s", strRemoteCallsign);
+					QueueCommandToHost(HostCmd);
+					sprintf(HostCmd, "STATUS ARQ CONNECTION REQUEST FROM %s REJECTED, CHANNEL BUSY.", strRemoteCallsign);
+					QueueCommandToHost(HostCmd);
+
+					return;
+				}
+			}
+
 			intReply = IRSNegotiateBW(intFrameType); // NegotiateBandwidth
 
 			if (intReply != 0x2E)	// If not ConRejBW the bandwidth is compatible so answer with correct ConAck frame

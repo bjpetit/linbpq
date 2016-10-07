@@ -201,6 +201,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\BusyDetect.c"
+				>
+			</File>
+			<File
 				RelativePath=".\CalcTemplates.c"
 				>
 			</File>

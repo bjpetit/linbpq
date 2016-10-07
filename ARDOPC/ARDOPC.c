@@ -26,6 +26,7 @@ BOOL HostInit();
 void HostPoll();
 BOOL MainPoll();
 void PlatformSleep();
+BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
 
 // Config parameters
 
@@ -2398,7 +2399,7 @@ int ExtractARQBandwidth()
 }
 
 //	 Function to implement a busy detector based on 1024 point FFT
- 
+ /*
 BOOL BusyDetect(float * dblMag, int intStart, int intStop)
 {
 	// this only called while searching for leader ...once leader detected, no longer called.
@@ -2559,7 +2560,7 @@ BOOL BusyDetect(float * dblMag, int intStart, int intStop)
 	}
 	return blnLastBusy;
 }
-
+*/
 //	Subroutine to update the Busy detector when not displaying Spectrum or Waterfall (graphics disabled)
  		
 void UpdateBusyDetector(short * bytNewSamples)
@@ -2603,7 +2604,7 @@ void UpdateBusyDetector(short * bytNewSamples)
     
 //	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
 	{
-		blnBusyStatus = BusyDetect(dblMag, intTuneLineLow, intTuneLineHi);
+		blnBusyStatus = BusyDetect2(dblMag, intTuneLineLow, intTuneLineHi);
 		
 		if (blnBusyStatus && !blnLastBusyStatus)
 		{

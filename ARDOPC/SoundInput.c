@@ -180,7 +180,7 @@ int intARQRTmeasuredMs;
 
 float dbl2Pi = 2 * M_PI; 
 
-float dblSNdBPwr, dblSNdBPwr_1, dblSNdBPwr_2;
+float dblSNdBPwr;
 float dblNCOFreq = 3000;	 // nominal NC) frequency
 float dblNCOPhase = 0;
 float dblNCOPhaseInc = 2 * M_PI * 3000 / 12000;  // was dblNCOFreq
@@ -365,13 +365,6 @@ BOOL IsDataFrame(UCHAR intFrameType)
 		return TRUE;
 
 	return FALSE;
-}
-
-void ResetSNPwrs()
-{
-	dblSNdBPwr = 0;
-	dblSNdBPwr_1 = 0;
-	dblSNdBPwr_2 = 0;
 }
 
 //    Subroutine to clear all mixed samples 
@@ -840,7 +833,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 				InitializeMixedSamples();
 				State = AcquireSymbolSync;
-				ResetSNPwrs();
 			}
 			else
 			{
@@ -1827,13 +1819,13 @@ BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetH
 	// Early leader detect code to calculate S:N on Front half (first 2 symbols)
 	// concept is to allow more accurate framing and sync detection and reduce false leader detects
 
-	GoertzelRealImag(intNewSamples, Ptr, 480, 57 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
+	GoertzelRealImag(intNewSamples, Ptr, 480, 57.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
 	dblAvgNoisePerBin = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 58 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
+	GoertzelRealImag(intNewSamples, Ptr, 480, 58.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
 	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 62 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
+	GoertzelRealImag(intNewSamples, Ptr, 480, 62.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
 	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 63 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz 
+	GoertzelRealImag(intNewSamples, Ptr, 480, 63.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz 
 	dblAvgNoisePerBin = 0.25f * (dblAvgNoisePerBin + (powf(dblCtrR, 2) + powf(dblCtrI, 2))); // average of 4 noise bins
 	dblLeftCar = 59 + dblTrialOffset / 25;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
 	dblRightCar = 61 + dblTrialOffset / 25;
@@ -1861,9 +1853,10 @@ BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetH
 	// These calibration values yield a sensitivity of ~ - 10 dB S:N (@ 3KHZ noise BW) with a Squelch=5, and 2 dB per squelch change
 	// The threshold for early is 1 dB lower than the threshold for the full 4 symbol leader . (compenseated for the 3 dB bandwidth difference)
 
-	if (dblSNdBPwr > (4 + Squelch) && (dblSNdBPwrEarly > (1 + Squelch))) // The -4 value comes from - (3+1) making early threshold 1 dB lower (after 3 dB compensation for bandwidth)
+
+	if (dblSNdBPwr > (4 + Squelch) && (dblSNdBPwrEarly > (1 + Squelch))) // making early threshold = lower (after 3 dB compensation for bandwidth)
 	{
-		WriteDebugLog("Fine Search S:N= %f dB, Prior S:N= %f", dblSNdBPwr,dblSNdBPwr_1);
+		WriteDebugLog("Fine Search S:N= %f dB, Early S:N= %f dblAvgNoisePerBin %f ", dblSNdBPwr, dblSNdBPwrEarly, dblAvgNoisePerBin);
 
 //		if (dblCoarseOffset < 999)
 //			WriteDebugLog("  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);

@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.7.2.0-BPQ"
+#define ProductVersion "0.7.2.1-BPQ"
 
 //	Sound interface buffer size
 
@@ -21,6 +21,10 @@
 #ifndef WIN32
 #define max(x, y) ((x) > (y) ? (x) : (y))
 #define min(x, y) ((x) < (y) ? (x) : (y))
+#endif
+
+#ifdef WIN32
+float round(float x);
 #endif
 
 #include <time.h>
@@ -59,6 +63,8 @@ typedef unsigned char UCHAR;
 
 #define FALSE 0
 #define TRUE 1
+#define False 0
+#define True 1
 
 BOOL KeyPTT(BOOL State);
 
@@ -413,7 +419,9 @@ extern int intQAMSymbolCnt;
 extern int intGoodQAMFrameDataDecodes;
 extern int intFailedQAMFrameDataDecodes;
 
-
+extern int dttLastBusyOn;
+extern int dttLastBusyOff;
+extern int dttLastLeaderDetect;
 
 
 // Has to follow enum defs
