@@ -4,7 +4,7 @@
 #ifndef __LZMADEC_H
 #define __LZMADEC_H
 
-#include "Types.h"
+#include "types.h"
 
 /* #define _LZMA_PROB32 */
 /* _LZMA_PROB32 can increase the speed on some CPUs,

@@ -769,6 +769,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add DD command to SCS Pactor, and use it for forced disconnect.
 //	Add ARDOP mode select to scan config
 //	ARDOP changes for ARDOP V 0.5+
+//	Flip SSID bits on UZ7HO downlink connects
+
+
+// Version xxxxx
+
+//	Fix Socket leak in ARDOP and FLDIGI drivers.
+//	Add option to change CMS Server hostname
+//	ARDOP Changes for 0.8.0+
 
 #define CKernel
 

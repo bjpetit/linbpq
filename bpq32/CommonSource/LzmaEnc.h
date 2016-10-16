@@ -4,7 +4,7 @@
 #ifndef __LZMAENC_H
 #define __LZMAENC_H
 
-#include "Types.h"
+#include "types.h"
 
 #define LZMA_PROPS_SIZE 5
 

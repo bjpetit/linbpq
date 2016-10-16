@@ -925,6 +925,10 @@
 //	Kill B2 WP bulls if FilterWPBulls set
 //	Include Message Type in BPQ B2 proposal extensions
 
+//	Fix corruption of BBSNumber if RMS Ex User and BBS both checked
+//	Tread B messages without an AT as Flood.
+//	Make sure Message headers are always saved to disk when a message status changes
+//	Reject message instead of failing session if TO address too long in FBB forwarding
 
 #include "BPQMail.h"
 #define MAIL

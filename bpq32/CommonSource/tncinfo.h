@@ -104,6 +104,7 @@ struct TCPINFO
 	int TriModePort;
 	int CMDPort[33];
 	char RELAYHOST[64];
+	char CMSServer[64];
 	BOOL FallbacktoRelay;		// Use Relsy if can't connect to CMS
 
 	BOOL IPV4;					// Allow Connect using IPV4

@@ -6,7 +6,7 @@ Public domain */
 #ifndef __LZMALIB_H
 #define __LZMALIB_H
 
-#include "Types.h"
+#include "types.h"
 
 #ifdef __cplusplus
   #define MY_EXTERN_C extern "C"

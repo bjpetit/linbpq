@@ -1494,6 +1494,7 @@ static VOID ConnecttoFLDigiThread(port)
 			TNC->Alerted = TRUE;
 		}
 		
+		closesocket(TNC->WINMORSock);
 		TNC->CONNECTING = FALSE;
 		return;
 	}

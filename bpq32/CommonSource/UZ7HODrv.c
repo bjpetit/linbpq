@@ -1284,7 +1284,8 @@ VOID ConnecttoUZ7HOThread(port)
 
 	}
 
-	closesocket(TNC->WINMORSock);
+	if (TNC->WINMORSock)
+		closesocket(TNC->WINMORSock);
 
 	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
 
@@ -1322,6 +1323,9 @@ VOID ConnecttoUZ7HOThread(port)
 		}
 		
 		TNC->CONNECTING = FALSE;
+		closesocket(TNC->WINMORSock);
+		TNC->WINMORSock = 0;
+	
 		return;
 	}
 
@@ -1353,6 +1357,7 @@ static int ProcessReceivedData(int port)
 //		WritetoConsole(ErrMsg);
 				
 		closesocket(TNC->WINMORSock);
+		TNC->WINMORSock = 0;
 					
 		TNC->CONNECTED = FALSE;
 
@@ -1367,6 +1372,8 @@ static int ProcessReceivedData(int port)
 		WritetoConsole(ErrMsg);
 
 		TNC->CONNECTED = FALSE;
+		closesocket(TNC->WINMORSock);
+		TNC->WINMORSock = 0;
 		return (0);
 	}
 
@@ -1381,6 +1388,18 @@ static int ProcessReceivedData(int port)
 #ifdef __BIG_ENDIAN__
 		datalen = reverse(datalen);
 #endif
+		if (datalen < 0 || datalen > 500)
+		{
+			// corrupt - reset connection
+
+			shutdown(TNC->WINMORSock, SD_BOTH);
+			Sleep(100);
+
+			closesocket(TNC->WINMORSock);
+			TNC->CONNECTED = FALSE;
+			return;
+		}
+
 		if (datalen > 0)
 		{
 			// Need data - See if enough there

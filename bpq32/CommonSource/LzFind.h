@@ -4,7 +4,7 @@
 #ifndef __LZFIND_H
 #define __LZFIND_H
 
-#include "Types.h"
+#include "types.h"
 
 typedef LZ_UInt32 CLzRef;
 

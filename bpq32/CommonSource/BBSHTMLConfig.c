@@ -3072,6 +3072,7 @@ VOID ProcessMsgFwdUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, cha
 		}
 		*RLen = SendMessageDetails(Msg, Reply, Session->Key);
 	}
+	SaveMessageDatabase();
 }
 
 

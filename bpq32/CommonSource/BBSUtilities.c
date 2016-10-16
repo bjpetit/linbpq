@@ -461,6 +461,7 @@ VOID GetUserDatabase()
 	int ReadLen;
 	struct UserInfo * user;
 	time_t UserLimit = time(NULL) - (UserLifetime * 86400); // Oldest user to keep
+	int i;
 
 	Handle = fopen(UserDatabasePath, "rb");
 
@@ -623,24 +624,41 @@ Next:
 		if (user->lastmsg < 0 || user->lastmsg > LatestMsg)
 			user->lastmsg = LatestMsg;
 
+		goto Next;
+	}
+
+	// Setting up BBS struct has been moved untill all user record
+	//	have been read so we can fix corrupt BBSNUmber
+
+	for (i=1; i <= NumberofUsers; i++)
+	{
+		user = UserRecPtr[i];
+
 		//	Read any forwarding info, even if not a BBS.
 		//	This allows a BBS to be temporarily set as a
 		//	normal user without loosing forwarding info
 
-			SetupForwardingStruct(user);
+		SetupForwardingStruct(user);
 
 		if (user->flags & F_BBS)
 		{
 			// Add to BBS Chain;
+
+			if (user->BBSNumber == NBBBS)				// Fix corrupt records
+			{
+				user->BBSNumber = FindFreeBBSNumber();
+				if (user->BBSNumber == 0)
+					user->BBSNumber = NBBBS;			// cant rally do much else
+			}
 
 			user->BBSNext = BBSChain;
 			BBSChain = user;
 
 			// Save Highest BBS Number
 
-			if (user->BBSNumber > HighestBBSNumber) HighestBBSNumber = user->BBSNumber;
+			if (user->BBSNumber > HighestBBSNumber)
+				HighestBBSNumber = user->BBSNumber;
 		}
-		goto Next;
 	}
 
 	SortBBSChain();
@@ -933,6 +951,12 @@ VOID SaveMessageDatabase()
 
 	Handle = fopen(MsgDatabasePath, "wb");
 
+	if (Handle == NULL)
+	{
+		CriticalErrorHandler("Failed to open message database");
+		return;
+	}
+
 	MsgHddrPtr[0]->status = 2;
 	MsgHddrPtr[0]->number = NumberofMessages;
 	MsgHddrPtr[0]->length = LatestMsg;
@@ -940,9 +964,17 @@ VOID SaveMessageDatabase()
 	for (i=0; i <= NumberofMessages; i++)
 	{
 		WriteLen = fwrite(MsgHddrPtr[i], 1, sizeof (struct MsgInfo), Handle);
+	
+		if (WriteLen != sizeof(struct MsgInfo))
+		{
+			CriticalErrorHandler("Failed to write message database record");
+			return;
+		}
 	}
 
-	fclose(Handle);
+	if (fclose(Handle) != 0)
+		CriticalErrorHandler("Failed to close message database");
+
 	return;
 }
 
@@ -1483,7 +1515,7 @@ int compare( const void *arg1, const void *arg2 );
 VOID SortBBSChain()
 {
 	struct UserInfo * user;
-	struct UserInfo * users[125]; 
+	struct UserInfo * users[161]; 
 	int i = 0, n;
 
 	// Get array of addresses
@@ -1491,7 +1523,7 @@ VOID SortBBSChain()
 	for (user = BBSChain; user; user = user->BBSNext)
 	{
 		users[i++] = user;
-		if (i > 124) break;
+		if (i > 160) break;
 	}
 
 	qsort((void *)users, i, 4, compare );
@@ -2346,6 +2378,7 @@ void TrytoSend()
 						conn->BBSFlags &= ~ARQMAILACK;
 						conn->UserPointer->ForwardingInfo->MsgCount--;
 
+						SaveMessageDatabase();
 						SendARQMail(conn);				// See if any more - close if not
 					}
 				}
@@ -6335,6 +6368,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 	else
 		fclose(Handle);
 
+	SaveMessageDatabase();
 	return TRUE;
 }
 
@@ -8368,7 +8402,6 @@ int Connected(int Stream)
 		
 		if (Stream == conn->BPQStream)
 		{
-
 			if (conn->Active)
 			{
 				// Probably an outgoing connect
@@ -8542,9 +8575,11 @@ int Connected(int Stream)
 						user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 					}
 				
+					if (user->BBSNumber == 0)
+						user->BBSNumber = NBBBS;
+
 					ForwardingInfo = user->ForwardingInfo;
 					
-					user->BBSNumber = NBBBS;
 					ForwardingInfo->AllowCompressed = TRUE;
 					B1 = ForwardingInfo->AllowB1 = FALSE;
 					B2 = ForwardingInfo->AllowB2 = TRUE;
@@ -9404,6 +9439,8 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 			conn->FwdMsg->status = 'F';			// Mark as forwarded
 			conn->FwdMsg->datechanged=time(NULL);
 		}
+
+		SaveMessageDatabase();
 
 		conn->UserPointer->ForwardingInfo->MsgCount--;
 

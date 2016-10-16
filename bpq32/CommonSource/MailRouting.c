@@ -983,7 +983,14 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	// Make sure HA is complete (starting at WW)
 
 	if (RouteElements[0] == 0)
+	{
+		// Just a TO. If a Bull, set flood
+
+		if (Msg->type == 'B')
+			Flood = TRUE;
+
 		goto NOHA;
+	}
 
 	ptr2 = RouteElements + strlen(RouteElements) - 1;
 
@@ -1753,6 +1760,7 @@ VOID ReRouteMessages()
 			}
 		}
 	}
+	SaveMessageDatabase();
 }
 
 

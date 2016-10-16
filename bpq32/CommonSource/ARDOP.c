@@ -383,29 +383,18 @@ VOID ARDOPSendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue)
 
 	// Command Formst is C:TEXT<CR><CRC>
 
-	UINT * buffptr;
 	int EncLen;
-	UCHAR * Encoded;
+	UCHAR Encoded[256];
 
-	buffptr = GetBuff();
-
-	//	Have to save copy for possible retry (and possibly until previous 
-	//	command is acked
-
-	if (buffptr == NULL)
-	{
+	if (Buff[0] == 0)		// Terminal Keepalive?
 		return;
-	}
 
-	Encoded = (UCHAR *)&buffptr[2];
 	EncLen = sprintf(Encoded, "C:%s\r", Buff);
 
 //	CRC = GenCRC16(Encoded + 2, EncLen -2);			// Don't include c:
 
 //	Encoded[EncLen++] = CRC >> 8;
 //	Encoded[EncLen++] = CRC & 0xFF;
-
-	buffptr[1] = EncLen;
 
 /*	if (Queue)
 	{
@@ -425,7 +414,6 @@ VOID ARDOPSendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue)
 
 */
 	SendToTNC(TNC, Encoded, EncLen);
-	ReleaseBuffer(buffptr);
 
 	return;
 }
@@ -1788,8 +1776,13 @@ VOID ARDOPThread(port)
 
 	}
 
-//	closesocket(TNC->WINMORSock);
-//	closesocket(TNC->WINMORDataSock);
+	if (TNC->WINMORSock)
+		closesocket(TNC->WINMORSock);
+	if (TNC->WINMORDataSock)
+		closesocket(TNC->WINMORDataSock);
+
+	TNC->WINMORSock = 0;
+	TNC->WINMORDataSock = 0;
 
 	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
 
@@ -1811,11 +1804,11 @@ VOID ARDOPThread(port)
 
 	 	TNC->CONNECTING = FALSE;
 		closesocket(TNC->WINMORSock);
+		TNC->WINMORSock = 0;
 
   	 	return; 
 	}
 
- 
 	setsockopt(TNC->WINMORSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 	setsockopt(TNC->WINMORDataSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 //	setsockopt(TNC->WINMORDataSock, IPPROTO_TCP, TCP_NODELAY, (const char FAR *)&bcopt, 4); 
@@ -1824,21 +1817,6 @@ VOID ARDOPThread(port)
 	sinx.sin_addr.s_addr = INADDR_ANY;
 	sinx.sin_port = 0;
 
-/*	if (bind(TNC->WINMORSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
-	{
-		//
-		//	Bind Failed
-		//
-	
-		i=sprintf(Msg, "Bind Failed for ARDOP socket - error code = %d\r\n", WSAGetLastError());
-		WritetoConsole(Msg);
-			
-		closesocket(TNC->WINMORSock);
-	 	TNC->CONNECTING = FALSE;
-
-  	 	return; 
-	}
-*/
 	if (connect(TNC->WINMORSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
 	{
 		//
@@ -1859,7 +1837,10 @@ VOID ARDOPThread(port)
 		}
 		
 		closesocket(TNC->WINMORSock);
+		closesocket(TNC->WINMORDataSock);
+
 		TNC->WINMORSock = 0;
+		TNC->WINMORDataSock = 0;
 	 	TNC->CONNECTING = FALSE;
 		return;
 	}
@@ -1888,6 +1869,7 @@ VOID ARDOPThread(port)
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
 		TNC->WINMORSock = 0;
+		TNC->WINMORDataSock = 0;
 	 	TNC->CONNECTING = FALSE;
 		return;
 	}
@@ -2015,8 +1997,10 @@ Lost:
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;
 
+				closesocket(TNC->WINMORSock);
 				closesocket(TNC->WINMORDataSock);
 				TNC->WINMORSock = 0;
+				TNC->WINMORDataSock = 0;
 				return;
 			}
 
@@ -2040,6 +2024,7 @@ Lost:
 				closesocket(TNC->WINMORSock);
 				closesocket(TNC->WINMORDataSock);
 				TNC->WINMORSock = 0;
+				TNC->WINMORDataSock = 0;
 				return;
 			}
 
@@ -2072,17 +2057,14 @@ Lost:
 			ARDOPSendCommand(TNC, "CODEC FALSE", FALSE);
 			FreeSemaphore(&Semaphore);
 
-			Sleep(100);
 			shutdown(TNC->WINMORSock, SD_BOTH);
-			Sleep(100);
-
-			closesocket(TNC->WINMORDataSock);
-
-			Sleep(100);
 			shutdown(TNC->WINMORDataSock, SD_BOTH);
 			Sleep(100);
-
+			closesocket(TNC->WINMORSock);
 			closesocket(TNC->WINMORDataSock);
+
+			TNC->WINMORSock = 0;
+			TNC->WINMORDataSock = 0;
 
 			if (TNC->WIMMORPID && TNC->WeStartedTNC)
 			{
@@ -2228,14 +2210,14 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		if (TNC->PTTMode)
 			Rig_PTT(TNC->RIG, TRUE);
 
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
 	if (_memicmp(Buffer, "PTT F", 5) == 0)
 	{
 		if (TNC->PTTMode)
 			Rig_PTT(TNC->RIG, FALSE);
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
 
@@ -2248,7 +2230,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		strcpy(TNC->WEB_CHANSTATE, "Busy");
 
 		TNC->WinmorRestartCodecTimer = time(NULL);
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
 
@@ -2262,7 +2244,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		MySetWindowText(TNC->xIDC_CHANSTATE, TNC->WEB_CHANSTATE);
 		TNC->WinmorRestartCodecTimer = time(NULL);
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
 
@@ -2272,7 +2254,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		Debugprintf(Buffer);
 		WritetoTrace(TNC, Buffer, MsgLen - 3);
 		memcpy(TNC->TargetCall, &Buffer[7], 10);
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
 
@@ -2321,7 +2303,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %s",
 			STREAM->BytesTXed, STREAM->BytesRXed, &Buffer[7]);
 		MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
 
@@ -2339,7 +2321,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		Debugprintf(Buffer);
 		WritetoTrace(TNC, Buffer, MsgLen - 3);
 
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 	
 		STREAM->ConnectTime = time(NULL); 
 		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
@@ -2524,7 +2506,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		Debugprintf(Buffer);
 
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		TNC->ConnectPending = FALSE;			// Cancel Scan Lock
 
 		if (TNC->FECMode)
@@ -2612,7 +2594,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "STATUS ", 7) == 0)
 	{
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
 
@@ -2630,7 +2612,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(&Buffer[0], "PENDING", 7) == 0)	// Save Pending state for scan control
 	{
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		TNC->ConnectPending = 6;				// Time out after 6 Scanintervals
 		return;
 	}
@@ -2638,7 +2620,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(&Buffer[0], "CANCELPENDING", 13) == 0
 		|| _memicmp(&Buffer[0], "REJECTEDB", 9) == 0)  //REJECTEDBUSY or REJECTEDBW
 	{
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 		TNC->ConnectPending = FALSE;
 		return;
 	}
@@ -2651,7 +2633,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
 	{
-		ARDOPSendCommand(TNC, "RDY", FALSE);
+//		ARDOPSendCommand(TNC, "RDY", FALSE);
 
 		TNC->WinmorRestartCodecTimer = time(NULL);
 
@@ -2811,9 +2793,12 @@ static VOID ARDOPProcessReceivedData(struct TNCINFO * TNC)
 	{
 		// Does this mean closed?
 		
-//		closesocket(TNC->WINMORSock);
-		closesocket(TNC->WINMORDataSock);
-
+		if (TNC->WINMORSock)
+			closesocket(TNC->WINMORSock);
+		if (TNC->WINMORDataSock)
+			closesocket(TNC->WINMORDataSock);
+		
+		TNC->WINMORSock = 0;
 		TNC->WINMORDataSock = 0;
 
 		TNC->CONNECTED = FALSE;
@@ -2871,12 +2856,16 @@ loop:
 
 			TNC->DataInputLen -= MsgLen;
 
-			if (TNC->InputLen == 0)
+			if (TNC->DataInputLen == 0)
 				return;
 
 			memmove(TNC->ARDOPDataBuffer, &TNC->ARDOPDataBuffer[MsgLen],  TNC->DataInputLen);
 			goto loop;
 		}
+		else
+			// Duff - clear input buffer
+			TNC->DataInputLen = 0;
+
 	}	
 	return;
 }
@@ -2913,9 +2902,10 @@ static VOID ARDOPProcessReceivedControl(struct TNCINFO * TNC)
 	{
 		// Does this mean closed?
 		
-		closesocket(TNC->WINMORSock);
-
-		TNC->WINMORSock = 0;
+		if (TNC->WINMORSock)
+			closesocket(TNC->WINMORSock);
+		if (TNC->WINMORDataSock)
+			closesocket(TNC->WINMORDataSock);
 
 		TNC->CONNECTED = FALSE;
 		TNC->Streams[0].ReportDISC = TRUE;

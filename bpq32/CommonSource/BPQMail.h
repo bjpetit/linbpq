@@ -419,7 +419,7 @@ struct UserInfo
 	UCHAR	PageLen;			// Lines Per Page
 
 	char	POP3Locked ;		// Nonzero if POP3 server has locked this user (stops other pop3 connections, or BBS user killing messages)
-	char	BBSNumber;			// BBS Bitmap Index Number
+	unsigned char BBSNumber;			// BBS Bitmap Index Number
 	struct	BBSForwardingInfo * ForwardingInfo;
 	struct  UserInfo * BBSNext;	// links BBS record
 	struct  TempUserInfo * Temp;	// Working Fields - not saved in user file

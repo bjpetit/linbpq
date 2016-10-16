@@ -286,6 +286,7 @@ ProcessLine(char * buf, int Port)
 		TCP->MaxSessions = 10;				// Default Values
 		TNC->Hardware = H_TELNET;
 		TCP->IPV4 = TRUE;
+		strcpy(TCP->CMSServer, "Server.Winlink.org");
 	}
 
 	TNC = TNCInfo[Port];
@@ -357,6 +358,15 @@ ProcessLine(char * buf, int Port)
 			}
 		}
 		else
+		if (_stricmp(param,"CMSSERVER") == 0)
+		{
+			int n = 0;
+			char * context;
+			char * ptr = strtok_s(value, ", \r", &context);
+
+			strcpy(TCP->CMSServer, ptr);
+		}
+		else
 		if (_stricmp(param,"RELAYHOST") == 0)
 		{
 			int n = 0;
@@ -365,6 +375,7 @@ ProcessLine(char * buf, int Port)
 
 			strcpy(TCP->RELAYHOST, ptr);
 		}
+
 
 		else
 		if (_stricmp(param,"FALLBACKTORELAY") == 0)
@@ -4619,8 +4630,7 @@ rootok:
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_DGRAM;
-	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
-//	n = getaddrinfo("cms.winlink.org", NULL, &hints, &res);
+	n = getaddrinfo(TCP->CMSServer, NULL, &hints, &res);
 	 
 	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
 	{

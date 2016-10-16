@@ -211,6 +211,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 
 				conn->UserPointer->ForwardingInfo->MsgCount--;
+
+				SaveMessageDatabase();
 				continue;
 			}
 
@@ -299,6 +301,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		conn->FBBIndex = 0;		// ready for next block;
 		conn->FBBChecksum = 0;
+
 
 		if (AllRejected && conn->RMSExpress)
 		{
@@ -393,7 +396,18 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (ptr == NULL) goto badparam;
 
-		if (strlen(ptr) > 6 ) goto badparam;
+		if (strlen(ptr) > 6)
+		{
+			// Temp fix - reject instead of breaking connection
+		
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+			Logprintf(LOG_BBS, conn, '?', "Message Rejected as TO field too long");
+
+			user->Total.MsgsRejectedIn[Index]++;
+			return;
+		}
+
 		strlop(ptr, '-');						// Remove any (illegal) ssid
 
 		strcpy(FBBHeader->To, ptr);
@@ -723,12 +737,11 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 			}
 
 			FBBHeader->FwdMsg->Locked = 0;	// Unlock
-
 			conn->UserPointer->ForwardingInfo->MsgCount--;
 		}
 	}
 	memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
-
+	SaveMessageDatabase();
 }
 
 

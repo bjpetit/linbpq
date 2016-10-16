@@ -88,6 +88,10 @@
 //	Fix buffer overrun introduced in 1.0.12.1 
 //	Fix saving Alert and Keyword filenames
 
+//	Version 1.0.x
+
+//	Add popup if keywords file can't be found
+
 #define _USE_32BIT_TIME_T
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -446,7 +450,17 @@ VOID GetKeyWordFile()
 	char * KeyWordFile;
 
 	if (_wstat(KeyWordsName, &STAT) == -1)
+	{
+		if (UseKeywords)
+		{
+			TCHAR Dir[MAX_PATH];
+			TCHAR Msg[512];
+			GetCurrentDirectory(MAX_PATH, Dir);
+			wsprintf(Msg, L"Couldn't find file %s in %s", KeyWordsName, Dir);
+			MessageBox(NULL, Msg, L"BPQTermTCP", MB_OK);
+		}
 		return;
+	}
 
 	FileSize = STAT.st_size;
 

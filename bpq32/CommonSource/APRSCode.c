@@ -4224,6 +4224,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		return;
 
 	case '$':					// NMEA
+		Debugprintf(Payload);
 		break;
 
 	case ')':					// Item	
