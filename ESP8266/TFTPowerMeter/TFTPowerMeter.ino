@@ -39,7 +39,7 @@ WiFiUDP udp;
 
 // Left Solar, Right Solar, Dougen, Domestic, Engine, Thruster
 
-Adafruit_INA219 ina219[6] = {0x40, 0x41, 0x44, 0x4C , 0x46, 0x4a};
+Adafruit_INA219 ina219[6] = {0x40, 0x41, 0x44, 0x4C , 0x4d, 0x4e};
 
 // For ESP8266
 
@@ -97,7 +97,13 @@ void setup()
   Serial.println(F("\nTFT Power Meter"));
 
   httpUpdater.setup(&httpServer);
+
+  httpServer.on("/", handleRoot);
+//  httpServer.onNotFound(handleNotFound);
+
   httpServer.begin();
+
+  
 
   Serial.println(F("\nWeb Updater ready"));
   tft.println(F("Updater ready"));
@@ -118,6 +124,7 @@ void setup()
       Serial.println(address, HEX);
       tft.print(F("i2c device at Address 0x"));
       tft.println(address, HEX);
+      yield();
     }
     else if (error == 4)
     {
@@ -125,6 +132,7 @@ void setup()
       Serial.println(address, HEX);
       tft.print(F("i2c Error at Address 0x"));
       tft.println(address, HEX);
+      yield();
     }
   }
 
@@ -167,9 +175,9 @@ void setup()
   {
     Serial.println(F("Connecting to wifi Hilton"));
     WiFi.begin("Hilton", "gb7bpqgb7bpq");
-	tft.println(F("Wifi connect Hilton"));
-	IPAddr.fromString("192.168.1.64");
-	count = 0;
+    tft.println(F("Wifi connect Hilton"));
+    IPAddr.fromString("192.168.1.64");
+    count = 0;
 
     while (WiFi.status() != WL_CONNECTED)
     {
@@ -220,11 +228,12 @@ double shuntR[6] = {0.1, 0.1, 0.1, 0.001, .001, .00075};
 double busV[6], shuntV[6];
 double I[6];
 
+char Line[256];
 
 void loop(void)
 {
   int rawBus[8], rawShunt[8];
-  char Line[256];
+
   int n;
   unsigned long start = micros();
 
@@ -265,8 +274,8 @@ void loop(void)
   if (I[1] < 0) I[1] = 0;
 
 
- // Serial.print("read and print took ");
- // Serial.println(micros() - start);
+  // Serial.print("read and print took ");
+  // Serial.println(micros() - start);
   //  delay(1000);
 
   start = micros();
@@ -285,9 +294,9 @@ void loop(void)
         index = 0;
     }
     tft.drawFastHLine(40, 100, 400, ILI9340_BLUE),
-                      tft.drawFastHLine(40, 200, 400, ILI9340_BLUE),
-                      tft.drawFastHLine(40, 300, 400, ILI9340_BLUE),
-                      delay(1000);
+    tft.drawFastHLine(40, 200, 400, ILI9340_BLUE),
+    tft.drawFastHLine(40, 300, 400, ILI9340_BLUE),
+    delay(1000);
   }
   else
   {
@@ -380,8 +389,8 @@ void loop(void)
       }
     }
   }
- // Serial.print("Touch took ");
-//  Serial.println(micros() - start);
+  // Serial.print("Touch took ");
+  //  Serial.println(micros() - start);
   //  delay(1000);
 
 }
@@ -393,4 +402,25 @@ void SendUDP(IPAddress & address, char * packetBuffer, int len)
   Serial.print(udp.endPacket());
   Serial.print(packetBuffer);
 }
+
+void handleRoot()
+{
+  httpServer.send(200, "text/plain", Line);
+}
+/*
+void handleNotFound(){
+  String message = "File Not Found\n\n";
+  message += "URI: ";
+  message += httpServer.uri();
+  message += "\nMethod: ";
+  message += (httpServer.method() == HTTP_GET)?"GET":"POST";
+  message += "\nArguments: ";
+  message += httpServer.args();
+  message += "\n";
+  for (uint8_t i=0; i<httpServer.args(); i++){
+    message += " " + httpServer.argName(i) + ": " + httpServer.arg(i) + "\n";
+  }
+  httpServer.send(404, "text/plain", message);
+}
+*/
 
