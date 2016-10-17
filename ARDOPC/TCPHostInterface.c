@@ -120,7 +120,7 @@ void SendCommandToHost(char * strText)
 		ret = send(TCPControlSock, bytToSend, len, 0);
 		ret = WSAGetLastError();
 
-		if (CommandTrace) Debugprintf(" Command Trace TO Host  c:%s", strText);
+		if (CommandTrace) WriteDebugLog(" Command Trace TO Host  c:%s", strText);
 		return;
 	}
 	return;
@@ -151,7 +151,7 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 	if (blnInitializing)
 		return;
 
-	if (CommandTrace) Debugprintf("[AddTagToDataAndSendToHost] bytes=%d Tag %s", Len, strTag);
+	if (CommandTrace) WriteDebugLog("[AddTagToDataAndSendToHost] bytes=%d Tag %s", Len, strTag);
 
 	//	Have to save copy for possible retry (and possibly until previous 
 	//	command is acked
@@ -293,7 +293,7 @@ loop:
 
 	// Getting bad data ?? Should we just reset ??
 	
-	Debugprintf("ARDOP BadHost Message ?? %s", ARDOPBuffer);
+	WriteDebugLog("ARDOP BadHost Message ?? %s", ARDOPBuffer);
 	return;
 }
 
@@ -422,7 +422,7 @@ SOCKET OpenSocket4(int port)
 
 		if (bind( sock, (struct sockaddr *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 		{
-			Debugprintf("bind(sock) failed port %d Error %d", port, WSAGetLastError());
+			WriteDebugLog("bind(sock) failed port %d Error %d", port, WSAGetLastError());
 
 		    closesocket(sock);
 			return FALSE;
@@ -430,7 +430,7 @@ SOCKET OpenSocket4(int port)
 
 		if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
 		{
-			Debugprintf("listen(sock) failed port %d Error %d", port, WSAGetLastError());
+			WriteDebugLog("listen(sock) failed port %d Error %d", port, WSAGetLastError());
 			return FALSE;
 		}
 		ioctl(sock, FIONBIO, &param);
@@ -448,7 +448,7 @@ BOOL HostInit()
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
 #endif
 
-	Debugprintf("ARDOPC listening on port %d", port);
+	WriteDebugLog("ARDOPC listening on port %d", port);
 //	InitQueue();
 
 	ListenSock = OpenSocket4(port);
@@ -481,7 +481,7 @@ void HostPoll()
 	if (ret == -1)
 	{
 		ret = WSAGetLastError();
-		Debugprintf("%d ", ret);
+		WriteDebugLog("%d ", ret);
 		perror("listen select");
 	}
 	else
@@ -494,10 +494,10 @@ void HostPoll()
 	    
 				if (TCPControlSock == INVALID_SOCKET)
 				{
-					Debugprintf("accept() failed error %d", WSAGetLastError());
+					WriteDebugLog("accept() failed error %d", WSAGetLastError());
 					return;
 				}
-				Debugprintf("Connected to host");
+				WriteDebugLog("Connected to host");
 					
 				ioctl(TCPControlSock, FIONBIO, &param);
 				CONNECTED = TRUE;
@@ -516,7 +516,7 @@ void HostPoll()
 	if (ret == -1)
 	{
 		ret = WSAGetLastError();
-		Debugprintf("%d ", ret);
+		WriteDebugLog("%d ", ret);
 		perror("listen select");
 	}
 	else
@@ -529,10 +529,10 @@ void HostPoll()
 	    
 				if (TCPDataSock == INVALID_SOCKET)
 				{
-					Debugprintf("accept() failed error %d", WSAGetLastError());
+					WriteDebugLog("accept() failed error %d", WSAGetLastError());
 					return;
 				}
-				Debugprintf("Connected to host");
+				WriteDebugLog("Connected to host");
 					
 				ioctl(TCPDataSock, FIONBIO, &param);
 				DATACONNECTED = TRUE;
@@ -556,7 +556,7 @@ void HostPoll()
 
 	if (ret == SOCKET_ERROR)
 	{
-		Debugprintf("Data Select failed %d ", WSAGetLastError());
+		WriteDebugLog("Data Select failed %d ", WSAGetLastError());
 		goto Lost;
 	}
 	if (ret > 0)
@@ -573,7 +573,7 @@ void HostPoll()
 		if (FD_ISSET(TCPControlSock, &errorfs))
 		{
 Lost:	
-			Debugprintf("TCP Connection lost");
+			WriteDebugLog("TCP Connection lost");
 			
 			CONNECTED = FALSE;
 
@@ -599,7 +599,7 @@ Lost:
 
 	if (ret == SOCKET_ERROR)
 	{
-		Debugprintf("Data Select failed %d ", WSAGetLastError());
+		WriteDebugLog("Data Select failed %d ", WSAGetLastError());
 		goto DCLost;
 	}
 	if (ret > 0)
@@ -616,7 +616,7 @@ Lost:
 		if (FD_ISSET(TCPDataSock, &errorfs))
 		{
 DCLost:	
-			Debugprintf("TCP Connection lost");
+			WriteDebugLog("TCP Connection lost");
 			
 			DATACONNECTED = FALSE;
 
@@ -668,7 +668,7 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 	Q = (UINT *) PQ;
 
 //	if (Semaphore.Flag == 0)
-//		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
+//		WriteDebugLog("Q_REM called without semaphore from %s Line %d", File, Line);
 
 	first = (UINT *)Q[0];
 
@@ -688,7 +688,7 @@ UINT _ReleaseBuffer(VOID *pBUFF, char * File, int Line)
 	int n = 0;
 
 //	if (Semaphore.Flag == 0)
-//		Debugprintf("ReleaseBuffer called without semaphore from %s Line %d", File, Line);
+//		WriteDebugLog("ReleaseBuffer called without semaphore from %s Line %d", File, Line);
 
 	pointer = (UINT *)FREE_Q;
 
@@ -713,7 +713,7 @@ int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 	Q = (UINT *) PQ;
 
 //	if (Semaphore.Flag == 0)
-//		Debugprintf("C_Q_ADD called without semaphore from %s Line %d", File, Line);
+//		WriteDebugLog("C_Q_ADD called without semaphore from %s Line %d", File, Line);
 
 
 	BUFF[0]=0;							// Clear chain in new buffer
@@ -751,7 +751,7 @@ int C_Q_COUNT(VOID *PQ)
 		count++;
 		if ((count + QCOUNT) > MAXBUFFS)
 		{
-			Debugprintf("C_Q_COUNT Detected corrupt Q %p len %d", PQ, count);
+			WriteDebugLog("C_Q_COUNT Detected corrupt Q %p len %d", PQ, count);
 			return count;
 		}
 		Q = (UINT *)*Q;
@@ -767,7 +767,7 @@ VOID * _GetBuff(char * File, int Line)
 //	FindLostBuffers();
 
 //	if (Semaphore.Flag == 0)
-//		Debugprintf("GetBuff called without semaphore from %s Line %d", File, Line);
+//		WriteDebugLog("GetBuff called without semaphore from %s Line %d", File, Line);
 
 	if (Temp)
 	{
@@ -778,7 +778,7 @@ VOID * _GetBuff(char * File, int Line)
 
 	}
 	else
-		Debugprintf("Warning - Getbuff returned NULL");
+		WriteDebugLog("Warning - Getbuff returned NULL");
 
 	return Temp;
 }

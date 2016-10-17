@@ -2,7 +2,7 @@
 
 #include "ARDOPC.h"
 
-#pragma warning(disable : 4244)		// Code does lots of int float to int
+#pragma warning(disable : 4244)		// Code does lots of float to int
 
 #define MEMORYARQ
 
@@ -700,6 +700,9 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 	//Dim bytNoRS(1 + intDataLen + 2 - 1) As Byte  ' 1 byte byte Count, Data, 2 byte CRC 
 	//Array.Copy(bytRawData, 0, bytNoRS, 0, bytNoRS.Length)
 
+	if (CarrierOk[Carrier] && CarrierOk[Carrier] != 1)
+		CarrierOk[Carrier] = CarrierOk[Carrier];
+
 	if (CarrierOk[Carrier])	// Already decoded this carrier?
 	{
 		// Athough we have already checked the data, it may be in the wrong place
@@ -798,6 +801,9 @@ void ProcessNewSamples(short * Samples, int nSamples)
 //	LookforUZ7HOLeader(Samples, nSamples);
 
 //	return;
+
+	if (CarrierOk[0] != 0 && CarrierOk[0] != 1)
+		Msg[0] =0;
 
 //	printtick("Start Busy");
 	if (State == SearchingForLeader)
@@ -1075,7 +1081,11 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	{
 		// Call DemodulateFrame for each set of samples
 
+
 		DemodulateFrame(intFrameType);
+
+		if (CarrierOk[0] != 0 && CarrierOk[0] != 1)
+			CarrierOk[0] = 0;
 
 		if (State == AcquireFrame)
 
@@ -1175,6 +1185,8 @@ ProcessFrame:
 						intGoodPSKFrameDataDecodes++;
 					else if (strstr (strMod, "QAM"))
 						intGoodQAMFrameDataDecodes++;
+					else	
+						intGoodFSKFrameDataDecodes++;
 
  			if (ProtocolMode == FEC)
 			{
@@ -1215,6 +1227,8 @@ ProcessFrame:
 						intFailedPSKFrameDataDecodes++;
 					else if (strstr (strMod, "QAM"))
 						intFailedQAMFrameDataDecodes++;
+					else
+						intFailedFSKFrameDataDecodes++;
 
 
             // Debug.WriteLine("[DecodePSKData2] bytPass = " & Format(bytPass, "X"))
@@ -1668,7 +1682,7 @@ BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetH
 	float dblLeftR[3], dblLeftI[3], dblRightR[3], dblRightI[3];
 	int i;
 	int Ptr = 0;
-	float dblAvgNoisePerBin, dblCoarsePwrSN, dblBinAdj1475, dblBinAdj1525, dblCoarseOffset;
+	float dblAvgNoisePerBin, dblCoarsePwrSN, dblBinAdj1475, dblBinAdj1525, dblCoarseOffset = 1000;
 	float dblTrialOffset, dblPowerEarly, dblSNdBPwrEarly;
 
 	if ((Length) < 960)
@@ -1676,7 +1690,7 @@ BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetH
 
 	// Compute the start and stop bins based on the tuning range Each bin is 12000/960 or 12.5 Hz/bin
      
-	if ((Now - dttLastGoodFrameTypeDecod > 20000) && TuningRange > 0)
+	if ((Now - dttLastGoodFrameTypeDecode > 20000) && TuningRange > 0)
 	{
 		// this is the full search over the full tuning range selected.  Uses more CPU time and with possibly larger deviation once connected. 
 		
@@ -1872,7 +1886,7 @@ BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetH
         
 		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
 		{
-			if (dblBinInterpLeft + dblBinInterpLeft > 0)  // consider different bounding below
+			if (dblBinInterpLeft + dblBinInterpRight > 0)  // consider different bounding below
 				*dblOffsetHz = dblTrialOffset + min((dblBinInterpLeft + dblBinInterpRight) * 6.25f, 3); // average left and right, adjustment bounded to +/- 3Hz max
 			else
 				*dblOffsetHz = dblTrialOffset + max((dblBinInterpLeft + dblBinInterpRight) * 6.25f, -3);
@@ -2421,7 +2435,7 @@ int Acquire4FSKFrameType()
 		Update4FSKConstellation(&intToneMags[0][0], &intLastRcvdFrameQuality);
 
 	if (AccumulateStats)
-		if (Acquire4FSKFrameType > 0)
+		if (NewType >= 0)
 			intGoodFSKFrameTypes++;
 		else
 			intFailedFSKFrameTypes++;
@@ -3068,7 +3082,7 @@ BOOL Decode4FSKConReq()
 
 	// Modified May 24, 2015 to use RS encoding vs CRC (similar to ID Frame)
  
-	FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+	FrameOK = RSDecode(bytFrameData1, 16, 4, &blnRSOK);
 
 	if (FrameOK && blnRSOK == FALSE)
 	{
@@ -3076,7 +3090,7 @@ BOOL Decode4FSKConReq()
 
 		WriteDebugLog("CONREQ Frame Corrected by RS");
 
-		FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+		FrameOK = RSDecode(bytFrameData1, 16, 4, &blnRSOK);
 
 		// Should now be OK without connections, if not RS didn't fix it
 
@@ -3156,7 +3170,7 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 	BOOL blnRSOK;
 	BOOL FrameOK;
 
-	FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+	FrameOK = RSDecode(bytFrameData1, 16, 4, &blnRSOK);
 
 	if (FrameOK && blnRSOK == FALSE)
 	{
@@ -3164,7 +3178,7 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 
 		WriteDebugLog("ID Frame Corrected by RS");
 
-		FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+		FrameOK = RSDecode(bytFrameData1, 16, 4, &blnRSOK);
 
 		// Should now be OK without connections, if not RS didn't fix it
 
@@ -3436,6 +3450,9 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 	//DataACK/NAK and short control frames 
 
+	if (CarrierOk[0] != 0 && CarrierOk[0] != 1)
+		CarrierOk[0] = 0;
+
 
 	if ((intFrameType >= 0 && intFrameType <= 0x1F) || intFrameType >= 0xE0) // DataACK/NAK
 	{
@@ -3452,6 +3469,9 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 	}
 
 	totalRSErrors = 0;
+			
+	if (CarrierOk[0] != 0 && CarrierOk[0] != 1)
+		CarrierOk[0] = 0;
 
 	WriteDebugLog("DecodeFrame MEMARQ Flags %d %d %d %d %d %d %d %d",
 		CarrierOk[0], CarrierOk[1], CarrierOk[2], CarrierOk[3],
@@ -4022,8 +4042,10 @@ VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier)
 #endif
 
 	if (CarrierOk[Carrier])	// Already decoded this carrier?
+	{
+		pskStart+= intPSKMode;
 		return;							// don't do it again
-
+	}
 	// Phase Samples are in intPhases
 
 	switch (intPSKMode)
@@ -4213,6 +4235,10 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 	int intAccOffsetCnt = 0, intAccOffsetCntBeginning = 0, intAccOffsetCntEnd = 0;
 	int	intAccOffsetBeginning = 0, intAccOffsetEnd = 0, intAccOffset = 0;
     int intPSKMode;
+
+	if (CarrierOk[0] && CarrierOk[0] != 1)
+		CarrierOk[0] = CarrierOk[0];
+
 	
 	if (strcmp(strMod, "8PSK") == 0 || strcmp(strMod, "16QAM") == 0)
 		intPSKMode = 8;
@@ -4286,6 +4312,9 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 				intAvgOffset, intAccOffsetCnt, intPhaseLength);
 
 	}
+	if (CarrierOk[0] && CarrierOk[0] != 1)
+		CarrierOk[0] = CarrierOk[0];
+
 }
 
 // Function to Decode one Carrier of 16QAM modulation 

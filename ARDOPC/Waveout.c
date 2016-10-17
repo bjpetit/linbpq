@@ -40,6 +40,16 @@ char PlaybackDevice[80] = "0"; //"1";
 char * CaptureDevices = NULL;
 char * PlaybackDevices = NULL;
 
+int CaptureCount = 0;
+int PlaybackCount = 0;
+
+int CaptureIndex = -1;		// Card number
+int PlayBackIndex = -1;
+
+
+char CaptureNames[16][MAXPNAMELEN + 2]= {""};
+char PlaybackNames[16][MAXPNAMELEN + 2]= {""};
+
 WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 12000, 12000, 2, 16, 0 };
 
 HWAVEOUT hWaveOut = 0;
@@ -96,7 +106,7 @@ void main(int argc, char * argv[])
 
 	t = timeGetTime();
 
-	Debugprintf("ARDOPC Version %s", ProductVersion);
+	WriteDebugLog("ARDOPC Version %s", ProductVersion);
 
 	if (argc > 1)
 		port = atoi(argv[1]);
@@ -105,6 +115,8 @@ void main(int argc, char * argv[])
 	{
 		strcpy(CaptureDevice, argv[2]);
 		strcpy(PlaybackDevice, argv[3]);
+		_strupr(CaptureDevice);
+		_strupr(PlaybackDevice);
 	}
 
 	QueryPerformanceFrequency(&Frequency);
@@ -184,16 +196,16 @@ short * SendtoCard(unsigned short * buf, int n)
 
 void GetSoundDevices()
 {
-	int count, i;
+	int i;
 
-	Debugprintf("Capture Devices");
+	WriteDebugLog("Capture Devices");
 
-	count = waveInGetNumDevs();
+	CaptureCount = waveInGetNumDevs();
 
-	CaptureDevices = malloc((MAXPNAMELEN + 2) * count);
+	CaptureDevices = malloc((MAXPNAMELEN + 2) * CaptureCount);
 	CaptureDevices[0] = 0;
 	
-	for (i = 0; i < count; i++)
+	for (i = 0; i < CaptureCount; i++)
 	{
 		waveInOpen(&hWaveIn, i, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 		waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
@@ -201,18 +213,19 @@ void GetSoundDevices()
 		if (CaptureDevices)
 			strcat(CaptureDevices, ",");
 		strcat(CaptureDevices, pwic.szPname);
-		Debugprintf("%d %s", i, pwic.szPname);
-		waveInClose(hWaveIn);
+		WriteDebugLog("%d %s", i, pwic.szPname);
+		memcpy(&CaptureNames[i][0], pwic.szPname, MAXPNAMELEN);
+		_strupr(&CaptureNames[i][0]);
 	}
 
-	Debugprintf("Playback Devices");
+	WriteDebugLog("Playback Devices");
 
-	count = waveOutGetNumDevs();
+	PlaybackCount = waveOutGetNumDevs();
 
-	PlaybackDevices = malloc((MAXPNAMELEN + 2) * count);
+	PlaybackDevices = malloc((MAXPNAMELEN + 2) * PlaybackCount);
 	PlaybackDevices[0] = 0;
 
-	for (i = 0; i < count; i++)
+	for (i = 0; i < PlaybackCount; i++)
 	{
 		waveOutOpen(&hWaveOut, i, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 		waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
@@ -220,36 +233,72 @@ void GetSoundDevices()
 		if (PlaybackDevices[0])
 			strcat(PlaybackDevices, ",");
 		strcat(PlaybackDevices, pwoc.szPname);
-		Debugprintf("%i %s", i, pwoc.szPname);
+		WriteDebugLog("%i %s", i, pwoc.szPname);
+		memcpy(&PlaybackNames[i][0], pwoc.szPname, MAXPNAMELEN);
+		_strupr(&PlaybackNames[i][0]);
 		waveOutClose(hWaveOut);
 	}
 }
 
+
 void InitSound(BOOL Report)
 {
-	int ret;
+	int i, ret;
 
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
 
-    ret = waveOutOpen(&hWaveOut, atoi(PlaybackDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+	if (strlen(PlaybackDevice) <= 2)
+		PlayBackIndex = atoi(PlaybackDevice);
+	else
+	{
+		// Name instead of number. Look for a substring match
+
+		for (i = 0; i < PlaybackCount; i++)
+		{
+			if (strstr(&PlaybackNames[i][0], PlaybackDevice))
+			{
+				PlayBackIndex = i;
+				break;
+			}
+		}
+	}
+
+    ret = waveOutOpen(&hWaveOut, PlayBackIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+
 	if (ret)
-		Debugprintf("Failed to open WaveOut Device %s Error %d", PlaybackDevice, ret);
+		WriteDebugLog("Failed to open WaveOut Device %s Error %d", PlaybackDevice, ret);
 	else
 	{
 		ret = waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
 		if (Report)
-			Debugprintf("Opened WaveOut Device %s", pwoc.szPname);
+			WriteDebugLog("Opened WaveOut Device %s", pwoc.szPname);
 	}
 
-    ret = waveInOpen(&hWaveIn, atoi(CaptureDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+	if (strlen(CaptureDevice) <= 2)
+		CaptureIndex = atoi(CaptureDevice);
+	else
+	{
+		// Name instead of number. Look for a substring match
+
+		for (i = 0; i < CaptureCount; i++)
+		{
+			if (strstr(&CaptureNames[i][0], CaptureDevice))
+			{
+				CaptureIndex = i;
+				break;
+			}
+		}
+	}
+
+    ret = waveInOpen(&hWaveIn, CaptureIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 	if (ret)
-		Debugprintf("Failed to open WaveIn Device %s Error %d", CaptureDevice, ret);
+		WriteDebugLog("Failed to open WaveIn Device %s Error %d", CaptureDevice, ret);
 	else
 	{
 		ret = waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
 		if (Report)
-			Debugprintf("Opened WaveIn Device %s", pwic.szPname);
+			WriteDebugLog("Opened WaveIn Device %s", pwic.szPname);
 	}
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
@@ -368,9 +417,13 @@ VOID WriteDebugLog(const char * format, ...)
 				"ARDOPDebug", st.wYear, st.wMonth, st.wDay);
 	
 	if (logfile == NULL)
-		if ((logfile = fopen(Value, "ab")) == NULL)
-		return;
+	{
+		sprintf(Value, "%s_%04d%02d%02d.log",
+				"ARDOPDebug", st.wYear, st.wMonth, st.wDay);
 
+		if ((logfile = fopen(Value, "ab")) == NULL)
+			return;
+	}
 	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
 		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 
@@ -384,9 +437,9 @@ VOID WriteExceptionLog(const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
-	char timebuf[128];
+	char timebuf[32];
 	UCHAR Value[100];
-	FILE *logfile;
+	FILE *logfile = NULL;
 	SYSTEMTIME st;
 	
 	va_start(arglist, format);
@@ -413,34 +466,35 @@ VOID WriteExceptionLog(const char * format, ...)
 	return;
 }
 
-VOID Debugprintf(const char * format, ...)
-{
-	char Mess[10000];
-	va_list(arglist);
-
-	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
-
-	printf(Mess);
-//	WriteLog(Mess, "ARDOPDebug");
-
-	return;
-}
-
-
 VOID Statsprintf(const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
+	UCHAR Value[100];
+	char timebuf[32];
+	FILE *logfile = NULL;
+	SYSTEMTIME st;
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 
-	printf(Mess);
-//	WriteLog(Mess, "ARDOPSession");
+	GetSystemTime(&st);
+	sprintf(Value, "%s_%04d%02d%02d.log",
+		"ARDOPSession", st.wYear, st.wMonth, st.wDay);
 
+	if ((logfile = fopen(Value, "ab")) == NULL)
+		return;
+
+	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
+	st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+
+	fputs(timebuf, logfile);
+	fputs(Mess, logfile);
+	
+	printf(Mess);
+
+	fclose(logfile);
 	return;
 }
 
@@ -468,7 +522,7 @@ void SoundFlush()
 	if (Loopback)
 		ProcessNewSamples(buffer[Index], Number);
 
-	SendtoCard(buffer[Index], Number * 2);
+	SendtoCard(buffer[Index], Number);
 
 	//	Wait for all sound output to complete
 	

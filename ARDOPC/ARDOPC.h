@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.7.2.1-BPQ"
+#define ProductVersion "0.8.1.0-BPQ"
 
 //	Sound interface buffer size
 
@@ -66,6 +66,9 @@ typedef unsigned char UCHAR;
 #define False 0
 #define True 1
 
+#define False 0
+#define True 1
+
 BOOL KeyPTT(BOOL State);
 
 UCHAR FrameCode(char * strFrameName);
@@ -123,6 +126,15 @@ BOOL CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType);
 char * strlop(char * buf, char delim);
 void QueueCommandToHost(char * Cmd);
 void LogStats();
+int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, BOOL blnInitialize);
+void SendData();
+int ComputeInterFrameInterval(int intRequestedIntervalMS);
+int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
+VOID WriteExceptionLog(const char * format, ...);
+void SaveQueueOnBreak();
+VOID Statsprintf(const char * format, ...);
+VOID CloseDebugLog();
+
 
 #ifdef WIN32
 void ProcessNewSamples(short * Samples, int nSamples);
@@ -267,7 +279,10 @@ struct SessionStats
 #define ConRejBusy 0x2D
 #define ConRejBW 0x2E
 
-
+#define ConAck200 0x39
+#define ConAck500 0x3A
+#define ConAck1000 0x3C
+#define ConAck2000 0x3C
 
 extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
 extern short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
@@ -311,7 +326,7 @@ extern int dttStartRTMeasure;
 
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
-extern const char strFrameType[256][16];
+extern const char strFrameType[256][18];
 extern BOOL Capturing;
 extern BOOL SoundIsPlaying;
 extern int blnLastPTT;
@@ -418,11 +433,15 @@ extern int intQAMSymbolsDecoded;
 extern int intQAMSymbolCnt;
 extern int intGoodQAMFrameDataDecodes;
 extern int intFailedQAMFrameDataDecodes;
+extern int intGoodQAMSummationDecodes;
 
 extern int dttLastBusyOn;
 extern int dttLastBusyOff;
 extern int dttLastLeaderDetect;
 
+extern int LastBusyOn;
+extern int LastBusyOff;
+extern int dttLastLeaderDetect;
 
 // Has to follow enum defs
 

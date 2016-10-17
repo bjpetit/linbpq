@@ -80,7 +80,7 @@ void QueueCommandToHost(char * Cmd)
 		state = 0;
 	}
 
-	Debugprintf("Command to Host %s", Cmd);
+	WriteDebugLog("Command to Host %s", Cmd);
 }
 
 void SendCommandToHost(char * Cmd)
@@ -93,7 +93,7 @@ void SendCommandToHost(char * Cmd)
 		state = 0;
 	}
 
-	Debugprintf("Command to Host %s", Cmd);
+	WriteDebugLog("Command to Host %s", Cmd);
 }
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
@@ -109,7 +109,7 @@ void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 	else
 	{
 		Msg[Len] = 0;
-		Debugprintf("RX Data %s %s", Type, Msg);
+		WriteDebugLog("RX Data %s %s", Type, Msg);
 	}
 }
 
@@ -355,14 +355,14 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		goto AckIt;
 	}
 
-//	Debugprintf("%c", Buffer[3]);
+//	WriteDebugLog("%c", Buffer[3]);
 
 	switch (Buffer[3])
 	{
 	case 'J':				// JHOST
 
 		MODE = FALSE;
-		Debugprintf("Exit Host Mode");
+		WriteDebugLog("Exit Host Mode");
 		return;
 
 	case 'L':
@@ -525,7 +525,7 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 
 	// We can probably just dump anything but JHOST 4 and Callsign
 
-	Debugprintf("SCS Command %s", Command);
+	WriteDebugLog("SCS Command %s", Command);
 
 	if (Len == 1)
 		goto SendPrompt;		// Just a CR
@@ -540,7 +540,7 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	if (_memicmp(Command, "JHOST4", 6) == 0)
 	{
 		MODE = TRUE;
-		Debugprintf("Entering Host Mode");
+		WriteDebugLog("Entering Host Mode");
 		Toggle = 0;
 		blnAbort = TRUE;			// Reset ARDOP 
 
@@ -752,7 +752,7 @@ Loop:
 		if (strlen(rxbuffer) < Length)
 		{
 			RXBPtr = 0;
-			Debugprintf("cancelling input %d %d", strlen(rxbuffer), Length);
+			WriteDebugLog("cancelling input %d %d", strlen(rxbuffer), Length);
 			return;
 		}
 		ptr = strchr(rxbuffer, 13);

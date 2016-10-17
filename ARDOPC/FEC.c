@@ -54,7 +54,7 @@ BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL
 	{
 		AddDataToDataToSend(bytData, Len);	// add new data to queue
 
-		if (DebugLog) Debugprintf("[ARDOPprotocol.StartFEC] %d bytes received while in FECSend state...append to data to send.", Len);
+		WriteDebugLog("[ARDOPprotocol.StartFEC] %d bytes received while in FECSend state...append to data to send.", Len);
 		return TRUE;
 	}
 	else
@@ -64,7 +64,7 @@ BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL
 
 	if (Len == 0 && bytDataToSendLength == 0)
 	{
-		if (DebugLog) Debugprintf("[ARDOPprotocol.StartFEC] No data to send!");
+		WriteDebugLog("[ARDOPprotocol.StartFEC] No data to send!");
 		return FALSE;
 	}
 

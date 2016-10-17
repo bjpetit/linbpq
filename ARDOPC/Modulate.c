@@ -117,7 +117,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
+	WriteDebugLog("Sending Frame Type %s", strType);
 
 	if (intBaud == 50)
 		initFilter(200);
@@ -302,7 +302,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "8FSK") != 0)
 		return;
 
-	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
+	WriteDebugLog("Sending Frame Type %s", strType);
 
 	initFilter(200);
 
@@ -377,7 +377,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 	if (strcmp(strMod, "16FSK") != 0)
 		return;
 
-	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
+	WriteDebugLog("Sending Frame Type %s", strType);
 
 	initFilter(500);
 
@@ -445,7 +445,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
+	WriteDebugLog("Sending Frame Type %s", strType);
 
 	initFilter(2000);
 
@@ -527,7 +527,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
 
-	if (DebugLog) Debugprintf("Sending Frame Type %s", strType);
+	WriteDebugLog("Sending Frame Type %s", strType);
 
 	if (intNumCar == 1)
 		initFilter(200);

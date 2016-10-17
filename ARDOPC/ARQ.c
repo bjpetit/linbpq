@@ -77,6 +77,9 @@ UCHAR bytCurrentFrameType = 0;	// The current frame type used for sending
 UCHAR * bytFrameTypesForBW;		// Holds the byte array for Data modes for a session bandwidth. First are most robust, last are fastest
 int bytFrameTypesForBWLength = 0;
 
+UCHAR * bytShiftUpThresholds;
+int bytShiftUpThresholdsLength;
+
 BOOL blnPending;
 unsigned int dttTimeoutTrip;
 int intLastARQDataFrameToHost;
@@ -105,7 +108,8 @@ int intFrameRepeatInterval;
 extern int intLeaderRcvdMs;	
 
 int intTrackingQuality;
-int intNAKctr;
+int intNAKctr = 0;
+int intACKctr = 0;
 UCHAR bytLastACKedDataFrameType;
 
 int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
@@ -625,8 +629,42 @@ UCHAR  * GetDataModes(int intBW)
 	return NoDataModes;
 }
 
-//  Subroutine to shift up to the next higher throughput or down to the next more robust data modes based on average reported quality 
+// Function to get Shift up thresholds by bandwidth for ARQ sessions
 
+static UCHAR byt200[] = {82, 85, 83, 76, 0};
+static UCHAR byt500[] = {82, 82, 82, 84, 75, 0};
+static UCHAR byt1000[] = {82, 82, 82, 77, 82, 80, 0}; //  ' Threshold for 8PSK 167 baud changed from 75 to 80 on rev 0.7.2.3
+static UCHAR byt2000[] = {82, 82, 82, 85, 86, 87, 80, 0}; //  Threshold for 8PSK 167 baud changed from 73 to 80 on rev 0.7.2.3
+static UCHAR byt2000FM[] = {90, 90, 75, 75, 73, 0};
+
+UCHAR * GetShiftUpThresholds(int intBW)
+{
+	//' Initial values determined by finding the following process: (all using Pink Gaussian Noise channel 0 to 3 KHz) 
+	//'       1) Find Min S:N that will give reliable (at least 4/5 tries) decoding at the fastest mode for the bandwidth.
+	//'       2) At that SAME S:N use the next fastest (more robust mode for the bandwidth)
+	//'       3) Over several frames average the Quality of the decoded frame in 2) above That quality value is the one that
+	//'       is then used as the shift up threshold for that mode. (note the top mode will never use a value to shift up).
+	//'       This might be adjusted some but should along with a requirement for two successive ACKs make a good algorithm
+
+	if (intBW == 200)
+		return byt200;
+
+	if (intBW == 500) 
+		return byt500;
+
+	if (intBW == 1000) 
+		return byt1000;
+
+	// default to 2000
+
+	if (TuningRange > 0  && !Use600Modes)
+		return byt2000;
+	else
+		return byt2000FM;
+}
+
+//  Subroutine to shift up to the next higher throughput or down to the next more robust data modes based on average reported quality 
+/*
 void Gearshift_7()
 {
 	// More complex mechanism to gear shift based on intAvgQuality, current state and bytes remaining.
@@ -759,7 +797,107 @@ void Gearshift_7()
 	else if (intShiftUpDn > 0)
 		intShiftUPs++;
 }
+*/
+void Gearshift_8()
+{
+	// More complex mechanism to gear shift based on intAvgQuality, current state and bytes remaining.
+	// This can be refined later with different or dynamic Trip points etc. 
+	// Revised Oct 8, 2016  Rev 0.7.2.2 to use intACKctr as well as intNAKctr and bytShiftUpThresholds using FrameInfo.GetShiftUpThresholds
 
+	char strOldMode[18] = "";
+	char strNewMode[18] = "";
+
+	int intBytesRemaining = bytDataToSendLength;
+
+	if (intFrameTypePtr > 0 && (intNAKctr >= 3 || (intNAKctr >= 2 && strstr(Name(bytFrameTypesForBW[intFrameTypePtr]), "FSK") == 0)))
+	{
+		// NAK threshold changed from 4 to 3 on rev 0.5.3.1, also less for PSK
+
+		strcpy(strOldMode, Name(bytFrameTypesForBW[intFrameTypePtr]));
+		strOldMode[strlen(strOldMode) - 2] = 0;
+		strcpy(strNewMode, Name(bytFrameTypesForBW[intFrameTypePtr - 1]));
+		strNewMode[strlen(strNewMode) - 2] = 0;
+
+ 		WriteDebugLog("[ARDOPprotocol.Gearshift_8] intNAKCtr= %d intNAKctr  Shift down from Frame type %s New Mode: %s", intNAKctr, strOldMode, strNewMode);
+		intShiftUpDn = -1;  // Shift down if 3 NAKs without ACK or 2 NAKs without an ACK from non FSK modes.
+		intAvgQuality; 		intNAKctr = 0;
+
+		intACKctr = 0;
+	}
+	else if (intAvgQuality > bytShiftUpThresholds[intFrameTypePtr] && intFrameTypePtr < (bytFrameTypesForBWLength - 1) && intACKctr >= 2)
+	{
+		// if above Hi Trip setup so next call of GetNextFrameData will select a faster mode if one is available 
+		
+		intShiftUpDn = 0;
+		
+		if (TuningRange == 0)
+		{
+			switch (intFrameTypePtr)
+			{
+			case 0:
+				
+				if (intBytesRemaining > 64)
+					intShiftUpDn = 2;
+				else if (intBytesRemaining > 32)
+					intShiftUpDn = 1;
+
+				break;
+
+			case 1:
+		
+				if (intBytesRemaining > 200)
+					intShiftUpDn = 2;
+				else if (intBytesRemaining > 64)
+					intShiftUpDn = 1;
+
+				break;
+ 
+			case 2:
+	
+				if (intBytesRemaining > 400)
+					intShiftUpDn = 2;
+				else if (intBytesRemaining > 200)
+					intShiftUpDn = 1;
+
+				break;
+
+			case 3:
+				
+				if (intBytesRemaining > 600) intShiftUpDn = 1;
+				break;
+		
+			case 4:
+				
+				if (intBytesRemaining > 512) intShiftUpDn = 1;
+				break;
+			}
+		}
+		else if (intSessionBW == 200)
+			intShiftUpDn = 1;
+		else if (intFrameTypePtr == 0 && intBytesRemaining > 32)
+			intShiftUpDn = 2;
+		else
+			intShiftUpDn = 1;
+
+
+		strcpy(strNewMode, Name(bytFrameTypesForBW[intFrameTypePtr + intShiftUpDn]));
+		strNewMode[strlen(strNewMode) - 2] = 0;
+	
+		WriteDebugLog("[ARDOPprotocol.Gearshift_8] ShiftUpDn = %d, AvgQuality=%d New Mode: %s",
+			intShiftUpDn, intAvgQuality, strNewMode);
+           
+		intAvgQuality = 0; // Clear intAvgQuality causing the first received Quality to become the new average
+		intNAKctr = 0;
+		intACKctr = 0;
+	}
+
+  	if (intShiftUpDn < 0)
+		intShiftDNs++;
+	else if (intShiftUpDn > 0)
+		intShiftUPs++;
+}
+
+/*
 void Gearshift_5x()
 {
 	//' More complex mechanism to gear shift based on intAvgQuality, current state and bytes remaining.
@@ -767,7 +905,6 @@ void Gearshift_5x()
 
 	int intTripHi = 79;		// Modified in revision 0.4.0 (was 82)
 	int intTripLow = 69;	// Modified in revision 0.4.0 (was 72)
-
 	int intBytesRemaining = bytDataToSendLength;
 
 	if (intNAKctr >= 5 && intFrameTypePtr > 0)	//  NAK threshold changed from 10 to 6 on rev 0.3.5.2
@@ -835,7 +972,7 @@ void Gearshift_5x()
 		WriteDebugLog("[ARDOPprotocol.Gearshift_5] ShiftUpDn = %d, AvgQuality=%d Resetting to %d New Mode: %s",
 			intShiftUpDn, intAvgQuality, (intTripHi + intTripLow) / 2, Name(bytFrameTypesForBW[intFrameTypePtr + intShiftUpDn]));
 	
-		intAvgQuality = (intTripHi + intTripLow) / 2;	 // init back to mid way
+		intAvgQuality = 0;	 // init back to mid way
 		intNAKctr = 0;
 	}
 	else if (intAvgQuality < intTripLow && intFrameTypePtr > 0)   // if below Low Trip setup so next call of GetNextFrameData will select a more robust mode if one is available 
@@ -878,7 +1015,7 @@ void Gearshift_5x()
 		WriteDebugLog("[ARDOPprotocol.Gearshift_5] ShiftUpDn = %d, AvgQuality=%d Resetting to %d New Mode: %s",
 			intShiftUpDn, intAvgQuality, (intTripHi + intTripLow) / 2, Name(bytFrameTypesForBW[intFrameTypePtr + intShiftUpDn]));
 			
-		intAvgQuality = (intTripHi + intTripLow) / 2;  // init back to mid way
+		intAvgQuality;  // init back to mid way
 		intNAKctr = 0;
 	}
 	
@@ -887,7 +1024,7 @@ void Gearshift_5x()
 //	else if (intShiftUpDn > 0)
 //		intShiftUPs++;
 }
-
+*/
 // Subroutine to provide exponential averaging for reported received quality from ACK/NAK to data frame.
 
 void ComputeQualityAvg(int intReportedQuality)
@@ -911,7 +1048,6 @@ void ComputeQualityAvg(int intReportedQuality)
 int GetNumCarriers(UCHAR bytFrameType)
 {
 	int intNumCar, dummy;
-	int blnOdd;
 	char strType[18];
 	char strMod[16];
 	
@@ -937,7 +1073,7 @@ void SendData()
 	{
 	case IDLE:
 
-		if (DebugLog) Debugprintf("[ARDOPProtocol.SendData] Sending Data from IDLE state! Exit SendData");
+		WriteDebugLog("[ARDOPProtocol.SendData] Sending Data from IDLE state! Exit SendData");
 		return;
 
 	case ISS:
@@ -1061,6 +1197,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 	if (blnInitialize)	//' Get the array of supported frame types in order of Most robust to least robust
 	{
 		bytFrameTypesForBW = GetDataModes(intSessionBW);
+		bytShiftUpThresholds = GetShiftUpThresholds(intSessionBW);
 
 		if (fastStart)
 			intFrameTypePtr = (bytFrameTypesForBWLength / 2) - 1;	// Start mid way
@@ -1154,7 +1291,7 @@ void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData)
 {
 	static char strLastStringPassedToHost[80] = "";
 	char strDisplay[128];
-	char * ToCall = bytData + strlen(bytData) + 1;
+	char * ToCall = strlop(bytData, ' ');
 	int Len;
 
 	if (!(intFrameType >= 0x31 && intFrameType <= 0x38))
@@ -1222,41 +1359,30 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
         
 		if (IsCallToMe(strCallsign, &bytPendingSessionID)) // (Handles protocol rules 1.2, 1.3)
 		{
-			//WriteDebugLog("[ProcessRcvdARQFrame]1 strCallsigns(0)=" & strCallsigns(0) & "  strCallsigns(1)=" & strCallsigns(1) & "  bytPendnigSessionID=" & Format(bytPendingSessionID, "X"))
-
-			// initial testing...just log Last Busy, Last Clear and Last Leader Detect  in ms
-
 			WriteDebugLog("[ProcessRcvdARQFrame] BusyBlock=%d Last Busy On=%d mS Last Busy Off=%d mS Last LeaderDetect=%d mS",
-					BusyBlock, Now - dttLastBusyOn, Now - dttLastBusyOff, Now - dttLastLeaderDetect);
-
-			
-			if (BusyBlock)
+					BusyBlock, Now - LastBusyOn, Now - LastBusyOff, Now - dttLastLeaderDetect);
+        
+			if (BusyBlock && (dttLastLeaderDetect - LastBusyOn) > 600 && (LastBusyOn - LastBusyOff) > 0)
 			{
-				int intLastBusyOffToLeader  = dttLastLeaderDetect - dttLastBusyOff;
-				int intLastBusyOnToLeader = dttLastLeaderDetect - dttLastBusyOn;
-				
-				if (intLastBusyOffToLeader < 1000 || intLastBusyOnToLeader < 1000)
-				{
-					// Experimental window of 1000 ms 9/20/2016
-					
-					WriteDebugLog("[ARDOPprotocol.ProcessRcvdARQFrame] ConReq from %s blocked by BusyBlock  LastBusyOff to Leader detect= %d ms",  strCallsign, intLastBusyOffToLeader);
+				//initial testing...log Last Busy, Last Clear and Last Leader Detect  in ms
 
-					EncLen = Encode4FSKControl(0x2e, bytPendingSessionID, bytEncodedBytes);
-					Mod4FSKDataAndPlay(0x2e, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+				WriteDebugLog("[ProcessRcvdARQFrame] Con Req Blocked by BUSY!  Last Busy On=%d, Last Busy Off=%d, Last LeaderDetect=%d",
+					Now - LastBusyOn, Now - LastBusyOff, Now - dttLastLeaderDetect);
 
+ 				EncLen = Encode4FSKControl(ConRejBusy, bytPendingSessionID, bytEncodedBytes);
+				Mod4FSKDataAndPlay(ConRejBusy, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
-					sprintf(HostCmd, "REJECTEDBUSY %s", strRemoteCallsign);
-					QueueCommandToHost(HostCmd);
-					sprintf(HostCmd, "STATUS ARQ CONNECTION REQUEST FROM %s REJECTED, CHANNEL BUSY.", strRemoteCallsign);
-					QueueCommandToHost(HostCmd);
+				sprintf(HostCmd, "REJECTEDBUSY %s", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				sprintf(HostCmd, "STATUS ARQ CONNECTION REQUEST FROM %s REJECTED, CHANNEL BUSY.", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
 
-					return;
-				}
+				return;
 			}
 
 			intReply = IRSNegotiateBW(intFrameType); // NegotiateBandwidth
 
-			if (intReply != 0x2E)	// If not ConRejBW the bandwidth is compatible so answer with correct ConAck frame
+			if (intReply != ConRejBW)	// If not ConRejBW the bandwidth is compatible so answer with correct ConAck frame
 			{
 				sprintf(HostCmd, "TARGET %s", strCallsign);
 				QueueCommandToHost(HostCmd);
@@ -1564,7 +1690,10 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				WriteDebugLog("[ARDOPprotocol.ProcessRcvdARQFrame]  IDLE received in ProtocolState %s substate %s", ARDOPStates[ProtocolState], ARQSubStates[ARQState]);
 				{
 					blnEnbARQRpt = FALSE; // setup for no repeats
-					
+				
+					if (CheckForDisconnect())
+						return;
+
 					if ((AutoBreak && bytDataToSendLength > 0) || blnBREAKCmd)
 					{
 						// keep BREAK Repeats fairly short (preliminary value 1 - 3 seconds)
@@ -1591,8 +1720,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
             
 			// handles DISCONNECT command from host
 			
-			if (CheckForDisconnect())
-				return;
+//			if (CheckForDisconnect())
+//				return;
 
 			// This handles normal data frames
 
@@ -1889,7 +2018,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				return;
 			}
 
-			if (blnFrameDecodedOK && intFrameType == 0x2D)  // ConRejBusy
+			if (blnFrameDecodedOK && intFrameType == ConRejBusy)  // ConRejBusy
 			{
 				WriteDebugLog("[ARDOPprotocol.ProcessRcvdARQFrame] ConRejBusy received in ARQState %s. Going to Protocol State DISC", ARQSubStates[ARQState]);
 
@@ -1902,7 +2031,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				InitializeConnection();
 				return;
 			}
-			if (blnFrameDecodedOK && intFrameType == 0x2E)	 // ConRejBW
+			if (blnFrameDecodedOK && intFrameType == ConRejBW)	 // ConRejBW
 			{
 				//if (DebugLog) WriteDebug("[ARDOPprotocol.ProcessRcvdARQFrame] ConRejBW received in ARQState " & ARQState.ToString & " Going to Protocol State DISC")
 
@@ -1934,6 +2063,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				if (blnLastFrameSentData)
 				{
+					intACKctr++;
 					bytLastARQDataFrameAcked = bytLastARQDataFrameSent;
 					
 					if (bytQDataInProcessLen)
@@ -1943,7 +2073,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					}
 
 					ComputeQualityAvg(38 + 2 * (intFrameType - 0xE0)); // Average ACK quality to exponential averager.
-					Gearshift_7();		// gear shift based on average quality
+					Gearshift_8();		// gear shift based on average quality
 				}
 				intNAKctr = 0;
 				blnEnbARQRpt = FALSE;	// stops repeat and forces new data frame or IDLE
@@ -2006,10 +2136,10 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			{
 				if (blnLastFrameSentData)
 				{
-			        intNAKctr += 1;
+			        intNAKctr++;
 				
 					ComputeQualityAvg(38 + 2 * intFrameType);	 // Average in NAK quality to exponential averager.  
-					Gearshift_7();		//' gear shift based on average quality or Shift Down if intNAKcnt >= 10
+					Gearshift_8();		//' gear shift based on average quality or Shift Down if intNAKcnt >= 10
 					
 					if (intShiftUpDn != 0)
 					{
@@ -2017,6 +2147,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 						intNAKctr = 0;
 						SendData();		//Added 0.3.5.2     Restore the last frames data, Send new data from outbound queue and set up repeats
 					}
+					intACKctr = 0;
 				}
                 
 				//     For now don't try and change the current data frame the simple gear shift will change it on the next frame 
@@ -2170,26 +2301,26 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if (intConReqFrameType == 0x31 || intConReqFrameType == 0x35)
 		{
 			intSessionBW = 200;
-			return 0x39;		 // ConAck200
+			return ConAck200;
 		}
 		if (intConReqFrameType == 0x32 || intConReqFrameType == 0x36)
 		{
 			intSessionBW = 500;
-			return 0x3A;		 // ConAck500
+			return ConAck500;
 		}
 		if (intConReqFrameType == 0x33 || intConReqFrameType == 0x37)
 		{
 			intSessionBW = 1000;
-			return 0x3B;		 // ConAck1000
+			return ConAck1000;
 		}
 		if (intConReqFrameType == 0x34 || intConReqFrameType == 0x38)
 		{
 			intSessionBW = 2000;
-			return 0x3C;		 // ConAck2000
+			return ConAck2000;
 		}
 	}
 
-	return 0x2E;		// ConRejBW
+	return ConRejBW;		// ConRejBW
 }
 
 //	Function to send and ARQ connect request for the current MCB.ARQBandwidth

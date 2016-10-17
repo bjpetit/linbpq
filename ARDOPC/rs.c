@@ -30,7 +30,7 @@
 #include <string.h>
 #include "ecc.h"
 
-void Debugprintf(const char * format, ...);
+void WriteDebugLog(const char * format, ...);
 
 /* Encoder parity bytes */
 int pBytes[MAXDEG];
@@ -69,10 +69,10 @@ void
 print_parity (void)
 { 
   int i;
-  Debugprintf("Parity Bytes: ");
+  WriteDebugLog("Parity Bytes: ");
   for (i = 0; i < NPAR; i++) 
-    Debugprintf("[%d]:%x, ",i,pBytes[i]);
-  Debugprintf("\n");
+    WriteDebugLog("[%d]:%x, ",i,pBytes[i]);
+  WriteDebugLog("\n");
 }
 
 
@@ -80,10 +80,10 @@ void
 print_syndrome (void)
 { 
   int i;
-  Debugprintf("Syndrome Bytes: ");
+  WriteDebugLog("Syndrome Bytes: ");
   for (i = 0; i < NPAR; i++) 
-    Debugprintf("[%d]:%x, ",i,synBytes[i]);
-  Debugprintf("\n");
+    WriteDebugLog("[%d]:%x, ",i,synBytes[i]);
+  WriteDebugLog("\n");
 }
 
 
@@ -108,7 +108,7 @@ decode_data(unsigned char data[], int nbytes)
 		
 		synBytes[j]  = sum;
 
-//	Debugprintf("%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
+//	WriteDebugLog("%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
 
 	}
 }
@@ -135,7 +135,7 @@ debug_check_syndrome (void)
   int i;
 	
   for (i = 0; i < 3; i++) {
-    Debugprintf(" inv log S[%d]/S[%d] = %d\n", i, i+1, 
+    WriteDebugLog(" inv log S[%d]/S[%d] = %d\n", i, i+1, 
 	   glog[gmult(synBytes[i], ginv(synBytes[i+1]))]);
   }
 }

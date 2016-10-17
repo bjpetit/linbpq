@@ -9,13 +9,12 @@
 
 #include "ARDOPC.h"
 
-
 VOID SortSignals(float * dblMag, int intStartBin, int intStopBin, int intNumBins, float *  dblAVGSignalPerBin, float *  dblAVGBaselinePerBin);
 
 int intLastStart, intLastStop;
 
-int dttLastBusyOn;
-int dttLastBusyOff;
+int LastBusyOn;
+int LastBusyOff;
 
 BOOL blnLastBusy = FALSE;
 
@@ -136,7 +135,7 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop)        // this only 
 		int y = round(dblAvgStoNWide);
 		
 		blnLastBusy = True;
-		dttLastBusyOn = Now;
+		LastBusyOn = Now;
 #ifdef __ARM_ARCH
 		WriteDebugLog("[BusyDetect2: BUSY ON  StoN Narrow = %d StoN Wide %d", x, y);
 #else
@@ -149,7 +148,7 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop)        // this only 
 		int y = round(dblAvgStoNWide);
 
 		blnLastBusy = False;
-		dttLastBusyOff = Now;
+		LastBusyOff = Now;
 #ifdef __ARM_ARCH
 		WriteDebugLog("[BusyDetect2: BUSY OFF StoN Narrow = %d StoN Wide %d", x, y);
 #else

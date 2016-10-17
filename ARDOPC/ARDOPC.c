@@ -74,6 +74,7 @@ int intPSKSymbolsDecoded;
 int intQAMQuality;
 int intQAMQualityCnts;
 int intQAMSymbolsDecoded;
+int intGoodQAMSummationDecodes;
 
 BOOL blnInitializing = FALSE;
 
@@ -150,7 +151,7 @@ const UCHAR bytValidFrameTypesISS[]=		// ACKs, NAKs, END, DISC, BREAK
  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
  16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
  // BREAK, DISC, or END
- 35, 41, 44, 
+ BREAK, DISCFRAME, END, ConRejBW, ConRejBusy, 
 // Con req and Con ACK
  49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
  //ACK
@@ -217,7 +218,7 @@ const char strAllDataModes[26][15] = {"8FSK.200.25", "4FSK.200.50S", "4FSK.200.5
 int strAllDataModesLen = 26;
 
  
-const char strFrameType[256][16] = {
+const char strFrameType[256][18] = {
 	"DataNAK", //  Range 0x00 to 0x1F includes 5 bits for quality 1 Car, 200Hz,4FSK
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
@@ -601,7 +602,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*blnOdd = (1 & bytFrameType) != 0;
 		*intNumCar = 1;
 		*intDataLen = 12;
-		*intRSLen = 2;
+		*intRSLen = 4;			// changed 0.8.0
 		strcpy(strMod, "4FSK");
 		*intBaud = 50;
 		*bytQualThres = 50;
@@ -1490,9 +1491,9 @@ BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _A
 	CompressCallsign(strMyCallsign, &bytToRS[0]);
 	CompressCallsign(strTargetCallsign, &bytToRS[6]);  //this uses compression to accept 4, 6, or 8 character Grid squares.
 
-	RSEncode(bytToRS, &bytReturn[14], 12, 2);  // Generate the RS encoding ...now 14 bytes total
+	RSEncode(bytToRS, &bytReturn[14], 12, 4);  // Generate the RS encoding ...now 14 bytes total
  
-	return 16;
+	return 18;
 }
 
 
@@ -1521,9 +1522,9 @@ int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn)
     if (Square[0])
 		CompressGridSquare(Square, &bytToRS[6]);  //this uses compression to accept 4, 6, or 8 character Grid squares.
 
-	RSEncode(bytToRS, &bytreturn[14], 12, 2);  // Generate the RS encoding ...now 14 bytes total
+	RSEncode(bytToRS, &bytreturn[14], 12, 4);  // Generate the RS encoding ...now 14 bytes total
 
-	return 16;
+	return 18;
 }
 
 //  Funtion to encodes a short 4FSK 50 baud Control frame  (2 bytes total) BREAK, END, DISC, IDLE, ConRejBusy, ConRegBW  
@@ -1614,8 +1615,6 @@ void SendID(BOOL blnEnableCWID)
 
 	if (SoundIsPlaying)
 		return;
-
-	return;
 
     if (GridSquare[0] == 0)
 	{

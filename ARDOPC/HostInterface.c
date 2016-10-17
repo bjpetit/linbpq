@@ -83,7 +83,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 	_strupr(strCMD);
 
-	if (CommandTrace) Debugprintf("[obCommand Trace FROM host: C:%s", strCMD);
+	if (CommandTrace) WriteDebugLog("[obCommand Trace FROM host: C:%s", strCMD);
 
 	ptrParams = strlop(strCMD, ' ');
 
@@ -423,7 +423,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS || ProtocolState == IRStoISS)
 		{
 			blnARQDisconnect = TRUE;
-			CheckForDisconnect();
+//			CheckForDisconnect();
 		}
 		goto cmddone;
 	}

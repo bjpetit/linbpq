@@ -5,6 +5,8 @@
 
 #include "ARDOPC.h"
 
+#pragma warning(disable : 4244)		// Code does lots of int float to int
+
 // Decode 1 carrier of PSK signam
 
 // UZ7HO Version. Similar to ARDOP, but can run on unmixed
