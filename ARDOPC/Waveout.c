@@ -550,8 +550,8 @@ void SoundFlush()
 	// Clear the capture buffers. I think this is only  needed when testing
 	// with audio loopback.
 
-	memset(&buffer[0], 0, 2400);
-	memset(&buffer[1], 0, 2400);
+//	memset(&buffer[0], 0, 2400);
+//	memset(&buffer[1], 0, 2400);
 
 	StartCapture();
 

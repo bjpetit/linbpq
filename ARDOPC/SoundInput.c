@@ -15,7 +15,6 @@ BOOL blnLeaderFound = FALSE;
 BOOL blnLeaderDetected;
 
 int intLeaderRcvdMs = 1000;		// Leader length??
-//short intPSKRefPhase;			// PSK Reference symbol in milliradians) (+/- 3142)
 
 extern int intLastRcvdFrameQuality;
 extern int intReceivedLeaderLen;
@@ -59,14 +58,15 @@ int intPSKMode;
 #define MAX_DATA_LENGTH	8 * 159 // I think! 8PSK.2000.167
 
 // intToneMags should be an array with one row per carrier.
-// and 4 * max bytes data (2 bits by value in 4FSK.
+// and 16 * max bytes data (2 bits per symbol, 4 samples per symbol in 4FSK.
 
 // but as 600 Baud frames are very long (750 bytes), but only one carrier
 // may be better to store as scalar and calculate offsets into it for each carrier
-// treat 600 as 3 * 200, but still may be better
+// treat 600 as 3 * 200, but scalar still may be better
 
 // Needs 64K if ints + another 64 for MEM ARQ. (maybe able to store as shorts)
 // 48K would do if we use a scalar (600 baud, 750 bytes)
+// Max is 4 carrier, 83 bytes or 1 carrier 762 (or treat as 3 * 253)
 
 // Could just about do this on Teensy 3.6 or Nucleo F7
 
@@ -84,28 +84,26 @@ int intToneMagsLength;
 
 unsigned char goodCarriers = 0;	// Carriers we have already decoded
 
-#ifdef MEMORYARQ	// Enough RAM for memory ARQ so keep all samples for a frame
-
-// This needs 20K
+//	We always collect all phases for PSK and QAM so we can do phase correction
 
 short intPhases[8][652] = {0};	// We will decode as soon as we have 4 or 8 depending on mode
 								//	(but need one set per carrier)
+								// 652 is 163 * 4 (4PSK 167 Baud)
 
-//	We only use Mags for QAM, and max is 2 carriers 192 bytes
-
+//	We only use Mags for QAM, and max is 2 carriers 195 bytes
+// ??????????????????
+//short intMags[2][195 * 2] = {0};
 short intMags[8][652] = {0};
 
-int  intToneMagsAvg[4][332];	//????
+#ifdef MEMORYARQ
+
+// Enough RAM for memory ARQ so keep all samples for FSK and a copy of tones or phase/amplitude
+
+int  intToneMagsAvg[4][332];	//???? FSK Tone averages
 
 short intCarPhaseAvg[8][652];	// array to accumulate phases for averaging (Memory ARQ)
 short intCarMagAvg[8][652];		// array to accumulate mags for averaging (Memory ARQ) 
  
-#else		// Limited memory, so only keep 8 samples
-
-short intPhases[8][8] = {0};	// We will decode as soon as we have 4 or 8 depending on mode
-								//	(but need one set per carrier)
-short intMags[8][8] = {0};
-
 #endif
 
 
@@ -142,6 +140,9 @@ char CarrierOk[8];			// RS OK Flags per carrier
 int charIndex = 0;			// Index into received chars
 
 int SymbolsLeft;			// number still to decode
+
+int DummyCarrier = 0;	// pseudo carrier used for long 600 baud frames
+UCHAR * Decode600Buffer = bytFrameData1;
 
 BOOL PSKInitDone = FALSE;
 
@@ -206,7 +207,7 @@ int Update4FSKConstellation(int * intToneMags, int * intQuality);
 void Update16FSKConstellation(int * intToneMags, int * intQuality);
 void Update8FSKConstellation(int * intToneMags, int * intQuality);
 
-BOOL DemodPSK();
+void DemodPSK();
 BOOL DemodQAM();
 
 /*
@@ -788,6 +789,13 @@ short intPSKPhase_1[8], intPSKPhase_0[8];
 short intCP[8];	  // Cyclic prefix offset 
 float dblFreqBin[8];
 
+// While searching for leader we must save unprocessed samples
+// We may have up to 720 left, so need 1920 
+
+short rawSamples[1920];	// Get Frame Type need 2400 and we may add 1200
+int rawSamplesLength = 0;
+
+
 
 void ProcessNewSamples(short * Samples, int nSamples)
 {
@@ -940,7 +948,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			State = SearchingForLeader;
 			ClearAllMixedSamples();
 			DiscardOldSamples();
-			if (DebugLog) printtick("poor frame type decode");
+			WriteDebugLog("poor frame type decode");
 
 			// stcStatus.BackColor = SystemColors.Control
 			// stcStatus.Text = ""
@@ -1012,6 +1020,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				goto ProcessFrame;
 			}
 
+			if (intBaud == 25)
+				intSampPerSym = 480;
 			if (intBaud == 50)
 				intSampPerSym = 240;
 			else if (intBaud == 100)
@@ -1036,6 +1046,12 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			charIndex = 0;	
 			PSKInitDone = 0;
 			
+			frameLen = 0;
+			totalRSErrors = 0;
+
+			DummyCarrier = 0;	// pseudo carrier used for long 600 baud frames
+			Decode600Buffer = bytFrameData1;
+
 			if (!IsShortControlFrame(intFrameType))
 			{
                //         stcStatus.BackColor = Color.Khaki
@@ -1064,6 +1080,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				// still skip decoding carriers that have been received;
 
 #ifdef MEMORYARQ
+				memset(intSumCounts, 0, sizeof(intSumCounts));
 				memset(intToneMagsAvg, 0, sizeof(intToneMagsAvg));
 				memset(intCarPhaseAvg, 0, sizeof(intCarPhaseAvg));
 				memset(intCarMagAvg, 0, sizeof(intCarMagAvg));
@@ -1105,12 +1122,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			Update16FSKConstellation(&intToneMags[0][0], &intLastRcvdFrameQuality);
 		else if (strcmp (strMod, "8FSK") == 0)
 			Update8FSKConstellation(&intToneMags[0][0], &intLastRcvdFrameQuality);
-		else
-			if (strcmp (strMod, "16QAM") == 0)
-				intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[0][0], &intMags[0][0], strMod, TRUE);
-			else
-				intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[0][0], &intMags[0][0], strMod, FALSE);
 
+		// PSK and QAM quality done in Decode routines
 
 		WriteDebugLog("Qual = %d", intLastRcvdFrameQuality);
 		DecodeCompleteTime = Now;
@@ -2029,7 +2042,13 @@ int EnvelopeCorrelator()
 			intJatMax = j;
 		}		
 	}
-
+	
+	if (AccumulateStats)
+	{
+		dblAvgCorMaxToMaxProduct = (dblAvgCorMaxToMaxProduct * intEnvelopeCors + (dblCorMax / dblCorMaxProduct)) / (intEnvelopeCors + 1);
+		intEnvelopeCors++;
+	}
+ 
 	if (dblCorMax > 40 * dblCorMaxProduct)
 	{
 		WriteDebugLog("EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
@@ -2631,9 +2650,6 @@ void Demod1Car4FSKChar(int Start, UCHAR * Decoded, int Carrier)
 
 
 void Demod1Car4FSK600Char(int Start, UCHAR * Decoded, int Carrier);
-
-int DummyCarrier = 0;	// pseudo carrier used for long 600 baud frames
-UCHAR * Decode600Buffer = bytFrameData1;
 
 BOOL Demod1Car4FSK600()
 {
@@ -3441,7 +3457,6 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 	char strTargetCallsign[10] = "";
 	char strIDCallSign[10] = "";
 	char strGridSQ[10] = "";
-	int CarrierLen;
 	int intTiming;
 	int intRcvdQuality;
 
@@ -3548,12 +3563,20 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 			break;
 
-		// 16 QAM
+		// 16 QAM - CRC Checked earlier
+
+		case 0x54:
+		case 0x55:
+
+			if (CarrierOk[0] && CarrierOk[1])
+				blnDecodeOK = TRUE;
+			break;
 
 		case 0x5C:
 		case 0x5D:
 		
-			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
+			// Checked earlier
+	
 			blnDecodeOK = CarrierOk[0];
 			break;
 
@@ -3564,8 +3587,6 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 		case 0x51:
 		case 0x52:
 		case 0x53:
-		case 0x54:
-		case 0x55:
 		case 0x68:
 		case 0x69:
 
@@ -3637,8 +3658,6 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 		
 		case 0x7A:
 		case 0x7B:
-		case 0x7C:
-		case 0x7D:
 
 			// 600 Baud Data. Frame has 3 * 200 RS Blocks
 
@@ -3654,6 +3673,17 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 			if (CarrierOk[0] && CarrierOk[1] && CarrierOk[2]) 
 				blnDecodeOK = TRUE;
+
+			break;
+
+		case 0x7C:
+		case 0x7D:
+
+			// 600 Baud Short. 
+
+			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
+
+			blnDecodeOK = CarrierOk[0];
 
 			break;
 
@@ -3881,10 +3911,7 @@ void Update8FSKConstellation(int * intToneMags, int * intQuality)
 
 //	Subroutine to Update the PhaseConstellation
 
-int intMagLength;
-int intPhasesLength;
-
-int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM)
+int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, BOOL blnQAM)
 {
 	// Subroutine to update bmpConstellation plot for PSK modes...
 	// Skip plotting and calculations of intPSKPhase(0) as this is a reference phase (9/30/2014)
@@ -3893,96 +3920,104 @@ int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, 
 	float dblPhaseError; 
 	float dblPhaseErrorSum = 0;
 	int intPSKIndex;
-	int intX, intY, intP = 0;
+//	int intX, intY, 
+	int intP = 0;
 	float dblRad = 0;
 	float dblAvgRad = 0;
 	float intMagMax = 0;
 	float dblPi4 = 0.25 * M_PI;
 	float dbPhaseStep  = 2 * M_PI / intPSKPhase;
 	float dblRadError = 0;
-	float  dblPlotRotation = 0;
-	// stcStatus As Status
-	int yCenter = 0, xCenter = 0;
-	int i,j, intQuality;
-
-	if (blnQAM)
-		intMagLength = intPhasesLength = 8;
-	else
-		intMagLength = intPhasesLength = intPSKMode;
+	float dblPlotRotation = 0;
+	int intRadInner = 0, intRadOuter = 0;
+	float dblAvgRadOuter = 0, dblAvgRadInner = 0, dblRadErrorInner = 0, dblRadErrorOuter = 0;
+ 
+	int i,j, k, intQuality;
 
 	if (intPSKPhase == 4)
 		intPSKIndex = 0;
 	else
 		intPSKIndex = 1;
- 
-           // bmpConstellation = New Bitmap(89, 89)
-           // ' Draw the axis and paint the black background area
-            //yCenter = (bmpConstellation.Height - 1) \ 2
-           // xCenter = (bmpConstellation.Width - 1) \ 2
-            //For x As Integer = 0 To bmpConstellation.Width - 1
-             //   For y As Integer = 0 To bmpConstellation.Height - 1
-             //       If y = yCenter Or x = xCenter Then
-             //           bmpConstellation.SetPixel(x, y, Color.Tomato)
-             //       End If
-             //   Next y
-            //Next x
 
-	for (j = 1; j < intMagLength; j++)   // skip the magnitude of the reference in calculation
+	if	(blnQAM)
 	{
-		intMagMax = max(intMagMax, intMags[j]); // find the max magnitude to auto scale
-		dblAvgRad += intMags[j];
+		intPSKPhase = 8;
+		intPSKIndex = 1;
+
+		for (j = 1; j < intPhasesLen; j++)   // skip the magnitude of the reference in calculation
+		{
+			intMagMax = max(intMagMax, intMag[j]); // find the max magnitude to auto scale
+		}
+
+		for (k = 1; k < intPhasesLen; k++)
+		{
+			if (intMag[k] < 0.75f * intMagMax)
+			{
+				dblAvgRadInner += intMag[k];
+				intRadInner++;
+			}
+			else
+			{
+				dblAvgRadOuter += intMag[k];
+				intRadOuter++;
+			}
+		}
+
+		dblAvgRadInner = dblAvgRadInner / intRadInner;
+		dblAvgRadOuter = dblAvgRadOuter / intRadOuter;
+ 		
+		for (i = 1; i <  intPhasesLen; i++)  // Don't plot the first phase (reference)
+		{
+			intP = round((0.001 * intPhases[i]) / dbPhaseStep);
+
+			// compute the Phase and Raduius errors
+
+			if (intMag[i] > (dblAvgRadInner + dblAvgRadOuter) / 2) 
+				dblRadErrorOuter += fabsf(dblAvgRadOuter - intMag[i]);
+			else
+				dblRadErrorInner += fabsf(dblAvgRadInner - intMag[i]);
+
+			dblPhaseError = fabsf(((0.001 * intPhases[i]) - intP * dbPhaseStep)); // always positive and < .5 *  dblPhaseStep
+			dblPhaseErrorSum += dblPhaseError;
+		}	
 	}
-	dblAvgRad = dblAvgRad / (intMagLength);  // the average radius
-  
-	for (i = 1; i <  intPhasesLength; i++)  // Don't plot the first phase (reference)
+	else
 	{
-		dblRad = 40 * intMags[i] / intMagMax; // scale the radius dblRad based on intMagMax
-        //        intX = CInt(xCenter + dblRad * Math.Cos(dblPlotRotation + intPhases(i) / 1000))
-		intY = (yCenter + dblRad * sinf(dblPlotRotation + intPhases[i] / 1000));
-        intP = 0.001 * intPhases[i] / dbPhaseStep;
+		for (i = 1; i <  intPhasesLen; i++)  // Don't plot the first phase (reference)
+		{
+			intP = round((0.001 * intPhases[i]) / dbPhaseStep);
 
-		//' compute the Phase and Raduius errors
+			//' compute the Phase error
 
-		dblRadError += powf(dblAvgRad - intMags[i], 2); 
-		dblPhaseError = fabsf(((0.001 * intPhases[i]) - intP * dbPhaseStep)); // always positive and < .5 *  dblPhaseStep
-		dblPhaseErrorSum += dblPhaseError;
-
-        // If intX <> xCenter And intY <> yCenter Then bmpConstellation.SetPixel(intX, intY, Color.Yellow) ' don't plot on top of axis
+			dblPhaseError = fabsf(((0.001 * intPhases[i]) - intP * dbPhaseStep)); // always positive and < .5 *  dblPhaseStep
+			dblPhaseErrorSum += dblPhaseError;
+		}
 	}
-
-	dblRadError = sqrtf(dblRadError / (intPhasesLength)) / dblAvgRad;
-
-	intQuality =  max(0, ((100 - 200 * (dblPhaseErrorSum / (intPhasesLength)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
-    
 	if (blnQAM) 
 	{
+		intQuality = max(0, (1 - (dblRadErrorInner / (intRadInner * dblAvgRadInner) + dblRadErrorOuter / (intRadOuter * dblAvgRadOuter))) * (100 - 200 * (dblPhaseErrorSum / intPhasesLen) / dbPhaseStep));
+
+//		intQuality = max(0, ((100 - 200 * (dblPhaseErrorSum / (intPhasesLen)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
+		
 		if (AccumulateStats)
 		{
 			intQAMQualityCnts += 1;
 			intQAMQuality += intQuality;
-			intQAMSymbolsDecoded += intPhasesLength;
+			intQAMSymbolsDecoded += intPhasesLen;
 		}
 	}
 	else
 	{
+		intQuality =  max(0, ((100 - 200 * (dblPhaseErrorSum / (intPhasesLen)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
+	
 		if (AccumulateStats)
 		{
-			intPSKQualityCnts[intPSKIndex] += 1;
+			intPSKQualityCnts[intPSKIndex]++;
 			intPSKQuality[intPSKIndex] += intQuality;
-			intPSKSymbolsDecoded += intPhasesLength;
+			intPSKSymbolsDecoded += intPhasesLen;
 		}
-	}		//include Radius error for QAM ...Lifted from WINMOR....may need work
-        //        return = CInt(Math.Max(0, (1 - dblRadError) * (100 - 200 * (dblPhaseErrorSum / (intPhases.Length - 1)) / dbPhaseStep)))
-	//       ' This gives good quality with probable seccessful decoding threshold around quality value of 60 to 70
-
-	return  max(0, ((100 - 200 * (dblPhaseErrorSum / (intPhasesLength)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
-	//        'Debug.WriteLine("  Avg Radius Error: " & Format(dblRadError, "0.0"))
-
-         // stcStatus.ControlName = "lblQuality"
-           // stcStatus.Text = strMod & " Quality: " & intQuality.ToString
-           // queTNCStatus.Enqueue(stcStatus)
-           // stcStatus.ControlName = "ConstellationPlot"
-           // queTNCStatus.Enqueue(stcStatus)
+	}	
+	return intQuality;
 }
 
 
@@ -4030,16 +4065,12 @@ VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float
 
 int pskStart = 0;
 
-//#define SMALLMEM
 
 VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier)
 {
 	unsigned int int24Bits;
 	UCHAR bytRawData;
 	int k;
-#ifdef SMALLMEM
-	pskStart = 0;			// only save one set of pjhases
-#endif
 
 	if (CarrierOk[Carrier])	// Already decoded this carrier?
 	{
@@ -4236,7 +4267,11 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 	int	intAccOffsetBeginning = 0, intAccOffsetEnd = 0, intAccOffset = 0;
     int intPSKMode;
 
-	if (CarrierOk[0] && CarrierOk[0] != 1)
+	if ((CarrierOk[0] && CarrierOk[0] != 1)
+		|| (CarrierOk[1] && CarrierOk[1] != 1)
+		|| (CarrierOk[2] && CarrierOk[2] != 1)
+		|| (CarrierOk[3] && CarrierOk[3] != 1))
+	
 		CarrierOk[0] = CarrierOk[0];
 
 	
@@ -4312,7 +4347,11 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 				intAvgOffset, intAccOffsetCnt, intPhaseLength);
 
 	}
-	if (CarrierOk[0] && CarrierOk[0] != 1)
+	if ((CarrierOk[0] && CarrierOk[0] != 1)
+		|| (CarrierOk[1] && CarrierOk[1] != 1)
+		|| (CarrierOk[2] && CarrierOk[2] != 1)
+		|| (CarrierOk[3] && CarrierOk[3] != 1))
+	
 		CarrierOk[0] = CarrierOk[0];
 
 }
@@ -4324,24 +4363,22 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 short intCarMagThreshold[8] = {0};
 
 
-VOID Decode1CarQAMChar(UCHAR * Decoded, int Carrier)
+VOID Decode1CarQAM(UCHAR * Decoded, int Carrier)
 {
 	unsigned int intData;
-	int i, k;
-	int Start = 0;
-
-	float dblAlpha = 0.1; // this determins how quickly the rolling average dblTrackingThreshold responds.
-
-	// !!! this needs optimising !!!!
+	int k;
+	float dblAlpha = 0.1f; // this determins how quickly the rolling average dblTrackingThreshold responds.
 
 	// dblAlpha value of .1 seems to work well...needs to be tested on fading channel (e.g. Multipath)
-
-	int intPhasePtr;
 	
 	int Threshold = intCarMagThreshold[Carrier];
+	int Len = intPhasesLen;
 
 	if (CarrierOk[Carrier])
 		return;							// don't do it again
+
+	pskStart = 0;
+	charIndex = 0;
 
 	// We calculated initial mag from reference symbol
 
@@ -4350,54 +4387,49 @@ VOID Decode1CarQAMChar(UCHAR * Decoded, int Carrier)
      
 	// On WGN this appears to improve decoding threshold about 1 dB 9/3/2016
     	
-//	intCarMagThreshold[Carrier]= 750;
-
-//	printf("%d\n", intCarMag=Threshold);
-
-	// Phase Samples are in intPhases
-
-	for (i = 0; i < 4; i++)
+	while (Len >= 0)
 	{
+		// Phase Samples are in intPhases
 
-	intData = 0;
+		intData = 0;
 
-	for (k = 0; k < 2; k++)
-	{
-		intData <<= 4;
-
-		if (intPhases[Carrier][Start] < 393 && intPhases[Carrier][Start] > -393)
+		for (k = 0; k < 2; k++)
 		{
-		}		// Zero so no need to do anything
-		else if (intPhases[Carrier][Start] >= 393 && intPhases[Carrier][Start] < 1179)
-			intData += 1;
-		else if (intPhases[Carrier][Start] >= 1179 && intPhases[Carrier][Start] < 1965)
-			intData += 2;
-		else if (intPhases[Carrier][Start] >= 1965 && intPhases[Carrier][Start] < 2751)
-			intData += 3;
-		else if (intPhases[Carrier][Start] >= 2751 || intPhases[Carrier][Start] < -2751)
-			intData += 4;
-		else if (intPhases[Carrier][Start] >= -2751 && intPhases[Carrier][Start] < -1965)
-			intData += 5;
-		else if (intPhases[Carrier][Start] >= -1965 && intPhases[Carrier][Start] <= -1179)
-			intData += 6;
-		else 
-			intData += 7;
+			intData <<= 4;
 
-		if (intMags[Carrier][Start] < Threshold)
-		{
-			intData += 8;		//  add 8 to "inner circle" symbols. 
-			Threshold = (Threshold * 900 + intMags[Carrier][Start] * 150) / 1000;
-		}
-		else
-		{
-			Threshold = ( Threshold * 900 + intMags[Carrier][Start] * 75) / 1000;
-		}
+			if (intPhases[Carrier][pskStart] < 393 && intPhases[Carrier][pskStart] > -393)
+			{
+			}		// Zero so no need to do anything
+			else if (intPhases[Carrier][pskStart] >= 393 && intPhases[Carrier][pskStart] < 1179)
+				intData += 1;
+			else if (intPhases[Carrier][pskStart] >= 1179 && intPhases[Carrier][pskStart] < 1965)
+				intData += 2;
+			else if (intPhases[Carrier][pskStart] >= 1965 && intPhases[Carrier][pskStart] < 2751)
+				intData += 3;
+			else if (intPhases[Carrier][pskStart] >= 2751 || intPhases[Carrier][pskStart] < -2751)
+				intData += 4;
+			else if (intPhases[Carrier][pskStart] >= -2751 && intPhases[Carrier][pskStart] < -1965)
+				intData += 5;
+			else if (intPhases[Carrier][pskStart] >= -1965 && intPhases[Carrier][pskStart] <= -1179)
+				intData += 6;
+			else 
+				intData += 7;
+
+			if (intMags[Carrier][pskStart] < Threshold)
+			{
+				intData += 8;		//  add 8 to "inner circle" symbols. 
+				Threshold = (Threshold * 900 + intMags[Carrier][pskStart] * 150) / 1000;
+			}
+			else
+			{
+				Threshold = ( Threshold * 900 + intMags[Carrier][pskStart] * 75) / 1000;
+			}
 		
-		intCarMagThreshold[Carrier] = Threshold;
-		Start ++;
-
-	}
-	Decoded[charIndex + i] = intData;
+			intCarMagThreshold[Carrier] = Threshold;
+			pskStart++;
+		}
+		Decoded[charIndex++] = intData;
+		Len -=2;
 	}
 }
 //	Functions to demod all PSKData frames single or multiple carriers 
@@ -4488,7 +4520,7 @@ VOID InitDemodPSK()
 
 int Demod1CarPSKChar(int Start, int Carrier);
 
-BOOL DemodPSK()
+void DemodPSK()
 {
 	int Used;
 	int Start = 0;
@@ -4511,14 +4543,14 @@ BOOL DemodPSK()
 				memmove(intFilteredMixedSamples,
 					&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
 
-			return FALSE;
+			return;
 		}
 		
 
 		if (PSKInitDone == 0)		// First time through
 		{	
 			if (intFilteredMixedSamplesLength < 2 * intPSKMode * intSampPerSym + 10) 
-				return FALSE;				// Wait for at least 2 chars worth
+				return;				// Wait for at least 2 chars worth
 
 			InitDemodPSK();
 			intFilteredMixedSamplesLength -= intSampPerSym;
@@ -4600,33 +4632,8 @@ BOOL DemodPSK()
 			Used = Demod1CarPSKChar(Start, 7);	
 		}
 
-		//	if we have 4 or 8 Phase samples, decode them 
-		
-		// (or each carrier)
-
-
 		if (intPhasesLen >= intPSKMode)
 		{
-	//		CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
-#ifdef SMALLMEM
-
-			Decode1CarPSKChar(bytFrameData1, 0);
-			if (intNumCar > 1)
-				Decode1CarPSKChar(bytFrameData2, 1);
-			if (intNumCar > 2)
-			{
-				Decode1CarPSKChar(bytFrameData3, 2);
-				Decode1CarPSKChar(bytFrameData4, 3);
-			}
-			if (intNumCar > 4)
-			{
-				Decode1CarPSKChar(bytFrameData5, 4);
-				Decode1CarPSKChar(bytFrameData6, 5);
-				Decode1CarPSKChar(bytFrameData7, 6);
-				Decode1CarPSKChar(bytFrameData8, 7);
-			}
-			intPhasesLen -= intPSKMode;
-#endif
 			if (intPSKMode == 4)
 			{
 				SymbolsLeft--;		// number still to decode
@@ -4642,24 +4649,37 @@ BOOL DemodPSK()
 		Start += Used; //intSampPerSym * 4;	
 		intFilteredMixedSamplesLength -= Used; //intSampPerSym * 4;
 
-		if (SymbolsLeft <= 0)	
-		{	
-			// if in Large memory mode, need to decode the phase samples
-
-#ifndef SMALLMEM
+		if (SymbolsLeft > 0)
+			continue;	
 
 		// Decode the phases
 
 		pskStart = 0;
 		charIndex = 0;
 
-		if (intPhasesLen >= intPSKMode)
-			CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
+		CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
+			
+		if (intNumCar > 1)
+			CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
+			
+		if (intNumCar > 2)
+		{
+			CorrectPhaseForTuningOffset(&intPhases[2][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[3][0], intPhasesLen, strMod);
+		}
+		if (intNumCar > 4)
+		{
+			CorrectPhaseForTuningOffset(&intPhases[4][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[5][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[6][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[7][0], intPhasesLen, strMod);
+		}
+
+		// Rick uses the last carier for Quality
+		intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[intNumCar - 1][0], &intMags[intNumCar - 1][0], strMod, FALSE);
 
 		while (intPhasesLen >= intPSKMode)
 		{
-//			CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
-
 			Decode1CarPSKChar(bytFrameData1, 0);
 			if (intNumCar > 1)
 			{
@@ -4697,18 +4717,14 @@ BOOL DemodPSK()
 				charIndex += 3;
 			}		
 		}
+	
+		// prepare for next
 
-
-#endif
-
-			// prepare for next
-
-			DiscardOldSamples();
-			ClearAllMixedSamples();
-			State = SearchingForLeader;
-		}
+		DiscardOldSamples();
+		ClearAllMixedSamples();
+		State = SearchingForLeader;
 	}
-	return TRUE;
+	return;
 }
 
 // Function to demodulate one carrier for all PSK frame types
@@ -4815,6 +4831,54 @@ VOID InitDemodQAM()
 
 int Demod1CarQAMChar(int Start, int Carrier);
 
+#ifdef MEMORYARQ
+
+//	Function to average two angles using magnitude weighting
+
+short WeightedAngleAvg(short intAng1, short intAng2, short intMag1, short intMag2)
+{
+	// Ang1 and Ang 2 are in the range of -3142 to + 3142 (miliradians)
+	// works but should come up with a routine that avoids Sin, Cos, Atan2
+    // Modified in Rev 0.3.5.1 to "weight" averaging by intMag1 and intMag2 (why!!!)
+
+	float dblSumX, dblSumY;
+
+	dblSumX = cosf(intAng1 / 1000.0) * intMag1 + cosf(intAng2 / 1000.0) * intMag2;
+	dblSumY = sinf(intAng1 / 1000.0) * intMag1 + sinf(intAng2 / 1000.0) * intMag2;
+        
+	return (1000 * atan2f(dblSumY, dblSumX));
+}
+
+void SaveQAMSamples(int i)
+{
+	int m;
+
+	if (intSumCounts[i] == 0)
+	{
+		// First try - initialize Sum counts Phase average and Mag Average 
+
+		for (m = 0; m < intPhasesLen; m++)
+		{
+			intCarPhaseAvg[i][m] = intPhases[i][m];
+			intCarMagAvg[i][m] = intMags[i][m];
+		}
+	}
+	else
+	{
+		for (m = 0; m < intPhasesLen; m++)
+		{
+			intCarPhaseAvg[i][m] = WeightedAngleAvg(intCarPhaseAvg[i][m], intPhases[i][m], intCarMagAvg[i][m], intMags[i][m]);
+			intPhases[i][m] = intCarPhaseAvg[i][m];
+			// Use simple weighted average for Mags 
+			intCarMagAvg[i][m] = (intCarMagAvg[i][m] * intSumCounts[i] + intMags[i][m]) / (intSumCounts[i] + 1);		
+			intMags[i][m] = intCarMagAvg[i][m];
+		}
+	}
+	intSumCounts[i]++;
+}			
+
+#endif
+
 BOOL DemodQAM()
 {
 	int Used;
@@ -4864,105 +4928,86 @@ BOOL DemodQAM()
 		{
 		case 1:
 
-			Used = Demod1CarQAMChar(Start, 0);
+			Used = Demod1CarQAMChar(Start, 0);		// demods two phase values - enough for one char
 			break;
 
 		case 2:
 
 			Demod1CarQAMChar(Start, 0);
-			intPhasesLen -= 4; //intPSKMode;
+			intPhasesLen -= 2;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
 			Used = Demod1CarQAMChar(Start, 1);
 			break;
-/*
-		case 4:
+		}
 
-			Demod1CarPSKChar(Start, 0);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+		SymbolsLeft--;		// number still to decode - we've done one
 	
-			Demod1CarPSKChar(Start, 1);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 2);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Used = Demod1CarPSKChar(Start, 3);
-			break;
-
-		case 8:
-
-			Demod1CarPSKChar(Start, 0);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 1);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 2);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 3);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 4);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 5);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 6);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Used = Demod1CarPSKChar(Start, 7);	
-*/	
-		}
-
-		//	if we have 4 or 8 Phase samples, decode them 
-		
-		// (or each carrier)
-
-		if (intPhasesLen >= intPSKMode)
-		{
-	//		CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
-
-			Decode1CarQAMChar(bytFrameData1, 0);
-
-			if (intNumCar > 1)
-				Decode1CarQAMChar(bytFrameData2, 1);
-/*
-			if (intNumCar > 2)
-			{
-				Decode1CarPSKChar(bytFrameData3, 2);
-				Decode1CarPSKChar(bytFrameData4, 3);
-			}
-			if (intNumCar > 4)
-			{
-				Decode1CarPSKChar(bytFrameData5, 4);
-				Decode1CarPSKChar(bytFrameData6, 5);
-				Decode1CarPSKChar(bytFrameData7, 6);
-				Decode1CarPSKChar(bytFrameData8, 7);
-			}
-*/
-			intPhasesLen -= intPSKMode;
-			charIndex += 4;
-			SymbolsLeft-=4;		// number still to decode
-		}
-
-		Start += Used; //intSampPerSym * 4;	
-		intFilteredMixedSamplesLength -= Used; //intSampPerSym * 4;
+		Start += Used;
+		intFilteredMixedSamplesLength -= Used;
 
 		if (SymbolsLeft <= 0)	
-		{	
+		{
+			// Frame complete - decode it
+
+			CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
+
+			if (intNumCar > 1)
+				CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
+
+			intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[intNumCar - 1][0], &intMags[intNumCar - 1][0], strMod, TRUE);
+
+			Decode1CarQAM(bytFrameData1, 0);
+
+			if (intNumCar > 1)
+				Decode1CarQAM(bytFrameData2, 1);
+
+			// Check Data
+
+			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
+		
+			if (intNumCar > 1)
+				frameLen +=  CorrectRawDataWithRS(bytFrameData2, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 1);
+
+#ifdef MEMORYARQ
+
+			if (!CarrierOk[0] || !CarrierOk[1])
+			{
+				// Decode error - save data for MEM ARQ
+
+				if (!CarrierOk[0])
+				{
+					SaveQAMSamples(0);
+					if (intSumCounts[0] > 1)
+					{
+						Decode1CarQAM(bytFrameData1, 0); // try to decode based on the WeightedAveragePhases
+					}
+				}			
+				if (!CarrierOk[1])
+				{
+					SaveQAMSamples(1);
+					if (intSumCounts[1] > 1)
+					{
+						Decode1CarQAM(bytFrameData2, 1);
+					}
+				}
+
+				if (intSumCounts[0] > 1 || intSumCounts[1] > 1)
+				{
+					// We've retryed to decode - see if ok now
+
+					WriteDebugLog("DemodQAM retry RS on MEM ARQ Corrected frames");
+
+					frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
+		
+					if (intNumCar > 1)
+						frameLen +=  CorrectRawDataWithRS(bytFrameData2, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 1);
+
+					if (CarrierOk[0] && CarrierOk[1])
+						if (AccumulateStats) intGoodQAMSummationDecodes++;
+				}
+			}
+#endif
 			// prepare for next
 
 			DiscardOldSamples();
@@ -4987,7 +5032,7 @@ int Demod1CarQAMChar(int Start, int Carrier)
 	float dblReal, dblImag;
 	int intMiliRadPerSample = intCarFreq * M_PI / 6;
 	int i;
-	int intNumOfSymbols = 4;
+	int intNumOfSymbols = 2;
 	int origStart = Start;;
 
 	if (CarrierOk[Carrier])		// Already decoded this carrier?
@@ -5031,10 +5076,10 @@ BOOL Decode1Car4FSKFromTones(UCHAR * bytData, int intToneMags)
 	//	Decodes intToneMags() to an array of bytes   
     //	Updates bytData() with decoded 
 
-
+/*
 	UCHAR bytSym;
 	int intIndex;
-/*
+
         ReDim bytData(intToneMags.Length \ 16 - 1)
 
         For i As Integer = 0 To bytData.Length - 1 ' For each data byte
