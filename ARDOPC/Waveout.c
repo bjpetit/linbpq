@@ -466,35 +466,45 @@ VOID WriteExceptionLog(const char * format, ...)
 	return;
 }
 
+FILE *statslogfile = NULL;
+
+VOID CloseStatsLog()
+{
+	fclose(statslogfile);
+	statslogfile = NULL;
+}
 VOID Statsprintf(const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
 	UCHAR Value[100];
 	char timebuf[32];
-	FILE *logfile = NULL;
+
 	SYSTEMTIME st;
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 
-	GetSystemTime(&st);
-	sprintf(Value, "%s_%04d%02d%02d.log",
-		"ARDOPSession", st.wYear, st.wMonth, st.wDay);
+	if (statslogfile == NULL)
+	{
+		GetSystemTime(&st);
+		sprintf(Value, "%s_%04d%02d%02d.log",
+			"ARDOPSession", st.wYear, st.wMonth, st.wDay);
 
-	if ((logfile = fopen(Value, "ab")) == NULL)
-		return;
+		if ((statslogfile = fopen(Value, "ab")) == NULL)
+			return;
+		else
+		{
+			sprintf(timebuf, "%02d:%02d:%02d.%03d\r\n",
+				st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+			fputs(timebuf, statslogfile);
+		}
+	}
 
-	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
-	st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
-
-	fputs(timebuf, logfile);
-	fputs(Mess, logfile);
-	
+	fputs(Mess, statslogfile);
 	printf(Mess);
 
-	fclose(logfile);
 	return;
 }
 

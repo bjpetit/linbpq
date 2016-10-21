@@ -497,7 +497,7 @@ void HostPoll()
 					WriteDebugLog("accept() failed error %d", WSAGetLastError());
 					return;
 				}
-				WriteDebugLog("Connected to host");
+				WriteDebugLog("Host Control Session Connected");
 					
 				ioctl(TCPControlSock, FIONBIO, &param);
 				CONNECTED = TRUE;
@@ -532,7 +532,7 @@ void HostPoll()
 					WriteDebugLog("accept() failed error %d", WSAGetLastError());
 					return;
 				}
-				WriteDebugLog("Connected to host");
+				WriteDebugLog("Host Data Session Connected");
 					
 				ioctl(TCPDataSock, FIONBIO, &param);
 				DATACONNECTED = TRUE;

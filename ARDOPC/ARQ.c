@@ -1910,7 +1910,10 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			// Process IRS Conack and capture IRS received leader for timing optimization
 			// Process ConAck from IRS (Handles protocol rule 1.4)
 
-			if (blnFrameDecodedOK && intFrameType >= 0x39 && intFrameType <= 0x3C)  // Process ConACK frames from IRS confirming BW is compatible and providing received leader info.
+			if (!blnFrameDecodedOK)
+				return;
+
+			if (intFrameType >= 0x39 && intFrameType <= 0x3C)  // Process ConACK frames from IRS confirming BW is compatible and providing received leader info.
 			{
 				UCHAR bytDummy = 0;
 
@@ -1953,6 +1956,29 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				return;
 			}
+			
+			if (intFrameType == ConRejBusy) // ConRejBusy Handles Protocol Rule 1.5
+			{
+				WriteDebugLog("[ARDOPprotocol.ProcessRcvdARQFrame] ConRejBusy received from %s ABORT Connect Request", strRemoteCallsign);
+ 				sprintf(HostCmd, "REJECTEDBUSY %s", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				sprintf(HostCmd, "STATUS ARQ CONNECTION REJECTED BY %s, REMOTE STATION BUSY.", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				Abort();
+				return;
+			}
+			if (intFrameType == ConRejBW) // ConRejBW Handles Protocol Rule 1.3
+			{
+				WriteDebugLog("[ARDOPprotocol.ProcessRcvdARQFrame] ConRejBW received from %s ABORT Connect Request", strRemoteCallsign);
+ 				sprintf(HostCmd, "REJECTEDBW %s", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				sprintf(HostCmd, "STATUS ARQ CONNECTION REJECTED BY %s, INCOMPATIBLE BW.", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				Abort();
+				return;
+			}
+			return;		// Shouldn't get here
+
 		}
 		if (ARQState == ISSConAck)
 		{
@@ -2447,14 +2473,25 @@ void Break()
 	blnBREAKCmd = TRUE; // Set flag to process pending BREAK
 }
 
+// Function to abort an FEC or ARQ transmission 
+
+void Abort()
+{
+	blnAbort = True;
+
+	if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == IRStoISS)
+		GetNextARQFrame();
+}
+
 void ClearTuningStats()
 {
 	intLeaderDetects = 0;
 	intLeaderSyncs = 0;
     intFrameSyncs = 0;
     intAccumFSKTracking = 0;
-    intFSKSymbolCnt = 0;
     intAccumPSKTracking = 0;
+    intAccumQAMTracking = 0;
+    intFSKSymbolCnt = 0;
     intPSKSymbolCnt = 0;
     intQAMSymbolCnt = 0;
     intGoodFSKFrameTypes = 0;
@@ -2475,6 +2512,7 @@ void ClearTuningStats()
     dblLeaderSNAvg = 0;
     dblAvgPSKRefErr = 0;
     intPSKTrackAttempts = 0;
+    intQAMTrackAttempts = 0;
     dblAvgDecodeDistance = 0;
     intDecodeDistanceCount = 0;
     intShiftDNs = 0;
@@ -2512,9 +2550,7 @@ void LogStats()
 	int intTotFSKDecodes = intGoodFSKFrameDataDecodes + intFailedFSKFrameDataDecodes;
 	int intTotPSKDecodes = intGoodPSKFrameDataDecodes + intFailedPSKFrameDataDecodes;
 
-	Statsprintf(" ");
-
-	Statsprintf("************************* ARQ session stats with %s  %d mintes ****************************", strRemoteCallsign, (Now - dttStartSession) /60000); 
+	Statsprintf("************************* ARQ session stats with %s  %d minutes ****************************", strRemoteCallsign, (Now - dttStartSession) /60000); 
 	Statsprintf("     LeaderDetects= %d   AvgLeader S+N:N(3KHz noise BW)= %f dB  LeaderSyncs= %d", intLeaderDetects, dblLeaderSNAvg - 23.8, intLeaderSyncs);
 	Statsprintf("     AvgCorrelationMax:MaxProd= %f over %d  correlations", dblAvgCorMaxToMaxProduct, intEnvelopeCors);
 	Statsprintf("     FrameSyncs=%d  Good Frame Type Decodes=%d  Failed Frame Type Decodes =%d", intFrameSyncs, intGoodFSKFrameTypes, intFailedFSKFrameTypes);
@@ -2571,6 +2607,7 @@ void LogStats()
 
 	Statsprintf("************************************************************************************************");
 
+	CloseStatsLog();
 	CloseDebugLog();		// Fluch debug log
 }
 

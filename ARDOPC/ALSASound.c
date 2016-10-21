@@ -63,14 +63,20 @@ char LogName[3][20] = {"ARDOPDebug", "ARDOPException", "ARDOPSession"};
 #define EXCEPTLOG 1
 #define SESSIONLOG 2
 
+FILE *statslogfile = NULL;
+
 VOID CloseDebugLog()
 {	
 	if (logfile[DEBUGLOG])
 		fclose(logfile[DEBUGLOG]);
 	logfile[DEBUGLOG] = NULL;
-	if (logfile[SESSIONLOG])
-		fclose(logfile[SESSIONLOG]);
-	logfile[SESSIONLOG] = NULL;
+}
+
+VOID CloseStatsLog()
+{
+	if (statslogfile)
+		fclose(statslogfile);
+	statslogfile = NULL;
 }
 
 
@@ -95,7 +101,7 @@ VOID WriteDebugLog(const char * format, ...)
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
+	strcat(Mess, "\n");
 
 	printf("%s", Mess);
 	WriteLog(Mess, DEBUGLOG);
@@ -109,7 +115,7 @@ VOID WriteExceptionLog(const char * format, ...)
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
+	strcat(Mess, "\n");
 
 	printf("%s", Mess);
 	WriteLog(Mess, EXCEPTLOG);
@@ -123,17 +129,57 @@ VOID Statsprintf(const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
+	UCHAR Value[100];
+	char timebuf[32];
+	struct timespec tp;
+
+	int hh;
+	int mm;
+	int ss;
+
+	clock_gettime(CLOCK_REALTIME, &tp);
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
+	strcat(Mess, "\n");
 
+	ss = tp.tv_sec % 86400;		// Secs int day
+	hh = ss / 3600;
+	mm = (ss - (hh * 3600)) / 60;
+	ss = ss % 60;
+
+	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
+		hh, mm, ss, (int)tp.tv_nsec/1000000);
+
+	if (statslogfile == NULL)
+	{
+		struct tm * tm;
+		time_t T;
+
+		T = time(NULL);
+		tm = gmtime(&T);
+
+		sprintf(Value, "%s_%04d%02d%02d.log",
+		LogName[2], tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+
+		if ((statslogfile = fopen(Value, "ab")) == NULL)
+		{
+			perror(Value);
+			return;
+		}
+		else
+		{
+			fputs(timebuf, statslogfile);
+			fputs("\n", statslogfile);
+		}
+
+	}
+
+	fputs(Mess, statslogfile);
 	printf("%s", Mess);
-	WriteLog(Mess, SESSIONLOG);
 
 	return;
 }
-
 
 void printtick(char * msg)
 {
@@ -161,12 +207,14 @@ void main(int argc, char * argv[])
 {
 	struct timespec tp;
 
+	Sleep(1000);	// Give LinBPQ time to complete init if exec'ed by linbpq
+
 	Debugprintf("ARDOPC Version %s", ProductVersion);
 
 	if (argc > 1)
 		port = atoi(argv[1]);
-
-	if (argc == 4)
+		
+	if (argc > 3)
 	{
 		strcpy(CaptureDevice, argv[2]);
 		strcpy(PlaybackDevice, argv[3]);
@@ -1094,34 +1142,37 @@ int WriteLog(char * msg, int Log)
 {
 	FILE *file;
 	char timebuf[128];
-	time_t T;
-	struct tm * tm;
-	UCHAR Value[100];
 	struct timespec tp;
+
+	UCHAR Value[100];
 	
 	int hh;
 	int mm;
 	int ss;
 
-	T = time(NULL);
-	tm = gmtime(&T);
-
 	clock_gettime(CLOCK_REALTIME, &tp);
-
-	sprintf(Value, "%s_%04d%02d%02d.log",
-				LogName[Log], tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
 	
 	if (logfile[Log] == NULL)
+	{
+		struct tm * tm;
+		time_t T;
+
+		T = time(NULL);
+		tm = gmtime(&T);
+
+		sprintf(Value, "%s_%04d%02d%02d.log",
+		LogName[Log], tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+
 		if ((logfile[Log] = fopen(Value, "a")) == NULL)
 			return FALSE;
-
+	}
 	ss = tp.tv_sec % 86400;		// Secs int day
 	hh = ss / 3600;
 	mm = (ss - (hh * 3600)) / 60;
 	ss = ss % 60;
 
 	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
-		hh, mm, ss, tp.tv_nsec/1000000);
+		hh, mm, ss, (int)tp.tv_nsec/1000000);
 
 	fputs(timebuf, logfile[Log]);
 	fputs(msg, logfile[Log]);

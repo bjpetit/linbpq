@@ -37,6 +37,16 @@ int Toggle;
 extern char Callsign[10];
 extern BOOL blnBusyStatus;
 
+extern int intNumCar;
+extern int intBaud;
+extern int intDataLen;
+extern int intRSLen;
+extern int intSampleLen;
+extern int intDataPtr;
+extern int intSampPerSym;
+extern int intDataBytesPerCar;
+
+
 BOOL Term4Mode;
 BOOL PACMode;
 
@@ -140,7 +150,6 @@ BOOL CheckStatusChange()
 		EmCRCStuffAndSend(SCSReply, ReplyLen);
 
 		return TRUE;
-
 	}
 
 	return FALSE;
@@ -207,7 +216,7 @@ BOOL CheckForData()
 
 const unsigned short CRCTAB[256];
 
-unsigned short int compute_crc(unsigned char *buf,int len)
+unsigned short int xcompute_crc(unsigned char *buf,int len)
 {
 	unsigned short fcs = 0xffff; 
 	int i;
@@ -298,7 +307,8 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		SCSReply[3] = 7;		// Status
 		SCSReply[4] = 3;		// Len -1
 
-		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS)
+//		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS)
+		if (ProtocolState != DISC)
 		{
 			// connected states
 
@@ -316,16 +326,23 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			else
 				SCSReply[6] = 4;		// P4
 
+
 			// Speedlevel Mapping from RMS Express
 
 			// P1 {100, 200}, _
             // P2 {200, 400, 600, 800}, _
             // P3 {200, 600, 1400, 2800, 3200, 3600}, _
             // P4 {47, 85, 150, 300, 450, 1100, 2200, 3300, 4400, 5500}}
- 
 
-			SCSReply[7] = 3;			// SpeedLevel ?? Base on mode ??	
-			
+			if (intSessionBW == 200)
+				SCSReply[7] = 1;
+			else if (intSessionBW == 500)
+				SCSReply[7] = 2;		// P2
+			else if (intSessionBW == 1000)
+				SCSReply[7] = 3;		// P2
+			else
+				SCSReply[7] = 6;		// P4
+
 			SCSReply[8] = dblOffsetHz;	// Freq Error
 		}
 		else
@@ -859,7 +876,7 @@ VOID EmCRCStuffAndSend(UCHAR * Msg, int Len)
 	SerialSendData(Msg, Len);
 }
 
-const unsigned short CRCTAB[256] = {
+const unsigned short xCRCTAB[256] = {
 	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
 	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
 	0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e, 

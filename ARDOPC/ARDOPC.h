@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.8.1.0-BPQ"
+#define ProductVersion "0.8.1.2-BPQ"
 
 //	Sound interface buffer size
 
@@ -132,6 +132,8 @@ VOID WriteExceptionLog(const char * format, ...);
 void SaveQueueOnBreak();
 VOID Statsprintf(const char * format, ...);
 VOID CloseDebugLog();
+VOID CloseStatsLog();
+void Abort();
 
 
 #ifdef WIN32
@@ -374,6 +376,9 @@ extern const UCHAR * bytValidFrameTypes;
 extern const char strAllDataModes[][15];
 extern int strAllDataModesLen;
 
+extern const short Rate[256];		// Data Rate (in bits/sec) by Frame Type
+
+
 extern BOOL newStatus;
 
 // RS Variables
@@ -401,6 +406,8 @@ extern int intAccumPSKLeaderTracking;
 extern float dblAvgPSKRefErr;
 extern int intPSKTrackAttempts;
 extern int intAccumPSKTracking;
+extern int intQAMTrackAttempts;
+extern int intAccumQAMTracking;
 extern int intPSKSymbolCnt;
 extern int intGoodPSKFrameDataDecodes;
 extern int intFailedPSKFrameDataDecodes;

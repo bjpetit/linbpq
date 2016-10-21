@@ -89,7 +89,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "ABORT") == 0)
 	{
-		blnAbort = TRUE;
+		Abort();
 		goto cmddone;
 	}
 
