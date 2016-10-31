@@ -4,7 +4,9 @@
 
 #pragma warning(disable : 4244)		// Code does lots of float to int
 
+#ifndef TEENSIE
 #define MEMORYARQ
+#endif
 
 //#define max(x, y) ((x) > (y) ? (x) : (y))
 //#define min(x, y) ((x) < (y) ? (x) : (y))
@@ -422,16 +424,16 @@ void DiscardOldSamples()
 
 //	Subroutine to apply 2000 Hz filter to mixed samples 
 
-static float dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
+float xdblZin_1 = 0, xdblZin_2 = 0, xdblZComb= 0;  // Used in the comb generator
 
 	// The resonators 
       
-static float dblZout_0[27] = {0.0f};	// resonator outputs
-static float dblZout_1[27] = {0.0f};	// resonator outputs delayed one sample
-static float dblZout_2[27] = {0.0f};	// resonator outputs delayed two samples
-static float dblCoef[27] = {0.0};		// the coefficients
-static float dblR = 0.9995f;			// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-static int intN = 120;				//Length of filter 12000/100
+float xdblZout_0[27] = {0.0f};	// resonator outputs
+float xdblZout_1[27] = {0.0f};	// resonator outputs delayed one sample
+float xdblZout_2[27] = {0.0f};	// resonator outputs delayed two samples
+float xdblCoef[27] = {0.0};		// the coefficients
+float xdblR = 0.9995f;			// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
+int xintN = 120;				//Length of filter 12000/100
 
 
 void FSMixFilter2000Hz(short * intMixedSamples, int intMixedSamplesLength)
@@ -445,10 +447,10 @@ void FSMixFilter2000Hz(short * intMixedSamples, int intMixedSamplesLength)
 
 	// Filtered data is appended to intFilteredMixedSamples
 
-	static float dblRn;
-	static float dblR2;
+	float dblRn;
+	float dblR2;
 
-	static float dblZin = 0;
+	float dblZin = 0;
       
 	int i, j;
 
@@ -457,17 +459,17 @@ void FSMixFilter2000Hz(short * intMixedSamples, int intMixedSamplesLength)
 	if (intFilteredMixedSamplesLength < 0)
 		WriteDebugLog("Corrupt intFilteredMixedSamplesLength");
 
-	dblRn = powf(dblR, intN);
+	dblRn = powf(xdblR, xintN);
 
-	dblR2 = powf(dblR, 2);
+	dblR2 = powf(xdblR, 2);
 
 	// Initialize the coefficients
     
-	if (dblCoef[26] == 0)
+	if (xdblCoef[26] == 0)
 	{
 		for (i = 4; i <= 26; i++)
 		{
-			dblCoef[i] = 2 * dblR * cosf(2 * M_PI * i / intN);  // For Frequency = bin i
+			xdblCoef[i] = 2 * xdblR * cosf(2 * M_PI * i / xintN);  // For Frequency = bin i
 		}
 	}
 
@@ -475,41 +477,43 @@ void FSMixFilter2000Hz(short * intMixedSamples, int intMixedSamplesLength)
 	{
 		intFilteredSample = 0;
 
-		if (i < intN)
+		if (i < xintN)
 			dblZin = intMixedSamples[i] - dblRn * intPriorMixedSamples[i];
 		else 
-			dblZin = intMixedSamples[i] - dblRn * intMixedSamples[i - intN];
+			dblZin = intMixedSamples[i] - dblRn * intMixedSamples[i - xintN];
  
 		//Compute the Comb
 
-		dblZComb = dblZin - dblZin_2 * dblR2;
-		dblZin_2 = dblZin_1;
-		dblZin_1 = dblZin;
+		xdblZComb = dblZin - xdblZin_2 * dblR2;
+		xdblZin_2 = xdblZin_1;
+		xdblZin_1 = dblZin;
 
 		// Now the resonators
 		for (j = 4; j <= 26; j++)	   // calculate output for 3 resonators 
 		{
-			dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
-			dblZout_2[j] = dblZout_1[j];
-			dblZout_1[j] = dblZout_0[j];
+			xdblZout_0[j] = xdblZComb + xdblCoef[j] * xdblZout_1[j] - dblR2 * xdblZout_2[j];
+			xdblZout_2[j] = xdblZout_1[j];
+			xdblZout_1[j] = xdblZout_0[j];
 
 			//' scale each by transition coeff and + (Even) or - (Odd) 
 			//' Resonators 2 and 13 scaled by .389 get best shape and side lobe supression 
 			//' Scaling also accomodates for the filter "gain" of approx 60. 
  
 			if (j == 4 || j == 26)
-				intFilteredSample += 0.389f * dblZout_0[j];
+				intFilteredSample += 0.389f * xdblZout_0[j];
 			else if ((j & 1) == 0)
-				intFilteredSample += dblZout_0[j];
+				intFilteredSample += xdblZout_0[j];
 			else
-				intFilteredSample -= dblZout_0[j];
+				intFilteredSample -= xdblZout_0[j];
 		}
-		intFilteredMixedSamples[intFilteredMixedSamplesLength++] = (int)ceil(intFilteredSample * 0.00833333333f);  // rescales for gain of filter
+
+		intFilteredSample = intFilteredSample * 0.00833333333f;
+		intFilteredMixedSamples[intFilteredMixedSamplesLength++] = intFilteredSample;  // rescales for gain of filter
 	}
 	
 	// update the prior intPriorMixedSamples array for the next filter call 
    
-	memmove(intPriorMixedSamples, &intMixedSamples[intMixedSamplesLength - intN], intPriorMixedSamplesLength * 2);		 
+	memmove(intPriorMixedSamples, &intMixedSamples[intMixedSamplesLength - xintN], intPriorMixedSamplesLength * 2);		 
 
 	if (intFilteredMixedSamplesLength > 5000)
 		WriteDebugLog("Corrupt intFilteredMixedSamplesLength");
@@ -821,10 +825,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		|| (CarrierOk[3] && CarrierOk[3] != 1))
 		CarrierOk[0] = CarrierOk[0];
 
-//	printtick("Start Busy");
-	if (State == SearchingForLeader)
-		UpdateBusyDetector(Samples);
-//	printtick("Done Busy");
 	if (ProtocolState == FECSend)
 		return;
 
@@ -838,9 +838,14 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		nSamples = rawSamplesLength;
 		Samples = rawSamples;
 	}
-//	WriteDebugLog("Processing %d samples", nSamples);
 
 	rawSamplesLength = 0;
+
+//	printtick("Start Busy");
+	if (State == SearchingForLeader)
+		UpdateBusyDetector(Samples);
+//	printtick("Done Busy");
+
 
 	// it seems that searchforleader runs on unmixed and unfilered samples
 
@@ -852,12 +857,22 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 //		WriteDebugLog("Looking for Leader");
 
+		if (nSamples >= 1200)
+		{
+			//	printtick("Start Busy");
+//			if (State == SearchingForLeader)
+//				UpdateBusyDetector(Samples);
+			//	printtick("Done Busy");
+		
+			if (ProtocolState == FECSend)
+					return;
+		}
 		while (State == SearchingForLeader && nSamples >= 1200)
 		{
 			int intSN;
 			
-//			blnLeaderFound = SearchFor2ToneLeader3(Samples, nSamples, &dblOffsetHz, &intSN);
-			blnLeaderFound = SearchFor2ToneLeader2(Samples, nSamples, &dblOffsetHz, &intSN);
+			blnLeaderFound = SearchFor2ToneLeader3(Samples, nSamples, &dblOffsetHz, &intSN);
+//			blnLeaderFound = SearchFor2ToneLeader2(Samples, nSamples, &dblOffsetHz, &intSN);
 		
 			if (blnLeaderFound)
 			{
@@ -4059,9 +4074,8 @@ int Update4FSKConstellation(int * intToneMags, int * intQuality)
 {
 	// Subroutine to update bmpConstellation plot for 4FSK modes...
         
-	float dblRad = 0;
 	int  intToneSum = 0;
-	float intMagMax = 0;
+	int intMagMax = 0;
 	float dblPi4  = 0.25 * M_PI;
 	float dblDistanceSum = 0;
 	//float dblPlotRotation;
@@ -4080,20 +4094,20 @@ int Update4FSKConstellation(int * intToneMags, int * intQuality)
 		if (intToneMags[i] > intToneMags[i + 1] && intToneMags[i] > intToneMags[i + 2] && intToneMags[i] > intToneMags[i + 3])
 		{
 			if (intToneSum > 0)
-				intRad = max(5.0f, 42.0f - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
+				intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
 		}
 		else if (intToneMags[i + 1] > intToneMags[i] && intToneMags[i + 1] > intToneMags[i + 2] && intToneMags[i + 1] > intToneMags[i + 3])
 		{
 			if (intToneSum > 0)
-				intRad = max(5.0f, 42.0f - 80 * (intToneMags[i] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
+				intRad = max(5, 42 - 80 * (intToneMags[i] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
 		}
 		else if (intToneMags[i + 2] > intToneMags[i] && intToneMags[i + 2] > intToneMags[i + 1] && intToneMags[i + 2] > intToneMags[i + 3]) 
 		{
             if (intToneSum > 0)
-				intRad = max(5.0f, 42.0f - 80 * (intToneMags[i + 1] + intToneMags[i] + intToneMags[i + 3]) / intToneSum);
+				intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i] + intToneMags[i + 3]) / intToneSum);
 		}
 		else if (intToneSum > 0)
-			intRad = max(5.0f, 42.0f - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i]) / intToneSum);	
+			intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i]) / intToneSum);	
 
 		dblDistanceSum += (43 - intRad);
 	}
@@ -4102,6 +4116,8 @@ int Update4FSKConstellation(int * intToneMags, int * intQuality)
 
 	if (*intQuality < 0)
 		*intQuality = 0;
+	else if (*intQuality > 100)
+		*intQuality = 100;
 
 	if (AccumulateStats)
 	{

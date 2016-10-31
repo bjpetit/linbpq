@@ -3,12 +3,24 @@
 // are changed infrequently
 //
 
+#ifndef ARDOPCHEADERDEFINED
+#define ARDOPCHEADERDEFINED
+
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.8.1.2-BPQ"
+#define ProductVersion "0.8.1.3-BPQ"
 
 //	Sound interface buffer size
 
+#ifdef TEENSIE
+
+#define DAC_SAMPLES_PER_BLOCK 1200
+#define ADC_SAMPLES_PER_BLOCK 1200
+#define SendSize DAC_SAMPLES_PER_BLOCK
+
+#else
 #define SendSize 1200		// 100 mS for now
+#define ReceiveSize 240		// try 20mS 100 mS for now
+#endif
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
@@ -27,6 +39,8 @@
 float round(float x);
 #endif
 
+#define Now getTicks()
+
 #include <time.h>
 
 #include <stdio.h>
@@ -41,19 +55,13 @@ float round(float x);
 
 #define M_PI       3.141592f
 
-#ifndef TARGET_STM32F4
+#ifndef TEENSIE
 #ifndef WIN32
 #define LINUX
 #endif
 #endif
 
 
-#ifdef TARGET_STM32F4
-#define Now ticks
-extern volatile int ticks;
-#else
-#define Now getTicks()
-#endif
 #include "ecc.h"				// RS Constants
 
 typedef int BOOL;
@@ -284,16 +292,16 @@ struct SessionStats
 #define ConAck1000 0x3C
 #define ConAck2000 0x3C
 
-extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
-extern short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
+extern const short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
+extern const short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
 
-extern short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
+extern const short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
     //   (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the table size from 7680 to 3840 integers
-extern short intPSK200bdCarTemplate[9][4][72];		// Templates for 200 bd with cyclic prefix
-extern short intFSK25bdCarTemplate[16][480];		// Template for 16FSK carriers spaced at 25 Hz, 25 baud
-extern short intFSK50bdCarTemplate[4][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
-extern short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carriers spaced at 100 Hz, 100 baud
-extern short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
+extern const short intPSK200bdCarTemplate[9][4][72];		// Templates for 200 bd with cyclic prefix
+extern const short intFSK25bdCarTemplate[16][480];		// Template for 16FSK carriers spaced at 25 Hz, 25 baud
+extern const short intFSK50bdCarTemplate[4][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
+extern const short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carriers spaced at 100 Hz, 100 baud
+extern const short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
 
 // Config Params
 extern char GridSquare[7];
@@ -452,3 +460,4 @@ extern int dttLastLeaderDetect;
 
 BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _ARQBandwidth ARQBandwidth, UCHAR * bytReturn);
 
+#endif

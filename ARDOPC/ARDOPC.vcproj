@@ -205,10 +205,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\CalcTemplates.c"
-				>
-			</File>
-			<File
 				RelativePath=".\ecc.h"
 				>
 			</File>

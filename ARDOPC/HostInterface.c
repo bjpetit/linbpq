@@ -44,7 +44,7 @@ int _memicmp(unsigned char *a, unsigned char *b, int n)
 
 #endif
 
-extern unsigned int dttTimeoutTrip;
+extern int dttTimeoutTrip;
 #define BREAK 0x23
 extern UCHAR bytSessionID;
 
@@ -87,7 +87,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 	ptrParams = strlop(strCMD, ' ');
 
-	if (strcmp(strCMD, "ABORT") == 0)
+	if (strcmp(strCMD, "ABORT") == 0 || strcmp(strCMD, "DD") == 0)
 	{
 		Abort();
 		goto cmddone;

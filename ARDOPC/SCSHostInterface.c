@@ -513,16 +513,34 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 			return;
 		}
+	
 	case '@':
 
 		// Pobably just @B
 
-			SCSReply[2] = Channel;
-			SCSReply[3] = 1;
-			len = sprintf(&SCSReply[4], "%d ", 4096 - bytDataToSendLength);
-			ReplyLen = len + 5;
-			EmCRCStuffAndSend(SCSReply, len + 5);
-			return;
+		SCSReply[2] = Channel;
+		SCSReply[3] = 1;
+		len = sprintf(&SCSReply[4], "%d ", 4096 - bytDataToSendLength);
+		ReplyLen = len + 5;
+		EmCRCStuffAndSend(SCSReply, len + 5);
+		return;
+
+	case '#':
+
+		// Use # Construct to send ARDOP commands
+
+		Buffer[Length - 2] = 0;
+		WriteDebugLog("SCS Host COmmand %s", &Buffer[4]);
+
+		ProcessCommandFromHost(&Buffer[4]);
+		SCSReply[2] = Channel;
+		SCSReply[3] = 1;
+		SCSReply[4] = 0;
+
+		ReplyLen = 5;
+		EmCRCStuffAndSend(SCSReply, 5);
+
+		return;
 
 	default:
 						
@@ -601,10 +619,14 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 		PutString(SerialNo);
 	}
 
-	else if (_memicmp(Command, "MYL ", 4) == 0)
+	else if (_memicmp(Command, "MYL", 3) == 0)
 	{
 		char Resp[] = "\rXXXX";
-		int level = atoi(&Command[4]);
+		char * ptr = strchr(Command, ' ');
+		int level;
+		
+		if (ptr)
+			level = atoi(ptr);
 		
 		if (level == 1)
 			ARQBandwidth = B200MAX;
@@ -673,7 +695,6 @@ SendPrompt:
 	
 	return;
 }
-
 
 
 VOID ProcessSCSPacket(UCHAR * rxbuffer, int Length)

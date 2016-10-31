@@ -49,7 +49,7 @@ void Generate50BaudTwoToneLeaderTemplate()
 	}		
 	fclose(fp1);
 }
-/*
+
 void GenerateTwoToneLeaderTemplate()
 {
 	// to create leader alternate these template samples reversing sign on each adjacent symbol

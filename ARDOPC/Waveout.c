@@ -5,7 +5,7 @@
 
 //	Nucleo uses DMA
 
-//	Linux will  use ALSA
+//	Linux will use ALSA
 
 //	This is the Windows Version
 
@@ -28,8 +28,10 @@ void GetSoundDevices();
 // Windows works with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
 
-short buffer[2][1200];		// Two Transfer/DMA buffers of 0.1 Sec
-short inbuffer[2][1200];	// Input Transfer/ buffers of 0.1 Sec
+// Currently use 1200 samples for TX but 480 for RX to reduce latency
+
+short buffer[2][SendSize];		// Two Transfer/DMA buffers of 0.1 Sec
+short inbuffer[5][ReceiveSize];	// Input Transfer/ buffers of 0.1 Sec
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -61,10 +63,13 @@ WAVEHDR header[2] =
 	{(char *)buffer[1], 0, 0, 0, 0, 0, 0, 0}
 };
 
-WAVEHDR inheader[2] =
+WAVEHDR inheader[5] =
 {
 	{(char *)inbuffer[0], 0, 0, 0, 0, 0, 0, 0},
-	{(char *)inbuffer[1], 0, 0, 0, 0, 0, 0, 0}
+	{(char *)inbuffer[1], 0, 0, 0, 0, 0, 0, 0},
+	{(char *)inbuffer[2], 0, 0, 0, 0, 0, 0, 0},
+	{(char *)inbuffer[3], 0, 0, 0, 0, 0, 0, 0},
+	{(char *)inbuffer[4], 0, 0, 0, 0, 0, 0, 0}
 };
 
 WAVEOUTCAPS pwoc;
@@ -149,14 +154,17 @@ void txSleep(int mS)
 {
 	// called while waiting for next TX buffer. Run background processes
 
+	PollReceivedSamples();			// discard any received samples
 	HostPoll();
 	Sleep(mS);
 }
 
 int PriorSize = 0;
 
-int Index = 0;				// DMA Buffer being used 0 or 1
-int inIndex = 0;				// DMA Buffer being used 0 or 1
+int Index = 0;				// DMA TX Buffer being used 0 or 1
+int inIndex = 0;			// DMA Buffer being used
+
+#define NumberofinBuffers 5
 
 FILE * wavfp1;
 
@@ -303,14 +311,13 @@ void InitSound(BOOL Report)
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
 
-	inheader[0].dwBufferLength = 2400;
-	inheader[1].dwBufferLength = 2400;
+	for (i = 0; i < NumberofinBuffers; i++)
+	{
+		inheader[i].dwBufferLength = ReceiveSize * 2;
 
-	ret = waveInPrepareHeader(hWaveIn, &inheader[0], sizeof(WAVEHDR));
-	ret = waveInAddBuffer(hWaveIn, &inheader[0], sizeof(WAVEHDR));
-
-	ret = waveInPrepareHeader(hWaveIn, &inheader[1], sizeof(WAVEHDR));
-	ret = waveInAddBuffer(hWaveIn, &inheader[1], sizeof(WAVEHDR));
+		ret = waveInPrepareHeader(hWaveIn, &inheader[i], sizeof(WAVEHDR));
+		ret = waveInAddBuffer(hWaveIn, &inheader[i], sizeof(WAVEHDR));
+	}
 
 	ret = waveInStart(hWaveIn);
 }
@@ -327,7 +334,7 @@ PollReceivedSamples()
 		short * ptr = &inbuffer[inIndex][0];
 		int i;
 
-		for (i = 0; i < 1200; i++)
+		for (i = 0; i < ReceiveSize; i++)
 		{
 			if (*(ptr) < min)
 				min = *ptr;
@@ -337,7 +344,7 @@ PollReceivedSamples()
 		}
 		leveltimer++;
 
-		if (leveltimer > 100)
+		if (leveltimer > 1000)
 		{
 			leveltimer = 0;
 			WriteDebugLog("Input peaks = %d, %d", min, max);
@@ -353,7 +360,10 @@ PollReceivedSamples()
 		waveInPrepareHeader(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
 		waveInAddBuffer(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
 
-		inIndex = !inIndex;
+		inIndex++;
+		
+		if (inIndex == NumberofinBuffers)
+			inIndex = 0;
 	}
 }
 

@@ -199,7 +199,7 @@ unsigned int getTicks()
 
 void PlatformSleep()
 {
-	Sleep(10);
+	Sleep(1);
 }
 
 
@@ -1073,14 +1073,14 @@ PollReceivedSamples()
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
 
-	if (SoundCardRead(&inbuffer[0][0], 1200))
+	if (SoundCardRead(&inbuffer[0][0], ReceiveSize))
 	{
-		// returns 1200 or none
+		// returns ReceiveSize or none
 
 		short * ptr = &inbuffer[0][0];
 		int i;
 
-		for (i = 0; i < 1200; i++)
+		for (i = 0; i < ReceiveSize; i++)
 		{
 			if (*(ptr) < min)
 				min = *ptr;
@@ -1092,16 +1092,15 @@ PollReceivedSamples()
 
 		displayLevel(max);
 
-		if (leveltimer > 100)
+		if (leveltimer > 400)
 		{
 			leveltimer = 0;
 			Debugprintf("Input peaks = %d, %d", min, max);
 			min = max = 0;
 		}
 
-
 		if (Capturing && Loopback == FALSE)
-			ProcessNewSamples(&inbuffer[0], 1200);
+			ProcessNewSamples(&inbuffer[0], ReceiveSize);
 	}
 }
 

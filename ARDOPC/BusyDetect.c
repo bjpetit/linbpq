@@ -27,7 +27,6 @@ int intLastStop  = 0;
 int intBusyOnCnt  = 0;  // used to filter Busy ON detections 
 int intBusyOffCnt  = 0; // used to filter Busy OFF detections 
 
-
 // Function to implement a busy detector based on 1024 point FFT
 BOOL BusyDetect2(float * dblMag, int intStart, int intStop)        // this only called while searching for leader ...once leader detected, no longer called.
 {

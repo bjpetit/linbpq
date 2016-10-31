@@ -81,7 +81,7 @@ UCHAR * bytShiftUpThresholds;
 int bytShiftUpThresholdsLength;
 
 BOOL blnPending;
-unsigned int dttTimeoutTrip;
+int dttTimeoutTrip;
 int intLastARQDataFrameToHost;
 int intAvgQuality;
 int intReceivedLeaderLen;
@@ -320,6 +320,7 @@ BOOL GetNextARQFrame()
 
 		if (intRepeatCount > 5)  // do 5 tries then force disconnect 
 		{
+			QueueCommandToHost("DISCONNECTED");
 			sprintf(HostCmd, "STATUS END NOT RECEIVED CLOSING ARQ SESSION WITH %s", strRemoteCallsign);
 			QueueCommandToHost(HostCmd);
 			blnDISCRepeating = FALSE;
@@ -335,7 +336,11 @@ BOOL GetNextARQFrame()
 
 		return TRUE;			// continue with DISC repeats
 	}
-	
+
+	if (ProtocolState == ISS)
+		if (CheckForDisconnect())
+			return;
+
 	if (ProtocolState == ISS && ARQState == ISSConReq) // Handles Repeating ConReq frames 
 	{
 		intRepeatCount++;
@@ -1319,8 +1324,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 	WriteDebugLog("Time since received = %d", timeSinceDecoded);
 
-	if (timeSinceDecoded < 250)
-		txSleep(250 - timeSinceDecoded);
+	if (timeSinceDecoded < 5000)
+		txSleep(500 - timeSinceDecoded);
 
 	// Note this is called as part of the RX sample poll routine
 

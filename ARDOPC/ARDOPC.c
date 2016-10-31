@@ -17,7 +17,7 @@
 void CompressCallsign(char * Callsign, UCHAR * Compressed);
 void CompressGridSquare(char * Square, UCHAR * Compressed);
 void  ASCIIto6Bit(char * Padded, UCHAR * Compressed);
-void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader);
+void GetTwoToneLeaderWithSync(int intSymLen);
 void SendID(BOOL blnEnableCWID);
 void PollReceivedSamples();
 void CheckTimers();
@@ -33,7 +33,7 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
 char GridSquare[7] = "";
 char Callsign[10] = "";
 BOOL wantCWID = FALSE;
-int LeaderLength = 260;
+int LeaderLength = 500;
 int TrailerLength = 0;
 unsigned int ARQTimeout = 120;
 int TuningRange = 100;
@@ -115,7 +115,7 @@ extern BOOL blnDISCRepeating;
 extern char strRemoteCallsign[10];
 extern char strLocalCallsign[10];
 extern char strFinalIDCallsign[10];
-extern unsigned int dttTimeoutTrip;
+extern int dttTimeoutTrip;
 extern unsigned int dttLastFECIDSent;
 extern int intFrameRepeatInterval;
 extern BOOL blnPending;
@@ -1598,6 +1598,9 @@ int EncodeDATAACK(int intQuality, UCHAR bytSessionID, UCHAR * bytreturn)
 
 	int intScaledQuality;
 
+	if (intQuality > 100)
+		intQuality = 100;
+
 	intScaledQuality = max(0, (intQuality / 2) - 19); // scale quality value to fit 5 bit field of 0 represents Q <= of 38 (pretty poor)
 	
 	bytreturn[0] = 0xE0 + intScaledQuality;		//ACKs 0xE0 - 0xFF
@@ -1637,7 +1640,7 @@ void SendID(BOOL blnEnableCWID)
     if (GridSquare[0] == 0)
 	{
 		EncLen = Encode4FSKIDFrame(Callsign, "No GS", bytEncodedBytes);
-		sprintf(bytIDSent," %s:[No GS] ", Callsign);
+		Len = sprintf(bytIDSent," %s:[No GS] ", Callsign);
 	}
 	else
 	{
@@ -1650,7 +1653,7 @@ void SendID(BOOL blnEnableCWID)
 	// On embedded platforms we don't have the memory to create full sound stream before playiong,
 	// so this is structured differently from Rick's code
 
-	Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+	Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], EncLen, 0);		// only returns when all sent
 
     if (blnEnableCWID)
 		sendCWID(Callsign, FALSE);
@@ -1661,8 +1664,7 @@ void SendID(BOOL blnEnableCWID)
  
 void ModTwoToneTest()
 {
-	short intLeader[100000];
-	GetTwoToneLeaderWithSync(500, &intLeader[0]);
+	GetTwoToneLeaderWithSync(500);
 	SampleSink(0);	// 5 secs
 	SoundFlush();
 }
@@ -2300,9 +2302,9 @@ void CheckTimers()
 
 	if (Now > tmrPollOBQueue)
 	{
-//		char HostCmd[32];
-//		sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
-//		QueueCommandToHost(HostCmd);
+		char HostCmd[32];
+		sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
+		QueueCommandToHost(HostCmd);
 	
 		tmrPollOBQueue = Now + 10000;		// 10 Secs
 	}
@@ -2580,6 +2582,8 @@ BOOL BusyDetect(float * dblMag, int intStart, int intStop)
 */
 //	Subroutine to update the Busy detector when not displaying Spectrum or Waterfall (graphics disabled)
  		
+int LastBusyCheck = 0;
+
 void UpdateBusyDetector(short * bytNewSamples)
 {
 	float dblReF[1024];
@@ -2593,18 +2597,17 @@ void UpdateBusyDetector(short * bytNewSamples)
 	int intTuneLineLow, intTuneLineHi, intDelta;
 	int i;
 
-//        Dim stcStatus As Status = Nothing
-//        stcStatus.ControlName = "mnuBusy"
-
 	if (ProtocolState != DISC)		// ' Only process busy when in DISC state
 		return;
 
 	if (State != SearchingForLeader)
 		return;						// only when looking for leader
 
-	if (Now - dttCodecStarted < 2)
+	if (Now - LastBusyCheck < 100)
 		return;
-	
+
+	LastBusyCheck = Now;
+
 	FourierTransform(1024, bytNewSamples, &dblReF[0], &dblImF[0], FALSE);
 
 	for (i = 0; i <  206; i++)
@@ -2645,7 +2648,7 @@ void UpdateBusyDetector(short * bytNewSamples)
 	}
 }
 
-unsigned short CRCTAB[256] = {
+unsigned const short CRCTAB[256] = {
 	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
 	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
 	0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e, 
