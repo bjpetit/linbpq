@@ -21,11 +21,14 @@ extern int intRepeatCount;
 extern unsigned int dttLastFECIDSent;
 extern unsigned int tmrSendTimeout;
 extern BOOL blnFramePending;
+extern int dttLastBusyTrip;
+extern int dttPriorLastBusyTrip;
+extern int dttLastBusyClear;
 
 int intLastFrameIDToHost = 0;
 int	intLastFailedFrameID = 0;
 int	intLastARQDataFrameToHost = -1;
-int	intARQDefaultDlyMs = 300;  // Not sure if this really need with optimized leader length. 100 ms doesn't add much overhead.
+int	intARQDefaultDlyMs = 100;  // Not sure if this really need with optimized leader length. 100 ms doesn't add much overhead.
 int	intAvgQuality;		 // the filtered average reported quality (0 to 100) practical range 50 to 96 
 int	intShiftUpDn = 0;
 int intFrameTypePtr = 0;	 // Pointer to the current data mode in bytFrameTypesForBW() 
@@ -339,7 +342,7 @@ BOOL GetNextARQFrame()
 
 	if (ProtocolState == ISS)
 		if (CheckForDisconnect())
-			return;
+			return FALSE;
 
 	if (ProtocolState == ISS && ARQState == ISSConReq) // Handles Repeating ConReq frames 
 	{
@@ -1324,8 +1327,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 	WriteDebugLog("Time since received = %d", timeSinceDecoded);
 
-	if (timeSinceDecoded < 5000)
-		txSleep(500 - timeSinceDecoded);
+	if (timeSinceDecoded < 250)
+		txSleep(250 - timeSinceDecoded);
 
 	// Note this is called as part of the RX sample poll routine
 
@@ -1364,25 +1367,40 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
         
 		if (IsCallToMe(strCallsign, &bytPendingSessionID)) // (Handles protocol rules 1.2, 1.3)
 		{
-			WriteDebugLog("[ProcessRcvdARQFrame] BusyBlock=%d Last Busy On=%d mS Last Busy Off=%d mS Last LeaderDetect=%d mS",
-					BusyBlock, Now - LastBusyOn, Now - LastBusyOff, Now - dttLastLeaderDetect);
-        
-			if (BusyBlock && (dttLastLeaderDetect - LastBusyOn) > 600 && (LastBusyOn - LastBusyOff) > 0)
+			BOOL blnLeaderTrippedBusy;
+			
+			// This logic works like this: 
+			// The Actual leader for this received frame should have tripped the busy detector making the last Busy trip very close
+			// (usually within 100 ms) of the leader detect time. So the following requires that there be a Busy clear (last busy clear) following 
+			// the Prior busy Trip AND at least 600 ms of clear time (may need adjustment) prior to the Leader detect and the Last Busy Clear
+			// after the Prior Busy Trip. The initialization of times on objBusy.ClearBusy should allow for passing the following test IF there
+			// was no Busy detection after the last clear and before the actual reception of the next frame. 
+
+			blnLeaderTrippedBusy = (dttLastLeaderDetect - dttLastBusyTrip) < 300;
+	
+			if (BusyBlock)
 			{
-				//initial testing...log Last Busy, Last Clear and Last Leader Detect  in ms
+				if ((blnLeaderTrippedBusy && dttLastBusyClear - dttPriorLastBusyTrip < 600) 
+				|| (!blnLeaderTrippedBusy && dttLastBusyClear - dttLastBusyTrip < 600))
+				{
+					WriteDebugLog("[ProcessRcvdARQFrame] Con Req Blocked by BUSY!  LeaderTrippedBusy=%d, Prior Last Busy Trip=%d, Last Busy Clear=%d,  Last Leader Detect=%d",
+						blnLeaderTrippedBusy, Now - dttPriorLastBusyTrip, Now - dttLastBusyClear, Now - dttLastLeaderDetect);
 
-				WriteDebugLog("[ProcessRcvdARQFrame] Con Req Blocked by BUSY!  Last Busy On=%d, Last Busy Off=%d, Last LeaderDetect=%d",
-					Now - LastBusyOn, Now - LastBusyOff, Now - dttLastLeaderDetect);
+					ClearBusy();
+			
+					// Clear out the busy detector. This necessary to keep the received frame and hold time from causing
+					// a continuous busy condition.
 
- 				EncLen = Encode4FSKControl(ConRejBusy, bytPendingSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(ConRejBusy, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+ 					EncLen = Encode4FSKControl(ConRejBusy, bytPendingSessionID, bytEncodedBytes);
+					Mod4FSKDataAndPlay(ConRejBusy, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
-				sprintf(HostCmd, "REJECTEDBUSY %s", strRemoteCallsign);
-				QueueCommandToHost(HostCmd);
-				sprintf(HostCmd, "STATUS ARQ CONNECTION REQUEST FROM %s REJECTED, CHANNEL BUSY.", strRemoteCallsign);
-				QueueCommandToHost(HostCmd);
+					sprintf(HostCmd, "REJECTEDBUSY %s", strRemoteCallsign);
+					QueueCommandToHost(HostCmd);
+					sprintf(HostCmd, "STATUS ARQ CONNECTION REQUEST FROM %s REJECTED, CHANNEL BUSY.", strRemoteCallsign);
+					QueueCommandToHost(HostCmd);
 
-				return;
+					return;
+				}
 			}
 
 			intReply = IRSNegotiateBW(intFrameType); // NegotiateBandwidth
@@ -1416,7 +1434,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				intReceivedLeaderLen = intLeaderRcvdMs;		 // capture the received leader from the remote ISS's ConReq (used for timing optimization)
 
 				EncLen = EncodeConACKwTiming(intReply, intLeaderRcvdMs, bytPendingSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(intReply, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+				Mod4FSKDataAndPlay(intReply, &bytEncodedBytes[0], EncLen, intARQDefaultDlyMs);		// only returns when all sent
 			}
 			else
 			{

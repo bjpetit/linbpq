@@ -33,7 +33,7 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
 char GridSquare[7] = "";
 char Callsign[10] = "";
 BOOL wantCWID = FALSE;
-int LeaderLength = 500;
+int LeaderLength = 240;
 int TrailerLength = 0;
 unsigned int ARQTimeout = 120;
 int TuningRange = 100;
@@ -2624,7 +2624,7 @@ void UpdateBusyDetector(short * bytNewSamples)
     
 //	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
 	{
-		blnBusyStatus = BusyDetect2(dblMag, intTuneLineLow, intTuneLineHi);
+		blnBusyStatus = BusyDetect3(dblMag, intTuneLineLow, intTuneLineHi);
 		
 		if (blnBusyStatus && !blnLastBusyStatus)
 		{

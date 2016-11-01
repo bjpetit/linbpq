@@ -688,7 +688,10 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		
 		if (strcmp(ptrParams, "TRUE") == 0)
+		{
 			blnListen = TRUE;
+			ClearBusy();
+		}
 		else 
 		if (strcmp(ptrParams, "FALSE") == 0)
 			blnListen = FALSE;

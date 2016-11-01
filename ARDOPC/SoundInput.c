@@ -23,6 +23,7 @@ extern UCHAR bytLastReceivedDataFrameType;
 extern int NErrors;
 extern BOOL blnBREAKCmd;
 extern UCHAR bytLastACKedDataFrameType;
+extern int intARQDefaultDlyMs;
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
@@ -203,8 +204,7 @@ int	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the f
 int RcvdSamplesLen = 0;				// Samples in RX buffer
 
 BOOL Acquire2ToneLeaderSymbolFraming();
-BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz);
-BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN);
+BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN);
 BOOL AcquireFrameSyncRSB();
 int Acquire4FSKFrameType();
 
@@ -1206,7 +1206,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] %d bytes to send in ProtocolState: %s: Send BREAK,  New state=IRStoISS (Rule 3.3)",
 					bytDataToSendLength,  ARDOPStates[ProtocolState]);
  			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, intARQDefaultDlyMs);		// only returns when all sent
 
 			WriteDebugLog("[ARDOPprotocol.ProcessNewSamples] Skip Data Decoding when blnBREAKCmd and ProtcolState=IRS");
 			blnBREAKCmd = FALSE;
@@ -1222,7 +1222,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 2000);
 			blnEnbARQRpt = TRUE;  // setup for repeats until changeover
  			EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+			Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, intARQDefaultDlyMs);		// only returns when all sent
 			goto skipDecode;
 		}						
 		
@@ -2241,8 +2241,17 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 		
 		dblBinInterpLeft = dblBinInterpLeft * dblLeftMag / (dblLeftMag + dblRightMag);
 		dblBinInterpRight = dblBinInterpRight * dblRightMag / (dblLeftMag + dblRightMag);
+	
+#ifdef __ARM_ARCH
+		{
+			int x = round(dblBinInterpLeft);	// odd, but PI doesnt print floats properly 
+			int y = round(dblBinInterpRight);
+		
+			WriteDebugLog(" SPL Left= %d  SPL Right= %d", x, y);
+		}
+#else
 		WriteDebugLog(" SPL Left= %f  SPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
-         
+#endif    
 		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
 		{
 			if (dblBinInterpLeft + dblBinInterpRight > 0)  // consider different bounding below
@@ -4526,7 +4535,7 @@ int Track1CarPSK(int intCarFreq, char * strPSKMod, float dblUnfilteredPhase, BOO
 		else if (strPSKMod[0] == '4')
 			dblModFactor = M_PI / 2;
 
-		dblRadiansPerSample = intCarFreq * dbl2Pi / 12000;
+		dblRadiansPerSample = (intCarFreq * dbl2Pi) / 12000;
 		dblPhaseOffset = dblUnfilteredPhase - dblModFactor * round(dblUnfilteredPhase / dblModFactor);
 		dblPhaseAtLastTrack = dblPhaseOffset;
 		dblFilteredPhaseOffset = dblPhaseOffset;
@@ -5148,17 +5157,17 @@ int Demod1CarPSKChar(int Start, int Carrier)
 
 		Corrections = Track1CarPSK(intCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
 
-		if (Corrections != 0)
-		{
-			Start += Corrections;
+//		if (Corrections != 0)
+//		{
+//			Start += Corrections;
 
-			if (intCP[i] == 0)
-				GoertzelRealImagHanning(intFilteredMixedSamples, Start, intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
-			else
-				GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+//			if (intCP[i] == 0)
+//				GoertzelRealImagHanning(intFilteredMixedSamples, Start, intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+//			else
+//				GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
 
-			intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
-		}
+//			intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+//		}
 		intPSKPhase_1[Carrier] = intPSKPhase_0[Carrier];
 		intPhasesLen++;
 		Start += intSampPerSym;

@@ -7,7 +7,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.8.1.3-BPQ"
+#define ProductVersion "0.8.2.0-BPQ"
 
 //	Sound interface buffer size
 
@@ -19,7 +19,8 @@
 
 #else
 #define SendSize 1200		// 100 mS for now
-#define ReceiveSize 240		// try 20mS 100 mS for now
+#define ReceiveSize 240		// try 50mS 100 mS for now
+#define NumberofinBuffers 4
 #endif
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   

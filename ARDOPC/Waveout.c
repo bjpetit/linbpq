@@ -164,7 +164,6 @@ int PriorSize = 0;
 int Index = 0;				// DMA TX Buffer being used 0 or 1
 int inIndex = 0;			// DMA Buffer being used
 
-#define NumberofinBuffers 5
 
 FILE * wavfp1;
 
