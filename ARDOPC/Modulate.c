@@ -117,7 +117,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	WriteDebugLog("Sending Frame Type %s", strType);
+	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
 	if (intBaud == 50)
 		initFilter(200);
@@ -302,7 +302,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "8FSK") != 0)
 		return;
 
-	WriteDebugLog("Sending Frame Type %s", strType);
+	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
 	initFilter(200);
 
@@ -377,7 +377,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 	if (strcmp(strMod, "16FSK") != 0)
 		return;
 
-	WriteDebugLog("Sending Frame Type %s", strType);
+	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
 	initFilter(500);
 
@@ -445,7 +445,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	WriteDebugLog("Sending Frame Type %s", strType);
+	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
 	initFilter(2000);
 
@@ -527,7 +527,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
 
-	WriteDebugLog("Sending Frame Type %s", strType);
+	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
 	if (intNumCar == 1)
 		initFilter(200);
@@ -1120,5 +1120,119 @@ void Flush()
 	SoundFlush(Number);
 }
 
+
+
+// Subroutine to make a CW ID Wave File
+
+void sendCWID(char * strID, BOOL blnPlay)
+{
+	// This generates a phase synchronous FSK MORSE keying of strID
+	// FSK used to maintain VOX on some sound cards
+	// Sent at 90% of  max ampllitude
+
+	char strAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/"; 
+
+	//Look up table for strAlphabet...each bit represents one dot time, 3 adjacent dots = 1 dash
+	// one dot spacing between dots or dashes
+
+	int intCW[] = {0x17, 0x1D5, 0x75D, 0x75, 0x1, 0x15D, 
+           0x1DD, 0x55, 0x5, 0x1777, 0x1D7, 0x175,
+           0x77, 0x1D, 0x777, 0x5DD, 0x1DD7, 0x5D, 
+           0x15, 0x7, 0x57, 0x157, 0x177, 0x757, 
+           0x1D77, 0x775, 0x77777, 0x17777, 0x5777, 0x1577,
+           0x557, 0x155, 0x755, 0x1DD5, 0x7775, 0x1DDDD, 0x1D57, 0x1D57};
+
+
+	float dblHiPhaseInc = 2 * M_PI * 1609.375f / 12000; // 1609.375 Hz High tone
+	float dblLoPhaseInc = 2 * M_PI * 1390.625f / 12000; // 1390.625  low tone
+	float dblHiPhase = 0;
+ 	float dblLoPhase = 0;
+ 	int  intDotSampCnt = 768;  // about 12 WPM or so (should be a multiple of 256
+	short intDot[768];
+	short intSpace[768];
+	int i, j, k;
+	int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
+	char * index;
+	int intMask;
+
+    strlop(strID, '-');		// Remove any SSID    
+
+	// Generate the dot samples (high tone) and space samples (low tone) 
+
+	for (i = 0; i < intDotSampCnt; i++)
+	{
+		if (CWOnOff)
+			intSpace[i] = 0;
+		else
+
+			intSpace[i] = sin(dblLoPhase) * 0.9 * intAmp;
+
+		intDot[i] = sin(dblHiPhase) * 0.9 * intAmp;
+		dblHiPhase += dblHiPhaseInc;
+		if (dblHiPhase > 2 * M_PI)
+			dblHiPhase -= 2 * M_PI;
+		dblLoPhase += dblLoPhaseInc;
+		if (dblLoPhase > 2 * M_PI)
+			dblLoPhase -= 2 * M_PI;
+	}
+	
+	initFilter(500);
+   
+	//Generate leader for VOX 6 dots long
+
+	for (k = 6; k >0; k--)
+		for (i = 0; i < intDotSampCnt; i++)
+			SampleSink(intSpace[i]);
+
+	for (j = 0; j < strlen(strID); j++)
+	{
+		index = strchr(strAlphabet, strID[j]);
+		if (index)
+			index -= (int)&strAlphabet[0];
+
+		intMask = 0x40000000;
+
+		if (index == NULL)
+		{
+			// process this as a space adding 6 dots worth of space to the wave file
+
+			for (k = 6; k >0; k--)
+				for (i = 0; i < intDotSampCnt; i++)
+					SampleSink(intSpace[i]);
+		}
+		else
+		{
+		while (intMask > 0) //  search for the first non 0 bit
+			if (intMask & intCW[(int)index])
+				break;	// intMask is pointing to the first non 0 entry
+			else
+				intMask >>= 1;	//  Right shift mask
+				
+		while (intMask > 0) //  search for the first non 0 bit
+		{
+			if (intMask & intCW[(int)index])
+				for (i = 0; i < intDotSampCnt; i++)
+					SampleSink(intDot[i]);
+			else
+				for (i = 0; i < intDotSampCnt; i++)
+					SampleSink(intSpace[i]);
+	
+			intMask >>= 1;	//  Right shift mask
+		}
+		}
+			// add 3 dot spaces for inter letter spacing
+			for (k = 6; k >0; k--)
+				for (i = 0; i < intDotSampCnt; i++)
+					SampleSink(intSpace[i]);
+	}
+	
+	//add 3 spaces for the end tail
+	
+	for (k = 6; k >0; k--)
+		for (i = 0; i < intDotSampCnt; i++)
+			SampleSink(intSpace[i]);
+
+	SoundFlush();
+}
 
 

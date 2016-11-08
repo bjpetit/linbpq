@@ -27,7 +27,7 @@ extern int inIndex;			// ADC Buffer half being used 0 or 1
 extern "C"
 {
 #include "C:\Users\John\OneDrive\Dev\Source\ARDOPC\ARDOPC.h"
-  void WriteDebugLog(const char * format, ...);
+  void WriteDebugLog(int Level, const char * format, ...);
   void InitSound();
   void HostInit();
   void CheckTimers();
@@ -69,7 +69,7 @@ extern "C"
 
     if (flag == 1)
     {
-      WriteDebugLog("adc Interrupt %d %d &d ", millis(), dma1.TCD->CITER_ELINKNO,
+      WriteDebugLog(LOGDEBUG, "adc Interrupt %d %d &d ", millis(), dma1.TCD->CITER_ELINKNO,
                     ADC_Buffer[dma1.TCD->CITER_ELINKNO]);
       flag = 0;
     }
@@ -97,7 +97,7 @@ extern "C"
       RXBUFFER[RXBPtr] = 0;
       Count = Serial.readBytes((char *)RXBUFFER, RXBPtr);
       if (Count != RXBPtr)
-        WriteDebugLog("Serial Read Error");
+        WriteDebugLog(LOGDEBUG, "Serial Read Error");
 
       ProcessSCSPacket(RXBUFFER, RXBPtr);
     }
@@ -138,14 +138,14 @@ void setup()
   Serial.begin(115200);
   Serial1.begin(115200);
 
-  tft.println("ARDOP TNC"); 
-
+  tft.print("ARDOP TNC ");
+  tft.println(ProductVersion);
   dma1.begin(true);
 
   if (RCM_SRS0 & 0X20)		// Watchdog Reset
-    WriteDebugLog("\n**** Reset by Watchdog ++++");
+    WriteDebugLog(LOGCRIT, "\n**** Reset by Watchdog ++++");
 
-  WriteDebugLog("ARDOPC Version %s CPU %d Bus %d %x", ProductVersion, F_CPU, F_BUS, RCM_SRS0);
+  WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d", ProductVersion, F_CPU, F_BUS);
 
   blnTimeoutTriggered = FALSE;
   SetARDOPProtocolState(DISC);
@@ -162,14 +162,15 @@ void setup()
   analogReadRes(16);
   analogReference(INTERNAL); // range 0 to 1.2 volts
   //analogReference(DEFAULT); // range 0 to 3.3 volts
-  analogReadAveraging(8);
+  //analogReadAveraging(8);
   // Actually, do many normal reads, to start with a nice DC level
+ 
   for (i = 0; i < 1024; i++)
   {
     sum += analogRead(16);
   }
 
-  WriteDebugLog("DAC Baseline %d", sum / 1024);
+  WriteDebugLog(LOGDEBUG, "DAC Baseline %d", sum / 1024);
 
   StartDAC();
   stopDAC();
@@ -180,10 +181,6 @@ void setup()
 
 void loop()
 {
-  // WriteDebugLog("ADC Count %d %d %d ", millis(), dma1.TCD->CITER_ELINKNO, ADC_Buffer[dma1.TCD->CITER_ELINKNO]);
-
-  //  WriteDebugLog("PDB %d", PDB0_CNT);
-
   PollReceivedSamples();
   CheckTimers();
   HostPoll();

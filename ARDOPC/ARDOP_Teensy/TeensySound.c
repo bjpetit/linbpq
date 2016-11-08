@@ -26,7 +26,7 @@ void stopDAC();
 unsigned short ADC_Buffer[2][ADC_SAMPLES_PER_BLOCK] = {0};	// Two Transfer/DMA buffers of 0.1 Sec
 unsigned short work;
 
-int max, min, tot;
+int maxlevel, minlevel, tot;
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -45,7 +45,7 @@ unsigned short * DMABuffer;
 
 void printtick(char * msg)
 {
-  WriteDebugLog("%s %i", msg, Now - LastNow);
+  WriteDebugLog(LOGDEBUG, "%s %i", msg, Now - LastNow);
   LastNow = Now;
 }
 
@@ -103,7 +103,7 @@ unsigned short * SendtoCard(unsigned short buf, int n)
   {
     int Left = GetDMAPointer();
 
-    //	WriteDebugLog("Index %d Left %d", Index, Left);
+    //	WriteDebugLog(LOGDEBUG, "Index %d Left %d", Index, Left);
 
     if (Index == 0)
     { // Just filled first buffer. Can return when left is less than half,
@@ -164,10 +164,10 @@ void PollReceivedSamples()
       s1 -= 32768;
       *dst++ = s1;
       tot += s1;
-      if (s1 > max)
-        max = s1;
-      if (s1 < min)
-        min = s1;
+      if (s1 > maxlevel)
+        maxlevel = s1;
+      if (s1 < minlevel)
+        minlevel = s1;
     }
 
     //	serial.printf("Max %d min %d av %d\n", max, min, tot/ADC_SAMPLES_PER_BLOCK);
@@ -179,12 +179,12 @@ void PollReceivedSamples()
 
     // 	 printtick("Process Sample End");
 
-    if (leveltimer++ > 100)
+    if (leveltimer++ > 10)
     {
       leveltimer = 0;
-      WriteDebugLog("Input peaks = %d, %d", min, max);
+      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 10));
+      tot = minlevel = maxlevel = 0;
     }
-    min = max = 0;
   }
   inIndex = !inIndex;
 }
@@ -241,24 +241,22 @@ void SoundFlush()
     ProcessNewSamples(&dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK], Number);
   }
 
-//  WriteDebugLog ("Flush Index = %d Number = %d Left = %d", Index, Number, GetDMAPointer());
+  //  WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d", Index, Number, GetDMAPointer());
 
   if (Index == 0)
-  
+
     //	Sending from first half of buffer. Stop when DMS Pointer gets to
     //	( 2 * DAC_SAMPLES_PER_BLOCK) - Number
 
     FlushEnd = ( 2 * DAC_SAMPLES_PER_BLOCK) - Number;
-    
+
   else
-  
+
     // Second Half. Stop when pointer gets to DAC_SAMPLES_PER_BLOCK - Number)
     FlushEnd = DAC_SAMPLES_PER_BLOCK - Number;
 
   while (GetDMAPointer() > FlushEnd)
     Sleep(1);
-  
- // WriteDebugLog ("Stopped at = %d", GetDMAPointer());
 
   stopDAC();
   DMARunning = FALSE;
@@ -266,7 +264,7 @@ void SoundFlush()
 
   if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
     dttNextPlay = Now + intFrameRepeatInterval;
-    
+
   KeyPTT(FALSE);		 // Unkey the Transmitter
 
   //	StartCapture();

@@ -142,7 +142,7 @@ HANDLE BPQOpenSerialPort(DWORD * lasterror)
 
 	// Only support New Style VCOM 
 
-	WriteDebugLog("ARDOPC opening port com%d", port);
+	WriteDebugLog(LOGDEBUG, "ARDOPC opening port com%d", port);
 
 	sprintf( szPort, "\\\\.\\pipe\\BPQCOM%d", port ) ;
 
@@ -289,10 +289,10 @@ BOOL HostInit()
 	hDevice = BPQOpenSerialPort(&Errorval);
 
 	if (hDevice != (HANDLE) -1)
-		WriteDebugLog("ARDOPC opened port com%d", port);
+		WriteDebugLog(LOGALERT, "ARDOPC opened port com%d", port);
 	else
 	{
-		WriteDebugLog("ARDOPC Open Failed for Port com%d", port);
+		WriteDebugLog(LOGALERT, "ARDOPC Open Failed for Port com%d", port);
 		hDevice = 0;
 	}
 	return TRUE;

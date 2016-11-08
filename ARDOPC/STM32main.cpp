@@ -53,7 +53,7 @@ extern "C" {
 	void CheckTimers();
 	void MainPoll();
 	void HostPoll();
-	void SetARDOPProtocolState(int State);
+	//void SetARDOPProtocolState(int State);
 
 	uint32_t DMA_GetCurrentMemoryTarget(DMA_Stream_TypeDef* DMAy_Streamx);
 	void PollReceivedSamples();

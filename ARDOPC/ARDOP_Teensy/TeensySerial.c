@@ -25,7 +25,7 @@ int PutChar(unsigned char c)
 
 #include <stdarg.h>
 
-void WriteDebugLog(const char * format, ...)
+void WriteDebugLog(int Level, const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
@@ -53,12 +53,6 @@ void CloseDebugLog()
 {
 }
 
-void displayCall(char * Call)
-{
-}
-void displayState(char * Call)
-{
-}
 
 void CloseStatsLog()
 {

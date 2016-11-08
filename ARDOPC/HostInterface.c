@@ -13,6 +13,9 @@ int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn)
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
 void Break();
 
+extern BOOL gotGPIO;
+extern int pttGPIOPin;
+
 #ifndef WIN32
 
 #define strtok_s strtok_r
@@ -83,7 +86,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 	_strupr(strCMD);
 
-	if (CommandTrace) WriteDebugLog("[obCommand Trace FROM host: C:%s", strCMD);
+	if (CommandTrace) WriteDebugLog(LOGDEBUG, "[obCommand Trace FROM host: C:%s", strCMD);
 
 	ptrParams = strlop(strCMD, ' ');
 
@@ -350,7 +353,10 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == NULL)
 		{
 			if (wantCWID)
-				sprintf(cmdReply, "CWID TRUE");
+				if	(CWOnOff)
+					sprintf(cmdReply, "CWID ONOFF");
+				else
+					sprintf(cmdReply, "CWID TRUE");
 			else
 				sprintf(cmdReply, "CWID FALSE");
 
@@ -359,10 +365,19 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		
 		if (strcmp(ptrParams, "TRUE") == 0)
+		{
 			wantCWID = TRUE;
+			CWOnOff = FALSE;
+		}
 		else 
 		if (strcmp(ptrParams, "FALSE") == 0)
 			wantCWID = FALSE;
+		else 
+		if (strcmp(ptrParams, "ONOFF") == 0)
+		{
+			wantCWID = TRUE;
+			CWOnOff = TRUE;
+		}
 		else
 		{
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
@@ -1004,6 +1019,30 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
                 ' End of optional Radio Commands
 */
+
+ 	if (strcmp(strCMD, "RADIOPTTGPIO") == 0)
+	{
+		if (!gotGPIO)
+		{
+			sprintf(strFault, "PTT via GPIO not available on this system");
+			goto cmddone;
+		}
+
+		if (ptrParams == NULL)
+		{
+			if (pttGPIOPin == -1)
+				sprintf(cmdReply, "RADIOPTTGPIO DISABLED");
+			else
+				sprintf(cmdReply, "RADIOPTTGPIO ENABLED on pin %d", pttGPIOPin);
+
+			SendCommandToHost(cmdReply);
+			goto cmddone;
+		}
+
+		pttGPIOPin = atoi(ptrParams);
+		goto cmddone;
+	}
+
 	if (strcmp(strCMD, "SENDID") == 0)
 	{
 		if (ProtocolState == DISC)

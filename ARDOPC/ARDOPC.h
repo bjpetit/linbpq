@@ -7,7 +7,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.8.2.0-BPQ"
+#define ProductVersion "0.8.2.2-BPQ"
 
 //	Sound interface buffer size
 
@@ -41,6 +41,17 @@ float round(float x);
 #endif
 
 #define Now getTicks()
+
+// DebugLog Severity Levels 
+
+#define LOGEMERGENCY 0 
+#define LOGALERT 1
+#define LOGCRIT 2 
+#define LOGERROR 3 
+#define LOGWARNING 4
+#define LOGNOTICE 5
+#define LOGINFO 6
+#define LOGDEBUG 7
 
 #include <time.h>
 
@@ -148,7 +159,7 @@ void Abort();
 #ifdef WIN32
 void ProcessNewSamples(short * Samples, int nSamples);
 VOID Debugprintf(const char * format, ...);
-VOID WriteDebugLog(const char * format, ...);
+VOID WriteDebugLog(int LogLevel, const char * format, ...);
 void ardopmain();
 BOOL GetNextFECFrame();
 void GenerateFSKTemplates();
@@ -308,6 +319,7 @@ extern const short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers
 extern char GridSquare[7];
 extern char Callsign[10];
 extern BOOL wantCWID;
+extern BOOL CWOnOff;
 extern int LeaderLength;
 extern int TrailerLength;
 extern unsigned int ARQTimeout;

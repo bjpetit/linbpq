@@ -94,6 +94,13 @@ void printtick(char * msg)
 	LastNow = Now;
 }
 
+extern volatile int ticks;
+
+unsigned int getTicks()
+{
+	return ticks;
+}
+
 extern int kissdebug;
 void kiss_send_rec_packet (int chan, unsigned char *fbuf,  int flen);
 

@@ -33,7 +33,13 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
 char GridSquare[7] = "";
 char Callsign[10] = "";
 BOOL wantCWID = FALSE;
+BOOL CWOnOff = FALSE;
+
+#ifdef TEENSIE
+int LeaderLength = 500;
+#else
 int LeaderLength = 240;
+#endif
 int TrailerLength = 0;
 unsigned int ARQTimeout = 120;
 int TuningRange = 100;
@@ -1851,120 +1857,6 @@ UCHAR ComputeTypeParity(UCHAR bytFrameType)
 	return bytParitySum & 0x3;
 }
 
-// Subroutine to make a CW ID Wave File
-
-void sendCWID(char * Call, BOOL Play)
-{
-}
-
-void CWID(char * strID, short * intSamples, BOOL blnPlay)
-{
-	// This generates a phase synchronous FSK MORSE keying of strID
-	// FSK used to maintain VOX on some sound cards
-	// Sent at 90% of  max ampllitude
-
-    char strAlphabe[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/";
-
-	// Look up table for strAlphabet...each bit represents one dot time, 3 adjacent dots = 1 dash
-	// one dot spacing between dots or dashes
-/*
-        Dim intCW() As Integer = {0x17, 0x1D5, 0x75D, 0x75, 0x1, 0x15D, _
-           0x1DD, 0x55, 0x5, 0x1777, 0x1D7, 0x175, _
-           0x77, 0x1D, 0x777, 0x5DD, 0x1DD7, 0x5D, _
-           0x15, 0x7, 0x57, 0x157, 0x177, 0x757, _
-           0x1D77, 0x775, 0x77777, 0x17777, 0x5777, 0x1577, _
-           0x557, 0x155, 0x755, 0x1DD5, 0x7775, 0x1DDDD, 0x1D57, 0x1D57}
-
-        If strID.IndexOf("-") <> -1 Then
-            ' strip off the -ssid for CWID
-            strID = strID.Substring(0, strID.IndexOf("-"))
-        End If
-
-        Dim dblHiPhaseInc As float = 2 * PI * 1609.375 / 12000 ' 1609.375 Hz High tone
-        Dim dblLoPhaseInc As float = 2 * PI * 1390.625 / 12000 ' 1390.625  low tone
-        Dim dblHiPhase As float
-        Dim dblLoPhase As float
-        Dim intDotSampCnt As Integer = 768 ' about 12 WPM or so (should be a multiple of 256
-        Dim intDot(intDotSampCnt - 1) As Int16
-        Dim intSpace(intDotSampCnt - 1) As Int16
-
-        ' Generate the dot samples (high tone) and space samples (low tone) 
-        For i As Integer = 0 To intDotSampCnt - 1
-            intSpace(i) = CShort(Sin(dblLoPhase) * 0.9 * intAmp)
-            intDot(i) = CShort(Sin(dblHiPhase) * 0.9 * intAmp)
-            dblHiPhase += dblHiPhaseInc
-            If dblHiPhase > 2 * PI Then dblHiPhase -= 2 * PI
-            dblLoPhase += dblLoPhaseInc
-            If dblLoPhase > 2 * PI Then dblLoPhase -= 2 * PI
-        Next i
-        Dim intMask As Int32
-        Dim intWav((6 * intDotSampCnt) - 1) As Int32
-        ' Generate leader for VOX 6 dots long
-        For k As Integer = 6 To 1 Step -1
-            Array.Copy(intSpace, 0, intWav, intWav.Length - k * intDotSampCnt, intDotSampCnt)
-        Next k
-
-        For j As Integer = 0 To strID.Length - 1 ' for each character in the string
-            intMask = 0x40000000
-            Dim intIdx As Integer = strAlphabet.IndexOf(strID.ToUpper.Substring(j, 1))
-            If intIdx = -1 Then
-                ' process this as a space adding 6 dots worth of space to the wave file
-                ReDim Preserve intWav(intWav.Length + (6 * intDotSampCnt) - 1)
-                For k As Integer = 6 To 1 Step -1
-                    Array.Copy(intSpace, 0, intWav, intWav.Length - k * intDotSampCnt, intDotSampCnt)
-                Next k
-            Else
-                While intMask > 0 ' search for the first non 0 bit
-                    If (intMask And intCW(intIdx)) <> 0 Then
-                        Exit While ' intMask is pointing to the first non 0 entry
-                    Else
-                        intMask = intMask \ 2 ' Right shift mask
-                    End If
-                End While
-                While intMask > 0
-                    ReDim Preserve intWav(intWav.Length + intDotSampCnt - 1)
-                    If (intMask And intCW(intIdx)) <> 0 Then
-                        Array.Copy(intDot, 0, intWav, intWav.Length - intDotSampCnt, intDotSampCnt)
-                    Else
-                        Array.Copy(intSpace, 0, intWav, intWav.Length - intDotSampCnt, intDotSampCnt)
-                    End If
-                    intMask = intMask \ 2 ' Right shift mask
-                End While
-            End If
-            ' add 3 dot spaces for inter letter spacing
-            ReDim Preserve intWav(intWav.Length + (3 * intDotSampCnt) - 1)
-            For k As Integer = 3 To 1 Step -1
-                Array.Copy(intSpace, 0, intWav, intWav.Length - k * intDotSampCnt, intDotSampCnt)
-            Next k
-        Next
-        ' add 3 spaces for the end tail
-        ReDim Preserve intWav(intWav.Length + (3 * intDotSampCnt) - 1)
-        For k As Integer = 3 To 1 Step -1
-            Array.Copy(intSpace, 0, intWav, intWav.Length - k * intDotSampCnt, intDotSampCnt)
-        Next k
-        If Not blnPlay Then
-            intSamples = intWav
-            Exit Sub
-        End If
-        ' Convert the integer array to bytes
-        Dim aryWave(2 * intWav.Length - 1) As Byte
-        For j As Integer = 0 To intWav.Length - 1
-            aryWave(2 * j) = CByte(intWav(j) And 0xFF) ' LSByte
-            aryWave(1 + 2 * j) = CByte((intWav(j) And 0xFF00) \ 256) ' MSbyte
-        Next j
-        ' *********************************
-        ' Debug code to look at wave file 
-        'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = FALSE Then
-        '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
-        'End If
-        'objWave.WriteRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\CWID.wav", 12000, 16, aryWave)
-        '' End of debug code
-        '************************************
-        objWave.WriteRIFFStream(memWaveStream, 12000, 16, aryWave)
-*/
-}
-
-
 // Function to look up the byte value from the frame string name
 
 UCHAR FrameCode(char * strFrameName)
@@ -2196,7 +2088,7 @@ void CheckTimers()
 
 			//	Repeat mechanism for normal repeated FEC or ARQ frames
       
-			WriteDebugLog("Repeating Last Frame");
+			WriteDebugLog(LOGDEBUG, "Repeating Last Frame");
 			RemodulateLastFrame();
 		}
 		else
@@ -2221,7 +2113,7 @@ void CheckTimers()
 			// Thread.Sleep(50)
 			// End While
 
-		WriteDebugLog("ARDOPprotocol.tmrSendTimeout]  ARQ Timeout from ProtocolState: %s Going to DISC state", ARDOPStates[ProtocolState]);
+		WriteDebugLog(LOGDEBUG, "ARDOPprotocol.tmrSendTimeout]  ARQ Timeout from ProtocolState: %s Going to DISC state", ARDOPStates[ProtocolState]);
         
 			// Confirmed proper operation of this timeout and rule 4.0 May 18, 2015
 			// Send an ID frame (Handles protocol rule 4.0)
@@ -2265,7 +2157,7 @@ void CheckTimers()
 		
 		tmrIRSPendingTimeout = 0;
 
-		WriteDebugLog("ARDOPprotocol.tmrIRSPendingTimeout]  ARQ Timeout from ProtocolState: %s Going to DISC state",  ARDOPStates[ProtocolState]);
+		WriteDebugLog(LOGDEBUG, "ARDOPprotocol.tmrIRSPendingTimeout]  ARQ Timeout from ProtocolState: %s Going to DISC state",  ARDOPStates[ProtocolState]);
 
 		QueueCommandToHost("DISCONNECTED");
 		sprintf(HostCmd, "STATUS ARQ CONNECT REQUEST TIMEOUT FROM PROTOCOL STATE: %s",ARDOPStates[ProtocolState]);
@@ -2290,7 +2182,7 @@ void CheckTimers()
 	{
 		tmrFinalID = 0;
 		
-		WriteDebugLog("[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (%s, [%s])", strFinalIDCallsign, GridSquare);
+		WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (%s, [%s])", strFinalIDCallsign, GridSquare);
    
 		if (CheckValidCallsignSyntax(strFinalIDCallsign))
 		{
@@ -2302,9 +2194,9 @@ void CheckTimers()
 
 	if (Now > tmrPollOBQueue)
 	{
-		char HostCmd[32];
-		sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
-		QueueCommandToHost(HostCmd);
+//		char HostCmd[32];
+//		sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
+//		QueueCommandToHost(HostCmd);
 	
 		tmrPollOBQueue = Now + 10000;		// 10 Secs
 	}

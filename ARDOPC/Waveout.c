@@ -17,12 +17,33 @@
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
 void printtick(char * msg);
+void PollReceivedSamples();
+
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
+VOID COMSetDTR(HANDLE fd);
+VOID COMClearDTR(HANDLE fd);
+VOID COMSetRTS(HANDLE fd);
+VOID COMClearRTS(HANDLE fd);
+
 
 #include <math.h>
 
 #include "ARDOPC.h"
 
 void GetSoundDevices();
+
+BOOL gotGPIO = FALSE;
+int pttGPIOPin = -1;
+
+HANDLE hPTTDevice;				// port for PTT
+char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
+
+#define PTTRTS		1
+#define PTTDTR		2
+#define PTTCI_V		4		// Not used here (but may be later)
+
+int PTTMode = PTTRTS;				// PTT Control Flags.
+
 
 
 // Windows works with signed samples +- 32767
@@ -111,17 +132,29 @@ void main(int argc, char * argv[])
 
 	t = timeGetTime();
 
-	WriteDebugLog("ARDOPC Version %s", ProductVersion);
+	WriteDebugLog(LOGALERT, "ARDOPC Version %s", ProductVersion);
 
 	if (argc > 1)
 		port = atoi(argv[1]);
 	
-	if (argc == 4)
+	if (argc >= 4)
 	{
 		strcpy(CaptureDevice, argv[2]);
 		strcpy(PlaybackDevice, argv[3]);
 		_strupr(CaptureDevice);
 		_strupr(PlaybackDevice);
+	}
+
+	if (argc >= 5)
+		strcpy(PTTPORT, argv[4]);
+
+	if (PTTPORT)
+		hPTTDevice = OpenCOMPort(PTTPORT, 19200, FALSE, FALSE, FALSE, 0);
+
+	if (hPTTDevice)
+	{
+		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPORT); 
+		RadioControl = TRUE;
 	}
 
 	QueryPerformanceFrequency(&Frequency);
@@ -146,7 +179,7 @@ unsigned int getTicks()
 void printtick(char * msg)
 {
 	QueryPerformanceCounter(&NewTicks);
-	WriteDebugLog("%s %i\r", msg, Now - LastNow);
+	WriteDebugLog(LOGCRIT, "%s %i\r", msg, Now - LastNow);
 	LastNow = Now;
 }
 
@@ -205,7 +238,7 @@ void GetSoundDevices()
 {
 	int i;
 
-	WriteDebugLog("Capture Devices");
+	WriteDebugLog(LOGALERT, "Capture Devices");
 
 	CaptureCount = waveInGetNumDevs();
 
@@ -220,12 +253,12 @@ void GetSoundDevices()
 		if (CaptureDevices)
 			strcat(CaptureDevices, ",");
 		strcat(CaptureDevices, pwic.szPname);
-		WriteDebugLog("%d %s", i, pwic.szPname);
+		WriteDebugLog(LOGALERT, "%d %s", i, pwic.szPname);
 		memcpy(&CaptureNames[i][0], pwic.szPname, MAXPNAMELEN);
 		_strupr(&CaptureNames[i][0]);
 	}
 
-	WriteDebugLog("Playback Devices");
+	WriteDebugLog(LOGALERT, "Playback Devices");
 
 	PlaybackCount = waveOutGetNumDevs();
 
@@ -240,7 +273,7 @@ void GetSoundDevices()
 		if (PlaybackDevices[0])
 			strcat(PlaybackDevices, ",");
 		strcat(PlaybackDevices, pwoc.szPname);
-		WriteDebugLog("%i %s", i, pwoc.szPname);
+		WriteDebugLog(LOGALERT, "%i %s", i, pwoc.szPname);
 		memcpy(&PlaybackNames[i][0], pwoc.szPname, MAXPNAMELEN);
 		_strupr(&PlaybackNames[i][0]);
 		waveOutClose(hWaveOut);
@@ -274,12 +307,12 @@ void InitSound(BOOL Report)
     ret = waveOutOpen(&hWaveOut, PlayBackIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 
 	if (ret)
-		WriteDebugLog("Failed to open WaveOut Device %s Error %d", PlaybackDevice, ret);
+		WriteDebugLog(LOGALERT, "Failed to open WaveOut Device %s Error %d", PlaybackDevice, ret);
 	else
 	{
 		ret = waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
 		if (Report)
-			WriteDebugLog("Opened WaveOut Device %s", pwoc.szPname);
+			WriteDebugLog(LOGALERT, "Opened WaveOut Device %s", pwoc.szPname);
 	}
 
 	if (strlen(CaptureDevice) <= 2)
@@ -300,12 +333,12 @@ void InitSound(BOOL Report)
 
     ret = waveInOpen(&hWaveIn, CaptureIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 	if (ret)
-		WriteDebugLog("Failed to open WaveIn Device %s Error %d", CaptureDevice, ret);
+		WriteDebugLog(LOGALERT, "Failed to open WaveIn Device %s Error %d", CaptureDevice, ret);
 	else
 	{
 		ret = waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
 		if (Report)
-			WriteDebugLog("Opened WaveIn Device %s", pwic.szPname);
+			WriteDebugLog(LOGALERT, "Opened WaveIn Device %s", pwic.szPname);
 	}
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
@@ -323,7 +356,7 @@ void InitSound(BOOL Report)
 
 int min = 0, max = 0, leveltimer = 0;
 
-PollReceivedSamples()
+void PollReceivedSamples()
 {
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
@@ -346,11 +379,11 @@ PollReceivedSamples()
 		if (leveltimer > 1000)
 		{
 			leveltimer = 0;
-			WriteDebugLog("Input peaks = %d, %d", min, max);
+			WriteDebugLog(LOGDEBUG, "Input peaks = %d, %d", min, max);
 			min = max = 0;
 		}
 
-//		WriteDebugLog("Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
+//		WriteDebugLog(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
 			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
 
@@ -372,7 +405,7 @@ void StopCapture()
 	Capturing = FALSE;
 
 //	waveInStop(hWaveIn);
-//	WriteDebugLog("Stop Capture");
+//	WriteDebugLog(LOGDEBUG, "Stop Capture");
 }
 
 void DiscardOldSamples();
@@ -385,7 +418,7 @@ void StartCapture()
 	ClearAllMixedSamples();
 	State = SearchingForLeader;
 
-//	WriteDebugLog("Start Capture");
+//	WriteDebugLog(LOGDEBUG, "Start Capture");
 }
 void CloseSound()
 { 
@@ -404,7 +437,7 @@ VOID CloseDebugLog()
 	logfile = NULL;
 }
 
-VOID WriteDebugLog(const char * format, ...)
+VOID WriteDebugLog(int LogLevel, const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
@@ -412,14 +445,16 @@ VOID WriteDebugLog(const char * format, ...)
 	UCHAR Value[100];
 	SYSTEMTIME st;
 
-	if (!DebugLog)
-		return;
 	
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 
-	printf(Mess);
+	if (LogLevel < LOGDEBUG)
+		printf(Mess);
+
+	if (!DebugLog)
+		return;
 
 	GetSystemTime(&st);
 	sprintf(Value, "%s_%04d%02d%02d.log",
@@ -557,12 +592,12 @@ void SoundFlush()
 
 	//'Debug.WriteLine("[tmrPoll.Tick] Play stop. Length = " & Format(Now.Subtract(dttTestStart).TotalMilliseconds, "#") & " ms")
           
-//		WriteDebugLog("Play complete blnEnbARQRpt = %d", blnEnbARQRpt);
+//		WriteDebugLog(LOGDEBUG, "Play complete blnEnbARQRpt = %d", blnEnbARQRpt);
 
 	if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
 		dttNextPlay = Now + intFrameRepeatInterval;
 
-//	WriteDebugLog("Now %d Now - dttNextPlay 1  = %d", Now, Now - dttNextPlay);
+//	WriteDebugLog(LOGDEBUG, "Now %d Now - dttNextPlay 1  = %d", Now, Now - dttNextPlay);
 
 	KeyPTT(FALSE);		 // Unkey the Transmitter
 
@@ -599,8 +634,19 @@ void StopCodec(char * strFault)
 	strFault[0] = 0;
 }
 
-VOID RadioPTT()			// No Radio Control in Windows Version (but may add later)
+VOID RadioPTT(BOOL PTTState)			// No Radio Control in Windows Version (but may add later)
 {
+	if (PTTMode & PTTRTS)
+		if (PTTState)
+			COMSetRTS(hPTTDevice);
+		else
+			COMClearRTS(hPTTDevice);
+
+	if (PTTMode & PTTDTR)
+		if (PTTState)
+			COMSetDTR(hPTTDevice);
+		else
+			COMClearDTR(hPTTDevice);
 }
 
 //  Function to send PTT TRUE or PTT FALSE comannad to Host or if local Radio control Keys radio PTT 
@@ -616,14 +662,14 @@ BOOL KeyPTT(BOOL blnPTT)
 
 	if (!RadioControl)
 		if (blnPTT)
-			QueueCommandToHost("PTT TRUE");
+			SendCommandToHostQuiet("PTT TRUE");
 		else
-			QueueCommandToHost("PTT FALSE");
+			SendCommandToHostQuiet("PTT FALSE");
 
 	else
 		RadioPTT(blnPTT);
 
-	WriteDebugLog("[Main.KeyPTT]  PTT-%s", BoolString[blnPTT]);
+	WriteDebugLog(LOGDEBUG, "[Main.KeyPTT]  PTT-%s", BoolString[blnPTT]);
 
 	blnLastPTT = blnPTT;
 	return TRUE;
@@ -644,4 +690,213 @@ void displayState()
 void displayCall(int dirn, char * call)
 {
 	// Dummy for i2c display
+}
+
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
+{
+	char szPort[80];
+	BOOL fRetVal ;
+	COMMTIMEOUTS  CommTimeOuts ;
+	int	Err;
+	char buf[100];
+	HANDLE fd;
+	DCB dcb;
+
+	// if Port Name starts COM, convert to \\.\COM or ports above 10 wont work
+
+	if ((UINT)pPort < 256)			// just a com port number
+		sprintf( szPort, "\\\\.\\COM%d", pPort);
+
+	else if (_memicmp(pPort, "COM", 3) == 0)
+	{
+		char * pp = (char *)pPort;
+		int p = atoi(&pp[3]);
+		sprintf( szPort, "\\\\.\\COM%d", p);
+	}
+	else
+		strcpy(szPort, pPort);
+
+	// open COMM device
+
+	fd = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL,
+                  NULL );
+
+	if (fd == (HANDLE) -1)
+	{
+		if (Quiet == 0)
+		{
+			if (pPort < (VOID *)256)
+				sprintf(buf," COM%d could not be opened \r\n ", (UINT)pPort);
+			else
+				sprintf(buf," %s could not be opened \r\n ", pPort);
+
+	//		WritetoConsoleLocal(buf);
+			OutputDebugString(buf);
+		}
+		return (FALSE);
+	}
+
+	Err = GetFileType(fd);
+
+	// setup device buffers
+
+	SetupComm(fd, 4096, 4096 ) ;
+
+	// purge any information in the buffer
+
+	PurgeComm(fd, PURGE_TXABORT | PURGE_RXABORT |
+                                      PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+
+	// set up for overlapped I/O
+
+	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
+	CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
+	CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
+	CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
+//     CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
+	CommTimeOuts.WriteTotalTimeoutConstant = 500 ;
+	SetCommTimeouts(fd, &CommTimeOuts ) ;
+
+   dcb.DCBlength = sizeof( DCB ) ;
+
+   GetCommState(fd, &dcb ) ;
+
+   dcb.BaudRate = speed;
+   dcb.ByteSize = 8;
+   dcb.Parity = 0;
+   dcb.StopBits = TWOSTOPBITS;
+   dcb.StopBits = Stopbits;
+
+	// setup hardware flow control
+
+	dcb.fOutxDsrFlow = 0;
+	dcb.fDtrControl = DTR_CONTROL_DISABLE ;
+
+	dcb.fOutxCtsFlow = 0;
+	dcb.fRtsControl = RTS_CONTROL_DISABLE ;
+
+	// setup software flow control
+
+   dcb.fInX = dcb.fOutX = 0;
+   dcb.XonChar = 0;
+   dcb.XoffChar = 0;
+   dcb.XonLim = 100 ;
+   dcb.XoffLim = 100 ;
+
+   // other various settings
+
+   dcb.fBinary = TRUE ;
+   dcb.fParity = FALSE;
+
+   fRetVal = SetCommState(fd, &dcb);
+
+	if (fRetVal)
+	{
+		if (SetDTR)
+			EscapeCommFunction(fd, SETDTR);
+		if (SetRTS)
+			EscapeCommFunction(fd, SETRTS);
+	}
+	else
+	{
+		if ((UINT)pPort < 256)
+			sprintf(buf,"COM%d Setup Failed %d ", pPort, GetLastError());
+		else
+			sprintf(buf,"%s Setup Failed %d ", pPort, GetLastError());
+
+		printf(buf);
+		OutputDebugString(buf);
+		CloseHandle(fd);
+		return 0;
+	}
+
+	return fd;
+
+}
+
+int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength )
+{
+	BOOL       fReadStat ;
+	COMSTAT    ComStat ;
+	DWORD      dwErrorFlags;
+	DWORD      dwLength;
+
+	// only try to read number of bytes in queue
+
+	ClearCommError(fd, &dwErrorFlags, &ComStat);
+
+	dwLength = min((DWORD) MaxLength, ComStat.cbInQue);
+
+	if (dwLength > 0)
+	{
+		fReadStat = ReadFile(fd, Block, dwLength, &dwLength, NULL) ;
+
+		if (!fReadStat)
+		{
+		    dwLength = 0 ;
+			ClearCommError(fd, &dwErrorFlags, &ComStat ) ;
+		}
+	}
+
+   return dwLength;
+}
+
+
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
+{
+	BOOL        fWriteStat;
+	DWORD       BytesWritten;
+	DWORD       ErrorFlags;
+	COMSTAT     ComStat;
+
+	fWriteStat = WriteFile(fd, Block, BytesToWrite,
+	                       &BytesWritten, NULL );
+
+	if ((!fWriteStat) || (BytesToWrite != BytesWritten))
+	{
+		int Err = GetLastError();
+		ClearCommError(fd, &ErrorFlags, &ComStat);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+VOID CloseCOMPort(HANDLE fd)
+{
+	SetCommMask(fd, 0);
+
+	// drop DTR
+
+	COMClearDTR(fd);
+
+	// purge any outstanding reads/writes and close device handle
+
+	PurgeComm(fd, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+
+	CloseHandle(fd);
+}
+
+
+VOID COMSetDTR(HANDLE fd)
+{
+	EscapeCommFunction(fd, SETDTR);
+}
+
+VOID COMClearDTR(HANDLE fd)
+{
+	EscapeCommFunction(fd, CLRDTR);
+}
+
+VOID COMSetRTS(HANDLE fd)
+{
+	EscapeCommFunction(fd, SETRTS);
+}
+
+VOID COMClearRTS(HANDLE fd)
+{
+	EscapeCommFunction(fd, CLRRTS);
 }

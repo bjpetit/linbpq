@@ -90,7 +90,7 @@ void QueueCommandToHost(char * Cmd)
 		state = 0;
 	}
 
-	WriteDebugLog("Command to Host %s", Cmd);
+	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
 }
 
 void SendCommandToHost(char * Cmd)
@@ -103,7 +103,7 @@ void SendCommandToHost(char * Cmd)
 		state = 0;
 	}
 
-	WriteDebugLog("Command to Host %s", Cmd);
+	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
 }
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
@@ -119,7 +119,7 @@ void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 	else
 	{
 		Msg[Len] = 0;
-		WriteDebugLog("RX Data %s %s", Type, Msg);
+		WriteDebugLog(LOGDEBUG, "RX Data %s %s", Type, Msg);
 	}
 }
 
@@ -372,14 +372,14 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		goto AckIt;
 	}
 
-//	WriteDebugLog("%c", Buffer[3]);
+//	WriteDebugLog(LOGDEBUG, "%c", Buffer[3]);
 
 	switch (Buffer[3])
 	{
 	case 'J':				// JHOST
 
 		MODE = FALSE;
-		WriteDebugLog("Exit Host Mode");
+		WriteDebugLog(LOGDEBUG, "Exit Host Mode");
 		return;
 
 	case 'L':
@@ -530,7 +530,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		// Use # Construct to send ARDOP commands
 
 		Buffer[Length - 2] = 0;
-		WriteDebugLog("SCS Host COmmand %s", &Buffer[4]);
+		WriteDebugLog(LOGDEBUG, "SCS Host COmmand %s", &Buffer[4]);
 
 		ProcessCommandFromHost(&Buffer[4]);
 		SCSReply[2] = Channel;
@@ -560,7 +560,7 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 
 	// We can probably just dump anything but JHOST 4 and Callsign
 
-	WriteDebugLog("SCS Command %s", Command);
+	WriteDebugLog(LOGDEBUG, "SCS Command %s", Command);
 
 	if (Len == 1)
 		goto SendPrompt;		// Just a CR
@@ -575,7 +575,7 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	if (_memicmp(Command, "JHOST4", 6) == 0)
 	{
 		MODE = TRUE;
-		WriteDebugLog("Entering Host Mode");
+		WriteDebugLog(LOGDEBUG, "Entering Host Mode");
 		Toggle = 0;
 		blnAbort = TRUE;			// Reset ARDOP 
 
@@ -790,7 +790,7 @@ Loop:
 		if (strlen(rxbuffer) < Length)
 		{
 			RXBPtr = 0;
-			WriteDebugLog("cancelling input %d %d", strlen(rxbuffer), Length);
+			WriteDebugLog(LOGDEBUG, "cancelling input %d %d", strlen(rxbuffer), Length);
 			return;
 		}
 		ptr = strchr(rxbuffer, 13);

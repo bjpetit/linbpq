@@ -25,12 +25,22 @@
  * Source code is available at http://rscode.sourceforge.net
  */
 
+#define LOGEMERGENCY 0 
+#define LOGALERT 1
+#define LOGCRIT 2 
+#define LOGERROR 3 
+#define LOGWARNING 4
+#define LOGNOTICE 5
+#define LOGINFO 6
+#define LOGDEBUG 7
+
+
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
 #include "ecc.h"
 
-void WriteDebugLog(const char * format, ...);
+void WriteDebugLog(int Level, const char * format, ...);
 
 /* Encoder parity bytes */
 int pBytes[MAXDEG];
@@ -69,10 +79,10 @@ void
 print_parity (void)
 { 
   int i;
-  WriteDebugLog("Parity Bytes: ");
+  WriteDebugLog(LOGDEBUG, "Parity Bytes: ");
   for (i = 0; i < NPAR; i++) 
-    WriteDebugLog("[%d]:%x, ",i,pBytes[i]);
-  WriteDebugLog("\n");
+    WriteDebugLog(LOGDEBUG, "[%d]:%x, ",i,pBytes[i]);
+  WriteDebugLog(LOGDEBUG, "\n");
 }
 
 
@@ -80,10 +90,10 @@ void
 print_syndrome (void)
 { 
   int i;
-  WriteDebugLog("Syndrome Bytes: ");
+  WriteDebugLog(LOGDEBUG, "Syndrome Bytes: ");
   for (i = 0; i < NPAR; i++) 
-    WriteDebugLog("[%d]:%x, ",i,synBytes[i]);
-  WriteDebugLog("\n");
+    WriteDebugLog(LOGDEBUG, "[%d]:%x, ",i,synBytes[i]);
+  WriteDebugLog(LOGDEBUG, "\n");
 }
 
 
@@ -108,7 +118,7 @@ decode_data(unsigned char data[], int nbytes)
 		
 		synBytes[j]  = sum;
 
-//	WriteDebugLog("%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
+//	WriteDebugLog(LOGDEBUG, "%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
 
 	}
 }
@@ -135,7 +145,7 @@ debug_check_syndrome (void)
   int i;
 	
   for (i = 0; i < 3; i++) {
-    WriteDebugLog(" inv log S[%d]/S[%d] = %d\n", i, i+1, 
+    WriteDebugLog(LOGDEBUG, " inv log S[%d]/S[%d] = %d\n", i, i+1, 
 	   glog[gmult(synBytes[i], ginv(synBytes[i+1]))]);
   }
 }

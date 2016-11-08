@@ -158,9 +158,9 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop)        // this only 
 		blnLastBusy = True;
 		LastBusyOn = Now;
 #ifdef __ARM_ARCH
-		WriteDebugLog("[BusyDetect2: BUSY ON  StoN Narrow = %d StoN Wide %d", x, y);
+		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY ON  StoN Narrow = %d StoN Wide %d", x, y);
 #else
-		WriteDebugLog("[BusyDetect2: BUSY ON  StoN Narrow = %f StoN Wide %f", dblAvgStoNNarrow, dblAvgStoNWide);
+		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY ON  StoN Narrow = %f StoN Wide %f", dblAvgStoNNarrow, dblAvgStoNWide);
 #endif
 	}
 	else if (blnLastBusy == True && !blnBusy)
@@ -171,9 +171,9 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop)        // this only 
 		blnLastBusy = False;
 		LastBusyOff = Now;
 #ifdef __ARM_ARCH
-		WriteDebugLog("[BusyDetect2: BUSY OFF StoN Narrow = %d StoN Wide %d", x, y);
+		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY OFF StoN Narrow = %d StoN Wide %d", x, y);
 #else
-		WriteDebugLog("[BusyDetect2: BUSY OFF StoN Narrow = %f StoN Wide %f", dblAvgStoNNarrow, dblAvgStoNWide);
+		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY OFF StoN Narrow = %f StoN Wide %f", dblAvgStoNNarrow, dblAvgStoNWide);
 #endif
 	}
 
@@ -254,7 +254,7 @@ BOOL BusyDetect3(float * dblMag, int intStart, int intStop)        // this only 
 		blnBusy = (dblAvgStoNNarrow > (3 + 0.008 * powf(BusyDet, 4))) || (dblAvgStoNWide > (5 + 0.016 * powf(BusyDet, 4)));  		
  	}
 
-//	WriteDebugLog("Busy %d Wide %f Narrow %f", blnBusy, dblAvgStoNWide, dblAvgStoNNarrow); 
+//	WriteDebugLog(LOGDEBUG, "Busy %d Wide %f Narrow %f", blnBusy, dblAvgStoNWide, dblAvgStoNNarrow); 
 
 	if (blnBusy)
 	{
