@@ -33,10 +33,13 @@ VOID COMClearRTS(HANDLE fd);
 void GetSoundDevices();
 
 BOOL gotGPIO = FALSE;
+BOOL useGPIO = FALSE;
+
 int pttGPIOPin = -1;
 
-HANDLE hPTTDevice;				// port for PTT
-char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
+
+HANDLE hPTTDevice = 0;			// port for PTT
+char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
 
 #define PTTRTS		1
 #define PTTDTR		2
@@ -137,7 +140,7 @@ void main(int argc, char * argv[])
 	if (argc > 1)
 		port = atoi(argv[1]);
 	
-	if (argc >= 4)
+	if (argc > 3)
 	{
 		strcpy(CaptureDevice, argv[2]);
 		strcpy(PlaybackDevice, argv[3]);
@@ -145,7 +148,7 @@ void main(int argc, char * argv[])
 		_strupr(PlaybackDevice);
 	}
 
-	if (argc >= 5)
+	if (argc > 4)
 		strcpy(PTTPORT, argv[4]);
 
 	if (PTTPORT)
@@ -153,6 +156,8 @@ void main(int argc, char * argv[])
 
 	if (hPTTDevice)
 	{
+		COMClearRTS(hPTTDevice);
+		COMClearDTR(hPTTDevice);
 		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPORT); 
 		RadioControl = TRUE;
 	}
@@ -450,7 +455,7 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 
-	if (LogLevel < LOGDEBUG)
+	if (LogLevel <= ConsoleLogLevel)
 		printf(Mess);
 
 	if (!DebugLog)
@@ -634,7 +639,7 @@ void StopCodec(char * strFault)
 	strFault[0] = 0;
 }
 
-VOID RadioPTT(BOOL PTTState)			// No Radio Control in Windows Version (but may add later)
+VOID RadioPTT(BOOL PTTState)
 {
 	if (PTTMode & PTTRTS)
 		if (PTTState)
@@ -682,7 +687,7 @@ void PlatformSleep()
 	Sleep(10);
 }
 
-void displayState()
+void displayState(const char * State)
 {
 	// Dummy for i2c display
 }

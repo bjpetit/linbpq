@@ -13,13 +13,38 @@
 
 #include <alsa/asoundlib.h>
 #include <signal.h>
+#include <termios.h>
+#include <sys/ioctl.h>
 
 #include "ARDOPC.h"
+
+void gpioSetMode(unsigned gpio, unsigned mode);
+void gpioWrite(unsigned gpio, unsigned level);
+
+#define HANDLE int
+
+VOID COMSetDTR(HANDLE fd);
+VOID COMClearDTR(HANDLE fd);
+VOID COMSetRTS(HANDLE fd);
+VOID COMClearRTS(HANDLE fd);
+VOID RadioPTT(int PTTState)	;
 
 extern BOOL blnDISCRepeating;
 
 BOOL gotGPIO = FALSE;
 int pttGPIOPin = -1;
+BOOL useGPIO = FALSE;
+
+
+HANDLE hPTTDevice = 0;				// port for PTT
+char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
+
+#define PTTRTS		1
+#define PTTDTR		2
+#define PTTCI_V		4		// Not used here (but may be later)
+
+int PTTMode = PTTRTS;				// PTT Control Flags.
+
 
 void Sleep(int mS)
 {
@@ -105,7 +130,7 @@ VOID WriteDebugLog(int Level, const char * format, ...)
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\n");
 	
-	if (Level < LOGDEBUG)
+	if (Level <= ConsoleLogLevel)
 		printf("%s", Mess);
 
 	if (!DebugLog)
@@ -209,6 +234,40 @@ void PlatformSleep()
 	Sleep(1);
 }
 
+// PTT via GPIO code
+
+#ifdef __ARM_ARCH
+
+#define PI_INPUT  0
+#define PI_OUTPUT 1
+#define PI_ALT0   4
+#define PI_ALT1   5
+#define PI_ALT2   6
+#define PI_ALT3   7
+#define PI_ALT4   3
+#define PI_ALT5   2
+
+// Set GPIO pin as output and set low
+
+SetupGPIOPTT()
+{
+	if (pttGPIOPin == -1)
+	{
+		WriteDebugLog(LOGALERT, "GPIO PTT disabled"); 
+		RadioControl = FALSE;
+		useGPIO = FALSE;
+	}
+	else
+	{
+		gpioSetMode(pttGPIOPin, PI_OUTPUT);
+		gpioWrite(pttGPIOPin, 0);
+		WriteDebugLog(LOGALERT, "Using GPIO pin %d for PTT", pttGPIOPin); 
+		RadioControl = TRUE;
+		useGPIO = TRUE;
+	}
+}
+#endif
+
 
 void main(int argc, char * argv[])
 {
@@ -227,17 +286,48 @@ void main(int argc, char * argv[])
 		strcpy(PlaybackDevice, argv[3]);
 	}
 
-	// Initialise GPIO for PTT if available
+	if (argc > 4)
+	{
+		if (stricmp(argv[4], "GPIO") == 0)
+		{
+		// Initialise GPIO for PTT if available
 
 #ifdef __ARM_ARCH
 
-   if (gpioInitialise() == 0)
-   {
-		printf("GPIO interface for PTT available\n");
-		gotGPIO = TRUE;
-   }
+			if (gpioInitialise() == 0)
+			{	
+				printf("GPIO interface for PTT available\n");
+				gotGPIO = TRUE;
 
+				pttGPIOPin = 17;
+				SetupGPIOPTT();
+				RadioPTT(1);
+				txSleep(1000);
+				RadioPTT(0);
+		   }
+			else
+				printf("Couldn't initialise GPIO interface for PTT\n");
+
+#else
+			printf("GPIO interface for PTT not available on this platform\n");
 #endif
+
+		}
+		else
+		{
+			strcpy(PTTPORT, argv[4]);
+			if (PTTPORT)
+				hPTTDevice = OpenCOMPort(PTTPORT, 19200, FALSE, FALSE, FALSE, 0);
+	
+			if (hPTTDevice)
+			{
+				WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPORT); 
+				COMClearRTS(hPTTDevice);
+				COMClearDTR(hPTTDevice);
+				RadioControl = TRUE;
+			}	
+		}
+	}
 
 	initdisplay();
 
@@ -331,7 +421,7 @@ int GetOutputDeviceCollection()
 
 	//	Add virtual device ARDOP so ALSA plugins can be used if needed
 
-	WriteDevices = realloc(WriteDevices,(WriteDeviceCount + 1) * 4);
+	WriteDevices = realloc(WriteDevices,(WriteDeviceCount + 1) * sizeof(WriteDevices));
 	WriteDevices[WriteDeviceCount++] = strdup("ARDOP");
 
 	//	Get Device List  from ALSA
@@ -433,7 +523,7 @@ int GetOutputDeviceCollection()
 
 			Debugprintf("%s", NameString);
 
-			WriteDevices = realloc(WriteDevices,(WriteDeviceCount + 1) * 4);
+			WriteDevices = realloc(WriteDevices,(WriteDeviceCount + 1) * sizeof(WriteDevices));
 			WriteDevices[WriteDeviceCount++] = strdup(NameString);
 
 			snd_pcm_close(pcm);
@@ -496,7 +586,7 @@ int GetInputDeviceCollection()
 
 	//	Add virtual device ARDOP so ALSA plugins can be used if needed
 
-	ReadDevices = realloc(ReadDevices,(ReadDeviceCount + 1) * 4);
+	ReadDevices = realloc(ReadDevices,(ReadDeviceCount + 1) * sizeof(ReadDevices));
 	ReadDevices[ReadDeviceCount++] = strdup("ARDOP");
 
 	//	Get Device List  from ALSA
@@ -588,7 +678,7 @@ int GetInputDeviceCollection()
 
 			Debugprintf("%s", NameString);
 
-			ReadDevices = realloc(ReadDevices,(ReadDeviceCount + 1) * 4);
+			ReadDevices = realloc(ReadDevices,(ReadDeviceCount + 1) * sizeof(ReadDevices));
 			ReadDevices[ReadDeviceCount++] = strdup(NameString);
 
 			snd_pcm_close(pcm);
@@ -1277,9 +1367,26 @@ void SoundFlush()
 	return;
 }
 
-VOID RadioPTT()	
+VOID RadioPTT(int PTTState)	
 {
-	// May add PTT via GPIO for PI
+#ifdef __ARM_ARCH
+	if (useGPIO)
+		gpioWrite(pttGPIOPin, PTTState);
+	else
+#endif
+	{
+		if (PTTMode & PTTRTS)
+			if (PTTState)
+				COMSetRTS(hPTTDevice);
+			else
+				COMClearRTS(hPTTDevice);
+
+		if (PTTMode & PTTDTR)
+			if (PTTState)
+				COMSetDTR(hPTTDevice);
+			else
+				COMClearDTR(hPTTDevice);
+	}
 }
 
 //  Function to send PTT TRUE or PTT FALSE commanad to Host or if local Radio control Keys radio PTT 
@@ -1307,6 +1414,173 @@ BOOL KeyPTT(BOOL blnPTT)
 	blnLastPTT = blnPTT;
 	return TRUE;
 }
+
+
+static struct speed_struct
+{
+	int	user_speed;
+	speed_t termios_speed;
+} speed_table[] = {
+	{300,         B300},
+	{600,         B600},
+	{1200,        B1200},
+	{2400,        B2400},
+	{4800,        B4800},
+	{9600,        B9600},
+	{19200,       B19200},
+	{38400,       B38400},
+	{57600,       B57600},
+	{115200,      B115200},
+	{-1,          B0}
+};
+
+
+HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
+{
+	char buf[100];
+
+	//	Linux Version.
+
+	int fd;
+	int hwflag = 0;
+	u_long param=1;
+	struct termios term;
+	struct speed_struct *s;
+
+	if ((fd = open(pPort, O_RDWR | O_NDELAY)) == -1)
+	{
+		if (Quiet == 0)
+		{
+			perror("Com Open Failed");
+			printf(" %s could not be opened \n", pPort);
+		}
+		return 0;
+	}
+
+	// Validate Speed Param
+
+	for (s = speed_table; s->user_speed != -1; s++)
+		if (s->user_speed == speed)
+			break;
+
+   if (s->user_speed == -1)
+   {
+	   fprintf(stderr, "tty_speed: invalid speed %d\n", speed);
+	   return FALSE;
+   }
+
+   if (tcgetattr(fd, &term) == -1)
+   {
+	   perror("tty_speed: tcgetattr");
+	   return FALSE;
+   }
+
+   	cfmakeraw(&term);
+	cfsetispeed(&term, s->termios_speed);
+	cfsetospeed(&term, s->termios_speed);
+
+	if (tcsetattr(fd, TCSANOW, &term) == -1)
+	{
+		perror("tty_speed: tcsetattr");
+		return FALSE;
+	}
+
+	ioctl(fd, FIONBIO, &param);
+	return fd;
+}
+
+/*
+int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
+{
+	int Length;
+
+	Length = read(fd, Block, MaxLength);
+
+	if (Length < 0)
+	{
+		if (errno != 11 && errno != 35)					// Would Block
+		{
+			perror("read");
+			printf("Handle %d Errno %d\n", fd, errno);
+		}
+		return 0;
+	}
+
+	return Length;
+}
+
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
+{
+	//	Some systems seem to have a very small max write size
+	
+	int ToSend = BytesToWrite;
+	int Sent = 0, ret;
+
+	while (ToSend)
+	{
+		ret = write(fd, &Block[Sent], ToSend);
+
+		if (ret >= ToSend)
+			return TRUE;
+
+		if (ret == -1)
+		{
+			if (errno != 11 && errno != 35)					// Would Block
+				return FALSE;
+	
+			usleep(10000);
+			ret = 0;
+		}
+						
+		Sent += ret;
+		ToSend -= ret;
+	}
+	return TRUE;
+}
+
+*/
+VOID CloseCOMPort(HANDLE fd)
+{
+	close(fd);
+}
+
+VOID COMSetDTR(HANDLE fd)
+{
+	int status;
+
+	ioctl(fd, TIOCMGET, &status);
+	status |= TIOCM_DTR;
+    ioctl(fd, TIOCMSET, &status);
+}
+
+VOID COMClearDTR(HANDLE fd)
+{
+	int status;
+
+	ioctl(fd, TIOCMGET, &status);
+	status &= ~TIOCM_DTR;
+    ioctl(fd, TIOCMSET, &status);
+}
+
+VOID COMSetRTS(HANDLE fd)
+{
+	int status;
+
+	ioctl(fd, TIOCMGET, &status);
+	status |= TIOCM_RTS;
+    ioctl(fd, TIOCMSET, &status);
+}
+
+VOID COMClearRTS(HANDLE fd)
+{
+	int status;
+
+	ioctl(fd, TIOCMGET, &status);
+	status &= ~TIOCM_RTS;
+    ioctl(fd, TIOCMSET, &status);
+}
+
+
 
 // GPIO access stuff for PTT on PI
 
@@ -1348,15 +1622,6 @@ static volatile uint32_t  *gpioReg = MAP_FAILED;
 #define PI_BIT  (1<<(gpio&0x1F))
 
 /* gpio modes. */
-
-#define PI_INPUT  0
-#define PI_OUTPUT 1
-#define PI_ALT0   4
-#define PI_ALT1   5
-#define PI_ALT2   6
-#define PI_ALT3   7
-#define PI_ALT4   3
-#define PI_ALT5   2
 
 void gpioSetMode(unsigned gpio, unsigned mode)
 {
@@ -1404,11 +1669,12 @@ int gpioRead(unsigned gpio)
    if ((*(gpioReg + GPLEV0 + PI_BANK) & PI_BIT) != 0) return 1;
    else                                         return 0;
 }
-
 void gpioWrite(unsigned gpio, unsigned level)
 {
-   if (level == 0) *(gpioReg + GPCLR0 + PI_BANK) = PI_BIT;
-   else            *(gpioReg + GPSET0 + PI_BANK) = PI_BIT;
+   if (level == 0)
+	   *(gpioReg + GPCLR0 + PI_BANK) = PI_BIT;
+   else
+	   *(gpioReg + GPSET0 + PI_BANK) = PI_BIT;
 }
 
 void gpioTrigger(unsigned gpio, unsigned pulseLen, unsigned level)
@@ -1522,3 +1788,31 @@ int gpioInitialise(void)
 
 	
 #endif
+
+
+
+int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
+{
+    unsigned char c1, c2;
+    int  v;
+
+	if (pStr1 == NULL)
+	{
+		if (pStr2)
+			Debugprintf("stricmp called with NULL 1st param - 2nd %s ", pStr2);
+		else
+			Debugprintf("stricmp called with two NULL params");
+
+		return 1;
+	}
+
+
+    do {
+        c1 = *pStr1++;
+        c2 = *pStr2++;
+        /* The casts are necessary when pStr1 is shorter & char is signed */
+        v = tolower(c1) - tolower(c2);
+    } while ((v == 0) && (c1 != '\0') && (c2 != '\0') );
+
+    return v;
+}

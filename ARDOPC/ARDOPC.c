@@ -61,6 +61,7 @@ BOOL Use600Modes = FALSE;
 BOOL FSKOnly = FALSE;
 BOOL fastStart = TRUE;
 BOOL skip167 = FALSE;
+BOOL ConsoleLogLevel = LOGINFO;
 
 // Stats
 

@@ -3,6 +3,8 @@
 
 #include "ARDOPC.h"
 
+
+
 BOOL blnProcessingCmdData = FALSE; // Processing a Command or Data frame
 BOOL blnHostRDY = FALSE;
 extern int intFECFramesSent;
@@ -11,10 +13,24 @@ void SendData();
 BOOL CheckForDisconnect();
 int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
+
 void Break();
 
 extern BOOL gotGPIO;
 extern int pttGPIOPin;
+
+
+
+HANDLE hPTTDevice;			// port for PTT
+extern char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
+
+#define PTTRTS		1
+#define PTTDTR		2
+#define PTTCI_V		4		// Not used here (but may be later)
+
+extern int PTTMode;				// PTT Control Flags.
+
 
 #ifndef WIN32
 
@@ -268,8 +284,6 @@ void ProcessCommandFromHost(char * strCMD)
 	}
 
 
-
-
 	if (strcmp(strCMD, "CAPTURE") == 0)
 	{
 		if (ptrParams == 0)
@@ -347,6 +361,31 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		goto cmddone;
 	}
+
+	if (strcmp(strCMD, "CONSOLELOG") == 0)
+	{
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "%s %d", strCMD, ConsoleLogLevel);
+			SendCommandToHost(cmdReply);
+		}
+		else
+		{
+			i = atoi(ptrParams);
+
+			if (i >= LOGEMERGENCY  && i <= LOGDEBUG)
+			{
+				ConsoleLogLevel = i;
+			}
+			else
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+	}
+
+
 
 	if (strcmp(strCMD, "CWID") == 0)
 	{
@@ -678,7 +717,7 @@ void ProcessCommandFromHost(char * strCMD)
 		{
 			i = atoi(ptrParams);
 
-			if (i >= 100  && i <= 1200)
+			if (i >= 120  && i <= 2500)
 			{
 				LeaderLength = (i + 9) /10;
 				LeaderLength *= 10;				// round to 10 mS
@@ -982,24 +1021,42 @@ void ProcessCommandFromHost(char * strCMD)
                 Else
                     strFault = "Syntax Err:" & strCMD
                 End If
-            Case "RADIOPTT"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.PTTPort)
-                Else ' need syntax check
-                    If strParameters.ToUpper = "CATPTT" Then
-                        RCB.PTTPort = "CAT PTT"
-                        objMain.objRadio.InitRadioPorts()
-                    ElseIf strParameters.ToUpper = "VOX/SIGNALINK" Then
-                        RCB.PTTPort = "VOX/Signalink"
-                        objMain.objRadio.InitRadioPorts()
-                    ElseIf strParameters.ToUpper.StartsWith("COM") Then
-                        RCB.PTTPort = strParameters.ToUpper
-                        objMain.objRadio.InitRadioPorts()
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                End If
-            Case "RADIOPTTDTR"
+				*/
+
+#ifndef TEENSIE
+	if (strcmp(strCMD, "RADIOPTT") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			sprintf(cmdReply, "RADIOPTT %s", PTTPORT);
+			SendCommandToHost(cmdReply);
+  			goto cmddone;
+		}
+
+		strcpy(PTTPORT, &cmdCopy[9]);	// Need original case
+
+		if (hPTTDevice)
+			CloseCOMPort(hPTTDevice);
+			
+		hPTTDevice = OpenCOMPort(PTTPORT, 19200, FALSE, FALSE, FALSE, 0);
+
+		if (hPTTDevice)
+		{
+			COMClearRTS(hPTTDevice);
+			COMClearDTR(hPTTDevice);
+			WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPORT); 
+			RadioControl = TRUE;
+		}
+		else
+		{
+			RadioControl = FALSE;
+			sprintf(strFault, "Could'n open PTT device %s", PTTPORT);
+		}
+		goto cmddone;
+	}
+	/*
+
+             Case "RADIOPTTDTR"
                 If ptrSpace = -1 Then
                     SendCommandToHost(strCommand & " " & RCB.PTTDTR.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
@@ -1040,9 +1097,12 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 
 		pttGPIOPin = atoi(ptrParams);
+#ifdef __ARM_ARCH
+		SetupGPIOPTT();
+#endif
 		goto cmddone;
 	}
-
+#endif
 	if (strcmp(strCMD, "SENDID") == 0)
 	{
 		if (ProtocolState == DISC)

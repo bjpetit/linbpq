@@ -1154,6 +1154,7 @@ void sendCWID(char * strID, BOOL blnPlay)
 	int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 	char * index;
 	int intMask;
+	int idoffset;
 
     strlop(strID, '-');		// Remove any SSID    
 
@@ -1188,7 +1189,9 @@ void sendCWID(char * strID, BOOL blnPlay)
 	{
 		index = strchr(strAlphabet, strID[j]);
 		if (index)
-			index -= (int)&strAlphabet[0];
+			idoffset = index - &strAlphabet[0];
+		else
+			idoffset = 0;
 
 		intMask = 0x40000000;
 
@@ -1203,14 +1206,14 @@ void sendCWID(char * strID, BOOL blnPlay)
 		else
 		{
 		while (intMask > 0) //  search for the first non 0 bit
-			if (intMask & intCW[(int)index])
+			if (intMask & intCW[idoffset])
 				break;	// intMask is pointing to the first non 0 entry
 			else
 				intMask >>= 1;	//  Right shift mask
 				
 		while (intMask > 0) //  search for the first non 0 bit
 		{
-			if (intMask & intCW[(int)index])
+			if (intMask & intCW[idoffset])
 				for (i = 0; i < intDotSampCnt; i++)
 					SampleSink(intDot[i]);
 			else

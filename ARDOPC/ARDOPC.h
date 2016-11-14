@@ -3,11 +3,12 @@
 // are changed infrequently
 //
 
+
 #ifndef ARDOPCHEADERDEFINED
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.8.2.2-BPQ"
+#define ProductVersion "0.8.3.4-BPQ"
 
 //	Sound interface buffer size
 
@@ -38,7 +39,14 @@
 
 #ifdef WIN32
 float round(float x);
+typedef void *HANDLE;
+#else
+#define HANDLE int
 #endif
+
+void txSleep(int mS);
+
+unsigned int getTicks();
 
 #define Now getTicks()
 
@@ -70,6 +78,12 @@ float round(float x);
 #ifndef TEENSIE
 #ifndef WIN32
 #define LINUX
+#endif
+#endif
+
+#ifdef __ARM_ARCH
+#ifndef TEENSIE
+#define ARMLINUX
 #endif
 #endif
 
@@ -120,13 +134,15 @@ void UpdateBusyDetector(short * bytNewSamples);
 int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM);
 void SetARDOPProtocolState(int value);
 
-unsigned int getTicks();
-void txSleep(int mS);
-void rxSleep(int mS);
+
 
 //exern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
 //extern "C" void SetFilter(void * Filter());
+
+
+void displayState(const char * State);
+void displayCall(int dirn, char * call);
 
 void SampleSink(short Sample);
 void SoundFlush();
@@ -166,6 +182,7 @@ void GenerateFSKTemplates();
 void printtick(char * msg);
 void InitValidFrameTypes();
 #endif
+
 
 BOOL DemodDecode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare);
 void DeCompressCallsign(char * bytCallsign, char * returned);
@@ -338,6 +355,8 @@ extern BOOL Use600Modes;
 extern BOOL FSKOnly;
 extern BOOL fastStart;
 extern BOOL skip167;
+extern BOOL ConsoleLogLevel;
+
 
 extern char * CaptureDevices;
 extern char * PlaybackDevices;

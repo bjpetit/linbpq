@@ -121,9 +121,8 @@ int IRSNegotiateBW(int intConReqFrameType);
 int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, BOOL blnInitialize);
 BOOL CheckForDisconnect();
 BOOL Send10MinID();
+
 void LogStats();
-void displayState();
-void displayCall(int dirn, char * call);
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
 BOOL CheckForDisconnect();
 
@@ -672,140 +671,7 @@ UCHAR * GetShiftUpThresholds(int intBW)
 }
 
 //  Subroutine to shift up to the next higher throughput or down to the next more robust data modes based on average reported quality 
-/*
-void Gearshift_7()
-{
-	// More complex mechanism to gear shift based on intAvgQuality, current state and bytes remaining.
-	// This can be refined later with different or dynamic Trip points etc. 
 
-	int intTripHi = 79;		// Modified in revision 0.4.0 (was 82)
-	int intTripLow = 69;	// Modified in revision 0.4.0 (was 72)
-
-	int intBytesRemaining = bytDataToSendLength;
-
-	if (intFrameTypePtr > 0 && (intNAKctr >= 3 || (intNAKctr >= 2 && strstr(Name(bytFrameTypesForBW[intFrameTypePtr]), "FSK") == 0)))
-	{
-		// NAK threshold changed from 4 to 3 on rev 0.5.3.1, also less for PSK
-
-		WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.Gearshift_7] intNAKCtr= %d intNAKctr  Shift down from Frame type %s New Mode: %s", intNAKctr, Name(bytFrameTypesForBW[intFrameTypePtr]), Name(bytFrameTypesForBW[intFrameTypePtr - 1]));
-		intShiftUpDn = -1;  // Shift down if 3 NAKs without ACK or 2 NAKs without an ACK from non FSK modes.
-		intAvgQuality = (intTripHi + intTripLow) / 2; // init back to mid way
-		intNAKctr = 0;
-	}
-	else if (intAvgQuality > intTripHi && intFrameTypePtr < (bytFrameTypesForBWLength - 1))
-	{
-		// if above Hi Trip setup so next call of GetNextFrameData will select a faster mode if one is available 
-		
-		intShiftUpDn = 0;
-		
-		if (TuningRange == 0)
-		{
-			switch (intFrameTypePtr)
-			{
-			case 0:
-				
-				if (intBytesRemaining > 64)
-					intShiftUpDn = 2;
-				else if (intBytesRemaining > 32)
-					intShiftUpDn = 1;
-
-				break;
-
-			case 1:
-		
-				if (intBytesRemaining > 200)
-					intShiftUpDn = 2;
-				else if (intBytesRemaining > 64)
-					intShiftUpDn = 1;
-
-				break;
- 
-			case 2:
-	
-				if (intBytesRemaining > 400)
-					intShiftUpDn = 2;
-				else if (intBytesRemaining > 200)
-					intShiftUpDn = 1;
-
-				break;
-
-			case 3:
-				
-				if (intBytesRemaining > 600) intShiftUpDn = 1;
-				break;
-		
-			case 4:
-				
-				if (intBytesRemaining > 512) intShiftUpDn = 1;
-				break;
-			}
-		}
-		else if (intSessionBW == 200)
-			intShiftUpDn = 1;
-		else if (intFrameTypePtr == 0 && intBytesRemaining > 32)
-			intShiftUpDn = 2;
-		else
-			intShiftUpDn = 1;
-
-		WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.Gearshift_7] ShiftUpDn = %d, AvgQuality=%d Resetting to %d New Mode: %s",
-			intShiftUpDn, intAvgQuality, (intTripHi + intTripLow) / 2, Name(bytFrameTypesForBW[intFrameTypePtr + intShiftUpDn]));
-
-            intNAKctr = 0;
-	}
-
-	else if (intAvgQuality < intTripLow && intFrameTypePtr > 0)
-	{
-		// if below Low Trip setup so next call of GetNextFrameData will select a more robust mode if one is available 
-            
-		intShiftUpDn = 0;
-		intShiftUpDn = 0;
-		
-		if (TuningRange == 0)
-		{
-			switch (intFrameTypePtr)
-			{
-			case 1:
-				
-				if (intBytesRemaining < 33)  intShiftUpDn = -1;
-				break;
- 
-			case 2:
-			case 4:
-			case 5:
-	
-				intShiftUpDn = -1;
-				break;
-
-			case 3:
-				
-				intShiftUpDn = -2;
-				break;
-			}
-		}
-
-		else if  (intSessionBW == 200)
-			intShiftUpDn = -1;
-		else
-		{
-			if (intFrameTypePtr == 2 && intBytesRemaining < 17)
-				intShiftUpDn = -2;
-			else
-				intShiftUpDn = -1;
-		}
-
-	WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.Gearshift_5] ShiftUpDn = %d, AvgQuality=%d Resetting to %d New Mode: %s",
-			intShiftUpDn, intAvgQuality, (intTripHi + intTripLow) / 2, Name(bytFrameTypesForBW[intFrameTypePtr + intShiftUpDn]));
-			
-		intAvgQuality = (intTripHi + intTripLow) / 2;  // init back to mid way
-		intNAKctr = 0;
-	}
-	
-	if (intShiftUpDn < 0)
-		intShiftDNs++;
-	else if (intShiftUpDn > 0)
-		intShiftUPs++;
-}
-*/
 void Gearshift_8()
 {
 	// More complex mechanism to gear shift based on intAvgQuality, current state and bytes remaining.

@@ -1333,6 +1333,11 @@ ProcessFrame:
 				InitializeConnection();
 			}
 		}
+		if (ProtocolMode == FEC && ProtocolState != FECSend)
+		{
+			SetARDOPProtocolState(DISC);
+			InitializeConnection();
+		}
 skipDecode:			
 		State = SearchingForLeader;
 		ClearAllMixedSamples();
@@ -1532,516 +1537,10 @@ float SpectralPeakLocator(float XkM1Re, float XkM1Im, float XkRe, float XkIm, fl
 	return 1.22 * (dblRightMag - dblLeftMag) / (dblLeftMag + *dblCentMag + dblRightMag);  // Optimized for Hamming Window
 }
 
-// Function to detect and tune the 2 tone leader (for all bandwidths) 
-/*
-BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz)
-{
-	// search through the samples looking for the telltail 50 baud 2 tone pattern (nominal tones 1475, 1525 Hz) 
-	// Find the offset in Hz (due to missmatch in transmitter - receiver tuning
-	// Finds the S:N (power ratio of the tones 1475 and 1525 ratioed to "noise" averaged from bins at 1425, 1450, 1500, 1550, and 1575Hz)
- 
-	float dblGoertzelReal[45];
-	float dblGoertzelImag[45];
-	float dblMag[45];
-	float dblPower;
-	float dblMaxPeak = 0.0, dblMaxPeakSN = 0.0, dblInterpM, dblBinAdj;
-	int intInterpCnt = 0;  // the count 0 to 3 of the interpolations that were < +/- .5 bin
-	int  intIatMaxPeak = 0;
-	float dblAlpha = 0.3f;  // Works well possibly some room for optimization Changed from .5 to .3 on Rev 0.1.5.3
-	float dblInterpretThreshold= 1.0f; // Good results June 6, 2014 (was .4)  ' Works well possibly some room for optimization
-	float dblFilteredMaxPeak = 0;
-	int intStartBin, intStopBin;
-	float dblLeftCar, dblRightCar, dblBinInterpLeft, dblBinInterpRight, dblCtrR, dblCtrI, dblCtrP, dblLeftP, dblRightP;
-	float dblLeftR[3], dblLeftI[3], dblRightR[3], dblRightI[3];
-	int i;
-	int Ptr = 0;
-	float dblAvgNoisePerBin, dblCoarsePwrSN, dblBinAdj1475, dblBinAdj1525, dblCoarseOffset;
-	float dblTrialOffset, dblPowerEarly, dblSNdBPwrEarly;
-
-	if ((Length) < 960)
-		return FALSE;		// ensure there are at least 960 samples (4 symbols of 240 samples)
-
-	// Compute the start and stop bins based on the tuning range Each bin is 12000/960 or 12.5 Hz/bin
-     
-	if ((Now - dttLastGoodFrameTypeDecod > 20000) && TuningRange > 0)
-	{
-		// this is the full search over the full tuning range selected.  Uses more CPU time and with possibly larger deviation once connected. 
-		
-		intStartBin = ((200.0f - TuningRange) / 12.5f);
-		intStopBin = 44 - intStartBin;
-
-		dblMaxPeak = 0;
-
-		// Generate the Power magnitudes for up to 45 12.5 Hz bins (a function of MCB.TuningRange) 
-  
-  
-		for (i = intStartBin; i <= intStopBin; i++)
-		{
-			GoertzelRealImag(intNewSamples, Ptr, 960, i + 98.0f, &dblGoertzelReal[i], &dblGoertzelImag[i]);
-				dblMag[i] = powf(dblGoertzelReal[i], 2) + powf(dblGoertzelImag[i], 2); // dblMag(i) in units of power (V^2)
-		}
-
-		// Search the bins to locate the max S:N in the two tone signal/avg noise.  
- 
-		for (i = intStartBin + 4; i <= intStopBin - 8; i++)	// ' +/- MCB.TuningRange from nominal 
-		{
-			dblPower = sqrtf(dblMag[i + 8] * dblMag[i + 4]); // using the product to minimize sensitivity to one strong carrier vs the two tone
-			// sqrt converts back to units of power from Power ^2
-
-			dblAvgNoisePerBin = (dblMag[i - 4] + dblMag[i - 2] + dblMag[i + 2] + dblMag[i + 6] + dblMag[i + 8]) * 0.2f;  // Simple average
-			dblMaxPeak = dblPower / dblAvgNoisePerBin;
-			if (dblMaxPeak > dblMaxPeakSN)
-			{
-				dblMaxPeakSN = dblMaxPeak;
-				dblCoarsePwrSN = 10 * log10f(dblMaxPeak);
-				intIatMaxPeak = i + 100;
-			}
-		}
-			
-		// Do the interpolation based on the two carriers at nominal 1475 and 1525Hz
-
-		if (((intIatMaxPeak - 101) >= intStartBin) && ((intIatMaxPeak - 95) <= intStopBin)) // check to ensure no index errors
-		{
-			// Interpolate the adjacent bins using QuinnSpectralPeakLocator
-
-			dblBinAdj1475 = QuinnSpectralPeakLocator(
-				dblGoertzelReal[intIatMaxPeak - 101], dblGoertzelImag[intIatMaxPeak - 101],
-				dblGoertzelReal[intIatMaxPeak - 100], dblGoertzelImag[intIatMaxPeak - 100], 
-				dblGoertzelReal[intIatMaxPeak - 99], dblGoertzelImag[intIatMaxPeak - 99]);
-
-			if (dblBinAdj1475 < dblInterpretThreshold && dblBinAdj1475 > -dblInterpretThreshold)
-			{
-				dblBinAdj = dblBinAdj1475;
-				intInterpCnt += 1;
-			}
-
-			dblBinAdj1525 = QuinnSpectralPeakLocator(
-				dblGoertzelReal[intIatMaxPeak - 97], dblGoertzelImag[intIatMaxPeak - 97], 
-				dblGoertzelReal[intIatMaxPeak - 96], dblGoertzelImag[intIatMaxPeak - 96], 
-				dblGoertzelReal[intIatMaxPeak - 95], dblGoertzelImag[intIatMaxPeak - 95]);
-
-			if (dblBinAdj1525 < dblInterpretThreshold && dblBinAdj1525 > -dblInterpretThreshold)
-			{
-				dblBinAdj += dblBinAdj1525;
-        		intInterpCnt += 1;
-			}
-
-			if (intInterpCnt == 0)
-			{				
-				if (SlowCPU)
-					Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduce CPU loading
-				else
-					Ptr += 240; // advance pointer 1 symbol (20 ms)
-		
-				blnLeaderDetected = FALSE;
-				return FALSE;
-			}
-			else
-			{	
-				dblBinAdj = dblBinAdj / intInterpCnt;	 // average the offsets that are within .5 bin
-				dblCoarseOffset = 12.5f * (intIatMaxPeak + dblBinAdj - 120); // compute the Coarse tuning offset in Hz
-			}
-		}
-		else
-		{
-			if (SlowCPU)
-				Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduce CPU loading
-			else
-				Ptr += 240; // advance pointer 1 symbol (20 ms) 
-		
-			blnLeaderDetected = FALSE;
-			return FALSE;
-		}
-            
-		// update the offsetHz and setup the NCO new freq and Phase inc. Note no change to current NCOphase
-
-		// Drop into narrow search
-	}
-
-	//	NarrowSearch:
-            
-	if (dblCoarseOffset < 999)
-		dblTrialOffset = dblCoarseOffset;  // use the CoarseOffset calculation from above
-	else
-		dblTrialOffset = *dblOffsetHz; // use the prior offset value
-
-	dblLeftCar = 120 - 2 + dblTrialOffset / 12.5f;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
-	dblRightCar = 120 + 2 + dblTrialOffset / 12.5f;
-	
-	// Calculate 5 bins total for Noise values in S/N computation (calculate average noise)  ' Simple average of noise bins
-            
-	GoertzelRealImag(intNewSamples, Ptr, 960, 114 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI);  // nominal center -75 Hz
-	dblAvgNoisePerBin = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, 116 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // center - 50 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, 120 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // Center 
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, 124 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // center + 50 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, 126 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI);  // center + 75 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-
-	dblAvgNoisePerBin = dblAvgNoisePerBin * 0.2f; // simple average,  now units of power
-
-	// Calculate one bin above and below the two nominal 2 tone positions for Quinn Spectral Peak locator
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar - 1, &dblLeftR[0], &dblLeftI[0]);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar, &dblLeftR[1], &dblLeftI[1]);
-	dblLeftP = powf(dblLeftR[1], 2) + powf(dblLeftI[1],  2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar + 1, &dblLeftR[2], &dblLeftI[2]);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar - 1, &dblRightR[0], &dblRightI[0]);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar, &dblRightR[1], &dblRightI[1]);
-	dblRightP = powf(dblRightR[1], 2) + powf(dblRightI[1], 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar + 1, &dblRightR[2], &dblRightI[2]);
-
-	// Calculate the total power in the two tones (use product vs sum to help reject a single carrier).
-	//dblPower = sqrtf(dblLeftP * dblRightP); // sqrt converts back to units of power 
-	dblPower = min(dblLeftP, dblRightP);  //Use the lower of Left or right to reject signle carrier
- 	// Power S:N (calculation indicates avg of 19dB at simulator setting of S:N =-5 db in 3 KHz channel)
-           
-	dblSNdBPwr = 10 * log10f(dblPower / dblAvgNoisePerBin);
-    
-
-	// Early leader detect code to calculate S:N on Front half (first 2 symbols)
-	// This appears to work well ( ver 0.5.0.5 July 20, 2016) and insures most of the leader is captured.
-	// concept is to allow more accurate framing and synb detection and reduce false leader detects
-
-	GoertzelRealImag(intNewSamples, Ptr, 480, 57 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
-	dblAvgNoisePerBin = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 58 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 60 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 62 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 63 + dblTrialOffset / 25, &dblCtrR, &dblCtrI); //  nominal center -75 Hz 
-	dblAvgNoisePerBin = 0.5 * (dblAvgNoisePerBin + (powf(dblCtrR, 2) + powf(dblCtrI, 2)));
-	dblLeftCar = 59 + dblTrialOffset / 25;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
-	dblRightCar = 61 + dblTrialOffset / 25;
-
-	GoertzelRealImag(intNewSamples, Ptr, 480, dblLeftCar, &dblCtrR, &dblCtrI); // LEFT carrier
-	dblLeftP = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, dblRightCar, &dblCtrR, &dblCtrI); // Right carrier
-	dblRightP = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	//dblPowerEarly = Sqrt(dblLeftP * dblRightP) ' sqrt converts back to units of power
-	dblPowerEarly = min(dblLeftP, dblRightP); //Use the lower of Left or right to reject signle carrier
-	dblSNdBPwrEarly = 10 * log10f(dblPowerEarly / dblAvgNoisePerBin);
-
-	// End of Early leader detect test code 
-
-
-	// The following thresholding requires the first half and the entire leader have a minium S:N for detection.
-	// These calibration values yield a sensitivity of ~ - 10 dB S:N (@ 3KHZ noise BW) with a Squelch=5, and 2 dB per squelch change
-	// The threshold for early is 1 dB lower than the threshold for the full 4 symbol leader . (compenseated for the 3 dB bandwidth difference)
-
-	if (dblSNdBPwr > (2 * Squelch) && (dblSNdBPwrEarly > (-4 + 2 * Squelch))) // The -4 value comes from - (3+1) making early threshold 1 dB lower (after 3 dB compensation for bandwidth)
-//	if (dblSNdBPwr > (Squelch + 5))  //  These give inital good performance WGN -5dB channel (3 KHz) but should be optimized. 
-	{
-//		WriteDebugLog(LOGDEBUG, "Fine Search S:N= %f dB, Prior S:N= %f", dblSNdBPwr,dblSNdBPwr_1);
-
-//		if (dblCoarseOffset < 999)
-//			WriteDebugLog(LOGDEBUG, "  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);
-
-		// Calculate the interpolation based on the left of the two tones
-
-		dblBinInterpLeft = QuinnSpectralPeakLocator(dblLeftR[0], dblLeftI[0], dblLeftR[1], dblLeftI[1], dblLeftR[2], dblLeftI[2]);
-		
-		// And the right of the two tones
-
-		dblBinInterpRight = QuinnSpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2]);
-//		WriteDebugLog(LOGDEBUG, " QSPL Left= %f  QSPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
-        
-		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
-		{
-			if (dblBinInterpLeft + dblBinInterpLeft > 0)  // consider different bounding below
-				*dblOffsetHz = dblTrialOffset + min((dblBinInterpLeft + dblBinInterpRight) * 6.25f, 3); // average left and right, adjustment bounded to +/- 3Hz max
-			else
-				*dblOffsetHz = dblTrialOffset + max((dblBinInterpLeft + dblBinInterpRight) * 6.25f, -3);
-
-		
-			sprintf(strDecodeCapture, "Interp Ldr;S:N= %f dB, Offset= %f Hz: ", dblSNdBPwr, *dblOffsetHz);
-
-			dttStartRmtLeaderMeasure = Now;
-			blnLeaderDetected = TRUE;
-
-			if (AccumulateStats)
-			{              
-				dblLeaderSNAvg = ((dblLeaderSNAvg * intLeaderDetects) + dblSNdBPwr) / (1 + intLeaderDetects); 
-				intLeaderDetects += 1;
-			}
-			dblNCOFreq = 3000 + *dblOffsetHz; // Set the NCO frequency and phase inc for mixing         
-			dblNCOPhaseInc = dbl2Pi * dblNCOFreq / 12000;
-		
-			Ptr = Ptr + 240; // advance 1 symbol to avoid any noise in start ' optimize?
-                    
-			State = AcquireSymbolSync;
-			blnLeaderDetected = TRUE;
-			dttStartRmtLeaderMeasure = Now;
-			return TRUE;
-		}
-
-		if (SlowCPU)
-			Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduced CPU loading
-		else
-			Ptr += 240; // advance pointer 1 symbol (20 ms)
-
-		blnLeaderDetected = FALSE;
-                    
-		return FALSE;
-	}
-	else
-	{
-		if (SlowCPU)
-			Ptr += 480; // advance pointer 2 symbols (40 ms) ' reduced CPU loading
-		else
-			Ptr += 240; // advance pointer 1 symbol (20 ms)
-
-			
-		blnLeaderDetected = FALSE;
-		return FALSE;
-	}
-}	
-
-
-*/
-BOOL SearchFor2ToneLeader2(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN)
-{
-	// search through the samples looking for the telltail 50 baud 2 tone pattern (nominal tones 1475, 1525 Hz) 
-	// Find the offset in Hz (due to missmatch in transmitter - receiver tuning
-	// Finds the S:N (power ratio of the tones 1475 and 1525 ratioed to "noise" averaged from bins at 1425, 1450, 1550, and 1575Hz)
- 
-	float dblGoertzelReal[45];
-	float dblGoertzelImag[45];
-	float dblMag[45];
-	float dblPower;
-	float dblMaxPeak = 0.0, dblMaxPeakSN = 0.0, dblInterpM, dblBinAdj;
-	int intInterpCnt = 0;  // the count 0 to 3 of the interpolations that were < +/- .5 bin
-	int  intIatMaxPeak = 0;
-	float dblAlpha = 0.3f;  // Works well possibly some room for optimization Changed from .5 to .3 on Rev 0.1.5.3
-	float dblInterpretThreshold= 1.0f; // Good results June 6, 2014 (was .4)  ' Works well possibly some room for optimization
-	float dblFilteredMaxPeak = 0;
-	int intStartBin, intStopBin;
-	float dblLeftCar, dblRightCar, dblBinInterpLeft, dblBinInterpRight, dblCtrR, dblCtrI, dblCtrP, dblLeftP, dblRightP;
-	float dblLeftR[3], dblLeftI[3], dblRightR[3], dblRightI[3];
-	int i;
-	int Ptr = 0;
-	float dblAvgNoisePerBin, dblCoarsePwrSN, dblBinAdj1475, dblBinAdj1525, dblCoarseOffset = 1000;
-	float dblTrialOffset, dblPowerEarly, dblSNdBPwrEarly;
-
-	if (Length < 960)
-		return FALSE;		// ensure there are at least 960 samples (4 symbols of 240 samples)
-
-	// Compute the start and stop bins based on the tuning range Each bin is 12000/960 or 12.5 Hz/bin
-     
-	if ((Now - dttLastGoodFrameTypeDecode > 20000) && TuningRange > 0)
-	{
-		// this is the full search over the full tuning range selected.  Uses more CPU time and with possibly larger deviation once connected. 
-		
-		intStartBin = ((200.0f - TuningRange) / 12.5f);
-		intStopBin = 44 - intStartBin;
-
-		dblMaxPeak = 0;
-
-		// Generate the Power magnitudes for up to 45 12.5 Hz bins (a function of MCB.TuningRange) 
-  
-		for (i = intStartBin; i <= intStopBin; i++)
-		{
-			GoertzelRealImag(intNewSamples, Ptr, 960, i + 98.0f, &dblGoertzelReal[i], &dblGoertzelImag[i]);
-				dblMag[i] = powf(dblGoertzelReal[i], 2) + powf(dblGoertzelImag[i], 2); // dblMag(i) in units of power (V^2)
-		}
-
-		// Search the bins to locate the max S:N in the two tone signal/avg noise.  
- 
-		for (i = intStartBin + 4; i <= intStopBin - 8; i++)	// ' +/- MCB.TuningRange from nominal 
-		{
-			dblPower = sqrtf(dblMag[i + 8] * dblMag[i + 4]); // using the product to minimize sensitivity to one strong carrier vs the two tone
-			// sqrt converts back to units of power from Power ^2
-			
-			// don't use center noise bin as too easily corrupted by adjacent carriers
-
-			dblAvgNoisePerBin = (dblMag[i - 4] + dblMag[i - 2] + dblMag[i + 6] + dblMag[i + 8]) * 0.25f;  // Simple average
-			dblMaxPeak = dblPower / dblAvgNoisePerBin;
-			if (dblMaxPeak > dblMaxPeakSN)
-			{
-				dblMaxPeakSN = dblMaxPeak;
-				dblCoarsePwrSN = 10 * log10f(dblMaxPeak);
-				intIatMaxPeak = i + 100;
-			}
-		}
-			
-		// Do the interpolation based on the two carriers at nominal 1475 and 1525Hz
-
-		if (((intIatMaxPeak - 101) >= intStartBin) && ((intIatMaxPeak - 95) <= intStopBin)) // check to ensure no index errors
-		{
-			// Interpolate the adjacent bins using QuinnSpectralPeakLocator
-
-			dblBinAdj1475 = QuinnSpectralPeakLocator(
-				dblGoertzelReal[intIatMaxPeak - 101], dblGoertzelImag[intIatMaxPeak - 101],
-				dblGoertzelReal[intIatMaxPeak - 100], dblGoertzelImag[intIatMaxPeak - 100], 
-				dblGoertzelReal[intIatMaxPeak - 99], dblGoertzelImag[intIatMaxPeak - 99]);
-
-			if (dblBinAdj1475 < dblInterpretThreshold && dblBinAdj1475 > -dblInterpretThreshold)
-			{
-				dblBinAdj = dblBinAdj1475;
-				intInterpCnt += 1;
-			}
-
-			dblBinAdj1525 = QuinnSpectralPeakLocator(
-				dblGoertzelReal[intIatMaxPeak - 97], dblGoertzelImag[intIatMaxPeak - 97], 
-				dblGoertzelReal[intIatMaxPeak - 96], dblGoertzelImag[intIatMaxPeak - 96], 
-				dblGoertzelReal[intIatMaxPeak - 95], dblGoertzelImag[intIatMaxPeak - 95]);
-
-			if (dblBinAdj1525 < dblInterpretThreshold && dblBinAdj1525 > -dblInterpretThreshold)
-			{
-				dblBinAdj += dblBinAdj1525;
-        		intInterpCnt += 1;
-			}
-
-			if (intInterpCnt == 0)
-			{					
-				return FALSE;
-			}
-			else
-			{	
-				dblBinAdj = dblBinAdj / intInterpCnt;	 // average the offsets that are within .5 bin
-				dblCoarseOffset = 12.5f * (intIatMaxPeak + dblBinAdj - 120); // compute the Coarse tuning offset in Hz
-			}
-		}
-		else
-		{
-			return FALSE;
-		}
-            
-		// update the offsetHz and setup the NCO new freq and Phase inc. Note no change to current NCOphase
-
-		// Drop into narrow search
-	}
-
-	//	NarrowSearch:
-            
-	if (dblCoarseOffset < 999)
-		dblTrialOffset = dblCoarseOffset;  // use the CoarseOffset calculation from above
-	else
-		dblTrialOffset = *dblOffsetHz; // use the prior offset value
-
-	dblLeftCar = 120 - 2 + dblTrialOffset / 12.5f;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
-	dblRightCar = 120 + 2 + dblTrialOffset / 12.5f;
-	// Calculate 4 bins total for Noise values in S/N computation (calculate average noise)  ' Simple average of noise bins      
-	GoertzelRealImag(intNewSamples, Ptr, 960, 114 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI);  // nominal center -75 Hz
-	dblAvgNoisePerBin = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, 116 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // center - 50 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, 124 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI); // center + 50 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, 126 + dblTrialOffset / 12.5f, &dblCtrR, &dblCtrI);  // center + 75 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	dblAvgNoisePerBin = dblAvgNoisePerBin * 0.25f; // simple average,  now units of power
-
-	// Calculate one bin above and below the two nominal 2 tone positions for Quinn Spectral Peak locator
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar - 1, &dblLeftR[0], &dblLeftI[0]);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar, &dblLeftR[1], &dblLeftI[1]);
-	dblLeftP = powf(dblLeftR[1], 2) + powf(dblLeftI[1],  2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblLeftCar + 1, &dblLeftR[2], &dblLeftI[2]);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar - 1, &dblRightR[0], &dblRightI[0]);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar, &dblRightR[1], &dblRightI[1]);
-	dblRightP = powf(dblRightR[1], 2) + powf(dblRightI[1], 2);
-	GoertzelRealImag(intNewSamples, Ptr, 960, dblRightCar + 1, &dblRightR[2], &dblRightI[2]);
-
-	// Calculate the total power in the two tones 
-	// This mechanism designed to reject single carrier but average both carriers if ratios is less than 2:1
-
-	if (dblLeftP > 2 * dblRightP)
-		dblPower = dblRightP;
-	else if (dblRightP > 2 * dblLeftP)
-		dblPower = dblLeftP;
-	else
-		dblPower = (dblLeftP + dblRightP) * 0.5f;  // simple average
-
-	dblSNdBPwr = 10 * log10f(dblPower / dblAvgNoisePerBin);
-
- 
-	// Early leader detect code to calculate S:N on Front half (first 2 symbols)
-	// concept is to allow more accurate framing and sync detection and reduce false leader detects
-
-	GoertzelRealImag(intNewSamples, Ptr, 480, 57.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
-	dblAvgNoisePerBin = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 58.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 62.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
-	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, 63.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz 
-	dblAvgNoisePerBin = 0.25f * (dblAvgNoisePerBin + (powf(dblCtrR, 2) + powf(dblCtrI, 2))); // average of 4 noise bins
-	dblLeftCar = 59 + dblTrialOffset / 25;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
-	dblRightCar = 61 + dblTrialOffset / 25;
-
-	GoertzelRealImag(intNewSamples, Ptr, 480, dblLeftCar, &dblCtrR, &dblCtrI); // LEFT carrier
-	dblLeftP = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-	GoertzelRealImag(intNewSamples, Ptr, 480, dblRightCar, &dblCtrR, &dblCtrI); // Right carrier
-	dblRightP = powf(dblCtrR, 2) + powf(dblCtrI, 2);
-
-	// the following rejects a single tone carrier but averages the two tones if ratio is < 2:1
-
-	if (dblLeftP > 4 * dblRightP)
-		dblPowerEarly = dblRightP;
-	else if (dblRightP > 4 * dblLeftP)
-		dblPowerEarly = dblLeftP;
-	else
-		dblPowerEarly = (dblLeftP + dblRightP) * 0.5f; //simple average if radio < 2:1
-
-	dblSNdBPwrEarly = 10 * log10f(dblPowerEarly / dblAvgNoisePerBin);
-
-	// End of Early leader detect test code 
-
-
-	// The following thresholding requires the first half and the entire leader have a minium S:N for detection.
-	// These calibration values yield a sensitivity of ~ - 10 dB S:N (@ 3KHZ noise BW) with a Squelch=5, and 2 dB per squelch change
-	// The threshold for early is 1 dB lower than the threshold for the full 4 symbol leader . (compenseated for the 3 dB bandwidth difference)
-
-
-	if (dblSNdBPwr > (4 + Squelch) && (dblSNdBPwrEarly > (1 + Squelch))) // making early threshold = lower (after 3 dB compensation for bandwidth)
-	{
-		WriteDebugLog(LOGDEBUG, "Fine Search S:N= %f dB, Early S:N= %f dblAvgNoisePerBin %f ", dblSNdBPwr, dblSNdBPwrEarly, dblAvgNoisePerBin);
-
-//		if (dblCoarseOffset < 999)
-//			WriteDebugLog(LOGDEBUG, "  CourseOffsetHz= %f Coarse Pwr S:N= %f dB", dblCoarseOffset, dblCoarsePwrSN);
-
-		// Calculate the interpolation based on the left of the two tones
-
-		dblBinInterpLeft = QuinnSpectralPeakLocator(dblLeftR[0], dblLeftI[0], dblLeftR[1], dblLeftI[1], dblLeftR[2], dblLeftI[2]);
-		
-		// And the right of the two tones
-
-		dblBinInterpRight = QuinnSpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2]);
-		WriteDebugLog(LOGDEBUG, " QSPL Left= %f  QSPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
-        
-		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
-		{
-			if (dblBinInterpLeft + dblBinInterpRight > 0)  // consider different bounding below
-				*dblOffsetHz = dblTrialOffset + min((dblBinInterpLeft + dblBinInterpRight) * 6.25f, 3); // average left and right, adjustment bounded to +/- 3Hz max
-			else
-				*dblOffsetHz = dblTrialOffset + max((dblBinInterpLeft + dblBinInterpRight) * 6.25f, -3);
-
-			// Capture power for debugging ...note: convert to 3 KHz noise bandwidth from 25Hz or 12.Hz for reporting consistancy.
-	
-			sprintf(strDecodeCapture, "Leader; S:N(3KHz) Early= %f dB, Full %f dB, Offset= %f Hz: ", dblSNdBPwrEarly - 20.8, dblSNdBPwr  - 23.8, *dblOffsetHz);
-
-			if (AccumulateStats)
-			{              
-				dblLeaderSNAvg = ((dblLeaderSNAvg * intLeaderDetects) + dblSNdBPwr) / (1 + intLeaderDetects); 
-				intLeaderDetects += 1;
-			}
-			dblNCOFreq = 3000 + *dblOffsetHz; // Set the NCO frequency and phase inc for mixing         
-			dblNCOPhaseInc = dbl2Pi * dblNCOFreq / 12000;
-		                    
-			State = AcquireSymbolSync;
-            *intSN = dblSNdBPwr - 23.8; // 23.8dB accomodates ratio of 3Kz BW:12.5 Hz BW (10Log 3000/12.5 = 23.8)
-			dttStartRmtLeaderMeasure = Now;
-			return TRUE;
-		}
-	}
-	return FALSE;
-}	
-
 // Function to detect and tune the 50 baud 2 tone leader (for all bandwidths) Updated version of SearchFor2ToneLeader2 
+
+float dblPriorFineOffset = 1000.0f;
+
 BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN)
 {
 	// This version uses 10Hz bin spacing. Hamming window on Goertzel, and simple spectral peak interpolator
@@ -2135,7 +1634,10 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
         		intInterpCnt += 1;
 			}
 			if (intInterpCnt == 0)					
+			{
+				dblPriorFineOffset = 1000.0f;
 				return FALSE;
+			}
 			else
 			{	
 				dblBinAdj = dblBinAdj / intInterpCnt;	 // average the offsets that are within 1 bin
@@ -2143,7 +1645,10 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 			}
 		}
 		else
+		{
+			dblPriorFineOffset = 1000.0f;
 			return FALSE;
+		}
 	}
 	
 	// Drop into Narrow Search
@@ -2155,7 +1660,10 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 		dblTrialOffset = *dblOffsetHz; // use the prior offset value
 	
     if (fabsf(dblTrialOffset) > TuningRange && TuningRange > 0)
+	{
+		dblPriorFineOffset = 1000.0f;	
 		return False;
+	}
 
 	dblLeftCar = 147.5f + dblTrialOffset / 10.0f;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
 	dblRightCar = 152.5f + dblTrialOffset / 10.0f;
@@ -2189,8 +1697,8 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 	else if (dblRightP > 4 * dblLeftP)
 		dblPower = dblLeftP;
 	else
-		dblPower = (dblLeftP + dblRightP) * 0.5f; //simple average if radio < 2:1
-
+		dblPower = sqrtf(dblLeftP * dblRightP);
+ 
 	dblSNdBPwr = 10 * log10f(dblPower / dblAvgNoisePerBin);
 
 	// Early leader detect code to calculate S:N on the first 2 symbols)
@@ -2203,7 +1711,7 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 	GoertzelRealImag(intNewSamples, Ptr, 480, 62.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz
 	dblAvgNoisePerBin += powf(dblCtrR, 2) + powf(dblCtrI, 2);
 	GoertzelRealImag(intNewSamples, Ptr, 480, 63.0f + dblTrialOffset / 25.0f, &dblCtrR, &dblCtrI); //  nominal center -75 Hz 
-	dblAvgNoisePerBin = 0.25f * (dblAvgNoisePerBin + (powf(dblCtrR, 2) + powf(dblCtrI, 2))); // average of 4 noise bins
+	dblAvgNoisePerBin = max(1000.0f, 0.25 * (dblAvgNoisePerBin + powf(dblCtrR, 2) + powf(dblCtrI, 2))); // average of 4 noise bins
 	dblLeftCar = 59 + dblTrialOffset / 25;  // the nominal positions of the two tone carriers based on the last computerd dblOffsetHz
 	dblRightCar = 61 + dblTrialOffset / 25;
 
@@ -2219,13 +1727,13 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 	else if (dblRightP > 4 * dblLeftP)
 		dblPowerEarly = dblLeftP;
 	else
-		dblPowerEarly = (dblLeftP + dblRightP) * 0.5f; //simple average if radio < 4:1
+		dblPowerEarly = sqrtf(dblLeftP * dblRightP);
 
 	dblSNdBPwrEarly = 10 * log10f(dblPowerEarly / dblAvgNoisePerBin);
 
 	// End of Early leader detect test code 
   
-	if (dblSNdBPwr > (4 + Squelch) && dblSNdBPwrEarly > Squelch && dblAvgNoisePerBin > 100.0f) // making early threshold = lower (after 3 dB compensation for bandwidth)
+	if (dblSNdBPwr > (4 + Squelch) && dblSNdBPwrEarly > Squelch && (dblAvgNoisePerBin > 100.0f || dblPriorFineOffset != 1000.0f)) // making early threshold = lower (after 3 dB compensation for bandwidth)
 	{
 		WriteDebugLog(LOGDEBUG, "Fine Search S:N= %f dB, Early S:N= %f dblAvgNoisePerBin %f ", dblSNdBPwr, dblSNdBPwrEarly, dblAvgNoisePerBin);
 
@@ -2235,22 +1743,23 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 		
 		// And the right of the two tones
 
-		dblBinInterpRight = SpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2], &dblLeftMag);
+		dblBinInterpRight = SpectralPeakLocator(dblRightR[0], dblRightI[0], dblRightR[1], dblRightI[1], dblRightR[2], dblRightI[2], &dblRightMag);
 
 		// Weight the interpolated values in proportion to their magnitudes
 		
 		dblBinInterpLeft = dblBinInterpLeft * dblLeftMag / (dblLeftMag + dblRightMag);
 		dblBinInterpRight = dblBinInterpRight * dblRightMag / (dblLeftMag + dblRightMag);
 	
-#ifdef __ARM_ARCH
+#ifdef ARMLINUX
 		{
 			int x = round(dblBinInterpLeft);	// odd, but PI doesnt print floats properly 
 			int y = round(dblBinInterpRight);
 		
-			WriteDebugLog(LOGDEBUG, " SPL Left= %d  SPL Right= %d", x, y);
+			WriteDebugLog(LOGDEBUG, " SPL Left= %d  SPL Right= %d Offset %f, LeftMag %f RightMag %f", x, y, *dblOffsetHz, dblLeftMag, dblRightMag);
 		}
 #else
-		WriteDebugLog(LOGDEBUG, " SPL Left= %f  SPL Right= %f", dblBinInterpLeft, dblBinInterpRight);
+		WriteDebugLog(LOGDEBUG, " SPL Left= %f  SPL Right= %f, Offset %f, LeftMag %f RightMag %f",
+			dblBinInterpLeft, dblBinInterpRight, *dblOffsetHz, dblLeftMag, dblRightMag);
 #endif    
 		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
 		{
@@ -2259,23 +1768,40 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 			else
 				*dblOffsetHz = dblTrialOffset + max((dblBinInterpLeft + dblBinInterpRight) * 10.0f, -3);
 
-			// Capture power for debugging ...note: convert to 3 KHz noise bandwidth from 25Hz or 12.Hz for reporting consistancy.
+			// Note the addition of requiring a second detect with small offset dramatically reduces false triggering even at Squelch values of 3
+			// The following demonstrated good detection down to -10 dB S:N with squelch = 3 and minimal false triggering. 
+			// Added rev 0.8.2.2 11/6/2016 RM
+
+			if (abs(dblPriorFineOffset - *dblOffsetHz) < 2.9f)
+			{
+				WriteDebugLog(LOGDEBUG, "Prior-Offset= %f", (dblPriorFineOffset - *dblOffsetHz));
+                   		
+				// Capture power for debugging ...note: convert to 3 KHz noise bandwidth from 25Hz or 12.Hz for reporting consistancy.
 	
-			sprintf(strDecodeCapture, "Leader; S:N(3KHz) Early= %f dB, Full %f dB, Offset= %f Hz: ", dblSNdBPwrEarly - 20.8f, dblSNdBPwr  - 24.77f, *dblOffsetHz);
+				sprintf(strDecodeCapture, "Ldr; S:N(3KHz) Early= %f dB, Full %f dB, Offset= %f Hz: ", dblSNdBPwrEarly - 20.8f, dblSNdBPwr  - 24.77f, *dblOffsetHz);
 
-			if (AccumulateStats)
-			{              
-				dblLeaderSNAvg = ((dblLeaderSNAvg * intLeaderDetects) + dblSNdBPwr) / (1 + intLeaderDetects); 
-				intLeaderDetects++;
-			}
+				if (AccumulateStats)
+				{              
+					dblLeaderSNAvg = ((dblLeaderSNAvg * intLeaderDetects) + dblSNdBPwr) / (1 + intLeaderDetects); 
+					intLeaderDetects++;
+				}
 
-			dblNCOFreq = 3000 + *dblOffsetHz; // Set the NCO frequency and phase inc for mixing         
-			dblNCOPhaseInc = dbl2Pi * dblNCOFreq / 12000;
-			dttLastLeaderDetect = dttStartRmtLeaderMeasure = Now;
+				dblNCOFreq = 3000 + *dblOffsetHz; // Set the NCO frequency and phase inc for mixing         
+				dblNCOPhaseInc = dbl2Pi * dblNCOFreq / 12000;
+				dttLastLeaderDetect = dttStartRmtLeaderMeasure = Now;
     
-			State = AcquireSymbolSync;
-            *intSN = dblSNdBPwr - 24.77; // 23.8dB accomodates ratio of 3Kz BW:10 Hz BW (10Log 3000/10 = 24.77)
-			return TRUE;
+				State = AcquireSymbolSync;
+				*intSN = dblSNdBPwr - 24.77; // 23.8dB accomodates ratio of 3Kz BW:10 Hz BW (10Log 3000/10 = 24.77)
+
+				// don't advance the pointer here
+              
+				dblPriorFineOffset = 1000.0f;
+				return TRUE;
+			}
+			else
+				dblPriorFineOffset = *dblOffsetHz;
+
+			// always use 1 symbol inc when looking for next minimal offset
 		}
 	}
 	return FALSE;
@@ -2556,6 +2082,9 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		bytValidFrameTypesLength = bytValidFrameTypesLengthALL;
 	}
 
+	// Search through all the valid frame types finding the minimal distance 
+	// This looks like a lot of computation but measured < 1 ms for 135 iterations....RM 11/1/2016
+
 	for (i = 0; i < bytValidFrameTypesLength; i++)
 	{
 		dblDistance1 = ComputeDecodeDistance(0, intToneMags, bytValidFrameTypes[i], 0);
@@ -2657,7 +2186,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			}
 			else
 			{
-				WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
+//				WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
 				return -1;		 // indicates poor quality decode so  don't use
 			}
 		}
@@ -2678,7 +2207,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			}
 			else
 			{
-				WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
+//				WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
 
 				return -1;	 // indicates poor quality decode so  don't use
 			}
@@ -2708,7 +2237,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 				}
 				else
 				{
-				WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
+//				WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
 					return -1;		 // indicates poor quality decode so  don't use
 				}
 			}
@@ -2727,7 +2256,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 				}
 				else
 				{
-					WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
+//					WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
 					return -1;		// indicates poor quality decode so  don't use
 				}
 			}
@@ -2736,7 +2265,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		{
 			sprintf(strDecodeCapture, "%s MD Decode;10  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
 				 strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, dblMinDistance1, dblMinDistance2);
-			WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
+//			WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
 			return -1; // indicates poor quality decode so  don't use
 		}
 	}
@@ -4535,7 +4064,7 @@ int Track1CarPSK(int intCarFreq, char * strPSKMod, float dblUnfilteredPhase, BOO
 		else if (strPSKMod[0] == '4')
 			dblModFactor = M_PI / 2;
 
-		dblRadiansPerSample = (intCarFreq * dbl2Pi) / 12000;
+		dblRadiansPerSample = (intCarFreq * dbl2Pi) / 12000.0f;
 		dblPhaseOffset = dblUnfilteredPhase - dblModFactor * round(dblUnfilteredPhase / dblModFactor);
 		dblPhaseAtLastTrack = dblPhaseOffset;
 		dblFilteredPhaseOffset = dblPhaseOffset;

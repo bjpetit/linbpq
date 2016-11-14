@@ -6,8 +6,13 @@
 //	Also has some platform specific routines
 
 #define TEENSIE
-#include "C:\Users\John\OneDrive\Dev\Source\ARDOPC\ARDOPC.h"
+
+#define concat(a, b) a ## b
+
+#include "C:/SkyDrive/Dev/Source/ARDOPC/ARDOPC.h"
 #include <math.h>
+
+
 
 extern BOOL blnDISCRepeating;
 
@@ -17,8 +22,6 @@ extern volatile unsigned short dac1_buffer[DAC_SAMPLES_PER_BLOCK * 2];
 
 extern int ADCInterrupts;
 
-
-void stopDAC();
 
 // Windows and Linux work with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
@@ -74,7 +77,7 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 
   if (DMARunning == FALSE)
   {
-    StartDAC();
+    xStartDAC();
     DMARunning = TRUE;
     FirstTime = TRUE;
 
@@ -179,10 +182,11 @@ void PollReceivedSamples()
 
     // 	 printtick("Process Sample End");
 
-    if (leveltimer++ > 10)
+    if (leveltimer++ > 4)
     {
       leveltimer = 0;
-      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 10));
+      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 6));
+      displayLevel(maxlevel);
       tot = minlevel = maxlevel = 0;
     }
   }
@@ -258,7 +262,7 @@ void SoundFlush()
   while (GetDMAPointer() > FlushEnd)
     Sleep(1);
 
-  stopDAC();
+  xstopDAC();
   DMARunning = FALSE;
   SoundIsPlaying = FALSE;
 

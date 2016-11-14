@@ -3,13 +3,6 @@
 #include "SPI.h"
 #include "ILI9341_t3.h"		// This is the PRJC optimised version of driver
 
-extern "C" {
-  void displayCall(int dirn, char * Call);
-}
-extern "C" {
-  void displayState(char * Call);
-}
-
 #define TFT_DC  9
 #define TFT_CS 10
 #define _RST 255		// Not Used
@@ -20,6 +13,34 @@ extern "C" {
 // Use hardware SPI
 ILI9341_t3 tft = ILI9341_t3(TFT_CS, TFT_DC, _RST, _MOSI, _SCLK, _MISO);
 
+const int barcolours[10] = {
+  ILI9341_YELLOW, ILI9341_YELLOW, ILI9341_GREEN,
+  ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN,
+  ILI9341_RED, ILI9341_RED, ILI9341_RED
+};
+
+// Signal levels for each bar
+
+const int barlevels[10] = {
+  1000, 2000, 5000, 8000, 11000,
+  16000, 24000, 28000, 30000, 32000};
+
+extern "C"
+{
+  void displayLevel(int level)
+  {
+    int i;
+
+    for (i = 0; i < 10; i++)
+    {
+      if (level > barlevels[i])
+        tft.fillRect(15 * i, 100, 14, 16, barcolours[i]);
+      else
+        tft.fillRect(15 * i, 100, 14, 16, ILI9341_BLACK);
+    }
+  }
+}
+
 void setupTFT()
 {
   tft.begin();
@@ -28,25 +49,6 @@ void setupTFT()
   tft.setRotation(1);
   tft.setCursor(0, 0);
   tft.setTextSize(2);
-  tft.fillRect(100, 100, 60, 16, ILI9341_RED);
-
 }
 
-void displayCall(int dirn, char * Call)
-{
-  char paddedcall[12] = "           ";
-
-  paddedcall[0] = dirn;
-  memcpy(paddedcall + 1, Call, strlen(Call));
-
-  tft.setCursor(0, 72);
-  tft.print(paddedcall);
-}
-void displayState(char * State)
-{
-  tft.setCursor(0, 48);
-  tft.print("          ");
-  tft.setCursor(0, 48);
-  tft.print(State);
-}
 

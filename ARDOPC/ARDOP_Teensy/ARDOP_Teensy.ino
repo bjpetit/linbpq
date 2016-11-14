@@ -17,16 +17,18 @@ unsigned char RXBUFFER[300];	// Async RX Buffer
 extern ILI9341_t3 tft;
 
 extern volatile int RXBPtr;
-
 volatile int flag = 0;
 volatile int flag2 = 0;
 extern int inIndex;			// ADC Buffer half being used 0 or 1
+
+void yDisplayCall(int dirn, char * Call);
+void yDisplayState(char * State);
+
 
 #define pttPin 13
 
 extern "C"
 {
-#include "C:\Users\John\OneDrive\Dev\Source\ARDOPC\ARDOPC.h"
   void WriteDebugLog(int Level, const char * format, ...);
   void InitSound();
   void HostInit();
@@ -34,15 +36,51 @@ extern "C"
   void HostPoll();
   void MainPoll();
   void InitDMA();
-  void StartDac();
+  void xStartDAC();
+  void xStartADC();
+  void DisplayCall(int dirn, char * Call);
+  void DisplayState(char * State);
+
   void PollReceivedSamples();
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
+
+#include "C:\SkyDrive\Dev\Source\ARDOPC\ARDOPC.h"
 
   extern unsigned int tmrPollOBQueue;
 
   extern volatile unsigned short ADC_Buffer[2 * ADC_SAMPLES_PER_BLOCK];
 
 #define Now getTicks()
+
+  void xStartDAC()
+  {
+    StartDAC();
+  }
+
+  void xstopDAC()
+  {
+    stopDAC();
+  }
+
+  void displayCall(int dirn, char * Call)
+  {
+    char paddedcall[12] = "           ";
+
+    paddedcall[0] = dirn;
+    memcpy(paddedcall + 1, Call, strlen(Call));
+
+    tft.setCursor(0, 72);
+    tft.print(paddedcall);
+  }
+
+  void displayState(const char * State)
+  {
+    tft.setCursor(0, 48);
+    tft.print("          ");
+    tft.setCursor(0, 48);
+    tft.print(State);
+  }
+
 
   unsigned int getTicks()
   {
@@ -164,14 +202,13 @@ void setup()
   //analogReference(DEFAULT); // range 0 to 3.3 volts
   //analogReadAveraging(8);
   // Actually, do many normal reads, to start with a nice DC level
- 
+
   for (i = 0; i < 1024; i++)
   {
     sum += analogRead(16);
   }
 
   WriteDebugLog(LOGDEBUG, "DAC Baseline %d", sum / 1024);
-
   StartDAC();
   stopDAC();
   setupADC(16);

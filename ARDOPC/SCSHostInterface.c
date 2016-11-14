@@ -103,8 +103,24 @@ void SendCommandToHost(char * Cmd)
 		state = 0;
 	}
 
+	WriteDebugLog(LOGINFO, "Command to Host %s", Cmd);
+}
+
+void SendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
+{
+	// if possible convert to equivalent PTC message
+
+	if (memcmp(Cmd, "STATUS CONNECT TO", 20) == 0)
+	{
+		change = 1;
+		state = 0;
+	}
+
 	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
 }
+
+//	Function to queue a text command to the Host used for all asynchronous Commmands (e.g. BUSY etc)
+
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 {

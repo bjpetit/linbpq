@@ -201,14 +201,14 @@ const char level[10][5] = {
         {255,255,255,255,255}};
 
 
-void displayState()
+void displayState(const char * State)
 {
 	if (i2cfile)
 	{
 		locate(i2cfile, 1, 0);
 		print(i2cfile, "        ");
 		locate(i2cfile, 1, 0);
-		print(i2cfile, ARDOPStates[ProtocolState]);
+		print(i2cfile, State);
 	}
 }
 
