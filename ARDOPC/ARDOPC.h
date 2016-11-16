@@ -12,7 +12,7 @@
 
 //	Sound interface buffer size
 
-#ifdef TEENSIE
+#ifdef TEENSY
 
 #define DAC_SAMPLES_PER_BLOCK 1200
 #define ADC_SAMPLES_PER_BLOCK 1200
@@ -75,14 +75,14 @@ unsigned int getTicks();
 
 #define M_PI       3.141592f
 
-#ifndef TEENSIE
+#ifndef TEENSY
 #ifndef WIN32
 #define LINUX
 #endif
 #endif
 
 #ifdef __ARM_ARCH
-#ifndef TEENSIE
+#ifndef TEENSY
 #define ARMLINUX
 #endif
 #endif

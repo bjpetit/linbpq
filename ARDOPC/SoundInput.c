@@ -4,7 +4,7 @@
 
 #pragma warning(disable : 4244)		// Code does lots of float to int
 
-#ifndef TEENSIE
+#ifndef TEENSY
 #define MEMORYARQ
 #endif
 

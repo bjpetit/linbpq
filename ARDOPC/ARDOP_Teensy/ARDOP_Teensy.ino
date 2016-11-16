@@ -1,6 +1,6 @@
 // Arduino interface code for ARDOP running on a Teensie 3.6
 
-#define TEENSIE
+#define TEENSY
 
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
 #define CPU_RESTART_VAL 0x5FA0004

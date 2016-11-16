@@ -1087,7 +1087,7 @@ void SampleSink(short Sample)
 		else if (intFilteredSample < -32700)
 			intFilteredSample = -32700;
 
-#ifdef TEENSIE	
+#ifdef TEENSY	
 		int work = (short)(intFilteredSample);
 		DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
 #else

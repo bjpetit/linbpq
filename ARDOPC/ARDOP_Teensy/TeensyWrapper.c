@@ -1,7 +1,7 @@
 //
 //	Makes keeping Windows, Linux and Teensy version in step easier
 
-#define TEENSIE
+#define TEENSY
 
 #include "C:\SkyDrive\Dev\Source\ARDOPC\ARDOPC.c"
 #include "C:\SkyDrive\Dev\Source\ARDOPC\ardopSampleArrays.c"

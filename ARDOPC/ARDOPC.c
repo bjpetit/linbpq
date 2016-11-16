@@ -35,7 +35,7 @@ char Callsign[10] = "";
 BOOL wantCWID = FALSE;
 BOOL CWOnOff = FALSE;
 
-#ifdef TEENSIE
+#ifdef TEENSY
 int LeaderLength = 500;
 #else
 int LeaderLength = 240;

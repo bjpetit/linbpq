@@ -1023,7 +1023,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
 				*/
 
-#ifndef TEENSIE
+#ifndef TEENSY
 	if (strcmp(strCMD, "RADIOPTT") == 0)
 	{
 		if (ptrParams == NULL)

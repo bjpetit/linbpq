@@ -1,6 +1,6 @@
 // ARDOP TNC Serial Interface for Teensy Board
 //
-#define TEENSIE
+#define TEENSY
 
 // SCS Port is on USB. Debug on Serial1
 

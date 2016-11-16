@@ -5,7 +5,7 @@
 
 //	Also has some platform specific routines
 
-#define TEENSIE
+#define TEENSY
 
 #define concat(a, b) a ## b
 
