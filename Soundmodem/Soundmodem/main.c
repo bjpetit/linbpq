@@ -39,11 +39,13 @@
 
 
 struct state state = {
-	NULL, NULL, NULL};
+	NULL, NULL, NULL, {200, 64, 100, 0, 0}};
+
 
 void InitSound(int SampleRate, int Report);
 
 int Baud = 9600;
+BOOL AFSK = FALSE;
 
 int logcheck(int x)
 {
@@ -76,7 +78,7 @@ struct demodulator *demodchain = &afskdemodulator;
 
 void ProcessNewSamples(short * buf, int count)
 {
-	if (Baud == 1200)
+	if (AFSK)
 		DemodAFSK(buf, count);
 	else
 		DemodFSK(buf, count);
@@ -101,13 +103,10 @@ int main(int argc, char *argv[])
 {
 	struct modemchannel *chan;
 	int samplerate, sr;
-	char p1[] = "1200";
-	char p2[] = "1200";
-	char p3[] = "2200";
-	char p4[] = "12000";
-
-
-	char * modparams[] = {p1, p2, p3, p4};
+	int P1 = 0;
+	int P2 = 0;
+	int P3 = 0;
+	int P4 = 0;
 
 #ifndef TEENSY
 	
@@ -128,10 +127,10 @@ int main(int argc, char *argv[])
 	chan->next = state.channels;
 	chan->state = &state;
 
-	if (Baud == 9600)
+	if (!AFSK)
 	{
-		modparams[0] = "9600";
-		modparams[1] = NULL;
+		P1 = 9600;
+		P2 = 0;
 		samplerate = 48000;
 		chan->mod = &fskmodulator;
 		chan->demod = &fskdemodulator;
@@ -139,6 +138,18 @@ int main(int argc, char *argv[])
 	else
 	{
 		samplerate = 12000;
+		P1 = Baud;
+
+		if (Baud == 300)
+		{
+			P2 = 1600;
+			P3 = 1800;
+		}
+		else
+		{
+			P2 = 1200;
+			P3 = 2200;
+		}
 		chan->mod = &afskmodulator;
 		chan->demod = &afskdemodulator;
 	}
@@ -147,17 +158,39 @@ int main(int argc, char *argv[])
 
 	pktinit(chan, "");
 
-	chan->modstate = chan->mod->config(chan, &sr, modparams);
-
-	if (sr > samplerate)
-		samplerate = sr;
-
-	sr = samplerate;
- 	chan->demodstate = chan->demod->config(chan, &sr, modparams);
-	if (sr > samplerate)
-		samplerate = sr;
+	chan->modstate = chan->mod->config(chan, &sr, P1, P2, P3);
+ 	chan->demodstate = chan->demod->config(chan, &sr, P1, P2, P3);
 
 	state.channels = chan;
+
+	// if 300 add more channels
+
+	if (Baud == 300)
+	{
+		if (0)
+		{
+
+		if (!(chan = malloc(sizeof(struct modemchannel))))
+			WriteDebugLog(MLOG_FATAL, "out of memory\n");
+
+		memset(chan, 0, sizeof(struct modemchannel));
+		chan->next = state.channels;
+		chan->state = &state;
+
+		chan->mod = &afskmodulator;
+		chan->demod = &afskdemodulator;
+
+		chan->modstate = NULL;
+		chan->demodstate = NULL;
+
+		pktinit(chan, "");
+
+		chan->modstate = chan->mod->config(chan, &sr, P1, P2, P3);
+	 	chan->demodstate = chan->demod->config(chan, &sr, P1, P2, P3);
+		state.channels = chan;
+
+		}
+	}
 
 	InitSound(samplerate, 1);
 
@@ -170,12 +203,12 @@ int main(int argc, char *argv[])
   
 		if (chan->mod)
 			chan->mod->init(chan->modstate, samplerate);
-	}
 
-	if (Baud == 1200)
-		DemodAFSKinit(state.channels->demodstate);		// G8BPQ 
-	else
-		DemodFSKinit(state.channels->demodstate);		// G8BPQ 
+		if (AFSK)
+			DemodAFSKinit(chan->demodstate);		// G8BPQ 
+		else
+			DemodFSKinit(chan->demodstate);		// G8BPQ 
+	}
 
 #ifndef TEENSY
 

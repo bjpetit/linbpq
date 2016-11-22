@@ -112,7 +112,6 @@ void SampleSink(short Sample)
 
 unsigned short * SendtoCard(unsigned short buf, int n)
 {
-  WriteDebugLog(7, "Sendtocard %d", n);
   if (Loopback)
   {
     // Loop back   to decode for testing
@@ -144,7 +143,7 @@ unsigned short * SendtoCard(unsigned short buf, int n)
     FirstTime = FALSE;
 
     while (GetDMAPointer() >= DAC_SAMPLES_PER_BLOCK)
-      txSleep(10);
+      txSleep(1);
   }
 
   // 	printtick("Start Wait");
@@ -169,10 +168,10 @@ unsigned short * SendtoCard(unsigned short buf, int n)
       if (Left < (DAC_SAMPLES_PER_BLOCK))
         break;
     }
-    txSleep(10);				// Run background while waiting
+    txSleep(1);				// Run background while waiting
   }
   Index = !Index;
-  txSleep(10);				// Run background while waiting
+  txSleep(1);				// Run background while waiting
   //  printtick("Stop Wait");
 
   return &dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK];
@@ -224,14 +223,16 @@ void PollReceivedSamples()
 
  //  	 printtick("Process Sample Start");
 
-    ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+   
+    if (Capturing)
+    	ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
 
  //   printtick("Process Sample End");
 
-    if (leveltimer++ > 100)
+    if (leveltimer++ > 1000)
     {
       leveltimer = 0;
-      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 100));
+      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 1000));
       displayLevel(maxlevel);
       tot = minlevel = maxlevel = 0;
     }
@@ -313,7 +314,7 @@ void SoundFlush()
 
   KeyPTT(FALSE);		 // Unkey the Transmitter
 
-  //	StartCapture();
+  StartCapture();
 
   return;
 }
@@ -333,6 +334,7 @@ BOOL KeyPTT(BOOL blnPTT)
 
 void Start_ADC_DMA(void)
 {
+	Capturing = TRUE;
 }
 
 void Config_ADC_DMA(void)

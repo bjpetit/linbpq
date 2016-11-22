@@ -16,6 +16,13 @@ DMAChannel dma1(false);
 unsigned char RXBUFFER[300];	// Async RX Buffer
 
 extern int Baud;		// Modem Speed (1200 or 9600 for noe)
+extern int AFSK;		// Modem Mode
+
+#define TRUE 1
+#define FALSE 0
+
+int loadCounter = 0;
+int lastLoadTicks = 0;
 
 extern ILI9341_t3 tft;
 
@@ -92,6 +99,17 @@ extern "C"
   }
   void Sleep(int mS)
   {
+    int loadtime = millis() - lastLoadTicks;
+
+    loadCounter += mS;
+
+    if (loadtime > 999)
+    {
+      WriteDebugLog(7, "Load = %d" , 100 - (100 * loadCounter / loadtime));
+      lastLoadTicks = millis();
+      loadCounter = 0;
+    }
+
     delay(mS);
   }
   void PlatformSleep()
@@ -175,12 +193,17 @@ void setup()
   WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
 
   Baud = 9600;	// FSK G3RUH
+  AFSK = FALSE;
 
   pinMode(pttPin, OUTPUT);
 
   setupTFT();
   Serial.begin(115200);
   Serial1.begin(115200);
+
+  Serial1.print("Hardware Serial No ");
+  print_mac();
+  Serial1.println("");
 
   tft.println("Packet TNC based on Soundmodem by Thomas Sailer");
   Serial1.println("Packet TNC based on Soundmodem by Thomas Sailer");
@@ -191,7 +214,8 @@ void setup()
   {
     tft.println("9600 FSK Mode");
     Serial1.println("9600 FSK Mode");
-  } else
+  }
+  else
   {
     tft.println("9600 FSK Mode");
     Serial1.println("9600 FSK Mode");
@@ -232,6 +256,7 @@ void loop()
 {
   mainLoop();
   PlatformSleep();
+  Sleep(1);
 }
 
 // DMA COde is here as it is more difficult to use the Arduino interface stuff
@@ -249,7 +274,7 @@ volatile uint16_t dac1_buffer[DAC_SAMPLES_PER_BLOCK * 2];
 
 //	PDB count of 4999 should give 12K clock with 60 MHz bus clock
 
-//	 We use 12K of 1200 and 24K for 9600 (for now - may optimise)
+//	 We use 12K of AFSK and 48K for 9600 (for now - may optimise)
 
 #define PDB_PERIOD_12000 (F_BUS/12000 - 1)
 #define PDB_PERIOD_24000 (F_BUS/24000 - 1)
@@ -261,9 +286,6 @@ void StartDAC()
 {
   // Set up the DAC and start sending a frame under DMA
 
-  WriteDebugLog(7, "PDB_PERIOD_12000 %d  PDB_PERIOD_24000 %d PDB_PERIOD_48000 %d",
-                PDB_PERIOD_12000, PDB_PERIOD_24000, PDB_PERIOD_48000);
-
   dma1.disable();
 
   SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
@@ -273,7 +295,7 @@ void StartDAC()
 
   PDB0_IDLY = 1;
 
-  if (Baud == 1200)
+  if (AFSK)
     PDB0_MOD = PDB_PERIOD_12000;
   else
     PDB0_MOD = PDB_PERIOD_48000;
@@ -391,12 +413,72 @@ extern char __bss_end;
 // licensed under GPL v3
 // Full credit goes to William Greiman.
 int FreeRam() {
-    char top;
- 
- //   return &top -sbrk(0);
- return __brkval ? &top - __brkval : &top - &__bss_end;
-  
+  char top;
+
+  //   return &top -sbrk(0);
+  return __brkval ? &top - __brkval : &top - &__bss_end;
+
 }
+
+// Function to get mac/serial number
+
+uint8_t mac[4];
+
+// http://forum.pjrc.com/threads/91-teensy-3-MAC-address
+
+void readserialno(uint8_t *mac)
+{
+  noInterrupts();
+
+  // With 3.6 have to read a block of 8 bytes at zero
+  // With 3.1 two blocks of 4 at e and f
+
+  FTFL_FCCOB0 = 0x41;             // Selects the READONCE command
+#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
+  FTFL_FCCOB1 = 0;             // read the given word of read once area
+#else
+  FTFL_FCCOB1 = 0x0F;          // read the given word of read once area
+#endif
+  FTFL_FCCOB2 = 0;
+  FTFL_FCCOB3 = 0;
+  // launch command and wait until complete
+  FTFL_FSTAT = FTFL_FSTAT_CCIF;
+  while (!(FTFL_FSTAT & FTFL_FSTAT_CCIF));
+
+#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
+
+  // Need last 4
+
+  *(mac++) = FTFL_FCCOB8;
+  *(mac++) = FTFL_FCCOB9;
+  *(mac++) = FTFL_FCCOBA;
+  *(mac++) = FTFL_FCCOBB;
+#else
+
+  // Need first 4
+
+  *(mac++) = FTFL_FCCOB4;
+  *(mac++) = FTFL_FCCOB5;
+  *(mac++) = FTFL_FCCOB6;
+  *(mac++) = FTFL_FCCOB7;
+#endif
+
+  interrupts();
+}
+
+
+void print_mac()  {
+  size_t count = 0;
+  readserialno(mac);
+  for (uint8_t i = 0; i < 4; ++i)
+  {
+    if (i != 0) count += Serial1.print(":");
+    count += Serial1.print((*(mac + i) & 0xF0) >> 4, 16);
+    count += Serial1.print(*(mac + i) & 0x0F, 16);
+  }
+}
+
+
 
 
 

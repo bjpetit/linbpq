@@ -104,6 +104,7 @@ void SoundFlush();
 #define KISS_CMD_FULLDUP    5
 #define KISS_CMD_HARDWARE   6
 #define KISS_CMD_FECLEVEL   8
+#define KISS_CMD_ACKMODE	12
 #define KISS_CMD_RETURN     255
 
 /* ---------------------------------------------------------------------- */
@@ -197,17 +198,55 @@ do {                                                            \
         goto encodeend##j;                                      \
 } while (0)
 
-static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned int len)
+static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned int len, BOOL ackmode)
 {
 	unsigned bitstream, notbitstream, bitbuf, numbit;
 	unsigned wr = chan->pkt.htx.wr;
+	int lenptr;
 
 	chan->pkt.stat.pkt_out++;
-	append_crc_ccitt(pkt, len);
+
+	if (ackmode)
+		append_crc_ccitt(pkt + 2, len - 2);
+	else
+		append_crc_ccitt(pkt, len);
+
 	len += 2;
 	bitstream = 0;
 	bitbuf = 0x7e;
 	numbit = 8; /* opening flag */
+
+
+	// I think I'll just buffer the frame as is, with length
+	// and ACKMODE flag on front. I'll do bit stuffing in
+	// tx loop
+
+	chan->pkt.htx.buf[wr++] = ackmode;
+	wr %= TXBUFFER_SIZE;
+
+	// we can't put length in till end, but savepointer
+	// and reserve space for it
+
+	lenptr = wr;
+
+	wr += 2;
+
+	if (wr > TXBUFFER_SIZE)
+		wr = wr % TXBUFFER_SIZE;
+
+	if (ackmode)
+	{
+		// first two bytes are send unchanged
+	
+		chan->pkt.htx.buf[wr++] = *(pkt++);
+		wr %= TXBUFFER_SIZE;
+
+		chan->pkt.htx.buf[wr++] = *(pkt++);
+		wr %= TXBUFFER_SIZE;
+
+		len -= 2;
+	}
+
 	while (numbit >= 8) {
 		chan->pkt.htx.buf[wr] = bitbuf;
 		wr = (wr + 1) % TXBUFFER_SIZE;
@@ -260,6 +299,15 @@ static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned 
 		numbit -= 8;
 	}
 	chan->pkt.htx.wr = wr;
+
+	// add length to packet
+
+	len = wr - lenptr - 2;	// -2 for length fiwld
+	if (len < 0 || len > 400)
+		len %= TXBUFFER_SIZE;
+	chan->pkt.htx.buf[lenptr++] = len & 0xff;
+	lenptr %= TXBUFFER_SIZE;
+	chan->pkt.htx.buf[lenptr] = len >> 8;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -402,78 +450,52 @@ static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned 
 {
 	if (len < 2)
 		return;
-	chan->pkt.stat.kiss_in++;
-        switch (pkt[0]) {
-	case KISS_CMD_DATA:
-		hdlc_encode(chan, pkt+1, len-1);
+
+	if (len > 360)
 		return;
 
-        case KISS_CMD_TXDELAY:
-		state.chacc.txdelay = pkt[1]*10;
-                WriteDebugLog(MLOG_INFO, "kiss: txdelay = %ums\n", pkt[1]*10);
-                return;
-                        
-        case KISS_CMD_TXTAIL:
-                WriteDebugLog(MLOG_INFO, "kiss: txtail = %ums\n", pkt[1]*10);
-                return;
+	chan->pkt.stat.kiss_in++;
+	switch (pkt[0])
+	{
+	case KISS_CMD_DATA:
+		hdlc_encode(chan, pkt+1, len-1, 0);
+		return;
 
-        case KISS_CMD_PPERSIST:
+	case KISS_CMD_ACKMODE:
+		hdlc_encode(chan, pkt+1, len-1, 1);
+		return;
+
+	case KISS_CMD_TXDELAY:
+		state.chacc.txdelay = pkt[1]*10;
+		WriteDebugLog(MLOG_INFO, "kiss: txdelay = %ums\n", pkt[1]*10);
+		return;
+                        
+	case KISS_CMD_TXTAIL:
+		WriteDebugLog(MLOG_INFO, "kiss: txtail = %ums\n", pkt[1]*10);
+		return;
+
+	case KISS_CMD_PPERSIST:
 		state.chacc.ppersist = pkt[1];
 		WriteDebugLog(MLOG_INFO, "kiss: ppersist = %u/256\n", pkt[1]);
-                return;
+		return;
 
-        case KISS_CMD_SLOTTIME:
+	case KISS_CMD_SLOTTIME:
 		state.chacc.slottime = pkt[1]*10;
-                WriteDebugLog(MLOG_INFO, "kiss: slottime = %ums\n", pkt[1]*10);
-                return;
+		WriteDebugLog(MLOG_INFO, "kiss: slottime = %ums\n", pkt[1]*10);
+		return;
 
-        case KISS_CMD_FULLDUP:
+	case KISS_CMD_FULLDUP:
 		state.chacc.fullduplex = !!pkt[1];
-                WriteDebugLog(MLOG_INFO, "kiss: %sduplex\n", pkt[1] ? "full" : "half");
-                return;
-
-        default:
-                WriteDebugLog(MLOG_INFO, "unknown kiss packet: 0x%02x 0x%02x\n", pkt[0], pkt[1]);
-                return;
-        }
+		WriteDebugLog(MLOG_INFO, "kiss: %sduplex\n", pkt[1] ? "full" : "half");
+		return;
+	
+	default:
+		WriteDebugLog(MLOG_INFO, "unknown kiss packet: 0x%02x 0x%02x\n", pkt[0], pkt[1]);
+		return;
+	}
 }
 
 /* ---------------------------------------------------------------------- */
-
-/* we decode inplace */
-static void kiss_decode(struct modemchannel *chan, u_int8_t *b, int len)
-{
-        int nlen = 0;
-        u_int8_t *p1 = b, *p2, *iframe;
-
-	iframe = p2 = alloca(len);
-        while (len > 0) {
-                if (*p1 != KISS_FESC) {
-                        *p2++ = *p1++;
-                        nlen++;
-                        len--;
-                } else {
-			if (len < 2)
-				goto err; /* invalid escape */
-			if (p1[1] == KISS_TFEND)
-				*p2++ = KISS_FEND;
-			else if (p1[1] == KISS_TFESC)
-				*p2++ = KISS_FESC;
-			else
-				goto err; /* invalid escape */
-			nlen++;
-			p1 += 2;
-			len -= 2;
-		}
-        }
-	if (len > 0)
-		goto err;
-        kiss_process_pkt(chan, iframe, nlen);
-        return;
- err:
-	WriteDebugLog(MLOG_ERROR, "KISS input error\n");
-	chan->pkt.stat.kiss_inerr++;
-}
 
 static unsigned short random_num(void)
 {
@@ -535,28 +557,104 @@ void pkttransmitloop(struct state *state)
 {
 	struct modemchannel *chan = state->channels;
 
+	BOOL AckMode;
+	unsigned char AckVal1;	// ackmode value to return
+	unsigned char AckVal2;	// ackmode value to return
+	int len, savewr, newwr;
+	int rd;
+
+	// TO support ackmode I've added an ackmode flag and two 
+	// byte length field on the front of each packet.
+
+	// I think we should discard anything that can't be
+	// sent for more than say 60 secs. ax.25 can't really 
+	// survive with longer waits than this, so I'll add 
+	// another two bytes for timestamp
+
+	// or do we use a cyclic buffer??? - yes, 4K for now
+
 	if (chan->pkt.htx.rd != chan->pkt.htx.wr)
 	{
 		if (!state->chacc.fullduplex)
 		{
 			if (!globaldcd(state) && (random_num() & 0xff) <= state->chacc.ppersist)
 			{
-				// Lost CSMA try againafter slot time
+				// Lost CSMA try again after slot time
+
 				Sleep(state->chacc.slottime);
 				return;
 			}
 		}
 
 		KeyPTT(1);
+
+		// This sends flags for txd 
+
 		chan->mod->modulate(chan->modstate, state->chacc.txdelay);
 
 		// See if more packets to send
 		
 		while (chan->mod && chan->pkt.htx.rd != chan->pkt.htx.wr)
 		{
+			rd = chan->pkt.htx.rd;
+
+			AckMode = chan->pkt.htx.buf[rd++];
+			rd = rd % TXBUFFER_SIZE;
+
+			len = chan->pkt.htx.buf[rd++];
+			rd = rd % TXBUFFER_SIZE;
+			len += chan->pkt.htx.buf[rd++] << 8;
+			rd = rd % TXBUFFER_SIZE;
+
+			if (len > 256)
+				len = 256;
+
+
+			if (AckMode)
+			{
+				// fist two bytes have to be returned when frame sent
+
+				AckVal1 = chan->pkt.htx.buf[rd++];
+				rd = rd % TXBUFFER_SIZE;
+				AckVal2 = chan->pkt.htx.buf[rd++];
+				rd = rd % TXBUFFER_SIZE;
+
+				len -= 2;
+			}
+
+			// modulate will send till buffer is empty,
+			// but we want to stop at end of each packet
+			// to send ackmode response if needed.
+			// TO do this change wr temporaily
+
+			savewr = chan->pkt.htx.wr;
+			newwr = rd + len;
+			if (newwr > TXBUFFER_SIZE)
+				newwr -= TXBUFFER_SIZE; 
+
+			chan->pkt.htx.rd = rd;
+
+			if (chan->pkt.htx.wr != newwr)
+				chan->pkt.htx.wr = newwr;
+			
 			chan->pkt.inhibittx = 0;
 			chan->mod->modulate(chan->modstate, 0);
 			chan->pkt.inhibittx = 1;
+
+			if (AckMode)
+			{
+				UCHAR kbuf[5];
+				UCHAR * kptr = kbuf;
+
+				*(kptr++) = KISS_FEND;
+				*(kptr++) = KISS_CMD_ACKMODE;
+				*(kptr++) = AckVal1;
+				*(kptr++) = AckVal2;
+				*(kptr++) = KISS_FEND;
+
+				SerialSendData(kbuf, 5);
+			}
+			chan->pkt.htx.wr = savewr;
 		}
 		SoundFlush();
 		KeyPTT(0);
@@ -595,187 +693,6 @@ void pktinit(struct modemchannel *chan, const char *params[])
 	chan->pkt.dcd = 0;
 }
 
-/* ---------------------------------------------------------------------- */
-
-#ifdef HAVE_MKISS
-
-struct modemparams pktmkissparams[] = {
-	{ "ifname", "Interface Name", "Name of the Kernel KISS Interface", "sm0", MODEMPAR_COMBO,
-	  { c: { { "sm0", "sm1", "sm2", "ax0" } } } },
-	{ "hwaddr", "Callsign", "Callsign (Hardware Address)", "", MODEMPAR_STRING },
-	{ "ip", "IP Address", "IP Address (mandatory)", "10.0.0.1", MODEMPAR_STRING },
-	{ "netmask", "Network Mask", "Network Mask", "255.255.255.0", MODEMPAR_STRING },
-	{ "broadcast", "Broadcast Address", "Broadcast Address", "10.0.0.255", MODEMPAR_STRING },
-	{ NULL }
-};
-
-static int parsehw(ax25_address *hwaddr, const char *cp)
-{
-	const char *cp1;
-	unsigned int i, j;
-
-	if (!cp || !*cp)
-		return 0;
-	memset(hwaddr->ax25_call, ' ', 6);
-	cp1 = strchr(cp, '-');
-	if (cp1) {
-		i = cp1 - cp;
-		j = strtoul(cp1 + 1, NULL, 0);
-		hwaddr->ax25_call[6] = j & 15;
-	} else {
-		i = strlen(cp);
-		hwaddr->ax25_call[6] = 0;
-	}
-	if (i > 6)
-		i = 6;
-	memcpy(hwaddr->ax25_call, cp, i);
-	for (i = 0; i < 6; i++)
-		if (hwaddr->ax25_call[i] >= 'a' && hwaddr->ax25_call[i] <= 'z')
-			hwaddr->ax25_call[i] += 'A' - 'a';
-	for (i = 0; i < 7; i++)
-		hwaddr->ax25_call[i] <<= 1;
-	return 1;
-}
-
-static int parseip(struct in_addr *ipaddr, const char *cp)
-{
-	if (!cp || !*cp)
-		return 0;
-	if (inet_aton(cp, ipaddr))
-		return 1;
-	ipaddr->s_addr = 0;
-	WriteDebugLog(MLOG_ERROR, "mkiss: invalid IP address \"%s\"\n", cp);
-	return 0;
-}
-
-void pktinitmkiss(struct modemchannel *chan, const char *params[])
-{
-        struct termios tm;
-	char ttyname[32];
-	int master, slave, fd, disc = N_AX25, encap = 4;
-        struct ifreq ifr;
-	char mbuf[512], *mptr = mbuf;
-	struct sockaddr_ax25 sax25;
-	struct sockaddr_in sin;
-	unsigned i;
-
-        memset(&chan->pkt, 0, sizeof(chan->pkt));
-	chan->pkt.inhibittx = 1;
-	if (!params[0])
-		WriteDebugLog(MLOG_FATAL, "MKISS: No interface name specified\n");
-	strncpy(chan->pkt.kiss.ifname, params[0], sizeof(chan->pkt.kiss.ifname));
-	if (openpty(&master, &slave, ttyname, NULL, NULL))
-		logerr(MLOG_FATAL, "openpty");
-	/* set mode to raw */
-	memset(&tm, 0, sizeof(tm));
-        tm.c_cflag = CS8 | CREAD | CLOCAL;
-        if (tcsetattr(master, TCSANOW, &tm))
-                logerr(MLOG_FATAL, "master: tcsetattr");
-        memset(&tm, 0, sizeof(tm));
-        tm.c_cflag = CS8 | CREAD | CLOCAL;
-        if (tcsetattr(slave, TCSANOW, &tm))
-                logerr(MLOG_FATAL, "slave: tcsetattr");
-	/* set the line discipline */
-        if (ioctl(master, TIOCSETD, &disc) == -1)
-                logerr(MLOG_FATAL, "ioctl: TIOCSETD");
-        if (ioctl(master, SIOCSIFENCAP, &encap) == -1)
-                logerr(MLOG_FATAL, "ioctl: SIOCSIFENCAP");
-	/* try to set the interface name */
-	if (params[0]) {
-                if (ioctl(master, SIOCGIFNAME, &ifr) == -1)
-                        logerr(MLOG_FATAL, "ioctl: SIOCGIFNAME");
-                if (strcmp(params[0], ifr.ifr_name)) {
-                        if ((fd = socket(PF_INET, SOCK_DGRAM, 0)) == -1)
-                                logerr(MLOG_FATAL, "socket (setifname)");
-                        strncpy(ifr.ifr_newname, params[0], sizeof(ifr.ifr_newname));
-                        ifr.ifr_newname[sizeof(ifr.ifr_newname) - 1] = 0;
-                        if (ioctl(fd, SIOCSIFNAME, &ifr) == -1) {
-                                logerr(1, "ioctl: SIOCSIFNAME");
-                                WriteDebugLog(1, "mkiss: cannot set ifname to %s, using %s (old kernel version?)\n",
-                                          params[0], ifr.ifr_name);
-                        }
-                        close(fd);
-                }
-	}
-	if (ioctl(master, SIOCGIFNAME, &ifr) == -1)
-		logerr(MLOG_FATAL, "ioctl: SIOCGIFNAME");
-	strncpy(chan->pkt.kiss.ifname, ifr.ifr_name, sizeof(chan->pkt.kiss.ifname));
-	/* start the interface */
-	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		logerr(MLOG_FATAL, "socket");
-	mptr += sprintf(mptr, "ifname %s mtu 256", ifr.ifr_name);
-	ifr.ifr_mtu = 256;
-        if (ioctl(fd, SIOCSIFMTU, &ifr) == -1)
-                logerr(MLOG_FATAL, "ioctl: SIOCSIFMTU");
-	if (parsehw(&sax25.sax25_call, params[1])) {
-		sax25.sax25_family = ARPHRD_AX25;
-		sax25.sax25_ndigis = 0;
-		memcpy(&ifr.ifr_hwaddr, &sax25, sizeof(ifr.ifr_hwaddr));
-		if (ioctl(fd, SIOCSIFHWADDR, &ifr) == -1)
-			logerr(MLOG_ERROR, "ioctl: SIOCSIFHWADDR");
-		else {
-			mptr += sprintf(mptr, " hwaddr ");
-			for (i = 0; i < 6; i++)
-				if (sax25.sax25_call.ax25_call[i] != (' ' << 1))
-					*mptr++ = (sax25.sax25_call.ax25_call[i] >> 1) & 0x7f;
-			mptr += sprintf(mptr, "-%d", (sax25.sax25_call.ax25_call[6] >> 1) & 0x7f);
-		}
-	}
-	if (parseip(&sin.sin_addr, params[2])) {
-		sin.sin_family = AF_INET;
-		memcpy(&ifr.ifr_addr, &sin, sizeof(ifr.ifr_addr));
-		if (ioctl(fd, SIOCSIFADDR, &ifr) == -1)
-			logerr(MLOG_ERROR, "ioctl: SIOCSIFADDR");
-		else
-			mptr += sprintf(mptr, " ipaddr %s", inet_ntoa(sin.sin_addr));
-	}
-	if (parseip(&sin.sin_addr, params[3])) {
-		sin.sin_family = AF_INET;
-		memcpy(&ifr.ifr_netmask, &sin, sizeof(ifr.ifr_netmask));
-		if (ioctl(fd, SIOCSIFNETMASK, &ifr) == -1)
-			logerr(MLOG_ERROR, "ioctl: SIOCSIFNETMASK");
-		else
-			mptr += sprintf(mptr, " netmask %s", inet_ntoa(sin.sin_addr));
-	}
-	if (parseip(&sin.sin_addr, params[4])) {
-		sin.sin_family = AF_INET;
-		memcpy(&ifr.ifr_broadaddr, &sin, sizeof(ifr.ifr_broadaddr));
-		if (ioctl(fd, SIOCSIFBRDADDR, &ifr) == -1)
-			logerr(MLOG_ERROR, "ioctl: SIOCSIFBRDADDR");
-		else
-			mptr += sprintf(mptr, " broadcast %s", inet_ntoa(sin.sin_addr));
-	}
-        if (ioctl(fd, SIOCGIFFLAGS, &ifr) == -1)
-                logerr(0, "ioctl: SIOCGIFFLAGS");
-        ifr.ifr_flags &= ~IFF_NOARP;
-        ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
-        if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
-                logerr(MLOG_FATAL, "ioctl: SIOCSIFFLAGS");
-
-        close(fd);
-	WriteDebugLog(MLOG_INFO, "mkiss: %s\n", mbuf);
-	/* prepare for using it */
-	chan->pkt.kiss.fd = slave;
-	chan->pkt.kiss.fdmaster = master;
-	chan->pkt.kiss.ioerr = 0;
-        fcntl(chan->pkt.kiss.fd, F_SETFL, fcntl(chan->pkt.kiss.fd, F_GETFL, 0) | O_NONBLOCK);
-	chan->pkt.kiss.ibufptr = 0;
-	chan->pkt.dcd = 0;
-}
-
-#else /* HAVE_MKISS */
-
-struct modemparams pktmkissparams[] = {
-	{ NULL }
-};
-
-void pktinitmkiss(struct modemchannel *chan, const char *params[])
-{
-	WriteDebugLog(MLOG_FATAL, "mkiss not supported on this architecture\n");
-}
-
-#endif /* HAVE_MKISS */
-/* ---------------------------------------------------------------------- */
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
@@ -800,6 +717,9 @@ void ProcessKISSMessage(UCHAR *kissMsg, int Length)
 void ProcessKISSPacket(unsigned char * Packet, int Length)
 {
 	UCHAR c;
+
+	if (Length < 0 || Length >360)
+		return;
 
 	while (Length)
 	{

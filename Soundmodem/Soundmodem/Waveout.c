@@ -65,13 +65,13 @@ int Capturing = 1;
 
 // Currently use 1200 samples for TX but 480 for RX to reduce latency
 
-#define SendSize 1200
+#define SendSize 2400
 #define ReceiveSize 1200
 
-#define NumberofinBuffers 5
+#define NumberofinBuffers 2
 
 short buffer[2][SendSize];		// Two Transfer/DMA buffers of 0.1 Sec
-short inbuffer[5][ReceiveSize];	// Input Transfer/ buffers of 0.1 Sec
+short inbuffer[NumberofinBuffers][ReceiveSize];	// Input Transfer/ buffers of 0.1 Sec
 
 short * DMABuffer = &buffer[0][0];
 
@@ -222,7 +222,7 @@ void txSleep(int mS)
 	// called while waiting for next TX buffer. Run background processes
 
 	PollReceivedSamples();			// discard any received samples
-	HostPoll();
+//	HostPoll();		// don't poll host when transmitting
 	Sleep(mS);
 }
 
@@ -239,7 +239,7 @@ BOOL DMARunning = FALSE;		// Used to start DMA on first write
 void SampleSink(short Sample)
 {
 
-#ifdef TEENSIE	
+#ifdef TEENSY	
 	int work = (short)Sample);
 	DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
 #else
@@ -474,6 +474,9 @@ void ClearAllMixedSamples();
 
 void StartCapture()
 {
+	// Get rid of anything received - at 966 can see echos
+	memset (inbuffer, 0 ,NumberofinBuffers * ReceiveSize * 2);
+	Capturing = TRUE;
 }
 void CloseSound()
 { 
@@ -502,7 +505,7 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 
-	printf(Mess);
+	printf("%s", Mess);
 }
 
 VOID WriteSamples(short * buffer, int len)
@@ -826,3 +829,6 @@ VOID COMClearRTS(HANDLE fd)
 	EscapeCommFunction(fd, CLRRTS);
 }
 
+VOID displayDCD(int x)
+{
+}

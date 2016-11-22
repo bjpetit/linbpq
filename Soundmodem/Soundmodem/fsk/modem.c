@@ -115,30 +115,17 @@ static const struct modemparams modparams[] = {
         
 
 
-static void *modconfig(struct modemchannel *chan, unsigned int *samplerate, const char *params[])
+static void *modconfig(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3)
 {
 	struct modstate *s;
 	unsigned int i;
         
-        if (!(s = calloc(1, sizeof(struct modstate))))
-                WriteDebugLog(MLOG_FATAL, "out of memory\n");
-        s->chan = chan;
-        if (params[0]) {
-                s->bps = atoi(params[0]);
-                if (s->bps < 4800)
-                        s->bps = 4800;
-                if (s->bps > 38400)
-                        s->bps= 38400;
-        } else
-                s->bps = 9600;
-	s->filtermode = 0;
-	if (params[1]) {
-		for (i = 1; i < 4; i++)
-			if (!strcmp(params[1], modparams[1].u.c.combostr[i])) {
-				s->filtermode = i;
-				break;
-			}
-	}
+	if (!(s = calloc(1, sizeof(struct modstate))))
+		WriteDebugLog(MLOG_FATAL, "out of memory\n");
+	
+	s->chan = chan;
+	s->bps = P1;
+	s->filtermode = P2;
 	*samplerate = s->bps + s->bps / 2;
 	return s;
 }
@@ -213,17 +200,40 @@ static void modinit(void *state, unsigned int samplerate)
 #endif
 }
 
+void modSendBit(struct modstate *s, int bit)
+{
+	unsigned int bitcnt = 0;
+
+	while (bitcnt == 0)
+	{
+		s->phase += s->phaseinc;
+		if (s->phase >= 0x10000)
+		{
+			s->phase &= 0xffff;
+			bitcnt++;
+			s->scram = (s->scram << 1) | ((s->scram ^ bit ^ 1) & 1);
+//			bits >>= 1;
+			if (s->scram & (SCRAM17_TAP1 << 1))
+				s->scram ^= SCRAM17_TAPN << 1;
+			s->txbits = (s->txbits << 1) | ((s->scram >> DESCRAM17_TAPSH3) & 1);
+		}
+		SampleSink(mfilter(s->txbits, s->filter[FILTERIDX(s->phase)], FILTERLEN));
+	}
+}
+
 static void modsendbits(struct modstate *s, unsigned char *data, unsigned int nrbits)
 {
-        int16_t sbuf[512];
-        int16_t *sptr = sbuf, *eptr = sbuf + sizeof(sbuf)/sizeof(sbuf[0]);
+	int16_t sbuf[512];
+	int16_t *sptr = sbuf, *eptr = sbuf + sizeof(sbuf)/sizeof(sbuf[0]);
 	unsigned int bitcnt, bits;
 
 	bits = *data++;
 	bitcnt = 0;
-	while (bitcnt < nrbits) {
+	while (bitcnt < nrbits)
+	{
 		s->phase += s->phaseinc;
-		if (s->phase >= 0x10000) {
+		if (s->phase >= 0x10000)
+		{
 			s->phase &= 0xffff;
 			bitcnt++;
 			s->scram = (s->scram << 1) | ((s->scram ^ bits ^ 1) & 1);
@@ -240,34 +250,39 @@ static void modsendbits(struct modstate *s, unsigned char *data, unsigned int nr
 
 static void modmodulate(void *state, unsigned int txdelay)
 {
-        struct modstate *s = (struct modstate *)state;
-        unsigned char ch[8];
-        unsigned int i, j;
+	struct modstate *s = (struct modstate *)state;
+	unsigned char ch[8];
+	unsigned int i, j;
 
-        i = txdelay * s->bps / 1000;
+	i = txdelay * s->bps / 1000;
 	if (i < 24)
 		i = 24;
 	memset(ch, 0x7e, sizeof(ch));
-	while (i > 0) {
+	while (i > 0)
+	{
 		j = i;
 		if (j > 8*sizeof(ch))
 			j = 8*sizeof(ch);
 		modsendbits(s, ch, j);
 		i -= j;
 	}
-        while (pktget(s->chan, ch, sizeof(ch)))
-                modsendbits(s, ch, 8*sizeof(ch));
+
+	while (pktget(s->chan, ch, sizeof(ch)))
+		modsendbits(s, ch, 8*sizeof(ch));
+
 	ch[0] = ch[1] = 0x7e;
-	modsendbits(s, ch, 16);
+	modsendbits(s, ch, 16);		// add two flags
 }
 
-struct modulator fskmodulator = {
-        NULL,
-        "fsk",
-        modparams,
-        modconfig,
-        modinit,
-        modmodulate,
+
+struct modulator fskmodulator = 
+{
+	NULL,
+	"fsk",
+	modparams,
+	modconfig,
+	modinit,
+	modmodulate,
 	free
 };
 
@@ -373,30 +388,17 @@ static int16_t equalizer(struct demodstate *s, int16_t s1, int16_t s2)
 
 static const struct modemparams demodparams[1];
 
-static void *demodconfig(struct modemchannel *chan, unsigned int *samplerate, const char *params[])
+static void *demodconfig(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3)
 {
 	struct demodstate *s;
 	unsigned int i;
 
-        if (!(s = calloc(1, sizeof(struct demodstate))))
-                WriteDebugLog(MLOG_FATAL, "out of memory\n");
-        s->chan = chan;
-        if (params[0]) {
-                s->bps = atoi(params[0]);
-                if (s->bps < 4800)
-                        s->bps = 4800;
-                if (s->bps > 38400)
-                        s->bps= 38400;
-        } else
-                s->bps = 9600;
-	s->filtermode = 0;
-	if (params[1]) {
-		for (i = 1; i < 4; i++)
-			if (!strcmp(params[1], demodparams[1].u.c.combostr[i])) {
-				s->filtermode = i;
-				break;
-			}
-	}
+	if (!(s = calloc(1, sizeof(struct demodstate))))
+		WriteDebugLog(MLOG_FATAL, "out of memory\n");
+	s->chan = chan;
+	s->bps = P1;
+	s->filtermode = P2;
+
 	*samplerate = s->bps + s->bps / 2;
 	return s;
 }
@@ -634,10 +636,12 @@ void DemodFSKinit(void *state)
 
 // reuse fields in AFSK 
 
-extern short SavedSamples[300];
+extern short SavedSamples[400];
 extern int SavedSamplesCount;
 
-extern short Samples[1200 + 300];		// Change if we change receivesize
+extern short Samples[1200 + 400];		// Change if we change receivesize
+
+int maxsaved = 0;
 
 void DemodFSK(short * buffer, int count)
 {
@@ -648,6 +652,7 @@ void DemodFSK(short * buffer, int count)
 
 	int phase = s->pll;		// save so we know how many samples we consumed
 	int used = 0;
+	int pllused;
 
 	// We save unused samples and prepend to new ones
 
@@ -657,21 +662,56 @@ void DemodFSK(short * buffer, int count)
 	count += SavedSamplesCount;
 
 	
-	while ((count - used) > 276)
+	while ((count - used) > 310)
 	{
+//		phase = s->pll;
+		
 		demodrx(s, &Samples[used], 256);
 
 		// demod pointer is in  s->pll
 
 		used += 256;
-		used += (s->pll - phase)  >> 16;
+//		used += (s->pll - phase)  >> 16;
 	}
 
 	// save count - used samples
 
+	// Get whole sample part of pll and add to used,
+	// remove from pll
+
+	pllused = (s->pll - phase)  >> 16;
+	used += pllused;
+	s->pll -= (pllused << 16);	// remove the whole samples
+
+	if (s->pll >= (1 << 16))
+	{
+		// remove another sample and update s->pll
+
+		used++;
+		s->pll -= (1 << 16);
+	}
+	else if (s->pll <= (-1 << 16))
+	{
+		// add another sample and update s->pll
+
+		used--;
+		s->pll += (1 << 16);
+
+	}
+	if (s->pll >= (1 << 16) || s->pll <= (-1 << 16))
+		WriteDebugLog("s->pll corrupt %d", SavedSamplesCount);
+
 	SavedSamplesCount =  count - used;
+
+	if (SavedSamplesCount < 0 || SavedSamplesCount > 400)
+		WriteDebugLog("SavedSamplesCount corrupt %d", SavedSamplesCount);
+
+	if (SavedSamplesCount > maxsaved)
+	{
+		maxsaved = SavedSamplesCount;
+		WriteDebugLog(7, " Max saved samples = %d", maxsaved);
+	}
 	memcpy(SavedSamples, &Samples[used], SavedSamplesCount * 2);
-//	s->pll &= 0xffff;	// remove the whole samples
 	
 //	WriteDebugLog(7, "used %d left %d phase %x",
 //		used, SavedSamplesCount, s->rxphase); 

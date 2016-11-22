@@ -105,7 +105,7 @@ struct modulator {
 	struct modulator *next;
 	const char *name;
 	const struct modemparams *params;
-	void *(*config)(struct modemchannel *chan, unsigned int *samplerate, const char *params[]);
+	void *(*config)(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3);
 	void (*init)(void *, unsigned int samplerate);
 	void (*modulate)(void *, unsigned int txdelay);
 	void (*free)(void *);
@@ -115,7 +115,7 @@ struct demodulator {
 	struct demodulator *next;
 	const char *name;
 	const struct modemparams *params;
-	void *(*config)(struct modemchannel *chan, unsigned int *samplerate, const char *params[]);
+	void *(*config)(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3);
 	void (*init)(void *, unsigned int samplerate, unsigned int *bitrate);
 	void (*demodulate)(void *);
 	void (*free)(void *);

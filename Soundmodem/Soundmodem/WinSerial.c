@@ -8,6 +8,8 @@
 #include <windows.h>
 #include <winioctl.h>
 #include <stdio.h>
+#include "soundio.h"
+
 #else
 #define HANDLE int
 #endif
@@ -302,10 +304,23 @@ BOOL HostInit()
 
 UCHAR RXBUFFER[300];
 
+extern struct state state;
+
 VOID HostPoll()
 {
 	unsigned int n;
 	unsigned long Read = 0;
+	struct kisspkt * pkt = &state.channels->pkt;
+
+	int space = TXBUFFER_SIZE - (pkt->htx.wr - pkt->htx.rd); 
+
+	if (space > TXBUFFER_SIZE)		// pointer wrapped
+		space -= TXBUFFER_SIZE;
+
+	// only continue if room for KISS packet in buffer
+
+	if (space < 370)	// Full packet plus len and ackmode fields
+		return;
 
 	if (VCOM)
 		n = BPQSerialGetData(RXBUFFER, 300, &Read);

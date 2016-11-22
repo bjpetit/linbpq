@@ -47,7 +47,7 @@ struct modstate {
 
 static const struct modemparams modparam;
 
-static void *modconfig(struct modemchannel *chan, unsigned int *samplerate, const char *params[])
+static void *modconfig(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3)
 {
 	struct modstate *s;
 	
@@ -57,27 +57,11 @@ static void *modconfig(struct modemchannel *chan, unsigned int *samplerate, cons
 	memset(s, 0, sizeof(struct modstate));
 
 	s->chan = chan;
-	if (params && params[0]) {
-		s->bps = strtoul(params[0], NULL, 0);
-		if (s->bps < 100)
-			s->bps = 100;
-		if (s->bps > 9600)
-			s->bps= 9600;
-	} else
-		s->bps = 1200;
-	if (params && params[1]) {
-		s->f0 = strtoul(params[1], NULL, 0);
-		if (s->f0 > s->bps * 4)
-			s->f0 = s->bps * 4;
-	} else
-		s->f0 = 1200;
-	if (params && params[2]) {
-		s->f1 = strtoul(params[2], NULL, 0);
-		if (s->f1 > s->bps * 4)
-			s->f1 = s->bps * 4;
-	} else
-		s->f1 = 2200;
-	s->notdiff = params[3] ? !strtoul(params[3], NULL, 0) : 0;
+	s->bps= P1;
+	s->f0 = P2;
+	s->f1 = P3;
+
+	s->notdiff = 0;
 	*samplerate = 8 * s->bps;
 	return s;
 }
@@ -97,6 +81,7 @@ static void modsendbits(struct modstate *s, unsigned int bits, unsigned int nrsy
 {
 	int16_t sbuf[512];
 	int16_t *sptr = sbuf, *eptr = sbuf + sizeof(sbuf)/sizeof(sbuf[0]);
+	int samplessent = 0;
 
 	while (nrsyms > 0)
 	{
@@ -108,6 +93,7 @@ static void modsendbits(struct modstate *s, unsigned int bits, unsigned int nrsy
 			nrsyms--;
 		}
 		SampleSink(COS(s->dds));
+		samplessent++;
 		s->dds += s->ddsinc[s->bit];
         s->bitph += s->bitinc;
 	}
@@ -190,7 +176,7 @@ struct demodstate {
 
 static const struct modemparams demodparams[1];
 
-static void *demodconfig(struct modemchannel *chan, unsigned int *samplerate, const char *params[])
+static void *demodconfig(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3)
 {
 	struct demodstate *s;
 	unsigned int f;
@@ -201,27 +187,12 @@ static void *demodconfig(struct modemchannel *chan, unsigned int *samplerate, co
 	memset(s, 0, sizeof(struct modstate));
 
 	s->chan = chan;
-	if (params[0]) {
-		s->bps = strtoul(params[0], NULL, 0);
-		if (s->bps < 100)
-			s->bps = 100;
-		if (s->bps > 9600)
-			s->bps= 9600;
-	} else
-		s->bps = 1200;
-	if (params[1]) {
-		s->f0 = strtoul(params[1], NULL, 0);
-		if (s->f0 > s->bps * 4)
-			s->f0 = s->bps * 4;
-	} else
-		s->f0 = 1200;
-	if (params[2]) {
-		s->f1 = strtoul(params[2], NULL, 0);
-		if (s->f1 > s->bps * 4)
-			s->f1 = s->bps * 4;
-	} else
-		s->f1 = 2200;
-	s->notdiff = params[3] ? !strtoul(params[3], NULL, 0) : 0;
+	s->bps= P1;
+	s->f0 = P2;
+	s->f1 = P3;
+
+	s->notdiff = 0;
+
 	f = s->f0;
 	if (s->f1 > f)
 		f = s->f1;
@@ -467,10 +438,10 @@ void DemodAFSKinit(void *state)
 
 // we call demod8bits fo so long as we have enogh samples
 
-short SavedSamples[300];	// AFSK only needs 136 but shared with PSK
+short SavedSamples[600];	// AFSK only needs 136 but shared with PSK
 int SavedSamplesCount = 0;
 
-short Samples[1200 + 300];		// Change if we change receivesize
+short Samples[1200 + 600];		// Change if we change receivesize
 
 void DemodAFSK(short * buffer, int count)
 {
@@ -479,8 +450,11 @@ void DemodAFSK(short * buffer, int count)
 	// demod needs to align the sample pointer to get phase right.
 	// It looks like demod needs 136 samples (at 12K sample rate)
 
+	int needed = (12 * s->rxphinc >> 16) + RXFILTLEN; // varie with baud and sample rate
 	int phase = s->rxphase;		// save so we know how many samples we consumed
 	int used = 0;
+
+//	WriteDebugLog(7, "Needed %d", needed);
 
 	// We save unused samples and prepend to new ones
 
@@ -488,10 +462,8 @@ void DemodAFSK(short * buffer, int count)
 	memcpy(&Samples[SavedSamplesCount], buffer, count * 2); // new ones
 
 	count += SavedSamplesCount;
-
-//	WriteDebugLog(7, "processing %d", count);
 	
-	while ((count - used) > 136)
+	while ((count - used) > needed)
 	{
 		demod8bits(s, Samples);
 		buf = s->rxbits;
