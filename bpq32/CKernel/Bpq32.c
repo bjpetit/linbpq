@@ -777,6 +777,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix Socket leak in ARDOP and FLDIGI drivers.
 //	Add option to change CMS Server hostname
 //	ARDOP Changes for 0.8.0+
+//	Discard Terminal Keepalive message (two nulls) in ARDOP command hander
+//	Allow parameters to be passed to ARDOP TNC when starting it
 
 #define CKernel
 

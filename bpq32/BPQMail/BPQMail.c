@@ -929,6 +929,8 @@
 //	Tread B messages without an AT as Flood.
 //	Make sure Message headers are always saved to disk when a message status changes
 //	Reject message instead of failing session if TO address too long in FBB forwarding
+//	FIx error when FBB restart data exactly fills a packet.
+
 
 #include "BPQMail.h"
 #define MAIL

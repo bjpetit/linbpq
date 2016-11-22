@@ -735,7 +735,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				TNC->Busy--;
 				if (TNC->Busy == 0)
-					SetWindowText(TNC->xIDC_CHANSTATE, "Clear");
+					MySetWindowText(TNC->xIDC_CHANSTATE, "Clear");
 					strcpy(TNC->WEB_CHANSTATE, "Clear");
 			}
 		}
@@ -757,7 +757,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(TNC->Streams[0].RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
 
 				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				free(TNC->ConnectCmd);
 				TNC->BusyDelay = 0;
@@ -783,7 +783,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					free(TNC->ConnectCmd);
 
 					sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				}
 			}
@@ -1986,7 +1986,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -2010,7 +2010,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -2388,7 +2388,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			if (WL2K)
 				strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			
 			// Check for ExcludeList
 
@@ -2492,7 +2492,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			else
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 			
-			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			UpdateMH(TNC, Call, '+', 'O');
 			return;
@@ -2606,7 +2606,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	//	Debugprintf("WINMOR RX: %s", Buffer);
 
 		strcpy(TNC->WEB_MODE, &Buffer[5]);
-		SetWindowText(TNC->xIDC_MODE, &Buffer[5]);
+		MySetWindowText(TNC->xIDC_MODE, &Buffer[5]);
 		return;
 	}
 
@@ -2616,6 +2616,58 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->ConnectPending = 6;				// Time out after 6 Scanintervals
 		return;
 	}
+
+	// REJECTEDBW and REJECTEDBUSY are sent to both calling and called
+
+	if (_memicmp(&Buffer[0], "REJECTEDBUSY", 12) == 0)
+	{
+		TNC->ConnectPending = FALSE;
+
+		if (TNC->Streams[0].Connecting)
+		{
+			// Report Connect Failed, and drop back to command mode
+
+			TNC->Streams[0].Connecting = FALSE;
+
+			buffptr = GetBuff();
+
+			if (buffptr == 0)
+			{
+				return;			// No buffers, so ignore
+			}
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} Connection to %s Rejected - Channel Busy\r", TNC->Streams[0].RemoteCall);
+
+			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+			return;
+		}
+	}
+
+	if (_memicmp(&Buffer[0], "REJECTEDBW", 10) == 0)
+	{
+		TNC->ConnectPending = FALSE;
+
+		if (TNC->Streams[0].Connecting)
+		{
+			// Report Connect Failed, and drop back to command mode
+
+			TNC->Streams[0].Connecting = FALSE;
+
+			buffptr = GetBuff();
+
+			if (buffptr == 0)
+			{
+				return;			// No buffers, so ignore
+			}
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} Connection to %s Rejected - Incompatible Bandwidth\r", TNC->Streams[0].RemoteCall);
+
+			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+			return;
+		}
+	}
+
+
 
 	if (_memicmp(&Buffer[0], "CANCELPENDING", 13) == 0
 		|| _memicmp(&Buffer[0], "REJECTEDB", 9) == 0)  //REJECTEDBUSY or REJECTEDBW
@@ -3291,7 +3343,7 @@ int ARDOPKillTNC(struct TNCINFO * TNC)
 }
 
 BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
-{
+{	
 	if (TNC->ProgramPath == NULL)
 		return 0;
 
@@ -3304,7 +3356,7 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
 		struct sockaddr_in destaddr;
 
-		Debugprintf("trying to restart ARDOP TNC %s", TNC->ProgramPath);
+		Debugprintf("trying to restart ARDOP TNC %s on remote host", TNC->ProgramPath);
 
 		if (sock == INVALID_SOCKET)
 			return 0;
@@ -3334,26 +3386,38 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 
 		return 1;				// Cant tell if it worked, but assume ok
 	}
+
+	// Extract any parameters from command string
+
 #ifndef WIN32
 	{
-		char * arg_list[] = {NULL, NULL};
-		pid_t child_pid;	
-
+		char * arg_list[] = {NULL, NULL, NULL, NULL, NULL};
+		pid_t child_pid;
+		char * Copy, * Context;
 		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
+
+		Copy = _strdup(TNC->ProgramPath);	// Save as strtok mangles it
+
+		arg_list[0] = strtok_s(Copy, " \n\r", &Context);
+		if (arg_list[0])
+			arg_list[1] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[1])
+			arg_list[2] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[2])
+			arg_list[3] = strtok_s(NULL, " \n\r", &Context);
 
 		//	Fork and Exec ARDOP
 
 		printf("Trying to start %s\n", TNC->ProgramPath);
 
-		arg_list[0] = TNC->ProgramPath;
-	 
-    	/* Duplicate this process. */ 
+		/* Duplicate this process. */ 
 
 		child_pid = fork (); 
 
 		if (child_pid == -1) 
  		{    				
 			printf ("ARDOPStart fork() Failed\n"); 
+			free(Copy);
 			return 0;
 		}
 
@@ -3367,6 +3431,7 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 			exit(0);			// Kill the new process
 		}
 		printf("Started ARDOP TNC\n");
+		free(Copy);
 		return TRUE;
 	}								 
 #else
@@ -3385,13 +3450,13 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 	  	SInfo.lpReserved2=NULL; 
 
 		Debugprintf("ARDOPRestartTNC Called for %s", TNC->ProgramPath);
-
+	
 		while (KillOldTNC(TNC->ProgramPath) && n++ < 100)
 		{
 			Sleep(100);
 		}
 
-		if (CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+		if (CreateProcess(NULL, TNC->ProgramPath, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
 		{
 			Debugprintf("Restart TNC OK");
 			TNC->WIMMORPID = PInfo.dwProcessId;

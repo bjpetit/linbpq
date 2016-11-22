@@ -3122,7 +3122,7 @@ NODE_DEL:
 
 		while (n--)
 		{
-			if (DEST->DEST_CALL[0] && ((DEST->DEST_STATE & 0x80) == 0))			// Don't delete locked
+			if (DEST->DEST_CALL[0] && ((DEST->DEST_STATE & 0x80) == 0))			// Don't delete appl node
 					REMOVENODE(DEST);
 
 			DEST++;

@@ -985,13 +985,13 @@ loop:
 		if (conn->InputLen < (MsgLen + 2))
 			return;						// Wait for more
 
-		// Waiting for Restart Header, see if it has arrived
+		// If waiting for Restart Header, see if it has arrived
 
 		if (conn->NeedRestartHeader)
 		{
 			conn->NeedRestartHeader = FALSE;
 
-			if (conn->InputLen > 8)
+			if (MsgLen == 6)
 			{
 				ptr = conn->InputBuffer+2;
 				conn->InputLen -=8;
@@ -1001,12 +1001,14 @@ loop:
 					conn->FBBChecksum+=ptr[0];
 					ptr++;
 				}
-
 				memmove(conn->InputBuffer, ptr, conn->InputLen);
-
 			}
 			else
-				BBSputs(conn, "*** Extra 8 bytes missing.\r");
+			{
+				BBSputs(conn, "*** Restart Header Missing.\r");
+				Flush(conn);
+				conn->CloseAfterFlush = 20;			// 2 Secs
+			}
 
 			goto loop;
 

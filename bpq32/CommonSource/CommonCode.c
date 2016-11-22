@@ -532,6 +532,8 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 
 			// Need to do a tidy close
 
+
+			STREAM->Connecting = FALSE;
 			STREAM->Disconnecting = TRUE;
 			STREAM->DisconnectingTimeout = 300;			// 30 Secs
 

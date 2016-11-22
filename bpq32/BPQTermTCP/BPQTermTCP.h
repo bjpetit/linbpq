@@ -29,6 +29,7 @@
 #define IDC_RADIO1                      1021
 #define IDC_RADIO2                      1022
 #define IDC_ALERTFILENAME               1023
+#define IDC_PLAYFILENAME                1023
 #define IDC_FREQ                        1024
 #define IDC_DURATION                    1025
 #define IDC_USEKEYWORDS                 1026

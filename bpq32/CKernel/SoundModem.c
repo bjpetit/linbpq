@@ -313,11 +313,11 @@ RestartSoundTNC(struct SOUNDTNCINFO * TNC)
 
 	TNC->PID = 0;			// So we don't try again
 
-	sprintf(cmdLine, "BPQSoundModem.exe %d %d %d",
+	sprintf(cmdLine, "%s\\BPQSoundModem.exe %d %d %d", BPQProgramDirectory,
 		TNC->SoundCardNumber, TNC->PERSIST, TNC->TXDELAY); 
 	sprintf(Prog, "%s\\BPQSoundModem.exe", BPQProgramDirectory);
 
-	return CreateProcess(Prog, cmdLine, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+	return CreateProcess(NULL, cmdLine, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 
 	return 0;
 }

@@ -447,7 +447,7 @@ portok:
 			if (Session != -1)				// Used for internal Stop/Start
 				RIG->ScanStopped |= 1;		// Set Manual Stopped Bit
 
-			SetWindowText(RIG->hSCAN, "");
+			MySetWindowText(RIG->hSCAN, "");
 			RIG->WEB_SCAN = ' ';
 
 			sprintf(Command, "Ok\r");
@@ -1802,7 +1802,7 @@ DoChange:
 				PortRecord->PORT_DLL_NAME, PORT->FreqPtr->Dwell); 
 
 			RIG->WaitingForPermission = FALSE;
-			SetWindowText(RIG->hSCAN, "-");
+			MySetWindowText(RIG->hSCAN, "-");
 			RIG->WEB_SCAN = '-';
 			RIG->ScanCounter = PORT->FreqPtr->Dwell;
 
@@ -1839,7 +1839,7 @@ DoChange:
 
 	RIG->ScanCounter = PORT->FreqPtr->Dwell; 
 	
-	SetWindowText(RIG->hSCAN, "S");
+	MySetWindowText(RIG->hSCAN, "S");
 	RIG->WEB_SCAN = 'S';
 
 	// Do Bandwidth and antenna switches (if needed)
