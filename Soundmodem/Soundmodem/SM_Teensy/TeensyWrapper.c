@@ -1,7 +1,6 @@
 //
 //	Makes keeping Windows, Linux and Teensy version in step easier
 
-#define TEENSIE
 #define TEENSY
 
 #define UCHAR unsigned char

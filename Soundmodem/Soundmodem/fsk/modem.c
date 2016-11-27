@@ -118,7 +118,6 @@ static const struct modemparams modparams[] = {
 static void *modconfig(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3)
 {
 	struct modstate *s;
-	unsigned int i;
         
 	if (!(s = calloc(1, sizeof(struct modstate))))
 		WriteDebugLog(MLOG_FATAL, "out of memory\n");
@@ -134,7 +133,7 @@ static void modinit(void *state, unsigned int samplerate)
 {
         struct modstate *s = (struct modstate *)state;
 	int i, j;
-	float f1, f2, time, alphatime;
+	float f1, f2, time;
 	float c[NUMFILTER * FILTERLEN];
 
 	s->phaseinc = (s->bps << 16) / samplerate;
@@ -175,11 +174,11 @@ static void modinit(void *state, unsigned int samplerate)
 	f1 = 0;
 	for (i = 0; i < NUMFILTER; i++) {
 		for (f2 = 0, j = i; j < NUMFILTER * FILTERLEN; j += NUMFILTER)
-			f2 += fabs(c[j]);
+			f2 += fabsf(c[j]);
 		if (f2 > f1)
 			f1 = f2;
 	}
-	f1 = 32767.0 / f1;
+	f1 = 32767.0f / f1;
 	for (i = 0; i < NUMFILTER; i++)
 		for (j = 0; j < FILTERLEN; j++)
 			s->filter[i][j] = f1 * c[j * NUMFILTER + i];
@@ -391,7 +390,6 @@ static const struct modemparams demodparams[1];
 static void *demodconfig(struct modemchannel *chan, unsigned int *samplerate, int P1, int P2, int P3)
 {
 	struct demodstate *s;
-	unsigned int i;
 
 	if (!(s = calloc(1, sizeof(struct demodstate))))
 		WriteDebugLog(MLOG_FATAL, "out of memory\n");
@@ -520,7 +518,7 @@ static void demodinit(void *state, unsigned int samplerate, unsigned int *bitrat
 	float coeff[FILTEROVER][MAXFIRLEN];
 	float pulseen[FILTEROVER];
 	float tmul;
-	float max1, max2, t, at, f1, f2;
+	float max1, max2, t, f1;
 	int i, j;
 
 	s->firlen = (samplerate * FILTERSPANBITS + s->bps - 1) / s->bps;
@@ -699,12 +697,12 @@ void DemodFSK(short * buffer, int count)
 
 	}
 	if (s->pll >= (1 << 16) || s->pll <= (-1 << 16))
-		WriteDebugLog("s->pll corrupt %d", SavedSamplesCount);
+		WriteDebugLog(7, "s->pll corrupt %d", SavedSamplesCount);
 
 	SavedSamplesCount =  count - used;
 
 	if (SavedSamplesCount < 0 || SavedSamplesCount > 400)
-		WriteDebugLog("SavedSamplesCount corrupt %d", SavedSamplesCount);
+		WriteDebugLog(7, "SavedSamplesCount corrupt %d", SavedSamplesCount);
 
 	if (SavedSamplesCount > maxsaved)
 	{

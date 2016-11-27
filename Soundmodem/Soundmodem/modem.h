@@ -76,6 +76,8 @@ extern void logvprintf(unsigned int level, const char *fmt, va_list args);
 extern void logprintf(unsigned int level, const char *fmt, ...);
 extern void logerr(unsigned int level, const char *st);
 extern unsigned int log_verblevel;
+void WriteDebugLog(int LogLevel, const char * format, ...);
+void SampleSink(short Sample);
 
 #define MODEMPAR_STRING      0
 #define MODEMPAR_COMBO       1

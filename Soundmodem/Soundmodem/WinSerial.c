@@ -319,7 +319,7 @@ VOID HostPoll()
 
 	// only continue if room for KISS packet in buffer
 
-	if (space < 370)	// Full packet plus len and ackmode fields
+	if (space < 450)	// Full stuffed packet plus len and ackmode fields
 		return;
 
 	if (VCOM)

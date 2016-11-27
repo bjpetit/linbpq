@@ -10,6 +10,18 @@
 #define _SCLK 14		// Clock moved to ALT pin as LED is on A13
 #define _MISO 12
 
+#define LED0 24
+#define LED1 25
+#define LED2 26
+#define LED3 31
+
+#define DCDLED LED0
+
+#define SW1 27
+#define SW2 28
+#define SW3 29
+#define SW4 30
+
 // Use hardware SPI
 ILI9341_t3 tft = ILI9341_t3(TFT_CS, TFT_DC, _RST, _MOSI, _SCLK, _MISO);
 
@@ -26,6 +38,11 @@ const int barlevels[10] = {
   16000, 24000, 28000, 30000, 32000
 };
 
+const int CAT4016Levels[11] = {
+  0, 1, 0b11, 0b111, 0b1111, 0b11111,
+  0b111111, 0b1111111, 0b11111111, 0b111111111, 0b1111111111
+};
+
 extern "C"
 {
   void displayLevel(int level)
@@ -39,6 +56,13 @@ extern "C"
       else
         tft.fillRect(15 * i, 100, 14, 16, ILI9341_BLACK);
     }
+    
+    for (i = 0; i < 10; i++)
+    {
+      if (level < barlevels[i])
+        break;
+    }
+    CAT4016(CAT4016Levels[i]);
   }
   void displayPTT(int State)
   {
@@ -50,7 +74,7 @@ extern "C"
       tft.print("   ");
   }
 
-  void displayDCD(int  * State)
+  void displayDCD(int State)
   {
     tft.setTextColor(ILI9341_GREEN, ILI9341_BLACK);
     tft.setCursor(0, 48);
@@ -58,6 +82,8 @@ extern "C"
       tft.print("DCD");
     else
       tft.print("   ");
+
+    SetLED(DCDLED, State);
 
   }
 

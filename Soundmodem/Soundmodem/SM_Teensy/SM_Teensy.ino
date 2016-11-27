@@ -1,6 +1,12 @@
-// Arduino interface code for ARDOP running on a Teensie 3.6
+// Arduino interface code for Soundmodem running on a Teensie 3.1 or 3.6
 
-#define TEENSIE
+
+// So far...
+// 1200 works both ways at 12000K sampling, but RX not at 48k
+// 9600 works at 48K
+// 1200 Ok on Tom's board.
+// 9600 uses about 14% of Teensy 3.1
+
 #define TEENSY
 
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
@@ -10,6 +16,7 @@
 #include <DMAChannel.h>
 #include "SPI.h"
 #include "ILI9341_t3.h"
+#include <EEPROM.h>
 
 DMAChannel dma1(false);
 
@@ -21,8 +28,10 @@ extern int AFSK;		// Modem Mode
 #define TRUE 1
 #define FALSE 0
 
-int loadCounter = 0;
+int loadCounter = 0;		// for performance monitor
 int lastLoadTicks = 0;
+
+int PKTLEDTimer = 0;
 
 extern ILI9341_t3 tft;
 
@@ -46,8 +55,37 @@ void yDisplayState(char * State);
 #define LOGINFO 6
 #define LOGDEBUG 7
 
+// TNC Params in EEPROM - compatible with pitnc_get/set
 
-#define pttPin 13
+#define	TXDELAY		1
+#define PERSIST		2
+#define SLOTTIME	3
+#define TXTAIL		4
+#define FULLDUP		5
+#define	KISSCHANNEL	6
+#define I2CADDRESS	7
+
+#define pttPin 6
+
+#define LED0 24
+#define LED1 25
+#define LED2 26
+#define LED3 31
+
+#define DCDLED LED0
+#define PKTLED LED1			// flash when packet received
+
+#define SW1 27
+#define SW2 28
+#define SW3 29
+#define SW4 30
+
+// CAT4016 10 LED display
+
+#define CLK 2
+#define BLANK 3
+#define LATCH 4
+#define SIN 5
 
 extern "C"
 {
@@ -73,14 +111,13 @@ extern "C"
 
 #define Now getTicks()
 
-  void _getpid()
+  void _getpid()		// Seem to be needed to satifay linker
   {
   }
 
   void _kill()
   {
   }
-
 
   void xStartDAC()
   {
@@ -99,6 +136,7 @@ extern "C"
   }
   void Sleep(int mS)
   {
+#if 0
     int loadtime = millis() - lastLoadTicks;
 
     loadCounter += mS;
@@ -109,7 +147,7 @@ extern "C"
       lastLoadTicks = millis();
       loadCounter = 0;
     }
-
+#endif
     delay(mS);
   }
   void PlatformSleep()
@@ -147,8 +185,15 @@ extern "C"
     Serial1.println(Msg);
   }
 
+  void SetLED(int Pin, int State)
+  {
+    digitalWrite(Pin, State);
+  }
+
   void HostPoll()
   {
+    // Called roughly once every milisecond
+
     int RXBPtr = Serial.available();
 
     if (RXBPtr)
@@ -161,6 +206,13 @@ extern "C"
 
       ProcessKISSPacket(RXBUFFER, RXBPtr);
     }
+
+    if (PKTLEDTimer)
+    {
+      PKTLEDTimer--;
+      if (PKTLEDTimer == 0)
+        SetLED(PKTLED, 0);				// turn off packet rxed led
+    }
   }
 
   int GetDMAPointer()
@@ -171,11 +223,6 @@ extern "C"
   {
     return dma1.TCD->CITER_ELINKNO;
   }
-  void SetLED(int blnPTT)
-  {
-    digitalWrite(pttPin, blnPTT);
-  }
-
 }
 void setup()
 {
@@ -195,7 +242,26 @@ void setup()
   Baud = 9600;	// FSK G3RUH
   AFSK = FALSE;
 
+  Baud = 1200;
+  AFSK = TRUE;
+
+  pinMode(13, OUTPUT);				// onboard LED
   pinMode(pttPin, OUTPUT);
+  pinMode(LED0, OUTPUT);
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  pinMode(LED3, OUTPUT);
+
+  pinMode (SW1, INPUT_PULLUP);
+  pinMode (SW2, INPUT_PULLUP);
+  pinMode (SW3, INPUT_PULLUP);
+  pinMode (SW4, INPUT_PULLUP);
+
+  pinMode(CLK, OUTPUT);
+  pinMode(BLANK, OUTPUT);
+  pinMode(LATCH, OUTPUT);
+  pinMode(SIN, OUTPUT);
+
 
   setupTFT();
   Serial.begin(115200);
@@ -210,6 +276,26 @@ void setup()
 
   WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
 
+  Serial1.print( "EEPROM length: " );
+  Serial1.println( EEPROM.length() );
+
+  // if (EEPROM.read(1) != 100)
+  // 	EEPROM.write(1, 100);
+
+  //if (EEPROM.read(2) != 200)
+  // 	EEPROM.write(2, 200);
+
+  for (i = 0; i < 16; i++)
+  {
+    // read a byte from the current address of the EEPROM
+    int value = EEPROM.read(i);
+
+    Serial1.print(i);
+    Serial1.print("\t");
+    Serial1.print(value, DEC);
+    Serial1.println();
+  }
+  Serial1.println(EEPROM[2]);
   if (Baud == 9600)
   {
     tft.println("9600 FSK Mode");
@@ -217,8 +303,10 @@ void setup()
   }
   else
   {
-    tft.println("9600 FSK Mode");
-    Serial1.println("9600 FSK Mode");
+    tft.print(Baud);
+    tft.println(" AFSK  Mode");
+    Serial1.print(Baud);
+    Serial1.println(" Baud AFSK  Mode");
   }
   dma1.begin(true);
 
@@ -249,6 +337,13 @@ void setup()
 
   WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
 
+  // Clear CAT4016
+
+  digitalWriteFast(BLANK, 0);	// Enable display
+  digitalWriteFast(LATCH, 0);	// Strobe High to copy data from shift reg to display
+  digitalWriteFast(CLK, 0);		// Strobe High to enter data to shift reg
+
+  CAT4016(0);				// All off
 }
 
 
@@ -478,6 +573,35 @@ void print_mac()  {
   }
 }
 
+void CAT4016(int value)
+{
+  // writes value to the 10 LED display
+  int i;
+
+  for (i = 0; i < 16; i++)			// must send all 16 to maintain sync
+  {
+    // Send each bit to display
+
+    // We probbly don't need a microsecond delay, but I doubt if it will
+    // cauise timing problems anywhere else
+
+    // looks like we need to send data backwards (hi order bit first)
+
+    digitalWriteFast(SIN, (value >> 15) & 1);
+    //   __asm("nop");
+    delayMicroseconds(1);		// Setup is around 20 nS
+    digitalWriteFast(CLK, 1);		// Copy SR to Outputs
+    delayMicroseconds(1);		// Setup is around 20 nS
+    digitalWriteFast(CLK, 0);		// Strobe High to copy data from shift reg to display
+    value = value << 1;			// ready for next bit
+    delayMicroseconds(1);		// Setup is around 20 nS
+  }
+  // copy Shift Reg to display
+
+  digitalWriteFast(LATCH, 1);		//  Strobe High to copy data from shift reg to display
+  delayMicroseconds(1);					// Setup is around 20 nS
+  digitalWriteFast(LATCH, 0);
+}
 
 
 

@@ -58,7 +58,7 @@ struct kisspkt {
 	unsigned int inhibittx;
 
 	struct {
-		unsigned rd, wr;
+		unsigned rd, wr, txend;
 		unsigned char buf[TXBUFFER_SIZE];
 	} htx;
 	

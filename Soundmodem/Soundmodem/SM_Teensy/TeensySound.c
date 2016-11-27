@@ -13,6 +13,27 @@
 #define TRUE 1
 #define FALSE 0
 
+#define pttPin 6
+
+#define LED0 24
+#define LED1 25
+#define LED2 26
+#define LED3 31
+
+#define DCDLED LED0
+
+#define SW1 27
+#define SW2 28
+#define SW3 29
+#define SW4 30
+
+// CAT4016
+
+#define CLK 2
+#define BLANK 3
+#define LATCH 4
+#define SIN 5
+
 
 #define ADC_SAMPLES_PER_BLOCK 1200
 #define DAC_SAMPLES_PER_BLOCK 1200
@@ -30,13 +51,10 @@
 
 #define Now getTicks()
 
-
-#define concat(a, b) a ## b
-
-#include <math.h>
-
 BOOL SoundIsPlaying = FALSE;
 BOOL Capturing = FALSE;
+
+int totSamples = 0;
 
 extern BOOL blnDISCRepeating;
 
@@ -102,11 +120,12 @@ void SampleSink(short Sample)
   {
     // send this buffer to sound interface
 
-    //    printtick("Start Wait");
+    printtick("Enter SendtoCard");
     DMABuffer = SendtoCard(DMABuffer, SendSize);
-    //    printtick("Stop Wait");
+    printtick("Leave SendtoCard");
     Number = 0;
   }
+  totSamples++;
 }
 
 
@@ -118,6 +137,9 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 
     ProcessNewSamples(buf, DAC_SAMPLES_PER_BLOCK);		// signed
   }
+
+  	WriteDebugLog(7, "SendtoCard %d", n);
+
 
   // Start DMA if first call
 
@@ -229,10 +251,10 @@ void PollReceivedSamples()
 
  //   printtick("Process Sample End");
 
-    if (leveltimer++ > 1000)
+    if (leveltimer++ > 100)
     {
       leveltimer = 0;
-      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 1000));
+      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 100));
       displayLevel(maxlevel);
       tot = minlevel = maxlevel = 0;
     }
@@ -282,31 +304,45 @@ void SoundFlush()
 
   //  send remaining samples
 
-  //  printtick("Start flush");
+  printtick("Start flush");
 
   if (Loopback)
   {
     ProcessNewSamples(&dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK], Number);
   }
 
-  //  WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d", Index, Number, GetDMAPointer());
+   WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d", Index, Number, GetDMAPointer());
 
   if (Index == 0)
 
-    //	Sending from first half of buffer. Stop when DMS Pointer gets to
-    //	( 2 * DAC_SAMPLES_PER_BLOCK) - Number
+    //	Sending from first half of buffer. Stop when DMA Pointer gets to
+    //	(2 * DAC_SAMPLES_PER_BLOCK) - Number
 
-    FlushEnd = ( 2 * DAC_SAMPLES_PER_BLOCK) - Number;
+    // Remember DMA pointer goes downwards
 
+    FlushEnd = (2 * DAC_SAMPLES_PER_BLOCK) - Number;
+    
   else
 
     // Second Half. Stop when pointer gets to DAC_SAMPLES_PER_BLOCK - Number)
+ 
     FlushEnd = DAC_SAMPLES_PER_BLOCK - Number;
+    
+    WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d Flushend %d", Index, Number, GetDMAPointer(), FlushEnd);
+
+
+    
+
+  while (GetDMAPointer() < FlushEnd)
+    txSleep(1);
+
+      printtick("mid flush");
+
 
   while (GetDMAPointer() > FlushEnd)
     txSleep(1);
 
-  // printtick("stop flush");
+   printtick("stop flush");
 
   xstopDAC();
   DMARunning = FALSE;
@@ -316,6 +352,11 @@ void SoundFlush()
 
   StartCapture();
 
+	WriteDebugLog(7, "totSamples %d", totSamples);
+  totSamples = 0;
+  Number = 0;
+	DMABuffer = &dac1_buffer[0];
+ 
   return;
 }
 
@@ -327,7 +368,7 @@ BOOL KeyPTT(BOOL blnPTT)
 {
   // Returns TRUE if successful False otherwise
 
-  SetLED(blnPTT);
+  SetLED(pttPin, blnPTT);
   displayPTT(blnPTT);
   return TRUE;
 }

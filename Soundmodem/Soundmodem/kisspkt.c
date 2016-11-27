@@ -88,6 +88,9 @@ extern int openpty(int *amaster, int *aslave, char *name, struct termios *termp,
 int SerialSendData(unsigned char * Message,int MsgLen);
 int KeyPTT(int blnPTT);
 void SoundFlush();
+void StopCapture();
+VOID WriteDebugLog(int LogLevel, const char * format, ...);
+VOID displayDCD(int x);
 
 /* ---------------------------------------------------------------------- */
 
@@ -107,6 +110,21 @@ void SoundFlush();
 #define KISS_CMD_ACKMODE	12
 #define KISS_CMD_RETURN     255
 
+// Teensy interface board board
+
+#ifdef TEENSY
+
+#define LED0 24
+#define LED1 25
+#define LED2 26
+#define LED3 31
+
+#define DCDLED LED0
+#define PKTLED LED1			// flash when packet received
+
+extern int PKTLEDTimer;
+
+#endif
 /* ---------------------------------------------------------------------- */
 /*
  * the CRC routines are stolen from WAMPES
@@ -352,6 +370,11 @@ static void do_rxpacket(struct modemchannel *chan)
 	WriteDebugLog(7,"RX Packet Len = %d Good CRC", chan->pkt.hrx.bufcnt);
 	chan->pkt.stat.pkt_in++;
 	kiss_encodepkt(chan, chan->pkt.hrx.buf, chan->pkt.hrx.bufcnt-2);
+
+#ifdef TEENSY
+	SetLED(PKTLED, TRUE);	// Flash LED
+	PKTLEDTimer = 200;		// for 200 mS
+#endif
 }
 
 #define DECODEITERA(j)                                                        \
@@ -524,11 +547,11 @@ int pktget(struct modemchannel *chan, unsigned char *data, unsigned int len)
 	unsigned int i, j, n = len;
 
 	i = (chan->pkt.htx.rd - chan->pkt.htx.wr - 1) % TXBUFFER_SIZE;
-	if (chan->pkt.inhibittx || chan->pkt.htx.rd == chan->pkt.htx.wr)
+	if (chan->pkt.inhibittx || chan->pkt.htx.rd == chan->pkt.htx.txend)
 		return 0;
 	while (n > 0) {
-		if (chan->pkt.htx.wr >= chan->pkt.htx.rd)
-			j = chan->pkt.htx.wr - chan->pkt.htx.rd;
+		if (chan->pkt.htx.txend >= chan->pkt.htx.rd)
+			j = chan->pkt.htx.txend - chan->pkt.htx.rd;
 		else
 			j = TXBUFFER_SIZE - chan->pkt.htx.rd;
 		if (j > n)
@@ -560,7 +583,7 @@ void pkttransmitloop(struct state *state)
 	BOOL AckMode;
 	unsigned char AckVal1;	// ackmode value to return
 	unsigned char AckVal2;	// ackmode value to return
-	int len, savewr, newwr;
+	int len, newwr;
 	int rd;
 
 	// TO support ackmode I've added an ackmode flag and two 
@@ -586,6 +609,7 @@ void pkttransmitloop(struct state *state)
 			}
 		}
 
+		StopCapture();
 		KeyPTT(1);
 
 		// This sends flags for txd 
@@ -622,20 +646,15 @@ void pkttransmitloop(struct state *state)
 				len -= 2;
 			}
 
-			// modulate will send till buffer is empty,
-			// but we want to stop at end of each packet
-			// to send ackmode response if needed.
-			// TO do this change wr temporaily
-
-			savewr = chan->pkt.htx.wr;
+			// I've changed modulate to stop when rd = txend, not wr,
+			
 			newwr = rd + len;
 			if (newwr > TXBUFFER_SIZE)
 				newwr -= TXBUFFER_SIZE; 
 
 			chan->pkt.htx.rd = rd;
 
-			if (chan->pkt.htx.wr != newwr)
-				chan->pkt.htx.wr = newwr;
+			chan->pkt.htx.txend = newwr;
 			
 			chan->pkt.inhibittx = 0;
 			chan->mod->modulate(chan->modstate, 0);
@@ -653,9 +672,12 @@ void pkttransmitloop(struct state *state)
 				*(kptr++) = KISS_FEND;
 
 				SerialSendData(kbuf, 5);
+				WriteDebugLog(7, "ACKMode Response");
 			}
-			chan->pkt.htx.wr = savewr;
 		}
+
+		// TX buffer empty - flush and drop PTT
+
 		SoundFlush();
 		KeyPTT(0);
 	}
@@ -675,17 +697,9 @@ void pktsetdcd(struct modemchannel *chan, int dcd)
 
 }
 
-void pktrelease(struct modemchannel *chan)
-{
-	close(chan->pkt.kiss.fd);
-	if (chan->pkt.kiss.fdmaster != -1)
-		close(chan->pkt.kiss.fdmaster);
-	chan->pkt.kiss.fd = chan->pkt.kiss.fdmaster = -1;
-}
-
 struct modemparams pktkissparams[];
 
-void pktinit(struct modemchannel *chan, const char *params[])
+void pktinit(struct modemchannel *chan)
 {
     memset(&chan->pkt, 0, sizeof(chan->pkt));
 	chan->pkt.inhibittx = 1;

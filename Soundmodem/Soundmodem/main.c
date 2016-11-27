@@ -39,13 +39,17 @@
 
 
 struct state state = {
-	NULL, NULL, NULL, {200, 64, 100, 0, 0}};
+	NULL, NULL, NULL, {250, 64, 100, 0, 0}};
 
 
 void InitSound(int SampleRate, int Report);
+void DemodAFSKinit(void *state);
+void DemodFSKinit(void *state);
 
-int Baud = 9600;
-BOOL AFSK = FALSE;
+//int Baud = 9600;
+//BOOL AFSK = FALSE;
+int Baud = 1200;
+BOOL AFSK = TRUE;
 
 int logcheck(int x)
 {
@@ -137,7 +141,11 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
+//#ifdef TEENSY
+//		samplerate = 48000;
+//#else
 		samplerate = 12000;
+//#endif
 		P1 = Baud;
 
 		if (Baud == 300)
@@ -156,7 +164,7 @@ int main(int argc, char *argv[])
 	chan->modstate = NULL;
 	chan->demodstate = NULL;
 
-	pktinit(chan, "");
+	pktinit(chan);
 
 	chan->modstate = chan->mod->config(chan, &sr, P1, P2, P3);
  	chan->demodstate = chan->demod->config(chan, &sr, P1, P2, P3);
@@ -183,7 +191,7 @@ int main(int argc, char *argv[])
 		chan->modstate = NULL;
 		chan->demodstate = NULL;
 
-		pktinit(chan, "");
+		pktinit(chan);
 
 		chan->modstate = chan->mod->config(chan, &sr, P1, P2, P3);
 	 	chan->demodstate = chan->demod->config(chan, &sr, P1, P2, P3);
@@ -209,6 +217,8 @@ int main(int argc, char *argv[])
 		else
 			DemodFSKinit(chan->demodstate);		// G8BPQ 
 	}
+
+	WriteDebugLog(7, "Baud %d AFSK %d Samplerate %d", Baud, AFSK, samplerate);
 
 #ifndef TEENSY
 

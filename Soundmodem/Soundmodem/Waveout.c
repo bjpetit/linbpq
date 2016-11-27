@@ -65,7 +65,7 @@ int Capturing = 1;
 
 // Currently use 1200 samples for TX but 480 for RX to reduce latency
 
-#define SendSize 2400
+#define SendSize 2400		// ?? needed for 48KHz 9600 ??
 #define ReceiveSize 1200
 
 #define NumberofinBuffers 2
@@ -222,7 +222,7 @@ void txSleep(int mS)
 	// called while waiting for next TX buffer. Run background processes
 
 	PollReceivedSamples();			// discard any received samples
-//	HostPoll();		// don't poll host when transmitting
+	HostPoll();	
 	Sleep(mS);
 }
 
@@ -236,8 +236,11 @@ FILE * wavfp1;
 
 BOOL DMARunning = FALSE;		// Used to start DMA on first write
 
+int totSamples = 0;
+
 void SampleSink(short Sample)
 {
+	totSamples++;
 
 #ifdef TEENSY	
 	int work = (short)Sample);
@@ -265,6 +268,9 @@ short * SendtoCard(unsigned short * buf, int n)
 		ProcessNewSamples(buf, 1200);		// signed
 	}
 
+	WriteDebugLog(7, "SendtoCard %d", n);
+
+
 	header[Index].dwBufferLength = n * 2;
 
 	waveOutPrepareHeader(hWaveOut, &header[Index], sizeof(WAVEHDR));
@@ -274,7 +280,7 @@ short * SendtoCard(unsigned short * buf, int n)
 
 	while (!(header[!Index].dwFlags & WHDR_DONE))
 	{
-		txSleep(10);				// Run buckground while waiting 
+		txSleep(1);				// Run buckground while waiting 
 	}
 
 	waveOutUnprepareHeader(hWaveOut, &header[!Index], sizeof(WAVEHDR));
@@ -474,7 +480,7 @@ void ClearAllMixedSamples();
 
 void StartCapture()
 {
-	// Get rid of anything received - at 966 can see echos
+	// Get rid of anything received - at 9600 can see echos
 	memset (inbuffer, 0 ,NumberofinBuffers * ReceiveSize * 2);
 	Capturing = TRUE;
 }
@@ -529,15 +535,20 @@ void SoundFlush()
 	if (Loopback)
 		ProcessNewSamples(buffer[Index], Number);
 
+	WriteDebugLog(7, "Flushing %d", Number);
+
 	SendtoCard(buffer[Index], Number);
 
 	//	Wait for all sound output to complete
 	
 	while (!(header[0].dwFlags & WHDR_DONE))
-		txSleep(10);
+		txSleep(1);
 	while (!(header[1].dwFlags & WHDR_DONE))
-		txSleep(10);
+		txSleep(1);
 
+	Number = 0;
+	Index = 0;
+	DMABuffer = &buffer[0][0];
 
 	KeyPTT(FALSE);		 // Unkey the Transmitter
 
@@ -556,7 +567,9 @@ void SoundFlush()
         //        stcStatus.ControlName = "lblRcvFrame" ' clear the Receive label
         //        queTNCStatus.Enqueue(stcStatus)
           
-
+	
+	WriteDebugLog(7, "totSamples %d", totSamples);
+	totSamples = 0;
 	return;
 }
 
@@ -588,10 +601,6 @@ VOID RadioPTT(BOOL PTTState)
 		else
 			COMClearDTR(hPTTDevice);
 }
-
-//  Function to send PTT TRUE or PTT FALSE comannad to Host or if local Radio control Keys radio PTT 
-
-const char BoolString[2][6] = {"FALSE", "TRUE"};
 
 BOOL KeyPTT(BOOL blnPTT)
 {

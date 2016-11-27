@@ -72,10 +72,8 @@ extern struct state state;
 
 /* ---------------------------------------------------------------------- */
 
-extern struct modemparams pktmkissparams[];
 extern struct modemparams pktkissparams[];
-extern void pktinit(struct modemchannel *chan, const char *params[]);
-extern void pktinitmkiss(struct modemchannel *chan, const char *params[]);
+extern void pktinit(struct modemchannel *chan);
 extern void pktrelease(struct modemchannel *chan);
 extern void pkttransmitloop(struct state *state);
 
