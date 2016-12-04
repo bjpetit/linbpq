@@ -1916,7 +1916,7 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 	}
 
 	sprintf(conn->WEB_COMMSSTATE,"COM%s Open", Port);
-	SetWindowText(conn->xIDC_COMMSSTATE, buf);
+	SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
 
 	return TRUE;
 }

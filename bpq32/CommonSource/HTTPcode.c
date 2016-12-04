@@ -1834,8 +1834,6 @@ doHeader:
 				return 1;
 			}
 
-
-
 			if (strstr(input, "Cancel=Cancel"))
 			{
 				ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
@@ -1903,9 +1901,20 @@ doHeader:
 				RegCloseKey(hKey);
 			}
 #endif
-
 			if (strstr(input, "Test=Test"))
 				SendUIBeacon(Port);
+
+		
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, Port,		
+				Interval[Port], &UIUIDEST[Port][0], &UIUIDigi[Port][0], &FN[Port][0], &Message[Port][0], Port);
+			
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+			send(sock, Header, HeaderLen, 0);
+			send(sock, _REPLYBUFFER, ReplyLen, 0);
+			send(sock, Tail, strlen(Tail), 0);
+
+			return 1;
 		}
 
 		if (_stricmp(NodeURL, "/Node/CfgSave") == 0)

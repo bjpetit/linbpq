@@ -656,9 +656,10 @@ typedef struct TNCINFO
 	time_t WinmorRestartCodecTimer;
 	int WinmorCurrentMode;
 	char ARDOPCurrentMode[6];
-
+	char ARDOPCommsMode;
+	char * ARDOPSerialPort;
+	int ARDOPSerialSpeed;
 	int SlowTimer;
-
 	int ARQPorts[32];				// For ARQ over KISS
 
 

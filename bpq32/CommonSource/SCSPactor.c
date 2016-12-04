@@ -3418,7 +3418,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 			// if not configured to use PTC Rig Control, Ignore
 
-			if (TNC->RIG->PORT->PTC == NULL)
+			if (TNC->RIG->PORT == NULL || TNC->RIG->PORT->PTC == NULL)
 				return;
 			
 			buffptr = GetBuff();
