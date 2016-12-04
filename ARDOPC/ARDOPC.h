@@ -101,6 +101,25 @@ typedef unsigned char UCHAR;
 #define False 0
 #define True 1
 
+// TEENSY Interface board equates
+
+#define pttPin 6
+
+#define LED0 24
+#define LED1 25
+#define LED2 26
+#define LED3 31
+
+#define ISSLED LED0
+#define IRSLED LED1
+#define TRAFFICLED LED2
+
+#define SW1 27
+#define SW2 28
+#define SW3 29
+#define SW4 30
+
+
 BOOL KeyPTT(BOOL State);
 
 UCHAR FrameCode(char * strFrameName);
@@ -133,7 +152,7 @@ void SendCommandToHost(char * Cmd);
 void UpdateBusyDetector(short * bytNewSamples);
 int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM);
 void SetARDOPProtocolState(int value);
-
+BOOL BusyDetect3(float * dblMag, int intStart, int intStop);
 
 
 //exern "C" void SampleSink(short Sample);
@@ -159,6 +178,8 @@ void GenCRC16FrameType(char * Data, int Length, UCHAR bytFrameType);
 BOOL CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType);
 char * strlop(char * buf, char delim);
 void QueueCommandToHost(char * Cmd);
+void SendCommandToHostQuiet(char * Cmd);
+void SendReplyToHost(char * strText);
 void LogStats();
 int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, BOOL blnInitialize);
 void SendData();
@@ -170,7 +191,11 @@ VOID Statsprintf(const char * format, ...);
 VOID CloseDebugLog();
 VOID CloseStatsLog();
 void Abort();
-
+void SetLED(int LED, int State);
+VOID ClearBusy();
+VOID CloseCOMPort(HANDLE fd);
+VOID COMClearRTS(HANDLE fd);
+VOID COMClearDTR(HANDLE fd);
 
 #ifdef WIN32
 void ProcessNewSamples(short * Samples, int nSamples);

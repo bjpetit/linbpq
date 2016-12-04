@@ -152,6 +152,12 @@ void QueueCommandToHost(char * strText)
 	SendCommandToHost(strText);		// no queuing in lastest code
 }
 
+void SendReplyToHost(char * strText)
+{
+	//	Used for replies to ARDOP commands. In TCP mode treat as SendCommandToHost
+
+	SendCommandToHost(strText);
+}
 //  Subroutine to add a short 3 byte tag (ARQ, FEC, ERR, or IDF) to data and send to the host 
 
 void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)

@@ -692,6 +692,10 @@ void displayState(const char * State)
 	// Dummy for i2c display
 }
 
+void SetLED(int LED, int State)
+{
+}
+
 void displayCall(int dirn, char * call)
 {
 	// Dummy for i2c display
@@ -904,4 +908,17 @@ VOID COMSetRTS(HANDLE fd)
 VOID COMClearRTS(HANDLE fd)
 {
 	EscapeCommFunction(fd, CLRRTS);
+}
+
+void CatWrite(char * Buffer, int Len)
+{
+	WriteDebugLog(5, "CAT Write Len %d %s", Len, Buffer);
+}
+
+unsigned char CatRXbuffer[256];
+int CatRXLen = 10;
+
+int RadioPoll()
+{
+	return CatRXLen;
 }

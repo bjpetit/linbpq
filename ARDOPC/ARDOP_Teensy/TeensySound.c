@@ -16,8 +16,6 @@
 
 extern BOOL blnDISCRepeating;
 
-// the ADC DMA saves the incoming ADC samples into these 2 buffers
-
 extern volatile unsigned short dac1_buffer[DAC_SAMPLES_PER_BLOCK * 2];
 
 extern int ADCInterrupts;
@@ -25,6 +23,8 @@ extern int ADCInterrupts;
 
 // Windows and Linux work with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
+
+// the ADC DMA saves the incoming ADC samples into these 2 buffers
 
 unsigned short ADC_Buffer[2][ADC_SAMPLES_PER_BLOCK] = {0};	// Two Transfer/DMA buffers of 0.1 Sec
 unsigned short work;
@@ -60,19 +60,10 @@ BOOL FirstTime = FALSE;
 
 void InitSound()
 {
-  Config_ADC_DMA();
-  Start_ADC_DMA();
 }
 
 unsigned short * SendtoCard(unsigned short buf, int n)
 {
-  if (Loopback)
-  {
-    // Loop back   to decode for testing
-
-    ProcessNewSamples(buf, DAC_SAMPLES_PER_BLOCK);		// signed
-  }
-
   // Start DMA if first call
 
   if (DMARunning == FALSE)
@@ -141,6 +132,9 @@ void PollReceivedSamples()
 {
   int Pointer = GetADCDMAPointer();
 
+  if (SoundIsPlaying)
+ 	 return;
+
   if (inIndex == 0)
   {
     if (Pointer > ADC_SAMPLES_PER_BLOCK)
@@ -175,12 +169,12 @@ void PollReceivedSamples()
 
     //	serial.printf("Max %d min %d av %d\n", max, min, tot/ADC_SAMPLES_PER_BLOCK);
 
-    //  	 printtick("Process Sample Start");
+  //  printtick("Process Sample Start");
 
     ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
 
 
-    // 	 printtick("Process Sample End");
+ //   printtick("Process Sample End");
 
     if (leveltimer++ > 4)
     {
@@ -284,17 +278,10 @@ BOOL KeyPTT(BOOL blnPTT)
 {
   // Returns TRUE if successful False otherwise
 
-  SetLED(blnPTT);
+  SetLED(pttPin, blnPTT);
   return TRUE;
 }
 
-void Start_ADC_DMA(void)
-{
-}
-
-void Config_ADC_DMA(void)
-{
-}
 
 
 

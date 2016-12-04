@@ -176,7 +176,7 @@ int SerialSendData(UCHAR * Message,int MsgLen)
 	
 	// Have to escape all oxff chars, as these are used to get status info 
 
-	UCHAR NewMessage[1000];
+	UCHAR NewMessage[2000];
 	UCHAR * ptr1 = Message;
 	UCHAR * ptr2 = NewMessage;
 	UCHAR c;
@@ -268,6 +268,7 @@ int BPQSerialGetData(UCHAR * Message, unsigned int BufLen, unsigned long * MsgLe
 
 VOID PutString(UCHAR * Msg)
 {
+	WriteDebugLog(7, Msg);
 	SerialSendData(Msg, strlen(Msg));
 }
 

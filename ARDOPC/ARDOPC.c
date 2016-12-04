@@ -2015,6 +2015,7 @@ void ClearDataToSend()
 	bytDataToSendLength = 0;
 	FreeSemaphore();
 
+	SetLED(TRAFFICLED, FALSE);
 	QueueCommandToHost("BUFFER 0");
 }
 
@@ -2068,6 +2069,9 @@ void RemoveDataFromQueue(int Len)
 		memmove(bytDataToSend, &bytDataToSend[Len], bytDataToSendLength);
 
 	FreeSemaphore();
+
+	if (bytDataToSendLength == 0)
+		SetLED(TRAFFICLED, FALSE);
 
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);

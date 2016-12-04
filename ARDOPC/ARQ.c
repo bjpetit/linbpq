@@ -251,6 +251,9 @@ void SetARDOPProtocolState(int value)
 		blnARQConnected = FALSE;
 		blnPending = FALSE;
 		ClearDataToSend();
+		SetLED(ISSLED, FALSE);
+		SetLED(IRSLED, FALSE);
+
 		break;
 
 	case FECRcv:
@@ -274,10 +277,22 @@ void SetARDOPProtocolState(int value)
 
 		blnFramePending = FALSE;	//  Added 0.6.4 to insure any prior repeating frame is cancelled before new data. 
 		blnEnbARQRpt = FALSE;
+		SetLED(ISSLED, TRUE);
+		SetLED(IRSLED, FALSE);
   
         //        stcStatus.BackColor = System.Drawing.Color.LightSalmon
 
 		break;
+
+	case IRS:
+	case IRStoISS:
+
+		SetLED(IRSLED, TRUE);
+		SetLED(ISSLED, FALSE);
+
+		break;
+
+
         //    Case ProtocolState.IDLE
         //        stcStatus.BackColor = System.Drawing.Color.NavajoWhite
         //    Case ProtocolState.OFFLINE
@@ -603,6 +618,9 @@ UCHAR  * GetDataModes(int intBW)
 		}
 
 		bytFrameTypesForBWLength = sizeof(DataModes1000);
+		if (skip167)
+				bytFrameTypesForBWLength--;		// remove 8PSK.1000.167
+
 		return DataModes1000;
 	}
 	if (intBW == 2000) 
@@ -617,7 +635,7 @@ UCHAR  * GetDataModes(int intBW)
 			bytFrameTypesForBWLength = sizeof(DataModes2000);
 
 			if (skip167)
-				bytFrameTypesForBWLength--;		// remove 8PSK.2000.167
+				bytFrameTypesForBWLength -= 2;		// remove 4PSK.2000.1678 and 8PSK.2000.167
 
 			return DataModes2000;
 		}

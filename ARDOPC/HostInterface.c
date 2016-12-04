@@ -84,6 +84,8 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 
 	FreeSemaphore();
 
+	SetLED(TRAFFICLED, TRUE);
+
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);
 }
@@ -119,7 +121,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "ARQBW %s", ARQBandwidths[ARQBandwidth]);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		else
@@ -133,7 +135,11 @@ void ProcessCommandFromHost(char * strCMD)
 			if (i == 8)
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			else
+			{
 				ARQBandwidth = i;
+				sprintf(cmdReply, "ARQBW now %s", ARQBandwidths[ARQBandwidth]);
+				SendReplyToHost(cmdReply);
+			}
 		}
 		goto cmddone;
 	}
@@ -152,6 +158,12 @@ void ProcessCommandFromHost(char * strCMD)
 
 				if (param > 1 && param < 16)
 				{
+					if (Callsign[0] == 0)
+					{
+						sprintf(strFault, "MYCALL not Set");
+						goto cmddone;
+					}
+						
 					if (ProtocolMode == ARQ)
 					{
 						ARQConReqRepeats = param;
@@ -174,7 +186,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, ARQTimeout);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		else
@@ -182,7 +194,11 @@ void ProcessCommandFromHost(char * strCMD)
 			i = atoi(ptrParams);
 
 			if (i > 29 && i < 241)	
+			{
 				ARQTimeout = i;
+				sprintf(cmdReply, "%s now %d", strCMD, ARQTimeout);
+				SendReplyToHost(cmdReply);
+			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}
@@ -198,7 +214,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "AUTOBREAK FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -212,6 +228,13 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+
+		if (AutoBreak)
+			sprintf(cmdReply, "AUTOBREAK now TRUE");
+		else
+			sprintf(cmdReply, "AUTOBREAK now FALSE");
+
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -226,7 +249,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, bytDataToSendLength);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
@@ -243,7 +266,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "BUSYBLOCK FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -257,6 +280,12 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (BusyBlock)
+			sprintf(cmdReply, "BUSYBLOCK now TRUE");
+		else
+			sprintf(cmdReply, "BUSYBLOCK now FALSE");
+		
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
  
@@ -267,7 +296,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, BusyDet);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 		{
@@ -276,6 +305,9 @@ void ProcessCommandFromHost(char * strCMD)
 			if (i >= 1  && i <= 10)
 			{
 				BusyDet = i;
+				sprintf(cmdReply, "%s now %d", strCMD, BusyDet);
+				SendReplyToHost(cmdReply);
+
 			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
@@ -283,13 +315,12 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
-
 	if (strcmp(strCMD, "CAPTURE") == 0)
 	{
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %s", strCMD, CaptureDevice);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 			strcpy(CaptureDevice, ptrParams);
@@ -300,9 +331,16 @@ void ProcessCommandFromHost(char * strCMD)
 	if (strcmp(strCMD, "CAPTUREDEVICES") == 0)
 	{
 		sprintf(cmdReply, "%s %s", strCMD, CaptureDevices);
-		SendCommandToHost(cmdReply);
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
+
+	if (strcmp(strCMD, "CL") == 0)		// For PTC Emulator
+	{
+		ClearDataToSend();
+		goto cmddone;
+	}
+
 
 	if (strcmp(strCMD, "CLOSE") == 0)
 	{
@@ -319,7 +357,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "CMDTRACE FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -333,6 +371,13 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+
+		if (CommandTrace)
+			sprintf(cmdReply, "CMDTRACE now TRUE");
+		else
+			sprintf(cmdReply, "CMDTRACE now FALSE");
+		
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -345,7 +390,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "CODEC FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -359,6 +404,12 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (blnCodecStarted)
+			sprintf(cmdReply, "CODEC now TRUE");
+		else
+			sprintf(cmdReply, "CODEC now FALSE");
+
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -369,7 +420,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, ConsoleLogLevel);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 		{
@@ -378,6 +429,8 @@ void ProcessCommandFromHost(char * strCMD)
 			if (i >= LOGEMERGENCY  && i <= LOGDEBUG)
 			{
 				ConsoleLogLevel = i;
+				sprintf(cmdReply, "%s now %d", strCMD, ConsoleLogLevel);
+				SendReplyToHost(cmdReply);
 			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
@@ -399,7 +452,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "CWID FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -422,6 +475,16 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+			
+		if (wantCWID)
+			if	(CWOnOff)
+				sprintf(cmdReply, "CWID now ONOFF");
+			else
+				sprintf(cmdReply, "CWID now TRUE");
+		else
+			sprintf(cmdReply, "CWID now FALSE");
+
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -432,6 +495,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, bytDataToSendLength);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		else
@@ -439,7 +503,11 @@ void ProcessCommandFromHost(char * strCMD)
 			i = atoi(ptrParams);
 
 			if (i == 0)	
+			{
 				bytDataToSendLength = 0;
+				sprintf(cmdReply, "%s now %d", strCMD, bytDataToSendLength);
+				SendReplyToHost(cmdReply);
+			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}
@@ -455,7 +523,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "DEBUGLOG FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -469,6 +537,13 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (DebugLog)
+			sprintf(cmdReply, "DEBUGLOG now TRUE");
+		else
+			sprintf(cmdReply, "DEBUGLOG now FALSE");
+
+		SendReplyToHost(cmdReply);
+
 		goto cmddone;
 	}
 
@@ -484,7 +559,7 @@ void ProcessCommandFromHost(char * strCMD)
 /*
             Case "DISPLAY"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & Format(MCB.DisplayFreq, "#.000"))
+                    SendReplyToHost(strCommand & " " & Format(MCB.DisplayFreq, "#.000"))
                 ElseIf IsNumeric(strParameters) Then
                     MCB.DisplayFreq = Val(strParameters)
                     Dim stcStatus As Status = Nothing
@@ -507,7 +582,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, DriveLevel);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		else
@@ -531,7 +606,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "FECID FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -557,7 +632,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "FASTSTART FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -572,7 +647,7 @@ void ProcessCommandFromHost(char * strCMD)
 			goto cmddone;
 		}
 		
-		SendCommandToHost("Ok");
+		SendReplyToHost("Ok");
 		goto cmddone;
 	}
 
@@ -586,7 +661,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %s", strCMD, strFECMode);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 		{
@@ -611,7 +686,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, FECRepeats);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 		{
@@ -651,7 +726,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "FSKONLY FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -675,7 +750,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %s", strCMD, GridSquare);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 			if (CheckGSSyntax(ptrParams))
@@ -711,7 +786,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, LeaderLength);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 		{
@@ -737,7 +812,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "LISTEN FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -766,7 +841,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "MONITOR FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -797,7 +872,7 @@ void ProcessCommandFromHost(char * strCMD)
 				len += sprintf(&cmdReply[len], "%s,", AuxCalls[i]);
 			}
 			cmdReply[len - 1] = 0;	// remove trailing space or ,
-			SendCommandToHost(cmdReply);	
+			SendReplyToHost(cmdReply);	
 			goto cmddone;
 		}
 
@@ -820,7 +895,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %s", strCMD, Callsign);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 			if (CheckValidCallsignSyntax(ptrParams))
@@ -836,7 +911,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %s", strCMD, PlaybackDevice);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 			strcpy(PlaybackDevice, ptrParams);
@@ -847,7 +922,7 @@ void ProcessCommandFromHost(char * strCMD)
 	if (strcmp(strCMD, "PLAYBACKDEVICES") == 0)
 	{
 		sprintf(cmdReply, "%s %s", strCMD, PlaybackDevices);
-		SendCommandToHost(cmdReply);
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -860,7 +935,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "PROTOCOLMODE FEC");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -887,7 +962,7 @@ void ProcessCommandFromHost(char * strCMD)
 /*
             Case "RADIOANT"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Ant.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.Ant.ToString)
                 ElseIf strParameters = "0" Or strParameters = "1" Or strParameters = "2" Then
                     RCB.Ant = CInt(strParameters)
                 Else
@@ -895,7 +970,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOCTRL"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.RadioControl.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.RadioControl.ToString)
                 ElseIf strParameters = "TRUE" Then
                     If IsNothing(objMain.objRadio) Then
                         objMain.SetNewRadio()
@@ -912,7 +987,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOCTRLBAUD"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPortBaud.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.CtrlPortBaud.ToString)
                 ElseIf IsNumeric(strParameters) Then  ' Later expand to tighter syntax checking
                     RCB.CtrlPortBaud = CInt(strParameters)
                 Else
@@ -920,7 +995,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOCTRLDTR"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPortDTR.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.CtrlPortDTR.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
                     RCB.CtrlPortDTR = CBool(strParameters)
                     objMain.objRadio.InitRadioPorts()
@@ -929,14 +1004,14 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOCTRLPORT"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPort)
+                    SendReplyToHost(strCommand & " " & RCB.CtrlPort)
                 Else ' Later expand to tighter syntax checking
                     RCB.CtrlPort = strParameters
                     objMain.objRadio.InitRadioPorts()
                 End If
             Case "RADIOCTRLRTS"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPortRTS.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.CtrlPortRTS.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
                     RCB.CtrlPortRTS = CBool(strParameters)
                     objMain.objRadio.InitRadioPorts()
@@ -945,7 +1020,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOFILTER"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Filter.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.Filter.ToString)
                 ElseIf IsNumeric(strParameters) AndAlso (CInt(strParameters) >= 0 And CInt(strParameters <= 3)) Then
                     RCB.Filter = CInt(strParameters)
                 Else
@@ -953,7 +1028,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOFREQ"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Frequency.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.Frequency.ToString)
                 ElseIf IsNumeric(strParameters) Then ' Later expand to tighter syntax checking
                     RCB.Frequency = CInt(strParameters)
                     If Not IsNothing(objMain.objRadio) Then
@@ -964,7 +1039,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOICOMADD"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.IcomAdd)
+                    SendReplyToHost(strCommand & " " & RCB.IcomAdd)
                 ElseIf strParameters.Length = 2 AndAlso ("0123456789ABCDEF".IndexOf(strParameters(0)) <> -1) AndAlso _
                         ("0123456789ABCDEF".IndexOf(strParameters(1)) <> -1) Then
                     RCB.IcomAdd = strParameters
@@ -973,7 +1048,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOISC"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.InternalSoundCard)
+                    SendReplyToHost(strCommand & " " & RCB.InternalSoundCard)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
                     RCB.InternalSoundCard = CBool(strParameters)
                 Else
@@ -981,7 +1056,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOMENU"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & objMain.RadioMenu.Enabled.ToString)
+                    SendReplyToHost(strCommand & " " & objMain.RadioMenu.Enabled.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
                     objMain.RadioMenu.Enabled = CBool(strParameters)
                 Else
@@ -989,7 +1064,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOMODE"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Mode)
+                    SendReplyToHost(strCommand & " " & RCB.Mode)
                 ElseIf strParameters = "USB" Or strParameters = "USBD" Or strParameters = "FM" Then
                     RCB.Mode = strParameters
                 Else
@@ -997,7 +1072,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOMODEL"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Model)
+                    SendReplyToHost(strCommand & " " & RCB.Model)
                 Else
                     Dim strRadios() As String = objMain.objRadio.strSupportedRadios.Split(",")
                     Dim strRadioModel As String = ""
@@ -1017,7 +1092,7 @@ void ProcessCommandFromHost(char * strCMD)
             Case "RADIOMODELS"
                 If ptrSpace = -1 And Not IsNothing(objMain.objRadio) Then
                     ' Send a comma delimited list of models?
-                    SendCommandToHost(strCommand & " " & objMain.objRadio.strSupportedRadios) ' Need to insure this isn't too long for Interfaces:
+                    SendReplyToHost(strCommand & " " & objMain.objRadio.strSupportedRadios) ' Need to insure this isn't too long for Interfaces:
                 Else
                     strFault = "Syntax Err:" & strCMD
                 End If
@@ -1029,7 +1104,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == NULL)
 		{
 			sprintf(cmdReply, "RADIOPTT %s", PTTPORT);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
   			goto cmddone;
 		}
 
@@ -1058,7 +1133,7 @@ void ProcessCommandFromHost(char * strCMD)
 
              Case "RADIOPTTDTR"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.PTTDTR.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.PTTDTR.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
                     RCB.PTTDTR = CBool(strParameters)
                     objMain.objRadio.InitRadioPorts()
@@ -1067,7 +1142,7 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "RADIOPTTRTS"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.PTTRTS.ToString)
+                    SendReplyToHost(strCommand & " " & RCB.PTTRTS.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
                     RCB.PTTRTS = CBool(strParameters)
                     objMain.objRadio.InitRadioPorts()
@@ -1092,7 +1167,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "RADIOPTTGPIO ENABLED on pin %d", pttGPIOPin);
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 
@@ -1115,7 +1190,7 @@ void ProcessCommandFromHost(char * strCMD)
 /*
             Case "SETUPMENU"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & objMain.SetupMenu.Enabled.ToString)
+                    SendReplyToHost(strCommand & " " & objMain.SetupMenu.Enabled.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
                     objMain.SetupMenu.Enabled = CBool(strParameters)
                 Else
@@ -1133,7 +1208,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "NO2000.167 FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -1148,7 +1223,7 @@ void ProcessCommandFromHost(char * strCMD)
 			goto cmddone;
 		}
 		
-		SendCommandToHost("Ok");
+		SendReplyToHost("Ok");
 		goto cmddone;
 	}
 
@@ -1160,7 +1235,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, Squelch);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 		{
@@ -1182,7 +1257,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %s", strCMD, ARDOPStates[ProtocolState]);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
@@ -1197,7 +1272,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, TrailerLength);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 		}
 		else
 		{
@@ -1217,7 +1292,7 @@ void ProcessCommandFromHost(char * strCMD)
 /*
             Case "TUNERANGE"
                 If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.TuningRange.ToString)
+                    SendReplyToHost(strCommand & " " & MCB.TuningRange.ToString)
                 Else
                     Select Case strParameters.Trim
                         Case "0", "50", "100", "150", "200"
@@ -1242,7 +1317,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "%s %d", strCMD, TuningRange);
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		else
@@ -1266,7 +1341,7 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(cmdReply, "USE600MODES FALSE");
 
-			SendCommandToHost(cmdReply);
+			SendReplyToHost(cmdReply);
 			goto cmddone;
 		}
 		
@@ -1287,7 +1362,7 @@ void ProcessCommandFromHost(char * strCMD)
 	if (strcmp(strCMD, "VERSION") == 0)
 	{
 		sprintf(cmdReply, "VERSION %s_%s", ProductName, ProductVersion);
-		SendCommandToHost(cmdReply);
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	} 
 	// RDY processed earlier Case "RDY" ' no response required for RDY
@@ -1300,7 +1375,7 @@ cmddone:
 	{
 		//Logs.Exception("[ProcessCommandFromHost] Cmd Rcvd=" & strCommand & "   Fault=" & strFault)
 		sprintf(cmdReply, "FAULT %s", strFault);
-		SendCommandToHost(cmdReply);
+		SendReplyToHost(cmdReply);
 	}
 //	SendCommandToHost("RDY");		// signals host a new command may be sent
 }

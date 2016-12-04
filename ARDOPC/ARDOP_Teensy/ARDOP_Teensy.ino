@@ -25,9 +25,34 @@ void yDisplayCall(int dirn, char * Call);
 void yDisplayState(char * State);
 
 
-#define pttPin 13
+#define pttPin 6
 
+#define LED0 24
+#define LED1 25
+#define LED2 26
+#define LED3 31
+
+#define ISSLED LED0
+#define IRSLED LED1
+#define TRAFFICLED LED2s
+
+#define SW1 27
+#define SW2 28
+#define SW3 29
+#define SW4 30
+
+// CAT4016
+
+#define CLK 2
+#define BLANK 3
+#define LATCH 4
+#define SIN 5
+
+
+unsigned char RXbuffer[256];
+int RXLen = 0;
 extern "C"
+
 {
   void WriteDebugLog(int Level, const char * format, ...);
   void InitSound();
@@ -125,6 +150,48 @@ extern "C"
     Serial1.println(Msg);
   }
 
+  
+void CatWrite(const uint8_t * Buffer, int Len)
+{
+  Serial5.write(Buffer, Len);
+}
+
+unsigned char CatRXbuffer[256];
+int CatRXLen = 0;
+
+
+void RadioPoll()
+{
+  int Length = Serial5.available();
+  int i, val;
+  unsigned char * ptr;
+  int len;
+
+  // only try to read number of bytes in queue
+
+  if (RXLen + Length > 256)
+    RXLen = 0;
+
+  Length = Serial5.readBytes(&RXbuffer[RXLen], Length);
+
+  if (Length == 0)
+    return;					// Nothing doing
+
+  RXLen += Length;
+
+  Length = RXLen;
+
+  Serial1.print("CAT RX ");
+  for (i = 0; i < Length; i++)
+  {
+    val = RXbuffer[i];
+    Serial1.print(val, HEX);
+    Serial1.print(" ");
+  }
+  Serial1.println("");
+}
+
+
   void HostPoll()
   {
     RXBPtr = Serial.available();
@@ -149,12 +216,46 @@ extern "C"
   {
     return dma1.TCD->CITER_ELINKNO;
   }
-  void SetLED(int blnPTT)
+  void SetLED(int LED, int blnPTT)
   {
-    digitalWrite(pttPin, blnPTT);
+    digitalWriteFast(LED, blnPTT);
   }
-
 }
+
+
+void CAT4016(int value)
+{
+  // writes value to the 10 LED display
+  int i;
+
+  for (i = 0; i < 16; i++)			// must send all 16 to maintain sync
+  {
+    // Send each bit to display
+
+    // We probbly don't need a microsecond delay, but I doubt if it will
+    // cauise timing problems anywhere else
+
+    // looks like we need to send data backwards (hi order bit first)
+
+    digitalWriteFast(SIN, (value >> 15) & 1);
+    //   __asm("nop");
+    delayMicroseconds(1);		// Setup is around 20 nS
+    digitalWriteFast(CLK, 1);		// Copy SR to Outputs
+    delayMicroseconds(1);		// Setup is around 20 nS
+    digitalWriteFast(CLK, 0);		// Strobe High to copy data from shift reg to display
+    value = value << 1;			// ready for next bit
+    delayMicroseconds(1);		// Setup is around 20 nS
+  }
+  // copy Shift Reg to display
+
+  digitalWriteFast(LATCH, 1);		//  Strobe High to copy data from shift reg to display
+  delayMicroseconds(1);					// Setup is around 20 nS
+  digitalWriteFast(LATCH, 0);
+}
+
+
+
+
 void setup()
 {
   uint32_t i, sum = 0;
@@ -170,11 +271,27 @@ void setup()
 
   WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
 
+  pinMode(13, OUTPUT);				// onboard LED
   pinMode(pttPin, OUTPUT);
+  pinMode(LED0, OUTPUT);
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  pinMode(LED3, OUTPUT);
+
+  pinMode (SW1, INPUT_PULLUP);
+  pinMode (SW2, INPUT_PULLUP);
+  pinMode (SW3, INPUT_PULLUP);
+  pinMode (SW4, INPUT_PULLUP);
+
+  pinMode(CLK, OUTPUT);
+  pinMode(BLANK, OUTPUT);
+  pinMode(LATCH, OUTPUT);
+  pinMode(SIN, OUTPUT);
 
   setupTFT();
   Serial.begin(115200);
   Serial1.begin(115200);
+  Serial5.begin(19200);				// CAT Port
 
   tft.print("ARDOP TNC ");
   tft.println(ProductVersion);
@@ -213,6 +330,15 @@ void setup()
   stopDAC();
   setupADC(16);
   StartADC();
+
+  // Clear CAT4016
+
+  digitalWriteFast(BLANK, 0);	// Enable display
+  digitalWriteFast(LATCH, 0);	// Strobe High to copy data from shift reg to display
+  digitalWriteFast(CLK, 0);		// Strobe High to enter data to shift reg
+
+  CAT4016(0);				// All off
+
 }
 
 
@@ -223,6 +349,7 @@ void loop()
   HostPoll();
   MainPoll();
   PlatformSleep();
+  RadioPoll();
 
   if (blnClosing)
   {
@@ -332,8 +459,12 @@ void setupADC(int pin)
 
 void pdb_isr()
 {
+	PDB0_SC &= ~PDB_SC_PDBIF; // clear interrupt flag
+
+	if (SoundIsPlaying)
+ 	 return;
+ 	 
   ADC0_SC1A = 8; // Trigger read on A2
-  PDB0_SC &= ~PDB_SC_PDBIF; // clear interrupt flag
 }
 
 void StartADC()
@@ -361,9 +492,6 @@ void StartADC()
   inIndex = 0;
   dma1.enable();
 }
-
-
-
 
 
 

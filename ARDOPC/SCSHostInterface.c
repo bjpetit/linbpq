@@ -5,6 +5,14 @@
 
 VOID ProcessSCSPacket(UCHAR * rxbuffer, int Length);
 VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
+void ProcessRIGPacket(int Command, char * Buffer, int Len);
+VOID PutString(UCHAR * Msg);
+int PutChar(UCHAR c);
+int SerialSendData(UCHAR * Message,int MsgLen);
+void CatWrite(char * Buffer, int Len);
+int RadioPoll();
+void ProcessCommandFromHost(char * strCMD);
+
 
 UCHAR bytDataToSend[4096];// =
 	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
@@ -46,11 +54,16 @@ extern int intDataPtr;
 extern int intSampPerSym;
 extern int intDataBytesPerCar;
 
+extern unsigned char CatRXbuffer[256];
+extern int CatRXLen;
+
 
 BOOL Term4Mode;
 BOOL PACMode;
 
-BOOL MODE;		// Host or Term
+BOOL HostMode;		// Host or Term
+
+BOOL PTCMode = FALSE;	// Running in PTC compatibility mode?
 
 volatile int RXBPtr;
 
@@ -64,46 +77,65 @@ extern float dblOffsetHz;
 extern int intSessionBW;
 
 
-void QueueCommandToHost(char * Cmd)
+void SendCommandToHost(char * Cmd)
 {
 	if (memcmp(Cmd, "STATUS ", 7) == 0)
 	{
 		if (memcmp(&Cmd[7], "CONNECT TO", 10) == 0)
 		{
-			memcpy(ReportCall, &Cmd[18], 10);
-			strlop(ReportCall, ' ');
-			change = 1;
-			state = 0;
+			if (HostMode)
+			{
+				memcpy(ReportCall, &Cmd[18], 10);
+				strlop(ReportCall, ' ');
+				change = 1;
+				state = 0;
+			}
+			else
+				PutString("Disconnected\r");
 		}
 	}
 	if (memcmp(Cmd, "CONNECTED ", 10) == 0)
 	{
-		memcpy(ReportCall, &Cmd[10], 10);
-		strlop(ReportCall, ' ');
-		change = 1;
-		state = 1;
-	}
+		if (HostMode)
+		{
+			memcpy(ReportCall, &Cmd[10], 10);
+			strlop(ReportCall, ' ');
+			change = 1;
+			state = 1;
+		}
+		else
+		{
+			PutString(Cmd);
+			PutString("\r");
+		}
+		}
 
 	if (memcmp(Cmd, "DISCON", 6) == 0)
 	{
-		change = 1;
-		state = 0;
+		if (HostMode)
+		{
+			change = 1;
+			state = 0;
+		}
+		else
+			PutString("Disconnected\r");
 	}
-
 	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
 }
 
-void SendCommandToHost(char * Cmd)
+void QueueCommandToHost(char * Cmd)
 {
-	// if possible convert to equivalent PTC message
+	SendCommandToHost(Cmd);		// no queuing now
+}
 
-	if (memcmp(Cmd, "STATUS CONNECT TO", 20) == 0)
-	{
-		change = 1;
-		state = 0;
-	}
+void SendReplyToHost(char * Cmd)
+{
+	// Used by command handler
 
-	WriteDebugLog(LOGINFO, "Command to Host %s", Cmd);
+	if (HostMode)
+		SendCommandToHost(Cmd);		// no queuing now
+	else
+		PutString(Cmd);
 }
 
 void SendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
@@ -119,18 +151,21 @@ void SendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
 	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
 }
 
-//	Function to queue a text command to the Host used for all asynchronous Commmands (e.g. BUSY etc)
-
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 {
-	if (MODE == 0)
-		return;
-
 	if (strcmp(Type, "ARQ") == 0)
 	{
-		memcpy(&bytDataforHost[bytesforHost], Msg, Len);
-		bytesforHost += Len;
+		if (HostMode)
+		{
+			memcpy(&bytDataforHost[bytesforHost], Msg, Len);
+			bytesforHost += Len;
+		}
+		else
+		{
+			Msg[Len] = 0;
+			PutString(Msg);
+		}
 	}
 	else
 	{
@@ -298,7 +333,12 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		if (newStatus)
 		{
 			newStatus = FALSE;
-			*(NextChan++) = 254;
+			*(NextChan++) = 255;
+		}
+
+		if (RadioPoll())			// Cat data available?
+		{
+			*(NextChan++) = 254;	// 253 + 1
 		}
 
 		if (bytesforHost || bytesEchoed || change)
@@ -378,13 +418,45 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		return;
 	}
 
+	if (Channel == 253)			// Rig Control
+	{
+		if (Command == 1 && Buffer[3] == 'G')	
+		{
+			// Poll for Rig Data
+
+			memcpy(&SCSReply[5], CatRXbuffer, CatRXLen);
+			SCSReply[2] = Channel;
+			SCSReply[3] = 7;
+			SCSReply[4] = CatRXLen - 1;
+
+			ReplyLen = CatRXLen + 5;
+			EmCRCStuffAndSend(SCSReply, ReplyLen);
+			CatRXLen = 0;
+			return;
+		}
+
+		Len = Buffer[2] + 1;
+		Buffer[Len + 3] = 0;
+
+		// RMS Express sends #TRX: Commands, eg #TRX TY I 9600 $00 TTL
+		// BPQ sends Data Frames with the raw contents
+
+		ProcessRIGPacket(Command, &Buffer[3], Len);
+		goto AckIt;
+	}
 
 	if (Command == 0)
 	{
 		// Data Frame
 
-		if (Channel == 31)
+		if (Channel == 32)		// Command
+		{
+			Buffer[Len + 3] = 0;
+			ProcessCommandFromHost(&Buffer[5]); // Skip C:
+		}
+		else if (Channel == 33)		// Command
 			AddDataToDataToSend(&Buffer[3], Buffer[2]+ 1);
+
 		goto AckIt;
 	}
 
@@ -394,7 +466,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 	{
 	case 'J':				// JHOST
 
-		MODE = FALSE;
+		HostMode = FALSE;
 		WriteDebugLog(LOGDEBUG, "Exit Host Mode");
 		return;
 
@@ -469,7 +541,10 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		}
 		Buffer[Length - 2] = 0;
 
-		SendARQConnectRequest(Callsign, &Buffer[6]);
+		if (Buffer[5] == '%' || Buffer[5] == '!' ||Buffer[5] == ';' )
+			Buffer++;		// Long Path / Robust
+
+		SendARQConnectRequest(Callsign, &Buffer[5]);
 
 	AckIt:
 
@@ -546,7 +621,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		// Use # Construct to send ARDOP commands
 
 		Buffer[Length - 2] = 0;
-		WriteDebugLog(LOGDEBUG, "SCS Host COmmand %s", &Buffer[4]);
+		WriteDebugLog(LOGDEBUG, "SCS Host Command %s", &Buffer[4]);
 
 		ProcessCommandFromHost(&Buffer[4]);
 		SCSReply[2] = Channel;
@@ -574,12 +649,26 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 {
 	// Command to SCS in non-Host mode.
 
-	// We can probably just dump anything but JHOST 4 and Callsign
+	// if connected, queue for transmit
+
+	if (ProtocolState == DISC
+		|| (ProtocolState == ISS && ARQState == ISSConReq))
+	{
+		// Command Mode
+	}
+	else
+	{
+		AddDataToDataToSend(Command, Len);
+		return;
+	}
+
+	Command[Len - 1] = 0;		// Remove CR
 
 	WriteDebugLog(LOGDEBUG, "SCS Command %s", Command);
 
 	if (Len == 1)
 		goto SendPrompt;		// Just a CR
+
 
 	if (_memicmp(Command, "CB ", 3) == 0)
 	{
@@ -590,15 +679,29 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 
 	if (_memicmp(Command, "JHOST4", 6) == 0)
 	{
-		MODE = TRUE;
-		WriteDebugLog(LOGDEBUG, "Entering Host Mode");
+		HostMode = TRUE;
+		WriteDebugLog(LOGINFO, "Entering Host Mode");
 		Toggle = 0;
 		blnAbort = TRUE;			// Reset ARDOP 
 
 		return;
 	}
 
-	if (_memicmp(Command, "TERM 4", 6) == 0)
+	if (_memicmp(Command, "RESTART", 7) == 0)
+	{
+		PutString("\r\nOK");
+		PTCMode = TRUE;
+		WriteDebugLog(LOGINFO, "PTC Emulation Mode");
+	}
+
+	if (_memicmp(Command, "ARDOP", 5) == 0)
+	{
+		PutString("\r\nOK");
+		PTCMode = FALSE;
+		WriteDebugLog(LOGINFO, "ARDOP Native Mode");
+	}
+
+	else if (_memicmp(Command, "TERM 4", 6) == 0)
 		Term4Mode = TRUE;
 
 	else if (_memicmp(Command, "T 0", 3) == 0)
@@ -607,15 +710,16 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	else if (_memicmp(Command, "PAC 4", 5) == 0)
 		PACMode = TRUE;
 
-	if (_memicmp(Command, "MYC", 3) == 0)
+	else if (_memicmp(Command, "MYC", 3) == 0)
 	{
 		char * ptr = strchr(Command, ' ');
 		char MYResp[80];
-
+	
 		Command[Len-1] = 0;		// Remove CR
 		
 		if (ptr && (strlen(ptr) > 2))
 		{
+			_strupr(ptr);
 			strcpy(Callsign, ++ptr); 
 		}
 
@@ -627,6 +731,11 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	{
 		char SerialNo[] = "\r\nSerial number: 0100000000000000";
 		PutString(SerialNo);
+	}
+
+	else if (_memicmp(Command, "LICENSE", 8) == 0)
+	{
+		PutString("\r\nLICENSE: 010000141714CB53 ABCDEFGHIJKL");
 	}
 
 	else if (_memicmp(Command, "PTCC", 4) == 0)
@@ -657,8 +766,12 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	}
 	else 
 	{
-		char SerialNo[] = "\rXXXX";
-		PutString(SerialNo);
+		// Process as an ARDOP Command
+
+		ProcessCommandFromHost(Command);
+//
+//		char SerialNo[] = "\rXXXX";
+//		PutString(SerialNo);
 	}
 
 SendPrompt:	
@@ -698,7 +811,7 @@ SendPrompt:
 	}
 
 
-
+/*
 	if (Term4Mode)
 		PutChar( 4);
 
@@ -708,7 +821,7 @@ SendPrompt:
 	PutChar( 'd');
 	PutChar( ':');
 	PutChar( ' ');
-	
+*/	
 	return;
 }
 
@@ -740,7 +853,7 @@ Loop:
 
 		// If we think we are in host mode, then to could be noise - just discard.
 
-		if (MODE)
+		if (HostMode)
 		{
 			RXBPtr = 0;
 			return;
@@ -828,7 +941,7 @@ Loop:
 		if (RXBPtr)
 		{
 			memmove(rxbuffer, ptr, RXBPtr + 1);
-			if (MODE)
+			if (HostMode)
 			{
 				// now in host mode, so pass rest up a level
 				
@@ -947,4 +1060,61 @@ const unsigned short xCRCTAB[256] = {
 0xf78f, 0xe606, 0xd49d, 0xc514, 0xb1ab, 0xa022, 0x92b9, 0x8330, 
 0x7bc7, 0x6a4e, 0x58d5, 0x495c, 0x3de3, 0x2c6a, 0x1ef1, 0x0f78 
 }; 
+
+// Rigcontrol Stuff
+
+void ProcessRIGPacket(int Command, char * Buffer, int Len)
+{
+	// RMS Express sends #TRX: Commands
+
+	// #TRX TY I 9600 $00 TTL
+	// #TRX T FEFE00E0050015050700FD
+	// #TRX T FEFE00E00601FD
+
+	// BPQ sends Data Frames with the raw contents
+
+	if (memcmp(Buffer, "#TRX T ", 7) == 0)
+	{
+		// RMS Express form
+
+		char * ptr1 =  &Buffer[7];
+		char * ptr2 = Buffer;
+		char c;
+		unsigned char val;
+
+		Len -= 7;
+		
+		while (Len-- > 0)
+		{
+			c = *(ptr1++);
+			
+			if (c >= 0x30)
+			{
+				c -= 0x30;
+				if (c > 9)
+					c -= 7;		// a-f
+
+				val = c << 4;
+			}
+
+			Len--;
+
+			c = *(ptr1++);
+			
+			if (c >= 0x30)
+			{
+				c -= 0x30;
+				if (c > 9)
+					c -= 7;		// a-f
+
+				val |= c;
+			}
+			*(ptr2++) = val;
+		}
+
+		CatWrite(Buffer, ptr2 - Buffer);
+		return;
+	}
+}
+
 

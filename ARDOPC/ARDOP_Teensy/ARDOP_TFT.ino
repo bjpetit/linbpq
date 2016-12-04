@@ -23,10 +23,17 @@ const int barcolours[10] = {
 
 const int barlevels[10] = {
   1000, 2000, 5000, 8000, 11000,
-  16000, 24000, 28000, 30000, 32000};
+  16000, 24000, 28000, 30000, 32000
+};
+
+const int CAT4016Levels[11] = {
+  0, 1, 0b11, 0b111, 0b1111, 0b11111,
+  0b111111, 0b1111111, 0b11111111, 0b111111111, 0b1111111111
+};
 
 extern "C"
 {
+
   void displayLevel(int level)
   {
     int i;
@@ -38,9 +45,14 @@ extern "C"
       else
         tft.fillRect(15 * i, 100, 14, 16, ILI9341_BLACK);
     }
+    for (i = 0; i < 10; i++)
+    {
+      if (level < barlevels[i])
+        break;
+    }
+    CAT4016(CAT4016Levels[i]);
   }
 }
-
 void setupTFT()
 {
   tft.begin();
