@@ -300,7 +300,7 @@ BOOL HostInit()
 }
 
 
-UCHAR RXBUFFER[300];
+UCHAR RXBUFFER[500]; // Long enough for stuffed Host Mode frame
 
 VOID HostPoll()
 {
@@ -308,7 +308,7 @@ VOID HostPoll()
 	unsigned long Read = 0;
 
 	if (VCOM)
-		n = BPQSerialGetData(&RXBUFFER[RXBPtr], 300 - RXBPtr, &Read);
+		n = BPQSerialGetData(&RXBUFFER[RXBPtr], 499 - RXBPtr, &Read);
 
 	if (Read)
 	{		
@@ -317,5 +317,3 @@ VOID HostPoll()
 	}
 	n=0;
 }
-
-

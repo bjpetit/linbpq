@@ -12,7 +12,7 @@
 
 DMAChannel dma1(false);
 
-unsigned char RXBUFFER[300];	// Async RX Buffer
+unsigned char RXBUFFER[500];	// Async RX Buffer. Enough for Stuffed Host Mode Frame
 
 extern ILI9341_t3 tft;
 
@@ -24,7 +24,6 @@ extern int inIndex;			// ADC Buffer half being used 0 or 1
 void yDisplayCall(int dirn, char * Call);
 void yDisplayState(char * State);
 
-
 #define pttPin 6
 
 #define LED0 24
@@ -34,7 +33,7 @@ void yDisplayState(char * State);
 
 #define ISSLED LED0
 #define IRSLED LED1
-#define TRAFFICLED LED2s
+#define TRAFFICLED LED2
 
 #define SW1 27
 #define SW2 28
@@ -48,9 +47,6 @@ void yDisplayState(char * State);
 #define LATCH 4
 #define SIN 5
 
-
-unsigned char RXbuffer[256];
-int RXLen = 0;
 extern "C"
 
 {
@@ -150,60 +146,58 @@ extern "C"
     Serial1.println(Msg);
   }
 
-  
-void CatWrite(const uint8_t * Buffer, int Len)
-{
-  Serial5.write(Buffer, Len);
-}
 
-unsigned char CatRXbuffer[256];
-int CatRXLen = 0;
-
-
-void RadioPoll()
-{
-  int Length = Serial5.available();
-  int i, val;
-  unsigned char * ptr;
-  int len;
-
-  // only try to read number of bytes in queue
-
-  if (RXLen + Length > 256)
-    RXLen = 0;
-
-  Length = Serial5.readBytes(&RXbuffer[RXLen], Length);
-
-  if (Length == 0)
-    return;					// Nothing doing
-
-  RXLen += Length;
-
-  Length = RXLen;
-
-  Serial1.print("CAT RX ");
-  for (i = 0; i < Length; i++)
+  void CatWrite(const uint8_t * Buffer, int Len)
   {
-    val = RXbuffer[i];
-    Serial1.print(val, HEX);
-    Serial1.print(" ");
+    Serial5.write(Buffer, Len);
   }
-  Serial1.println("");
-}
 
+  unsigned char CatRXbuffer[256];
+  int CatRXLen = 0;
+
+
+  void RadioPoll()
+  {
+    int Length = Serial5.available();
+    int i, val;
+
+    // only try to read number of bytes in queue
+
+    if (CatRXLen + Length > 256)
+      CatRXLen = 0;
+
+    Length = Serial5.readBytes(&CatRXbuffer[CatRXLen], Length);
+
+    if (Length == 0)
+      return;					// Nothing doing
+
+    CatRXLen += Length;
+
+    Length = CatRXLen;
+
+    Serial1.print("CAT RX ");
+    for (i = 0; i < Length; i++)
+    {
+      val = CatRXbuffer[i];
+      Serial1.print(val, HEX);
+      Serial1.print(" ");
+    }
+    Serial1.println("");
+  }
 
   void HostPoll()
   {
-    RXBPtr = Serial.available();
+    int Avail = Serial.available();
 
-    if (RXBPtr)
+    if (Avail)
     {
       int Count;
-      RXBUFFER[RXBPtr] = 0;
-      Count = Serial.readBytes((char *)RXBUFFER, RXBPtr);
-      if (Count != RXBPtr)
-        WriteDebugLog(LOGDEBUG, "Serial Read Error");
 
+      if (Avail > (499 - RXBPtr))
+        Avail = 499 - RXBPtr;
+
+      Count = Serial.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
+      RXBPtr += Count;
       ProcessSCSPacket(RXBUFFER, RXBPtr);
     }
   }
@@ -459,11 +453,11 @@ void setupADC(int pin)
 
 void pdb_isr()
 {
-	PDB0_SC &= ~PDB_SC_PDBIF; // clear interrupt flag
+  PDB0_SC &= ~PDB_SC_PDBIF; // clear interrupt flag
 
-	if (SoundIsPlaying)
- 	 return;
- 	 
+  if (SoundIsPlaying)
+    return;
+
   ADC0_SC1A = 8; // Trigger read on A2
 }
 

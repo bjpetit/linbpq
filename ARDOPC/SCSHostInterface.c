@@ -13,14 +13,7 @@ void CatWrite(char * Buffer, int Len);
 int RadioPoll();
 void ProcessCommandFromHost(char * strCMD);
 
-
-UCHAR bytDataToSend[4096];// =
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";
-
+UCHAR bytDataToSend[4096];
 
 // May malloc this, or change to cyclic buffer
 
@@ -76,9 +69,35 @@ int ReplyLen;
 extern float dblOffsetHz;
 extern int intSessionBW;
 
+char CommandToHostBuffer[512];
+int CommandToHostBufferLen;
 
 void SendCommandToHost(char * Cmd)
 {
+	if (HostMode & !PTCMode)	// ARDOP Native
+	{
+		char * ptr = &CommandToHostBuffer[CommandToHostBufferLen];
+		int len = strlen(Cmd);
+
+		if (CommandToHostBufferLen + len > 500)
+			return;			// ignore if full
+
+		// Add headers and queue for host
+
+		*ptr++ = 'c';
+		*ptr++ = ':';
+		strcpy(ptr, Cmd);
+		ptr += len;
+		*ptr++ = '\r';
+
+		CommandToHostBufferLen += (len + 3);
+
+		if (CommandToHostBufferLen > 512)
+			CommandToHostBufferLen = 0;
+
+		return;
+	}
+
 	if (memcmp(Cmd, "STATUS ", 7) == 0)
 	{
 		if (memcmp(&Cmd[7], "CONNECT TO", 10) == 0)
@@ -128,12 +147,17 @@ void QueueCommandToHost(char * Cmd)
 	SendCommandToHost(Cmd);		// no queuing now
 }
 
+char CMDReplyBuffer[256];
+
 void SendReplyToHost(char * Cmd)
 {
 	// Used by command handler
 
 	if (HostMode)
-		SendCommandToHost(Cmd);		// no queuing now
+		if (PTCMode)
+			return;				// shouldnt have commands jn PTC Mode
+		else
+			strcpy(CMDReplyBuffer, Cmd);
 	else
 		PutString(Cmd);
 }
@@ -154,24 +178,36 @@ void SendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 {
-	if (strcmp(Type, "ARQ") == 0)
+	if (!HostMode)
 	{
-		if (HostMode)
+		Msg[Len] = 0;
+		PutString(Msg);
+		return;
+	}
+
+	if (PTCMode)
+	{
+		// only pass ARQ Data to Host
+
+		if (strcmp(Type, "ARQ") == 0)
 		{
 			memcpy(&bytDataforHost[bytesforHost], Msg, Len);
 			bytesforHost += Len;
 		}
-		else
-		{
-			Msg[Len] = 0;
-			PutString(Msg);
-		}
+
+		return;
 	}
-	else
-	{
-		Msg[Len] = 0;
-		WriteDebugLog(LOGDEBUG, "RX Data %s %s", Type, Msg);
-	}
+
+	// In ARDOP Native add header (Type and Len
+
+	bytDataforHost[bytesforHost++] = 'd';			// indicates data from TNC
+	bytDataforHost[bytesforHost++] = ':';
+	Len += 3;		// Tag
+	bytDataforHost[bytesforHost++] = Len >> 8;		//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
+	bytDataforHost[bytesforHost++] = Len  & 0xFF;	// LS Byte
+	memcpy(&bytDataforHost[bytesforHost], Type, 3);
+	memcpy(&bytDataforHost[bytesforHost + 3], Msg, Len - 3);
+	bytesforHost += Len;
 }
 
 BOOL CheckStatusChange()
@@ -205,6 +241,35 @@ BOOL CheckStatusChange()
 
 	return FALSE;
 
+}
+
+BOOL CheckForControl()
+{
+	int Length;
+
+	if (CommandToHostBufferLen == 0)
+		return FALSE;
+
+	if (CommandToHostBufferLen > 256)
+		Length = 256;
+	else
+		Length = CommandToHostBufferLen;
+
+	memcpy(&SCSReply[5], CommandToHostBuffer, Length);
+
+	CommandToHostBufferLen -= Length;
+
+	if (CommandToHostBufferLen)
+		memmove(CommandToHostBuffer, &CommandToHostBuffer[Length], CommandToHostBufferLen);
+
+	SCSReply[2] = 32;
+	SCSReply[3] = 7;
+	SCSReply[4] = Length - 1;
+
+	ReplyLen = Length + 5;
+	EmCRCStuffAndSend(SCSReply, ReplyLen);
+
+	return TRUE;
 }
 
 BOOL CheckForData()
@@ -252,7 +317,11 @@ BOOL CheckForData()
 	if (bytesforHost)
 		memmove(bytDataforHost, &bytDataforHost[Length], bytesforHost);
 
-	SCSReply[2] = DataChannel;
+	if (PTCMode)
+		SCSReply[2] = DataChannel;
+	else
+		SCSReply[2] = 33;
+
 	SCSReply[3] = 7;
 	SCSReply[4] = Length - 1;
 
@@ -307,21 +376,19 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 	int Channel = Buffer[0];
 	int Command = Buffer[1] & 0x3f;
 	int Len = Buffer[2];
-	char * MYCall;
 	int len;
 
 	if (Toggle == (Buffer[1] & 0x80) && (Buffer[1] & 0x40) == 0)
 	{
 		// Repeat Condition
 
-		//EmCRCStuffAndSend( SCSReply, ReplyLen);
-		//return;
+		EmCRCStuffAndSend(SCSReply, ReplyLen);
+		return;
 	}
 
 	Toggle = (Buffer[1] & 0x80);
 	Toggle ^= 0x80;
 
-//	if (Channel == 255 &&  Len == 0)
 	if (Channel == 255)
 	{
 		UCHAR * NextChan = &SCSReply[4];
@@ -337,12 +404,16 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		}
 
 		if (RadioPoll())			// Cat data available?
-		{
 			*(NextChan++) = 254;	// 253 + 1
-		}
+
+		if (CommandToHostBufferLen)	// only used in Native mode
+			*(NextChan++) = 33;		// Native mode cmd channel
 
 		if (bytesforHost || bytesEchoed || change)
-			*(NextChan++) = DataChannel;			// Something for this channel
+			if (PTCMode)
+				*(NextChan++) = DataChannel; // Something for this channel
+			else
+				*(NextChan++) = 34;		// Native mode data channel
 
 		*(NextChan++) = 0;
 
@@ -449,13 +520,33 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 	{
 		// Data Frame
 
-		if (Channel == 32)		// Command
+		if (Channel == 31)			// PTC Mode
+			AddDataToDataToSend(&Buffer[3], Buffer[2] + 1);
+
+		else if (Channel == 32)		// Native Mode Command
 		{
 			Buffer[Len + 3] = 0;
+			CMDReplyBuffer[0] = 0;	// in case no reply
 			ProcessCommandFromHost(&Buffer[5]); // Skip C:
+
+			// Command will have put reply in CMDReplyBuffer
+
+			if (CMDReplyBuffer[0] == 0) // no response
+				goto AckIt;
+			
+			SCSReply[2] = Channel;
+			SCSReply[3] = 1;
+			strcpy(&SCSReply[4], "c:");
+			strcpy(&SCSReply[6], CMDReplyBuffer);
+			ReplyLen = strlen(CMDReplyBuffer) + 7;
+			EmCRCStuffAndSend(SCSReply, ReplyLen);
+			return;
 		}
-		else if (Channel == 33)		// Command
-			AddDataToDataToSend(&Buffer[3], Buffer[2]+ 1);
+
+		else if (Channel == 33)		// Native Mode Data
+
+			// Format is D: Len Data - remove D: and Len
+			AddDataToDataToSend(&Buffer[7], Buffer[2] - 3);
 
 		goto AckIt;
 	}
@@ -514,11 +605,28 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 	case 'G':				// Specific Poll
 	
-		if (CheckStatusChange())
-			return;						// It has sent reply
+		if (PTCMode)
+		{
+			if (CheckStatusChange())
+				return;					// It has sent reply
 
-		if (CheckForData())
-			return;						// It has sent reply
+			if (CheckForData())
+				return;					// It has sent reply
+		}
+		else
+		{
+			// Native mode
+
+			if (Channel == 32)
+				if (CheckForControl())
+					return;				// It has sent reply
+
+			if (Channel == 33)
+				if (CheckForData())
+					return;				// It has sent reply
+		}
+
+		// reply nothing doing
 
 		SCSReply[2] = Channel;
 		SCSReply[3] = 0;
@@ -851,7 +959,7 @@ Loop:
 		
 		// Char Mode Frame I think we need to see CR on end (and we could have more than one in buffer
 
-		// If we think we are in host mode, then to could be noise - just discard.
+		// If we think we are in host mode, then it could be noise - just discard.
 
 		if (HostMode)
 		{
@@ -888,29 +996,28 @@ Loop:
 			}
 			PutChar(30);
 			PutChar(0x87);
-	if (Term4Mode)
-	{
-		PutChar(13);
-		PutChar(4);
-		PutChar(13);
-		PutChar('c');
-		PutChar('m');
-		PutChar('d');
-		PutChar(':');
-		PutChar(' ');
-		PutChar(1);
-	}
-	else
-	{
-		PutChar(13);
-		PutChar('c');
-		PutChar('m');
-		PutChar('d');
-		PutChar(':');
-		PutChar(' ');
-	}
 
-
+			if (Term4Mode)
+			{
+				PutChar(13);
+				PutChar(4);
+				PutChar(13);
+				PutChar('c');
+				PutChar('m');
+				PutChar('d');
+				PutChar(':');
+				PutChar(' ');
+				PutChar(1);
+			}
+			else
+			{
+				PutChar(13);
+				PutChar('c');
+				PutChar('m');
+				PutChar('d');
+				PutChar(':');
+				PutChar(' ');
+			}
 			return;
 		}
 
@@ -925,8 +1032,14 @@ Loop:
 		ptr = strchr(rxbuffer, 13);
 
 		if (ptr == 0)
-			return;		// Wait for rest of frame
+		{
+			if (Length > 290)
+				RXBPtr = 0;			// unreasonable length
+		
+			// Wait for rest of frame
 
+			return;
+		}
 		ptr++;
 
 		cmdlen = ptr - rxbuffer;
@@ -967,7 +1080,6 @@ Loop:
 	}
 
 	// Can't unstuff into same buffer - fails if partial msg received, and we unstuff twice
-
 
 	Length = EmUnstuff(&rxbuffer[2], &UnstuffBuffer[2], Length - 2);
 

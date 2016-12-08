@@ -73,14 +73,7 @@ int DataInputLen = 0;
 
 //	Main TX Buffer
 
-UCHAR bytDataToSend[100000] = 
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";
-
-;					// May malloc this, or change to cyclic buffer
+UCHAR bytDataToSend[100000];
 
 int bytDataToSendLength = 0;
 

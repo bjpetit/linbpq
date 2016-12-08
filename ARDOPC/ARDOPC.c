@@ -1639,7 +1639,7 @@ void SendID(BOOL blnEnableCWID)
 	unsigned char bytIDSent[80];
 	int Len;
 
-	// Schedular needs to ensure this isnt called if already playing
+	// Scheduler needs to ensure this isnt called if already playing
 
 	if (SoundIsPlaying)
 		return;

@@ -5,7 +5,6 @@
 
 
 
-BOOL blnProcessingCmdData = FALSE; // Processing a Command or Data frame
 BOOL blnHostRDY = FALSE;
 extern int intFECFramesSent;
 
@@ -82,6 +81,9 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 	memcpy(&bytDataToSend[bytDataToSendLength], bytNewData, Len);
 	bytDataToSendLength += Len;
 
+	if (bytDataToSendLength > 4096)
+		return;
+
 	FreeSemaphore();
 
 	SetLED(TRAFFICLED, TRUE);
@@ -111,6 +113,7 @@ void ProcessCommandFromHost(char * strCMD)
 	if (strcmp(strCMD, "ABORT") == 0 || strcmp(strCMD, "DD") == 0)
 	{
 		Abort();
+		SendReplyToHost("ABORT");
 		goto cmddone;
 	}
 
@@ -167,6 +170,10 @@ void ProcessCommandFromHost(char * strCMD)
 					if (ProtocolMode == ARQ)
 					{
 						ARQConReqRepeats = param;
+
+						// Must send reply before calling or protocol could hang
+
+						SendReplyToHost(cmdCopy);
 						SendARQConnectRequest(Callsign, ptrParams);
 						goto cmddone;
 					}
@@ -323,8 +330,11 @@ void ProcessCommandFromHost(char * strCMD)
 			SendReplyToHost(cmdReply);
 		}
 		else
+		{
 			strcpy(CaptureDevice, ptrParams);
-
+			sprintf(cmdReply, "%s now %s", strCMD, CaptureDevice);
+			SendReplyToHost(cmdReply);
+		}
 		goto cmddone;
 	}
      
@@ -589,8 +599,13 @@ void ProcessCommandFromHost(char * strCMD)
 		{
 			i = atoi(ptrParams);
 
-			if (i >= 0 && i <= 100)	
+			if (i >= 0 && i <= 100)
+			{
 				DriveLevel = i;
+				sprintf(cmdReply, "%s now %d", strCMD, DriveLevel);
+				SendReplyToHost(cmdReply);
+				goto cmddone;
+			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}
@@ -620,6 +635,12 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (FECId)
+			sprintf(cmdReply, "FECID now TRUE");
+		else
+			sprintf(cmdReply, "FECID now FALSE");
+
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -646,13 +667,13 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
-		
-		SendReplyToHost("Ok");
+		if (fastStart)
+			sprintf(cmdReply, "FASTSTART now TRUE");
+		else
+			sprintf(cmdReply, "FASTSTART now FALSE");
+
 		goto cmddone;
 	}
-
-
-
 
 	if (strcmp(strCMD, "FECMODE") == 0)
 	{
@@ -671,6 +692,8 @@ void ProcessCommandFromHost(char * strCMD)
 				{
 					strcpy(strFECMode, ptrParams);
 					intFECFramesSent = 0;		// Force mode to be reevaluated
+					sprintf(cmdReply, "%s now %s", strCMD, strFECMode);
+					SendReplyToHost(cmdReply);
 					goto cmddone;
 				}
 			}
@@ -693,7 +716,11 @@ void ProcessCommandFromHost(char * strCMD)
 			i = atoi(ptrParams);
 
 			if (i >= 0 && i <= 5)	
+			{
 				FECRepeats = i;
+				sprintf(cmdReply, "%s now %d", strCMD, FECRepeats);
+				SendReplyToHost(cmdReply);
+			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}
@@ -703,14 +730,20 @@ void ProcessCommandFromHost(char * strCMD)
 	if (strcmp(strCMD, "FECSEND") == 0)
 	{
 		if (ptrParams == 0)
+		{
 			sprintf(strFault, "Syntax Err: %s", strCMD);	
-	
+			goto cmddone;
+		}
 		if (strcmp(ptrParams, "TRUE") == 0)
 		{				
 			StartFEC(NULL, 0, strFECMode, FECRepeats, FECId);
+			SendReplyToHost("FECSEND now TRUE");
 		}
 		else if (strcmp(ptrParams, "FALSE") == 0)
+		{
 			blnAbort = TRUE;
+			SendReplyToHost("FECSEND now FALSE");
+		}
 		else
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 
@@ -740,6 +773,10 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (FSKOnly)
+			sprintf(cmdReply, "FSKONLY now TRUE");
+		else
+			sprintf(cmdReply, "FSKONLY now FALSE");
 		goto cmddone;
 	}
 
@@ -754,7 +791,11 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		else
 			if (CheckGSSyntax(ptrParams))
+			{
 				strcpy(GridSquare, ptrParams);
+				sprintf(cmdReply, "%s now %s", strCMD, GridSquare);
+				SendReplyToHost(cmdReply);
+			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 
@@ -765,17 +806,10 @@ void ProcessCommandFromHost(char * strCMD)
 	{
 		blnInitializing = TRUE;
 		ClearDataToSend();
-
-//		tmrPollQueue = 0;
-
-         //       queDataForHost.Clear()
-
-		blnProcessingCmdData = FALSE; // Processing a Command or Data frame
 		blnHostRDY = TRUE;
 		blnInitializing = FALSE;
 
-//		tmrPollQueue = 10;
-
+		SendReplyToHost("INITIALIZE");
 		goto cmddone;
 	}
 
@@ -796,6 +830,8 @@ void ProcessCommandFromHost(char * strCMD)
 			{
 				LeaderLength = (i + 9) /10;
 				LeaderLength *= 10;				// round to 10 mS
+				sprintf(cmdReply, "%s now %d", strCMD, LeaderLength);
+				SendReplyToHost(cmdReply);
 			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
@@ -829,6 +865,11 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (blnListen)
+			sprintf(cmdReply, "LISTEN now TRUE");
+		else
+			sprintf(cmdReply, "LISTEN now FALSE");
+
 		goto cmddone;
 	}
 
@@ -836,7 +877,7 @@ void ProcessCommandFromHost(char * strCMD)
 	{
 		if (ptrParams == NULL)
 		{
-			if (blnListen)
+			if (Monitor)
 				sprintf(cmdReply, "MONITOR TRUE");
 			else
 				sprintf(cmdReply, "MONITOR FALSE");
@@ -855,6 +896,10 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (Monitor)
+			sprintf(cmdReply, "MONITOR now TRUE");
+		else
+			sprintf(cmdReply, "MONITOR now FALSE");
 		goto cmddone;
 	}
    
@@ -887,6 +932,15 @@ void ProcessCommandFromHost(char * strCMD)
 
 			ptr = strtok_s(NULL, ", ", &context);
 		}
+
+		len = sprintf(cmdReply, "%s", "MYAUX now ");
+		for (i = 0; i < AuxCallsLength; i++)
+		{
+			len += sprintf(&cmdReply[len], "%s,", AuxCalls[i]);
+		}
+		cmdReply[len - 1] = 0;	// remove trailing space or ,
+		SendReplyToHost(cmdReply);	
+
 		goto cmddone;
 	}
 
@@ -898,11 +952,16 @@ void ProcessCommandFromHost(char * strCMD)
 			SendReplyToHost(cmdReply);
 		}
 		else
+		{
 			if (CheckValidCallsignSyntax(ptrParams))
+			{
 				strcpy(Callsign, ptrParams);
+				sprintf(cmdReply, "%s now %s", strCMD, Callsign);
+				SendReplyToHost(cmdReply);
+			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-
+		}
 		goto cmddone;
 	}
 
@@ -914,8 +973,11 @@ void ProcessCommandFromHost(char * strCMD)
 			SendReplyToHost(cmdReply);
 		}
 		else
+		{
 			strcpy(PlaybackDevice, ptrParams);
-
+			sprintf(cmdReply, "%s now %s", strCMD, PlaybackDevice);
+			SendReplyToHost(cmdReply);
+		}
 		goto cmddone;
 	}
      
@@ -949,13 +1011,22 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
-		SetARDOPProtocolState(DISC);	// ' set state to DISC on any Protocol mode change. 
+		if (ProtocolMode == ARQ)
+			sprintf(cmdReply, "PROTOCOLMODE now ARQ");
+		else
+			sprintf(cmdReply, "PROTOCOLMODE now FEC");
+
+		SendReplyToHost(cmdReply);
+
+		SetARDOPProtocolState(DISC);	// set state to DISC on any Protocol mode change. 
 		goto cmddone;
 	}
 
 	if (strcmp(strCMD, "PURGEBUFFER") == 0)
 	{
 		ClearDataToSend();  // Should precipitate an asynchonous BUFFER 0 reponse. 
+
+		SendReplyToHost(strCMD);
 		goto cmddone;  
 	}
 
@@ -1127,6 +1198,8 @@ void ProcessCommandFromHost(char * strCMD)
 			RadioControl = FALSE;
 			sprintf(strFault, "Could'n open PTT device %s", PTTPORT);
 		}
+		sprintf(cmdReply, "RADIOPTT now %s", PTTPORT);
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 	/*
@@ -1175,13 +1248,22 @@ void ProcessCommandFromHost(char * strCMD)
 #ifdef __ARM_ARCH
 		SetupGPIOPTT();
 #endif
+		if (pttGPIOPin == -1)
+			sprintf(cmdReply, "RADIOPTTGPIO now DISABLED");
+		else
+			sprintf(cmdReply, "RADIOPTTGPIO now ENABLED on pin %d", pttGPIOPin);
+		
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 #endif
 	if (strcmp(strCMD, "SENDID") == 0)
 	{
 		if (ProtocolState == DISC)
+		{
 			SendID(wantCWID);
+			SendReplyToHost(strCMD);
+		}
 		else
 			sprintf(strFault, "Not from State %s", ARDOPStates[ProtocolState]);
 
@@ -1222,8 +1304,12 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (skip167)
+			sprintf(cmdReply, "NO2000.167 now TRUE");
+		else
+			sprintf(cmdReply, "NO2000.167 now FALSE");
 		
-		SendReplyToHost("Ok");
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -1244,6 +1330,8 @@ void ProcessCommandFromHost(char * strCMD)
 			if (i >= 1  && i <= 10)
 			{
 				Squelch = i;
+				sprintf(cmdReply, "%s now %d", strCMD, Squelch);
+				SendReplyToHost(cmdReply);
 			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
@@ -1282,6 +1370,9 @@ void ProcessCommandFromHost(char * strCMD)
 			{
 				TrailerLength = (i + 9) /10;
 				TrailerLength *= 10;				// round to 10 mS
+				
+				sprintf(cmdReply, "%s now %d", strCMD, TrailerLength);
+				SendReplyToHost(cmdReply);
 			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
@@ -1325,7 +1416,11 @@ void ProcessCommandFromHost(char * strCMD)
 			i = atoi(ptrParams);
 
 			if (i >= 0 && i <= 200)	
+			{
 				TuningRange = i;
+				sprintf(cmdReply, "%s now %d", strCMD, TuningRange);
+				SendReplyToHost(cmdReply);
+			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}
@@ -1355,6 +1450,11 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 			goto cmddone;
 		}
+		if (Use600Modes)
+			sprintf(cmdReply, "USE600MODES now TRUE");
+		else
+			sprintf(cmdReply, "USE600MODES now FALSE");
+
 		goto cmddone;
 	}
 

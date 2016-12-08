@@ -2831,8 +2831,9 @@ BOOL Demod1Car16FSK()
 			//	number left
 
 			intFilteredMixedSamplesLength -= Corrections;
-	if (intFilteredMixedSamplesLength < 0)
-		WriteDebugLog(LOGDEBUG, "Corrupt intFilteredMixedSamplesLength");
+	
+			if (intFilteredMixedSamplesLength < 0)
+				WriteDebugLog(LOGDEBUG, "Corrupt intFilteredMixedSamplesLength");
 
 			Corrections = 0;
 

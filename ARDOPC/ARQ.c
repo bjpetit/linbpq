@@ -468,7 +468,7 @@ UCHAR GenerateSessionID(char * strCallingCallSign, char *strTargetCallsign)
 
 void CalculateOptimumLeader(int intReportedReceivedLeaderMS,int  intLeaderSentMS)
 {
-	intCalcLeader = max(160, 120 + intLeaderSentMS - intReportedReceivedLeaderMS);  //  This appears to work well on HF sim tests May 31, 2015
+	intCalcLeader = max(200, 120 + intLeaderSentMS - intReportedReceivedLeaderMS);  //  This appears to work well on HF sim tests May 31, 2015
     //    WriteDebugLog(LOGDEBUG, ("[ARDOPprotocol.CalcualteOptimumLeader] Leader Sent=" & intLeaderSentMS.ToString & "  ReportedReceived=" & intReportedReceivedLeaderMS.ToString & "  Calculated=" & stcConnection.intCalcLeader.ToString)
 }
 
@@ -1188,6 +1188,9 @@ void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData)
 
 	if (!(intFrameType >= 0x31 && intFrameType <= 0x38))
 		return;
+
+	if (ToCall == NULL)		// messed up by COn Req processing
+		ToCall = bytData + strlen(bytData) + 1;
  
 	Len = sprintf(strDisplay, " [%s: %s > %s]", Name(intFrameType), bytData, ToCall); 
     AddTagToDataAndSendToHost(strDisplay, "ARQ", Len);

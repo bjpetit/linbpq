@@ -1816,3 +1816,7 @@ int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
 
     return v;
 }
+
+void SetLED(int LED, int State)
+{
+}
