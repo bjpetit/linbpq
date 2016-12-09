@@ -386,8 +386,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		return;
 	}
 
-	Toggle = (Buffer[1] & 0x80);
-	Toggle ^= 0x80;
+	Toggle ^= 0x80;		// Good frame so swap toggle
 
 	if (Channel == 255)
 	{
@@ -1068,6 +1067,12 @@ Loop:
 
 	// Receiving a Host Mode frame
 
+	if (HostMode == 0)
+	{
+		RXBPtr = 0;
+		return;
+	}
+
 	if (Length < 6)				// Minimum Frame Sise
 		return;
 
@@ -1110,6 +1115,8 @@ VOID EmCRCStuffAndSend(UCHAR * Msg, int Len)
 	unsigned short int crc;
 	UCHAR StuffedMsg[500];
 	int i, j;
+
+	Msg[3] |= Toggle;
 
 	crc = compute_crc(&Msg[2], Len-2);
 	crc ^= 0xffff;

@@ -34,8 +34,8 @@ int maxlevel, minlevel, tot;
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
 
-char CaptureDevice[] = "DMA";
-char PlaybackDevice[] = "DMA";
+char CaptureDevice[] = "ADC";
+char PlaybackDevice[] = "DAC";
 
 char * CaptureDevices = CaptureDevice;
 char * PlaybackDevices = PlaybackDevice;

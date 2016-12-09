@@ -83,11 +83,11 @@ to equivalent Pactor values.
  |AA AA | XX |  XX  | XX XX XX .... XX |XX XX|
  -----------------------------------------------
  
- Payload can have two formats, either a Null terminated ASCII string or a Byte Count of 0 to 255
- followed by 1 to 256 bytes of data. 
+ Payload can have two formats, either a Null terminated ASCII string or a Byte Count of
+ 0 to 255 followed by 1 to 256 bytes of data. 
  
- There are two opcodes for Host to TNC packets, and eight for TNC to Host, though not all are used
- in ARDOP Native Mode.
+ There are two opcodes for Host to TNC packets, and eight for TNC to Host, though not
+ all are used in ARDOP Native Mode.
  
  From Host to TNC
  
@@ -102,7 +102,7 @@ to equivalent Pactor values.
  Opcode 7 - Data, preceeded by (length-1)
  
  Channel 32 is used for Commands and Channel 33 for Data. Typical messages 
- are shown below (control fields in Hex). Note that the Command foramt is used for hostmode 
+ are shown below (control fields in Hex). Note that the Command format is used for hostmode 
  protocol level commands. ARDOP commands (such as "ARQCALL") are sent as data on the 
  Command channel.
  
@@ -114,10 +114,10 @@ to equivalent Pactor values.
  |AA AA | FF |  01  | 00 47 |XX XX|
  ----------------------------------
  
- Response is a null terninated list of channels with available data. Value is Channel No plus 1
+ Response is a null terminated list of channels with available data. Value is Channel plus 1
  
 ----------------------------------
- |AA AA | FF |  01  | 21 00 |XX XX|				Channel 32 has data (0x21 = 32 + 1)
+ |AA AA | FF |  01  | 21 00 |XX XX|            Channel 32 has data (0x21 = 32 + 1)
  ----------------------------------
   
  Poll to TNC Command Channel
@@ -192,7 +192,10 @@ to equivalent Pactor values.
  byte 3		Info Length - 1
  byte 4-end Info (length 1 to 256)
 
-SCS CRC Hostmode adds two byte of 170 to the front and a crc-16 checksum to the end. It also defines the top bit (bit 7) of the Type Code as a sequence toggle and next pit (bit 6) as a requence reset flag. Data transparency is ensured by adding a null byte after any occurence of 170 in the message or crc. 
+SCS CRC Hostmode adds two byte of 170 to the front and a crc-16 checksum to the end.
+It also defines the top bit (bit 7) of the Type Code as a sequence toggle and next bit
+(bit 6) as a sequence reset flag. Data transparency is ensured by adding a null byte
+after any occurence of 170 in the message or crc. 
 
 Command Codes
 

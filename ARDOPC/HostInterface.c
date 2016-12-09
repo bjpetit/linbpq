@@ -19,8 +19,6 @@ void Break();
 extern BOOL gotGPIO;
 extern int pttGPIOPin;
 
-
-
 HANDLE hPTTDevice;			// port for PTT
 extern char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
 
@@ -331,7 +329,10 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		else
 		{
+			// Can't change on Teensy
+#ifndef Teensy
 			strcpy(CaptureDevice, ptrParams);
+#endif
 			sprintf(cmdReply, "%s now %s", strCMD, CaptureDevice);
 			SendReplyToHost(cmdReply);
 		}
@@ -974,7 +975,10 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		else
 		{
+			// Can't change sound devices on Teensy
+#ifndef Teensy
 			strcpy(PlaybackDevice, ptrParams);
+#endif
 			sprintf(cmdReply, "%s now %s", strCMD, PlaybackDevice);
 			SendReplyToHost(cmdReply);
 		}
