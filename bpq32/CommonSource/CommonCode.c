@@ -2050,17 +2050,33 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	return fd;
 
 }
+int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
+{
+	BOOL Error;
+	return ReadCOMBlockEx(fd, Block, MaxLength, &Error);
+}
 
-int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength )
+// version to pass read error back to caller
+
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
 {
 	BOOL       fReadStat ;
 	COMSTAT    ComStat ;
 	DWORD      dwErrorFlags;
 	DWORD      dwLength;
+	BOOL	ret;
 
 	// only try to read number of bytes in queue
 
-	ClearCommError(fd, &dwErrorFlags, &ComStat);
+	ret = ClearCommError(fd, &dwErrorFlags, &ComStat);
+
+	if (ret == 0)
+	{
+		int Err = GetLastError();
+		*Error = TRUE;
+		return 0;
+	}
+
 
 	dwLength = min((DWORD) MaxLength, ComStat.cbInQue);
 
@@ -2074,6 +2090,8 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength )
 			ClearCommError(fd, &dwErrorFlags, &ComStat ) ;
 		}
 	}
+
+	*Error = FALSE;
 
    return dwLength;
 }
@@ -2226,16 +2244,36 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
 {
+	BOOL Error;
+	return ReadCOMBlockEx(fd, Block, MaxLength, &Error);
+}
+
+// version to pass read error back to caller
+
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
+{
 	int Length;
 
+	errno = 22222;		// to catch zero read (?? file closed ??)
+
 	Length = read(fd, Block, MaxLength);
+
+	*Error = 0;
+
+	if (Length == 0 && errno == 22222)	// seems to be result of unpluging USB
+	{
+		printf("KISS read returned zero len and no errno\n");
+		*Error = 1;
+		return 0;
+	}
 
 	if (Length < 0)
 	{
 		if (errno != 11 && errno != 35)					// Would Block
 		{
 			perror("read");
-			printf("Handle %d Errno %d\n", fd, errno);
+			printf("Handle %d Errno %d Len %d\n", fd, errno, Length);
+			*Error = 1;
 		}
 		return 0;
 	}

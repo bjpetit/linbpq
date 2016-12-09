@@ -24,7 +24,8 @@ typedef struct tagASYINFO
 	BOOL	MSGREADY;				// Complete msg in RXMSG
 	BOOL	ESCFLAG;				// FESC/DLE received
 	BOOL	NEEDCRC;				// ETX received, waiting for CRC (NETROM)
- 
+	int		ReopenTimer;			// for failed com ports
+
 } ASYINFO, *NPASYINFO ;
 
 NPASYINFO KISSInfo[33] = {0};

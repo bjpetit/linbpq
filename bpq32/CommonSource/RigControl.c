@@ -4404,7 +4404,6 @@ CheckScan:
 			i = sprintf(RIG->Poll + Len, "$PICOA,90,%02x,MODE*xx\r\n", RIG->RigAddr);
 			AddNMEAChecksum(RIG->Poll + Len);
 			RIG->PollLen = Len + i;
-
 		}
 
 		FreqPtr++;

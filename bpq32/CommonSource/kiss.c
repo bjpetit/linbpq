@@ -105,6 +105,8 @@ VOID INITCOM(struct KISSINFO * PORTVEC);
 VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer);
 int ConnecttoTCP(NPASYINFO ASY);
 int KISSGetTCPMessage(NPASYINFO ASY);
+VOID CloseKISSPort(struct PORTCONTROL * PortVector);
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
 
 extern struct PORTCONTROL * PORTTABLE;
 extern int	NUMBEROFPORTS;
@@ -446,8 +448,10 @@ HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port)
 	else
 		ComDev = OpenCOMPort((VOID *)port, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE, 0);
 	
-	if (ComDev)
-		npKISSINFO->idComDev = ComDev;
+	npKISSINFO->idComDev = ComDev;
+
+	if (ComDev == NULL)
+		return NULL;
 
 	if (PortVector->KISSFLAGS & PITNC)
 	{
@@ -477,10 +481,36 @@ HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port)
 }
 int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength )
 {
+	BOOL Error;
+	int ret;
+	
 	if (npKISSINFO->idComDev == 0)
-		return 0;
+	{
+		// Try to reopen port every 15 secs
 
-	return ReadCOMBlock(npKISSINFO->idComDev, lpszBlock, nMaxLength);
+		npKISSINFO->ReopenTimer++;
+
+		if (npKISSINFO->ReopenTimer > 300)	// about 30 secs
+		{
+			npKISSINFO->idComDev = OpenConnection(npKISSINFO->Portvector, npKISSINFO->bPort);
+			npKISSINFO->ReopenTimer = 0;
+		}
+
+		if (npKISSINFO->idComDev == 0)
+			return 0;
+	}
+
+	ret = ReadCOMBlockEx(npKISSINFO->idComDev, lpszBlock, nMaxLength, &Error);
+
+	if (Error)
+	{
+		CloseKISSPort(npKISSINFO->Portvector);
+		Debugprintf("Port %d Kiss Read Error", npKISSINFO->bPort);	
+		npKISSINFO->ReopenTimer = 250;  // first try in 5 secs
+		return 0;
+	}
+
+	return ret;
 }
 
 static BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite)
