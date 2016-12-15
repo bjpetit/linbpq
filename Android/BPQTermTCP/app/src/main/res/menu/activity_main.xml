@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:id="@+id/con1" android:title="@string/connectOption"></item>
+    <item android:id="@+id/con2" android:title="@string/connectOption2"></item>
+    <item android:id="@+id/dis" android:title="@string/DisOption"></item>
+    <item android:id="@+id/settings" android:title="Settings"></item>
+    <item android:id="@+id/exit" android:title="@string/exitOption" android:alphabeticShortcut="x"></item>
+
+</menu>

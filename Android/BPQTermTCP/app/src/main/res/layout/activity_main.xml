@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width ="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical">
+
+    <android.support.v7.widget.Toolbar
+        android:id="@+id/my_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        android:theme="@style/ThemeOverlay.AppCompat.ActionBar" />
+
+
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:weightSum="1">
+
+        <net.g8bpq.bpqtermtcp.EditTextExx
+            android:id="@+id/Input"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:hint="@string/edit_message"
+            android:scrollHorizontally="true"
+            android:textSize="@dimen/Ten"
+            android:typeface="monospace"
+            android:imeOptions="actionSend"
+            android:imeActionLabel="SEND"
+            android:singleLine="true" />
+
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/Scroll"
+        android:layout_width="fill_parent"
+        android:layout_height="375dp"
+        android:scrollbars="vertical"
+        android:visibility="visible">
+
+        <EditText
+            android:id="@+id/Output"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:drawable/editbox_background_normal"
+            android:editable="false"
+            android:enabled="false"
+            android:focusable="false"
+            android:gravity="bottom|left"
+            android:minLines="10"
+            android:scrollHorizontally="true"
+            android:scrollbarAlwaysDrawVerticalTrack="true"
+            android:scrollbarStyle="insideInset"
+            android:scrollbars="horizontal|vertical"
+            android:text="@string/TermTCP"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:textColor="@android:color/black"
+            android:textColorHint="@android:color/darker_gray"
+            android:textSize="@dimen/Ten"
+            android:typeface="monospace" />
+
+    </ScrollView>
+</LinearLayout>

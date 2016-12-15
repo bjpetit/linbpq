@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width ="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/textView1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Host 1"
+        android:textAppearance="?android:attr/textAppearanceMedium" />
+
+    <EditText
+        android:id="@+id/Host"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:hint="Host"
+        android:typeface="monospace" />
+
+    <EditText
+        android:id="@+id/Port"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:hint="Port"
+        android:typeface="monospace"
+        android:inputType="number" />
+
+    <EditText
+        android:id="@+id/User"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:typeface="monospace"
+        android:hint="Username" />
+    <EditText
+        android:id="@+id/Pass"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:typeface="monospace"
+        android:hint="Password" />
+
+    <TextView
+        android:id="@+id/textView2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Host 2"
+        android:textAppearance="?android:attr/textAppearanceMedium" />
+
+    <EditText
+        android:id="@+id/Host2"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:hint="Host"
+        android:typeface="monospace" />
+
+    <EditText
+        android:id="@+id/Port2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:hint="Port"
+        android:typeface="monospace"
+        android:inputType="number" />
+
+    <EditText
+        android:id="@+id/User2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:typeface="monospace"
+        android:hint="Username" />
+    <EditText
+        android:id="@+id/Pass2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/editbox_background_normal"
+        android:scrollHorizontally="true"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:typeface="monospace"
+        android:hint="Password" />
+
+    <LinearLayout
+        android:layout_width="219dp"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical" >
+
+        <TextView
+            android:id="@+id/textView3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="left|center_vertical"
+            android:gravity="left|center_vertical"
+            android:text="Font Size      "
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <EditText
+            android:id="@+id/Size"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:background="@android:drawable/editbox_background_normal"
+            android:inputType="number"
+            android:scrollHorizontally="true"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:typeface="monospace" />
+
+    </LinearLayout>
+
+    <CheckBox
+        android:id="@+id/checkBox1"
+        android:layout_width="172dp"
+        android:layout_height="wrap_content"
+        android:gravity="right|center_vertical"
+        android:text="Hide Keyboard" />
+
+    <Button
+        android:id="@+id/Save"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:gravity="center_horizontal"
+        android:onClick="Save"
+        android:text="Save" />
+
+</LinearLayout>
