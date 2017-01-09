@@ -8,7 +8,7 @@
         android:id="@+id/my_toolbar"
         android:layout_width="match_parent"
         android:layout_height="46dp"
-        android:background="?attr/colorPrimary"
+        android:background="@android:color/white"
         android:elevation="4dp"
         android:theme="@style/ThemeOverlay.AppCompat.ActionBar" />
 
@@ -36,7 +36,7 @@
     <ScrollView
         android:id="@+id/Scroll"
         android:layout_width="fill_parent"
-        android:layout_height="375dp"
+        android:layout_height="fill_parent"
         android:scrollbars="vertical"
         android:visibility="visible">
 

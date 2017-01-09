@@ -1,7 +1,7 @@
 <resources>
     <string name="action_settings">Settings</string>
     <string name="app_name">BPQTermTCP</string>
-    <string name="TermTCP">BPQTermTCP for Android</string>
+    <string name="TermTCP">BPQTermTCP for Android Version 2.1</string>
     <string name="menu_settings">Settings</string>
     <string name="title_activity_main">BPQTermTCP</string>
     <string name="edit_message">Input</string>

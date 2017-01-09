@@ -8,21 +8,19 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.text.Editable;
 import android.text.method.KeyListener;
+import android.util.TypedValue;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
-import android.view.View;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.util.TypedValue;
-
-import net.g8bpq.bpqtermtcp.R;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -30,6 +28,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
+
+
 
 public class MainActivity extends AppCompatActivity {
 
@@ -52,7 +52,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onBackPressed()
     {
-        return;
     }
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event)  {
@@ -98,9 +97,7 @@ public class MainActivity extends AppCompatActivity {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         }
         else
-        {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        }
 
         Output = (TextView) findViewById(R.id.Output);
         Input = (EditText) findViewById(R.id.Input);
@@ -193,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
                 Output.setText(e.getMessage());
             }
-            Output.setText("Disonnecting");
+            Output.setText("Disconnected");
             NeedScroll = true;
             return true;
         }
@@ -229,60 +226,13 @@ public class MainActivity extends AppCompatActivity {
             Output.setText("Connecting to " + Host);
             NeedScroll = true;
 
-            try
-            {
-                s = new Socket(Host, Port);
-
-                //outgoing stream redirect to socket
-
-                out = s.getOutputStream();
-                input = new BufferedReader(new InputStreamReader(s.getInputStream()));
-
-                String signon = User + "\r" + Pass + "\rBPQTermTCP\r";
-
-                byte[] bytes = signon.getBytes("UTF-8");
-                out.write(bytes);
-
-            }
- /*           catch (UnknownHostException e)
-            {
-                // TODO Auto-generated catch block
-
-                Output.setText("Resolve Failed " + e.getMessage());
-                e.printStackTrace();
-            }
-   */
-            catch (Exception e)
-            {
-                e.printStackTrace();
-                Output.setText(e.getMessage());
-            }
-          /*  catch (SecurityException e)
-            {
-                e.printStackTrace();
-                Output.setText(e.getMessage());
-            }
-            catch (IOException e)
-            {
-                e.printStackTrace();
-                Output.setText(e.getMessage());
-            }
-          */
-            finally
-            {
-                if (s == null)
-                {
-                    return true;
-                }
-            }
-
-            // Start thread to read from socket
+            // Start thread to handle connection
 
             new Thread(new Runnable()
             {
                 public void run()
                 {
-                    ReadFromSocket();			// this runs until the socket closes
+                    SocketThread();			// this runs until the socket closes
                 }
             }
             ).start();
@@ -329,10 +279,44 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void ReadFromSocket()
+    public void SocketThread()
     {
         int count;
         char[] inchars;
+
+        try
+        {
+            s = new Socket(Host, Port);
+
+            //outgoing stream redirect to socket
+
+            out = s.getOutputStream();
+            input = new BufferedReader(new InputStreamReader(s.getInputStream()));
+
+            String signon = User + "\r" + Pass + "\rBPQTermTCP\r";
+
+            byte[] bytes = signon.getBytes("UTF-8");
+            out.write(bytes);
+
+        }
+
+        catch (final Exception e)
+        {
+            runOnUiThread(new Runnable()
+            {
+                public void run()
+                {
+                    Output.setText(e.getMessage());
+                    NeedScroll = true;
+                    return;
+                }
+            });
+        }
+
+        if (s == null)
+        {
+            return;
+        }
 
         while(true)
         {
@@ -347,17 +331,16 @@ public class MainActivity extends AppCompatActivity {
                 NeedScroll = false;
 
                 runOnUiThread(new Runnable()
-
-                              {
-                                  public void run()
-                                  {
-                                      SV.post(new Runnable() {
-                                          public void run() {
-                                              SV.fullScroll(ScrollView.FOCUS_DOWN);
-                                          }
-                                      });
-                                  }
-                              }
+                {
+                    public void run()
+                    {
+                        SV.post(new Runnable() {
+                            public void run() {
+                                SV.fullScroll(ScrollView.FOCUS_DOWN);
+                            }
+                        });
+                    }
+                }
                 );
             }
 
@@ -391,14 +374,13 @@ public class MainActivity extends AppCompatActivity {
                     // Can't update UI from this thread
 
                     runOnUiThread(new Runnable()
-                                  {
-                                      public void run()
-                                      {
-                                          Output.setText(OutBuffer);
-                                          NeedScroll = true;
-                                      }
-                                  }
-                    );
+                    {
+                        public void run()
+                        {
+                            Output.setText(OutBuffer);
+                            NeedScroll = true;
+                        }
+                    });
                 }
             }
             catch (IOException e)
@@ -419,10 +401,6 @@ public class MainActivity extends AppCompatActivity {
      * A native method that is implemented by the 'native-lib' native library,
      * which is packaged with this application.
      */
-    public native String stringFromJNI();
 
-    // Used to load the 'native-lib' library on application startup.
-static {
-      System.loadLibrary("native-lib");
-   }
+
 }
