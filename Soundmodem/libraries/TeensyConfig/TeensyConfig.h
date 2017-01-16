@@ -29,6 +29,10 @@
 #define LED2 4
 #define LED3 5
 
+// Can use i2c as KISS port
+
+#define i2cSlaveSupport
+
 #else
 
 #define WDTBOARD

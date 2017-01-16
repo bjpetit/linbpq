@@ -14,7 +14,6 @@
 #define TRUE 1
 #define FALSE 0
 
-#define DCDLED LED0
 
 #define ADC_SAMPLES_PER_BLOCK 1200
 #define DAC_SAMPLES_PER_BLOCK 1200
@@ -52,7 +51,7 @@ extern int ADCInterrupts;
 // Windows and Linux work with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
 // TEENSY DAC uses unsigned 0 - 4095
-// TEENSY ADC uses unsigned 0 - 85535
+// TEENSY ADC uses unsigned 0 - 65535
 
 
 unsigned short ADC_Buffer[2][ADC_SAMPLES_PER_BLOCK] = {0};	// Two Transfer/DMA buffers of 0.1 Sec
@@ -63,8 +62,8 @@ int maxlevel, minlevel, tot;
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
 
-char CaptureDevice[] = "DMA";
-char PlaybackDevice[] = "DMA";
+char CaptureDevice[] = "ADC";
+char PlaybackDevice[] = "DAC";
 
 char * CaptureDevices = CaptureDevice;
 char * PlaybackDevices = PlaybackDevice;
@@ -316,7 +315,7 @@ void SoundFlush()
   while (GetDMAPointer() > FlushEnd)
     txSleep(1);
 
-  printtick("end flush");
+//  printtick("end flush");
 
   xstopDAC();
   DMARunning = FALSE;

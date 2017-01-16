@@ -24,6 +24,7 @@
 
 // i2c support
 
+#ifdef i2cSlaveSupport
 
 #include <i2c_t3.h>
 
@@ -150,38 +151,34 @@ void requestEvent(void)
   }
 }
 
+#endif
 
+#include <stdarg.h>
+extern "C"
+{
 
-
-
-
-
-// SCS Port is on USB. Debug on Serial1
-
-#define TRUE 1
-#define FALSE 0
+void Statsprintf(const char * format, ...)
+{
+  return;
+}
 
 int HostInit()
 {
-  return TRUE;
+  return true;
 }
+
 
 void PutString(const char * Msg)
 {
-  //	SerialSendData(Msg, );
   HOSTPORT.write((const uint8_t *)Msg, strlen(Msg));
 }
 
 int PutChar(unsigned char c)
 {
-  // SerialSendData(&c, 1);
   HOSTPORT.write(&c, 1);
   return 0;
 }
 
-#include <stdarg.h>
-extern "C"
-{
   void SerialSendData(const uint8_t * Msg, int Len)
   {
     HOSTPORT.write(Msg, Len);
@@ -209,13 +206,10 @@ extern "C"
     MONPORT.println(Mess);
     return;
   }
-  void Statsprintf(const char * format, ...)
-  {
-  }
+
   void CloseDebugLog()
   {
   }
-
 
   void CloseStatsLog()
   {
