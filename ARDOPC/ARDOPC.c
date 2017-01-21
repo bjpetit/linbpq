@@ -30,10 +30,15 @@ BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
 
 // Config parameters
 
-char GridSquare[7] = "";
+char GridSquare[9] = "";
 char Callsign[10] = "";
 BOOL wantCWID = FALSE;
 BOOL CWOnOff = FALSE;
+BOOL NeedID = FALSE;		// SENDID Command Flag
+BOOL NeedConReq = FALSE;	// ARQCALL Command Flag
+BOOL NeedTwoToneTest = FALSE;
+
+char ConnectToCall[16] = "";
 
 #ifdef TEENSY
 int LeaderLength = 500;
@@ -43,6 +48,9 @@ int LeaderLength = 240;
 int TrailerLength = 0;
 unsigned int ARQTimeout = 120;
 int TuningRange = 100;
+int TXLevel = 300;				// 300 mV p-p Used on Teensy
+int RXLevel = 0;				// Configured Level - zero means auto tune
+int autoRXLevel = 1500;			// calculated level
 int ARQConReqRepeats = 5;
 BOOL DebugLog = TRUE;
 BOOL CommandTrace = TRUE;
@@ -1669,22 +1677,12 @@ void SendID(BOOL blnEnableCWID)
 
 // Function to generate a 5 second burst of two tone (1450 and 1550 Hz) used for setting up drive level
  
-void ModTwoToneTest()
-{
-	GetTwoToneLeaderWithSync(500);
-	SampleSink(0);	// 5 secs
-	SoundFlush();
-}
-
-
-//  Subroutine to send 5 seconds of two tone
-
 void Send5SecTwoTone()
 {
-	if (!SoundIsPlaying)
-	{
-//		CreateWaveStream(ModTwoToneTest());
-	}
+	initFilter(200);
+	GetTwoToneLeaderWithSync(250);
+//	SampleSink(0);	// 5 secs
+	SoundFlush();
 }
 
 
@@ -1813,8 +1811,8 @@ void DeCompressCallsign(char * bytCallsign, char * returned)
     
 	Bit6ToASCII(bytCallsign, bytTest);
 
-	memcpy(returned, bytTest, 6);
-	returned[6] = 0;
+	memcpy(returned, bytTest, 7);
+	returned[7] = 0;
 	strlop(returned, ' ');		// remove trailing space
 
 	if (bytTest[7] == '0') // Value of "0" so No SSID
@@ -2015,7 +2013,9 @@ void ClearDataToSend()
 	bytDataToSendLength = 0;
 	FreeSemaphore();
 
+#ifdef TEENSY
 	SetLED(TRAFFICLED, FALSE);
+#endif
 	QueueCommandToHost("BUFFER 0");
 }
 
@@ -2070,8 +2070,10 @@ void RemoveDataFromQueue(int Len)
 
 	FreeSemaphore();
 
+#ifdef TEENSY
 	if (bytDataToSendLength == 0)
 		SetLED(TRAFFICLED, FALSE);
+#endif		
 
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);
@@ -2196,6 +2198,29 @@ void CheckTimers()
 			dttLastFECIDSent = Now;
 		}
 	}
+
+	// Send Conect Request (from ARQCALL command)
+
+	if (NeedConReq)
+	{
+		NeedConReq = 0;
+		SendARQConnectRequest(Callsign, ConnectToCall);
+	}
+
+	// Send Async ID (from SENDID command)
+
+	if (NeedID)
+	{
+		SendID(wantCWID);
+		NeedID = 0;
+	}
+
+	if (NeedTwoToneTest)
+	{
+		Send5SecTwoTone();
+		NeedTwoToneTest = 0;
+	}
+
 
 	if (Now > tmrPollOBQueue)
 	{

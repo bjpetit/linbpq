@@ -1,4 +1,6 @@
-// Arduino interface code for ARDOP running on a Teensie 3.6
+// Arduino interface code for ARDOP running on a Teensy 3.6
+
+#include "TeensyConfig.h"
 
 #define TEENSY
 
@@ -6,49 +8,30 @@
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
 
-#include <DMAChannel.h>
-#include "SPI.h"
-#include "ILI9341_t3.h"
-
-DMAChannel dma1(false);
 
 unsigned char RXBUFFER[500];	// Async RX Buffer. Enough for Stuffed Host Mode Frame
-
-extern ILI9341_t3 tft;
 
 extern volatile int RXBPtr;
 volatile int flag = 0;
 volatile int flag2 = 0;
-extern int inIndex;			// ADC Buffer half being used 0 or 1
+
+extern int VRef;
 
 void yDisplayCall(int dirn, char * Call);
 void yDisplayState(char * State);
+void i2csetup();
+void i2cloop();
+void CommonSetup();
+void setupPDB(int SampleRate);
+void setupDAC();
+void setupADC(int Pin);
+extern "C" void StartDAC();
+extern "C" void StopDAC();
+void StartADC();
 
-#define pttPin 6
-
-#define LED0 24
-#define LED1 25
-#define LED2 26
-#define LED3 31
-
-#define ISSLED LED0
-#define IRSLED LED1
-#define TRAFFICLED LED2
-
-#define SW1 27
-#define SW2 28
-#define SW3 29
-#define SW4 30
-
-// CAT4016
-
-#define CLK 2
-#define BLANK 3
-#define LATCH 4
-#define SIN 5
+// Arduino is a c++ environment so functions in ardop must be defined as "C"
 
 extern "C"
-
 {
   void WriteDebugLog(int Level, const char * format, ...);
   void InitSound();
@@ -57,51 +40,18 @@ extern "C"
   void HostPoll();
   void MainPoll();
   void InitDMA();
-  void xStartDAC();
-  void xStartADC();
   void DisplayCall(int dirn, char * Call);
   void DisplayState(char * State);
 
   void PollReceivedSamples();
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
+  void SetPot(int address, unsigned int value);
 
-#include "C:\SkyDrive\Dev\Source\ARDOPC\ARDOPC.h"
+#include "..\..\ARDOPC.h"
 
   extern unsigned int tmrPollOBQueue;
 
-  extern volatile unsigned short ADC_Buffer[2 * ADC_SAMPLES_PER_BLOCK];
-
 #define Now getTicks()
-
-  void xStartDAC()
-  {
-    StartDAC();
-  }
-
-  void xstopDAC()
-  {
-    stopDAC();
-  }
-
-  void displayCall(int dirn, char * Call)
-  {
-    char paddedcall[12] = "           ";
-
-    paddedcall[0] = dirn;
-    memcpy(paddedcall + 1, Call, strlen(Call));
-
-    tft.setCursor(0, 72);
-    tft.print(paddedcall);
-  }
-
-  void displayState(const char * State)
-  {
-    tft.setCursor(0, 48);
-    tft.print("          ");
-    tft.setCursor(0, 48);
-    tft.print(State);
-  }
-
 
   unsigned int getTicks()
   {
@@ -126,26 +76,9 @@ extern "C"
     PollReceivedSamples();			// discard any received samples
     HostPoll();
 
-    if (flag == 1)
-    {
-      WriteDebugLog(LOGDEBUG, "adc Interrupt %d %d &d ", millis(), dma1.TCD->CITER_ELINKNO,
-                    ADC_Buffer[dma1.TCD->CITER_ELINKNO]);
-      flag = 0;
-    }
     PlatformSleep();
     Sleep(mS);
   }
-
-  void SerialSendData(const uint8_t * Msg, int Len)
-  {
-    Serial.write(Msg, Len);
-  }
-
-  void Serial1Print(char * Msg, int Len)
-  {
-    Serial1.println(Msg);
-  }
-
 
   void CatWrite(const uint8_t * Buffer, int Len)
   {
@@ -154,7 +87,6 @@ extern "C"
 
   unsigned char CatRXbuffer[256];
   int CatRXLen = 0;
-
 
   void RadioPoll()
   {
@@ -175,19 +107,40 @@ extern "C"
 
     Length = CatRXLen;
 
-    Serial1.print("CAT RX ");
+    MONPORT.print("CAT RX ");
     for (i = 0; i < Length; i++)
     {
       val = CatRXbuffer[i];
-      Serial1.print(val, HEX);
-      Serial1.print(" ");
+      MONPORT.print(val, HEX);
+      MONPORT.print(" ");
     }
-    Serial1.println("");
+    MONPORT.println("");
   }
+
+#define MEM_LEN 512
+  extern uint8_t databuf[MEM_LEN];
+  extern volatile int i2cputptr, i2cgetptr;
 
   void HostPoll()
   {
-    int Avail = Serial.available();
+#ifdef I2CHOST
+
+    while (i2cgetptr != i2cputptr)
+    {
+      unsigned char c;
+      c = databuf[i2cgetptr++];
+      i2cgetptr &= 0x1ff;				// 512 cyclic
+
+      RXBUFFER[RXBPtr++] = c;
+
+      if (i2cgetptr == i2cputptr || RXBPtr > 498)
+      {
+        ProcessSCSPacket(RXBUFFER, RXBPtr);
+        return;
+      }
+    }
+#else
+    int Avail = HOSTPORT.available();
 
     if (Avail)
     {
@@ -196,63 +149,31 @@ extern "C"
       if (Avail > (499 - RXBPtr))
         Avail = 499 - RXBPtr;
 
-      Count = Serial.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
+      Count = HOSTPORT.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
       RXBPtr += Count;
       ProcessSCSPacket(RXBUFFER, RXBPtr);
     }
-  }
+#ifdef i2cSlaveSupport
+    i2cloop();					// I2C but not for Host
+#endif
+#endif
 
-  int GetDMAPointer()
-  {
-    return dma1.TCD->CITER_ELINKNO;
-  }
-  int GetADCDMAPointer()
-  {
-    return dma1.TCD->CITER_ELINKNO;
-  }
-  void SetLED(int LED, int blnPTT)
-  {
-    digitalWriteFast(LED, blnPTT);
   }
 }
-
-
-void CAT4016(int value)
-{
-  // writes value to the 10 LED display
-  int i;
-
-  for (i = 0; i < 16; i++)			// must send all 16 to maintain sync
-  {
-    // Send each bit to display
-
-    // We probbly don't need a microsecond delay, but I doubt if it will
-    // cauise timing problems anywhere else
-
-    // looks like we need to send data backwards (hi order bit first)
-
-    digitalWriteFast(SIN, (value >> 15) & 1);
-    //   __asm("nop");
-    delayMicroseconds(1);		// Setup is around 20 nS
-    digitalWriteFast(CLK, 1);		// Copy SR to Outputs
-    delayMicroseconds(1);		// Setup is around 20 nS
-    digitalWriteFast(CLK, 0);		// Strobe High to copy data from shift reg to display
-    value = value << 1;			// ready for next bit
-    delayMicroseconds(1);		// Setup is around 20 nS
-  }
-  // copy Shift Reg to display
-
-  digitalWriteFast(LATCH, 1);		//  Strobe High to copy data from shift reg to display
-  delayMicroseconds(1);					// Setup is around 20 nS
-  digitalWriteFast(LATCH, 0);
-}
-
-
-
 
 void setup()
 {
   uint32_t i, sum = 0;
+
+#ifdef HOSTPORT
+  HOSTPORT.begin(115200);
+  while (!HOSTPORT);
+#endif
+
+  MONPORT.begin(115200);
+  Serial5.begin(19200);				// CAT Port
+
+  while (!MONPORT);
 
   // Set 10 second watchdog
 
@@ -265,32 +186,14 @@ void setup()
 
   WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
 
-  pinMode(13, OUTPUT);				// onboard LED
-  pinMode(pttPin, OUTPUT);
-  pinMode(LED0, OUTPUT);
-  pinMode(LED1, OUTPUT);
-  pinMode(LED2, OUTPUT);
-  pinMode(LED3, OUTPUT);
+  CommonSetup();
 
-  pinMode (SW1, INPUT_PULLUP);
-  pinMode (SW2, INPUT_PULLUP);
-  pinMode (SW3, INPUT_PULLUP);
-  pinMode (SW4, INPUT_PULLUP);
-
-  pinMode(CLK, OUTPUT);
-  pinMode(BLANK, OUTPUT);
-  pinMode(LATCH, OUTPUT);
-  pinMode(SIN, OUTPUT);
-
-  setupTFT();
-  Serial.begin(115200);
-  Serial1.begin(115200);
-  Serial5.begin(19200);				// CAT Port
-
-  tft.print("ARDOP TNC ");
-  tft.println(ProductVersion);
-  dma1.begin(true);
-
+  MONPORT.printf("Monitor Buffer Space %d\r\n", MONPORT.availableForWrite());
+#if defined HOSTPORT
+  MONPORT.printf("Host Buffer Space %d\r\n", HOSTPORT.availableForWrite());
+#elif defined I2CHOST
+  MONPORT.printf("Host Connection is i2c on address %x Hex\r\n", I2CSLAVEADDR);
+#endif
   if (RCM_SRS0 & 0X20)		// Watchdog Reset
     WriteDebugLog(LOGCRIT, "\n**** Reset by Watchdog ++++");
 
@@ -309,8 +212,8 @@ void setup()
   // leaves the ADC in a state that's mostly ready to use
 
   analogReadRes(16);
-  analogReference(INTERNAL); // range 0 to 1.2 volts
-  //analogReference(DEFAULT); // range 0 to 3.3 volts
+  //analogReference(INTERNAL); // range 0 to 1.2 volts
+  analogReference(DEFAULT); // range 0 to 3.3 volts
   //analogReadAveraging(8);
   // Actually, do many normal reads, to start with a nice DC level
 
@@ -320,21 +223,31 @@ void setup()
   }
 
   WriteDebugLog(LOGDEBUG, "DAC Baseline %d", sum / 1024);
-  StartDAC();
-  stopDAC();
+
+  setupPDB(12000);			// 12K sample rate
+  setupDAC();
   setupADC(16);
   StartADC();
 
-  // Clear CAT4016
+  // Read Vref
 
-  digitalWriteFast(BLANK, 0);	// Enable display
-  digitalWriteFast(LATCH, 0);	// Strobe High to copy data from shift reg to display
-  digitalWriteFast(CLK, 0);		// Strobe High to enter data to shift reg
+  SetPot(1, 256);				// TX Level Gain = 1
 
-  CAT4016(0);				// All off
+  delay(100);
 
+  analogRead(17);
+
+  for (i = 0; i < 100; i++)
+  {
+    VRef += analogRead(17);
+  }
+  VRef /= 100;
+  MONPORT.printf("VREF %d offset %d\r\n", VRef, VRef - 32768);
+
+  analogRead(16);		// Set ADC back to A0
 }
 
+int lastticks = Now;
 
 void loop()
 {
@@ -342,6 +255,10 @@ void loop()
   CheckTimers();
   HostPoll();
   MainPoll();
+  if (Now - lastticks > 999)
+  {
+    // Debug 1 sec tick
+  }
   PlatformSleep();
   RadioPoll();
 
@@ -351,143 +268,11 @@ void loop()
   }
 }
 
-// DMA COde is here as it is more difficult to use the Arduino interface stuff
-// from C (Arduino .ino files are compiles as c++)
-
-// DAC uses DMA, trigged by the PDB.
-
-// So far I can't get PDB+ADC+DMA to work, so I use PDB to generate an interrupt,
-// which software triggers the ADC, which then used DMA to save the result on completion.
-
-volatile uint16_t dac1_buffer[DAC_SAMPLES_PER_BLOCK * 2];
-
-#define PDB_CONFIG_DAC (PDB_SC_TRGSEL(15) | PDB_SC_PDBEN | PDB_SC_CONT | PDB_SC_PDBIE | PDB_SC_DMAEN)
-#define PDB_CONFIG_ADC (PDB_SC_TRGSEL(15) | PDB_SC_PDBEN | PDB_SC_CONT | PDB_SC_PDBIE)
-
-//	PDB count of 4999 should give 12K clock with 60 MHz bus clock
-
-#define PDB_PERIOD (5000-1)
-
-
-void StartDAC()
+extern "C" bool OKtoAdjustLevel()
 {
-  // Set up the DAC and start sending a frame under DMA
+  // Only auto adjust level when disconnected.
+  // Level is set at end of each received packet when connected
 
-  dma1.disable();
-
-  SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
-  DAC0_C0 = DAC_C0_DACEN | DAC_C0_DACRFS; // enable the DAC module, 3.3V reference
-
-  SIM_SCGC6 |= SIM_SCGC6_PDB;
-
-  PDB0_IDLY = 1;
-  PDB0_MOD = PDB_PERIOD;
-
-  PDB0_SC = 0;
-  PDB0_SC = PDB_CONFIG_DAC | PDB_SC_LDOK;
-  PDB0_SC = PDB_CONFIG_DAC | PDB_SC_SWTRIG;
-
-  dma1.TCD->SADDR = dac1_buffer;
-  dma1.TCD->SOFF = 2;
-  dma1.TCD->ATTR = DMA_TCD_ATTR_SSIZE(DMA_TCD_ATTR_SIZE_16BIT) | DMA_TCD_ATTR_DSIZE(DMA_TCD_ATTR_SIZE_16BIT);
-  dma1.TCD->NBYTES_MLNO = 2;	// Bytes per minor loop
-  dma1.TCD->SLAST = -sizeof(dac1_buffer);	// Reinit to start
-  dma1.TCD->DADDR = &DAC0_DAT0L;
-  dma1.TCD->DOFF = 0;
-  dma1.TCD->CITER_ELINKNO = sizeof(dac1_buffer) / 2;
-  dma1.TCD->DLASTSGA = 0;
-  dma1.TCD->BITER_ELINKNO = sizeof(dac1_buffer) / 2;
-  //  dma1.TCD->CSR = DMA_TCD_CSR_INTHALF | DMA_TCD_CSR_INTMAJOR;
-
-  DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
-  DMAMUX0_CHCFG0 = DMAMUX_SOURCE_PDB | DMAMUX_ENABLE;
-
-  dma1.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
-
-  dma1.enable();
-  DMA_CINT = DMA_CINT_CAIR;
+  return (ProtocolState == DISC);
 }
-
-void DACisr()
-{
-  DMA_CINT = DMA_CINT_CAIR;
-  flag2 = 1;
-}
-
-void stopDAC()
-{
-  dma1.disable();
-  StartADC();
-  DAC0_DAT0L = 0;
-  DAC0_DATH = 8;		// Set output to mid value
-}
-
-uint16_t dc_average;
-
-void setupADC(int pin)
-{
-  uint32_t i, sum = 0;
-
-  // pin must be 0 to 13 (for A0 to A13)
-  // or 14 to 23 for digital pin numbers A0-A9
-  // or 34 to 37 corresponding to A10-A13
-  if (pin > 23 && !(pin >= 34 && pin <= 37)) return;
-
-  // Configure the ADC and run at least one software-triggered
-  // conversion.  This completes the self calibration stuff and
-  // leaves the ADC in a state that's mostly ready to use
-
-  analogReadRes(16);
-  //analogReference(INTERNAL); // range 0 to 1.2 volts
-  analogReference(DEFAULT); // range 0 to 3.3 volts
-  //analogReadAveraging(8);
-  // Actually, do many normal reads, to start with a nice DC level
-  for (i = 0; i < 1024; i++) {
-    sum += analogRead(pin);
-  }
-  dc_average = sum >> 10;
-
-  ADC0_SC2 |= ADC_SC2_DMAEN;
-  NVIC_ENABLE_IRQ(IRQ_PDB);
-}
-
-void pdb_isr()
-{
-  PDB0_SC &= ~PDB_SC_PDBIF; // clear interrupt flag
-
-  if (SoundIsPlaying)
-    return;
-
-  ADC0_SC1A = 8; // Trigger read on A2
-}
-
-void StartADC()
-{
-  dma1.disable();
-
-  PDB0_SC = 0;
-  PDB0_SC = PDB_CONFIG_ADC | PDB_SC_LDOK;
-  PDB0_SC = PDB_CONFIG_ADC | PDB_SC_SWTRIG | PDB_SC_LDOK;
-
-  dma1.TCD->SADDR = &ADC0_RA;
-  dma1.TCD->SOFF = 0;
-  dma1.TCD->ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
-  dma1.TCD->NBYTES_MLNO = 2;
-  dma1.TCD->SLAST = 0;
-  dma1.TCD->DADDR = ADC_Buffer;
-  dma1.TCD->DOFF = 2;
-  dma1.TCD->CITER_ELINKNO = sizeof(ADC_Buffer) / 2;
-  dma1.TCD->DLASTSGA = -sizeof(ADC_Buffer);
-  dma1.TCD->BITER_ELINKNO = sizeof(ADC_Buffer) / 2;
-  dma1.TCD->CSR = 0; //DMA_TCD_CSR_INTHALF | DMA_TCD_CSR_INTMAJOR;
-
-  dma1.triggerAtHardwareEvent(DMAMUX_SOURCE_ADC0);
-
-  inIndex = 0;
-  dma1.enable();
-}
-
-
-
-
 

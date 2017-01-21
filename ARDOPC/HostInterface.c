@@ -18,6 +18,11 @@ void Break();
 
 extern BOOL gotGPIO;
 extern int pttGPIOPin;
+extern BOOL NeedID;			// SENDID Command Flag
+extern BOOL NeedConReq;		// ARQCALL Command Flag
+extern char ConnectToCall[16];
+extern BOOL NeedTwoToneTest;
+
 
 HANDLE hPTTDevice;			// port for PTT
 extern char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
@@ -84,8 +89,9 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 
 	FreeSemaphore();
 
+#ifdef TEENSY
 	SetLED(TRAFFICLED, TRUE);
-
+#endif
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);
 }
@@ -169,10 +175,9 @@ void ProcessCommandFromHost(char * strCMD)
 					{
 						ARQConReqRepeats = param;
 
-						// Must send reply before calling or protocol could hang
-
+						NeedConReq =  TRUE;
+						strcpy(ConnectToCall, ptrParams);
 						SendReplyToHost(cmdCopy);
-						SendARQConnectRequest(Callsign, ptrParams);
 						goto cmddone;
 					}
 					sprintf(strFault, "Not from mode FEC");
@@ -1261,11 +1266,46 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 #endif
+
+	if (strcmp(strCMD, "RXLEVEL") == 0)
+	{
+#ifndef HASPOTS
+		sprintf(cmdReply, "RXLEVEL command not available on this platform");
+		SendReplyToHost(cmdReply);
+		goto cmddone;
+#else
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "%s %d", strCMD, RXLevel);
+			SendReplyToHost(cmdReply);
+			goto cmddone;
+		}
+		else
+		{
+			i = atoi(ptrParams);
+
+			if (i >= 0 && i <= 3000)
+			{
+				int Pot;
+				RXLevel = i;
+				AdjustRXLevel(RXLevel);
+				sprintf(cmdReply, "%s now %d", strCMD, RXLevel);
+				SendReplyToHost(cmdReply);
+			}
+			else
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+#endif
+	}
+
 	if (strcmp(strCMD, "SENDID") == 0)
 	{
 		if (ProtocolState == DISC)
 		{
-			SendID(wantCWID);
+			NeedID = TRUE;			// Send from background
 			SendReplyToHost(strCMD);
 		}
 		else
@@ -1384,25 +1424,20 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
-/*
-            Case "TUNERANGE"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & MCB.TuningRange.ToString)
-                Else
-                    Select Case strParameters.Trim
-                        Case "0", "50", "100", "150", "200"
-                            MCB.TuningRange = CInt(strParameters)
-                        Case Else
-                            strFault = "Syntax Err:" & strCMD
-                    End Select
-                End If
-            Case "TWOTONETEST"
-                If objMain.objProtocol.GetARDOPProtocolState = ProtocolState.DISC Then
-                    objMain.Send5SecTwoTone()
-                Else
-                    strFault = "Not from state " & objMain.objProtocol.GetARDOPProtocolState.ToString
-                End If
-*/
+	if (strcmp(strCMD, "TWOTONETEST") == 0)
+	{
+       if (ProtocolState == DISC)
+	   {
+		   NeedTwoToneTest = TRUE;			// Send from background
+		   SendReplyToHost(strCMD);
+	   }
+	   else
+		   sprintf(strFault, "Not from state %s", ARDOPStates[ProtocolState]);
+       
+		   goto cmddone;
+
+	}
+
 
 
 	if (strcmp(strCMD, "TUNINGRANGE") == 0)
@@ -1430,6 +1465,40 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		goto cmddone;
 	}
+
+	if (strcmp(strCMD, "TXLEVEL") == 0)
+	{
+#ifndef HASPOTS
+		sprintf(cmdReply, "TXLEVEL command not available on this platform");
+		SendReplyToHost(cmdReply);
+		goto cmddone;
+#else
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "%s %d", strCMD, TXLevel);
+			SendReplyToHost(cmdReply);
+			goto cmddone;
+		}
+		else
+		{
+			i = atoi(ptrParams);
+
+			if (i >= 0 && i <= 3000)	
+			{
+				int Pot;
+				TXLevel = i;
+				sprintf(cmdReply, "%s now %d", strCMD, i);
+				AdjustTXLevel(TXLevel);
+				SendReplyToHost(cmdReply);			}
+			else
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+#endif
+	}
+
 
 	if (strcmp(strCMD, "USE600MODES") == 0)
 	{

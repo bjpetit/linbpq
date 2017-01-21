@@ -9,6 +9,7 @@ int FECRepeatsSent;
 
 UCHAR bytFrameType;
 BOOL blnSendIDFrame;
+extern BOOL NeedID;		// SENDID Command Flag
 
 extern int intLastFrameIDToHost;
 int bytFailedDataLength; 
@@ -118,19 +119,13 @@ BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL
 
 	if (blnSendID)
 	{
-		unsigned char bytEncodedBytes[16];
-
-		EncLen = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
-		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
-
-		dttLastFECIDSent = Now;
-		intFECFramesSent = 0;
+		NeedID = TRUE;
 	}
 	else
 	{
 		// Cant we just call GetNextFECFrame??
 
-		GetNextFECFrame();
+//		GetNextFECFrame();		// Use timer to start so cmd response is immediate
 /*
 			Dim bytFrameData(-1) As Byte
             strFrameComponents = strFECMode.Split(".")
@@ -180,6 +175,7 @@ BOOL GetNextFECFrame()
 		WriteDebugLog(LOGDEBUG, "[GetNextFECFrame] FECAbort. Going to DISC state");
 		KeyPTT(FALSE);  // insurance for PTT off
 		SetARDOPProtocolState(DISC);
+		blnAbort = FALSE;
 		return FALSE;
 	}
 	

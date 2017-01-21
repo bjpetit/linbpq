@@ -209,13 +209,6 @@ BOOL DMARunning = FALSE;		// Used to start DMA on first write
 
 short * SendtoCard(unsigned short * buf, int n)
 {
-	if (Loopback)
-	{
-		// Loop back   to decode for testing
-
-		ProcessNewSamples(buf, 1200);		// signed
-	}
-
 	header[Index].dwBufferLength = n * 2;
 
 	waveOutPrepareHeader(hWaveOut, &header[Index], sizeof(WAVEHDR));
@@ -916,7 +909,7 @@ void CatWrite(char * Buffer, int Len)
 }
 
 unsigned char CatRXbuffer[256];
-int CatRXLen = 10;
+int CatRXLen = 0;
 
 int RadioPoll()
 {

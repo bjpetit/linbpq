@@ -8,7 +8,27 @@
 #include <windows.h>
 #include <winioctl.h>
 #else
+
 #define HANDLE int
+
+#ifdef MACBPQ
+#define NOI2C
+#endif
+
+#ifdef NOI2C
+int i2c_smbus_write_byte()
+{
+	return -1;
+}
+
+int i2c_smbus_read_byte()
+{
+	return -1;
+}
+#else
+#include "i2c-dev.h"
+#endif
+
 #endif
 
 #include "ARDOPC.h"
@@ -19,13 +39,7 @@ WriteCOMBlock(hDevice, Message, MsgLen);
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 
 
-UCHAR bytDataToSend[4096];// =
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";
-
+UCHAR bytDataToSend[4096];
 
 // May malloc this, or change to cyclic buffer
 

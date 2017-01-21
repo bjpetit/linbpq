@@ -2,14 +2,15 @@
 //	Makes keeping Windows, Linux and Teensy version in step easier
 
 #define TEENSY
+#include "TeensyConfig.h"
 
-#include "C:\SkyDrive\Dev\Source\ARDOPC\ARDOPC.c"
-#include "C:\SkyDrive\Dev\Source\ARDOPC\ardopSampleArrays.c"
-#include "C:\SkyDrive\Dev\Source\ARDOPC\ARQ.c"
-#include "C:\SkyDrive\Dev\Source\ARDOPC\berlekamp.c"
-#include "C:\SkyDrive\Dev\Source\ARDOPC\BusyDetect.c"
-#include "C:\SkyDrive\Dev\Source\ARDOPC\FEC.c"
-#include "C:\SkyDrive\Dev\Source\ARDOPC\FFT.c"
+#include "..\..\ARDOPC.c"
+#include "..\..\ardopSampleArrays.c"
+#include "..\..\ARQ.c"
+#include "..\..\berlekamp.c"
+#include "..\..\BusyDetect.c"
+#include "..\..\FEC.c"
+#include "..\..\FFT.c"
 
 #include "C:\SkyDrive\Dev\Source\ARDOPC\galois.c"
 #include "C:\SkyDrive\Dev\Source\ARDOPC\HostInterface.c"

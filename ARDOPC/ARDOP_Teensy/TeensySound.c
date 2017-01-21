@@ -1,20 +1,22 @@
 //
 //	Passes audio samples to and from the sound interface
 
-//	This is the Arduino/Teensie Version, using DMA to DAC/ADC
+//	This is the Arduino/Teensy Version, using DMA to DAC/ADC
 
 //	Also has some platform specific routines
 
-#define TEENSY
+#include "TeensyConfig.h"
 
 #define concat(a, b) a ## b
 
-#include "C:/SkyDrive/Dev/Source/ARDOPC/ARDOPC.h"
+#include "..\..\ARDOPC.h"
 #include <math.h>
 
-
+extern int VRef;
 
 extern BOOL blnDISCRepeating;
+
+// the ADC DMA saves the incoming ADC samples into these 2 buffers
 
 extern volatile unsigned short dac1_buffer[DAC_SAMPLES_PER_BLOCK * 2];
 
@@ -23,6 +25,8 @@ extern int ADCInterrupts;
 
 // Windows and Linux work with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
+// TEENSY DAC uses unsigned 0 - 4095
+// TEENSY ADC uses unsigned 0 - 65535
 
 // the ADC DMA saves the incoming ADC samples into these 2 buffers
 
@@ -68,7 +72,7 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 
   if (DMARunning == FALSE)
   {
-    xStartDAC();
+    StartDAC();
     DMARunning = TRUE;
     FirstTime = TRUE;
 
@@ -88,10 +92,10 @@ unsigned short * SendtoCard(unsigned short buf, int n)
     FirstTime = FALSE;
 
     while (GetDMAPointer() >= DAC_SAMPLES_PER_BLOCK)
-      txSleep(10);
+      txSleep(1);
   }
 
-  //	printtick("Start Wait");
+  // 	printtick("Start Wait");
 
   while (1)
   {
@@ -113,11 +117,11 @@ unsigned short * SendtoCard(unsigned short buf, int n)
       if (Left < (DAC_SAMPLES_PER_BLOCK))
         break;
     }
-    txSleep(10);				// Run background while waiting
+    txSleep(1);				// Run background while waiting
   }
   Index = !Index;
-  txSleep(10);				// Run background while waiting
-  //printtick("Stop Wait");
+  txSleep(1);				// Run background while waiting
+  //  printtick("Stop Wait");
 
   return &dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK];
 }
@@ -126,14 +130,15 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 //    for (t = 0; t < sizeof(buffer); ++t)
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
-int min = 0, max = 0, leveltimer = 0;
+int lastmin = 0, lastmax = 0;
+int Samples, levelticks = 0;
 
 void PollReceivedSamples()
 {
   int Pointer = GetADCDMAPointer();
 
   if (SoundIsPlaying)
- 	 return;
+    return;
 
   if (inIndex == 0)
   {
@@ -146,9 +151,7 @@ void PollReceivedSamples()
       return;
 
   }
-
   // convert the saved ADC 16-bit unsigned samples into 16-bit signed samples
-
   {
     unsigned short  *src = (unsigned short *)&ADC_Buffer[inIndex];	// point to the DMA buffer where the ADC samples were saved
     short  *dst = (unsigned short *)src;				// reuse input buffer
@@ -158,7 +161,7 @@ void PollReceivedSamples()
     for (i = 0; i < ADC_SAMPLES_PER_BLOCK; i++)
     {
       register int s1 = (unsigned short)(*src++);
-      s1 -= 32768;
+      s1 -= VRef;
       *dst++ = s1;
       tot += s1;
       if (s1 > maxlevel)
@@ -167,22 +170,29 @@ void PollReceivedSamples()
         minlevel = s1;
     }
 
-    //	serial.printf("Max %d min %d av %d\n", max, min, tot/ADC_SAMPLES_PER_BLOCK);
+    Samples += ADC_SAMPLES_PER_BLOCK;
 
-  //  printtick("Process Sample Start");
-
+    //  printtick("Process Sample Start");
     ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+    //  printtick("Process Sample End");
 
+    // We save Max and Min every block so we can adjust level
+    // when we see a valid packet. We display every 10 seconds
 
- //   printtick("Process Sample End");
+    lastmin = minlevel;
+    lastmax = maxlevel;
 
-    if (leveltimer++ > 4)
+    if (Now - levelticks > 9999)
     {
-      leveltimer = 0;
-      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * 6));
+      levelticks = Now;
+      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
       displayLevel(maxlevel);
-      tot = minlevel = maxlevel = 0;
+      Samples = tot = 0;
+
+      if (RXLevel == 0)				// Automatic level
+      	CheckandAdjustRXLevel(maxlevel, minlevel, FALSE);
     }
+    minlevel = maxlevel = 0;
   }
   inIndex = !inIndex;
 }
@@ -243,20 +253,35 @@ void SoundFlush()
 
   if (Index == 0)
 
-    //	Sending from first half of buffer. Stop when DMS Pointer gets to
-    //	( 2 * DAC_SAMPLES_PER_BLOCK) - Number
+    //	Sending from first half of buffer. Stop when DMA Pointer gets to
+    //	(2 * DAC_SAMPLES_PER_BLOCK) - Number
 
-    FlushEnd = ( 2 * DAC_SAMPLES_PER_BLOCK) - Number;
+    // Remember DMA pointer goes downwards
+
+    FlushEnd = (2 * DAC_SAMPLES_PER_BLOCK) - Number;
 
   else
 
     // Second Half. Stop when pointer gets to DAC_SAMPLES_PER_BLOCK - Number)
     FlushEnd = DAC_SAMPLES_PER_BLOCK - Number;
 
-  while (GetDMAPointer() > FlushEnd)
-    Sleep(1);
+  // WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d Flushend %d", Index, Number, GetDMAPointer(), FlushEnd);
 
-  xstopDAC();
+  // Wait if necessary for the other half to complete
+
+  while (GetDMAPointer() < FlushEnd)
+    txSleep(1);
+
+  printtick("mid flush");
+
+  // Wait for this (partial) half to complete
+
+  while (GetDMAPointer() > FlushEnd)
+    txSleep(1);
+
+  // printtick("end flush");
+
+  stopDAC();
   DMARunning = FALSE;
   SoundIsPlaying = FALSE;
 
@@ -268,18 +293,6 @@ void SoundFlush()
   //	StartCapture();
 
   return;
-}
-
-//  Function to Key radio PTT
-
-const char BoolString[2][6] = {"FALSE", "TRUE"};
-
-BOOL KeyPTT(BOOL blnPTT)
-{
-  // Returns TRUE if successful False otherwise
-
-  SetLED(pttPin, blnPTT);
-  return TRUE;
 }
 
 

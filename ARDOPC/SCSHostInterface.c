@@ -79,6 +79,8 @@ void SendCommandToHost(char * Cmd)
 		char * ptr = &CommandToHostBuffer[CommandToHostBufferLen];
 		int len = strlen(Cmd);
 
+		WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
+
 		if (CommandToHostBufferLen + len > 500)
 			return;			// ignore if full
 
@@ -158,6 +160,7 @@ void SendReplyToHost(char * Cmd)
 			return;				// shouldnt have commands jn PTC Mode
 		else
 			strcpy(CMDReplyBuffer, Cmd);
+
 	else
 		PutString(Cmd);
 }
@@ -258,6 +261,8 @@ BOOL CheckForControl()
 	memcpy(&SCSReply[5], CommandToHostBuffer, Length);
 
 	CommandToHostBufferLen -= Length;
+
+
 
 	if (CommandToHostBufferLen)
 		memmove(CommandToHostBuffer, &CommandToHostBuffer[Length], CommandToHostBufferLen);
@@ -377,16 +382,22 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 	int Command = Buffer[1] & 0x3f;
 	int Len = Buffer[2];
 	int len;
+	int RXToggle = Buffer[1] & 0x80;
 
-	if (Toggle == (Buffer[1] & 0x80) && (Buffer[1] & 0x40) == 0)
+//	WriteDebugLog(LOGINFO, "SCS Host Frame Toggle %x RXToggle %x Chan %d Cmd %d Len %d",
+//		Toggle, RXToggle, Channel, Command, Len);
+
+	if (Toggle == RXToggle && (Buffer[1] & 0x40) == 0)
 	{
 		// Repeat Condition
 
 		EmCRCStuffAndSend(SCSReply, ReplyLen);
+		WriteDebugLog(LOGINFO, "Same Toggle - Repeating last packet");
+
 		return;
 	}
 
-	Toggle ^= 0x80;		// Good frame so swap toggle
+	Toggle = RXToggle;
 
 	if (Channel == 255)
 	{
@@ -539,6 +550,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			strcpy(&SCSReply[6], CMDReplyBuffer);
 			ReplyLen = strlen(CMDReplyBuffer) + 7;
 			EmCRCStuffAndSend(SCSReply, ReplyLen);
+			WriteDebugLog(LOGDEBUG, "Sending CMD Reply %s", CMDReplyBuffer);
 			return;
 		}
 
@@ -557,7 +569,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 	case 'J':				// JHOST
 
 		HostMode = FALSE;
-		WriteDebugLog(LOGDEBUG, "Exit Host Mode");
+		WriteDebugLog(LOGINFO, "Exit Host Mode");
 		return;
 
 	case 'L':
@@ -1116,8 +1128,12 @@ VOID EmCRCStuffAndSend(UCHAR * Msg, int Len)
 	UCHAR StuffedMsg[500];
 	int i, j;
 
-	Msg[3] |= Toggle;
-
+	if (PTCMode == FALSE)		// only native  mode has toggle on input
+	{
+		Msg[3] &= 0x7F;
+		Msg[3] |= Toggle;
+//		Msg[3] ^= 0x80;		// reinveret toggle so we reply with received toggle
+	}
 	crc = compute_crc(&Msg[2], Len-2);
 	crc ^= 0xffff;
 

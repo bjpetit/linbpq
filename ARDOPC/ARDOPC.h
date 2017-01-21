@@ -8,7 +8,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.0.1-BPQ"
+#define ProductVersion "0.9.0.3-BPQ"
 
 //	Sound interface buffer size
 
@@ -103,22 +103,9 @@ typedef unsigned char UCHAR;
 
 // TEENSY Interface board equates
 
-#define pttPin 6
-
-#define LED0 24
-#define LED1 25
-#define LED2 26
-#define LED3 31
-
 #define ISSLED LED0
 #define IRSLED LED1
 #define TRAFFICLED LED2
-
-#define SW1 27
-#define SW2 28
-#define SW3 29
-#define SW4 30
-
 
 BOOL KeyPTT(BOOL State);
 
@@ -358,7 +345,7 @@ extern const short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carrie
 extern const short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
 
 // Config Params
-extern char GridSquare[7];
+extern char GridSquare[9];
 extern char Callsign[10];
 extern BOOL wantCWID;
 extern BOOL CWOnOff;
@@ -366,6 +353,9 @@ extern int LeaderLength;
 extern int TrailerLength;
 extern unsigned int ARQTimeout;
 extern int TuningRange;
+extern int TXLevel;
+extern int RXLevel;
+extern int autoRXLevel;
 extern BOOL DebugLog;
 extern int ARQConReqRepeats;
 extern BOOL CommandTrace;

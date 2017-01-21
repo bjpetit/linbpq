@@ -3059,7 +3059,7 @@ BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
 
 BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 {
-	UCHAR bytCall[6];
+	UCHAR bytCall[10];
 	BOOL blnRSOK;
 	BOOL FrameOK;
 
@@ -3332,7 +3332,7 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
  //       Dim stcStatus As Status = Nothing
 	char strCallerCallsign[10] = "";
 	char strTargetCallsign[10] = "";
-	char strIDCallSign[10] = "";
+	char strIDCallSign[11] = "";
 	char strGridSQ[10] = "";
 	int intTiming;
 	int intRcvdQuality;
