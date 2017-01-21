@@ -27,11 +27,33 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <stdio.h>
 #include <time.h>
 
+#ifdef WIN32
+//#include <Psapi.h>
+#else
+
+// For serial over i2c support
+
+#ifdef MACBPQ
+#define NOI2C
+#endif
+
+#ifdef NOI2C
+int i2c_smbus_write_byte()
+{
+	return -1;
+}
+
+int i2c_smbus_read_byte()
+{
+	return -1;
+}
+#else
+#include "i2c-dev.h"
+#endif
+#endif
+
 #include "CHeaders.h"
 
-#ifdef WIN32
-#include <Psapi.h>
-#endif
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
 int (WINAPI FAR *EnumProcessesPtr)();
@@ -65,6 +87,7 @@ VOID SendToTNC(struct TNCINFO * TNC, UCHAR * Encoded, int EncLen);
 VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, int Length);
 void ARDOPSCSCheckRX(struct TNCINFO * TNC);
 VOID ARDOPSCSPoll(struct TNCINFO * TNC);
+VOID ARDOPDoTNCReinit(struct TNCINFO * TNC);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -262,10 +285,29 @@ static ProcessLine(char * buf, int Port)
 			
 		if (p_port == NULL) return (FALSE);
 
-		TNC->ARDOPSerialPort = strdup(p_ipad);
+		TNC->ARDOPSerialPort = _strdup(p_ipad);
 		TNC->ARDOPSerialSpeed = atoi(p_port);
 
 		TNC->ARDOPCommsMode = 'S';
+	}
+	else if (_stricmp(buf, "I2C") == 0)
+	{
+		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+		memset(TNC, 0, sizeof(struct TNCINFO));
+	
+		if (p_ipad == NULL)
+			p_ipad = strtok(NULL, " \t\n\r");
+
+		if (p_ipad == NULL) return (FALSE);
+	
+		p_port = strtok(NULL, " \t\n\r");
+			
+		if (p_port == NULL) return (FALSE);
+
+		TNC->ARDOPSerialPort = _strdup(p_ipad);
+		TNC->ARDOPSerialSpeed = atoi(p_port);
+
+		TNC->ARDOPCommsMode = 'I';
 	}
 	else
 		return FALSE;						// Must start with ADDR
@@ -669,7 +711,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
 
-		if (TNC->ARDOPCommsMode == 'S')
+		if (TNC->ARDOPCommsMode == 'S' || TNC->ARDOPCommsMode == 'I')
 		{
 			ARDOPSCSCheckRX(TNC);
 			ARDOPSCSPoll(TNC);
@@ -689,9 +731,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 
-			if (TNC->CONNECTED == 0)
+			if (TNC->CONNECTED == 0 ||
+				TNC->Streams[0].Connecting ||
+				TNC->Streams[0].Connected)
 			{
-				// discard if not connected
+				// discard if TNC not connected or sesison active
 
 				ReleaseBuffer(buffptr);
 				continue;
@@ -1229,7 +1273,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		// CHECK IF OK TO SEND (And check TNC Status)
 
-		if (TNC->ARDOPCommsMode == 'S')
+		if (TNC->ARDOPCommsMode == 'S' || TNC->ARDOPCommsMode == 'I')
 		{
 			// if serial mode must check buffer space
 
@@ -1622,11 +1666,54 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	}
 	else if (TNC->ARDOPCommsMode == 'S')
 	{
-		TNC->PortRecord->PORTCONTROL.SerialPortName = strdup(TNC->ARDOPSerialPort); // for common routines
+		TNC->PortRecord->PORTCONTROL.SerialPortName = _strdup(TNC->ARDOPSerialPort); // for common routines
 		Consoleprintf("ARDOP Serial %s", TNC->ARDOPSerialPort);
 		OpenCOMMPort(TNC, TNC->ARDOPSerialPort, TNC->ARDOPSerialSpeed, FALSE);
 	}
+	else if (TNC->ARDOPCommsMode == 'I')
+	{
+#ifdef WIN32
+		sprintf(Msg,"ARDOP I2C is not supported on WIN32 systems\n");
+		WritetoConsoleLocal(Msg);
+#else
+#ifdef NOI2C
+		sprintf(Msg,"I2C is not supported on this systems\n");
+		WritetoConsoleLocal(Msg);
+#else
+		char i2cname[30];
+		int fd;
+		int retval;
 
+		if (strlen(TNC->ARDOPSerialPort) < 3)
+			sprintf(i2cname, "/dev/i2c-%s", TNC->ARDOPSerialPort);
+		else
+			strcpy(i2cname, TNC->ARDOPSerialPort);
+	
+		TNC->PortRecord->PORTCONTROL.SerialPortName = _strdup(i2cname); // for common routines
+
+		sprintf(Msg,"ARDOP I2C Bus %s Addr %d ", i2cname, TNC->ARDOPSerialSpeed);
+		WritetoConsoleLocal(Msg);
+
+		// Open and configure the i2c interface
+		                         
+		TNC->hDevice = open(i2cname, O_RDWR);
+		
+		if (TNC->hDevice < 0)
+		{
+			printf("Cannot find i2c bus %s\n", i2cname);
+		}
+			  
+	 	retval = ioctl(TNC->hDevice,  I2C_SLAVE, TNC->ARDOPSerialSpeed);
+		
+		if(retval == -1)
+		{
+			printf("Cannot open i2c device %x\n", TNC->ARDOPSerialSpeed);
+		}
+ 
+ 		ioctl(TNC->hDevice,  I2C_TIMEOUT, 100);
+#endif
+#endif
+	}
 
 	time(&TNC->lasttime);			// Get initial time value
 
@@ -3344,6 +3431,8 @@ VOID ARDOPCRCStuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
     Msg[3] |= TNC->Toggle;
 
+//	Debugprintf("ARDOP TX Toggle %x", TNC->Toggle);
+
 	crc = compute_crc(&Msg[2], Len-2);
 	crc ^= 0xffff;
 
@@ -3376,6 +3465,44 @@ VOID ARDOPCRCStuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 }
 
 
+VOID ARDOPDoTermModeTimeout(struct TNCINFO * TNC)
+{
+	UCHAR * Poll = TNC->TXBuffer;
+
+	if (TNC->ReinitState == 0)
+	{
+		//Checking if in Terminal Mode - Try to set back to Term Mode
+
+		TNC->ReinitState = 1;
+		ExitHost(TNC);
+		TNC->Retries = 1;
+
+		return;
+	}
+
+	if (TNC->ReinitState == 1)
+	{
+		// Forcing back to Term Mode
+
+		TNC->ReinitState = 0;
+		ARDOPDoTNCReinit(TNC);				// See if worked
+		return;
+	}
+
+	if (TNC->ReinitState == 3)
+	{
+		// Entering Host Mode
+	
+		// Assume ok
+
+		TNC->HostMode = TRUE;
+		TNC->IntCmdDelay = 10;
+
+		return;
+	}
+}
+
+
 VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
@@ -3395,9 +3522,37 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 		if (WriteCommBlock(TNC) == FALSE)
 		{
 			CloseCOMPort(TNC->hDevice);
-			OpenCOMMPort(TNC, TNC->ARDOPSerialPort, TNC->ARDOPSerialSpeed, TRUE);
-		}
+			
+			if (TNC->ARDOPCommsMode == 'S')
+			{
+	//			OpenCOMMPort(TNC, TNC->ARDOPSerialPort, TNC->ARDOPSerialSpeed, FALSE);
+			}
+			else
+			{
+#ifdef WIN32
+#else
+#ifdef NOI2C
+#else	
+				char i2cname[30];
+				int fd;
+				int retval;
 
+				// Open and configure the i2c interface
+
+				if (strlen(TNC->ARDOPSerialPort) < 3)
+					sprintf(i2cname, "/dev/i2c-%s", TNC->ARDOPSerialPort);
+				else
+					strcpy(i2cname, TNC->ARDOPSerialPort);
+		                      
+				TNC->hDevice = open(i2cname, O_RDWR);
+							  
+	 			retval = ioctl(TNC->hDevice,  I2C_SLAVE, TNC->ARDOPSerialSpeed);
+ 
+ 				ioctl(TNC->hDevice,  I2C_TIMEOUT, 100);
+#endif
+#endif
+			}
+		}
 		TNC->Retries = 1;
 	}
 
@@ -3519,6 +3674,8 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		return;
 
 	// Check toggle
+
+//	Debugprintf("ARDOP RX Toggle = %x MSG[3] = %x", TNC->Toggle, Msg[3]);
 
 	if (TNC->Toggle != (Msg[3] & 0x80))
 	{
@@ -3781,14 +3938,10 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				C_Q_ADD(&TNC->RadiotoBPQ_Q, buffptr);
 			}
 			return;
-		}
-		
+		}	
 		return;
 	}
 }
-
-
-
 
 void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 {
@@ -3799,7 +3952,34 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 	if (TNC->RXLen == 500)
 		TNC->RXLen = 0;
 
-	Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
+	if (TNC->ARDOPCommsMode =='I')
+	{
+		unsigned char Buffer[502];
+		BOOL Error;	
+
+		// i2c mode always returns as much as requested or error
+		// First two bytes of block are lenght
+
+		Len = ReadCOMBlockEx(TNC->hDevice, Buffer, 502, &Error);
+	
+		if (Len < 502 || Error == 5)
+			return;
+
+		if (Error)
+			Debugprintf("ARDOP i2c returned %d bytes Error %d", Len, Error);
+
+		Len = Buffer[1] << 8 | Buffer[0];
+
+		if (Len == 0)
+			return;
+
+		if (Len > 500 - TNC->RXLen)
+			Len = 500 - TNC->RXLen;
+		
+		memcpy(&TNC->RXBuffer[TNC->RXLen], &Buffer[2], Len);
+	}
+	else
+		Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
 
 	if (Len == 0)
 		return;
@@ -3982,6 +4162,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 
 		if(TNC->Retries)
 		{
+			Debugprintf("ARDOP TImeout - Retransmit PTC Block");
 			WriteCommBlock(TNC);	// Retransmit Block
 			return;
 		}
@@ -3990,7 +4171,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 
 		if (TNC->HostMode == 0)
 		{
-			DoTermModeTimeout(TNC);
+			ARDOPDoTermModeTimeout(TNC);
 			return;
 		}
 
@@ -4040,7 +4221,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 
 	if (!TNC->HostMode)
 	{
-		DoTNCReinit(TNC);
+		ARDOPDoTNCReinit(TNC);
 		return;
 	}
 

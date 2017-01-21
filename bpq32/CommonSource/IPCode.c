@@ -104,7 +104,7 @@ ShellExecute( NULL,
 #endif
 
 //#ifdef WIN32
-#include <pcap.h>
+#include "pcap.h"
 //#endif
 
 #ifndef LINBPQ
@@ -543,12 +543,13 @@ Dll BOOL APIENTRY Init_IP()
 
 #ifndef MACBPQ
 	{
-		pcap_if_t * ifs, * saveifs;
+		pcap_if_t * ifs = NULL, * saveifs;
 		char Line[80];
+		char ErrBuf[256];
 
 		// Find IP Addr of Adapter Interface
 		
-		pcap_findalldevsx(&ifs, "");	
+		pcap_findalldevsx(&ifs, ErrBuf);	
 
 		saveifs = ifs;		// Save for release
 

@@ -1145,7 +1145,7 @@ int main(int argc, char * argv[])
 
 				if (tm->tm_wday == 0)		// Sunday
 				{
-					if ((LastTrafficTime + 86400) < NOW)
+					if (GenerateTrafficReport && (LastTrafficTime + 86400) < NOW)
 					{
 						LastTrafficTime = NOW;
 						CreateBBSTrafficReport();

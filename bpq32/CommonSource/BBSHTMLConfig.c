@@ -893,6 +893,8 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	else
 	{
 		Vptr = strlop(HDest, '@');
+		if (strlen(HDest) > 6)
+			HDest[6] = 0;
 		strcpy(Msg->to, _strupr(HDest));
 	}
 
@@ -1572,7 +1574,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (ConfigTemplate)
 			free(ConfigTemplate);
 
-		ConfigTemplate = GetTemplateFromFile(6, "MainConfig.txt");
+		ConfigTemplate = GetTemplateFromFile(7, "MainConfig.txt");
 
 		SendConfigPage(Reply, RLen, Key);
 		return;
@@ -1827,7 +1829,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (HousekeepingTemplate)
 			free(HousekeepingTemplate);
 
-		HousekeepingTemplate = GetTemplateFromFile(1, "Housekeeping.txt");
+		HousekeepingTemplate = GetTemplateFromFile(2, "Housekeeping.txt");
 
 		SendHouseKeeping(Reply, RLen, Key);
 		return;
@@ -2283,6 +2285,7 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 		GetCheckBox(input, "Deltobin=", &DeletetoRecycleBin);
 		GetCheckBox(input, "SendND=", &SendNonDeliveryMsgs);
 		GetCheckBox(input, "NoMail=", &SuppressMaintEmail);
+		GetCheckBox(input, "GenTraffic=", &GenerateTrafficReport);
 		GetCheckBox(input, "OvUnsent=", &OverrideUnsent);
 
 		GetParam(input, "PR=", Temp);
@@ -2439,6 +2442,7 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 
 		GetParam(input, "ISPDomain=", MyDomain);
 		GetParam(input, "SMTPServer=", ISPSMTPName);
+		GetParam(input, "ISPEHLOName=", ISPEHLOName);
 			
 		GetParam(input, "ISPSMTPPort=", Temp);
 		ISPSMTPPort = atoi(Temp);
@@ -3182,7 +3186,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		AMPRDomain,
 		(SendAMPRDirect) ? CHKD  : UNC,
 		(ISP_Gateway_Enabled) ? CHKD  : UNC,
-		MyDomain, ISPSMTPName, ISPSMTPPort, ISPPOP3Name, ISPPOP3Port,
+		MyDomain, ISPSMTPName, ISPSMTPPort, ISPEHLOName, ISPPOP3Name, ISPPOP3Port,
 		ISPAccountName, ISPAccountPass, ISPPOP3Interval,
 		(SMTPAuthNeeded) ? CHKD  : UNC,
 		(SendWP) ? CHKD  : UNC,
@@ -3238,6 +3242,7 @@ VOID SendHouseKeeping(char * Reply, int * ReplyLen, char * Key)
 			(DeletetoRecycleBin) ? CHKD  : UNC,
 			(SendNonDeliveryMsgs) ? CHKD  : UNC,
 			(SuppressMaintEmail) ? CHKD  : UNC,
+			(GenerateTrafficReport) ? CHKD  : UNC,
 			PR, PUR, PF, PNF, BF, BNF, NTSD, NTSF, NTSU,
 			FromList, ToList, AtList,
 			(OverrideUnsent) ? CHKD  : UNC);

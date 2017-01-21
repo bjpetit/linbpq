@@ -33,6 +33,8 @@ struct ScanEntry
 	int Cmd2Len;
 	char * Cmd3;
 	int Cmd3Len;
+	char * Cmd4;
+	int Cmd4Len;
 	char * PollCmd;
 	int PollCmdLen;
 	char APPL[13];		// Autoconnect APPL for this Freq
@@ -174,8 +176,8 @@ struct RIGPORTINFO
 	struct ScanEntry ScanEntry;	
 	char Line2[10];
 	char Line3[10];
+	char Line4[10];
 };
-
 
 
 #define IOCTL_SERIAL_IS_COM_OPEN CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)

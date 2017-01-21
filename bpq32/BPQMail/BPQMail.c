@@ -925,12 +925,15 @@
 //	Kill B2 WP bulls if FilterWPBulls set
 //	Include Message Type in BPQ B2 proposal extensions
 
+//  67 ??
+
 //	Fix corruption of BBSNumber if RMS Ex User and BBS both checked
 //	Tread B messages without an AT as Flood.
 //	Make sure Message headers are always saved to disk when a message status changes
 //	Reject message instead of failing session if TO address too long in FBB forwarding
-//	FIx error when FBB restart data exactly fills a packet.
-
+//	Fix error when FBB restart data exactly fills a packet.
+//	Fix possible generation of meg number zero in send nondlivery notification 
+//	Fix problem with "Web Manage Messages" when stray message number zero appears
 
 #include "BPQMail.h"
 #define MAIL
@@ -1874,10 +1877,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				if (tm->tm_wday == 0)		// Sunday
 				{
-					if ((LastTrafficTime + 86400) < NOW)
+					if (GenerateTrafficReport && (LastTrafficTime + 86400) < NOW)
 					{
 						CreateBBSTrafficReport();
-						LastTrafficTime = NOW;
+						LastTrafficTime = NOW;	
 					}
 				}
 			}

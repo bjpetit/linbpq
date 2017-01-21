@@ -82,7 +82,7 @@ BOOL SendAMPRSMTP(CIRCUIT * conn);
 VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int MsgLen);
 VOID MCastTimer();
 VOID MCastConTimer(ConnectionInfo * conn);
-
+int FindFreeBBSNumber();
 
 config_t cfg;
 config_setting_t * group;
@@ -7581,7 +7581,7 @@ struct MsgInfo * FindMessageByNumber(int msgno)
 		if (Msg->number == msgno)
 			return Msg;
 
-		if (Msg->number < msgno)
+		if (Msg->number && Msg->number < msgno)		// sometimes get zero msg number
 			return NULL;			// Not found
 
 		m--;
@@ -7833,6 +7833,7 @@ VOID SaveConfig(char * ConfigName)
 
 	SaveStringValue(group, "MyDomain", MyDomain);
 	SaveStringValue(group, "ISPSMTPName", ISPSMTPName);
+	SaveStringValue(group, "ISPEHLOName", ISPEHLOName);
 	SaveStringValue(group, "ISPPOP3Name", ISPPOP3Name);
 	SaveStringValue(group, "ISPAccountName", ISPAccountName);
 	SaveStringValue(group, "ISPAccountPass", EncryptedISPAccountPass);
@@ -7991,6 +7992,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "MaintSaveReg", SaveRegDuringMaint);
 	SaveIntValue(group, "OverrideUnsent", OverrideUnsent);
 	SaveIntValue(group, "SendNonDeliveryMsgs", SendNonDeliveryMsgs);
+	SaveIntValue(group, "GenerateTrafficReport", GenerateTrafficReport);
 
 	SaveOverride(group, "LTFROM", LTFROM);
 	SaveOverride(group, "LTTO", LTTO);
@@ -8371,7 +8373,8 @@ BOOL GetConfig(char * ConfigName)
 		 OverrideUnsent = GetIntValue(group, "OverrideUnsent");
 		 SendNonDeliveryMsgs = GetIntValue(group, "SendNonDeliveryMsgs");
 		 OverrideUnsent = GetIntValue(group, "OverrideUnsent");
-	
+		 GenerateTrafficReport = GetIntValueWithDefault(group, "GenerateTrafficReport", 1);
+
 		 LTFROM = GetOverrides(group,  "LTFROM");
 		 LTTO = GetOverrides(group,  "LTTO");
 		 LTAT = GetOverrides(group,  "LTAT");

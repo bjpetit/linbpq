@@ -56,6 +56,8 @@ BOOL ISP_Gateway_Enabled;
 char MyDomain[50];			// Mail domain for BBS<>Internet Mapping
 
 char ISPSMTPName[50];
+char ISPEHLOName[50] = "";
+
 int ISPSMTPPort;
 
 char ISPPOP3Name[50];
@@ -2827,8 +2829,14 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (sockptr->AMPR)
 				sockprintf(sockptr, "EHLO %s", AMPRDomain);
 			else
-				sockprintf(sockptr, "EHLO %s", BBSName);
+				if (ISPEHLOName[0])
+					sockprintf(sockptr, "EHLO %s", ISPEHLOName);
+				else
+					sockprintf(sockptr, "EHLO %s", BBSName);
+			
 			sockptr->State = WaitingForHELOResponse;
+
+
 		}
 		else
 		{

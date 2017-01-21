@@ -657,7 +657,7 @@ typedef struct TNCINFO
 	int WinmorCurrentMode;
 	char ARDOPCurrentMode[6];
 	char ARDOPCommsMode;
-	char * ARDOPSerialPort;
+	char * ARDOPSerialPort;			// Have Bus/Device for I2C
 	int ARDOPSerialSpeed;
 	int SlowTimer;
 	int ARQPorts[32];				// For ARQ over KISS

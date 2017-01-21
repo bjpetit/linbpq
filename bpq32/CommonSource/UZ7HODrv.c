@@ -1284,8 +1284,7 @@ VOID ConnecttoUZ7HOThread(port)
 
 	}
 
-	if (TNC->WINMORSock)
-		closesocket(TNC->WINMORSock);
+	closesocket(TNC->WINMORSock);
 
 	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
 

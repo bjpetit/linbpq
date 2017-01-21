@@ -779,6 +779,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	ARDOP Changes for 0.8.0+
 //	Discard Terminal Keepalive message (two nulls) in ARDOP command hander
 //	Allow parameters to be passed to ARDOP TNC when starting it
+//	Fix Web update of Beacon params
+//	Retry connects to KISS ports after failure
+//	Add support for ARDOP Serial Interface Native mode.
+//	Fix gating APRS-IS Messages to RF
+//	Fix Beacons when PORTNUM used
+//	Make sure old monitor flag is cleared for TermTCP sessions
+//	Add CI-V antenna control for IC746
+//	Don't allow ARDOP beacons when connected
 
 #define CKernel
 

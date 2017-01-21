@@ -58,6 +58,7 @@ char *fcvt(double number, int ndigits, int *decpt, int *sign);
 #endif
 #include "bpq32.h"
 
+
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 extern char * RigConfigMsg[35];
 
@@ -320,7 +321,7 @@ int Rig_Command(int Session, char * Command)
 	char FreqString[80]="", FilterString[80]="", Mode[80]="", Data[80] = "";
 	UINT * buffptr;
 	UCHAR * Poll;
-	char * 	Valchar ;
+	char * Valchar;
 	int dec, sign;
 	struct RIGPORTINFO * PORT;
 	int i, p;
@@ -488,6 +489,7 @@ portok:
 	Freq = Freq * 1000000.0;
 
 	Valchar = _fcvt(Freq, 0, &dec, &sign);
+//	_gcvt(Freq, 0, Valchar);
 
 	if (dec == 9)	// 10-100
 		sprintf(FreqString, "%s", Valchar);
@@ -526,10 +528,14 @@ portok:
 		Antenna = '1';
 	else if (strstr(Data, "A2"))
 		Antenna = '2';
-	if (strstr(Data, "A3"))
+	else if (strstr(Data, "A3"))
 		Antenna = '3';
 	else if (strstr(Data, "A4"))
 		Antenna = '4';
+	else if (strstr(Data, "A5"))
+		Antenna = '5';
+	else if (strstr(Data, "A6"))
+		Antenna = '6';
 
 	switch (PORT->PortType)
 	{ 
@@ -730,6 +736,37 @@ portok:
 						
 					*(CmdPtr++) = 0xFD;
 				}
+			}
+			
+			if (Antenna == '5' || Antenna == '6')
+			{
+				// Antenna select for 746 and maybe others
+
+				// Could be going in cmd2 3 or 4
+
+				if (FreqPtr[0].Cmd2 == NULL)
+				{
+					CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[30];
+					FreqPtr[0].Cmd2Len = 7;
+				}
+				else if (FreqPtr[0].Cmd3 == NULL)
+				{
+					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
+					FreqPtr[0].Cmd3Len = 7;
+				}
+				else 
+				{
+					CmdPtr = FreqPtr->Cmd4 = (UCHAR *)&buffptr[50];
+					FreqPtr[0].Cmd4Len = 7;
+				}
+
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = RIG->RigAddr;
+				*(CmdPtr++) = 0xE0;
+				*(CmdPtr++) = 0x12;		// Set Antenna
+				*(CmdPtr++) = Antenna - '5';	// 0 for A5 1 for A6
+				*(CmdPtr++) = 0xFD;
 			}
 		}
 
@@ -1882,8 +1919,10 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 	}
 
 	// If Antenna Change needed, do it
+		
+	// 5 and 6 are used for CI-V switching so ignore here
 
-	if (ptr->Antenna)
+	if (ptr->Antenna && ptr->Antenna < '5')
 	{
 		SwitchAntenna(RIG, ptr->Antenna);
 	}
@@ -2073,6 +2112,7 @@ VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * Msg, int framelen)
 	UCHAR * Poll = PORT->TXBuffer;
 	struct RIGINFO * RIG;
 	int i;
+	int cmdSent = PORT->TXBuffer[4];
 
 	if (Msg[0] != 0xfe || Msg[1] != 0xfe)
 
@@ -2109,7 +2149,7 @@ ok:
 
 		// if it was the set freq, send the set mode
 
-		if (PORT->TXBuffer[4] == 5 || PORT->TXBuffer[4] == 7) // Freq or VFO
+		if (cmdSent == 5 || cmdSent == 7) // Freq or VFO
 		{
 			if (PORT->FreqPtr->Cmd2)
 			{
@@ -2130,7 +2170,7 @@ ok:
 			return;
 		}
 
-		if (PORT->TXBuffer[4] == 6)
+		if (cmdSent == 6)		// Set Mode
 		{
 			if (PORT->FreqPtr->Cmd3)
 			{
@@ -2144,20 +2184,32 @@ ok:
 			goto SetFinished;
 		}
 
-		if (PORT->TXBuffer[4] == 0x0f || PORT->TXBuffer[4] == 0x01a)	// Set DUP or Set Data
-			goto SetFinished;
-
-		if (PORT->TXBuffer[4] == 0x08)
+		if (cmdSent == 0x08)
 		{
 			// Memory Chan
 			
-			PORT->TXBuffer[4] = 0;			// So we only do it once
+			cmdSent = 0;			// So we only do it once
 
 			goto SetFinished;
 		}
 
-		if (PORT->TXBuffer[4] == 0x08 || PORT->TXBuffer[4] == 0x0f || PORT->TXBuffer[4] == 0x01a)	// Set DUP or Set Data
+		if (cmdSent == 0x12)
+			goto SetFinished;		// Antenna always sent last
+
+
+		if (cmdSent == 0x0f || cmdSent == 0x01a)	// Set DUP or Data
 		{
+			// These are send from cmd3. There may be a cmd4
+			// for antenna switching
+
+			if (PORT->FreqPtr->Cmd4)
+			{
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd4, PORT->FreqPtr->Cmd4Len);
+				PORT->TXLen = PORT->FreqPtr->Cmd4Len;
+				RigWriteCommBlock(PORT);
+				PORT->Retries = 2;
+				return;
+			}
 
 SetFinished:
 
@@ -2201,14 +2253,17 @@ SetFinished:
 
 		if (!PORT->AutoPoll)
 		{
-			if (PORT->TXBuffer[4] == 5)
+			if (cmdSent == 5)
 				SendResponse(RIG->Session, "Sorry - Set Frequency Command Rejected");
 			else
-			if (PORT->TXBuffer[4] == 6)
+			if (cmdSent == 6)
 				SendResponse(RIG->Session, "Sorry - Set Mode Command Rejected");
 			else
-			if (PORT->TXBuffer[4] == 0x0f)
+			if (cmdSent == 0x0f)
 				SendResponse(RIG->Session, "Sorry - Set Shift Command Rejected");
+			else
+			if (cmdSent == 0x12)
+				SendResponse(RIG->Session, "Sorry - Set Antenna Command Rejected");
 		}
 		return;
 	}
@@ -3924,13 +3979,17 @@ CheckScan:
 					Supress = 1;
 
 				if (strstr(&Modeptr[1], "A1"))
-						Antenna = '1';
+					Antenna = '1';
 				else if (strstr(&Modeptr[1], "A2"))
 					Antenna = '2';
-				if (strstr(&Modeptr[1], "A3"))
+				else if (strstr(&Modeptr[1], "A3"))
 					Antenna = '3';
 				else if (strstr(&Modeptr[1], "A4"))
 					Antenna = '4';
+				else if (strstr(&Modeptr[1], "A5"))
+					Antenna = '5';
+				else if (strstr(&Modeptr[1], "A6"))
+					Antenna = '6';
 				}
 			}
 			
@@ -4090,6 +4149,8 @@ CheckScan:
 
 
 		Valchar = _fcvt(Freq, 0, &dec, &sign);
+//		_gcvt(Freq, 0, Valchar);
+
 
 		if (dec == 9)	// 10-100
 			sprintf(FreqString, "%s", Valchar);
@@ -4298,8 +4359,40 @@ CheckScan:
 						}
 					}
 				}
+
+				if (Antenna == '5' || Antenna == '6')
+				{
+					// Antenna select for 746 and maybe others
+
+					// Could be going in cmd2 3 or 4
+
+					if (FreqPtr[0]->Cmd2 == NULL)
+					{
+						CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+						FreqPtr[0]->Cmd2Len = 7;
+					}
+					else if (FreqPtr[0]->Cmd3 == NULL)
+					{
+						CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+						FreqPtr[0]->Cmd3Len = 7;
+					}
+					else 
+					{
+						CmdPtr = FreqPtr[0]->Cmd4 = malloc(10);
+						FreqPtr[0]->Cmd4Len = 7;
+					}
+
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = RIG->RigAddr;
+					*(CmdPtr++) = 0xE0;
+					*(CmdPtr++) = 0x12;		// Set Antenna
+					*(CmdPtr++) = Antenna - '5';	// 0 for A5 1 for A6
+					*(CmdPtr++) = 0xFD;
+				}
 			}
 		}
+
 		else if	(PORT->PortType == YAESU)
 		{	
 			//Send Mode first - changing mode can change freq

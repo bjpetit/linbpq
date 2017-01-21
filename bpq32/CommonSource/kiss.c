@@ -26,11 +26,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
-#ifdef MACBPQ
-#define NOI2C
-#endif
-
-
 #ifndef WIN32
 
 #include <stdio.h>
@@ -49,6 +44,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 //#include <netax25/ttyutils.h>
 //#include <netax25/daemon.h>
+
+#ifdef MACBPQ
+#define NOI2C
+#endif
 
 #ifdef NOI2C
 int i2c_smbus_write_byte()
@@ -450,8 +449,8 @@ HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port)
 	
 	npKISSINFO->idComDev = ComDev;
 
-	if (ComDev == NULL)
-		return NULL;
+	if (ComDev == 0)
+		return 0;
 
 	if (PortVector->KISSFLAGS & PITNC)
 	{
@@ -484,9 +483,9 @@ int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength )
 	BOOL Error;
 	int ret;
 	
-	if (npKISSINFO->idComDev == 0)
+	if (npKISSINFO->idComDev == 0 && npKISSINFO->Portvector->PortStopped == FALSE)
 	{
-		// Try to reopen port every 15 secs
+		// Try to reopen port every 30 secs
 
 		npKISSINFO->ReopenTimer++;
 

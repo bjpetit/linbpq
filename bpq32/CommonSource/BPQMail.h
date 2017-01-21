@@ -1405,6 +1405,7 @@ extern BOOL ISP_Gateway_Enabled;
 extern char MyDomain[];			// Mail domain for BBS<>Internet Mapping
 
 extern char ISPSMTPName[];
+extern char ISPEHLOName[];
 extern int ISPSMTPPort;
 
 extern char ISPPOP3Name[];
@@ -1430,6 +1431,7 @@ extern BOOL SaveRegDuringMaint;
 extern BOOL SendWP;
 extern BOOL OverrideUnsent;
 extern BOOL SendNonDeliveryMsgs;
+extern BOOL GenerateTrafficReport;
 
 extern int PR;
 extern int PUR;

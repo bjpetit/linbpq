@@ -1818,6 +1818,8 @@ doHeader:
 			int retCode, disp;
 			char Key[80];
 			HKEY hKey;
+			struct PORTCONTROL * PORT;
+			int Slot = 0;
 
 
 			if (LOCAL == FALSE && COOKIE == FALSE)
@@ -1847,10 +1849,14 @@ doHeader:
 
 			GetParam(input, "Port", &Param);
 			Port = atoi(&Param[1]);
+			PORT = GetPortTableEntryFromPortNum(Port); // Need slot not number
+			if (PORT)
+				Slot = PORT->PortSlot;
+
 			GetParam(input, "Every", &Param);
-			Interval[Port] = atoi(&Param[1]);
+			Interval[Slot] = atoi(&Param[1]);
 
-
+ 
 //extern char * UIUIDigi[33];
 //extern char UIUIDEST[33][11];		// Dest for Beacons
 //extern UCHAR FN[33][256];			// Filename
@@ -1859,26 +1865,26 @@ doHeader:
 
 
 			GetParam(input, "Dest", &Param);
-			strcpy(UIUIDEST[Port], &Param[1]);
+			strcpy(UIUIDEST[Slot], &Param[1]);
 
 			GetParam(input, "Path", &Param);
-			if (UIUIDigi[Port])
-				free(UIUIDigi[Port]);
-			UIUIDigi[Port] = _strdup(&Param[1]);
+			if (UIUIDigi[Slot])
+				free(UIUIDigi[Slot]);
+			UIUIDigi[Slot] = _strdup(&Param[1]);
 
 			GetParam(input, "File", &Param);
-			strcpy(FN[Port], &Param[1]);
+			strcpy(FN[Slot], &Param[1]);
 			GetParam(input, "Text", &Param);
-			strcpy(Message[Port], &Param[1]);
+			strcpy(Message[Slot], &Param[1]);
 		
-			MinCounter[Port] = Interval[Port];
+			MinCounter[Slot] = Interval[Slot];
 
-			SendFromFile[Port] = 0;
+			SendFromFile[Slot] = 0;
 			
-			if (FN[Port][0])
-				SendFromFile[Port] = 1;
+			if (FN[Slot][0])
+				SendFromFile[Slot] = 1;
 
-			SetupUI(Port);
+			SetupUI(Slot);
 
 #ifdef LINBPQ
 			SaveUIConfig();
@@ -1902,12 +1908,12 @@ doHeader:
 			}
 #endif
 			if (strstr(input, "Test=Test"))
-				SendUIBeacon(Port);
+				SendUIBeacon(Slot);
 
 		
 			ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, Port,		
-				Interval[Port], &UIUIDEST[Port][0], &UIUIDigi[Port][0], &FN[Port][0], &Message[Port][0], Port);
+				Interval[Slot], &UIUIDEST[Slot][0], &UIUIDigi[Slot][0], &FN[Slot][0], &Message[Slot][0], Port);
 			
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 			send(sock, Header, HeaderLen, 0);
@@ -2120,9 +2126,16 @@ doHeader:
 	{
 		char * PortChar = strtok_s(NULL, "&", &Context);
 		int PortNo = atoi(PortChar);
+		struct PORTCONTROL * PORT;
+		int PortSlot = 0;
+
+		PORT = GetPortTableEntryFromPortNum(PortNo); // Need slot not number
+		if (PORT)
+			PortSlot = PORT->PortSlot;
+
 
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, PortNo,
-			Interval[PortNo], &UIUIDEST[PortNo][0], &UIUIDigi[PortNo][0], &FN[PortNo][0], &Message[PortNo][0], PortNo);
+			Interval[PortSlot], &UIUIDEST[PortSlot][0], &UIUIDigi[PortSlot][0], &FN[PortSlot][0], &Message[PortSlot][0], PortNo);
 	}
 
 

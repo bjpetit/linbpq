@@ -640,6 +640,8 @@ typedef struct PORTCONTROL
 
 	FARPROCY UIHook;			// Used for KISSARQ
 	struct PORTCONTROL * HookPort;
+	BOOL PortStopped;			// STOPPORT command used
+	int PortSlot;				// Index in Port Table
 
 }	PORTCONTROLX, *PPORTCONTROL;
 

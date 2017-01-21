@@ -29,6 +29,7 @@ int LogAge = 7;
 
 BOOL DeletetoRecycleBin = FALSE;
 BOOL SuppressMaintEmail = FALSE;
+BOOL GenerateTrafficReport = TRUE;
 BOOL SaveRegDuringMaint = FALSE;
 BOOL OverrideUnsent = FALSE;
 BOOL SendNonDeliveryMsgs = TRUE;
@@ -876,7 +877,7 @@ int DeleteLogFiles()
 
 VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 {
-	struct MsgInfo * Msg = AllocateMsgRecord();
+	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
 	char MailBuffer[1000];
 	char MsgFile[MAX_PATH];
@@ -915,6 +916,7 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 			sprintf(From, "%s@%s", OldMsg->from, WP->first_homebbs);
 	}
 
+	Msg = AllocateMsgRecord();
 	GetSemaphore(&MsgNoSemaphore, 0);
 	Msg->number = ++LatestMsg;
 	MsgnotoMsg[Msg->number] = Msg;

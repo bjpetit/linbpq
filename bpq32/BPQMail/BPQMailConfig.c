@@ -500,6 +500,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDC_MyMailDomain, MyDomain);
 
 		SetDlgItemText(pHdr->hwndDisplay, IDC_ISPSMTPName, ISPSMTPName);
+		SetDlgItemText(pHdr->hwndDisplay, SMTP_EHELO, ISPEHLOName);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_ISPSMTPPort, ISPSMTPPort, FALSE);
 
 		SetDlgItemText(pHdr->hwndDisplay, IDC_ISPPOP3Name, ISPPOP3Name);
@@ -539,6 +540,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTSAVEREG, SaveRegDuringMaint);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_OVERRIDEUNSENT, OverrideUnsent);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTNONDELIVERY , SendNonDeliveryMsgs);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTTRAFFIC, GenerateTrafficReport);
 
 		if (LTFROM)
 		{
@@ -1554,6 +1556,8 @@ VOID SaveISPConfig()
 
 	GetDlgItemText(hwndDisplay, IDC_ISPSMTPName, ISPSMTPName, 50);
 	ISPSMTPPort = GetDlgItemInt(hwndDisplay, IDC_ISPSMTPPort, &OK2, FALSE);
+
+	GetDlgItemText(hwndDisplay, SMTP_EHELO, ISPEHLOName, 50);
 
 	GetDlgItemText(hwndDisplay, IDC_ISPPOP3Name, ISPPOP3Name, 50);
 	ISPPOP3Port = GetDlgItemInt(hwndDisplay, IDC_ISPPOP3Port, &OK3, FALSE);

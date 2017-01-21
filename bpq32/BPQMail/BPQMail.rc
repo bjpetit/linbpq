@@ -320,7 +320,7 @@ BEGIN
                     WS_GROUP,149,179,34,14
 END
 
-ISP_CONFIG DIALOG DISCARDABLE  26, 5, 381, 266
+ISP_CONFIG DIALOG DISCARDABLE  26, 5, 381, 284
 STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
@@ -330,7 +330,7 @@ BEGIN
                     1,10,34,349,25
     LTEXT           "POP3 Server",-1,10,146,61,13
     LTEXT           "ISP Account Name",-1,10,163,63,13
-    EDITTEXT        3002,95,127,148,15
+    EDITTEXT        IDC_ISPSMTPName,95,127,148,15
     EDITTEXT        3004,95,144,147,15
     EDITTEXT        3006,95,161,147,15
     LTEXT           "Port",-1,250,147,18,13
@@ -339,19 +339,21 @@ BEGIN
     EDITTEXT        3003,275,127,29,15
     LTEXT           "This page configures the BBS <> Internet Mail Gateway. The Gateway allows local users to send messages to Internet email addresses, and get replies from those messages",
                     -1,10,10,353,20
-    LTEXT           "My Domain",-1,10,112,51,7
+    LTEXT           "My Domain",-1,10,112,51,8
     LTEXT           "ISP Account Password",-1,10,180,80,13
     EDITTEXT        3007,95,178,147,15,ES_PASSWORD
-    LTEXT           "POP3 Poll Interval (Seconds)",-1,10,199,80,18
-    EDITTEXT        3008,95,202,29,12
+    LTEXT           "POP3 Poll Interval (Seconds)",-1,10,216,80,18
+    EDITTEXT        3008,95,219,29,12
     LTEXT           "WARNING This feature my be illegal in some administrations. Make sure your authorities permit forwarding mail from the Amateur Service before enabling it",
                     -1,10,64,348,15
     CONTROL         "Enable Internet Gateway",3000,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | BS_LEFT | WS_TABSTOP,10,90,90,15
-    DEFPUSHBUTTON   "Save",3100,165,241,57,17,BS_CENTER | BS_VCENTER
+    DEFPUSHBUTTON   "Save",3100,165,261,57,17,BS_CENTER | BS_VCENTER
     CONTROL         "SMTP Server Requires Authentication",ISP_SMTP_AUTH,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_LEFT | 
                     BS_MULTILINE | WS_TABSTOP,250,159,69,32
+    EDITTEXT        SMTP_EHELO,95,196,100,15
+    LTEXT           "SMTP ""EHELO"" Domain",-1,10,198,80,8
 END
 
 IDD_FORWARDING DIALOGEX 20, 20, 444, 301
@@ -1028,9 +1030,9 @@ BEGIN
     CONTROL         "Supress Mailing of Housekeeping Results",
                     IDC_MAINTNOMAIL,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
                     BS_MULTILINE | WS_TABSTOP,5,161,115,20
-    CONTROL         "Save Registry",IDC_MAINTSAVEREG,"Button",
+    CONTROL         "Generate Traffic Report",IDC_MAINTTRAFFIC,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,5,186,115,10
+                    WS_TABSTOP,5,183,115,10
     CONTROL         "Send Non-delivery Notifications for P and T messages",
                     IDC_MAINTNONDELIVERY,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,141,115,20
@@ -1050,6 +1052,9 @@ BEGIN
     LTEXT           "Delivered",IDC_STATIC,264,94,49,10
     EDITTEXT        IDM_NTSD,324,94,20,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
+    CONTROL         "Save Registry",IDC_MAINTSAVEREG2,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
+                    WS_TABSTOP,5,201,115,10
 END
 
 FILTERS DIALOG DISCARDABLE  26, 5, 382, 287
@@ -1108,6 +1113,11 @@ END
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO MOVEABLE PURE 
 BEGIN
+    102, DIALOG
+    BEGIN
+        TOPMARGIN, 47
+    END
+
     "BBS_CONFIG", DIALOG
     BEGIN
         BOTTOMMARGIN, 276

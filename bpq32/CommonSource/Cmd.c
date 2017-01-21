@@ -4894,6 +4894,7 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 					}
 
 					CloseKISSPort(PORT); 
+					PORT->PortStopped = TRUE;
 					Bufferptr += sprintf(Bufferptr, "Port Closed\r");
 					SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 
@@ -4957,7 +4958,9 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 						Bufferptr += sprintf(Bufferptr, "Port Opened\r");
 					else
 						Bufferptr += sprintf(Bufferptr, "Port Open Failed\r");
-						
+
+					PORT->PortStopped = FALSE;
+	
 					SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 					return;
 				}

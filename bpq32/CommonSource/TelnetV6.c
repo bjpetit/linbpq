@@ -3991,6 +3991,7 @@ MsgLoop:
 				{
 					send(sock, "Connected to TelnetServer\r", 26, 0);
 					sockptr->BPQTermMode = TRUE;
+					sockptr->MMASK = 0;				// Make sure defaults to off
 					sockptr->InputLen -= 11;
 
 					if (sockptr->InputLen)
@@ -4679,7 +4680,7 @@ resok:
 	{
 		if (TCP->CMSName[i])
 			free(TCP->CMSName[i]);
-		   		
+		   				
 		remoteHost = gethostbyaddr((char *) &TCP->CMSAddr[i], 4, AF_INET);
 
 		if (remoteHost == NULL)
@@ -4704,9 +4705,9 @@ resok:
 	
 		   for (pAlias = remoteHost->h_aliases; *pAlias != 0; pAlias++)
 		   {
-			   Debugprintf("\tAlternate name #%d: %s\n", ++i, *pAlias);
+			   Debugprintf("\tAlternate name #%d: %s\n", i, *pAlias);
 		   }
-	   }
+		}
 		i++;
 	}
 
@@ -5044,7 +5045,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	{
 		err=WSAGetLastError();
 
-		if (err == 10035 || err == 115 || err == 36)		//EWOULDBLOCK
+		if (err == 10035 || err == 115 || err == 36 || err == 150)		//EWOULDBLOCK
 		{
 			//	Connect in Progress
 
@@ -5062,7 +5063,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 				// Try Next
 
 				TCP->CMSFailed[sockptr->CMSIndex] = TRUE;
-
+				Debugprintf("Connect Failed %d, trying next", err);
 				CMSConnect(TNC, TNC->TCPInfo, &TNC->Streams[Stream], Stream);
 				return 0;
 			}

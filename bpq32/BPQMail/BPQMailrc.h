@@ -77,9 +77,11 @@
 #define IDC_WPVIA                       1020
 #define IDC_MSGTITLE                    1021
 #define IDC_MAINTSAVEREG                1021
+#define IDC_MAINTTRAFFIC                1021
 #define IDC_MSGBID                      1022
 #define IDC_MAINTNONDELIVERY            1022
 #define IDSEND                          1023
+#define IDC_MAINTSAVEREG2               1023
 #define IDCANCELMSG                     1024
 #define BPQBASE                         1024
 #define IDC_ATTACHMENTS                 1024
@@ -175,6 +177,7 @@
 #define IDC_ISPAccountPass              3007
 #define IDC_POP3Timer                   3008
 #define ISP_SMTP_AUTH                   3009
+#define SMTP_EHELO                      3010
 #define IDC_ISPSAVE                     3100
 #define IDC_FWDENABLE                   4000
 #define IDC_BBS                         4001

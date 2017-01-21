@@ -1899,6 +1899,9 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 	if (conn->WEB_COMMSSTATE == NULL)
 		conn->WEB_COMMSSTATE = zalloc(100);
 
+	if (Port == NULL)
+		return (FALSE);
+
 	if (_memicmp(Port, "COM", 3) == 0)
 	{
 		PortNum = atoi(&Port[3]);
@@ -2215,6 +2218,11 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
    if (s->user_speed == -1)
    {
+	   int i = 0;
+	   int j = 1;
+
+	   j = j/i;
+
 	   fprintf(stderr, "tty_speed: invalid speed %d\n", speed);
 	   return FALSE;
    }
@@ -2271,9 +2279,9 @@ int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
 	{
 		if (errno != 11 && errno != 35)					// Would Block
 		{
-			perror("read");
-			printf("Handle %d Errno %d Len %d\n", fd, errno, Length);
-			*Error = 1;
+//			perror("read");
+//			printf("Handle %d Errno %d Len %d\n", fd, errno, Length);
+			*Error = errno;
 		}
 		return 0;
 	}

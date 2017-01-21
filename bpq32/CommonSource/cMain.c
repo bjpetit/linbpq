@@ -561,6 +561,7 @@ BOOL Start()
 	struct ROUTE * ROUTE;
 	struct DEST_LIST * DEST;
 	CMDX * CMD;
+	int PortSlot = 1;
 
 	unsigned char * ptr2, * ptr3, * ptr4;
 	USHORT * CWPTR;
@@ -785,6 +786,7 @@ BOOL Start()
 		PORT->PORTPOINTER = (struct PORTCONTROL *)NEXTPORT;
 
 		PORT->PORTNUMBER = (UCHAR)PortRec->PORTNUM;
+		PORT->PortSlot = PortSlot++;
 		memcpy(PORT->PORTDESCRIPTION, PortRec->ID, 30);
 
 		PORT->PORTTYPE = (char)PortRec->TYPE;
