@@ -21,17 +21,18 @@
 
 #include "serial1.c"
 
+extern "C" void SaveEEPROM(int Reg, unsigned char Val);
+extern "C" void SetPot(int address, int value);
+extern "C" unsigned int GetPot(int i);
+
 // i2c support
 
-#ifdef i2cSlaveSupport
+#if defined I2CHOST || defined I2CKISS || defined I2CMONITOR
 
 #include <i2c_t3.h>
 
 void receiveEvent(size_t count);
 void requestEvent(void);
-extern "C" void SaveEEPROM(int Reg, unsigned char Val);
-extern "C" void SetPot(int address, int value);
-extern "C" unsigned int GetPot(int i);
 
 #define MEM_LEN 512
 uint8_t databuf[MEM_LEN];
@@ -63,12 +64,10 @@ int i2cMsgPtr = 0;
 
 #ifdef I2CHOST
 
-unsigned char i2creply[512] = {0, 0};
+unsigned char i2creply[512] = {0xaa, 0};
 
-volatile int i2creplyptr = 2;
+volatile int i2creplyptr = 3;
 volatile int i2creplylen = 0;
-
-
 
 #else
 
@@ -78,7 +77,7 @@ unsigned char i2cidle[2] = {15};
 volatile int i2creplyptr = 0;
 volatile int i2creplylen = 14;
 
-
+// This is only called if I2CKISS is enabled
 void i2cloop()
 {
   // print received data - this is done in main loop to keep time spent in I2C ISR to minimum
@@ -196,17 +195,15 @@ void receiveEvent(size_t count)
 //
 
 void requestEvent(void)
-{
-  // PI interface works a byte at a time
+{  
 #ifdef I2CHOST
-
-  i2creply[0] = i2creplylen;
-  i2creply[1] = i2creplylen >> 8;		// First two bytes are length
-
-  Wire.write(i2creply, i2creplylen + 2);
+  i2creply[1] = i2creplylen;
+  i2creply[2] = i2creplylen >> 8;		// First two bytes are length
+  Wire.write(i2creply, i2creplylen + 3);
   i2creplylen = 0;
-  i2creplyptr = 2;
+  i2creplyptr = 3;
 #else
+// TNC-PI interface works a byte at a time
 
   if (i2creplylen == 0)			// nothing to send
     Wire.write(i2cidle, 0); // return idle
@@ -239,8 +236,8 @@ extern "C"
   void PutString(const char * Msg)
   {
 #ifdef I2CHOST
-    memcpy(&i2creply[2], Msg, strlen(Msg));
-    i2creplyptr = 2;
+    memcpy(&i2creply[3], Msg, strlen(Msg));
+    i2creplyptr = 3;
     i2creplylen = strlen(Msg);
 #else
     HOSTPORT.write((const uint8_t *)Msg, strlen(Msg));
@@ -261,8 +258,8 @@ extern "C"
   void SerialSendData(const uint8_t * Msg, int Len)
   {
 #ifdef I2CHOST
-    memcpy(&i2creply[2], Msg, Len);
-    i2creplyptr = 2;
+    memcpy(&i2creply[3], Msg, Len);
+    i2creplyptr = 3;
     i2creplylen = Len;
 #else
     HOSTPORT.write(Msg, Len);

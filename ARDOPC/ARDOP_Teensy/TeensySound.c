@@ -187,6 +187,11 @@ void PollReceivedSamples()
       levelticks = Now;
       WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
       displayLevel(maxlevel);
+
+      // Adjust VRef
+
+      VRef += tot / Samples;
+      
       Samples = tot = 0;
 
       if (RXLevel == 0)				// Automatic level
@@ -200,7 +205,6 @@ void PollReceivedSamples()
 void StopCapture()
 {
   Capturing = FALSE;
-  //	printf("Stop Capture\n");
 }
 
 void StartCodec(char * strFault)
@@ -219,8 +223,6 @@ void StartCapture()
   DiscardOldSamples();
   ClearAllMixedSamples();
   State = SearchingForLeader;
-
-  //	printf("Start Capture\n");
 }
 void CloseSound()
 {
@@ -272,7 +274,7 @@ void SoundFlush()
   while (GetDMAPointer() < FlushEnd)
     txSleep(1);
 
-  printtick("mid flush");
+ // printtick("mid flush");
 
   // Wait for this (partial) half to complete
 

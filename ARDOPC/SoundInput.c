@@ -2870,8 +2870,9 @@ BOOL Demod1Car16FSK()
 		SymbolsLeft--;			// number still to decode
 		Start += intSampPerSym * 2;	// 2 FSK nibbles 
 		intFilteredMixedSamplesLength -= intSampPerSym * 2;
-	if (intFilteredMixedSamplesLength < 0)
-		WriteDebugLog(LOGERROR, "Corrupt intFilteredMixedSamplesLength");
+
+		if (intFilteredMixedSamplesLength < 0)
+			WriteDebugLog(LOGERROR, "Corrupt intFilteredMixedSamplesLength");
 
 		if (SymbolsLeft <= 0)	
 		{	

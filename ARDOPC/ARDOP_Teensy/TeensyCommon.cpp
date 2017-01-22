@@ -86,7 +86,7 @@ void CommonSetup()
   CAT4016(0);				// All off
 #endif
 
-#ifdef i2cSlaveSupport
+#if defined I2CHOST || defined I2CKISS || defined I2CMONITOR
   i2csetup();
 #endif
 
