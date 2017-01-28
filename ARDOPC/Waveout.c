@@ -47,7 +47,16 @@ char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
 
 int PTTMode = PTTRTS;				// PTT Control Flags.
 
+#ifdef LOGTOHOST
 
+// Log output sent to host instead of File
+
+#define LOGBUFFERSIZE 2048
+
+char LogToHostBuffer[LOGBUFFERSIZE];
+int LogToHostBufferLen;
+
+#endif
 
 // Windows works with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
@@ -445,8 +454,15 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 
 	
 	va_start(arglist, format);
+#ifdef LOGTOHOST
+	vsprintf(&Mess[1], format, arglist);
+	strcat(Mess, "\r\n");
+	Mess[0] = LogLevel + '0';
+	SendLogToHost(Mess);
+#else
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
+
 
 	if (LogLevel <= ConsoleLogLevel)
 		printf(Mess);
@@ -472,6 +488,8 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 	fputs(timebuf, logfile);
 
 	fputs(Mess, logfile);
+#endif
+
 	return;
 }
 

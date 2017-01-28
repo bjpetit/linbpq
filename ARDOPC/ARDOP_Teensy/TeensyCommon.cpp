@@ -103,14 +103,14 @@ void CommonSetup()
   setupTFT();
 #endif
 
-// Set intial TX and RX Levels
+  // Set intial TX and RX Levels
 
   if (RXLevel)			// Zero means auto set level
     AdjustRXLevel(RXLevel);
   else
     AdjustRXLevel(autoRXLevel);
 
-   AdjustTXLevel(TXLevel);
+  AdjustTXLevel(TXLevel);
 }
 
 // Code to access Digital Pots (used for setting input and output levels)
@@ -132,14 +132,14 @@ extern "C"
       //     SetPot(2, Pot);
     }
   }
-  
+
   void AdjustTXLevel(int Level)
   {
     int Pot = (Level * 256) / 3000;
 
     WriteDebugLog(LOGINFO, "Adjusting TX Level %d mV Pot %d", Level, Pot);
 
-    SetPot(1, Pot);		// Write to live 
+    SetPot(1, Pot);		// Write to live
   }
 #ifdef SPIPOTS
 
@@ -555,7 +555,7 @@ extern "C" void CheckandAdjustRXLevel(int maxlevel, int minlevel, bool Force)
   int pktopk = (maxlevel - minlevel) * 3300 / 65536;
 
   if (!OKtoAdjustLevel() && !Force)			// Protocol specific test
-    return;
+	  return;
 
   // Try adjusting pot to get about 2000 mV
 

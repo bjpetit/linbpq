@@ -678,6 +678,8 @@ void ProcessCommandFromHost(char * strCMD)
 		else
 			sprintf(cmdReply, "FASTSTART now FALSE");
 
+		SendReplyToHost(cmdReply);
+
 		goto cmddone;
 	}
 
@@ -783,6 +785,8 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(cmdReply, "FSKONLY now TRUE");
 		else
 			sprintf(cmdReply, "FSKONLY now FALSE");
+
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -875,7 +879,8 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(cmdReply, "LISTEN now TRUE");
 		else
 			sprintf(cmdReply, "LISTEN now FALSE");
-
+		
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 
@@ -906,6 +911,8 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(cmdReply, "MONITOR now TRUE");
 		else
 			sprintf(cmdReply, "MONITOR now FALSE");
+		
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
    
@@ -1528,6 +1535,7 @@ void ProcessCommandFromHost(char * strCMD)
 		else
 			sprintf(cmdReply, "USE600MODES now FALSE");
 
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 

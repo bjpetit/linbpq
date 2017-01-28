@@ -24,6 +24,7 @@
 extern "C" void SaveEEPROM(int Reg, unsigned char Val);
 extern "C" void SetPot(int address, int value);
 extern "C" unsigned int GetPot(int i);
+extern "C" void SendLogToHost(char * Msg);
 
 // i2c support
 
@@ -195,7 +196,7 @@ void receiveEvent(size_t count)
 //
 
 void requestEvent(void)
-{  
+{
 #ifdef I2CHOST
   i2creply[1] = i2creplylen;
   i2creply[2] = i2creplylen >> 8;		// First two bytes are length
@@ -203,7 +204,7 @@ void requestEvent(void)
   i2creplylen = 0;
   i2creplyptr = 3;
 #else
-// TNC-PI interface works a byte at a time
+  // TNC-PI interface works a byte at a time
 
   if (i2creplylen == 0)			// nothing to send
     Wire.write(i2cidle, 0); // return idle
@@ -272,15 +273,22 @@ extern "C"
     va_list(arglist);
 
     va_start(arglist, format);
-    vsprintf(Mess, format, arglist);
-    //	Serial1Print(Mess);
-    MONPORT.println(Mess);
+//#ifdef LOGTOHOST
+       vsprintf(&Mess[1], format, arglist);
+        strcat(&Mess[1], "\r\n");
+       Mess[0] = Level + '0';
+       SendLogToHost(Mess);
+//#else
+ //   vsprintf(Mess, format, arglist);
+ //   MONPORT.println(Mess);
+//#endif
     return;
   }
   void WriteExceptionLog(const char * format, ...)
   {
     char Mess[10000];
     va_list(arglist);
+
 
     va_start(arglist, format);
     vsprintf(Mess, format, arglist);
@@ -297,6 +305,35 @@ extern "C"
   void CloseStatsLog()
   {
   }
+
+// #ifdef LOGTOHOST
+
+ #define LOGBUFFERSIZE 2048
+
+extern char LogToHostBuffer[LOGBUFFERSIZE];
+extern int LogToHostBufferLen;
+
+void SendLogToHost(char * Cmd)
+{
+// I think we need log in text mode
+//	if (HostMode & !PTCMode)	// ARDOP Native
+
+//	if (!PTCMode)	// ARDOP Native
+	{
+		char * ptr = &LogToHostBuffer[LogToHostBufferLen];
+		int len = strlen(Cmd);
+		
+		if (LogToHostBufferLen + len >= LOGBUFFERSIZE)
+			return;			// ignore if full
+
+		memcpy(ptr, Cmd, len);
+
+		LogToHostBufferLen += len;
+	}
+}
+
+//#endif
+ 
 }
 
 

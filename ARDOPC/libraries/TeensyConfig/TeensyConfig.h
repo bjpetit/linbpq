@@ -16,9 +16,9 @@
 
 // This file is for ARDOP
 
+
+#define ARDOP
 #define TEENSY
-
-
 #define PIBOARD
 
 #ifdef PIBOARD
@@ -27,6 +27,8 @@
 // May one day support Monitor over I2C
 
 // If we define I2CHOST we shoudn't define HOSTPORT
+
+//#define LOGTOHOST
 
 #define HOSTPORT Serial1
 #define MONPORT Serial1
@@ -61,8 +63,8 @@
 
 
 //#define HASPOTS
-//#define SPIPOTS
-#define I2CPOTADDR
+//#define I2CPOTS
+//#define I2CPOTADDR
 
 #define pttPin 6
 

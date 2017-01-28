@@ -29,6 +29,10 @@ extern "C" void StartDAC();
 extern "C" void StopDAC();
 void StartADC();
 
+extern "C" void SetPot(int address, unsigned int value);
+extern "C" unsigned int GetPot(int address);
+extern "C" void SetLED(int Pin, int State);
+
 // Arduino is a c++ environment so functions in ardop must be defined as "C"
 
 extern "C"

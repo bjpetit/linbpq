@@ -8,7 +8,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.0.3-BPQ"
+#define ProductVersion "0.9.0.4-BPQ"
 
 //	Sound interface buffer size
 
@@ -103,9 +103,15 @@ typedef unsigned char UCHAR;
 
 // TEENSY Interface board equates
 
+#ifdef TEENSY
 #define ISSLED LED0
 #define IRSLED LED1
 #define TRAFFICLED LED2
+#else
+#define ISSLED 0
+#define IRSLED 0
+#define TRAFFICLED 0
+#endif
 
 BOOL KeyPTT(BOOL State);
 
@@ -140,7 +146,7 @@ void UpdateBusyDetector(short * bytNewSamples);
 int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM);
 void SetARDOPProtocolState(int value);
 BOOL BusyDetect3(float * dblMag, int intStart, int intStop);
-
+void SendLogToHost(char * Msg);
 
 //exern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();

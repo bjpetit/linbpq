@@ -1640,8 +1640,6 @@ int EncodeDATANAK(int intQuality , UCHAR bytSessionID, UCHAR * bytreturn)
 	return 2;
 }
 
-
-
 void SendID(BOOL blnEnableCWID)
 {
 	unsigned char bytIDSent[80];

@@ -11,6 +11,10 @@
 //#define max(x, y) ((x) > (y) ? (x) : (y))
 //#define min(x, y) ((x) < (y) ? (x) : (y))
 
+void CheckandAdjustRXLevel(int maxlevel, int minlevel, BOOL Force);
+
+extern int lastmax, lastmin;		// Sample Levels
+
 char strRcvFrameTag[32];
 
 BOOL blnLeaderFound = FALSE;
@@ -1253,6 +1257,11 @@ ProcessFrame:
 
 		if (blnFrameDecodedOK)
 		{
+			// Set input level if supported
+			
+#ifdef HASPOTS
+			CheckandAdjustRXLevel(lastmax, lastmin, TRUE);
+#endif
 			if (AccumulateStats)
 				if (IsDataFrame(intFrameType))
 					if (strstr (strMod, "PSK"))
@@ -1735,7 +1744,7 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
   
 	if (dblSNdBPwr > (4 + Squelch) && dblSNdBPwrEarly > Squelch && (dblAvgNoisePerBin > 100.0f || dblPriorFineOffset != 1000.0f)) // making early threshold = lower (after 3 dB compensation for bandwidth)
 	{
-		WriteDebugLog(LOGDEBUG, "Fine Search S:N= %f dB, Early S:N= %f dblAvgNoisePerBin %f ", dblSNdBPwr, dblSNdBPwrEarly, dblAvgNoisePerBin);
+//		WriteDebugLog(LOGDEBUG, "Fine Search S:N= %f dB, Early S:N= %f dblAvgNoisePerBin %f ", dblSNdBPwr, dblSNdBPwrEarly, dblAvgNoisePerBin);
 
 		// Calculate the interpolation based on the left of the two tones
 
@@ -1755,11 +1764,11 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 			int x = round(dblBinInterpLeft);	// odd, but PI doesnt print floats properly 
 			int y = round(dblBinInterpRight);
 		
-			WriteDebugLog(LOGDEBUG, " SPL Left= %d  SPL Right= %d Offset %f, LeftMag %f RightMag %f", x, y, *dblOffsetHz, dblLeftMag, dblRightMag);
+//			WriteDebugLog(LOGDEBUG, " SPL Left= %d  SPL Right= %d Offset %f, LeftMag %f RightMag %f", x, y, *dblOffsetHz, dblLeftMag, dblRightMag);
 		}
 #else
-		WriteDebugLog(LOGDEBUG, " SPL Left= %f  SPL Right= %f, Offset %f, LeftMag %f RightMag %f",
-			dblBinInterpLeft, dblBinInterpRight, *dblOffsetHz, dblLeftMag, dblRightMag);
+//		WriteDebugLog(LOGDEBUG, " SPL Left= %f  SPL Right= %f, Offset %f, LeftMag %f RightMag %f",
+//			dblBinInterpLeft, dblBinInterpRight, *dblOffsetHz, dblLeftMag, dblRightMag);
 #endif    
 		if (fabsf(dblBinInterpLeft + dblBinInterpRight) < 1.0) // sanity check for the interpolators 
 		{

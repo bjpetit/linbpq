@@ -1,7 +1,19 @@
-// ARDOP TNC Host Interface
-//
+//	ARDOP TNC Host Serial Interface
+
+//	Based on SCS Extended Hodtmode, as used in 
+//	SCS PTC and Dragon controllers.
+
+//	Operates in two modes, SCS Emulation and ARDOP Native.
+//	SCS Emulation allows programs writter for the SCS 
+//	controllers to use ARDOP
+//	ARDOP Native supports full ARDOP command set
+
+//	Native Mode uses Stream 32 for commands, 33 for Data 
+//	and 34 for Monitor/Logging.
+
 
 #include "ARDOPC.h"
+
 
 VOID ProcessSCSPacket(UCHAR * rxbuffer, int Length);
 VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
@@ -13,27 +25,41 @@ void CatWrite(char * Buffer, int Len);
 int RadioPoll();
 void ProcessCommandFromHost(char * strCMD);
 
+//#ifdef LOGTOHOST
+
+// Log output sent to host instead of File
+
+#define LOGBUFFERSIZE 2048
+
+char LogToHostBuffer[LOGBUFFERSIZE];
+int LogToHostBufferLen = 0;
+
+//#endif
+
 UCHAR bytDataToSend[4096];
 
-// May malloc this, or change to cyclic buffer
+// Outboind data buffer 
 
 int bytDataToSendLength = 0;
 
 char ReportCall[10];
 
 UCHAR bytDataforHost[2048];		// has to be at least max packet size (8 * 159)
-
 int bytesforHost = 0;
 
 UCHAR bytEchoData[1272];		// has to be at least max packet size (?1272)
-
 int bytesEchoed = 0;
 
 UCHAR DelayedEcho = 0;
 
-UCHAR SCSReply[256 + 5];	// could be smaller??
-
+UCHAR SCSReply[256 + 10];		// Host Mode reply buffer
 int Toggle;
+
+char CommandToHostBuffer[512];	// Async Commands to Host (BUFFER etc)
+int CommandToHostBufferLen;
+
+char CMDReplyBuffer[256];		// Used by COmmand Handler. Null Terminated
+
 
 extern char Callsign[10];
 extern BOOL blnBusyStatus;
@@ -49,7 +75,6 @@ extern int intDataBytesPerCar;
 
 extern unsigned char CatRXbuffer[256];
 extern int CatRXLen;
-
 
 BOOL Term4Mode;
 BOOL PACMode;
@@ -68,9 +93,6 @@ int ReplyLen;
 
 extern float dblOffsetHz;
 extern int intSessionBW;
-
-char CommandToHostBuffer[512];
-int CommandToHostBufferLen;
 
 void SendCommandToHost(char * Cmd)
 {
@@ -144,12 +166,12 @@ void SendCommandToHost(char * Cmd)
 	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
 }
 
+
 void QueueCommandToHost(char * Cmd)
 {
 	SendCommandToHost(Cmd);		// no queuing now
 }
 
-char CMDReplyBuffer[256];
 
 void SendReplyToHost(char * Cmd)
 {
@@ -201,7 +223,7 @@ void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 		return;
 	}
 
-	// In ARDOP Native add header (Type and Len
+	// In ARDOP Native add header (Type and Len)
 
 	bytDataforHost[bytesforHost++] = 'd';			// indicates data from TNC
 	bytDataforHost[bytesforHost++] = ':';
@@ -212,6 +234,29 @@ void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 	memcpy(&bytDataforHost[bytesforHost + 3], Msg, Len - 3);
 	bytesforHost += Len;
 }
+
+#ifdef LOGTOHOST
+
+void SendLogToHost(char * Cmd)
+{
+// I think we need log in text mode
+//	if (HostMode & !PTCMode)	// ARDOP Native
+
+	if (!PTCMode)	// ARDOP Native
+	{
+		char * ptr = &LogToHostBuffer[LogToHostBufferLen];
+		int len = strlen(Cmd);
+		
+		if (LogToHostBufferLen + len >= LOGBUFFERSIZE)
+			return;			// ignore if full
+
+		memcpy(ptr, Cmd, len);
+
+		LogToHostBufferLen += len;
+	}
+}
+
+#endif
 
 BOOL CheckStatusChange()
 {
@@ -246,6 +291,7 @@ BOOL CheckStatusChange()
 
 }
 
+
 BOOL CheckForControl()
 {
 	int Length;
@@ -261,8 +307,6 @@ BOOL CheckForControl()
 	memcpy(&SCSReply[5], CommandToHostBuffer, Length);
 
 	CommandToHostBufferLen -= Length;
-
-
 
 	if (CommandToHostBufferLen)
 		memmove(CommandToHostBuffer, &CommandToHostBuffer[Length], CommandToHostBufferLen);
@@ -335,6 +379,40 @@ BOOL CheckForData()
 
 	return TRUE;
 }
+
+
+//#ifdef LOGTOHOST
+
+BOOL CheckForLog()
+{
+	int Length;
+
+	if (LogToHostBufferLen == 0)
+		return FALSE;
+
+	if (LogToHostBufferLen > 256)
+		Length = 256;
+	else
+		Length = LogToHostBufferLen;
+
+
+	memcpy(&SCSReply[5], LogToHostBuffer, Length);
+	LogToHostBufferLen -= Length;
+
+	if (LogToHostBufferLen)
+		memmove(LogToHostBuffer, &LogToHostBuffer[Length], LogToHostBufferLen);
+	
+	SCSReply[2] = 34;
+	SCSReply[3] = 7;
+	SCSReply[4] = Length - 1;
+
+	ReplyLen = Length + 5;
+	EmCRCStuffAndSend(SCSReply, ReplyLen);
+
+	return TRUE;
+}
+
+//#endif
 
 
 // SCS Emulator
@@ -413,17 +491,25 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			*(NextChan++) = 255;
 		}
 
-		if (RadioPoll())			// Cat data available?
+		else if (RadioPoll())		// Cat data available?
 			*(NextChan++) = 254;	// 253 + 1
 
-		if (CommandToHostBufferLen)	// only used in Native mode
+		else if (CommandToHostBufferLen)	// only used in Native mode
 			*(NextChan++) = 33;		// Native mode cmd channel
 
-		if (bytesforHost || bytesEchoed || change)
+		else if (bytesforHost || bytesEchoed || change)
 			if (PTCMode)
 				*(NextChan++) = DataChannel; // Something for this channel
 			else
 				*(NextChan++) = 34;		// Native mode data channel
+
+//#ifdef LOGTOHOST
+		else if (LogToHostBufferLen)	// only used in Native mode
+		{
+			WriteExceptionLog("Log Chan %d", LogToHostBufferLen);
+			*(NextChan++) = 35;		// Native mode log channel
+		}
+//#endif
 
 		*(NextChan++) = 0;
 
@@ -635,6 +721,12 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			if (Channel == 33)
 				if (CheckForData())
 					return;				// It has sent reply
+
+//#ifdef LOGTOHOST
+			if (Channel == 34)
+				if (CheckForLog())
+					return;				// It has sent reply
+//#endif
 		}
 
 		// reply nothing doing
@@ -1251,5 +1343,4 @@ void ProcessRIGPacket(int Command, char * Buffer, int Len)
 		return;
 	}
 }
-
 
