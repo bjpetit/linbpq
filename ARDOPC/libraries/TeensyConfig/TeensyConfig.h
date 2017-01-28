@@ -16,9 +16,12 @@
 
 // This file is for ARDOP
 
-
 #define ARDOP
 #define TEENSY
+
+#define Statsprintf MONprintf
+#define WriteExceptionLog MONprintf
+
 #define PIBOARD
 
 #ifdef PIBOARD
@@ -28,10 +31,14 @@
 
 // If we define I2CHOST we shoudn't define HOSTPORT
 
-//#define LOGTOHOST
+// Define LOGTOHOST foor logging over Host Poet (Serial or i2c)
+//	Define MONPORT for logging to Teensy Serial Port
 
-#define HOSTPORT Serial1
-#define MONPORT Serial1
+#define LOGTOHOST
+//#define HOSTPORT Serial1
+//#define MONPORT Serial1
+
+#define CATPORT Serial1
 
 #define I2CHOST
 #define I2CSLAVEADDR 0x1F
@@ -57,10 +64,10 @@
 
 #define HOSTPORT Serial
 #define MONPORT Serial1
+#define CATPORT Serial5
 
 #define TFT
 #define BARLEDS
-
 
 //#define HASPOTS
 //#define I2CPOTS

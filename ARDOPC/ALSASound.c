@@ -113,7 +113,7 @@ VOID Debugprintf(const char * format, ...)
 	va_list(arglist);
 
 	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
+	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
 
 	printf("%s", Mess);
@@ -127,7 +127,7 @@ VOID WriteDebugLog(int Level, const char * format, ...)
 	va_list(arglist);
 
 	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
+	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\n");
 	
 	if (Level <= ConsoleLogLevel)
@@ -146,7 +146,7 @@ VOID WriteExceptionLog(const char * format, ...)
 	va_list(arglist);
 
 	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
+	vsnprintf(Mess, format, arglist);
 	strcat(Mess, "\n");
 
 	printf("%s", Mess);
@@ -172,7 +172,7 @@ VOID Statsprintf(const char * format, ...)
 	clock_gettime(CLOCK_REALTIME, &tp);
 
 	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
+	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\n");
 
 	ss = tp.tv_sec % 86400;		// Secs int day

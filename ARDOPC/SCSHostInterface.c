@@ -25,7 +25,7 @@ void CatWrite(char * Buffer, int Len);
 int RadioPoll();
 void ProcessCommandFromHost(char * strCMD);
 
-//#ifdef LOGTOHOST
+#ifdef LOGTOHOST
 
 // Log output sent to host instead of File
 
@@ -34,7 +34,7 @@ void ProcessCommandFromHost(char * strCMD);
 char LogToHostBuffer[LOGBUFFERSIZE];
 int LogToHostBufferLen = 0;
 
-//#endif
+#endif
 
 UCHAR bytDataToSend[4096];
 
@@ -235,29 +235,6 @@ void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 	bytesforHost += Len;
 }
 
-#ifdef LOGTOHOST
-
-void SendLogToHost(char * Cmd)
-{
-// I think we need log in text mode
-//	if (HostMode & !PTCMode)	// ARDOP Native
-
-	if (!PTCMode)	// ARDOP Native
-	{
-		char * ptr = &LogToHostBuffer[LogToHostBufferLen];
-		int len = strlen(Cmd);
-		
-		if (LogToHostBufferLen + len >= LOGBUFFERSIZE)
-			return;			// ignore if full
-
-		memcpy(ptr, Cmd, len);
-
-		LogToHostBufferLen += len;
-	}
-}
-
-#endif
-
 BOOL CheckStatusChange()
 {
 	if (change == 1)
@@ -381,7 +358,7 @@ BOOL CheckForData()
 }
 
 
-//#ifdef LOGTOHOST
+#ifdef LOGTOHOST
 
 BOOL CheckForLog()
 {
@@ -412,7 +389,7 @@ BOOL CheckForLog()
 	return TRUE;
 }
 
-//#endif
+#endif
 
 
 // SCS Emulator
@@ -491,25 +468,22 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			*(NextChan++) = 255;
 		}
 
-		else if (RadioPoll())		// Cat data available?
+		if (CatRXLen)				// Cat data available?
 			*(NextChan++) = 254;	// 253 + 1
 
-		else if (CommandToHostBufferLen)	// only used in Native mode
+		if (CommandToHostBufferLen)	// only used in Native mode
 			*(NextChan++) = 33;		// Native mode cmd channel
 
-		else if (bytesforHost || bytesEchoed || change)
+		if (bytesforHost || bytesEchoed || change)
 			if (PTCMode)
 				*(NextChan++) = DataChannel; // Something for this channel
 			else
 				*(NextChan++) = 34;		// Native mode data channel
 
-//#ifdef LOGTOHOST
-		else if (LogToHostBufferLen)	// only used in Native mode
-		{
-			WriteExceptionLog("Log Chan %d", LogToHostBufferLen);
+#ifdef LOGTOHOST
+		if (LogToHostBufferLen)	// only used in Native mode
 			*(NextChan++) = 35;		// Native mode log channel
-		}
-//#endif
+#endif
 
 		*(NextChan++) = 0;
 
@@ -722,11 +696,11 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 				if (CheckForData())
 					return;				// It has sent reply
 
-//#ifdef LOGTOHOST
+#ifdef LOGTOHOST
 			if (Channel == 34)
 				if (CheckForLog())
 					return;				// It has sent reply
-//#endif
+#endif
 		}
 
 		// reply nothing doing
@@ -893,8 +867,11 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 		HostMode = TRUE;
 		WriteDebugLog(LOGINFO, "Entering Host Mode");
 		Toggle = 0;
-		blnAbort = TRUE;			// Reset ARDOP 
+		blnAbort = True;
 
+		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == IRStoISS)
+			GetNextARQFrame();
+	
 		return;
 	}
 
@@ -1342,5 +1319,7 @@ void ProcessRIGPacket(int Command, char * Buffer, int Len)
 		CatWrite(Buffer, ptr2 - Buffer);
 		return;
 	}
+	CatWrite(Buffer, Len);
+	return;
 }
 

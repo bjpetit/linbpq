@@ -455,12 +455,12 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 	
 	va_start(arglist, format);
 #ifdef LOGTOHOST
-	vsprintf(&Mess[1], format, arglist);
+	vsnprintf(&Mess[1], sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
 	Mess[0] = LogLevel + '0';
 	SendLogToHost(Mess);
 #else
-	vsprintf(Mess, format, arglist);
+	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
 
 
@@ -503,7 +503,7 @@ VOID WriteExceptionLog(const char * format, ...)
 	SYSTEMTIME st;
 	
 	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
+	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
 
 	printf(Mess);
@@ -543,7 +543,7 @@ VOID Statsprintf(const char * format, ...)
 	SYSTEMTIME st;
 
 	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
+	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
 
 	if (statslogfile == NULL)

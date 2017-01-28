@@ -8,7 +8,6 @@
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
 
-
 unsigned char RXBUFFER[500];	// Async RX Buffer. Enough for Stuffed Host Mode Frame
 
 extern volatile int RXBPtr;
@@ -86,15 +85,18 @@ extern "C"
 
   void CatWrite(const uint8_t * Buffer, int Len)
   {
-    Serial5.write(Buffer, Len);
+#ifdef CATPORT
+    CATPORT.write(Buffer, Len);
+#endif
   }
 
   unsigned char CatRXbuffer[256];
   int CatRXLen = 0;
 
-  void RadioPoll()
+  int RadioPoll()
   {
-    int Length = Serial5.available();
+#ifdef CATPORT
+    int Length = CATPORT.available();
     int i, val;
 
     // only try to read number of bytes in queue
@@ -102,23 +104,21 @@ extern "C"
     if (CatRXLen + Length > 256)
       CatRXLen = 0;
 
-    Length = Serial5.readBytes(&CatRXbuffer[CatRXLen], Length);
+    Length = CATPORT.readBytes(&CatRXbuffer[CatRXLen], Length);
 
     if (Length == 0)
-      return;					// Nothing doing
+      return 0;					// Nothing doing
 
     CatRXLen += Length;
 
     Length = CatRXLen;
 
-    MONPORT.print("CAT RX ");
-    for (i = 0; i < Length; i++)
-    {
-      val = CatRXbuffer[i];
-      MONPORT.print(val, HEX);
-      MONPORT.print(" ");
-    }
-    MONPORT.println("");
+//    MONprintf("CAT RX ");
+//    for (i = 0; i < Length; i++)
+//      MONprintf("%x ", CatRXbuffer[i]);
+//    MONprintf("\r\n");
+#endif
+    return CatRXLen;
   }
 
 #define MEM_LEN 512
@@ -173,11 +173,15 @@ void setup()
   HOSTPORT.begin(115200);
   while (!HOSTPORT);
 #endif
-
+#ifdef MONPORT
   MONPORT.begin(115200);
-  Serial5.begin(19200);				// CAT Port
-
   while (!MONPORT);
+#endif
+
+#ifdef CATPORT
+  CATPORT.begin(19200);				// CAT Port
+#endif
+
 
   // Set 10 second watchdog
 
@@ -192,12 +196,15 @@ void setup()
 
   CommonSetup();
 
+#ifdef MONPORT
   MONPORT.printf("Monitor Buffer Space %d\r\n", MONPORT.availableForWrite());
-#if defined HOSTPORT
-  MONPORT.printf("Host Buffer Space %d\r\n", HOSTPORT.availableForWrite());
-#elif defined I2CHOST
-  MONPORT.printf("Host Connection is i2c on address %x Hex\r\n", I2CSLAVEADDR);
 #endif
+#if defined HOSTPORT
+  MONprintf("Host Buffer Space %d\r\n", HOSTPORT.availableForWrite());
+#elif defined I2CHOST
+  MONprintf("Host Connection is i2c on address %x Hex\r\n", I2CSLAVEADDR);
+#endif
+
   if (RCM_SRS0 & 0X20)		// Watchdog Reset
     WriteDebugLog(LOGCRIT, "\n**** Reset by Watchdog ++++");
 
@@ -246,7 +253,7 @@ void setup()
     VRef += analogRead(17);
   }
   VRef /= 100;
-  MONPORT.printf("VREF %d offset %d\r\n", VRef, VRef - 32768);
+  MONprintf("VREF %d offset %d\r\n", VRef, VRef - 32768);
 
   analogRead(16);		// Set ADC back to A0
 }

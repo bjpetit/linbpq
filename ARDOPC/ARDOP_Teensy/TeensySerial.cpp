@@ -222,12 +222,6 @@ void requestEvent(void)
 #include <stdarg.h>
 extern "C"
 {
-
-  void Statsprintf(const char * format, ...)
-  {
-    return;
-  }
-
   int HostInit()
   {
     return true;
@@ -269,31 +263,40 @@ extern "C"
 
   void WriteDebugLog(int Level, const char * format, ...)
   {
-    char Mess[10000];
+    char Mess[256];
     va_list(arglist);
 
     va_start(arglist, format);
-//#ifdef LOGTOHOST
-       vsprintf(&Mess[1], format, arglist);
-        strcat(&Mess[1], "\r\n");
-       Mess[0] = Level + '0';
-       SendLogToHost(Mess);
-//#else
- //   vsprintf(Mess, format, arglist);
- //   MONPORT.println(Mess);
-//#endif
+#ifdef LOGTOHOST
+    Mess[0] = Level + '0';
+    vsnprintf(&Mess[1], sizeof(Mess) -1, format, arglist);
+    strcat(&Mess[1], "\r\n");
+    SendLogToHost(Mess);
+#endif
+#ifdef MONPORT
+    vspnrintf(Mess, sizeof(Mess), format, arglist);
+    MONPORT.println(Mess);
+#endif
     return;
   }
-  void WriteExceptionLog(const char * format, ...)
+
+  // Write to Log, either via host or serial port
+  void MONprintf(const char * format, ...)
   {
-    char Mess[10000];
+    char Mess[256];
     va_list(arglist);
 
-
     va_start(arglist, format);
-    vsprintf(Mess, format, arglist);
-    //	Serial1Print(Mess);
+#ifdef LOGTOHOST
+    Mess[0] = '0';
+    vsnprintf(&Mess[1], sizeof(Mess), format, arglist);
+//    strcat(&Mess[1], "\r\n");
+    SendLogToHost(Mess);
+#endif
+#ifdef MONPORT
+    vsnprintf(Mess, sizeof(Mess), format, arglist);
     MONPORT.println(Mess);
+#endif
     return;
   }
 
@@ -301,40 +304,39 @@ extern "C"
   {
   }
 
-
   void CloseStatsLog()
   {
   }
 
-// #ifdef LOGTOHOST
+#ifdef LOGTOHOST
 
- #define LOGBUFFERSIZE 2048
+#define LOGBUFFERSIZE 2048
 
-extern char LogToHostBuffer[LOGBUFFERSIZE];
-extern int LogToHostBufferLen;
+  extern char LogToHostBuffer[LOGBUFFERSIZE];
+  extern int LogToHostBufferLen;
+  extern int PTCMode;
 
-void SendLogToHost(char * Cmd)
-{
-// I think we need log in text mode
-//	if (HostMode & !PTCMode)	// ARDOP Native
+  void SendLogToHost(char * Cmd)
+  {
+    // I think we need log in text mode
+    //	if (HostMode & !PTCMode)	// ARDOP Native
 
-//	if (!PTCMode)	// ARDOP Native
-	{
-		char * ptr = &LogToHostBuffer[LogToHostBufferLen];
-		int len = strlen(Cmd);
-		
-		if (LogToHostBufferLen + len >= LOGBUFFERSIZE)
-			return;			// ignore if full
+    if (!PTCMode)	// ARDOP Native
+    {
+      char * ptr = &LogToHostBuffer[LogToHostBufferLen];
+      int len = strlen(Cmd);
 
-		memcpy(ptr, Cmd, len);
+      if (LogToHostBufferLen + len >= LOGBUFFERSIZE)
+        return;			// ignore if full
 
-		LogToHostBufferLen += len;
-	}
+      memcpy(ptr, Cmd, len);
+      LogToHostBufferLen += len;
+    }
+  }
+#endif
 }
 
-//#endif
- 
-}
+
 
 
 
