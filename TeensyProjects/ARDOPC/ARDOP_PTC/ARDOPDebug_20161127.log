@@ -1,0 +1,107 @@
+22:09:36.815 ARDOPC Version 0.8.3.4-BPQ
+22:09:36.816 Capture Devices
+22:09:37.776 0 Stereo Mix (Realtek High Defini
+22:09:37.793 1 Microphone (3- USB Audio CODEC 
+22:09:37.859 2 Microphone (Realtek High Defini
+22:09:37.859 Playback Devices
+22:09:37.917 0 Speakers (Realtek High Definiti
+22:09:37.953 1 Speakers (3- USB Audio CODEC )
+22:09:37.963 Command to Host BUFFER 0
+22:09:37.963 Command to Host NEWSTATE DISC 
+22:09:37.994 Opened WaveOut Device Speakers (Realtek High Definiti
+22:09:38.002 Opened WaveIn Device Stereo Mix (Realtek High Defini
+22:09:38.003 ARDOPC opening port com43
+22:09:38.003 ARDOPC opened port com43
+22:09:58.044 Input peaks = -47, 642
+22:10:18.057 Input peaks = -19, 16
+22:10:38.082 Input peaks = -18, 14
+22:10:50.575 SCS Command 
+22:10:50.676 SCS Command RESTART
+22:10:50.776 SCS Command PTCC 0
+22:10:51.286 SCS Command license
+22:10:51.778 SCS Command ARX 0
+22:10:51.881 SCS Command CHOB 0
+22:10:51.982 SCS Command CM 0
+22:10:52.084 SCS Command CONT 3
+22:10:52.186 SCS Command CWID 0 0
+22:10:52.287 SCS Command L 0
+22:10:52.388 SCS Command LF 0
+22:10:52.489 SCS Command MAXE 35
+22:10:52.592 SCS Command PTCH 31
+22:10:52.695 SCS Command REM 0
+22:10:52.786 SCS Command ST 2
+22:10:52.888 SCS Command TONES 4
+22:10:52.990 SCS Command UML 0
+22:10:53.093 SCS Command TRX S 0
+22:10:53.138 SCS Command TRX DU 0
+22:10:53.173 SCS Command CB 0ADEC ALL 1
+22:10:53.173 SCS Command ADEC ALL 1
+22:10:53.218 SCS Command MYL 3
+22:10:53.264 SCS Command FSKA 150
+22:10:53.299 SCS Command PSKA 150
+22:10:53.344 SCS Command TXD 6
+22:10:53.378 SCS Command MYCALL GM8BPQ
+22:10:53.423 SCS Command JHOST4
+22:10:53.423 Entering Host Mode
+22:10:58.101 Input peaks = -20, 16
+22:11:18.127 Input peaks = -17, 17
+22:11:23.669 SCS Host COmmand DD
+22:11:23.669 [obCommand Trace FROM host: C:DD
+22:11:24.871 Exit Host Mode
+22:11:25.875 SCS Command ST 0MYCALL GM8BPQ
+22:11:26.417 SCS Command MYCALL GM8BPQ
+22:11:26.519 SCS Command RESTART
+22:11:26.624 SCS Command PTCC 0
+22:11:27.125 SCS Command license
+22:11:27.620 SCS Command ARX 0
+22:11:27.725 SCS Command CHOB 0
+22:11:27.826 SCS Command CM 0
+22:11:27.927 SCS Command CONT 3
+22:11:28.028 SCS Command CWID 0 0
+22:11:28.129 SCS Command L 0
+22:11:28.230 SCS Command LF 0
+22:11:28.334 SCS Command MAXE 35
+22:11:28.436 SCS Command PTCH 31
+22:11:28.538 SCS Command REM 0
+22:11:28.639 SCS Command ST 2
+22:11:28.730 SCS Command TONES 4
+22:11:28.833 SCS Command UML 0
+22:11:28.935 SCS Command TRX S 0
+22:11:28.982 SCS Command TRX DU 0
+22:11:29.016 SCS Command CB 0ADEC ALL 1
+22:11:29.016 SCS Command ADEC ALL 1
+22:11:29.062 SCS Command MYL 3
+22:11:29.096 SCS Command FSKA 150
+22:11:29.140 SCS Command PSKA 150
+22:11:29.187 SCS Command TXD 6
+22:11:29.221 SCS Command MYCALL GM8BPQ
+22:11:29.267 SCS Command JHOST4
+22:11:29.267 Entering Host Mode
+22:11:30.240 Rig Control Command Len 22
+22:11:30.343 Rig Control Command Len 29
+22:11:30.456 Rig Control Command Len 21
+22:11:30.559 Rig Control Command Len 23
+22:11:30.673 Rig Control Command Len 22
+22:11:30.776 Rig Control Command Len 29
+22:11:30.889 Rig Control Command Len 21
+22:11:31.002 Rig Control Command Len 23
+22:11:38.140 Input peaks = -15, 15
+22:11:40.188 SCS Host COmmand CL
+22:11:40.188 [obCommand Trace FROM host: C:CL
+22:11:40.188 Command to Host FAULT CMD not recoginized
+22:11:40.304 Command to Host NEWSTATE ISS 
+22:11:40.304 [SendARQConnectRequest] strMycall=GM8BPQ  strTargetCall=G8BPQ bytPendnigSessionID=a7
+22:11:40.304 Sending Frame Type ConReq1000M
+22:11:40.304 Command to Host PTT TRUE
+22:11:40.304 [Main.KeyPTT]  PTT-TRUE
+22:11:42.038 Command to Host PTT FALSE
+22:11:42.038 [Main.KeyPTT]  PTT-FALSE
+22:11:44.046 Repeating Last Frame
+22:11:44.047 Sending Frame Type ConReq1000M
+22:11:44.047 Command to Host PTT TRUE
+22:11:44.047 [Main.KeyPTT]  PTT-TRUE
+22:11:45.779 Command to Host PTT FALSE
+22:11:45.779 [Main.KeyPTT]  PTT-FALSE
+22:11:47.786 Repeating Last Frame
+22:11:47.786 Sending Frame Type ConReq1000M
+22:11:47.786 Comm

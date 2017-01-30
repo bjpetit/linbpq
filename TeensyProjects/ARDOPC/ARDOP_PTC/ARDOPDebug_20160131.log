@@ -1,0 +1,16 @@
+15:54:37 timeGetTime 389791646
+15:54:37 ARDOPC Version 0.4.3.4-BPQ
+15:54:37 Capture Devices
+15:54:37 0 Stereo Mix (Realtek High Defini
+15:54:37 1 CABLE Output (VB-Audio Virtual 
+15:54:37 Playback Devices
+15:54:37 0 Speakers (Realtek High Definiti
+15:54:37 1 CABLE Input (VB-Audio Virtual C
+15:54:38 2 Realtek Digital Output (Realtek
+15:54:38 Command to Host NEWSTATE DISC 
+15:54:38 Opened WaveOut Device Speakers (Realtek High Definiti
+15:54:38 Opened WaveIn Device Stereo Mix (Realtek High Defini
+15:54:38 ARDOPC opening port com36
+15:54:38 ARDOPC opened port com36
+15:54:48 Command to Host BUFFER 0
+15:54:48 Input peaks = -10, 10

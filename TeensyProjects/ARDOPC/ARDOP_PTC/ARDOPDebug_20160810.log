@@ -1,0 +1,2110 @@
+10:53:02 timeGetTime 143236562
+10:53:02 ARDOPC Version 0.5.5.1-BPQ
+10:53:02 Capture Devices
+10:53:03 0 Stereo Mix (Realtek High Defini
+10:53:03 1 CABLE Output (VB-Audio Virtual 
+10:53:03 Playback Devices
+10:53:03 0 Speakers (Realtek High Definiti
+10:53:03 1 Realtek Digital Output (Realtek
+10:53:03 2 CABLE Input (VB-Audio Virtual C
+10:53:03 Command to Host NEWSTATE DISC 
+10:53:03 Opened WaveOut Device Speakers (Realtek High Definiti
+10:53:03 Opened WaveIn Device Stereo Mix (Realtek High Defini
+10:53:03 ARDOPC opening port com36
+10:53:03 ARDOPC Open Failed for Port com36
+10:53:13 Command to Host BUFFER 0
+10:53:13 Input peaks = -10, 11
+10:53:23 Command to Host BUFFER 0
+10:53:23 Input peaks = -10, 9
+10:53:33 Command to Host BUFFER 0
+10:53:33 Input peaks = -10, 9
+10:53:43 Command to Host BUFFER 0
+10:53:43 Input peaks = -10, 10
+10:53:53 Command to Host BUFFER 0
+10:53:53 Input peaks = -11, 11
+10:54:04 timeGetTime 143297765
+10:54:04 ARDOPC Version 0.5.5.1-BPQ
+10:54:04 Capture Devices
+10:54:04 0 Stereo Mix (Realtek High Defini
+10:54:04 1 CABLE Output (VB-Audio Virtual 
+10:54:04 Playback Devices
+10:54:04 0 Speakers (Realtek High Definiti
+10:54:04 1 Realtek Digital Output (Realtek
+10:54:04 2 CABLE Input (VB-Audio Virtual C
+10:54:04 Command to Host NEWSTATE DISC 
+10:54:04 Opened WaveOut Device Speakers (Realtek High Definiti
+10:54:04 Opened WaveIn Device Stereo Mix (Realtek High Defini
+10:54:04 ARDOPC opening port com15
+10:54:04 ARDOPC opened port com15
+10:54:04 Command to Host BUSY TRUE
+10:54:06 Command to Host BUSY FALSE
+10:54:14 Command to Host BUFFER 0
+10:54:14 Input peaks = -21, 125
+10:54:24 Command to Host BUFFER 0
+10:54:24 Input peaks = -12, 12
+10:54:34 Command to Host BUFFER 0
+10:54:34 Input peaks = -11, 12
+10:54:44 Command to Host BUFFER 0
+10:54:44 Input peaks = -12, 10
+10:54:50 Command to Host BUSY TRUE
+10:54:54 Command to Host BUFFER 0
+10:54:54 Input peaks = -1149, 1125
+10:54:58 Command to Host BUSY FALSE
+10:55:04 Command to Host BUFFER 0
+10:55:05 Input peaks = -12, 11
+10:55:14 Command to Host BUFFER 0
+10:55:15 Input peaks = -11, 10
+10:55:24 Command to Host BUFFER 0
+10:55:25 Input peaks = -10, 10
+10:55:34 Command to Host BUFFER 0
+10:55:35 Input peaks = -11, 11
+10:55:44 Command to Host BUFFER 0
+10:55:45 Input peaks = -11, 11
+10:55:54 Command to Host BUFFER 0
+10:55:54 SCS Command 
+10:55:54 SCS Command RESTART
+10:55:54 SCS Command PTCC 0
+10:55:55 SCS Command license
+10:55:55 Input peaks = -10, 10
+10:55:55 SCS Command ARX 0
+10:55:55 SCS Command CHOB 0
+10:55:56 SCS Command CM 0
+10:55:56 SCS Command CONT 3
+10:55:56 SCS Command CWID 0 0
+10:55:56 SCS Command L 0
+10:55:56 SCS Command LF 0
+10:55:56 SCS Command MAXE 35
+10:55:56 SCS Command PTCH 31
+10:55:56 SCS Command REM 0
+10:55:56 SCS Command ST 2
+10:55:57 SCS Command TONES 4
+10:55:57 SCS Command UML 0
+10:55:57 SCS Command TRX S 0
+10:55:57 SCS Command TRX DU 0
+10:55:57 SCS Command CB 0ADEC ALL 1
+10:55:57 SCS Command ADEC ALL 1
+10:55:57 SCS Command MYL 4
+10:55:57 SCS Command FSKA 150
+10:55:57 SCS Command PSKA 150
+10:55:57 SCS Command TXD 6
+10:55:57 SCS Command MYCALL GM8BPQ
+10:55:57 SCS Command JHOST4
+10:55:57 Entering Host Mode
+10:56:04 Command to Host BUFFER 0
+10:56:05 Input peaks = -10, 10
+10:56:14 Command to Host BUFFER 0
+10:56:15 Input peaks = -11, 10
+10:56:17 Command to Host BUSY TRUE
+10:56:24 Command to Host BUFFER 0
+10:56:25 Input peaks = -669, 629
+10:56:26 Command to Host NEWSTATE ISS 
+10:56:26 Sending Frame Type ConReq2000M
+10:56:26 Command to Host PTT TRUE
+10:56:26 [Main.KeyPTT]  PTT-TRUE
+10:56:28 Command to Host PTT FALSE
+10:56:28 [Main.KeyPTT]  PTT-FALSE
+10:56:28 Fine Search S:N= 88.949921 dB, Prior S:N= 0.000000
+10:56:28   CourseOffsetHz= 0.000302 Coarse Pwr S:N= 46.144424 dB
+10:56:28  QSPL Left= 0.000011  QSPL Right= -0.000006
+10:56:28 EnvelopeCorrelator CorMax:MaxProd= 61.347319  J= 39
+10:56:28 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:56:28 [Frame Type Decode Fail] Interp Ldr;S:N= 88.949921 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H0:DataNAK, D1= 1.00, D2= 1.00
+10:56:30 Repeating Last Frame
+10:56:30 Sending Frame Type ConReq2000M
+10:56:30 Command to Host PTT TRUE
+10:56:30 [Main.KeyPTT]  PTT-TRUE
+10:56:31 Command to Host PTT FALSE
+10:56:31 [Main.KeyPTT]  PTT-FALSE
+10:56:32 Fine Search S:N= 91.613045 dB, Prior S:N= 0.000000
+10:56:32   CourseOffsetHz= 0.000593 Coarse Pwr S:N= 46.063644 dB
+10:56:32  QSPL Left= 0.000031  QSPL Right= 0.000071
+10:56:32 EnvelopeCorrelator CorMax:MaxProd= 59.986444  J= 219
+10:56:32 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:56:32 [Frame Type Decode OK  ] Interp Ldr;S:N= 91.613045 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H3C:ConAck2000, D1= 0.00, D2= 0.00
+10:56:33 Qual = 97
+10:56:33 [DemodDecode4FSKConACK]  Remote leader timing reported: 1702508 ms
+10:56:33 [DecodeFrame] Frame: ConAck2000 Decode PASS,   Constellation Quality= 97
+10:56:33 [ARDOPprotocol.GetNextFrameData] Initial Frame Type: 16FSK.500.25S.E
+10:56:33 [ARDOPprotocol.ProcessRcvdARQFrame] Compatible bandwidth received from IRS ConAck: 2000 Hz
+10:56:33 Sending Frame Type ConAck2000
+10:56:33 Command to Host PTT TRUE
+10:56:33 [Main.KeyPTT]  PTT-TRUE
+10:56:34 Command to Host PTT FALSE
+10:56:34 [Main.KeyPTT]  PTT-FALSE
+10:56:34 Command to Host BUFFER 0
+10:56:35 Fine Search S:N= 90.039253 dB, Prior S:N= 0.000000
+10:56:35   CourseOffsetHz= 0.000056 Coarse Pwr S:N= 38.750031 dB
+10:56:35  QSPL Left= 0.000003  QSPL Right= -0.000007
+10:56:35 EnvelopeCorrelator CorMax:MaxProd= 60.354369  J= 83
+10:56:35 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:56:35 [Frame Type Decode OK  ] Interp Ldr;S:N= 90.039253 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H23:BREAK, D1= 0.00, D2= 0.00
+10:56:35 [DecodeFrame] Frame: BREAK 
+10:56:35 [ARDOPprotocol.ProcessRcvdARQFrame] ISS RmtLeaderMeas=283 ms
+10:56:35 [ARDOPprotocol.ProcessRcvdARQFrame] BREAK received in ARQState ISSConAck Processed as implied ACK
+10:56:36 [ARDOPprotocol.SendData] DataToSend = 0 bytes, ProtocolState ISS>QUIET (Rule 3.1)
+10:56:36 Command to Host NEWSTATE QUIET 
+10:56:36 Command to Host CONNECTED GM8BPQ-10 2000
+10:56:36 Command to Host STATUS ARQ CONNECTION ESTABLISHED WITH GM8BPQ-10, SESSION BW = 2000 HZ
+10:56:36 Command to Host BUFFER 12
+10:56:36 [ARDOPprotocol.AddDataToDataToSend 12 bytes to send in QUIET state: QUIET>ISS (Rule 3.1)
+10:56:36 Command to Host NEWSTATE ISS 
+10:56:36 [ARDOPprotocol.SendData] DataToSend = 12 bytes, In ProtocolState ISS
+10:56:36 [ARDOPprotocol.GetNextFrameData] No shift, Frame Type: 16FSK.500.25S.E
+10:56:36 Sending Frame Type 16FSK.500.25S.E
+10:56:36 Command to Host PTT TRUE
+10:56:36 [Main.KeyPTT]  PTT-TRUE
+10:56:38 Command to Host PTT FALSE
+10:56:38 [Main.KeyPTT]  PTT-FALSE
+10:56:39 Fine Search S:N= 87.445831 dB, Prior S:N= 0.000000
+10:56:39   CourseOffsetHz= 0.000122 Coarse Pwr S:N= 43.930965 dB
+10:56:39  QSPL Left= 0.000014  QSPL Right= -0.000006
+10:56:39 EnvelopeCorrelator CorMax:MaxProd= 59.997938  J= 198
+10:56:39 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:56:39 [Frame Type Decode OK  ] Interp Ldr;S:N= 87.445831 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H23: BREAK, D1= 0.00, D2= 0.00
+10:56:39 [DecodeFrame] Frame: BREAK 
+10:56:39 [ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from ARQState ISSData, Go to ProtocolState IRS & substate IRSfromISS , send ACK
+10:56:39 Sending Frame Type DataACK
+10:56:39 Command to Host PTT TRUE
+10:56:39 [Main.KeyPTT]  PTT-TRUE
+10:56:40 Command to Host PTT FALSE
+10:56:40 [Main.KeyPTT]  PTT-FALSE
+10:56:40 Command to Host NEWSTATE IRS 
+10:56:40 Fine Search S:N= 88.512947 dB, Prior S:N= 0.000000
+10:56:40   CourseOffsetHz= 0.000285 Coarse Pwr S:N= 41.274651 dB
+10:56:40  QSPL Left= 0.000006  QSPL Right= -0.000020
+10:56:40 EnvelopeCorrelator CorMax:MaxProd= 59.997203  J= 160
+10:56:40 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:56:41 [Frame Type Decode OK  ] Interp Ldr;S:N= 88.512947 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H5B: 16FSK.500.25S.O, D1= 0.00, D2= 0.00
+10:56:41 Command to Host BUFFER 29
+10:56:46 Command to Host BUFFER 58
+10:56:51 Command to Host BUFFER 87
+10:56:56 Command to Host BUFFER 116
+10:57:01 Command to Host BUFFER 145
+10:57:07 Command to Host BUFFER 174
+10:57:12 Command to Host BUFFER 203
+10:57:17 Command to Host BUFFER 232
+10:57:22 Command to Host BUFFER 261
+10:57:27 Command to Host BUFFER 290
+10:57:33 Command to Host NEWSTATE IRStoISS 
+10:57:33 [ARDOPprotocol.AddDataToDataToSend] 290 bytes to send in ProtocolState: IRStoISS : Send BREAK,  New protocol state=IRStoISS (Rule 3.3)
+10:57:33 Sending Frame Type BREAK
+10:57:33 Command to Host PTT TRUE
+10:57:33 [Main.KeyPTT]  PTT-TRUE
+10:57:33 Command to Host PTT FALSE
+10:57:33 [Main.KeyPTT]  PTT-FALSE
+10:57:33 Command to Host BUFFER 290
+10:57:34 Input peaks = -10711, 10710
+10:57:35 Repeating Last Frame
+10:57:35 Sending Frame Type BREAK
+10:57:35 Command to Host PTT TRUE
+10:57:35 [Main.KeyPTT]  PTT-TRUE
+10:57:35 Command to Host PTT FALSE
+10:57:35 [Main.KeyPTT]  PTT-FALSE
+10:57:35 Fine Search S:N= 88.227806 dB, Prior S:N= 0.000000
+10:57:35   CourseOffsetHz= -0.000303 Coarse Pwr S:N= 46.349876 dB
+10:57:35  QSPL Left= 0.000019  QSPL Right= -0.000028
+10:57:35 EnvelopeCorrelator CorMax:MaxProd= 60.006731  J= 163
+10:57:35 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:57:35 [Frame Type Decode Fail] Interp Ldr;S:N= 88.227806 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:57:36 Repeating Last Frame
+10:57:36 Sending Frame Type BREAK
+10:57:36 Command to Host PTT TRUE
+10:57:36 [Main.KeyPTT]  PTT-TRUE
+10:57:37 Command to Host PTT FALSE
+10:57:37 [Main.KeyPTT]  PTT-FALSE
+10:57:37 Fine Search S:N= 89.184738 dB, Prior S:N= 0.000000
+10:57:37   CourseOffsetHz= 0.000408 Coarse Pwr S:N= 44.149643 dB
+10:57:37  QSPL Left= -0.000028  QSPL Right= 0.000021
+10:57:37 EnvelopeCorrelator CorMax:MaxProd= 60.012073  J= 194
+10:57:37 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:57:37 [Frame Type Decode Fail] Interp Ldr;S:N= 89.184738 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:57:38 Repeating Last Frame
+10:57:38 Sending Frame Type BREAK
+10:57:38 Command to Host PTT TRUE
+10:57:38 [Main.KeyPTT]  PTT-TRUE
+10:57:39 Command to Host PTT FALSE
+10:57:39 [Main.KeyPTT]  PTT-FALSE
+10:57:40 Repeating Last Frame
+10:57:40 Sending Frame Type BREAK
+10:57:40 Command to Host PTT TRUE
+10:57:40 [Main.KeyPTT]  PTT-TRUE
+10:57:41 Command to Host PTT FALSE
+10:57:41 [Main.KeyPTT]  PTT-FALSE
+10:57:41 Fine Search S:N= 88.192261 dB, Prior S:N= 0.000000
+10:57:41   CourseOffsetHz= -0.000469 Coarse Pwr S:N= 36.805706 dB
+10:57:41  QSPL Left= 0.000018  QSPL Right= -0.000019
+10:57:41 EnvelopeCorrelator CorMax:MaxProd= 60.007108  J= 142
+10:57:41 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:57:42 [Frame Type Decode Fail] Interp Ldr;S:N= 88.192261 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:57:42 Repeating Last Frame
+10:57:42 Sending Frame Type BREAK
+10:57:42 Command to Host PTT TRUE
+10:57:42 [Main.KeyPTT]  PTT-TRUE
+10:57:43 Command to Host PTT FALSE
+10:57:43 [Main.KeyPTT]  PTT-FALSE
+10:57:43 Command to Host BUFFER 290
+10:57:44 Repeating Last Frame
+10:57:44 Sending Frame Type BREAK
+10:57:44 Command to Host PTT TRUE
+10:57:44 [Main.KeyPTT]  PTT-TRUE
+10:57:44 Command to Host PTT FALSE
+10:57:44 [Main.KeyPTT]  PTT-FALSE
+10:57:44 Fine Search S:N= 92.197647 dB, Prior S:N= 0.000000
+10:57:45   CourseOffsetHz= 0.000124 Coarse Pwr S:N= 46.178509 dB
+10:57:45  QSPL Left= 0.000001  QSPL Right= 0.000019
+10:57:45 EnvelopeCorrelator CorMax:MaxProd= 61.339421  J= 41
+10:57:45 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:57:45 [Frame Type Decode Fail] Interp Ldr;S:N= 92.197647 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:57:46 Repeating Last Frame
+10:57:46 Sending Frame Type BREAK
+10:57:46 Command to Host PTT TRUE
+10:57:46 [Main.KeyPTT]  PTT-TRUE
+10:57:46 Command to Host PTT FALSE
+10:57:46 [Main.KeyPTT]  PTT-FALSE
+10:57:47 Input peaks = -10624, 10625
+10:57:48 Repeating Last Frame
+10:57:48 Sending Frame Type BREAK
+10:57:48 Command to Host PTT TRUE
+10:57:48 [Main.KeyPTT]  PTT-TRUE
+10:57:48 Command to Host PTT FALSE
+10:57:48 [Main.KeyPTT]  PTT-FALSE
+10:57:48 Fine Search S:N= 88.936844 dB, Prior S:N= 0.000000
+10:57:48   CourseOffsetHz= 0.000093 Coarse Pwr S:N= 42.872616 dB
+10:57:48  QSPL Left= 0.000025  QSPL Right= -0.000019
+10:57:48 EnvelopeCorrelator CorMax:MaxProd= 59.992744  J= 175
+10:57:48 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:57:49 [Frame Type Decode Fail] Interp Ldr;S:N= 88.936844 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:57:49 Exit Host Mode
+10:57:50 Repeating Last Frame
+10:57:50 Sending Frame Type BREAK
+10:57:50 Command to Host PTT TRUE
+10:57:50 [Main.KeyPTT]  PTT-TRUE
+10:57:50 Command to Host PTT FALSE
+10:57:50 [Main.KeyPTT]  PTT-FALSE
+10:57:50 SCS Command ST 0MYCALL GM8BPQ
+10:57:51 Repeating Last Frame
+10:57:51 Sending Frame Type BREAK
+10:57:51 Command to Host PTT TRUE
+10:57:51 [Main.KeyPTT]  PTT-TRUE
+10:57:52 Command to Host PTT FALSE
+10:57:52 [Main.KeyPTT]  PTT-FALSE
+10:57:52 Fine Search S:N= 89.199326 dB, Prior S:N= 0.000000
+10:57:52   CourseOffsetHz= 0.000177 Coarse Pwr S:N= 40.072441 dB
+10:57:52  QSPL Left= 0.000016  QSPL Right= 0.000003
+10:57:52 EnvelopeCorrelator CorMax:MaxProd= 60.004965  J= 138
+10:57:52 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:57:52 [Frame Type Decode Fail] Interp Ldr;S:N= 89.199326 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:57:53 Repeating Last Frame
+10:57:53 Sending Frame Type BREAK
+10:57:53 Command to Host PTT TRUE
+10:57:53 [Main.KeyPTT]  PTT-TRUE
+10:57:54 Command to Host PTT FALSE
+10:57:54 [Main.KeyPTT]  PTT-FALSE
+10:57:54 Command to Host BUFFER 290
+10:57:55 Repeating Last Frame
+10:57:55 Sending Frame Type BREAK
+10:57:55 Command to Host PTT TRUE
+10:57:55 [Main.KeyPTT]  PTT-TRUE
+10:57:56 Command to Host PTT FALSE
+10:57:56 [Main.KeyPTT]  PTT-FALSE
+10:57:57 Repeating Last Frame
+10:57:57 Sending Frame Type BREAK
+10:57:57 Command to Host PTT TRUE
+10:57:57 [Main.KeyPTT]  PTT-TRUE
+10:57:58 Command to Host PTT FALSE
+10:57:58 [Main.KeyPTT]  PTT-FALSE
+10:57:59 Repeating Last Frame
+10:57:59 Sending Frame Type BREAK
+10:57:59 Command to Host PTT TRUE
+10:57:59 [Main.KeyPTT]  PTT-TRUE
+10:57:59 Command to Host PTT FALSE
+10:57:59 [Main.KeyPTT]  PTT-FALSE
+10:58:01 Input peaks = -10708, 10709
+10:58:01 Repeating Last Frame
+10:58:01 Sending Frame Type BREAK
+10:58:01 Command to Host PTT TRUE
+10:58:01 [Main.KeyPTT]  PTT-TRUE
+10:58:01 Command to Host PTT FALSE
+10:58:01 [Main.KeyPTT]  PTT-FALSE
+10:58:03 Repeating Last Frame
+10:58:03 Sending Frame Type BREAK
+10:58:03 Command to Host PTT TRUE
+10:58:03 [Main.KeyPTT]  PTT-TRUE
+10:58:03 Command to Host PTT FALSE
+10:58:03 [Main.KeyPTT]  PTT-FALSE
+10:58:03 Fine Search S:N= 91.779442 dB, Prior S:N= 0.000000
+10:58:03   CourseOffsetHz= 0.000398 Coarse Pwr S:N= 44.887470 dB
+10:58:03  QSPL Left= -0.000012  QSPL Right= 0.000013
+10:58:03 EnvelopeCorrelator CorMax:MaxProd= 59.994993  J= 225
+10:58:03 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:04 [Frame Type Decode Fail] Interp Ldr;S:N= 91.779442 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:04 Command to Host BUFFER 290
+10:58:04 Repeating Last Frame
+10:58:04 Sending Frame Type BREAK
+10:58:05 Command to Host PTT TRUE
+10:58:05 [Main.KeyPTT]  PTT-TRUE
+10:58:05 Command to Host PTT FALSE
+10:58:05 [Main.KeyPTT]  PTT-FALSE
+10:58:06 Repeating Last Frame
+10:58:06 Sending Frame Type BREAK
+10:58:06 Command to Host PTT TRUE
+10:58:06 [Main.KeyPTT]  PTT-TRUE
+10:58:07 Command to Host PTT FALSE
+10:58:07 [Main.KeyPTT]  PTT-FALSE
+10:58:08 Repeating Last Frame
+10:58:08 Sending Frame Type BREAK
+10:58:08 Command to Host PTT TRUE
+10:58:08 [Main.KeyPTT]  PTT-TRUE
+10:58:09 Command to Host PTT FALSE
+10:58:09 [Main.KeyPTT]  PTT-FALSE
+10:58:09 Fine Search S:N= 92.976563 dB, Prior S:N= 0.000000
+10:58:09   CourseOffsetHz= 0.000372 Coarse Pwr S:N= 46.451630 dB
+10:58:09  QSPL Left= 0.000015  QSPL Right= -0.000006
+10:58:09 EnvelopeCorrelator CorMax:MaxProd= 59.987052  J= 208
+10:58:09 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:09 [Frame Type Decode Fail] Interp Ldr;S:N= 92.976563 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:10 Repeating Last Frame
+10:58:10 Sending Frame Type BREAK
+10:58:10 Command to Host PTT TRUE
+10:58:10 [Main.KeyPTT]  PTT-TRUE
+10:58:11 Command to Host PTT FALSE
+10:58:11 [Main.KeyPTT]  PTT-FALSE
+10:58:12 Repeating Last Frame
+10:58:12 Sending Frame Type BREAK
+10:58:12 Command to Host PTT TRUE
+10:58:12 [Main.KeyPTT]  PTT-TRUE
+10:58:12 Command to Host PTT FALSE
+10:58:13 [Main.KeyPTT]  PTT-FALSE
+10:58:13 Fine Search S:N= 89.695351 dB, Prior S:N= 0.000000
+10:58:13   CourseOffsetHz= 0.000215 Coarse Pwr S:N= 43.569988 dB
+10:58:13  QSPL Left= 0.000002  QSPL Right= 0.000020
+10:58:13 EnvelopeCorrelator CorMax:MaxProd= 59.997212  J= 186
+10:58:13 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:13 [Frame Type Decode Fail] Interp Ldr;S:N= 89.695351 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:14 Input peaks = -10709, 10708
+10:58:14 Repeating Last Frame
+10:58:14 Sending Frame Type BREAK
+10:58:14 Command to Host PTT TRUE
+10:58:14 [Main.KeyPTT]  PTT-TRUE
+10:58:14 Command to Host PTT FALSE
+10:58:14 [Main.KeyPTT]  PTT-FALSE
+10:58:14 Command to Host BUFFER 290
+10:58:16 Repeating Last Frame
+10:58:16 Sending Frame Type BREAK
+10:58:16 Command to Host PTT TRUE
+10:58:16 [Main.KeyPTT]  PTT-TRUE
+10:58:16 Command to Host PTT FALSE
+10:58:16 [Main.KeyPTT]  PTT-FALSE
+10:58:18 Repeating Last Frame
+10:58:18 Sending Frame Type BREAK
+10:58:18 Command to Host PTT TRUE
+10:58:18 [Main.KeyPTT]  PTT-TRUE
+10:58:18 Command to Host PTT FALSE
+10:58:18 [Main.KeyPTT]  PTT-FALSE
+10:58:19 Repeating Last Frame
+10:58:19 Sending Frame Type BREAK
+10:58:19 Command to Host PTT TRUE
+10:58:19 [Main.KeyPTT]  PTT-TRUE
+10:58:20 Command to Host PTT FALSE
+10:58:20 [Main.KeyPTT]  PTT-FALSE
+10:58:20 Fine Search S:N= 18.360819 dB, Prior S:N= 0.000000
+10:58:20   CourseOffsetHz= -1.160305 Coarse Pwr S:N= 8.098314 dB
+10:58:20  QSPL Left= 0.008393  QSPL Right= -0.043372
+10:58:20 EnvelopeCorrelator CorMax:MaxProd= 59.591501  J= 132
+10:58:20 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:20 [Frame Type Decode Fail] Interp Ldr;S:N= 18.360819 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:21 Repeating Last Frame
+10:58:21 Sending Frame Type BREAK
+10:58:21 Command to Host PTT TRUE
+10:58:21 [Main.KeyPTT]  PTT-TRUE
+10:58:22 Command to Host PTT FALSE
+10:58:22 [Main.KeyPTT]  PTT-FALSE
+10:58:23 Repeating Last Frame
+10:58:23 Sending Frame Type BREAK
+10:58:23 Command to Host PTT TRUE
+10:58:23 [Main.KeyPTT]  PTT-TRUE
+10:58:24 Command to Host PTT FALSE
+10:58:24 [Main.KeyPTT]  PTT-FALSE
+10:58:24 Command to Host BUFFER 290
+10:58:25 Repeating Last Frame
+10:58:25 Sending Frame Type BREAK
+10:58:25 Command to Host PTT TRUE
+10:58:25 [Main.KeyPTT]  PTT-TRUE
+10:58:26 Command to Host PTT FALSE
+10:58:26 [Main.KeyPTT]  PTT-FALSE
+10:58:27 Repeating Last Frame
+10:58:27 Sending Frame Type BREAK
+10:58:27 Command to Host PTT TRUE
+10:58:27 [Main.KeyPTT]  PTT-TRUE
+10:58:27 Command to Host PTT FALSE
+10:58:27 [Main.KeyPTT]  PTT-FALSE
+10:58:27 Input peaks = -10622, 10625
+10:58:28 Fine Search S:N= 91.115997 dB, Prior S:N= 0.000000
+10:58:28   CourseOffsetHz= 0.000242 Coarse Pwr S:N= 44.786667 dB
+10:58:28  QSPL Left= 0.000007  QSPL Right= -0.000010
+10:58:28 EnvelopeCorrelator CorMax:MaxProd= 60.007636  J= 127
+10:58:28 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:28 [Frame Type Decode Fail] Interp Ldr;S:N= 91.115997 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:29 Repeating Last Frame
+10:58:29 Sending Frame Type BREAK
+10:58:29 Command to Host PTT TRUE
+10:58:29 [Main.KeyPTT]  PTT-TRUE
+10:58:29 Command to Host PTT FALSE
+10:58:29 [Main.KeyPTT]  PTT-FALSE
+10:58:31 Repeating Last Frame
+10:58:31 Sending Frame Type BREAK
+10:58:31 Command to Host PTT TRUE
+10:58:31 [Main.KeyPTT]  PTT-TRUE
+10:58:31 Command to Host PTT FALSE
+10:58:31 [Main.KeyPTT]  PTT-FALSE
+10:58:33 Repeating Last Frame
+10:58:33 Sending Frame Type BREAK
+10:58:33 Command to Host PTT TRUE
+10:58:33 [Main.KeyPTT]  PTT-TRUE
+10:58:33 Command to Host PTT FALSE
+10:58:33 [Main.KeyPTT]  PTT-FALSE
+10:58:34 Command to Host BUFFER 290
+10:58:34 Repeating Last Frame
+10:58:34 Sending Frame Type BREAK
+10:58:34 Command to Host PTT TRUE
+10:58:34 [Main.KeyPTT]  PTT-TRUE
+10:58:35 Command to Host PTT FALSE
+10:58:35 [Main.KeyPTT]  PTT-FALSE
+10:58:35 Fine Search S:N= 89.732742 dB, Prior S:N= 0.000000
+10:58:35   CourseOffsetHz= 0.000087 Coarse Pwr S:N= 45.747417 dB
+10:58:35  QSPL Left= 0.000003  QSPL Right= 0.000011
+10:58:35 EnvelopeCorrelator CorMax:MaxProd= 60.002559  J= 198
+10:58:35 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:35 [Frame Type Decode Fail] Interp Ldr;S:N= 89.732742 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:36 Repeating Last Frame
+10:58:36 Sending Frame Type BREAK
+10:58:36 Command to Host PTT TRUE
+10:58:36 [Main.KeyPTT]  PTT-TRUE
+10:58:37 Command to Host PTT FALSE
+10:58:37 [Main.KeyPTT]  PTT-FALSE
+10:58:38 Repeating Last Frame
+10:58:38 Sending Frame Type BREAK
+10:58:38 Command to Host PTT TRUE
+10:58:38 [Main.KeyPTT]  PTT-TRUE
+10:58:39 Command to Host PTT FALSE
+10:58:39 [Main.KeyPTT]  PTT-FALSE
+10:58:40 Repeating Last Frame
+10:58:40 Sending Frame Type BREAK
+10:58:40 Command to Host PTT TRUE
+10:58:40 [Main.KeyPTT]  PTT-TRUE
+10:58:41 Command to Host PTT FALSE
+10:58:41 [Main.KeyPTT]  PTT-FALSE
+10:58:41 Input peaks = -10712, 10708
+10:58:41 Fine Search S:N= 91.771973 dB, Prior S:N= 0.000000
+10:58:41   CourseOffsetHz= 0.000278 Coarse Pwr S:N= 45.234581 dB
+10:58:41  QSPL Left= 0.000003  QSPL Right= -0.000003
+10:58:41 EnvelopeCorrelator CorMax:MaxProd= 61.555590  J= 13
+10:58:41 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:41 [Frame Type Decode Fail] Interp Ldr;S:N= 91.771973 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:42 Repeating Last Frame
+10:58:42 Sending Frame Type BREAK
+10:58:42 Command to Host PTT TRUE
+10:58:42 [Main.KeyPTT]  PTT-TRUE
+10:58:42 Command to Host PTT FALSE
+10:58:42 [Main.KeyPTT]  PTT-FALSE
+10:58:42 Fine Search S:N= 90.354378 dB, Prior S:N= 0.000000
+10:58:42   CourseOffsetHz= -0.000050 Coarse Pwr S:N= 40.442894 dB
+10:58:42  QSPL Left= -0.000013  QSPL Right= 0.000017
+10:58:42 EnvelopeCorrelator CorMax:MaxProd= 59.998627  J= 232
+10:58:42 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:43 [Frame Type Decode Fail] Interp Ldr;S:N= 90.354378 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:44 Repeating Last Frame
+10:58:44 Sending Frame Type BREAK
+10:58:44 Command to Host PTT TRUE
+10:58:44 [Main.KeyPTT]  PTT-TRUE
+10:58:44 Command to Host PTT FALSE
+10:58:44 [Main.KeyPTT]  PTT-FALSE
+10:58:44 Fine Search S:N= 92.067879 dB, Prior S:N= 0.000000
+10:58:44   CourseOffsetHz= 0.000073 Coarse Pwr S:N= 42.182732 dB
+10:58:44  QSPL Left= -0.000016  QSPL Right= 0.000011
+10:58:44 EnvelopeCorrelator CorMax:MaxProd= 61.057196  J= 1
+10:58:44 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:58:44 Command to Host BUFFER 290
+10:58:45 [Frame Type Decode Fail] Interp Ldr;S:N= 92.067879 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:58:46 Repeating Last Frame
+10:58:46 Sending Frame Type BREAK
+10:58:46 Command to Host PTT TRUE
+10:58:46 [Main.KeyPTT]  PTT-TRUE
+10:58:46 Command to Host PTT FALSE
+10:58:46 [Main.KeyPTT]  PTT-FALSE
+10:58:47 Repeating Last Frame
+10:58:47 Sending Frame Type BREAK
+10:58:48 Command to Host PTT TRUE
+10:58:48 [Main.KeyPTT]  PTT-TRUE
+10:58:48 Command to Host PTT FALSE
+10:58:48 [Main.KeyPTT]  PTT-FALSE
+10:58:49 Repeating Last Frame
+10:58:49 Sending Frame Type BREAK
+10:58:49 Command to Host PTT TRUE
+10:58:49 [Main.KeyPTT]  PTT-TRUE
+10:58:50 Command to Host PTT FALSE
+10:58:50 [Main.KeyPTT]  PTT-FALSE
+10:58:51 Repeating Last Frame
+10:58:51 Sending Frame Type BREAK
+10:58:51 Command to Host PTT TRUE
+10:58:51 [Main.KeyPTT]  PTT-TRUE
+10:58:52 Command to Host PTT FALSE
+10:58:52 [Main.KeyPTT]  PTT-FALSE
+10:58:53 Repeating Last Frame
+10:58:53 Sending Frame Type BREAK
+10:58:53 Command to Host PTT TRUE
+10:58:53 [Main.KeyPTT]  PTT-TRUE
+10:58:54 Command to Host PTT FALSE
+10:58:54 [Main.KeyPTT]  PTT-FALSE
+10:58:54 Input peaks = -10625, 10624
+10:58:54 Command to Host BUFFER 290
+10:58:55 Repeating Last Frame
+10:58:55 Sending Frame Type BREAK
+10:58:55 Command to Host PTT TRUE
+10:58:55 [Main.KeyPTT]  PTT-TRUE
+10:58:56 Command to Host PTT FALSE
+10:58:56 [Main.KeyPTT]  PTT-FALSE
+10:58:57 Repeating Last Frame
+10:58:57 Sending Frame Type BREAK
+10:58:57 Command to Host PTT TRUE
+10:58:57 [Main.KeyPTT]  PTT-TRUE
+10:58:57 Command to Host PTT FALSE
+10:58:57 [Main.KeyPTT]  PTT-FALSE
+10:58:59 Repeating Last Frame
+10:58:59 Sending Frame Type BREAK
+10:58:59 Command to Host PTT TRUE
+10:58:59 [Main.KeyPTT]  PTT-TRUE
+10:58:59 Command to Host PTT FALSE
+10:58:59 [Main.KeyPTT]  PTT-FALSE
+10:59:01 Repeating Last Frame
+10:59:01 Sending Frame Type BREAK
+10:59:01 Command to Host PTT TRUE
+10:59:01 [Main.KeyPTT]  PTT-TRUE
+10:59:01 Command to Host PTT FALSE
+10:59:01 [Main.KeyPTT]  PTT-FALSE
+10:59:02 Repeating Last Frame
+10:59:02 Sending Frame Type BREAK
+10:59:03 Command to Host PTT TRUE
+10:59:03 [Main.KeyPTT]  PTT-TRUE
+10:59:03 Command to Host PTT FALSE
+10:59:03 [Main.KeyPTT]  PTT-FALSE
+10:59:04 Repeating Last Frame
+10:59:04 Sending Frame Type BREAK
+10:59:04 Command to Host PTT TRUE
+10:59:04 [Main.KeyPTT]  PTT-TRUE
+10:59:05 Command to Host PTT FALSE
+10:59:05 [Main.KeyPTT]  PTT-FALSE
+10:59:05 Command to Host BUFFER 290
+10:59:05 Fine Search S:N= 89.171188 dB, Prior S:N= 0.000000
+10:59:05   CourseOffsetHz= 0.000092 Coarse Pwr S:N= 44.163113 dB
+10:59:05  QSPL Left= 0.000013  QSPL Right= -0.000007
+10:59:05 EnvelopeCorrelator CorMax:MaxProd= 59.996735  J= 154
+10:59:05 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:05 [Frame Type Decode Fail] Interp Ldr;S:N= 89.171188 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:06 Repeating Last Frame
+10:59:06 Sending Frame Type BREAK
+10:59:06 Command to Host PTT TRUE
+10:59:06 [Main.KeyPTT]  PTT-TRUE
+10:59:07 Command to Host PTT FALSE
+10:59:07 [Main.KeyPTT]  PTT-FALSE
+10:59:07 Fine Search S:N= 92.440765 dB, Prior S:N= 0.000000
+10:59:07   CourseOffsetHz= 0.000379 Coarse Pwr S:N= 40.040825 dB
+10:59:07  QSPL Left= 0.000040  QSPL Right= 0.000014
+10:59:07 EnvelopeCorrelator CorMax:MaxProd= 59.997712  J= 177
+10:59:07 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:07 Input peaks = -10708, 10710
+10:59:07 [Frame Type Decode Fail] Interp Ldr;S:N= 92.440765 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:08 Repeating Last Frame
+10:59:08 Sending Frame Type BREAK
+10:59:08 Command to Host PTT TRUE
+10:59:08 [Main.KeyPTT]  PTT-TRUE
+10:59:09 Command to Host PTT FALSE
+10:59:09 [Main.KeyPTT]  PTT-FALSE
+10:59:10 Repeating Last Frame
+10:59:10 Sending Frame Type BREAK
+10:59:10 Command to Host PTT TRUE
+10:59:10 [Main.KeyPTT]  PTT-TRUE
+10:59:10 Command to Host PTT FALSE
+10:59:10 [Main.KeyPTT]  PTT-FALSE
+10:59:12 Repeating Last Frame
+10:59:12 Sending Frame Type BREAK
+10:59:12 Command to Host PTT TRUE
+10:59:12 [Main.KeyPTT]  PTT-TRUE
+10:59:12 Command to Host PTT FALSE
+10:59:12 [Main.KeyPTT]  PTT-FALSE
+10:59:12 Fine Search S:N= 92.821640 dB, Prior S:N= 0.000000
+10:59:12   CourseOffsetHz= 0.000286 Coarse Pwr S:N= 42.930416 dB
+10:59:12  QSPL Left= 0.000044  QSPL Right= 0.000026
+10:59:12 EnvelopeCorrelator CorMax:MaxProd= 60.000036  J= 177
+10:59:12 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:13 [Frame Type Decode Fail] Interp Ldr;S:N= 92.821640 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:14 Repeating Last Frame
+10:59:14 Sending Frame Type BREAK
+10:59:14 Command to Host PTT TRUE
+10:59:14 [Main.KeyPTT]  PTT-TRUE
+10:59:14 Command to Host PTT FALSE
+10:59:14 [Main.KeyPTT]  PTT-FALSE
+10:59:14 Fine Search S:N= 89.150513 dB, Prior S:N= 0.000000
+10:59:14   CourseOffsetHz= 0.000340 Coarse Pwr S:N= 46.446686 dB
+10:59:14  QSPL Left= -0.000020  QSPL Right= 0.000013
+10:59:14 EnvelopeCorrelator CorMax:MaxProd= 61.451066  J= 35
+10:59:14 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:15 [Frame Type Decode Fail] Interp Ldr;S:N= 89.150513 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:15 Command to Host BUFFER 290
+10:59:16 Repeating Last Frame
+10:59:16 Sending Frame Type BREAK
+10:59:16 Command to Host PTT TRUE
+10:59:16 [Main.KeyPTT]  PTT-TRUE
+10:59:16 Command to Host PTT FALSE
+10:59:16 [Main.KeyPTT]  PTT-FALSE
+10:59:17 Repeating Last Frame
+10:59:17 Sending Frame Type BREAK
+10:59:17 Command to Host PTT TRUE
+10:59:17 [Main.KeyPTT]  PTT-TRUE
+10:59:18 Command to Host PTT FALSE
+10:59:18 [Main.KeyPTT]  PTT-FALSE
+10:59:18 Fine Search S:N= 89.017105 dB, Prior S:N= 0.000000
+10:59:18   CourseOffsetHz= 0.000254 Coarse Pwr S:N= 39.637341 dB
+10:59:18  QSPL Left= 0.000005  QSPL Right= 0.000035
+10:59:18 EnvelopeCorrelator CorMax:MaxProd= 60.061340  J= 111
+10:59:18 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:19 [Frame Type Decode Fail] Interp Ldr;S:N= 89.017105 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:19 Repeating Last Frame
+10:59:19 Sending Frame Type BREAK
+10:59:19 Command to Host PTT TRUE
+10:59:19 [Main.KeyPTT]  PTT-TRUE
+10:59:20 Command to Host PTT FALSE
+10:59:20 [Main.KeyPTT]  PTT-FALSE
+10:59:20 Input peaks = -10708, 10707
+10:59:21 SCS Command MYCALL GM8BPQ
+10:59:21 SCS Command RESTART
+10:59:21 SCS Command PTCC 0
+10:59:21 Repeating Last Frame
+10:59:21 Sending Frame Type BREAK
+10:59:21 Command to Host PTT TRUE
+10:59:21 [Main.KeyPTT]  PTT-TRUE
+10:59:21 SCS Command license
+10:59:22 Command to Host PTT FALSE
+10:59:22 [Main.KeyPTT]  PTT-FALSE
+10:59:22 Fine Search S:N= 92.646347 dB, Prior S:N= 0.000000
+10:59:22   CourseOffsetHz= -0.000159 Coarse Pwr S:N= 42.179520 dB
+10:59:22  QSPL Left= 0.000011  QSPL Right= -0.000012
+10:59:22 EnvelopeCorrelator CorMax:MaxProd= 59.986305  J= 155
+10:59:22 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:22 SCS Command ARX 0
+10:59:22 SCS Command CHOB 0
+10:59:22 SCS Command CM 0
+10:59:22 [Frame Type Decode Fail] Interp Ldr;S:N= 92.646347 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:22 SCS Command CONT 3
+10:59:22 SCS Command CWID 0 0
+10:59:22 SCS Command L 0
+10:59:22 SCS Command LF 0
+10:59:22 SCS Command MAXE 35
+10:59:23 SCS Command PTCH 31
+10:59:23 SCS Command REM 0
+10:59:23 SCS Command ST 2
+10:59:23 SCS Command TONES 4
+10:59:23 SCS Command UML 0
+10:59:23 Repeating Last Frame
+10:59:23 Sending Frame Type BREAK
+10:59:23 Command to Host PTT TRUE
+10:59:23 [Main.KeyPTT]  PTT-TRUE
+10:59:23 SCS Command TRX S 0
+10:59:23 SCS Command TRX DU 0
+10:59:23 SCS Command CB 0ADEC ALL 1
+10:59:23 SCS Command ADEC ALL 1
+10:59:23 SCS Command MYL 4
+10:59:23 SCS Command FSKA 150
+10:59:23 SCS Command PSKA 150
+10:59:23 SCS Command TXD 6
+10:59:23 SCS Command MYCALL GM8BPQ
+10:59:23 SCS Command JHOST4
+10:59:23 Entering Host Mode
+10:59:24 Command to Host PTT FALSE
+10:59:24 [Main.KeyPTT]  PTT-FALSE
+10:59:24 Fine Search S:N= 95.562683 dB, Prior S:N= 0.000000
+10:59:24   CourseOffsetHz= 0.000248 Coarse Pwr S:N= 46.389481 dB
+10:59:24  QSPL Left= 0.000013  QSPL Right= 0.000005
+10:59:24 EnvelopeCorrelator CorMax:MaxProd= 60.036300  J= 116
+10:59:24 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:24 [Frame Type Decode Fail] Interp Ldr;S:N= 95.562683 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:25 Repeating Last Frame
+10:59:25 Sending Frame Type BREAK
+10:59:25 Command to Host PTT TRUE
+10:59:25 [Main.KeyPTT]  PTT-TRUE
+10:59:25 Command to Host PTT FALSE
+10:59:25 [Main.KeyPTT]  PTT-FALSE
+10:59:25 Command to Host BUFFER 290
+10:59:25 Fine Search S:N= 89.520576 dB, Prior S:N= 0.000000
+10:59:25   CourseOffsetHz= 0.000422 Coarse Pwr S:N= 43.863991 dB
+10:59:25  QSPL Left= 0.000006  QSPL Right= 0.000049
+10:59:25 EnvelopeCorrelator CorMax:MaxProd= 61.086358  J= 1
+10:59:25 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:26 [Frame Type Decode Fail] Interp Ldr;S:N= 89.520576 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:27 Repeating Last Frame
+10:59:27 Sending Frame Type BREAK
+10:59:27 Command to Host PTT TRUE
+10:59:27 [Main.KeyPTT]  PTT-TRUE
+10:59:27 Command to Host PTT FALSE
+10:59:27 [Main.KeyPTT]  PTT-FALSE
+10:59:29 Repeating Last Frame
+10:59:29 Sending Frame Type BREAK
+10:59:29 Command to Host PTT TRUE
+10:59:29 [Main.KeyPTT]  PTT-TRUE
+10:59:29 Command to Host PTT FALSE
+10:59:29 [Main.KeyPTT]  PTT-FALSE
+10:59:30 Repeating Last Frame
+10:59:31 Sending Frame Type BREAK
+10:59:31 Command to Host PTT TRUE
+10:59:31 [Main.KeyPTT]  PTT-TRUE
+10:59:31 Command to Host PTT FALSE
+10:59:31 [Main.KeyPTT]  PTT-FALSE
+10:59:32 Repeating Last Frame
+10:59:32 Sending Frame Type BREAK
+10:59:32 Command to Host PTT TRUE
+10:59:32 [Main.KeyPTT]  PTT-TRUE
+10:59:33 Command to Host PTT FALSE
+10:59:33 [Main.KeyPTT]  PTT-FALSE
+10:59:33 Fine Search S:N= 91.037018 dB, Prior S:N= 0.000000
+10:59:33   CourseOffsetHz= 0.000400 Coarse Pwr S:N= 43.747231 dB
+10:59:33  QSPL Left= -0.000023  QSPL Right= 0.000015
+10:59:33 EnvelopeCorrelator CorMax:MaxProd= 61.367376  J= 37
+10:59:33 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:33 Input peaks = -10705, 10709
+10:59:33 [Frame Type Decode Fail] Interp Ldr;S:N= 91.037018 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+10:59:34 Repeating Last Frame
+10:59:34 Sending Frame Type BREAK
+10:59:34 Command to Host PTT TRUE
+10:59:34 [Main.KeyPTT]  PTT-TRUE
+10:59:35 Command to Host PTT FALSE
+10:59:35 [Main.KeyPTT]  PTT-FALSE
+10:59:35 Command to Host NEWSTATE ISS 
+10:59:35 Sending Frame Type ConReq2000M
+10:59:35 Command to Host PTT TRUE
+10:59:35 [Main.KeyPTT]  PTT-TRUE
+10:59:37 Command to Host PTT FALSE
+10:59:37 [Main.KeyPTT]  PTT-FALSE
+10:59:37 Command to Host BUFFER 290
+10:59:37 Fine Search S:N= 89.301155 dB, Prior S:N= 0.000000
+10:59:37   CourseOffsetHz= 0.000472 Coarse Pwr S:N= 46.321945 dB
+10:59:37  QSPL Left= -0.000025  QSPL Right= 0.000024
+10:59:37 EnvelopeCorrelator CorMax:MaxProd= 60.375324  J= 81
+10:59:37 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:38 [Frame Type Decode OK  ] Interp Ldr;S:N= 89.301155 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H3C:ConAck2000, D1= 0.00, D2= 0.00
+10:59:38 Qual = 97
+10:59:38 [DemodDecode4FSKConACK]  Remote leader timing reported: 1702508 ms
+10:59:38 [DecodeFrame] Frame: ConAck2000 Decode PASS,   Constellation Quality= 97
+10:59:38 [ARDOPprotocol.GetNextFrameData] Initial Frame Type: 16FSK.500.25S.E
+10:59:38 [ARDOPprotocol.ProcessRcvdARQFrame] Compatible bandwidth received from IRS ConAck: 2000 Hz
+10:59:38 Sending Frame Type ConAck2000
+10:59:38 Command to Host PTT TRUE
+10:59:38 [Main.KeyPTT]  PTT-TRUE
+10:59:39 Command to Host PTT FALSE
+10:59:39 [Main.KeyPTT]  PTT-FALSE
+10:59:40 Fine Search S:N= 90.109787 dB, Prior S:N= 0.000000
+10:59:40   CourseOffsetHz= -0.000052 Coarse Pwr S:N= 43.739853 dB
+10:59:40  QSPL Left= 0.000009  QSPL Right= -0.000004
+10:59:40 EnvelopeCorrelator CorMax:MaxProd= 60.006666  J= 212
+10:59:40 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:40 [Frame Type Decode OK  ] Interp Ldr;S:N= 90.109787 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=HFD:DataACK, D1= 0.00, D2= 0.00
+10:59:40 [DecodeFrame] Frame: DataACK 
+10:59:40 [ARDOPprotocol.ProcessRcvdARQFrame] ISS RmtLeaderMeas=261 ms
+10:59:40 [ARDOPprotocol.ProcessRcvdARQFrame] ACK received in ARQState ISSConAck 
+10:59:40 [ARDOPprotocol.SendData] DataToSend = 290 bytes, In ProtocolState ISS
+10:59:40 [ARDOPprotocol.GetNextFrameData] No shift, Frame Type: 16FSK.500.25S.E
+10:59:40 Sending Frame Type 16FSK.500.25S.E
+10:59:40 Command to Host PTT TRUE
+10:59:40 [Main.KeyPTT]  PTT-TRUE
+10:59:43 Command to Host PTT FALSE
+10:59:43 [Main.KeyPTT]  PTT-FALSE
+10:59:43 Command to Host CONNECTED GM8BPQ-10 2000
+10:59:43 Command to Host STATUS ARQ CONNECTION ESTABLISHED WITH GM8BPQ-10, SESSION BW = 2000 HZ
+10:59:43 Fine Search S:N= 87.242966 dB, Prior S:N= 0.000000
+10:59:43   CourseOffsetHz= 0.000214 Coarse Pwr S:N= 43.341103 dB
+10:59:43  QSPL Left= -0.000005  QSPL Right= 0.000006
+10:59:43 EnvelopeCorrelator CorMax:MaxProd= 59.997097  J= 197
+10:59:43 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:43 [Frame Type Decode Fail] Interp Ldr;S:N= 87.242966 dB, Offset= 0.000000 Hz:  MD Decode;10  Type1=H40: Type2=H0: , D1= 0.94, D2= 1.00
+10:59:45 Repeating Last Frame
+10:59:45 Sending Frame Type 16FSK.500.25S.E
+10:59:45 Command to Host PTT TRUE
+10:59:45 [Main.KeyPTT]  PTT-TRUE
+10:59:47 Command to Host PTT FALSE
+10:59:47 [Main.KeyPTT]  PTT-FALSE
+10:59:47 Command to Host BUFFER 290
+10:59:47 Fine Search S:N= 91.763390 dB, Prior S:N= 0.000000
+10:59:47   CourseOffsetHz= 0.000427 Coarse Pwr S:N= 44.578876 dB
+10:59:47  QSPL Left= -0.000004  QSPL Right= 0.000014
+10:59:47 EnvelopeCorrelator CorMax:MaxProd= 59.992190  J= 237
+10:59:47 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:48 [Frame Type Decode OK  ] Interp Ldr;S:N= 91.763390 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H23: BREAK, D1= 0.00, D2= 0.00
+10:59:48 [DecodeFrame] Frame: BREAK 
+10:59:48 [ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from ARQState ISSData, Go to ProtocolState IRS & substate IRSfromISS , send ACK
+10:59:48 Sending Frame Type DataACK
+10:59:48 Command to Host PTT TRUE
+10:59:48 [Main.KeyPTT]  PTT-TRUE
+10:59:48 Command to Host PTT FALSE
+10:59:48 [Main.KeyPTT]  PTT-FALSE
+10:59:48 Command to Host NEWSTATE IRS 
+10:59:49 Fine Search S:N= 83.491814 dB, Prior S:N= 0.000000
+10:59:49   CourseOffsetHz= 0.000313 Coarse Pwr S:N= 42.386307 dB
+10:59:49  QSPL Left= 0.000007  QSPL Right= 0.000010
+10:59:49 EnvelopeCorrelator CorMax:MaxProd= 60.525671  J= 73
+10:59:49 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:49 [Frame Type Decode OK  ] Interp Ldr;S:N= 83.491814 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H5B: 16FSK.500.25S.O, D1= 0.00, D2= 0.00
+10:59:51 Qual = 95
+10:59:51 [DemodDecode4FSKData] OK without RS
+10:59:51 [DecodeFrame] Frame: 16FSK.500.25S.O Decode PASS,   Constellation Quality= 95
+10:59:51 [ARDOPprotocol.ProcessRcvdARQFrame] Data Rcvd in ProtocolState=IRSData, Substate IRSfromISS Go to Substate IRSData
+10:59:51 Sending Frame Type DataACK
+10:59:52 Command to Host PTT TRUE
+10:59:52 [Main.KeyPTT]  PTT-TRUE
+10:59:52 Command to Host PTT FALSE
+10:59:52 [Main.KeyPTT]  PTT-FALSE
+10:59:52 Input peaks = -10883, 10880
+10:59:53 Fine Search S:N= 92.038155 dB, Prior S:N= 0.000000
+10:59:53   CourseOffsetHz= 0.000332 Coarse Pwr S:N= 47.010460 dB
+10:59:53  QSPL Left= 0.000008  QSPL Right= 0.000017
+10:59:53 EnvelopeCorrelator CorMax:MaxProd= 60.089471  J= 105
+10:59:53 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:54 [Frame Type Decode OK  ] Interp Ldr;S:N= 92.038155 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H5B: 16FSK.500.25S.O, D1= 0.00, D2= 0.00
+10:59:56 Qual = 95
+10:59:56 [DemodDecode4FSKData] OK without RS
+10:59:56 [DecodeFrame] Frame: 16FSK.500.25S.O Decode PASS,   Constellation Quality= 95
+10:59:56 Sending Frame Type DataACK
+10:59:56 Command to Host PTT TRUE
+10:59:56 [Main.KeyPTT]  PTT-TRUE
+10:59:56 Command to Host PTT FALSE
+10:59:56 [Main.KeyPTT]  PTT-FALSE
+10:59:57 Fine Search S:N= 85.405533 dB, Prior S:N= 0.000000
+10:59:57   CourseOffsetHz= 0.000128 Coarse Pwr S:N= 41.063583 dB
+10:59:57  QSPL Left= 0.000003  QSPL Right= 0.000004
+10:59:57 EnvelopeCorrelator CorMax:MaxProd= 60.411242  J= 79
+10:59:57 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+10:59:57 Command to Host BUFFER 0
+10:59:57 [Frame Type Decode OK  ] Interp Ldr;S:N= 85.405533 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H4A: 4FSK.500.100.E, D1= 0.00, D2= 0.00
+11:00:01 Qual = 97
+11:00:01 [DemodDecode4FSKData] OK without RS
+11:00:01 [DecodeFrame] Frame: 4FSK.500.100.E Decode PASS,   Constellation Quality= 97
+11:00:01 Sending Frame Type DataACK
+11:00:01 Command to Host PTT TRUE
+11:00:01 [Main.KeyPTT]  PTT-TRUE
+11:00:01 Command to Host PTT FALSE
+11:00:01 [Main.KeyPTT]  PTT-FALSE
+11:00:03 Fine Search S:N= 88.005417 dB, Prior S:N= 0.000000
+11:00:03   CourseOffsetHz= 0.000057 Coarse Pwr S:N= 44.932564 dB
+11:00:03  QSPL Left= 0.000007  QSPL Right= 0.000002
+11:00:03 EnvelopeCorrelator CorMax:MaxProd= 59.995267  J= 206
+11:00:03 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:00:03 [Frame Type Decode OK  ] Interp Ldr;S:N= 88.005417 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H4A: 4FSK.500.100.E, D1= 0.00, D2= 0.00
+11:00:04 Input peaks = -10881, 10880
+11:00:06 Qual = 97
+11:00:06 [DemodDecode4FSKData] OK without RS
+11:00:06 [DecodeFrame] Frame: 4FSK.500.100.E Decode PASS,   Constellation Quality= 97
+11:00:07 Sending Frame Type DataACK
+11:00:07 Command to Host PTT TRUE
+11:00:07 [Main.KeyPTT]  PTT-TRUE
+11:00:07 Command to Host PTT FALSE
+11:00:07 [Main.KeyPTT]  PTT-FALSE
+11:00:07 Command to Host BUFFER 0
+11:00:09 Fine Search S:N= 101.474625 dB, Prior S:N= 0.000000
+11:00:09   CourseOffsetHz= 0.000315 Coarse Pwr S:N= 50.596527 dB
+11:00:09  QSPL Left= 0.000022  QSPL Right= 0.000028
+11:00:09 EnvelopeCorrelator CorMax:MaxProd= 60.007221  J= 133
+11:00:09 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:00:09 [Frame Type Decode OK  ] Interp Ldr;S:N= 101.474625 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H4A: 4FSK.500.100.E, D1= 0.00, D2= 0.00
+11:00:12 Qual = 97
+11:00:12 [DemodDecode4FSKData] OK without RS
+11:00:12 [DecodeFrame] Frame: 4FSK.500.100.E Decode PASS,   Constellation Quality= 97
+11:00:13 Sending Frame Type DataACK
+11:00:13 Command to Host PTT TRUE
+11:00:13 [Main.KeyPTT]  PTT-TRUE
+11:00:13 Command to Host PTT FALSE
+11:00:13 [Main.KeyPTT]  PTT-FALSE
+11:00:14 Fine Search S:N= 85.501106 dB, Prior S:N= 0.000000
+11:00:14   CourseOffsetHz= 0.000395 Coarse Pwr S:N= 39.461414 dB
+11:00:14  QSPL Left= -0.000026  QSPL Right= 0.000027
+11:00:14 EnvelopeCorrelator CorMax:MaxProd= 60.174126  J= 96
+11:00:14 [Acquire2ToneLeaderSymbolFraming] intIatMinError= -1
+11:00:14 [Frame Type Decode OK  ] Interp Ldr;S:N= 85.501106 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H69: 4FSK.1000.100.O, D1= 0.00, D2= 0.00
+11:00:15 Input peaks = -10976, 10878
+11:00:17 Command to Host BUFFER 0
+11:00:17 Qual = 97
+11:00:17 [DemodDecode4FSKData] OK without RS
+11:00:17 [DemodDecode4FSKData] OK without RS
+11:00:17 [DecodeFrame] Frame: 4FSK.1000.100.O Decode PASS,   Constellation Quality= 97
+11:00:18 Sending Frame Type DataACK
+11:00:18 Command to Host PTT TRUE
+11:00:18 [Main.KeyPTT]  PTT-TRUE
+11:00:18 Command to Host PTT FALSE
+11:00:18 [Main.KeyPTT]  PTT-FALSE
+11:00:26 Input peaks = -10874, 10655
+11:00:27 Command to Host BUFFER 0
+11:00:36 Input peaks = -12, 11
+11:00:37 Command to Host BUFFER 0
+11:00:38 Exit Host Mode
+11:00:39 SCS Command ST 0MYCALL GM8BPQ
+11:00:40 SCS Command MYCALL GM8BPQ
+11:00:40 SCS Command RESTART
+11:00:40 SCS Command PTCC 0
+11:00:40 SCS Command license
+11:00:41 SCS Command ARX 0
+11:00:41 SCS Command CHOB 0
+11:00:41 SCS Command CM 0
+11:00:41 SCS Command CONT 3
+11:00:41 SCS Command CWID 0 0
+11:00:41 SCS Command L 0
+11:00:42 SCS Command LF 0
+11:00:42 SCS Command MAXE 35
+11:00:42 SCS Command PTCH 31
+11:00:42 SCS Command REM 0
+11:00:42 SCS Command ST 2
+11:00:42 SCS Command TONES 4
+11:00:42 SCS Command UML 0
+11:00:42 SCS Command TRX S 0
+11:00:42 SCS Command TRX DU 0
+11:00:42 SCS Command CB 0ADEC ALL 1
+11:00:42 SCS Command ADEC ALL 1
+11:00:42 SCS Command MYL 4
+11:00:42 SCS Command FSKA 150
+11:00:42 SCS Command PSKA 150
+11:00:43 SCS Command TXD 6
+11:00:43 SCS Command MYCALL GM8BPQ
+11:00:43 SCS Command JHOST4
+11:00:43 Entering Host Mode
+11:00:46 Input peaks = -10, 9
+11:00:47 Command to Host BUFFER 0
+11:00:49 Command to Host NEWSTATE ISS 
+11:00:49 Sending Frame Type ConReq2000M
+11:00:49 Command to Host PTT TRUE
+11:00:49 [Main.KeyPTT]  PTT-TRUE
+11:00:51 Command to Host PTT FALSE
+11:00:51 [Main.KeyPTT]  PTT-FALSE
+11:00:53 Repeating Last Frame
+11:00:53 Sending Frame Type ConReq2000M
+11:00:53 Command to Host PTT TRUE
+11:00:53 [Main.KeyPTT]  PTT-TRUE
+11:00:55 Command to Host PTT FALSE
+11:00:55 [Main.KeyPTT]  PTT-FALSE
+11:00:55 Fine Search S:N= 91.945343 dB, Prior S:N= 0.000000
+11:00:55   CourseOffsetHz= 0.000589 Coarse Pwr S:N= 42.630287 dB
+11:00:55  QSPL Left= 0.000056  QSPL Right= 0.000026
+11:00:55 EnvelopeCorrelator CorMax:MaxProd= 60.004975  J= 124
+11:00:56 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:00:56 [Frame Type Decode OK  ] Interp Ldr;S:N= 91.945343 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H3C:ConAck2000, D1= 0.00, D2= 0.00
+11:00:56 Qual = 97
+11:00:56 [DemodDecode4FSKConACK]  Remote leader timing reported: 1702508 ms
+11:00:56 [DecodeFrame] Frame: ConAck2000 Decode PASS,   Constellation Quality= 97
+11:00:56 [ARDOPprotocol.GetNextFrameData] Initial Frame Type: 16FSK.500.25S.E
+11:00:56 [ARDOPprotocol.ProcessRcvdARQFrame] Compatible bandwidth received from IRS ConAck: 2000 Hz
+11:00:56 Sending Frame Type ConAck2000
+11:00:56 Command to Host PTT TRUE
+11:00:57 [Main.KeyPTT]  PTT-TRUE
+11:00:57 Command to Host PTT FALSE
+11:00:57 [Main.KeyPTT]  PTT-FALSE
+11:00:57 Command to Host BUFFER 0
+11:00:58 Fine Search S:N= 87.892570 dB, Prior S:N= 0.000000
+11:00:58   CourseOffsetHz= 0.000102 Coarse Pwr S:N= 45.793041 dB
+11:00:58  QSPL Left= 0.000012  QSPL Right= 0.000004
+11:00:58 EnvelopeCorrelator CorMax:MaxProd= 60.008950  J= 204
+11:00:58 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:00:58 [Frame Type Decode OK  ] Interp Ldr;S:N= 87.892570 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=HFD:DataACK, D1= 0.00, D2= 0.00
+11:00:58 [DecodeFrame] Frame: DataACK 
+11:00:58 [ARDOPprotocol.ProcessRcvdARQFrame] ISS RmtLeaderMeas=260 ms
+11:00:58 [ARDOPprotocol.ProcessRcvdARQFrame] ACK received in ARQState ISSConAck 
+11:00:59 [ARDOPprotocol.CheckForDisconnect]  ARQ Disconnect ...Sending DISC (repeat)
+11:00:59 Command to Host STATUS INITIATING ARQ DISCONNECT
+11:00:59 Sending Frame Type DISC
+11:00:59 Command to Host PTT TRUE
+11:00:59 [Main.KeyPTT]  PTT-TRUE
+11:00:59 Command to Host PTT FALSE
+11:00:59 [Main.KeyPTT]  PTT-FALSE
+11:00:59 Command to Host CONNECTED GM8BPQ-10 2000
+11:00:59 Command to Host STATUS ARQ CONNECTION ESTABLISHED WITH GM8BPQ-10, SESSION BW = 2000 HZ
+11:01:00 Fine Search S:N= 91.073952 dB, Prior S:N= 0.000000
+11:01:00   CourseOffsetHz= -0.000036 Coarse Pwr S:N= 42.925419 dB
+11:01:00  QSPL Left= -0.000008  QSPL Right= 0.000002
+11:01:00 EnvelopeCorrelator CorMax:MaxProd= 60.007695  J= 138
+11:01:00 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:00 [Frame Type Decode OK  ] Interp Ldr;S:N= 91.073952 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H2C: END, D1= 0.00, D2= 0.00
+11:01:00 [DecodeFrame] Frame: END 
+11:01:00 [ARDOPprotocol.ProcessRcvdARQFrame]  END received ... going to DISC state
+11:01:00  
+11:01:00 ************************* ARQ session stats with GM8BPQ-10  0 mintes ****************************
+11:01:00      LeaderDetects= 3   AvgLeader S+N:N(3KHz noise BW)= 66.503955 dB  LeaderSyncs= 3
+11:01:00      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+11:01:00      FrameSyncs=3  Good Frame Type Decodes=3  Failed Frame Type Decodes =0
+11:01:00      Avg Frame Type decode distance= 0.000891 over 1 decodes
+11:01:00  
+11:01:00   FSK:
+11:01:00      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+11:01:00      AccumFSKTracking= 0   over 20 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+11:01:00   Squelch= 5  Mode Shift UPs= 0   Mode Shift DOWNs= 0  Link Turnovers= 0
+11:01:00  
+11:01:00   Received Frame Quality:
+11:01:00      Avg 4FSK Quality=95 on 3 frame(s)
+11:01:00 ************************************************************************************************
+11:01:00 Command to Host DISCONNECTED
+11:01:00 Command to Host STATUS ARQ CONNECTION ENDED WITH GM8BPQ-10
+11:01:00 Sending Frame Type IDFrame
+11:01:00 Command to Host PTT TRUE
+11:01:00 [Main.KeyPTT]  PTT-TRUE
+11:01:02 Command to Host PTT FALSE
+11:01:02 [Main.KeyPTT]  PTT-FALSE
+11:01:02 Command to Host NEWSTATE DISC 
+11:01:03 Input peaks = -10710, 10706
+11:01:03 Command to Host BUSY FALSE
+11:01:07 Command to Host BUFFER 0
+11:01:08 Command to Host NEWSTATE ISS 
+11:01:08 Sending Frame Type ConReq2000M
+11:01:08 Command to Host PTT TRUE
+11:01:08 [Main.KeyPTT]  PTT-TRUE
+11:01:09 Command to Host PTT FALSE
+11:01:09 [Main.KeyPTT]  PTT-FALSE
+11:01:09 Fine Search S:N= 88.675224 dB, Prior S:N= 0.000000
+11:01:09   CourseOffsetHz= -0.000221 Coarse Pwr S:N= 39.337555 dB
+11:01:09  QSPL Left= 0.000004  QSPL Right= -0.000014
+11:01:09 EnvelopeCorrelator CorMax:MaxProd= 60.051296  J= 112
+11:01:09 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:10 [Frame Type Decode Fail] Interp Ldr;S:N= 88.675224 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H0:DataNAK, D1= 1.00, D2= 1.00
+11:01:10 Fine Search S:N= 90.041512 dB, Prior S:N= 0.000000
+11:01:10   CourseOffsetHz= 0.000161 Coarse Pwr S:N= 45.410595 dB
+11:01:10  QSPL Left= -0.000024  QSPL Right= 0.000011
+11:01:10 EnvelopeCorrelator CorMax:MaxProd= 60.008850  J= 215
+11:01:10 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:10 [Frame Type Decode OK  ] Interp Ldr;S:N= 90.041512 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H3C:ConAck2000, D1= 0.00, D2= 0.00
+11:01:11 Qual = 97
+11:01:11 [DemodDecode4FSKConACK]  Remote leader timing reported: 1702508 ms
+11:01:11 [DecodeFrame] Frame: ConAck2000 Decode PASS,   Constellation Quality= 97
+11:01:11 [ARDOPprotocol.GetNextFrameData] Initial Frame Type: 16FSK.500.25S.E
+11:01:11 [ARDOPprotocol.ProcessRcvdARQFrame] Compatible bandwidth received from IRS ConAck: 2000 Hz
+11:01:11 Sending Frame Type ConAck2000
+11:01:11 Command to Host PTT TRUE
+11:01:11 [Main.KeyPTT]  PTT-TRUE
+11:01:11 Command to Host PTT FALSE
+11:01:11 [Main.KeyPTT]  PTT-FALSE
+11:01:12 Fine Search S:N= 91.059914 dB, Prior S:N= 0.000000
+11:01:12   CourseOffsetHz= 0.000189 Coarse Pwr S:N= 39.282463 dB
+11:01:12  QSPL Left= 0.000002  QSPL Right= 0.000019
+11:01:12 EnvelopeCorrelator CorMax:MaxProd= 60.002573  J= 172
+11:01:12 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:13 [Frame Type Decode OK  ] Interp Ldr;S:N= 91.059914 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=HFD:DataACK, D1= 0.00, D2= 0.00
+11:01:13 [DecodeFrame] Frame: DataACK 
+11:01:13 [ARDOPprotocol.ProcessRcvdARQFrame] ISS RmtLeaderMeas=279 ms
+11:01:13 [ARDOPprotocol.ProcessRcvdARQFrame] ACK received in ARQState ISSConAck 
+11:01:13 [ARDOPprotocol.SendData] DataToSend = 0 bytes, ProtocolState ISS>QUIET (Rule 3.1)
+11:01:13 Command to Host NEWSTATE QUIET 
+11:01:13 Command to Host CONNECTED GM8BPQ-10 2000
+11:01:13 Command to Host STATUS ARQ CONNECTION ESTABLISHED WITH GM8BPQ-10, SESSION BW = 2000 HZ
+11:01:15 Fine Search S:N= 87.626228 dB, Prior S:N= 0.000000
+11:01:15   CourseOffsetHz= 0.000193 Coarse Pwr S:N= 45.066395 dB
+11:01:15  QSPL Left= 0.000017  QSPL Right= 0.000013
+11:01:15 EnvelopeCorrelator CorMax:MaxProd= 61.325018  J= 40
+11:01:15 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:15 [Frame Type Decode OK  ] Interp Ldr;S:N= 87.626228 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H23: BREAK, D1= 0.00, D2= 0.00
+11:01:15 [DecodeFrame] Frame: BREAK 
+11:01:16 Sending Frame Type DataACK
+11:01:16 Command to Host PTT TRUE
+11:01:16 [Main.KeyPTT]  PTT-TRUE
+11:01:16 Command to Host PTT FALSE
+11:01:16 [Main.KeyPTT]  PTT-FALSE
+11:01:16 [ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from QUIET, Go to IRS, Substate IRSfromISS
+11:01:16 Command to Host NEWSTATE IRS 
+11:01:16 Input peaks = -10709, 10713
+11:01:17 Fine Search S:N= 88.776947 dB, Prior S:N= 0.000000
+11:01:17   CourseOffsetHz= 0.000300 Coarse Pwr S:N= 46.072304 dB
+11:01:17  QSPL Left= 0.000014  QSPL Right= 0.000021
+11:01:17 EnvelopeCorrelator CorMax:MaxProd= 61.570332  J= 27
+11:01:17 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:17 [Frame Type Decode OK  ] Interp Ldr;S:N= 88.776947 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H5A: 16FSK.500.25S.E, D1= 0.00, D2= 0.00
+11:01:17 Command to Host BUFFER 0
+11:01:19 Qual = 95
+11:01:19 [DemodDecode4FSKData] OK without RS
+11:01:19 [DecodeFrame] Frame: 16FSK.500.25S.E Decode PASS,   Constellation Quality= 95
+11:01:19 [ARDOPprotocol.ProcessRcvdARQFrame] Data Rcvd in ProtocolState=IRSData, Substate IRSfromISS Go to Substate IRSData
+11:01:19 Sending Frame Type DataACK
+11:01:19 Command to Host PTT TRUE
+11:01:19 [Main.KeyPTT]  PTT-TRUE
+11:01:20 Command to Host PTT FALSE
+11:01:20 [Main.KeyPTT]  PTT-FALSE
+11:01:20 Fine Search S:N= 91.418564 dB, Prior S:N= 0.000000
+11:01:20   CourseOffsetHz= 0.000258 Coarse Pwr S:N= 47.679844 dB
+11:01:20  QSPL Left= 0.000007  QSPL Right= 0.000024
+11:01:20 EnvelopeCorrelator CorMax:MaxProd= 60.005195  J= 169
+11:01:20 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:21 [Frame Type Decode OK  ] Interp Ldr;S:N= 91.418564 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H4B: 4FSK.500.100.O, D1= 0.00, D2= 0.00
+11:01:24 Qual = 97
+11:01:24 [DemodDecode4FSKData] OK without RS
+11:01:24 [DecodeFrame] Frame: 4FSK.500.100.O Decode PASS,   Constellation Quality= 97
+11:01:24 Sending Frame Type DataACK
+11:01:24 Command to Host PTT TRUE
+11:01:24 [Main.KeyPTT]  PTT-TRUE
+11:01:25 Command to Host PTT FALSE
+11:01:25 [Main.KeyPTT]  PTT-FALSE
+11:01:26 Fine Search S:N= 87.553566 dB, Prior S:N= 0.000000
+11:01:26   CourseOffsetHz= 0.000103 Coarse Pwr S:N= 40.937576 dB
+11:01:26  QSPL Left= -0.000014  QSPL Right= 0.000014
+11:01:26 EnvelopeCorrelator CorMax:MaxProd= 61.388042  J= 8
+11:01:26 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:26 [Frame Type Decode OK  ] Interp Ldr;S:N= 87.553566 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H4B: 4FSK.500.100.O, D1= 0.00, D2= 0.00
+11:01:27 Command to Host BUFFER 0
+11:01:28 Input peaks = -10796, 10794
+11:01:30 Qual = 96
+11:01:30 [DemodDecode4FSKData] OK without RS
+11:01:30 [DecodeFrame] Frame: 4FSK.500.100.O Decode PASS,   Constellation Quality= 96
+11:01:30 Sending Frame Type DataACK
+11:01:30 Command to Host PTT TRUE
+11:01:30 [Main.KeyPTT]  PTT-TRUE
+11:01:31 Command to Host PTT FALSE
+11:01:31 [Main.KeyPTT]  PTT-FALSE
+11:01:31 Fine Search S:N= 85.977943 dB, Prior S:N= 0.000000
+11:01:31   CourseOffsetHz= -0.000063 Coarse Pwr S:N= 43.040352 dB
+11:01:31  QSPL Left= -0.000024  QSPL Right= 0.000025
+11:01:31 EnvelopeCorrelator CorMax:MaxProd= 61.378112  J= 7
+11:01:31 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:31 [Frame Type Decode OK  ] Interp Ldr;S:N= 85.977943 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H68: 4FSK.1000.100.E, D1= 0.00, D2= 0.00
+11:01:35 Qual = 97
+11:01:35 [DemodDecode4FSKData] OK without RS
+11:01:35 [DemodDecode4FSKData] OK without RS
+11:01:35 [DecodeFrame] Frame: 4FSK.1000.100.E Decode PASS,   Constellation Quality= 97
+11:01:35 Sending Frame Type DataACK
+11:01:35 Command to Host PTT TRUE
+11:01:35 [Main.KeyPTT]  PTT-TRUE
+11:01:35 Command to Host PTT FALSE
+11:01:35 [Main.KeyPTT]  PTT-FALSE
+11:01:37 Command to Host BUFFER 0
+11:01:39 Input peaks = -10974, 10598
+11:01:44 Fine Search S:N= 89.972649 dB, Prior S:N= 0.000000
+11:01:44   CourseOffsetHz= 0.000313 Coarse Pwr S:N= 45.666336 dB
+11:01:44  QSPL Left= 0.000052  QSPL Right= 0.000023
+11:01:44 EnvelopeCorrelator CorMax:MaxProd= 60.056965  J= 113
+11:01:44 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:45 [Frame Type Decode OK  ] Interp Ldr;S:N= 89.972649 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H29: DISC, D1= 0.00, D2= 0.00
+11:01:45 [DecodeFrame] Frame: DISC 
+11:01:45 [ARDOPprotocol.ProcessRcvdARQFrame]  DISC frame received in ProtocolState IRS, IRSData...going to DISC state
+11:01:45  
+11:01:45 ************************* ARQ session stats with GM8BPQ-10  0 mintes ****************************
+11:01:45      LeaderDetects= 9   AvgLeader S+N:N(3KHz noise BW)= 65.211391 dB  LeaderSyncs= 9
+11:01:45      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+11:01:45      FrameSyncs=9  Good Frame Type Decodes=9  Failed Frame Type Decodes =0
+11:01:45      Avg Frame Type decode distance= 0.000863 over 6 decodes
+11:01:45  
+11:01:45   FSK:
+11:01:45      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+11:01:45      AccumFSKTracking= 0   over 1394 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+11:01:45   Squelch= 5  Mode Shift UPs= 0   Mode Shift DOWNs= 0  Link Turnovers= 1
+11:01:45  
+11:01:45   Received Frame Quality:
+11:01:45      Avg 4FSK Quality=96 on 7 frame(s)
+11:01:45      Avg 16FSK Quality=95 on 1 frame(s)
+11:01:45 ************************************************************************************************
+11:01:45 Command to Host DISCONNECTED
+11:01:45 Command to Host STATUS ARQ CONNECTION ENDED WITH GM8BPQ-10
+11:01:45 Command to Host NEWSTATE DISC 
+11:01:45 Sending Frame Type END
+11:01:45 Command to Host PTT TRUE
+11:01:45 [Main.KeyPTT]  PTT-TRUE
+11:01:46 Command to Host PTT FALSE
+11:01:46 [Main.KeyPTT]  PTT-FALSE
+11:01:46 [ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (GM8BPQ, [])
+11:01:46 Sending Frame Type IDFrame
+11:01:46 Command to Host PTT TRUE
+11:01:46 [Main.KeyPTT]  PTT-TRUE
+11:01:47 Command to Host PTT FALSE
+11:01:47 [Main.KeyPTT]  PTT-FALSE
+11:01:47 Command to Host BUFFER 0
+11:01:49 Command to Host BUSY TRUE
+11:01:49 Fine Search S:N= 88.852768 dB, Prior S:N= 0.000000
+11:01:49   CourseOffsetHz= 0.000111 Coarse Pwr S:N= 44.563271 dB
+11:01:50  QSPL Left= 0.000018  QSPL Right= 0.000000
+11:01:50 EnvelopeCorrelator CorMax:MaxProd= 59.988397  J= 156
+11:01:50 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:50 [Frame Type Decode Fail] Interp Ldr;S:N= 88.852768 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H29, Type2=HFE, D1= 0.00, D2= 0.00
+11:01:51 Fine Search S:N= 89.584518 dB, Prior S:N= 0.000000
+11:01:51   CourseOffsetHz= 0.000184 Coarse Pwr S:N= 44.558197 dB
+11:01:51  QSPL Left= -0.000011  QSPL Right= 0.000006
+11:01:51 EnvelopeCorrelator CorMax:MaxProd= 60.099148  J= 105
+11:01:51 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:51 [Frame Type Decode Fail] Interp Ldr;S:N= 89.584518 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H29, Type2=HFE, D1= 0.00, D2= 0.00
+11:01:52 Input peaks = -10706, 10706
+11:01:53 Fine Search S:N= 21.936453 dB, Prior S:N= 0.000000
+11:01:53   CourseOffsetHz= -0.885309 Coarse Pwr S:N= 9.131413 dB
+11:01:53  QSPL Left= -0.002756  QSPL Right= 0.014507
+11:01:53 EnvelopeCorrelator CorMax:MaxProd= 60.884548  J= 161
+11:01:53 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:01:54 [Frame Type Decode Fail] Interp Ldr;S:N= 21.936453 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H29, Type2=HFE, D1= 0.00, D2= 0.00
+11:01:54 Command to Host BUSY FALSE
+11:01:54 Command to Host BUSY TRUE
+11:01:57 Command to Host BUFFER 0
+11:01:58 Exit Host Mode
+11:01:59 SCS Command ST 0MYCALL GM8BPQ
+11:02:02 Input peaks = -10623, 10622
+11:02:07 Command to Host BUFFER 0
+11:02:09 Command to Host BUSY FALSE
+11:04:57 timeGetTime 143950687
+11:04:57 ARDOPC Version 0.5.5.1-BPQ
+11:04:57 Capture Devices
+11:04:57 0 Stereo Mix (Realtek High Defini
+11:04:57 1 CABLE Output (VB-Audio Virtual 
+11:04:57 Playback Devices
+11:04:57 0 Speakers (Realtek High Definiti
+11:04:57 1 Realtek Digital Output (Realtek
+11:04:57 2 CABLE Input (VB-Audio Virtual C
+11:04:57 Command to Host NEWSTATE DISC 
+11:04:57 Opened WaveOut Device Speakers (Realtek High Definiti
+11:04:57 Opened WaveIn Device Stereo Mix (Realtek High Defini
+11:04:57 ARDOPC opening port com15
+11:04:57 ARDOPC opened port com15
+11:05:06 SCS Command 
+11:05:06 SCS Command RESTART
+11:05:06 SCS Command PTCC 0
+11:05:06 SCS Command license
+11:05:07 Command to Host BUFFER 0
+11:05:07 Input peaks = -10, 10
+11:05:07 SCS Command ARX 0
+11:05:07 SCS Command CHOB 0
+11:05:07 SCS Command CM 0
+11:05:07 SCS Command CONT 3
+11:05:07 SCS Command CWID 0 0
+11:05:07 SCS Command L 0
+11:05:08 SCS Command LF 0
+11:05:08 SCS Command MAXE 35
+11:05:08 SCS Command PTCH 31
+11:05:08 SCS Command REM 0
+11:05:08 SCS Command ST 2
+11:05:08 SCS Command TONES 4
+11:05:08 SCS Command UML 0
+11:05:08 SCS Command TRX S 0
+11:05:08 SCS Command TRX DU 0
+11:05:08 SCS Command CB 0ADEC ALL 1
+11:05:08 SCS Command ADEC ALL 1
+11:05:08 SCS Command MYL 4
+11:05:08 SCS Command FSKA 150
+11:05:08 SCS Command PSKA 150
+11:05:08 SCS Command TXD 6
+11:05:09 SCS Command MYCALL GM8BPQ
+11:05:09 SCS Command JHOST4
+11:05:09 Entering Host Mode
+11:05:11 Command to Host NEWSTATE ISS 
+11:05:11 Sending Frame Type ConReq2000M
+11:05:11 Command to Host PTT TRUE
+11:05:11 [Main.KeyPTT]  PTT-TRUE
+11:05:13 Command to Host PTT FALSE
+11:05:13 [Main.KeyPTT]  PTT-FALSE
+11:05:15 Repeating Last Frame
+11:05:15 Sending Frame Type ConReq2000M
+11:05:15 Command to Host PTT TRUE
+11:05:15 [Main.KeyPTT]  PTT-TRUE
+11:05:16 Command to Host PTT FALSE
+11:05:16 [Main.KeyPTT]  PTT-FALSE
+11:05:17 Command to Host BUFFER 0
+11:05:18 Repeating Last Frame
+11:05:18 Sending Frame Type ConReq2000M
+11:05:18 Command to Host PTT TRUE
+11:05:18 [Main.KeyPTT]  PTT-TRUE
+11:05:20 Command to Host PTT FALSE
+11:05:20 [Main.KeyPTT]  PTT-FALSE
+11:05:22 Input peaks = -10624, 10622
+11:05:22 Repeating Last Frame
+11:05:22 Sending Frame Type ConReq2000M
+11:05:22 Command to Host PTT TRUE
+11:05:22 [Main.KeyPTT]  PTT-TRUE
+11:05:24 Command to Host PTT FALSE
+11:05:24 [Main.KeyPTT]  PTT-FALSE
+11:05:24 Fine Search S:N= 88.803726 dB, Prior S:N= 0.000000
+11:05:24   CourseOffsetHz= 0.000328 Coarse Pwr S:N= 45.410934 dB
+11:05:24  QSPL Left= 0.000029  QSPL Right= 0.000009
+11:05:24 EnvelopeCorrelator CorMax:MaxProd= 59.994960  J= 232
+11:05:24 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:25 [Frame Type Decode OK  ] Interp Ldr;S:N= 88.803726 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=H3C:ConAck2000, D1= 0.00, D2= 0.00
+11:05:25 Qual = 97
+11:05:25 [DemodDecode4FSKConACK]  Remote leader timing reported: 1702508 ms
+11:05:25 [DecodeFrame] Frame: ConAck2000 Decode PASS,   Constellation Quality= 97
+11:05:25 [ARDOPprotocol.GetNextFrameData] Initial Frame Type: 16FSK.500.25S.E
+11:05:25 [ARDOPprotocol.ProcessRcvdARQFrame] Compatible bandwidth received from IRS ConAck: 2000 Hz
+11:05:25 Sending Frame Type ConAck2000
+11:05:25 Command to Host PTT TRUE
+11:05:25 [Main.KeyPTT]  PTT-TRUE
+11:05:26 Command to Host PTT FALSE
+11:05:26 [Main.KeyPTT]  PTT-FALSE
+11:05:27 Command to Host BUFFER 0
+11:05:28 Repeating Last Frame
+11:05:28 Sending Frame Type ConAck2000
+11:05:28 Command to Host PTT TRUE
+11:05:28 [Main.KeyPTT]  PTT-TRUE
+11:05:28 Command to Host PTT FALSE
+11:05:28 [Main.KeyPTT]  PTT-FALSE
+11:05:29 Fine Search S:N= 94.731781 dB, Prior S:N= 0.000000
+11:05:29   CourseOffsetHz= 0.000137 Coarse Pwr S:N= 45.869881 dB
+11:05:29  QSPL Left= -0.000001  QSPL Right= 0.000013
+11:05:29 EnvelopeCorrelator CorMax:MaxProd= 60.025450  J= 124
+11:05:29 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:30 [Frame Type Decode OK  ] Interp Ldr;S:N= 94.731781 dB, Offset= 0.000000 Hz:  MD Decode;6 ID=H28, Type=HFD:DataACK, D1= 0.00, D2= 0.00
+11:05:30 [DecodeFrame] Frame: DataACK 
+11:05:30 [ARDOPprotocol.ProcessRcvdARQFrame] ISS RmtLeaderMeas=253 ms
+11:05:30 [ARDOPprotocol.ProcessRcvdARQFrame] ACK received in ARQState ISSConAck 
+11:05:30 [ARDOPprotocol.SendData] DataToSend = 0 bytes, ProtocolState ISS>QUIET (Rule 3.1)
+11:05:30 Command to Host NEWSTATE QUIET 
+11:05:30 Command to Host CONNECTED GM8BPQ-10 2000
+11:05:30 Command to Host STATUS ARQ CONNECTION ESTABLISHED WITH GM8BPQ-10, SESSION BW = 2000 HZ
+11:05:30 Fine Search S:N= 88.597565 dB, Prior S:N= 0.000000
+11:05:30   CourseOffsetHz= 0.000377 Coarse Pwr S:N= 45.912647 dB
+11:05:30  QSPL Left= 0.000045  QSPL Right= 0.000068
+11:05:30 EnvelopeCorrelator CorMax:MaxProd= 60.004538  J= 225
+11:05:30 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:31 [Frame Type Decode Fail] Interp Ldr;S:N= 88.597565 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H0: DataNAK, D1= 1.00, D2= 1.00
+11:05:32 Fine Search S:N= 88.414307 dB, Prior S:N= 0.000000
+11:05:32   CourseOffsetHz= 0.000199 Coarse Pwr S:N= 38.127216 dB
+11:05:32  QSPL Left= 0.000026  QSPL Right= -0.000028
+11:05:32 EnvelopeCorrelator CorMax:MaxProd= 60.006284  J= 169
+11:05:32 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:32 [Frame Type Decode OK  ] Interp Ldr;S:N= 88.414307 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H23: BREAK, D1= 0.00, D2= 0.00
+11:05:32 [DecodeFrame] Frame: BREAK 
+11:05:33 Sending Frame Type DataACK
+11:05:33 Command to Host PTT TRUE
+11:05:33 [Main.KeyPTT]  PTT-TRUE
+11:05:33 Command to Host PTT FALSE
+11:05:33 [Main.KeyPTT]  PTT-FALSE
+11:05:33 [ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from QUIET, Go to IRS, Substate IRSfromISS
+11:05:33 Command to Host NEWSTATE IRS 
+11:05:34 Fine Search S:N= 88.106926 dB, Prior S:N= 0.000000
+11:05:34   CourseOffsetHz= 0.000068 Coarse Pwr S:N= 42.632084 dB
+11:05:34  QSPL Left= 0.000037  QSPL Right= -0.000037
+11:05:34 EnvelopeCorrelator CorMax:MaxProd= 59.992665  J= 191
+11:05:34 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:35 [Frame Type Decode OK  ] Interp Ldr;S:N= 88.106926 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H23: BREAK, D1= 0.00, D2= 0.00
+11:05:35 [DecodeFrame] Frame: BREAK 
+11:05:35 [ARDOPprotocol.ProcessRcvdARQFrame]  BREAK received in ProtocolState IRS , IRSData...going to DISC state
+11:05:35 Sending Frame Type DataACK
+11:05:35 Command to Host PTT TRUE
+11:05:35 [Main.KeyPTT]  PTT-TRUE
+11:05:35 Command to Host PTT FALSE
+11:05:35 [Main.KeyPTT]  PTT-FALSE
+11:05:36 Fine Search S:N= 90.459358 dB, Prior S:N= 0.000000
+11:05:36   CourseOffsetHz= 0.000374 Coarse Pwr S:N= 44.152641 dB
+11:05:36  QSPL Left= 0.000079  QSPL Right= 0.000034
+11:05:36 EnvelopeCorrelator CorMax:MaxProd= 60.008926  J= 225
+11:05:36 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:36 [Frame Type Decode OK  ] Interp Ldr;S:N= 90.459358 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H5B: 16FSK.500.25S.O, D1= 0.00, D2= 0.00
+11:05:36 Input peaks = -10709, 10708
+11:05:37 Command to Host BUFFER 0
+11:05:38 Qual = 95
+11:05:38 [DemodDecode4FSKData] OK without RS
+11:05:38 [DecodeFrame] Frame: 16FSK.500.25S.O Decode PASS,   Constellation Quality= 95
+11:05:38 [ARDOPprotocol.ProcessRcvdARQFrame] Data Rcvd in ProtocolState=IRSData, Substate IRSfromISS Go to Substate IRSData
+11:05:38 Sending Frame Type DataACK
+11:05:38 Command to Host PTT TRUE
+11:05:38 [Main.KeyPTT]  PTT-TRUE
+11:05:39 Command to Host PTT FALSE
+11:05:39 [Main.KeyPTT]  PTT-FALSE
+11:05:39 Fine Search S:N= 90.980911 dB, Prior S:N= 0.000000
+11:05:39   CourseOffsetHz= 0.000182 Coarse Pwr S:N= 46.271854 dB
+11:05:39  QSPL Left= 0.000021  QSPL Right= 0.000034
+11:05:39 EnvelopeCorrelator CorMax:MaxProd= 59.992577  J= 225
+11:05:39 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:40 [Frame Type Decode OK  ] Interp Ldr;S:N= 90.980911 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H4A: 4FSK.500.100.E, D1= 0.00, D2= 0.00
+11:05:43 Qual = 97
+11:05:43 [DemodDecode4FSKData] OK without RS
+11:05:43 [DecodeFrame] Frame: 4FSK.500.100.E Decode PASS,   Constellation Quality= 97
+11:05:43 Sending Frame Type DataACK
+11:05:43 Command to Host PTT TRUE
+11:05:43 [Main.KeyPTT]  PTT-TRUE
+11:05:44 Command to Host PTT FALSE
+11:05:44 [Main.KeyPTT]  PTT-FALSE
+11:05:44 Fine Search S:N= 27.498644 dB, Prior S:N= 0.000000
+11:05:44   CourseOffsetHz= -0.237313 Coarse Pwr S:N= 13.520620 dB
+11:05:44  QSPL Left= 0.002846  QSPL Right= -0.003437
+11:05:44 EnvelopeCorrelator CorMax:MaxProd= 60.943908  J= 82
+11:05:44 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:45 [Frame Type Decode OK  ] Interp Ldr;S:N= 27.498644 dB, Offset= 0.000000 Hz:  MD Decode;9 ID=H28, Type=H69: 4FSK.1000.100.O, D1= 0.00, D2= 0.00
+11:05:47 Command to Host BUFFER 0
+11:05:48 Input peaks = -11175, 11036
+11:05:48 Qual = 97
+11:05:48 [DemodDecode4FSKData] OK without RS
+11:05:48 [DemodDecode4FSKData] OK without RS
+11:05:48 [DecodeFrame] Frame: 4FSK.1000.100.O Decode PASS,   Constellation Quality= 97
+11:05:48 Sending Frame Type DataACK
+11:05:48 Command to Host PTT TRUE
+11:05:48 [Main.KeyPTT]  PTT-TRUE
+11:05:49 Command to Host PTT FALSE
+11:05:49 [Main.KeyPTT]  PTT-FALSE
+11:05:55 Fine Search S:N= 25.495613 dB, Prior S:N= 0.000000
+11:05:55   CourseOffsetHz= -0.199544 Coarse Pwr S:N= 12.674883 dB
+11:05:55  QSPL Left= -0.000330  QSPL Right= 0.000726
+11:05:55 EnvelopeCorrelator CorMax:MaxProd= 59.989262  J= 223
+11:05:55 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:05:56 [Frame Type Decode OK  ] Interp Ldr;S:N= 25.495613 dB, Offset= 0.000000 Hz:  MD Decode;8 ID=H28, Critical Type=H29: DISC, D1= 0.00, D2= 0.00
+11:05:56 [DecodeFrame] Frame: DISC 
+11:05:56 [ARDOPprotocol.ProcessRcvdARQFrame]  DISC frame received in ProtocolState IRS, IRSData...going to DISC state
+11:05:56  
+11:05:56 ************************* ARQ session stats with GM8BPQ-10  0 mintes ****************************
+11:05:56      LeaderDetects= 9   AvgLeader S+N:N(3KHz noise BW)= 52.098758 dB  LeaderSyncs= 9
+11:05:56      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+11:05:56      FrameSyncs=9  Good Frame Type Decodes=9  Failed Frame Type Decodes =0
+11:05:56      Avg Frame Type decode distance= 0.143474 over 7 decodes
+11:05:56  
+11:05:56   FSK:
+11:05:56      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+11:05:56      AccumFSKTracking= 0   over 1062 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+11:05:56   Squelch= 5  Mode Shift UPs= 0   Mode Shift DOWNs= 0  Link Turnovers= 1
+11:05:56  
+11:05:56   Received Frame Quality:
+11:05:56      Avg 4FSK Quality=95 on 7 frame(s)
+11:05:56      Avg 16FSK Quality=95 on 1 frame(s)
+11:05:56 ************************************************************************************************
+11:05:56 Command to Host DISCONNECTED
+11:05:56 Command to Host STATUS ARQ CONNECTION ENDED WITH GM8BPQ-10
+11:05:56 Command to Host NEWSTATE DISC 
+11:05:56 Sending Frame Type END
+11:05:56 Command to Host PTT TRUE
+11:05:56 [Main.KeyPTT]  PTT-TRUE
+11:05:56 Command to Host PTT FALSE
+11:05:56 [Main.KeyPTT]  PTT-FALSE
+11:05:56 [ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (GM8BPQ, [])
+11:05:56 Sending Frame Type IDFrame
+11:05:56 Command to Host PTT TRUE
+11:05:56 [Main.KeyPTT]  PTT-TRUE
+11:05:58 Command to Host PTT FALSE
+11:05:58 [Main.KeyPTT]  PTT-FALSE
+11:05:58 Command to Host BUFFER 0
+11:06:00 Command to Host BUSY TRUE
+11:06:00 Fine Search S:N= 86.961708 dB, Prior S:N= 0.000000
+11:06:00   CourseOffsetHz= 0.000536 Coarse Pwr S:N= 46.359100 dB
+11:06:00  QSPL Left= -0.000012  QSPL Right= 0.000045
+11:06:00 EnvelopeCorrelator CorMax:MaxProd= 59.991164  J= 149
+11:06:00 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:06:01 [Frame Type Decode Fail] Interp Ldr;S:N= 86.961708 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H29, Type2=HFE, D1= 0.00, D2= 0.00
+11:06:01 Input peaks = -10896, 10758
+11:06:03 Fine Search S:N= 31.628365 dB, Prior S:N= 0.000000
+11:06:03   CourseOffsetHz= -0.129109 Coarse Pwr S:N= 16.471804 dB
+11:06:03  QSPL Left= -0.007120  QSPL Right= 0.007560
+11:06:03 EnvelopeCorrelator CorMax:MaxProd= 61.070797  J= 75
+11:06:03 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:06:03 [Frame Type Decode Fail] Interp Ldr;S:N= 31.628365 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H29, Type2=HFE, D1= 0.00, D2= 0.00
+11:06:07 Fine Search S:N= 91.724541 dB, Prior S:N= 0.000000
+11:06:07   CourseOffsetHz= 0.000213 Coarse Pwr S:N= 43.284157 dB
+11:06:07  QSPL Left= -0.000007  QSPL Right= 0.000008
+11:06:07 EnvelopeCorrelator CorMax:MaxProd= 60.277500  J= 87
+11:06:07 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+11:06:07 [Frame Type Decode Fail] Interp Ldr;S:N= 91.724541 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H29, Type2=HFE, D1= 0.00, D2= 0.00
+11:06:08 Command to Host BUFFER 0
+11:06:09 Fine Search S:N= 21.733746 dB, Prior S:N= 0.000000
+11:06:09   CourseOffsetHz= -0.886453 Coarse Pwr S:N= 9.020771 dB
+11:06:09  QSPL Left= -0.000116  QSPL Right= 0.014476
+11:06:09 EnvelopeCorrelator CorMax:MaxProd= 60.733344  J= 166
+11:06:09 [Acquire2ToneLeaderSymbolFraming] intIatMinError= -1
+11:06:09 [Frame Type Decode Fail] Interp Ldr;S:N= 21.733746 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H29, Type2=HFE, D1= 0.00, D2= 0.00
+11:06:11 Input peaks = -10627, 10624
+11:06:18 Command to Host BUFFER 0
+11:06:21 Input peaks = -10, 10
+11:06:24 Command to Host BUSY FALSE
+11:06:28 Command to Host BUFFER 0
+11:06:31 Input peaks = -11, 11
+11:06:38 Command to Host BUFFER 0
+11:06:41 Input peaks = -11, 10
+11:06:48 Command to Host BUFFER 0
+11:06:51 Input peaks = -11, 10
+11:06:58 Command to Host BUFFER 0
+11:07:01 Input peaks = -12, 12
+11:07:08 Command to Host BUFFER 0
+11:07:12 Input peaks = -12, 10
+11:07:18 Command to Host BUFFER 0
+11:07:22 Input peaks = -11, 10
+11:07:28 Command to Host BUFFER 0
+11:07:32 Input peaks = -12, 10
+11:07:38 Command to Host BUFFER 0
+11:07:42 Input peaks = -11, 9
+11:07:48 Command to Host BUFFER 0
+11:07:52 Input peaks = -10, 10
+11:07:58 Command to Host BUFFER 0
+11:08:02 Input peaks = -11, 11
+11:08:08 Command to Host BUFFER 0
+11:08:12 Input peaks = -11, 10
+11:08:18 Command to Host BUFFER 0
+11:08:22 Input peaks = -11, 10
+11:08:28 Command to Host BUFFER 0
+11:08:32 Input peaks = -11, 10
+11:08:38 Command to Host BUFFER 0
+11:08:42 Input peaks = -10, 10
+11:08:48 Command to Host BUFFER 0
+11:08:53 Input peaks = -13, 11
+11:08:58 Command to Host BUFFER 0
+11:09:03 Input peaks = -11, 10
+11:09:08 Command to Host BUFFER 0
+11:09:13 Input peaks = -10, 10
+11:09:18 Command to Host BUFFER 0
+11:09:23 Input peaks = -11, 11
+11:09:28 Command to Host BUFFER 0
+11:09:33 Input peaks = -11, 11
+11:09:38 Command to Host BUFFER 0
+11:09:43 Input peaks = -11, 10
+11:09:48 Command to Host BUFFER 0
+11:09:53 Input peaks = -12, 10
+11:09:58 Command to Host BUFFER 0
+11:10:03 Input peaks = -10, 10
+11:10:09 Command to Host BUFFER 0
+11:10:13 Input peaks = -11, 9
+11:10:19 Command to Host BUFFER 0
+11:10:23 Input peaks = -11, 9
+11:10:29 Command to Host BUFFER 0
+11:10:34 Input peaks = -10, 10
+11:10:39 Command to Host BUFFER 0
+11:10:44 Input peaks = -10, 9
+11:10:49 Command to Host BUFFER 0
+11:10:54 Input peaks = -10, 11
+11:10:59 Command to Host BUFFER 0
+11:11:04 Input peaks = -10, 10
+11:11:09 Command to Host BUFFER 0
+11:11:14 Input peaks = -13, 10
+11:11:19 Command to Host BUFFER 0
+11:11:24 Input peaks = -10, 9
+11:11:29 Command to Host BUFFER 0
+11:11:34 Input peaks = -10, 11
+11:11:39 Command to Host BUFFER 0
+11:11:44 Input peaks = -10, 9
+11:11:49 Command to Host BUFFER 0
+11:11:54 Input peaks = -12, 10
+11:11:59 Command to Host BUFFER 0
+11:12:04 Input peaks = -11, 9
+11:12:09 Command to Host BUFFER 0
+11:12:15 Input peaks = -11, 10
+11:12:19 Command to Host BUFFER 0
+11:12:25 Input peaks = -10, 10
+11:12:29 Command to Host BUFFER 0
+11:12:35 Input peaks = -12, 10
+11:12:39 Command to Host BUFFER 0
+11:12:45 Input peaks = -10, 9
+11:12:49 Command to Host BUFFER 0
+11:12:55 Input peaks = -10, 10
+11:12:59 Command to Host BUFFER 0
+11:13:05 Input peaks = -9, 11
+11:13:09 Command to Host BUFFER 0
+11:13:15 Input peaks = -11, 10
+11:13:19 Command to Host BUFFER 0
+11:13:25 Input peaks = -11, 10
+11:13:29 Command to Host BUFFER 0
+11:13:35 Input peaks = -10, 10
+11:13:39 Command to Host BUFFER 0
+11:13:45 Input peaks = -11, 11
+11:13:49 Command to Host BUFFER 0
+11:13:56 Input peaks = -10, 11
+11:13:59 Command to Host BUFFER 0
+11:14:06 Input peaks = -10, 11
+11:14:09 Command to Host BUFFER 0
+11:14:16 Input peaks = -10, 10
+11:14:19 Command to Host BUFFER 0
+11:14:26 Input peaks = -10, 11
+11:14:29 Command to Host BUFFER 0
+11:14:36 Input peaks = -11, 10
+11:14:39 Command to Host BUFFER 0
+11:14:46 Input peaks = -11, 10
+11:14:49 Command to Host BUFFER 0
+11:14:56 Input peaks = -11, 9
+11:14:59 Command to Host BUFFER 0
+11:15:06 Input peaks = -12, 11
+11:15:09 Command to Host BUFFER 0
+11:15:16 Input peaks = -11, 11
+11:15:19 Command to Host BUFFER 0
+11:15:26 Input peaks = -11, 11
+11:15:29 Command to Host BUFFER 0
+11:15:37 Input peaks = -12, 10
+11:15:39 Command to Host BUFFER 0
+11:15:47 Input peaks = -10, 11
+11:15:49 Command to Host BUFFER 0
+11:15:57 Input peaks = -11, 10
+11:15:59 Command to Host BUFFER 0
+11:16:07 Input peaks = -10, 10
+11:16:09 Command to Host BUFFER 0
+11:16:17 Input peaks = -10, 10
+11:16:19 Command to Host BUFFER 0
+11:16:27 Input peaks = -10, 10
+11:16:29 Command to Host BUFFER 0
+11:16:37 Input peaks = -11, 10
+11:16:39 Command to Host BUFFER 0
+11:16:47 Input peaks = -11, 11
+11:16:49 Command to Host BUFFER 0
+11:16:57 Input peaks = -12, 10
+11:16:59 Command to Host BUFFER 0
+11:17:07 Input peaks = -11, 9
+11:17:09 Command to Host BUFFER 0
+11:17:18 Input peaks = -12, 10
+11:17:19 Command to Host BUFFER 0
+11:17:28 Input peaks = -11, 11
+11:17:29 Command to Host BUFFER 0
+11:17:38 Input peaks = -10, 10
+11:17:39 Command to Host BUFFER 0
+11:17:48 Input peaks = -10, 10
+11:17:49 Command to Host BUFFER 0
+11:17:58 Input peaks = -10, 10
+11:17:59 Command to Host BUFFER 0
+11:18:08 Input peaks = -10, 11
+11:18:09 Command to Host BUFFER 0
+11:18:18 Input peaks = -10, 11
+11:18:19 Command to Host BUFFER 0
+11:18:23 Fine Search S:N= 11.022391 dB, Prior S:N= 0.000000
+11:18:23   CourseOffsetHz= -65.845711 Coarse Pwr S:N= 6.608395 dB
+11:18:23  QSPL Left= -0.253474  QSPL Right= -0.088118
+11:18:23 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 2
+11:18:24 [Frame Type Decode Fail] Interp Ldr;S:N= 11.022391 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H0, Type2=H0, D1= 1.00, D2= 1.00
+11:18:28 Input peaks = -11, 13
+11:18:29 Command to Host BUFFER 0
+11:18:38 Input peaks = -12, 12
+11:18:39 Command to Host BUFFER 0
+11:18:48 Input peaks = -11, 11
+11:18:49 Command to Host BUFFER 0
+11:18:59 Input peaks = -11, 11
+11:18:59 Command to Host BUFFER 0
+11:19:09 Input peaks = -12, 10
+11:19:09 Command to Host BUFFER 0
+11:19:19 Input peaks = -11, 10
+11:19:20 Command to Host BUFFER 0
+11:19:24 Command to Host BUSY TRUE
+11:19:28 Command to Host BUSY FALSE
+11:19:29 Input peaks = -686, 731
+11:19:30 Command to Host BUFFER 0
+11:19:39 Input peaks = -11, 11
+11:19:40 Command to Host BUFFER 0
+11:19:49 Input peaks = -10, 10
+11:19:50 Command to Host BUFFER 0
+11:19:59 Input peaks = -10, 10
+11:20:00 Command to Host BUFFER 0
+11:20:09 Input peaks = -11, 10
+11:20:10 Command to Host BUFFER 0
+11:20:19 Input peaks = -10, 10
+11:20:20 Command to Host BUFFER 0
+11:20:29 Input peaks = -13, 10
+11:20:30 Command to Host BUFFER 0
+11:20:40 Input peaks = -11, 10
+11:20:40 Command to Host BUFFER 0
+11:20:50 Input peaks = -11, 10
+11:20:50 Command to Host BUFFER 0
+11:21:00 Command to Host BUFFER 0
+11:21:00 Input peaks = -10, 11
+11:21:10 Command to Host BUFFER 0
+11:21:10 Input peaks = -11, 10
+11:21:20 Command to Host BUFFER 0
+11:21:20 Input peaks = -13, 10
+11:21:30 Command to Host BUFFER 0
+11:21:30 Input peaks = -10, 13
+11:21:40 Command to Host BUFFER 0
+11:21:40 Input peaks = -10, 10
+11:21:50 Command to Host BUFFER 0
+11:21:50 Input peaks = -11, 10
+11:22:00 Command to Host BUFFER 0
+11:22:00 Input peaks = -10, 11
+11:22:10 Command to Host BUFFER 0
+11:22:10 Input peaks = -10, 10
+11:22:20 Command to Host BUFFER 0
+11:22:21 Input peaks = -10, 10
+11:22:30 Command to Host BUFFER 0
+11:22:31 Input peaks = -11, 11
+11:22:40 Command to Host BUFFER 0
+11:22:41 Input peaks = -11, 10
+11:22:50 Command to Host BUFFER 0
+11:22:51 Input peaks = -11, 12
+11:23:00 Command to Host BUFFER 0
+11:23:01 Input peaks = -11, 11
+11:23:10 Command to Host BUFFER 0
+11:23:11 Input peaks = -10, 9
+11:23:20 Command to Host BUFFER 0
+11:23:21 Input peaks = -10, 11
+11:23:30 Command to Host BUFFER 0
+11:23:31 Input peaks = -11, 11
+11:23:40 Command to Host BUFFER 0
+11:23:41 Input peaks = -12, 10
+11:23:50 Command to Host BUFFER 0
+11:23:51 Input peaks = -12, 9
+11:24:00 Command to Host BUFFER 0
+11:24:02 Input peaks = -12, 11
+11:24:10 Command to Host BUFFER 0
+11:24:12 Input peaks = -12, 10
+11:24:20 Command to Host BUFFER 0
+11:24:22 Input peaks = -10, 10
+11:24:30 Command to Host BUFFER 0
+11:24:32 Input peaks = -11, 11
+11:24:40 Command to Host BUFFER 0
+11:24:42 Input peaks = -12, 11
+11:24:50 Command to Host BUFFER 0
+11:24:52 Input peaks = -10, 10
+11:25:00 Command to Host BUFFER 0
+11:25:02 Input peaks = -11, 11
+11:25:10 Command to Host BUFFER 0
+11:25:12 Input peaks = -11, 10
+11:25:20 Command to Host BUFFER 0
+11:25:22 Input peaks = -12, 11
+11:25:30 Command to Host BUFFER 0
+11:25:32 Input peaks = -9, 9
+11:25:40 Command to Host BUFFER 0
+11:25:43 Input peaks = -10, 11
+11:25:50 Command to Host BUFFER 0
+11:25:53 Input peaks = -11, 11
+11:26:00 Command to Host BUFFER 0
+11:26:03 Input peaks = -10, 9
+11:26:10 Command to Host BUFFER 0
+11:26:13 Input peaks = -10, 10
+11:26:20 Command to Host BUFFER 0
+11:26:23 Input peaks = -11, 10
+11:26:30 Command to Host BUFFER 0
+11:26:33 Input peaks = -10, 10
+11:26:40 Command to Host BUFFER 0
+11:26:43 Input peaks = -10, 11
+11:26:50 Command to Host BUFFER 0
+11:26:53 Input peaks = -11, 10
+11:27:00 Command to Host BUFFER 0
+11:27:03 Input peaks = -11, 10
+11:27:10 Command to Host BUFFER 0
+11:27:13 Input peaks = -10, 10
+11:27:20 Command to Host BUFFER 0
+11:27:24 Input peaks = -10, 11
+11:27:30 Command to Host BUFFER 0
+11:27:34 Input peaks = -10, 11
+11:27:40 Command to Host BUFFER 0
+11:27:44 Input peaks = -11, 10
+11:27:50 Command to Host BUFFER 0
+11:27:54 Input peaks = -9, 11
+11:28:00 Command to Host BUFFER 0
+11:28:04 Input peaks = -10, 10
+11:28:10 Command to Host BUFFER 0
+11:28:14 Input peaks = -10, 12
+11:28:20 Command to Host BUFFER 0
+11:28:24 Input peaks = -11, 10
+11:28:31 Command to Host BUFFER 0
+11:28:34 Input peaks = -10, 10
+11:28:41 Command to Host BUFFER 0
+11:28:44 Input peaks = -11, 10
+11:28:51 Command to Host BUFFER 0
+11:28:54 Input peaks = -9, 11
+11:29:01 Command to Host BUFFER 0
+11:29:05 Input peaks = -11, 10
+11:29:11 Command to Host BUFFER 0
+11:29:15 Input peaks = -12, 10
+11:29:21 Command to Host BUFFER 0
+11:29:25 Input peaks = -10, 10
+11:29:31 Command to Host BUFFER 0
+11:29:35 Input peaks = -11, 11
+11:29:41 Command to Host BUFFER 0
+11:29:45 Input peaks = -10, 11
+11:29:51 Command to Host BUFFER 0
+11:29:55 Input peaks = -10, 11
+11:30:01 Command to Host BUFFER 0
+11:30:05 Input peaks = -11, 10
+11:30:11 Command to Host BUFFER 0
+11:30:15 Input peaks = -10, 9
+11:30:21 Command to Host BUFFER 0
+11:30:25 Input peaks = -10, 10
+11:30:31 Command to Host BUFFER 0
+11:30:35 Input peaks = -11, 10
+11:30:41 Command to Host BUFFER 0
+11:30:46 Input peaks = -11, 10
+11:30:51 Command to Host BUFFER 0
+11:30:56 Input peaks = -10, 10
+11:31:01 Command to Host BUFFER 0
+11:31:06 Input peaks = -10, 10
+11:31:11 Command to Host BUFFER 0
+11:31:16 Input peaks = -10, 10
+11:31:21 Command to Host BUFFER 0
+11:31:26 Input peaks = -11, 9
+11:31:31 Command to Host BUFFER 0
+11:31:36 Input peaks = -10, 10
+11:31:41 Command to Host BUFFER 0
+11:31:46 Input peaks = -10, 10
+11:31:51 Command to Host BUFFER 0
+11:31:56 Input peaks = -10, 10
+11:32:01 Command to Host BUFFER 0
+11:32:06 Input peaks = -10, 11
+11:32:11 Command to Host BUFFER 0
+11:32:16 Input peaks = -12, 10
+11:32:21 Command to Host BUFFER 0
+11:32:27 Input peaks = -10, 9
+11:32:31 Command to Host BUFFER 0
+11:32:37 Input peaks = -11, 9
+11:32:41 Command to Host BUFFER 0
+11:32:47 Input peaks = -10, 10
+11:32:51 Command to Host BUFFER 0
+11:32:57 Input peaks = -11, 11
+11:33:01 Command to Host BUFFER 0
+11:33:01 Fine Search S:N= 12.316408 dB, Prior S:N= 0.000000
+11:33:01   CourseOffsetHz= -78.508034 Coarse Pwr S:N= 5.001801 dB
+11:33:01  QSPL Left= -0.076353  QSPL Right= 0.909215
+11:33:01 EnvelopeCorrelator CorMax:MaxProd= 46.117504  J= 130
+11:33:01 [Acquire2ToneLeaderSymbolFraming] intIatMinError= -2
+11:33:02 [Frame Type Decode Fail] Interp Ldr;S:N= 12.316408 dB, Offset= 0.000000 Hz:  MD Decode;5 Type1=H0, Type2=H0, D1= 1.00, D2= 1.00
+11:33:07 Input peaks = -9, 11
+11:33:11 Command to Host BUFFER 0
+11:33:17 Input peaks = -9, 10
+11:33:21 Command to Host BUFFER 0
+11:33:27 Input peaks = -11, 10
+11:33:31 Command to Host BUFFER 0
+11:33:37 Input peaks = -10, 10
+11:33:41 Command to Host BUFFER 0
+11:33:47 Input peaks = -11, 10
+11:33:51 Command to Host BUFFER 0
+11:33:57 Input peaks = -10, 10
+11:34:01 Command to Host BUFFER 0
+11:34:07 Input peaks = -10, 10
+11:34:11 Command to Host BUFFER 0
+11:34:18 Input peaks = -11, 11
+11:34:21 Command to Host BUFFER 0
+11:34:28 Input peaks = -11, 11
+11:34:31 Command to Host BUFFER 0
+11:34:38 Input peaks = -11, 11
+11:34:41 Command to Host BUFFER 0
+11:34:46 Command to Host BUSY TRUE
+11:34:48 Input peaks = -696, 733
+11:34:48 Command to Host BUSY FALSE
+11:34:51 Command to Host BUFFER 0
+11:34:58 Input peaks = -11, 9
+11:35:01 Command to Host BUFFER 0
+11:35:08 Input peaks = -11, 11
+11:35:11 Command to Host BUFFER 0
+11:35:18 Input peaks = -11, 11
+11:35:21 Command to Host BUFFER 0
+11:35:28 Input peaks = -10, 10
+11:35:31 Command to Host BUFFER 0
+11:35:38 Input peaks = -10, 11
+11:35:41 Command to Host BUFFER 0
+11:35:49 Input peaks = -10, 10
+11:35:51 Command to Host BUFFER 0
+11:35:59 Input peaks = -10, 10
+11:36:01 Command to Host BUFFER 0
+11:36:09 Input peaks = -10, 10
+11:36:11 Command to Host BUFFER 0
+11:36:19 Input peaks = -12, 10
+11:36:21 Command to Host BUFFER 0
+11:36:29 Input peaks = -10, 11
+11:36:31 Command to Host BUFFER 0
+11:36:39 Input peaks = -10, 10
+11:36:41 Command to Host BUFFER 0
+11:36:49 Input peaks = -10, 10
+11:36:51 Command to Host BUFFER 0
+11:36:59 Input peaks = -12, 10
+11:37:01 Command to Host BUFFER 0
+11:37:09 Input peaks = -10, 10
+11:37:11 Command to Host BUFFER 0
+11:37:19 Input peaks = -11, 10
+11:37:21 Command to Host BUFFER 0
+11:37:29 Input peaks = -10, 11
+11:37:31 Command to Host BUFFER 0
+11:37:40 Input peaks = -11, 11
+11:37:41 Command to Host BUFFER 0
+11:37:50 Input peaks = -10, 10
+11:37:51 Command to Host BUFFER 0
+11:38:00 Input peaks = -11, 10
+11:38:01 Command to Host BUFFER 0
+11:38:10 Input peaks = -12, 10
+11:38:11 Command to Host BUFFER 0
+11:38:20 Input peaks = -10, 10
+11:38:21 Command to Host BUFFER 0
+11:38:30 Input peaks = -10, 10
+11:38:31 Command to Host BUFFER 0
+11:38:40 Input peaks = -10, 10
+11:38:42 Command to Host BUFFER 0
+11:38:50 Input peaks = -11, 9
+11:38:52 Command to Host BUFFER 0
+11:39:00 Input peaks = -10, 9
+11:39:02 Command to Host BUFFER 0
+11:39:11 Input peaks = -10, 9
+11:39:12 Command to Host BUFFER 0
+11:39:21 Input peaks = -11, 13
+11:39:22 Command to Host BUFFER 0
+11:39:31 Input peaks = -11, 10
+11:39:32 Command to Host BUFFER 0
+11:39:41 Input peaks = -11, 10
+11:39:42 Command to Host BUFFER 0
+11:39:48 Command to Host BUSY TRUE
+11:39:50 Command to Host BUSY FALSE
+11:39:51 Input peaks = -681, 739
+11:39:52 Command to Host BUFFER 0
+11:40:01 Input peaks = -11, 9
+11:40:02 Command to Host BUFFER 0
+11:40:11 Input peaks = -11, 10
+11:40:12 Command to Host BUFFER 0
+11:40:21 Input peaks = -11, 11
+11:40:22 Command to Host BUFFER 0
+11:40:31 Input peaks = -10, 11
+11:40:32 Command to Host BUFFER 0
+11:40:41 Input peaks = -10, 10
+11:40:42 Command to Host BUFFER 0
+11:40:51 Input peaks = -10, 11
+11:40:52 Command to Host BUFFER 0
+11:41:02 Input peaks = -10, 10
+11:41:02 Command to Host BUFFER 0
+11:41:12 Input peaks = -10, 9
+11:41:12 Command to Host BUFFER 0
+11:41:22 Command to Host BUFFER 0
+11:41:22 Input peaks = -11, 10
+11:41:32 Command to Host BUFFER 0
+11:41:32 Input peaks = -10, 9
+11:41:42 Command to Host BUFFER 0
+11:41:42 Input peaks = -11, 11
+11:41:52 Command to Host BUFFER 0
+11:41:52 Input peaks = -10, 10
+11:42:02 Command to Host BUFFER 0
+11:42:02 Input peaks = -10, 10
+11:42:12 Command to Host BUFFER 0
+11:42:12 Input peaks = -10, 10
+11:42:22 Command to Host BUFFER 0
+11:42:22 Input peaks = -10, 9
+11:42:32 Command to Host BUFFER 0
+11:42:33 Input peaks = -10, 10
+11:42:42 Command to Host BUFFER 0
+11:42:43 Input peaks = -10, 11
+11:42:52 Command to Host BUFFER 0
+11:42:53 Input peaks = -12, 11
+11:43:02 Command to Host BUFFER 0
+11:43:03 Input peaks = -10, 12
+11:43:12 Command to Host BUFFER 0
+11:43:13 Input peaks = -13, 11
+11:43:22 Command to Host BUFFER 0
+11:43:23 Input peaks = -10, 11
+11:43:32 Command to Host BUFFER 0
+11:43:33 Input peaks = -11, 10
+11:43:42 Command to Host BUFFER 0
+11:43:43 Input peaks = -11, 10
+11:43:52 Command to Host BUFFER 0
+11:43:53 Input peaks = -11, 10
+11:44:02 Command to Host BUFFER 0
+11:44:03 Input peaks = -10, 10
+11:44:12 Command to Host BUFFER 0
+11:44:13 Input peaks = -10, 10
+11:44:22 Command to Host BUFFER 0
+11:44:24 Input peaks = -10, 12
+11:44:32 Command to Host BUFFER 0
+11:44:34 Input peaks = -11, 9
+11:44:42 Command to Host BUFFER 0
+11:44:44 Input peaks = -10, 9
+11:44:51 Command to Host BUSY TRUE
+11:44:52 Command to Host BUFFER 0
+11:44:53 Command to Host BUSY FALSE
+11:44:54 Input peaks = -676, 738
+11:45:02 Command to Host BUFFER 0
+11:45:04 Input peaks = -10, 10
+11:45:12 Command to Host BUFFER 0
+11:45:14 Input peaks = -11, 10
+11:45:22 Command to Host BUFFER 0
+11:45:24 Input peaks = -11, 9
+11:45:32 Command to Host BUFFER 0
+11:45:34 Input peaks = -11, 10
+11:45:42 Command to Host BUFFER 0
+11:45:44 Input peaks = -10, 9
+11:45:52 Command to Host BUFFER 0
+11:45:54 Input peaks = -10, 10
+11:46:02 Command to Host BUFFER 0
+11:46:05 Input peaks = -10, 11
+11:46:12 Command to Host BUFFER 0
+11:46:15 Input peaks = -11, 10
+11:46:22 Command to Host BUFFER 0
+11:46:25 Input peaks = -11, 11
+11:46:32 Command to Host BUFFER 0
+11:46:35 Input peaks = -10, 10
+11:46:42 Command to Host BUFFER 0
+11:46:45 Input peaks = -10, 10
+11:46:52 Command to Host BUFFER 0
+11:46:55 Input peaks = -10, 9
+11:47:02 Command to Host BUFFER 0
+11:47:05 Input peaks = -11, 12
+11:47:12 Command to Host BUFFER 0
+11:47:15 Input peaks = -11, 12
+11:47:22 Command to Host BUFFER 0
+11:47:25 Input peaks = -12, 11
+11:47:32 Command to Host BUFFER 0
+11:47:35 Input peaks = -11, 11
+11:47:42 Command to Host BUFFER 0
+11:47:46 Input peaks = -10, 10
+11:47:52 Command to Host BUFFER 0
+11:47:56 Input peaks = -10, 11
+11:48:02 Command to Host BUFFER 0
+11:48:06 Input peaks = -11, 10
+11:48:12 Command to Host BUFFER 0
+11:48:16 Input peaks = -10, 9
+11:48:22 Command to Host BUFFER 0
+11:48:26 Input peaks = -11, 11
+11:48:32 Command to Host BUFFER 0
+11:48:36 Input peaks = -10, 10
+11:48:42 Command to Host BUFFER 0
+11:48:43 Exit Host Mode
+11:48:44 SCS Command ST 0MYCALL GM8BPQ
+11:48:46 Input peaks = -11, 10
+11:48:53 Command to Host BUFFER 0
+11:48:56 Input peaks = -10, 12
+11:49:03 Command to Host BUFFER 0
+11:49:06 Input peaks = -10, 11
+11:49:13 Command to Host BUFFER 0
+11:49:16 Input peaks = -10, 12
+11:49:23 Command to Host BUFFER 0
+11:49:27 Input peaks = -10, 10
+11:49:33 Command to Host BUFFER 0
+11:49:37 Input peaks = -10, 10
+11:49:43 Command to Host BUFFER 0
+11:49:47 Input peaks = -11, 11
+11:49:53 Command to Host BUFFER 0
+11:49:57 Input peaks = -11, 10
+11:50:03 Command to Host BUFFER 0
+11:50:07 Input peaks = -11, 10
+11:50:13 Command to Host BUFFER 0
+11:50:17 Input peaks = -11, 10
+11:50:23 Command to Host BUFFER 0
+11:50:27 Input peaks = -11, 10
+11:50:33 Command to Host BUFFER 0
+11:50:37 Input peaks = -11, 10
+11:50:43 Command to Host BUFFER 0
+11:50:47 Input peaks = -10, 10
+11:50:53 Command to Host BUFFER 0
+11:50:57 Input peaks = -11, 10
+11:51:03 Command to Host BUFFER 0
+11:51:08 Input peaks = -10, 11
+11:51:13 Command to Host BUFFER 0
+11:51:18 Input peaks = -10, 10
+11:51:23 Command to Host BUFFER 0
+11:51:28 Input peaks = -10, 11
+11:51:33 Command to Host BUFFER 0
+11:51:38 Input peaks = -10, 10
+11:51:43 Command to Host BUFFER 0
+11:51:48 Input peaks = -11, 11
+11:51:53 Command to Host BUFFER 0
+11:51:58 Input peaks = -10, 10
+11:52:03 Command to Host BUFFER 0
+11:52:08 Input peaks = -12, 10
+11:52:13 Command to Host BUFFER 0
+11:52:18 Input peaks = -10, 10
+11:52:23 Command to Host BUFFER 0
+11:52:28 Input peaks = -12, 11
+11:52:33 Command to Host BUFFER 0
+11:52:38 Input peaks = -11, 10
+11:52:43 Command to Host BUFFER 0
+11:52:49 Input peaks = -11, 11
+11:52:53 Command to Host BUFFER 0
+11:52:59 Input peaks = -10, 10
+11:53:03 Command to Host BUFFER 0
+11:53:09 Input peaks = -10, 10
+11:53:13 Command to Host BUFFER 0
+11:53:19 Input peaks = -12, 10
+11:53:23 Command to Host BUFFER 0
+11:53:29 Input peaks = -11, 11
+11:53:33 Command to Host BUFFER 0
+11:53:39 Input peaks = -12, 10
+11:53:43 Command to Host BUFFER 0
+11:53:49 Input peaks = -10, 11
+11:53:53 Command to Host BUFFER 0
+11:53:59 Input peaks = -10, 9
+11:54:03 Command to Host BUFFER 0
+11:54:09 Input peaks = -10, 10
+11:54:13 Command to Host BUFFER 0
+11:54:19 Input peaks = -11, 12
+11:54:23 Command to Host BUFFER 0
+11:54:30 Input peaks = -11, 10
+11:54:33 Command to Host BUFFER 0
+11:54:40 Input peaks = -10, 10
+11:54:43 Command to Host BUFFER 0
+11:54:50 Input peaks = -12, 10
+11:54:53 Command to Host BUFFER 0
+11:55:00 Input peaks = -11, 9
+11:55:01 Command to Host BUSY TRUE
+11:55:03 Command to Host BUSY FALSE
+11:55:03 Command to Host BUFFER 0
+11:55:10 Input peaks = -688, 731
+11:55:13 Command to Host BUFFER 0
+11:55:20 Input peaks = -13, 10
+11:55:23 Command to Host BUFFER 0
+11:55:30 Input peaks = -10, 10
+11:55:33 Command to Host BUFFER 0

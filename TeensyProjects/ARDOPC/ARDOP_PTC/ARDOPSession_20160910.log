@@ -1,0 +1,127 @@
+08:47:40  
+08:47:40 ************************* ARQ session stats with G8BPQ-10  3 mintes ****************************
+08:47:40      LeaderDetects= 11   AvgLeader S+N:N(3KHz noise BW)= 56.968265 dB  LeaderSyncs= 11
+08:47:40      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+08:47:40      FrameSyncs=11  Good Frame Type Decodes=11  Failed Frame Type Decodes =0
+08:47:40      Avg Frame Type decode distance= 0.025915 over 8 decodes
+08:47:40  
+08:47:40   FSK:
+08:47:40      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+08:47:40      AccumFSKTracking= 0   over 1062 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+08:47:40   Squelch= 5  Mode Shift UPs= 2   Mode Shift DOWNs= 0  Link Turnovers= 2
+08:47:40  
+08:47:40   Received Frame Quality:
+08:47:40      Avg 4FSK Quality=90 on 8 frame(s)
+08:47:40      Avg 16FSK Quality=95 on 1 frame(s)
+08:47:40 ************************************************************************************************
+08:52:14  
+08:52:14 ************************* ARQ session stats with G8BPQ-10  2 mintes ****************************
+08:52:14      LeaderDetects= 13   AvgLeader S+N:N(3KHz noise BW)= 65.740787 dB  LeaderSyncs= 13
+08:52:14      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+08:52:14      FrameSyncs=13  Good Frame Type Decodes=13  Failed Frame Type Decodes =0
+08:52:14      Avg Frame Type decode distance= 0.000649 over 11 decodes
+08:52:14  
+08:52:14   FSK:
+08:52:14      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+08:52:14      AccumFSKTracking= 0   over 2390 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+08:52:14   Squelch= 5  Mode Shift UPs= 3   Mode Shift DOWNs= 0  Link Turnovers= 3
+08:52:14  
+08:52:14   Received Frame Quality:
+08:52:14      Avg 4FSK Quality=92 on 12 frame(s)
+08:52:14      Avg 16FSK Quality=95 on 1 frame(s)
+08:52:14 ************************************************************************************************
+08:57:57  
+08:57:57 ************************* ARQ session stats with G8BPQ-10  0 mintes ****************************
+08:57:57      LeaderDetects= 14   AvgLeader S+N:N(3KHz noise BW)= 69.145404 dB  LeaderSyncs= 14
+08:57:57      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+08:57:57      FrameSyncs=14  Good Frame Type Decodes=14  Failed Frame Type Decodes =0
+08:57:57      Avg Frame Type decode distance= 0.019336 over 11 decodes
+08:57:57  
+08:57:57   FSK:
+08:57:57      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+08:57:57      AccumFSKTracking= 0   over 2390 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+08:57:57   Squelch= 5  Mode Shift UPs= 3   Mode Shift DOWNs= 0  Link Turnovers= 3
+08:57:57  
+08:57:57   Received Frame Quality:
+08:57:57      Avg 4FSK Quality=91 on 11 frame(s)
+08:57:57      Avg 16FSK Quality=95 on 1 frame(s)
+08:57:57 ************************************************************************************************
+09:02:25  
+09:02:25 ************************* ARQ session stats with G8BPQ-10  2 mintes ****************************
+09:02:25      LeaderDetects= 4   AvgLeader S+N:N(3KHz noise BW)= 27.460784 dB  LeaderSyncs= 4
+09:02:25      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+09:02:25      FrameSyncs=4  Good Frame Type Decodes=4  Failed Frame Type Decodes =0
+09:02:25      Avg Frame Type decode distance= 0.000000 over 0 decodes
+09:02:25  
+09:02:25   FSK:
+09:02:25      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+09:02:25      AccumFSKTracking= 0   over 20 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+09:02:25   Squelch= 5  Mode Shift UPs= 0   Mode Shift DOWNs= 0  Link Turnovers= 0
+09:02:25  
+09:02:25   Received Frame Quality:
+09:02:25      Avg 4FSK Quality=57 on 1 frame(s)
+09:02:25 ************************************************************************************************
+09:03:30  
+09:03:30 ************************* ARQ session stats with G8BPQ-10  0 mintes ****************************
+09:03:30      LeaderDetects= 14   AvgLeader S+N:N(3KHz noise BW)= 66.997058 dB  LeaderSyncs= 14
+09:03:30      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+09:03:30      FrameSyncs=14  Good Frame Type Decodes=14  Failed Frame Type Decodes =0
+09:03:30      Avg Frame Type decode distance= 0.167420 over 12 decodes
+09:03:30  
+09:03:30   FSK:
+09:03:30      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+09:03:30      AccumFSKTracking= 0   over 2390 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+09:03:30   Squelch= 5  Mode Shift UPs= 3   Mode Shift DOWNs= 0  Link Turnovers= 3
+09:03:30  
+09:03:30   Received Frame Quality:
+09:03:30      Avg 4FSK Quality=91 on 11 frame(s)
+09:03:30      Avg 16FSK Quality=95 on 1 frame(s)
+09:03:30 ************************************************************************************************
+09:06:03  
+09:06:03 ************************* ARQ session stats with G8BPQ-10  0 mintes ****************************
+09:06:03      LeaderDetects= 12   AvgLeader S+N:N(3KHz noise BW)= 56.306064 dB  LeaderSyncs= 12
+09:06:03      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+09:06:03      FrameSyncs=12  Good Frame Type Decodes=12  Failed Frame Type Decodes =0
+09:06:03      Avg Frame Type decode distance= 0.000763 over 10 decodes
+09:06:03  
+09:06:03   FSK:
+09:06:03      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+09:06:03      AccumFSKTracking= 0   over 2390 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+09:06:03   Squelch= 5  Mode Shift UPs= 3   Mode Shift DOWNs= 0  Link Turnovers= 3
+09:06:03  
+09:06:03   Received Frame Quality:
+09:06:03      Avg 4FSK Quality=92 on 11 frame(s)
+09:06:03      Avg 16FSK Quality=95 on 1 frame(s)
+09:06:03 ************************************************************************************************
+09:10:20  
+09:10:20 ************************* ARQ session stats with G8BPQ-10  0 mintes ****************************
+09:10:20      LeaderDetects= 14   AvgLeader S+N:N(3KHz noise BW)= 62.797496 dB  LeaderSyncs= 14
+09:10:20      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+09:10:20      FrameSyncs=14  Good Frame Type Decodes=14  Failed Frame Type Decodes =0
+09:10:20      Avg Frame Type decode distance= 0.129701 over 12 decodes
+09:10:20  
+09:10:20   FSK:
+09:10:20      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+09:10:20      AccumFSKTracking= 0   over 2390 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+09:10:20   Squelch= 5  Mode Shift UPs= 3   Mode Shift DOWNs= 0  Link Turnovers= 3
+09:10:20  
+09:10:20   Received Frame Quality:
+09:10:20      Avg 4FSK Quality=92 on 11 frame(s)
+09:10:20      Avg 16FSK Quality=95 on 1 frame(s)
+09:10:20 ************************************************************************************************
+09:28:58  
+09:28:58 ************************* ARQ session stats with G8BPQ-10  0 mintes ****************************
+09:28:58      LeaderDetects= 13   AvgLeader S+N:N(3KHz noise BW)= 60.994617 dB  LeaderSyncs= 13
+09:28:58      AvgCorrelationMax:MaxProd= 0.000000 over 0  correlations
+09:28:58      FrameSyncs=13  Good Frame Type Decodes=13  Failed Frame Type Decodes =0
+09:28:58      Avg Frame Type decode distance= 0.018962 over 11 decodes
+09:28:58  
+09:28:58   FSK:
+09:28:58      Good FSK Data Frame Decodes= 1  RecoveredFSKCarriers with Summation=0  Failed FSK Data Frame Decodes=0
+09:28:58      AccumFSKTracking= 0   over 2390 symbols   Good Data Frame Decodes= 1   Failed Data Frame Decodes=0
+09:28:58   Squelch= 5  Mode Shift UPs= 3   Mode Shift DOWNs= 0  Link Turnovers= 3
+09:28:58  
+09:28:58   Received Frame Quality:
+09:28:58      Avg 4FSK Quality=92 on 11 frame(s)
+09:28:58      Avg 16FSK Quality=95 on 1 frame(s)
+09:28:58 ************************************************************************************************
