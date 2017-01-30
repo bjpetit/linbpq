@@ -1,11 +1,14 @@
 // Arduino interface code for Soundmodem running on a Teensie 3.1 or 3.6
 
-
 // So far...
 // 1200 works both ways at 12000K sampling, but RX not at 48k
 // 9600 works at 48K
 // 1200 Ok on Tom's board.
 // 9600 uses about 14% of Teensy 3.1
+
+// This file has to be in the Arduino user library folder TeensyConfig
+
+#include "TeensyConfig.h"
 
 #define TEENSY
 
@@ -15,7 +18,11 @@
 
 #include <DMAChannel.h>
 #include "SPI.h"
-#include "ILI9341_t3.h"
+
+
+
+Print *tftp = NULL;
+
 #include <EEPROM.h>
 
 DMAChannel dma1(false);
@@ -33,8 +40,6 @@ int lastLoadTicks = 0;
 
 int PKTLEDTimer = 0;
 
-extern ILI9341_t3 tft;
-
 extern volatile int RXBPtr;
 volatile int flag = 0;
 volatile int flag2 = 0;
@@ -42,6 +47,11 @@ extern int inIndex;			// ADC Buffer half being used 0 or 1
 
 void yDisplayCall(int dirn, char * Call);
 void yDisplayState(char * State);
+Print * setupTFT();
+
+void i2csetup();
+void i2cloop();
+
 
 #define ADC_SAMPLES_PER_BLOCK 1200
 #define DAC_SAMPLES_PER_BLOCK 1200
@@ -65,28 +75,10 @@ void yDisplayState(char * State);
 #define	KISSCHANNEL	6
 #define I2CADDRESS	7
 
-#define pttPin 6
 
-#define LED0 24
-#define LED1 25
-#define LED2 26
-#define LED3 31
 
 #define DCDLED LED0
 #define PKTLED LED1			// flash when packet received
-
-#define SW1 27
-#define SW2 28
-#define SW3 29
-#define SW4 30
-
-// CAT4016 10 LED display
-
-#define CLK 2
-#define BLANK 3
-#define LATCH 4
-#define SIN 5
-
 extern "C"
 {
   void WriteDebugLog(int Level, const char * format, ...);
@@ -175,32 +167,67 @@ extern "C"
     Sleep(mS);
   }
 
-  void SerialSendData(const uint8_t * Msg, int Len)
-  {
-    Serial.write(Msg, Len);
-  }
-
-  void Serial1Print(char * Msg, int Len)
-  {
-    Serial1.println(Msg);
-  }
-
   void SetLED(int Pin, int State)
   {
+#ifdef PIBOARD
+    digitalWrite(Pin, !State);				// Leds off when low
+#else
     digitalWrite(Pin, State);
+#endif
+  }
+
+
+  void CAT4016(int value)
+  {
+#ifdef BARLEDS
+
+    // writes value to the 10 LED display
+    int i;
+
+    for (i = 0; i < 16; i++)			// must send all 16 to maintain sync
+    {
+      // Send each bit to display
+
+      // We probbly don't need a microsecond delay, but I doubt if it will
+      // cauise timing problems anywhere else
+
+      // looks like we need to send data backwards (hi order bit first)
+
+      digitalWriteFast(SIN, (value >> 15) & 1);
+      //   __asm("nop");
+      delayMicroseconds(1);		// Setup is around 20 nS
+      digitalWriteFast(CLK, 1);		// Copy SR to Outputs
+      delayMicroseconds(1);		// Setup is around 20 nS
+      digitalWriteFast(CLK, 0);		// Strobe High to copy data from shift reg to display
+      value = value << 1;			// ready for next bit
+      delayMicroseconds(1);		// Setup is around 20 nS
+    }
+    // copy Shift Reg to display
+
+    digitalWriteFast(LATCH, 1);		//  Strobe High to copy data from shift reg to display
+    delayMicroseconds(1);					// Setup is around 20 nS
+    digitalWriteFast(LATCH, 0);
+#endif
+  }
+
+
+  void SaveEEPROM(int Reg, unsigned char Val)
+  {
+    if (EEPROM.read(Reg) != Val)
+      EEPROM.write(Reg, Val);
   }
 
   void HostPoll()
   {
     // Called roughly once every milisecond
 
-    int RXBPtr = Serial.available();
+    int RXBPtr = HOSTPORT.available();
 
     if (RXBPtr)
     {
       int Count;
       RXBUFFER[RXBPtr] = 0;
-      Count = Serial.readBytes((char *)RXBUFFER, RXBPtr);
+      Count = HOSTPORT.readBytes((char *)RXBUFFER, RXBPtr);
       if (Count != RXBPtr)
         WriteDebugLog(LOGDEBUG, "Serial Read Error");
 
@@ -228,6 +255,10 @@ void setup()
 {
   uint32_t i, sum = 0;
 
+  HOSTPORT.begin(115200);
+  MONPORT.begin(115200);
+  while (!MONPORT);							// Wait for Serial before starting watchdog!
+
   // Set 10 second watchdog
 
   WDOG_UNLOCK = WDOG_UNLOCK_SEQ1;
@@ -242,15 +273,21 @@ void setup()
   Baud = 9600;	// FSK G3RUH
   AFSK = FALSE;
 
-  Baud = 1200;
-  AFSK = TRUE;
+  //  Baud = 1200;
+  //  AFSK = TRUE;
 
-  pinMode(13, OUTPUT);				// onboard LED
   pinMode(pttPin, OUTPUT);
   pinMode(LED0, OUTPUT);
   pinMode(LED1, OUTPUT);
   pinMode(LED2, OUTPUT);
   pinMode(LED3, OUTPUT);
+
+  SetLED(LED0, 0);
+  SetLED(LED1, 0);
+  SetLED(LED3, 0);
+  SetLED(LED3, 0);
+
+#ifdef WDTBOARD
 
   pinMode (SW1, INPUT_PULLUP);
   pinMode (SW2, INPUT_PULLUP);
@@ -262,52 +299,53 @@ void setup()
   pinMode(LATCH, OUTPUT);
   pinMode(SIN, OUTPUT);
 
+#endif
 
-  setupTFT();
-  Serial.begin(115200);
-  Serial1.begin(115200);
+#ifdef TFT
+  tftp = setupTFT();
+#endif
 
-  Serial1.print("Hardware Serial No ");
+  MONPORT.printf("Monitor Buffer Space %d\n", MONPORT.availableForWrite());
+  MONPORT.printf("Host Buffer Space %d\n", HOSTPORT.availableForWrite());
+
+  MONPORT.print("Hardware Serial No ");
   print_mac();
-  Serial1.println("");
+  MONPORT.println("");
 
-  tft.println("Packet TNC based on Soundmodem by Thomas Sailer");
-  Serial1.println("Packet TNC based on Soundmodem by Thomas Sailer");
+  if (tftp)
+    tftp->println("Packet TNC based on Soundmodem by Thomas Sailer");
+  MONPORT.println("Packet TNC based on Soundmodem by Thomas Sailer");
 
   WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
 
-  Serial1.print( "EEPROM length: " );
-  Serial1.println( EEPROM.length() );
-
-  // if (EEPROM.read(1) != 100)
-  // 	EEPROM.write(1, 100);
-
-  //if (EEPROM.read(2) != 200)
-  // 	EEPROM.write(2, 200);
+  MONPORT.print( "EEPROM length: " );
+  MONPORT.println( EEPROM.length() );
 
   for (i = 0; i < 16; i++)
   {
     // read a byte from the current address of the EEPROM
     int value = EEPROM.read(i);
 
-    Serial1.print(i);
-    Serial1.print("\t");
-    Serial1.print(value, DEC);
-    Serial1.println();
+    MONPORT.print(i);
+    MONPORT.print("\t");
+    MONPORT.print(value, DEC);
+    MONPORT.println();
   }
-  Serial1.println(EEPROM[2]);
+
   if (Baud == 9600)
   {
-    tft.println("9600 FSK Mode");
-    Serial1.println("9600 FSK Mode");
+    if (tftp)
+      tftp->println("9600 FSK Mode");
+    MONPORT.println("9600 FSK Mode");
   }
   else
   {
-    tft.print(Baud);
-    tft.println(" AFSK  Mode");
-    Serial1.print(Baud);
-    Serial1.println(" Baud AFSK  Mode");
+    if (tftp)
+      tftp->printf("AFSK Mode %d Baud", Baud);
+
+    MONPORT.printf("AFSK Mode %d Baud", Baud);
   }
+
   dma1.begin(true);
 
   if (RCM_SRS0 & 0X20)		// Watchdog Reset
@@ -337,13 +375,7 @@ void setup()
 
   WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
 
-  // Clear CAT4016
-
-  digitalWriteFast(BLANK, 0);	// Enable display
-  digitalWriteFast(LATCH, 0);	// Strobe High to copy data from shift reg to display
-  digitalWriteFast(CLK, 0);		// Strobe High to enter data to shift reg
-
-  CAT4016(0);				// All off
+  i2csetup();
 }
 
 
@@ -352,6 +384,7 @@ void loop()
   mainLoop();
   PlatformSleep();
   Sleep(1);
+  i2cloop();
 }
 
 // DMA COde is here as it is more difficult to use the Arduino interface stuff
@@ -496,8 +529,6 @@ void StartADC()
 }
 
 
-
-
 extern "C" char* sbrk(int incr);
 
 extern char *__brkval;
@@ -507,12 +538,11 @@ extern char __bss_end;
 // function from the sdFat library (SdFatUtil.cpp)
 // licensed under GPL v3
 // Full credit goes to William Greiman.
-int FreeRam() {
+int FreeRam()
+{
   char top;
 
-  //   return &top -sbrk(0);
   return __brkval ? &top - __brkval : &top - &__bss_end;
-
 }
 
 // Function to get mac/serial number
@@ -567,42 +597,11 @@ void print_mac()  {
   readserialno(mac);
   for (uint8_t i = 0; i < 4; ++i)
   {
-    if (i != 0) count += Serial1.print(":");
-    count += Serial1.print((*(mac + i) & 0xF0) >> 4, 16);
-    count += Serial1.print(*(mac + i) & 0x0F, 16);
+    if (i != 0) count += MONPORT.print(":");
+    count += MONPORT.print((*(mac + i) & 0xF0) >> 4, 16);
+    count += MONPORT.print(*(mac + i) & 0x0F, 16);
   }
 }
-
-void CAT4016(int value)
-{
-  // writes value to the 10 LED display
-  int i;
-
-  for (i = 0; i < 16; i++)			// must send all 16 to maintain sync
-  {
-    // Send each bit to display
-
-    // We probbly don't need a microsecond delay, but I doubt if it will
-    // cauise timing problems anywhere else
-
-    // looks like we need to send data backwards (hi order bit first)
-
-    digitalWriteFast(SIN, (value >> 15) & 1);
-    //   __asm("nop");
-    delayMicroseconds(1);		// Setup is around 20 nS
-    digitalWriteFast(CLK, 1);		// Copy SR to Outputs
-    delayMicroseconds(1);		// Setup is around 20 nS
-    digitalWriteFast(CLK, 0);		// Strobe High to copy data from shift reg to display
-    value = value << 1;			// ready for next bit
-    delayMicroseconds(1);		// Setup is around 20 nS
-  }
-  // copy Shift Reg to display
-
-  digitalWriteFast(LATCH, 1);		//  Strobe High to copy data from shift reg to display
-  delayMicroseconds(1);					// Setup is around 20 nS
-  digitalWriteFast(LATCH, 0);
-}
-
 
 
 

@@ -14,13 +14,32 @@
 // PIBOARD is the Raspberry PI i2c Board. It has 4 LEDS and the Host port on Serial1. There is no TFT
 // CAT4016 Display or switches. Level setting pots are on SPI
 
+// This file is for Soundmodem
 
-//#define PIBOARD
+
+#define SOUNDMODEM
+
+#define TEENSY
+#define PIBOARD
+
+#define DCDLED LED3
 
 #ifdef PIBOARD
 
+// Can use Serial or I2C for Host Interface
+// May one day support Monitor over I2C
+
+// If we define I2CHOST we shoudn't define HOSTPORT
+
 #define HOSTPORT Serial1
 #define MONPORT Serial
+
+//#define I2CHOST
+//#define I2CSLAVEADDR 0x1F
+
+#define HASPOTS
+#define SPIPOTS
+#define SPIPOTCS 10
 
 #define pttPin 6
 
@@ -29,9 +48,9 @@
 #define LED2 4
 #define LED3 5
 
-// Can use i2c as KISS port
-
-#define i2cSlaveSupport
+#ifdef I2CHOST
+#undef HOSTPORT
+#endif
 
 #else
 
@@ -42,6 +61,11 @@
 
 #define TFT
 #define BARLEDS
+
+
+//#define HASPOTS
+//#define SPIPOTS
+//#define I2CPOTADDR
 
 #define pttPin 6
 

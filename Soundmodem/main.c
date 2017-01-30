@@ -46,10 +46,10 @@ void InitSound(int SampleRate, int Report);
 void DemodAFSKinit(void *state);
 void DemodFSKinit(void *state);
 
-//int Baud = 9600;
-//BOOL AFSK = FALSE;
-int Baud = 1200;
-BOOL AFSK = TRUE;
+int Baud = 9600;
+BOOL AFSK = FALSE;
+//int Baud = 1200;
+//BOOL AFSK = TRUE;
 
 int logcheck(int x)
 {

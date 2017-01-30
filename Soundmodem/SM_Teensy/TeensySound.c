@@ -14,6 +14,7 @@
 #define TRUE 1
 #define FALSE 0
 
+extern int VRef;
 
 #define ADC_SAMPLES_PER_BLOCK 1200
 #define DAC_SAMPLES_PER_BLOCK 1200
@@ -31,8 +32,10 @@
 
 #define Now getTicks()
 
-extern int Baud;		// Modem Speed (1200 or 9600 for now)
-extern int AFSK;		// Modem Mode
+extern int TXLevel;				// 300 mV p-p Used on Teensy
+extern RXLevel;							// Configured Level - zero means auto tune
+extern autoRXLevel;			// calculated level
+
 
 BOOL SoundIsPlaying = FALSE;
 BOOL Capturing = FALSE;
@@ -123,7 +126,7 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 
   if (DMARunning == FALSE)
   {
-    xStartDAC();
+    StartDAC();
     DMARunning = TRUE;
     FirstTime = TRUE;
 
@@ -181,7 +184,8 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 //    for (t = 0; t < sizeof(buffer); ++t)
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
-int min = 0, max = 0, leveltimer = 0;
+int lastmin = 0, lastmax = 0;
+int Samples, levelticks = 0;
 
 void PollReceivedSamples()
 {
@@ -210,7 +214,7 @@ void PollReceivedSamples()
     for (i = 0; i < ADC_SAMPLES_PER_BLOCK; i++)
     {
       register int s1 = (unsigned short)(*src++);
-      s1 -= 32768;
+      s1 -= VRef;
       *dst++ = s1;
       tot += s1;
       if (s1 > maxlevel)
@@ -219,23 +223,35 @@ void PollReceivedSamples()
         minlevel = s1;
     }
 
-    //	serial.printf("Max %d min %d av %d\n", max, min, tot/ADC_SAMPLES_PER_BLOCK);
+    Samples += ADC_SAMPLES_PER_BLOCK;
 
-    //  	 printtick("Process Sample Start");
-
-
+  //    printtick("Process Sample Start");
     if (Capturing)
       ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+  //    printtick("Process Sample End");
 
-    //   printtick("Process Sample End");
+    // We save Max and Min every block so we can adjust level
+    // when we see a valid packet. We display every 10 seconds
 
-    leveltimer++;
-    if ((AFSK && leveltimer > 20) || leveltimer > 80)
+    lastmin = minlevel;
+    lastmax = maxlevel;
+
+    if (Now - levelticks > 9999)
     {
-      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / (ADC_SAMPLES_PER_BLOCK * leveltimer));
+      levelticks = Now;
+      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
       displayLevel(maxlevel);
-      leveltimer = tot = minlevel = maxlevel = 0;
+
+      // Adjust VRef
+
+      VRef += tot / Samples;
+
+      Samples = tot = 0;
+
+      if (RXLevel == 0)				// Automatic level
+        CheckandAdjustRXLevel(maxlevel, minlevel, FALSE);
     }
+    minlevel = maxlevel = 0;
   }
   inIndex = !inIndex;
 }
@@ -243,7 +259,6 @@ void PollReceivedSamples()
 void StopCapture()
 {
   Capturing = FALSE;
-  //	printf("Stop Capture\n");
 }
 
 void StartCodec(char * strFault)
@@ -284,7 +299,7 @@ void SoundFlush()
 
   printtick("Start flush");
 
-//  WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d", Index, Number, GetDMAPointer());
+  //  WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d", Index, Number, GetDMAPointer());
 
   if (Index == 0)
 
@@ -301,7 +316,7 @@ void SoundFlush()
 
     FlushEnd = DAC_SAMPLES_PER_BLOCK - Number;
 
- // WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d Flushend %d", Index, Number, GetDMAPointer(), FlushEnd);
+  // WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d Flushend %d", Index, Number, GetDMAPointer(), FlushEnd);
 
   // Wait if necessary for the other half to complete
 
@@ -315,9 +330,9 @@ void SoundFlush()
   while (GetDMAPointer() > FlushEnd)
     txSleep(1);
 
-//  printtick("end flush");
+  //  printtick("end flush");
 
-  xstopDAC();
+  stopDAC();
   DMARunning = FALSE;
   SoundIsPlaying = FALSE;
 
@@ -333,18 +348,8 @@ void SoundFlush()
   return;
 }
 
-//  Function to Key radio PTT
 
-const char BoolString[2][6] = {"FALSE", "TRUE"};
 
-BOOL KeyPTT(BOOL blnPTT)
-{
-  // Returns TRUE if successful False otherwise
-
-  SetLED(pttPin, blnPTT);
-  displayPTT(blnPTT);
-  return TRUE;
-}
 
 void Start_ADC_DMA(void)
 {
