@@ -787,6 +787,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Make sure old monitor flag is cleared for TermTCP sessions
 //	Add CI-V antenna control for IC746
 //	Don't allow ARDOP beacons when connected
+//	Add support for ARDOP Serail over I2C
 
 #define CKernel
 
@@ -2082,8 +2083,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 	int i;
 	unsigned int ProcessID;
-
-	int WL2K = sizeof(struct WL2KInfo); 
 
 	switch( ul_reason_being_called )
 	{

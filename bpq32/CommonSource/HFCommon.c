@@ -56,6 +56,7 @@ extern int Ver[];
 
 int KillTNC(struct TNCINFO * TNC);
 int RestartTNC(struct TNCINFO * TNC);
+VOID ARDOPAbort(struct TNCINFO * TNC);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
@@ -253,6 +254,11 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 				RegSetValueEx(hKey,"TNC->RestartAfterFailure",0,REG_DWORD,(BYTE *)&TNC->RestartAfterFailure, 4);
 				RegCloseKey(hKey);
 			}
+			break;
+
+		case ARDOP_ABORT:
+
+			ARDOPAbort(TNC);
 			break;
 		}
 		return DefMDIChildProc(hWnd, message, wParam, lParam);
@@ -945,7 +951,7 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 	}
 
 
-	LOC = memchr(Call, '(', 20);
+ 	LOC = memchr(Call, '(', 20);
 
 	if (LOC)
 	{
@@ -1025,7 +1031,7 @@ DoMove:
 	ReportMode[3] = Direction;
 	ReportMode[4] = 0;
 
-	SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
+ 	SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
 
 	return;
 }

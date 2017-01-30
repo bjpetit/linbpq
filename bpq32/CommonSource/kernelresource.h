@@ -73,6 +73,7 @@
 #define IDC_DISPFREQ                    1022
 #define IDC_RADIO1                      1023
 #define RIG_LINE                        1024
+#define ARDOP_ABORT                     1025
 #define IDC_LEDS                        1030
 #define IDC_ENIGATE                     1040
 #define IGATESTATE                      1041

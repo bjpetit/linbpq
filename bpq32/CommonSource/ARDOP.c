@@ -215,6 +215,32 @@ BOOL checkcrc16(unsigned char * Data, unsigned short length)
 	return FALSE;
 }
 
+
+// Logging Interface. Used for Log over Serial Mode
+
+BOOL ARDOPOpenLogFile(struct TNCINFO * TNC)
+{
+	UCHAR FN[MAX_PATH];
+
+	time_t T;
+	struct tm * tm;
+	int i;
+
+	T = time(NULL);
+	tm = gmtime(&T);
+
+	strlop(TNC->LogPath, 13);
+	strlop(TNC->LogPath, 32);
+
+	sprintf(FN,"%s/ARDOPDebugLog_%02d%02d_%d.txt", TNC->LogPath, tm->tm_mon + 1, tm->tm_mday, TNC->Port);
+
+	TNC->LogHandle = fopen(FN, "ab");
+	i = GetLastError();
+	return (TNC->LogHandle != NULL);
+}
+
+
+
 static ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
@@ -410,6 +436,9 @@ static ProcessLine(char * buf, int Port)
 				
 				strcat (TNC->InitScript, buf);
 			}
+			else
+			if (_memicmp(buf, "LOGDIR ", 7) == 0)
+				TNC->LogPath = strdup(&buf[7]);
 			else
 
 			strcat (TNC->InitScript, buf);
@@ -1424,8 +1453,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
 		"</head><title>ARDOP Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2>ARDOP Status</h2>");
-
+		"<h2><form method=post action=ARDOPAbort?%d>ARDOP Status <input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
+		TNC->Port);
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -1479,6 +1508,9 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	}
 
 	TNC->Port = port;
+
+	if (TNC->LogPath)
+		ARDOPOpenLogFile(TNC); 
 
 	TNC->ARDOPBuffer = malloc(8192);
 	TNC->ARDOPDataBuffer = malloc(8192);
@@ -1653,6 +1685,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_KILL, "Kill ARDOP TNC");
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart ARDOP TNC");
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after each Connection");
+	AppendMenu(TNC->hMenu, MF_STRING, ARDOP_ABORT, "Abort Current Session");
 	
 	CheckMenuItem(TNC->hMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
 
@@ -1685,14 +1718,16 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 		int retval;
 
 		if (strlen(TNC->ARDOPSerialPort) < 3)
+		{
 			sprintf(i2cname, "/dev/i2c-%s", TNC->ARDOPSerialPort);
+			TNC->ARDOPSerialPort = _strdup(i2cname);
+		}
 		else
 			strcpy(i2cname, TNC->ARDOPSerialPort);
 	
 		TNC->PortRecord->PORTCONTROL.SerialPortName = _strdup(i2cname); // for common routines
 
-		sprintf(Msg,"ARDOP I2C Bus %s Addr %d ", i2cname, TNC->ARDOPSerialSpeed);
-		WritetoConsoleLocal(Msg);
+		Consoleprintf("ARDOP I2C Bus %s Addr %d ", i2cname, TNC->ARDOPSerialSpeed);
 
 		// Open and configure the i2c interface
 		                         
@@ -1710,7 +1745,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 			printf("Cannot open i2c device %x\n", TNC->ARDOPSerialSpeed);
 		}
  
- 		ioctl(TNC->hDevice,  I2C_TIMEOUT, 100);
+ 		ioctl(TNC->hDevice,  I2C_TIMEOUT, 10);	//m100 mS
 #endif
 #endif
 	}
@@ -2963,15 +2998,35 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 		// Place ID frames in Monitor Window and MH
 
 		char Call[20];
+		char * Loc;
+
+// GM8BPQ-2:[IO68VL] 
+//ID:GM8BPQ-2 IO68VL : 
+// GM8BPQ-2:[IO68VL] 
+//ID:GM8BPQ-2 [IO68vl]: 
+//ID:HB9AVK JN47HG : 
+
+// TX BPQ IDF  GM8BPQ-2:[IO68VL] 
+// RX Rick IDF ID:GM8BPQ-2 [IO68vl]: 
+
+// TX Rick IDF  GM8BPQ-2:[IO68VL] 
+// RX BPQ IDF ID:GM8BPQ-2 IO68VL : 
+
+//ID:GM8BPQ-2 [IO68vl] : 
 
 		Data[Length] = 0;
 		WritetoTrace(TNC, Data, Length);
 
-		if (memcmp(Data, "ID:", 3) == 0)	// These seem to be transmitted ID's
+		Debugprintf("ARDOP IDF %s", Data);
+
+		// Loos like transmitted ID doesnt have ID:
+	
+		if (memcmp(Data, "ID:", 3) == 0)	// These seem to be received ID's
 		{
 			memcpy(Call, &Data[3], 20);
-			strlop(Call, ':'); 
-			UpdateMH(TNC, Call, '!', 'I');
+			Loc = strlop(Call, ' '); 
+			strlop(Loc, ']');
+			UpdateMHEx(TNC, Call, '!', 'I', &Loc[1]);
 		}
 		return;
 	}
@@ -3410,6 +3465,8 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 	ARDOPSendCommand(TNC, "ABORT", TRUE);
 }
 
+
+
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
 	ARDOPReleaseTNC(TNC);
@@ -3419,6 +3476,11 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		TNC->FECMode = FALSE;
 		ARDOPSendCommand(TNC, "SENDID", TRUE);
 	}
+}
+
+VOID ARDOPAbort(struct TNCINFO * TNC)
+{
+	ARDOPSendCommand(TNC, "ABORT", TRUE);
 }
 
 // Host Mode Stuff (we reuse some routines in SCSPactor)
@@ -3548,7 +3610,7 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 							  
 	 			retval = ioctl(TNC->hDevice,  I2C_SLAVE, TNC->ARDOPSerialSpeed);
  
- 				ioctl(TNC->hDevice,  I2C_TIMEOUT, 100);
+ 				ioctl(TNC->hDevice,  I2C_TIMEOUT, 10);	// 100 mS
 #endif
 #endif
 			}
@@ -3755,6 +3817,19 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		}
 		return;
 
+	}		
+		
+	if (Stream == 34)		// Native Mode Log
+	{
+		int Len = Msg[4] + 1;
+	
+		if (TNC->LogHandle)
+		{
+			fwrite(&Msg[5], 1, Len, TNC->LogHandle); 
+			fflush(TNC->LogHandle);
+		}
+
+		return;
 	}
 		
 	if (Msg[3] == 0)
@@ -3954,29 +4029,37 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 
 	if (TNC->ARDOPCommsMode =='I')
 	{
-		unsigned char Buffer[502];
+		unsigned char Buffer[503];
 		BOOL Error;	
 
 		// i2c mode always returns as much as requested or error
 		// First two bytes of block are lenght
 
-		Len = ReadCOMBlockEx(TNC->hDevice, Buffer, 502, &Error);
+		Len = ReadCOMBlockEx(TNC->hDevice, Buffer, 503, &Error);
 	
-		if (Len < 502 || Error == 5)
+		if (Len < 503 || Error == 5)
 			return;
 
 		if (Error)
 			Debugprintf("ARDOP i2c returned %d bytes Error %d", Len, Error);
 
-		Len = Buffer[1] << 8 | Buffer[0];
+		Len = (Buffer[2] << 8) | Buffer[1];
 
 		if (Len == 0)
 			return;
 
+//		if (Len != 7)
+//			Debugprintf("ARDOP i2c Len %d  RXL %d %x %x %x %x %x %x %x %x %x %x %x %x",
+//				Len, TNC->RXLen,
+//				Buffer[0], Buffer[1], Buffer[2], Buffer[3],
+//				Buffer[4], Buffer[5], Buffer[6], Buffer[7],
+//				Buffer[8], Buffer[9], Buffer[10], Buffer[11]);
+
 		if (Len > 500 - TNC->RXLen)
 			Len = 500 - TNC->RXLen;
+
 		
-		memcpy(&TNC->RXBuffer[TNC->RXLen], &Buffer[2], Len);
+		memcpy(&TNC->RXBuffer[TNC->RXLen], &Buffer[3], Len);
 	}
 	else
 		Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
@@ -4140,6 +4223,8 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 
 	// Bad CRC - assume incomplete frame, and wait for rest. If it was a full bad frame, timeout and retry will recover link.
 
+	Debugprintf("ARDOP bad crc %x", crc);
+
 	return;
 }
 
@@ -4162,7 +4247,8 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 
 		if(TNC->Retries)
 		{
-			Debugprintf("ARDOP TImeout - Retransmit PTC Block");
+			if (TNC->HostMode)
+				Debugprintf("ARDOP Timeout - Retransmit PTC Block");
 			WriteCommBlock(TNC);	// Retransmit Block
 			return;
 		}
@@ -4233,21 +4319,14 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 		UINT * buffptr;
 			
 		buffptr=Q_REM(&TNC->BPQtoRadio_Q);
-
 		datalen=buffptr[1];
-
 		Poll[2] = 253;		// Radio Channel
 		Poll[3] = 0;		// Data?
 		Poll[4] = datalen - 1;
-	
 		memcpy(&Poll[5], buffptr+2, datalen);
-		
-		ReleaseBuffer(buffptr);
-		
+	
+		ReleaseBuffer(buffptr);	
 		ARDOPCRCStuffAndSend(TNC, Poll, datalen + 5);
-
-//		Debugprintf("SCS Sending Rig Command");
-
 		return;
 	}
 
@@ -4304,3 +4383,5 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 	return;
 
 }
+
+

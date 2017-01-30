@@ -661,7 +661,8 @@ typedef struct TNCINFO
 	int ARDOPSerialSpeed;
 	int SlowTimer;
 	int ARQPorts[32];				// For ARQ over KISS
-
+	FILE * LogHandle;				// Ardop Logging File
+	char * LogPath;
 
 } *PTNCINFO;
 

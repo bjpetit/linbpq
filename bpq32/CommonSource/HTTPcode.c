@@ -1930,6 +1930,30 @@ doHeader:
 			SaveConfigFile(sock, MsgPtr, Key);
 			return 0;
 		}
+
+		if (_stricmp(NodeURL, "/Node/ARDOPAbort") == 0)
+		{
+		int port = atoi(Context);
+
+		if (port > 0 && port < 33)
+		{
+			struct TNCINFO * TNC = TNCInfo[port];
+
+			if (TNC)
+				ARDOPAbort(TNC);
+
+			if (TNC && TNC->WebWindowProc)
+				ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
+			
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+			send(sock, Header, HeaderLen, 0);
+			send(sock, _REPLYBUFFER, ReplyLen, 0);
+			send(sock, Tail, strlen(Tail), 0);
+
+			return 1;
+		}
+		
+	}
 	
 		send(sock, _REPLYBUFFER, InputLen, 0);
 		return 0;

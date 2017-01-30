@@ -4134,7 +4134,7 @@ int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr
 {
 	int n;
 
-	Debugprintf("Disconnect Reported");
+	Debugprintf("Telnet Disconnect Reported");
 
 	if (sockptr->SocketActive)
 	{

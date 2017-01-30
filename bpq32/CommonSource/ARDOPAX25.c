@@ -777,7 +777,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
 		"</head><title>ARDOP Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2>ARDOP Status</h2>");
+		"<h2><form method=post action=ARDOPAbort?%d>ARDOP Status <input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
+		TNC->Port);
 
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");

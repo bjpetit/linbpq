@@ -1389,7 +1389,7 @@ BOOL Rig_Poll()
 			return TRUE;
 		}
 
-		if (PORT->hDevice == 0)			// Try to reopen
+		if (PORT->hDevice == 0 && PORT->PTC == 0)	
 		{
 			// Try to reopen every 15 secs 
 			
@@ -2128,6 +2128,7 @@ VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * Msg, int framelen)
 		{
 			// Just come up		
 			PORT->PORTOK = TRUE;
+			Debugprintf("Cat Port OK");
 		}
 		return;
 	}
@@ -3410,7 +3411,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 	if ((_memicmp(ptr, "VCOM", 4) == 0) && TNC->Hardware == H_SCS)		// Using Radio Port on PTC
 		COMPort = 0;
-	else if ((_memicmp(ptr, "PTCPORT", 7) == 0) && TNC->Hardware == H_SCS)
+	else if ((_memicmp(ptr, "PTCPORT", 7) == 0) && (TNC->Hardware == H_SCS || TNC->Hardware == H_ARDOP))
 		COMPort = 0;
 	else
 		COMPort = ptr;
