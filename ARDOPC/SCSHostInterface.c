@@ -468,9 +468,11 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			*(NextChan++) = 255;
 		}
 
-		if (CatRXLen)				// Cat data available?
+		if (CatRXLen)		// Cat data available?
+		{
+			WriteDebugLog(LOGDEBUG, "Radio Pool Returned %d",CatRXLen);
 			*(NextChan++) = 254;	// 253 + 1
-
+		}
 		if (CommandToHostBufferLen)	// only used in Native mode
 			*(NextChan++) = 33;		// Native mode cmd channel
 

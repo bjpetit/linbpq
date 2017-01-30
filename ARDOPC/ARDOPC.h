@@ -12,17 +12,9 @@
 
 //	Sound interface buffer size
 
-#ifdef TEENSY
-
-#define DAC_SAMPLES_PER_BLOCK 1200
-#define ADC_SAMPLES_PER_BLOCK 1200
-#define SendSize DAC_SAMPLES_PER_BLOCK
-
-#else
 #define SendSize 1200		// 100 mS for now
 #define ReceiveSize 240		// try 50mS 100 mS for now
 #define NumberofinBuffers 4
-#endif
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
@@ -160,6 +152,8 @@ void SampleSink(short Sample);
 void SoundFlush();
 void StopCapture();
 void StartCapture();
+void DiscardOldSamples();
+void ClearAllMixedSamples();
 
 void SetFilter(void * Filter());
 
@@ -190,7 +184,7 @@ VOID CloseCOMPort(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
 VOID COMClearDTR(HANDLE fd);
 
-#ifdef WIN32
+//#ifdef WIN32
 void ProcessNewSamples(short * Samples, int nSamples);
 VOID Debugprintf(const char * format, ...);
 VOID WriteDebugLog(int LogLevel, const char * format, ...);
@@ -199,8 +193,10 @@ BOOL GetNextFECFrame();
 void GenerateFSKTemplates();
 void printtick(char * msg);
 void InitValidFrameTypes();
-#endif
+//#endif
 
+extern void Generate50BaudTwoToneLeaderTemplate();
+extern BOOL blnDISCRepeating;
 
 BOOL DemodDecode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare);
 void DeCompressCallsign(char * bytCallsign, char * returned);

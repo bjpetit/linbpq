@@ -6,11 +6,12 @@
 //	Also has some platform specific routines
 
 #include "TeensyConfig.h"
+#include "TeensyCommon.h"
 
-#define concat(a, b) a ## b
+//#include "..\..\ARDOPC.h"
+//#include <math.h>
 
-#include "..\..\ARDOPC.h"
-#include <math.h>
+extern int SoundIsPlaying;
 
 extern int VRef;
 
@@ -202,11 +203,6 @@ void PollReceivedSamples()
   inIndex = !inIndex;
 }
 
-void StopCapture()
-{
-  Capturing = FALSE;
-}
-
 void StartCodec(char * strFault)
 {
   strFault[0] = 0;
@@ -217,13 +213,6 @@ void StopCodec(char * strFault)
   strFault[0] = 0;
 }
 
-void StartCapture()
-{
-  Capturing = TRUE;
-  DiscardOldSamples();
-  ClearAllMixedSamples();
-  State = SearchingForLeader;
-}
 void CloseSound()
 {
 }
@@ -287,9 +276,8 @@ void SoundFlush()
   DMARunning = FALSE;
   SoundIsPlaying = FALSE;
 
-  if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
-    dttNextPlay = Now + intFrameRepeatInterval;
-
+	TurnroundLink();					// Mode Specific Code
+	
   KeyPTT(FALSE);		 // Unkey the Transmitter
 
   //	StartCapture();

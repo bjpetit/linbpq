@@ -3070,6 +3070,7 @@ BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
 BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 {
 	UCHAR bytCall[10];
+	UCHAR temp[20];
 	BOOL blnRSOK;
 	BOOL FrameOK;
 
@@ -3095,23 +3096,14 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 	memcpy(bytCall, bytFrameData1, 6);
 	DeCompressCallsign(bytCall, strCallID);
 	memcpy(bytCall, &bytFrameData1[6], 6);
-	DeCompressGridSquare(bytCall, strGridSquare);
-
-//	printtick(strCallID);
-//	printtick(strGridSquare);
-
-
-	/*
-        If strGridSquare.Length = 6 Then
-            strGridSquare = "[" & strGridSquare.Substring(0, 4).ToUpper & strGridSquare.Substring(4, 2).ToLower & "]"
-        ElseIf strGridSquare.Length = 8 Then
-            strGridSquare = "[" & strGridSquare.Substring(0, 4).ToUpper & strGridSquare.Substring(4, 2).ToLower & strGridSquare.Substring(6, 2) & "]"
-        Else
-            strGridSquare = "[" & strGridSquare.ToUpper & "]"
-        End If
-		*/
-
-        ///strRcvFrameTag = "_" & strCallID & " " & strGridSquare
+	DeCompressGridSquare(bytCall, temp);
+      
+	if (strlen(temp) > 5)
+	{
+		temp[4] = tolower(temp[4]);
+		temp[5] = tolower(temp[5]);
+	}
+	sprintf(strGridSquare, "[%s]", temp);
 
 	if (AccumulateStats)
 		if (FrameOK)
@@ -3343,7 +3335,7 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 	char strCallerCallsign[10] = "";
 	char strTargetCallsign[10] = "";
 	char strIDCallSign[11] = "";
-	char strGridSQ[10] = "";
+	char strGridSQ[20] = "";
 	int intTiming;
 	int intRcvdQuality;
 
@@ -3397,7 +3389,7 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 						
 			blnDecodeOK = Decode4FSKID(0x30, strIDCallSign, strGridSQ);
 			
-			frameLen = sprintf(bytData, "ID:%s %s : " , strIDCallSign, strGridSQ);
+			frameLen = sprintf(bytData, "ID:%s %s:" , strIDCallSign, strGridSQ);
 
 			//stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
 
@@ -4839,7 +4831,7 @@ void SavePSKSamples(int i)
 
 BOOL DemodQAM()
 {
-	int Used;
+	int Used = 0;
 	int Start = 0;
 
 	// We can't wait for the full frame as we don't have enough RAM, so

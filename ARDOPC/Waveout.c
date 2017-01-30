@@ -415,9 +415,6 @@ void StopCapture()
 //	WriteDebugLog(LOGDEBUG, "Stop Capture");
 }
 
-void DiscardOldSamples();
-void ClearAllMixedSamples();
-
 void StartCapture()
 {
 	Capturing = TRUE;

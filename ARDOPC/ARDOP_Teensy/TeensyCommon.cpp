@@ -3,34 +3,23 @@
 // Currently used by ARDOP and Packet TNC
 
 #include <EEPROM.h>
-
 #include "TeensyConfig.h"
+#include "TeensyCommon.h"
 
-extern "C"
-{
-#include "..\..\ARDOPC.h"
-}
+void CAT4016(int value);
+void setupTFT();
+
+#define ProductName "ARDOP TNC"
+#define ProductVersion "0.9.0.4-BPQ"
+
+// extern "C" {#include "..\..\ARDOPC.h"}
 
 #include "SPI.h"
-
-extern "C" void AdjustRXLevel(int Level);
-extern "C" void AdjustTXLevel(int Level);
-extern "C" void WriteDebugLog(int Level, const char * format, ...);
-extern "C" void SetPot(int address, unsigned int value);
-extern "C" unsigned int GetPot(int address);
-extern "C" void SetLED(int Pin, int State);
-
-extern "C" bool OKtoAdjustLevel();			// in platform specific code
-
-void i2csetup();
-extern "C" void StartDAC();
 
 void StartADC();
 void setupDAC();
 void setupADC();
-extern "C" void stopDAC();
-
-extern int inIndex;			// ADC Buffer half being used 0 or 1
+void i2csetup();
 
 #include <DMAChannel.h>
 
@@ -118,6 +107,7 @@ void CommonSetup()
 // PI Board uses SPI, WDT Board uses i2c
 extern "C"
 {
+#ifdef HASPOTS
   void AdjustRXLevel(int Level)
   {
     int Pot = (Level * 256) / 3000;
@@ -141,6 +131,13 @@ extern "C"
 
     SetPot(1, Pot);		// Write to live
   }
+#else
+  void AdjustRXLevel(int Level)
+  {}
+  void AdjustTXLevel(int Level)
+  {}
+#endif
+
 #ifdef SPIPOTS
 
   void SetPot(int address, unsigned int value)
@@ -460,7 +457,7 @@ ILI9341_t3 tft = ILI9341_t3(TFT_CS, TFT_DC, _RST, _MOSI, _SCLK, _MISO);
 static Print * tftptr = NULL;
 
 
-Print * setupTFT()
+void setupTFT()
 {
   Serial1.println("INIT TFT");
   tft.begin();
@@ -471,7 +468,6 @@ Print * setupTFT()
   tft.setTextSize(2);
   tft.printf("ARDOP TNC %s", ProductVersion);
   tftptr = &tft;
-  return &tft;
 }
 
 extern "C"
@@ -505,9 +501,9 @@ extern "C"
 
 // Dummy routines
 
-extern "C"void displayCall(int dirn, char * Call)
+extern "C" void displayCall(int dirn, char * Call)
 {}
-extern "C"void displayState(const char * State)
+extern "C" void displayState(const char * State)
 {}
 
 #endif
@@ -518,7 +514,13 @@ const int barlevels[10] = {
   1000, 2000, 5000, 8000, 11000,
   16000, 24000, 28000, 30000, 32000
 };
-
+#ifdef TFT
+const int barcolours[10] = {
+  ILI9341_YELLOW, ILI9341_YELLOW, ILI9341_GREEN,
+  ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN,
+  ILI9341_RED, ILI9341_RED, ILI9341_RED
+};
+#endif
 const int CAT4016Levels[11] = {
   0, 1, 0b11, 0b111, 0b1111, 0b11111,
   0b111111, 0b1111111, 0b11111111, 0b111111111, 0b1111111111
@@ -550,46 +552,87 @@ extern "C"
 
 // Routine to adjust the RX gain pot to keep input level in range
 
-extern "C" void CheckandAdjustRXLevel(int maxlevel, int minlevel, bool Force)
+extern "C"
 {
-  int pktopk = (maxlevel - minlevel) * 3300 / 65536;
-
-  if (!OKtoAdjustLevel() && !Force)			// Protocol specific test
-	  return;
-
-  // Try adjusting pot to get about 2000 mV
-
-  if (pktopk > 3200)
+  void CheckandAdjustRXLevel(int maxlevel, int minlevel, bool Force)
   {
-    // Overloaded so can't get accurate level. Set Gain to minimum
+    int pktopk = (maxlevel - minlevel) * 3300 / 65536;
 
-    autoRXLevel = 3000;
-    AdjustRXLevel(autoRXLevel);
-    return;
-  }
-  if (pktopk < 40)
-  {
-    // Assume no input
-    WriteDebugLog(LOGINFO, "Level below threshold - assume no input %d %d %d pk", maxlevel, minlevel, pktopk);
-    return;
-  }
+    if (!OKtoAdjustLevel() && !Force)			// Protocol specific test
+      return;
 
-  if (pktopk < 1600 || pktopk > 2400)
-  {
-    // Calulate actual input voltage from current pot gain setting
+    // Try adjusting pot to get about 2000 mV
 
-    pktopk = pktopk * autoRXLevel / 3000;
+    if (pktopk > 3200)
+    {
+      // Overloaded so can't get accurate level. Set Gain to minimum
 
-    WriteDebugLog(LOGINFO, "peak to peak input %d mV", pktopk);
-
-    autoRXLevel = pktopk  * 3 / 2;			// try to get to 2/3rd
-
-    if (autoRXLevel > 3000)
       autoRXLevel = 3000;
+      AdjustRXLevel(autoRXLevel);
+      return;
+    }
+    if (pktopk < 40)
+    {
+      // Assume no input
+      WriteDebugLog(LOGINFO, "Level below threshold - assume no input %d %d %d pk", maxlevel, minlevel, pktopk);
+      return;
+    }
 
-    AdjustRXLevel(autoRXLevel);
+    if (pktopk < 1600 || pktopk > 2400)
+    {
+      // Calulate actual input voltage from current pot gain setting
+
+      pktopk = pktopk * autoRXLevel / 3000;
+
+      WriteDebugLog(LOGINFO, "peak to peak input %d mV", pktopk);
+
+      autoRXLevel = pktopk  * 3 / 2;			// try to get to 2/3rd
+
+      if (autoRXLevel > 3000)
+        autoRXLevel = 3000;
+
+      AdjustRXLevel(autoRXLevel);
+    }
+  }
+
+  void CatWrite(const uint8_t * Buffer, int Len)
+  {
+#ifdef CATPORT
+    CATPORT.write(Buffer, Len);
+#endif
+  }
+
+  unsigned char CatRXbuffer[256];
+  int CatRXLen = 0;
+
+  int RadioPoll()
+  {
+#ifdef CATPORT
+    int Length = CATPORT.available();
+
+    // only try to read number of bytes in queue
+
+    if (CatRXLen + Length > 256)
+      CatRXLen = 0;
+
+    Length = CATPORT.readBytes(&CatRXbuffer[CatRXLen], Length);
+
+    if (Length == 0)
+      return 0;					// Nothing doing
+
+    CatRXLen += Length;
+
+    Length = CatRXLen;
+
+    //    MONprintf("CAT RX ");
+    //    for (i = 0; i < Length; i++)
+    //      MONprintf("%x ", CatRXbuffer[i]);
+    //    MONprintf("\r\n");
+#endif
+    return CatRXLen;
   }
 }
+
 
 
 

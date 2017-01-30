@@ -274,7 +274,7 @@ extern "C"
     SendLogToHost(Mess);
 #endif
 #ifdef MONPORT
-    vspnrintf(Mess, sizeof(Mess), format, arglist);
+    vsnprintf(Mess, sizeof(Mess), format, arglist);
     MONPORT.println(Mess);
 #endif
     return;
@@ -290,7 +290,7 @@ extern "C"
 #ifdef LOGTOHOST
     Mess[0] = '0';
     vsnprintf(&Mess[1], sizeof(Mess), format, arglist);
-//    strcat(&Mess[1], "\r\n");
+    strcat(&Mess[1], "\r\n");
     SendLogToHost(Mess);
 #endif
 #ifdef MONPORT

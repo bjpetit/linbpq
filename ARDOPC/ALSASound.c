@@ -146,7 +146,7 @@ VOID WriteExceptionLog(const char * format, ...)
 	va_list(arglist);
 
 	va_start(arglist, format);
-	vsnprintf(Mess, format, arglist);
+	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\n");
 
 	printf("%s", Mess);

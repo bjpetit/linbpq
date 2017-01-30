@@ -1,6 +1,7 @@
 // Arduino interface code for ARDOP running on a Teensy 3.6
 
 #include "TeensyConfig.h"
+#include "TeensyCommon.h"
 
 #define TEENSY
 
@@ -83,44 +84,7 @@ extern "C"
     Sleep(mS);
   }
 
-  void CatWrite(const uint8_t * Buffer, int Len)
-  {
-#ifdef CATPORT
-    CATPORT.write(Buffer, Len);
-#endif
-  }
-
-  unsigned char CatRXbuffer[256];
-  int CatRXLen = 0;
-
-  int RadioPoll()
-  {
-#ifdef CATPORT
-    int Length = CATPORT.available();
-    int i, val;
-
-    // only try to read number of bytes in queue
-
-    if (CatRXLen + Length > 256)
-      CatRXLen = 0;
-
-    Length = CATPORT.readBytes(&CatRXbuffer[CatRXLen], Length);
-
-    if (Length == 0)
-      return 0;					// Nothing doing
-
-    CatRXLen += Length;
-
-    Length = CatRXLen;
-
-//    MONprintf("CAT RX ");
-//    for (i = 0; i < Length; i++)
-//      MONprintf("%x ", CatRXbuffer[i]);
-//    MONprintf("\r\n");
-#endif
-    return CatRXLen;
-  }
-
+ 
 #define MEM_LEN 512
   extern uint8_t databuf[MEM_LEN];
   extern volatile int i2cputptr, i2cgetptr;
@@ -171,7 +135,6 @@ void setup()
 
 #ifdef HOSTPORT
   HOSTPORT.begin(115200);
-  while (!HOSTPORT);
 #endif
 #ifdef MONPORT
   MONPORT.begin(115200);
@@ -279,11 +242,32 @@ void loop()
   }
 }
 
-extern "C" bool OKtoAdjustLevel()
+extern "C"
 {
-  // Only auto adjust level when disconnected.
-  // Level is set at end of each received packet when connected
+  int OKtoAdjustLevel()
 
-  return (ProtocolState == DISC);
+  {
+    // Only auto adjust level when disconnected.
+    // Level is set at end of each received packet when connected
+
+    return (ProtocolState == DISC);
+  }
+
+  void StartCapture()
+  {
+    Capturing = TRUE;
+    DiscardOldSamples();
+    ClearAllMixedSamples();
+    State = SearchingForLeader;
+  }
+  void StopCapture()
+  {
+    Capturing = FALSE;
+  }
+  void TurnroundLink()
+  {
+    if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
+      dttNextPlay = Now + intFrameRepeatInterval;
+  }
 }
 
