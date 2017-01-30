@@ -3,8 +3,6 @@
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
 
-#define TEENSY
-
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
@@ -17,10 +15,6 @@ volatile int flag2 = 0;
 
 extern int VRef;
 
-void yDisplayCall(int dirn, char * Call);
-void yDisplayState(char * State);
-void i2csetup();
-void i2cloop();
 void CommonSetup();
 void setupPDB(int SampleRate);
 void setupDAC();
@@ -28,10 +22,6 @@ void setupADC(int Pin);
 extern "C" void StartDAC();
 extern "C" void StopDAC();
 void StartADC();
-
-extern "C" void SetPot(int address, unsigned int value);
-extern "C" unsigned int GetPot(int address);
-extern "C" void SetLED(int Pin, int State);
 
 // Arduino is a c++ environment so functions in ardop must be defined as "C"
 
@@ -44,47 +34,16 @@ extern "C"
   void HostPoll();
   void MainPoll();
   void InitDMA();
-  void DisplayCall(int dirn, char * Call);
-  void DisplayState(char * State);
+   void PlatformSleep();
 
-  void PollReceivedSamples();
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
-  void SetPot(int address, unsigned int value);
-
+ 
 #include "..\..\ARDOPC.h"
 
   extern unsigned int tmrPollOBQueue;
 
 #define Now getTicks()
 
-  unsigned int getTicks()
-  {
-    return millis();
-  }
-  void Sleep(int mS)
-  {
-    delay(mS);
-  }
-  void PlatformSleep()
-  {
-    noInterrupts();
-    WDOG_REFRESH = 0xA602;
-    WDOG_REFRESH = 0xB480;
-    interrupts();
-  }
-
-  void txSleep(int mS)
-  {
-    // called while waiting for next TX buffer. Run background processes
-
-    PollReceivedSamples();			// discard any received samples
-    HostPoll();
-
-    PlatformSleep();
-    Sleep(mS);
-  }
-
- 
 #define MEM_LEN 512
   extern uint8_t databuf[MEM_LEN];
   extern volatile int i2cputptr, i2cgetptr;
@@ -125,7 +84,6 @@ extern "C"
     i2cloop();					// I2C but not for Host
 #endif
 #endif
-
   }
 }
 
@@ -133,43 +91,7 @@ void setup()
 {
   uint32_t i, sum = 0;
 
-#ifdef HOSTPORT
-  HOSTPORT.begin(115200);
-#endif
-#ifdef MONPORT
-  MONPORT.begin(115200);
-  while (!MONPORT);
-#endif
-
-#ifdef CATPORT
-  CATPORT.begin(19200);				// CAT Port
-#endif
-
-
-  // Set 10 second watchdog
-
-  WDOG_UNLOCK = WDOG_UNLOCK_SEQ1;
-  WDOG_UNLOCK = WDOG_UNLOCK_SEQ2;
-  WDOG_TOVALL = 10000; // The next 2 lines sets the time-out value. This is the value that the watchdog timer compare itself to.
-  WDOG_TOVALH = 0;
-  WDOG_STCTRLH = (WDOG_STCTRLH_ALLOWUPDATE | WDOG_STCTRLH_WDOGEN |
-                  WDOG_STCTRLH_WAITEN | WDOG_STCTRLH_STOPEN); // Enable WDG
-
-  WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
-
   CommonSetup();
-
-#ifdef MONPORT
-  MONPORT.printf("Monitor Buffer Space %d\r\n", MONPORT.availableForWrite());
-#endif
-#if defined HOSTPORT
-  MONprintf("Host Buffer Space %d\r\n", HOSTPORT.availableForWrite());
-#elif defined I2CHOST
-  MONprintf("Host Connection is i2c on address %x Hex\r\n", I2CSLAVEADDR);
-#endif
-
-  if (RCM_SRS0 & 0X20)		// Watchdog Reset
-    WriteDebugLog(LOGCRIT, "\n**** Reset by Watchdog ++++");
 
   WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d", ProductVersion, F_CPU, F_BUS);
 
@@ -245,7 +167,6 @@ void loop()
 extern "C"
 {
   int OKtoAdjustLevel()
-
   {
     // Only auto adjust level when disconnected.
     // Level is set at end of each received packet when connected
