@@ -51,6 +51,9 @@ BOOL AFSK = FALSE;
 //int Baud = 1200;
 //BOOL AFSK = TRUE;
 
+int TXLevel = 300;				// 300 mV p-p Used on Teensy
+int RXLevel = 0;				// Configured Level - zero means auto tune
+int autoRXLevel = 1500;			// calculated level
 int logcheck(int x)
 {
 	return 1;

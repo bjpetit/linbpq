@@ -120,9 +120,10 @@ VOID displayDCD(int x);
 #define LED3 31
 
 #define DCDLED LED0
-#define PKTLED LED1			// flash when packet received
+#define PKTLED LED3		// flash when packet received
 
-extern int PKTLEDTimer;
+extern unsigned int PKTLEDTimer;
+#define Now getTicks()
 
 #endif
 
@@ -384,8 +385,8 @@ static void do_rxpacket(struct modemchannel *chan)
 	kiss_encodepkt(chan, chan->pkt.hrx.buf, chan->pkt.hrx.bufcnt-2);
 
 #ifdef TEENSY
-	SetLED(PKTLED, TRUE);	// Flash LED
-	PKTLEDTimer = 200;		// for 200 mS
+	SetLED(PKTLED, TRUE);		// Flash LED
+	PKTLEDTimer = Now + 200;	// for 200 mS
 #endif
 }
 
