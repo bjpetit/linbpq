@@ -579,7 +579,6 @@ portok:
 		// Build a ScanEntry in the buffer
 
 		FreqPtr = (struct ScanEntry *)&buffptr[2];
-
 		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
@@ -587,7 +586,7 @@ portok:
 		FreqPtr->Antenna = Antenna;
 		FreqPtr->Dwell = 51;
 
-		CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[20];
+		CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
 		FreqPtr->Cmd2 = NULL;
 		FreqPtr->Cmd3 = NULL;
 
@@ -686,7 +685,7 @@ portok:
 
 				if (Split)
 				{
-					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
+					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[50];
 					FreqPtr->Cmd3Len = 7;
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = 0xFE;
@@ -706,7 +705,7 @@ portok:
 				}
 				else if (DataFlag)
 				{
-					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
+					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[50];
 
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = 0xFE;
@@ -751,12 +750,12 @@ portok:
 				}
 				else if (FreqPtr[0].Cmd3 == NULL)
 				{
-					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
+					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[50];
 					FreqPtr[0].Cmd3Len = 7;
 				}
 				else 
 				{
-					CmdPtr = FreqPtr->Cmd4 = (UCHAR *)&buffptr[50];
+					CmdPtr = FreqPtr->Cmd4 = (UCHAR *)&buffptr[60];
 					FreqPtr[0].Cmd4Len = 7;
 				}
 
@@ -807,12 +806,13 @@ portok:
 		// Build a ScanEntry in the buffer
 
 		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[20];
+		Poll = (UCHAR *)&buffptr[30];
 
 		// Send Mode then Freq - setting Mode seems to change frequency
 
@@ -914,13 +914,14 @@ portok:
 
 		// Build a ScanEntry in the buffer
 
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 		FreqPtr = (struct ScanEntry *)&buffptr[2];
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[20];
+		Poll = (UCHAR *)&buffptr[30];
 
 		// Send Mode then Freq - setting Mode seems to change frequency
 
@@ -1007,12 +1008,13 @@ portok:
 		// Build a ScanEntry in the buffer
 
 		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[20];
+		Poll = (UCHAR *)&buffptr[30];
 
 		if (PORT->PortType == FT2000)
 			buffptr[1] = sprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
@@ -1044,12 +1046,13 @@ portok:
 		// Build a ScanEntry in the buffer
 
 		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[20];
+		Poll = (UCHAR *)&buffptr[30];
 
 		i = sprintf(Poll, "$PICOA,90,%02x,RXF,%.6f*xx\r\n", RIG->RigAddr, Freq/1000000.);
 		AddNMEAChecksum(Poll);
@@ -1893,7 +1896,8 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 	int i;
 	struct _EXTPORTDATA * PortRecord;
 
-	if (ptr->Bandwidth || ptr->RPacketMode || ptr->HFPacketMode || ptr->PMaxLevel)
+	if (ptr->Bandwidth || ptr->RPacketMode || ptr->HFPacketMode 
+		|| ptr->PMaxLevel || ptr->ARDOPMode[0])
 	{
 		i = 0;
 
@@ -2040,17 +2044,17 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 			Debugprintf("BPQ32 Manual Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 
-		memcpy(Poll, &buffptr[20], PORT->FreqPtr->Cmd1Len);
+		memcpy(Poll, &buffptr[30], PORT->FreqPtr->Cmd1Len);
 
 		if (PORT->ScanEntry.Cmd2)
 		{
 			PORT->ScanEntry.Cmd2 = (char *)&PORT->Line2;	// Put The Set mode Command into ScanStruct
-			memcpy(PORT->Line2, &buffptr[30], PORT->FreqPtr->Cmd2Len);
+			memcpy(PORT->Line2, &buffptr[40], PORT->FreqPtr->Cmd2Len);
 
 			if (PORT->ScanEntry.Cmd3)
 			{
 				PORT->ScanEntry.Cmd3 = (char *)&PORT->Line3;
-				memcpy(PORT->Line3, &buffptr[40], PORT->FreqPtr->Cmd3Len);
+				memcpy(PORT->Line3, &buffptr[50], PORT->FreqPtr->Cmd3Len);
 			}
 		}
 
@@ -2752,7 +2756,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
-		memcpy(Poll, &buffptr[20], datalen);
+		memcpy(Poll, &buffptr[30], datalen);
 
 		if (PORT->PortType == YAESU)
 		{
@@ -3088,7 +3092,7 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
-		memcpy(Poll, &buffptr[20], datalen);
+		memcpy(Poll, &buffptr[30], datalen);
 
 		PORT->TXLen = datalen;
 		RigWriteCommBlock(PORT);

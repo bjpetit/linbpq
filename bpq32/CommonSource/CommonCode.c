@@ -2218,11 +2218,6 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
    if (s->user_speed == -1)
    {
-	   int i = 0;
-	   int j = 1;
-
-	   j = j/i;
-
 	   fprintf(stderr, "tty_speed: invalid speed %d\n", speed);
 	   return FALSE;
    }

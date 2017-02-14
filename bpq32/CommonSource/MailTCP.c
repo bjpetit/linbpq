@@ -2381,15 +2381,23 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "LIST",4) == 0)
+	if (memcmp(Buffer, "LIST", 4) == 0)
 	{
 		char reply[40];
 		int i, count=0, size=0;
 		int MsgNo = atoi(&Buffer[4]);
 
+		if (Buffer[4] == 13)	// CR
+			MsgNo = 0;
+
+		Debugprintf("%s %d", Buffer, MsgNo);
+
 		if (MsgNo)
 		{
-			sprintf(reply, "+OK %d %d", MsgNo, sockptr->POP3Msgs[MsgNo - 1]->length);
+			if (MsgNo > sockptr->POP3MsgCount)		
+				sprintf(reply, "-ERR no such message, only %d messages in maildrop", sockptr->POP3MsgCount);
+			else
+				sprintf(reply, "+OK %d %d", MsgNo, sockptr->POP3Msgs[MsgNo - 1]->length);
 			SendSock(sockptr, reply);
 			return;
 		}

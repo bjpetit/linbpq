@@ -1458,6 +1458,15 @@ static VOID ConnecttoFLDigiThread(port)
 		 memcpy(&TNC->Datadestaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 	}
 
+	if (TNC->WINMORSock)
+	{
+		Debugprintf("FLDIGI Closing Sock %d", TNC->WINMORSock); 
+		closesocket(TNC->WINMORSock);
+	}
+
+	TNC->WINMORSock = 0;
+
+
 	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
 
 	if (TNC->WINMORSock == INVALID_SOCKET)
@@ -1495,11 +1504,17 @@ static VOID ConnecttoFLDigiThread(port)
 		}
 		
 		closesocket(TNC->WINMORSock);
+		TNC->WINMORSock = 0;
 		TNC->CONNECTING = FALSE;
 		return;
 	}
 
 	TNC->LastFreq = 0;
+
+	if (TNC->WINMORDataSock)
+		closesocket(TNC->WINMORDataSock);
+
+	TNC->WINMORDataSock = 0;
 
 	TNC->WINMORDataSock=socket(AF_INET,SOCK_STREAM,0);
 
@@ -1512,6 +1527,7 @@ static VOID ConnecttoFLDigiThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
+		TNC->WINMORSock = 0;
 	 	TNC->CONNECTING = FALSE;
 
   	 	return; 
@@ -1528,6 +1544,8 @@ static VOID ConnecttoFLDigiThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
+		TNC->WINMORSock = 0;
+		TNC->WINMORDataSock = 0;
 	 	TNC->CONNECTING = FALSE;
   	 	return; 
 	}
@@ -1550,11 +1568,12 @@ static VOID ConnecttoFLDigiThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
+		TNC->WINMORSock = 0;
+		TNC->WINMORDataSock = 0;
 	 	TNC->CONNECTING = FALSE;
 	}
 
 	return;
-
 }
 
 VOID UpdateStatsLine(struct TNCINFO * TNC, struct STREAMINFO * STREAM)

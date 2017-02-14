@@ -655,13 +655,15 @@ typedef struct TNCINFO
 
 	time_t WinmorRestartCodecTimer;
 	int WinmorCurrentMode;
-	char ARDOPCurrentMode[6];
+	char ARDOPCurrentMode[10];
 	char ARDOPCommsMode;
 	char * ARDOPSerialPort;			// Have Bus/Device for I2C
 	int ARDOPSerialSpeed;
+	BOOL TCPCONNECTED;				// ARDOP  over TCP Connected
 	int SlowTimer;
 	int ARQPorts[32];				// For ARQ over KISS
 	FILE * LogHandle;				// Ardop Logging File
+	FILE * DebugHandle;				// Ardop Debug File
 	char * LogPath;
 
 } *PTNCINFO;

@@ -1580,7 +1580,7 @@ int ConnecttoWINMOR(int port)
 	return 0;
 }
 
-VOID WINMORThread(port)
+VOID WINMORThread(int port)
 {
 	// Opens both sockets and looks for data on control socket. Data socket is polled from BG,
 	// but we need fast response to control messages for PTT porcessing
@@ -1630,8 +1630,15 @@ VOID WINMORThread(port)
 
 	}
 
-//	closesocket(TNC->WINMORSock);
-//	closesocket(TNC->WINMORDataSock);
+	if (TNC->WINMORSock)
+		closesocket(TNC->WINMORSock);
+
+	TNC->WINMORSock = 0;
+	
+	if (TNC->WINMORDataSock)
+		closesocket(TNC->WINMORDataSock);
+
+	TNC->WINMORDataSock = 0;
 
 	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
 
@@ -1660,6 +1667,7 @@ VOID WINMORThread(port)
 		WritetoConsole(Msg);
 			
 		closesocket(TNC->WINMORSock);
+		TNC->WINMORSock = 0;
 	 	TNC->CONNECTING = FALSE;
 
   	 	return; 
@@ -1704,7 +1712,7 @@ VOID WINMORThread(port)
 		WritetoConsole(Msg);
 
 		closesocket(TNC->WINMORSock);
-		closesocket(TNC->WINMORDataSock);
+		TNC->WINMORSock = 0;
 	 	TNC->CONNECTING = FALSE;
 
   	 	return; 
@@ -1721,7 +1729,9 @@ VOID WINMORThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
-	 	TNC->CONNECTING = FALSE;
+		TNC->WINMORSock = 0;
+		TNC->WINMORDataSock = 0;
+		TNC->CONNECTING = FALSE;
 
   	 	return; 
 	}
@@ -1754,6 +1764,8 @@ VOID WINMORThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
+		TNC->WINMORSock = 0;
+		TNC->WINMORDataSock = 0;
 	 	TNC->CONNECTING = FALSE;
 
 		return;
@@ -1847,6 +1859,7 @@ Lost:
 
 			closesocket(TNC->WINMORDataSock);
 			closesocket(TNC->WINMORSock);
+			TNC->WINMORDataSock = 0;
 			TNC->WINMORSock= 0;
 
 			if (TNC->WIMMORPID && TNC->WeStartedTNC)

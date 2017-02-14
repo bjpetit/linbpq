@@ -1703,6 +1703,9 @@ VOID TelnetPoll(int Port)
 
 			if (sockptr->SocketActive)
 			{
+				if (sockptr->socket == 0)
+					Debugprintf("Active Session but zero socket");
+
 				if (TNC->Streams[n].Connecting)
 				{
 					// look for complete or failed
@@ -1737,9 +1740,14 @@ VOID TelnetPoll(int Port)
 			if (retval == -1)
 			{				
 				perror("data select");
-				Debugprintf("Select Error %d", WSAGetLastError());
+				Debugprintf("Telnet Select Error %d Active %d", WSAGetLastError(), Active);
 
-				// 
+				for (n = 0; n <= TCP->MaxSessions; n++)
+				{
+					sockptr = TNC->Streams[n].ConnectionInfo;
+					if (sockptr->SocketActive)
+						Debugprintf("Active Session %d socket %d", n, sockptr->socket);
+				}
 			}
 			else
 			{
@@ -2681,6 +2689,8 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 				Debugprintf("BPQ32 Telnet accept() failed Error %d", WSAGetLastError());
 				return FALSE;
 			}
+				
+			Debugprintf("BPQ32 Telnet accept() Sock %d", sock);
 
 			ioctl(sock, FIONBIO, &param);
 
@@ -2776,7 +2786,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 	return 0;
 }
 
-
+/*
 int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 {
 	int n;
@@ -2839,6 +2849,7 @@ int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 	return 0;
 }
 
+*/
 #define PACLEN 100
 
 VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
@@ -4134,20 +4145,15 @@ int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr
 {
 	int n;
 
-	Debugprintf("Telnet Disconnect Reported");
-
 	if (sockptr->SocketActive)
 	{
 		closesocket(sockptr->socket);
 
 		n = sockptr->Number;
-
 #ifndef LINBPQ
 		ModifyMenu(TNC->TCPInfo->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, ".");
 #endif
-
 		sockptr->SocketActive = FALSE;
-
 		ShowConnections(TNC);;
 	}
 	return 0;
@@ -4421,7 +4427,6 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	buffptr = GetBuff();
 	if (buffptr == 0) return 0;			// No buffers, so ignore
 				
-	Debugprintf("Except Event Error = %d", Error);
 #ifndef WIN32
 
 //	SO_ERROR codes
@@ -4436,7 +4441,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	if (Error == 0)
 		getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&Error, &errlen);
 
-	Debugprintf("Except Event Error after opts = %d", Error);
+//	Debugprintf("Except Event Error after opts = %d", Error);
 #endif
 
 	if (Error)

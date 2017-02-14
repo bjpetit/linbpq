@@ -88,6 +88,8 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 void ARDOPSCSCheckRX(struct TNCINFO * TNC);
 VOID ARDOPSCSPoll(struct TNCINFO * TNC);
 VOID ARDOPDoTNCReinit(struct TNCINFO * TNC);
+int SerialGetTCPMessage(struct TNCINFO * TNC, unsigned char * Buffer, int Len);
+int SerialConnecttoTCP(struct TNCINFO * TNC);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -114,7 +116,7 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
@@ -218,7 +220,7 @@ BOOL checkcrc16(unsigned char * Data, unsigned short length)
 
 // Logging Interface. Used for Log over Serial Mode
 
-BOOL ARDOPOpenLogFile(struct TNCINFO * TNC)
+BOOL ARDOPOpenLogFiles(struct TNCINFO * TNC)
 {
 	UCHAR FN[MAX_PATH];
 
@@ -233,9 +235,10 @@ BOOL ARDOPOpenLogFile(struct TNCINFO * TNC)
 	strlop(TNC->LogPath, 32);
 
 	sprintf(FN,"%s/ARDOPDebugLog_%02d%02d_%d.txt", TNC->LogPath, tm->tm_mon + 1, tm->tm_mday, TNC->Port);
-
+	TNC->DebugHandle = fopen(FN, "ab");
+	sprintf(FN,"%s/ARDOPLog_%02d%02d_%d.txt", TNC->LogPath, tm->tm_mon + 1, tm->tm_mday, TNC->Port);
 	TNC->LogHandle = fopen(FN, "ab");
-	i = GetLastError();
+	
 	return (TNC->LogHandle != NULL);
 }
 
@@ -268,7 +271,7 @@ static ProcessLine(char * buf, int Port)
 	BPQport = Port;
 	p_ipad = ptr;
 
-	if (_stricmp(buf, "ADDR") == 0)
+	if (_stricmp(buf, "ADDR") == 0 || _stricmp(buf, "TCPSERIAL") == 0)
 	{
 		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
 		memset(TNC, 0, sizeof(struct TNCINFO));
@@ -295,7 +298,10 @@ static ProcessLine(char * buf, int Port)
 
 		strcpy(TNC->WINMORHostName,p_ipad);
 
-		TNC->ARDOPCommsMode = 'T';		// TCP
+		if (buf[0] == 'A')
+			TNC->ARDOPCommsMode = 'T';		// TCP
+		else
+			TNC->ARDOPCommsMode = 'E';		// TCPSERIAL (ESP01)
 	}
 	else if (_stricmp(buf, "SERIAL") == 0)
 	{
@@ -438,7 +444,7 @@ static ProcessLine(char * buf, int Port)
 			}
 			else
 			if (_memicmp(buf, "LOGDIR ", 7) == 0)
-				TNC->LogPath = strdup(&buf[7]);
+				TNC->LogPath = _strdup(&buf[7]);
 			else
 
 			strcat (TNC->InitScript, buf);
@@ -450,7 +456,7 @@ static ProcessLine(char * buf, int Port)
 
 
 
-void ARDOPThread(int port);
+void ARDOPThread(struct TNCINFO * TNC);
 VOID ARDOPProcessDataSocketData(int port);
 int ConnecttoARDOP();
 static VOID ARDOPProcessReceivedData(struct TNCINFO * TNC);
@@ -519,7 +525,7 @@ VOID SendToTNC(struct TNCINFO * TNC, UCHAR * Encoded, int EncLen)
 {
 	int SentLen;
 
-	if (TNC->hDevice)
+	if (TNC->hDevice || (TNC->ARDOPCommsMode == 'E' && TNC->WINMORSock))
 	{
 		// Serial mode. Queue to Hostmode driver
 		
@@ -539,74 +545,31 @@ VOID SendToTNC(struct TNCINFO * TNC, UCHAR * Encoded, int EncLen)
 		return;
 	}
 
-	if(TNC->WINMORSock)
+	if(TNC->ARDOPCommsMode == 'T' && TNC->WINMORSock)
 	{
 		SentLen = send(TNC->WINMORSock, Encoded, EncLen, 0);
 		
 		if (SentLen != EncLen)
-		{
-			// WINMOR doesn't seem to recover from a blocked write. For now just reset
-			
-//			if (bytes == SOCKET_ERROR)
-//			{
+		{			
 			int winerr=WSAGetLastError();
 			char ErrMsg[80];
 				
 			sprintf(ErrMsg, "ARDOP Write Failed for port %d - error code = %d\r\n", TNC->Port, winerr);
 			WritetoConsole(ErrMsg);
-					
-	
-//				if (winerr != WSAEWOULDBLOCK)
-//				{
-		
+							
 			closesocket(TNC->WINMORSock);
-					
+			TNC->WINMORSock = 0;		
 			TNC->CONNECTED = FALSE;
 			return;
 		}
 	}
-
-//			else
-//				{
-//					bytes=0;		// resent whole packet
-//				}
-
-//			}
-
-			// Partial Send or WSAEWOULDBLOCK. Save data, and send once busy clears
-
-			
-			// Get a buffer
-						
-//			buffptr=GetBuff();
-
-//			if (buffptr == 0)
-//			{
-				// No buffers, so can only break connection and try again
-
-//				closesocket(WINMORSock[MasterPort[port]]);
-					
-//				CONNECTED[MasterPort[port]]=FALSE;
-
-//				return (0);
-//			}
-	
-//			buffptr[1]=txlen-bytes;			// Bytes still to send
-
-//			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
-
-//			C_Q_ADD(&BPQtoWINMOR_Q[MasterPort[port]],buffptr);
-	
-//			return (0);
-
 }
-
 
 VOID SendDataToTNC(struct TNCINFO * TNC, UCHAR * Encoded, int EncLen)
 {
 	int SentLen;
 
-	if (TNC->hDevice)
+	if (TNC->hDevice || (TNC->ARDOPCommsMode == 'E' && TNC->WINMORSock))
 	{
 		// Serial mode. Queue to Hostmode driver
 		
@@ -622,7 +585,6 @@ VOID SendDataToTNC(struct TNCINFO * TNC, UCHAR * Encoded, int EncLen)
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 
 		TNC->Streams[Stream].FramesQueued++;
-
 
 		if (TNC->Timeout == 0)		// if link idle can send now
 			ARDOPSCSPoll(TNC);
@@ -652,6 +614,8 @@ VOID SendDataToTNC(struct TNCINFO * TNC, UCHAR * Encoded, int EncLen)
 		
 			closesocket(TNC->WINMORSock);
 			closesocket(TNC->WINMORDataSock);
+			TNC->WINMORSock = 0;		
+			TNC->WINMORDataSock = 0;		
 					
 			TNC->CONNECTED = FALSE;
 			return;
@@ -740,7 +704,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
 
-		if (TNC->ARDOPCommsMode == 'S' || TNC->ARDOPCommsMode == 'I')
+		if (TNC->ARDOPCommsMode != 'T') // S I or E
 		{
 			ARDOPSCSCheckRX(TNC);
 			ARDOPSCSPoll(TNC);
@@ -749,6 +713,47 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		return 0;
 
 	case 1:				// poll
+
+		// If not using serial interface, Rig Contol Frames are sent as 
+		// ARDOP COmmand Frames. These are hex encoded
+
+		if (TNC->ARDOPCommsMode == 'T' && TNC->BPQtoRadio_Q)
+		{
+			UINT * buffptr;
+			
+			buffptr=Q_REM(&TNC->BPQtoRadio_Q);
+		
+			if (TNC->CONNECTED)
+			{
+				int len=buffptr[1];
+				UCHAR * ptr = &buffptr[2];
+				char RigCommand[256] = "RADIOHEX ";
+				char * ptr2 = &RigCommand[9] ;
+				int i, j;
+
+				if (len < 120)
+				{
+					while (len--)
+					{
+						i = *(ptr++);
+						j = i >>4;
+						j += '0';		// ascii
+						if (j > '9')
+							j += 7;
+						*(ptr2++) = j;
+
+						j = i & 0xf;
+						j += '0';		// ascii
+						if (j > '9')
+							j += 7;
+						*(ptr2++) = j;
+					}
+					ARDOPSendCommand(TNC, RigCommand, FALSE);
+				}
+			}
+			ReleaseBuffer(buffptr);	
+
+		}
 
 		while (TNC->PortRecord->UI_Q)
 		{
@@ -1035,7 +1040,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (ltime - TNC->lasttime > 9 )
 			{
 				if (TNC->ARDOPCommsMode == 'T')
-					ConnecttoARDOP(port);
+					ConnecttoARDOP(TNC);
 				TNC->lasttime = ltime;
 			}
 		}
@@ -1302,7 +1307,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		// CHECK IF OK TO SEND (And check TNC Status)
 
-		if (TNC->ARDOPCommsMode == 'S' || TNC->ARDOPCommsMode == 'I')
+		if (!TNC->ARDOPCommsMode == 'T')
 		{
 			// if serial mode must check buffer space
 
@@ -1344,19 +1349,45 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 		if (Param == 1)		// Request Permission
 		{
+			if (TNC->ARDOPCommsMode == 'T')		// TCP Mode
+			{
+				if (!TNC->WINMORSock)
+					return 0;					// No connection so no interlock
+			}
+			else
+			{
+				// Serial Modes
+
+				if (!TNC->HostMode)
+					return 0;					// No connection so no interlock
+			}
+			
 			if (TNC->ConnectPending)
 				TNC->ConnectPending--;		// Time out if set too long
 
 			if (!TNC->ConnectPending)
+			{
+				ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
 				return 0;	// OK to Change
-
-//			ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
+			}
 
 			return TRUE;
 		}
 
 		if (Param == 2)		// Check  Permission
 		{
+			if (TNC->ARDOPCommsMode == 'T')		// TCP Mode
+			{
+				if (!TNC->WINMORSock)
+					return 1;					// No connection so ok
+			}
+			else
+			{
+				// Serial Modes
+
+				if (!TNC->HostMode)
+					return 1;					// No connection so ok
+			}
 			if (TNC->ConnectPending)
 			{
 				TNC->ConnectPending--;
@@ -1367,7 +1398,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
-//			ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+			ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 			return 0;
 		}
 
@@ -1384,8 +1415,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->ARDOPCurrentMode[0] == 0)
 					ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 
-			strcpy(TNC->ARDOPCurrentMode, Scan->ARDOPMode); 
-
+			Debugprintf("ARDOPMODE %s", Scan->ARDOPMode);
+			
+			memcpy(TNC->ARDOPCurrentMode, Scan->ARDOPMode, 6); 
 			
 			if (Scan->ARDOPMode[0] == 'S') // SKIP - Dont Allow Connects
 			{
@@ -1404,6 +1436,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			else
 				sprintf(CMD, "ARQBW %sAX", Scan->ARDOPMode);
 	
+			ARDOPSendCommand(TNC, CMD, TRUE);
+
 			return 0;
 		}
 		return 0;
@@ -1436,12 +1470,12 @@ VOID ARDOPReleaseTNC(struct TNCINFO * TNC)
 
 VOID ARDOPSuspendPort(struct TNCINFO * TNC)
 {
-	ARDOPSendCommand(TNC, "CODEC FALSE", TRUE);
+	ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
 }
 
 VOID ARDOPReleasePort(struct TNCINFO * TNC)
 {
-	ARDOPSendCommand(TNC, "CODEC TRUE", TRUE);
+	ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 }
 
 
@@ -1510,7 +1544,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	TNC->Port = port;
 
 	if (TNC->LogPath)
-		ARDOPOpenLogFile(TNC); 
+		ARDOPOpenLogFiles(TNC); 
 
 	TNC->ARDOPBuffer = malloc(8192);
 	TNC->ARDOPDataBuffer = malloc(8192);
@@ -1695,8 +1729,15 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	if (TNC->ARDOPCommsMode == 'T')
 	{
 		Consoleprintf("ARDOP Host %s %d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
-		ConnecttoARDOP(port);
+		ConnecttoARDOP(TNC);
 	}
+
+	else if (TNC->ARDOPCommsMode == 'E')
+	{
+		Consoleprintf("ARDOP TCPSerial %s:%d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
+		SerialConnecttoTCP(TNC);
+	}
+
 	else if (TNC->ARDOPCommsMode == 'S')
 	{
 		TNC->PortRecord->PORTCONTROL.SerialPortName = _strdup(TNC->ARDOPSerialPort); // for common routines
@@ -1731,21 +1772,19 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 
 		// Open and configure the i2c interface
 		                         
-		TNC->hDevice = open(i2cname, O_RDWR);
+		fd = TNC->hDevice = open(i2cname, O_RDWR);
 		
-		if (TNC->hDevice < 0)
+		if (fd < 0)
+			printf("Cannot find i2c bus %s \n", i2cname);
+		else
 		{
-			printf("Cannot find i2c bus %s\n", i2cname);
-		}
-			  
-	 	retval = ioctl(TNC->hDevice,  I2C_SLAVE, TNC->ARDOPSerialSpeed);
+			retval = ioctl(TNC->hDevice,  I2C_SLAVE, TNC->ARDOPSerialSpeed);
 		
-		if(retval == -1)
-		{
-			printf("Cannot open i2c device %x\n", TNC->ARDOPSerialSpeed);
-		}
+			if(retval == -1)
+				printf("Cannot open i2c device %x\n", TNC->ARDOPSerialSpeed);
  
- 		ioctl(TNC->hDevice,  I2C_TIMEOUT, 10);	//m100 mS
+ 			ioctl(TNC->hDevice,  I2C_TIMEOUT, 10);	//100 mS	
+		}
 #endif
 #endif
 	}
@@ -1755,14 +1794,14 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	return ((int) ExtProc);
 }
 
-int ConnecttoARDOP(int port)
+int ConnecttoARDOP(struct TNCINFO * TNC)
 {
-	_beginthread(ARDOPThread,0,port);
+	_beginthread(ARDOPThread, 0, TNC);
 
 	return 0;
 }
 
-VOID ARDOPThread(port)
+VOID ARDOPThread(struct TNCINFO * TNC)
 {
 	// Opens sockets and looks for data on control and data sockets.
 	
@@ -1773,7 +1812,6 @@ VOID ARDOPThread(port)
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	struct hostent * HostEnt;
-	struct TNCINFO * TNC = TNCInfo[port];
 	fd_set readfs;
 	fd_set errorfs;
 	struct timeval timeout;
@@ -1818,10 +1856,15 @@ VOID ARDOPThread(port)
 	}
 
 	if (TNC->WINMORSock)
+	{
+		Debugprintf("ARDOP Closing Sock %d", TNC->WINMORSock); 
 		closesocket(TNC->WINMORSock);
+	}
 	if (TNC->WINMORDataSock)
+	{
+		Debugprintf("ARDOP Closing Sock %d", TNC->WINMORDataSock); 
 		closesocket(TNC->WINMORDataSock);
-
+	}
 	TNC->WINMORSock = 0;
 	TNC->WINMORDataSock = 0;
 
@@ -2158,6 +2201,52 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "RDY", 3) == 0)
 		return;		// RDY not used now
 
+	if (_memicmp(Buffer, "RADIOHEX ", 9) == 0)
+	{
+		// Parameter is blockto send to radio, in hex
+		
+		char c;
+		int val;
+ 		char * ptr1 = &Buffer[9];
+		UCHAR * ptr2 = Buffer;
+		UINT * buffptr;
+		int Len;
+
+			// if not configured to use PTC Rig Control, Ignore
+
+		if (TNC->RIG->PORT == NULL || TNC->RIG->PORT->PTC == NULL)
+			return;
+			
+		buffptr = GetBuff();
+
+		if (buffptr == NULL)
+			return;
+
+		while (c = *(ptr1++))
+		{
+			val = c - 0x30;
+			if (val > 15) val -= 7;
+			val <<= 4;
+			c = *(ptr1++) - 0x30;
+			if (c > 15) c -= 7;
+			val |= c;
+			*(ptr2++) = val;
+		}
+ 		
+		*(ptr2) = 0; 
+
+		Len = ptr2 - Buffer;
+
+		buffptr[1] = Len;
+		memcpy(buffptr + 2, Buffer, Len);
+		C_Q_ADD(&TNC->RadiotoBPQ_Q, buffptr);
+
+//		WriteCOMBlock(hRIGDevice, ptrParams, ptr2 - ptrParams);
+		return;
+		
+	}
+
+
 	if (_memicmp(Buffer, "LISTEN NOW", 10) == 0)
 		return;				// Response shouldn't go to user
 
@@ -2479,7 +2568,10 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "DISCONNECTED", 12) == 0
 		|| _memicmp(Buffer, "STATUS CONNECT TO", 17) == 0  
-		|| _memicmp(Buffer, "STATUS ARQ TIMEOUT FROM PROTOCOL STATE", 24) == 0)
+		|| _memicmp(Buffer, "STATUS ARQ TIMEOUT FROM PROTOCOL STATE", 24) == 0
+//		|| _memicmp(Buffer, "NEWSTATE DISC", 13) == 0
+		|| _memicmp(Buffer, "ABORT", 5) == 0)
+
 	{
 		Debugprintf(Buffer);
 
@@ -2661,12 +2753,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		MySetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[9]);
 	
-		if (_memicmp(&Buffer[9], "DISCONNECTING", 13) == 0)	// So we can timout stuck discpending
-		{
-			TNC->DiscPending = 600;
-			return;
-		}
-		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)
+		if (_memicmp(&Buffer[9], "DISC", 4) == 0)
 		{
 			TNC->DiscPending = FALSE;
 			TNC->ConnectPending = FALSE;
@@ -2909,6 +2996,9 @@ static VOID ARDOPProcessReceivedControl(struct TNCINFO * TNC)
 				closesocket(TNC->WINMORSock);
 			if (TNC->WINMORDataSock)
 				closesocket(TNC->WINMORDataSock);
+
+			TNC->WINMORSock = 0;
+			TNC->WINMORDataSock = 0;
 
 			TNC->CONNECTED = FALSE;
 			TNC->Streams[0].ReportDISC = TRUE;
@@ -3521,9 +3611,24 @@ VOID ARDOPCRCStuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	Msg[0] = 170;
 	Msg[1] = 170;
 
-	WriteCommBlock(TNC);
+	ARDOPWriteCommBlock(TNC);
 
 	TNC->Retries = 5;
+}
+
+VOID ARDOPExitHost(struct TNCINFO * TNC)
+{
+	UCHAR * Poll = TNC->TXBuffer;
+
+	// Try to exit Host Mode
+
+	TNC->TXBuffer[2] = 31;
+	TNC->TXBuffer[3] = 0x41;
+	TNC->TXBuffer[4] = 0x5;
+	memcpy(&TNC->TXBuffer[5], "JHOST0", 6);
+
+	ARDOPCRCStuffAndSend(TNC, Poll, 11);
+	return;
 }
 
 
@@ -3536,7 +3641,7 @@ VOID ARDOPDoTermModeTimeout(struct TNCINFO * TNC)
 		//Checking if in Terminal Mode - Try to set back to Term Mode
 
 		TNC->ReinitState = 1;
-		ExitHost(TNC);
+		ARDOPExitHost(TNC);
 		TNC->Retries = 1;
 
 		return;
@@ -3581,7 +3686,33 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 		Poll[1] = 0x1B;
 		TNC->TXLen = 2;
 
-		if (WriteCommBlock(TNC) == FALSE)
+		if (TNC->ARDOPCommsMode == 'E')
+		{
+			if (TNC->TCPCONNECTED)	
+			{
+				int SentLen = send(TNC->WINMORSock, TNC->TXBuffer, TNC->TXLen, 0);
+			
+				if (SentLen != TNC->TXLen)
+				{
+					// ARDOP doesn't seem to recover from a blocked write. For now just reset
+			
+					int winerr=WSAGetLastError();
+					char ErrMsg[80];
+				
+					sprintf(ErrMsg, "ARDOP Write Failed for port %d - error code = %d\r\n", TNC->Port, winerr);
+					WritetoConsole(ErrMsg);
+					
+					closesocket(TNC->WINMORSock);
+					TNC->WINMORSock = 0;
+					TNC->TCPCONNECTED = FALSE;
+				}
+			}
+			TNC->Timeout = 20;				// 2 secs
+			TNC->Retries = 1;
+			return 1;
+		}
+
+		if (ARDOPWriteCommBlock(TNC) == FALSE)
 		{
 			CloseCOMPort(TNC->hDevice);
 			
@@ -3606,11 +3737,19 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 				else
 					strcpy(i2cname, TNC->ARDOPSerialPort);
 		                      
-				TNC->hDevice = open(i2cname, O_RDWR);
-							  
-	 			retval = ioctl(TNC->hDevice,  I2C_SLAVE, TNC->ARDOPSerialSpeed);
+				fd = TNC->hDevice = open(i2cname, O_RDWR);
+
+				if (fd < 0)
+					printf("Cannot find i2c bus %s\n", i2cname);
+				else
+				{
+	 				retval = ioctl(fd,  I2C_SLAVE, TNC->ARDOPSerialSpeed);
+		
+					if(retval == -1)
+						printf("Cannot open i2c device %x\n", TNC->ARDOPSerialSpeed);
  
- 				ioctl(TNC->hDevice,  I2C_TIMEOUT, 10);	// 100 mS
+ 					ioctl(fd,  I2C_TIMEOUT, 10);
+				}			 
 #endif
 #endif
 			}
@@ -3631,7 +3770,7 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 		memcpy(Poll, "JHOST4\r", 7);
 
 		TNC->TXLen = 7;
-		WriteCommBlock(TNC);
+		ARDOPWriteCommBlock(TNC);
 
 		// Timeout will enter host mode
 
@@ -3668,7 +3807,7 @@ VOID ARDOPProcessTermModeResponse(struct TNCINFO * TNC)
 //		CloseLogFile(TNC->Port);
 
 		TNC->TXLen = 6;
-		WriteCommBlock(TNC);
+		ARDOPWriteCommBlock(TNC);
 
 		TNC->Timeout = 60;				// 6 secs
 
@@ -3706,7 +3845,7 @@ VOID ARDOPProcessTermModeResponse(struct TNCINFO * TNC)
 		memcpy(Poll, ptr1, len);
 
 		TNC->TXLen = len;
-		WriteCommBlock(TNC);
+		ARDOPWriteCommBlock(TNC);
 
 		TNC->Timeout = 60;				// 6 secs
 
@@ -3822,13 +3961,74 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	if (Stream == 34)		// Native Mode Log
 	{
 		int Len = Msg[4] + 1;
-	
-		if (TNC->LogHandle)
-		{
-			fwrite(&Msg[5], 1, Len, TNC->LogHandle); 
-			fflush(TNC->LogHandle);
-		}
+		char timebuf[32];
+		char Line[256];
+		char * ptr, * ptr2;
+		UCHAR Value[100];
+#ifdef WIN32
+		SYSTEMTIME st;
+#else
+		struct timespec tp;
+		int hh;
+		int mm;
+		int ss;
+#endif
+		if (TNC->LogHandle == 0 && TNC->DebugHandle == 0)
+			return;
+			
+#ifdef WIN32
+		GetSystemTime(&st);
+		sprintf(timebuf, "%02d:%02d:%02d.%03d ",
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+#else
+		clock_gettime(CLOCK_REALTIME, &tp);
+		ss = tp.tv_sec % 86400;		// Secs int day
+		hh = ss / 3600;
+		mm = (ss - (hh * 3600)) / 60;
+		ss = ss % 60;
 
+		sprintf(timebuf, "%02d:%02d:%02d.%03d ",
+			hh, mm, ss, (int)tp.tv_nsec/1000000);
+#endif
+		// Messages may be blocked with top bit of first byte set
+
+		ptr = &Msg[5];
+		ptr2 = Line;
+
+		while(Len--)
+		{
+			int c = (*ptr++);
+			
+			if (c & 0x80)
+			{
+				// New Message
+
+				*ptr2 = 0;
+				fputs(Line, TNC->DebugHandle);		// rest of last line
+
+				// Timestamp new message and add type
+
+				fputs(timebuf, TNC->DebugHandle);
+				fputc(c & 0x7f, TNC->DebugHandle);
+				fputc(' ', TNC->DebugHandle);
+				ptr2 = Line;
+			}
+			else 
+				*(ptr2++) = c;
+		}	
+		*ptr2 = 0;
+		fputs(Line, TNC->DebugHandle);		// rest of last line
+		fflush(TNC->DebugHandle);
+
+//		if (Msg[5] < '7')
+//		{
+//			if (TNC->LogHandle)
+//			{
+//				fputs(timebuf, TNC->LogHandle);
+//				fwrite(&Msg[6], 1, Len - 1, TNC->LogHandle); 
+//				fflush(TNC->LogHandle);
+//			}
+//		}
 		return;
 	}
 		
@@ -4033,14 +4233,17 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 		BOOL Error;	
 
 		// i2c mode always returns as much as requested or error
-		// First two bytes of block are lenght
+		// First two bytes of block are length
 
-		Len = ReadCOMBlockEx(TNC->hDevice, Buffer, 503, &Error);
+//		if (TNC->hDevice < 0)
+//			return;
+
+		Len = ReadCOMBlockEx(TNC->hDevice, Buffer, 273, &Error);
 	
-		if (Len < 503 || Error == 5)
+		if (Len < 273 || Error == 5)
 			return;
 
-		if (Error)
+	if (Error)
 			Debugprintf("ARDOP i2c returned %d bytes Error %d", Len, Error);
 
 		Len = (Buffer[2] << 8) | Buffer[1];
@@ -4061,9 +4264,11 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 		
 		memcpy(&TNC->RXBuffer[TNC->RXLen], &Buffer[3], Len);
 	}
+	else if (TNC->ARDOPCommsMode =='E')		//Serial over TCP
+		Len = SerialGetTCPMessage(TNC, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
 	else
 		Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
-
+	
 	if (Len == 0)
 		return;
 	
@@ -4235,7 +4440,6 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 
-	
 	if (TNC->Timeout)
 	{
 		TNC->Timeout--;
@@ -4249,7 +4453,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 		{
 			if (TNC->HostMode)
 				Debugprintf("ARDOP Timeout - Retransmit PTC Block");
-			WriteCommBlock(TNC);	// Retransmit Block
+			ARDOPWriteCommBlock(TNC);	// Retransmit Block
 			return;
 		}
 
@@ -4384,4 +4588,198 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 
 }
 
+// ARDOP Serial over TCP ROutines
+
+// Probably only for Teensy with ESP01. Runs SCS Emulator over a TCP Link
+
+
+VOID SerialConnecttoTCPThread(struct TNCINFO * TNC);
+
+int SerialConnecttoTCP(struct TNCINFO * TNC)
+{
+	_beginthread(SerialConnecttoTCPThread, 0, TNC);
+
+	return 0;
+}
+
+VOID SerialConnecttoTCPThread(struct TNCINFO * TNC)
+{
+	char Msg[255];
+	int err,i;
+	u_long param = 1;
+	BOOL bcopt=TRUE;
+	SOCKET sock;
+	struct hostent * HostEnt;
+	SOCKADDR_IN sinx; 
+	int addrlen=sizeof(sinx);
+
+	if (TNC->WINMORHostName == NULL)
+		return;
+
+	Sleep(5000);		// Allow init to complete 
+
+	while(1)
+	{
+		if (TNC->TCPCONNECTED)
+		{
+			Sleep(57000);
+			continue;
+		}
+
+
+		TNC->BusyFlags = 0;
+
+		TNC->CONNECTING = TRUE;
+
+		TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+
+		if (TNC->destaddr.sin_addr.s_addr == INADDR_NONE)
+		{
+			//	Resolve name to address
+
+			HostEnt = gethostbyname (TNC->WINMORHostName);
+		 
+			if (!HostEnt)
+			{
+				TNC->CONNECTING = FALSE;
+				Sleep (57000);
+				return;			// Resolve failed
+			}
+			 memcpy(&TNC->destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+			 memcpy(&TNC->Datadestaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+		}
+
+		if (TNC->WINMORSock)
+		{
+			Debugprintf("ARDOP Closing Sock %d", TNC->WINMORSock); 
+			closesocket(TNC->WINMORSock);
+		}
+	
+		TNC->WINMORSock = 0;
+		TNC->WINMORSock = socket(AF_INET,SOCK_STREAM,0);
+
+		if (TNC->WINMORSock == INVALID_SOCKET)
+		{
+			i=sprintf(Msg, "Socket Failed for ARDOP socket - error code = %d\r\n", WSAGetLastError());
+			WritetoConsole(Msg);
+
+			TNC->CONNECTING = FALSE;
+  			return; 
+		}
+
+		setsockopt(TNC->WINMORSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+//	setsockopt(TNC->WINMORDataSock, IPPROTO_TCP, TCP_NODELAY, (const char FAR *)&bcopt, 4); 
+
+		sinx.sin_family = AF_INET;
+		sinx.sin_addr.s_addr = INADDR_ANY;
+		sinx.sin_port = 0;
+
+		if (connect(TNC->WINMORSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
+		{
+			//
+			//	Connected successful
+
+			TNC->TCPCONNECTED = TRUE;
+			ioctl(TNC->WINMORSock, FIONBIO, &param);
+			Debugprintf("ARDOP TECSerial connected, Socet %d", TNC->WINMORSock);
+		}
+		else
+		{
+			if (TNC->Alerted == FALSE)
+			{
+				err=WSAGetLastError();
+   				i=sprintf(Msg, "Connect Failed for ARDOP socket - error code = %d\r\n", err);
+				WritetoConsole(Msg);
+				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
+				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+
+				TNC->Alerted = TRUE;
+			}
+		
+			closesocket(TNC->WINMORSock);
+	
+			TNC->WINMORSock = 0;
+			TNC->CONNECTING = FALSE;
+			Sleep (57000);						// 1 Mins
+		}
+	}
+}
+
+int SerialGetTCPMessage(struct TNCINFO * TNC, unsigned char * Buffer, int Len)
+{
+	int index=0;
+	ULONG param = 1;
+
+	if (TNC->TCPCONNECTED)
+	{
+		int InputLen;
+
+		//	Poll TCP COnnection for data
+
+		// May have several messages per packet, or message split over packets
+
+		InputLen = recv(TNC->WINMORSock, Buffer, Len, 0);
+
+		if (InputLen < 0)
+		{
+			int err = WSAGetLastError();
+
+			if (err == 10035 || err == 11)
+			{
+				InputLen = 0;
+				return 0;
+			}
+			Debugprintf("ARDOP Serial TCP RX Error  %d received for socket %d", err, TNC->WINMORSock);
+	
+			TNC->TCPCONNECTED = 0;
+			closesocket(TNC->WINMORSock);
+			TNC->WINMORSock = 0;
+			return 0;
+		}
+
+		if (InputLen > 0)
+			return InputLen;
+		else
+		{
+			Debugprintf("ARDOP Serial TCP Close received for socket %d", TNC->WINMORSock);
+
+			TNC->TCPCONNECTED = 0;
+			closesocket(TNC->WINMORSock);
+			TNC->WINMORSock = 0;
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
+int ARDOPWriteCommBlock(struct TNCINFO * TNC)
+{
+	if (TNC->ARDOPCommsMode == 'E')
+	{
+		if (TNC->TCPCONNECTED)
+		{
+			int SentLen = send(TNC->WINMORSock, TNC->TXBuffer, TNC->TXLen, 0);
+		
+			if (SentLen != TNC->TXLen)
+			{
+				// ARDOP doesn't seem to recover from a blocked write. For now just reset
+			
+				int winerr=WSAGetLastError();
+				char ErrMsg[80];
+				
+				sprintf(ErrMsg, "ARDOP Write Failed for port %d - error code = %d\r\n", TNC->Port, winerr);
+				WritetoConsole(ErrMsg);
+					
+				closesocket(TNC->WINMORSock);
+				TNC->WINMORSock = 0;
+				TNC->TCPCONNECTED = FALSE;
+			}
+		}
+		TNC->Timeout = 20;				// 2 secs
+		return 1;
+	}
+	return (WriteCommBlock(TNC));
+}
 

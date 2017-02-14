@@ -256,29 +256,28 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
                          
 		fd = open(i2cname, O_RDWR);
 		if (fd < 0)
-		{
 			printf("Cannot find i2c bus %s\n", i2cname);
-		}
-		
-		//	check_funcs(file, size, daddress, pec)
-	  
-	 	retval = ioctl(fd,  I2C_SLAVE, comport);
-		
-		if(retval == -1)
+		else
 		{
-			printf("Cannot open i2c device %x\n", comport);
-		}
+	 		retval = ioctl(fd,  I2C_SLAVE, comport);
+		
+			if(retval == -1)
+				printf("Cannot open i2c device %x\n", comport);
  
- 		ioctl(fd,  I2C_TIMEOUT, 100);
+ 			ioctl(fd,  I2C_TIMEOUT, 10);	// 100 mS
+		}
 
 		npKISSINFO->idComDev = fd;
 
 		// Reset the TNC and wait for completion
 	
-		i2c_smbus_write_byte(fd, FEND);		
-		i2c_smbus_write_byte(fd, 15);
-		i2c_smbus_write_byte(fd, 2);
-	
+		retval = i2c_smbus_write_byte(fd, FEND);		
+		retval = i2c_smbus_write_byte(fd, 15);
+		retval = i2c_smbus_write_byte(fd, 2);
+		
+		if (retval == -1)
+			printf("\ni2c write error - check device ");
+
 		sleep(2);
 
 #endif
@@ -494,10 +493,10 @@ int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength )
 			npKISSINFO->idComDev = OpenConnection(npKISSINFO->Portvector, npKISSINFO->bPort);
 			npKISSINFO->ReopenTimer = 0;
 		}
-
-		if (npKISSINFO->idComDev == 0)
-			return 0;
 	}
+
+	if (npKISSINFO->idComDev == 0)
+		return 0;
 
 	ret = ReadCOMBlockEx(npKISSINFO->idComDev, lpszBlock, nMaxLength, &Error);
 
@@ -560,9 +559,7 @@ static void CheckReceivedData(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 
 	if (npKISSINFO->RXBCOUNT == 0)
 	{	
-		//
 		//	Check com buffer
-		//
 
 		if (PORT->PORTTYPE == 22)			// i2c
 		{
@@ -1576,15 +1573,29 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 	UCHAR * ptr;
 	int fd = npKISSINFO->idComDev;
 
+	if (fd < 0)
+		return 0;
+
 	retval = i2c_smbus_read_byte(fd);
 	
 	//	Returns POLL (0x0e) if nothing to receive, otherwise the control byte of a frame
 	
 	if (retval == -1)	 		// Read failed		
   	{
-		perror("poll failed");
+		if (npKISSINFO->ReopenTimer <= 0)		// dont report too often
+		{
+			char msg[80];
+			sprintf(msg, "i2c poll failed Port %d", PORT->PORTNUMBER);
+			perror(msg);
+			npKISSINFO->ReopenTimer = 600;
+		}
+		else
+			npKISSINFO->ReopenTimer--;
+
 		return 0;
 	}
+
+	npKISSINFO->ReopenTimer = 0;		// Report next error
 		
 //	NACK means last message send to TNC was duff
 

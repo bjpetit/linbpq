@@ -3480,7 +3480,10 @@ int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length)
 {
 	UINT * buffptr;
 
-	if (!TNC->TNCOK)
+	if (TNC->TNCOK || (TNC->Hardware == H_ARDOP && TNC->ARDOPCommsMode == 'T'))
+	{
+	}
+	else
 		return 0;
 
 	// Queue for TNC

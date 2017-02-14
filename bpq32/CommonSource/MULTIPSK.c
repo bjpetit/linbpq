@@ -914,7 +914,10 @@ static VOID ConnecttoMPSKThread(port)
 
 	}
 
-	closesocket(TNC->WINMORSock);
+	if (TNC->WINMORSock)
+		closesocket(TNC->WINMORSock);
+
+	TNC->WINMORSock = 0;
 
 	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
 

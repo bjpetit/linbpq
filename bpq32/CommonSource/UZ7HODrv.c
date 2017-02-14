@@ -1284,7 +1284,13 @@ VOID ConnecttoUZ7HOThread(port)
 
 	}
 
-	closesocket(TNC->WINMORSock);
+	if (TNC->WINMORSock)
+	{
+		Debugprintf("UZ7HO Closing Sock %d", TNC->WINMORSock); 
+		closesocket(TNC->WINMORSock);
+	}
+
+	TNC->WINMORSock = 0;
 
 	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
 
@@ -1396,7 +1402,7 @@ static int ProcessReceivedData(int port)
 
 			closesocket(TNC->WINMORSock);
 			TNC->CONNECTED = FALSE;
-			return;
+			return 0;
 		}
 
 		if (datalen > 0)

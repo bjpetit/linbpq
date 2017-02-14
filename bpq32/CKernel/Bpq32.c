@@ -788,6 +788,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add CI-V antenna control for IC746
 //	Don't allow ARDOP beacons when connected
 //	Add support for ARDOP Serail over I2C
+//	Fix possble crash when using manual RADIO messages
 
 #define CKernel
 

@@ -242,7 +242,7 @@ VOID Poll_AGW()
 
 		if (retval == -1)
 		{				
-			perror("data select");
+			perror("data select yy");
 			Debugprintf("Select Error %d", WSAGetLastError());
 		}
 		else

@@ -2,7 +2,7 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="MapWebServer"
+	Name="NodeMapServer"
 	ProjectGUID="{47A0CA69-0D2E-4E9E-95C6-F50BF2E04108}"
 	RootNamespace="MapWebServer"
 	Keyword="Win32Proj"
@@ -43,7 +43,7 @@
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
-				RuntimeLibrary="3"
+				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
@@ -61,7 +61,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="WS2_32.Lib  "
-				OutputFile="c:\devprogs\bpq32\monitor\MapWebServer.exe"
+				OutputFile="c:\devprogs\bpq32\monitor\NodeMapServer.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -118,7 +118,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
-				RuntimeLibrary="2"
+				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
@@ -136,6 +136,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="WS2_32.Lib  "
+				OutputFile="c:\devprogs\bpq32\monitor\NodeMapServer.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -178,7 +179,7 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\MapWebServer\MapWebServer.c"
+				RelativePath="..\MapWebServer\NodeMapServer.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -197,7 +198,7 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="..\MapWebServer\MapWebServer.h"
+				RelativePath="..\MapWebServer\NodeMapServer.h"
 				>
 			</File>
 			<File
@@ -211,7 +212,7 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 			<File
-				RelativePath="..\MapWebServer\MapWebServer.rc"
+				RelativePath="..\MapWebServer\NodeMapServer.rc"
 				>
 			</File>
 			<File
@@ -219,10 +220,6 @@
 				>
 			</File>
 		</Filter>
-		<File
-			RelativePath=".\ReadMe.txt"
-			>
-		</File>
 	</Files>
 	<Globals>
 	</Globals>
