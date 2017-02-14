@@ -2,6 +2,8 @@
 //	Makes keeping Windows, Linux and Teensy version in step easier
 
 #define TEENSY
+#define PTC
+
 #include "TeensyConfig.h"
 
 #include "..\..\ARDOPC\ARDOPC.c"

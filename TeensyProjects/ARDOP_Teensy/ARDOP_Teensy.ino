@@ -93,6 +93,8 @@ void setup()
 
   CommonSetup();
 
+  Serial.begin(115200);
+
   WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d", ProductVersion, F_CPU, F_BUS);
 
   blnTimeoutTriggered = FALSE;
@@ -157,6 +159,7 @@ void loop()
   }
   PlatformSleep();
   RadioPoll();
+  Sleep(1);
 
   if (blnClosing)
   {
