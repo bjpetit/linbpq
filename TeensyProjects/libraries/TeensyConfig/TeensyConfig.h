@@ -1,7 +1,7 @@
-// Board specific configuraton for Teensy
+// Board specific configuration for Teensy
 
 // There are currently two boards, one designed by the WDT and one by me (G8BPQ). Mine is 
-// a Raspberry PI form factor board. The WDT board is indended to be a standalone unit.
+// a Raspberry PI form factor board. The WDT board is intended to be a standalone unit.
 
 // Currently there are two applications using these boards, ARDOP and a port of Thomas Sailer's
 // Packet Soundmodem. The port supports 1200 and 9600 modems. 
@@ -11,7 +11,7 @@
 // setup is with the Host Port on USB and a monitor/debug port on Serial1, though a Bluetooth 
 // version is planned.
 
-// PIBOARD is the Raspberry PI i2c Board. It has 4 LEDS and the Host port on Serial1. There is no TFT
+// PIBOARD is the Raspberry PI i2c Board. It has 4 LEDS and the Host port on Serial1 or i2c. There is no TFT
 // CAT4016 Display or switches. Level setting pots are on SPI
 
 // This file is for ARDOP
@@ -27,21 +27,21 @@
 #ifdef PIBOARD
 
 // Can use Serial or I2C for Host Interface
-// May one day support Monitor over I2C
 
-// If we define I2CHOST we shoudn't define HOSTPORT
+// If we define I2CHOST we shouldn't define HOSTPORT
 
-// Define LOGTOHOST foor logging over Host Poet (Serial or i2c)
-//	Define MONPORT for logging to Teensy Serial Port
+// Define LOGTOHOST for logging over Host Port (Serial or i2c)
+// Define MONPORT for logging to Teensy Serial Port
 
-#define LOGTOHOST
-//#define HOSTPORT Serial1
-//#define MONPORT Serial1
+//#define LOGTOHOST
+#define HOSTPORT Serial1
+#define MONPORT Serial
 
-#define CATPORT Serial1
+#define CATPORT Serial5
+#define CATSPEED 19200
 
-#define I2CHOST
-#define I2CSLAVEADDR 0x1F
+//#define I2CHOST
+//#define I2CSLAVEADDR 0x1F
 
 #define HASPOTS
 #define SPIPOTS
@@ -65,6 +65,7 @@
 #define HOSTPORT Serial
 #define MONPORT Serial1
 #define CATPORT Serial5
+#define CATSPEED 19200
 
 #define TFT
 #define BARLEDS

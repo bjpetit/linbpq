@@ -48,84 +48,22 @@ char * PlaybackDevices = PlaybackDevice;
 int LastNow;
 
 int Numbertosend = 0;				// Number waiting to be sent
+int totSamples = 0;
+extern int Capturing ;
 
-unsigned short * DMABuffer;
+unsigned short * DMABuffer = &dac1_buffer[0];
 
-void printtick(char * msg)
-{
-  WriteDebugLog(LOGDEBUG, "%s %i", msg, Now - LastNow);
-  LastNow = Now;
-}
 
-int Index = 0;				// DMA Buffer being used 0 or 1
-int inIndex = 0;			// DMA Buffer being used 0 or 1
 
-BOOL DMARunning = FALSE;		// Used to start DMA on first write
-BOOL FirstTime = FALSE;
 
-void InitSound()
-{
-}
+extern int Index;				// DMA Buffer being used 0 or 1
+extern int inIndex;			// DMA Buffer being used 0 or 1
 
-unsigned short * SendtoCard(unsigned short buf, int n)
-{
-  // Start DMA if first call
+extern int Number;
 
-  if (DMARunning == FALSE)
-  {
-    StartDAC();
-    DMARunning = TRUE;
-    FirstTime = TRUE;
+extern BOOL DMARunning;		// Used to start DMA on first write
+extern BOOL FirstTime;
 
-    // We can immediately fill second half
-
-    Index = 1;
-    return &dac1_buffer[DAC_SAMPLES_PER_BLOCK];
-  }
-
-  // wait for other DMA buffer to finish
-
-  // First time through we must wait till we are into the second
-  //	(left < DAC_SAMPLES_PER_BLOCK)
-
-  if (FirstTime)
-  {
-    FirstTime = FALSE;
-
-    while (GetDMAPointer() >= DAC_SAMPLES_PER_BLOCK)
-      txSleep(1);
-  }
-
-  // 	printtick("Start Wait");
-
-  while (1)
-  {
-    int Left = GetDMAPointer();
-
-    //	WriteDebugLog(LOGDEBUG, "Index %d Left %d", Index, Left);
-
-    if (Index == 0)
-    { // Just filled first buffer. Can return when left is less than half,
-      // as then we are sending buffer 2
-
-      if (Left > (DAC_SAMPLES_PER_BLOCK) )
-        break;
-    }
-    else
-    {
-      // Just filled 2nd buffer, can return as soon as pointer is above half
-
-      if (Left < (DAC_SAMPLES_PER_BLOCK))
-        break;
-    }
-    txSleep(1);				// Run background while waiting
-  }
-  Index = !Index;
-  txSleep(1);				// Run background while waiting
-  //  printtick("Stop Wait");
-
-  return &dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK];
-}
 
 //		// This generates a nice musical pattern for sound interface testing
 //    for (t = 0; t < sizeof(buffer); ++t)
@@ -213,6 +151,7 @@ void StopCodec(char * strFault)
   strFault[0] = 0;
 }
 
+
 void CloseSound()
 {
 }
@@ -235,10 +174,7 @@ void SoundFlush()
 
   AddTrailer();			// add the trailer.
 
-  if (Loopback)
-  {
-    ProcessNewSamples(&dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK], Number);
-  }
+//  printtick("Start flush");
 
   //  WriteDebugLog (LOGDEBUG, "Flush Index = %d Number = %d Left = %d", Index, Number, GetDMAPointer());
 
@@ -280,7 +216,12 @@ void SoundFlush()
 	
   KeyPTT(FALSE);		 // Unkey the Transmitter
 
-  //	StartCapture();
+  StartCapture();
+
+  WriteDebugLog(7, "totSamples %d", totSamples);
+  totSamples = 0;
+  Number = 0;
+  DMABuffer = &dac1_buffer[0];
 
   return;
 }

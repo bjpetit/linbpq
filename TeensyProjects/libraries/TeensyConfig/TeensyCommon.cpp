@@ -24,8 +24,6 @@
 void CAT4016(int value);
 void setupTFT();
 
-#define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.0.4-BPQ"
 
 // extern "C" {#include "..\..\ARDOPC.h"}
 
@@ -43,6 +41,11 @@ DMAChannel dma2(true);
 
 int VRef = 32768;				// ADC and ADC reference (ideal is 32678)
 
+unsigned int PKTLEDTimer = 0;
+
+#define PKTLED LED3				// flash when packet received
+
+
 void CommonSetup()
 {	
 #ifdef HOSTPORT
@@ -53,7 +56,7 @@ void CommonSetup()
   while (!MONPORT);
 #endif
 #ifdef CATPORT
-  CATPORT.begin(19200);				// CAT Port
+  CATPORT.begin(CATSPEED);				// CAT Port
 #endif
 
   // Set 10 second watchdog
@@ -153,20 +156,52 @@ void CommonSetup()
 
 extern "C"
 {
-	unsigned int getTicks()
+  int LastNow;
+  
+
+
+  unsigned int getTicks()
   {
     return millis();
   }
+  
+   void printtick(char * msg)
+  {
+    Serial.printf("%s %i\r\n", msg, Now - LastNow);
+    LastNow = Now;
+  }
+
+  int loadCounter = 0;		// for performance monitor
+  int lastLoadTicks = 0;
+
   void Sleep(int mS)
   {
+#if 0
+    int loadtime = millis() - lastLoadTicks;
+
+    loadCounter += mS;
+
+    if (loadtime > 999)
+    {
+      Serial.printf("Load = %d\r\n" , 100 - (100 * loadCounter / loadtime));
+      lastLoadTicks = millis();
+      loadCounter = 0;
+    }
+#endif
     delay(mS);
   }
-  void PlatformSleep()
+   void PlatformSleep()
   {
     noInterrupts();
     WDOG_REFRESH = 0xA602;
     WDOG_REFRESH = 0xB480;
     interrupts();
+
+	if (PKTLEDTimer && Now > PKTLEDTimer)
+    {
+      PKTLEDTimer = 0;
+      SetLED(PKTLED, 0);				// turn off packet rxed led
+    }
   }
 
   void txSleep(int mS)
@@ -537,16 +572,29 @@ static Print * tftptr = NULL;
 
 void setupTFT()
 {
-  Serial1.println("INIT TFT");
   tft.begin();
   tft.fillScreen(ILI9341_BLACK);
   tft.setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
   tft.setRotation(1);
   tft.setCursor(0, 0);
   tft.setTextSize(2);
-  tft.printf("ARDOP TNC %s", ProductVersion);
   tftptr = &tft;
 }
+
+ // Write to tft. Gets round problem of different TFT Hardware
+ 
+ void TFTprintf(const char * format, ...)
+  {
+    char Mess[256];
+    va_list(arglist);
+    va_start(arglist, format);
+    vsnprintf(Mess, sizeof(Mess), format, arglist);
+    tft.print(Mess);
+    return;
+  }
+
+
+
 
 extern "C"
 {
@@ -635,6 +683,9 @@ extern "C"
   void CheckandAdjustRXLevel(int maxlevel, int minlevel, bool Force)
   {
     int pktopk = (maxlevel - minlevel) * 3300 / 65536;
+	
+	if (RXLevel)
+		return;						// Only autoadjuest if level = 0)
 
     if (!OKtoAdjustLevel() && !Force)			// Protocol specific test
       return;
@@ -658,7 +709,7 @@ extern "C"
 
     if (pktopk < 1600 || pktopk > 2400)
     {
-      // Calulate actual input voltage from current pot gain setting
+      // Calculate actual input voltage from current pot gain setting
 
       pktopk = pktopk * autoRXLevel / 3000;
 
@@ -1014,12 +1065,91 @@ extern "C"
 
       if (LogToHostBufferLen + len >= LOGBUFFERSIZE)
         return;			// ignore if full
+		
+	  Cmd[0] |= 0x80;		// Set top bit so we can unpack more easily
 
       memcpy(ptr, Cmd, len);
       LogToHostBufferLen += len;
     }
   }
 #endif
+
+// Sound Routines. These are all "C" Routines
+
+int Index = 0;				// DMA Buffer being used 0 or 1
+int inIndex = 0;			// DMA Buffer being used 0 or 1
+
+extern int Number;
+
+BOOL DMARunning = FALSE;		// Used to start DMA on first write
+BOOL FirstTime = FALSE;
+
+
+void InitSound()
+{
+}
+
+volatile unsigned short * SendtoCard(unsigned short buf, int n)
+{
+  // Start DMA if first call
+
+  if (DMARunning == FALSE)
+  {
+    StartDAC();
+    DMARunning = TRUE;
+    FirstTime = TRUE;
+
+    // We can immediately fill second half
+
+    Index = 1;
+    return &dac1_buffer[DAC_SAMPLES_PER_BLOCK];
+  }
+
+  // wait for other DMA buffer to finish
+
+  // First time through we must wait till we are into the second
+  //	(left < DAC_SAMPLES_PER_BLOCK)
+
+  if (FirstTime)
+  {
+    FirstTime = FALSE;
+
+    while (GetDMAPointer() >= DAC_SAMPLES_PER_BLOCK)
+      txSleep(1);
+  }
+
+  // 	printtick("Start Wait");
+
+  while (1)
+  {
+    int Left = GetDMAPointer();
+
+    //	WriteDebugLog(LOGDEBUG, "Index %d Left %d", Index, Left);
+
+    if (Index == 0)
+    { // Just filled first buffer. Can return when left is less than half,
+      // as then we are sending buffer 2
+
+      if (Left > (DAC_SAMPLES_PER_BLOCK) )
+        break;
+    }
+    else
+    {
+      // Just filled 2nd buffer, can return as soon as pointer is above half
+
+      if (Left < (DAC_SAMPLES_PER_BLOCK))
+        break;
+    }
+    txSleep(1);				// Run background while waiting
+  }
+  Index = !Index;
+  txSleep(1);				// Run background while waiting
+  //  printtick("Stop Wait");
+
+  return &dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK];
+}
+
+
 }
 
 

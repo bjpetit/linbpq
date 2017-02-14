@@ -24,6 +24,8 @@ void PollReceivedSamples();
 void HostPoll();
 void SaveEEPROM(int Reg, unsigned char Val);
 void SendLogToHost(char * Msg);
+void Sleep(int mS);
+void PlatformSleep();
 
 extern int inIndex;			// ADC Buffer half being used 0 or 1
 extern int RXLevel, autoRXLevel, TXLevel;
@@ -31,6 +33,8 @@ extern int RXLevel, autoRXLevel, TXLevel;
 #ifdef __cplusplus
 }
 #endif
+
+void TFTprintf(const char * format, ...);
 
 void CAT4016(int value);
 

@@ -1,3 +1,9 @@
+
+// This is a modified version of the Standard Teensy i2c library
+
+// The buffer size of wire is increased to 512 to handle full KISS packets
+// only the first i2c port is enabled, to save a bit of RAM. 
+
 /*
     ------------------------------------------------------------------------------------------------------
     i2c_t3 - I2C library for Teensy 3.0/3.1/LC
