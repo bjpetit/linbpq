@@ -8,7 +8,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.0.4-BPQ"
+#define ProductVersion "0.9.0.7-BPQ"
 
 //	Sound interface buffer size
 
@@ -373,6 +373,26 @@ extern BOOL FSKOnly;
 extern BOOL fastStart;
 extern BOOL skip167;
 extern BOOL ConsoleLogLevel;
+
+extern BOOL gotGPIO;
+extern BOOL useGPIO;
+
+extern int pttGPIOPin;
+
+extern HANDLE hRIGDevice;		// port for Rig Control
+extern char RIGPORT[80];
+extern int RIGBAUD;
+
+HANDLE hPTTDevice;					// port for PTT
+extern char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
+
+#define PTTRTS		1
+#define PTTDTR		2
+#define PTTCI_V		4		// Not used here (but may be later)
+
+extern int PTTMode;				// PTT Control Flags.
+
+
 
 
 extern char * CaptureDevices;

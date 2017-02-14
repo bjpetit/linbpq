@@ -15,7 +15,7 @@
 #include "ARDOPC.h"
 
 
-VOID ProcessSCSPacket(UCHAR * rxbuffer, int Length);
+VOID ProcessSCSPacket(UCHAR * rxbuffer, unsigned int Length);
 VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
 void ProcessRIGPacket(int Command, char * Buffer, int Len);
 VOID PutString(UCHAR * Msg);
@@ -24,6 +24,7 @@ int SerialSendData(UCHAR * Message,int MsgLen);
 void CatWrite(char * Buffer, int Len);
 int RadioPoll();
 void ProcessCommandFromHost(char * strCMD);
+BOOL GetNextARQFrame();
 
 #ifdef LOGTOHOST
 
@@ -47,7 +48,7 @@ char ReportCall[10];
 UCHAR bytDataforHost[2048];		// has to be at least max packet size (8 * 159)
 int bytesforHost = 0;
 
-UCHAR bytEchoData[1272];		// has to be at least max packet size (?1272)
+UCHAR bytEchoData[1280];		// has to be at least max packet size (?1272)
 int bytesEchoed = 0;
 
 UCHAR DelayedEcho = 0;
@@ -58,7 +59,7 @@ int Toggle;
 char CommandToHostBuffer[512];	// Async Commands to Host (BUFFER etc)
 int CommandToHostBufferLen;
 
-char CMDReplyBuffer[256];		// Used by COmmand Handler. Null Terminated
+char CMDReplyBuffer[256];		// Used by Command Handler. Null Terminated
 
 
 extern char Callsign[10];
@@ -363,6 +364,7 @@ BOOL CheckForData()
 BOOL CheckForLog()
 {
 	int Length;
+	char * ptr;
 
 	if (LogToHostBufferLen == 0)
 		return FALSE;
@@ -371,7 +373,6 @@ BOOL CheckForLog()
 		Length = 256;
 	else
 		Length = LogToHostBufferLen;
-
 
 	memcpy(&SCSReply[5], LogToHostBuffer, Length);
 	LogToHostBufferLen -= Length;
@@ -470,7 +471,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		if (CatRXLen)		// Cat data available?
 		{
-			WriteDebugLog(LOGDEBUG, "Radio Pool Returned %d",CatRXLen);
+//			WriteDebugLog(LOGDEBUG, "Radio Poll Returned %d",CatRXLen);
 			*(NextChan++) = 254;	// 253 + 1
 		}
 		if (CommandToHostBufferLen)	// only used in Native mode
@@ -592,7 +593,9 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 	{
 		// Data Frame
 
-		if (Channel == 31)			// PTC Mode
+//		WriteDebugLog(LOGDEBUG, "Data Frame Channel %d", Channel);
+
+		if (Channel == 31)			// PTC Mode Data
 			AddDataToDataToSend(&Buffer[3], Buffer[2] + 1);
 
 		else if (Channel == 32)		// Native Mode Command
@@ -623,8 +626,6 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		goto AckIt;
 	}
-
-//	WriteDebugLog(LOGDEBUG, "%c", Buffer[3]);
 
 	switch (Buffer[3])
 	{
@@ -754,6 +755,9 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		// %X commands
 
+		Buffer[Length - 2] = 0;
+		WriteDebugLog(LOGDEBUG, "SCS Host Command %s", &Buffer[3]);
+
 		switch (Buffer[4])
 		{
 		case 'V':					// Version
@@ -845,8 +849,8 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	}
 	else
 	{
-		AddDataToDataToSend(Command, Len);
-		return;
+//		AddDataToDataToSend(Command, Len);
+//		return;
 	}
 
 	Command[Len - 1] = 0;		// Remove CR
@@ -926,6 +930,50 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	else if (_memicmp(Command, "LICENSE", 8) == 0)
 	{
 		PutString("\r\nLICENSE: 010000141714CB53 ABCDEFGHIJKL");
+	}
+
+	else if (_memicmp(Command, "PSKA", 4) == 0)
+	{
+		char cmdReply[80];
+		int i;
+
+		i = atoi(&Command[5]);
+
+		if (i >= 0 && i <= 3000)	
+		{
+			int Pot;
+			TXLevel = i;
+			sprintf(cmdReply, "\r\nPSKA: %d", i);
+#ifdef HASPOTS
+			AdjustTXLevel(TXLevel);
+#endif
+		}
+		else
+			sprintf(cmdReply, "Syntax Err: %s", Command);	
+	
+		PutString(cmdReply);
+	}
+
+	else if (_memicmp(Command, "FSKA", 4) == 0)
+	{
+		char cmdReply[80];
+		int i;
+
+		i = atoi(&Command[5]);
+
+		if (i >= 0 && i <= 3000)	
+		{
+			int Pot;
+			RXLevel = i;
+			sprintf(cmdReply, "\r\nFSKA: %d", i);
+#ifdef HASPOTS
+			AdjustRXLevel(RXLevel);
+#endif
+		}
+		else
+			sprintf(cmdReply, "Syntax Err: %s", Command);	
+	
+		PutString(cmdReply);
 	}
 
 	else if (_memicmp(Command, "PTCC", 4) == 0)
@@ -1016,7 +1064,7 @@ SendPrompt:
 }
 
 
-VOID ProcessSCSPacket(UCHAR * rxbuffer, int Length)
+VOID ProcessSCSPacket(UCHAR * rxbuffer, unsigned int Length)
 {
 	unsigned short crc;
 	char UnstuffBuffer[500] = "";

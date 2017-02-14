@@ -13,25 +13,14 @@ BOOL CheckForDisconnect();
 int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
 
 void Break();
 
-extern BOOL gotGPIO;
-extern int pttGPIOPin;
 extern BOOL NeedID;			// SENDID Command Flag
 extern BOOL NeedConReq;		// ARQCALL Command Flag
 extern char ConnectToCall[16];
 extern BOOL NeedTwoToneTest;
-
-
-HANDLE hPTTDevice;			// port for PTT
-extern char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
-
-#define PTTRTS		1
-#define PTTDTR		2
-#define PTTCI_V		4		// Not used here (but may be later)
-
-extern int PTTMode;				// PTT Control Flags.
 
 
 #ifndef WIN32
@@ -1072,15 +1061,46 @@ void ProcessCommandFromHost(char * strCMD)
                 Else
                     strFault = "Syntax Err:" & strCMD
                 End If
-            Case "RADIOCTRLBAUD"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & RCB.CtrlPortBaud.ToString)
-                ElseIf IsNumeric(strParameters) Then  ' Later expand to tighter syntax checking
-                    RCB.CtrlPortBaud = CInt(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOCTRLDTR"
+*/
+	if (strcmp(strCMD, "RADIOCTRLBAUD") == 0)	
+	{
+		int Baud;
+		
+		if (ptrParams == NULL)
+		{
+			sprintf(cmdReply, "RADIOCTRLBAUD %d", RIGBAUD);
+			SendReplyToHost(cmdReply);
+  			goto cmddone;
+		}
+
+ 		Baud = atoi(ptrParams);
+		
+		RIGBAUD = Baud;
+
+		if (hRIGDevice)
+			CloseCOMPort(hRIGDevice);
+			
+		hRIGDevice = OpenCOMPort(RIGPORT, RIGBAUD, FALSE, FALSE, FALSE, 0);
+
+		if (hRIGDevice)
+		{
+			WriteDebugLog(LOGALERT, "Using port %s for CAT Baud %d", RIGPORT, RIGBAUD); 
+			RadioControl = TRUE;
+		}
+		else
+		{
+			RadioControl = FALSE;
+			sprintf(strFault, "Could'n open CAT device %s", PTTPORT);
+		}
+
+		sprintf(cmdReply, "RADIOCTRLBAUD now %d", RIGBAUD);
+		SendReplyToHost(cmdReply);
+		goto cmddone;
+	}
+
+ /*
+    
+		 Case "RADIOCTRLDTR"
                 If ptrSpace = -1 Then
                     SendReplyToHost(strCommand & " " & RCB.CtrlPortDTR.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
@@ -1089,14 +1109,40 @@ void ProcessCommandFromHost(char * strCMD)
                 Else
                     strFault = "Syntax Err:" & strCMD
                 End If
-            Case "RADIOCTRLPORT"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & RCB.CtrlPort)
-                Else ' Later expand to tighter syntax checking
-                    RCB.CtrlPort = strParameters
-                    objMain.objRadio.InitRadioPorts()
-                End If
-            Case "RADIOCTRLRTS"
+*/
+		
+	if (strcmp(strCMD, "RADIOCTRLPORT") == 0)	
+	{
+		if (ptrParams == NULL)
+		{
+			sprintf(cmdReply, "RADIOCTRLPORT %s", RIGPORT);
+			SendReplyToHost(cmdReply);
+  			goto cmddone;
+		}
+ 		strcpy(RIGPORT, &cmdCopy[14]);	// Need original case
+
+		if (hRIGDevice)
+			CloseCOMPort(hRIGDevice);
+			
+		hRIGDevice = OpenCOMPort(RIGPORT, 19200, FALSE, FALSE, FALSE, 0);
+
+		if (hRIGDevice)
+		{
+			WriteDebugLog(LOGALERT, "Using port %s for CAT Baud %d", RIGPORT, RIGBAUD); 
+			RadioControl = TRUE;
+		}
+		else
+		{
+			RadioControl = FALSE;
+			sprintf(strFault, "Could'n open CAT device %s", RIGPORT);
+		}
+		sprintf(cmdReply, "RADIOCTRLPORT now %s", RIGPORT);
+		SendReplyToHost(cmdReply);
+		goto cmddone;
+	}
+   
+/*
+Case "RADIOCTRLRTS"
                 If ptrSpace = -1 Then
                     SendReplyToHost(strCommand & " " & RCB.CtrlPortRTS.ToString)
                 ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
@@ -1124,6 +1170,34 @@ void ProcessCommandFromHost(char * strCMD)
                 Else
                     strFault = "Syntax Err:" & strCMD
                 End If
+*/
+	if (strcmp(strCMD, "RADIOHEX") == 0)
+	{
+		// Parameter is blockto send to radio, in hex
+		
+		char c;
+		int val;
+		char * ptr1 = ptrParams;
+		char * ptr2 = ptrParams;
+
+		if (hRIGDevice)
+		{
+			while (c = *(ptr1++))
+			{
+				val = c - 0x30;
+				if (val > 15) val -= 7;
+				val <<= 4;
+				c = *(ptr1++) - 0x30;
+				if (c > 15) c -= 7;
+				val |= c;
+				*(ptr2++) = val;
+			}
+			WriteCOMBlock(hRIGDevice, ptrParams, ptr2 - ptrParams);
+		}
+		goto cmddone;
+	}
+
+/*
             Case "RADIOICOMADD"
                 If ptrSpace = -1 Then
                     SendReplyToHost(strCommand & " " & RCB.IcomAdd)
@@ -1332,14 +1406,14 @@ void ProcessCommandFromHost(char * strCMD)
 
 */
 
-	if (strcmp(strCMD, "NO2000.167") == 0)
+	if (strcmp(strCMD, "NO2000.167") == 0 || strcmp(strCMD, "NO167") == 0)
 	{
 		if (ptrParams == NULL)
 		{
 			if (skip167)
-				sprintf(cmdReply, "NO2000.167 TRUE");
+				sprintf(cmdReply, "%s TRUE", strCMD);
 			else
-				sprintf(cmdReply, "NO2000.167 FALSE");
+				sprintf(cmdReply, "%s FALSE", strCMD);
 
 			SendReplyToHost(cmdReply);
 			goto cmddone;
@@ -1356,9 +1430,9 @@ void ProcessCommandFromHost(char * strCMD)
 			goto cmddone;
 		}
 		if (skip167)
-			sprintf(cmdReply, "NO2000.167 now TRUE");
+			sprintf(cmdReply, "%s now TRUE", strCMD);
 		else
-			sprintf(cmdReply, "NO2000.167 now FALSE");
+			sprintf(cmdReply, "%s now FALSE", strCMD);
 		
 		SendReplyToHost(cmdReply);
 		goto cmddone;
@@ -1548,7 +1622,7 @@ void ProcessCommandFromHost(char * strCMD)
 	} 
 	// RDY processed earlier Case "RDY" ' no response required for RDY
 
-	sprintf(strFault, "CMD not recoginized");
+	sprintf(strFault, "CMD %s not recoginized", strCMD);
 
 cmddone:
 

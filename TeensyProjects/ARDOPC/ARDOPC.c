@@ -71,6 +71,21 @@ BOOL fastStart = TRUE;
 BOOL skip167 = FALSE;
 BOOL ConsoleLogLevel = LOGINFO;
 
+BOOL gotGPIO = FALSE;
+BOOL useGPIO = FALSE;
+
+int pttGPIOPin = -1;
+
+HANDLE hRIGDevice = 0;			// port for PTT
+char RIGPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
+int RIGBAUD = 19200;
+
+HANDLE hPTTDevice = 0;			// port for PTT
+char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
+
+int PTTMode = PTTRTS;				// PTT Control Flags.
+
+
 // Stats
 
 //    Public Structure QualityStats
@@ -2026,7 +2041,7 @@ void SaveQueueOnBreak()
 
 #ifdef PTC
 
-extern UCHAR bytEchoData[2048];		// has to be at least max packet size (?1280)
+extern UCHAR bytEchoData[1280];		// has to be at least max packet size (?1280)
 
 extern int bytesEchoed;
 

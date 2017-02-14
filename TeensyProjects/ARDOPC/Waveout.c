@@ -32,20 +32,6 @@ VOID COMClearRTS(HANDLE fd);
 
 void GetSoundDevices();
 
-BOOL gotGPIO = FALSE;
-BOOL useGPIO = FALSE;
-
-int pttGPIOPin = -1;
-
-
-HANDLE hPTTDevice = 0;			// port for PTT
-char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
-
-#define PTTRTS		1
-#define PTTDTR		2
-#define PTTCI_V		4		// Not used here (but may be later)
-
-int PTTMode = PTTRTS;				// PTT Control Flags.
 
 #ifdef LOGTOHOST
 
@@ -869,6 +855,8 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 	DWORD       BytesWritten;
 	DWORD       ErrorFlags;
 	COMSTAT     ComStat;
+
+	Block[BytesToWrite] = 0;
 
 	fWriteStat = WriteFile(fd, Block, BytesToWrite,
 	                       &BytesWritten, NULL );

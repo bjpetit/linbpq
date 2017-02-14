@@ -8,6 +8,11 @@
 #define MEMORYARQ
 #endif
 
+#ifdef TEENSY
+#define PKTLED LED3		// flash when packet received
+extern unsigned int PKTLEDTimer;
+#endif
+
 //#define max(x, y) ((x) > (y) ? (x) : (y))
 //#define min(x, y) ((x) < (y) ? (x) : (y))
 
@@ -1052,7 +1057,9 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				if (ProtocolState == IRStoISS && intFrameType >= 0xe0)
 				{
 					//	In this state transition to ISS if  ACK frame 
-		
+				
+					txSleep(250);
+
 					WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessNewSamples] ProtocolState=IRStoISS, substate = %s ACK received. Cease BREAKS, NewProtocolState=ISS, substate ISSData", ARQSubStates[ARQState]);
 					blnEnbARQRpt = FALSE;	// stop the BREAK repeats
 					intLastARQDataFrameToHost = -1; // initialize to illegal value to capture first new ISS frame and pass to host
@@ -1271,6 +1278,13 @@ ProcessFrame:
 					else	
 						intGoodFSKFrameDataDecodes++;
 
+#ifdef TEENSY
+			if (IsDataFrame(intFrameType))
+			{
+				SetLED(PKTLED, TRUE);		// Flash LED
+				PKTLEDTimer = Now + 400;	// For 400 Ms
+			}
+#endif
  			if (ProtocolMode == FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame

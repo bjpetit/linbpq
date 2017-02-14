@@ -31,21 +31,6 @@ VOID RadioPTT(int PTTState)	;
 
 extern BOOL blnDISCRepeating;
 
-BOOL gotGPIO = FALSE;
-int pttGPIOPin = -1;
-BOOL useGPIO = FALSE;
-
-
-HANDLE hPTTDevice = 0;				// port for PTT
-char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
-
-#define PTTRTS		1
-#define PTTDTR		2
-#define PTTCI_V		4		// Not used here (but may be later)
-
-int PTTMode = PTTRTS;				// PTT Control Flags.
-
-
 void Sleep(int mS)
 {
 	usleep(mS * 1000);
@@ -1819,4 +1804,52 @@ int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
 
 void SetLED(int LED, int State)
 {
+}
+
+int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
+{
+	int Length;
+
+	Length = read(fd, Block, MaxLength);
+
+	if (Length < 0)
+	{
+		if (errno != 11 && errno != 35)					// Would Block
+		{
+			perror("read");
+			Debugprintf("Handle %d Errno %d", fd, errno);
+		}
+		return 0;
+	}
+
+	return Length;
+}
+
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
+{
+	//	Some systems seem to have a very small max write size
+	
+	int ToSend = BytesToWrite;
+	int Sent = 0, ret;
+
+	while (ToSend)
+	{
+		ret = write(fd, &Block[Sent], ToSend);
+
+		if (ret >= ToSend)
+			return TRUE;
+
+		if (ret == -1)
+		{
+			if (errno != 11 && errno != 35)					// Would Block
+				return FALSE;
+	
+			usleep(10000);
+			ret = 0;
+		}
+						
+		Sent += ret;
+		ToSend -= ret;
+	}
+	return TRUE;
 }

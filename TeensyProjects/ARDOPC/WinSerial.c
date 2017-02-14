@@ -317,3 +317,63 @@ VOID HostPoll()
 	}
 	n=0;
 }
+
+
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
+{
+	BOOL       fReadStat ;
+	COMSTAT    ComStat ;
+	DWORD      dwErrorFlags;
+	DWORD      dwLength;
+	BOOL	ret;
+
+	// only try to read number of bytes in queue
+
+	ret = ClearCommError(fd, &dwErrorFlags, &ComStat);
+
+	if (ret == 0)
+	{
+		int Err = GetLastError();
+		*Error = TRUE;
+		return 0;
+	}
+
+
+	dwLength = min((DWORD) MaxLength, ComStat.cbInQue);
+
+	if (dwLength > 0)
+	{
+		fReadStat = ReadFile(fd, Block, dwLength, &dwLength, NULL) ;
+
+		if (!fReadStat)
+		{
+		    dwLength = 0 ;
+			ClearCommError(fd, &dwErrorFlags, &ComStat ) ;
+		}
+	}
+
+	*Error = FALSE;
+
+   return dwLength;
+}
+
+
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
+{
+	BOOL        fWriteStat;
+	DWORD       BytesWritten;
+	DWORD       ErrorFlags;
+	COMSTAT     ComStat;
+
+	fWriteStat = WriteFile(fd, Block, BytesToWrite,
+	                       &BytesWritten, NULL );
+
+	if ((!fWriteStat) || (BytesToWrite != BytesWritten))
+	{
+		int Err = GetLastError();
+		ClearCommError(fd, &ErrorFlags, &ComStat);
+		return FALSE;
+	}
+	return TRUE;
+}
+

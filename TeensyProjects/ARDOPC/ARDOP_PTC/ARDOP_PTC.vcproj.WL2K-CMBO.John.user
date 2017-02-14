@@ -11,7 +11,7 @@
 			<DebugSettings
 				Command="$(TargetPath)"
 				WorkingDirectory="c:\devprogs\bpq32"
-				CommandArguments="15"
+				CommandArguments="35"
 				Attach="false"
 				DebuggerType="3"
 				Remote="1"
@@ -39,7 +39,7 @@
 			<DebugSettings
 				Command="$(TargetPath)"
 				WorkingDirectory=""
-				CommandArguments="15"
+				CommandArguments="40"
 				Attach="false"
 				DebuggerType="3"
 				Remote="1"

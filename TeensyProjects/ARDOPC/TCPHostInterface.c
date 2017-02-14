@@ -55,6 +55,7 @@ int C_Q_COUNT(VOID *Q);
 
 void ProcessCommandFromHost(char * strCMD);
 BOOL checkcrc16(unsigned char * Data, unsigned short length);
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
 
 extern int port;
 
@@ -102,7 +103,7 @@ void SendCommandToHost(char * strText)
 	// Returns TRUE if command sent successfully.
 	// Form byte array to send with CRC
 
-	UCHAR bytToSend[256];
+	UCHAR bytToSend[1024];
 	int len;
 	int ret;
 	len = sprintf(bytToSend,"c:%s\r", strText);
@@ -112,7 +113,7 @@ void SendCommandToHost(char * strText)
 		ret = send(TCPControlSock, bytToSend, len, 0);
 		ret = WSAGetLastError();
 
-		if (CommandTrace) WriteDebugLog(LOGINFO, " Command Trace TO Host  c:%s", strText);
+		if (CommandTrace) WriteDebugLog(LOGDEBUG, " Command Trace TO Host  c:%s", strText);
 		return;
 	}
 	return;
@@ -252,6 +253,12 @@ loop:
 
 	if (InputLen < 6)
 		return;					// Wait for more to arrive (?? timeout??)
+
+
+//	ARDOPBuffer[InputLen] = 0;
+//	WriteDebugLog(LOG_DEBUG, "%s", ARDOPBuffer);
+
+
 
 	if (ARDOPBuffer[1] = ':')	// At least message looks reasonable
 	{
@@ -440,7 +447,7 @@ SOCKET OpenSocket4(int port)
 
 		if (bind( sock, (struct sockaddr *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 		{
-			WriteDebugLog(LOGDEBUG, "bind(sock) failed port %d Error %d", port, WSAGetLastError());
+			WriteDebugLog(LOGINFO, "bind(sock) failed port %d Error %d", port, WSAGetLastError());
 
 		    closesocket(sock);
 			return FALSE;
@@ -448,7 +455,7 @@ SOCKET OpenSocket4(int port)
 
 		if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
 		{
-			WriteDebugLog(LOGDEBUG, "listen(sock) failed port %d Error %d", port, WSAGetLastError());
+			WriteDebugLog(LOGINFO, "listen(sock) failed port %d Error %d", port, WSAGetLastError());
 			return FALSE;
 		}
 		ioctl(sock, FIONBIO, &param);
@@ -485,6 +492,46 @@ void HostPoll()
 	int addrlen = sizeof(struct sockaddr_in);
 	struct sockaddr_in sin;  
 	u_long param=1;
+
+	// Check for Rig control data
+
+	if (hRIGDevice && CONNECTED)
+	{
+		BOOL Error;
+		UCHAR RigBlock[256];
+		int Len;
+
+		Len = ReadCOMBlock(hRIGDevice, RigBlock, 256);
+
+		if (Len)
+		{
+			UCHAR * ptr = RigBlock;
+			char RigCommand[1024] = "RADIOHEX ";
+			char * ptr2 = &RigCommand[9] ;
+			int i, j;
+
+			while (Len--)
+			{
+				i = *(ptr++);
+				j = i >>4;
+				j += '0';		// ascii
+				if (j > '9')
+					j += 7;
+				*(ptr2++) = j;
+
+				j = i & 0xf;
+				j += '0';		// ascii
+				if (j > '9')
+					j += 7;
+				*(ptr2++) = j;
+			}
+			*(ptr2) = 0;
+			SendCommandToHost(RigCommand);
+		}
+	}
+
+	if (ListenSock == 0)
+		return;
 
 	FD_ZERO(&readfs);	
 	FD_ZERO(&errorfs);
@@ -523,6 +570,9 @@ void HostPoll()
 			}
 		}
 	}
+
+	if (DataListenSock == 0)
+		return;
 
 	FD_SET(DataListenSock,&readfs);
 

@@ -13,6 +13,13 @@
 
 #include "ARDOPC.h"
 
+#ifdef TEENSY
+#define PKTLED LED3		// flash when packet received
+
+extern unsigned int PKTLEDTimer;
+#endif
+
+
 extern UCHAR bytData[];
 extern int intLastRcvdFrameQuality;
 extern int intRmtLeaderMeasure;
@@ -549,24 +556,24 @@ static UCHAR DataModes200[] = {0x4E, 0x46, 0x40, 0x44, 0x5C};
 static UCHAR DataModes200FSK[] = {0x4E, 0x46};
 
 	// 500  streamlined 0.3.1.6
-	//16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4PSK.500.100, 8PSK.500.100, 16QAM.500.100)
-	//' (329, 429, 881, 1536, 2592, 4305 bytes/min)
-static UCHAR DataModes500[] = {0x5A, 0x58, 0x4A, 0x50, 0x52, 0x54};
+	//8FSK.200.25, 16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4PSK.500.100, 8PSK.500.100, 16QAM.500.100)
+	//' (288, 329, 429, 881, 1536, 2592, 4305 bytes/min)
+static UCHAR DataModes500[] = {0x4E, 0x5A, 0x58, 0x4A, 0x50, 0x52, 0x54};
 static UCHAR DataModes500FSK[] = {0x5A, 0x58, 0x4A};
 
 
 // 1000 ' Streamlined 0.3.1.6
-	//'16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4PSK.1000.100, 8PSK.1000.100, 8PSK.1000.167
-	//'(329, 429, 881, 1762, 3072, 5184, 8610 bytes/min) 
-static UCHAR DataModes1000[] = {0x5A, 0x58, 0x4A, 0x68, 0x60, 0x62, 0x66};
+	//'8FSK.200.25, 16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4PSK.1000.100, 8PSK.1000.100, 8PSK.1000.167
+	//'(288, 329, 429, 881, 1762, 3072, 5184, 8610 bytes/min) 
+static UCHAR DataModes1000[] = {0x4E, 0x5A, 0x58, 0x4A, 0x68, 0x60, 0x62, 0x66};
 static UCHAR DataModes1000FSK[] = {0x5A, 0x58, 0x4A, 0x68};
 
 // 2000 Non-FM
 //' These do not include the 600 baud modes for FM only.
-//'16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4FSK.2000.100, 4PSK.2000.100, 8PSK.2000.100, 4PSK.2000.167, 8PSK.2000.167)
-//'(329, 429, 881, 1762, 3624, 6144, 10386, 17220 bytes/min) 
+//'8FSK.200.25, 16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4FSK.2000.100, 4PSK.2000.100, 8PSK.2000.100, 4PSK.2000.167, 8PSK.2000.167)
+//'(288, 329, 429, 881, 1762, 3624, 6144, 10386, 17220 bytes/min) 
 
-static UCHAR DataModes2000[] = {0x5A, 0x58, 0x4A, 0x68, 0x78, 0x70, 0x72, 0x74, 0x76};
+static UCHAR DataModes2000[] = {0x4E, 0x5A, 0x58, 0x4A, 0x68, 0x78, 0x70, 0x72, 0x74, 0x76};
 static UCHAR DataModes2000FSK[] = {0x5A, 0x58, 0x4A, 0x68, 0x78};
 
 //2000 FM
@@ -1092,9 +1099,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		bytShiftUpThresholds = GetShiftUpThresholds(intSessionBW);
 
 		if (fastStart)
-			intFrameTypePtr = (bytFrameTypesForBWLength / 2) - 1;	// Start mid way
+			intFrameTypePtr = (bytFrameTypesForBWLength / 2);	// Start mid way
 		else
 			intFrameTypePtr = 0;
+
 		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 		if(DebugLog) WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.GetNextFrameData] Initial Frame Type: %s", Name(bytCurrentFrameType));
 		*intUpDn = 0;
@@ -1372,7 +1380,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
        
 				if (IsCallToMe(strCallsign, &bytPendingSessionID)) // (Handles protocol rules 1.2, 1.3)
 				{
-					//WriteDebugLog(LOGDEBUG, "[ProcessRcvdARQFrame]1 strCallsigns(0)=" & strCallsigns(0) & "  strCallsigns(1)=" & strCallsigns(1) & "  bytPendnigSessionID=" & Format(bytPendingSessionID, "X"))
+					//WriteDebugLog(LOGDEBUG, "[ProcessRcvdARQFrame]1 strCallsigns(0)=" & strCallsigns(0) & "  strCallsigns(1)=" & strCallsigns(1) & "  bytPendingSessionID=" & Format(bytPendingSessionID, "X"))
             
 					intReply = IRSNegotiateBW(intFrameType); // NegotiateBandwidth
 
@@ -2000,6 +2008,11 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				if (blnLastFrameSentData)
 				{
 					intACKctr++;
+#ifdef TEENSY
+					SetLED(PKTLED, TRUE);		// Flash LED
+					PKTLEDTimer = Now + 200;	// for 200 mS
+#endif
+
 					bytLastARQDataFrameAcked = bytLastARQDataFrameSent;
 					
 					if (bytQDataInProcessLen)
@@ -2296,7 +2309,7 @@ BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall)
 	bytSessionID = GenerateSessionID(strMycall, strTargetCall);  // Now set bytSessionID to receive ConAck (note the calling staton is the first entry in GenerateSessionID) 
 	bytPendingSessionID = bytSessionID;
 
-	WriteDebugLog(LOGINFO, "[SendARQConnectRequest] strMycall=%s  strTargetCall=%s bytPendnigSessionID=%x", strMycall, strTargetCall, bytPendingSessionID);
+	WriteDebugLog(LOGINFO, "[SendARQConnectRequest] strMycall=%s  strTargetCall=%s bytPendingSessionID=%x", strMycall, strTargetCall, bytPendingSessionID);
 	blnPending = TRUE;
 	blnARQConnected = FALSE;
 	
