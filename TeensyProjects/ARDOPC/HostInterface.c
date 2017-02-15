@@ -1064,6 +1064,9 @@ void ProcessCommandFromHost(char * strCMD)
 */
 	if (strcmp(strCMD, "RADIOCTRLBAUD") == 0)	
 	{
+#ifdef TEENSY
+ 		sprintf(strFault, "RADIOCTRLBAUD not supported on this platform");
+#else
 		int Baud;
 		
 		if (ptrParams == NULL)
@@ -1078,23 +1081,26 @@ void ProcessCommandFromHost(char * strCMD)
 		RIGBAUD = Baud;
 
 		if (hRIGDevice)
-			CloseCOMPort(hRIGDevice);
-			
-		hRIGDevice = OpenCOMPort(RIGPORT, RIGBAUD, FALSE, FALSE, FALSE, 0);
-
-		if (hRIGDevice)
 		{
-			WriteDebugLog(LOGALERT, "Using port %s for CAT Baud %d", RIGPORT, RIGBAUD); 
-			RadioControl = TRUE;
+			CloseCOMPort(hRIGDevice);
+			hRIGDevice = 0;
+		}
+		if (RIGPORT[0])
+		{
+			hRIGDevice = OpenCOMPort(RIGPORT, RIGBAUD, FALSE, FALSE, FALSE, 0);
+
+			if (hRIGDevice)
+			{
+				WriteDebugLog(LOGINFO, "Using port %s for CAT Baud %d", RIGPORT, RIGBAUD); 
+				sprintf(cmdReply, "RADIOCTRLBAUD now %d", RIGBAUD);
+				SendReplyToHost(cmdReply);
+			}
+			else
+				sprintf(strFault, "Couldn't open CAT device %s", PTTPORT);
 		}
 		else
-		{
-			RadioControl = FALSE;
-			sprintf(strFault, "Could'n open CAT device %s", PTTPORT);
-		}
-
-		sprintf(cmdReply, "RADIOCTRLBAUD now %d", RIGBAUD);
-		SendReplyToHost(cmdReply);
+			sprintf(cmdReply, "RADIOCTRLBAUD now %d", RIGBAUD);
+#endif
 		goto cmddone;
 	}
 
@@ -1113,6 +1119,9 @@ void ProcessCommandFromHost(char * strCMD)
 		
 	if (strcmp(strCMD, "RADIOCTRLPORT") == 0)	
 	{
+#ifdef TEENSY
+ 		sprintf(strFault, "RADIOCTRLPORT not supported on this platform");
+#else
 		if (ptrParams == NULL)
 		{
 			sprintf(cmdReply, "RADIOCTRLPORT %s", RIGPORT);
@@ -1129,15 +1138,12 @@ void ProcessCommandFromHost(char * strCMD)
 		if (hRIGDevice)
 		{
 			WriteDebugLog(LOGALERT, "Using port %s for CAT Baud %d", RIGPORT, RIGBAUD); 
-			RadioControl = TRUE;
+			sprintf(cmdReply, "RADIOCTRLPORT now %s", RIGPORT);
+			SendReplyToHost(cmdReply);
 		}
 		else
-		{
-			RadioControl = FALSE;
-			sprintf(strFault, "Could'n open CAT device %s", RIGPORT);
-		}
-		sprintf(cmdReply, "RADIOCTRLPORT now %s", RIGPORT);
-		SendReplyToHost(cmdReply);
+			sprintf(strFault, "Couldn't open CAT device %s", RIGPORT);
+#endif
 		goto cmddone;
 	}
    
@@ -1173,6 +1179,9 @@ Case "RADIOCTRLRTS"
 */
 	if (strcmp(strCMD, "RADIOHEX") == 0)
 	{
+#ifdef TEENSY
+ 		sprintf(strFault, "RADIOHEX not supported on this platform");
+#else
 		// Parameter is blockto send to radio, in hex
 		
 		char c;
@@ -1194,6 +1203,7 @@ Case "RADIOCTRLRTS"
 			}
 			WriteCOMBlock(hRIGDevice, ptrParams, ptr2 - ptrParams);
 		}
+#endif	
 		goto cmddone;
 	}
 

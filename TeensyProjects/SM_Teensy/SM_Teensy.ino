@@ -9,8 +9,7 @@
 // This file has to be in the Arduino user library folder TeensyConfig
 
 #include "TeensyConfig.h"
-
-#define TEENSY
+#include "TeensyCommon.h"
 
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
 #define CPU_RESTART_VAL 0x5FA0004
@@ -19,9 +18,6 @@
 #include <DMAChannel.h>
 #include "SPI.h"
 
-#define MONPORT Serial5
-
-Print *tftp = NULL;
 
 #include <EEPROM.h>
 
@@ -36,13 +32,11 @@ extern int TXLevel;				// 300 mV p-p Used on Teensy
 extern int RXLevel;				// Configured Level - zero means auto tune
 extern int autoRXLevel;			// calculated level
 
+BOOL SoundIsPlaying = FALSE;
+BOOL Capturing = FALSE;
+
 #define TRUE 1
 #define FALSE 0
-
-int loadCounter = 0;		// for performance monitor
-int lastLoadTicks = 0;
-
-int PKTLEDTimer = 0;
 
 extern volatile int RXBPtr;
 volatile int flag = 0;
@@ -92,7 +86,7 @@ void i2cloop();
 #define I2CADDRESS	7
 
 #define DCDLED LED0
-#define PKTLED LED1			// flash when packet received
+#define PKTLED LED3		// flash when packet received
 extern "C"
 {
   void WriteDebugLog(int Level, const char * format, ...);
@@ -113,6 +107,8 @@ extern "C"
   // extern unsigned int tmrPollOBQueue;
 
   extern volatile unsigned short ADC_Buffer[2 * ADC_SAMPLES_PER_BLOCK];
+  int Number = 0;
+
 
 #define Now getTicks()
 
@@ -122,45 +118,6 @@ extern "C"
 
   void _kill()
   {
-  }
-
-  unsigned int getTicks()
-  {
-    return millis();
-  }
-  void Sleep(int mS)
-  {
-#if 0
-    int loadtime = millis() - lastLoadTicks;
-
-    loadCounter += mS;
-
-    if (loadtime > 999)
-    {
-      WriteDebugLog(7, "Load = %d" , 100 - (100 * loadCounter / loadtime));
-      lastLoadTicks = millis();
-      loadCounter = 0;
-    }
-#endif
-    delay(mS);
-  }
-  void PlatformSleep()
-  {
-    noInterrupts();
-    WDOG_REFRESH = 0xA602;
-    WDOG_REFRESH = 0xB480;
-    interrupts();
-  }
-
-  void txSleep(int mS)
-  {
-    // called while waiting for next TX buffer. Run background processes
-
-    PollReceivedSamples();			// discard any received samples
-    HostPoll();
-
-    PlatformSleep();
-    Sleep(mS);
   }
 
 #define MEM_LEN 512
@@ -203,12 +160,6 @@ extern "C"
       ProcessKISSPacket(RXBUFFER, RXBPtr);
     }
 #endif
-    if (PKTLEDTimer)
-    {
-      PKTLEDTimer--;
-      if (PKTLEDTimer == 0)
-        SetLED(PKTLED, 0);				// turn off packet rxed led
-    }
   }
 
 
@@ -244,48 +195,38 @@ extern "C"
 
     CommonSetup();
 
-    MONPORT.printf("Monitor Buffer Space %d\r\n", MONPORT.availableForWrite());
-#if defined HOSTPORT
-    MONPORT.printf("Host Buffer Space %d\r\n", HOSTPORT.availableForWrite());
-#elif defined I2CHOST
-    MONPORT.printf("Host Connection is i2c on address %x Hex\r\n", I2CSLAVEADDR);
-#endif
-    MONPORT.print("Hardware Serial No ");
+    MONprintf("Hardware Serial No ");
     print_mac();
-    MONPORT.println("");
+    MONprintf("\r\n");
 
-    if (tftp)
-      tftp->println("Packet TNC based on Soundmodem by Thomas Sailer");
-    MONPORT.println("Packet TNC based on Soundmodem by Thomas Sailer");
+#ifdef TFT
+    TFTprintf("Packet TNC based on Soundmodem by Thomas Sailer");
+#endif
+    MONprintf("Packet TNC based on Soundmodem by Thomas Sailer");
 
     WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
-
-    MONPORT.print( "EEPROM length: " );
-    MONPORT.println( EEPROM.length() );
 
     for (i = 0; i < 16; i++)
     {
       // read a byte from the current address of the EEPROM
       int value = EEPROM.read(i);
 
-      MONPORT.print(i);
-      MONPORT.print("\t");
-      MONPORT.print(value, DEC);
-      MONPORT.println();
+      MONprintf("%d\t%d\r\n", i, value);
     }
 
     if (Baud == 9600)
     {
-      if (tftp)
-        tftp->println("9600 FSK Mode");
-      MONPORT.println("9600 FSK Mode");
+#ifdef TFT
+      TFTprintf("9600 FSK Mode");
+#endif
+      MONprintf("9600 FSK Mode");
     }
     else
     {
-      if (tftp)
-        tftp->printf("AFSK Mode %d Baud", Baud);
-
-      MONPORT.printf("AFSK Mode %d Baud", Baud);
+#ifdef TFT
+      TFTprintf("AFSK Mode %d Baud", Baud);
+#endif
+      MONprintf("AFSK Mode %d Baud", Baud);
     }
 
     if (RCM_SRS0 & 0X20)		// Watchdog Reset
@@ -332,7 +273,7 @@ extern "C"
        VRef /= 100;
     */
 
-    MONPORT.printf("VREF %d offset %d\r\n", VRef, VRef - 32768);
+    MONprintf("VREF %d offset %d\r\n", VRef, VRef - 32768);
 
     analogRead(16);		// Set ADC back to A0
 
@@ -422,21 +363,70 @@ void print_mac()  {
   readserialno(mac);
   for (uint8_t i = 0; i < 4; ++i)
   {
-    if (i != 0) count += MONPORT.print(":");
-    count += MONPORT.print((*(mac + i) & 0xF0) >> 4, 16);
-    count += MONPORT.print(*(mac + i) & 0x0F, 16);
+    if (i != 0) MONprintf(":");
+    MONprintf("%x", (*(mac + i) & 0xF0) >> 4, 16);
+    MONprintf("%x", *(mac + i) & 0x0F, 16);
   }
 }
-
-extern "C" bool OKtoAdjustLevel()
+extern "C"
 {
-  // Only auto adjust level when disconnected.
-  // Level is set at end of each received packet when connected
 
-  return true;
+
+  unsigned short * SendtoCard(unsigned short * buf, int n);
+  extern unsigned short * DMABuffer;
+  extern int Number, totSamples;
+
+  void SampleSink(short Sample)
+  {
+    int work = (short)Sample;
+
+    DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
+
+    if (Number == SendSize)
+    {
+      // send this buffer to sound interface
+
+      //  printtick("Enter SendtoCard");
+      DMABuffer = SendtoCard(DMABuffer, SendSize);
+      //  printtick("Leave SendtoCard");
+      Number = 0;
+    }
+    totSamples++;
+  }
+
+
+
+  int OKtoAdjustLevel()
+  {
+    // Only auto adjust level when disconnected.
+    // Level is set at end of each received packet when connected
+
+    return true;
+  }
+
+  void TurnroundLink()
+  {
+  }
+
+  int AddTrailer()
+  {
+    return 0;
+  }
+
+  int displayDCD()
+  {
+    return true;
+  }
+
+  void StopCapture()
+  {
+    Capturing = FALSE;
+  }
+
+  void StartCapture()
+  {
+    Capturing = TRUE;
+
+    //	printf("Start Capture\n");
+  }
 }
-
-
-
-
-

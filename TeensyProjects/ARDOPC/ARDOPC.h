@@ -8,7 +8,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.0.7-BPQ"
+#define ProductVersion "0.9.0.8-BPQ"
 
 //	Sound interface buffer size
 
@@ -383,7 +383,8 @@ extern HANDLE hRIGDevice;		// port for Rig Control
 extern char RIGPORT[80];
 extern int RIGBAUD;
 
-HANDLE hPTTDevice;					// port for PTT
+
+extern HANDLE hPTTDevice;					// port for PTT
 extern char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
 
 #define PTTRTS		1
