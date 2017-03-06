@@ -22,6 +22,7 @@ void setupADC(int Pin);
 extern "C" void StartDAC();
 extern "C" void StopDAC();
 void StartADC();
+void setupOLED();
 
 // Arduino is a c++ environment so functions in ardop must be defined as "C"
 
@@ -34,10 +35,10 @@ extern "C"
   void HostPoll();
   void MainPoll();
   void InitDMA();
-   void PlatformSleep();
+  void PlatformSleep();
 
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
- 
+
 #include "..\..\ARDOPC\ARDOPC.h"
 
   extern unsigned int tmrPollOBQueue;
@@ -143,6 +144,12 @@ void setup()
   MONprintf("VREF %d offset %d\r\n", VRef, VRef - 32768);
 
   analogRead(16);		// Set ADC back to A0
+
+#ifdef PLOTCONSTELLATION
+#ifdef OLED
+  setupOLED();
+#endif
+#endif
 }
 
 int lastticks = Now;
