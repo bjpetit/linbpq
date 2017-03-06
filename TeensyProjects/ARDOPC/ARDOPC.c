@@ -1,7 +1,6 @@
 // ARDOPC.cpp : Defines the entry point for the console application.
 //
 
-
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
@@ -2515,74 +2514,6 @@ BOOL BusyDetect(float * dblMag, int intStart, int intStop)
 	return blnLastBusy;
 }
 */
-//	Subroutine to update the Busy detector when not displaying Spectrum or Waterfall (graphics disabled)
- 		
-int LastBusyCheck = 0;
-
-void UpdateBusyDetector(short * bytNewSamples)
-{
-	float dblReF[1024];
-	float dblImF[1024];
-
-	float dblMag[206];
-	
-	static BOOL blnLastBusyStatus;
-	
-	float dblMagAvg = 0;
-	int intTuneLineLow, intTuneLineHi, intDelta;
-	int i;
-
-	if (ProtocolState != DISC)		// ' Only process busy when in DISC state
-		return;
-
-	if (State != SearchingForLeader)
-		return;						// only when looking for leader
-
-	if (Now - LastBusyCheck < 100)
-		return;
-
-	LastBusyCheck = Now;
-
-	FourierTransform(1024, bytNewSamples, &dblReF[0], &dblImF[0], FALSE);
-
-	for (i = 0; i <  206; i++)
-	{
-		//	starting at ~300 Hz to ~2700 Hz Which puts the center of the signal in the center of the window (~1500Hz)
-            
-		dblMag[i] = powf(dblReF[i + 25], 2) + powf(dblImF[i + 25], 2);	 // first pass 
-		dblMagAvg += dblMag[i];
-	}
-	intDelta = (ExtractARQBandwidth() / 2 + TuningRange) / 11.719f;
-
-	intTuneLineLow = max((103 - intDelta), 3);
-	intTuneLineHi = min((103 + intDelta), 203);
-    
-//	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
-	{
-		blnBusyStatus = BusyDetect3(dblMag, intTuneLineLow, intTuneLineHi);
-		
-		if (blnBusyStatus && !blnLastBusyStatus)
-		{
-			QueueCommandToHost("BUSY TRUE");
-         	newStatus = TRUE;				// report to PTC
-		}
-		//    stcStatus.Text = "True"
-            //    queTNCStatus.Enqueue(stcStatus)
-            //    'Debug.WriteLine("BUSY TRUE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
-			
-		else if (blnLastBusyStatus && !blnBusyStatus)
-		{
-			QueueCommandToHost("BUSY FALSE");
-			newStatus = TRUE;				// report to PTC
-		} 
-		//    stcStatus.Text = "False"
-        //    queTNCStatus.Enqueue(stcStatus)
-        //    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
-
-		blnLastBusyStatus = blnBusyStatus;
-	}
-}
-
 unsigned const short CRCTAB[256] = {
 	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
 	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 

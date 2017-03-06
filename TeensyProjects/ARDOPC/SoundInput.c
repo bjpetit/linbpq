@@ -8,6 +8,38 @@
 #define MEMORYARQ
 #endif
 
+#undef PLOTSPECTRUM
+
+#define WHITE  0xffff
+#define Tomato 0xffff
+#define Orange 0xffff
+#define Khaki 0xffff
+#define Cyan 0xffff
+#define DeepSkyBlue 0
+#define RoyalBlue 0 
+#define Navy 0
+#define Black 0
+
+#define PLOTCONSTELLATION
+#define OLED
+
+#ifdef OLED
+#define ConstellationHeight 64
+#define ConstellationWidth 64
+#define WHITE 0xffff
+#define Tomato 0xffff
+#define Gold 0xffff
+#define Lime 0xffff
+#define PLOTRADIUS 30
+
+
+#else
+#define TFTDISP
+#define ConstellationHeight 91
+#define ConstellationWidth 91
+#define PLOTRADIUS 40
+#endif
+
 #ifdef TEENSY
 #define PKTLED LED3		// flash when packet received
 extern unsigned int PKTLEDTimer;
@@ -17,6 +49,11 @@ extern unsigned int PKTLEDTimer;
 //#define min(x, y) ((x) < (y) ? (x) : (y))
 
 void CheckandAdjustRXLevel(int maxlevel, int minlevel, BOOL Force);
+void SetPixel(unsigned short x, unsigned short y, unsigned short Colour);
+void clearDisplay();
+void updateDisplay();
+
+void DrawAxes(int Qual, char * Mode);
 
 extern int lastmax, lastmin;		// Sample Levels
 
@@ -33,6 +70,7 @@ extern int NErrors;
 extern BOOL blnBREAKCmd;
 extern UCHAR bytLastACKedDataFrameType;
 extern int intARQDefaultDlyMs;
+
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
@@ -224,7 +262,7 @@ VOID Decode1CarPSK(UCHAR * Decoded, int Carrier);
 int EnvelopeCorrelator();
 BOOL DecodeFrame(int intFrameType, UCHAR * bytData);
 
-int Update4FSKConstellation(int * intToneMags, int * intQuality);
+void Update4FSKConstellation(int * intToneMags, int * intQuality);
 void Update16FSKConstellation(int * intToneMags, int * intQuality);
 void Update8FSKConstellation(int * intToneMags, int * intQuality);
 
@@ -851,7 +889,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	rawSamplesLength = 0;
 
 //	printtick("Start Busy");
-	if (State == SearchingForLeader)
+//	if (State == SearchingForLeader)
 		UpdateBusyDetector(Samples);
 //	printtick("Done Busy");
 
@@ -1102,9 +1140,9 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				intSampPerSym = 20;
 
 			if (IsDataFrame(intFrameType))
-				SymbolsLeft = intDataLen + intRSLen + 3; // Data has a length byte
+				SymbolsLeft = intDataLen + intRSLen + 3; // Data has crc + length byte
 			else
-				SymbolsLeft = intDataLen + intRSLen + 2;
+				SymbolsLeft = intDataLen + intRSLen;	// No CRC
 
 			if (intDataLen == 600)
 				SymbolsLeft += 6;		// 600 baud has 3 * RS Blocks
@@ -3625,22 +3663,27 @@ returnframe:
 
 // Subroutine to update the 4FSK Constellation
 
-int Update4FSKConstellation(int * intToneMags, int * intQuality)
+void drawFastVLine(int x0, int y0, int length, int color);
+void drawFastHLine(int x0, int y0, int length, int color);
+
+void Update4FSKConstellation(int * intToneMags, int * intQuality)
 {
 	// Subroutine to update bmpConstellation plot for 4FSK modes...
         
-	int  intToneSum = 0;
+	int intToneSum = 0;
 	int intMagMax = 0;
 	float dblPi4  = 0.25 * M_PI;
 	float dblDistanceSum = 0;
-	//float dblPlotRotation;
-	// Dim stcStatus As Status
-
-	//int yCenter, xCenter;
 	int intRad = 0;
-	// Dim clrPixel As System.Drawing.Color
-	// bmpConstellation = New Bitmap(89, 89)
-	int i;
+	int i, clrPixel;
+
+#ifdef PLOTCONSTELLATION
+
+	int yCenter = (ConstellationHeight - 2)/ 2;
+	int xCenter = (ConstellationWidth - 2) / 2;
+
+	clearDisplay();
+#endif
 
 	for (i = 0; i < intToneMagsLength; i += 4)  // for the number of symbols represented by intToneMags
 	{
@@ -3650,21 +3693,89 @@ int Update4FSKConstellation(int * intToneMags, int * intQuality)
 		{
 			if (intToneSum > 0)
 				intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
+
+			dblDistanceSum += (42 - intRad);
+
+#ifdef PLOTCONSTELLATION
+			if (intRad < 15)
+				clrPixel = Tomato;
+			else if (intRad < 30)
+				clrPixel = Gold;
+			else
+				clrPixel = Lime;
+
+			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
+			SetPixel(xCenter + intRad, yCenter + 1, clrPixel);
+			SetPixel(xCenter + intRad, yCenter - 1, clrPixel); // don't plot on top of axis
+			SetPixel(xCenter + intRad, yCenter + 2, clrPixel);
+			SetPixel(xCenter + intRad, yCenter - 2, clrPixel);
+#endif
 		}
 		else if (intToneMags[i + 1] > intToneMags[i] && intToneMags[i + 1] > intToneMags[i + 2] && intToneMags[i + 1] > intToneMags[i + 3])
 		{
 			if (intToneSum > 0)
 				intRad = max(5, 42 - 80 * (intToneMags[i] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
+
+			dblDistanceSum += (42 - intRad);
+
+#ifdef PLOTCONSTELLATION
+			if (intRad < 15)
+				clrPixel = Tomato;
+			else if (intRad < 30)
+				clrPixel = Gold;
+			else
+				clrPixel = Lime;
+
+			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
+			SetPixel(xCenter + 1, yCenter + intRad, clrPixel);
+			SetPixel(xCenter - 1, yCenter + intRad, clrPixel);
+			SetPixel(xCenter + 2, yCenter + intRad, clrPixel);
+			SetPixel(xCenter - 2, yCenter + intRad, clrPixel);
+#endif
 		}
 		else if (intToneMags[i + 2] > intToneMags[i] && intToneMags[i + 2] > intToneMags[i + 1] && intToneMags[i + 2] > intToneMags[i + 3]) 
 		{
             if (intToneSum > 0)
 				intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i] + intToneMags[i + 3]) / intToneSum);
+
+			dblDistanceSum += (42 - intRad);
+	
+#ifdef PLOTCONSTELLATION
+			if (intRad < 15)
+				clrPixel = Tomato;
+			else if (intRad < 30)
+				clrPixel = Gold;
+			else
+				clrPixel = Lime;
+
+			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
+			SetPixel(xCenter - intRad, yCenter + 1, clrPixel);
+			SetPixel(xCenter - intRad, yCenter - 1, clrPixel); // don't plot on top of axis
+			SetPixel(xCenter - intRad, yCenter + 2, clrPixel);
+			SetPixel(xCenter - intRad, yCenter - 2, clrPixel);
+#endif
 		}
 		else if (intToneSum > 0)
+		{
 			intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i]) / intToneSum);	
 
-		dblDistanceSum += (43 - intRad);
+			dblDistanceSum += (42 - intRad);
+
+#ifdef PLOTCONSTELLATION
+			if (intRad < 15)
+				clrPixel = Tomato;
+			else if (intRad < 30)
+				clrPixel = Gold;
+			else
+				clrPixel = Lime;
+
+			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
+			SetPixel(xCenter + 1, yCenter - intRad, clrPixel);
+			SetPixel(xCenter - 1, yCenter - intRad, clrPixel);
+			SetPixel(xCenter + 2, yCenter - intRad, clrPixel);
+			SetPixel(xCenter - 2, yCenter -	intRad, clrPixel);
+#endif
+		}
 	}
 
 	*intQuality = 100 - (2.7f * (dblDistanceSum / (intToneMagsLength / 4))); // ' factor 2.7 emperically chosen for calibration (Qual range 25 to 100)
@@ -3680,8 +3791,15 @@ int Update4FSKConstellation(int * intToneMags, int * intQuality)
 		int4FSKQuality += *intQuality;
 	}
 
-	return *intQuality;
+#ifdef PLOTCONSTELLATION
+	DrawAxes(*intQuality, strType);
+	updateDisplay();
+#endif
+
+	return;
 }
+
+
 
 // Subroutine to update the 16FSK constallation
 
@@ -3696,11 +3814,19 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 	float dblDistanceSum = 0;
 	float dblPlotRotation = 0;
 //            Dim stcStatus As Status
-	int	yCenter, xCenter;
 	int	intRad;
 //            Dim clrPixel As System.Drawing.Color
 	int	intJatMaxMag;
-	int i, j;
+	int i, j, x, y,clrPixel;
+
+#ifdef PLOTCONSTELLATION
+
+	int yCenter = (ConstellationHeight - 2)/ 2;
+	int xCenter = (ConstellationWidth - 2) / 2;
+
+	clearDisplay();
+#endif
+
 
 	for (i = 0; i< intToneMagsLength; i += 16)  // for the number of symbols represented by intToneMags
 	{
@@ -3718,6 +3844,25 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 		}
 		intRad = max(5, 42 - 40 * (intToneSum - intMagMax) / intToneSum);
 		dblDistanceSum += (43 - intRad);
+
+#ifdef PLOTCONSTELLATION		
+		if (intRad < 15)
+			clrPixel = Tomato;
+		else if (intRad < 30)
+			clrPixel = Gold;
+		else
+			clrPixel = Lime;
+
+		// plot the symbols rotated to avoid the axis
+
+		intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
+		dblAng = M_PI / 16.0f + (intJatMaxMag * M_PI / 8);
+  
+		x = xCenter + intRad * cosf(dblAng);
+		y = yCenter + intRad * sinf(dblAng);
+		SetPixel(x, y, clrPixel);    
+#endif
+
 	}
 		
 	*intQuality = max(0, (100 - 2.2 * (dblDistanceSum / (intToneMagsLength / 16))));	 // factor 2.2 emperically chosen for calibration (Qual range 25 to 100)
@@ -3728,6 +3873,10 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 		int16FSKQualityCnts++;
 		int16FSKQuality += *intQuality;
 	}
+#ifdef PLOTCONSTELLATION
+	DrawAxes(*intQuality, strType);
+	updateDisplay();
+#endif
 }
 
 //	Subroutine to udpate the 8FSK Constellation
@@ -3735,69 +3884,75 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 void Update8FSKConstellation(int * intToneMags, int * intQuality)
 {
 	//	Subroutine to update bmpConstellation plot for 8FSK modes...
-/*
-            Dim dblRad As Double = 0
-            Dim intToneSum As Int32 = 0
-            Dim intMagMax As Double = 0
-            Dim dblAng As Double
-            Dim dblDistanceSum As Double
-            Dim dblPlotRotation As Double = 0
-            Dim stcStatus As Status
-            Dim yCenter, xCenter As Integer
-            Dim intRad As Int32
-            Dim clrPixel As System.Drawing.Color
-            Dim intJatMaxMag As Int32
-            bmpConstellation = New Bitmap(89, 89)
-            ' Draw the axis and paint the black background area
-            yCenter = (bmpConstellation.Height - 2) \ 2
-            xCenter = (bmpConstellation.Width - 2) \ 2
-            For x As Integer = 0 To bmpConstellation.Width - 1
-                For y As Integer = 0 To bmpConstellation.Height - 1
-                    If y = yCenter Or x = xCenter Then
-                        bmpConstellation.SetPixel(x, y, Color.DeepSkyBlue)
-                    End If
-                Next y
-            Next x
-            For i As Integer = 0 To (intToneMags.Length - 1) Step 8  ' for the number of symbols represented by intToneMags
-                intToneSum = 0
-                intMagMax = 0
-                For j As Integer = 0 To 7
-                    If intToneMags(i + j) > intMagMax Then
-                        intMagMax = intToneMags(i + j)
-                        intJatMaxMag = j
-                    End If
-                    intToneSum += intToneMags(i + j)
-                Next j
-                intRad = Max(5, 42 - 40 * (intToneSum - intMagMax) / intToneSum)
-                If intRad < 15 Then
-                    clrPixel = Color.Tomato
-                ElseIf intRad < 30 Then
-                    clrPixel = Color.Gold
-                Else
-                    clrPixel = Color.Lime
-                End If
-                ' plot the symbols rotated to avoid the axis
-                dblAng = PI / 9 + (intJatMaxMag * PI / 4)
-                bmpConstellation.SetPixel(CInt(xCenter + intRad * Cos(dblAng)), CInt(yCenter + intRad * Sin(dblAng)), clrPixel)
-                dblDistanceSum += (43 - intRad)
-            Next i
-            intQuality = Math.Max(0, CInt(100 - 2.0 * (dblDistanceSum / (intToneMags.Length \ 8)))) ' factor 2.0 emperically chosen for calibration (Qual range 25 to 100)
-            stcStatus.ControlName = "lblQuality"
-            stcStatus.Text = "8FSK Quality: " & intQuality.ToString
-            queTNCStatus.Enqueue(stcStatus)
-            If MCB.AccumulateStats Then
-                stcQualityStats.int8FSKQualityCnts += 1
-                stcQualityStats.int8FSKQuality += intQuality
-            End If
-            stcStatus.ControlName = "ConstellationPlot"
-            queTNCStatus.Enqueue(stcStatus)
-        Catch ex As Exception
-            Logs.Exception("[Main.Update8FSKConstellation] Err: " & ex.ToString)
-        End Try
-    End Sub ' Update8FSKConstellation
-	*/
-	return;
+         
+	int intToneSum = 0;
+	int intMagMax = 0;
+	float dblPi4  = 0.25 * M_PI;
+	float dblDistanceSum = 0;
+	int intRad = 0;
+	int i, j, intJatMaxMag;
+	float dblAng;
 
+#ifdef PLOTCONSTELLATION
+
+	int yCenter = (ConstellationHeight - 2)/ 2;
+	int xCenter = (ConstellationWidth - 2) / 2;
+	unsigned short clrPixel = WHITE;
+	unsigned short x, y;
+
+	clearDisplay();
+#endif
+
+	for (i = 0; i < intToneMagsLength; i += 8)  // for the number of symbols represented by intToneMags
+	{
+		intToneSum = 0;
+		intMagMax = 0;
+
+ 		for (j = 0; j < 8; j++)
+		{
+			if (intToneMags[i + j] > intMagMax)
+			{
+				intMagMax = intToneMags[i + j];
+				intJatMaxMag = j;
+			}
+			intToneSum += intToneMags[i + j];
+		}
+
+		intRad = max(5, 42 - 40 * (intToneSum - intMagMax) / intToneSum);
+		dblDistanceSum += (43 - intRad);
+								
+#ifdef PLOTCONSTELLATION		
+		if (intRad < 15)
+			clrPixel = Tomato;
+		else if (intRad < 30)
+			clrPixel = Gold;
+		else
+			clrPixel = Lime;
+
+		// plot the symbols rotated to avoid the axis
+
+		intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
+
+		dblAng = M_PI / 9.0f + (intJatMaxMag * M_PI / 4);
+  
+		x = xCenter + intRad * cosf(dblAng);
+		y = yCenter + intRad * sinf(dblAng);
+		SetPixel(x, y, clrPixel);    
+#endif
+	}
+		
+	*intQuality = max(0, (100 - 2.0 * (dblDistanceSum / (intToneMagsLength / 8))));	 // factor 2.0 emperically chosen for calibration (Qual range 25 to 100)
+
+	if(AccumulateStats)
+	{
+		int8FSKQualityCnts++;
+		int8FSKQuality += *intQuality;
+	}
+#ifdef PLOTCONSTELLATION
+	DrawAxes(*intQuality, strType);
+	updateDisplay();
+#endif
+	return;
 }
 
 
@@ -3813,13 +3968,12 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 	float dblPhaseError; 
 	float dblPhaseErrorSum = 0;
 	int intPSKIndex;
-//	int intX, intY, 
-	int intP = 0;
+	int intX, intY, intP = 0;
 	float dblRad = 0;
 	float dblAvgRad = 0;
 	float intMagMax = 0;
 	float dblPi4 = 0.25 * M_PI;
-	float dbPhaseStep  = 2 * M_PI / intPSKPhase;
+	float dbPhaseStep;
 	float dblRadError = 0;
 	float dblPlotRotation = 0;
 	int intRadInner = 0, intRadOuter = 0;
@@ -3827,16 +3981,27 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
  
 	int i,j, k, intQuality;
 
+	int yCenter = (ConstellationHeight - 2)/ 2;
+	int xCenter = (ConstellationWidth - 2) / 2;
+
+#ifdef PLOTCONSTELLATION
+
+	unsigned short clrPixel = WHITE;
+	unsigned short x, y;
+
+	clearDisplay();
+#endif
+
 	if (intPSKPhase == 4)
 		intPSKIndex = 0;
 	else
 		intPSKIndex = 1;
 
-	if	(blnQAM)
+	if (blnQAM)
 	{
 		intPSKPhase = 8;
 		intPSKIndex = 1;
-
+		dbPhaseStep  = 2 * M_PI / intPSKPhase;
 		for (j = 1; j < intPhasesLen; j++)   // skip the magnitude of the reference in calculation
 		{
 			intMagMax = max(intMagMax, intMag[j]); // find the max magnitude to auto scale
@@ -3858,34 +4023,45 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 
 		dblAvgRadInner = dblAvgRadInner / intRadInner;
 		dblAvgRadOuter = dblAvgRadOuter / intRadOuter;
- 		
-		for (i = 1; i <  intPhasesLen; i++)  // Don't plot the first phase (reference)
-		{
-			intP = round((0.001 * intPhases[i]) / dbPhaseStep);
-
-			// compute the Phase and Raduius errors
-
-			if (intMag[i] > (dblAvgRadInner + dblAvgRadOuter) / 2) 
-				dblRadErrorOuter += fabsf(dblAvgRadOuter - intMag[i]);
-			else
-				dblRadErrorInner += fabsf(dblAvgRadInner - intMag[i]);
-
-			dblPhaseError = fabsf(((0.001 * intPhases[i]) - intP * dbPhaseStep)); // always positive and < .5 *  dblPhaseStep
-			dblPhaseErrorSum += dblPhaseError;
-		}	
 	}
 	else
 	{
-		for (i = 1; i <  intPhasesLen; i++)  // Don't plot the first phase (reference)
+		dbPhaseStep  = 2 * M_PI / intPSKPhase;
+		for (j = 1; j < intPhasesLen; j++)   // skip the magnitude of the reference in calculation
 		{
-			intP = round((0.001 * intPhases[i]) / dbPhaseStep);
-
-			//' compute the Phase error
-
-			dblPhaseError = fabsf(((0.001 * intPhases[i]) - intP * dbPhaseStep)); // always positive and < .5 *  dblPhaseStep
-			dblPhaseErrorSum += dblPhaseError;
+			intMagMax = max(intMagMax, intMag[j]); // find the max magnitude to auto scale
+            dblAvgRad += intMag[j];	
 		}
 	}
+           
+	dblAvgRad = dblAvgRad / (intPhasesLen - 1); // the average radius
+
+	for (i = 1; i <  intPhasesLen; i++)  // Don't plot the first phase (reference)
+	{
+		intP = round((0.001 * intPhases[i]) / dbPhaseStep);
+
+		// compute the Phase and Radius errors
+ 
+		if (intMag[i] > (dblAvgRadInner + dblAvgRadOuter) / 2) 
+			dblRadErrorOuter += fabsf(dblAvgRadOuter - intMag[i]);
+		else
+			dblRadErrorInner += fabsf(dblAvgRadInner - intMag[i]);
+
+		dblPhaseError = fabsf(((0.001 * intPhases[i]) - intP * dbPhaseStep)); // always positive and < .5 *  dblPhaseStep
+		dblPhaseErrorSum += dblPhaseError;
+
+#ifdef PLOTCONSTELLATION
+		dblRad = PLOTRADIUS * intMag[i] / intMagMax; //  scale the radius dblRad based on intMagMax
+		intX = xCenter + dblRad * cosf(dblPlotRotation + intPhases[i] / 1000.0f);
+		intY = yCenter + dblRad * sinf(dblPlotRotation + intPhases[i] / 1000.0f);
+    
+		
+		if (intX > 0 && intY > 0)
+			if (intX != xCenter && intY != yCenter)
+				SetPixel(intX, intY, WHITE); // don't plot on top of axis
+#endif
+	}
+
 	if (blnQAM) 
 	{
 //		intQuality = max(0, ((100 - 200 * (dblPhaseErrorSum / (intPhasesLen)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
@@ -3911,7 +4087,12 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 			intPSKSymbolsDecoded += intPhasesLen;
 		}
 	}	
+#ifdef PLOTCONSTELLATION
+	DrawAxes(intQuality, strType);
+	updateDisplay();
+#endif
 	return intQuality;
+
 }
 
 
@@ -5122,4 +5303,123 @@ BOOL Decode1Car4FSKFromTones(UCHAR * bytData, int intToneMags)
     End Function  '  Decode1Car16FSKFromTones
 
 */
+
+//	Subroutine to update the Busy detector when not displaying Spectrum or Waterfall (graphics disabled)
+ 		
+int LastBusyCheck = 0;
+extern BOOL blnBusyStatus;
+
+int intWaterfallRow = 0;
+
+void UpdateBusyDetector(short * bytNewSamples)
+{
+	float dblReF[1024];
+	float dblImF[1024];
+	float dblMag[206];
+
+	
+	static BOOL blnLastBusyStatus;
+	
+	float dblMagAvg = 0;
+	int intTuneLineLow, intTuneLineHi, intDelta;
+	int i;
+
+	if (ProtocolState != DISC)		// ' Only process busy when in DISC state
+		return;
+
+	if (State != SearchingForLeader)
+		return;						// only when looking for leader
+
+	if (Now - LastBusyCheck < 100)
+		return;
+
+	LastBusyCheck = Now;
+
+	FourierTransform(1024, bytNewSamples, &dblReF[0], &dblImF[0], FALSE);
+
+	for (i = 0; i <  206; i++)
+	{
+		//	starting at ~300 Hz to ~2700 Hz Which puts the center of the signal in the center of the window (~1500Hz)
+            
+		dblMag[i] = powf(dblReF[i + 25], 2) + powf(dblImF[i + 25], 2);	 // first pass 
+		dblMagAvg += dblMag[i];
+	}
+	intDelta = (ExtractARQBandwidth() / 2 + TuningRange) / 11.719f;
+
+	intTuneLineLow = max((103 - intDelta), 3);
+	intTuneLineHi = min((103 + intDelta), 203);
+   
+	// At the moment we only get here what seaching for leader,
+	// but if we want to plot spectrum we should call
+	// it always
+
+	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
+	{
+		blnBusyStatus = BusyDetect3(dblMag, intTuneLineLow, intTuneLineHi);
+		
+		if (blnBusyStatus && !blnLastBusyStatus)
+		{
+			QueueCommandToHost("BUSY TRUE");
+         	newStatus = TRUE;				// report to PTC
+		}
+		//    stcStatus.Text = "True"
+            //    queTNCStatus.Enqueue(stcStatus)
+            //    'Debug.WriteLine("BUSY TRUE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
+			
+		else if (blnLastBusyStatus && !blnBusyStatus)
+		{
+			QueueCommandToHost("BUSY FALSE");
+			newStatus = TRUE;				// report to PTC
+		} 
+		//    stcStatus.Text = "False"
+        //    queTNCStatus.Enqueue(stcStatus)
+        //    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
+
+		blnLastBusyStatus = blnBusyStatus;
+	}
+
+#ifdef PLOTSPECTRUM
+
+	dblMagAvg = log10f(dblMagAvg / 5000.0f);
+	
+	for (i = 0; i < 206; i++)
+	{
+		// The following provides some AGC over the waterfall to compensate for avg input level.
+        
+		float y1 = (0.25f + 2.5f / dblMagAvg) * log10f(0.01 + dblMag[i]);
+        int objColor;
+		int clrTLC = WHITE;
+
+		// Set the pixel color based on the intensity (log) of the spectral line
+		if (y1 > 6.5)
+			objColor = Orange; // Strongest spectral line 
+		else if (y1 > 6)
+			objColor = Khaki;
+		else if (y1 > 5.5)
+			objColor = Cyan;
+		else if (y1 > 5)
+			objColor = DeepSkyBlue;
+		else if (y1 > 4.5)
+			objColor = RoyalBlue;
+		else if (y1 > 4)
+			objColor = Navy;
+		else
+			objColor = Black;
+		
+		if (i == 103)
+			SetPixel(intWaterfallRow, i/2 + 10, Tomato);  // 1500 Hz line (center)
+		else if (i == intTuneLineLow || i == intTuneLineLow - 1 || i == intTuneLineHi || i == intTuneLineHi + 1)
+			SetPixel(intWaterfallRow, i/2 + 10, clrTLC);
+		else
+			SetPixel(intWaterfallRow, i/2 + 10, objColor); // ' Else plot the pixel as received
+	}
+	updateDisplay();
+	intWaterfallRow++;
+	if (intWaterfallRow > 60)
+		intWaterfallRow = 2;
+
+#endif  
+
+
+}
 

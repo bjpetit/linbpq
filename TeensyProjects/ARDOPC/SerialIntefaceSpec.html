@@ -38,7 +38,8 @@ pre {font-family: monospace; margin-left: 5%;white-space: pre}
 <p>
  ARDOP Native Mode is designed to be functionally similar to the TCP mode, to simplify host
  program and TNC support. Two DED Channels are assigned to the functions of the two TCP ports,
- Channel 32 for Control and Channel 33 for Data. The Protocol control channels
+ Channel 32 for Control and Channel 33 for Data. A third channel (34) is used for debug information,
+ as a standalone TNC doesn't usually have local storage for writing a debug log. The Protocol control channels
  (255 for polling, 254 for status and 253 for rig control) are used as defined by SCS.
  
 <h3>PTC Emulation Mode.</h3>
@@ -101,10 +102,10 @@ to equivalent Pactor values.
  Opcode 2 - Response Failure, followed by null terminated message
  Opcode 7 - Data, preceeded by (length-1)
  
- Channel 32 is used for Commands and Channel 33 for Data. Typical messages 
+ Channel 32 is used for Commands, Channel 33 for Data and Channel 34 for Debug information. Typical messages 
  are shown below (control fields in Hex). Note that the Command format is used for hostmode 
  protocol level commands. ARDOP commands (such as "ARQCALL") are sent as data on the 
- Command channel.
+ Command channel. The Debug channel is for information to be written to a debug log.
  
  General Poll
  
@@ -181,7 +182,7 @@ to equivalent Pactor values.
  
  <b>WA8DED Packet Format</b><br><br>
  
- There are two date formats, null terminted or counted.
+ There are two data formats, null terminted or counted.
  
 <pre>
  

@@ -848,6 +848,26 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength )
    return dwLength;
 }
 
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
+{
+	BOOL        fWriteStat;
+	DWORD       BytesWritten;
+	DWORD       ErrorFlags;
+	COMSTAT     ComStat;
+
+	fWriteStat = WriteFile(fd, Block, BytesToWrite,
+	                       &BytesWritten, NULL );
+
+	if ((!fWriteStat) || (BytesToWrite != BytesWritten))
+	{
+		int Err = GetLastError();
+		ClearCommError(fd, &ErrorFlags, &ComStat);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+
 
 VOID CloseCOMPort(HANDLE fd)
 {

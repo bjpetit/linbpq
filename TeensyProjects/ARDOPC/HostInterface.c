@@ -1189,6 +1189,11 @@ Case "RADIOCTRLRTS"
 		char * ptr1 = ptrParams;
 		char * ptr2 = ptrParams;
 
+		if (ptrParams == NULL)
+		{
+			sprintf(strFault, "RADIOHEX command string missing");
+			goto cmddone;
+		}
 		if (hRIGDevice)
 		{
 			while (c = *(ptr1++))

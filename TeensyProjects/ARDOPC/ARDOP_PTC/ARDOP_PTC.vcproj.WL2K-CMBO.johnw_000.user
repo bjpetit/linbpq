@@ -10,8 +10,8 @@
 			>
 			<DebugSettings
 				Command="$(TargetPath)"
-				WorkingDirectory="c:\devprogs\bpq32"
-				CommandArguments="43 mix real"
+				WorkingDirectory=""
+				CommandArguments="43 mix 0"
 				Attach="false"
 				DebuggerType="3"
 				Remote="1"
