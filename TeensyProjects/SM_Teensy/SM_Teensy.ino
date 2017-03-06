@@ -11,10 +11,6 @@
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
 
-#define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
-#define CPU_RESTART_VAL 0x5FA0004
-#define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
-
 #include <DMAChannel.h>
 #include "SPI.h"
 
@@ -25,6 +21,13 @@ unsigned char RXBUFFER[300];	// Async RX Buffer
 
 extern int Baud;		// Modem Speed (1200 or 9600 for noe)
 extern int AFSK;		// Modem Mode
+extern int FSK;
+extern int PSK;
+extern int samplerate;
+extern char VersionString[];
+extern int VersionNo;
+extern int KISSCHECKSUM;
+
 
 extern int VRef;
 
@@ -57,6 +60,7 @@ void StartADC();
 extern "C" void SetPot(int address, unsigned int value);
 extern "C" unsigned int GetPot(int address);
 extern "C" void SetLED(int Pin, int State);
+extern "C" void RunPSKReceive();
 
 
 void i2csetup();
@@ -128,25 +132,7 @@ extern "C"
   {
     // Called roughly once every milisecond
 
-#ifdef I2CHOST
-
-    int RXBPtr = 0;
-
-    while (i2cgetptr != i2cputptr)
-    {
-      unsigned char c;
-      c = databuf[i2cgetptr++];
-      i2cgetptr &= 0x1ff;				// 512 cyclic
-
-      RXBUFFER[RXBPtr++] = c;
-
-      if (i2cgetptr == i2cputptr || RXBPtr > 498)
-      {
-        ProcessKISSPacket(RXBUFFER, RXBPtr);
-        return;
-      }
-    }
-#else
+#ifdef HOSTPORT
 
     int RXBPtr = HOSTPORT.available();
 
@@ -156,7 +142,7 @@ extern "C"
       Count = HOSTPORT.readBytes((char *)RXBUFFER, RXBPtr);
       if (Count != RXBPtr)
         WriteDebugLog(LOGDEBUG, "Serial Read Error");
-
+        
       ProcessKISSPacket(RXBUFFER, RXBPtr);
     }
 #endif
@@ -167,42 +153,37 @@ extern "C"
   {
     uint32_t i, sum = 0;
 
-#ifdef HOSTPORT
-    HOSTPORT.begin(115200);
-    while (!HOSTPORT);
-#endif
-#ifdef MONPORT
-    MONPORT.begin(115200);
-    while (!MONPORT);
-#endif
-
-    // Set 10 second watchdog
-
-    WDOG_UNLOCK = WDOG_UNLOCK_SEQ1;
-    WDOG_UNLOCK = WDOG_UNLOCK_SEQ2;
-    WDOG_TOVALL = 10000; // The next 2 lines sets the time-out value. This is the value that the watchdog timer compare itself to.
-    WDOG_TOVALH = 0;
-    WDOG_STCTRLH = (WDOG_STCTRLH_ALLOWUPDATE | WDOG_STCTRLH_WDOGEN |
-                    WDOG_STCTRLH_WAITEN | WDOG_STCTRLH_STOPEN); // Enable WDG
-
-    WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
-
     Baud = 9600;	// FSK G3RUH
     AFSK = FALSE;
+    FSK = TRUE;
+    PSK = FALSE;
 
-    //    Baud = 1200;
-    //    AFSK = TRUE;
+    // if EEPROM Reg 8 is set to 96 or 12, set TNC mode
+    // otherwise use compiled in defaults
 
+    int value = EEPROM.read(8);
+
+    if (value == 12)
+    {
+      Baud = 1200;	// FSK G3RUH
+      AFSK = TRUE;
+      FSK = FALSE;
+    }
+    else if (value == 96)
+    {
+      Baud = 9600;	// FSK G3RUH
+      AFSK = FALSE;
+      FSK = TRUE;
+    }
     CommonSetup();
-
-    MONprintf("Hardware Serial No ");
     print_mac();
-    MONprintf("\r\n");
 
 #ifdef TFT
     TFTprintf("Packet TNC based on Soundmodem by Thomas Sailer");
 #endif
-    MONprintf("Packet TNC based on Soundmodem by Thomas Sailer");
+    MONprintf(VersionString);
+
+    SaveEEPROM(0, VersionNo);
 
     WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
 
@@ -210,11 +191,17 @@ extern "C"
     {
       // read a byte from the current address of the EEPROM
       int value = EEPROM.read(i);
-
-      MONprintf("%d\t%d\r\n", i, value);
+      WriteDebugLog(7, "%d\t%d", i, value);
     }
 
-    if (Baud == 9600)
+    if (PSK)
+    {
+#ifdef TFT
+      TFTprintf("PSK Mode");
+#endif
+      MONprintf("PSK Mode");
+    }
+    else if (FSK)
     {
 #ifdef TFT
       TFTprintf("9600 FSK Mode");
@@ -239,7 +226,7 @@ extern "C"
     // leaves the ADC in a state that's mostly ready to use
 
     analogReadRes(16);
-    //    analogReference(INTERNAL); // range 0 to 1.2 volts
+    //analogReference(INTERNAL); // range 0 to 1.2 volts
     analogReference(DEFAULT); // range 0 to 3.3 volts
     //analogReadAveraging(8);
     // Actually, do many normal reads, to start with a nice DC level
@@ -251,37 +238,34 @@ extern "C"
 
     WriteDebugLog(LOGDEBUG, "DAC Baseline %d", sum / 1024);
 
-    if (Baud == 9600)
-      setupPDB(48000);			// 48K sample rate
-    else
-      setupPDB(12000);			// 12K sample rate
+    // Read Vref
 
-    /*
-       // Read Vref
+    SetPot(1, 256);				// TX Level Gain = 1
 
-       SetPot(1, 256);				// TX Level Gain = 1
-       delay(100);
-       analogRead(17);
+    delay(100);
 
-       VRef = 0;
+    analogRead(17);
 
-       for (i = 0; i < 100; i++)
-       {
-         VRef += analogRead(17);
-       }
-
-       VRef /= 100;
-    */
-
+    for (i = 0; i < 100; i++)
+    {
+      VRef += analogRead(17);
+    }
+    VRef /= 100;
     MONprintf("VREF %d offset %d\r\n", VRef, VRef - 32768);
 
     analogRead(16);		// Set ADC back to A0
 
+    SetPot(1, TXLevel);
+
+    setupPDB(samplerate);
     setupDAC();
     setupADC(16);
     StartADC();
 
     WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
+
+    //	if (PSK)
+    //		RunPSKReceive();		// This does not return!!!!
   }
 
 
@@ -290,7 +274,7 @@ extern "C"
     mainLoop();
     PlatformSleep();
     Sleep(1);
-#ifdef i2cSlaveSupport
+#ifdef I2CKISS
     i2cloop();
 #endif
   }
@@ -358,20 +342,13 @@ void readserialno(uint8_t *mac)
   interrupts();
 }
 
-void print_mac()  {
-  size_t count = 0;
+void print_mac()
+{
   readserialno(mac);
-  for (uint8_t i = 0; i < 4; ++i)
-  {
-    if (i != 0) MONprintf(":");
-    MONprintf("%x", (*(mac + i) & 0xF0) >> 4, 16);
-    MONprintf("%x", *(mac + i) & 0x0F, 16);
-  }
+  WriteDebugLog(7, "Hardware Serial No %02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3]);
 }
 extern "C"
 {
-
-
   unsigned short * SendtoCard(unsigned short * buf, int n);
   extern unsigned short * DMABuffer;
   extern int Number, totSamples;
@@ -413,8 +390,9 @@ extern "C"
     return 0;
   }
 
-  int displayDCD()
+  int displayDCD(int state)
   {
+    SetLED(DCDLED, state);
     return true;
   }
 
