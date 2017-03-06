@@ -8,40 +8,79 @@
 
 // WDTBOARD is the WDT version, with 4 LEDS and Switches, an Adafruit TFT display.
 // a 10 segment LED bar driven by a CAT4016 and two digital pots using i2c. The standard
-// setup is with the Host Port on USB and a monitor/debug port on Serial1, though a Bluetooth 
-// version is planned.
+// setup is with the Host Port on USB and a monitor/debug port on Serial1, though a 
+// Bluetooth version is planned.
 
-// PIBOARD is the Raspberry PI i2c Board. It has 4 LEDS and the Host port on Serial1 or i2c. There is no TFT
-// CAT4016 Display or switches. Level setting pots are on SPI
+// PIBOARD is the Raspberry PI i2c Board. It has 4 LEDS and the Host port on 
+// Serial1 Serial3 or i2c. There is no TFT,  CAT4016 Display or switches.
+// Level setting pots are on SPI
 
 // This file is for ARDOP
 
 #define ARDOP
+#define PIBOARD
+
+// Standard definitions
+
 #define TEENSY
 
 #define Statsprintf MONprintf
 #define WriteExceptionLog MONprintf
 
-#define PIBOARD
+#define PLOTCONSTELLATION
+#define OLED
+
+#ifdef OLED
+#define ConstellationHeight 64
+#define ConstellationWidth 64
+#define PLOTRADIUS 30
+#define WHITE 0xffff
+#define Tomato 0xffff
+#define Gold 0xffff
+#define Lime 0xffff
+#define Yellow 0xffff
+#else
+#define TFTDISP
+#define ConstellationHeight 91
+#define ConstellationWidth 91
+#endif
+
 
 #ifdef PIBOARD
 
 // Can use Serial or I2C for Host Interface
 
-// If we define I2CHOST we shouldn't define HOSTPORT
+// if HOSTPORT is not defined, i2c will be used
 
 // Define LOGTOHOST for logging over Host Port (Serial or i2c)
 // Define MONPORT for logging to Teensy Serial Port
 
-//#define LOGTOHOST
-#define HOSTPORT Serial1
+// Serial3 connects to ESP01 Module
+
+// To use a Serial port for host link, define here
+// Serial for USB Port
+// Serial1 for PI Header
+// Serial3 for ESP01 Header
+// If using Serial1 or Serial3 also define SERIAL1SIZE or SSRIAL3SIZE to
+// increase size of serial port buffers
+
+//#define HOSTPORT Serial3
+//#define HOSTSPEED 115200
+//#define SERIAL3SIZE 512
+
 #define MONPORT Serial
+//#define LOGTOHOST
+#define CPULOAD
 
 #define CATPORT Serial5
 #define CATSPEED 19200
 
-//#define I2CHOST
-//#define I2CSLAVEADDR 0x1F
+// Shouldn't need to change anything below here
+
+#ifndef HOSTPORT
+#define I2CHOST
+#define I2CSLAVEADDR 0x1F
+#endif
 
 #define HASPOTS
 #define SPIPOTS
@@ -54,9 +93,6 @@
 #define LED2 4
 #define LED3 5
 
-#ifdef I2CHOST
-#undef HOSTPORT
-#endif
 
 #else
 
@@ -94,3 +130,4 @@
 #define SIN 5
 
 #endif
+

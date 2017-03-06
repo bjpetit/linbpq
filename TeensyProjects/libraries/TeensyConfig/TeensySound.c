@@ -75,7 +75,7 @@ int Samples, levelticks = 0;
 void PollReceivedSamples()
 {
   int Pointer = GetADCDMAPointer();
-
+   
   if (SoundIsPlaying)
     return;
 
@@ -124,7 +124,7 @@ void PollReceivedSamples()
     if (Now - levelticks > 9999)
     {
       levelticks = Now;
-      WriteDebugLog(LOGINFO, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
+      WriteDebugLog(LOGDEBUG, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
       displayLevel(maxlevel);
 
       // Adjust VRef

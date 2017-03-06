@@ -16,14 +16,25 @@
 // We need to be able to queue a full KISS or Hostmode frame to the host without
 // waiting
 
-#define SERIAL1_TX_BUFFER_SIZE	512 // number of outgoing bytes to buffer
-#define SERIAL1_RX_BUFFER_SIZE	512
-
+#ifdef SERIAL1SIZE
+#define SERIAL1_TX_BUFFER_SIZE	SERIAL1SIZE // number of outgoing bytes to buffer
+#define SERIAL1_RX_BUFFER_SIZE	SERIAL1SIZE
 #include "serial1.c"
+#endif
+
+#ifdef SERIAL3SIZE
+#define SERIAL3_TX_BUFFER_SIZE	SERIAL3SIZE // number of outgoing bytes to buffer
+#define SERIAL3_RX_BUFFER_SIZE	SERIAL3SIZE
+#include "serial3.c"
+#endif
+
+#define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
+#define CPU_RESTART_VAL 0x5FA0004
+#define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
+
 
 void CAT4016(int value);
 void setupTFT();
-
 
 // extern "C" {#include "..\..\ARDOPC.h"}
 
@@ -34,7 +45,12 @@ void setupDAC();
 void setupADC();
 void i2csetup();
 
+extern "C" void ProcessKISSMessage(unsigned char * Packet, int Length);
+extern "C" int PutChar(unsigned char c);
+
 #include <DMAChannel.h>
+
+extern int VesionNo;
 
 DMAChannel dma1(true);
 DMAChannel dma2(true);
@@ -45,15 +61,16 @@ unsigned int PKTLEDTimer = 0;
 
 #define PKTLED LED3				// flash when packet received
 
+extern int KISSCHECKSUM;
+
 
 void CommonSetup()
 {	
 #ifdef HOSTPORT
-  HOSTPORT.begin(115200);
+  HOSTPORT.begin(HOSTSPEED);
 #endif
 #ifdef MONPORT
   MONPORT.begin(115200);
-  while (!MONPORT);
 #endif
 #ifdef CATPORT
   CATPORT.begin(CATSPEED);				// CAT Port
@@ -77,6 +94,8 @@ void CommonSetup()
   MONprintf("Host Buffer Space %d\r\n", HOSTPORT.availableForWrite());
 #elif defined I2CHOST
   MONprintf("Host Connection is i2c on address %x Hex\r\n", I2CSLAVEADDR);
+#elif defined I2CKISS
+  MONprintf("Host Connection is i2cKISS on address %x Hex\r\n", I2CSLAVEADDR);
 #endif
 
   if (RCM_SRS0 & 0X20)		// Watchdog Reset
@@ -127,21 +146,25 @@ void CommonSetup()
   CAT4016(0);				// All off
 #endif
 
+#if defined I2CKISS
+	KISSCHECKSUM = 1;
+#endif
+
 #if defined I2CHOST || defined I2CKISS || defined I2CMONITOR
-  i2csetup();
+	i2csetup();
 #endif
 
 #ifdef SPIPOTS
-  pinMode (SPIPOTCS, OUTPUT);	// SPI Pot
-  digitalWriteFast (SPIPOTCS, HIGH);
+	pinMode (SPIPOTCS, OUTPUT);	// SPI Pot
+	digitalWriteFast (SPIPOTCS, HIGH);
 #endif
 
 #if defined(SPIPOTS) || defined (TFT)
-  SPI.begin();
+	SPI.begin();
 #endif
 
 #ifdef TFT
-  setupTFT();
+	setupTFT();
 #endif
 
   // Set intial TX and RX Levels
@@ -176,14 +199,15 @@ extern "C"
 
   void Sleep(int mS)
   {
-#if 0
+#if defined MONPORT && defined CPULOAD
+
     int loadtime = millis() - lastLoadTicks;
 
     loadCounter += mS;
 
     if (loadtime > 999)
     {
-      Serial.printf("Load = %d\r\n" , 100 - (100 * loadCounter / loadtime));
+      MONPORT.printf("Load = %d\r\n" , 100 - (100 * loadCounter / loadtime));
       lastLoadTicks = millis();
       loadCounter = 0;
     }
@@ -382,11 +406,12 @@ void setupPDB(int SampleRate)
   // DAC flow PDB->DMA->DAC
   // ADC flow PDB->DAC->DMA
 
-
   SIM_SCGC6 |= SIM_SCGC6_PDB;		// Enable PDB clock
 
   PDB0_IDLY = 1;
   PDB0_MOD = F_BUS / SampleRate - 1;
+
+  WriteDebugLog(LOGINFO, "Sample Rate %d PDB Divider %d", SampleRate, F_BUS / SampleRate);
 
   PDB0_SC = 0;
   PDB0_SC = PDB_CONFIG | PDB_SC_LDOK;
@@ -440,8 +465,6 @@ uint16_t dc_average;
 
 void setupADC(int pin)
 {
-  uint32_t i, sum = 0;
-
   // pin must be 0 to 13 (for A0 to A13)
   // or 14 to 23 for digital pin numbers A0-A9
   // or 34 to 37 corresponding to A10-A13
@@ -452,8 +475,6 @@ void setupADC(int pin)
   // leaves the ADC in a state that's mostly ready to use
 
   analogRead(pin);
-
-  dc_average = sum >> 10;
 
   ADC0_SC2 |= ADC_SC2_ADTRG | ADC_SC2_DMAEN;	// Hardware triggered
 
@@ -703,7 +724,7 @@ extern "C"
     if (pktopk < 40)
     {
       // Assume no input
-      WriteDebugLog(LOGINFO, "Level below threshold - assume no input %d %d %d pk", maxlevel, minlevel, pktopk);
+      WriteDebugLog(LOGDEBUG, "Level below threshold - assume no input %d %d %d pk", maxlevel, minlevel, pktopk);
       return;
     }
 
@@ -713,7 +734,7 @@ extern "C"
 
       pktopk = pktopk * autoRXLevel / 3000;
 
-      WriteDebugLog(LOGINFO, "peak to peak input %d mV", pktopk);
+      WriteDebugLog(LOGDEBUG, "peak to peak input %d mV", pktopk);
 
       autoRXLevel = pktopk  * 3 / 2;			// try to get to 2/3rd
 
@@ -776,6 +797,7 @@ void requestEvent(void);
 uint8_t databuf[MEM_LEN];
 
 volatile int i2cputptr = 0, i2cgetptr = 0, target = 0;
+volatile int i2ctxgetptr = 0, i2ctxputptr =0;
 
 void i2csetup()
 {
@@ -804,29 +826,25 @@ int i2cMsgPtr = 0;
 
 unsigned char i2creply[512] = {0xaa, 0};
 
-volatile int i2creplyptr = 3;
+volatile int i2creplyptr = 0;
 volatile int i2creplylen = 0;
 
 #else
 
 unsigned char i2creply[512] = {192, 8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 3, 192};
-unsigned char i2cidle[2] = {15};
+unsigned char i2cidle[2] = {0x0e};
 
 volatile int i2creplyptr = 0;
-volatile int i2creplylen = 14;
+volatile int i2creplylen = 0;
 
-// This is only called if I2CKISS is enabled
+// This is only called if I2CKISS is enabled. SCS Hostmode uses HostPoll
 void i2cloop()
 {
-  // print received data - this is done in main loop to keep time spent in I2C ISR to minimum
-
   while (i2cgetptr != i2cputptr)
   {
     unsigned char c;
     c = databuf[i2cgetptr++];
     i2cgetptr &= 0x1ff;				// 512 cyclic
-
-    MONPORT.printf("%x %c ", c, c);
 
     if (c == FEND)
     {
@@ -856,31 +874,37 @@ void i2cloop()
           // Get Params Command
 
           int Sum = 8, val;
+		  
+		  PutChar(FEND);
+		  PutChar(8);				// Get Params Response
+		  
 
           for (i = 0; i < 9; i++)
           {
             val = EEPROM.read(i);
-            i2creply[i + 2] = val;
+            PutChar(val);
             Sum ^= val;
           }
 
           // Reg 9 and 10 are Digital Pots
 
           val = GetPot(0);
-          i2creply[11] = val;
+          PutChar(val);
           Sum ^= val;
 
           val = GetPot(1);
-          i2creply[12] = val;
+          PutChar(val);
           Sum ^= val;
 
-          i2creply[13] = Sum;
-          i2creply[14] = FEND;
-
-          i2creplyptr = 0;
-          i2creplylen = 15;
+          PutChar(Sum);
+          PutChar(FEND);
+		  
           return;
         }
+		
+		if (i2cMessage[1] == 2)		// Reboot
+		   CPU_RESTART // reset processor
+
         return;			// other immediate command
       }
       if (i2cMessage[0] && i2cMessage[0] != 12)
@@ -894,14 +918,20 @@ void i2cloop()
           SetPot(0, val);
         else if (reg == 10)
           SetPot(1, val);
-        else
-          SaveEEPROM(reg, val);
-        return;
+	  
+	    WriteDebugLog(7,"Set KISS Param %d to %d", reg, val);
+        SaveEEPROM(reg, val);
+		
+		// Drop through to process immediately
+ 
       }
 
       // Data Frame
+	  
+	  WriteDebugLog(7,"I2CKiss Data Frame Opcode %d len %d", i2cMessage[0], Len);
 
-      return;
+	  ProcessKISSMessage(i2cMessage, Len);
+      continue;
     }
     else
     {
@@ -935,20 +965,42 @@ void receiveEvent(size_t count)
 void requestEvent(void)
 {
 #ifdef I2CHOST
-  i2creply[1] = i2creplylen;
-  i2creply[2] = i2creplylen >> 8;		// First two bytes are length
-  Wire.write(i2creply, i2creplylen + 3);
-  i2creplylen = 0;
-  i2creplyptr = 3;
+
+	int Len;
+	unsigned char Reply[33];
+	int i;
+	unsigned char * ptr2 = &Reply[1];
+	
+// SCS Host interface reads blocks of 32 bytes + Length byte (probably - may optimise!)
+
+	if (i2creplylen > 32)
+		Len = 32;
+	else
+		Len = i2creplylen;
+	
+  Reply[0] = Len;
+  
+  for (i = 0; i < Len; i++)
+  {
+	  *(ptr2++) = i2creply[i2ctxgetptr++];
+	  i2ctxgetptr &= 0x1ff;		// 512 cyclic buffer
+  }
+  
+  Wire.write(Reply, Len + 1);
+  
+  i2creplylen -= Len;
+
 #else
+	
   // TNC-PI interface works a byte at a time
 
   if (i2creplylen == 0)			// nothing to send
-    Wire.write(i2cidle, 0); // return idle
+    Wire.write(i2cidle, 1); 	// return idle
   else
   {
     // return the next byte of the message
-    Wire.write(&i2creply[i2creplyptr++], 1);
+    Wire.write(&i2creply[i2ctxgetptr++], 1);
+	i2ctxgetptr &= 0x1ff;		// 512 cyclic buffer
     i2creplylen--;
   }
 #endif
@@ -967,20 +1019,15 @@ extern "C"
 
   void PutString(const char * Msg)
   {
-#ifdef I2CHOST
-    memcpy(&i2creply[3], Msg, strlen(Msg));
-    i2creplyptr = 3;
-    i2creplylen = strlen(Msg);
-#else
-    HOSTPORT.write((const uint8_t *)Msg, strlen(Msg));
-#endif
+	  SerialSendData((const uint8_t *)Msg, strlen(Msg));
   }
 
   int PutChar(unsigned char c)
   {
-#ifdef I2CHOST
+#if defined I2CHOST || defined I2CKISS
     i2creply[i2creplyptr++] = c;
-    i2creplylen++;
+	i2creplyptr &= 0x1ff;					// 512 cyclic
+	i2creplylen++;
 #else
     HOSTPORT.write(&c, 1);
 #endif
@@ -989,10 +1036,15 @@ extern "C"
 
   void SerialSendData(const uint8_t * Msg, int Len)
   {
-#ifdef I2CHOST
-    memcpy(&i2creply[3], Msg, Len);
-    i2creplyptr = 3;
-    i2creplylen = Len;
+#if defined I2CHOST || defined I2CKISS
+	uint8_t * ptr =  (uint8_t *)Msg;
+	int cnt = Len;
+	while (cnt--)
+	{
+		i2creply[i2creplyptr++] = *(ptr++);
+		i2creplyptr &= 0x1ff;					// 512 cyclic
+	}
+	i2creplylen += Len;
 #else
     HOSTPORT.write(Msg, Len);
 #endif

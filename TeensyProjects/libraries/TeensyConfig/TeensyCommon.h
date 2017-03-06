@@ -26,6 +26,7 @@ void SaveEEPROM(int Reg, unsigned char Val);
 void SendLogToHost(char * Msg);
 void Sleep(int mS);
 void PlatformSleep();
+void SerialSendData(const unsigned char * Msg, int Len);
 
 extern int inIndex;			// ADC Buffer half being used 0 or 1
 extern int RXLevel, autoRXLevel, TXLevel;

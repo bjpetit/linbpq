@@ -2,10 +2,11 @@
 // This is a modified version of the Standard Teensy i2c library
 
 // The buffer size of wire is increased to 512 to handle full KISS packets
-// only the first i2c port is enabled, to save a bit of RAM. 
+// only the first two i2c ports are enabled, to save a bit of RAM. 
 
 /*
-    ------------------------------------------------------------------------------------------------------
+   
+   ------------------------------------------------------------------------------------------------------
     i2c_t3 - I2C library for Teensy 3.0/3.1/LC
 
     - (v9) Modified 01Jul16 by Brian (nox771 at gmail.com)
@@ -130,6 +131,7 @@
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+
 #if !defined(I2C_T3_H) && (defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__) || \
                            defined(__MK64FX512__) || defined(__MK66FX1M0__)) // 3.0/3.1-3.2/LC/3.5/3.6
 #define I2C_T3_H
@@ -174,7 +176,7 @@
 // I2C_BUS_ENABLE 3   (enable Wire & Wire1 & Wire2)
 // I2C_BUS_ENABLE 4   (enable Wire & Wire1 & Wire2 & Wire3)
 //
-#define I2C_BUS_ENABLE 1
+#define I2C_BUS_ENABLE 2
 
 // ------------------------------------------------------------------------------------------------------
 // Tx/Rx buffer sizes - modify these as needed.  Buffers should be large enough to hold:
