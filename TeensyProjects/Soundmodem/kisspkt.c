@@ -137,6 +137,8 @@ extern unsigned int PKTLEDTimer;
 #define	KISSCHANNEL	6
 #define I2CADDRESS	7
 
+int KISSCHECKSUM = 0;		// Using checksums on KISS
+
 
 /* ---------------------------------------------------------------------- */
 /*
@@ -348,10 +350,14 @@ static void kiss_encodepkt(struct modemchannel *chan, unsigned char *data, unsig
 	unsigned char kbuf[768];
 	unsigned char *bp = kbuf;
 	int i, len;
+	int sum = 0;			// For checksummed KISS
 
 	*bp++ = KISS_FEND;
 	*bp++ = KISS_CMD_DATA;
-	for (; dlen > 0; dlen--, data++) {
+	for (; dlen > 0; dlen--, data++)
+	{
+		sum ^= *data;
+
 		if (*data == KISS_FEND) {
 			*bp++ = KISS_FESC;
 			*bp++ = KISS_TFEND;
@@ -360,6 +366,28 @@ static void kiss_encodepkt(struct modemchannel *chan, unsigned char *data, unsig
 			*bp++ = KISS_TFESC;
 		} else 
 			*bp++ = *data;
+	}
+
+	if (KISSCHECKSUM)
+	{
+		// Send Checksum before closing flag
+		// May need to escape it
+
+		switch (sum)
+		{
+		case KISS_FEND:
+			*bp++ = KISS_FESC;
+			*bp++ = KISS_TFEND;
+			break;
+
+		case KISS_FESC:
+			*bp++ = KISS_FESC;
+			*bp++ = KISS_TFESC;
+		break;
+
+		default:
+			*bp++ = sum;
+		}
 	}
 	*bp++ = KISS_FEND;
 	len = bp - kbuf;
@@ -376,7 +404,8 @@ static void do_rxpacket(struct modemchannel *chan)
 	
 	if (!check_crc_ccitt(chan->pkt.hrx.buf, chan->pkt.hrx.bufcnt))
 	{
-//		WriteDebugLog(7,"RX Packet Len = %d Bad CRC", chan->pkt.hrx.bufcnt);
+		if (chan->pkt.dcd)
+			WriteDebugLog(7,"RX Packet Len = %d Bad CRC DCD = %d", chan->pkt.hrx.bufcnt, chan->pkt.dcd);
 		return;
 	}
 		
@@ -741,6 +770,29 @@ BOOL ESCFLAG = FALSE;
 
 void ProcessKISSMessage(UCHAR *kissMsg, int Length)
 {
+	// if using checksums, check it
+
+	if (KISSCHECKSUM)
+	{
+		//	SUM MESSAGE, AND IF DUFF DISCARD. IF OK DECREMENT COUNT TO REMOVE SUM
+
+		int sumlen = Length;
+		char * ptr = kissMsg;
+		UCHAR sum = 0;
+
+		while (sumlen--)
+		{
+			sum ^= *(ptr++);
+		}
+
+		if (sum)
+		{
+			WriteDebugLog(6, "KISS Checksum Error");
+			return;
+		}
+		Length--;							// Remove Checksum
+	}
+
 	WriteDebugLog(7, "sending KISS frame len %d", Length);
 	kiss_process_pkt(state.channels, kissMsg, Length);
 }

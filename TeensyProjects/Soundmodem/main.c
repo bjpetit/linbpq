@@ -45,13 +45,23 @@ struct state state = {
 void InitSound(int SampleRate, int Report);
 void DemodAFSKinit(void *state);
 void DemodFSKinit(void *state);
+void mainLoop();
+
+char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.1 February 2017\r\n"
+						"based on Soundmodem by Thomas Sailer";
+
+int VersionNo = 1;		
 
 int Baud = 9600;
 BOOL AFSK = FALSE;
+BOOL FSK = TRUE;
+BOOL PSK = FALSE;
+int samplerate;
+
 //int Baud = 1200;
 //BOOL AFSK = TRUE;
 
-int TXLevel = 300;				// 300 mV p-p Used on Teensy
+int TXLevel = 30;				// 300 mV p-p Used on Teensy
 int RXLevel = 0;				// Configured Level - zero means auto tune
 int autoRXLevel = 1500;			// calculated level
 int logcheck(int x)
@@ -59,16 +69,46 @@ int logcheck(int x)
 	return 1;
 }
 
+void audiowrite(struct modemchannel *chan, const int16_t *samples, unsigned int nr)
+{
+	while (nr--)
+		SampleSink(*(samples++));
+}
+
+short PSKSamples[5000];
+unsigned int PSKSampleCount = 0;
+
+int maxpsk = 0;
 
 void audioread(struct modemchannel *chan, int16_t *samples, unsigned int nr, u_int16_t tim)
 {
-        struct audioio *audioio = chan->state->audioio;
+	// This is called by psk decode and I can't see an easy way to restructure
+	// this. So in PSK modes this becomes the main background loop, polling 
+	// for new samples or host input
 
-        if (!audioio || !audioio->read) {
-                return;
-        }
-        audioio->read(audioio, samples, nr, tim);
+	if (nr > 3000)
+		WriteDebugLog(7, "NR > 3000 %d", nr);
+
+	while(PSKSampleCount < nr)
+	{
+		mainLoop();
+		Sleep(1);
+#ifdef TEENSY
+		PlatformSleep();
+#ifdef i2cSlaveSupport
+		i2cloop();
+#endif
+#endif
+	}
+
+	memcpy(samples, PSKSamples, nr * 2);
+	PSKSampleCount -= nr;
+
+	if (PSKSampleCount)
+		memmove(PSKSamples, &PSKSamples[nr], PSKSampleCount * 2);
 }
+
+
 
 u_int16_t audiocurtime(struct modemchannel *chan)
 {
@@ -87,8 +127,19 @@ void ProcessNewSamples(short * buf, int count)
 {
 	if (AFSK)
 		DemodAFSK(buf, count);
-	else
+	else if (FSK)
 		DemodFSK(buf, count);
+/*	else
+	{
+		memcpy(&PSKSamples[PSKSampleCount], buf, count * 2);
+		PSKSampleCount += count;
+		if (PSKSampleCount > maxpsk)
+		{
+			WriteDebugLog(7, "Max PSK Samples %d", PSKSampleCount);
+			maxpsk =PSKSampleCount;
+		}
+	}
+*/
 }
 
 int wavmain(int argc, char *argv[]);
@@ -109,7 +160,7 @@ int main(int argc, char *argv[])
 #endif
 {
 	struct modemchannel *chan;
-	int samplerate, sr;
+	int sr;
 	int P1 = 0;
 	int P2 = 0;
 	int P3 = 0;
@@ -123,7 +174,9 @@ int main(int argc, char *argv[])
 #endif
 
 	afskmodulator.next = &fskmodulator;
+	fskmodulator.next = &pskmodulator;
 	afskdemodulator.next = &fskdemodulator;
+	fskdemodulator.next = &pskdemodulator;
 
 // Set up single channel
 
@@ -134,7 +187,7 @@ int main(int argc, char *argv[])
 	chan->next = state.channels;
 	chan->state = &state;
 
-	if (!AFSK)
+	if (FSK)
 	{
 		P1 = 9600;
 		P2 = 0;
@@ -142,7 +195,7 @@ int main(int argc, char *argv[])
 		chan->mod = &fskmodulator;
 		chan->demod = &fskdemodulator;
 	}
-	else
+	else if (AFSK)
 	{
 //#ifdef TEENSY
 //		samplerate = 48000;
@@ -163,6 +216,14 @@ int main(int argc, char *argv[])
 		}
 		chan->mod = &afskmodulator;
 		chan->demod = &afskdemodulator;
+	}
+	else
+	{
+		// PSK
+
+		samplerate = 9600;
+		chan->mod = &pskmodulator;
+		chan->demod = &pskdemodulator;
 	}
 	chan->modstate = NULL;
 	chan->demodstate = NULL;
@@ -217,11 +278,18 @@ int main(int argc, char *argv[])
 
 		if (AFSK)
 			DemodAFSKinit(chan->demodstate);		// G8BPQ 
-		else
+		else if (FSK)
 			DemodFSKinit(chan->demodstate);		// G8BPQ 
+		else
+		{
+			DemodPSKinit(chan->demodstate);
+#ifndef TEENSY
+			chan->demod->demodulate(chan->demodstate);
+#endif
+		}
 	}
 
-	WriteDebugLog(7, "Baud %d AFSK %d Samplerate %d", Baud, AFSK, samplerate);
+	WriteDebugLog(7, "Baud %d AFSK %d FSK %d PSK %d Samplerate %d", Baud, AFSK, FSK, PSK, samplerate);
 
 #ifndef TEENSY
 
@@ -231,3 +299,17 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
+
+RunPSKReceive()
+{
+	struct modemchannel *chan;
+
+	for (chan = state.channels; chan; chan = chan->next)
+	{
+		if (PSK)
+			chan->demod->demodulate(chan->demodstate);
+
+	// Note this does not return!
+	}
+}
+

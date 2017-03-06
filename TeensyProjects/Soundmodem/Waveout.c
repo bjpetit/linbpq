@@ -401,7 +401,7 @@ void InitSound(int SampleRate, BOOL Report)
 	{
 		ret = waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
 		if (Report)
-			printf("Opened WaveIn Device %s\n", pwic.szPname);
+			printf("Opened WaveIn Device %s Sample Rate %d\n", pwic.szPname, SampleRate);
 	}
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
