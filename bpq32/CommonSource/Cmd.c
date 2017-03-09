@@ -138,6 +138,7 @@ CMDX COMMANDS[];
 int CMDXLEN	= sizeof (CMDX);
 
 VOID SENDNODESMSG();
+VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID FINDBUFFS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
@@ -3284,8 +3285,18 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		Bufferptr += sprintf(Bufferptr, "Heard List for Port %d Cleared\r", Port);
 	}
 	else
-		Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
-
+	{
+		if (CMD->String[2] == 'V')		// MHV
+		{
+			Bufferptr += sprintf(Bufferptr, "MHeard List PI1LAP for Port %d\r", Port);
+			Bufferptr = CHECKBUFFER(Session, Bufferptr);
+			Bufferptr += sprintf(Bufferptr, "Callsign   Last heard     Pkts RX    via Digi ;) \r");
+			Bufferptr = CHECKBUFFER(Session, Bufferptr);
+			Bufferptr += sprintf(Bufferptr, "---------  -----------    -------    ------------------------------------------\r");
+		}
+		else
+			Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
+	}
 	while (n--)
 	{
 		if (MH->MHCALL[0] == 0)
@@ -3365,7 +3376,8 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		ptr = FormatMH(MH);
 		
 		if (CMD->String[2] == 'V')		// MHV
-			Bufferptr += sprintf(Bufferptr, "%-10s %d %s %s\r", Normcall, MH->MHCOUNT, ptr, DigiList);
+			Bufferptr += sprintf(Bufferptr, "%-10s %-10s %-10d %-30s %s\r",
+				Normcall, ptr, MH->MHCOUNT, DigiList, MH->MHFreq);
 		else
 			Bufferptr += sprintf(Bufferptr, "%-10s %s %s\r", Normcall, ptr, DigiList);
 
@@ -3900,6 +3912,7 @@ CMDX COMMANDS[] =
 	"STOPPORT    ",4,STOPPORT,0,
 	"STARTPORT   ",5,STARTPORT,0,
 	"FINDBUFFS   ",4,FINDBUFFS,0,
+	"KISS        ",4,KISSCMD,0,
 
 #ifdef EXCLUDEBITS
 
@@ -4913,6 +4926,7 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 	return;
 }
 
+
 VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	char _REPLYBUFFER[1000] = "";
@@ -4968,6 +4982,100 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 			}
 		}
 	}
+
+	// Bad port
+
+	strcpy(Bufferptr, BADPORT);
+	Bufferptr += strlen(BADPORT);
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+}
+
+#define FEND 0xC0 
+int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count);
+
+
+VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char _REPLYBUFFER[1000] = "";
+	char * ptr, * Context;
+
+	int portno = 0;
+	int cmd = 0, val = 0;
+	struct PORTCONTROL * PORT = PORTTABLE;
+	int n = NUMBEROFPORTS;
+
+	// Send KISS Command to TNC
+
+	// Get port number
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+	{
+		portno = atoi (ptr);
+		ptr = strtok_s(NULL, " ", &Context);
+
+		if (ptr)
+		{
+			cmd = atoi (ptr);
+			ptr = strtok_s(NULL, " ", &Context);
+
+			if (ptr)
+				val = atoi (ptr);
+		}
+	}
+
+	if (portno == 0 || cmd == 0)
+	{
+		strcpy(Bufferptr, BADMSG);
+		Bufferptr += strlen(BADMSG);
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	while (n--)
+	{
+		if (PORT->PORTNUMBER == portno)
+		{
+			struct KISSINFO * KISS;
+			UCHAR ENCBUFF[16];
+			unsigned char * ptr = ENCBUFF;
+
+			if (PORT->PORTTYPE != 0 && PORT->PORTTYPE != 22)
+			{
+				Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
+				SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+				return;
+			}
+
+			KISS = (struct KISSINFO *) PORT;
+
+			if (KISS->FIRSTPORT != KISS)
+			{
+				Bufferptr += sprintf(Bufferptr, "Not first port of a Multidrop Set\r");
+				SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+				return;
+			}
+
+			// Send Command
+
+			*(ptr++) = FEND;
+			*(ptr++) = KISS->OURCTRL | cmd;
+			*(ptr++) = (UCHAR)val;
+			*(ptr++) = FEND;
+
+			PORT = (struct PORTCONTROL *)KISS->FIRSTPORT;			// ALL FRAMES GO ON SAME Q
+
+			ASYSEND(PORT, ENCBUFF, 4);
+
+			Bufferptr += sprintf(Bufferptr, "Command Sent\r");
+			SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+			return;
+		}
+		PORT = PORT->PORTPOINTER;
+	}
+
 
 	// Bad port
 

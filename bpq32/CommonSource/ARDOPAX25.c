@@ -1847,19 +1847,6 @@ static VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLe
 		return;
 	}
 
-	if (_memicmp(Buffer, "MONCALL", 7) == 0)
-	{
-		Debugprintf(Buffer);
-
-		// Add to MHEARD
-
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
-		UpdateMH(TNC, &Buffer[8], '!', 0);
-		
-		if (!TNC->FECMode)
-			return;							// If in FEC mode pass ID messages to user.
-	}
-
 	Debugprintf(Buffer);
 
 	if (_memicmp(Buffer, "STATUS ", 7) == 0)

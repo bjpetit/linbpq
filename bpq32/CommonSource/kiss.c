@@ -235,7 +235,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		int fd;
 		int retval;
 
-		PortVector->KISSFLAGS |= CHECKSUM |TNCX;		// i2c TNCs need chgecksum and TNCX Mode
+		PortVector->KISSFLAGS |= CHECKSUM | TNCX;		// i2c TNCs need checksum and TNCX Mode
 
 		sprintf(Msg,"I2C Bus %d Addr %d Chan %c ", PortVector->INTLEVEL, comport, Channel);
 		WritetoConsoleLocal(Msg);
@@ -893,6 +893,7 @@ VOID KISSTX(struct KISSINFO * KISS, UINT * Buffer)
 	struct PORTCONTROL * PORT = (struct PORTCONTROL *)KISS;
 
 	//	START TRANSMISSION
+
 
 	KISS = KISS->FIRSTPORT;		// ALL FRAMES GO ON SAME Q
 
@@ -1558,6 +1559,15 @@ SeeifMore:
 //		Buffer[5] = (len & 0xff);
 //		Buffer[6] = (len >> 8);
 
+		// Randomly drop packets
+
+//		if ((rand() % 7) > 5)
+//		{
+//			Debugprintf("KISS Test Drop packet");
+//			ReleaseBuffer(Buffer);	// SET FRAME SENT RECENTLY
+//		}
+//		else
+		
 		C_Q_ADD(&KISS->PORT.PORTRX_Q, (UINT *)Buffer);
 	}
 

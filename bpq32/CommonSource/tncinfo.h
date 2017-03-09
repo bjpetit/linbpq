@@ -662,9 +662,13 @@ typedef struct TNCINFO
 	BOOL TCPCONNECTED;				// ARDOP  over TCP Connected
 	int SlowTimer;
 	int ARQPorts[32];				// For ARQ over KISS
+	char * LogPath;
 	FILE * LogHandle;				// Ardop Logging File
 	FILE * DebugHandle;				// Ardop Debug File
-	char * LogPath;
+	char LastLogType;				// For split packets	
+
+	UCHAR * ARDOPAPRS;				// Used to reconstruct APRS datagram from FEC packets
+	int ARDOPAPRSLen;
 
 } *PTNCINFO;
 

@@ -2690,7 +2690,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 				return FALSE;
 			}
 				
-			Debugprintf("BPQ32 Telnet accept() Sock %d", sock);
+//			Debugprintf("BPQ32 Telnet accept() Sock %d", sock);
 
 			ioctl(sock, FIONBIO, &param);
 

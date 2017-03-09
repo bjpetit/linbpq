@@ -2452,7 +2452,12 @@ int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len)
 		{
 			i++;
 			if (MsgIn[i] != 0)
+			{
+				if (MsgIn[i] == 170)	// 170 170 Probably start of next packet
+					return j;
+
 				if (i != len) return -1;
+			}
 		}
 	}
 

@@ -1551,8 +1551,32 @@ VOID SDIFRM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 
 	NS = (CTL >> 1) & 7;			// ISOLATE RECEIVED N(S)
 	
+CheckNSLoop:
+
 	if (NS != LINK->LINKNR)		// EQUAL TO OUR N(R)?
 	{
+		// There is a frame missing.
+		// if we have just sent a REJ we have at least one out
+		// of sequence frame in RXFRAMES
+
+		// so if we have frame LINK->LINKNR we can process it
+		// and remove it from RXFRAMES. If we are then back 
+		// in sequence we just carry on.
+
+		if (LINK->RXFRAMES[LINK->LINKNR])
+		{
+			// We have the first missing frame. Process it.
+	
+			MESSAGE * OldBuffer = Q_REM(&LINK->RXFRAMES[LINK->LINKNR]);
+		
+			Debugprintf("L2 process saved Frame %d", LINK->LINKNR);
+			PROC_I_FRAME(LINK, PORT, OldBuffer); // Passes on  or releases Buffer
+
+			// NR has been updated.
+
+			goto CheckNSLoop;		// See if OK or we have another saved frame
+		}
+		
 		//	BAD FRAME, SEND REJ (AFTER RESPTIME - OR WE MAY SEND LOTS!)
 
 		//	ALSO SAVE THE FRAME - NEXT TIME WE MAY GET A DIFFERENT SUBSET
@@ -1573,17 +1597,19 @@ VOID SDIFRM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 
 		LINK->L2ACKREQ = THREESECS;		// EXTRA LONG RESPTIME, AS SENDING TOO MANY REJ'S IS SERIOUS
 
-//		if (LINK->FRAMES[NS])
-//		{
-//			// Already have a copy, so discard this one
-//			
-//			ReleaseBuffer(Buffer);
-//		}
-//		else
-//			LINK->RXFRAMES[NS] = Buffer;
-
-		ReleaseBuffer(Buffer);
-	
+		if (LINK->RXFRAMES[NS])
+		{
+			// Already have a copy, so discard this one
+			
+			Debugprintf ("Frame %d out of seq but already have copy - release", NS);
+			ReleaseBuffer(Buffer);
+		}
+		else
+		{
+			Debugprintf ("Frame %d out of seq - save", NS);
+			Buffer->CHAIN = 0;
+			LINK->RXFRAMES[NS] = Buffer;
+		}
 		goto CheckPF;
 	}
 
@@ -1593,6 +1619,12 @@ VOID SDIFRM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 	{
 		LINK->L2STATE = 5;
 		LINK->L2FLAGS &= ~REJSENT;
+	}
+
+	// Remove any stored frame with this seq
+	if (LINK->RXFRAMES[NS])
+	{
+		ReleaseBuffer(Q_REM(&LINK->RXFRAMES[NS]));
 	}
 
 	PROC_I_FRAME(LINK, PORT, Buffer);		// Passes on  or releases Buffer
@@ -2570,8 +2602,33 @@ CHKBUFFS:
 	//	SEND REJ IF IN REJ STATE
 
 	if (LINK->L2STATE == 6)
-		return REJ;
+	{
+/*
+	// We may have the needed frame in RXFRAMES
 
+CheckNSLoop2:
+
+		if (LINK->RXFRAMES[LINK->LINKNR])
+		{
+			// We have the first missing frame. Process it.
+	
+			struct PORTCONTROL * PORT = LINK->LINKPORT;
+			MESSAGE * OldBuffer = Q_REM(&LINK->RXFRAMES[LINK->LINKNR]);
+		
+			Debugprintf("L2 about to send REJ - process saved Frame %d", LINK->LINKNR);
+			PROC_I_FRAME(LINK, PORT, OldBuffer); // Passes on  or releases Buffer
+
+			// NR has been updated.
+	
+			LINK->L2STATE = 5;
+			LINK->L2FLAGS &= ~REJSENT;
+
+			goto CheckNSLoop2;		// See if OK or we have another saved frame
+		}
+		if (LINK->L2STATE == 6)
+*/
+		return REJ;
+	}
 	return RR;
 
 SENDRNR:
