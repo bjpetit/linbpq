@@ -23,7 +23,7 @@ void MONprintf(const char * format, ...);
 void PollReceivedSamples();
 void HostPoll();
 void SaveEEPROM(int Reg, unsigned char Val);
-void SendLogToHost(char * Msg);
+void SendLogToHost(char * Msg, int len);
 void Sleep(int mS);
 void PlatformSleep();
 void SerialSendData(const unsigned char * Msg, int Len);

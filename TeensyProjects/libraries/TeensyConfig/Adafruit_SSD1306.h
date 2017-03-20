@@ -15,6 +15,12 @@ Written by Limor Fried/Ladyada  for Adafruit Industries.
 BSD license, check license.txt for more information
 All text above, and the splash screen must be included in any redistribution
 *********************************************************************/
+
+// Updated by John WIseman G8BPQ for ARDOP Teensy March 2017
+// use Wire1
+// add function to return address of display buffer to caller
+
+
 #ifndef _Adafruit_SSD1306_H_
 #define _Adafruit_SSD1306_H_
 
@@ -152,7 +158,7 @@ class Adafruit_SSD1306 : public Adafruit_GFX {
   void ssd1306_command(uint8_t c);
 
   void clearDisplay(void);
-  uint8_t * getDisplay(void);
+  uint8_t * getDisplay(void);		// JNW My addition
   void invertDisplay(uint8_t i);
   void display();
 

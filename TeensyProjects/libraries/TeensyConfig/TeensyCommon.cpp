@@ -51,6 +51,7 @@ extern "C" int PutChar(unsigned char c);
 #include <DMAChannel.h>
 
 extern int VesionNo;
+extern BOOL SerialHost;
 
 DMAChannel dma1(true);
 DMAChannel dma2(true);
@@ -65,7 +66,8 @@ extern int KISSCHECKSUM;
 
 
 void CommonSetup()
-{	
+{
+
 #ifdef HOSTPORT
   HOSTPORT.begin(HOSTSPEED);
 #endif
@@ -88,14 +90,14 @@ void CommonSetup()
   WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
 
 #ifdef MONPORT
-  MONPORT.printf("Monitor Buffer Space %d\r\n", MONPORT.availableForWrite());
+  Monprintf("Monitor Buffer Space %d", MONPORT.availableForWrite());
 #endif
 #if defined HOSTPORT
-  MONprintf("Host Buffer Space %d\r\n", HOSTPORT.availableForWrite());
+  WriteDebugLog(0, "Host Buffer Space %d", HOSTPORT.availableForWrite());
 #elif defined I2CHOST
-  MONprintf("Host Connection is i2c on address %x Hex\r\n", I2CSLAVEADDR);
+  WriteDebugLog(0, "Host Connection is i2c on address %x Hex", I2CSLAVEADDR);
 #elif defined I2CKISS
-  MONprintf("Host Connection is i2cKISS on address %x Hex\r\n", I2CSLAVEADDR);
+  WriteDebugLog(0, "Host Connection is i2cKISS on address %x Hex", I2CSLAVEADDR);
 #endif
 
   if (RCM_SRS0 & 0X20)		// Watchdog Reset
@@ -196,7 +198,9 @@ extern "C"
 
   int loadCounter = 0;		// for performance monitor
   int lastLoadTicks = 0;
-
+  unsigned int lastRTCTick = 0;	// Make sure this is set to ticks mod 1000 so RTC incrememtns at mS 0
+  unsigned int RTC = 0;		// set to seconds since 01.01.2000 by DATE and TIME Commands (Dragon log time epoch)
+  
   void Sleep(int mS)
   {
 #if defined MONPORT && defined CPULOAD
@@ -221,6 +225,13 @@ extern "C"
     WDOG_REFRESH = 0xB480;
     interrupts();
 
+	// update clock time
+	
+	while ((millis() - lastRTCTick) > 999)
+	{
+		lastRTCTick += 1000;
+		RTC++;
+	}
 	if (PKTLEDTimer && Now > PKTLEDTimer)
     {
       PKTLEDTimer = 0;
@@ -263,9 +274,7 @@ extern "C"
   void AdjustTXLevel(int Level)
   {
     int Pot = (Level * 256) / 3000;
-
     WriteDebugLog(LOGINFO, "Adjusting TX Level %d mV Pot %d", Level, Pot);
-
     SetPot(1, Pot);		// Write to live
   }
 #else
@@ -628,7 +637,7 @@ extern "C"
 
     if (tftptr)
     {
-      tft.setCursor(0, 72);
+      tft.setCursor(0, 140);
       tft.print(paddedcall);
     }
   }
@@ -637,9 +646,9 @@ extern "C"
   {
     if (tftptr)
     {
-      tft.setCursor(0, 48);
+      tft.setCursor(0, 120);
       tft.print("          ");
-      tft.setCursor(0, 48);
+      tft.setCursor(0, 120);
       tft.print(State);
     }
   }
@@ -837,7 +846,10 @@ unsigned char i2cidle[2] = {0x0e};
 volatile int i2creplyptr = 0;
 volatile int i2creplylen = 0;
 
+extern int ESCFLAG;
+
 // This is only called if I2CKISS is enabled. SCS Hostmode uses HostPoll
+
 void i2cloop()
 {
   while (i2cgetptr != i2cputptr)
@@ -935,9 +947,37 @@ void i2cloop()
     }
     else
     {
-      // normal char
+      // Not FEND but could be FESC etc
+	  
+	  	if (ESCFLAG)
+		{
+			//
+			//	FESC received - next should be TFESC or TFEND
 
-      i2cMessage[i2cMsgPtr++] = c;
+			ESCFLAG = FALSE;
+
+			if (c == TFESC)
+				c = FESC;
+	
+			if (c == TFEND)
+				c=FEND;
+			
+			// others leave alone
+		}
+		else
+		{
+			if (c == FESC)
+			{
+				ESCFLAG = TRUE;
+				continue;
+			}
+		}
+		
+		//
+		//	Ok, a normal char
+		//
+
+		i2cMessage[i2cMsgPtr++] = c;
     }
   }
 }
@@ -1024,43 +1064,72 @@ extern "C"
 
   int PutChar(unsigned char c)
   {
+#ifdef HOSTPORT
+	if (SerialHost)
+	{
+		HOSTPORT.write(&c, 1);
+		return 0;
+	}
+#endif
 #if defined I2CHOST || defined I2CKISS
     i2creply[i2creplyptr++] = c;
 	i2creplyptr &= 0x1ff;					// 512 cyclic
 	i2creplylen++;
-#else
-    HOSTPORT.write(&c, 1);
 #endif
     return 0;
   }
-
+  
   void SerialSendData(const uint8_t * Msg, int Len)
   {
+#ifdef HOSTPORT
+	if (SerialHost)
+	{
+		HOSTPORT.write(Msg, Len);
+		return;
+	}
+#endif
 #if defined I2CHOST || defined I2CKISS
 	uint8_t * ptr =  (uint8_t *)Msg;
 	int cnt = Len;
+	
 	while (cnt--)
 	{
 		i2creply[i2creplyptr++] = *(ptr++);
 		i2creplyptr &= 0x1ff;					// 512 cyclic
 	}
 	i2creplylen += Len;
-#else
-    HOSTPORT.write(Msg, Len);
 #endif
   }
 
   void WriteDebugLog(int Level, const char * format, ...)
   {
+	  // Use Dragon log format (stats with 32 bit timestamp)
+	  
     char Mess[256];
     va_list(arglist);
+	int len;
 
     va_start(arglist, format);
 #ifdef LOGTOHOST
-    Mess[0] = Level + '0';
-    vsnprintf(&Mess[1], sizeof(Mess) -1, format, arglist);
-    strcat(&Mess[1], "\r\n");
-    SendLogToHost(Mess);
+
+	// correct RTC if needed
+	
+	while ((millis() - lastRTCTick) > 999)
+	{
+		lastRTCTick += 1000;
+		RTC++;
+	}
+	Mess[0] = RTC >> 24;
+	Mess[1] = RTC >> 16;
+	Mess[2] = RTC >> 0;
+	Mess[3] = RTC;
+
+	sprintf(&Mess[4], "%03d", millis() % 1000);	// millisecs
+    Mess[7] = '0' + Level;
+
+    len = vsnprintf(&Mess[8], sizeof(Mess) - 8, format, arglist);
+    strcat(&Mess[8], "\r\n");
+    SendLogToHost(Mess, len + 10);
 #endif
 #ifdef MONPORT
     vsnprintf(Mess, sizeof(Mess), format, arglist);
@@ -1074,13 +1143,28 @@ extern "C"
   {
     char Mess[256];
     va_list(arglist);
+	int len;
 
     va_start(arglist, format);
 #ifdef LOGTOHOST
-    Mess[0] = '0';
-    vsnprintf(&Mess[1], sizeof(Mess), format, arglist);
-    strcat(&Mess[1], "\r\n");
-    SendLogToHost(Mess);
+ 
+ // correct RTC if needed
+	
+	while ((millis() - lastRTCTick) > 999)
+	{
+		lastRTCTick += 1000;
+		RTC++;
+	}
+	Mess[0] = RTC >> 24;
+	Mess[1] = RTC >> 16;
+	Mess[2] = RTC >> 0;
+	Mess[3] = RTC;
+
+	sprintf(&Mess[4], "%03d", millis() % 1000);	// millisecs
+    Mess[7] = '0';
+    len = vsnprintf(&Mess[8], sizeof(Mess) - 8, format, arglist);
+    strcat(&Mess[8], "\r\n");
+    SendLogToHost(Mess, len + 10);
 #endif
 #ifdef MONPORT
     vsnprintf(Mess, sizeof(Mess), format, arglist);
@@ -1105,7 +1189,7 @@ extern "C"
   extern int LogToHostBufferLen;
   extern int PTCMode;
 
-  void SendLogToHost(char * Cmd)
+  void SendLogToHost(char * Cmd, int len)
   {
     // I think we need log in text mode
     //	if (HostMode & !PTCMode)	// ARDOP Native
@@ -1113,13 +1197,10 @@ extern "C"
     if (!PTCMode)	// ARDOP Native
     {
       char * ptr = &LogToHostBuffer[LogToHostBufferLen];
-      int len = strlen(Cmd);
-
+     
       if (LogToHostBufferLen + len >= LOGBUFFERSIZE)
         return;			// ignore if full
 		
-	  Cmd[0] |= 0x80;		// Set top bit so we can unpack more easily
-
       memcpy(ptr, Cmd, len);
       LogToHostBufferLen += len;
     }
@@ -1200,9 +1281,288 @@ volatile unsigned short * SendtoCard(unsigned short buf, int n)
 
   return &dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK];
 }
-
-
 }
+
+#ifdef OLED
+
+// Support for 128 * 64 OLED display on i2c 
+
+#include <i2c_t3.h>
+#include <Adafruit_SSD1306.h>
+
+/*// If using software SPI (the default case):
+  #define OLED_MOSI   9
+  #define OLED_CLK   10
+  #define OLED_DC    11
+  #define OLED_CS    12
+  #define OLED_RESET 13
+  Adafruit_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+*/
+// Uncomment this block to use hardware SPI
+#define OLED_DC     8
+#define OLED_CS     9
+#define OLED_RESET  0
+
+#define _MOSI 11
+#define _SCLK 13		// Clock moved to ALT pin as LED is on A13
+#define _MISO 12
+
+// for spi Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
+
+#define OLED_RESET 0
+Adafruit_SSD1306 display(OLED_RESET);		// i2c
+
+#if (SSD1306_LCDHEIGHT != 64)
+#error("Height incorrect, please fix Adafruit_SSD1306.h!");
+#endif
+
+uint8_t * buffer;		// OLED Image buffer
+char * TXType = "TX:";
+
+int OLEDOK = 0;		// Set if display found
+
+extern "C"
+{
+  void Set8Pixels(int16_t x, int16_t y, int pixels, int16_t Colour)
+  {
+    int offset;
+    offset = (127 - y) + 128 * (x / 8);
+    buffer[offset] = pixels;
+  }
+   
+  void mySetPixel(int16_t x, int16_t y, int16_t Colour)
+  {
+    int offset;
+    uint8_t val;
+
+    offset = (127 - y) + 128 * (x / 8);
+
+    if (offset < 0 || offset > 2047)
+    {
+      return;
+    }
+
+    // top bit is first pixel
+
+    val = (1 << (x & 7));
+    if (Colour)
+      buffer[offset] |= val;
+    else
+      buffer[offset] &= ~val;
+  }
+
+  void DrawAxes(int Qual, char * Mode)
+  {
+    int y;
+  
+    // Draw x and y axes in centre of constallation area
+
+    int yCenter = (ConstellationHeight - 2) / 2;
+    int xCenter = (ConstellationWidth - 2) / 2;
+
+    Set8Pixels(0, xCenter, 0x55, WHITE);
+    Set8Pixels(8, xCenter, 0x55, WHITE);
+    Set8Pixels(16, xCenter, 0x55, WHITE);
+    Set8Pixels(24, xCenter, 0x55, WHITE);
+    Set8Pixels(32, xCenter, 0x55, WHITE);
+    Set8Pixels(40, xCenter, 0x55, WHITE);
+    Set8Pixels(48, xCenter, 0x55, WHITE);
+    Set8Pixels(56, xCenter, 0x55, WHITE);
+
+    // y is 64 pixels from 31, 0
+
+    for (y = 0; y < 64; y += 2)
+      mySetPixel(xCenter, y, WHITE);
+
+    display.setRotation(0);
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print(Mode);
+    display.setCursor(0, 12);
+    display.printf("QUAL %d  ", Qual);
+  }
+
+  void DrawDecode(char * Decode)
+  {
+    display.setCursor(0, 24);
+    display.print(Decode);
+	if (TXType)
+	{
+		display.setCursor(0, 52);
+		display.print(TXType);
+	}
+  }
+
+  void DrawTXMode(char * TXMode)
+  {
+	TXType = TXMode;
+	display.setCursor(0, 52);
+	display.print("           ");	//CLear old mode
+	display.setCursor(0, 52);
+	display.print(TXMode);
+  }
+
+  void clearDisplay()
+  {
+    display.clearDisplay();
+  }
+
+  void updateDisplay()
+  {
+    if (OLEDOK)	
+      display.display();
+  }
+}
+
+
+void setupOLED()
+{
+  // Make sure the device is there, or the dsiplay code will hang
+
+  Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_37_38, I2C_PULLUP_EXT, 2500000);
+  Wire1.setDefaultTimeout(10000); // 10ms
+
+  Wire1.beginTransmission(0x3C);  // slave addr
+  Wire1.endTransmission();        // no data, just addr
+
+  switch (Wire1.status())
+  {
+    case I2C_WAITING:
+      WriteDebugLog(6, "Found OLED display at 0x3C");
+      OLEDOK = 1;
+      break;
+    case I2C_ADDR_NAK:
+      WriteDebugLog(6, " Find OLED Error Addr: 0x%02X NAK", 0x3C);
+      break;
+    default:
+      WriteDebugLog(6, "OLED not found at address 0x3C");
+      break;
+  }
+
+  // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
+  display.begin(SSD1306_SWITCHCAPVCC);
+  // init done
+
+  // Show image buffer on the display hardware.
+  // Since the buffer is intialized with an Adafruit splashscreen
+  // internally, this will display the splashscreen.
+
+//  Serial.printf("Start Display %d\r\n", millis());
+  updateDisplay();
+//  Serial.printf("End Display %d\r\n", millis());
+  delay(1000);
+    
+
+  // I can't get the drawline or pixel routines to work from C,
+  // so I get the display buffer and update it myself.
+
+  // The displays i have are 128 x 64. As this is primarily for
+  // constellation display, I'll use in potrait mode, with the top
+  // 64 x 64 used for the constellation and the lower area for short
+  // status messages
+
+  // Pixels from a byte seem to be plotted in the 64 direction, and if we
+  // mount the display so this is left to right, it works bottom to top.
+  // or for conventional (L>R, Top>Bottom) we must reverse one. I'll start
+  // from 127 and work down.
+
+  // So byte origin is 127 - y + 128 * (x/8)
+
+  buffer = display.getDisplay();
+  clearDisplay();
+  
+  DrawAxes(99, "16Q.200.100");
+  DrawDecode("PASS");
+//  Serial.printf("Start Display %d\r\n", millis());
+  updateDisplay();
+//  Serial.printf("End Display %d\r\n", millis());
+}
+
+#endif
+
+
+#ifdef WDTTFT
+
+// Constallation or Waterfall display on TFT on WDT board
+
+char * TXType = "TX:";		// Save last transmitted type
+
+extern "C"
+{
+  void mySetPixel(int16_t x, int16_t y, int16_t Colour)
+  {
+	tft.drawPixel(x + ConsXoffset, y + ConsYoffset, Colour);
+  }
+
+  void DrawAxes(int Qual, char * Mode)
+  {
+    // Draw x and y axes in centre of constallation area
+
+    int yCenter = ConsYoffset + (ConstellationHeight - 2) / 2;
+    int xCenter = ConsXoffset + (ConstellationWidth - 2) / 2;
+	
+	tft.setRotation(1);
+
+	tft.drawFastVLine(xCenter, ConsYoffset , ConstellationHeight, WHITE);
+	tft.drawFastHLine(ConsXoffset, yCenter , ConstellationWidth, WHITE);
+
+    tft.setRotation(1);
+    tft.setTextSize(2);
+    tft.setTextColor(WHITE);
+    tft.setCursor(0, 0);
+    tft.print(Mode);
+    tft.setCursor(0, 18);
+    tft.printf("QUAL %d  ", Qual);
+  }
+
+  void DrawDecode(char * Decode)
+  {
+    tft.setCursor(0, 36);
+    tft.print(Decode);
+	if (TXType)
+	{
+		tft.setCursor(0, 75);
+		tft.print(TXType);
+	}
+  }
+
+  void DrawTXMode(char * TXMode)
+  {
+	TXType = TXMode;
+	tft.setCursor(0, 54);
+	tft.print("           ");	//Clear old mode
+	tft.setCursor(0, 554);
+	tft.print(TXMode);
+  }
+
+  void clearDisplay()
+  {
+	  // This just has to clear constellation area
+	  
+	  tft.fillRect(ConsXoffset, ConsYoffset, ConstellationWidth, ConstellationHeight, ILI9341_BLACK);
+  }
+
+  void updateDisplay()
+  {
+      // Probably not needed with TFT
+  }
+}
+
+
+void setupWDTTFT()
+{
+	// Board has already been initialised
+	
+	clearDisplay();  
+//	Serial.printf("Start Display %d\r\n", millis());
+  	DrawAxes(99, "16Q.200.100");
+	DrawDecode("PASS");
+//	Serial.printf("End Display %d\r\n", millis());
+}
+
+#endif
+
 
 
 

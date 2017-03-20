@@ -16,6 +16,11 @@ BSD license, check license.txt for more information
 All text above, and the splash screen below must be included in any redistribution
 *********************************************************************/
 
+// Updated by John WIseman G8BPQ for ARDOP Teensy March 2017
+// use Wire1
+// add function to return address of display buffer to caller
+
+
 #ifdef __AVR__
   #include <avr/pgmspace.h>
 #elif defined(ESP8266)
@@ -203,8 +208,13 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr, bool reset) {
   else
   {
     // I2C Init
-       Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_37_38, I2C_PULLUP_EXT, 1500000);
-    Wire1.setDefaultTimeout(10000); // 10ms
+#if defined(__MK20DX256__) // 3.1/3.2
+	Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_26_31 , I2C_PULLUP_EXT, 2500000);
+#else 
+    Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_37_38, I2C_PULLUP_EXT, 2500000);
+#endif
+
+	Wire1.setDefaultTimeout(10000); // 10ms
 
 #ifdef __SAM3X8E__
     // Force 400 KHz I2C, rawr! (Uses pins 20, 21 for SDA, SCL)
@@ -472,16 +482,18 @@ void Adafruit_SSD1306::display(void) {
     //Serial.println(TWSR & 0x3, DEC);
 
     // I2C
-    for (uint16_t i=0; i<(SSD1306_LCDWIDTH*SSD1306_LCDHEIGHT/8); i++) {
-      // send a bunch of data in one xmission
-      Wire1.beginTransmission(_i2caddr);
-      WIRE_WRITE(0x40);
-      for (uint8_t x=0; x<16; x++) {
-        WIRE_WRITE(buffer[i]);
-        i++;
-      }
-      i--;
-      Wire1.endTransmission();
+	for (uint16_t i = 0; i<(SSD1306_LCDWIDTH*SSD1306_LCDHEIGHT/8); i++)
+	{
+		// send a bunch of data in one xmission
+		Wire1.beginTransmission(_i2caddr);
+		WIRE_WRITE(0x40);
+		for (uint8_t x=0; x < 128; x++)
+		{
+			WIRE_WRITE(buffer[i]);
+			i++;
+		}
+		i--;
+		Wire1.endTransmission();
     }
 #ifdef TWBR
     TWBR = twbrbackup;
