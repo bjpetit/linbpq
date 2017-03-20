@@ -65,9 +65,6 @@ snd_pcm_sframes_t MaxAvail;
 
 #include <stdarg.h>
 
-#include <stdarg.h>
-
-
 FILE *logfile[3] = {NULL, NULL, NULL};
 char LogName[3][20] = {"ARDOPDebug", "ARDOPException", "ARDOPSession"};
 

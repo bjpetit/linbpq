@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)($InputName)(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)($InputName)(ConfigurationName)"
+			OutputDirectory="$(SolutionDir)($InputName)($ConfigurationName)"
+			IntermediateDirectory="$(SolutionDir)($InputName)($ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -96,8 +96,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)($InputName)(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)($InputName)(ConfigurationName)"
+			OutputDirectory="$(SolutionDir)($InputName)($ConfigurationName)"
+			IntermediateDirectory="$(SolutionDir)($InputName)($ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"

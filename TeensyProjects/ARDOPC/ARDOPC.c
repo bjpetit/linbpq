@@ -1,6 +1,7 @@
 // ARDOPC.cpp : Defines the entry point for the console application.
 //
 
+
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
@@ -194,7 +195,7 @@ int bytValidFrameTypesLengthISS = sizeof(bytValidFrameTypesISS);
 int bytValidFrameTypesLengthALL = sizeof(bytValidFrameTypesALL);
 int bytValidFrameTypesLength;
 
-UCHAR isValidFrame[256]= 
+const UCHAR isValidFrame[256]= 
 {
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 00 - 0F    ACK and NAK
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 10 - 1F
@@ -394,6 +395,136 @@ const char strFrameType[256][18] = {
 	"DataACK"		// Range 0xE0 to 0xFF includes 5 bits for quality 
 };
 
+const char shortFrameType[256][12] = {
+	"DataNAK", //  Range 0x00 to 0x1F includes 5 bits for quality 1 Car, 200Hz,4F
+	"","","","","","","","","","","","","","","","",
+	"","","","","","","","","","","","","","","","",
+	"","",
+
+        //Short Control Frames 1 Car, 200Hz,4F  ' Reassigned May 22, 2015 for maximum "distance"
+ 
+	"BREAK", "IDLE", "",
+	"", "", "",
+	"DISC", "", "",
+	"END",
+	"ConRejBusy",
+	"ConRejBW",
+	"",
+
+	//Special frames 1 Car, 200Hz,4F 0x30 +
+
+	"IDFrame",
+	"ConReq200M",
+	"ConReq500M",
+	"ConReq1KM",
+	"ConReq2KM",
+	"ConReq200F",
+	"ConReq500F",
+	"ConReq1KF",
+	"ConReq2KF",
+	"ConAck200",
+	"ConAck500",
+	"ConAck1K",
+	"ConAck2K",
+	// Types 0x3D to 0x3F reserved
+	"","","",
+	// 200 Hz Bandwidth Data 
+	// 1 Car P Data Modes 200 HzBW  100 baud 
+	
+	"4P.200.100",	// 0x40
+	"4P.200.100",
+	"4P.200.100S",
+	"4P.200.100S",
+	"8P.200.100",
+	"8P.200.100",
+
+	// 1 Car 4F Data mode 200 HzBW, 50 baud 
+
+	"4F.200.50",
+	"4F.200.50",
+	"4F.200.50S", // 48
+	"4F.200.50S",
+	"4F.500.100",
+	"4F.500.100",
+	"4F.500.100S",
+	"4F.500.100S",
+	"8F.200.25",
+	"8F.200.25",
+
+	//' 2 Car P Data Modes 100 baud
+	"4P.500.100", // 50
+	"4P.500.100",
+	"8P.500.100",
+	"8P.500.100",
+
+	// 2 Car Data modes 16 Q baud  
+
+	"16Q.500.100",	//54
+	"16Q.500.100",
+	"", "",				// 56, 57 were 500 167 modes	
+
+	// 1 Car 16F mode 25 baud
+
+	"16F.500.25", // 58
+	"16F.500.25",
+	"16F.500.25S",
+	"16F.500.25S",
+	
+	// 1 Car 16Q Data mode 200 Hz BW, 100 baud
+
+	"16Q.200.100",	// 5C
+    "16Q.200.100",	// 5D
+	"","",				// 5E/F
+
+	//1 Khz Bandwidth Data Modes 
+	//  4 Car 100 baud P
+	"4P.1K.100", //60
+	"4P.1K.100",
+	"8P.1K.100",
+	"8P.1K.100",
+	// 4 car 167 baud P
+	"4P.1K.167",
+	"4P.1K.167",
+	"8P.1K.167",
+	"8P.1K.167",
+	// 2 Car 4F 100 baud
+	"4F.1K.100", //68
+	"4F.1K.100","","","","","","",
+
+	// 2Khz Bandwidth Data Modes 
+	//  8 Car 100 baud P
+	"4P.2K.100", //70 
+	"4P.2K.100",
+	"8P.2K.100",
+	"8P.2K.100",
+	//  8 Car 167 baud P
+	"4P.2K.167",
+	"4P.2K.167",
+	"8P.2K.167",
+	"8P.2K.167",
+	// 4 Car 4F 100 baud
+	"4F.2K.100",
+	"4F.2K.100",
+	// 1 Car 4F 600 baud (FM only)
+	"4F.2K.600", // Experimental 
+	"4F.2K.600", // Experimental
+	"4F.2K.600S", // Experimental
+	"4F.2K.600S", // Experimental //7d
+	"","",	// 7e-7f
+	"","","","","","","","","","","","","","","","",
+	"","","","","","","","","","","","","","","","",
+	"","","","","","","","","","","","","","","","",
+	"","","","","","","","","","","","","","","","",
+	"","","","","","","","","","","","","","","","", //C0
+
+	//Frame Types 0xA0 to 0xDF reserved for experimentation 
+	"SOUND2K" //D0
+	"","","","","","","","","","","","","","","","",
+    //Data ACK  1 Car, 200Hz,4F
+	"DataACK"		// Range 0xE0 to 0xFF includes 5 bits for quality 
+};
+
+
 char * strlop(char * buf, char delim)
 {
 	// Terminate buf at delim, and return rest of string
@@ -585,6 +716,17 @@ const char * Name(UCHAR bytID)
 		return strFrameType[bytID];
 }
 
+//	 returns pointer to Frame Type Name
+
+const char * shortName(UCHAR bytID)
+{
+	if (bytID < 0x20)
+		return shortFrameType[0];
+	else if (bytID >= 0xE0)
+		return shortFrameType[0xE0];
+	else
+		return shortFrameType[bytID];
+}
 // Function to look up frame info from bytFrameType
 
 BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
@@ -1698,7 +1840,6 @@ void Send5SecTwoTone()
 }
 
 
-
 void  ASCIIto6Bit(char * Padded, UCHAR * Compressed)
 {
 	// Input must be 8 bytes which will convert to 6 bytes of packed 6 bit characters and
@@ -2514,6 +2655,74 @@ BOOL BusyDetect(float * dblMag, int intStart, int intStop)
 	return blnLastBusy;
 }
 */
+//	Subroutine to update the Busy detector when not displaying Spectrum or Waterfall (graphics disabled)
+ 		
+int LastBusyCheck = 0;
+
+void UpdateBusyDetector(short * bytNewSamples)
+{
+	float dblReF[1024];
+	float dblImF[1024];
+
+	float dblMag[206];
+	
+	static BOOL blnLastBusyStatus;
+	
+	float dblMagAvg = 0;
+	int intTuneLineLow, intTuneLineHi, intDelta;
+	int i;
+
+	if (ProtocolState != DISC)		// ' Only process busy when in DISC state
+		return;
+
+	if (State != SearchingForLeader)
+		return;						// only when looking for leader
+
+	if (Now - LastBusyCheck < 100)
+		return;
+
+	LastBusyCheck = Now;
+
+	FourierTransform(1024, bytNewSamples, &dblReF[0], &dblImF[0], FALSE);
+
+	for (i = 0; i <  206; i++)
+	{
+		//	starting at ~300 Hz to ~2700 Hz Which puts the center of the signal in the center of the window (~1500Hz)
+            
+		dblMag[i] = powf(dblReF[i + 25], 2) + powf(dblImF[i + 25], 2);	 // first pass 
+		dblMagAvg += dblMag[i];
+	}
+	intDelta = (ExtractARQBandwidth() / 2 + TuningRange) / 11.719f;
+
+	intTuneLineLow = max((103 - intDelta), 3);
+	intTuneLineHi = min((103 + intDelta), 203);
+    
+//	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
+	{
+		blnBusyStatus = BusyDetect3(dblMag, intTuneLineLow, intTuneLineHi);
+		
+		if (blnBusyStatus && !blnLastBusyStatus)
+		{
+			QueueCommandToHost("BUSY TRUE");
+         	newStatus = TRUE;				// report to PTC
+		}
+		//    stcStatus.Text = "True"
+            //    queTNCStatus.Enqueue(stcStatus)
+            //    'Debug.WriteLine("BUSY TRUE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
+			
+		else if (blnLastBusyStatus && !blnBusyStatus)
+		{
+			QueueCommandToHost("BUSY FALSE");
+			newStatus = TRUE;				// report to PTC
+		} 
+		//    stcStatus.Text = "False"
+        //    queTNCStatus.Enqueue(stcStatus)
+        //    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
+
+		blnLastBusyStatus = blnBusyStatus;
+	}
+}
+
 unsigned const short CRCTAB[256] = {
 	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
 	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 

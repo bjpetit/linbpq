@@ -8,7 +8,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.0.9-BPQ"
+#define ProductVersion "0.9.0.12-BPQ"
 
 //	Sound interface buffer size
 
@@ -58,7 +58,7 @@ unsigned int getTicks();
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <ctype.h>
 #include <math.h>
 
 #ifdef M_PI
@@ -138,7 +138,7 @@ void UpdateBusyDetector(short * bytNewSamples);
 int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM);
 void SetARDOPProtocolState(int value);
 BOOL BusyDetect3(float * dblMag, int intStart, int intStop);
-void SendLogToHost(char * Msg);
+void SendLogToHost(char * Msg, int len);
 
 //exern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
@@ -218,6 +218,7 @@ void RemodulateLastFrame();
 void GetSemaphore();
 void FreeSemaphore();
 const char * Name(UCHAR bytID);
+const char * shortName(UCHAR bytID);
 void InitSound();
 void initFilter(int Width);
 void FourierTransform(int NumSamples, short * RealIn, float * RealOut, float * ImagOut, int InverseTransform);
@@ -405,6 +406,7 @@ extern int dttStartRTMeasure;
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
 extern const char strFrameType[256][18];
+extern const char shortFrameType[256][12];
 extern BOOL Capturing;
 extern BOOL SoundIsPlaying;
 extern int blnLastPTT;

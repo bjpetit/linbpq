@@ -3,6 +3,10 @@
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
 
+#ifndef ARDOP
+#error("ARDOP not defined in TeensyCommon.h");
+#endif
+
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
@@ -12,6 +16,8 @@ unsigned char RXBUFFER[500];	// Async RX Buffer. Enough for Stuffed Host Mode Fr
 extern volatile int RXBPtr;
 volatile int flag = 0;
 volatile int flag2 = 0;
+int SerialHost = TRUE;				// Will eventually allow switching from Serial to I2c without reconfig
+
 
 extern int VRef;
 
@@ -23,6 +29,7 @@ extern "C" void StartDAC();
 extern "C" void StopDAC();
 void StartADC();
 void setupOLED();
+void setupWDTTFT();
 
 // Arduino is a c++ environment so functions in ardop must be defined as "C"
 
@@ -39,7 +46,7 @@ extern "C"
 
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
 
-#include "..\..\ARDOPC\ARDOPC.h"
+#include "..\..\ARDOPC\ARDOPC.h" 
 
   extern unsigned int tmrPollOBQueue;
 
@@ -92,12 +99,15 @@ void setup()
 {
   uint32_t i, sum = 0;
 
+ #ifdef I2CHOST
+  SerialHost = FALSE;
+ #endif
+
   CommonSetup();
 
   Serial.begin(115200);
 
-  WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d", ProductVersion, F_CPU, F_BUS);
-
+  WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d FreeRAM %d", ProductVersion, F_CPU, F_BUS, FreeRam());
   blnTimeoutTriggered = FALSE;
   SetARDOPProtocolState(DISC);
 
@@ -141,13 +151,16 @@ void setup()
     VRef += analogRead(17);
   }
   VRef /= 100;
-  MONprintf("VREF %d offset %d\r\n", VRef, VRef - 32768);
-
-  analogRead(16);		// Set ADC back to A0
+	analogRead(16);		// Set ADC back to A0
+  
+  WriteDebugLog(0, "VREF %d offset %d", VRef, VRef - 32768);
 
 #ifdef PLOTCONSTELLATION
 #ifdef OLED
   setupOLED();
+#endif
+#ifdef WDTTFT
+	setupWDTTFT();
 #endif
 #endif
 }
@@ -160,6 +173,7 @@ void loop()
   CheckTimers();
   HostPoll();
   MainPoll();
+  
   if (Now - lastticks > 999)
   {
     // Debug 1 sec tick
@@ -201,4 +215,24 @@ extern "C"
       dttNextPlay = Now + intFrameRepeatInterval;
   }
 }
+
+
+
+// function from the sdFat library (SdFatUtil.cpp)
+// licensed under GPL v3
+// Full credit goes to William Greiman.
+
+extern "C" char* sbrk(int incr);
+
+extern char *__brkval;
+extern char __bss_end;
+
+
+int FreeRam()
+{
+  char top;
+
+  return __brkval ? &top - __brkval : &top - &__bss_end;
+}
+
 

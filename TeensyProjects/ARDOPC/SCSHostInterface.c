@@ -14,6 +14,7 @@
 
 #include "ARDOPC.h"
 
+#define LOGTOHOST
 
 VOID ProcessSCSPacket(UCHAR * rxbuffer, unsigned int Length);
 VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
@@ -369,10 +370,22 @@ BOOL CheckForLog()
 	if (LogToHostBufferLen == 0)
 		return FALSE;
 
-	if (LogToHostBufferLen > 256)
+	// Return first message from buffer
+
+	// Terminated with LF, but beware of LF in timestamp
+
+	ptr = memchr(&LogToHostBuffer[4], 10, LogToHostBufferLen -4);
+
+	if (ptr == NULL)		// shouldn't happen!
+	{
+		LogToHostBufferLen = 0;
+		return FALSE;
+	}
+
+	Length = 1 + ptr - &LogToHostBuffer[0];
+
+	if (Length > 256)
 		Length = 256;
-	else
-		Length = LogToHostBufferLen;
 
 	memcpy(&SCSReply[5], LogToHostBuffer, Length);
 	LogToHostBufferLen -= Length;
@@ -380,7 +393,7 @@ BOOL CheckForLog()
 	if (LogToHostBufferLen)
 		memmove(LogToHostBuffer, &LogToHostBuffer[Length], LogToHostBufferLen);
 	
-	SCSReply[2] = 34;
+	SCSReply[2] = 248;
 	SCSReply[3] = 7;
 	SCSReply[4] = Length - 1;
 
@@ -463,6 +476,9 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		// See if any channels have anything available
 
+		// Although spec say Dragon only sends log data in response
+		// to poll of chan 248 it seems to send in response to get poll
+
 		if (newStatus)
 		{
 			newStatus = FALSE;
@@ -484,8 +500,8 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 				*(NextChan++) = 34;		// Native mode data channel
 
 #ifdef LOGTOHOST
-		if (LogToHostBufferLen)	// only used in Native mode
-			*(NextChan++) = 35;		// Native mode log channel
+//		if (LogToHostBufferLen)	// only used in Native mode
+//			*(NextChan++) = 35;		// Native mode log channel
 #endif
 
 		*(NextChan++) = 0;
@@ -495,6 +511,24 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		ReplyLen = NextChan - &SCSReply[0];
 
+#ifdef LOGTOHOST
+
+		if (ReplyLen == 5)		// nothing doing
+		{
+			// if we have log data send it
+
+			if (LogToHostBufferLen)	// only used in Native mode
+			{
+				//	Send next message
+				if (CheckForLog())
+				{
+					// got a message
+
+					return;
+				}
+			}
+		}
+#endif
 		EmCRCStuffAndSend(SCSReply, ReplyLen);
 		return;
 	}
@@ -941,7 +975,6 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 
 		if (i >= 0 && i <= 3000)	
 		{
-			int Pot;
 			TXLevel = i;
 			sprintf(cmdReply, "\r\nPSKA: %d", i);
 #ifdef HASPOTS

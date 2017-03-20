@@ -3,8 +3,6 @@
 
 #include "ARDOPC.h"
 
-
-
 BOOL blnHostRDY = FALSE;
 extern int intFECFramesSent;
 
@@ -21,6 +19,9 @@ extern BOOL NeedID;			// SENDID Command Flag
 extern BOOL NeedConReq;		// ARQCALL Command Flag
 extern char ConnectToCall[16];
 extern BOOL NeedTwoToneTest;
+
+extern unsigned int lastRTCTick;// Make sure this is set to ticks mod 1000 so RTC incrememtns at mS 0
+extern unsigned int RTC;		// set to seconds since 01.01.2000 by DATE and TIME Commands (Dragon log time epoch)
 
 
 #ifndef WIN32
@@ -518,6 +519,45 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		goto cmddone;
 	}
+
+  
+	if (strcmp(strCMD, "DATETIME") == 0)
+	{
+#ifndef TEENSY
+ 		sprintf(strFault, "DATETIME not supported on this platform");
+#else
+		// Set RTC to Date (DD:MM:YY HH.MM.SS format)
+
+		struct tm tm;
+		int n; 
+
+		if (ptrParams == NULL || strlen(ptrParams) != 17)
+		{
+			sprintf(strFault, "Syntax Err: %s", cmdCopy);	
+			goto cmddone;
+		}
+
+		n = sscanf(ptrParams, "%d %d %d %d %d %d",
+			&tm.tm_mday, &tm.tm_mon, &tm.tm_year,
+			&tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+
+		if (n != 6)
+		{
+			sprintf(strFault, "Syntax Err: %s", cmdCopy);	
+			goto cmddone;
+		}
+
+		tm.tm_year += 100;
+		tm.tm_mon--;
+
+		RTC = mktime(&tm);
+		sprintf(cmdReply, "RTC set to %s", asctime(gmtime(&RTC)));
+		RTC -= 946684800;	// Adjust to start from 1/1/2000
+
+		SendReplyToHost(cmdReply);
+#endif
+		goto cmddone;
+	}
   
 	if (strcmp(strCMD, "DEBUGLOG") == 0)
 	{
@@ -548,7 +588,6 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(cmdReply, "DEBUGLOG now FALSE");
 
 		SendReplyToHost(cmdReply);
-
 		goto cmddone;
 	}
 

@@ -1,11 +1,14 @@
 // Test code for PI Teensy Interface board
 
 #define RigAddr 0x88				// ICOM CI-V address
+#define CATPORT Serial3
+//#include "TeensyConfig.h"
+//#include "i2c_t3.h"
 
 #include <DMAChannel.h>
 #include "SPI.h"
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+//#include <Adafruit_GFX.h>
+//#include <Adafruit_SSD1306.h>
 
 #define OLED_DC     8
 #define OLED_CS     9
@@ -14,7 +17,7 @@
 #define _MOSI 11
 #define _SCLK 13
 #define _MISO 12
-Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
+//Adafruit_SSD1306 display1(OLED_DC, OLED_RESET, OLED_CS);
 
 
 #define pttPin 6
@@ -33,7 +36,7 @@ Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
 #define slaveSelectPin 10
 
-DMAChannel dma1(false);
+DMAChannel dma3(false);
 
 int count = 0;
 
@@ -136,22 +139,49 @@ void setup()
   pinMode (slaveSelectPin, OUTPUT);	// SPI Pot
   digitalWriteFast (slaveSelectPin, HIGH);
 
+  
+ // Serial.printf("Setup Display %x\r\n", &Wire1);
+
+  delay(100);
+
+// Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_37_38, I2C_PULLUP_EXT, 2500000, I2C_OP_MODE_IMM);
+// Wire1.begin();
+
+ //  Serial.printf("Setup Display %x\r\n", Wire1.bus);
+
+  delay(100);
+//  Wire1.setDefaultTimeout(10000); // 10ms
+//  Serial.printf("Setup Display %x\r\n", Wire1.bus);
+
+  delay(100);
+
+ // Wire1.beginTransmission(0x3C);       // slave addr
+ // Serial.printf("Setup Display %x\r\n", Wire1.bus);
+
+  delay(100);
+//  Wire1.endTransmission();              // no data, just addr
+//  Serial.printf("Setup Display %x\r\n", Wire1.bus);
+
+  delay(100);
+
    Serial.printf("Start Display %d\r\n", millis());
-  display.display();
-  Serial.printf("End Display %d\r\n", millis());
-  delay(2000);
+//  display1.display();
+ Serial.printf("End Display %d\r\n", millis());
+
 
   // Clear the buffer.
-  Serial.printf("Start Clear %d\r\n", millis());
-  display.clearDisplay();
-  Serial.printf("End Clear %d\r\n", millis());
-    display.display();
- // SPI.begin();
+//  Serial.printf("Start Clear %d\r\n", millis());
+ // display.clearDisplay();
+//  Serial.printf("End Clear %d\r\n", millis());
+ //   display.display();
+ 
+  
+  SPI.begin();
 
-  dma1.begin(true);
+  dma3.begin(true);
 
   Serial1.begin(115200);
-  Serial5.begin(19200);
+  CATPORT.begin(19200);
 
   SaveSerial = (HardwareSerial*)&Serial;
 
@@ -183,7 +213,7 @@ void setup()
   analogWriteResolution(12);
   analogRead(16);			// forces a calibrate
 
-  startDAC();
+  xstartDAC();
 
 }
 
@@ -212,8 +242,8 @@ void loop()
 // ADC is triggered by PDB and generates an interrupt which echos
 // received value back to DAC
 
-#define PDB_CONFIG_DAC (PDB_SC_TRGSEL(15) | PDB_SC_PDBEN | PDB_SC_CONT | PDB_SC_PDBIE | PDB_SC_DMAEN)
-#define PDB_CONFIG_ADC (PDB_SC_TRGSEL(15) | PDB_SC_PDBEN | PDB_SC_CONT | PDB_SC_PDBIE)
+#define PDB_CONFIG_DAC (PDB_SC_TRGSEL(15) | PDB_SC_PDBEN | PDB_SC_CONT | PDB_SC_DMAEN)
+#define PDB_CONFIG_ADC (PDB_SC_TRGSEL(15) | PDB_SC_PDBEN | PDB_SC_CONT)
 
 //	PDB count of 4999 should give 12K clock with 60 MHz bus clock
 //	PDB count of 1249 should give 48K clock with 60 MHz bus clock
@@ -226,9 +256,9 @@ void loop()
 // For a freqency of X we need SAMPLERATE / X samples per cycle and X / 10 sets of
 // samples for a DAC Buffer of length SAMPLERATE/10
 
-volatile uint16_t dac1_buffer[SAMPLERATE / 10];		// Allows waveforms down to 10Hz
+volatile uint16_t dac_buffer[SAMPLERATE / 10];		// Allows waveforms down to 10Hz
 
-void startDAC()
+void xstartDAC()
 {
   // Set up the DAC and start sending buffer under DMA
 
@@ -238,10 +268,10 @@ void startDAC()
 
   //  for (i = 0; i < SAMPLERATE / 10; i++)
   //  {
-  //    dac1_buffer[i] = 2048;
+  //    dac_buffer[i] = 2048;
   //  }
 
-  dma1.disable();
+  dma3.disable();
 
   SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
   DAC0_C0 = DAC_C0_DACEN | DAC_C0_DACRFS; // enable the DAC module, 3.3V reference
@@ -257,32 +287,32 @@ void startDAC()
   PDB0_SC = PDB_CONFIG_DAC | PDB_SC_LDOK;
   PDB0_SC = PDB_CONFIG_DAC | PDB_SC_SWTRIG;
 
-  dma1.TCD->SADDR = dac1_buffer;
-  dma1.TCD->SOFF = 2;
-  dma1.TCD->ATTR = DMA_TCD_ATTR_SSIZE(DMA_TCD_ATTR_SIZE_16BIT) | DMA_TCD_ATTR_DSIZE(DMA_TCD_ATTR_SIZE_16BIT);
-  dma1.TCD->NBYTES_MLNO = 2;	// Bytes per minor loop
-  dma1.TCD->SLAST = -sizeof(dac1_buffer);	// Reinit to start
-  dma1.TCD->DADDR = &DAC0_DAT0L;
-  dma1.TCD->DOFF = 0;
-  dma1.TCD->CITER_ELINKNO = sizeof(dac1_buffer) / 2;
-  dma1.TCD->DLASTSGA = 0;
-  dma1.TCD->BITER_ELINKNO = sizeof(dac1_buffer) / 2;
+  dma3.TCD->SADDR = dac_buffer;
+  dma3.TCD->SOFF = 2;
+  dma3.TCD->ATTR = DMA_TCD_ATTR_SSIZE(DMA_TCD_ATTR_SIZE_16BIT) | DMA_TCD_ATTR_DSIZE(DMA_TCD_ATTR_SIZE_16BIT);
+  dma3.TCD->NBYTES_MLNO = 2;	// Bytes per minor loop
+  dma3.TCD->SLAST = -sizeof(dac_buffer);	// Reinit to start
+  dma3.TCD->DADDR = &DAC0_DAT0L;
+  dma3.TCD->DOFF = 0;
+  dma3.TCD->CITER_ELINKNO = sizeof(dac_buffer) / 2;
+  dma3.TCD->DLASTSGA = 0;
+  dma3.TCD->BITER_ELINKNO = sizeof(dac_buffer) / 2;
 
   DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
   DMAMUX0_CHCFG0 = DMAMUX_SOURCE_PDB | DMAMUX_ENABLE;
 
-  dma1.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
-  dma1.enable();
+  dma3.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
+  dma3.enable();
 }
 
-void stopDAC()
+void xstopDAC()
 {
-  dma1.disable();
+  dma3.disable();
   DAC0_DAT0L = 0;
   DAC0_DATH = 8;		// Set output to mid value
 }
 
-void setupADC(int pin)
+void xsetupADC(int pin)
 {
 
   // pin must be 0 to 13 (for A0 to A13)
@@ -318,7 +348,7 @@ void setupADC(int pin)
 
 
 // pdb interrupt is enabled in case you need it. Not needed at the moment
-void pdb_isr(void)
+void xpdb_isr(void)
 {
   PDB0_SC &= ~PDB_SC_PDBIF; // clear interrupt
   pdbints++;
@@ -340,9 +370,9 @@ void pdb_isr(void)
   adcints++;
   }
 */
-void startADC()
+void xstartADC()
 {
-  dma1.disable();
+  dma3.disable();
 
   // Configure PDB to Interrupt
 
@@ -412,9 +442,9 @@ void HostPoll()
         GenerateSquareWave(3000);
         break;
       case '7':
-        stopDAC();
-        setupADC(16);
-        startADC();
+        xstopDAC();
+        xsetupADC(16);
+        xstartADC();
         break;
       case '8':
         digitalWriteFast(pttPin, !digitalReadFast(pttPin));
@@ -429,7 +459,7 @@ void HostPoll()
         Msg[5] = 3;				// Mode
         Msg[6] = 1; 			//Filter
         Msg[7] = 0xFD;
-        Serial5.write(Msg, 8);
+        CATPORT.write(Msg, 8);
         break;
 
       case 'a':
@@ -482,7 +512,7 @@ void GenerateTone(int Hz)
   int steps = SAMPLERATE / Hz;		// steps to make one cycle
   int loops = Hz / 10;							// sets of steps to fill DMA buffer
   float phaseincr = twopi / steps;
-  volatile uint16_t * ptr = dac1_buffer;
+  volatile uint16_t * ptr = dac_buffer;
   int i, j;
 
   for (i = 0; i < loops; i++)
@@ -496,14 +526,14 @@ void GenerateTone(int Hz)
         phase = 0;
     }
   }
-  startDAC();
+  xstartDAC();
 }
 
 void GenerateSquareWave(int Hz)
 {
   int stepsperhalfcycle = (SAMPLERATE / 2) / Hz;		// steps to make each half of cycle
   int loops = Hz / 10;									// cycles to fill DMA buffer
-  volatile short unsigned int * ptr = dac1_buffer;
+  volatile short unsigned int * ptr = dac_buffer;
   int i, j;
 
   for (i = 0; i < loops; i++)
@@ -516,7 +546,7 @@ void GenerateSquareWave(int Hz)
     for (j = 0; j < stepsperhalfcycle; j++)
       *(ptr++) = 0;
   }
-  startDAC();
+  xstartDAC();
 }
 
 unsigned char RXbuffer[256];
@@ -524,7 +554,7 @@ int RXLen = 0;
 
 void RadioPoll()
 {
-  int Length = Serial5.available();
+  int Length = CATPORT.available();
   int i, val;
   unsigned char * ptr;
   int len;
@@ -534,7 +564,7 @@ void RadioPoll()
   if (RXLen + Length > 256)
     RXLen = 0;
 
-  Length = Serial5.readBytes(&RXbuffer[RXLen], Length);
+  Length = CATPORT.readBytes(&RXbuffer[RXLen], Length);
 
   if (Length == 0)
     return;					// Nothing doing
@@ -728,10 +758,9 @@ unsigned int GetPotSPI(int i)
   thisRegister = (i << 4) | 0x0c;
 
   SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
-
   digitalWrite(slaveSelectPin, LOW);
 
-  // Device returns the top two bits of the value when address is sent
+// Device returns the top two bits of the value when address is sent
 
   result1 = SPI.transfer(thisRegister);
   // send a value of 0 to read the low 8 bits

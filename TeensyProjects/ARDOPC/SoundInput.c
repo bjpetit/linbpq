@@ -8,8 +8,9 @@
 #define MEMORYARQ
 #endif
 
-#undef PLOTSPECTRUM
+#undef PLOTWATERFALL
 
+#ifdef PLOTWATERFALL
 #define WHITE  0xffff
 #define Tomato 0xffff
 #define Orange 0xffff
@@ -19,26 +20,8 @@
 #define RoyalBlue 0 
 #define Navy 0
 #define Black 0
-
-#define PLOTCONSTELLATION
-#define OLED
-
-#ifdef OLED
-#define ConstellationHeight 64
-#define ConstellationWidth 64
-#define WHITE 0xffff
-#define Tomato 0xffff
-#define Gold 0xffff
-#define Lime 0xffff
-#define PLOTRADIUS 30
-
-
-#else
-#define TFTDISP
-#define ConstellationHeight 91
-#define ConstellationWidth 91
-#define PLOTRADIUS 40
 #endif
+
 
 #ifdef TEENSY
 #define PKTLED LED3		// flash when packet received
@@ -49,7 +32,7 @@ extern unsigned int PKTLEDTimer;
 //#define min(x, y) ((x) < (y) ? (x) : (y))
 
 void CheckandAdjustRXLevel(int maxlevel, int minlevel, BOOL Force);
-void SetPixel(unsigned short x, unsigned short y, unsigned short Colour);
+void mySetPixel(unsigned short x, unsigned short y, unsigned short Colour);
 void clearDisplay();
 void updateDisplay();
 
@@ -217,7 +200,7 @@ extern int intLastARQDataFrameToHost;
 // dont think I need it short intRcvdSamples[12000];		// 1 second. May need to optimise
 
 float dblOffsetLastGoodDecode = 0;
-int dttLastGoodFrameTypeDecode = 0;
+int dttLastGoodFrameTypeDecode = -20000;
 
 float dblOffsetHz = 0;;
 int dttLastLeaderDetect;
@@ -234,6 +217,7 @@ extern UCHAR bytSessionID;
 int dttLastGoodFrameTypeDecod;
 int dttStartRmtLeaderMeasure;
 
+char lastGoodID[11] = "";
 
 int GotBitSyncTicks;
 
@@ -376,9 +360,9 @@ const int SamplesToComplete[256] = {
 
 	*/
 
-// Function to determine if a valide frame type
+// Function to determine if a valid frame type
 
-extern UCHAR isValidFrame[256];
+extern const UCHAR isValidFrame[256];
 
 BOOL IsValidFrameType(UCHAR bytType)
 {
@@ -3077,6 +3061,10 @@ BOOL Decode4FSKConReq()
 	else if (intFrameType == 0x34)
 		intBW = 2000;
 
+	if (FrameOK)
+		memcpy(lastGoodID, strCaller, 10);
+
+
 	return FrameOK;
 }
 
@@ -3163,6 +3151,8 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 		else
 			intFailedFSKFrameDataDecodes++;
 
+	if (FrameOK)
+		memcpy(lastGoodID, strCallID, 10);
 
 	return FrameOK;	// Not correctable
 }
@@ -3625,10 +3615,25 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 	}
 
 	if (blnDecodeOK)
+	{
 		WriteDebugLog(LOGINFO, "[DecodeFrame] Frame: %s Decode PASS,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
-	else
-		WriteDebugLog(LOGINFO, "[DecodeFrame] Frame: %s Decode FAIL,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
+#ifdef PLOTCONSTELLATION
+		if (intFrameType >= 0x30 && intFrameType <= 0x38)
+			DrawDecode(lastGoodID);		// ID or CONREQ
+		else
+			DrawDecode("PASS");
+		updateDisplay();
+#endif
+	}
 
+	else
+	{
+		WriteDebugLog(LOGINFO, "[DecodeFrame] Frame: %s Decode FAIL,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
+#ifdef PLOTCONSTELLATION
+		DrawDecode("FAIL");
+		updateDisplay();
+#endif
+	}
 	//	if a data frame with few error and quality very low, adjust
 
 	if (blnDecodeOK && (totalRSErrors / intNumCar) < (intRSLen / 4) && intLastRcvdFrameQuality < 80)
@@ -3705,10 +3710,10 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 				clrPixel = Lime;
 
 			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			SetPixel(xCenter + intRad, yCenter + 1, clrPixel);
-			SetPixel(xCenter + intRad, yCenter - 1, clrPixel); // don't plot on top of axis
-			SetPixel(xCenter + intRad, yCenter + 2, clrPixel);
-			SetPixel(xCenter + intRad, yCenter - 2, clrPixel);
+			mySetPixel(xCenter + intRad, yCenter + 1, clrPixel);
+			mySetPixel(xCenter + intRad, yCenter - 1, clrPixel); // don't plot on top of axis
+			mySetPixel(xCenter + intRad, yCenter + 2, clrPixel);
+			mySetPixel(xCenter + intRad, yCenter - 2, clrPixel);
 #endif
 		}
 		else if (intToneMags[i + 1] > intToneMags[i] && intToneMags[i + 1] > intToneMags[i + 2] && intToneMags[i + 1] > intToneMags[i + 3])
@@ -3727,10 +3732,10 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 				clrPixel = Lime;
 
 			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			SetPixel(xCenter + 1, yCenter + intRad, clrPixel);
-			SetPixel(xCenter - 1, yCenter + intRad, clrPixel);
-			SetPixel(xCenter + 2, yCenter + intRad, clrPixel);
-			SetPixel(xCenter - 2, yCenter + intRad, clrPixel);
+			mySetPixel(xCenter + 1, yCenter + intRad, clrPixel);
+			mySetPixel(xCenter - 1, yCenter + intRad, clrPixel);
+			mySetPixel(xCenter + 2, yCenter + intRad, clrPixel);
+			mySetPixel(xCenter - 2, yCenter + intRad, clrPixel);
 #endif
 		}
 		else if (intToneMags[i + 2] > intToneMags[i] && intToneMags[i + 2] > intToneMags[i + 1] && intToneMags[i + 2] > intToneMags[i + 3]) 
@@ -3749,10 +3754,10 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 				clrPixel = Lime;
 
 			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			SetPixel(xCenter - intRad, yCenter + 1, clrPixel);
-			SetPixel(xCenter - intRad, yCenter - 1, clrPixel); // don't plot on top of axis
-			SetPixel(xCenter - intRad, yCenter + 2, clrPixel);
-			SetPixel(xCenter - intRad, yCenter - 2, clrPixel);
+			mySetPixel(xCenter - intRad, yCenter + 1, clrPixel);
+			mySetPixel(xCenter - intRad, yCenter - 1, clrPixel); // don't plot on top of axis
+			mySetPixel(xCenter - intRad, yCenter + 2, clrPixel);
+			mySetPixel(xCenter - intRad, yCenter - 2, clrPixel);
 #endif
 		}
 		else if (intToneSum > 0)
@@ -3770,10 +3775,10 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 				clrPixel = Lime;
 
 			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			SetPixel(xCenter + 1, yCenter - intRad, clrPixel);
-			SetPixel(xCenter - 1, yCenter - intRad, clrPixel);
-			SetPixel(xCenter + 2, yCenter - intRad, clrPixel);
-			SetPixel(xCenter - 2, yCenter -	intRad, clrPixel);
+			mySetPixel(xCenter + 1, yCenter - intRad, clrPixel);
+			mySetPixel(xCenter - 1, yCenter - intRad, clrPixel);
+			mySetPixel(xCenter + 2, yCenter - intRad, clrPixel);
+			mySetPixel(xCenter - 2, yCenter -	intRad, clrPixel);
 #endif
 		}
 	}
@@ -3792,8 +3797,7 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 	}
 
 #ifdef PLOTCONSTELLATION
-	DrawAxes(*intQuality, strType);
-	updateDisplay();
+	DrawAxes(*intQuality, shortName(intFrameType));
 #endif
 
 	return;
@@ -3860,7 +3864,7 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
   
 		x = xCenter + intRad * cosf(dblAng);
 		y = yCenter + intRad * sinf(dblAng);
-		SetPixel(x, y, clrPixel);    
+		mySetPixel(x, y, clrPixel);    
 #endif
 
 	}
@@ -3874,8 +3878,7 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 		int16FSKQuality += *intQuality;
 	}
 #ifdef PLOTCONSTELLATION
-	DrawAxes(*intQuality, strType);
-	updateDisplay();
+	DrawAxes(*intQuality, shortName(intFrameType));
 #endif
 }
 
@@ -3937,7 +3940,7 @@ void Update8FSKConstellation(int * intToneMags, int * intQuality)
   
 		x = xCenter + intRad * cosf(dblAng);
 		y = yCenter + intRad * sinf(dblAng);
-		SetPixel(x, y, clrPixel);    
+		mySetPixel(x, y, clrPixel);    
 #endif
 	}
 		
@@ -3949,8 +3952,7 @@ void Update8FSKConstellation(int * intToneMags, int * intQuality)
 		int8FSKQuality += *intQuality;
 	}
 #ifdef PLOTCONSTELLATION
-	DrawAxes(*intQuality, strType);
-	updateDisplay();
+	DrawAxes(*intQuality, shortName(intFrameType));
 #endif
 	return;
 }
@@ -3981,10 +3983,10 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
  
 	int i,j, k, intQuality;
 
+#ifdef PLOTCONSTELLATION
+
 	int yCenter = (ConstellationHeight - 2)/ 2;
 	int xCenter = (ConstellationWidth - 2) / 2;
-
-#ifdef PLOTCONSTELLATION
 
 	unsigned short clrPixel = WHITE;
 	unsigned short x, y;
@@ -4058,7 +4060,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 		
 		if (intX > 0 && intY > 0)
 			if (intX != xCenter && intY != yCenter)
-				SetPixel(intX, intY, WHITE); // don't plot on top of axis
+				mySetPixel(intX, intY, WHITE); // don't plot on top of axis
 #endif
 	}
 
@@ -4088,8 +4090,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 		}
 	}	
 #ifdef PLOTCONSTELLATION
-	DrawAxes(intQuality, strType);
-	updateDisplay();
+	DrawAxes(intQuality, shortName(intFrameType));
 #endif
 	return intQuality;
 
@@ -5304,6 +5305,8 @@ BOOL Decode1Car4FSKFromTones(UCHAR * bytData, int intToneMags)
 
 */
 
+
+/*
 //	Subroutine to update the Busy detector when not displaying Spectrum or Waterfall (graphics disabled)
  		
 int LastBusyCheck = 0;
@@ -5407,11 +5410,11 @@ void UpdateBusyDetector(short * bytNewSamples)
 			objColor = Black;
 		
 		if (i == 103)
-			SetPixel(intWaterfallRow, i/2 + 10, Tomato);  // 1500 Hz line (center)
+			mySetPixel(intWaterfallRow, i/2 + 10, Tomato);  // 1500 Hz line (center)
 		else if (i == intTuneLineLow || i == intTuneLineLow - 1 || i == intTuneLineHi || i == intTuneLineHi + 1)
-			SetPixel(intWaterfallRow, i/2 + 10, clrTLC);
+			mySetPixel(intWaterfallRow, i/2 + 10, clrTLC);
 		else
-			SetPixel(intWaterfallRow, i/2 + 10, objColor); // ' Else plot the pixel as received
+			mySetPixel(intWaterfallRow, i/2 + 10, objColor); // ' Else plot the pixel as received
 	}
 	updateDisplay();
 	intWaterfallRow++;
@@ -5423,3 +5426,4 @@ void UpdateBusyDetector(short * bytNewSamples)
 
 }
 
+*/

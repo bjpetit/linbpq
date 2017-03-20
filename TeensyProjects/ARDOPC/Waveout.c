@@ -94,6 +94,8 @@ WAVEHDR inheader[5] =
 WAVEOUTCAPS pwoc;
 WAVEINCAPS pwic;
 
+unsigned int RTC = 0;
+
 void InitSound(BOOL Quiet);
 void HostPoll();
 
@@ -441,7 +443,7 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 	vsnprintf(&Mess[1], sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
 	Mess[0] = LogLevel + '0';
-	SendLogToHost(Mess);
+	SendLogToHost(Mess, strlen(Mess));
 #else
 	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
@@ -917,3 +919,16 @@ int RadioPoll()
 {
 	return CatRXLen;
 }
+
+void mySetPixel(unsigned short x, unsigned short y, unsigned short Colour)
+{}
+void clearDisplay()
+{}
+void updateDisplay()
+{}
+void DrawAxes(int Qual, char * Mode)
+{}
+void DrawDecode(char * Decode)
+{}
+
+

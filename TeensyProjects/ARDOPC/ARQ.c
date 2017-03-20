@@ -45,6 +45,8 @@ UCHAR bytLastARQDataFrameSent = 0;  // initialize to an improper data frame
 UCHAR bytLastARQDataFrameAcked = 0;  // initialize to an improper data frame
 void ClearTuningStats();
 void ClearQualityStats();
+void updateDisplay();
+void DrawTXMode(char * TXMode);
 
 int bytQDataInProcessLen = 0;		// Lenght of frame to send/last sent
 
@@ -1104,6 +1106,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 			intFrameTypePtr = 0;
 
 		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
+#ifdef PLOTCONSTELLATION
+		DrawTXMode(shortName(bytCurrentFrameType));
+		updateDisplay();
+#endif
 		if(DebugLog) WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.GetNextFrameData] Initial Frame Type: %s", Name(bytCurrentFrameType));
 		*intUpDn = 0;
 		return 0;
@@ -1114,6 +1120,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		{
 			intFrameTypePtr = max(0, intFrameTypePtr + *intUpDn);
 			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
+#ifdef PLOTCONSTELLATION
+			DrawTXMode(shortName(bytCurrentFrameType));
+			updateDisplay();
+#endif
 			strShift = "Shift Down";
 		}
 		*intUpDn = 0;
@@ -1124,6 +1134,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		{
 			intFrameTypePtr = min(bytFrameTypesForBWLength, intFrameTypePtr + *intUpDn);
 			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
+#ifdef PLOTCONSTELLATION
+			DrawTXMode(shortName(bytCurrentFrameType));
+			updateDisplay();
+#endif
 			strShift = "Shift Up";
 		}
 		*intUpDn = 0;
