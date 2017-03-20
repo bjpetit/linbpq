@@ -6,14 +6,16 @@
 // 1200 Ok on Tom's board.
 // 9600 uses about 14% of Teensy 3.1
 
-// This file has to be in the Arduino user library folder TeensyConfig
-
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
 
+#ifndef PACKET
+#error("PACKET not defined in TeensyCommon.h");
+#endif
+
+
 #include <DMAChannel.h>
 #include "SPI.h"
-
 
 #include <EEPROM.h>
 
@@ -28,18 +30,20 @@ extern char VersionString[];
 extern int VersionNo;
 extern int KISSCHECKSUM;
 
-
 extern int VRef;
 
 extern int TXLevel;				// 300 mV p-p Used on Teensy
 extern int RXLevel;				// Configured Level - zero means auto tune
 extern int autoRXLevel;			// calculated level
 
-BOOL SoundIsPlaying = FALSE;
-BOOL Capturing = FALSE;
-
 #define TRUE 1
 #define FALSE 0
+
+int SoundIsPlaying = FALSE;
+int Capturing = FALSE;
+int SerialHost = TRUE;
+
+
 
 extern volatile int RXBPtr;
 volatile int flag = 0;
@@ -134,20 +138,23 @@ extern "C"
 
 #ifdef HOSTPORT
 
-    int RXBPtr = HOSTPORT.available();
-
-    if (RXBPtr)
+    if (SerialHost)
     {
-      int Count;
-      Count = HOSTPORT.readBytes((char *)RXBUFFER, RXBPtr);
-      if (Count != RXBPtr)
-        WriteDebugLog(LOGDEBUG, "Serial Read Error");
-        
-      ProcessKISSPacket(RXBUFFER, RXBPtr);
+      int RXBPtr = HOSTPORT.available();
+
+      if (RXBPtr)
+      {
+        int Count;
+        Count = HOSTPORT.readBytes((char *)RXBUFFER, RXBPtr);
+
+        if (Count != RXBPtr)
+          WriteDebugLog(LOGDEBUG, "Serial Read Error");
+
+        ProcessKISSPacket(RXBUFFER, RXBPtr);
+      }
     }
 #endif
   }
-
 
   void setup()
   {
@@ -165,7 +172,13 @@ extern "C"
 
     if (value == 12)
     {
-      Baud = 1200;	// FSK G3RUH
+      Baud = 1200;
+      AFSK = TRUE;
+      FSK = FALSE;
+    }
+    if (value == 24)
+    {
+      Baud = 2400;
       AFSK = TRUE;
       FSK = FALSE;
     }
@@ -175,6 +188,10 @@ extern "C"
       AFSK = FALSE;
       FSK = TRUE;
     }
+
+    RXLevel = EEPROM.read(9);
+    TXLevel = EEPROM.read(10);
+
     CommonSetup();
     print_mac();
 
@@ -256,6 +273,12 @@ extern "C"
     analogRead(16);		// Set ADC back to A0
 
     SetPot(1, TXLevel);
+    WriteDebugLog(LOGDEBUG, "TXLevel %d = %d mV", TXLevel, (TXLevel * 3000) / 256);
+
+    if (RXLevel)
+      SetPot(0, RXLevel);
+    else
+      SetPot(0, 256);					// Start at min gain
 
     setupPDB(samplerate);
     setupDAC();
@@ -274,7 +297,8 @@ extern "C"
     mainLoop();
     PlatformSleep();
     Sleep(1);
-#ifdef I2CKISS
+    HostPoll();
+#if defined I2CKISS || defined I2CMONITOR
     i2cloop();
 #endif
   }
