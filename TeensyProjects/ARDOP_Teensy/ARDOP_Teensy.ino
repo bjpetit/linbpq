@@ -18,6 +18,7 @@ volatile int flag = 0;
 volatile int flag2 = 0;
 int SerialHost = TRUE;				// Will eventually allow switching from Serial to I2c without reconfig
 
+int SerialWatchDog = 0;
 
 extern int VRef;
 
@@ -46,7 +47,7 @@ extern "C"
 
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
 
-#include "..\..\ARDOPC\ARDOPC.h" 
+#include "..\..\ARDOPC\ARDOPC.h"
 
   extern unsigned int tmrPollOBQueue;
 
@@ -80,7 +81,7 @@ extern "C"
     if (Avail)
     {
       int Count;
-
+      
       if (Avail > (499 - RXBPtr))
         Avail = 499 - RXBPtr;
 
@@ -99,13 +100,11 @@ void setup()
 {
   uint32_t i, sum = 0;
 
- #ifdef I2CHOST
+#ifdef I2CHOST
   SerialHost = FALSE;
- #endif
+#endif
 
   CommonSetup();
-
-  Serial.begin(115200);
 
   WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d FreeRAM %d", ProductVersion, F_CPU, F_BUS, FreeRam());
   blnTimeoutTriggered = FALSE;
@@ -151,8 +150,8 @@ void setup()
     VRef += analogRead(17);
   }
   VRef /= 100;
-	analogRead(16);		// Set ADC back to A0
-  
+  analogRead(16);		// Set ADC back to A0
+
   WriteDebugLog(0, "VREF %d offset %d", VRef, VRef - 32768);
 
 #ifdef PLOTCONSTELLATION
@@ -160,7 +159,7 @@ void setup()
   setupOLED();
 #endif
 #ifdef WDTTFT
-	setupWDTTFT();
+  setupWDTTFT();
 #endif
 #endif
 }
@@ -173,16 +172,18 @@ void loop()
   CheckTimers();
   HostPoll();
   MainPoll();
-  
+
   if (Now - lastticks > 999)
   {
     // Debug 1 sec tick
   }
   PlatformSleep();
-  RadioPoll();
+  //RadioPoll();
   Sleep(1);
 
-  if (blnClosing)
+  SerialWatchDog++;		// Reset if nothing for 60 secs
+
+  if (blnClosing || SerialWatchDog > 60000)
   {
     CPU_RESTART // reset processor
   }
@@ -234,5 +235,11 @@ int FreeRam()
 
   return __brkval ? &top - __brkval : &top - &__bss_end;
 }
+
+int _gettimeofday()
+{
+  return 0;
+}
+
 
 

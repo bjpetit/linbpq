@@ -32,6 +32,7 @@ extern int dttLastBusyTrip;
 extern int dttPriorLastBusyTrip;
 extern int dttLastBusyClear;
 
+
 int intLastFrameIDToHost = 0;
 int	intLastFailedFrameID = 0;
 int	intLastARQDataFrameToHost = -1;
@@ -102,6 +103,7 @@ unsigned int tmrIRSPendingTimeout = 0;
 unsigned int tmrPollOBQueue;
 UCHAR bytLastReceivedDataFrameType;
 BOOL blnDISCRepeating;
+
 int intRmtLeaderMeas;
 
 int	intOBBytesToConfirm = 0;	// remaining bytes to confirm  
@@ -174,6 +176,9 @@ unsigned int dttStartSession;
 int intLinkTurnovers;
 int intEnvelopeCors;
 float dblAvgCorMaxToMaxProduct;
+int intConReqSN;
+int intConReqQuality;
+
 
 // Subroutine to compute a 8 bit CRC value and append it to the Data...
 
@@ -408,7 +413,7 @@ BOOL GetNextARQFrame()
 
 		intRepeatCount += 1;
 		if (intRepeatCount <= ARQConReqRepeats)
-			    return TRUE;
+			return TRUE;
 		else
 		{
 			SetARDOPProtocolState(DISC);
@@ -436,6 +441,21 @@ BOOL GetNextARQFrame()
 				return FALSE;
 			}
 		}
+	}
+
+	if (ProtocolState == DISC && intPINGRepeats > 0)
+	{
+		intRepeatCount++;
+		if (intRepeatCount <= intPINGRepeats && blnPINGrepeating)
+		{
+			dttLastPINGSent = Now;
+			return TRUE;				// continue PING
+		}
+		
+		intPINGRepeats = 0;
+		blnPINGrepeating = False;
+        return FALSE;
+
 	}
 
 	// Handles the DISC state (no repeats)
@@ -504,6 +524,21 @@ BOOL IsCallToMe(char * strCallsign, UCHAR * bytReplySessionID)
 			*bytReplySessionID = GenerateSessionID(bytData, strCallsign);
 			return TRUE;
 		}
+	}
+
+	return FALSE;
+}
+BOOL IsPingToMe(char * strCallsign)
+{
+	int i;
+	
+	if (strcmp(strCallsign, Callsign) == 0)
+		return TRUE;
+	
+	for (i = 0; i < AuxCallsLength; i++)
+	{
+		if (strcmp(strCallsign, AuxCalls[i]) == 0)
+			return TRUE;
 	}
 
 	return FALSE;
@@ -1261,6 +1296,13 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			Mod4FSKDataAndPlay(0x2C, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 			return;
 		}
+
+		if (intFrameType == PING && blnFrameDecodedOK)
+		{
+			ProcessPingFrame(bytData);
+            return;
+		}
+
 		if (!blnListen)
 			return;			 // ignore connect request if not blnListen
     
@@ -2457,6 +2499,8 @@ void ClearTuningStats()
     intLinkTurnovers = 0;
     intEnvelopeCors = 0;
     dblAvgCorMaxToMaxProduct = 0;
+	intConReqSN = 0;
+	intConReqQuality = 0;
 }
 
 void ClearQualityStats()

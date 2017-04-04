@@ -99,6 +99,13 @@ VOID displayDCD(int x);
 #define KISS_TFEND  ((unsigned char)0334)
 #define KISS_TFESC  ((unsigned char)0335)
 
+
+#define	FEND	0xC0	// KISS CONTROL CODES 
+#define	FESC	0xDB
+#define	TFEND	0xDC
+#define	TFESC	0xDD
+
+
 #define KISS_CMD_DATA       0
 #define KISS_CMD_TXDELAY    1
 #define KISS_CMD_PPERSIST   2
@@ -107,6 +114,19 @@ VOID displayDCD(int x);
 #define KISS_CMD_FULLDUP    5
 #define KISS_CMD_HARDWARE   6
 #define KISS_CMD_FECLEVEL   8
+
+#ifdef TEENSY
+#define KISS_CMD_BAUDRATE   8
+#define KISS_CMD_RXLEVEL    9
+#define KISS_CMD_TXLEVEL    10
+#define KISS_CMD_IMMED      15
+
+#define CPU_RESTART_ADDR (unsigned int *)0xE000ED0C
+#define CPU_RESTART_VAL 0x5FA0004
+#define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
+
+#endif
+
 #define KISS_CMD_ACKMODE	12
 #define KISS_CMD_RETURN     255
 
@@ -558,6 +578,64 @@ static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned 
 		SaveEEPROM(FULLDUP, pkt[1]);
 		WriteDebugLog(MLOG_INFO, "kiss: %sduplex\n", pkt[1] ? "full" : "half");
 		return;
+
+#ifdef TEENSY
+	case KISS_CMD_BAUDRATE:
+	case KISS_CMD_RXLEVEL:
+	case KISS_CMD_TXLEVEL:
+
+		 if (pkt[0] == 9) // SPI Pots
+          SetPot(0, pkt[1]);
+        else if (pkt[0] == 10)
+          SetPot(1, pkt[1]);
+
+		WriteDebugLog(7,"Set KISS Param %d to %d", pkt[0], pkt[1]);
+        SaveEEPROM(pkt[0], pkt[1]);
+
+		return;
+
+	case KISS_CMD_IMMED:
+
+       // Immediate Command
+		
+		if (pkt[1] == 1)
+        {
+          // Get Params Command
+
+          int Sum = 8, val, i;
+		  
+		  PutChar(FEND);
+		  PutChar(8);				// Get Params Response
+		  
+          for (i = 0; i < 9; i++)
+          {
+            val = GetEEPROM(i);
+            PutChar(val);
+            Sum ^= val;
+          }
+
+          // Reg 9 and 10 are Digital Pots
+
+          val = GetPot(0);
+          PutChar(val);
+          Sum ^= val;
+
+          val = GetPot(1);
+          PutChar(val);
+          Sum ^= val;
+
+          PutChar(Sum);
+          PutChar(FEND);
+		  
+          return;
+        }
+		
+		if (pkt[1] == 2)		// Reboot
+		   CPU_RESTART // reset processor
+
+        return;			// other immediate command
+ 
+#endif:
 	
 	default:
 		WriteDebugLog(MLOG_INFO, "unknown kiss packet: 0x%02x 0x%02x\n", pkt[0], pkt[1]);
@@ -772,7 +850,7 @@ void ProcessKISSMessage(UCHAR *kissMsg, int Length)
 {
 	// if using checksums, check it
 
-	if (KISSCHECKSUM)
+	if (KISSCHECKSUM && Length > 2)		// KISS Control pkts dont have checksum
 	{
 		//	SUM MESSAGE, AND IF DUFF DISCARD. IF OK DECREMENT COUNT TO REMOVE SUM
 

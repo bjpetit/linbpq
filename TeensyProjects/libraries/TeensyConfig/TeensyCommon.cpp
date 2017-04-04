@@ -32,7 +32,6 @@
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
 
-
 void CAT4016(int value);
 void setupTFT();
 
@@ -47,6 +46,7 @@ void i2csetup();
 
 extern "C" void ProcessKISSMessage(unsigned char * Packet, int Length);
 extern "C" int PutChar(unsigned char c);
+extern "C" int i2cPutChar(unsigned char c);
 
 #include <DMAChannel.h>
 
@@ -90,7 +90,7 @@ void CommonSetup()
   WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
 
 #ifdef MONPORT
-  Monprintf("Monitor Buffer Space %d", MONPORT.availableForWrite());
+  MONPORT.printf("Monitor Buffer Space %d", MONPORT.availableForWrite());
 #endif
 #if defined HOSTPORT
   WriteDebugLog(0, "Host Buffer Space %d", HOSTPORT.availableForWrite());
@@ -227,7 +227,7 @@ extern "C"
 
 	// update clock time
 	
-	while ((millis() - lastRTCTick) > 999)
+	if ((millis() - lastRTCTick) > 999)
 	{
 		lastRTCTick += 1000;
 		RTC++;
@@ -394,6 +394,11 @@ extern "C" void SaveEEPROM(int Reg, unsigned char Val)
 {
   if (EEPROM.read(Reg) != Val)
     EEPROM.write(Reg, Val);
+}
+
+extern "C" int GetEEPROM(int Reg)
+{
+  return EEPROM.read(Reg);
 }
 
 // DAC/ADC Code
@@ -887,29 +892,28 @@ void i2cloop()
 
           int Sum = 8, val;
 		  
-		  PutChar(FEND);
-		  PutChar(8);				// Get Params Response
+		  i2cPutChar(FEND);
+		  i2cPutChar(8);				// Get Params Response
 		  
-
           for (i = 0; i < 9; i++)
           {
             val = EEPROM.read(i);
-            PutChar(val);
+            i2cPutChar(val);
             Sum ^= val;
           }
 
           // Reg 9 and 10 are Digital Pots
 
           val = GetPot(0);
-          PutChar(val);
+          i2cPutChar(val);
           Sum ^= val;
 
           val = GetPot(1);
-          PutChar(val);
+          i2cPutChar(val);
           Sum ^= val;
 
-          PutChar(Sum);
-          PutChar(FEND);
+          i2cPutChar(Sum);
+          i2cPutChar(FEND);
 		  
           return;
         }
@@ -1079,6 +1083,16 @@ extern "C"
     return 0;
   }
   
+  int i2cPutChar(unsigned char c)
+  {
+  #if defined I2CHOST || defined I2CKISS || defined I2CMONITOR
+    i2creply[i2creplyptr++] = c;
+	i2creplyptr &= 0x1ff;					// 512 cyclic
+	i2creplylen++;
+#endif
+    return 0;
+  }
+  
   void SerialSendData(const uint8_t * Msg, int Len)
   {
 #ifdef HOSTPORT
@@ -1114,15 +1128,15 @@ extern "C"
 
 	// correct RTC if needed
 	
-	while ((millis() - lastRTCTick) > 999)
+	if ((millis() - lastRTCTick) > 999)
 	{
 		lastRTCTick += 1000;
 		RTC++;
 	}
-	Mess[0] = RTC >> 24;
-	Mess[1] = RTC >> 16;
-	Mess[2] = RTC >> 0;
-	Mess[3] = RTC;
+	Mess[0] = (RTC >> 24) & 0xff;
+	Mess[1] = (RTC >> 16) & 0xff;
+	Mess[2] = (RTC >> 8) & 0xff;
+	Mess[3] = RTC & 0xff;
 
 	sprintf(&Mess[4], "%03d", millis() % 1000);	// millisecs
     Mess[7] = '0' + Level;
@@ -1282,13 +1296,15 @@ volatile unsigned short * SendtoCard(unsigned short buf, int n)
   return &dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK];
 }
 }
-
 #ifdef OLED
-
-// Support for 128 * 64 OLED display on i2c 
 
 #include <i2c_t3.h>
 #include <Adafruit_SSD1306.h>
+
+
+
+// Support for 128 * 64 OLED display on i2c 
+
 
 /*// If using software SPI (the default case):
   #define OLED_MOSI   9
@@ -1301,7 +1317,7 @@ volatile unsigned short * SendtoCard(unsigned short buf, int n)
 // Uncomment this block to use hardware SPI
 #define OLED_DC     8
 #define OLED_CS     9
-#define OLED_RESET  0
+#define OLED_RESET  -1
 
 #define _MOSI 11
 #define _SCLK 13		// Clock moved to ALT pin as LED is on A13
@@ -1309,7 +1325,6 @@ volatile unsigned short * SendtoCard(unsigned short buf, int n)
 
 // for spi Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
-#define OLED_RESET 0
 Adafruit_SSD1306 display(OLED_RESET);		// i2c
 
 #if (SSD1306_LCDHEIGHT != 64)
@@ -1439,6 +1454,8 @@ void setupOLED()
       WriteDebugLog(6, "OLED not found at address 0x3C");
       break;
   }
+  
+ 
 
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC);

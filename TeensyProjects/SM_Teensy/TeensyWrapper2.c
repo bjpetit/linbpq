@@ -8,8 +8,8 @@
 #define TRUE 1
 #define FALSE 0
 
-#include "C:\SkyDrive\Dev\Source\TeensyProjects\Soundmodem\pskmodem\pskmodem.c"
-#include "C:\SkyDrive\Dev\Source\TeensyProjects\Soundmodem\pskmodem\pskmlse.c"
+#include "..\..\Soundmodem\pskmodem\pskmodem.c"
+#include "..\..\Soundmodem\pskmodem\pskmlse.c"
 
 
 

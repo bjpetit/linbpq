@@ -3,6 +3,9 @@ typedef int BOOL;
 #define TRUE 1
 #define FALSE 0
 
+#define Statsprintf MONprintf
+#define WriteExceptionLog MONprintf
+
 #define Now getTicks()
 
 #ifdef __cplusplus

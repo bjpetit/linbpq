@@ -52,7 +52,7 @@
 #error ("USB Audio Not Enabled") 
 #endif // AUDIO_INTERFACE
 
-int SampleRate = 12000;
+int SampleRate = 48000;
 
 // Called from the USB interrupt when an isochronous packet arrives
 // we must completely remove it from the receive buffer before returning
@@ -164,7 +164,7 @@ unsigned int usb_audio_transmit_callback(void)
   
 	target = SampleRate / 1000;
   
-	memset(usb_audio_transmit_buffer + len, 0xaa, num * 2);
+	memset(usb_audio_transmit_buffer + len, 0xaa, target * 2);
    
   /*
    while (len < target) {

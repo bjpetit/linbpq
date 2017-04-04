@@ -1058,7 +1058,7 @@ static uint8_t config_descriptor[CONFIG_DESC_SIZE] = {
 	2,					// bSubFrameSize = 2 byte
 	16,					// bBitResolution = 16 bits
 	0,					// bSamFreqType = 1 frequency
-	LSB(11025), MSB(11025), 0,		// tSamFreq
+	LSB(8000), MSB(8000), 0,		// tSamFreq
 //	LSB(12000), MSB(12000), 0,		// tSamFreq
 //	LSB(44100), MSB(44100), 0,		// tSamFreq
 	LSB(48000), MSB(48000), 0,		// tSamFreq
@@ -1120,7 +1120,7 @@ static uint8_t config_descriptor[CONFIG_DESC_SIZE] = {
 	2,					// bSubFrameSize = 2 byte
 	16,					// bBitResolution = 16 bits
 	0,					// bSamFreqType = 1 frequency
-	LSB(11025), MSB(11025), 0,		// tSamFreq
+	LSB(8000), MSB(8000), 0,		// tSamFreq
 //	LSB(12000), MSB(12000), 0,		// tSamFreq
 //	LSB(44100), MSB(44100), 0,		// tSamFreq
 	LSB(48000), MSB(48000), 0,		// tSamFreq

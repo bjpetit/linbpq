@@ -96,6 +96,8 @@ int ReplyLen;
 extern float dblOffsetHz;
 extern int intSessionBW;
 
+extern int SerialWatchDog;
+
 void SendCommandToHost(char * Cmd)
 {
 	if (HostMode & !PTCMode)	// ARDOP Native
@@ -474,6 +476,11 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		
 		// General Poll
 
+		// if Teensy,kick link watchdog
+
+#ifdef TEENSY
+		SerialWatchDog = 0;
+#endif
 		// See if any channels have anything available
 
 		// Although spec say Dragon only sends log data in response
@@ -1119,6 +1126,7 @@ Loop:
 	{
 		UCHAR *ptr;
 		int cmdlen;
+
 		
 		// Char Mode Frame I think we need to see CR on end (and we could have more than one in buffer
 
@@ -1256,7 +1264,9 @@ Loop:
 	{
 		// Unstuff returned an errors (170 not followed by 0)
 
-		RXBPtr = 0;
+	WriteDebugLog(0, "ProcessSCSPacket Bad Unstuff Frame");
+
+	RXBPtr = 0;
 		return;				// Ignore for now
 	}
 	crc = compute_crc(&UnstuffBuffer[2], Length);

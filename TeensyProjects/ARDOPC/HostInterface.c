@@ -17,6 +17,8 @@ void Break();
 
 extern BOOL NeedID;			// SENDID Command Flag
 extern BOOL NeedConReq;		// ARQCALL Command Flag
+extern BOOL NeedPing;
+extern BOOL PingCount;
 extern char ConnectToCall[16];
 extern BOOL NeedTwoToneTest;
 
@@ -526,7 +528,7 @@ void ProcessCommandFromHost(char * strCMD)
 #ifndef TEENSY
  		sprintf(strFault, "DATETIME not supported on this platform");
 #else
-		// Set RTC to Date (DD:MM:YY HH.MM.SS format)
+		// Set RTC to Date (DD MM YY HH MM SS format)
 
 		struct tm tm;
 		int n; 
@@ -551,7 +553,7 @@ void ProcessCommandFromHost(char * strCMD)
 		tm.tm_mon--;
 
 		RTC = mktime(&tm);
-		sprintf(cmdReply, "RTC set to %s", asctime(gmtime(&RTC)));
+		sprintf(cmdReply, "RTC set");
 		RTC -= 946684800;	// Adjust to start from 1/1/2000
 
 		SendReplyToHost(cmdReply);
@@ -1003,6 +1005,39 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
 		}
+		goto cmddone;
+	}
+
+	if (strcmp(strCMD, "PING") == 0)
+	{
+		if (ptrParams)
+		{
+			char * countp = strlop(ptrParams, ' ');
+			int count = 0;
+
+			if (countp)
+				count = atoi(countp);
+
+			if (CheckValidCallsignSyntax(ptrParams) && count > 0 && count < 16)
+			{
+				if (ProtocolState != DISC)
+				{
+					sprintf(strFault, "No PING from state %s",  ARDOPStates[ProtocolState]);
+					goto cmddone;
+				}
+				else
+				{
+					SendReplyToHost(cmdCopy); // echo command back to host.
+					strcpy(ConnectToCall, _strupr(ptrParams));
+					PingCount = count;
+					NeedPing = TRUE;			// request ping grom background
+					goto cmddone;
+				}
+			}
+		}
+
+		sprintf(strFault, "Syntax Err: %s", cmdCopy);
+
 		goto cmddone;
 	}
 

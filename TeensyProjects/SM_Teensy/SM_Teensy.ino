@@ -19,7 +19,7 @@
 
 #include <EEPROM.h>
 
-unsigned char RXBUFFER[300];	// Async RX Buffer
+unsigned char RXBUFFER[300];	// Async RX Bufferextern "C" void xxx_Setup(int bmRequestType)
 
 extern int Baud;		// Modem Speed (1200 or 9600 for noe)
 extern int AFSK;		// Modem Mode

@@ -187,11 +187,13 @@ void setup()
 
   Serial.printf("Serial is %x\r\n", SaveSerial);
 
-  SaveSerial->println("Should be USB - DOes this work!");
+  SaveSerial->println("Should be USB - DOes this work?");
 
-//  SaveSerial = &Serial1;
+  SaveSerial = &Serial1;
 
-  SaveSerial->println("Should be Serial1 DOes this work!");
+  SaveSerial->println("Should be Serial1 DOes this work?");
+
+  SaveSerial = (HardwareSerial*)&Serial;
 
  // SaveSerial->printf("SaveSerial Buffer Space %d\r\n", SaveSerial->availableForWrite());
   SaveSerial->printf("Serial Buffer Space %d\r\n", Serial.availableForWrite());

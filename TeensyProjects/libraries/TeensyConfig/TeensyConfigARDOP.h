@@ -17,11 +17,11 @@
 
 // This file is for ARDOP
 
-//#define PIBOARD
+#define PIBOARD
 
 #define PLOTCONSTELLATION
-//#define OLED
-#define WDTTFT
+#define OLED
+//#define WDTTFT
 
 #ifdef PIBOARD
 
@@ -38,15 +38,15 @@
 // Serial for USB Port
 // Serial1 for PI Header
 // Serial3 for ESP01 Header
-// If using Serial1 or Serial3 also define SERIAL1SIZE or SSRIAL3SIZE to
+// If using Serial1 or Serial3 also define SERIAL1SIZE or SERIAL3SIZE to
 // increase size of serial port buffers
 
-#define HOSTPORT Serial
+#define HOSTPORT Serial1
 #define HOSTSPEED 115200
-//#define SERIAL1SIZE 512
+#define SERIAL1SIZE 512
 
 //#define MONPORT Serial
-#define CPULOAD
+//#define CPULOAD
 
 #define CATPORT Serial5
 #define CATSPEED 19200
@@ -167,3 +167,6 @@
 #endif
 
 #endif
+
+#define Statsprintf MONprintf
+#define WriteExceptionLog MONprintf

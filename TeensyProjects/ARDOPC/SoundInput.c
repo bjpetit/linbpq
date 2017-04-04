@@ -1315,6 +1315,8 @@ ProcessFrame:
 					AddTagToDataAndSendToHost(bytData, "IDF", frameLen);
 				else if (intFrameType >= 0x31 && intFrameType <= 0x38)
 					ProcessUnconnectedConReqFrame(intFrameType, bytData);
+				else if (intFrameType == PING)
+					ProcessPingFrame(bytData);
 			}				
 			else if (ProtocolMode == ARQ)
 			{
@@ -2353,7 +2355,7 @@ int Acquire4FSKFrameType()
 	else					// not connected and not pending so use &FF (FEC or ARQ unconnected session ID
 		NewType = MinimalDistanceFrameType(&intToneMags[0][0], 0xFF);
   
-	if (NewType > 0x30 && NewType < 0x39)
+	if ((NewType > 0x30 && NewType < 0x39) || NewType == PING)
 		QueueCommandToHost("PENDING");			 // early pending notice to stop scanners
 
 	if (NewType >= 0 &&  IsShortControlFrame(NewType))		// update the constellation if a short frame (no data to follow)
@@ -3064,9 +3066,125 @@ BOOL Decode4FSKConReq()
 	if (FrameOK)
 		memcpy(lastGoodID, strCaller, 10);
 
+	intConReqSN = Compute4FSKSN();
+	WriteDebugLog(LOGDEBUG, "DemodDecode4FSKConReq:  S:N=%d Q=%d", intConReqSN, intLastRcvdFrameQuality);
+	intConReqQuality = intLastRcvdFrameQuality;
 
 	return FrameOK;
 }
+
+// Experimental test code to evaluate trying to compute the S:N and Multipath index from a Connect Request or Ping Frame  3/6/17
+
+int Compute4FSKSN()
+{
+	int intSNdB = 0;
+
+	// Status 3/6/17:
+	// Code below appears to work well with WGN tracking S:N in ARDOP Test form from about -5 to +25 db S:N
+	// This code can be used to analyze any 50 baud 4FSK frame but normally will be used on a Ping and a ConReq.
+	// First compute the S:N defined as (approximately) the strongest tone in the group of 4FSK compared to the average of the other 3 tones
+ 
+	int intNumSymbols  = intToneMagsLength /4;
+	float dblAVGSNdB = 0;
+	int intDominateTones[64];
+	int intNonDominateToneSum;
+	float intAvgNonDominateTone;
+	int i, j;
+	int SNcount = 0;
+
+	// First compute the average S:N for all symbols 
+
+	for (i = 0; i < intNumSymbols; i++)		//  for each symbol
+	{
+		intNonDominateToneSum = 10;			// Protect divide by zero
+		intDominateTones[i] = 0;
+
+		for (j = 0; j < 4; j++)			 // for each tone
+		{
+			if (intToneMags[0][4 * i + j] > intDominateTones[i])
+				intDominateTones[i] = intToneMags[0][4 * i + j];
+			
+			intNonDominateToneSum += intToneMags[0][4 * i + j];
+		}
+		
+		intAvgNonDominateTone = (intNonDominateToneSum - intDominateTones[i])/ 3; // subtract out the Dominate Tone from the sum
+		
+		// Note subtract intAvgNonDominateTone below to compute S:N instead of (S+N):N
+
+		dblAVGSNdB += (20.0f * log10f(sqrtf(intDominateTones[i] - intAvgNonDominateTone) / sqrtf(intAvgNonDominateTone)));	 // average in the S:N	
+	}
+	intSNdB = (dblAVGSNdB / intNumSymbols) - 17.8f;	//  17.8 converts from nominal 50 Hz "bin" BW to standard 3 KHz BW (10* Log10(3000/50))
+	
+	return intSNdB;
+}
+
+// Function to Demodulate and Decode 1 carrier 4FSK 50 baud Ping frame  
+
+BOOL Decode4FSKPing()
+{
+	UCHAR strCaller[10];
+	UCHAR strTarget [10];
+	UCHAR bytCall[6];
+	BOOL blnRSOK;
+	BOOL FrameOK;
+	int intSNdB;
+
+	FrameOK = RSDecode(bytFrameData1, 16, 4, &blnRSOK);
+
+	if (FrameOK && blnRSOK == FALSE)
+	{
+		// RS Claims to have corrected it, but check
+
+		WriteDebugLog(LOGDEBUG, "PING Frame Corrected by RS");
+
+		FrameOK = RSDecode(bytFrameData1, 16, 4, &blnRSOK);
+
+		// Should now be OK without connections, if not RS didn't fix it
+
+		if (blnRSOK == FALSE)
+		{
+			WriteDebugLog(LOGDEBUG, "PING Still bad after RS");
+			FrameOK = FALSE;
+		}
+	}
+
+	memcpy(bytCall, bytFrameData1, 6);
+	DeCompressCallsign(bytCall, strCaller);
+	memcpy(bytCall, &bytFrameData1[6], 6);
+	DeCompressCallsign(bytCall, strTarget);
+
+//	printtick(strCaller);
+//	printtick(strTarget);
+	
+	sprintf(strRcvFrameTag, "_%s > %s", strCaller, strTarget);
+	sprintf(bytData, "%s %s", strCaller, strTarget);
+
+	if (FrameOK == FALSE)
+		return FALSE;
+
+	intSNdB = Compute4FSKSN();
+
+	if (ProtocolState == DISC)
+	{
+		char Msg[80];
+
+		sprintf(Msg, "PING %s>%s %d %d", strCaller, strTarget, intSNdB, intLastRcvdFrameQuality);
+		SendCommandToHost(Msg);
+
+		WriteDebugLog(LOGDEBUG, "[DemodDecode4FSKPing] PING %s>%s S:N=%d Q=%d", strCaller, strTarget, intSNdB, intLastRcvdFrameQuality);
+		
+		stcLastPingdttTimeReceived = time(NULL);
+		memcpy(stcLastPingstrSender, strCaller, 10);
+		memcpy(stcLastPingstrTarget, strTarget, 10);
+		stcLastPingintRcvdSN = intSNdB;
+		stcLastPingintQuality = intLastRcvdFrameQuality;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 
 // Function to Decode 1 carrier 4FSK 50 baud Connect Ack with timing 
 
@@ -3106,6 +3224,36 @@ BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
 
 	return FALSE;
 }
+
+
+//  Function  Decode 1 carrier 4FSK 50 baud PingACK with S:N and Quality 
+BOOL Decode4FSKPingACK(UCHAR bytFrameType, int * intSNdB, int * intQuality)
+{
+	int Ack = -1;
+
+	if ((bytFrameData1[0] == bytFrameData1[1])|| (bytFrameData1[0] == bytFrameData1[2]))
+		Ack = bytFrameData1[0];
+	else
+		if (bytFrameData1[1] == bytFrameData1[2])
+			Ack = bytFrameData1[1];
+
+	if (Ack >= 0)
+	{
+		*intSNdB = ((Ack & 0xF8) >> 3) - 10;	// Range -10 to + 21 dB steps of 1 dB
+        *intQuality = (Ack & 7) * 10 + 30;		// Range 30 to 100 steps of 10
+       
+		if (*intSNdB == 21)
+			WriteDebugLog(LOGDEBUG, "[DemodDecode4FSKPingACK]  S:N> 20 dB Quality=%d" ,*intQuality);
+		else
+			WriteDebugLog(LOGDEBUG, "[DemodDecode4FSKPingACK]  S:N= %d dB Quality=%d",  *intSNdB, *intQuality);
+
+		blnPINGrepeating = False;
+		blnFramePending = False;	//  Cancels last repeat
+		return TRUE;
+	}
+	return FALSE;
+}
+
 
 BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 {
@@ -3189,7 +3337,7 @@ void DemodulateFrame(int intFrameType)
 		return;
 	}
 
-	if (intFrameType >= 0x30 && intFrameType <= 0x38)
+	if ((intFrameType >= 0x30 && intFrameType <= 0x38) || intFrameType == PING)
 	{
 		// ID and CON Req
 
@@ -3203,13 +3351,11 @@ void DemodulateFrame(int intFrameType)
 		case 0x3A:
 		case 0x3B:
 		case 0x3C:		 // Connect ACKs with Timing
+		case PINGACK:
  
 		Demod1Car4FSK();
-		return;
-
 		break;
 		
-	
 		// 1 Carrier Data frames
 		// PSK Data
 
@@ -3367,7 +3513,7 @@ BOOL DecodeACKNAK(int intFrameType, int *  intQuality)
 }
 
 
-
+int intSNdB = 0, intQuality = 0;
 
 
 BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
@@ -3380,6 +3526,7 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 	char strGridSQ[20] = "";
 	int intTiming;
 	int intRcvdQuality;
+	char Reply[80];
 
 	strRcvFrameTag[0] = 0;
 	//stcStatus.ControlName = "lblRcvFrame"
@@ -3427,7 +3574,20 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 		break;
 		
-		case 0x30:		 // ID Frame
+		case PINGACK:		 // 3D
+ 
+			blnDecodeOK = Decode4FSKPingACK(intFrameType, &intSNdB, &intQuality);
+			
+			if (blnDecodeOK && ProtocolState == DISC && Now  - dttLastPINGSent < 5000)	
+			{
+				sprintf(Reply, "PINGACK %d %d", intSNdB, intQuality);
+				SendCommandToHost(Reply);
+			}
+
+ 			break;
+    
+
+		case 0x30:		 // ID FrameReply, 
 						
 			blnDecodeOK = Decode4FSKID(0x30, strIDCallSign, strGridSQ);
 			
@@ -3448,6 +3608,12 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 
 			blnDecodeOK = Decode4FSKConReq();
 			break;
+
+		case PING:	// 0x3E
+
+			blnDecodeOK = Decode4FSKPing();
+			break;
+
 
 		//   PSK 1 Carrier Data
 	

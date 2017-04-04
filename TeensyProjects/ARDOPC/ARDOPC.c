@@ -36,7 +36,14 @@ BOOL wantCWID = FALSE;
 BOOL CWOnOff = FALSE;
 BOOL NeedID = FALSE;		// SENDID Command Flag
 BOOL NeedConReq = FALSE;	// ARQCALL Command Flag
+BOOL NeedPing = FALSE;		// PING Command Flag
 BOOL NeedTwoToneTest = FALSE;
+
+int PingCount;
+
+BOOL blnPINGrepeating = False;
+BOOL blnFramePending = False;	//  Cancels last repeat
+int intPINGRepeats = 0;
 
 char ConnectToCall[16] = "";
 
@@ -70,6 +77,7 @@ BOOL FSKOnly = FALSE;
 BOOL fastStart = TRUE;
 BOOL skip167 = FALSE;
 BOOL ConsoleLogLevel = LOGINFO;
+BOOL EnablePingAck = TRUE;
 
 BOOL gotGPIO = FALSE;
 BOOL useGPIO = FALSE;
@@ -106,6 +114,13 @@ int intQAMQualityCnts;
 int intQAMSymbolsDecoded;
 int intGoodQAMSummationDecodes;
 
+
+char stcLastPingstrSender[10];
+char stcLastPingstrTarget[10];
+int stcLastPingintRcvdSN;
+int stcLastPingintQuality;
+time_t stcLastPingdttTimeReceived;
+
 BOOL blnInitializing = FALSE;
 
 BOOL blnLastPTT = FALSE;
@@ -138,6 +153,8 @@ BOOL blnAbort = FALSE;
 int intRepeatCount;
 BOOL blnARQDisconnect = FALSE;
 
+int dttLastPINGSent;
+
 enum _ProtocolMode ProtocolMode = FEC;
 
 extern BOOL blnEnbARQRpt;
@@ -153,10 +170,10 @@ extern unsigned int tmrIRSPendingTimeout;
 extern unsigned int tmrFinalID;
 extern unsigned int tmrPollOBQueue;
 int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
+void SendPING(char * strMycall, char * strTargetCall, int intRpt);
 
 int intRepeatCnt;
 
-BOOL blnFramePending = FALSE;
 BOOL blnClosing = FALSE;
 BOOL blnCodecStarted = FALSE;
 
@@ -167,7 +184,7 @@ const UCHAR bytValidFrameTypesALL[]=
 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
 35, 36, 41, 44, 45,
- 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 64, 65, 66,
+ 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, PINGACK, PING, 64, 65, 66,
  67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
  84, 85, 88, 89, 90, 91, 92, 93, 96, 97, 98, 99, 100, 101, 102, 103,
  104, 105, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
@@ -201,7 +218,7 @@ const UCHAR isValidFrame[256]=
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 10 - 1F
 	0,0,0,1,1,0,0,0,0,1,0,0,1,1,1,0,	// BREAK=23, IDLE=24, DISC=29, END=2C, ConRejBusy=2D, ConRejBW=2E
 
-	1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,	// 30 - 3F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,	// 30 - 3F (3d PINKAck 3E Ping
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 40 - 4F
 	1,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,	// 50 - 5F - 56, 57 were 167 500
 	1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,	// 60 - 6F
@@ -297,8 +314,9 @@ const char strFrameType[256][18] = {
 	"ConAck500",
 	"ConAck1000",
 	"ConAck2000",
-	// Types 0x3D to 0x3F reserved
-	"","","",
+	"PingAck",
+	"Ping",
+	"",
 	// 200 Hz Bandwidth Data 
 	// 1 Car PSK Data Modes 200 HzBW  100 baud 
 	
@@ -427,7 +445,7 @@ const char shortFrameType[256][12] = {
 	"ConAck1K",
 	"ConAck2K",
 	// Types 0x3D to 0x3F reserved
-	"","","",
+	"PingAck","Ping","",
 	// 200 Hz Bandwidth Data 
 	// 1 Car P Data Modes 200 HzBW  100 baud 
 	
@@ -632,9 +650,9 @@ BOOL GetNextFrame()
 			return FALSE;
 	}
 	if (ProtocolMode == ARQ)
-		if (ARQState == None)
-			return FALSE;
-		else
+//		if (ARQState == None)
+//			return FALSE;
+//		else
             return GetNextARQFrame();
 
 	return FALSE;
@@ -787,6 +805,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 	case 0x36:
 	case 0x37:
 	case 0x38:
+	case 0x3E:		// Ping
 
 		*blnOdd = (1 & bytFrameType) != 0;
 		*intNumCar = 1;
@@ -801,6 +820,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 	case 0x3A:
 	case 0x3B:
 	case 0x3C:
+	case 0x3D:
 
 		*blnOdd = (1 & bytFrameType) != 0;
 		*intNumCar = 1;
@@ -1685,6 +1705,28 @@ BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _A
 	return 18;
 }
 
+int EncodePing(char * strMyCallsign, char * strTargetCallsign, UCHAR * bytReturn)
+{
+	// Encodes a 4FSK 200 Hz BW Ping frame ( ~ 1950 ms with default leader/trailer) 
+
+	UCHAR * bytToRS= &bytReturn[2];
+
+//        If Not (CheckValidCallsignSyntax(strTargetCallsign) Or CheckValidCallsignSyntax(strMyCallsign)) Then
+  //          Logs.Exception("[EncodeModulate.EncodePing] Illegal Call sign syntax. MyCallsign = " & strMyCallsign & ", TargetCallsign = " & strTargetCallsign)
+   ////         Return Nothing
+   //     End If
+
+	bytReturn[0] = PING;
+	bytReturn[1] = bytReturn[0] ^ 0xFF; // Ping always uses session ID of &HFF
+
+	CompressCallsign(strMyCallsign, &bytToRS[0]);
+	CompressCallsign(strTargetCallsign, &bytToRS[6]);  //this uses compression to accept 4, 6, or 8 character Grid squares.
+
+	RSEncode(bytToRS, &bytReturn[14], 12, 4);  // Generate the RS encoding ...now 14 bytes total
+	return 18;
+}
+
+
 
  
 int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn)
@@ -1757,9 +1799,31 @@ int EncodeConACKwTiming(UCHAR bytFrameType, int intRcvdLeaderLenMs, UCHAR bytSes
 
 	bytreturn[2] = bytTiming;
 	bytreturn[3] = bytTiming;
+	bytreturn[4] = bytTiming;
 
-	return 4;
+	return 5;
 }
+//  Function to encode a PingAck frame with Quality Data  (5 bytes total)  
+
+int EncodePingAck(int bytFrameType, int intSN, int intQuality, UCHAR * bytreturn)
+{
+	// Encodes a Ping ACK with one byte of S:N and Quality info ( info repeated 2 times for redundancy) 
+
+	bytreturn[0] = bytFrameType;
+	bytreturn[1] = bytFrameType ^ 0xff;
+
+	if (intSN >= 21)
+		bytreturn[2] = 0xf8;	// set to MAX level indicating >= 21dB
+	else
+		bytreturn[2] = ((intSN + 10) & 0x1F) << 3;		// Upper 5 bits are S:N 0-31 corresponding to -10 to 21 dB   (5 bits S:N, 3 bits Quality 
+
+	bytreturn[2] += max(0, (intQuality - 30) / 10) & 7; // Quality is lower 3 bits value 0 to 7 representing 30-100
+	bytreturn[3] = bytreturn[2];
+	bytreturn[4] = bytreturn[2];
+	
+	return 5;
+}
+
 
 //	' Function to encode an ACK control frame  (2 bytes total) ...with 5 bit Quality code 
 
@@ -2359,6 +2423,11 @@ void CheckTimers()
 		NeedConReq = 0;
 		SendARQConnectRequest(Callsign, ConnectToCall);
 	}
+	if (NeedPing)
+	{
+		NeedPing = 0;
+		SendPING(Callsign, ConnectToCall, PingCount);
+	}
 
 	// Send Async ID (from SENDID command)
 
@@ -2723,6 +2792,61 @@ void UpdateBusyDetector(short * bytNewSamples)
 	}
 }
 
+void SendPING(char * strMycall, char * strTargetCall, int intRpt)
+{   	
+	EncLen = EncodePing(strMycall, strTargetCall, bytEncodedBytes);
+
+	if (EncLen == 0)
+		return;
+	
+	// generate the modulation with 2 x the default FEC leader length...Should insure reception at the target
+	// Note this is sent with session ID 0xFF
+
+	//	Set all flags before playing, as the End TX is called before we return here
+	
+	intFrameRepeatInterval = 2000;  // ms ' Finn reported 7/4/2015 that 1600 was too short ...need further evaluation but temporarily moved to 2000 ms
+	blnEnbARQRpt = TRUE;
+
+	Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+        
+	blnAbort = False;
+	dttTimeoutTrip = Now;
+	intRepeatCount = 1;
+	intPINGRepeats = intRpt;
+	blnPINGrepeating = True;
+	dttLastPINGSent = Now;
+
+	WriteDebugLog(LOGDEBUG, "[SendPING] strMycall= %s strTargetCall=%s  Repeat=%d", strMycall, strTargetCall, intRpt);
+
+	return;
+}
+ 
+// This sub processes a correctly decoded Ping frame, decodes it an passed to host for display if it doesn't duplicate the prior passed frame. 
+
+ProcessPingFrame(char * bytData)
+{
+	WriteDebugLog(LOGDEBUG, "ProcessPingFrame Protocol State = %s", ARDOPStates[ProtocolState]);
+	
+	if (ProtocolState == DISC)
+	{
+		char * strPingInfo = strlop(bytData, ' ');
+		
+		if (blnListen && IsPingToMe(strPingInfo) && EnablePingAck)
+		{
+			// Ack Ping
+
+			EncLen = EncodePingAck(PINGACK, stcLastPingintRcvdSN, stcLastPingintQuality, bytEncodedBytes);
+			Mod4FSKDataAndPlay(PINGACK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+               
+			WriteDebugLog(LOGDEBUG, "[ProcessPingFrame] PING from %s S:N=%d Qual=%d", bytData, stcLastPingintRcvdSN, stcLastPingintQuality);
+			return;
+		}
+	}	
+	SendCommandToHost("CANCELPENDING");	
+}
+
+
+
 unsigned const short CRCTAB[256] = {
 	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
 	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
@@ -2769,3 +2893,5 @@ unsigned short int compute_crc(unsigned char *buf,int len)
 
 	return fcs;
 }
+
+

@@ -2,7 +2,7 @@
 
 //	I don't need the overhead of the Audio Library, so I'll copy the interupt routines from
 //	usb_audio.cpp and add my own wrapper
-//	I see two uses for this. One combined with ARDOP (or possibly Packet) so host can run a 
+//	I see two uses for this. One combined with ARDOP (or possibly Packet) so host can run a
 //  Soundcard mode (eg WINMOR) in parallel with ARDOP/
 
 //	Or a simple passthough (a "Signalink emulator").
@@ -42,14 +42,51 @@
    SOFTWARE.
 */
 
+#include "TeensyConfig.h"
+#include "TeensyCommon.h"
+
 #include "SoundCard.h"
 #include "usb_dev.h"
 #include <string.h> // for memcpy()
 
 #ifdef AUDIO_INTERFACE // defined by usb_dev.h -> usb_desc.h
 #else
-#error ("USB Audio Not Enabled") 
+#error ("USB Audio Not Enabled")
 #endif // AUDIO_INTERFACE
+
+void CommonSetup();
+void setupPDB(int SampleRate);
+void setupDAC();
+void setupADC(int Pin);
+extern "C" void StartDAC();
+extern "C" void StopDAC();
+void StartADC();
+void setupOLED();
+void setupWDTTFT();
+
+// Arduino is a c++ environment so functions in ardop must be defined as "C"
+
+extern "C"
+{
+  void WriteDebugLog(int Level, const char * format, ...);
+  void InitSound();
+  void HostInit();
+  void CheckTimers();
+  void HostPoll();
+  void MainPoll();
+  void InitDMA();
+  void PlatformSleep();
+
+#define Now getTicks()
+}
+
+extern int VRef;
+
+int TXLevel = 128;				// 300 mV p-p Used on Teensy
+int RXLevel = 0;				// Configured Level - zero means auto tune
+int autoRXLevel = 255;			// calculated level
+
+extern int SampleRate;
 
 // Uncomment this to work around a limitation in Macintosh adaptive rates
 // This is not a perfect solution.  Details here:
@@ -62,7 +99,7 @@
 // (DAC/DAC work with 100 mS blocks). If we want to process sound (eg for ARDOP and also
 // pass to host (which might make sense for multimode scanning) we may have to rethink this
 
-// USB seems to send/requrst a block of samples every mS, so for 48K we send 192 
+// USB seems to send/requrst a block of samples every mS, so for 48K we send 192
 // bytes (2 chan, 2 bytes per sample) so AUDIO_TX_SIZE, AUDIO_RX_SIZE have to be
 // increased from 180 (for 44.1) to 192.
 
@@ -95,7 +132,7 @@ uint16_t usb_audio_receive_buffer[AUDIO_RX_SIZE / 2] DMABUFATTR;
 uint32_t usb_audio_sync_feedback DMABUFATTR;
 uint8_t usb_audio_receive_setting = 0;
 
-static uint32_t feedback_accumulator = 12 * 16384 * 256;
+static uint32_t feedback_accumulator = (SampleRate / 1000) * 16384 * 256;
 
 void AudioInputbegin(void)
 {
@@ -265,14 +302,14 @@ void AudioOutputUSBupdate(void)
 
 extern "C" void xxx_Setup(int bmRequestType)
 {
-//	Serial.printf("usb_setup Type %x\r\n", bmRequestType);
+  //	Serial.printf("usb_setup Type %x\r\n", bmRequestType);
 }
 
 int usb_audio_get_feature(void *stp, uint8_t *data, uint32_t *datalen)
 {
   struct setup_struct setup = *((struct setup_struct *)stp);
 
-    Serial.printf("get feature %x %x %x\r\n", setup.bmRequestType, setup.bCS, setup.bRequest);
+  Serial.printf("get feature %x %x %x\r\n", setup.bmRequestType, setup.bCS, setup.bRequest);
 
   if (setup.bmRequestType == 0xA1) { // should check bRequest, bChannel, and UnitID
     if (setup.bCS == 0x01) { // mute
@@ -313,8 +350,8 @@ int usb_audio_set_feature(void *stp, uint8_t *buf)
   struct setup_struct setup = *((struct setup_struct *)stp);
 
   Serial.printf("set feature %x %x %x %x %x %x %x %x %x\r\n", setup.bmRequestType, setup.bCS, setup.bRequest, buf[0], buf[1],
-  		buf[2], buf[3], buf[4], buf[5]);
-  
+                buf[2], buf[3], buf[4], buf[5]);
+
   if (setup.bmRequestType == 0x21) { // should check bRequest, bChannel and UnitID
     if (setup.bCS == 0x01) { // mute
       if (setup.bRequest == 0x01) { // SET_CUR
@@ -334,22 +371,76 @@ int usb_audio_set_feature(void *stp, uint8_t *buf)
   return 0;
 }
 
+
+#include "SPI.h"
+
 void setup()
 {
-	// Set up the pool
-
-	int i = 0;
-	
-	while (i < POOLCOUNT)
-	{
-		release(&pool[i++]);
-	}
-	
+  SPI.begin();
+  
   Serial.begin(115200);
-// while (!Serial);
-delay(1000);
+  // while (!Serial);
+  delay(1000);
   Serial.printf("Starting\r\n");
 
+  // Set up ADC and DAC
+
+  int i, sum = 0;
+
+  Serial.printf("InitSound\r\n");
+  InitSound();
+  Serial.printf("InitSound ret\r\n");
+
+  // Configure the ADC and run at least one software-triggered
+  // conversion.  This completes the self calibration stuff and
+  // leaves the ADC in a state that's mostly ready to use
+
+  analogReadRes(16);
+  //analogReference(INTERNAL); // range 0 to 1.2 volts
+  analogReference(DEFAULT); // range 0 to 3.3 volts
+  //analogReadAveraging(8);
+  // Actually, do many normal reads, to start with a nice DC level
+
+  for (i = 0; i < 1024; i++)
+  {
+    sum += analogRead(16);
+  }
+
+  Serial.printf("DAC Baseline %d\r\n", sum / 1024);
+
+  setupPDB(12000);			// 12K sample rate
+  setupDAC();
+  setupADC(16);
+  StartADC();
+
+  // Read Vref
+
+  SetPot(1, 256);				// TX Level Gain = 1
+  delay(100);
+
+  analogRead(17);
+
+  Serial.printf("analogRead ret\r\n");
+
+  for (i = 0; i < 100; i++)
+  {
+    VRef += analogRead(17);
+  }
+  VRef /= 100;
+  analogRead(16);		// Set ADC back to A0
+
+  Serial.printf("VREF %d offset %d\r\n", VRef, VRef - 32768);
+
+
+  // Set up the pool
+
+  i = 0;
+
+  while (i < POOLCOUNT)
+  {
+    release(&pool[i++]);
+  }
+ 
   AudioInputbegin();
   AudioOutputbegin();
 }
@@ -358,12 +449,12 @@ int lastTicks = 0;
 
 void loop()
 {
-	if ((millis() - lastTicks) > 999)
-	{
-		lastTicks = millis();
-		Serial.printf("in Ints %d Out ints %d Q %d tot rx %d\r\n", inInts, outInts, q_count, rxtot/4);
-		inInts = outInts = rxtot = 0;
-	}
+  if ((millis() - lastTicks) > 999)
+  {
+    lastTicks = millis();
+    Serial.printf("in Ints %d Out ints %d Q %d tot rx %d\r\n", inInts, outInts, q_count, rxtot / 4);
+    inInts = outInts = rxtot = 0;
+  }
 }
 
 my_audio_block_t * allocate(void)
@@ -375,12 +466,12 @@ my_audio_block_t * allocate(void)
   if (block == NULL)
   {
     __enable_irq();
-  	return NULL;
+    return NULL;
   }
 
   free_q = block->chain;
   q_count++;
- 
+
   __enable_irq();
   return block;
 }
@@ -400,15 +491,15 @@ void release(my_audio_block_t *block)
 
 void transmit(my_audio_block_t *block, unsigned char index)
 {
-	// I think this sends block from USB to DAC
+  // I think this sends block from USB to DAC
 
-	// Can we just append to the DAC cyclic buffer??
+  // Can we just append to the DAC cyclic buffer??
 
-	// If input is stereo, do we average??
+  // If input is stereo, do we average??
 
-	// Also do Audio derived PTT (VOX) here
-	
-	release(block);
+  // Also do Audio derived PTT (VOX) here
+
+  release(block);
 }
 // Receive block from an input.  The block's data
 // is sent to USB (I think!!). So this is called from

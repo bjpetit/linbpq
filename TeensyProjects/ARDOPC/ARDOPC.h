@@ -1,14 +1,10 @@
-// stdafx.h : include file for standard system include files,
-// or project specific include files that are used frequently, but
-// are changed infrequently
-//
 
 
 #ifndef ARDOPCHEADERDEFINED
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.0.12-BPQ"
+#define ProductVersion "0.9.4.1-BPQ"
 
 //	Sound interface buffer size
 
@@ -65,7 +61,7 @@ unsigned int getTicks();
 #undef M_PI
 #endif
 
-#define M_PI       3.141592f
+#define M_PI       3.1415926f
 
 #ifndef TEENSY
 #ifndef WIN32
@@ -78,7 +74,6 @@ unsigned int getTicks();
 #define ARMLINUX
 #endif
 #endif
-
 
 #include "ecc.h"				// RS Constants
 
@@ -139,11 +134,6 @@ int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, 
 void SetARDOPProtocolState(int value);
 BOOL BusyDetect3(float * dblMag, int intStart, int intStop);
 void SendLogToHost(char * Msg, int len);
-
-//exern "C" void SampleSink(short Sample);
-//extern "C" void SoundFlush();
-//extern "C" void SetFilter(void * Filter());
-
 
 void displayState(const char * State);
 void displayCall(int dirn, char * call);
@@ -222,6 +212,13 @@ const char * shortName(UCHAR bytID);
 void InitSound();
 void initFilter(int Width);
 void FourierTransform(int NumSamples, short * RealIn, float * RealOut, float * ImagOut, int InverseTransform);
+
+
+extern char stcLastPingstrSender[10];
+extern char stcLastPingstrTarget[10];
+extern int stcLastPingintRcvdSN;
+extern int stcLastPingintQuality;
+extern time_t stcLastPingdttTimeReceived;
 
 enum _ReceiveState		// used for initial receive testing...later put in correct protocol states
 {
@@ -335,6 +332,9 @@ struct SessionStats
 #define ConAck500 0x3A
 #define ConAck1000 0x3C
 #define ConAck2000 0x3C
+#define PINGACK 0x3d
+#define PING 0x3E
+
 
 extern const short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
 extern const short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
@@ -374,6 +374,13 @@ extern BOOL FSKOnly;
 extern BOOL fastStart;
 extern BOOL skip167;
 extern BOOL ConsoleLogLevel;
+extern BOOL EnablePingAck;
+
+extern int dttLastPINGSent;
+
+extern BOOL blnPINGrepeating;
+extern BOOL blnFramePending;
+extern int intPINGRepeats;
 
 extern BOOL gotGPIO;
 extern BOOL useGPIO;
@@ -500,6 +507,10 @@ extern unsigned int dttStartSession;
 extern int intLinkTurnovers;
 extern int intEnvelopeCors;
 extern float dblAvgCorMaxToMaxProduct;
+extern int intConReqSN;
+extern int intConReqQuality;
+
+
 
 extern int int4FSKQuality;
 extern int int4FSKQualityCnts;

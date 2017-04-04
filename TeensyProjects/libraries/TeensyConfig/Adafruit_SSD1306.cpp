@@ -175,6 +175,7 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr, bool reset) {
   _vccstate = vccstate;
   _i2caddr = i2caddr;
 
+  /*
   // set pin directions
   if (sid != -1){
     pinMode(dc, OUTPUT);
@@ -206,6 +207,7 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr, bool reset) {
     }
   }
   else
+  */
   {
     // I2C Init
 #if defined(__MK20DX256__) // 3.1/3.2
@@ -222,7 +224,9 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr, bool reset) {
     TWI1->TWI_CWGR = ((VARIANT_MCK / (2 * 400000)) - 4) * 0x101;
 #endif
   }
-  if ((reset) && (rst >= 0)) {
+  
+  if ((reset) && (rst >= 0))
+  {
     // Setup reset pin direction (used by both SPI and I2C)
     pinMode(rst, OUTPUT);
     digitalWrite(rst, HIGH);
@@ -235,7 +239,7 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr, bool reset) {
     // bring out of reset
     digitalWrite(rst, HIGH);
     // turn on VCC (9V?)
-  }
+ }
 
   // Init sequence
   ssd1306_command(SSD1306_DISPLAYOFF);                    // 0xAE

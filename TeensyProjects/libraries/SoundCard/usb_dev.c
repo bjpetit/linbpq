@@ -449,8 +449,8 @@ static void usb_setup(void)
 
 	  case 0x81A2: // GET_CUR (wValue=0, wIndex=interface, wLength=len)
 		if (setup.wLength >= 3) {
-			reply_buffer[0] = 12000 & 255;
-			reply_buffer[1] = 12000 >> 8;
+			reply_buffer[0] = 48000 & 255;
+			reply_buffer[1] = 48000 >> 8;
 			reply_buffer[2] = 0;
 			datalen = 3;
 			data = reply_buffer;

@@ -1191,7 +1191,7 @@ PollReceivedSamples()
 		}
 
 		if (Capturing && Loopback == FALSE)
-			ProcessNewSamples(&inbuffer[0], ReceiveSize);
+			ProcessNewSamples(&inbuffer[0][0], ReceiveSize);
 	}
 }
 
@@ -1301,7 +1301,7 @@ void SoundFlush()
 	AddTrailer();			// add the trailer.
 
 	if (Loopback)
-		ProcessNewSamples(&buffer[Index], Number);
+		ProcessNewSamples(&buffer[Index][0], Number);
 
 	SendtoCard(&buffer[Index][0], Number);
 
