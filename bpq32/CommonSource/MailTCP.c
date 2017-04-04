@@ -3073,6 +3073,13 @@ BOOL SendtoAMPR(CIRCUIT * conn)
 
 	Host = strlop(tocopy, '@');
 
+	if (Host == NULL)
+	{
+		Logprintf(LOG_TCP, NULL, '|', "AMPR Forward - Host Name missing from VIA %s for Msg %d", Msg->via, Msg->number);
+		free(tocopy);
+		return FALSE;
+	}
+
 	Logprintf(LOG_TCP, NULL, '|', "Connecting to Server %s to send Msg %d", Host, Msg->number);
 
 	sockptr = SMTPConnect(Host, 25, TRUE, Msg, Body);

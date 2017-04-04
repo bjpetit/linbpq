@@ -1060,7 +1060,7 @@ NextAPRS:
 	   ;
 
 	if (i == PARAMLIM)
-	   Consoleprintf("Source record no %d not recognised - Ignored: %s" ,LineNo, rec);
+	   Consoleprintf("bpq32.cfg line no %d not recognised - Ignored: %s" ,LineNo, rec);
 	else
 	{
 	   fileoffset = offset[i];

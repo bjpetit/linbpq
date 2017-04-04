@@ -91,8 +91,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		len = GetRXMessage(port,buff);
 	
-		if (len>0)
-			return (len);
+//		if (len > 0)
+//		{
+//			// Randomly drop packets
+
+//			if ((rand() % 7) > 5)
+//			{
+//				Debugprintf("VKISS Test Drop packet");
+//				return 0;
+//			}
+//		}
 		
 		return len;
 

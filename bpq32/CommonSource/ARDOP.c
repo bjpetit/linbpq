@@ -1825,6 +1825,7 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 	struct timeval timeout;
 	char * ptr1, * ptr2;
 	UINT * buffptr;
+	char Cmd[64];
 
 	if (TNC->WINMORHostName == NULL)
 		return;
@@ -2009,6 +2010,23 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 		if (ptr2)
 			*(ptr2) = 0; 
 	
+		// if Date or Time command add current time
+
+		if (_memicmp(ptr1, "DATETIME", 4) == 0)
+		{
+			time_t T;
+			struct tm * tm;
+
+			T = time(NULL);
+			tm = gmtime(&T);	
+
+			sprintf(Cmd, "DATETIME %02d %02d %02d %02d %02d %02d\r",
+				tm->tm_mday, tm->tm_mon + 1, tm->tm_year - 100,
+				tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+			ptr1 = Cmd;
+		}
+
 		ARDOPSendCommand(TNC, ptr1, TRUE);
 
 		if (ptr2)
@@ -2800,6 +2818,23 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		WritetoTrace(TNC, Buffer, MsgLen - 3);
 		return;
+	}
+
+	if (_memicmp(Buffer, "PING ", 5) == 0)
+	{
+		WritetoTrace(TNC, Buffer, MsgLen - 3);
+	
+		// Release scanlock after another interval (to allow time for response to be sent)
+		TNC->ConnectPending = 1;
+
+		return;
+	}
+
+	if (_memicmp(Buffer, "PINGACK ", 8) == 0)
+	{
+		WritetoTrace(TNC, Buffer, MsgLen - 3);
+
+		// Drop through to return touser
 	}
 
 	//	Return others to user (if attached but not connected)
@@ -3702,7 +3737,7 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 		Poll[1] = 0x1B;
 		TNC->TXLen = 2;
 
-		Debugprintf("Sending CR ESC");
+//		Debugprintf("Sending CR ESC, Mode %c", TNC->ARDOPCommsMode);
 
 		if (TNC->ARDOPCommsMode == 'E')
 		{
@@ -3732,11 +3767,13 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 
 		if (ARDOPWriteCommBlock(TNC) == FALSE)
 		{
+			Debugprintf("ARDOPWriteCommBlock Failed Mode %c", TNC->ARDOPCommsMode);
+
 			CloseCOMPort(TNC->hDevice);
 			
 			if (TNC->ARDOPCommsMode == 'S')
 			{
-	//			OpenCOMMPort(TNC, TNC->ARDOPSerialPort, TNC->ARDOPSerialSpeed, FALSE);
+				OpenCOMMPort(TNC, TNC->ARDOPSerialPort, TNC->ARDOPSerialSpeed, FALSE);
 			}
 			else
 			{
@@ -3809,8 +3846,6 @@ VOID ARDOPProcessTermModeResponse(struct TNCINFO * TNC)
 	char * ptr1, * ptr2;
 	int len;
 
-	Debugprintf("Term Resp %s Len %d", TNC->RXBuffer, TNC->RXLen);
-
 	if (TNC->ReinitState == 0)
 	{
 		// Testing if in Term Mode. It is, so can now send Init Commands
@@ -3863,6 +3898,21 @@ VOID ARDOPProcessTermModeResponse(struct TNCINFO * TNC)
 		len = (ptr2 - ptr1) + 1;
 
 		memcpy(Poll, ptr1, len);
+
+		// if Date or Time command add current time
+
+		if (_memicmp(ptr1, "DATETIME", 4) == 0)
+		{
+			time_t T;
+			struct tm * tm;
+
+			T = time(NULL);
+			tm = gmtime(&T);	
+
+			len = sprintf(Poll, "DATETIME %02d %02d %02d %02d %02d %02d\r",
+				tm->tm_mday, tm->tm_mon + 1, tm->tm_year - 100,
+				tm->tm_hour, tm->tm_min, tm->tm_sec);
+		}
 
 		TNC->TXLen = len;
 		ARDOPWriteCommBlock(TNC);
@@ -4222,6 +4272,55 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			return;
 		}
 
+		if (Msg[2] == 248)	// Log Message
+		{
+			// Monitor Data - Length format
+			// first 4 bytes contain a 32 bits long timestamp.
+			// That timestamp holds the number of seconds that elapsed since date 01.01.2000 at 00:00:00.
+			// The MS byte is sent first. The timestamp can be corrected to the usual C timestamp (seconds
+			//since 01.01.1970, 00:00:00) simply by adding 946684800 (seconds) to it.
+			// Teminated with LF
+
+			int datalen = Msg[4] + 1;
+			time_t timestamp = (Msg[5] << 24) + (Msg[6] << 16)
+				+ (Msg[7] << 8) + Msg[8] + 946684800;
+			char c;
+			char timebuf[32] = "HH:MM:SS.MMM";
+			struct tm * tm;
+
+			if (TNC->LogHandle == 0 || TNC->DebugHandle == 0)
+				return;
+
+			tm = gmtime(&timestamp);			
+
+			sprintf(timebuf, "%02d:%02d:%02d.    ",
+				tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+			// ARDOP Messages have a millisec time in first 3 bytes
+			// and a log type in 4th
+
+			c = Msg[12];		// Type
+
+			memcpy(&timebuf[9], &Msg[9], 3);	// copy millisecs
+			fputs(timebuf, TNC->DebugHandle);
+			fputc(c, TNC->DebugHandle);
+			fputc(' ', TNC->DebugHandle);
+			fwrite(&Msg[13], 1, datalen - 8, TNC->DebugHandle);
+			fflush(TNC->DebugHandle);
+
+			if (c < '7')
+			{
+				// All types below debug go to log file
+
+				fputs(timebuf, TNC->LogHandle);
+				fputc(c, TNC->LogHandle);
+				fputc(' ', TNC->LogHandle);
+				fwrite(&Msg[13], 1, datalen - 8, TNC->LogHandle);
+				fflush(TNC->LogHandle);
+			}
+			return;
+		}
+
 		if (Msg[2] == 253)						// Rig Port Response
 		{
 			// Queue for Rig Control Driver
@@ -4312,13 +4411,11 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 		Len = SerialGetTCPMessage(TNC, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
 	else
 		Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
-	
+
 	if (Len == 0)
 		return;
 	
 	TNC->RXLen += Len;
-
-//	Debugprintf("This Pkt %d Total %d", Len, TNC->RXLen); 
 
 	Length = TNC->RXLen;
 
@@ -4337,9 +4434,7 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 	{
 		// Char Mode Frame I think we need to see cmd: on end
 
-	
-		Debugprintf("Char Mode Frame %s Len %d", TNC->RXBuffer, TNC->RXLen);
-		// If we think we are in host mode, then to could be noise - just discard.
+			// If we think we are in host mode, then to could be noise - just discard.
 
 		if (TNC->HostMode)
 		{
@@ -4496,7 +4591,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 
 		TNC->Retries--;
 
-		if(TNC->Retries)
+		if(TNC->Retries >= 0)
 		{
 			if (TNC->HostMode)
 				Debugprintf("ARDOP Timeout - Retransmit PTC Block");

@@ -3911,7 +3911,7 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 {
 	// Check one element of Multiple Address
 
-	if (!(conn->BBSFlags & BBS))
+	if (conn == NULL || !(conn->BBSFlags & BBS))
 	{
 		// if a normal user, check that TO and/or AT are known and warn if not.
 
@@ -3938,7 +3938,8 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 				if (ToUser->HomeBBS[0])
 				{
 					char * NewAddr = malloc(250);
-					nodeprintf(conn, "Address %s - @%s added from HomeBBS\r", Addr, ToUser->HomeBBS);
+					if (conn)
+						nodeprintf(conn, "Address %s - @%s added from HomeBBS\r", Addr, ToUser->HomeBBS);
 					sprintf(NewAddr, "%s@%s", Addr, ToUser->HomeBBS);
 					return NewAddr;
 				}
@@ -3951,7 +3952,8 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 				{
 					char * NewAddr = malloc(250);
 
-					nodeprintf(conn, "Address %s - @%s added from WP\r", Addr, WP->first_homebbs);
+					if (conn)
+						nodeprintf(conn, "Address %s - @%s added from WP\r", Addr, WP->first_homebbs);
 					sprintf(NewAddr, "%s@%s", Addr, WP->first_homebbs);
 					return NewAddr;
 				}
@@ -3965,7 +3967,7 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 	{
 		Addr[3] = ':';			// Replace RMS/ with RMS:
 			
-		if (!FindRMS())
+		if (conn && !FindRMS())
 		{
 			nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
 			return FALSE;
@@ -3977,7 +3979,7 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 
 		if (ISP_Gateway_Enabled)
 		{
-			if ((conn->UserPointer->flags & F_EMAIL) == 0)
+			if (conn && (conn->UserPointer->flags & F_EMAIL) == 0)
 			{
 				nodeprintf(conn, "*** Error - You need to ask the SYSOP to allow you to use Internet Mail\r");
 				return FALSE;
@@ -3985,7 +3987,8 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 		}
 		else
 		{
-			nodeprintf(conn, "*** Error - Sending mail to smtp addresses is disabled\r");
+			if (conn)
+				nodeprintf(conn, "*** Error - Sending mail to smtp addresses is disabled\r");
 			return FALSE;
 		}
 	}
@@ -7219,36 +7222,27 @@ CheckForSID:
 						if (user->RMSSSIDBits & (1 << s))
 						{
 							if (s)
-							{
 								sprintf(RMSCall, "%s-%d", user->Call, s);
-								if (strcmp(RMSCall, ConnectingCall) != 0)
-								{
-									strcat(FWLine, " ");
-									strcat(FWLine, RMSCall);
-								}
-							}
 							else
+								sprintf(RMSCall, "%s", user->Call);
+
+							// We added connectingcall at front
+							
+							if (strcmp(RMSCall, ConnectingCall) != 0)
 							{
-								if (strcmp(user->Call, ConnectingCall) == 0)
-								{
-									// Dont include BBS call - was put on front
-									goto NoPass;
-								}
-								
 								strcat(FWLine, " ");
-								strcat(FWLine, user->Call);
+								strcat(FWLine, RMSCall);
+					
+								if (user->CMSPass[0])
+								{
+									int Response = GetCMSHash(conn->PQChallenge, user->CMSPass);
+									char RespString[12];
+	
+									sprintf(RespString, "%010d", Response);
+									strcat(FWLine, "|");
+									strcat(FWLine, &RespString[2]);
+								}
 							}
-
-							if (user->CMSPass[0])
-							{
-								int Response = GetCMSHash(conn->PQChallenge, user->CMSPass);
-								char RespString[12];
-
-								sprintf(RespString, "%010d", Response);
-								strcat(FWLine, "|");
-								strcat(FWLine, &RespString[2]);
-							}
-NoPass:;
 						}
 					}
 				}

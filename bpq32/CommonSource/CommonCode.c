@@ -2274,8 +2274,8 @@ int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
 	{
 		if (errno != 11 && errno != 35)					// Would Block
 		{
-//			perror("read");
-//			printf("Handle %d Errno %d Len %d\n", fd, errno, Length);
+			perror("read");
+			printf("Handle %d Errno %d Len %d\n", fd, errno, Length);
 			*Error = errno;
 		}
 		return 0;

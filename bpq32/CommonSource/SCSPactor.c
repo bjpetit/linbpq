@@ -3413,6 +3413,24 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 			return;
 		}
+	
+		if (Msg[2] == 248)	// Log Message
+		{
+			// Monitor Data - Length format
+			// first 4 bytes contain a 32 bits long timestamp.
+			// That timestamp holds the number of seconds that elapsed since date 01.01.2000 at 00:00:00.
+			// The MS byte is sent first. The timestamp can be corrected to the usual C timestamp (seconds
+			//since 01.01.1970, 00:00:00) simply by adding 946684800 (seconds) to it.
+			// Teminated with LF
+
+			int datalen = Msg[4] + 1;
+			unsigned int timestamp = (Msg[5] << 24) + (Msg[6] << 16)
+				+ (Msg[6] << 8) + Msg[7] + 946684800;
+
+			Msg[5 + datalen] = 0;
+			Debugprintf("SCS Debug %s", &Msg[9]);
+			return;
+		}
 
 		if (Msg[2] == 253)						// Rig Port Response
 		{

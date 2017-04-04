@@ -1029,6 +1029,7 @@ static VOID ARDOPThread(port)
 	struct timeval timeout;
 	char * ptr1, * ptr2;
 	UINT * buffptr;
+	char Cmd[32];
 
 	if (TNC->WINMORHostName == NULL)
 		return;
@@ -1059,12 +1060,11 @@ static VOID ARDOPThread(port)
 		 
 		 if (!HostEnt)
 		 {
-			 	TNC->CONNECTING = FALSE;
-				return;			// Resolve failed
+		 	TNC->CONNECTING = FALSE;
+			return;			// Resolve failed
 		 }
 		 memcpy(&TNC->destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 		 memcpy(&TNC->Datadestaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-
 	}
 
 //	closesocket(TNC->WINMORSock);
@@ -1213,7 +1213,32 @@ static VOID ARDOPThread(port)
 		ptr2 = strchr(ptr1, 13);
 		if (ptr2)
 			*(ptr2) = 0; 
-	
+
+		// if Date or Time command add current time
+
+		if (_memicmp(ptr1, "DATE", 4) == 0)
+		{
+			time_t T;
+			struct tm * tm;
+
+			T = time(NULL);
+			tm = gmtime(&T);	
+
+			sprintf(Cmd,"DATE %02d%02d%02d\r",  tm->tm_mday, tm->tm_mon + 1, tm->tm_year - 100);
+			ptr1 = Cmd;
+		}
+		else if (_memicmp(ptr1, "TIME", 4) == 0)
+		{
+			time_t T;
+			struct tm * tm;
+
+			T = time(NULL);
+			tm = gmtime(&T);	
+
+			sprintf(Cmd,"TIME %02d%02d%02d\r",  tm->tm_hour, tm->tm_min, tm->tm_sec);
+			ptr1 = Cmd;
+		}
+
 		ARDOPSendCommand(TNC, ptr1, TRUE);
 
 		if (ptr2)

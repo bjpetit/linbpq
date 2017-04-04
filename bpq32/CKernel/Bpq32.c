@@ -787,10 +787,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Make sure old monitor flag is cleared for TermTCP sessions
 //	Add CI-V antenna control for IC746
 //	Don't allow ARDOP beacons when connected
-//	Add support for ARDOP Serail over I2C
+//	Add support for ARDOP Serial over I2C
 //	Fix possble crash when using manual RADIO messages
 //	Save out of sequence L2 frames for possilb euse after retry
 //	Add KISS command to send KISS control frame to TNC
+//	Stop removing unused digis from packets sent to APRS-IS
+//	Basic processing of ARDOP PING and PINGACK responses
 
 #define CKernel
 

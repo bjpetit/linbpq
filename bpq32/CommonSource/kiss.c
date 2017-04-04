@@ -1567,7 +1567,7 @@ SeeifMore:
 //			ReleaseBuffer(Buffer);	// SET FRAME SENT RECENTLY
 //		}
 //		else
-		
+	
 		C_Q_ADD(&KISS->PORT.PORTRX_Q, (UINT *)Buffer);
 	}
 

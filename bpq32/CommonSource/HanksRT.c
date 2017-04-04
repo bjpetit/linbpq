@@ -2877,10 +2877,11 @@ VOID ChatTimer()
 	CHATNODE *node;
 	ChatCIRCUIT *c;
 	TOPIC *topic;
-	USER *user;
-	time_t NOW = time(NULL);
 	char Msg[256];
 #endif
+	USER *user;
+	time_t NOW = time(NULL);
+
 	GetSemaphore(&ChatSemaphore, 0);
 
 	if (NeedStatus)
@@ -2973,7 +2974,7 @@ VOID ChatTimer()
 				}
 			}
 
-			if (user->rtflags & u_keepalive && (NOW - user->lastsendtime) > 600)
+			if ((user->rtflags & u_keepalive) && (NOW - user->lastsendtime) > 600)
 			{
 				nprintf(user->circuit, "Chat Keepalive\r");
 				user->lastsendtime = NOW;
@@ -2982,6 +2983,37 @@ VOID ChatTimer()
 	}
 
 	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
+
+#else
+
+	for (user = user_hd; user; user = user->next)
+	{
+		if (user->circuit && user->circuit->rtcflags & p_user)	// Local User
+		{
+			if ((NOW - user->lastmsgtime) > 7200)
+			{
+				nprintf(user->circuit, "*** Disconnected - Idle time exceeded\r");
+				Sleep(1000);
+
+				if (user->circuit->BPQStream < 0)
+				{
+					CloseConsole(user->circuit->BPQStream);	
+					break;
+				}
+				else
+				{
+					Disconnect(user->circuit->BPQStream);
+					break;
+				}
+			}
+
+			if ((user->rtflags & u_keepalive) && (NOW - user->lastsendtime) > 600)
+			{
+				nprintf(user->circuit, "Chat Keepalive\r");
+				user->lastsendtime = NOW;
+			}
+		}
+	}
 
 #endif
 

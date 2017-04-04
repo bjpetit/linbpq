@@ -496,13 +496,28 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 	char Buffer[2048];
 	char Header[2048];
 	char * ptr, * ptr1;
+	int Sent;
 
 	sprintf(Header, HeaderTemplate, Request, Host, Port, Len + 2, Params);
-	send(sock, Header, strlen(Header), 0);
+	Sent = send(sock, Header, strlen(Header), 0);
+
+	if (Sent == -1)
+	{
+		int Err = WSAGetLastError();
+		Debugprintf("Error %d from WL2K Update send()", Err);
+		return;
+	}
 
 	while (InputLen != -1)
 	{
 		InputLen = recv(sock, &Buffer[inptr], 2048 - inptr, 0);
+
+		if (InputLen == -1)
+		{
+			int Err = WSAGetLastError();
+			Debugprintf("Error %d from WL2K Update recv()", Err);
+			return;
+		}
 
 		//	As we are using a persistant connection, can't look for close. Check
 		//	for complete message

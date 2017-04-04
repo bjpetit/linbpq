@@ -1057,6 +1057,13 @@ Dll VOID APIENTRY Poll_APRS()
 		ptr3 = strchr(ptr1, ' ');		// End of addresses
 		*ptr3 = 0;
 
+		// We should send path to IS unchanged, so create IS
+		// message before chopping path. We won't decide if 
+		// we will actually send it to IS till later
+
+		len = sprintf(ISMsg, "%s,qAR,%s:%s", ptr1, APRSCall, Payload);
+
+
 		// if digis, remove any unactioned ones
 
 		if (Digis)
@@ -1125,7 +1132,7 @@ Dll VOID APIENTRY Poll_APRS()
 
 		if (APRSISOpen && CrossPortMap[Port][0])	// No point if not open
 		{
-			len = sprintf(ISMsg, "%s>%s,qAR,%s:%s", ptr1, ptr4, APRSCall, Payload);
+// was done above     len = sprintf(ISMsg, "%s>%s,qAR,%s:%s", ptr1, ptr4, APRSCall, Payload);
 
 			if (SATGate && (DigisUsed == 0))
 			{
