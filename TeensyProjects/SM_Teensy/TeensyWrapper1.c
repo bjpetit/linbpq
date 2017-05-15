@@ -9,7 +9,7 @@
 #define FALSE 0
 
 
-#include "..\..\Soundmodem\fsk\fskic.c"
-#include "..\..\Soundmodem\fsk\modem.c"
-#include "..\..\Soundmodem\sinc.c"
+#include "../../Soundmodem/fsk/fskic.c"
+#include "../../Soundmodem/fsk/modem.c"
+#include "../../Soundmodem/sinc.c"
 

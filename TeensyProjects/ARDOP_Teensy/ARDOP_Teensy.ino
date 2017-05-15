@@ -1,3 +1,4 @@
+
 // Arduino interface code for ARDOP running on a Teensy 3.6
 
 #include "TeensyConfig.h"
@@ -21,6 +22,7 @@ int SerialHost = TRUE;				// Will eventually allow switching from Serial to I2c 
 int SerialWatchDog = 0;
 
 extern int VRef;
+extern int TXLevel;
 
 void CommonSetup();
 void setupPDB(int SampleRate);
@@ -30,6 +32,8 @@ extern "C" void StartDAC();
 extern "C" void StopDAC();
 void StartADC();
 void setupOLED();
+void setupKMR_18();
+
 void setupWDTTFT();
 
 // Arduino is a c++ environment so functions in ardop must be defined as "C"
@@ -44,10 +48,11 @@ extern "C"
   void MainPoll();
   void InitDMA();
   void PlatformSleep();
+  void AdjustTXLevel(int Level);
 
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
 
-#include "..\..\ARDOPC\ARDOPC.h"
+#include "../../ARDOPC/ARDOPC.h"
 
   extern unsigned int tmrPollOBQueue;
 
@@ -81,7 +86,7 @@ extern "C"
     if (Avail)
     {
       int Count;
-      
+
       if (Avail > (499 - RXBPtr))
         Avail = 499 - RXBPtr;
 
@@ -154,6 +159,8 @@ void setup()
 
   WriteDebugLog(0, "VREF %d offset %d", VRef, VRef - 32768);
 
+  AdjustTXLevel(TXLevel);
+
 #ifdef PLOTCONSTELLATION
 #ifdef OLED
   setupOLED();
@@ -161,6 +168,10 @@ void setup()
 #ifdef WDTTFT
   setupWDTTFT();
 #endif
+#ifdef KMR_18
+  setupKMR_18();
+#endif
+
 #endif
 }
 
@@ -181,7 +192,9 @@ void loop()
   //RadioPoll();
   Sleep(1);
 
+#ifdef I2CHOST
   SerialWatchDog++;		// Reset if nothing for 60 secs
+#endif
 
   if (blnClosing || SerialWatchDog > 60000)
   {

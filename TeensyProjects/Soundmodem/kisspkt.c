@@ -289,7 +289,7 @@ static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned 
 
 	if (ackmode)
 	{
-		// first two bytes are send unchanged
+		// first two bytes are sent unchanged
 	
 		chan->pkt.htx.buf[wr++] = *(pkt++);
 		wr %= TXBUFFER_SIZE;
@@ -355,7 +355,7 @@ static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned 
 
 	// add length to packet
 
-	len = wr - lenptr - 2;	// -2 for length fiwld
+	len = wr - lenptr - 2;	// -2 for length field
 	if (len < 0 || len > 400)
 		len %= TXBUFFER_SIZE;
 	chan->pkt.htx.buf[lenptr++] = len & 0xff;
@@ -533,6 +533,9 @@ static void hdlc_receive(struct modemchannel *chan, const unsigned char *data, u
 
 static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned int len)
 {
+	char GetResp[64] = "GetResp: ";
+	char * ptr = &GetResp[8];
+
 	if (len < 2)
 		return;
 
@@ -596,38 +599,46 @@ static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned 
 
 	case KISS_CMD_IMMED:
 
-       // Immediate Command
+		// Immediate Command
 		
 		if (pkt[1] == 1)
-        {
-          // Get Params Command
+		{
+			// Get Params Command
 
-          int Sum = 8, val, i;
+			int Sum = 8, val, i;
 		  
-		  PutChar(FEND);
-		  PutChar(8);				// Get Params Response
+			PutChar(FEND);
+			PutChar(8);				// Get Params Response
 		  
-          for (i = 0; i < 9; i++)
-          {
-            val = GetEEPROM(i);
-            PutChar(val);
-            Sum ^= val;
-          }
+			for (i = 0; i < 11; i++)
+			{
+				val = GetEEPROM(i);
+				PutChar(val);
+				Sum ^= val;
+			}
 
-          // Reg 9 and 10 are Digital Pots
+			// Reg 11 is RX Pot actual
 
-          val = GetPot(0);
-          PutChar(val);
-          Sum ^= val;
+			val = GetPot(0);
+			PutChar(val);
+			Sum ^= val;
 
-          val = GetPot(1);
-          PutChar(val);
-          Sum ^= val;
+			PutChar(Sum);
+			PutChar(FEND);
 
-          PutChar(Sum);
-          PutChar(FEND);
-		  
-          return;
+			// Also write to log for clients that can't handle KISS response
+
+			for (i = 0; i < 11; i++)
+			{
+				val = GetEEPROM(i);
+				ptr += sprintf(ptr, "%02X ", val);
+			}
+			val = GetPot(0);
+			ptr += sprintf(ptr, "%02X ", val & 0xff);
+
+			WriteDebugLog(6, GetResp);
+
+			return;
         }
 		
 		if (pkt[1] == 2)		// Reboot
@@ -635,12 +646,87 @@ static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned 
 
         return;			// other immediate command
  
-#endif:
+#endif
 	
 	default:
 		WriteDebugLog(MLOG_INFO, "unknown kiss packet: 0x%02x 0x%02x\n", pkt[0], pkt[1]);
 		return;
 	}
+}
+
+UCHAR TNC[] = {'T'+'T', 'N'+'N', 'C' + 'C', 0x40, 0x40, 0x40, 1};
+UCHAR LOG[] = {'L'+'L', 'O'+'O', 'G' + 'G', 0x40, 0x40, 0x40, 0};
+
+
+void SendMonUI(char * Mess)
+{
+	// Send Log message as a UI Datagram From TNC to LOG
+
+	unsigned char kbuf[768];
+	unsigned char *bp = kbuf;
+	unsigned char * data;
+	int dlen = strlen(Mess);
+
+	int i, len;
+	int sum = 0;			// For checksummed KISS
+
+	*bp++ = KISS_FEND;
+	*bp++ = KISS_CMD_DATA;
+
+	data = LOG;			// Send Dest
+
+	for (i = 0; i < 7; i++)
+	{
+		sum ^= *data;
+		*bp++ = *data++;
+	}
+
+	data = TNC;			// Send Origin
+
+	for (i = 0; i < 7; i++)
+	{
+		sum ^= *data;
+		*bp++ = *data++;
+	}
+	sum ^= 3;
+	*bp++ = 3;			// UI
+
+	sum ^= 0xF0;
+	*bp++ = 0XF0;		// Pid
+
+	data = Mess;
+
+	for (; dlen > 0; dlen--, data++)
+	{
+		sum ^= *data;
+		*bp++ = *data;
+	}
+
+	if (KISSCHECKSUM)
+	{
+		// Send Checksum before closing flag
+		// May need to escape it
+
+		switch (sum)
+		{
+		case KISS_FEND:
+			*bp++ = KISS_FESC;
+			*bp++ = KISS_TFEND;
+			break;
+
+		case KISS_FESC:
+			*bp++ = KISS_FESC;
+			*bp++ = KISS_TFESC;
+		break;
+
+		default:
+			*bp++ = sum;
+		}
+	}
+	*bp++ = KISS_FEND;
+	len = bp - kbuf;
+
+	i = SerialSendData(kbuf, len);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -711,7 +797,7 @@ void pkttransmitloop(struct state *state)
 	int len, newwr;
 	int rd;
 
-	// TO support ackmode I've added an ackmode flag and two 
+	// To support ackmode I've added an ackmode flag and two 
 	// byte length field on the front of each packet.
 
 	// I think we should discard anything that can't be
@@ -755,9 +841,8 @@ void pkttransmitloop(struct state *state)
 			len += chan->pkt.htx.buf[rd++] << 8;
 			rd = rd % TXBUFFER_SIZE;
 
-			if (len > 256)
-				len = 256;
-
+			WriteDebugLog(7, "Cyclic buffer check rd %d wr %d len %d",
+				chan->pkt.htx.rd, chan->pkt.htx.wr, len);
 
 			if (AckMode)
 			{

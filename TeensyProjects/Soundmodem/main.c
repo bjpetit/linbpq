@@ -47,12 +47,12 @@ void DemodAFSKinit(void *state);
 void DemodFSKinit(void *state);
 void mainLoop();
 
-char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.1 February 2017\r\n"
+char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.2 May 2017\r\n"
 						"based on Soundmodem by Thomas Sailer";
 
-int VersionNo = 1;		
+int VersionNo = 2;		
 
-int Baud = 2400;
+int Baud = 1200;
 BOOL AFSK = TRUE;
 BOOL FSK = FALSE;
 BOOL PSK = FALSE;
@@ -211,8 +211,8 @@ int main(int argc, char *argv[])
 		}
 		else if (Baud == 1200)
 		{
-			P2 = 1600;
-			P3 = 1800;
+			P2 = 1200;
+			P3 = 2200;
 		}
 		else
 		{

@@ -53,7 +53,7 @@ extern int NErrors;
 extern BOOL blnBREAKCmd;
 extern UCHAR bytLastACKedDataFrameType;
 extern int intARQDefaultDlyMs;
-
+unsigned int tmrFinalID;
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
@@ -249,6 +249,8 @@ BOOL DecodeFrame(int intFrameType, UCHAR * bytData);
 void Update4FSKConstellation(int * intToneMags, int * intQuality);
 void Update16FSKConstellation(int * intToneMags, int * intQuality);
 void Update8FSKConstellation(int * intToneMags, int * intQuality);
+void ProcessPingFrame(char * bytData);
+int Compute4FSKSN();
 
 void DemodPSK();
 BOOL DemodQAM();
@@ -1317,6 +1319,20 @@ ProcessFrame:
 					ProcessUnconnectedConReqFrame(intFrameType, bytData);
 				else if (intFrameType == PING)
 					ProcessPingFrame(bytData);
+				else if (intFrameType == DISCFRAME) 
+				{
+					// Special case to process DISC from previous connection (Ending station must have missed END reply to DISC) Handles protocol rule 1.5
+    
+					WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessNewSamples]  DISC frame received in ProtocolMode FEC, Send END with SessionID= %XX", bytLastARQSessionID);
+
+					tmrFinalID = Now + 3000;			
+					blnEnbARQRpt = FALSE;
+
+					EncLen = Encode4FSKControl(END, bytLastARQSessionID, bytEncodedBytes);
+					Mod4FSKDataAndPlay(END, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+
+					// Drop through
+				}
 			}				
 			else if (ProtocolMode == ARQ)
 			{
@@ -1353,6 +1369,7 @@ ProcessFrame:
 
 
             // Debug.WriteLine("[DecodePSKData2] bytPass = " & Format(bytPass, "X"))
+	
 			if (ProtocolMode == FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame
@@ -2159,8 +2176,10 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		}
 	}
 
-//	WriteDebugLog(LOGDEBUG, "%x %x %x Sess %x pend %d conn %d", intIatMinDistance1, intIatMinDistance2,
-//		intIatMinDistance3, bytSessionID, blnPending, blnARQConnected); 
+	WriteDebugLog(LOGDEBUG, "Frame Decode type %x %x %x Dist %.2f %.2f %.2f Sess %x pend %d conn %d lastsess %d",
+		intIatMinDistance1, intIatMinDistance2, intIatMinDistance3, 
+		dblMinDistance1, dblMinDistance2, dblMinDistance3, 
+		bytSessionID, blnPending, blnARQConnected, bytLastARQSessionID); 
 	
 	if (bytSessionID == 0xFF)		// ' we are in a FEC QSO, monitoring an ARQ session or have not yet reached the ARQ Pending or Connected status 
 	{
@@ -3110,8 +3129,10 @@ int Compute4FSKSN()
 		intAvgNonDominateTone = (intNonDominateToneSum - intDominateTones[i])/ 3; // subtract out the Dominate Tone from the sum
 		
 		// Note subtract intAvgNonDominateTone below to compute S:N instead of (S+N):N
-
-		dblAVGSNdB += (20.0f * log10f(sqrtf(intDominateTones[i] - intAvgNonDominateTone) / sqrtf(intAvgNonDominateTone)));	 // average in the S:N	
+		// note 10 * log used since tone values are already voltage squared (avoids SQRT) 
+		// the S:N calculation is limited to a Max of + 50 dB to avoid distorting the average in very low noise environments 
+            
+		dblAVGSNdB += min(50.0f, 10.0f * log10f((intDominateTones[i] - intAvgNonDominateTone) / intAvgNonDominateTone)); //  average in the S:N;
 	}
 	intSNdB = (dblAVGSNdB / intNumSymbols) - 17.8f;	//  17.8 converts from nominal 50 Hz "bin" BW to standard 3 KHz BW (10* Log10(3000/50))
 	

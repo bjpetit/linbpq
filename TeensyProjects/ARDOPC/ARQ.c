@@ -65,7 +65,7 @@ int AuxCallsLength = 0;
 int intBW;			// Requested connect speed
 int intSessionBW;	// Negotiated speed
 
-const char ARQBandwidths[8][12] = {"200FORCED", "500FORCED", "1000FORCED", "2000FORCED", "200MAX", "500MAX", "1000MAX", "2000MAX"};
+const char ARQBandwidths[9][12] = {"200FORCED", "500FORCED", "1000FORCED", "2000FORCED", "200MAX", "500MAX", "1000MAX", "2000MAX", "UNDEFINED"};
 enum _ARQSubStates ARQState;
 
 const char ARQSubStates[10][11] = {"None", "ISSConReq", "ISSConAck", "ISSData", "ISSId", "IRSConAck", "IRSData", "IRSBreak", "IRSfromISS", "DISCArqEnd"};
@@ -732,6 +732,10 @@ UCHAR * GetShiftUpThresholds(int intBW)
 		return byt2000FM;
 }
 
+unsigned short  ModeHasWorked[16] = {0};		// used to attempt to make gear shift more stable.
+unsigned short  ModeHasBeenTried[16] = {0};
+unsigned short  ModeNAKS[16] = {0};
+
 //  Subroutine to shift up to the next higher throughput or down to the next more robust data modes based on average reported quality 
 
 void Gearshift_8()
@@ -742,10 +746,21 @@ void Gearshift_8()
 
 	char strOldMode[18] = "";
 	char strNewMode[18] = "";
+	int DownNAKS = 3;			// Normal
 
 	int intBytesRemaining = bytDataToSendLength;
 
-	if (intFrameTypePtr > 0 && (intNAKctr >= 3 || (intNAKctr >= 2 && strstr(Name(bytFrameTypesForBW[intFrameTypePtr]), "FSK") == 0)))
+	if (ModeHasWorked[intFrameTypePtr] == 0)		// This mode has never worked
+		DownNAKS = 1;			// Revent immediately
+	else if (strstr(Name(bytFrameTypesForBW[intFrameTypePtr]), "FSK") == 0)
+		DownNAKS = 2;			// Lower for FSK
+
+	if (intACKctr)
+		ModeHasWorked[intFrameTypePtr]++;
+	else if (intNAKctr)
+		ModeNAKS[intFrameTypePtr]++;
+
+	if (intFrameTypePtr > 0 && intNAKctr >= DownNAKS)
 	{
 		// NAK threshold changed from 4 to 3 on rev 0.5.3.1, also less for PSK
 
@@ -756,8 +771,9 @@ void Gearshift_8()
 
  		WriteDebugLog(LOGINFO, "[ARDOPprotocol.Gearshift_8] intNAKCtr= %d intNAKctr  Shift down from Frame type %s New Mode: %s", intNAKctr, strOldMode, strNewMode);
 		intShiftUpDn = -1;  // Shift down if 3 NAKs without ACK or 2 NAKs without an ACK from non FSK modes.
-		intAvgQuality; 		intNAKctr = 0;
-
+		intAvgQuality;
+		
+		intNAKctr = 0;
 		intACKctr = 0;
 	}
 	else if (intAvgQuality > bytShiftUpThresholds[intFrameTypePtr] && intFrameTypePtr < (bytFrameTypesForBWLength - 1) && intACKctr >= 2)
@@ -815,6 +831,16 @@ void Gearshift_8()
 		else
 			intShiftUpDn = 1;
 
+		// if the new mode has been tried before, and immediately failed, don't try again
+		// till we get at least 5 sucessive acks
+
+		if (ModeHasBeenTried[intFrameTypePtr] && ModeHasWorked[intFrameTypePtr] == 0 && intACKctr < 5)
+		{
+			intShiftUpDn = 0;
+			return;
+		}
+
+		ModeHasBeenTried[intFrameTypePtr] = 1;
 
 		strcpy(strNewMode, Name(bytFrameTypesForBW[intFrameTypePtr + intShiftUpDn]));
 		strNewMode[strlen(strNewMode) - 2] = 0;
@@ -1232,6 +1258,10 @@ void InitializeConnection()
 
 	ClearQualityStats();
 	ClearTuningStats();
+
+	memset(ModeHasWorked, 0, sizeof(ModeHasWorked));
+	memset(ModeHasBeenTried, 0, sizeof(ModeHasBeenTried));
+	memset(ModeNAKS, 0, sizeof(ModeNAKS));
 }
 
 // This sub processes a correctly decoded ConReq frame, decodes it an passed to host for display if it doesn't duplicate the prior passed frame. 
@@ -1290,7 +1320,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 			EncLen = Encode4FSKControl(0x2C, bytLastARQSessionID, bytEncodedBytes);
 
-			tmrFinalID = 500;			
+			tmrFinalID = Now + 3000;			
 			blnEnbARQRpt = FALSE;
 
 			Mod4FSKDataAndPlay(0x2C, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
@@ -1601,14 +1631,12 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				bytLastARQSessionID = bytSessionID;  // capture this session ID to allow answering DISC from DISC state if ISS missed Sent END
                        
 				ClearDataToSend();
-				tmrFinalID = 500;
+				tmrFinalID = Now + 3000;
 				blnDISCRepeating = FALSE;
 				
 				SetARDOPProtocolState(DISC);
                 InitializeConnection();
 				blnEnbARQRpt = FALSE;
-
-				bytLastARQSessionID = bytSessionID;  // capture this session ID to allow answering DISC from DISC state if ISS missed Sent END
 
 				EncLen = Encode4FSKControl(0x2C, bytSessionID, bytEncodedBytes);
 				Mod4FSKDataAndPlay(0x2C, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
@@ -1838,11 +1866,11 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				QueueCommandToHost("DISCONNECTED");
 				sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s ", strRemoteCallsign);
 				QueueCommandToHost(HostCmd);
+				tmrFinalID = Now + 3000;
+				blnDISCRepeating = FALSE;
 				EncLen = Encode4FSKControl(END, bytSessionID, bytEncodedBytes);
 				Mod4FSKDataAndPlay(END, &bytEncodedBytes[0], EncLen, LeaderLength);	
                 bytLastARQSessionID = bytSessionID; // capture this session ID to allow answering DISC from DISC state
-				tmrFinalID = 500;
-				blnDISCRepeating = FALSE;
                 ClearDataToSend();
                 SetARDOPProtocolState(DISC);
 				blnEnbARQRpt = FALSE;
@@ -2172,7 +2200,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
       
 				bytLastARQSessionID = bytSessionID; // capture this session ID to allow answering DISC from DISC state
 				blnDISCRepeating = FALSE;
-				tmrFinalID = 500;
+				tmrFinalID = Now + 3000;
 				ClearDataToSend();
 				SetARDOPProtocolState(DISC);
 				InitializeConnection();
@@ -2229,7 +2257,7 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if ((intConReqFrameType >= 0x31 && intConReqFrameType <= 0x34)|| intConReqFrameType == 0x35)
 		{
 			intSessionBW = 200;
-			return 0x39;		 // ConAck200
+			return ConAck200;
 		}
 		break;
 
@@ -2238,7 +2266,7 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if ((intConReqFrameType >= 0x32 && intConReqFrameType <= 0x34) || intConReqFrameType == 0x36)
 		{
 			intSessionBW = 500;
-			return 0x3A;	// ' ConAck500
+			return ConAck500;
 		}
 		break;
 
@@ -2247,7 +2275,7 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if ((intConReqFrameType >= 0x33 && intConReqFrameType <= 0x34) || intConReqFrameType == 0x37)
 		{
 			intSessionBW = 1000;
-			return 0x3B;		 // ConAck1000
+			return ConAck1000;
 		}
 		break;
 
@@ -2256,7 +2284,7 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if (intConReqFrameType == 0x34 || intConReqFrameType == 0x38)
 		{
 			intSessionBW = 2000;
-			return 0x3C;		//  ConAck2000
+			return ConAck2000;
 		}
 		break;
 
@@ -2265,7 +2293,7 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if (intConReqFrameType >= 0x31 && intConReqFrameType <= 0x35)
 		{
 			intSessionBW = 200;
-			return 0x39;		 // ConAck200
+			return ConAck200;
 		}
 		break;
 
@@ -2274,12 +2302,12 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if (intConReqFrameType == 0x31 || intConReqFrameType == 0x35)
 		{
 			intSessionBW = 200;
-			return 0x39;		 // ConAck200
+			return ConAck200;
 		}
 		if ((intConReqFrameType >= 0x32 && intConReqFrameType <= 0x34) || intConReqFrameType == 0x36)
 		{
 			intSessionBW = 500;
-			return 0x3A;		 // ConAck500
+			return ConAck500;
 		}
 		break;
 
@@ -2288,17 +2316,17 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if (intConReqFrameType == 0x31 || intConReqFrameType == 0x35)
 		{
 			intSessionBW = 200;
-			return 0x39;		 // ConAck200
+			return ConAck200;
 		}
 		if (intConReqFrameType == 0x32 || intConReqFrameType == 0x36)
 		{
 			intSessionBW = 500;
-			return 0x3A;		 // ConAck500
+			return ConAck500;
 		}
 		if ((intConReqFrameType >= 0x33 && intConReqFrameType <= 0x34) || intConReqFrameType == 0x37)
 		{
 			intSessionBW = 1000;
-			return 0x3B;		 // ConAck1000
+			return ConAck1000;
 		}
            
 	case B2000MAX:
@@ -2345,7 +2373,10 @@ BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall)
 	strcpy(strLocalCallsign, strMycall);
 	strcpy(strFinalIDCallsign, strLocalCallsign);
 
-	EncLen = EncodeARQConRequest(strMycall, strTargetCall, ARQBandwidth, bytEncodedBytes);
+	if (CallBandwidth == UNDEFINED)
+		EncLen = EncodeARQConRequest(strMycall, strTargetCall, ARQBandwidth, bytEncodedBytes);
+	else
+		EncLen = EncodeARQConRequest(strMycall, strTargetCall, CallBandwidth, bytEncodedBytes);
 
 	if (EncLen == 0)
 		return FALSE;
@@ -2529,6 +2560,7 @@ void LogStats()
 {
 	int intTotFSKDecodes = intGoodFSKFrameDataDecodes + intFailedFSKFrameDataDecodes;
 	int intTotPSKDecodes = intGoodPSKFrameDataDecodes + intFailedPSKFrameDataDecodes;
+	int i;
 
 	Statsprintf("************************* ARQ session stats with %s  %d minutes ****************************", strRemoteCallsign, (Now - dttStartSession) /60000); 
 	Statsprintf("     LeaderDetects= %d   AvgLeader S+N:N(3KHz noise BW)= %f dB  LeaderSyncs= %d", intLeaderDetects, dblLeaderSNAvg - 23.8, intLeaderSyncs);
@@ -2584,6 +2616,17 @@ void LogStats()
 
 	if (intQAMQualityCnts > 0)
 		Statsprintf("     Avg QAM Quality=%d on %d frame(s)",  intQAMQuality / intQAMQualityCnts, intQAMQualityCnts);
+
+	// Experimental logging of Frame Type ACK and NAK counts
+
+	Statsprintf("");
+	Statsprintf("Type              ACKS  NAKS");
+
+	for (i = 0; i < bytFrameTypesForBWLength; i++)
+	{
+		Statsprintf("%-16s %5d %5d", Name(bytFrameTypesForBW[i]), ModeHasWorked[i], ModeNAKS[i]);
+	}
+
 
 	Statsprintf("************************************************************************************************");
 

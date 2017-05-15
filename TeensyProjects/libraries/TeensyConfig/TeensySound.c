@@ -129,7 +129,7 @@ void PollReceivedSamples()
 
       // Adjust VRef
 
-      VRef += tot / Samples;
+//      VRef += tot / Samples;
       
       Samples = tot = 0;
 

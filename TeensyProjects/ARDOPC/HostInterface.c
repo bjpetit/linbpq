@@ -20,6 +20,9 @@ extern BOOL NeedConReq;		// ARQCALL Command Flag
 extern BOOL NeedPing;
 extern BOOL PingCount;
 extern char ConnectToCall[16];
+extern enum _ARQBandwidth CallBandwidth;
+
+
 extern BOOL NeedTwoToneTest;
 
 extern unsigned int lastRTCTick;// Make sure this is set to ticks mod 1000 so RTC incrememtns at mS 0
@@ -313,6 +316,36 @@ void ProcessCommandFromHost(char * strCMD)
 			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
+		}
+		goto cmddone;
+	}
+
+	if (strcmp(strCMD, "CALLBW") == 0)
+	{
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "CALLBW %s", ARQBandwidths[CallBandwidth]);
+			SendReplyToHost(cmdReply);
+			goto cmddone;
+		}
+		else
+		{
+			for (i = 0; i < 9; i++)
+			{
+				if (strcmp(ptrParams, ARQBandwidths[i]) == 0)
+					break;
+			}
+
+			if (i == 9)
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			else
+			{
+				CallBandwidth = i;
+				sprintf(cmdReply, "CALLBW now %s", ARQBandwidths[CallBandwidth]);
+				SendReplyToHost(cmdReply);
+			}
 		}
 		goto cmddone;
 	}
@@ -645,6 +678,41 @@ void ProcessCommandFromHost(char * strCMD)
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}
+		goto cmddone;
+	}
+
+	if (strcmp(strCMD, "ENABLEPINGACK") == 0)
+	{
+		if (ptrParams == NULL)
+		{
+			if (EnablePingAck)
+				sprintf(cmdReply, "ENABLEPINGACK TRUE");
+			else
+				sprintf(cmdReply, "ENABLEPINGACK FALSE");
+
+			SendReplyToHost(cmdReply);
+			goto cmddone;
+		}
+		
+		if (strcmp(ptrParams, "TRUE") == 0)
+		{
+			EnablePingAck = TRUE;
+			ClearBusy();
+		}
+		else 
+		if (strcmp(ptrParams, "FALSE") == 0)
+			EnablePingAck = FALSE;
+		else
+		{
+			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			goto cmddone;
+		}
+		if (EnablePingAck)
+			sprintf(cmdReply, "ENABLEPINGACK now TRUE");
+		else
+			sprintf(cmdReply, "ENABLEPINGACK now FALSE");
+		
+		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
 

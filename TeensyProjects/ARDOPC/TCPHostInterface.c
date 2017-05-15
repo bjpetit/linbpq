@@ -260,7 +260,7 @@ loop:
 
 
 
-	if (ARDOPBuffer[1] = ':')	// At least message looks reasonable
+	if (ARDOPBuffer[1] == ':')	// At least message looks reasonable
 	{
 		if (ARDOPBuffer[0] == 'C')
 		{
@@ -319,6 +319,7 @@ loop:
 	// Getting bad data ?? Should we just reset ??
 	
 	WriteDebugLog(LOGDEBUG, "ARDOP BadHost Message ?? %s", ARDOPBuffer);
+	InputLen = 0;
 	return;
 }
 

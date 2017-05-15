@@ -38,6 +38,8 @@ BOOL NeedID = FALSE;		// SENDID Command Flag
 BOOL NeedConReq = FALSE;	// ARQCALL Command Flag
 BOOL NeedPing = FALSE;		// PING Command Flag
 BOOL NeedTwoToneTest = FALSE;
+enum _ARQBandwidth CallBandwidth = UNDEFINED;
+
 
 int PingCount;
 
@@ -2823,7 +2825,7 @@ void SendPING(char * strMycall, char * strTargetCall, int intRpt)
  
 // This sub processes a correctly decoded Ping frame, decodes it an passed to host for display if it doesn't duplicate the prior passed frame. 
 
-ProcessPingFrame(char * bytData)
+void ProcessPingFrame(char * bytData)
 {
 	WriteDebugLog(LOGDEBUG, "ProcessPingFrame Protocol State = %s", ARDOPStates[ProtocolState]);
 	
@@ -2839,6 +2841,7 @@ ProcessPingFrame(char * bytData)
 			Mod4FSKDataAndPlay(PINGACK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
                
 			WriteDebugLog(LOGDEBUG, "[ProcessPingFrame] PING from %s S:N=%d Qual=%d", bytData, stcLastPingintRcvdSN, stcLastPingintQuality);
+			SendCommandToHost("PINGREPLY");	
 			return;
 		}
 	}	

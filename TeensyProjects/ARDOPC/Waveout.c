@@ -456,13 +456,11 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 		return;
 
 	GetSystemTime(&st);
-	sprintf(Value, "%s_%04d%02d%02d.log",
-				"ARDOPDebug", st.wYear, st.wMonth, st.wDay);
 	
 	if (logfile == NULL)
 	{
-		sprintf(Value, "%s_%04d%02d%02d.log",
-				"ARDOPDebug", st.wYear, st.wMonth, st.wDay);
+		sprintf(Value, "%s%d_%04d%02d%02d.log",
+			"ARDOPDebug", port, st.wYear, st.wMonth, st.wDay);
 
 		if ((logfile = fopen(Value, "ab")) == NULL)
 			return;
@@ -494,8 +492,8 @@ VOID WriteExceptionLog(const char * format, ...)
 	printf(Mess);
 
 	GetSystemTime(&st);
-	sprintf(Value, "%s_%04d%02d%02d.log",
-				"ARDOPException", st.wYear, st.wMonth, st.wDay);
+	sprintf(Value, "%s%d_%04d%02d%02d.log",
+				"ARDOPException", port, st.wYear, st.wMonth, st.wDay);
 	
 	if ((logfile = fopen(Value, "ab")) == NULL)
 		return;
@@ -534,8 +532,8 @@ VOID Statsprintf(const char * format, ...)
 	if (statslogfile == NULL)
 	{
 		GetSystemTime(&st);
-		sprintf(Value, "%s_%04d%02d%02d.log",
-			"ARDOPSession", st.wYear, st.wMonth, st.wDay);
+		sprintf(Value, "%s%d_%04d%02d%02d.log",
+			"ARDOPSession", port, st.wYear, st.wMonth, st.wDay);
 
 		if ((statslogfile = fopen(Value, "ab")) == NULL)
 			return;

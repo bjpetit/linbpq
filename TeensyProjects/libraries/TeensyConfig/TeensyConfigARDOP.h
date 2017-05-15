@@ -19,9 +19,18 @@
 
 #define PIBOARD
 
+// define PLOTCONSTELLATION if you have a display attached and want a constellation display
+
 #define PLOTCONSTELLATION
-#define OLED
+
+// define the type of display 
+// OLED is i2c 128 x 64 Display
+// WDTTFT is the TFT on the WDT version of the board.
+// KMR_1.8 is 1.8" TFT 128 x 160 SPI with ST7735 chip
+
+//#define OLED
 //#define WDTTFT
+#define KMR_18
 
 #ifdef PIBOARD
 
@@ -126,6 +135,25 @@
 #define Gold 0xffff
 #define Lime 0xffff
 #define Yellow 0xffff
+#endif
+
+#ifdef KMR_18
+
+//	Using the display on the WDT board (ILI9341)
+
+#define ConstellationHeight 91
+#define ConstellationWidth 91
+#define PLOTRADIUS 42
+// Set position of constellation on display
+#define ConsXoffset 69
+#define ConsYoffset 0
+#define WHITE 0xffff
+#define Tomato 0xFD20	// ILI9341_ORANGE
+#define Gold Yellow
+#define Lime 0x07E0 	// ILI9341_GREEN
+#define Yellow 0xFFE0	// ILI9341_YELLOW 
+#define BLACK 0     
+
 #endif
 
 #ifdef WDTTFT

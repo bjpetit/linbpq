@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.4.1-BPQ"
+#define ProductVersion "0.9.5.7-BPQ"
 
 //	Sound interface buffer size
 
@@ -242,13 +242,13 @@ enum _ARQBandwidth
 	B200MAX,
 	B500MAX,
 	B1000MAX,
-	B2000MAX
+	B2000MAX,
+	UNDEFINED
 };
 
 extern enum _ARQBandwidth ARQBandwidth;
-
-extern const char ARQBandwidths[8][12];
-
+extern enum _ARQBandwidth CallBandwidth;
+extern const char ARQBandwidths[9][12];
 
 enum _ARDOPState
 {
@@ -306,20 +306,6 @@ struct SEM
 
 extern struct SEM Semaphore;
 
-struct SessionStats
-{
-	time_t dttSessionStart;
-	int intTotalBytesSent;
-    int intTotalBytesReceived;
-	int intFrameTypeDecodes;
-//	float ModeQuality() As Double
-	float dblSearchForLeaderAvg;
-	int intMax1MinThruput;
-	int intGearShifts;
-	BOOL blnStatsValid;
-};
-
-
 
 #define BREAK 0x23
 #define IDLEFRAME 0x24
@@ -330,7 +316,7 @@ struct SessionStats
 
 #define ConAck200 0x39
 #define ConAck500 0x3A
-#define ConAck1000 0x3C
+#define ConAck1000 0x3B
 #define ConAck2000 0x3C
 #define PINGACK 0x3d
 #define PING 0x3E

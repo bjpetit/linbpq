@@ -131,7 +131,7 @@ static void *modconfig(struct modemchannel *chan, unsigned int *samplerate, int 
 
 static void modinit(void *state, unsigned int samplerate)
 {
-        struct modstate *s = (struct modstate *)state;
+	struct modstate *s = (struct modstate *)state;
 	int i, j;
 	float f1, f2, time;
 	float c[NUMFILTER * FILTERLEN];

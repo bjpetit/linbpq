@@ -173,8 +173,8 @@ VOID Statsprintf(const char * format, ...)
 		T = time(NULL);
 		tm = gmtime(&T);
 
-		sprintf(Value, "%s_%04d%02d%02d.log",
-		LogName[2], tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+		sprintf(Value, "%s%d_%04d%02d%02d.log",
+		LogName[2], port, tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
 
 		if ((statslogfile = fopen(Value, "ab")) == NULL)
 		{
@@ -257,11 +257,11 @@ void main(int argc, char * argv[])
 
 	Sleep(1000);	// Give LinBPQ time to complete init if exec'ed by linbpq
 
-	Debugprintf("ARDOPC Version %s", ProductVersion);
-
 	if (argc > 1)
 		port = atoi(argv[1]);
-		
+
+	Debugprintf("ARDOPC Version %s", ProductVersion);
+	
 	if (argc > 3)
 	{
 		strcpy(CaptureDevice, argv[2]);
@@ -1250,8 +1250,8 @@ int WriteLog(char * msg, int Log)
 		T = time(NULL);
 		tm = gmtime(&T);
 
-		sprintf(Value, "%s_%04d%02d%02d.log",
-		LogName[Log], tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+		sprintf(Value, "%s%d_%04d%02d%02d.log",
+		LogName[Log], port, tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
 
 		if ((logfile[Log] = fopen(Value, "a")) == NULL)
 			return FALSE;

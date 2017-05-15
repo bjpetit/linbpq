@@ -41,14 +41,11 @@
 // If using Serial1 or Serial3 also define SERIAL1SIZE or SSRIAL3SIZE to
 // increase size of serial port buffers
 
-#define HOSTPORT Serial3
-#define SERIAL3SIZE 512
+#define HOSTPORT Serial1
+#define SERIAL1SIZE 512
 #define HOSTSPEED 115200
 
 #define MONPORT Serial
-
-// Send Debug output as UI frames on Serial Interface
-#define UIMON
 
 //#define CATPORT Serial5
 //#define CATSPEED 19200

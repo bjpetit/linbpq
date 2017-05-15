@@ -10,6 +10,7 @@ int FECRepeatsSent;
 UCHAR bytFrameType;
 BOOL blnSendIDFrame;
 extern BOOL NeedID;		// SENDID Command Flag
+extern int intRepeatCount;
 
 extern int intLastFrameIDToHost;
 int bytFailedDataLength; 
@@ -198,6 +199,21 @@ BOOL GetNextFECFrame()
 
 		return FALSE;
 	}
+
+	if (ProtocolState == DISC && intPINGRepeats > 0)
+	{
+		intRepeatCount++;
+		if (intRepeatCount <= intPINGRepeats && blnPINGrepeating)
+		{
+			dttLastPINGSent = Now;
+			return TRUE;				// continue PING
+		}
+		
+		intPINGRepeats = 0;
+		blnPINGrepeating = False;
+        return FALSE;
+	}
+
 	
 	if (ProtocolState != FECSend)
 		return FALSE;
