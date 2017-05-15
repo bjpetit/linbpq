@@ -436,7 +436,8 @@ typedef struct user_t
 	ChatCIRCUIT *circuit;       // Circuit user is on, local or link.
 	TOPIC   *topic;         // Topic user is in.
 	int     rtflags;
-	time_t	lastmsgtime;	// Time of last input from user
+	time_t	lastmsgtime;	// Time of last input from user including keepalives
+	time_t	lastrealmsgtime;// Time of last input from user
 	time_t	lastsendtime;	// Time of last output to user
 	int Colour;				// For Console Display
 #ifdef LINBPQ

@@ -934,6 +934,8 @@
 //	Fix error when FBB restart data exactly fills a packet.
 //	Fix possible generation of meg number zero in send nondlivery notification 
 //	Fix problem with "Web Manage Messages" when stray message number zero appears
+//	Fix Crash in AMPR forward when host missing from VIA
+//	Fix possible addition of an spurious password entry to the ;FW: line when connecting to CMS
 
 #include "BPQMail.h"
 #define MAIL
@@ -2194,6 +2196,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			int n, Files = 0;
 			int TotalFileSize = 0;
 			char * NewMsg;
+			char * fulladdr;
 
 			GetDlgItemText(hDlg, IDC_MSGTO, HDest, 60);
 
@@ -2281,6 +2284,20 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 				}
 			}
 
+			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
+
+			// add @ if missing and check rms, smtp, etc
+
+			if (status[0] == 'P')
+			{
+				fulladdr =  CheckToAddress(NULL, HDest);
+
+				if (fulladdr)
+				{
+					strcpy(HDest, fulladdr);
+					free(fulladdr);
+				}
+			}
 			Msg = AllocateMsgRecord();
 		
 			// Set number here so they remain in sequence
@@ -2319,7 +2336,6 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 
 			GetDlgItemText(hDlg, IDC_MSGTITLE, Msg->title, 61);
-			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
 			Msg->type = status[0];
 			Msg->status = 'N';
 

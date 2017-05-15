@@ -20,6 +20,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "BPQMail.h"
 
+#ifdef WIN32
+//#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
+#else
+#include <iconv.h>
+#ifndef MACBPQ
+#include <sys/prctl.h>
+#endif
+#endif
 
 extern char NodeTail[];
 extern char BBSName[10];
@@ -394,6 +402,61 @@ UCHAR * GetBPQDirectory();
 #endif
 
 
+int WebIsUTF8(unsigned char *ptr, int len)
+{
+	int n; 
+	unsigned char * cpt = ptr;
+
+	// This is simpler than the Term version, as it only handles complete lines of text, so cant get split sequences
+
+	cpt--;
+										
+	for (n = 0; n < len; n++)
+	{
+		cpt++;
+		
+		if (*cpt < 128)
+			continue;
+
+		if ((*cpt & 0xF8) == 0xF0)
+		{ // start of 4-byte sequence
+			if (((*(cpt + 1) & 0xC0) == 0x80)
+		     && ((*(cpt + 2) & 0xC0) == 0x80)
+			 && ((*(cpt + 3) & 0xC0) == 0x80))
+			{
+				cpt += 3;
+				n += 3;
+				continue;
+			}
+			return FALSE;
+	    }
+		else if ((*cpt & 0xF0) == 0xE0)
+		{ // start of 3-byte sequence
+	        if (((*(cpt + 1) & 0xC0) == 0x80)
+		     && ((*(cpt + 2) & 0xC0) == 0x80))
+			{
+				cpt += 2;
+				n += 2;
+				continue;
+			}
+			return FALSE;
+		}
+		else if ((*cpt & 0xE0) == 0xC0)
+		{ // start of 2-byte sequence
+	        if ((*(cpt + 1) & 0xC0) == 0x80)
+			{
+				cpt++;
+				n++;
+				continue;
+			}
+			return FALSE;
+		}
+		return FALSE;
+	}
+
+    return TRUE;
+}
+
 static int compare(const void *arg1, const void *arg2)
 {
    // Compare Calls. Fortunately call is at start of stuct
@@ -465,6 +528,38 @@ UseThis:
 	return Session;
 }
 
+void ConvertTitletoUTF8(char * Title, char * UTF8Title)
+{
+	if (WebIsUTF8(Title, strlen(Title)) == FALSE)
+	{
+		// With Windows it is simple - convert using current codepage
+		// I think the only reliable way is to convert to unicode and back
+
+		int origlen = strlen(Title) + 1;
+#ifndef LINBPQ
+		WCHAR BufferW[128];
+		int wlen;
+		int len = origlen;
+
+		wlen = MultiByteToWideChar(CP_ACP, 0, Title, len, BufferW, origlen * 2); 
+		len = WideCharToMultiByte(CP_UTF8, 0, BufferW, wlen, UTF8Title, origlen * 2, NULL, NULL); 
+#else
+		int left = 2 * strlen(Title);
+		int len = origlen;
+		iconv_t * icu = NULL;
+				
+		if (icu == NULL)
+			icu = iconv_open("UTF-8", "CP1252");
+
+		iconv(icu, NULL, NULL, NULL, NULL);		// Reset State Machine
+		iconv(icu, &Title, &len, (char ** __restrict__)&UTF8Title, &left);
+#endif
+	}
+	else
+		strcpy(UTF8Title, Title);
+}
+
+
 
 int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Session)
 {
@@ -485,6 +580,8 @@ int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Sess
 		
 		if (Msg && CheckUserMsg(Msg, User->Call, User->flags & F_SYSOP))
 		{
+			char UTF8Title[128];
+			
 			// List if it is the right type and in the page range we want
 
 			if (Session->WebMailTypes[0] && strchr(Session->WebMailTypes, Msg->type) == 0) 
@@ -506,11 +603,15 @@ int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Sess
 			strcpy(Via, Msg->via);
 			strlop(Via, '.');
 
+			// make suretitle is UTF 8 encoded
+
+			ConvertTitletoUTF8(Msg->title, UTF8Title);
+			
 			ptr += sprintf(ptr, "<a href=""/WebMail/WM/%d?%s"">%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
 				Msg->number, Key, Msg->number,
 				FormatDateAndTime(Msg->datecreated, TRUE), Msg->type,
 				Msg->status, Msg->length, Msg->to, Via,
-				Msg->from, Msg->title);
+				Msg->from, UTF8Title);
 
 			n--;
 
@@ -532,6 +633,7 @@ int SendWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Num
 	char * ptr = Message;
 	char * MsgBytes, * Save;
 	char FullTo[100];
+	char UTF8Title[128];
 	int Index;
 
 	Msg = GetMsgFromNumber(Number);
@@ -556,9 +658,12 @@ int SendWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Num
 	else
 		strcpy(FullTo, Msg->to);
 
+	// make sure title is UTF 8 encoded
+
+	ConvertTitletoUTF8(Msg->title, UTF8Title);
 
 	ptr += sprintf(ptr, "From: %s%s\nTo: %s\nType/Status: %c%c\nDate/Time: %s\nBid: %s\nTitle: %s\n\n",
-		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, UTF8Title);
 
 	MsgBytes = Save = ReadMessageFile(Number);
 
@@ -680,6 +785,50 @@ int SendWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Num
 
 		User->Total.MsgsSent[Index] ++;
 //		User->Total.BytesForwardedOut[Index] += Length;
+
+		// if body not UTF-8, convert it
+
+	if (WebIsUTF8(MsgBytes, strlen(MsgBytes)) == FALSE)
+	{
+		// With Windows it is simple - convert using current codepage
+		// I think the only reliable way is to convert to unicode and back
+
+		int origlen = strlen(MsgBytes) + 1;
+
+		UCHAR * BufferB = malloc(2 * origlen);
+
+#ifndef LINBPQ
+
+		WCHAR * BufferW = malloc(2 * origlen);
+		int wlen;
+		int len = origlen;
+
+		wlen = MultiByteToWideChar(CP_ACP, 0, MsgBytes, len, BufferW, origlen * 2); 
+		len = WideCharToMultiByte(CP_UTF8, 0, BufferW, wlen, BufferB, origlen * 2, NULL, NULL); 
+		
+		free(Save);
+		Save = MsgBytes = BufferB;
+		free(BufferW);
+
+#else
+		int left = 2 * strlen(MsgBytes);
+		int len = strlen(MsgBytes);
+		UCHAR * BufferBP = BufferB;
+		iconv_t * icu = NULL;
+
+		if (icu == NULL)
+			icu = iconv_open("UTF-8", "CP1252");
+
+		iconv(icu, NULL, NULL, NULL, NULL);		// Reset State Machine
+		iconv(icu, &MsgBytes, &len, (char ** __restrict__)&BufferBP, &left);
+	
+		free(Save);
+		Save = MsgBytes = BufferB;
+
+#endif
+
+	}
+
 
 		ptr += sprintf(ptr, "%s", MsgBytes);
 		free(Save);

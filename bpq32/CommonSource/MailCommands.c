@@ -349,6 +349,47 @@ VOID DoSetIdleTime(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * C
 	return;
 }
 
+VOID DoSetMsgNo(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
+{
+	int newNumber;
+
+	if (conn->sysop == 0)
+	{
+		nodeprintf(conn, "Command needs SYSOP status\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (Arg1)
+		newNumber = atoi(Arg1);
+	else
+	{
+		nodeprintf(conn, "New Number not specified\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (newNumber < LatestMsg)
+	{
+		nodeprintf(conn, "New Number less tham current (%d)\r", LatestMsg);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (newNumber > (MaxMsgno - 1000))
+	{
+		nodeprintf(conn, "New Number too close to Max Message Number\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	nodeprintf(conn, "Next message number was %d, now %d\r", LatestMsg, newNumber);
+	SendPrompt(conn, user);
+	LatestMsg = newNumber;
+	SaveMessageDatabase();
+}
+
+
 VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {
 	int msgno;

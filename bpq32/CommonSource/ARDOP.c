@@ -1250,6 +1250,29 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 
+			if (_memicmp(&buff[8], "PING ", 5) == 0)
+			{
+				if (InterlockedCheckBusy(TNC))
+				{
+					// Channel Busy. Unless override set, reject
+
+					if (TNC->OverrideBusy == 0)
+					{
+						// Reject
+				
+						UINT * buffptr = GetBuff();
+						
+						if (buffptr)
+						{
+							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} Ping blocked by Busy\r");
+							C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+						}
+						return 0;
+					}
+				}
+				TNC->OverrideBusy = FALSE;
+			}
+
 			// See if a Connect Command. If so, start codec and set Connecting
 
 			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
@@ -2020,7 +2043,7 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 			T = time(NULL);
 			tm = gmtime(&T);	
 
-			sprintf(Cmd, "DATETIME %02d %02d %02d %02d %02d %02d\r",
+			sprintf(Cmd, "DATETIME %02d %02d %02d %02d %02d %02d",
 				tm->tm_mday, tm->tm_mon + 1, tm->tm_year - 100,
 				tm->tm_hour, tm->tm_min, tm->tm_sec);
 
@@ -2454,6 +2477,8 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			ProcessIncommingConnectEx(TNC, Call, 0, TRUE, TRUE);
 				
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
+
+			SESS->Mode = TNC->WL2KMode;
 			
 			TNC->ConnectPending = FALSE;
 
@@ -2461,7 +2486,6 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			{
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
 				SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
-				SESS->Mode = TNC->WL2KMode;
 			}
 			else
 			{
@@ -2469,7 +2493,6 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				if (WL2K)
 				{
 					SESS->Frequency = WL2K->Freq;
-					SESS->Mode = WL2K->mode;
 				}
 			}
 			
@@ -2822,10 +2845,25 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "PING ", 5) == 0)
 	{
+		char Call[32];
+
+		// Make sure not Echoed PING
+
+		// c:ping gm8bpq-1 5
+		// c:PING GM8BPQ>GM8BPQ-1 15 98
+
+		if (strchr(Buffer, '>') == 0)	// Echoed
+			return;
+		
 		WritetoTrace(TNC, Buffer, MsgLen - 3);
 	
 		// Release scanlock after another interval (to allow time for response to be sent)
-		TNC->ConnectPending = 1;
+		// ?? use cancelpending TNC->ConnectPending = 1;
+
+
+		memcpy(Call, &Buffer[5], 20);
+		strlop(Call, '>'); 
+		UpdateMH(TNC, Call, '!', 'I');
 
 		return;
 	}
@@ -2833,7 +2871,6 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "PINGACK ", 8) == 0)
 	{
 		WritetoTrace(TNC, Buffer, MsgLen - 3);
-
 		// Drop through to return touser
 	}
 

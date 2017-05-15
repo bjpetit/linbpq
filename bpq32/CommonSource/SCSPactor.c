@@ -131,11 +131,12 @@ int CheckMode(struct TNCINFO * TNC);
 
 static FILE * LogHandle[32] = {0};
 
+static BOOL WRITELOG;					// Enable debug logging
+
+
 //char * Logs[4] = {"1", "2", "3", "4"};
 
 static char BaseDir[MAX_PATH]="c:\\";
-
-static BOOL WRITELOG = TRUE;
 
 static VOID CloseLogFile(int Flags)
 {
@@ -2734,13 +2735,13 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 				
 	}
 
-	if (TNC->HFPacket && TNC->UseAPPLCalls)
-		goto DontUseAPPLCmd;
+	if (!PactorCall && TNC->UseAPPLCalls)
+		goto DontUseAPPLCmd;				// Don't use APPL= for Packet Calls
 
 	Debugprintf("Pactor Call is %s Freq Specific Appl is %s Freq is %s",
 	DestCall, FreqAppl, TNC->RIG->Valchar);
 						
-	if (FreqAppl[0])			// Frequency spcific APPL overrides TNC APPL
+	if (FreqAppl[0])			// Frequency specific APPL overrides TNC APPL
 	{
 		buffptr = GetBuff();
 		if (buffptr == 0) return;			// No buffers, so ignore

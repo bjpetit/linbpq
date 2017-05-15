@@ -3385,6 +3385,14 @@ Dll VOID APIENTRY APRSDisconnect()
 
 }
 
+
+Dll char * APIENTRY APRSGetStatusMsgPtr()
+{
+	return StatusMsg;
+}
+
+
+
 Dll BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call)
 {
 	// Request APRS Data from Switch (called by APRS Applications)

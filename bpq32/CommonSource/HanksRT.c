@@ -813,7 +813,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 		
 	text_tellu(conn->u.user, Buffer, NULL, o_topic); // To local users.
 
-	conn->u.user->lastmsgtime = time(NULL);
+	conn->u.user->lastrealmsgtime = conn->u.user->lastmsgtime = time(NULL);
 		
 	// Send to Linked nodes
 
@@ -1091,7 +1091,7 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 			if (!user)
 				break;
 
-			user->lastmsgtime = time(NULL);
+			user->lastrealmsgtime = user->lastmsgtime = time(NULL);
 
 			text_tellu(user, f1, NULL, o_topic);
 
@@ -2068,7 +2068,7 @@ static USER *user_join(ChatCIRCUIT *circuit, char *ucall, char *ncall, char *nal
 	if (circuit->rtcflags & p_user)
 		circuit->u.user = user;
 
-	user->lastmsgtime = time(NULL);
+	user->lastrealmsgtime = user->lastmsgtime = time(NULL);
 
 	user->topic   = topic_join(circuit, deftopic);
 	return user;
@@ -2444,10 +2444,10 @@ void show_users(ChatCIRCUIT *circuit)
 #endif
 			if (circuit->u.user->rtflags & u_colour)	// Use Colour
 				nprintf(circuit, "\x1b%c%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
-					user->Colour, user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
+					user->Colour, user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastrealmsgtime);
 			else
 				nprintf(circuit, "%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
-					user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
+					user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastrealmsgtime);
 #ifndef LINBPQ
 		}
 		__except(EXCEPTION_EXECUTE_HANDLER)
@@ -2957,7 +2957,9 @@ VOID ChatTimer()
 
 		if (user->circuit && user->circuit->rtcflags & p_user)	// Local User
 		{
-			if ((NOW - user->lastmsgtime) > 7200)
+			time_t Idle = NOW - user->lastmsgtime;
+
+			if (Idle > 7200)
 			{
 				nprintf(user->circuit, "*** Disconnected - Idle time exceeded\r");
 				Sleep(1000);
@@ -3521,6 +3523,10 @@ loop:
 	if (conn->InputLen == 1 && conn->InputBuffer[0] == 0)		// Single Null
 	{
 		conn->InputLen = 0;
+
+		if (conn->u.user->circuit && conn->u.user->circuit->rtcflags & p_user)	// Local User
+			conn->u.user->lastmsgtime = time(NULL);
+
 		return 0;
 	}
 

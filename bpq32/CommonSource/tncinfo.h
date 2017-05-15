@@ -670,6 +670,8 @@ typedef struct TNCINFO
 	UCHAR * ARDOPAPRS;				// Used to reconstruct APRS datagram from FEC packets
 	int ARDOPAPRSLen;
 
+	BOOL WRITELOG;					// Enable debug logging
+
 } *PTNCINFO;
 
 VOID * zalloc(int len);

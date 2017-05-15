@@ -734,39 +734,40 @@ ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen)
 		{
 			USER = TCP->UserRecPtr[i];
 
-			if (_stricmp(user, USER->UserName) == 0)
+			if ((strcmp(password, USER->Password) == 0) &&
+				((_stricmp(user, USER->UserName) == 0 ) || (_stricmp(USER->UserName, "ANON") == 0)))
 			{
- 				if (strcmp(password, USER->Password) == 0)
+				// ok
+
+				struct HTTPConnectionInfo * Session = AllocateSession(sock, 'T');
+
+				if (Session)
 				{
-					// ok
-
-					struct HTTPConnectionInfo * Session = AllocateSession(sock, 'T');
-
-					if (Session)
-					{
-						char AXCall[10];
-						ReplyLen = sprintf(_REPLYBUFFER, TermPage, Mycall, Mycall, Session->Key, Session->Key, Session->Key);
-						strcpy(Session->HTTPCall, USER->Callsign);
-						ConvToAX25(Session->HTTPCall, AXCall);
-						ChangeSessionCallsign(Session->Stream, AXCall);
-						BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = USER->Secure;
-						Session->USER = USER;
-
-						if (Appl[0])
-						{
-							strcat(Appl, "\r");
-							SendMsg(Session->Stream, Appl, strlen(Appl));
-						}
-
-					}
+					char AXCall[10];
+					ReplyLen = sprintf(_REPLYBUFFER, TermPage, Mycall, Mycall, Session->Key, Session->Key, Session->Key);
+					if (_stricmp(USER->UserName, "ANON") == 0)
+						strcpy(Session->HTTPCall, _strupr(user));
 					else
-					{
-						ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+						strcpy(Session->HTTPCall, USER->Callsign);
+					ConvToAX25(Session->HTTPCall, AXCall);
+					ChangeSessionCallsign(Session->Stream, AXCall);
+					BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = USER->Secure;
+					Session->USER = USER;
 
-						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
+					if (Appl[0])
+					{
+						strcat(Appl, "\r");
+						SendMsg(Session->Stream, Appl, strlen(Appl));
 					}
-					break;
+
 				}
+				else
+				{
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
+				}
+				break;
 			}
 		}
 
@@ -1348,22 +1349,13 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	memcpy(Mycall, &MYNODECALL, 10);
 	strlop(Mycall, ' ');
 
-	// APRS is internal
 
-	if (_memicmp(Context, "/APRS/", 6) == 0)
+#ifdef WIN32
+
+	// Windows - Pass to APRS Messages Page request to BPQAPRS via Pipe
+
+	if (_memicmp(Context, "/APRS/MSGS/", 10) == 0)
 	{
-		APRSProcessHTTPMessage(sock, MsgPtr);
-		return 0;
-	}
-
-/*
-
-	// Windows - Pass to BPQAPRS via Pipi
-
-	if (_memicmp(Context, "/APRS/", 6) == 0)
-	{
-		// If for APRS, Pass to APRS Server via Named Pipe
-
 		char _REPLYBUFFER[8192];
 
 		hPipe = CreateFile(APRSPipeFileName, GENERIC_READ | GENERIC_WRITE,
@@ -1413,7 +1405,15 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		return 0;
 	}
 
-*/
+#endif
+
+	// other APRS process internally
+
+	if (_memicmp(Context, "/APRS/", 6) == 0)
+	{
+		APRSProcessHTTPMessage(sock, MsgPtr);
+		return 0;
+	}
 	
 
 	if (_stricmp(Context, "/Node/Signon?Node") == 0)

@@ -792,7 +792,13 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Save out of sequence L2 frames for possilb euse after retry
 //	Add KISS command to send KISS control frame to TNC
 //	Stop removing unused digis from packets sent to APRS-IS
-//	Basic processing of ARDOP PING and PINGACK responses
+//	Processing of ARDOP PING and PINGACK responses
+//	Handle changed encoding of WL2K update responses.
+//	Allow anonymous logon to telnet
+//	Don't use APPL= for RP Calls in Dragon Single mode.
+//	Add basic messaging page to APRS Web Server
+//  Add debug log option to SCSTracker and TrkMulti Drivers
+
 
 #define CKernel
 

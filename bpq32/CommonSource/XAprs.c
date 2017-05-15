@@ -85,6 +85,7 @@ GtkWidget *checklabel;
 GtkWidget *check1;
 GtkWidget *check2;
 GtkWidget *check3;
+GtkWidget *check4;
 GtkWidget *checkhbox;
 GtkWidget *separator;
 GtkWidget *table;
@@ -181,6 +182,19 @@ void FreeSemaphore(struct SEM * Semaphore)
 	Semaphore->Flag = 0;
 
 	return;
+}
+
+char * strlop(char * buf, char delim)
+{
+	// Terminate buf at delim, and return rest of string
+
+	char * ptr = strchr(buf, delim);
+
+	if (ptr == NULL) return NULL;
+
+	*(ptr)++=0;
+
+	return ptr;
 }
 
 unsigned long _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist)
@@ -282,6 +296,8 @@ UCHAR NextSeq = 1;
 
 char APRSCall[10];
 char LoppedAPRSCall[10];
+char BaseCall[10];
+
 
 // Image chunks are 256 rows of 3 * 256 bytes
 
@@ -2680,16 +2696,21 @@ void frame_callback(GtkWindow *window, GdkEvent *event, gpointer data)
 BOOL OnlyMine = FALSE;
 BOOL OnlySeq = FALSE;
 BOOL ShowBulls = FALSE;
+BOOL AllSSID = FALSE;
+
 
 void check_callback(GtkButton *button, gpointer user_data)
 {
 	GtkTreeIter iter;
 	struct APRSMESSAGE * ptr = Messages;
 	int n = 0;
+	
+	char BaseFrom[10];
 
 	OnlyMine = gtk_toggle_button_get_active((GtkToggleButton *)check1);
 	OnlySeq = gtk_toggle_button_get_active((GtkToggleButton *)check2);
 	ShowBulls = gtk_toggle_button_get_active((GtkToggleButton *)check3);
+	AllSSID = gtk_toggle_button_get_active((GtkToggleButton *)check4);
 
 	// rewite the Message display with new filter
 
@@ -2704,20 +2725,27 @@ void check_callback(GtkButton *button, gpointer user_data)
 			if (ShowBulls == TRUE)
 				goto wantit;
 
-		if (strcmp(ptr->ToCall, APRSCall) != 0)			// not to me?
-		{
-			if (OnlyMine == TRUE)
-			{
-				ptr = ptr->Next;
-				continue;
-			}
-		}
+			if (strcmp(ptr->ToCall, APRSCall) == 0)			//  to me?
+				goto wantit;
 
-		if (OnlySeq && ptr->Seq[0] == 0)
-		{
+			if (AllSSID)
+			{
+				memcpy(BaseFrom, ptr->ToCall, 10);
+				strlop(BaseFrom, ' ');
+				strlop(BaseFrom, '-');
+
+				if (strcmp(BaseFrom, BaseCall) == 0)
+					goto wantit;
+			}
+
+			if (OnlyMine == FALSE)		// Want All
+				if (OnlySeq == FALSE || ptr->Seq[0] != 0)
+					goto wantit;
+			
+			// ignore
+
 			ptr = ptr->Next;
 			continue;
-		}
 
 	wantit:
 
@@ -2906,7 +2934,7 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.1.1\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.2.1\n");
   	printf("Copyright © 2004-2016 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
@@ -2999,6 +3027,11 @@ int main(int argc, char *argv[])
 	memcpy(APRSCall, ControlRecord->Callsign, strlen(ControlRecord->Callsign));
 
 	printf("LinBPQ Configured with MaxStations %d APRSCall %s\n", MaxStations, APRSCall);
+	
+	memcpy(BaseCall, APRSCall, 10);		// Get call less SSID
+	strlop(BaseCall, ' ');
+	strlop(BaseCall, '-');
+
 
 	if (MaxStations == 0)
 		MaxStations = 1500;			// for old LinBPQ
@@ -3167,7 +3200,8 @@ int main(int argc, char *argv[])
 
 	checklabel = gtk_label_new(" ");
 
-	check1 = gtk_check_button_new_with_label ("Show only My Msgs  ");
+	check1 = gtk_check_button_new_with_label ("Show only My Msgs ");
+	check4 = gtk_check_button_new_with_label ("All SSIDs ");
 	check2 = gtk_check_button_new_with_label ("Show only Sequenced Msgs  ");
 	check3 = gtk_check_button_new_with_label ("Show Bulls  ");
 
@@ -3177,10 +3211,12 @@ int main(int argc, char *argv[])
 	gtk_toggle_button_set_active((GtkToggleButton *)check1, OnlyMine);
 	gtk_toggle_button_set_active((GtkToggleButton *)check2, OnlySeq);
 	gtk_toggle_button_set_active((GtkToggleButton *)check3, ShowBulls);
+	gtk_toggle_button_set_active((GtkToggleButton *)check4, AllSSID);
 
 	g_signal_connect(G_OBJECT(check1), "clicked", G_CALLBACK(check_callback), "1");
 	g_signal_connect(G_OBJECT(check2), "clicked", G_CALLBACK(check_callback), "2");
 	g_signal_connect(G_OBJECT(check3), "clicked", G_CALLBACK(check_callback), "3");
+	g_signal_connect(G_OBJECT(check4), "clicked", G_CALLBACK(check_callback), "4");
 	g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(button_callback), "1");
 	g_signal_connect(G_OBJECT(button2), "clicked", G_CALLBACK(button2_callback), "1");
 
@@ -3189,6 +3225,7 @@ int main(int argc, char *argv[])
 	checkhbox = gtk_hbox_new (FALSE, 0);
 	gtk_box_pack_start (GTK_BOX (checkhbox), checklabel, FALSE, FALSE, 0);
 	gtk_container_add (GTK_CONTAINER (checkhbox), check1);
+	gtk_container_add (GTK_CONTAINER (checkhbox), check4);
 	gtk_container_add (GTK_CONTAINER (checkhbox), check2);
 	gtk_container_add (GTK_CONTAINER (checkhbox), check3);
 	gtk_container_add (GTK_CONTAINER (checkhbox), button);
@@ -3748,12 +3785,25 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 			gtk_combo_box_text_prepend_text ((GtkComboBoxText *)combo, LoppedCall);
 		}
 	}
-	else
-		if (OnlyMine == TRUE)
-			return;
+	
+	if (AllSSID)
+	{
+		char BaseTo[10];
+		memcpy(BaseTo, MsgDest, 10);
+		strlop(BaseTo, ' ');
+		strlop(BaseTo, '-');
 
-	if (OnlySeq && Message->Seq[0] == 0)
-		return;
+		if (strcmp(BaseTo, BaseCall) == 0)
+			goto wantit;
+	}
+
+	if (OnlyMine == FALSE)		// Want All
+		if (OnlySeq == FALSE || ptr->Seq[0] != 0)
+			goto wantit;
+			
+	// ignore
+
+	return;
 
 wantit:
 

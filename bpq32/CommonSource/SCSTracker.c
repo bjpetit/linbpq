@@ -105,6 +105,91 @@ VOID TRKReleasePort(struct TNCINFO * TNC)
 	sprintf(STREAM->CmdSet, "\1\1\1I%s", TNC->NodeCall);
 }
 
+static FILE * LogHandle[32] = {0};
+time_t LogTime[32] = {0};
+
+static char BaseDir[MAX_PATH]="c:\\";
+
+VOID CloseDebugLogFile(int Port)
+{
+	fclose(LogHandle[Port]);
+	LogHandle[Port] = NULL;
+}
+
+BOOL OpenDebugLogFile(int Port)
+{
+	UCHAR FN[MAX_PATH];
+
+	time_t T;
+	struct tm * tm;
+
+	if (LogHandle[Port])
+		return TRUE;				// already open
+
+	T = LogTime[Port] = time(NULL);
+	tm = gmtime(&T);	
+
+	sprintf(FN,"%s/Logs/Port%02dDebugLog_%02d%02d.txt", BPQDirectory, Port, tm->tm_mon + 1, tm->tm_mday);
+
+	LogHandle[Port] = fopen(FN, "ab");
+	
+	return (LogHandle[Port] != NULL);
+}
+
+void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen)
+{
+	if (LogHandle[Port] == NULL)
+		OpenDebugLogFile(Port);
+
+	if (LogHandle[Port])
+	{
+		time_t T;
+		struct tm * tm;
+		char hddr[32];
+		char hex[4];
+		int len;
+		UCHAR c;
+		char textbit[33] = "                                ";
+		int i;
+		T = time(NULL);
+		tm = gmtime(&T);	
+			
+		len = sprintf(hddr,"%02d:%02d:%02d %c Len %3d ", tm->tm_hour, tm->tm_min, tm->tm_sec, Dirn, MsgLen);
+
+		fwrite(hddr, 1, len, LogHandle[Port]);
+
+		// Write up to 32 bytes of Text - replace ctrl with .
+
+		for (i = 0; i < 33 && i < MsgLen; i++)
+		{
+			c = Msg[i];
+			if (c < 32) c = '.';
+			textbit[i] = c;
+		}
+		fwrite(textbit, 1, 32, LogHandle[Port]);
+
+		// display fiorsy 16 in hex
+
+		if (MsgLen > 16)
+			MsgLen = 16;
+
+		while (MsgLen--)
+		{
+			c = *(Msg++);
+			sprintf(hex, " %02X", c);
+			fwrite(hex, 1, 3, LogHandle[Port]);
+		}
+		fwrite("\r\n", 1, 2, LogHandle[Port]);
+
+		if (T - LogTime[Port] > 30)
+			CloseDebugLogFile(Port);
+
+	}
+}
+
+
+
+
 static ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
@@ -171,7 +256,9 @@ ConfigLine:
 			TNC->RobustTime = Robust * 10;
 			#pragma warning(pop)
 		}
-		if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
+		if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
+			TNC->WRITELOG = atoi(&buf[8]);
+		else if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
 			TNC->RPBEACON = TRUE;
 		else
 		if (_memicmp(buf, "USEAPPLCALLS", 12) == 0)
@@ -705,6 +792,9 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 	{
 		// Probably Signon Message
 
+		if (TNC->WRITELOG)
+			WriteDebugLogLine(TNC->Port, 'R', ptr, Length);
+
 		ptr[Length] = 0;
 		Debugprintf("TRK %s", ptr);
 		TNC->RXLen = 0;
@@ -717,6 +807,9 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 		
 		if (memcmp(ptr, "\x18\x02INVALID", 9) == 0)
 		{
+			if (TNC->WRITELOG)
+				WriteDebugLogLine(TNC->Port, 'R', ptr, Length);
+
 			TNC->HostMode = TRUE;
 			TNC->HOSTSTATE = 0;
 			TNC->Timeout = 0;
@@ -742,6 +835,8 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 		{
 			// TNC is in Term Mode
 
+			if (TNC->WRITELOG)
+				WriteDebugLogLine(TNC->Port, 'R', ptr, Length);
 			TNC->ReinitState = 0;
 			TNC->HostMode = 0;
 
@@ -860,6 +955,9 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
 	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
+	
+	if (TNC->WRITELOG)
+		WriteDebugLogLine(TNC->Port, 'T', TNC->TXBuffer, TNC->TXLen);
 
 	TNC->Timeout = 20;				// 2 secs
 	return TRUE;
@@ -1512,6 +1610,10 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
+	if (TNC->WRITELOG)
+		WriteDebugLogLine(TNC->Port, 'R', TNC->RXBuffer, TNC->RXLen);
+
+
 	if (TNC->ReinitState == 0)
 	{
 		// Testing if in Term Mode. It is, so can now send Init Commands
@@ -1563,6 +1665,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	UINT Stream = 0;
 	UCHAR * Msg = TNC->DEDBuffer;
 	int framelen = TNC->InputLen;
+
+	if (TNC->WRITELOG)
+		WriteDebugLogLine(TNC->Port, 'R', Msg, framelen);
 
 	if (TNC->ReinitState == 10)
 	{

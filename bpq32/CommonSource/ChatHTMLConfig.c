@@ -534,7 +534,7 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 			Topic = user->topic->name;
 
 		Len += sprintf(&Users[Len], "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>",
-			user->call, Alias, user->name, Topic, (int)(time(NULL) - user->lastmsgtime), user->qth);
+			user->call, Alias, user->name, Topic, (int)(time(NULL) - user->lastrealmsgtime), user->qth);
 	
 	}
 

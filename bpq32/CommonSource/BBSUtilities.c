@@ -9801,6 +9801,12 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (_stricmp(Cmd, "SETNEXTMESSAGENUMBER") == 0)
+	{
+		DoSetMsgNo(conn, user, Arg1, Context);
+		return;
+	}
+
 	if (_memicmp(Cmd, "D", 1) == 0)
 	{
 		DoDeliveredCommand(conn, user, Cmd, Arg1, Context);

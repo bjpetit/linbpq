@@ -512,7 +512,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 	{
 		InputLen = recv(sock, &Buffer[inptr], 2048 - inptr, 0);
 
-		if (InputLen == -1)
+		if (InputLen == -1 || InputLen == 0)
 		{
 			int Err = WSAGetLastError();
 			Debugprintf("Error %d from WL2K Update recv()", Err);
@@ -536,7 +536,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 
 			if (ptr1)
 			{
-				// Have content length
+				// Have content lengthRLOP
 
 				int ContentLen = atoi(ptr1 + 16);
 
@@ -554,6 +554,18 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 						else
 							Debugprintf("WL2K Database update ok");
 					}
+					return;
+				}
+			}
+			else
+			{
+				ptr1 = strstr(Buffer, "Transfer-Encoding:");
+				
+				if (ptr1)
+				{
+					// Just accept anything until I've sorted things with Lee
+				
+					Debugprintf("WL2K Database update ok");
 					return;
 				}
 			}

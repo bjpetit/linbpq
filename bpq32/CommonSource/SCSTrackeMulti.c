@@ -117,6 +117,8 @@ ConfigLine:
 		{
 //			TNC->UseAPPLCalls = TRUE;
 		}
+		else if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
+			TNC->WRITELOG = atoi(&buf[8]);	
 		else
 		if (_memicmp(buf, "DEFAULT ROBUST", 14) == 0)
 		{
@@ -459,6 +461,9 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 		
 		if (memcmp(ptr, "\x18\x02INVALID", 9) == 0)
 		{
+			if (TNC->WRITELOG)
+				WriteDebugLogLine(TNC->Port, 'R', ptr, Length);
+
 			TNC->HostMode = TRUE;
 			TNC->HOSTSTATE = 0;
 			TNC->Timeout = 0;
@@ -473,6 +478,21 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 			ProcessTermModeResponse(TNC);
 			TNC->RXLen = 0;
 			TNC->HOSTSTATE = 0;
+
+			return;
+		}
+	}
+
+	if (TNC->ReinitState == 10)
+	{
+		if (Length == 1 && *(ptr) == '.')		// 01 echoed as .
+		{
+			// TNC is in Term Mode
+
+			if (TNC->WRITELOG)
+				WriteDebugLogLine(TNC->Port, 'R', ptr, Length);
+			TNC->ReinitState = 0;
+			TNC->HostMode = 0;
 
 			return;
 		}
@@ -581,6 +601,9 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
 	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
+
+	if (TNC->WRITELOG)
+		WriteDebugLogLine(TNC->Port, 'T', TNC->TXBuffer, TNC->TXLen);
 
 	TNC->Timeout = 20;				// 2 secs
 	return TRUE;
@@ -1091,6 +1114,9 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
+	if (TNC->WRITELOG)
+		WriteDebugLogLine(TNC->Port, 'R', TNC->RXBuffer, TNC->RXLen);
+
 	if (TNC->ReinitState == 0)
 	{
 		// Testing if in Term Mode. It is, so can now send Init Commands
@@ -1127,6 +1153,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	UCHAR * Msg = TNC->DEDBuffer;
 	int framelen = TNC->InputLen;
 	struct STREAMINFO * STREAM;
+
+	if (TNC->WRITELOG)
+		WriteDebugLogLine(TNC->Port, 'R', Msg, framelen);
 
 	if (TNC->ReinitState == 10)
 	{

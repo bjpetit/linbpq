@@ -671,7 +671,7 @@ portok:
 
 			if (ModeNo != -1)			// Dont Set
 			{		
-				CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[30];
+				CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[40];
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = RIG->RigAddr;
@@ -745,7 +745,7 @@ portok:
 
 				if (FreqPtr[0].Cmd2 == NULL)
 				{
-					CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[30];
+					CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[40];
 					FreqPtr[0].Cmd2Len = 7;
 				}
 				else if (FreqPtr[0].Cmd3 == NULL)
@@ -914,8 +914,8 @@ portok:
 
 		// Build a ScanEntry in the buffer
 
-		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
@@ -2053,8 +2053,14 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 			if (PORT->ScanEntry.Cmd3)
 			{
-				PORT->ScanEntry.Cmd3 = (char *)&PORT->Line3;
+				PORT->ScanEntry.Cmd3 = (char *)&PORT->Line3;	// copy from buffer
 				memcpy(PORT->Line3, &buffptr[50], PORT->FreqPtr->Cmd3Len);
+			
+				if (PORT->ScanEntry.Cmd4)
+				{
+					PORT->ScanEntry.Cmd4 = (char *)&PORT->Line4;
+					memcpy(PORT->Line4, &buffptr[60], PORT->FreqPtr->Cmd4Len);
+				}
 			}
 		}
 

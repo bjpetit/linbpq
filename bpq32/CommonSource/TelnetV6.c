@@ -492,6 +492,13 @@ ProcessLine(char * buf, int Port)
 
 
 			User = &Param[0][0];
+
+			if (_stricmp(User, "ANON") == 0)
+			{
+				strcpy(&Param[2][0], "ANON");
+				strcpy(&Param[4][0], "");		// Dont allow SYSOP if ANON
+			}
+
 			Pwd = &Param[1][0];
 			UserCall = &Param[2][0];
 			Appl = &Param[3][0];
@@ -3216,26 +3223,35 @@ MsgLoop:
 		{
 			USER = TCP->UserRecPtr[i];
 
-			if (strcmp(MsgPtr,USER->UserName) == 0)
+			if (_stricmp(USER->UserName, "ANON") == 0)
+			{
+				// Anon Login - Callsign is supplied as user
+
+				sockptr->UserPointer = USER;      //' Save pointer for checking password
+                strcpy(sockptr->Callsign, _strupr(MsgPtr)); //' for *** linked
+			}
+			else if (strcmp(MsgPtr,USER->UserName) == 0)
 			{
                 sockptr->UserPointer = USER;      //' Save pointer for checking password
                 strcpy(sockptr->Callsign, USER->Callsign); //' for *** linked
-                
-                send(sock, TCP->PasswordMsg, strlen(TCP->PasswordMsg),0);
-                
-                sockptr->Retries = 0;
-                
-                sockptr->LoginState = 1;
-                sockptr->InputLen = 0;
 
-				n=sockptr->Number;
-#ifndef LINBPQ
-				ModifyMenu(TCP->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
-#endif
-				ShowConnections(TNC);;
-
-                return 0;
 			}
+			else
+				continue;
+                
+			send(sock, TCP->PasswordMsg, strlen(TCP->PasswordMsg),0);
+                
+			sockptr->Retries = 0;
+                
+			sockptr->LoginState = 1;
+			sockptr->InputLen = 0;
+
+			n=sockptr->Number;
+#ifndef LINBPQ
+			ModifyMenu(TCP->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
+#endif
+			ShowConnections(TNC);;
+			return 0;
 		}
         
         //   Not found
@@ -3279,8 +3295,7 @@ MsgLoop:
 			WriteLog (logmsg);
 		}
 
-		if (strcmp(MsgPtr, sockptr->UserPointer->Password) == 0)
-		{
+		if (strcmp(MsgPtr, sockptr->UserPointer->Password) == 0)		{
 			char * ct = TCP->cfgCTEXT;
 			char * Appl;
 			int ctlen = strlen(ct);
@@ -3776,23 +3791,33 @@ MsgLoop:
 
 				if (Sess2)
 				{
-					// See if L2 session - if so, get info from WL2K report line
+					// if Session has report info, use it
 
-					if (Sess2->L4CIRCUITTYPE & L2LINK)
+					if (Sess2->Mode)
 					{
-						LINKTABLE * LINK = Sess2->L4TARGET.LINK;
-						PORTCONTROLX * PORT = LINK->LINKPORT;
-						
-						Freq = PORT->WL2KInfo.Freq;
-						Mode = PORT->WL2KInfo.mode;
-		
+						Freq = Sess2->Frequency;
+						Mode = Sess2->Mode;
 					}
 					else
 					{
-						if (Sess2->RMSCall[0])
+						// See if L2 session - if so, get info from WL2K report line
+
+						if (Sess2->L4CIRCUITTYPE & L2LINK)
 						{
-							Freq = Sess2->Frequency;
-							Mode = Sess2->Mode;
+							LINKTABLE * LINK = Sess2->L4TARGET.LINK;
+							PORTCONTROLX * PORT = LINK->LINKPORT;
+						
+							Freq = PORT->WL2KInfo.Freq;
+							Mode = PORT->WL2KInfo.mode;
+		
+						}
+						else
+						{
+							if (Sess2->RMSCall[0])
+							{
+								Freq = Sess2->Frequency;
+								Mode = Sess2->Mode;
+							}
 						}
 					}
 				}
@@ -3890,34 +3915,46 @@ MsgLoop:
 		{
 			USER = TCP->UserRecPtr[i];
 
-			if (strcmp(MsgPtr,USER->UserName) == 0)
+			if (_stricmp(USER->UserName, "ANON") == 0)
 			{
-                sockptr->UserPointer = USER;      //' Save pointer for checking password
-                strcpy(sockptr->Callsign, USER->Callsign); //' for *** linked
-                                
-                sockptr->Retries = 0;
-                
-                sockptr->LoginState = 1;
-                sockptr->InputLen = 0;
+				// Anon Login - Callsign is supplied as user
 
-				n=sockptr->Number;
+				sockptr->UserPointer = USER;      //' Save pointer for checking password
+                strcpy(sockptr->Callsign, _strupr(MsgPtr)); //' for *** linked
+			}
+			else if (strcmp(MsgPtr,USER->UserName) == 0)
+			{
+				sockptr->UserPointer = USER;      //' Save pointer for checking password
+                strcpy(sockptr->Callsign, USER->Callsign); //' for *** linked
+            
+			}
+			else
+				continue;
+
+			sockptr->Retries = 0;
+                
+			sockptr->LoginState = 1;
+			sockptr->InputLen = 0;
+
+			n=sockptr->Number;
 
 #ifndef LINBPQ
-				ModifyMenu(TCP->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
+			ModifyMenu(TCP->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
 #endif
 
-				ShowConnections(TNC);;
+			ShowConnections(TNC);;
 
-               	InputLen=InputLen-(MsgLen+1);
+			InputLen=InputLen-(MsgLen+1);
 
-				sockptr->InputLen=InputLen;
+			sockptr->InputLen=InputLen;
 				
-				if (InputLen > 0)
-				{
-					memmove(MsgPtr, CRPtr+1, InputLen);
-					goto MsgLoop;
-				}
+			if (InputLen > 0)
+			{
+				memmove(MsgPtr, CRPtr+1, InputLen);
+				goto MsgLoop;
 			}
+
+			return 0;
 		}
 
         //   User Not found

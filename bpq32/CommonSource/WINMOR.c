@@ -980,6 +980,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				
 				UINT * buffptr = GetBuff();
 
+				if (_memicmp(&buff[8], "BW 500", 6) == 0)
+					TNC->WL2KMode = 21;
+				else
+					TNC->WL2KMode = 22;
+	
 				if (buffptr)
 				{
 					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Winmor} OK\r");
@@ -1449,6 +1454,8 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	free(TNC->InitScript);
 	TNC->InitScript = TempScript;
+
+	TNC->WL2KMode = 22;				// in case not scanning
 
 	// Set MYCALL
 
@@ -2043,6 +2050,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
 			
+			SESS->Mode = TNC->WL2KMode;
+
 			if (TNC->RIG && TNC->RIG != &TNC->DummyRig && strcmp(TNC->RIG->RigName, "PTT"))
 			{
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);

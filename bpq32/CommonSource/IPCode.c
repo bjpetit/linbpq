@@ -210,8 +210,7 @@ static int nat_table_len = 0;
 static struct nat_table_entry nat_table[MAX_ENTRIES];
 
 
-ULONG UCSD44;		// 44.0.0.1
-
+ULONG UCSD44 = 0;		// RIP SOurce - Normally 44.0.0.1
 
 // Following two fields used by stats to get round shared memmory problem
 
@@ -323,10 +322,13 @@ BOOL Check44Route(int Interface)
 
 	for (n = 0; n < pIpForwardTable->dwNumEntries; n++)
 	{
-		if (Row->dwForwardDest == 44 && Row->dwForwardMask == 255 && Row->dwForwardIfIndex == Interface)
+		if (Row->dwForwardDest == 44 && Row->dwForwardMask == 255)
 		{
-			free(pIpForwardTable);
-			return TRUE;
+			if (Row->dwForwardIfIndex == Interface)
+			{
+				free(pIpForwardTable);
+				return TRUE;
+			}
 		}
 		Row++;
 	}
@@ -654,7 +656,8 @@ Dll BOOL APIENTRY Init_IP()
 		int err, ret;
 		char Msg[80];
 				
-		UCSD44 = inet_addr("44.0.0.1");
+		if (UCSD44 == 0)
+			UCSD44 = inet_addr("44.0.0.1");
 
 #ifdef WIN32
 
@@ -2340,7 +2343,7 @@ VOID ProcessRIP44Message(PIPMSG IPptr)
 		RIP2++;
 	}
 
-	while (Len >= 20)		// Entry LengtH
+	while (Len >= 20)		// Entry Length
 	{
 		// See if already in table
 
@@ -3287,16 +3290,31 @@ static ProcessLine(char * buf)
 		
 			num=sscanf(p_value,"%x-%x-%x-%x-%x-%x",&a,&b,&c,&d,&e,&f);
 
-			if (num != 6) return FALSE;
+			if (num == 6)
+			{
+				RouterMac[0]=a;
+				RouterMac[1]=b;
+				RouterMac[2]=c;
+				RouterMac[3]=d;
+				RouterMac[4]=e;
+				RouterMac[5]=f;
 
-			RouterMac[0]=a;
-			RouterMac[1]=b;
-			RouterMac[2]=c;
-			RouterMac[3]=d;
-			RouterMac[4]=e;
-			RouterMac[5]=f;
+				p_value = strtok(NULL, " \t\n\r");
 
-			return TRUE;					// Normal IPIP
+				if (p_value == NULL)
+					return TRUE;
+			}	
+			// see if source addr specified
+				
+			if (_stricmp(p_value, "RIPSOURCE") == 0)
+			{
+				// Set Source addr of RIP44 packets
+			
+				p_value = strtok(NULL, " =\t\n\r");
+				UCSD44 = inet_addr(p_value);
+				return TRUE;
+			}
+			return FALSE;
 		}
 
 		if (_stricmp(p_value, "UDP") == 0)
