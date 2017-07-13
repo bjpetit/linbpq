@@ -932,10 +932,14 @@
 //	Make sure Message headers are always saved to disk when a message status changes
 //	Reject message instead of failing session if TO address too long in FBB forwarding
 //	Fix error when FBB restart data exactly fills a packet.
-//	Fix possible generation of meg number zero in send nondlivery notification 
-//	Fix problem with "Web Manage Messages" when stray message number zero appears
+//	Fix possible generation of msg number zero in send nondlivery notification 
+//	Fix problem with Web "Manage Messages" when stray message number zero appears
 //	Fix Crash in AMPR forward when host missing from VIA
 //	Fix possible addition of an spurious password entry to the ;FW: line when connecting to CMS
+//	Fix test for Status "D" in forward check.
+//	Don't cancel AUTH on SMTP RSET
+//	Fix "nowhere to go" message on some messages sent to smtp addresses
+//	Add @ from Home BBS or WP is not spcified in "Send from Clipboard"
 
 #include "BPQMail.h"
 #define MAIL
@@ -1156,6 +1160,7 @@ int DeleteRedundantMessages();
 VOID BBSSlowTimer();
 VOID CopyConfigFile(char * ConfigName);
 BOOL CreateMulticastConsole();
+char * CheckToAddress(CIRCUIT * conn, char * Addr);
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -2196,7 +2201,6 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			int n, Files = 0;
 			int TotalFileSize = 0;
 			char * NewMsg;
-			char * fulladdr;
 
 			GetDlgItemText(hDlg, IDC_MSGTO, HDest, 60);
 
@@ -2284,20 +2288,6 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 				}
 			}
 
-			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
-
-			// add @ if missing and check rms, smtp, etc
-
-			if (status[0] == 'P')
-			{
-				fulladdr =  CheckToAddress(NULL, HDest);
-
-				if (fulladdr)
-				{
-					strcpy(HDest, fulladdr);
-					free(fulladdr);
-				}
-			}
 			Msg = AllocateMsgRecord();
 		
 			// Set number here so they remain in sequence
@@ -2336,6 +2326,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 
 			GetDlgItemText(hDlg, IDC_MSGTITLE, Msg->title, 61);
+			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
 			Msg->type = status[0];
 			Msg->status = 'N';
 
