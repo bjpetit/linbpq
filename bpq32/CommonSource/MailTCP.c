@@ -165,7 +165,7 @@ VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...)
 	SendSock(sockptr, buff);
 }
 
-extern SMTPMsgs;
+extern int SMTPMsgs;
 
 fd_set ListenSet;
 SOCKET ListenMax = 0;
@@ -1849,10 +1849,15 @@ ZvVx9G1hcg==
 	if(memcmp(Buffer, "RSET\r\n", 6) == 0)
 	{
 		SendSock(sockptr, "250 Ok");
-		sockptr->State = 0;
+
+		// This cancelled AUTH which I think is wrong
+		//sockptr->State = 0;
+
+		if (sockptr->State != Authenticated)
+			sockptr->State = 0;	
+
 		sockptr->Recipients = 0;
-//		Sleep(500);
-//		shutdown(sock, 0);
+
 		return;
 	}
 
@@ -1860,7 +1865,7 @@ ZvVx9G1hcg==
 }
 
 
-CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag)
+int CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag)
 {
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
@@ -2125,7 +2130,7 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 	return TRUE;
 }
 
-TidyString(char * Address)
+int TidyString(char * Address)
 {
 	// Cleans up a From: or To: Address
 
@@ -3576,7 +3581,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 }
 
-CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag)
+int CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag)
 {
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;

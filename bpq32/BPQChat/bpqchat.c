@@ -33,6 +33,9 @@
 //	Send Chat Map INFO on Startup 
 //	Add Welcome Message to Web Config
 
+// July 2017 1.0.8.1
+//	Fix Keepalives in Linux version
+
 
 #include "BPQChat.h"
 

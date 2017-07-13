@@ -64,6 +64,9 @@
 // July 2016 1.1.10.1
 //	Switch to Thunderforest tile server
 
+// July 2017 1.1.11.1
+// Add Messages Web Page
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 
@@ -114,8 +117,6 @@ char APRSCall[10];
 char LoppedAPRSCall[10];
 
 char ISFilter[1000] = "m/50 u/APBPQ*"; 
-
-char * StatusMsg;
 
 int RetryCount = 4;
 int RetryTimer = 45;
@@ -382,6 +383,31 @@ struct OSMQUEUE OSMQueue = {NULL,0,0,0};
 
 int OSMQueueCount;
 
+// Web stuff
+
+char WebHeader[] = "<HTML><HEAD><meta http-equiv=\"expires\" content=\"-1\">"
+	"<meta http-equiv=\"pragma\" content=\"no-cache\">"
+	"<TITLE>%s's Messages</TITLE></HEAD>"
+	"<BODY alink=\"#008000\" bgcolor=\"#F5F5DC\" link=\"#0000FF\" vlink=\"#000080\">"
+	"<center><h1>%s's messages</h1><TABLE BORDER=\"3\" CELLSPACING=\"2\" CELLPADDING=\"1\">"
+	"<tr><td>from</td><td>to</td><td>time</td><td>&nbsp;</td><td>message</td></tr>";
+
+char WebLine[] = "<tr bgcolor=\"#ffcccc\"><td>%s </td><td> %s </td><td> %s</td><td>"
+	"<a href=\"entermsg?fromcall=%s&tocall=%s\">Reply</a></td><td> %s</td></tr>";
+
+char WebTrailer[] = "</table></BODY></HTML>";
+
+
+char SendMsgPage[] = "<html><head><title>BPQ32 APRS Messaging</title></head><body background=\"/background.jpg\">"
+	"<center><h2>APRS Message Input</h1>"
+	"<form method=post action=/APRS/Msgs/SendMsg>"
+	"<table align=center  bgcolor=white>"
+	"<tr><td>To</td><td><input type=text name=call tabindex=1 size=10 maxlength=12 value=\"%s\"/></td></tr>" 
+	"<tr><td>Message</td><td><input type=text name=message tabindex=2 size=80 maxlength=100 /></td></tr></table>"  
+	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+
+DllImport VOID APIENTRY APRSSetStatus(char * Status);
+Dll char * APIENTRY APRSGetStatusMsgPtr();
 DllImport VOID APIENTRY APRSConnect(char * Call, char * Filter);
 DllImport VOID APIENTRY APRSDisconnect();
 DllImport BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call);
@@ -460,6 +486,19 @@ LOGFONT LFTTYFONT ;
 HFONT hFont ;
 
 BOOL MinimizetoTray=FALSE;
+
+char * strlop(char * buf, char delim)
+{
+	// Terminate buf at delim, and return rest of string
+
+	char * ptr = strchr(buf, delim);
+
+	if (ptr == NULL) return NULL;
+
+	*(ptr)++=0;
+
+	return ptr;
+}
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
@@ -1077,7 +1116,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		if (retCode == ERROR_SUCCESS)
 			sscanf(Size,"%d,%d,%d,%d",&MsgRect.left,&MsgRect.right,&MsgRect.top,&MsgRect.bottom);
 
-		GetStringVal(hKey, "StatusMsg", &StatusMsg);
+//		GetStringVal(hKey, "StatusMsg", &StatusMsg);
 
 		Vallen=999;
 		retCode = RegQueryValueEx(hKey, "ISFilter", 0, &Type, ISFilter, &Vallen);
@@ -1341,10 +1380,8 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 	{
 	case WM_INITDIALOG:
 
-		if (StatusMsg)
-			SetDlgItemText(hDlg, IDC_STATUSTEXT, StatusMsg);
-
 		SetDlgItemText(hDlg, IDC_FILTER, ISFilter);
+		SetDlgItemText(hDlg, IDC_STATUS, APRSGetStatusMsgPtr());
 		SetDlgItemInt(hDlg, IDC_RETRIES, RetryCount, FALSE);
 		SetDlgItemInt(hDlg, IDC_RETRYTIME, RetryTimer, FALSE);
 		SetDlgItemInt(hDlg, IDC_EXPIRE, ExpireTime, FALSE);
@@ -1458,7 +1495,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 
 			int retCode = RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS", 0, KEY_ALL_ACCESS, &hKey);
 
-			SaveStringValtoReg(hDlg, IDC_STATUSTEXT, hKey, "StatusMsg" , &StatusMsg);
+			GetDlgItemText(hDlg, IDC_STATUS, APRSGetStatusMsgPtr(), 120);
 			SaveFixedStringValtoReg(hDlg, IDC_FILTER, hKey, "ISFilter", ISFilter, 999);
 			SaveFixedStringValtoReg(hDlg, IDC_WXFILE, hKey, "WXFile", WXFileName, 240);
 			SaveFixedStringValtoReg(hDlg, IDC_WXTEXT, hKey, "WXText", WXComment, 79);
@@ -2565,42 +2602,64 @@ LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	
 		case NM_DBLCLK:
 		{
-				LVITEM item = {0};
-				char Item1[260] = "AA";
-				int i;
+			LVITEM item = {0};
+			char Item1[260] = "AA";
+			int i;
 
-				item.iSubItem = pnm->iSubItem;
+			item.iSubItem = pnm->iSubItem;
+	
+			if (pnm->iSubItem == 2 || pnm->iSubItem == 3)		// Seq or TIme
+				break;
+
+			if (pnm->iSubItem == 4)		// Message 
+				item.iSubItem = 0;		// Get From Call
+
+			item.mask = LVIF_TEXT;
+			item.iItem = pnm->iItem;
+			item.pszText = Item1;
+			item.cchTextMax = 100;
+
+			ListView_GetItem(pnm->hdr.hwndFrom, &item);
+
+			// Add Call to TO Dropdown list
+
+			// Remove trailing spaces
+
+			i = strlen(Item1);
+			i--;
+
+			while(i > 1)
+			{
+				if (Item1[i] == ' ')
+					Item1[i] = 0;				// Remove trailing spaces
+				else
+					break;
+				i--;
+			}
+
+			i = SendMessage(hToCall, CB_FINDSTRINGEXACT, -1, (LPARAM)(LPCTSTR)&Item1);
+
+			if (i == CB_ERR)
+				i = SendMessage(hToCall, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)&Item1);
+
+			SendMessage(hToCall, CB_SETCURSEL, i, 0);
+
+			// if message was clicked, copy it to Msg box
+
+			if (pnm->iSubItem == 4)		// Message 
+			{
+				item.iSubItem = 4;		// Get Msg
+
 				item.mask = LVIF_TEXT;
 				item.iItem = pnm->iItem;
 				item.pszText = Item1;
 				item.cchTextMax = 100;
 
 				ListView_GetItem(pnm->hdr.hwndFrom, &item);
-
-				// Add Call to TO Dropdown list
-
-				// Remove trailing spaces
-
-				i = strlen(Item1);
-				i--;
-
-				while(i > 1)
-				{
-					if (Item1[i] == ' ')
-						Item1[i] = 0;				// Remove trailing spaces
-					else
-						break;
-				i--;
-				}
-
-				i = SendMessage(hToCall, CB_FINDSTRINGEXACT, -1, (LPARAM)(LPCTSTR)&Item1);
-
-				if (i == CB_ERR)
-					i = SendMessage(hToCall, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)&Item1);
-
-				SendMessage(hToCall, CB_SETCURSEL, i, 0);
+				SendMessage(hInput, WM_SETTEXT, 79, (LPARAM)(LPCTSTR)&Item1);
+			}
 				 
-				break;
+			break;
 		}
 
 #ifdef APRS
@@ -2663,8 +2722,21 @@ subitem and return CDRF_NEWFONT.*/
 			CheckDlgButton(hWnd, IDC_MYMSGS, Val);
 
 			Vallen=4;
+			RegQueryValueEx(hKey,"AllSSID", 0, (ULONG *)&Type, (UCHAR *)&Val, (ULONG *)&Vallen);
+			CheckDlgButton(hWnd, IDC_MYMSGSDSSID, Val);
+	
+			Vallen=4;
 			RegQueryValueEx(hKey,"MsgBEEP", 0, (ULONG *)&Type, (UCHAR *)&Val, (ULONG *)&Vallen);
 			CheckDlgButton(hWnd, IDC_MSGBEEP, Val);
+
+			Vallen=4;
+			RegQueryValueEx(hKey,"OnlySeq", 0, (ULONG *)&Type, (UCHAR *)&Val, (ULONG *)&Vallen);
+			CheckDlgButton(hWnd, IDC_SHOWSEQ, Val);
+
+			Vallen=4;
+			RegQueryValueEx(hKey,"ShowBulls", 0, (ULONG *)&Type, (UCHAR *)&Val, (ULONG *)&Vallen);
+			CheckDlgButton(hWnd, IDC_SHOWBULLS, Val);
+
 
 			RegCloseKey(hKey);
 		}
@@ -2722,8 +2794,17 @@ subitem and return CDRF_NEWFONT.*/
 			RefreshMessages();
 
 			break;
+	
+		case IDC_MYMSGSDSSID:
 
-			// Drop Through
+			RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS", 0, KEY_ALL_ACCESS, &hKey);
+
+			Param = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGSDSSID);
+			RegSetValueEx(hKey, "AllSSID", 0, REG_DWORD, (BYTE *)&Param, 4);
+
+			RefreshMessages();
+
+			break;
 
 		case IDC_MSGBEEP:
 
@@ -2733,7 +2814,26 @@ subitem and return CDRF_NEWFONT.*/
 
 			break;
 
-		case IDC_CLEARMSGS:
+		case IDC_SHOWSEQ:
+
+			RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS", 0, KEY_ALL_ACCESS, &hKey);
+			Param = IsDlgButtonChecked(hMsgDlg, IDC_SHOWSEQ);
+			RegSetValueEx(hKey, "OnlySeq", 0, REG_DWORD, (BYTE *)&Param, 4);
+
+			RefreshMessages();
+			break;
+
+		case IDC_SHOWBULLS:
+
+			RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS", 0, KEY_ALL_ACCESS, &hKey);
+			Param = IsDlgButtonChecked(hMsgDlg, IDC_SHOWBULLS);
+			RegSetValueEx(hKey, "ShowBulls", 0, REG_DWORD, (BYTE *)&Param, 4);
+
+			RefreshMessages();
+			break;
+
+
+		case IDC_CLEARRX:
 		{
 			struct APRSMESSAGE * ptr = Messages;
 			struct APRSMESSAGE * last = Messages;
@@ -2747,7 +2847,14 @@ subitem and return CDRF_NEWFONT.*/
 
 			Messages = NULL;
 
-			ptr = OutstandingMsgs;
+			RefreshMessages();
+			break;
+		}
+			
+		case IDC_CLEARTX:
+		{
+			struct APRSMESSAGE * ptr = OutstandingMsgs;
+			struct APRSMESSAGE * last;
 
 			while (ptr)
 			{
@@ -2755,13 +2862,11 @@ subitem and return CDRF_NEWFONT.*/
 				ptr = ptr->Next;
 				free(last);
 			}
-
 			OutstandingMsgs = NULL;
 			SendMessage(hMsgsOut, LVM_DELETEALLITEMS, (WPARAM)0, (LPARAM) 0);
 
 			RefreshMessages();
 			break;
-
 		}
 		}
 		break;
@@ -4844,23 +4949,73 @@ void UpdateMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
 }
 VOID RefreshMessages()
 {
-	struct APRSMESSAGE * ptr = Messages;
+struct APRSMESSAGE * ptr = Messages;
 	int n = 0;
 	BOOL OnlyMine = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGS);
+	BOOL AllSSID = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGSDSSID);
+	BOOL OnlySeq = IsDlgButtonChecked(hMsgDlg, IDC_SHOWSEQ);
+	BOOL ShowBulls = IsDlgButtonChecked(hMsgDlg, IDC_SHOWBULLS);
+
+	char BaseCall[10];
+	char BaseFrom[10];
+
+	if (AllSSID)
+	{
+		memcpy(BaseCall, LoppedAPRSCall, 10);
+		strlop(BaseCall, '-');
+	}
 
 	SendMessage(hMsgsIn, LVM_DELETEALLITEMS, (WPARAM)0, (LPARAM) 0);
 
 	if (ptr)
 	{
 		do
-		{				
-			if (OnlyMine == 0 ||(strcmp(ptr->ToCall, APRSCall) == 0) || (strcmp(ptr->FromCall, APRSCall) == 0))
-			{			
-				UpdateMessageLine(hMsgsIn, n, ptr);
-				n++;
+		{
+
+			char ToLopped[11] = "";
+			memcpy(ToLopped, ptr->ToCall, 10);
+			strlop(ToLopped, ' ');
+
+			if (memcmp(ToLopped, "BLN", 3) == 0)
+				if (ShowBulls == TRUE)
+					goto wantit;
+
+			if (strcmp(ToLopped, LoppedAPRSCall) == 0)		//  to me?
+				goto wantit;
+
+			if (strcmp(ptr->FromCall, LoppedAPRSCall) == 0)	//  from me?
+				goto wantit;
+
+			if (AllSSID)
+			{
+				memcpy(BaseFrom, ptr->FromCall, 10);
+				strlop(BaseFrom, '-');
+
+				if (strcmp(BaseFrom, BaseCall) == 0)
+					goto wantit;
+
+				memcpy(BaseFrom, ToLopped, 10);
+				strlop(BaseFrom, '-');
+
+				if (strcmp(BaseFrom, BaseCall) == 0)
+					goto wantit;
 			}
+
+			if (OnlyMine == FALSE)		// Want All
+				if (OnlySeq == FALSE || ptr->Seq[0] != 0)
+					goto wantit;
+			
+			// ignore
+
 			ptr = ptr->Next;
-		
+			continue;
+
+	wantit:
+
+			UpdateMessageLine(hMsgsIn, n, ptr);
+			n++;
+			ptr = ptr->Next;
+	
 		} while (ptr);
 	}
 
@@ -5252,6 +5407,8 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 	char MsgDest[10];
 	struct APRSMESSAGE * Message;
 	struct APRSMESSAGE * ptr = Messages;
+	struct APRSMESSAGE * Prev = NULL;
+
 	char * TextPtr = &Payload[11];
 	char * SeqPtr;
 	int n = 0;
@@ -5303,6 +5460,37 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 	
 		return;
 	}
+
+	// if From To, Seq and Message are the same as one we already have,
+	// remove old message
+
+
+	while (ptr)
+	{
+		if (strcmp(ptr->Text, TextPtr) == 0
+			&& strcmp(ptr->FromCall, Station->Callsign) == 0
+			&& strcmp(ptr->ToCall, MsgDest) == 0)
+		{
+			if ((SeqPtr == 0 && ptr->Seq[0] == 0)	// both null
+				|| strcmp(ptr->Seq, SeqPtr) == 0)
+			{
+				// remove it
+
+				if (Prev)
+					Prev->Next = ptr->Next;
+				else
+					Messages = ptr->Next;
+
+				free(ptr);
+
+				break;
+			}
+		}
+		Prev = ptr;
+		ptr = ptr->Next;
+	}
+
+	ptr = Messages;
 
 	Message = malloc(sizeof(struct APRSMESSAGE));
 	memset(Message, 0, sizeof(struct APRSMESSAGE));
@@ -6658,7 +6846,7 @@ char * LookupKey(struct APRSConnectionInfo * sockptr, char * Key)
 		return _strdup(LoppedAPRSCall);
 
 	if (strcmp(Key, "##MY_BEACON_COMMENT##") == 0)
-		return _strdup(StatusMsg);
+		return _strdup(APRSGetStatusMsgPtr());
 
 	if (strcmp(Key, "##MY_WX_BEACON_COMMENT##") == 0)
 		return _strdup(WXComment);
@@ -7158,19 +7346,22 @@ DWORD WINAPI InstanceThread(LPVOID lpvParam)
 // of this procedure to run concurrently, depending on the number of incoming
 // client connections.
 { 
-   DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0; 
-   BOOL fSuccess = FALSE;
-   HANDLE hPipe  = NULL;
-   char Buffer[4096];
-   char OutBuffer[100000];
-   char * MsgPtr;
-   int InputLen = 0;
-   int OutputLen = 0;
+	DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0; 
+	BOOL fSuccess = FALSE;
+	HANDLE hPipe  = NULL;
+	char Buffer[4096];
+	char OutBuffer[100000];
+	char * MsgPtr;
+	int InputLen = 0;
+	int OutputLen = 0;
    	char * URL;
 	char * ptr;
 	struct APRSConnectionInfo CI;
 	struct APRSConnectionInfo * sockptr = &CI;
-	char Key[12];
+	char * To;
+
+	int HeaderLen;
+	char Header[256];
 
 	__try
 	{
@@ -7203,82 +7394,231 @@ DWORD WINAPI InstanceThread(LPVOID lpvParam)
 
 		MsgPtr = &Buffer[0];
 
-		if (memcmp(MsgPtr, "GET" , 3) != 0)
+		if (memcmp(MsgPtr, "POST" , 3) == 0)
 		{
-			Debugprintf(MsgPtr);
-			OutputLen = sprintf(OutBuffer, "HTTP/1.0 501 Not Supported\r\n\r\n");
-			WriteFile(sockptr->hPipe, OutBuffer, OutputLen, &cbWritten, NULL); 
+			char * To;
+			char * Msg = "";
 
-			FlushFileBuffers(sockptr->hPipe); 
-			DisconnectNamedPipe(hPipe); 
-			CloseHandle(hPipe);
-			return 1;
+			URL = &MsgPtr[5];
+
+			ptr = strstr(URL, "\r\n\r\n");
+
+			if (ptr)
+			{
+				char * param, * context;
+
+				param = strtok_s(ptr + 4, "&", &context);
+
+				while (param)
+				{
+					char * val = strlop(param, '=');
+
+					if (val)
+					{
+						if (_stricmp(param, "call") == 0)
+							To = _strupr(val);
+						else if (_stricmp(param, "message") == 0)
+						{
+							// Undo any % transparency
+							
+							char * ptr2 = val;
+							char c;
+
+							Msg = val;
+
+							c = *(val++);
+
+							while (c)
+							{
+								if (c == '%')
+								{
+									int n;
+									int m = *(val++) - '0';
+									if (m > 9) m = m - 7;
+									n = *(val++) - '0';
+									if (n > 9) n = n - 7;
+
+									c  = m * 16 + n;
+								}
+								else if (c == '+')
+									c = ' ';
+
+								*(ptr2++) = c;
+								c = *(val++);
+							}
+
+							*(ptr2++) = 0;
+						}
+					}
+					
+					param = strtok_s(NULL,"&", &context);
+				}
+
+				// Send APRS Messsage
+
+				if (strlen(Msg) > 100)
+					Msg[100] = 0;
+
+				SendAPRSMessage(Msg, _strupr(To));
+
+				HeaderLen = sprintf(Header, "HTTP/1.0 200 Ok\r\nContent-Length: 13\r\n\r\nMessage Sent\r\n");
+				WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
+				Sleep(2000);
+				DisconnectNamedPipe(hPipe); 
+				CloseHandle(hPipe); 
+				return 1;
+
+			}
 
 		}
 
 		URL = &MsgPtr[4];
 
-		ptr = strstr(URL, " HTTP");
+		ptr = strstr(URL, "\r\n\r\n");
 
 		if (ptr)
+
 			*ptr = 0;
 
 //		Debugprintf("Processing %s", URL);
 
-		if (_memicmp(URL, "/aprs/find.cgi?call=", 20) == 0)
+		if (_memicmp(URL, "/aprs/msgs/entermsg", 19) == 0)
 		{
-			// return Station details
+			To = strchr(URL, '=');
 
-			char * Call = &URL[20];
-			BOOL RFOnly, WX, Mobile, Object = FALSE;
-			struct STATIONRECORD * stn;
-			char * Referrer = strstr(ptr + 1, "Referer:");
-
-			strcpy(Key, Call);
-
-			if (Referrer)
+			if (To)
 			{
-				ptr = strchr(Referrer, 13);
-				if (ptr)
-				{
-					*ptr = 0;
-					RFOnly = (BOOL)strstr(Referrer, "rf");
-					WX = (BOOL)strstr(Referrer, "wx");
-					Mobile = (BOOL)strstr(Referrer, "mobile");
-					Object = (BOOL)strstr(Referrer, "obj");
+				To++;
+				strlop(To, '&');
+			}
+			else
+				To = "";
 
-					if (WX)
-						strcpy(URL, "/aprs/infowx_call.html");
-					else if (Mobile)
-						strcpy(URL, "/aprs/infomobile_call.html");
-					else if (Object)
-						strcpy(URL, "/aprs/infoobj_call.html");
-					else
-						strcpy(URL, "/aprs/info_call.html");
+			OutputLen = sprintf(OutBuffer, SendMsgPage, To);
+			HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
+			WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
+			WriteFile(sockptr->hPipe, OutBuffer, OutputLen, &cbWritten, NULL);
+			Sleep(2000);
+		}
+		else if (_memicmp(URL, "/aprs/msgs", 10) == 0)
+		{
+			// Return Messages Page
+
+			struct APRSMESSAGE * ptr = Messages;
+			int n = 0;
+			char BaseCall[10];
+			char BaseFrom[10];
+			char * MsgCall = LoppedAPRSCall;
+			BOOL OnlyMine = TRUE;
+			BOOL AllSSID = TRUE;
+			BOOL OnlySeq = FALSE;
+			BOOL ShowBulls = TRUE;
+
+			// Parse parameters
+
+			// ?call=g8bpq&bulls=true&seqonly=true&onlymine=true
+
+			char * params = strchr(URL, '?');
+
+			if (params)
+			{
+				char * param, * context;
+
+				param = strtok_s(++params, "&", &context);
+
+				while (param)
+				{
+					char * val = strlop(param, '=');
+
+					if (val)
+					{
+						if (_stricmp(param, "call") == 0)
+							MsgCall = _strupr(val);
+						else if (_stricmp(param, "bulls") == 0)
+							ShowBulls = !_stricmp(val, "true");
+						else if (_stricmp(param, "onlyseq") == 0)
+							OnlySeq = !_stricmp(val, "true");
+						else if (_stricmp(param, "onlymine") == 0)
+							OnlyMine = !_stricmp(val, "true");
+						else if (_stricmp(param, "AllSSID") == 0)
+							AllSSID = !_stricmp(val, "true");
+					}
+					param = strtok_s(NULL,"&", &context);
 				}
 			}
-
-			if (Object)
+			if (AllSSID)
 			{
-				// Name is space padded, and could have embedded spaces
-				
-				int Keylen = strlen(Key);
-				
-				if (Keylen < 9)
-					memset(&Key[Keylen], 32, 9 - Keylen);
-			}			
+				memcpy(BaseCall, MsgCall, 10);
+				strlop(BaseCall, '-');
+			}
+
+			OutputLen = sprintf(OutBuffer, WebHeader, MsgCall, MsgCall);
+
+			if (ptr)
+			{
+				do
+				{
+					char ToLopped[11] = "";
+					memcpy(ToLopped, ptr->ToCall, 10);
+					strlop(ToLopped, ' ');
+
+					if (memcmp(ToLopped, "BLN", 3) == 0)
+						if (ShowBulls == TRUE)
+							goto wantit;
+
+					if (strcmp(ToLopped, MsgCall) == 0)			//  to me?
+						goto wantit;
+
+					if (strcmp(ptr->FromCall, MsgCall) == 0)			//  to me?
+						goto wantit;
+
+					if (AllSSID)
+					{
+						memcpy(BaseFrom, ToLopped, 10);
+						strlop(BaseFrom, '-');
+
+						if (strcmp(BaseFrom, BaseCall) == 0)
+							goto wantit;
+
+						memcpy(BaseFrom, ptr->FromCall, 10);
+						strlop(BaseFrom, '-');
+
+						if (strcmp(BaseFrom, BaseCall) == 0)
+							goto wantit;
+
+					}
+
+					if (OnlyMine == FALSE)		// Want All
+						if (OnlySeq == FALSE || ptr->Seq[0] != 0)
+							goto wantit;
 			
-			stn = FindStation(Key, Key, FALSE);
+					// ignore
 
-			if (stn == NULL)
-				strcpy(URL, "/aprs/noinfo.html");
-			else
-				sockptr->SelCall = stn;
+					ptr = ptr->Next;
+					continue;
+	wantit:
+					OutputLen += sprintf(&OutBuffer[OutputLen], WebLine,
+						ptr->FromCall, ptr->ToCall, ptr->Time,ptr->FromCall, ptr->ToCall, ptr->Text);
+					ptr = ptr->Next;
+
+					if (OutputLen > 99000)
+						break;
+
+				} while (ptr);
+			}
+
+			OutputLen += sprintf(&OutBuffer[OutputLen], WebTrailer);
+
+			HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
+			WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
+			WriteFile(sockptr->hPipe, OutBuffer, OutputLen, &cbWritten, NULL);
+			Sleep(5000);
 		}
-
-		strcpy(sockptr->Callsign, Key);
-
-		SendMessageFile(sockptr, URL);
+		else
+		{
+			HeaderLen = sprintf(Header, "HTTP/1.0 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+			WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
+		}
 	}
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER)

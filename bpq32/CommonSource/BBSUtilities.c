@@ -83,6 +83,8 @@ VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buff
 VOID MCastTimer();
 VOID MCastConTimer(ConnectionInfo * conn);
 int FindFreeBBSNumber();
+VOID DoSetMsgNo(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+
 
 config_t cfg;
 config_setting_t * group;
@@ -4742,7 +4744,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	BIDRec * BIDRec;
 	char * ptr1, * ptr2 = NULL;
 	char * ptr3, * ptr4;
-	int FWDCount;
+	int FWDCount = 0;
 	char OldMess[] = "\r\n\r\nOriginal Message:\r\n\r\n";
 	int Age, OurCount;
 	char * HoldReason = "User has Hold Messages flag set";
@@ -4987,6 +4989,10 @@ nextline:
 			
 			char * Call;
 			char * AT;
+
+			// smtp or rms - don't warn no route
+
+			FWDCount = 1;
 
 			Call = _strupr(_strdup(Msg->via));
 			AT = strlop(Call, '@');
@@ -5428,7 +5434,7 @@ BOOL SeeifMessagestoForward (int BBSNumber, CIRCUIT * conn)
 {
 	// See if any messages are queued for this BBS
 
-	// Conn is not NULL, also check Msg Type
+	// if Conn is not NULL, also check Msg Type
 
 	int m;
 	struct MsgInfo * Msg;
@@ -5437,7 +5443,7 @@ BOOL SeeifMessagestoForward (int BBSNumber, CIRCUIT * conn)
 	{
 		Msg=MsgHddrPtr[m];
 
-		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+		if ((Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
 		{
 			if (conn)
 			{
@@ -7496,27 +7502,37 @@ VOID FWDTimerProc()
 				continue;				// Out of bands
 			}
 		FWD:	
+			if (ForwardingInfo->Enabled)
+			{
+				if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
+				{
+					//Temp Debug Code
 
-				if (ForwardingInfo->Enabled)
-					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (SeeifMessagestoForward(user->BBSNumber, NULL) ||
-							(ForwardingInfo->ReverseFlag && ((NOW - ForwardingInfo->LastReverseForward) >= ForwardingInfo->RevFwdInterval))) // Menu Command overrides Reverse
+//					Debugprintf("ReverseFlag = %d, Msgs to Forward Flag %d Msgs to Forward Count %d",
+//						ForwardingInfo->ReverseFlag,
+//						SeeifMessagestoForward(user->BBSNumber, NULL),
+//						CountMessagestoForward(user));
+						
+					if (SeeifMessagestoForward(user->BBSNumber, NULL) ||
+						(ForwardingInfo->ReverseFlag && ((NOW - ForwardingInfo->LastReverseForward) >= ForwardingInfo->RevFwdInterval)))
 
+					{
+						user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+
+
+						// remove any old TempScript
+
+						if (user->ForwardingInfo->TempConnectScript)
 						{
-							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
-
-
-							// remove any old TempScript
-
-							if (user->ForwardingInfo->TempConnectScript)
-							{
-								FreeList(user->ForwardingInfo->TempConnectScript);
-								user->ForwardingInfo->TempConnectScript = NULL;
-							}
-
-							if (ConnecttoBBS(user))
-								ForwardingInfo->Forwarding = TRUE;					
+							FreeList(user->ForwardingInfo->TempConnectScript);
+							user->ForwardingInfo->TempConnectScript = NULL;
 						}
+
+						if (ConnecttoBBS(user))
+							ForwardingInfo->Forwarding = TRUE;					
+					}
+				}
+			}
 		}
 	}
 }
@@ -8627,7 +8643,7 @@ int Connected(int Stream)
 	return 0;
 }
 
-int Disconnected (Stream)
+int Disconnected (int Stream)
 {
 	struct UserInfo * user = NULL;
 	CIRCUIT * conn;

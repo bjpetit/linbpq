@@ -261,6 +261,10 @@ int DoReceivedData(int Stream)
 				if (conn->InputLen == 1 && conn->InputBuffer[0] == 0)		// Single Null
 				{
 					conn->InputLen = 0;
+
+					if (conn->u.user->circuit && conn->u.user->circuit->rtcflags & p_user)	// Local User
+						conn->u.user->lastmsgtime = time(NULL);
+
 					return 0;
 				}
 

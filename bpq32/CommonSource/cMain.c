@@ -1581,6 +1581,8 @@ VOID ReadNodes()
 			}
 
 			ptr = strtok_s(NULL, seps, &Context);
+			if (ptr == NULL)
+				continue;
 
 			if (ConvToAX25(ptr, axcall) == FALSE)
 				continue;				// Duff

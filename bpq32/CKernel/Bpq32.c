@@ -789,15 +789,18 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Don't allow ARDOP beacons when connected
 //	Add support for ARDOP Serial over I2C
 //	Fix possble crash when using manual RADIO messages
-//	Save out of sequence L2 frames for possilb euse after retry
+//	Save out of sequence L2 frames for possible reuse after retry
 //	Add KISS command to send KISS control frame to TNC
 //	Stop removing unused digis from packets sent to APRS-IS
+
 //	Processing of ARDOP PING and PINGACK responses
 //	Handle changed encoding of WL2K update responses.
 //	Allow anonymous logon to telnet
 //	Don't use APPL= for RP Calls in Dragon Single mode.
 //	Add basic messaging page to APRS Web Server
-//  Add debug log option to SCSTracker and TrkMulti Drivers
+//	Add debug log option to SCSTracker and TrkMulti Driver
+//	Support REBOOT command on LinBPQ
+//  Allow LISTEN command on all ports that support ax.25 monitoring
 
 
 #define CKernel

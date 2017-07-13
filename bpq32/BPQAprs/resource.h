@@ -58,8 +58,11 @@
 #define IDC_FILTER                      1070
 #define IDC_TEXTLABEL2                  1070
 #define IDC_WXFILE                      1071
+#define IDC_MYMSGSDSSID                 1071
 #define IDC_WXTEXT                      1072
+#define IDC_SHOWBULLS                   1072
 #define IDC_FILE                        1073
+#define IDC_SHOWSEQ                     1073
 #define IDC_INPUT                       1074
 #define IDC_JPEGFILE                    1074
 #define IDC_WXPORTS                     1075
@@ -70,10 +73,12 @@
 #define IDC_LIST2                       1081
 #define IDC_SUPZERO                     1082
 #define IDC_NOTRACKS                    1083
-#define IDC_CLEARMSGS                   1083
+#define IDC_CLEARRX                     1083
 #define IDC_LOCALTIME                   1084
+#define IDC_CLEARTX                     1084
 #define IDC_CHECK1                      1085
 #define IDC_CHECK2                      1086
+#define IDC_STATUS                      9990
 #define IDD_CHATCOLCONFIG               30008
 #define IDC_CHATCOLOURS                 30009
 

@@ -129,7 +129,7 @@ BOOL OpenDebugLogFile(int Port)
 	T = LogTime[Port] = time(NULL);
 	tm = gmtime(&T);	
 
-	sprintf(FN,"%s/Logs/Port%02dDebugLog_%02d%02d.txt", BPQDirectory, Port, tm->tm_mon + 1, tm->tm_mday);
+	sprintf(FN,"%s/logs/Port%02dDebugLog_%02d%02d.txt", BPQDirectory, Port, tm->tm_mon + 1, tm->tm_mday);
 
 	LogHandle[Port] = fopen(FN, "ab");
 	

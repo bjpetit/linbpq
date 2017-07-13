@@ -10,14 +10,14 @@
 
 #endif
 
-#define KVers 6,0,13,46
-#define KVerstring "6.0.13.46\0"
+#define KVers 6,0,14,1
+#define KVerstring "6.0.14.1\0"
 
 #ifdef CKernel
 
 #define Vers KVers
 #define Verstring KVerstring
-#define Datestring "May 2017"
+#define Datestring "July 2017"
 #define VerComments "G8BPQ Packet Switch (C Version)" KVerstring
 #define VerCopyright "Copyright © 2001-2017 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
@@ -27,8 +27,8 @@
 
 #ifdef TermTCP
 
-#define Vers 1,0,13,2
-#define Verstring "1.0.13.2\0"
+#define Vers 1,0,14,1
+#define Verstring "1.0.14.1\0"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011-2017 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"
@@ -104,8 +104,8 @@
 
 #ifdef APRS
 
-#define Vers 1,1,10,4
-#define Verstring "1.1.10.4\0"
+#define Vers 1,1,11,1
+#define Verstring "1.1.11.1\0"
 #define VerComments  "APRS Client for G8BPQ Switch\0"
 #define VerCopyright "Copyright © 2012-2017 John Wiseman G8BPQ\0"
 #define VerDesc "APRS Client for G8BPQ Switch\0"
@@ -115,8 +115,8 @@
 
 #ifdef CHAT
  
-#define Vers 1,0,7,2
-#define Verstring "1.0.7.2\0"
+#define Vers 1,0,8,1
+#define Verstring "1.0.8.1\0"
 #define VerComments "Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2017 John Wiseman G8BPQ\0"
 #define VerDesc "Chat server for G8BPQ's 32 Bit Switch\0"

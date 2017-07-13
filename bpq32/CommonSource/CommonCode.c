@@ -1891,7 +1891,7 @@ DllExport UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc)
 
 // Standard serial port handling routines, used by lots of modules.
 
-OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
+int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 {
 	char buf[80];
 	int PortNum;

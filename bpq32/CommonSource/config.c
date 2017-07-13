@@ -2004,7 +2004,7 @@ char rec[];
 */
 
 
-decode_port_rec(char * rec)
+int decode_port_rec(char * rec)
 {
 	int i;
 	int cn = 1;			/* RETURN CODE FROM ROUTINES */
@@ -2617,7 +2617,7 @@ static int troutine[] =
 
 #define TPARAMLIM 6
 
-decode_tnc_rec(char * rec)
+int decode_tnc_rec(char * rec)
 {
 	char key_word[20];
 	char value[300];
@@ -2813,7 +2813,7 @@ static int droutine[] =
 
 #define DPARAMLIM 6
 
-decode_ded_rec(rec)
+int decode_ded_rec(rec)
 char rec[];
 {
 	int i;

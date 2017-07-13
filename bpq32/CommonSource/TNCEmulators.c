@@ -1197,10 +1197,12 @@ VOID TNCBGThread()
 {
 	TNCRUNNING = TRUE;
 
+	Sleep(5000);
+
 	while (TNCRUNNING)
 	{
 		TNCPoll();
-		Sleep(10);
+		Sleep(50);
 	}
 }
 

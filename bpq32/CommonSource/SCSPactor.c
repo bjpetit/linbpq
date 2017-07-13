@@ -131,12 +131,12 @@ int CheckMode(struct TNCINFO * TNC);
 
 static FILE * LogHandle[32] = {0};
 
-static BOOL WRITELOG;					// Enable debug logging
-
 
 //char * Logs[4] = {"1", "2", "3", "4"};
 
 static char BaseDir[MAX_PATH]="c:\\";
+
+static BOOL WRITELOG = FALSE;
 
 static VOID CloseLogFile(int Flags)
 {

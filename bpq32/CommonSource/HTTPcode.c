@@ -700,7 +700,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 	send(sock, Tail, strlen(Tail), 0);
 }
 
-ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen)
+int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen)
 {
 	char _REPLYBUFFER[8192];
 	int ReplyLen;

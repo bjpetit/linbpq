@@ -244,7 +244,7 @@ VOID SendPortsForMonitor(SOCKET sock)
 	send(sock, PortInfo, ptr - PortInfo, 0);
 }
 
-ProcessLine(char * buf, int Port)
+int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr;
 	UCHAR * ptr1;
@@ -539,8 +539,6 @@ ProcessLine(char * buf, int Port)
 
 	return TRUE;
 }
-
-int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS);
 
 static int MaxStreams = 26;
 

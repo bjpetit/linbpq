@@ -1633,7 +1633,7 @@ VOID LISTENCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		return;
 	}
 
-	if (PORT->PROTOCOL == 10) // && PORT->UICAPABLE == 0)
+	if (PORT->PROTOCOL == 10  && PORT->UICAPABLE == 0)
 	{
 		Bufferptr += sprintf(Bufferptr, "Sorry, port is not an ax.25 port\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);

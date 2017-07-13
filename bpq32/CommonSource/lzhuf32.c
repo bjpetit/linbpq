@@ -806,7 +806,7 @@ void Decode(CIRCUIT * conn)
 
 	// Temp fix for duff MACBPQ (Message Length send big-endian)
 
-	if (textsize > 5000000)
+	if (textsize > 500000)
 	{
 		char x[4];
 		char y[4];

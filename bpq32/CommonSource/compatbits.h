@@ -47,6 +47,8 @@ int pthread_equal(pthread_t T1, pthread_t T2);
 
 #else
 
+int Sleep(int ms);
+
 #define ioctlsocket ioctl
 
 #define Dll
@@ -55,6 +57,7 @@ int pthread_equal(pthread_t T1, pthread_t T2);
 #include <unistd.h>
 #include <time.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <sys/select.h>

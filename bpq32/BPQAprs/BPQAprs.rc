@@ -2,6 +2,11 @@
 //
 #include "resource.h"
 
+// Generated Help ID header file
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "resource.hm"
+#undef APSTUDIO_HIDDEN_SYMBOLS
+
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -54,80 +59,85 @@ END
 // Dialog
 //
 
-IDD_BASICSETUP DIALOG DISCARDABLE  0, 0, 339, 274
+IDD_BASICSETUP DIALOG DISCARDABLE  0, 0, 338, 259
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "BPQAprs Basic Setup"
 FONT 8, "MS Sans Serif"
 BEGIN
-    DEFPUSHBUTTON   "Save",IDOK,112,247,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,175,247,50,14
+    DEFPUSHBUTTON   "Save",IDOK,112,239,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,175,239,50,14
     LTEXT           "Msg Retry Count",IDC_STATIC,2,30,60,12,SS_CENTERIMAGE
     LTEXT           "Msg Retry Interval",IDC_STATIC,95,30,65,12,
                     SS_CENTERIMAGE
     EDITTEXT        IDC_RETRIES,67,30,24,12,ES_AUTOHSCROLL | ES_NUMBER
     EDITTEXT        IDC_RETRYTIME,163,30,20,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "IS Filter",IDC_STATIC,2,72,60,12,SS_CENTERIMAGE
-    EDITTEXT        IDC_FILTER,68,72,262,12,ES_AUTOHSCROLL
-    LTEXT           "Filename",IDC_STATIC,29,137,33,12,SS_CENTERIMAGE
+    LTEXT           "Status Msg",IDC_STATIC,2,72,57,12,SS_CENTERIMAGE
+    EDITTEXT        IDC_STATUS,65,71,262,12,ES_AUTOHSCROLL
+    LTEXT           "IS Filter",IDC_STATIC,2,54,57,12,SS_CENTERIMAGE
+    EDITTEXT        IDC_FILTER,66,52,262,12,ES_AUTOHSCROLL
+    LTEXT           "Filename",IDC_STATIC,29,129,33,12,SS_CENTERIMAGE
     CONTROL         "Send UI-View Compatible WX FIle",IDC_SENDWX,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,117,130,10
-    EDITTEXT        IDC_WXFILE,78,135,212,12,ES_AUTOHSCROLL | WS_DISABLED
-    LTEXT           "Beacon Text",IDC_STATIC,28,151,42,12,SS_CENTERIMAGE
-    LTEXT           "Interval",IDC_STATIC,35,166,33,12,SS_CENTERIMAGE
-    EDITTEXT        IDC_WXTEXT,78,150,209,12,ES_AUTOHSCROLL | WS_DISABLED
-    EDITTEXT        IDC_WXINTERVAL,78,166,20,12,ES_AUTOHSCROLL | ES_NUMBER | 
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,108,130,10
+    EDITTEXT        IDC_WXFILE,78,127,212,12,ES_AUTOHSCROLL | WS_DISABLED
+    LTEXT           "Beacon Text",IDC_STATIC,28,143,42,12,SS_CENTERIMAGE
+    LTEXT           "Interval",IDC_STATIC,35,158,33,12,SS_CENTERIMAGE
+    EDITTEXT        IDC_WXTEXT,78,142,209,12,ES_AUTOHSCROLL | WS_DISABLED
+    EDITTEXT        IDC_WXINTERVAL,78,158,20,12,ES_AUTOHSCROLL | ES_NUMBER | 
                     WS_DISABLED
-    PUSHBUTTON      "Browse",IDC_FILE,297,135,33,12,WS_DISABLED
-    LTEXT           "Port List",IDC_STATIC,105,166,33,12,SS_CENTERIMAGE
-    EDITTEXT        IDC_WXPORTS,138,166,81,12,ES_AUTOHSCROLL | WS_DISABLED
+    PUSHBUTTON      "Browse",IDC_FILE,296,127,33,12,WS_DISABLED
+    LTEXT           "Port List",IDC_STATIC,105,158,33,12,SS_CENTERIMAGE
+    EDITTEXT        IDC_WXPORTS,138,158,81,12,ES_AUTOHSCROLL | WS_DISABLED
     CONTROL         "Suppress stations with zero Lat/Lon",IDC_SUPZERO,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,96,130,10
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,92,130,10
     CONTROL         "Default to no tracks",IDC_NOTRACKS,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,95,10,75,10
     LTEXT           "Track Expire Time",IDC_STATIC,2,8,59,12,SS_CENTERIMAGE
     EDITTEXT        IDC_EXPIRETRACKS,66,8,27,12,ES_AUTOHSCROLL | ES_NUMBER
     CONTROL         "Use Local Time",IDC_LOCALTIME,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,146,96,75,10
-    LTEXT           "Filename",IDC_STATIC,8,211,33,12,SS_CENTERIMAGE
-    EDITTEXT        IDC_JPEGFILE,57,211,212,12,ES_AUTOHSCROLL
-    LTEXT           "Interval (Seconds)",IDC_STATIC,100,193,62,12,
+                    BS_LEFTTEXT | WS_TABSTOP,146,107,75,10
+    LTEXT           "Filename",IDC_STATIC,8,203,33,12,SS_CENTERIMAGE
+    EDITTEXT        IDC_JPEGFILE,57,203,212,12,ES_AUTOHSCROLL
+    LTEXT           "Interval (Seconds)",IDC_STATIC,100,185,62,12,
                     SS_CENTERIMAGE
-    EDITTEXT        IDC_JPEGINTERVAL,167,193,20,12,ES_AUTOHSCROLL | 
+    EDITTEXT        IDC_JPEGINTERVAL,167,185,20,12,ES_AUTOHSCROLL | 
                     ES_NUMBER
-    PUSHBUTTON      "Browse",IDC_FILE2,275,211,33,12
+    PUSHBUTTON      "Browse",IDC_FILE2,275,203,33,12
     CONTROL         "Create JPEG of display",IDC_CREATEJPEG,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,194,84,10
-    LTEXT           "Send ACKS and Replies using received path",IDC_STATIC,2,
-                    48,150,12,SS_CENTERIMAGE | NOT WS_VISIBLE
-    CONTROL         "",IDC_CHECK1,"Button",BS_AUTOCHECKBOX | NOT WS_VISIBLE | 
-                    WS_TABSTOP,163,50,16,8
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,169,84,10
     CONTROL         "Use Decay Retry Algorithm",IDC_CHECK2,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | NOT WS_VISIBLE | 
-                    WS_TABSTOP,195,32,101,10
+                    WS_TABSTOP,195,31,101,10
 END
 
-APRSMSGS DIALOG DISCARDABLE  100, 100, 467, 275
+APRSMSGS DIALOGEX 100, 100, 467, 275
 STYLE WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Dialog"
 CLASS "APRSMSGS"
-FONT 9, "Fixedsys"
+FONT 9, "Fixedsys", 0, 0, 0x1
 BEGIN
     LTEXT           "To",IDC_TOLABEL,0,216,9,8
     COMBOBOX        IDC_TOCALL,12,215,45,50,CBS_DROPDOWN | CBS_SORT | 
                     CBS_UPPERCASE | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Text",IDC_TEXTLABEL,60,216,19,8
     EDITTEXT        IDC_INPUT,80,215,222,12,ES_AUTOHSCROLL
-    CONTROL         "Show only my Messages",IDC_MYMSGS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT,5,5,96,8
+    CONTROL         "Show only mine",IDC_MYMSGS,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT,3,5,73,8
     CONTROL         "Beep instead of Popup",IDC_MSGBEEP,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT,108,5,97,8
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT,282,5,97,8
     CONTROL         "List1",IDC_LIST1,"SysListView32",LVS_REPORT | WS_BORDER,
                     9,26,396,69
     CONTROL         "List2",IDC_LIST2,"SysListView32",LVS_REPORT | WS_BORDER,
                     8,103,396,83
-    PUSHBUTTON      "Clear Screen",IDC_CLEARMSGS,223,3,56,10
+    PUSHBUTTON      "Clear RX",IDC_CLEARRX,382,4,38,10
     LTEXT           "Path",IDC_TEXTLABEL2,307,216,19,8,NOT WS_VISIBLE
     EDITTEXT        IDC_PATH,329,215,76,12,ES_AUTOHSCROLL | NOT WS_VISIBLE
+    CONTROL         "All SSIDs",IDC_MYMSGSDSSID,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT,81,5,50,8
+    PUSHBUTTON      "Clear TX",IDC_CLEARTX,424,4,38,10,0,0,HIDC_CLEARTX
+    CONTROL         "Show Bulls",IDC_SHOWBULLS,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT | WS_TABSTOP,227,5,52,8
+    CONTROL         "Only Show Sequenced ",IDC_SHOWSEQ,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,135,5,90,8
 END
 
 APRSSTNS DIALOG DISCARDABLE  100, 100, 505, 275
@@ -161,8 +171,8 @@ BEGIN
                     -1,25,128,189,10,NOT WS_GROUP
     LTEXT           "Includes code from zlib (http://zlib.net)",-1,44,111,
                     135,10,NOT WS_GROUP
-					LTEXT           "Map Tiles Copyright Thunderforest (http://www.thunderforest.com)",-1,
-                    29,139,181,10,NOT WS_GROUP
+    LTEXT           "Map Tiles Copyright Thunderforest (http://www.thunderforest.com)",
+                    -1,29,139,181,10,NOT WS_GROUP
 END
 
 STNPOPUP DIALOG DISCARDABLE  0, 0, 231, 70
@@ -198,9 +208,9 @@ BEGIN
     IDD_BASICSETUP, DIALOG
     BEGIN
         LEFTMARGIN, 2
-        RIGHTMARGIN, 330
+        RIGHTMARGIN, 329
         TOPMARGIN, 7
-        BOTTOMMARGIN, 269
+        BOTTOMMARGIN, 254
     END
 
     "STNPOPUP", DIALOG
