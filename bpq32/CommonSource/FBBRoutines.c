@@ -124,9 +124,13 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 	if (Buffer[0] != 'F')
 	{
+		if (conn->BBSFlags & DISCONNECTING)
+			return;				// Ignore if disconnect aleady started
+
 		BBSputs(conn, "*** Protocol Error - Line should start with 'F'\r");
 		Flush(conn);
 		Sleep(500);
+		conn->BBSFlags |= DISCONNECTING;
 		Disconnect(conn->BPQStream);
 
 		return;
@@ -316,6 +320,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (conn->FBBMsgsSent)
 			FlagSentMessages(conn, user);
+
+		conn->BBSFlags |= DISCONNECTING;
 
 		Disconnect(conn->BPQStream);
 		return;

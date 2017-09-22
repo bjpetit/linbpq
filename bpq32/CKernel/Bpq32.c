@@ -772,7 +772,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Flip SSID bits on UZ7HO downlink connects
 
 
-// Version xxxxx
+// Version 6.0.14.1
 
 //	Fix Socket leak in ARDOP and FLDIGI drivers.
 //	Add option to change CMS Server hostname
@@ -802,6 +802,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Support REBOOT command on LinBPQ
 //  Allow LISTEN command on all ports that support ax.25 monitoring
 
+//	Version 6.0.15.1 ??
+
+//	partial support for ax.25 V2.2
+//	Add MHU and MHL commands and MH filter option
+//	Fix scan interlock with ARDOP
+//	Add Input source seiect for IC7300
+//	Remove % transparency from web terminal signon message
+//	Fix L4 COnnects In count on stats
 
 #define CKernel
 

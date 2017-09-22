@@ -131,6 +131,9 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 	char From[10], To[10];
 	BOOL Info = 0;
 	BOOL FRMRFLAG = 0;
+	BOOL XIDFLAG = 0;
+	BOOL TESTFLAG = 0;
+
 	int MsgLen = msg->LENGTH;
 
 	// MINI mode is for Node Listen (remote monitor) Mode. Keep info to minimum
@@ -321,13 +324,30 @@ KC6OAR*>ID:
 	{
 		// UN Numbered
 				
-		char SUP[5] = "??";
+		char SUP[6] = "??";
 
 		switch (CTL)
 		{
 		case SABM:
 
 			strcpy(SUP, "C");
+			break;
+
+		case SABME:
+
+			strcpy(SUP, "SABME");
+			break;
+
+		case XID:
+
+			strcpy(SUP, "XID");
+			XIDFLAG = 1;
+			break;
+
+		case TEST:
+
+			strcpy(SUP, "TEST");
+			TESTFLAG = 1;
 			break;
 
 		case DISC:
@@ -363,7 +383,7 @@ KC6OAR*>ID:
 		// Super
 
 		int NR = (CTL >> 5) & 7;
-		char SUP[4] = "??";
+		char SUP[5] = "??";
 
 		switch (CTL & 0x0F)
 		{
@@ -381,6 +401,10 @@ KC6OAR*>ID:
 
 			strcpy(SUP, "REJ");
 			break;
+		case SREJ:
+
+			strcpy(SUP, "SREJ");
+			break;
 		}
 
 		Output += sprintf(Output, "<%s%s%s R%d>", SUP, CRCHAR, PFCHAR, NR);
@@ -390,6 +414,59 @@ KC6OAR*>ID:
 	if (FRMRFLAG)
 		Output += sprintf(Output, " %02X %02X %02X", ADJBUFFER->PID, ADJBUFFER->L2DATA[0], ADJBUFFER->L2DATA[1]); 
 
+	if (XIDFLAG)
+	{
+		// Decode and display XID
+
+		UCHAR * ptr = &ADJBUFFER->PID;
+
+		if (*ptr++ == 0x82 && *ptr++ == 0x80)
+		{
+			int Type;
+			int Len;
+			unsigned int value;
+			int xidlen = *(ptr++) << 8;
+			xidlen += *ptr++;
+		
+			// XID is set of Type, Len, Value n-tuples
+
+// G8BPQ-2>G8BPQ:(XID cmd, p=1) Half-Duplex SREJ modulo-128 I-Field-Length-Rx=256 Window-Size-Rx=32 Ack-Timer=3000 Retries=10
+
+
+			while (xidlen > 0)
+			{
+				Type = *ptr++;
+				Len = *ptr++;
+
+				value = 0;
+				xidlen -= (Len + 2);
+
+				while (Len--)
+				{
+					value <<=8;
+					value += *ptr++;
+				}
+				switch(Type)
+				{
+				case 2:				//Bin fields
+				case 3:
+
+					Output += sprintf(Output, " %d=%x", Type, value);
+					break;
+
+				case 6:				//RX Size
+
+					Output += sprintf(Output, " RX Paclen=%d", value / 8);
+					break;
+
+				case 8:				//RX Window
+
+					Output += sprintf(Output, " RX Window=%d", value);
+					break;
+				}
+			}	
+		}
+	}
 	if (Info)
 	{
 		// We have an info frame

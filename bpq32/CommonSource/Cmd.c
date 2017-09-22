@@ -94,7 +94,11 @@ char NOVALCALLS[] = "No Valid Calls defined on this port\r";
 char BADVALUEMSG[] = "Invalid parameter\r";
 
 char BADCONFIGMSG[] = "Configuration File check falled - will continue with old config\r";
+#ifdef LINBPQ
+char REBOOTOK[] = "Rebooting\r";
+#else
 char REBOOTOK[] = "Rebooting in 20 secs\r";
+#endif
 char REBOOTFAILED[] = "Shutdown failed\r";
 
 char RESTARTOK[] = "Restarting\r";
@@ -1128,8 +1132,12 @@ VOID CMDL00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 			memcpy(Bufferptr, Normcall, len);
 			Bufferptr += len;
 
-			Bufferptr += sprintf(Bufferptr, " S=%d P=%d T=%d V=%d\r",
-				LINK->L2STATE, LINK->LINKPORT->PORTNUMBER, LINK->LINKTYPE, 2 - LINK->VER1FLAG);
+			if (LINK->Ver2point2)
+				Bufferptr += sprintf(Bufferptr, " S=%d P=%d T=%d V=2.2\r",
+					LINK->L2STATE, LINK->LINKPORT->PORTNUMBER, LINK->LINKTYPE);
+			else
+				Bufferptr += sprintf(Bufferptr, " S=%d P=%d T=%d V=%d\r",
+					LINK->L2STATE, LINK->LINKPORT->PORTNUMBER, LINK->LINKTYPE, 2 - LINK->VER1FLAG);
 		}
 		LINK++;
 	}
@@ -2465,7 +2473,10 @@ noFlip3:
 
 	RESET2(LINK);						// RESET ALL FLAGS
 
-	LINK->L2STATE = 2;					// CONNECTING
+	if (CMD->String[0] == 'N' && SUPPORT2point2)
+		LINK->L2STATE = 1;					// New (2.2) send XID
+	else
+		LINK->L2STATE = 2;					// Send SABM
 
 	LINK->CIRCUITPOINTER = NewSess;
 
@@ -2475,8 +2486,12 @@ noFlip3:
 		NewSess->SESSPACLEN = Session->SESSPACLEN = PORT->PORTPACLEN;
 
 	if (CQFLAG == 0)			// if a CQ CALL  DONT SEND SABM
-		SENDSABM(LINK);
-
+	{
+		if (LINK->L2STATE == 1)
+			L2SENDXID(LINK);
+		else	
+			SENDSABM(LINK);
+	}
 	ReleaseBuffer((UINT *)REPLYBUFFER);
 	return;
 }	
@@ -3233,14 +3248,14 @@ VOID CMDQUERY(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
-char * FormatMH(MHSTRUC * MH);
+char * FormatMH(MHSTRUC * MH, char Format);
 
 VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	//	DISPLAY HEARD LIST
 	
 	int Port = 0, sess = 0;
-	char * ptr, *Context;
+	char * ptr, *Context, *pattern;
 	struct PORTCONTROL * PORT = NULL;
 	MHSTRUC * MH;
 	int n = MHENTRIES;
@@ -3270,6 +3285,11 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		return;
 	}
 
+	pattern = strtok_s(NULL, " ", &Context);
+
+	if (pattern)
+		_strupr(pattern);			// Optional filter
+
 	MH = PORT->PORTMHEARD;
 
 	if (MH == NULL)
@@ -3288,14 +3308,17 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	{
 		if (CMD->String[2] == 'V')		// MHV
 		{
-			Bufferptr += sprintf(Bufferptr, "MHeard List PI1LAP for Port %d\r", Port);
+			Bufferptr += sprintf(Bufferptr, "MHeard List %s for Port %d\r", MYNODECALL, Port);
 			Bufferptr = CHECKBUFFER(Session, Bufferptr);
 			Bufferptr += sprintf(Bufferptr, "Callsign   Last heard     Pkts RX    via Digi ;) \r");
 			Bufferptr = CHECKBUFFER(Session, Bufferptr);
 			Bufferptr += sprintf(Bufferptr, "---------  -----------    -------    ------------------------------------------\r");
 		}
 		else
-			Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
+			if (pattern)
+				Bufferptr += sprintf(Bufferptr, "Heard List for Port %d filtered by %s\r", Port, pattern);
+			else
+				Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
 	}
 	while (n--)
 	{
@@ -3310,6 +3333,12 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 		Normcall[len++] = MH->MHDIGI;
 		Normcall[len++] = 0;
+
+		if (pattern && strstr(Normcall, pattern) == 0)
+		{
+			MH++;
+			continue;
+		}
 
 		n = 8;					// Max number of digi-peaters
 
@@ -3373,7 +3402,7 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		Normcall[len++] = 0;
 
 
-		ptr = FormatMH(MH);
+		ptr = FormatMH(MH, CMD->String[2]);
 		
 		if (CMD->String[2] == 'V')		// MHV
 			Bufferptr += sprintf(Bufferptr, "%-10s %-10s %-10d %-30s %s\r",
@@ -3975,6 +4004,7 @@ CMDX COMMANDS[] =
 	"*** LINKED  ",10,LINKCMD,0,
 	"CQ          ",2,CQCMD,0,
 	"CONNECT     ",1,CMDC00,0,
+	"NC          ",2,CMDC00,0,
 	"BYE         ",1,BYECMD,0,
 	"QUIT        ",1,BYECMD,0,
 	"INFO        ",1,CMDI00,0,
@@ -3992,6 +4022,8 @@ CMDX COMMANDS[] =
 	"UNPROTO     ",2,UNPROTOCMD,0,
 	"?           ",1,CMDQUERY,0,
 	"DUMP        ",4,DUMPCMD,0,
+	"MHU         ",3,MHCMD,0,		// UTC Times
+	"MHL         ",3,MHCMD,0,		// Local Times
 	"MHV         ",3,MHCMD,0,
 	"MHEARD      ",1,MHCMD,0,
 	"APRSMH      ",2,APRSMHCMD,0,

@@ -1172,27 +1172,33 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 		if (Param == 1)		// Request Permission
 		{
-			if (!TNC->ConnectPending)
-				return 0;	// OK to Change
+			if (TNC->ConnectPending)
+				return TRUE;	// Not OK to Change
 
 			if (TNC->CONNECTED)
+			{
+				TNC->GavePermission = TRUE;
 				send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
-
-			return TRUE;
+			}
+			return FALSE;
 		}
 
 		if (Param == 2)		// Check  Permission
 		{
-			if (TNC->ConnectPending)
-				return -1;	// Skip Interval
-
+			Debugprintf("Scan Check Permission called on WINMOR");
 			return 1;		// OK to change
 		}
 
 		if (Param == 3)		// Release  Permission
 		{
 			if (TNC->CONNECTED)
-				send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+			{
+				if (TNC->GavePermission)
+				{
+					TNC->GavePermission = FALSE;
+					send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+				}
+			}
 			return 0;
 		}
 

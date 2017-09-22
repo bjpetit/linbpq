@@ -1893,7 +1893,6 @@ DllExport UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc)
 
 int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 {
-	char buf[80];
 	int PortNum;
 
 	if (conn->WEB_COMMSSTATE == NULL)
@@ -1966,9 +1965,9 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 		if (Quiet == 0)
 		{
 			if (pPort < (VOID *)256)
-				sprintf(buf," COM%d could not be opened \r\n ", (UINT)pPort);
+				sprintf(buf," COM%d could not be opened %d\r\n ", (UINT)pPort, GetLastError());
 			else
-				sprintf(buf," %s could not be opened \r\n ", pPort);
+				sprintf(buf," %s could not be opened %d\r\n ", pPort, GetLastError());
 
 	//		WritetoConsoleLocal(buf);
 			OutputDebugString(buf);
@@ -2053,6 +2052,9 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	return fd;
 
 }
+
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
+
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
 {
 	BOOL Error;
@@ -2604,8 +2606,11 @@ char * FormatUptime(int Uptime)
 	return UPTime;
  }
 
- char * FormatMH(PMHSTRUC MH)
- {
+static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+
+char * FormatMH(PMHSTRUC MH, char Format)
+{
 	struct tm * TM;
 	static char MHTime[50];
 	time_t szClock;
@@ -2614,16 +2619,26 @@ char * FormatUptime(int Uptime)
 	memcpy(LOC, MH->MHLocator, 6);
 	LOC[6] = 0;
 
-	szClock = time(NULL) - MH->MHTIME;
+	if (Format == 'U' || Format =='L')
+		szClock = MH->MHTIME;
+	else
+		szClock = time(NULL) - MH->MHTIME;
 
-	TM = gmtime(&szClock);
+	if (Format == 'L')
+		TM = localtime(&szClock);
+	else
+		TM = gmtime(&szClock);
 
-	sprintf(MHTime, "%.2d:%.2d:%.2d:%.2d  %s %s",
-		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, MH->MHFreq, LOC);
+	if (Format == 'U' || Format =='L')
+		sprintf(MHTime, "%s %02d %.2d:%.2d:%.2d  %s %s",
+			month[TM->tm_mon], TM->tm_mday, TM->tm_hour, TM->tm_min, TM->tm_sec, MH->MHFreq, LOC);
+	else
+		sprintf(MHTime, "%.2d:%.2d:%.2d:%.2d  %s %s",
+			TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, MH->MHFreq, LOC);
 
 	return MHTime;
 
- }
+}
 
 Dll VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset)
 {

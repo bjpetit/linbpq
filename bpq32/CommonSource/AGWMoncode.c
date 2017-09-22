@@ -89,6 +89,8 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 	char From[10], To[10];
 	BOOL Info = 0;
 	BOOL FRMRFLAG = 0;
+	BOOL XIDFLAG = 0;
+	BOOL TESTFLAG = 0;
 	int MsgLen = msg->LENGTH;
 
 	//	GET THE CONTROL BYTE, TO SEE IF THIS FRAME IS TO BE DISPLAYED

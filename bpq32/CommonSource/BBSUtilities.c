@@ -5904,7 +5904,7 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 			if (ptr1)
 				*(ptr1++) = 0;
 
-			if (strlen(ptr))		// igonre null elements
+			if (strlen(ptr))		// ignore null elements
 			{
 				Value = realloc(Value, (Count+2)*4);
 				Value[Count++] = _strdup(ptr);
@@ -6921,7 +6921,15 @@ InBand:
 
 			if (_memicmp(Cmd, "FILE", 4) == 0)
 			{
-				ForwardMessagestoFile(conn, &Cmd[5]);
+				if (Cmd[4] == 0)
+				{
+					// Missing Filename
+					
+					Logprintf(LOG_BBS, conn, '!', "Export file name missing");
+				}
+				else
+					ForwardMessagestoFile(conn, &Cmd[5]);
+				
 				conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
 				Disconnect(conn->BPQStream);
 				return FALSE;

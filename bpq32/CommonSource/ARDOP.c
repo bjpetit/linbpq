@@ -1391,12 +1391,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					return 0;					// No connection so no interlock
 			}
 			
-			if (TNC->ConnectPending)
-				TNC->ConnectPending--;		// Time out if set too long
+//			if (TNC->ConnectPending)
+//				TNC->ConnectPending--;		// Time out if set too long
 
 			if (!TNC->ConnectPending)
 			{
 				ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
+				TNC->GavePermission = TRUE;
 				return 0;	// OK to Change
 			}
 
@@ -1405,29 +1406,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 2)		// Check  Permission
 		{
-			if (TNC->ARDOPCommsMode == 'T')		// TCP Mode
-			{
-				if (!TNC->WINMORSock)
-					return 1;					// No connection so ok
-			}
-			else
-			{
-				// Serial Modes
-
-				if (!TNC->HostMode)
-					return 1;					// No connection so ok
-			}
-			if (TNC->ConnectPending)
-			{
-				TNC->ConnectPending--;
-				return -1;	// Skip Interval
-			}
+			Debugprintf("Scan Check Permission called on ARDOP");
 			return 1;		// OK to change
 		}
 
 		if (Param == 3)		// Release  Permission
 		{
-			ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+			if (TNC->GavePermission)
+			{
+				TNC->GavePermission = FALSE;
+				ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+			}
 			return 0;
 		}
 

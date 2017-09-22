@@ -2246,7 +2246,7 @@ DigiLoop:
 				if (memcmp(ptr1, "QRA ", 4) == 0)
 				{
 					char Call[10], Loc[10] = "";
-					sscanf(&ptr1[4], "%s %s", &Call, &Loc);
+					sscanf(&ptr1[4], "%s %s", &Call[0], &Loc[0]);
 
 					UpdateMHEx(TNC, MHCall, ' ', 0, Loc);
 				}

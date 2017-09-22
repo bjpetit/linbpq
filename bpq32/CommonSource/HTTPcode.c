@@ -298,6 +298,51 @@ static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=I
 
 static char EXCEPTMSG[80] = "";
 
+
+static void UndoTransparency(char * input)
+{
+	char * ptr1, * ptr2;
+	char c;
+	int hex;
+
+	ptr1 = ptr2 = input;
+
+	// Convert any %xx constructs
+
+	while (1)
+	{
+		c = *(ptr1++);
+
+		if (c == 0)
+			break;
+
+		if (c == '%')
+		{
+			c = *(ptr1++);
+			if(isdigit(c))
+				hex = (c - '0') << 4;
+			else
+				hex = (tolower(c) - 'a' + 10) << 4;
+
+			c = *(ptr1++);
+			if(isdigit(c))
+				hex += (c - '0');
+			else
+				hex += (tolower(c) - 'a' + 10);
+
+			*(ptr2++) = hex;
+		}
+		else if (c == '+')
+			*(ptr2++) = 32;
+		else
+			*(ptr2++) = c;
+	}
+	*ptr2 = 0;
+}
+
+
+
+
 VOID PollSession(struct HTTPConnectionInfo * Session)
 {
 	int state, change;
@@ -716,6 +761,8 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 		int i;
 		struct UserRec * USER;
 
+		UndoTransparency(input);
+	
 		if (strstr(input, "Cancel=Cancel"))
 		{
 			ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
@@ -724,6 +771,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 		user = strtok_s(&input[9], "&", &Context);
 		password = strtok_s(NULL, "=", &Context);
 		password = strtok_s(NULL, "&", &Context);
+
 		Appl = strtok_s(NULL, "=", &Context);
 		Appl = strtok_s(NULL, "&", &Context);
 
@@ -1266,10 +1314,6 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
 	}
 	return;
 }
-
-
-
-
 
 int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 {
@@ -3005,6 +3049,8 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 		int i;
 		struct UserRec * USER;
 
+		UndoTransparency(input);
+
 		if (strstr(input, "Cancel=Cancel"))
 		{
 			ReplyLen = SetupNodeMenu(Reply);
@@ -3070,6 +3116,8 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 		int i;
 		struct UserRec * USER;
 
+		UndoTransparency(input);
+
 		if (strstr(input, "Cancel=Cancel"))
 		{
 			ReplyLen = SetupNodeMenu(Reply);
@@ -3127,6 +3175,8 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 	{
 		int i;
 		struct UserRec * USER;
+
+		UndoTransparency(input);
 
 		if (strstr(input, "Cancel=Cancel"))
 		{

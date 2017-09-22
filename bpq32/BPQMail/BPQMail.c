@@ -925,7 +925,7 @@
 //	Kill B2 WP bulls if FilterWPBulls set
 //	Include Message Type in BPQ B2 proposal extensions
 
-//  67 ??
+//  6.0.14.1 July 2017
 
 //	Fix corruption of BBSNumber if RMS Ex User and BBS both checked
 //	Tread B messages without an AT as Flood.
@@ -940,6 +940,13 @@
 //	Don't cancel AUTH on SMTP RSET
 //	Fix "nowhere to go" message on some messages sent to smtp addresses
 //	Add @ from Home BBS or WP is not spcified in "Send from Clipboard"
+
+//	6.0.15.1 ????
+
+//	Fix PE if Filename missing from FILE connect script command
+//	Suppress reporting errors after receiving FQ
+
+
 
 #include "BPQMail.h"
 #define MAIL
@@ -1391,6 +1398,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	// Main message loop:
 
 	Logprintf(LOG_DEBUG_X, NULL, '!', "Program Starting");
+	Logprintf(LOG_BBS, NULL, '!', "BPQMail Starting");
 	Debugprintf("BPQMail Starting");
 
 	} My__except_Routine("Init");

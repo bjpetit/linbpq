@@ -295,6 +295,7 @@ typedef struct ConnectionInfo_S
 #define ARQMAILACK 2048					// Waiting for all data to be acked
 #define	NEEDLF 4096						// Add LF to forward script commands (fro Telnet
 #define	MCASTRX 8192					// Stream in Multicast RX Mode
+#define DISCONNECTING 16384				// Disconnect sent to Node
 
 struct FBBRestartData
 {

@@ -32,16 +32,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 				 
 #include "CHeaders.h"
 
-#define	UI	3
-#define	SABM 0x2F
-#define	DISC 0x43
-#define	DM	0x0F
-#define	UA	0x63
-#define	FRMR 0x87
-#define	RR	1
-#define	RNR	5
-#define	REJ	9
-
 #define	PFBIT 0x10		// POLL/FINAL BIT IN CONTROL BYTE
 
 #define	REJSENT	1		// SET WHEN FIRST REJ IS SENT IN REPLY
@@ -96,6 +86,7 @@ VOID PUT_ON_PORT_Q(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 VOID L2SWAPADDRESSES(MESSAGE * Buffer);
 BOOL FindLink(UCHAR * LinkCall, UCHAR * OurCall, int Port, struct _LINKTABLE ** REQLINK);
 VOID SENDSABM(struct _LINKTABLE * LINK);
+VOID L2SENDXID(struct _LINKTABLE * LINK);
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID Q_IP_MSG(MESSAGE * Buffer);
 VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT);
@@ -106,6 +97,8 @@ VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall, int 
 VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg);
 VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg);
+VOID L2SENDINVALIDCTRL(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL);
+UCHAR * SETUPADDRESSES(struct _LINKTABLE * LINK, PMESSAGE Msg);
 
 extern int REALTIMETICKS;
 
@@ -558,6 +551,8 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 {
 	//	MESSAGE ADDRESSED TO OUR CALL OR ALIAS, BUT NOT FOR AN ACTIVE SESSION
 
+	// LINK points to an empty link table entry
+
 	struct ROUTE * ROUTE;
 	int CTLlessPF = CTL & ~PFBIT;
 	
@@ -567,6 +562,7 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 	NO_CTEXT = 0;
 
 	//	ONLY SABM or UI  ALLOWED IF NO SESSION 
+	//	Plus XID/TEST/SABME if V2.2 support enabled
 
 	if (CTLlessPF == 3)			// UI
 	{
@@ -598,8 +594,53 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 		ReleaseBuffer(Buffer);
 		return;
 	}
-	
-	if (CTLlessPF != SABM)
+
+	if (CTLlessPF == SABME)
+	{
+		// Although some say V2.2 requires SABME I don't agree!
+
+		// Reject until we support Mod 128
+
+		L2SENDINVALIDCTRL(PORT, Buffer, ADJBUFFER, CTL);
+		return;
+	}
+
+	if (CTLlessPF == SREJ)		// Used to see if other end supports SREJ on 2.0
+	{
+		// Send FRMR if dont support SREJ
+		// Send DM if we do
+
+		if (SUPPORT2point2)
+			L2SENDRESP(PORT, Buffer, ADJBUFFER, DM);
+		else
+			L2SENDINVALIDCTRL(PORT, Buffer, ADJBUFFER, CTL);
+		
+		return;
+	}
+
+	if (CTLlessPF == XID)
+	{
+		// Send FRMR if we only support V 2.0
+		
+		if (SUPPORT2point2 == FALSE)
+		{
+			L2SENDINVALIDCTRL(PORT, Buffer, ADJBUFFER, CTL);		
+			return;
+		}
+		// if Support 2.2 drop through
+	}
+
+	if (CTLlessPF == TEST)
+	{
+		// I can't see amy harm in replying to TEST
+
+		L2SENDRESP(PORT, Buffer, ADJBUFFER, TEST);
+		return;
+	}
+
+
+//	if (CTLlessPF != SABM && CTLlessPF != SABME)
+	if (CTLlessPF != SABM && CTLlessPF != XID)
 	{
 		if ((MSGFLAG & CMDBIT) && (CTL & PFBIT))	// Command with P?
 			L2SENDDM(PORT, Buffer, ADJBUFFER);
@@ -609,6 +650,7 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 		return;
 	}
 
+	// Exclude and limit tests are done for XID and SABM
 #ifdef	EXCLUDEBITS
 
 	//	CHECK ExcludeList
@@ -667,8 +709,168 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 		}
 	}
 
-	L2SABM(LINK, PORT, Buffer, ADJBUFFER, MSGFLAG);			// Process the SABM
+	// OK to accept SABM or XID
+
+
+	if (CTLlessPF == XID)
+	{
+		// I think it is fairly safe to accept XID as soon as we
+		// can process SREJ, but only accept Mod 8 and 256 Byte frames
+
+		// I think the only way to run 2.2 Mod 8 is to preceed a 
+		//	SABM with XID, but others don't seem to agree!
+
+		//	Run through XID fields, changing any we don't like,
+		//	then return an XID response
+
+		// Decode and process XID
+
+		UCHAR * ptr = &ADJBUFFER->PID;
+		UCHAR * ptr1, * ptr2;
+		UCHAR TEMPDIGI[57];
+		int n;
+
+		if (*ptr++ == 0x82 && *ptr++ == 0x80)
+		{
+			int Type;
+			int Len;
+			unsigned int value;
+			int xidlen = *(ptr++) << 8;	
+			xidlen += *ptr++;
+		
+			// XID is set of Type, Len, Value n-tuples
+
+			while (xidlen > 0)
+			{
+				Type = *ptr++;
+				Len = *ptr++;
 	
+				value = 0;
+				xidlen -= (Len + 2);
+
+				while (Len--)
+				{
+					value <<=8;
+					value += *ptr++;
+				}
+				switch(Type)
+				{
+				case 2:				//Bin fields
+
+					break;
+
+				case 3:
+
+					if ((value & OPMustHave) != OPMustHave)
+						goto BadXID;
+
+					if ((value & OPMod8) == 0)
+						goto BadXID;
+
+					if ((value & OPSREJMult) == 0)
+						goto BadXID;
+
+
+					//	Reply Mod 8 SREJMULTI
+
+					value = OPMustHave | OPSREJMult | OPMod8;
+					ptr -=3;
+					*ptr++ = value >> 16;
+					*ptr++ = value >> 8;
+					*ptr++ = value;
+
+
+					break;
+
+				case 6:				//RX Size
+
+					break;
+
+				case 8:				//RX Window
+
+					break;
+				}
+			}
+
+			// Send back as XID response
+
+			LINK->L2STATE = 1;			// XID received
+			LINK->Ver2point2 = TRUE;	// Must support 2.2 if sent XID
+			LINK->L2TIME = PORT->PORTT1;
+
+			LINK->LINKPORT = PORT;
+			
+			// save calls so we can match up SABM when it comes
+
+			memcpy(LINK->LINKCALL, Buffer->ORIGIN, 7);
+			LINK->LINKCALL[6] &= 0x1e;		// Mask SSID
+
+			memcpy(LINK->OURCALL, Buffer->DEST, 7);
+	
+			LINK->OURCALL[6] &= 0x1e;		// Mask SSID
+
+			memset(LINK->DIGIS, 0, 56);		// CLEAR DIGI FIELD IN CASE RECONNECT
+
+			if ((Buffer->ORIGIN[6] & 1) == 0)	// End of Address
+			{
+				//	THERE ARE DIGIS TO PROCESS - COPY TO WORK AREA reversed, THEN COPY BACK
+	
+				memset(TEMPDIGI, 0, 57);		// CLEAR DIGI FIELD IN CASE RECONNECT
+
+				ptr1 = &Buffer->ORIGIN[6];		// End of add 
+				ptr2 = &TEMPDIGI[7 * 7];		// Last Temp Digi
+
+				while((*ptr1 & 1) == 0)			// End of address bit
+				{
+					ptr1++;
+					memcpy(ptr2, ptr1, 7);
+					ptr2[6] &= 0x1e;			// Mask Repeated and Last bits
+					ptr2 -= 7;
+					ptr1 += 6;
+				}
+		
+				//	LIST OF DIGI CALLS COMPLETE - COPY TO LINK CONTROL ENTRY
+
+				n = PORT->PORTMAXDIGIS;
+
+				ptr1 = ptr2 + 7;				// First in TEMPDIGIS
+				ptr2 = &LINK->DIGIS[0];
+
+				while (*ptr1)
+				{
+					if (n == 0)
+					{
+						// Too many for us
+				
+						CLEAROUTLINK(LINK);
+						ReleaseBuffer(Buffer);
+						return;
+					}
+
+					memcpy(ptr2, ptr1, 7);
+					ptr1 += 7;
+					ptr2 += 7;
+					n--;
+				}
+			}
+
+			ADJBUFFER->CTL = CTL | PFBIT;
+
+// 			Buffer->LENGTH = (UCHAR *)ADJBUFFER - (UCHAR *)Buffer + MSGHDDRLEN + 15;	// SET UP BYTE COUNT
+
+			L2SWAPADDRESSES(Buffer);			// SWAP ADDRESSES AND SET RESP BITS
+
+			PUT_ON_PORT_Q(PORT, Buffer);
+			return;
+		}
+BadXID:
+		L2SENDINVALIDCTRL(PORT, Buffer, ADJBUFFER, CTL);
+		return;
+	}
+
+	// Not XID, so must be SABM
+
+	L2SABM(LINK, PORT, Buffer, ADJBUFFER, MSGFLAG);			// Process the SABM
 }
 
 
@@ -736,9 +938,43 @@ VOID L2LINKACTIVE(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 		return;
 	}
 
+
+	if (LINK->L2STATE == 1)
+	{
+		// XID Senton- should be XID response if 2.2 ok or DM/FRMR if not
+
+		if (MSGFLAG & RESP)
+		{
+			if (CTLlessPF == DM || CTLlessPF == FRMR)
+			{
+				// Doesn't support XID - Send SABM
+
+				LINK->L2STATE = 2;
+				LINK->Ver2point2 = FALSE;
+				LINK->L2TIMER = 1;		// USe retry to send SABM
+			}
+			else if (CTLlessPF == XID)
+			{
+				// Process response to make sure ok, Send SABM or DISC
+
+				LINK->L2STATE = 2;
+				LINK->Ver2point2 = TRUE;// Must support 2.2 if responded to XID
+				LINK->L2TIMER = 1;		// USe retry to send SABM
+			}
+			ReleaseBuffer(Buffer);
+			return;
+		}
+	}
+
 	if (CTLlessPF == SABM)
 	{
 		//	SABM ON EXISTING SESSION - IF DISCONNECTING, REJECT
+
+		if (LINK->L2STATE == 1)			// Sent XID?
+		{
+			L2SABM(LINK, PORT, Buffer, ADJBUFFER, MSGFLAG);			// Process the SABM
+			return;
+		}
 
 		if (LINK->L2STATE == 4)			// DISCONNECTING?
 		{
@@ -1051,6 +1287,34 @@ VOID L2SENDRESP(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER
 	return;
 }
 
+
+VOID L2SENDINVALIDCTRL(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL)
+{
+	// Send FRMR Invalid Control field
+	
+	//	QUEUE RESPONSE TO PORT CONTROL - MAY NOT HAVE A LINK ENTRY 
+
+	//	SET APPROPRIATE P/F BIT 
+
+	UCHAR * ptr;
+
+	ADJBUFFER->CTL = FRMR | PFBIT;
+	
+	ptr = &ADJBUFFER->PID;
+
+	*(ptr++) = CTL;	// MOVE REJECT C-BYTE
+	*(ptr++) = 0;
+	*(ptr++) = SDINVC;			// MOVE REJECT FLAGS
+
+ 	Buffer->LENGTH = (UCHAR *)ADJBUFFER - (UCHAR *)Buffer + MSGHDDRLEN + 18;	// SET UP BYTE COUNT
+
+	L2SWAPADDRESSES(Buffer);			// SWAP ADDRESSES AND SET RESP BITS
+
+	PUT_ON_PORT_Q(PORT, Buffer);
+
+	return;
+}
+
 VOID L2SWAPADDRESSES(MESSAGE * Buffer)
 {
 	//	EXCHANGE ORIGIN AND DEST, AND REVERSE DIGIS (IF PRESENT)
@@ -1267,7 +1531,11 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * B
 	
 		switch (CTL & 0x0f)
 		{
+			// is there any harm in accepoting SREJ even if we don't
+			// otherwise support 2.2?
+
 		case REJ:
+		case SREJ:
 			
 			PORT->L2REJCOUNT++;
 
@@ -1438,11 +1706,119 @@ VOID SFRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, UCHAR CTL, UCHA
 		return;
 	}
 
-	SDNRCHK(LINK, CTL);				// CHECK RECEIVED N(R)
+	SDNRCHK(LINK, CTL);			// CHECK RECEIVED N(R)
 
 	if (LINK->SDREJF)			// ARE ANY REJECT FLAGS SET NOW?
 	{
 		SDFRMR(LINK, PORT);		// PROCESS FRAME REJECT CONDITION
+		return;
+	}
+
+	if ((CTL & 0xf) == SREJ)
+	{
+		// Probably safer to handle SREJ completely separately
+
+		// Can we get SREJ Command with P??(Yes)
+
+		// Can we just resend missing frame ?? (Think so!)
+
+		// We support MultiSREJ (can gave additional missing frame
+		// numbers in the Info field
+
+		// I don't see the point of Multi unless we wait fot an F bit,
+		// bur maybe not safe to assume others do the same
+
+		// So if I get SREJ(F) I can send missing frame(s)
+
+		if (MSGFLAG & RESP)
+		{
+			// SREJ Response
+
+			if (CTL & PFBIT)
+			{
+				// SREJ(F). Send Frames()
+
+				UCHAR NS = (CTL >> 5) & 7;		// Frame to resend
+
+				struct PORTCONTROL * PORT;
+				UCHAR * ptr1, * ptr2;
+				UCHAR CTL;
+				int count;
+				MESSAGE * Msg;
+				MESSAGE * Buffer;
+						
+				Msg = LINK->FRAMES[NS];	// is frame available?
+
+				if (Msg == NULL)
+					return;				// Wot!!
+
+				// send the frame
+
+				//	GET BUFFER FOR COPY OF MESSAGE - HAVE TO KEEP ORIGINAL FOR RETRIES	
+
+				Buffer = GetBuff();
+
+				if (Buffer == NULL)
+					return;
+
+				ptr2 = SETUPADDRESSES(LINK, Buffer);	// copy addresses
+
+				// ptr2  NOW POINTS TO COMMAND BYTE
+
+				//	GOING TO SEND I FRAME - WILL ACK ANY RECEIVED FRAMES
+
+				LINK->L2ACKREQ = 0;			// CLEAR ACK NEEDED
+				LINK->L2SLOTIM = T3 + rand() % 15;		// SET FRAME SENT RECENTLY
+				LINK->KILLTIMER = 0;		// RESET IDLE CIRCUIT TIMER
+
+				CTL = LINK->LINKNR << 5;	// GET CURRENT N(R), SHIFT IT TO TOP 3 BITS			
+				CTL |= NS << 1;	// BITS 1-3 OF CONTROL BYTE
+
+				//	SET P BIT IF NO MORE TO SEND (only more if Multi SREJ)
+
+				if (LINK->VER1FLAG == 0)	// NO POLL BIT IF V1
+				{
+					CTL |= PFBIT;
+					LINK->L2FLAGS |= POLLSENT;
+					LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
+
+					// FLAG BUFFER TO CAUSE TIMER TO BE RESET AFTER SEND (or ACK if ACKMODE)
+
+					Buffer->Linkptr = LINK;
+				}
+			
+				*(ptr2++) = CTL;		// TO DATA (STARTING WITH PID)
+
+				count = Msg->LENGTH - MSGHDDRLEN;
+	
+				if (count > 0)			// SHOULD ALWAYS BE A PID, BUT BETTER SAFE THAN SORRY
+				{
+					ptr1 = (UCHAR *)Msg;
+					ptr1 += MSGHDDRLEN;
+					memcpy(ptr2, ptr1, count);
+				}
+
+				Buffer->DEST[6] |= 0x80;		// SET COMMAND
+
+				Buffer->LENGTH = ptr2 + count - (UCHAR *)Buffer;		// SET NEW LENGTH
+
+				LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
+
+				PORT = LINK->LINKPORT;
+
+				if (PORT)
+				{
+					Buffer->PORT = PORT->PORTNUMBER;
+					PUT_ON_PORT_Q(PORT, Buffer);
+				}
+				else
+				{
+					Buffer->Linkptr = 0;
+					ReleaseBuffer(Buffer);
+				}
+			}
+		}
+
 		return;
 	}
 
@@ -1522,7 +1898,6 @@ VOID SFRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, UCHAR CTL, UCHA
 		LINK->L2TIMER = LINK->L2TIME;
 	}
 }
-
 
 //***	PROCESS AN INFORMATION FRAME
 
@@ -1771,8 +2146,12 @@ VOID SDNRCHK(struct _LINKTABLE * LINK, UCHAR CTL)
 
 GoodNR:
 		
-		LINK->LINKWS = NR;				// NEW WINDOW START = RECEIVED N(R)
-		ACKMSG(LINK);					// Remove any acjed messages
+		if ((CTL & 0x0f) == SREJ)
+			if ((CTL & PFBIT) == 0)
+				return;				// SREJ without F doesn't ACK anything
+
+		LINK->LINKWS = NR;		// NEW WINDOW START = RECEIVED N(R)
+		ACKMSG(LINK);			// Remove any acked messages
 		return;
 	}
 
@@ -2100,7 +2479,7 @@ VOID L2TimerProc()
 			// TIMER NOT RUNNING - MAKE SURE STATE NOT BELOW 5 - IF
 			// IT IS, SOMETHING HAS GONE WRONG, AND LINK WILL HANG FOREVER
 
-			if (LINK->L2STATE < 5 && LINK->L2STATE != 2)	// 2 = CONNECT - PROBABLY TO CQ
+			if (LINK->L2STATE < 5 && LINK->L2STATE != 2 && LINK->L2STATE != 1)	// 2 = CONNECT - PROBABLY TO CQ
 				LINK->L2TIMER = 2;							// ARBITRARY VALUE
 		}
 
@@ -2316,8 +2695,27 @@ VOID L2TIMEOUT(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT)
 
 	PORT->L2TIMEOUTS++;			// FOR STATS	
 
-	if (LINK->L2STATE <= 1)		// NO IDLE STATE
+	if (LINK->L2STATE == 0) 
 		return;
+
+	if (LINK->L2STATE == 1) 
+	{
+		//	XID
+
+		LINK->L2RETRIES++;
+		if (LINK->L2RETRIES >= PORT->PORTN2)
+		{
+			//	RETRIED N2 TIMES - Give up
+
+			CONNECTFAILED(LINK);		// TELL LEVEL 4 IT FAILED
+			CLEAROUTLINK(LINK);
+			return;
+		}
+
+		L2SENDXID(LINK);
+		return;
+	}
+
 
 	if (LINK->L2STATE == 2)
 	{
@@ -2445,6 +2843,94 @@ VOID CLEAROUTLINK(struct _LINKTABLE * LINK)
 	memset(LINK, 0, sizeof(struct _LINKTABLE));
 }
 
+VOID L2SENDXID(struct _LINKTABLE * LINK)
+{
+	//	Set up and send XID
+
+	struct PORTCONTROL * PORT;
+	UCHAR * ptr;
+	unsigned int xidval;
+	MESSAGE * Buffer;
+
+	if (LINK->LINKPORT == 0)
+		return;						//??? has been zapped
+
+	Buffer = SETUPL2MESSAGE(LINK, XID | PFBIT);
+
+	if (Buffer == NULL)
+	{
+		// NO BUFFERS - SET TIMER TO FORCE RETRY
+
+		LINK->L2TIMER = 10*3;		// SET TIMER
+		return;
+	}
+
+	Buffer->DEST[6] |= 0x80;		// SET COMMAND
+
+	ptr = &Buffer->PID;
+
+	// Set up default XID Mod 8 
+
+	*ptr++ = 0x82;			// FI
+	*ptr++ = 0x80;			// GI
+	*ptr++ = 0x0;
+	*ptr++ = 0x10;			// Length 16
+
+	*ptr++ = 0x02;			// Classes of Procedures
+	*ptr++ = 0x02;			// Length
+	*ptr++ = 0x00;			// 
+	*ptr++ = 0x21;			// ABM Half Duplex
+
+	// We offer REJ, SREJ and SREJ Multiframe
+
+	*ptr++ = 0x03;			// Optional Functions
+	*ptr++ = 0x03;			// Len
+
+	// Sync TX, SREJ Multiframe 16 bit FCS, Mod 8, TEST,
+	// Extended Addressing, REJ, SREJ
+
+	xidval = OPMustHave | OPSREJ | OPSREJMult | OPREJ | OPMod8;
+	*ptr++ = xidval >> 16;
+	*ptr++ = xidval >> 8;
+	*ptr++ = xidval;
+
+	
+	*ptr++ = 0x06;			// RX Packet Len
+	*ptr++ = 0x02;			// Len
+	*ptr++ = 0x08;			// 
+	*ptr++ = 0x00;			// 2K bits (256) Bytes
+
+	*ptr++ = 0x08;			// RX Window
+	*ptr++ = 0x01;			// Len
+	*ptr++ = 0x07;			// 7
+
+	Buffer->LENGTH = ptr - (UCHAR *)Buffer;		// SET LENGTH
+
+	LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
+
+	// FLAG BUFFER TO CAUSE TIMER TO BE RESET AFTER SEND
+
+	Buffer->Linkptr = LINK;
+	
+	PORT = LINK->LINKPORT;
+
+	if (PORT)
+	{
+		Buffer->PORT = PORT->PORTNUMBER;
+		PUT_ON_PORT_Q(PORT, Buffer);
+	}
+	else
+	{
+		Buffer->Linkptr = 0;
+		ReleaseBuffer(Buffer);
+	}
+}
+
+
+
+
+
+
 VOID L2SENDCOMMAND(struct _LINKTABLE * LINK, int CMD)
 {
 	//	SEND COMMAND IN CMD
@@ -2491,6 +2977,11 @@ VOID L2SENDCOMMAND(struct _LINKTABLE * LINK, int CMD)
 		ReleaseBuffer(Buffer);
 	}
 }
+
+
+
+
+
 
 VOID L2SENDRESPONSE(struct _LINKTABLE * LINK, int CMD)
 {
@@ -2627,7 +3118,12 @@ CheckNSLoop2:
 		}
 		if (LINK->L2STATE == 6)
 */
-		return REJ;
+		// if we support SREJ send that instesd or REJ
+
+		if (LINK->Ver2point2)		// We only allow 2.2 with SREJ Multi
+			return SREJ;
+		else
+			return REJ;
 	}
 	return RR;
 

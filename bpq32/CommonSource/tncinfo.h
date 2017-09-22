@@ -392,6 +392,7 @@ typedef struct TNCINFO
 
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
 	int ConnectPending;			// Set if Connect Pending Received. If so, mustn't allow freq change.
+	BOOL GavePermission;		// Set if we allowed freq change 
 	BOOL DiscPending;			// Set if Disconnect Pending Received. So we can time out stuck in Disconnecting
 	BOOL HadConnect;				// Flag to say have been in session
 	BOOL FECMode;				// In FEC Mode

@@ -171,6 +171,24 @@ VOID CloseCOMPort(HANDLE fd);
 #define	RNR	5
 #define	REJ	9
 
+// V2.2 Types
+
+#define	SREJ 0x0D
+#define SABME 0x6F
+#define XID 0xAF
+#define TEST 0xE3
+
+#define SUPPORT2point2 1
+
+// XID Optional Functions
+
+#define OPMustHave 0x02A080		// Sync TEST 16 bit FCS Extended Address
+#define OPSREJ 4
+#define OPSREJMult 0x200000
+#define OPREJ 2
+#define OPMod8 0x400
+#define OPMod128 0x800
+
 #define BPQHOSTSTREAMS	64
 
 extern TRANSPORTENTRY * L4TABLE;

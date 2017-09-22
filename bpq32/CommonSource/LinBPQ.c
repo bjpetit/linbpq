@@ -876,6 +876,7 @@ int main(int argc, char * argv[])
 		}
 
 		printf("Mail Started\n");
+		Logprintf(LOG_BBS, NULL, '!', "Mail Starting");
 
 	}
 	}
@@ -1308,7 +1309,7 @@ int APIENTRY Restart()
 
 int APIENTRY Reboot()
 {
-	// Run shutdown -r -f
+	// Run sudo shutdown -r -f
 #ifndef LINBPQ
 	STARTUPINFO  SInfo;
     PROCESS_INFORMATION PInfo;
@@ -1324,8 +1325,43 @@ int APIENTRY Reboot()
   	SInfo.lpReserved2=NULL;
 
 	return CreateProcess(NULL, Cmd, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
-#endif
 	return 0;
+#else
+	
+	char * arg_list[] = {NULL, NULL, NULL, NULL, NULL};
+	pid_t child_pid;
+	char * Context;
+	signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
+
+	arg_list[0] = "sudo";
+	arg_list[1] = "shutdown";
+	arg_list[2] = "now";
+	arg_list[3] = "-r";
+
+	//	Fork and Exec shutdown
+
+	// Duplicate this process.  
+
+	child_pid = fork(); 
+
+	if (child_pid == -1) 
+	{    				
+		printf ("Reboot fork() Failed\n"); 
+		return 0;
+	}
+
+	if (child_pid == 0) 
+ 	{    				
+		execvp (arg_list[0], arg_list); 
+        
+		/* The execvp  function returns only if an error occurs.  */ 
+
+		printf ("Failed to run shutdown\n"); 
+		exit(0);			// Kill the new process
+	}
+	return TRUE;								 
+#endif
+
 }
 
 int APIENTRY Reconfig()

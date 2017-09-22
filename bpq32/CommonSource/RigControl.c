@@ -1781,21 +1781,41 @@ GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 
 	// Get Permission to change
 
+	if (RIG_DEBUG)
+		Debugprintf("GetPermissionToChange - WaitingForPermission = %d",  RIG->WaitingForPermission);
+
+	// See if any two stage (CONLOCK) ports
+
+//	if (RIG->PortRecord[0]->SCANCAPABILITIES != CONLOCK)
+//		goto CheckOtherPorts;
+
+	
 	if (RIG->WaitingForPermission)
 	{
+		// This code should only be called if port needs two stage
+		// eg Request then confirm. only SCS Pactor at the moment.
+		
 		// TNC has been asked for permission, and we are waiting respoonse
+
+		// Only SCS pactor returns WaitingForPrmission, so check shouldn't be called on others
 		
 		RIG->OKtoChange = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
 	
 		if (RIG->OKtoChange == 1)
-			goto DoChange;
+		{
+			if (RIG_DEBUG)
+				Debugprintf("Check Permission returned OK to change");
+
+			goto CheckOtherPorts;
+		}
 
 		if (RIG->OKtoChange == -1)
 		{
 			// Permission Refused. Wait Scan Interval and try again
 
-			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
-				RIG->PortRecord[0]->PORT_DLL_NAME, PORT->FreqPtr->Dwell ); 
+			if (RIG_DEBUG)
+				Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
+						RIG->PortRecord[0]->PORT_DLL_NAME, PORT->FreqPtr->Dwell ); 
 
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
@@ -1813,20 +1833,37 @@ GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 	}
 	else
 	{
+		// not waiting for permission, so must be first call of a cycle
+
 		if (RIG->PortRecord[0]->PORT_EXT_ADDR)
 			RIG->WaitingForPermission = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 		// If it returns zero there is no need to wait.
-				
+		// SCS Returns True if it is waiting for permission
+		// ARDOP returns True if you can't change so should defet scan
+
 		if (RIG->WaitingForPermission)
 		{
+			if (RIG->PortRecord[0]->SCANCAPABILITIES == CONLOCK)	// Pactor style 2 stage lock
+				return FALSE;		// Wait till driver has status
+
+			// Single stage - Should defer scan
+			
+			if (RIG_DEBUG)
+				Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
+						RIG->PortRecord[0]->PORT_DLL_NAME, PORT->FreqPtr->Dwell ); 
+
 			return FALSE;
-		}		
+		}	
+
+		if (RIG_DEBUG)
+			Debugprintf("First call to %s returned OK to change", RIG->PortRecord[0]->PORT_DLL_NAME);
 	}
 
-DoChange:
+CheckOtherPorts:
 
-	// First TNC has given permission. Ask any others (these are assumed to give immediate yes/no
+	// Either first TNC gave permission or there are no SCS like ports.
+	// Ask any others (these are assumed to give immediate yes/no
 
 	i = 1;
 
@@ -1838,8 +1875,9 @@ DoChange:
 		{
 			// 1 means can't change - release all
 
-			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
-				PortRecord->PORT_DLL_NAME, PORT->FreqPtr->Dwell); 
+			if (RIG_DEBUG)
+				Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
+						PortRecord->PORT_DLL_NAME, PORT->FreqPtr->Dwell); 
 
 			RIG->WaitingForPermission = FALSE;
 			MySetWindowText(RIG->hSCAN, "-");
@@ -1852,6 +1890,10 @@ DoChange:
 			ReleasePermission(RIG);
 			return FALSE;
 		}
+		else
+			if (RIG_DEBUG)
+				Debugprintf("Scan Debug %s gave permission", PortRecord->PORT_DLL_NAME); 
+
 		i++;
 	}
 
@@ -3719,6 +3761,12 @@ PortFound:
 				*(Poll++) = 0x03;
 				*(Poll++) = 0x24;			// Data Mode Source
 			}
+			else if (strcmp(RIG->RigName, "IC7300") == 0)
+			{
+				*(Poll++) = 0x05;
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x67;			// Data Mode Source
+			}
 
 			else if (strcmp(RIG->RigName, "IC7410") == 0)
 			{
@@ -3770,6 +3818,12 @@ PortFound:
 			{
 				*(Poll++) = 0x03;
 				*(Poll++) = 0x24;			// Data Mode Source
+			}
+			else if (strcmp(RIG->RigName, "IC7300") == 0)
+			{
+				*(Poll++) = 0x05;
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x67;			// Data Mode Source
 			}
 			else if (strcmp(RIG->RigName, "IC7410") == 0)
 			{
