@@ -119,9 +119,6 @@ VOID displayDCD(int x);
 #define KISS_CMD_BAUDRATE   8
 #define KISS_CMD_RXLEVEL    9
 #define KISS_CMD_TXLEVEL    10
-// 11 is actual RX level, 12 can't be used (ACKMode)
-#define  KISS_CMD_CENTREFREQ 13
-
 #define KISS_CMD_IMMED      15
 
 #define CPU_RESTART_ADDR (unsigned int *)0xE000ED0C
@@ -589,7 +586,6 @@ static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned 
 	case KISS_CMD_BAUDRATE:
 	case KISS_CMD_RXLEVEL:
 	case KISS_CMD_TXLEVEL:
-	case KISS_CMD_CENTREFREQ:
 
 		 if (pkt[0] == 9) // SPI Pots
           SetPot(0, pkt[1]);
@@ -627,7 +623,7 @@ static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned 
 			PutChar(val);
 			Sum ^= val;
 
-			val = GetEEPROM(13);			// Centre Freq
+			val = GetEEPROM(12);
 			PutChar(val);
 			Sum ^= val;
 

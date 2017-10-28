@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.5.7-BPQ"
+#define ProductVersion "0.9.5.9-BPQ"
 
 //	Sound interface buffer size
 
@@ -91,7 +91,11 @@ typedef unsigned char UCHAR;
 // TEENSY Interface board equates
 
 #ifdef TEENSY
+#ifdef PIBOARD
 #define ISSLED LED0
+#else
+#define ISSLED LED1
+#endif
 #define IRSLED LED1
 #define TRAFFICLED LED2
 #else
@@ -210,7 +214,7 @@ void FreeSemaphore();
 const char * Name(UCHAR bytID);
 const char * shortName(UCHAR bytID);
 void InitSound();
-void initFilter(int Width);
+void initFilter(int Width, int centerFreq);
 void FourierTransform(int NumSamples, short * RealIn, float * RealOut, float * ImagOut, int InverseTransform);
 
 
@@ -320,6 +324,8 @@ extern struct SEM Semaphore;
 #define ConAck2000 0x3C
 #define PINGACK 0x3d
 #define PING 0x3E
+#define PktFrameHeader 0xC0		// Variable length frame Header
+#define PktFrameData 0xC1		// Variable length frame Data (Virtual Frsme Type)
 
 
 extern const short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
@@ -524,6 +530,14 @@ extern int dttLastLeaderDetect;
 extern int LastBusyOn;
 extern int LastBusyOff;
 extern int dttLastLeaderDetect;
+
+extern int pktNumCar;
+extern int pktDataLen;
+extern int pktRSLen;
+extern char pktMod[4][8];
+extern int pktMode;
+extern int pktModeLen;
+
 
 // Has to follow enum defs
 

@@ -11,6 +11,11 @@
 // setup is with the Host Port on USB and a monitor/debug port on Serial1, though a 
 // Bluetooth version is planned.
 
+// WDTV2 is Version 2 of the  WDT board, with 4 LEDS and Switches, an Adafruit TFT display.
+// a 10 segment LED bar driven by a CAT4016 and two digital pots using i2c. The standard
+// setup is with the Host Port on USB and a monitor/debug port on Serial1 or with Bluetooth on Serial 5
+// CAT (CI-V or RS232) on Serial4
+
 // PIBOARD is the Raspberry PI i2c Board. It has 4 LEDS and the Host port on 
 // Serial1 Serial3 or i2c. There is no TFT,  CAT4016 Display or switches.
 // Level setting pots are on SPI
@@ -18,10 +23,34 @@
 // This file is for ARDOP
 
 #define PIBOARD
+//#define WDTBOARD
+
+<<<<<<< .mine
+#ifndef PIBOARD
+#ifndef WDTBOARD
+
+// Default to WDT V2
+
+#define WDTV2
+#endif
+#endif
 
 // define PLOTCONSTELLATION if you have a display attached and want a constellation display
 
+=======
+// define PLOTCONSTELLATION if you have a display attached and want a constellation display
+
+>>>>>>> .r617
 #define PLOTCONSTELLATION
+<<<<<<< .mine
+
+// define the type of display 
+// OLED is i2c 128 x 64 Display
+// WDTTFT is the TFT on the WDT version of the board.
+// KMR_1.8 is 1.8" TFT 128 x 160 SPI with ST7735 chip
+
+#define OLED
+=======
 
 // define the type of display 
 // OLED is i2c 128 x 64 Display
@@ -29,8 +58,14 @@
 // KMR_1.8 is 1.8" TFT 128 x 160 SPI with ST7735 chip
 
 //#define OLED
+>>>>>>> .r617
 //#define WDTTFT
+<<<<<<< .mine
+//#define KMR_18
+=======
 #define KMR_18
+>>>>>>> .r617
+
 
 #ifdef PIBOARD
 
@@ -50,11 +85,11 @@
 // If using Serial1 or Serial3 also define SERIAL1SIZE or SERIAL3SIZE to
 // increase size of serial port buffers
 
-#define HOSTPORT Serial1
-#define HOSTSPEED 115200
-#define SERIAL1SIZE 512
+//#define HOSTPORT Serial3
+//#define HOSTSPEED 115200
+//#define SERIAL3SIZE 512
 
-//#define MONPORT Serial
+#define MONPORT Serial
 //#define CPULOAD
 
 #define CATPORT Serial5
@@ -83,14 +118,16 @@
 #define LED2 4
 #define LED3 5
 
+#endif
 
-#else
 
-#define WDTBOARD
+#ifdef WDTBOARD
+
+// Original WDT BOard
 
 #define HOSTPORT Serial
 #define HOSTSPEED 115200
-//#define MONPORT Serial3
+#define MONPORT Serial1
 #define CATPORT Serial5
 #define CATSPEED 19200
 
@@ -123,6 +160,75 @@
 #define BLANK 3
 #define LATCH 4
 #define SIN 5
+
+#endif
+
+
+#ifdef WDTV2
+
+// New WDT Board
+
+#define HOSTPORT Serial
+#define HOSTSPEED 115200
+#define MONPORT Serial1
+#define CATPORT Serial4
+#define CATSPEED 19200
+#define BTPORT Serial5
+
+//#ifndef MONPORT
+#define LOGTOHOST
+//#endif
+
+
+#ifdef BTPORT
+#define SERIAL5SIZE 512
+#define HOSTPORT2 Serial5
+#endif
+
+
+#define TFT
+#define BARLEDS
+
+#define HASPOTS
+#define I2CPOTS
+#define I2CPOTADDR 0x28
+
+#define pttPin 6
+
+#define LED1 8
+#define LED2 26
+#define LED3 25
+
+#define SW1 27
+#define SW2 28
+
+// CAT4016 10 LED display
+
+#define CLK 2
+#define BLANK 3
+#define LATCH 4
+#define SIN 5
+
+/* Bluetooth Defines for RN4678 */
+//                          Pin   BT-Function
+#define BT_WakeUp           A9    // In  H = Module On
+#define BT_SoftwareButton   7     // In  H    L = Put Module in Standby
+#define BT_Status1          A7    // Out      See table 2.3 in datasheet
+#define BT_Status2          A8    // Out      See table 2.3 in datasheet
+#define BT_CTS              24    // In   
+#define BT_RTS              30    // Out
+#define BT_PairingKey       35    // In  H    L = Force Standby
+#define BT_UartRxInd        A17   // In  H    L = UART I/O In stanby mode
+#define BT_LinkDropCtl      A18   // In  H    L = Drop BLE link
+#define BT_InquiryCtl       A19   // In  H    L = Force BT-Classic mode
+#define BT_ResetN           A20   // In  H    L = Module reset
+#define BT_EAN              A6    // In  L    See table 2.1 in datasheet
+#define BT_P2_4             A1    // In  H    See table 2.1 in datasheet
+#define BT_P2_0             A3    // In  H    See table 2.1 in datasheet
+#define BT_P3_7             29    // Out
+
+
+
 
 #endif
 

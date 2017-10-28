@@ -15,6 +15,12 @@
 
 #include <windows.h>
 #include <mmsystem.h>
+
+#ifdef USE_DIREWOLF
+#include "direwolf/fsk_demod_state.h"
+#include "direwolf/demod_afsk.h"
+#endif
+
 #pragma comment(lib, "winmm.lib")
 void printtick(char * msg);
 void PollReceivedSamples();
@@ -111,6 +117,21 @@ extern void Generate50BaudTwoToneLeaderTemplate();
 extern BOOL blnDISCRepeating;
 
 #define TARGET_RESOLUTION 1         // 1-millisecond target resolution
+
+	
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+	WriteDebugLog(6, Mess);
+
+	return;
+}
+
 
 void main(int argc, char * argv[])
 {
@@ -373,7 +394,11 @@ void PollReceivedSamples()
 
 		if (leveltimer > 1000)
 		{
+			char HostCmd[64];
 			leveltimer = 0;
+			sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
+			QueueCommandToHost(HostCmd);
+
 			WriteDebugLog(LOGDEBUG, "Input peaks = %d, %d", min, max);
 			min = max = 0;
 		}

@@ -28,6 +28,12 @@
 #include "serial3.c"
 #endif
 
+#ifdef SERIAL5SIZE
+#define SERIAL5_TX_BUFFER_SIZE	SERIAL5SIZE // number of outgoing bytes to buffer
+#define SERIAL5_RX_BUFFER_SIZE	SERIAL5SIZE
+#include "serial5.c"
+#endif
+
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
@@ -38,6 +44,12 @@ void setupTFT();
 // extern "C" {#include "..\..\ARDOPC.h"}
 
 #include "SPI.h"
+
+#if defined I2CHOST || defined I2CKISS || defined I2CMONITOR || defined I2CPOTS
+
+#include <i2c_t3.h>
+
+#endif
 
 void StartADC();
 void setupDAC();
@@ -52,7 +64,11 @@ extern "C" void SendMonUI(char * Mess);
 #include <DMAChannel.h>
 
 extern int VesionNo;
+extern int ActivePort;
+  
 extern BOOL SerialHost;
+
+extern int centreFreq;
 
 DMAChannel dma1(true);
 DMAChannel dma2(true);
@@ -68,9 +84,14 @@ extern int KISSCHECKSUM;
 
 void CommonSetup()
 {
-
 #ifdef HOSTPORT
   HOSTPORT.begin(HOSTSPEED);
+#endif
+#ifdef HOSTPORT2
+  HOSTPORT2.begin(HOSTSPEED);
+#endif
+#ifdef HOSTPORT3
+  HOSTPORT3.begin(HOSTSPEED);
 #endif
 #ifdef MONPORT
   MONPORT.begin(115200);
@@ -90,11 +111,62 @@ void CommonSetup()
 
   WDOG_PRESC = 0; // This sets prescale clock so that the watchdog timer ticks at 1kHZ instead of the default 1kHZ/4 = 200 HZ
 
-#ifdef MONPORT
-  MONPORT.printf("Monitor Buffer Space %d", MONPORT.availableForWrite());
+#ifdef BTPORT
+
+ // Set up BT
+
+  Serial5.begin(115200);        // default for the module requires CTS/RTS
+
+
+  pinMode (BT_WakeUp, OUTPUT);
+  pinMode (BT_SoftwareButton, OUTPUT);
+  pinMode (BT_Status1, INPUT);
+  pinMode (BT_Status2, INPUT);
+  pinMode (BT_CTS, OUTPUT);
+  pinMode (BT_RTS, INPUT);
+  pinMode (BT_PairingKey, OUTPUT);
+  pinMode (BT_UartRxInd, OUTPUT);
+  pinMode (BT_LinkDropCtl, OUTPUT);
+  pinMode (BT_InquiryCtl, OUTPUT);
+  pinMode (BT_ResetN, OUTPUT);
+  pinMode (BT_EAN, OUTPUT);
+  pinMode (BT_P2_4, OUTPUT);
+  pinMode (BT_P2_0, OUTPUT);
+  pinMode (BT_P3_7, INPUT);
+
+
+  digitalWriteFast(BT_WakeUp, 1);         // 1 = normal
+  digitalWriteFast(BT_SoftwareButton, 1); // 1 = Power on
+  digitalWriteFast(BT_CTS, 0);            // Force CTS for now
+  digitalWriteFast(BT_PairingKey, 1);     // 1 = normal
+  digitalWriteFast(BT_UartRxInd, 1);      // 1 = normal
+  digitalWriteFast(BT_LinkDropCtl, 1);    // 0 = disconnect BLE session    
+  digitalWriteFast(BT_InquiryCtl, 1);     // 0 = Force Classic Mode
+  digitalWriteFast(BT_ResetN, 1);         // 1 = normal
+  digitalWriteFast(BT_EAN, 0);            // 0 = normal
+  digitalWriteFast(BT_P2_4, 1);           // 1 = normal
+  digitalWriteFast(BT_P2_0, 1);           // 1 = normal
+
+// lets reset BT module
+  digitalWriteFast(BT_ResetN, 0);
+  delay(100);
+  digitalWriteFast(BT_ResetN, 1);
+  delay(100);
+
 #endif
+  
+#ifdef MONPORT
+  MONPORT.printf("Monitor Buffer Space %d\r\n", MONPORT.availableForWrite());
+#endif
+  
 #if defined HOSTPORT
   WriteDebugLog(0, "Host Buffer Space %d", HOSTPORT.availableForWrite());
+  #if defined HOSTPORT2
+    WriteDebugLog(0, "Host Port 2 Buffer Space %d", HOSTPORT2.availableForWrite());
+  #endif
+  #if defined HOSTPORT3
+    WriteDebugLog(0, "Host Port 3 Buffer Space %d", HOSTPORT3.availableForWrite());
+   #endif
 #elif defined I2CHOST
   WriteDebugLog(0, "Host Connection is i2c on address %x Hex", I2CSLAVEADDR);
 #elif defined I2CKISS
@@ -105,20 +177,26 @@ void CommonSetup()
     WriteDebugLog(LOGCRIT, "\n**** Reset by Watchdog ++++");
 
   pinMode(pttPin, OUTPUT);
+#ifdef LED0
   pinMode(LED0, OUTPUT);
+#endif
   pinMode(LED1, OUTPUT);
   pinMode(LED2, OUTPUT);
   pinMode(LED3, OUTPUT);
 
   // Flash Leds to show starting
 
+#ifdef LED0
   SetLED(LED0, 1);
   SetLED(LED1, 1);
+#endif
   SetLED(LED2, 1);
   SetLED(LED3, 1);
   delay(200);
+#ifdef LED0
   SetLED(LED0, 0);
   delay(200);
+#endif
   SetLED(LED1, 0);
   delay(200);
   SetLED(LED2, 0);
@@ -129,8 +207,8 @@ void CommonSetup()
 
   pinMode (SW1, INPUT_PULLUP);
   pinMode (SW2, INPUT_PULLUP);
-  pinMode (SW3, INPUT_PULLUP);
-  pinMode (SW4, INPUT_PULLUP);
+//  pinMode (SW3, INPUT_PULLUP);
+//  pinMode (SW4, INPUT_PULLUP);
 
 #endif
 #ifdef BARLEDS
@@ -155,6 +233,10 @@ void CommonSetup()
 
 #if defined I2CHOST || defined I2CKISS || defined I2CMONITOR
 	i2csetup();
+#endif
+
+#if defined I2CPOTS
+	Wire.begin();
 #endif
 
 #ifdef SPIPOTS
@@ -259,17 +341,25 @@ extern "C"
 #ifdef HASPOTS
   void AdjustRXLevel(int Level)
   {
-    int Pot = (Level * 256) / 3000;
+ #ifdef PIBOARD
+	int Pot = (Level * 256) / 3000;
+#else
+	
+	// Tom's board. Res = 3.9k , pot is in feedback loop
+	// Gain 3000 / Level
+	// Pot Res = Gain * 3.9
+	// pot val = 256 * Res / 50
+	
+	int Pot = (3000 * 39 * 256) / (500 * Level);	//39 instead of 3.9, 500 instead of 50 to avoid loss of precsision
+#endif
 
     WriteDebugLog(LOGINFO, "Adjusting RX Level %d mV Pot %d", Level, Pot);
 
-    if (Level > 0)
-    {
-      // Zero means set level automatically
+	if (Pot > 256)
+		Pot = 256;
 
-      SetPot(0, Pot);		// Write to live and nv regs
-      //     SetPot(2, Pot);
-    }
+    if (Level > 0)
+		SetPot(0, Pot);		// Write to live and nv regs
   }
 
   void AdjustTXLevel(int Level)
@@ -334,11 +424,54 @@ extern "C"
 #endif
 #ifdef I2CPOTS
 
-  void SetPot(int address, unsigned int value)
-  {}
+size_t idx;
+#define MEM_LEN 256
+char databuf[MEM_LEN];
 
+
+  void SetPot(int address, unsigned int value)
+  {
+	Wire.beginTransmission(I2CPOTADDR);       // Slave address
+	Wire.write((address << 4) | (value >> 8));      // opcode + top bit of value
+	Wire.write(value & 0xff);    // value
+	Wire.endTransmission();               // Transmit to Slave
+
+    // Check if error occured
+    if (Wire.getError())
+      WriteDebugLog(LOGINFO, "i2c Pot write FAIL");
+
+    return ; 
+  }
+
+  
   unsigned int GetPot(int i)
-  {}
+  {
+	int n;
+	
+    Wire.beginTransmission(I2CPOTADDR);         // Slave address
+    Wire.write((i << 4) | 0x0c);      // opcode
+    Wire.endTransmission();           // Transmit to Slave
+
+    // Check if error occured
+    if (Wire.getError())
+      WriteDebugLog(LOGINFO, "i2c Pot selest FAIL ");
+ 
+    // Read from Slave
+
+    n = Wire.requestFrom(I2CPOTADDR, 2); // Read from Slave (len 2)
+
+    // Check if error occured
+    if (Wire.getError())
+      WriteDebugLog(LOGINFO, "i2c Pot read FAIL ");
+    else
+    {
+		idx = 0;
+		while (Wire.available())
+			databuf[idx++] = Wire.readByte();
+    }
+  
+    return ((databuf[0] << 8) + databuf[1]); 
+}
 
 #endif
 
@@ -364,7 +497,7 @@ extern "C"
 void CAT4016(int value)
 {
 #ifdef BARLEDS
-  // writes value to the 10 LED display
+  // writes value to the 12 LED display
   int i;
 
   for (i = 0; i < 16; i++)			// must send all 16 to maintain sync
@@ -672,20 +805,21 @@ extern "C" void displayState(const char * State)
 
 // Signal levels for each bar
 
-const int barlevels[10] = {
+const int barlevels[12] = {
   1000, 2000, 5000, 8000, 11000,
-  16000, 24000, 28000, 30000, 32000
+  16000, 18000, 20000, 24000, 28000, 30000, 32000
 };
 #ifdef TFT
-const int barcolours[10] = {
+const int barcolours[12] = {
   ILI9341_YELLOW, ILI9341_YELLOW, ILI9341_GREEN,
-  ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN,
-  ILI9341_RED, ILI9341_RED, ILI9341_RED
+  ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN,
+  ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN,
+  ILI9341_YELLOW, ILI9341_RED, ILI9341_RED
 };
 #endif
-const int CAT4016Levels[11] = {
-  0, 1, 0b11, 0b111, 0b1111, 0b11111,
-  0b111111, 0b1111111, 0b11111111, 0b111111111, 0b1111111111
+const int CAT4016Levels[13] = {
+  0, 1, 3, 7, 0xf, 0b11111,
+  0b111111, 0b1111111, 0b11111111, 0x1ff, 0x3ff, 0x7ff, 0xfff
 };
 
 
@@ -695,7 +829,7 @@ extern "C"
   {
     int i;
 #ifdef TFT
-    for (i = 0; i < 10; i++)
+    for (i = 0; i < 12; i++)
     {
       if (level > barlevels[i])
         tft.fillRect(15 * i, 100, 14, 16, barcolours[i]);
@@ -703,7 +837,7 @@ extern "C"
         tft.fillRect(15 * i, 100, 14, 16, ILI9341_BLACK);
     }
 #endif
-    for (i = 0; i < 10; i++)
+    for (i = 0; i < 12; i++)
     {
       if (level < barlevels[i])
         break;
@@ -748,13 +882,16 @@ extern "C"
       // Calculate actual input voltage from current pot gain setting
 
       pktopk = pktopk * autoRXLevel / 3000;
-
+	  
       WriteDebugLog(LOGDEBUG, "peak to peak input %d mV", pktopk);
 
       autoRXLevel = pktopk  * 3 / 2;			// try to get to 2/3rd
 
       if (autoRXLevel > 3000)
         autoRXLevel = 3000;
+	
+	  if (autoRXLevel < 100)
+		  autoRXLevel = 100;
 
       AdjustRXLevel(autoRXLevel);
     }
@@ -803,7 +940,6 @@ extern "C"
 
 #if defined I2CHOST || defined I2CKISS || defined I2CMONITOR
 
-#include <i2c_t3.h>
 
 void receiveEvent(size_t count);
 void requestEvent(void);
@@ -878,11 +1014,12 @@ void i2cloop()
 
       // New message
 
-      MONPORT.printf("Slave received: ");
-      for (i = 0; i < Len; i++)
-        MONPORT.printf("%x ", i2cMessage[i]);
-      MONPORT.printf("\r\n");
-
+#ifdef MONPORT
+		MONPORT.printf("Slave received: ");
+		for (i = 0; i < Len; i++)
+			MONPORT.printf("%x ", i2cMessage[i]);
+		MONPORT.printf("\r\n");
+#endif
       if (i2cMessage[0] == 15)
       {
         // Immediate Command
@@ -909,13 +1046,39 @@ void i2cloop()
           i2cPutChar(val);
           Sum ^= val;
 
+<<<<<<< .mine
+          val = EEPROM.read(13);	// Centre Freq
+          i2cPutChar(val);
+          Sum ^= val;
+=======
          //val = GetPot(1);
          // i2cPutChar(val);
          // Sum ^= val;
+>>>>>>> .r617
 
           i2cPutChar(Sum);
           i2cPutChar(FEND);
 		  
+<<<<<<< .mine
+
+			// Also write to log for clients that can't handle KISS response
+			
+			char GetResp[64] = "GetResp: ";
+			char * ptr = &GetResp[8];
+
+			for (i = 0; i < 11; i++)
+			{
+				val = GetEEPROM(i);
+				ptr += sprintf(ptr, "%02X ", val);
+			}
+			val = GetPot(0);
+			ptr += sprintf(ptr, "%02X ", val & 0xff);
+			val = GetEEPROM(13);
+			ptr += sprintf(ptr, "%02X ", val);
+
+			WriteDebugLog(6, GetResp);
+		  
+=======
 
 			// Also write to log for clients that can't handle KISS response
 			
@@ -932,6 +1095,7 @@ void i2cloop()
 
 			WriteDebugLog(6, GetResp);
 		  
+>>>>>>> .r617
           return;
         }
 		
@@ -1086,9 +1250,23 @@ extern "C"
   int PutChar(unsigned char c)
   {
 #ifdef HOSTPORT
-	if (SerialHost)
+	if (ActivePort == 1)
 	{
 		HOSTPORT.write(&c, 1);
+		return 0;
+	}
+#endif
+#ifdef HOSTPORT2
+	if (ActivePort == 2)
+	{
+		HOSTPORT2.write(&c, 1);
+		return 0;
+	}
+#endif
+#ifdef HOSTPORT3
+	if (ActivePort == 3)
+	{
+		HOSTPORT3.write(&c, 1);
 		return 0;
 	}
 #endif
@@ -1113,9 +1291,23 @@ extern "C"
   void SerialSendData(const uint8_t * Msg, int Len)
   {
 #ifdef HOSTPORT
-	if (SerialHost)
+	if (ActivePort == 1)
 	{
 		HOSTPORT.write(Msg, Len);
+		return;
+	}
+#endif
+#ifdef HOSTPORT2
+	if (ActivePort == 2)
+	{
+		HOSTPORT2.write(Msg, Len);
+		return;
+	}
+#endif
+#ifdef HOSTPORT3
+	if (ActivePort == 3)
+	{
+		HOSTPORT3.write(Msg, Len);
 		return;
 	}
 #endif
@@ -1227,6 +1419,7 @@ extern "C"
   extern int LogToHostBufferLen;
   extern int PTCMode;
 
+  
   void SendLogToHost(char * Cmd, int len)
   {
     // I think we need log in text mode
@@ -1256,6 +1449,7 @@ extern int Number;
 BOOL DMARunning = FALSE;		// Used to start DMA on first write
 BOOL FirstTime = FALSE;
 
+extern int totSamples;
 
 void InitSound()
 {
@@ -1265,12 +1459,14 @@ volatile unsigned short * SendtoCard(unsigned short buf, int n)
 {
   // Start DMA if first call
 
+  totSamples += n;
+	
   if (DMARunning == FALSE)
   {
     StartDAC();
     DMARunning = TRUE;
     FirstTime = TRUE;
-
+	
     // We can immediately fill second half
 
     Index = 1;
@@ -1525,6 +1721,118 @@ void setupOLED()
 
 #ifdef KMR_18
 
+<<<<<<< .mine
+// This Teensy3 native optimized version requires specific pins
+//
+#define sclk 13  // SCLK can also use pin 14
+#define mosi 11  // MOSI can also use pin 7
+#define cs   15  // CS & DC can use pins 2, 6, 9, 10, 15, 20, 21, 22, 23
+#define dc   14   //  but certain pairs must NOT be used: 2+10, 6+9, 20+23, 21+22
+#define rst  23  // RST can use any pin
+//#define sdcs 4   // CS for SD card, can use any pin
+
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_ST7735.h> // Hardware-specific library
+#include <SPI.h>
+
+Adafruit_ST7735 tft = Adafruit_ST7735(cs, dc, rst);
+
+char * TXType = "TX:";		// Save last transmitted type
+
+extern "C"
+{
+  void mySetPixel(int16_t x, int16_t y, int16_t Colour)
+  {
+	tft.drawPixel(x + ConsXoffset, y + ConsYoffset, Colour);
+  }
+
+  void DrawAxes(int Qual, char * Mode)
+  {
+    // Draw x and y axes in centre of constallation area
+
+    int yCenter = ConsYoffset + (ConstellationHeight - 2) / 2;
+    int xCenter = ConsXoffset + (ConstellationWidth - 2) / 2;
+	
+	tft.setRotation(3);
+
+	tft.drawFastVLine(xCenter, ConsYoffset , ConstellationHeight, Yellow);
+	tft.drawFastHLine(ConsXoffset, yCenter , ConstellationWidth, Yellow);
+
+    tft.setRotation(3);
+    tft.setTextSize(1);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setCursor(0, 0);
+	tft.print("           ");	//Clear old mode
+    tft.setCursor(0, 0);
+    tft.print(Mode);
+    tft.setCursor(0, 18);
+    tft.printf("QUAL %d  ", Qual);
+  }
+
+  void DrawDecode(char * Decode)
+  {
+    tft.setCursor(0, 36);
+    tft.printf("%s    ", Decode);
+	if (TXType)
+	{
+		tft.setCursor(0, 54);
+		tft.print("           ");	//Clear old TXTYPE
+		tft.setCursor(0, 54);
+		tft.print(TXType);
+	}
+  }
+
+  void DrawTXMode(char * TXMode)
+  {
+	TXType = TXMode;
+	tft.setCursor(0, 54);
+	tft.print("           ");	//Clear old txtype
+	tft.setCursor(0, 54);
+	tft.print(TXMode);
+  }
+
+  void clearDisplay()
+  {
+	  // This just has to clear constellation area
+	  
+	  tft.fillRect(ConsXoffset, ConsYoffset, ConstellationWidth, ConstellationHeight, ST7735_BLACK);
+  }
+
+  void updateDisplay()
+  {
+      // Probably not needed with TFT
+  }
+}
+
+void setupKMR_18(void) {
+
+//  pinMode(sdcs, INPUT_PULLUP);  // keep SD CS high when not using SD card
+
+  // Our supplier changed the 1.8" display slightly after Jan 10, 2012
+  // so that the alignment of the TFT had to be shifted by a few pixels
+  // this just means the init code is slightly different. Check the
+  // color of the tab to see which init code to try. If the display is
+  // cut off or has extra 'random' pixels on the top & left, try the
+  // other option!
+  // If you are seeing red and green color inversion, use Black Tab
+
+  // If your TFT's plastic wrap has a Black Tab, use the following:
+ // tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
+  // If your TFT's plastic wrap has a Red Tab, use the following:
+  tft.initR(INITR_REDTAB);   // initialize a ST7735R chip, red tab
+  // If your TFT's plastic wrap has a Green Tab, use the following:
+  //tft.initR(INITR_GREENTAB); // initialize a ST7735R chip, green tab
+
+ 	tft.fillRect(0, 0, 128, 160, ST7735_BLACK);
+ 
+  	DrawAxes(99, "16Q.200.100");
+	DrawDecode("PASS");
+}
+
+
+#endif
+
+=======
 // This Teensy3 native optimized version requires specific pins
 //
 #define sclk 13  // SCLK can also use pin 14
@@ -1635,6 +1943,7 @@ void setupKMR_18(void) {
 
 #endif
 
+>>>>>>> .r617
 #ifdef WDTTFT
 
 // Constallation or Waterfall display on TFT on WDT board
@@ -1662,7 +1971,9 @@ extern "C"
 
     tft.setRotation(1);
     tft.setTextSize(2);
-    tft.setTextColor(WHITE);
+    tft.setTextColor(WHITE, 0);
+	tft.setCursor(0, 0);
+	tft.print("           ");	//Clear old mode
     tft.setCursor(0, 0);
     tft.print(Mode);
     tft.setCursor(0, 18);
@@ -1671,11 +1982,17 @@ extern "C"
 
   void DrawDecode(char * Decode)
   {
-    tft.setCursor(0, 36);
+   	tft.setCursor(0, 36);
+	tft.print("           ");	//Clear old decode
+
+	tft.setCursor(0, 36);
     tft.print(Decode);
 	if (TXType)
 	{
 		tft.setCursor(0, 75);
+		tft.print("           ");	//Clear old TXTYPE
+		tft.setCursor(0, 75);
+
 		tft.print(TXType);
 	}
   }
@@ -1683,9 +2000,15 @@ extern "C"
   void DrawTXMode(char * TXMode)
   {
 	TXType = TXMode;
+<<<<<<< .mine
+	tft.setCursor(0, 75);
+	tft.print("           ");	//Clear old TXMODE
+	tft.setCursor(0, 75);
+=======
 	tft.setCursor(0, 54);
 	tft.print("           ");	//Clear old mode
 	tft.setCursor(0, 54);
+>>>>>>> .r617
 	tft.print(TXMode);
   }
 

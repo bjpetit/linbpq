@@ -1109,6 +1109,57 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
+	if (strcmp(strCMD, "PAC") == 0)
+	{
+		// Packet Mode Subcommands
+
+//extern int pktNumCar;
+//extern int pktDataLen;
+//extern int pktRSLen;
+//extern char pktMod[4][8];
+//extern int pktMode;
+
+
+		if (ptrParams)
+		{
+			char * PacVal = strlop(ptrParams, ' ');
+
+			if (strcmp(ptrParams, "MODE") == 0)
+			{
+				int i;
+
+				if (PacVal == NULL)
+				{
+					sprintf(cmdReply, "%PAC MODE %s", &pktMod[pktMode][0]);
+					SendReplyToHost(cmdReply);
+					goto cmddone;
+				}
+
+				for (i = 0; i < pktModeLen; i++)
+				{
+					if (strcmp(PacVal, &pktMod[i][0]) == 0)
+					{
+						pktMode = i;		// Force mode to be reevaluated
+						sprintf(cmdReply, "%PAC MODE now %s", PacVal);
+						SendReplyToHost(cmdReply);
+						goto cmddone;
+					}
+				}
+	
+				sprintf(strFault, "Syntax Err: PAC MODE %s", PacVal);
+
+			}
+
+			SendReplyToHost(_strupr(cmdCopy)); // echo command back to host.
+			goto cmddone;
+		}
+
+		sprintf(strFault, "Syntax Err: %s", cmdCopy);
+
+		goto cmddone;
+	}
+
+
 	if (strcmp(strCMD, "PLAYBACK") == 0)
 	{
 		if (ptrParams == 0)
@@ -1544,6 +1595,19 @@ Case "RADIOCTRLRTS"
 		if (ProtocolState == DISC)
 		{
 			NeedID = TRUE;			// Send from background
+			SendReplyToHost(strCMD);
+		}
+		else
+			sprintf(strFault, "Not from State %s", ARDOPStates[ProtocolState]);
+
+		goto cmddone;
+	}
+
+	if (strcmp(strCMD, "SENDPKT") == 0)
+	{
+		if (ProtocolState == DISC)
+		{
+			PktARDOPEncode("Test Test Test\r                 ", 29);
 			SendReplyToHost(strCMD);
 		}
 		else

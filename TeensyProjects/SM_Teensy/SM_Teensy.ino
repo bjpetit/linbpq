@@ -10,7 +10,7 @@
 #include "TeensyCommon.h"
 
 #ifndef PACKET
-#error("PACKET not defined in TeensyCommon.h");
+#error("PACKET not defined in TeensyConfig.h");
 #endif
 
 
@@ -25,6 +25,7 @@ extern int Baud;		// Modem Speed (1200 or 9600 for noe)
 extern int AFSK;		// Modem Mode
 extern int FSK;
 extern int PSK;
+extern int centreFreq;
 extern int samplerate;
 extern char VersionString[];
 extern int VersionNo;
@@ -34,7 +35,7 @@ extern int VRef;
 
 extern int TXLevel;				// 300 mV p-p Used on Teensy
 extern int RXLevel;				// Configured Level - zero means auto tune
-extern int autoRXLevel;			// calculated level
+extern int autoRXLevel;		// calculated level
 
 #define TRUE 1
 #define FALSE 0
@@ -42,7 +43,7 @@ extern int autoRXLevel;			// calculated level
 int SoundIsPlaying = FALSE;
 int Capturing = FALSE;
 int SerialHost = TRUE;
-
+int ActivePort = 0;						// Serial port in use
 
 
 extern volatile int RXBPtr;
@@ -65,6 +66,26 @@ extern "C" void SetPot(int address, unsigned int value);
 extern "C" unsigned int GetPot(int address);
 extern "C" void SetLED(int Pin, int State);
 extern "C" void RunPSKReceive();
+extern "C" void SetDefaultKISSParams(unsigned int txdelay, unsigned int ppersist,
+                                     unsigned int slottime, unsigned int fullduplex, unsigned int txtail);
+
+
+// Default KISS params. Will be overridden from EEPORM if set
+
+unsigned int txdelay = 300;
+unsigned int ppersist = 64;
+unsigned int slottime = 100;
+unsigned int fullduplex = 0;
+unsigned int txtail = 0;
+
+// TNC Params in EEPROM - compatible with pitnc_get/set
+
+#define	TXDELAY		1
+#define PERSIST		2
+#define SLOTTIME	3
+#define TXTAIL		4
+#define FULLDUP		5
+#define	KISSCHANNEL	6
 
 
 void i2csetup();
@@ -138,171 +159,261 @@ extern "C"
 
 #ifdef HOSTPORT
 
-    if (SerialHost)
-    {
-      int RXBPtr = HOSTPORT.available();
+    if (!SerialHost)
+      return;
 
-      if (RXBPtr)
+    int RXBPtr = HOSTPORT.available();
+
+    if (RXBPtr)
+    {
+      int Count;
+      if (ActivePort != 1)
       {
-        int Count;
-        Count = HOSTPORT.readBytes((char *)RXBUFFER, RXBPtr);
-
-        if (Count != RXBPtr)
-          WriteDebugLog(LOGDEBUG, "Serial Read Error");
-
-        ProcessKISSPacket(RXBUFFER, RXBPtr);
+        ActivePort = 1;
+        WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
       }
+      Count = HOSTPORT.readBytes((char *)RXBUFFER, RXBPtr);
+
+      if (Count != RXBPtr)
+        WriteDebugLog(LOGDEBUG, "Serial Read Error");
+
+      ProcessKISSPacket(RXBUFFER, RXBPtr);
     }
 #endif
-  }
-
-  void setup()
-  {
-    uint32_t i, sum = 0;
-
-    Baud = 9600;	// FSK G3RUH
-    AFSK = FALSE;
-    FSK = TRUE;
-    PSK = FALSE;
-
-    // if EEPROM Reg 8 is set to 96 or 12, set TNC mode
-    // otherwise use compiled in defaults
-
-    int value = EEPROM.read(8);
-
-    if (value == 12)
+#ifdef HOSTPORT2
+    RXBPtr = HOSTPORT2.available();
+    if (RXBPtr)
     {
-      Baud = 1200;
-      AFSK = TRUE;
-      FSK = FALSE;
-    }
-    if (value == 24)
-    {
-      Baud = 2400;
-      AFSK = TRUE;
-      FSK = FALSE;
-    }
-    else if (value == 96)
-    {
-      Baud = 9600;	// FSK G3RUH
-      AFSK = FALSE;
-      FSK = TRUE;
-    }
+      int Count = HOSTPORT2.readBytes((char *)RXBUFFER, RXBPtr);
+      RXBPtr += Count;
+      if (ActivePort != 2)
+      {
+        ActivePort = 2;
+        WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+      }
 
-    RXLevel = EEPROM.read(9);
-    TXLevel = EEPROM.read(10);
+      if (Count != RXBPtr)
+        WriteDebugLog(LOGDEBUG, "Serial Read Error");
 
-    CommonSetup();
-    print_mac();
-
-#ifdef TFT
-    TFTprintf("Packet TNC based on Soundmodem by Thomas Sailer");
+      ProcessKISSPacket(RXBUFFER, RXBPtr);
+    }
 #endif
-    MONprintf(VersionString);
-
-    SaveEEPROM(0, VersionNo);
-
-    WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
-
-    for (i = 0; i < 16; i++)
+#ifdef HOSTPORT3
+    RXBPtr = HOSTPORT3.available();
+    if (RXBPtr)
     {
-      // read a byte from the current address of the EEPROM
-      int value = EEPROM.read(i);
-      WriteDebugLog(7, "%d\t%d", i, value);
+      int Count = HOSTPORT3.readBytes((char *)RXBUFFER, RXBPtr);
+      RXBPtr += Count;
+      if (ActivePort != 3)
+      {
+        ActivePort = 3;
+        WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+      }
+
+      if (Count != RXBPtr)
+        WriteDebugLog(LOGDEBUG, "Serial Read Error");
+
+      ProcessKISSPacket(RXBUFFER, RXBPtr);
     }
-
-    if (PSK)
-    {
-#ifdef TFT
-      TFTprintf("PSK Mode");
-#endif
-      MONprintf("PSK Mode");
-    }
-    else if (FSK)
-    {
-#ifdef TFT
-      TFTprintf("9600 FSK Mode");
-#endif
-      MONprintf("9600 FSK Mode");
-    }
-    else
-    {
-#ifdef TFT
-      TFTprintf("AFSK Mode %d Baud", Baud);
-#endif
-      MONprintf("AFSK Mode %d Baud", Baud);
-    }
-
-    if (RCM_SRS0 & 0X20)		// Watchdog Reset
-      WriteDebugLog(LOGCRIT, "\n**** Reset by Watchdog ++++");
-
-    SoundModemInit();
-
-    // Configure the ADC and run at least one software-triggered
-    // conversion.  This completes the self calibration stuff and
-    // leaves the ADC in a state that's mostly ready to use
-
-    analogReadRes(16);
-    //analogReference(INTERNAL); // range 0 to 1.2 volts
-    analogReference(DEFAULT); // range 0 to 3.3 volts
-    //analogReadAveraging(8);
-    // Actually, do many normal reads, to start with a nice DC level
-
-    for (i = 0; i < 1024; i++)
-    {
-      sum += analogRead(16);
-    }
-
-    WriteDebugLog(LOGDEBUG, "DAC Baseline %d", sum / 1024);
-
-    // Read Vref
-
-    SetPot(1, 256);				// TX Level Gain = 1
-
-    delay(100);
-
-    analogRead(17);
-
-    for (i = 0; i < 100; i++)
-    {
-      VRef += analogRead(17);
-    }
-    VRef /= 100;
-    MONprintf("VREF %d offset %d\r\n", VRef, VRef - 32768);
-
-    analogRead(16);		// Set ADC back to A0
-
-    SetPot(1, TXLevel);
-    WriteDebugLog(LOGDEBUG, "TXLevel %d = %d mV", TXLevel, (TXLevel * 3000) / 256);
-
-    if (RXLevel)
-      SetPot(0, RXLevel);
-    else
-      SetPot(0, 256);					// Start at min gain
-
-    setupPDB(samplerate);
-    setupDAC();
-    setupADC(16);
-    StartADC();
-
-    WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
-
-    //	if (PSK)
-    //		RunPSKReceive();		// This does not return!!!!
-  }
-
-
-  void loop()
-  {
-    mainLoop();
-    PlatformSleep();
-    Sleep(1);
-    HostPoll();
-#if defined I2CKISS || defined I2CMONITOR
-    i2cloop();
 #endif
   }
 }
+
+
+void setup()
+{
+  uint32_t i, sum = 0;
+
+  Baud = 9600;	// FSK G3RUH
+  AFSK = FALSE;
+  FSK = TRUE;
+  PSK = FALSE;
+
+  // if EEPROM KISS Params are set use them to overide defaults
+  // unset EEPROM defaults to 255
+
+  int value = EEPROM.read(TXDELAY);
+
+  if (value != 255)
+    txdelay = value * 10;
+
+  value = EEPROM.read(PERSIST);
+
+  if (value != 255)
+    ppersist = value;
+
+  value = EEPROM.read(SLOTTIME);
+
+  if (value != 255)
+    slottime = value * 10;
+
+  value = EEPROM.read(TXTAIL);
+
+  if (value != 255)
+    txtail = value;
+
+  value = EEPROM.read(FULLDUP);
+
+  if (value == 1)
+    fullduplex = 1;
+
+  SetDefaultKISSParams(txdelay,  ppersist, slottime, fullduplex, txtail);
+
+  // if EEPROM Reg 8 is set to a valid speed set TNC mode
+  // otherwise use compiled in defaults
+
+  value = EEPROM.read(8);
+
+  if (value == 3)
+  {
+    Baud = 300;
+    AFSK = TRUE;
+    FSK = FALSE;
+  }
+  else if (value == 12)
+  {
+    Baud = 1200;
+    AFSK = TRUE;
+    FSK = FALSE;
+  }
+  else if (value == 24)
+  {
+    Baud = 2400;
+    AFSK = TRUE;
+    FSK = FALSE;
+  }
+  else if (value == 96)
+  {
+    Baud = 9600;	// FSK G3RUH
+    AFSK = FALSE;
+    FSK = TRUE;
+  }
+
+  // if EEPROM Reg 13 is set to a reasonable value set TNC centre freq
+  // otherwise use compiled in defaults
+
+  value = EEPROM.read(13);
+
+  if (value > 90 && value < 250)
+    centreFreq = value * 10;
+
+  RXLevel = EEPROM.read(9);
+  TXLevel = EEPROM.read(10);
+
+  CommonSetup();
+  print_mac();
+
+#ifdef TFT
+  TFTprintf("Packet TNC based on Soundmodem by Thomas Sailer");
+#endif
+  MONprintf(VersionString);
+
+  SaveEEPROM(0, VersionNo);
+
+  WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
+
+  for (i = 0; i < 16; i++)
+  {
+    // read a byte from the current address of the EEPROM
+    int value = EEPROM.read(i);
+    WriteDebugLog(7, "%d\t%d", i, value);
+  }
+
+  if (PSK)
+  {
+#ifdef TFT
+    TFTprintf("PSK Mode");
+#endif
+    MONprintf("PSK Mode");
+  }
+  else if (FSK)
+  {
+#ifdef TFT
+    TFTprintf("9600 FSK Mode");
+#endif
+    MONprintf("9600 FSK Mode");
+  }
+  else
+  {
+#ifdef TFT
+    TFTprintf("AFSK Mode %d Baud Centre Freq %d", Baud, centreFreq);
+#endif
+    MONprintf("AFSK Mode %d Baud Centre Freq %d", Baud, centreFreq);
+  }
+
+  if (RCM_SRS0 & 0X20)		// Watchdog Reset
+    WriteDebugLog(LOGCRIT, "\n**** Reset by Watchdog ++++");
+
+  SoundModemInit();
+
+  // Configure the ADC and run at least one software-triggered
+  // conversion.  This completes the self calibration stuff and
+  // leaves the ADC in a state that's mostly ready to use
+
+  analogReadRes(16);
+  //analogReference(INTERNAL); // range 0 to 1.2 volts
+  analogReference(DEFAULT); // range 0 to 3.3 volts
+  //analogReadAveraging(8);
+  // Actually, do many normal reads, to start with a nice DC level
+
+  for (i = 0; i < 1024; i++)
+  {
+    sum += analogRead(16);
+  }
+
+  WriteDebugLog(LOGDEBUG, "DAC Baseline %d", sum / 1024);
+
+#ifdef PIPOARD
+
+  // Can read DAC output to determine Vref
+
+  SetPot(1, 256);				// TX Level Gain = 1
+
+  delay(100);
+
+  analogRead(17);
+
+  for (i = 0; i < 100; i++)
+  {
+    VRef += analogRead(17);
+  }
+  VRef /= 100;
+  MONprintf("VREF %d offset %d\r\n", VRef, VRef - 32768);
+
+  analogRead(16);		// Set ADC back to A0
+#endif
+
+  SetPot(1, TXLevel);
+  WriteDebugLog(LOGDEBUG, "TXLevel %d = %d mV", TXLevel, (TXLevel * 3000) / 256);
+
+  if (RXLevel)
+    SetPot(0, RXLevel);
+  else
+    SetPot(0, 256);					// Start at min gain
+
+  setupPDB(samplerate);
+  setupDAC();
+  setupADC(16);
+  StartADC();
+
+  WriteDebugLog(7, "CPU %d Bus %d FreeRAM %d", F_CPU, F_BUS, FreeRam());
+
+  //	if (PSK)
+  //		RunPSKReceive();		// This does not return!!!!
+}
+
+
+void loop()
+{
+  mainLoop();
+  PlatformSleep();
+  Sleep(1);
+  HostPoll();
+#if defined I2CKISS || defined I2CMONITOR
+  i2cloop();
+#endif
+}
+
 
 extern "C" char* sbrk(int incr);
 

@@ -21,7 +21,7 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 char * strlop(char * buf, char delim);
 void ProcessKISSPacket(unsigned char * Packet, int Length);
 
-int port = 43;
+int port = 41;
 int Speed;
 int PollDelay;
 

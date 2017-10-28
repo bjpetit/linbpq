@@ -54,7 +54,7 @@ char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.6 August 2017\r\n"
 
 int VersionNo = 6;		
 
-int Baud = 300;
+int Baud = 2400;
 BOOL AFSK = TRUE;
 BOOL FSK = FALSE;
 BOOL PSK = FALSE;

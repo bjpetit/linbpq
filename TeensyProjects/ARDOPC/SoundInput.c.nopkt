@@ -31,8 +31,6 @@ extern unsigned int PKTLEDTimer;
 //#define max(x, y) ((x) > (y) ? (x) : (y))
 //#define min(x, y) ((x) < (y) ? (x) : (y))
 
-void SendFrametoHost(unsigned char *data, unsigned dlen);
-
 void CheckandAdjustRXLevel(int maxlevel, int minlevel, BOOL Force);
 void mySetPixel(unsigned short x, unsigned short y, unsigned short Colour);
 void clearDisplay();
@@ -236,11 +234,6 @@ int	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the f
 
 int RcvdSamplesLen = 0;				// Samples in RX buffer
 
-//char rxpktMod[10] = "16QAM";		// Mode for data part of current packet frame when receving
-
-extern char pktMod[4][8];
-
-
 BOOL Acquire2ToneLeaderSymbolFraming();
 BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN);
 BOOL AcquireFrameSyncRSB();
@@ -411,9 +404,6 @@ BOOL IsDataFrame(UCHAR intFrameType)
 {
 	const char * String = Name(intFrameType);
 
-	if (intFrameType == PktFrameHeader)
-		return TRUE;
-	
 	if (String == NULL || String[0] == 0)
 		return FALSE;
 
@@ -860,10 +850,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 //	LookforUZ7HOLeader(Samples, nSamples);
 
-//	printtick("Start afsk");
-//	DemodAFSK(Samples, nSamples);
-//	printtick("End afsk");
-
 //	return;
 
 	if ((CarrierOk[0] && CarrierOk[0] != 1)
@@ -1183,18 +1169,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 //			if (IsDataFrame(intFrameType) && LastDataFrameType != intFrameType)
 
-			if (intFrameType == PktFrameHeader || intFrameType == PktFrameData)
-			{
-				memset(CarrierOk, 0, sizeof(CarrierOk));
-				memset(intSumCounts, 0, sizeof(intSumCounts));
-#ifdef MEMORYARQ
-				memset(intToneMagsAvg, 0, sizeof(intToneMagsAvg));
-				memset(intCarPhaseAvg, 0, sizeof(intCarPhaseAvg));
-				memset(intCarMagAvg, 0, sizeof(intCarMagAvg));
-#endif
-				LastDataFrameType = intFrameType;
-			}
-			else if (LastDataFrameType != intFrameType)
+			if (LastDataFrameType != intFrameType)
 			{
 				WriteDebugLog(LOGDEBUG, "New frame type - MEMARQ flags reset");
 				memset(CarrierOk, 0, sizeof(CarrierOk));
@@ -1311,10 +1286,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 ProcessFrame:	
 
-		 if (intFrameType == PktFrameData)
-			return;
-
-
 		if (blnFrameDecodedOK)
 		{
 			// Set input level if supported
@@ -1337,8 +1308,8 @@ ProcessFrame:
 				SetLED(PKTLED, TRUE);		// Flash LED
 				PKTLEDTimer = Now + 400;	// For 400 Ms
 			}
-#endif			
-			if (ProtocolMode == FEC)
+#endif
+ 			if (ProtocolMode == FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame
 					ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);
@@ -3526,19 +3497,6 @@ void DemodulateFrame(int intFrameType)
 			Demod1Car4FSK();
 			break;
 
-		case PktFrameHeader:	// Experimantal Variable Length Frame 
-
-			DemodPSK();
-			break;
-
-		case PktFrameData:	// Experimantal Variable Length Frame 
-			
-			if (strcmp(strMod, "16QAM") == 0)
-				DemodQAM();
-			else
-				DemodPSK();
-			break;
-
 
   /*              ' Experimental Sounding frame
             Case 0xD0
@@ -3579,7 +3537,7 @@ BOOL DecodeACKNAK(int intFrameType, int *  intQuality)
 int intSNdB = 0, intQuality = 0;
 
 
-BOOL DecodeFrame(int xxx, UCHAR * bytData)
+BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 {
 	BOOL blnDecodeOK = FALSE;
  //       Dim stcStatus As Status = Nothing
@@ -3835,85 +3793,6 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			blnDecodeOK = CarrierOk[0];
 
 			break;
-
-		case PktFrameHeader:
-		{
-		// Variable Length Packet Frame Header
-
-			int Type;
-			int Len;
-			int pktNumCar = 2;
-			int pktDataLen;
-			int pktRSLen;
-
-				if (CarrierOk[0])
-				{
-					Type = bytFrameData1[1] >> 4;
-					Len =  ((bytFrameData1[1] & 0xf) << 8) | bytFrameData1[2];
-				}
-				else if (CarrierOk[1])
-				{
-					Type = bytFrameData2[1] >> 4;
-					Len =  ((bytFrameData2[1] & 0xf) << 8) | bytFrameData2[2];
-				}
-				else
-				{
-					// Cant decode
-	
-					DiscardOldSamples();
-					ClearAllMixedSamples();
-					break;
-				}
-								
-				WriteDebugLog(7, "Pkt Frame Header Type %s Len %d", &pktMod[Type][0], Len);
-				blnDecodeOK = TRUE;
-
-				// Reset to receive rest of frame
-
-				strcpy(strMod, &pktMod[Type][0]);
-
-				pktDataLen = Len / pktNumCar;
-
-				if (Len & 1)		// Odd
-					pktDataLen++;
-
-				pktRSLen = pktDataLen >> 2;			// Try 25% for now
-				if (pktRSLen & 1)
-					pktRSLen++;						// Odd RS bytes no use
-
-				if (pktRSLen < 4)
-					pktRSLen = 4;					// At least 4
-
-				SymbolsLeft = pktDataLen + pktRSLen + 3; // Data has crc + length byte
-				State = AcquireFrame;
-				intFrameType = PktFrameData;
-				CarrierOk[1] = CarrierOk[0] = 0;
-				charIndex = 0;	
-				frameLen = 0;
-				intPhasesLen = 0;
-				intDataLen = pktDataLen;
-				intRSLen = pktRSLen;
-				
-				return 0;
-		}
-
-					
-		case PktFrameData:
-		{
-			if (CarrierOk[0] && CarrierOk[1])
-			{
-				blnDecodeOK = TRUE;
-
-				// Packet Data  - Pass to Host as KISS frame
-				// Data in bytData  len in frameLen
-
-				SendFrametoHost(bytData, frameLen);
-			
-			}
-			break;
-		}
-
-
 
 //                ' Experimental Sounding frame
 //            Case 0xD0
@@ -4840,6 +4719,12 @@ VOID Decode1CarQAM(UCHAR * Decoded, int Carrier)
 }
 //	Functions to demod all PSKData frames single or multiple carriers 
 
+double dblPhaseInc;  // in milliradians
+short intNforGoertzel[8];
+short intPSKPhase_1[8], intPSKPhase_0[8];
+short intCP[8];	  // Cyclic prefix offset 
+float dblFreqBin[8];
+
 
 VOID InitDemodPSK()
 {
@@ -4914,13 +4799,6 @@ VOID InitDemodPSK()
 		dblPhase = atan2f(dblImag, dblReal);
 		Track1CarPSK(intCarFreq, strMod, dblPhase, TRUE);
 		intPSKPhase_1[i] = 1000 * dblPhase;
-
-		// Set initial mag from Reference Phase (which should be full power)
-		// Done here as well as in initQAM for pkt where we may switch mode midpacket
-
-		intCarMagThreshold[i] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
-		intCarMagThreshold[i] *= 0.75;
-
 		intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 	}
 }
@@ -5109,22 +4987,7 @@ void DemodPSK()
 			frameLen +=  CorrectRawDataWithRS(bytFrameData8, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 7);
 
 		}
-
-		// If variable length packet frame header we only have header - leave rx running
-		
-		if (intFrameType == PktFrameHeader)
-		{
-			State = SearchingForLeader;
 			
-			// Save any unused samples
-			
-			if (intFilteredMixedSamplesLength > 0 && Start > 0)
-				memmove(intFilteredMixedSamples,
-					&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
-
-			return;
-		}
-	
 #ifdef MEMORYARQ
 
 		for (Carrier = 0; Carrier < intNumCar; Carrier++)
@@ -5166,9 +5029,9 @@ void DemodPSK()
 	
 		// prepare for next
 
-		State = SearchingForLeader;
 		DiscardOldSamples();
 		ClearAllMixedSamples();
+		State = SearchingForLeader;
 	}
 	return;
 }
@@ -5443,7 +5306,7 @@ BOOL DemodQAM()
 
 #ifdef MEMORYARQ
 
-			if ((!CarrierOk[0] || !CarrierOk[1]) && intFrameType != PktFrameHeader)
+			if (!CarrierOk[0] || !CarrierOk[1])
 			{
 				// Decode error - save data for MEM ARQ
 

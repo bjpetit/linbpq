@@ -5,7 +5,7 @@
 #include "TeensyCommon.h"
 
 #ifndef ARDOP
-#error("ARDOP not defined in TeensyCommon.h");
+#error("ARDOP not defined in TeensyConfig.h");
 #endif
 
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
@@ -18,7 +18,7 @@ extern volatile int RXBPtr;
 volatile int flag = 0;
 volatile int flag2 = 0;
 int SerialHost = TRUE;				// Will eventually allow switching from Serial to I2c without reconfig
-
+int ActivePort = 0;						// Serial port in use
 int SerialWatchDog = 0;
 
 extern int VRef;
@@ -49,12 +49,15 @@ extern "C"
   void InitDMA();
   void PlatformSleep();
   void AdjustTXLevel(int Level);
+  void KISSInit();
 
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
 
 #include "../../ARDOPC/ARDOPC.h"
 
-  extern unsigned int tmrPollOBQueue;
+extern unsigned int tmrPollOBQueue;
+
+extern int UseKISS;
 
 #define Now getTicks()
 
@@ -81,23 +84,77 @@ extern "C"
       }
     }
 #else
-    int Avail = HOSTPORT.available();
 
+#ifdef i2cSlaveSupport
+    i2cloop();					// I2C but not for Host
+#endif
+
+		// To simplify switching USB / Serial / Bluetooth / ESP we poll all defined ports,
+		// and switch to using whichever provides input
+
+		// Both boards could use USB(Serail) or Serial1
+		// PIBoard has ESP on Serail3
+		// WDT Board has BT on Serial5
+
+    int Avail = HOSTPORT.available();
+    int Count;
+    
     if (Avail)
     {
-      int Count;
-
       if (Avail > (499 - RXBPtr))
         Avail = 499 - RXBPtr;
 
       Count = HOSTPORT.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
       RXBPtr += Count;
+      if (ActivePort != 1)
+      {
+      	ActivePort = 1;
+      	WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+      }
+      	
       ProcessSCSPacket(RXBUFFER, RXBPtr);
     }
-#ifdef i2cSlaveSupport
-    i2cloop();					// I2C but not for Host
+#ifdef HOSTPORT2
+		else
+    {
+    	Avail = HOSTPORT2.available();
+    	if (Avail)
+    	{
+    	  if (Avail > (499 - RXBPtr))
+      	  Avail = 499 - RXBPtr;
+
+      	Count = HOSTPORT2.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
+      	RXBPtr += Count;
+ 	      if (ActivePort != 2)
+  	    {
+    	  	ActivePort = 2;
+      		WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+      	}
+      	ProcessSCSPacket(RXBUFFER, RXBPtr);
+    	}
+    }
 #endif
+#ifdef HOSTPORT3
+		else
+		{
+			Avail = HOSTPORT3.available();
+			if (Avail)
+			{
+				if (Avail > (499 - RXBPtr))
+					Avail = 499 - RXBPtr;
+
+				Count = HOSTPORT3.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
+				RXBPtr += Count;
+				if (ActivePort != 3)
+     	 {
+    	  	ActivePort = 3;
+    	  	WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+				}
+      	ProcessSCSPacket(RXBUFFER, RXBPtr);
+    	}
+    }
 #endif
+#endif		// I2CHOST
   }
 }
 
@@ -119,6 +176,9 @@ void setup()
   HostInit();
   tmrPollOBQueue = Now + 10000;
   ProtocolMode = ARQ;
+
+  if (UseKISS)
+			KISSInit();
 
   // Configure the ADC and run at least one software-triggered
   // conversion.  This completes the self calibration stuff and
@@ -142,7 +202,9 @@ void setup()
   setupADC(16);
   StartADC();
 
-  // Read Vref
+  #ifdef PIBOARD
+
+  // PI Baord can read Analog out which allows u to Read Vref
 
   SetPot(1, 256);				// TX Level Gain = 1
 
@@ -157,9 +219,14 @@ void setup()
   VRef /= 100;
   analogRead(16);		// Set ADC back to A0
 
+  #endif
+  
+
   WriteDebugLog(0, "VREF %d offset %d", VRef, VRef - 32768);
 
   AdjustTXLevel(TXLevel);
+
+  print_mac();
 
 #ifdef PLOTCONSTELLATION
 #ifdef OLED
@@ -252,6 +319,68 @@ int FreeRam()
 int _gettimeofday()
 {
   return 0;
+}
+
+// Function to get mac/serial number
+
+uint8_t mac[8];
+
+// http://forum.pjrc.com/threads/91-teensy-3-MAC-address
+
+void readserialno(uint8_t *mac)
+{
+  noInterrupts();
+
+  // With 3.6 have to read a block of 8 bytes at zero
+  // With 3.1 two blocks of 4 at e and f
+
+  FTFL_FCCOB0 = 0x41;             // Selects the READONCE command
+#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
+  FTFL_FCCOB1 = 0;             // read the given word of read once area
+#else
+  FTFL_FCCOB1 = 0x0F;          // read the given word of read once area
+#endif
+  FTFL_FCCOB2 = 0;
+  FTFL_FCCOB3 = 0;
+  // launch command and wait until complete
+  FTFL_FSTAT = FTFL_FSTAT_CCIF;
+  while (!(FTFL_FSTAT & FTFL_FSTAT_CCIF));
+
+#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
+
+  // Top 3 bytes (Manufacture ID in bits 8-31
+  
+  *(mac++) = FTFL_FCCOB5;
+  *(mac++) = FTFL_FCCOB6;
+  *(mac++) = FTFL_FCCOB7;
+
+	// Serial No in bits 8-31
+	
+  *(mac++) = FTFL_FCCOB9;
+  *(mac++) = FTFL_FCCOBA;
+  *(mac++) = FTFL_FCCOBB;
+#else
+
+  // Could read Manufacture ID from page E but no point as fixed (04:E9:E5)
+ 
+  *(mac++) = 0x04;
+  *(mac++) = 0xE9;
+  *(mac++) = 0xE5;
+  *(mac++) = FTFL_FCCOB5;
+  *(mac++) = FTFL_FCCOB6;
+  *(mac++) = FTFL_FCCOB7;
+
+  
+#endif
+
+  interrupts();
+}
+
+void print_mac()
+{
+  readserialno(mac);
+  WriteDebugLog(6, "Hardware Serial No %02X:%02X:%02X:%02X:%02X:%02X",
+  		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
 

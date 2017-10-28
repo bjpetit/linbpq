@@ -268,7 +268,7 @@ short * SendtoCard(unsigned short * buf, int n)
 		ProcessNewSamples(buf, 1200);		// signed
 	}
 
-	WriteDebugLog(7, "SendtoCard %d", n);
+//	WriteDebugLog(7, "SendtoCard %d", n);
 
 
 	header[Index].dwBufferLength = n * 2;

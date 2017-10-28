@@ -123,11 +123,15 @@ void PollReceivedSamples()
 
     if (Now - levelticks > 9999)
     {
-      levelticks = Now;
-      WriteDebugLog(LOGDEBUG, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
-      displayLevel(maxlevel);
+      	char HostCmd[64];
+		
+		levelticks = Now;
+		WriteDebugLog(LOGDEBUG, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
+		sprintf(HostCmd, "INPUTPEAKS %d %d", minlevel, maxlevel);
+		QueueCommandToHost(HostCmd);
+		displayLevel(maxlevel);
 
-      // Adjust VRef
+		// Adjust VRef
 
 //      VRef += tot / Samples;
       
@@ -173,6 +177,14 @@ void SoundFlush()
   // Append Trailer then send remaining samples
 
   AddTrailer();			// add the trailer.
+  
+  // Index= 0, Number = 0 causes a nasty boundary condition. Simplest is to make sure it isn't
+  
+  // Actually, as there is a 1ms sleep between tests, anything less than about 50 (at 48K) could cause
+  // a problem
+  
+  if (Index == 0 && Number < 50)
+	Number = 50;
 
 //  printtick("Start flush");
 

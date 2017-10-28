@@ -23,10 +23,15 @@ void PollReceivedSamples();
 void CheckTimers();
 BOOL GetNextARQFrame();
 BOOL HostInit();
+BOOL KISSInit();
 void HostPoll();
 BOOL MainPoll();
+VOID PacketStartTX();
 void PlatformSleep();
 BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
+BOOL IsPingToMe(char * strCallsign);
+void LookforPacket(float * dblMag, float dblMagAvg, int count, float * real, float * imag);
+
 
 // Config parameters
 
@@ -39,7 +44,7 @@ BOOL NeedConReq = FALSE;	// ARQCALL Command Flag
 BOOL NeedPing = FALSE;		// PING Command Flag
 BOOL NeedTwoToneTest = FALSE;
 enum _ARQBandwidth CallBandwidth = UNDEFINED;
-
+BOOL UseKISS = TRUE;			// Enable Packet (KISS) interface
 
 int PingCount;
 
@@ -94,7 +99,6 @@ HANDLE hPTTDevice = 0;			// port for PTT
 char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
 
 int PTTMode = PTTRTS;				// PTT Control Flags.
-
 
 // Stats
 
@@ -190,6 +194,7 @@ const UCHAR bytValidFrameTypesALL[]=
  67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
  84, 85, 88, 89, 90, 91, 92, 93, 96, 97, 98, 99, 100, 101, 102, 103,
  104, 105, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
+ 124, 125, PktFrameHeader, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  124, 125, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248,
  249, 250, 251, 252, 253, 254, 255};
@@ -406,7 +411,7 @@ const char strFrameType[256][18] = {
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
-	"","","","","","","","","","","","","","","","", //C0
+	"PktFrame","","","","","","","","","","","","","","","", //C0
 
 	//Frame Types 0xA0 to 0xDF reserved for experimentation 
 	"SOUND2K" //D0
@@ -699,6 +704,13 @@ void ardopmain()
 
 	HostInit();
 
+	if (UseKISS)
+	{
+		KISSInit();
+#ifdef USE_SOUNDMODEM
+		afskInit();
+#endif
+	}
 //	while (1)
 //		testRS();
 
@@ -1192,6 +1204,44 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*bytQualThres = 50;
 		break;
 
+	case PktFrameHeader:
+
+		// Special Variable Length frame
+
+		// This defines the header, 4PSK.500.100. Length is 6 bytes
+		// Once we have that we receive the rest of the packet in the 
+		// mode defined in the header.
+		// Header is 4 bits Type 12 Bits Len 2 bytes CRC 2 bytes RS
+
+		*blnOdd = (1 & bytFrameType) != 0;
+		*intNumCar = 2;
+		*intDataLen = 2;
+		*intRSLen = 2;
+		strcpy(strMod, "4PSK");
+		*intBaud = 100;
+		*bytQualThres = 50;
+ 		break;
+
+	case PktFrameData:
+
+		// Special Variable Length frame
+
+		// This isn't ever transmitted but is used to define the
+		// current setting for the data frame. Mode and Length 
+		// are variable
+		
+
+		*blnOdd = (1 & bytFrameType) != 0;
+		*intNumCar = pktNumCar;
+		*intDataLen = pktDataLen;
+		*intRSLen = pktRSLen;
+		strcpy(strMod, &pktMod[pktMode][0]);
+		*intBaud = 100;
+		*bytQualThres = 50;
+ 		break;
+
+
+
 	default:
 		//'Logs.Exception("[PSKDataInfo] No data for frame type= H" & Format(bytFrameType, "x"))
         return FALSE;
@@ -1489,7 +1539,7 @@ int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	{
 		intCarDataCnt = Length - bytDataToSendLengthPtr;
 			
-		if (intCarDataCnt >= intDataLen) // why not > ??
+		if (intCarDataCnt > intDataLen) // why not > ??
 		{
 			// Won't all fit 
 
@@ -1899,7 +1949,7 @@ void SendID(BOOL blnEnableCWID)
  
 void Send5SecTwoTone()
 {
-	initFilter(200);
+	initFilter(200, 1500);
 	GetTwoToneLeaderWithSync(250);
 //	SampleSink(0);	// 5 secs
 	SoundFlush();
@@ -2480,6 +2530,14 @@ BOOL MainPoll()
 			// As we will send the frame if one is available, and won't return
 			// till it is all sent, I don't think I have to do anything here
 		}
+
+		// Send anything on Packet Queue
+
+		if (UseKISS)
+			if (blnBusyStatus == FALSE)
+//				PacketStartTX();		// Won't return till all sent
+				PktARDOPStartTX();
+
 	}
 //            If Not SoundIsPlaying Then
 //               SendIDToolStripMenuItem.Enabled = objProtocol.GetARDOPSetARDOPProtocolState(ProtocolState.DISC
@@ -2763,6 +2821,10 @@ void UpdateBusyDetector(short * bytNewSamples)
 		dblMag[i] = powf(dblReF[i + 25], 2) + powf(dblImF[i + 25], 2);	 // first pass 
 		dblMagAvg += dblMag[i];
 	}
+
+//	LookforPacket(dblMag, dblMagAvg, 206, &dblReF[25], &dblImF[25]);
+//	packet_process_samples(bytNewSamples, 1200);
+
 	intDelta = (ExtractARQBandwidth() / 2 + TuningRange) / 11.719f;
 
 	intTuneLineLow = max((103 - intDelta), 3);

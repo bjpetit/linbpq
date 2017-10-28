@@ -253,17 +253,23 @@ static void modmodulate(void *state, unsigned int txdelay)
 	unsigned char ch[8];
 	unsigned int i, j;
 
-	i = txdelay * s->bps / 1000;
-	if (i < 24)
-		i = 24;
-	memset(ch, 0x7e, sizeof(ch));
-	while (i > 0)
+	// Sends txdelay or packet - not both
+
+	if (txdelay)
 	{
-		j = i;
-		if (j > 8*sizeof(ch))
-			j = 8*sizeof(ch);
-		modsendbits(s, ch, j);
-		i -= j;
+		i = txdelay * s->bps / 1000;
+		if (i < 24)
+			i = 24;
+		memset(ch, 0x7e, sizeof(ch));
+		while (i > 0)
+		{
+			j = i;
+			if (j > 8*sizeof(ch))
+				j = 8*sizeof(ch);
+			modsendbits(s, ch, j);
+			i -= j;
+		}
+		return;
 	}
 
 	while (pktget(s->chan, ch, sizeof(ch)))

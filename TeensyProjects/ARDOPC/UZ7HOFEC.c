@@ -7,7 +7,16 @@
 
 #pragma warning(disable : 4244)		// Code does lots of int float to int
 
-// Decode 1 carrier of PSK signam
+
+// Get sample sync. ARDOP seems to do it by comparing a generated 1500 Hz 
+// tone with received signal and finding sample position that gives best 
+// correlation. This works as ARDOP has a 1500 Hz leader. Can we apply this here??
+
+
+
+
+
+// Decode 1 carrier of PSK signal
 
 // UZ7HO Version. Similar to ARDOP, but can run on unmixed
 

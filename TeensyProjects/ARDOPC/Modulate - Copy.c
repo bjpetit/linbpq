@@ -2,13 +2,6 @@
 
 #include "ARDOPC.h"
 
-extern int pktNumCar;
-extern int pktDataLen;
-extern int pktRSLen;
-extern char pktMod[4][8];
-extern int pktMode;
-
-
 #pragma warning(disable : 4244)		// Code does lots of  float to int
 
 FILE * fp1;
@@ -127,13 +120,13 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
 	if (intBaud == 50)
-		initFilter(200,1500);
+		initFilter(200);
 	else if (intNumCar == 1)
-		initFilter(500,1500);
+		initFilter(500);
 	else if (intNumCar == 2)
-		initFilter(1000,1500);
+		initFilter(1000);
 	else if (intNumCar == 4)
-		initFilter(2000,1500);
+		initFilter(2000);
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
@@ -311,7 +304,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
-	initFilter(200,1500);
+	initFilter(200);
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
@@ -386,7 +379,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
-	initFilter(500,1500);
+	initFilter(500);
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
@@ -454,7 +447,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
-	initFilter(2000,1500);
+	initFilter(2000);
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
@@ -537,13 +530,13 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
 	if (intNumCar == 1)
-		initFilter(200,1500);
+		initFilter(200);
 	else if (intNumCar == 2)
-		initFilter(500,1500);
+		initFilter(500);
 	else if (intNumCar == 4)
-		initFilter(1000,1500);
+		initFilter(1000);
 	else if (intNumCar == 8)
-		initFilter(2000,1500);
+		initFilter(2000);
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
 //               strLastWavStream = strType
@@ -628,9 +621,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	// End of reference phase generation 
 
 	intDataPtr = 2;  // initialize pointer to start of data.
-
-PktLoopBack:		// Reenter here to send rest of variable length packet frame
-
+		
 	if (strcmp(strMod, "4PSK") == 0)
 	{
 		for (m = 0; m < intDataBytesPerCar; m++)  // For each byte of input data (all carriers) 
@@ -800,17 +791,7 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 			intDataPtr += 1;
 		}
 	}
-	if (Type == PktFrameHeader)
-	{
-		// just sent packet header. Send rest in current mode
 
-		Type = 0;			// Prevent reentry
-
-		strcpy(strMod, &pktMod[pktMode][0]);
-		intDataBytesPerCar = pktDataLen + pktRSLen + 3;
-		intDataPtr = 18;		// Over Header
-		goto PktLoopBack;		// Reenter to send rest of variable length packet frame
-	}
 	Flush();
 }
 
@@ -874,20 +855,19 @@ static int intN = 120;				//Length of filter 12000/100
 static float dblRn;
 
 static float dblR2;
-static float dblCoef[32] = {0.0f};			// the coefficients
+static float dblCoef[26] = {0.0f};			// the coefficients
 float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
 
 // The resonators 
       
-float dblZout_0[32] = {0.0f};	// resonator outputs
-float dblZout_1[32] = {0.0f};	// resonator outputs delayed one sample
-float dblZout_2[32] = {0.0f};	// resonator outputs delayed two samples
+float dblZout_0[26] = {0.0f};	// resonator outputs
+float dblZout_1[26] = {0.0f};	// resonator outputs delayed one sample
+float dblZout_2[26] = {0.0f};	// resonator outputs delayed two samples
 
 int fWidth;				// Filter BandWidth
 int SampleNo;
 int outCount = 0;
 int first, last;		// Filter slots
-int centreSlot;
 
 float largest = 0;
 float smallest = 0;
@@ -908,11 +888,10 @@ unsigned short * SoundInit();
 
 // initFilter is called to set up each packet. It selects filter width
 
-void initFilter(int Width, int Centre)
+void initFilter(int Width)
 {
 	int i, j;
 	fWidth = Width;
-	centreSlot = Centre / 100;
 	largest = smallest = 0;
 	SampleNo = 0;
 	Number = 0;
@@ -939,42 +918,35 @@ void initFilter(int Width, int Centre)
 
 		// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
 
-		first = centreSlot - 1;
-		last = centreSlot + 1;		// 3 filter sections
+		first = 14;
+		last = 16;		// 3 filter sections
 		break;
 
 	case 500:
 
 		// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
 
-		first = centreSlot - 3;
-		last = centreSlot + 3;		// 7 filter sections
-//		first = 12;
-//		last = 18;		// 7 filter sections
+		first = 12;
+		last = 18;		// 7 filter sections
 		break;
 
 	case 1000:
 		
 		// implements 11 100 Hz wide sections centered on 1500 Hz  (~1000 Hz wide @ - 30dB centered on 1500 Hz)
 
-		first = centreSlot - 5;
-		last = centreSlot + 5;		// 11 filter sections
-//		first = 10;
-//		last = 20;		// 7 filter sections
+		first = 10;
+		last = 20;		// 7 filter sections
 		break;
 
 	case 2000:
 		
 		// implements 21 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
 
-		first = centreSlot - 10;
-		last = centreSlot + 10;		// 21 filter sections
-//		first = 5;
-//		last = 25;		// 7 filter sections
+		first = 5;
+		last = 25;		// 7 filter sections
 	}
 
-
-	for (j = first; j <= last; j++)
+	for (j = first; j <= last; j++)	   // calculate output for 3 resonators 
 	{
 		dblZout_0[j] = 0;
 		dblZout_1[j] = 0;
@@ -1037,7 +1009,7 @@ void SampleSink(short Sample)
 
 			if (SampleNo >= intFilLen)
 			{
-				if (j == first || j == last)
+				if (j == 14 || j == 16)
 					intFilteredSample += (float)0.7389f * dblZout_0[j];
 				else
 					intFilteredSample -= (float)dblZout_0[j];
@@ -1053,9 +1025,9 @@ void SampleSink(short Sample)
 
 			if (SampleNo >= intFilLen)
 			{
-				if (j == first || j == last)
+				if (j == 12 || j == 18)
 					intFilteredSample += 0.10601f * dblZout_0[j];
-				else if (j == (first + 1) || j == (last - 1))
+				else if (j == 13 || j == 17)
 					intFilteredSample -= 0.59383f * dblZout_0[j];
 				else if ((j & 1) == 0)	// 14 15 16
 					intFilteredSample += (int)dblZout_0[j];
@@ -1075,7 +1047,7 @@ void SampleSink(short Sample)
 
 			if (SampleNo >= intFilLen)
 			{
-				if (j == first || j == last)
+				if (j == 10 || j == 20)
 					intFilteredSample +=  0.377f * dblZout_0[j];
 				else if ((j & 1) == 0)	// Even
 					intFilteredSample += (int)dblZout_0[j];
@@ -1094,7 +1066,7 @@ void SampleSink(short Sample)
           
 			if (SampleNo >= intFilLen)
 			{
-				if (j == first || j == last)
+				if (j == 5 || j == 25)
 					intFilteredSample +=  0.371f * dblZout_0[j];
 				else if ((j & 1) == 0)	// Even
 					intFilteredSample += (int)dblZout_0[j];
@@ -1205,7 +1177,7 @@ void sendCWID(char * strID, BOOL blnPlay)
 			dblLoPhase -= 2 * M_PI;
 	}
 	
-	initFilter(500,1500);
+	initFilter(500);
    
 	//Generate leader for VOX 6 dots long
 

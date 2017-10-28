@@ -1,3 +1,18 @@
+//
+// This code calculates and writes to files the templates
+// used to generate modulation samples.
+
+// Rick's code gererates them dynamically as program start, but
+// that measns they have to be in RAM. By pregenerating and 
+// compliling them they can be placed in program space
+// This is necessary with the small RAM space of embedded CPUs
+
+// This only needs to be run once to generate the source files
+
+// Keep code in case we need to change, but don't compile
+
+#if 0
+
 #include "ARDOPC.h"
 
 #pragma warning(disable : 4244)		// Code does lots of int float to int
@@ -96,7 +111,7 @@ void GenerateTwoToneLeaderTemplate()
 	}		
 	fclose(fp1);
 }
-*/
+
 // Subroutine to create the FSK symbol templates
 
 void GenerateFSKTemplates()
@@ -137,7 +152,7 @@ void GenerateFSKTemplates()
 
 		for (k = 0; k < 240; k++)	// for 240 samples (one 50 baud symbol)
 		{
-	//		intFSK50bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle);  // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+			intFSK50bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle);  // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
 			dblAngle += dblCarPhaseInc[i];
 
 			if (dblAngle >= 2 * M_PI)
@@ -219,7 +234,7 @@ void GenerateFSKTemplates()
 	}
 
 	// Now compute the templates: (2400 32 bit values total)  
-/*
+
 	for (i = 0; i < 20; i++)	 // across 20 tones
 	{
 		dblAngle = 0;
@@ -227,18 +242,18 @@ void GenerateFSKTemplates()
 		for (k = 0; k < 120; k++)		// for 120 samples (one 100 baud symbol)
 		{
 			short work = intAmp * 1.1 * sin(dblAngle);
-			intFSK100bdCarTemplate[i][k] = work); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+			intFSK100bdCarTemplate[i][k] = work; // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
 				
 			dblAngle += dblCarPhaseInc[i];
 			if (dblAngle >= 2 * M_PI)
 				dblAngle -= 2 * M_PI;
 		}
 	}
-*/
+
 
 	// Now print them
 
-/*
+
 	fp1 = fopen("s:\\fskcoeffs100.txt", "wb");
 
 	len = sprintf(msg, "short intFSK100bdCarTemplate[20][120] = \r\n");
@@ -286,7 +301,7 @@ void GenerateFSKTemplates()
 	fwrite(msg, 1, len, fp1);
 
 	fclose(fp1);
-*/
+
 
 	fp1 = fopen("s:\\fskcoeffs25.txt", "wb");
 
@@ -347,7 +362,6 @@ void GenerateFSKTemplates()
 	for (i = 0; i < 4; i++)		// across 4 tones
 	{
 			line = 0;
-
 			for (k = 0; k < 20; k++) // for 20 samples (one 600 baud symbol)
 			{
 				if ((k - line) == 9)
@@ -584,6 +598,6 @@ VOID GeneratePSKTemplates()
 }
 
 
-
+#endif
 
 

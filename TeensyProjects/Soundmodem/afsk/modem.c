@@ -105,11 +105,18 @@ static void modmodulate(void *state, unsigned int txdelay)
 	int i;
 	unsigned char ch;
 
-	i = txdelay * s->bps / 1000;
-	do {
-		modsendbits(s, 0x7e, 8);
-		i -= 8;
-	} while (i > 0);
+	// Sends txdelay or packet - not both
+
+	if (txdelay)
+	{
+		i = txdelay * s->bps / 1000;
+		do {
+			modsendbits(s, 0x7e, 8);
+			i -= 8;
+		} while (i > 0);
+	
+		return;
+	}
 	while (pktget(s->chan, &ch, 1))
 		modsendbits(s, ch, 8);
 	modsendbits(s, 0x7e, 8);

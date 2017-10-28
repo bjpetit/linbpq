@@ -1185,8 +1185,11 @@ PollReceivedSamples()
 
 		if (leveltimer > 400)
 		{
+			char HostCmd[64];
 			leveltimer = 0;
 			Debugprintf("Input peaks = %d, %d", min, max);
+			sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
+			QueueCommandToHost(HostCmd);
 			min = max = 0;
 		}
 

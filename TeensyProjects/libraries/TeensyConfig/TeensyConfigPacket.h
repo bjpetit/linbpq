@@ -47,9 +47,15 @@
 
 #define MONPORT Serial
 
+<<<<<<< .mine
+// Send Debug output as UI frames on Serial Interface
+//#define UIMON
+
+=======
 // Send Debug output as UI frames on Serial Interface
 #define UIMON
 
+>>>>>>> .r617
 //#define CATPORT Serial5
 //#define CATSPEED 19200
 

@@ -26,6 +26,7 @@ void CatWrite(char * Buffer, int Len);
 int RadioPoll();
 void ProcessCommandFromHost(char * strCMD);
 BOOL GetNextARQFrame();
+VOID ProcessKISSBytes(UCHAR * RXBUFFER, int Read);
 
 #ifdef LOGTOHOST
 
@@ -88,7 +89,7 @@ BOOL PTCMode = FALSE;	// Running in PTC compatibility mode?
 volatile int RXBPtr;
 
 int change = 0;			// Flag for connect/disconnect reports
-int state = 0;
+int SCSState = 0;
 
 int DataChannel = 31;
 int ReplyLen;
@@ -135,7 +136,7 @@ void SendCommandToHost(char * Cmd)
 				memcpy(ReportCall, &Cmd[18], 10);
 				strlop(ReportCall, ' ');
 				change = 1;
-				state = 0;
+				SCSState = 0;
 			}
 			else
 				PutString("Disconnected\r");
@@ -148,7 +149,7 @@ void SendCommandToHost(char * Cmd)
 			memcpy(ReportCall, &Cmd[10], 10);
 			strlop(ReportCall, ' ');
 			change = 1;
-			state = 1;
+			SCSState = 1;
 		}
 		else
 		{
@@ -162,7 +163,7 @@ void SendCommandToHost(char * Cmd)
 		if (HostMode)
 		{
 			change = 1;
-			state = 0;
+			SCSState = 0;
 		}
 		else
 			PutString("Disconnected\r");
@@ -198,7 +199,7 @@ void SendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
 	if (memcmp(Cmd, "STATUS CONNECT TO", 20) == 0)
 	{
 		change = 1;
-		state = 0;
+		SCSState = 0;
 	}
 
 	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
@@ -245,7 +246,7 @@ BOOL CheckStatusChange()
 	{
 		change = 0;
 
-		if (state == 1)
+		if (SCSState == 1)
 		{
 			// Connected
 
@@ -484,7 +485,17 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		// See if any channels have anything available
 
 		// Although spec say Dragon only sends log data in response
-		// to poll of chan 248 it seems to send in response to get poll
+		// to poll of chan 248 it seems to send in response to gen poll
+
+		// Send KISS data in response to gen poll
+
+		if (CheckKISS(SCSReply))	// only used in Native mode
+		{
+			// got a message
+
+			return;
+		}
+
 
 		if (newStatus)
 		{
@@ -629,6 +640,33 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		ProcessRIGPacket(Command, &Buffer[3], Len);
 		goto AckIt;
 	}
+
+	if (Channel == 250)			// KISS Interface
+	{
+		if (Command == 1 && Buffer[3] == 'G')	
+		{
+			// Poll for KISS Data
+
+			memcpy(&SCSReply[5], CatRXbuffer, CatRXLen);
+			SCSReply[2] = Channel;
+			SCSReply[3] = 7;
+			SCSReply[4] = CatRXLen - 1;
+
+			ReplyLen = CatRXLen + 5;
+			EmCRCStuffAndSend(SCSReply, ReplyLen);
+			CatRXLen = 0;
+			return;
+		}
+
+		Len = Buffer[2] + 1;
+		Buffer[Len + 3] = 0;
+
+		ProcessKISSBytes(&Buffer[3], Len);
+
+		goto AckIt;
+	}
+
+
 
 	if (Command == 0)
 	{
@@ -1264,9 +1302,9 @@ Loop:
 	{
 		// Unstuff returned an errors (170 not followed by 0)
 
-	WriteDebugLog(0, "ProcessSCSPacket Bad Unstuff Frame");
+		WriteDebugLog(0, "ProcessSCSPacket Bad Unstuff Frame");
 
-	RXBPtr = 0;
+		RXBPtr = 0;
 		return;				// Ignore for now
 	}
 	crc = compute_crc(&UnstuffBuffer[2], Length);
@@ -1279,6 +1317,8 @@ Loop:
 	}
 
 	// Bad CRC - assume incomplete frame, and wait for rest. If it was a full bad frame, timeout and retry will recover link.
+
+//	WriteDebugLog(0, "ProcessSCSPacket Bad CRC");
 
 	return;
 }
