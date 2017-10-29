@@ -1046,20 +1046,13 @@ void i2cloop()
           i2cPutChar(val);
           Sum ^= val;
 
-<<<<<<< .mine
           val = EEPROM.read(13);	// Centre Freq
           i2cPutChar(val);
           Sum ^= val;
-=======
-         //val = GetPot(1);
-         // i2cPutChar(val);
-         // Sum ^= val;
->>>>>>> .r617
 
           i2cPutChar(Sum);
           i2cPutChar(FEND);
 		  
-<<<<<<< .mine
 
 			// Also write to log for clients that can't handle KISS response
 			
@@ -1078,24 +1071,6 @@ void i2cloop()
 
 			WriteDebugLog(6, GetResp);
 		  
-=======
-
-			// Also write to log for clients that can't handle KISS response
-			
-			char GetResp[64] = "GetResp: ";
-			char * ptr = &GetResp[8];
-
-			for (i = 0; i < 11; i++)
-			{
-				val = GetEEPROM(i);
-				ptr += sprintf(ptr, "%02X ", val);
-			}
-			val = GetPot(0);
-			ptr += sprintf(ptr, "%02X ", val & 0xff);
-
-			WriteDebugLog(6, GetResp);
-		  
->>>>>>> .r617
           return;
         }
 		
@@ -1721,7 +1696,6 @@ void setupOLED()
 
 #ifdef KMR_18
 
-<<<<<<< .mine
 // This Teensy3 native optimized version requires specific pins
 //
 #define sclk 13  // SCLK can also use pin 14
@@ -1832,118 +1806,6 @@ void setupKMR_18(void) {
 
 #endif
 
-=======
-// This Teensy3 native optimized version requires specific pins
-//
-#define sclk 13  // SCLK can also use pin 14
-#define mosi 11  // MOSI can also use pin 7
-#define cs   15  // CS & DC can use pins 2, 6, 9, 10, 15, 20, 21, 22, 23
-#define dc   14   //  but certain pairs must NOT be used: 2+10, 6+9, 20+23, 21+22
-#define rst  23  // RST can use any pin
-//#define sdcs 4   // CS for SD card, can use any pin
-
-#include <Adafruit_GFX.h>    // Core graphics library
-#include <Adafruit_ST7735.h> // Hardware-specific library
-#include <SPI.h>
-
-Adafruit_ST7735 tft = Adafruit_ST7735(cs, dc, rst);
-
-char * TXType = "TX:";		// Save last transmitted type
-
-extern "C"
-{
-  void mySetPixel(int16_t x, int16_t y, int16_t Colour)
-  {
-	tft.drawPixel(x + ConsXoffset, y + ConsYoffset, Colour);
-  }
-
-  void DrawAxes(int Qual, char * Mode)
-  {
-    // Draw x and y axes in centre of constallation area
-
-    int yCenter = ConsYoffset + (ConstellationHeight - 2) / 2;
-    int xCenter = ConsXoffset + (ConstellationWidth - 2) / 2;
-	
-	tft.setRotation(3);
-
-	tft.drawFastVLine(xCenter, ConsYoffset , ConstellationHeight, Yellow);
-	tft.drawFastHLine(ConsXoffset, yCenter , ConstellationWidth, Yellow);
-
-    tft.setRotation(3);
-    tft.setTextSize(1);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setCursor(0, 0);
-	tft.print("           ");	//Clear old mode
-    tft.setCursor(0, 0);
-    tft.print(Mode);
-    tft.setCursor(0, 18);
-    tft.printf("QUAL %d  ", Qual);
-  }
-
-  void DrawDecode(char * Decode)
-  {
-    tft.setCursor(0, 36);
-    tft.printf("%s    ", Decode);
-	if (TXType)
-	{
-		tft.setCursor(0, 54);
-		tft.print("           ");	//Clear old mode
-		tft.setCursor(0, 54);
-		tft.print(TXType);
-	}
-  }
-
-  void DrawTXMode(char * TXMode)
-  {
-	TXType = TXMode;
-	tft.setCursor(0, 54);
-	tft.print("           ");	//Clear old mode
-	tft.setCursor(0, 54);
-	tft.print(TXMode);
-  }
-
-  void clearDisplay()
-  {
-	  // This just has to clear constellation area
-	  
-	  tft.fillRect(ConsXoffset, ConsYoffset, ConstellationWidth, ConstellationHeight, ST7735_BLACK);
-  }
-
-  void updateDisplay()
-  {
-      // Probably not needed with TFT
-  }
-}
-
-void setupKMR_18(void) {
-
-//  pinMode(sdcs, INPUT_PULLUP);  // keep SD CS high when not using SD card
-
-  // Our supplier changed the 1.8" display slightly after Jan 10, 2012
-  // so that the alignment of the TFT had to be shifted by a few pixels
-  // this just means the init code is slightly different. Check the
-  // color of the tab to see which init code to try. If the display is
-  // cut off or has extra 'random' pixels on the top & left, try the
-  // other option!
-  // If you are seeing red and green color inversion, use Black Tab
-
-  // If your TFT's plastic wrap has a Black Tab, use the following:
- // tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
-  // If your TFT's plastic wrap has a Red Tab, use the following:
-  tft.initR(INITR_REDTAB);   // initialize a ST7735R chip, red tab
-  // If your TFT's plastic wrap has a Green Tab, use the following:
-  //tft.initR(INITR_GREENTAB); // initialize a ST7735R chip, green tab
-
- 	tft.fillRect(0, 0, 128, 160, ST7735_BLACK);
- 
-  	DrawAxes(99, "16Q.200.100");
-	DrawDecode("PASS");
-}
-
-
-#endif
-
->>>>>>> .r617
 #ifdef WDTTFT
 
 // Constallation or Waterfall display on TFT on WDT board
@@ -2000,15 +1862,9 @@ extern "C"
   void DrawTXMode(char * TXMode)
   {
 	TXType = TXMode;
-<<<<<<< .mine
 	tft.setCursor(0, 75);
 	tft.print("           ");	//Clear old TXMODE
 	tft.setCursor(0, 75);
-=======
-	tft.setCursor(0, 54);
-	tft.print("           ");	//Clear old mode
-	tft.setCursor(0, 54);
->>>>>>> .r617
 	tft.print(TXMode);
   }
 

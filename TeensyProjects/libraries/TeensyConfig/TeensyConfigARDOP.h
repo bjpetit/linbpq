@@ -25,7 +25,6 @@
 #define PIBOARD
 //#define WDTBOARD
 
-<<<<<<< .mine
 #ifndef PIBOARD
 #ifndef WDTBOARD
 
@@ -37,12 +36,7 @@
 
 // define PLOTCONSTELLATION if you have a display attached and want a constellation display
 
-=======
-// define PLOTCONSTELLATION if you have a display attached and want a constellation display
-
->>>>>>> .r617
 #define PLOTCONSTELLATION
-<<<<<<< .mine
 
 // define the type of display 
 // OLED is i2c 128 x 64 Display
@@ -50,21 +44,14 @@
 // KMR_1.8 is 1.8" TFT 128 x 160 SPI with ST7735 chip
 
 #define OLED
-=======
 
 // define the type of display 
 // OLED is i2c 128 x 64 Display
 // WDTTFT is the TFT on the WDT version of the board.
 // KMR_1.8 is 1.8" TFT 128 x 160 SPI with ST7735 chip
 
-//#define OLED
->>>>>>> .r617
 //#define WDTTFT
-<<<<<<< .mine
 //#define KMR_18
-=======
-#define KMR_18
->>>>>>> .r617
 
 
 #ifdef PIBOARD
