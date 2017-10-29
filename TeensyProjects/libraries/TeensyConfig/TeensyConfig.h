@@ -2,8 +2,8 @@
 
 // At the moment only Packet, ARDOP or SOUNDCARD
 
-//#define PACKET
-#define ARDOP
+#define PACKET
+//#define ARDOP
 
 //#define SOUNDCARD
 // Standard definitions

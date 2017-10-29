@@ -7794,4 +7794,513 @@ OK
 20:54:50.102 Command to Host BUSY TRUE
 20:54:53.481 Command to Host INPUTPEAKS -3477 2912
 20:54:53.481 Input peaks = -3477, 2912
-20:54:56.945 Command to Host BUSY 
+20:54:56.945 Command to Host BUSY 22:02:04.280 ARDOPC Version 0.9.5.9-BPQ
+22:02:04.281 Capture Devices
+22:02:05.066 0 Stereo Mix (Realtek High Defini
+22:02:05.076 1 CABLE Output (VB-Audio Virtual 
+22:02:05.076 Playback Devices
+22:02:05.089 0 Speakers (Realtek High Definiti
+22:02:05.100 1 CABLE Input (VB-Audio Virtual C
+22:02:05.118 2 Realtek Digital Output (Realtek
+22:02:05.120 Command to Host BUFFER 0
+22:02:05.120 Command to Host NEWSTATE DISC 
+22:02:05.126 Opened WaveOut Device Speakers (Realtek High Definiti
+22:02:05.131 Opened WaveIn Device Stereo Mix (Realtek High Defini
+22:02:05.131 ARDOPC opening port com20
+22:02:05.131 ARDOPC opened port com20
+22:02:25.618 Command to Host INPUTPEAKS -10 10
+22:02:25.618 Input peaks = -10, 10
+22:02:26.416 Command to Host BUSY TRUE
+22:02:33.160 Command to Host BUSY FALSE
+22:02:45.734 Command to Host INPUTPEAKS -3750 3194
+22:02:45.734 Input peaks = -3750, 3194
+22:02:49.197 SCS Command 
+22:02:49.298 SCS Command ARDOP
+22:02:49.298 
+OK
+22:02:49.298 ARDOP Native Mode
+22:02:49.410 SCS Command INITIALIZE
+22:02:49.410 [obCommand Trace FROM host: C:INITIALIZE
+22:02:49.410 Command to Host BUFFER 0
+22:02:49.410 INITIALIZE
+22:02:49.410 SCS Command VERSION
+22:02:49.410 [obCommand Trace FROM host: C:VERSION
+22:02:49.410 VERSION ARDOP TNC_0.9.5.9-BPQ
+22:02:49.410 SCS Command CWID False
+22:02:49.410 [obCommand Trace FROM host: C:CWID FALSE
+22:02:49.410 CWID now FALSE
+22:02:49.410 SCS Command PROTOCOLMODE ARQ
+22:02:49.410 [obCommand Trace FROM host: C:PROTOCOLMODE ARQ
+22:02:49.410 PROTOCOLMODE now ARQ
+22:02:49.410 SCS Command ARQTIMEOUT 90
+22:02:49.410 [obCommand Trace FROM host: C:ARQTIMEOUT 90
+22:02:49.410 ARQTIMEOUT now 90
+22:02:49.410 SCS Command DEBUGLOG TRUE
+22:02:49.410 [obCommand Trace FROM host: C:DEBUGLOG TRUE
+22:02:49.410 DEBUGLOG now TRUE
+22:02:49.410 SCS Command CMDTRACE True
+22:02:49.410 [obCommand Trace FROM host: C:CMDTRACE TRUE
+22:02:49.410 CMDTRACE now TRUE
+22:02:49.410 SCS Command CWID FALSE
+22:02:49.410 [obCommand Trace FROM host: C:CWID FALSE
+22:02:49.410 CWID now FALSE
+22:02:49.410 SCS Command DRIVELEVEL 100
+22:02:49.410 [obCommand Trace FROM host: C:DRIVELEVEL 100
+22:02:49.410 DRIVELEVEL now 100
+22:02:49.410 SCS Command GRIDSQUARE IO68VL
+22:02:49.410 [obCommand Trace FROM host: C:GRIDSQUARE IO68VL
+22:02:49.410 GRIDSQUARE now IO68VL
+22:02:49.410 SCS Command CONSOLELOG 7
+22:02:49.410 [obCommand Trace FROM host: C:CONSOLELOG 7
+22:02:49.411 CONSOLELOG now 7
+22:02:49.411 SCS Command FECREPEATS 0
+22:02:49.411 [obCommand Trace FROM host: C:FECREPEATS 0
+22:02:49.411 FECREPEATS now 0
+22:02:49.411 SCS Command FASTSTART TRUE
+22:02:49.412 [obCommand Trace FROM host: C:FASTSTART TRUE
+22:02:49.412 FASTSTART now TRUE
+22:02:49.412 SCS Command MYCALL G8BPQ-2
+22:02:49.412 Mycall: >G8BPQ-2<
+22:02:49.412 SCS Command MYAUX G8BPQ-10,G8BPQ-1,G8BPQ-3,G8BPQ-5,G8BPQ-15,G8BPQ,G8BPQ-14
+22:02:49.412 [obCommand Trace FROM host: C:MYAUX G8BPQ-10,G8BPQ-1,G8BPQ-3,G8BPQ-5,G8BPQ-15,G8BPQ,G8BPQ-14
+22:02:49.414 MYAUX now G8BPQ-10,G8BPQ-1,G8BPQ-3,G8BPQ-5,G8BPQ-15,G8BPQ,G8BPQ-14
+22:02:49.414 SCS Command JHOST4
+22:02:49.415 Entering Host Mode
+22:02:49.416 Command to Host BUFFER 0
+22:03:03.458 Queuing 20 Packet Bytes
+22:03:03.460 Sending Packet Frame Len 18
+22:03:03.463 Sending Frame Type PktFrame
+22:03:03.464 Command to Host PTT TRUE
+22:03:03.465 [Main.KeyPTT]  PTT-TRUE
+22:03:04.816 Command to Host PTT FALSE
+22:03:04.818 [Main.KeyPTT]  PTT-FALSE
+22:03:05.759 Command to Host INPUTPEAKS -11808 11820
+22:03:05.760 Input peaks = -11808, 11820
+22:03:07.613 Command to Host BUSY TRUE
+22:03:09.705 Queuing 20 Packet Bytes
+22:03:21.739 Command to Host BUSY FALSE
+22:03:21.741 Sending Packet Frame Len 18
+22:03:21.742 Sending Frame Type PktFrame
+22:03:21.743 Command to Host PTT TRUE
+22:03:21.744 [Main.KeyPTT]  PTT-TRUE
+22:03:23.095 Command to Host PTT FALSE
+22:03:23.096 [Main.KeyPTT]  PTT-FALSE
+22:03:25.767 Command to Host INPUTPEAKS -32768 32767
+22:03:25.768 Input peaks = -32768, 32767
+22:03:28.098 Queuing 20 Packet Bytes
+22:03:28.100 Sending Packet Frame Len 18
+22:03:28.101 Sending Frame Type PktFrame
+22:03:28.103 Command to Host PTT TRUE
+22:03:28.103 [Main.KeyPTT]  PTT-TRUE
+22:03:29.453 Command to Host PTT FALSE
+22:03:29.454 [Main.KeyPTT]  PTT-FALSE
+22:03:31.704 Queuing 20 Packet Bytes
+22:03:31.706 Sending Packet Frame Len 18
+22:03:31.707 Sending Frame Type PktFrame
+22:03:31.708 Command to Host PTT TRUE
+22:03:31.709 [Main.KeyPTT]  PTT-TRUE
+22:03:33.063 Command to Host PTT FALSE
+22:03:33.065 [Main.KeyPTT]  PTT-FALSE
+22:03:34.441 [obCommand Trace FROM host: C:LISTEN FALSE
+22:03:34.442 Sending CMD Reply LISTEN now FALSE
+22:03:37.393 [obCommand Trace FROM host: C:PAC MODE
+22:03:37.395 Sending CMD Reply PAC MODE 4PSK
+22:03:45.794 Command to Host INPUTPEAKS -32768 32767
+22:03:45.796 Input peaks = -32768, 32767
+22:03:55.435 [obCommand Trace FROM host: C:STATE
+22:03:55.435 Sending CMD Reply STATE DISC
+22:04:05.814 Command to Host INPUTPEAKS -12 11
+22:04:05.815 Input peaks = -12, 11
+22:04:25.836 Command to Host INPUTPEAKS -11 11
+22:04:25.839 Input peaks = -11, 11
+22:04:45.847 Command to Host INPUTPEAKS -12 11
+22:04:45.848 Input peaks = -12, 11
+22:05:01.297 [obCommand Trace FROM host: C:STATE
+22:05:01.298 Sending CMD Reply STATE DISC
+22:05:05.867 Command to Host INPUTPEAKS -11 12
+22:05:05.868 Input peaks = -11, 12
+22:05:25.894 Command to Host INPUTPEAKS -19020 20820
+22:05:25.895 Input peaks = -19020, 20820
+22:05:25.917 Command to Host BUSY TRUE
+22:05:33.070 Command to Host BUSY FALSE
+22:05:45.916 Command to Host INPUTPEAKS -10741 10570
+22:05:45.920 Input peaks = -10741, 10570
+22:05:46.372 Prior-Offset= -0.634684
+22:05:46.394 EnvelopeCorrelator CorMax:MaxProd= 47.027837  J= 113
+22:05:46.395 [Acquire2ToneLeaderSymbolFraming] intIatMinError= -1
+22:05:46.690 Frame Decode type e6 0 ff Dist 0.67 0.48 0.48 Sess ff pend 0 conn 0 lastsess 0
+22:05:46.691 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -11.849592 dB, Full -15.241298 dB, Offset= 0.565218 Hz:  MD Decode;5 Type1=HE6, Type2=H0, D1= 0.67, D2= 0.48
+22:05:46.692 poor frame type decode
+22:05:53.572 Command to Host BUSY TRUE
+22:05:58.866 Command to Host BUSY FALSE
+22:05:59.755 Command to Host BUSY TRUE
+22:06:00.227 Prior-Offset= -2.035805
+22:06:00.249 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 2
+22:06:00.450 Frame Decode type ff 37 68 Dist 0.57 0.47 0.49 Sess ff pend 0 conn 0 lastsess 0
+22:06:00.451 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -10.355868 dB, Full -5.951757 dB, Offset= -87.688576 Hz:  MD Decode;5 Type1=HFF, Type2=H37, D1= 0.57, D2= 0.47
+22:06:00.452 poor frame type decode
+22:06:04.977 Command to Host BUSY FALSE
+22:06:05.932 Command to Host INPUTPEAKS -13419 13397
+22:06:05.932 Input peaks = -13419, 13397
+22:06:06.875 Command to Host BUSY TRUE
+22:06:07.197 [obCommand Trace FROM host: C:STATE
+22:06:07.197 Sending CMD Reply STATE DISC
+22:06:07.530 Prior-Offset= -1.703194
+22:06:07.553 EnvelopeCorrelator CorMax:MaxProd= 43.445250  J= 3
+22:06:07.553 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 2
+22:06:07.805 Frame Decode type ef c0 1f Dist 0.59 0.42 0.45 Sess ff pend 0 conn 0 lastsess 0
+22:06:07.806 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -12.225127 dB, Full -12.007084 dB, Offset= -87.395836 Hz:  MD Decode;5 Type1=HEF, Type2=HC0, D1= 0.59, D2= 0.42
+22:06:07.807 poor frame type decode
+22:06:13.309 Command to Host BUSY FALSE
+22:06:14.531 Command to Host BUSY TRUE
+22:06:14.671 Prior-Offset= -0.777397
+22:06:14.694 EnvelopeCorrelator CorMax:MaxProd= 61.251150  J= 2
+22:06:14.695 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+22:06:14.927 Frame Decode type f0 45 32 Dist 0.83 0.58 0.54 Sess ff pend 0 conn 0 lastsess 0
+22:06:14.931 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -12.083496 dB, Full -14.061897 dB, Offset= -49.062588 Hz:  MD Decode;5 Type1=HF0, Type2=H45, D1= 0.83, D2= 0.58
+22:06:14.931 poor frame type decode
+22:06:19.690 Command to Host BUSY FALSE
+22:06:20.462 Command to Host BUSY TRUE
+22:06:25.770 Command to Host BUSY FALSE
+22:06:25.945 Command to Host INPUTPEAKS -13396 13445
+22:06:25.948 Input peaks = -13396, 13445
+22:06:27.253 Command to Host BUSY TRUE
+22:06:27.832 Prior-Offset= -0.382999
+22:06:27.856 EnvelopeCorrelator CorMax:MaxProd= 41.848239  J= 0
+22:06:27.857 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+22:06:28.058 Frame Decode type 40 3 7c Dist 0.53 0.41 0.37 Sess ff pend 0 conn 0 lastsess 0
+22:06:28.058 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -12.283417 dB, Full -14.767756 dB, Offset= -48.959816 Hz:  MD Decode;5 Type1=H40, Type2=H3, D1= 0.53, D2= 0.41
+22:06:28.058 poor frame type decode
+22:06:28.452 Prior-Offset= -1.488716
+22:06:28.475 EnvelopeCorrelator CorMax:MaxProd= 43.536584  J= 0
+22:06:28.476 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+22:06:28.738 Frame Decode type 5 62 55 Dist 0.58 0.51 0.54 Sess ff pend 0 conn 0 lastsess 0
+22:06:28.739 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -10.841982 dB, Full -7.273874 dB, Offset= -46.295696 Hz:  MD Decode;5 Type1=H5, Type2=H62, D1= 0.58, D2= 0.51
+22:06:28.739 poor frame type decode
+22:06:32.474 Command to Host BUSY FALSE
+22:06:34.070 Command to Host BUSY TRUE
+22:06:35.115 Prior-Offset= -0.381931
+22:06:35.139 EnvelopeCorrelator CorMax:MaxProd= 40.263274  J= 3
+22:06:35.139 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 0
+22:06:35.716 Frame Decode type 7c 4f f0 Dist 0.40 0.65 0.66 Sess ff pend 0 conn 0 lastsess 0
+22:06:35.718 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -12.286007 dB, Full -14.766873 dB, Offset= -48.961468 Hz:  MD Decode;5 Type1=H7C, Type2=H4F, D1= 0.40, D2= 0.65
+22:06:35.720 poor frame type decode
+22:06:40.077 Command to Host BUSY FALSE
+22:06:41.430 Command to Host BUSY TRUE
+22:06:41.947 Prior-Offset= -2.220833
+22:06:41.970 EnvelopeCorrelator CorMax:MaxProd= 53.193564  J= 3
+22:06:41.971 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 1
+22:06:42.352 Frame Decode type 75 ea 5d Dist 0.58 0.54 0.53 Sess ff pend 0 conn 0 lastsess 0
+22:06:42.352 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -9.194121 dB, Full -15.022975 dB, Offset= -47.446320 Hz:  MD Decode;5 Type1=H75, Type2=HEA, D1= 0.58, D2= 0.54
+22:06:42.352 poor frame type decode
+22:06:45.974 Command to Host INPUTPEAKS -13406 13564
+22:06:45.975 Input peaks = -13406, 13564
+22:06:46.845 Command to Host BUSY FALSE
+22:06:47.753 Command to Host BUSY TRUE
+22:06:48.290 Prior-Offset= -2.222858
+22:06:48.318 EnvelopeCorrelator CorMax:MaxProd= 62.910200  J= 1
+22:06:48.319 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 2
+22:06:48.690 Frame Decode type e8 71 42 Dist 0.57 0.51 0.53 Sess ff pend 0 conn 0 lastsess 0
+22:06:48.691 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -9.195256 dB, Full -15.026310 dB, Offset= -47.444492 Hz:  MD Decode;5 Type1=HE8, Type2=H71, D1= 0.57, D2= 0.51
+22:06:48.691 poor frame type decode
+22:06:50.465 Queuing 39 Packet Bytes
+22:06:53.270 Command to Host BUSY FALSE
+22:06:53.273 Sending Packet Frame Len 37
+22:06:53.273 Sending Frame Type PktFrame
+22:06:53.274 Command to Host PTT TRUE
+22:06:53.275 [Main.KeyPTT]  PTT-TRUE
+22:06:55.026 Command to Host PTT FALSE
+22:06:55.027 [Main.KeyPTT]  PTT-FALSE
+22:07:00.529 Command to Host BUSY TRUE
+22:07:00.982 Prior-Offset= -0.777760
+22:07:01.004 EnvelopeCorrelator CorMax:MaxProd= 62.905847  J= 3
+22:07:01.005 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 2
+22:07:01.416 Frame Decode type 59 15 ea Dist 0.55 0.49 0.49 Sess ff pend 0 conn 0 lastsess 0
+22:07:01.416 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -12.085522 dB, Full -14.059609 dB, Offset= -49.061802 Hz:  MD Decode;5 Type1=H59, Type2=H15, D1= 0.55, D2= 0.49
+22:07:01.417 poor frame type decode
+22:07:05.984 Command to Host INPUTPEAKS -32768 32767
+22:07:05.985 Input peaks = -32768, 32767
+22:07:06.028 Command to Host BUSY FALSE
+22:07:07.408 Command to Host BUSY TRUE
+22:07:12.667 Command to Host BUSY FALSE
+22:07:13.332 [obCommand Trace FROM host: C:STATE
+22:07:13.333 Sending CMD Reply STATE DISC
+22:07:13.806 Command to Host BUSY TRUE
+22:07:18.995 Command to Host BUSY FALSE
+22:07:20.089 Command to Host BUSY TRUE
+22:07:26.007 Command to Host INPUTPEAKS -13556 13566
+22:07:26.008 Input peaks = -13556, 13566
+22:07:26.331 Command to Host BUSY FALSE
+22:07:27.806 Command to Host BUSY TRUE
+22:07:28.850 Prior-Offset= -1.349312
+22:07:28.873 EnvelopeCorrelator CorMax:MaxProd= 41.807281  J= 3
+22:07:28.873 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 1
+22:07:29.104 Frame Decode type 17 33 f0 Dist 0.60 0.57 0.61 Sess ff pend 0 conn 0 lastsess 0
+22:07:29.105 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -13.768999 dB, Full -14.968459 dB, Offset= -87.228806 Hz:  MD Decode;5 Type1=H17, Type2=H33, D1= 0.60, D2= 0.57
+22:07:29.105 poor frame type decode
+22:07:32.988 Command to Host BUSY FALSE
+22:07:34.312 Prior-Offset= 0.299988
+22:07:34.325 EnvelopeCorrelator CorMax:MaxProd= 72.971349  J= 240
+22:07:34.325 [Acquire2ToneLeaderSymbolFraming] intIatMinError= -1
+22:07:34.575 Frame Decode type c0 fb 4 Dist 0.59 0.57 0.57 Sess ff pend 0 conn 0 lastsess 0
+22:07:34.575 [Frame Type Decode Fail] Ldr; S:N(3KHz) Early= -12.095147 dB, Full -13.485879 dB, Offset= 92.942856 Hz:  MD Decode;5 Type1=HC0, Type2=HFB, D1= 0.59, D2= 0.57
+22:07:34.578 poor frame type decode
+22:07:34.806 Command to Host BUSY TRUE
+22:07:45.231 Command to Host BUSY FALSE
+22:07:46.034 Command to Host INPUTPEAKS -13304 13421
+22:07:46.035 Input peaks = -13304, 13421
+22:08:06.050 Command to Host INPUTPEAKS -11 11
+22:08:06.051 Input peaks = -11, 11
+22:08:20.667 [obCommand Trace FROM host: C:STATE
+22:08:20.667 Sending CMD Reply STATE DISC
+08:17:55.777 Command to Host INPUTPEAKS -32607 32598
+08:17:55.778 Input peaks = -32607, 32598
+08:18:16.383 Command to Host INPUTPEAKS -32600 32599
+08:18:16.384 Input peaks = -32600, 32599
+08:18:36.401 Command to Host INPUTPEAKS -10 10
+08:18:36.402 Input peaks = -10, 10
+08:18:38.063 Command to Host BUSY TRUE
+08:18:40.675 [obCommand Trace FROM host: C:STATE
+08:18:40.676 Sending CMD Reply STATE DISC
+08:18:44.681 Command to Host BUSY FALSE
+08:18:56.415 Command to Host INPUTPEAKS -10071 9833
+08:18:56.416 Input peaks = -10071, 9833
+08:19:16.437 Command to Host INPUTPEAKS -11 12
+08:19:16.438 Input peaks = -11, 12
+08:19:36.465 Command to Host INPUTPEAKS -12 11
+08:19:36.467 Input peaks = -12, 11
+08:19:46.606 [obCommand Trace FROM host: C:STATE
+08:19:46.607 Sending CMD Reply STATE DISC
+08:19:56.483 Command to Host INPUTPEAKS -11 12
+08:19:56.493 Input peaks = -11, 12
+08:20:16.490 Command to Host INPUTPEAKS -11 12
+08:20:16.490 Input peaks = -11, 12
+08:20:36.518 Command to Host INPUTPEAKS -11 11
+08:20:36.520 Input peaks = -11, 11
+08:20:52.698 [obCommand Trace FROM host: C:STATE
+08:20:52.699 Sending CMD Reply STATE DISC
+08:20:56.541 Command to Host INPUTPEAKS -11 11
+08:20:56.541 Input peaks = -11, 11
+08:21:16.558 Command to Host INPUTPEAKS -11 12
+08:21:16.560 Input peaks = -11, 12
+08:21:36.571 Command to Host INPUTPEAKS -11 12
+08:21:36.571 Input peaks = -11, 12
+08:21:56.597 Command to Host INPUTPEAKS -11 11
+08:21:56.598 Input peaks = -11, 11
+08:21:58.718 [obCommand Trace FROM host: C:STATE
+08:21:58.719 Sending CMD Reply STATE DISC
+08:22:16.619 Command to Host INPUTPEAKS -11 11
+08:22:16.620 Input peaks = -11, 11
+08:22:36.639 Command to Host INPUTPEAKS -11 11
+08:22:36.639 Input peaks = -11, 11
+08:22:56.652 Command to Host INPUTPEAKS -11 11
+08:22:56.653 Input peaks = -11, 11
+08:23:04.556 [obCommand Trace FROM host: C:STATE
+08:23:04.558 Sending CMD Reply STATE DISC
+08:23:16.675 Command to Host INPUTPEAKS -12 11
+08:23:16.677 Input peaks = -12, 11
+08:23:36.701 Command to Host INPUTPEAKS -12 10
+08:23:36.702 Input peaks = -12, 10
+08:23:56.708 Command to Host INPUTPEAKS -10 10
+08:23:56.709 Input peaks = -10, 10
+08:24:10.417 [obCommand Trace FROM host: C:STATE
+08:24:10.418 Sending CMD Reply STATE DISC
+08:24:16.733 Command to Host INPUTPEAKS -11 10
+08:24:16.734 Input peaks = -11, 10
+08:24:36.755 Command to Host INPUTPEAKS -12 12
+08:24:36.756 Input peaks = -12, 12
+08:24:56.770 Command to Host INPUTPEAKS -12 10
+08:24:56.772 Input peaks = -12, 10
+08:25:16.290 [obCommand Trace FROM host: C:STATE
+08:25:16.292 Sending CMD Reply STATE DISC
+08:25:16.794 Command to Host INPUTPEAKS -11 11
+08:25:16.796 Input peaks = -11, 11
+08:25:36.815 Command to Host INPUTPEAKS -11 11
+08:25:36.817 Input peaks = -11, 11
+08:25:56.842 Command to Host INPUTPEAKS -11 10
+08:25:56.843 Input peaks = -11, 10
+08:26:16.857 Command to Host INPUTPEAKS -12 11
+08:26:16.858 Input peaks = -12, 11
+08:26:22.173 [obCommand Trace FROM host: C:STATE
+08:26:22.174 Sending CMD Reply STATE DISC
+08:26:36.877 Command to Host INPUTPEAKS -12 12
+08:26:36.878 Input peaks = -12, 12
+08:26:56.901 Command to Host INPUTPEAKS -11 11
+08:26:56.905 Input peaks = -11, 11
+08:27:16.906 Command to Host INPUTPEAKS -11 10
+08:27:16.906 Input peaks = -11, 10
+08:27:28.122 [obCommand Trace FROM host: C:STATE
+08:27:28.122 Sending CMD Reply STATE DISC
+08:27:36.933 Command to Host INPUTPEAKS -11 10
+08:27:36.934 Input peaks = -11, 10
+08:27:57.278 Command to Host INPUTPEAKS -1791 1972
+08:27:57.278 Input peaks = -1791, 1972
+08:28:17.343 Command to Host INPUTPEAKS -1785 1978
+08:28:17.344 Input peaks = -1785, 1978
+08:28:35.730 [obCommand Trace FROM host: C:STATE
+08:28:35.731 Sending CMD Reply STATE DISC
+08:28:37.597 Command to Host INPUTPEAKS -1794 1976
+08:28:37.598 Input peaks = -1794, 1976
+08:28:57.624 Command to Host INPUTPEAKS -12 12
+08:28:57.624 Input peaks = -12, 12
+08:29:17.853 Command to Host INPUTPEAKS -11 13
+08:29:17.854 Input peaks = -11, 13
+08:29:22.006 [obCommand Trace FROM host: C:LISTEN TRUE
+08:29:22.006 Sending CMD Reply LISTEN now TRUE
+08:29:37.874 Command to Host INPUTPEAKS -11 10
+08:29:37.874 Input peaks = -11, 10
+08:29:42.906 [obCommand Trace FROM host: C:STATE
+08:29:42.907 Sending CMD Reply STATE DISC
+08:29:57.890 Command to Host INPUTPEAKS -12 10
+08:29:57.891 Input peaks = -12, 10
+08:30:17.906 Command to Host INPUTPEAKS -11 11
+08:30:17.907 Input peaks = -11, 11
+08:30:37.929 Command to Host INPUTPEAKS -12 11
+08:30:37.930 Input peaks = -12, 11
+08:30:48.879 [obCommand Trace FROM host: C:STATE
+08:30:48.880 Sending CMD Reply STATE DISC
+08:30:57.948 Command to Host INPUTPEAKS -12 10
+08:30:57.948 Input peaks = -12, 10
+08:31:18.269 Command to Host INPUTPEAKS -11 11
+08:31:18.270 Input peaks = -11, 11
+08:31:18.573 Queuing 39 Packet Bytes
+08:31:18.573 Sending Packet Frame Len 37
+08:31:18.573 Sending Frame Type PktFrame
+08:31:18.573 Command to Host PTT TRUE
+08:31:18.573 [Main.KeyPTT]  PTT-TRUE
+08:31:20.330 Command to Host PTT FALSE
+08:31:20.331 [Main.KeyPTT]  PTT-FALSE
+08:31:37.498 Command to Host INPUTPEAKS -32768 32767
+08:31:37.499 Input peaks = -32768, 32767
+08:31:54.435 [obCommand Trace FROM host: C:STATE
+08:31:54.435 Sending CMD Reply STATE DISC
+08:31:57.524 Command to Host INPUTPEAKS -11 11
+08:31:57.525 Input peaks = -11, 11
+08:32:17.532 Command to Host INPUTPEAKS -11 11
+08:32:17.533 Input peaks = -11, 11
+08:32:37.554 Command to Host INPUTPEAKS -12 11
+08:32:37.555 Input peaks = -12, 11
+08:32:57.584 Command to Host INPUTPEAKS -11 12
+08:32:57.585 Input peaks = -11, 12
+08:33:00.283 [obCommand Trace FROM host: C:STATE
+08:33:00.284 Sending CMD Reply STATE DISC
+08:33:18.780 Command to Host INPUTPEAKS -11 11
+08:33:18.780 Input peaks = -11, 11
+08:33:38.815 Command to Host INPUTPEAKS -12 11
+08:33:38.816 Input peaks = -12, 11
+08:33:58.840 Command to Host INPUTPEAKS -11 11
+08:33:58.841 Input peaks = -11, 11
+08:34:08.847 [obCommand Trace FROM host: C:STATE
+08:34:08.848 Sending CMD Reply STATE DISC
+08:34:19.344 Command to Host INPUTPEAKS -11 10
+08:34:19.345 Input peaks = -11, 10
+08:34:39.840 Command to Host INPUTPEAKS -11 11
+08:34:39.841 Input peaks = -11, 11
+08:34:59.852 Command to Host INPUTPEAKS -11 11
+08:34:59.852 Input peaks = -11, 11
+08:35:15.688 [obCommand Trace FROM host: C:STATE
+08:35:15.689 Sending CMD Reply STATE DISC
+08:35:19.880 Command to Host INPUTPEAKS -12 12
+08:35:19.881 Input peaks = -12, 12
+08:35:39.909 Command to Host INPUTPEAKS -11 11
+08:35:39.909 Input peaks = -11, 11
+08:35:59.923 Command to Host INPUTPEAKS -11 11
+08:35:59.924 Input peaks = -11, 11
+08:36:19.936 Command to Host INPUTPEAKS -11 11
+08:36:19.937 Input peaks = -11, 11
+08:36:21.544 [obCommand Trace FROM host: C:STATE
+08:36:21.544 Sending CMD Reply STATE DISC
+08:36:39.965 Command to Host INPUTPEAKS -10 11
+08:36:39.966 Input peaks = -10, 11
+08:36:59.990 Command to Host INPUTPEAKS -11 12
+08:36:59.991 Input peaks = -11, 12
+08:37:20.003 Command to Host INPUTPEAKS -12 11
+08:37:20.005 Input peaks = -12, 11
+08:37:27.399 [obCommand Trace FROM host: C:STATE
+08:37:27.399 Sending CMD Reply STATE DISC
+08:37:37.445 Command to Host BUSY TRUE
+08:37:40.026 Command to Host INPUTPEAKS -19120 20982
+08:37:40.026 Input peaks = -19120, 20982
+08:37:44.484 Command to Host BUSY FALSE
+08:38:01.025 Command to Host INPUTPEAKS -12 10
+08:38:01.025 Input peaks = -12, 10
+08:38:21.703 Command to Host INPUTPEAKS -10 10
+08:38:21.703 Input peaks = -10, 10
+08:38:37.244 [obCommand Trace FROM host: C:STATE
+08:38:37.245 Sending CMD Reply STATE DISC
+08:38:42.376 Command to Host INPUTPEAKS -11 9
+08:38:42.377 Input peaks = -11, 9
+08:38:59.385 Command to Host BUSY TRUE
+08:39:02.406 Command to Host INPUTPEAKS -19117 20987
+08:39:02.407 Input peaks = -19117, 20987
+08:39:06.646 Command to Host BUSY FALSE
+08:39:24.343 Command to Host INPUTPEAKS -12 12
+08:39:24.344 Input peaks = -12, 12
+08:39:44.638 Command to Host INPUTPEAKS -1852 1616
+08:39:44.640 Input peaks = -1852, 1616
+08:39:47.060 [obCommand Trace FROM host: C:STATE
+08:39:47.061 Sending CMD Reply STATE DISC
+08:40:09.688 Command to Host INPUTPEAKS -11 10
+08:40:09.688 Input peaks = -11, 10
+08:40:32.981 Command to Host INPUTPEAKS -1747 1987
+08:40:32.982 Input peaks = -1747, 1987
+08:40:53.084 Command to Host INPUTPEAKS -1752 1988
+08:40:53.085 Input peaks = -1752, 1988
+08:41:06.258 [obCommand Trace FROM host: C:STATE
+08:41:06.258 Sending CMD Reply STATE DISC
+08:41:13.811 Command to Host INPUTPEAKS -13 11
+08:41:13.812 Input peaks = -13, 11
+08:41:33.826 Command to Host INPUTPEAKS -1747 1991
+08:41:33.827 Input peaks = -1747, 1991
+08:41:56.473 Command to Host INPUTPEAKS -11 11
+08:41:56.474 Input peaks = -11, 11
+08:42:19.481 Command to Host INPUTPEAKS -12 12
+08:42:19.482 Input peaks = -12, 12
+08:42:19.772 [obCommand Trace FROM host: C:STATE
+08:42:19.772 Sending CMD Reply STATE DISC
+08:42:39.920 Command to Host INPUTPEAKS -11 11
+08:42:39.922 Input peaks = -11, 11
+08:43:01.758 Command to Host INPUTPEAKS -11 11
+08:43:01.758 Input peaks = -11, 11
+08:43:12.308 Command to Host BUSY TRUE
+08:43:13.549 Command to Host BUSY FALSE
+08:43:24.183 Command to Host INPUTPEAKS -1794 1806
+08:43:24.184 Input peaks = -1794, 1806
+08:43:38.447 [obCommand Trace FROM host: C:STATE
+08:43:38.448 Sending CMD Reply STATE DISC
+08:43:47.924 Command to Host BUSY TRUE
+08:43:48.903 Command to Host INPUTPEAKS -10039 9788
+08:43:48.904 Input peaks = -10039, 9788
+08:43:54.565 Command to Host BUSY FALSE
+08:44:10.199 Command to Host INPUTPEAKS -1274 1424
+08:44:10.199 Input peaks = -1274, 1424
+08:44:30.204 Command to Host INPUTPEAKS -11 11
+08:44:30.204 Input peaks = -11, 11
+08:44:46.143 [obCommand Trace FROM host: C:STATE
+08:44:46.144 Sending CMD Reply STATE DISC
+08:44:50.240 Command to Host INPUTPEAKS -11 12
+08:44:50.240 Input peaks = -11, 12
+08:45:10.268 Command to Host INPUTPEAKS -11 12
+08:45:10.268 Input peaks = -11, 12
+08:45:31.096 Command to Host INPUTPEAKS -10 11
+08:45:31.097 Input peaks = -10, 11
+08:45:51.124 Command to Host INPUTPEAKS -11 11
+08:45:51.125 Input peaks = -11, 11
+08:45:53.366 [obCommand Trace FROM host: C:STATE
+08:45:53.367 Sending CMD Reply STATE DISC
+08:46:11.200 Command to Host INPUTPEAKS -11 11
+08:46:11.200 Input peaks = -11, 11
+08:46:31.205 Command to Host INPUTPEAKS -10 11
+08:46:31.206 Input peaks = -10, 11
+08:46:51.237 Command to Host INPUTPEAKS -11 11
+08:46:51.237 Input peaks = -11, 11
+08:47:00.161 [obCommand Trace FROM host: C:STATE
+08:47:00.161 Sending CMD Reply STATE DISC
+08:47:04.461 Queuing 39 Packet Bytes
+08:47:04.461 Sending Packet Frame Len 37
+08:47:04.462 Sending Frame Type PktFrame
+08:47:04.462 Command to Host PTT TRUE
+08:47:04.462 [Main.KeyPTT]  PTT-TRUE
+08:47:06.215 Command to Host PTT FALSE
+08:47:06.215 [Main.KeyPTT]  PTT-FALSE
+08:47:11.257 Command t
