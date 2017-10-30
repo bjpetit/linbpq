@@ -128,7 +128,9 @@ void PollReceivedSamples()
 		levelticks = Now;
 		WriteDebugLog(LOGDEBUG, "Input peaks %d %d average %d", maxlevel, minlevel, tot / Samples);
 		sprintf(HostCmd, "INPUTPEAKS %d %d", minlevel, maxlevel);
+#ifdef ARDOP
 		QueueCommandToHost(HostCmd);
+#endif
 		displayLevel(maxlevel);
 
 		// Adjust VRef
