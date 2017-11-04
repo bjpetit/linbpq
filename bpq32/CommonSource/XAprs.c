@@ -234,6 +234,7 @@ int TrackExpireTime = 1440;
 BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
 BOOL LocalTime = TRUE;
+BOOL KM = FALSE;
 
 int SlowTimer = 0;
 
@@ -909,7 +910,7 @@ double Distance(double laa, double loa)
 {
 	double lah = ControlRecord->Lat;
 	double loh = ControlRecord->Lon;
-
+	double dist;
 /*
 
 'Great Circle Calculations.
@@ -930,11 +931,15 @@ double Distance(double laa, double loa)
 'p1 = 3.1415926535: P2 = p1 / 180: Rem -- PI, Deg =>= Radians
 */
 
-loh = radians(loh); lah = radians(lah);
-loa = radians(loa); laa = radians(laa);
+	loh = radians(loh); lah = radians(lah);
+	loa = radians(loa); laa = radians(laa);
 
-return 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
+	dist =  60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
 
+	if (KM)
+		dist *= 1.60934;
+
+	return dist;
 }
 
 double Bearing(double lat2, double lon2)
@@ -2858,6 +2863,9 @@ void SaveConfig()
 	SaveIntValue(group, "OnlySeq", OnlySeq);
 	SaveIntValue(group, "ShowBulls", ShowBulls);
 
+	SaveIntValue(group, "LocalTime", LocalTime);
+	SaveIntValue(group, "KM", KM);
+
 	SaveIntValue(group, "CreateJPEG", CreateJPEG);
 	SaveIntValue(group, "JPEGInterval", JPEGInterval);
 	SaveStringValue(group, "JPEGFileName", JPEGFileName);
@@ -2934,8 +2942,8 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.2.1\n");
-  	printf("Copyright © 2004-2016 John Wiseman G8BPQ\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.3.1\n");
+  	printf("Copyright © 2004-2017 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
@@ -2978,6 +2986,9 @@ int main(int argc, char *argv[])
 			OnlyMine = GetIntValue(group, "OnlyMine", 0);
 			OnlySeq = GetIntValue(group, "OnlySeq", 1);
 			ShowBulls = GetIntValue(group, "ShowBulls", 0);
+
+			LocalTime = GetIntValue(group, "LocalTime", 0);
+			KM = GetIntValue(group, "KM", 0);
 
 			CreateJPEG = GetIntValue(group, "CreateJPEG", 1);
 			JPEGInterval = GetIntValue(group, "JPEGInterval", 300);

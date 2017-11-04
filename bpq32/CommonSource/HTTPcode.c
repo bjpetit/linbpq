@@ -50,6 +50,8 @@ VOID SaveUIConfig();
 int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
 VOID SetupUI(int Port);
 VOID SendUIBeacon(int Port);
+VOID GetParam(char * input, char * key, char * value);
+VOID ARDOPAbort(struct TNCINFO * TNC);
 
 
 extern struct ROUTE * NEIGHBOURS;
@@ -187,8 +189,8 @@ char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 alig
 	"<form method=post action=BeaconAction>"
 	"<table align=center  bgcolor=white>"
 	"<tr><td>Send Interval (Minutes)</td><td><input type=text name=Every tabindex=1 size=5 value=%d></td></tr>" 
-	"<tr><td>To</td><td><input name=Dest tabindex=2 size=5 value=%s></td></tr>"  
-	"<tr><td>Path</td><td><input type=text name=Path size=50 maxlength=50 value=%s></td></tr>"
+	"<tr><td>To</td><td><input name=Dest style=\"text-transform:uppercase;\" tabindex=2 size=5 value=%s></td></tr>"  
+	"<tr><td>Path</td><td><input type=text name=Path style=\"text-transform:uppercase;\" size=50 maxlength=50 value=%s></td></tr>"
 	"<tr><td>Send From File</td><td><input type=text name=File size=50 maxlength=50  value=%s></td></tr>"
 	"<tr><td>Text</td><td><textarea name=\"Text\" cols=40 rows=5>%s</textarea></td></tr>"
 	"</table>" 
@@ -1394,13 +1396,14 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	strlop(Mycall, ' ');
 
 
-#ifdef WIN32
 
-	// Windows - Pass to APRS Messages Page request to BPQAPRS via Pipe
+	// Pass APRS Messages Page request to BPQAPRS/XAPRS via Pipe
 
 	if (_memicmp(Context, "/APRS/MSGS/", 10) == 0)
 	{
 		char _REPLYBUFFER[8192];
+
+#ifdef WIN32
 
 		hPipe = CreateFile(APRSPipeFileName, GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
@@ -1446,10 +1449,18 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			}
 			CloseHandle(hPipe);
 		}
+#else
+		// Linux
+
+			InputLen = sprintf(_REPLYBUFFER, "HTTP/1.1 404 Not Found\r\nContent-Length: 33\r\n\r\nAPRS Messages are not available\r\n");
+			send(sock, _REPLYBUFFER, InputLen, 0);
+
+
+#endif
 		return 0;
 	}
 
-#endif
+
 
 	// other APRS process internally
 
@@ -1891,13 +1902,13 @@ doHeader:
 				return 1;
 			}
 
-			GetParam(input, "Port", &Param);
+			GetParam(input, "Port", &Param[0]);
 			Port = atoi(&Param[1]);
 			PORT = GetPortTableEntryFromPortNum(Port); // Need slot not number
 			if (PORT)
 				Slot = PORT->PortSlot;
 
-			GetParam(input, "Every", &Param);
+			GetParam(input, "Every", &Param[0]);
 			Interval[Slot] = atoi(&Param[1]);
 
  
@@ -1908,17 +1919,19 @@ doHeader:
 //extern char Message[33][1000];		// Beacon Text
 
 
-			GetParam(input, "Dest", &Param);
+			GetParam(input, "Dest", &Param[0]);
+			_strupr(Param);
 			strcpy(UIUIDEST[Slot], &Param[1]);
 
-			GetParam(input, "Path", &Param);
+			GetParam(input, "Path", &Param[0]);
+			_strupr(Param);
 			if (UIUIDigi[Slot])
 				free(UIUIDigi[Slot]);
 			UIUIDigi[Slot] = _strdup(&Param[1]);
 
-			GetParam(input, "File", &Param);
+			GetParam(input, "File", &Param[0]);
 			strcpy(FN[Slot], &Param[1]);
-			GetParam(input, "Text", &Param);
+			GetParam(input, "Text", &Param[0]);
 			strcpy(Message[Slot], &Param[1]);
 		
 			MinCounter[Slot] = Interval[Slot];
@@ -2128,7 +2141,7 @@ doHeader:
 		{
 			//	Send Not Authorized
 
-			char _REPLYBUFFER[1000];	
+			char _REPLYBUFFER[2000];	
 			ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));

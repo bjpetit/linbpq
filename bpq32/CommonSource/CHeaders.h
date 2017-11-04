@@ -18,6 +18,7 @@ DllExport BOOL ConvToAX25Ex(unsigned char * callsign, unsigned char * ax25call);
 int WritetoConsoleLocal(char * buff);
 VOID Consoleprintf(const char * format, ...);
 VOID FreeConfig();
+int GetListeningPortsPID(int Port);
 
 UINT InitializeExtDriver(PEXTPORTDATA PORTVEC);
 

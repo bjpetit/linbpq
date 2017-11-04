@@ -93,6 +93,8 @@ Next:
 
 	if (ReadLen == sizeof (WPRec))
 	{
+		strlop(WPRec.callsign, ' ');
+		
 		if (strlen(WPRec.callsign) > 2)
 		{
 			if (_stricmp(WPRec.callsign, "RMS") == 0)

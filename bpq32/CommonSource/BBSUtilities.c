@@ -349,9 +349,9 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf(Mess, format, arglist);
-#ifndef LINBPQ
+//#ifndef LINBPQ
 	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG_X);
-#endif
+//#endif
 	//	#ifdef _DEBUG 
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
@@ -4925,26 +4925,29 @@ nextline:
 
 			}
 	
-			if (Msg->status == 'N' && strcmp(Msg->to, "WP") == 0)
+			if (strcmp(Msg->to, "WP") == 0)
 			{
-				// Reject WP Bulls is set, Kill message here.
+				// If Reject WP Bulls is set, Kill message here.
 				// It should only get here if B2 - otherwise it should be
 				// rejected earlier
 
 				if (Msg->type == 'B' && FilterWPBulls)
 					Msg->status = 'K';
-				else
+		
+				if (Msg->status == 'N')
+				{
 					ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
 	
-				if (Msg->type == 'P')			// Kill any processed private WP messages.
-				{
-					char VIA[80];
+					if (Msg->type == 'P')			// Kill any processed private WP messages.
+					{
+						char VIA[80];
 					
-					strcpy(VIA, Msg->via);
-					strlop(VIA, '.');
+						strcpy(VIA, Msg->via);
+						strlop(VIA, '.');
 					
-					if (strcmp(VIA, BBSName) == 0)
+						if (strcmp(VIA, BBSName) == 0)
 						Msg->status = 'K';
+					}
 				}
 			}
 		}

@@ -1510,11 +1510,24 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 			{
 				struct addrinfo hints, *res = 0;
 				int n;
+				BOOL UseV6 = FALSE;
+
+				if (_memicmp(arp->hostname, "ipv6:", 5) == 0)
+					UseV6 = TRUE;
 
 				memset(&hints, 0, sizeof hints);
-				hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 				hints.ai_socktype = SOCK_DGRAM;
-				n = getaddrinfo(arp->hostname, NULL, &hints, &res);
+			
+				if (UseV6)
+				{
+					hints.ai_family = AF_INET6;  // use IPv6
+					n = getaddrinfo(&arp->hostname[5], NULL, &hints, &res);
+				}
+				else
+				{
+					hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+					n = getaddrinfo(arp->hostname, NULL, &hints, &res);
+				}
 
 				if (res)
 				{

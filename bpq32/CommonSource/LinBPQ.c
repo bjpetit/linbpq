@@ -461,7 +461,7 @@ char VersionStringWithBuild[50]=Verstring;
 int Ver[4] = {Vers};
 char TextVerstring[50] = Verstring;
 
-extern UCHAR PWLEN;
+extern UCHAR PWLen;
 extern char PWTEXT[];
 extern int ISPort;
 
@@ -567,7 +567,7 @@ int main(int argc, char * argv[])
 
 	for (i=0;PWTEXT[i] > 0x20;i++); //Scan for cr or null
 
-	PWLEN=i;
+	PWLen=i;
 
 	SetApplPorts();
 
@@ -1225,6 +1225,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
 UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
+UINT VARAExtInit(EXTPORTDATA * PortEntry);
 UINT DragonExtInit(EXTPORTDATA * PortEntry);
 
 UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
@@ -1294,6 +1295,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "ARDOP"))
 		return (UINT) ARDOPExtInit;
+
+	if (strstr(Value, "VARA"))
+		return (UINT) VARAExtInit;
 
 	if (strstr(Value, "DRAGON"))
 		return (UINT) DragonExtInit;

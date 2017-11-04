@@ -2255,7 +2255,7 @@ ok:
 			// These are send from cmd3. There may be a cmd4
 			// for antenna switching
 
-			if (PORT->FreqPtr->Cmd4)
+			if (PORT->FreqPtr && PORT->FreqPtr->Cmd4)
 			{
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd4, PORT->FreqPtr->Cmd4Len);
 				PORT->TXLen = PORT->FreqPtr->Cmd4Len;

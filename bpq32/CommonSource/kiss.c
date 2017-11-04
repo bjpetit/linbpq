@@ -776,8 +776,6 @@ VOID KISSINIT(struct KISSINFO * KISS)
 
 	KISS->OURCTRL = (PORT->CHANNELNUM - 'A') << 4;	// KISS CONTROL
 
-	Debugprintf("FirstChan %X", FIRSTCHAN);
-
 	if (FIRSTCHAN)
 	{
 		//	THIS IS NOT THE FIRST PORT ON THIS I/O ADDR - WE MUST BE USING
@@ -800,8 +798,7 @@ VOID KISSINIT(struct KISSINFO * KISS)
 		INITCOM(KISS);
 			
 	//	Display to Console
-	
-	
+		
 }
 
 VOID INITCOM(struct KISSINFO * KISS)
@@ -1554,20 +1551,21 @@ SeeifMore:
 		memcpy(&Buffer[7], &Port->RXMSG[1], len);
 		len += 7;
 
-		PutLengthinBuffer(Buffer, len);		// Neded for arm5 portability
-
 //		Buffer[5] = (len & 0xff);
 //		Buffer[6] = (len >> 8);
 
+		PutLengthinBuffer(Buffer, len);		// Needed for arm5 portability
+
+/*
 		// Randomly drop packets
 
-//		if ((rand() % 7) > 5)
-//		{
-//			Debugprintf("KISS Test Drop packet");
-//			ReleaseBuffer(Buffer);	// SET FRAME SENT RECENTLY
-//		}
-//		else
-	
+		if ((rand() % 7) > 5)
+		{
+			Debugprintf("KISS Test Drop packet");
+			ReleaseBuffer(Buffer);
+		}
+		else
+*/
 		C_Q_ADD(&KISS->PORT.PORTRX_Q, (UINT *)Buffer);
 	}
 

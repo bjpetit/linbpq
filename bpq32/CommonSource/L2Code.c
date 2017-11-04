@@ -99,6 +99,7 @@ VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg);
 VOID L2SENDINVALIDCTRL(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL);
 UCHAR * SETUPADDRESSES(struct _LINKTABLE * LINK, PMESSAGE Msg);
+VOID ProcessXIDCommand(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL, UCHAR MSGFLAG);
 
 extern int REALTIMETICKS;
 
@@ -714,6 +715,18 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 
 	if (CTLlessPF == XID)
 	{
+		ProcessXIDCommand(LINK, PORT, Buffer, ADJBUFFER, CTL, MSGFLAG);
+		return;
+	}
+
+	// Not XID, so must be SABM
+
+	L2SABM(LINK, PORT, Buffer, ADJBUFFER, MSGFLAG);			// Process the SABM
+}
+
+
+VOID ProcessXIDCommand(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL, UCHAR MSGFLAG)
+{
 		// I think it is fairly safe to accept XID as soon as we
 		// can process SREJ, but only accept Mod 8 and 256 Byte frames
 
@@ -866,12 +879,8 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 BadXID:
 		L2SENDINVALIDCTRL(PORT, Buffer, ADJBUFFER, CTL);
 		return;
-	}
-
-	// Not XID, so must be SABM
-
-	L2SABM(LINK, PORT, Buffer, ADJBUFFER, MSGFLAG);			// Process the SABM
 }
+
 
 
 int COUNTLINKS(int Port)
@@ -941,7 +950,7 @@ VOID L2LINKACTIVE(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 
 	if (LINK->L2STATE == 1)
 	{
-		// XID Senton- should be XID response if 2.2 ok or DM/FRMR if not
+		// XID State. Should be XID response if 2.2 ok or DM/FRMR if not
 
 		if (MSGFLAG & RESP)
 		{
@@ -961,10 +970,24 @@ VOID L2LINKACTIVE(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 				LINK->Ver2point2 = TRUE;// Must support 2.2 if responded to XID
 				LINK->L2TIMER = 1;		// USe retry to send SABM
 			}
+
 			ReleaseBuffer(Buffer);
 			return;
 		}
+	
+		// Command on existing session. Could be due to other end missing
+		// the XID response, so if XID just resend response
+
 	}
+
+	if (CTLlessPF == XID && (MSGFLAG & CMDBIT))
+	{
+		// XID Command on active session. Other end may be restarting. Send Response
+
+		ProcessXIDCommand(LINK, PORT, Buffer, ADJBUFFER, CTL, MSGFLAG);
+		return;
+	}
+
 
 	if (CTLlessPF == SABM)
 	{
@@ -1420,7 +1443,10 @@ BOOL InternalL2SETUPCROSSLINK(PROUTE ROUTE, int Retries)
 	else
 		LINK->LINKWINDOW = PORT->PORTWINDOW;
 
-	LINK->L2STATE = 2;
+//	if (SUPPORT2point2)
+//		LINK->L2STATE = 1;		// Send XID
+//	else
+		LINK->L2STATE = 2;
 
 	memcpy(LINK->LINKCALL, ROUTE->NEIGHBOUR_CALL, 7);
 	memcpy(LINK->OURCALL, NETROMCALL, 7);
@@ -1442,7 +1468,11 @@ BOOL InternalL2SETUPCROSSLINK(PROUTE ROUTE, int Retries)
 	if (Retries)
 		LINK->L2RETRIES = PORT->PORTN2 - Retries;
 
-	SENDSABM(LINK);
+	if (LINK->L2STATE == 1)
+		L2SENDXID(LINK);
+	else	
+		SENDSABM(LINK);
+
 	return TRUE;
 }
 
@@ -1988,26 +2018,48 @@ CheckNSLoop:
 		goto CheckPF;
 	}
 
-	//	IN SEQUENCE FRAME - CANCEL REJ
+	// IN SEQUENCE FRAME 
+	
+	// Remove any stored frame with this seq
+
+	if (LINK->RXFRAMES[NS])
+		ReleaseBuffer(Q_REM(&LINK->RXFRAMES[NS]));
 
 	if (LINK->L2STATE == 6)				// REJ?
 	{
+		// If using REJ we can cancel REJ state.
+		// If using SREJ we only cancel REJ if we have no stored frames
+	
+		if (LINK->Ver2point2)
+		{
+			// see if any frames saved. 
+
+			int i;
+
+			for (i = 0; i < 8; i++)
+			{
+				if (LINK->RXFRAMES[i])
+					goto stayinREJ;
+			}
+			// Drop through if no stored frames
+		}
+
+		// CANCEL REJ
+
 		LINK->L2STATE = 5;
 		LINK->L2FLAGS &= ~REJSENT;
 	}
 
-	// Remove any stored frame with this seq
-	if (LINK->RXFRAMES[NS])
-	{
-		ReleaseBuffer(Q_REM(&LINK->RXFRAMES[NS]));
-	}
+stayinREJ:
 
 	PROC_I_FRAME(LINK, PORT, Buffer);		// Passes on  or releases Buffer
 
+
 CheckPF:
 
-	if (LINK->L2FLAGS & REJSENT)
-		return;						// DONT SEND ANOTHER TILL REJ IS CANCELLED
+	if (LINK->Ver2point2 == 0)			// Unless using SREJ
+		if (LINK->L2FLAGS & REJSENT)
+			return;						// DONT SEND ANOTHER TILL REJ IS CANCELLED
 
 	if (CTL & PFBIT)
 	{
@@ -3094,7 +3146,7 @@ CHKBUFFS:
 
 	if (LINK->L2STATE == 6)
 	{
-/*
+
 	// We may have the needed frame in RXFRAMES
 
 CheckNSLoop2:
@@ -3110,14 +3162,32 @@ CheckNSLoop2:
 			PROC_I_FRAME(LINK, PORT, OldBuffer); // Passes on  or releases Buffer
 
 			// NR has been updated.
-	
+
+			// CLear REJ if we have no more saved
+			
+			if (LINK->Ver2point2)			// Using SREJ?
+			{
+				// see if any frames saved. 
+
+				int i;
+
+				for (i = 0; i < 8; i++)
+				{
+					if (LINK->RXFRAMES[i])
+						goto stayinREJ2;
+				}
+				// Drop through if no stored frames
+			}
+
 			LINK->L2STATE = 5;
 			LINK->L2FLAGS &= ~REJSENT;
+stayinREJ2:
+			LINK->L2ACKREQ = 0;		// Cancel Resptime (Set by PROC_I_FRAME)
 
 			goto CheckNSLoop2;		// See if OK or we have another saved frame
 		}
 		if (LINK->L2STATE == 6)
-*/
+
 		// if we support SREJ send that instesd or REJ
 
 		if (LINK->Ver2point2)		// We only allow 2.2 with SREJ Multi

@@ -528,11 +528,11 @@ typedef struct PORTCONTROL
 	UINT PORTRX_Q;			// FRAMES RECEIVED ON THIS PORT
 	UINT PORTTX_Q;			// FRAMES TO BE SENT ON THIS PORT
 
-	int (FAR * PORTTXROUTINE)();	// POINTER TO TRANSMIT ROUTINE FOR THIS PORT
-	int (FAR * PORTRXROUTINE)();	// POINTER TO RECEIVE ROUTINE FOR THIS PORT
-	int (FAR * PORTINITCODE)();		// INITIALISATION ROUTINE
-	int (FAR * PORTTIMERCODE)();	//
-	int (FAR * PORTCLOSECODE)();	// CLOSE ROUTINE
+	void (FAR * PORTTXROUTINE)();	// POINTER TO TRANSMIT ROUTINE FOR THIS PORT
+	void (FAR * PORTRXROUTINE)();	// POINTER TO RECEIVE ROUTINE FOR THIS PORT
+	void (FAR * PORTINITCODE)();		// INITIALISATION ROUTINE
+	void (FAR * PORTTIMERCODE)();	//
+	void (FAR * PORTCLOSECODE)();	// CLOSE ROUTINE
 	int (FAR * PORTTXCHECKCODE)();	// OK to TX Check
 
 	char PORTDESCRIPTION[30];// TEXT DESCRIPTION OF FREQ/SPEED ETC
@@ -629,7 +629,7 @@ typedef struct PORTCONTROL
 	struct in_addr PORTIPADDR;	// IP address for "KISS over UDP"
 	int	ListenPort;				// For KISS over UDP, if Different TX and RX Ports needed
 	BOOL KISSTCP;				// TCP instead of UDP for KISS
-	BOOL KISSSLAVE;				// TCP KISS is Salve
+	BOOL KISSSLAVE;				// TCP KISS is Slave
 
 	char * SerialPortName;		//	Serial Port Name for Unix
 	struct XDIGI * XDIGIS;		// Cross port digi setup
@@ -642,6 +642,7 @@ typedef struct PORTCONTROL
 	struct PORTCONTROL * HookPort;
 	BOOL PortStopped;			// STOPPORT command used
 	int PortSlot;				// Index in Port Table
+	struct TNCINFO * TNC;		// Associated TNC record if a virtual KISS port on a Most Mode Port
 
 }	PORTCONTROLX, *PPORTCONTROL;
 

@@ -90,6 +90,13 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC);
 VOID ARDOPDoTNCReinit(struct TNCINFO * TNC);
 int SerialGetTCPMessage(struct TNCINFO * TNC, unsigned char * Buffer, int Len);
 int SerialConnecttoTCP(struct TNCINFO * TNC);
+int ARDOPWriteCommBlock(struct TNCINFO * TNC);
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
+int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
+BOOL WriteCommBlock(struct TNCINFO * TNC);
+VOID AddVirtualKISSPort(struct TNCINFO * TNC, int Port);
+void ProcessKISSBytes(struct TNCINFO * TNC, UCHAR * Data, int Len);
+void ProcessKISSPacket(struct TNCINFO * TNC, UCHAR * KISSBuffer, int Len);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -445,6 +452,9 @@ static ProcessLine(char * buf, int Port)
 			if (_memicmp(buf, "LOGDIR ", 7) == 0)
 				TNC->LogPath = _strdup(&buf[7]);
 			else
+			if (_memicmp(buf, "ENABLEPACKET", 12) == 0)
+				AddVirtualKISSPort(TNC, Port);
+			else
 
 			strcat (TNC->InitScript, buf);
 		}
@@ -452,7 +462,6 @@ static ProcessLine(char * buf, int Port)
 
 	return (TRUE);	
 }
-
 
 
 void ARDOPThread(struct TNCINFO * TNC);
@@ -465,6 +474,7 @@ VOID ARDOPReleaseTNC(struct TNCINFO * TNC);
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
 VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
+
 
 
 #define MAXBPQPORTS 32
@@ -1513,7 +1523,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
-	Len += sprintf(&Buff[Len], "<tr><td>Channel State</td><td>%s</td></tr>", TNC->WEB_CHANSTATE);
+	Len += sprintf(&Buff[Len], "<tr><td>Channel State</td><td>%s &nbsp; %s</td></tr>", TNC->WEB_CHANSTATE, TNC->WEB_LEVELS);
 	Len += sprintf(&Buff[Len], "<tr><td>Proto State</td><td>%s</td></tr>", TNC->WEB_PROTOSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 //	Len += sprintf(&Buff[Len], "<tr><td>TNC Restarts</td><td></td></tr>", TNC->WEB_RESTARTS);
@@ -1698,7 +1708,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 
 	TNC->WEB_MODE = zalloc(20);
 	TNC->WEB_TRAFFIC = zalloc(100);
-
+	TNC->WEB_LEVELS =zalloc(32);
 
 #ifndef LINBPQ
 
@@ -1714,7 +1724,8 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	TNC->xIDC_MODE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,50,200,20, TNC->hDlg, NULL, hInstance, NULL);
  
 	CreateWindowEx(0, "STATIC", "Channel State", WS_CHILD | WS_VISIBLE, 10,72,110,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_CHANSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,72,144,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_CHANSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,72,82,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_LEVELS = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 200,72,200,20, TNC->hDlg, NULL, hInstance, NULL);
  
  	CreateWindowEx(0, "STATIC", "Proto State", WS_CHILD | WS_VISIBLE,10,94,80,20, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_PROTOSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE,116,94,374,20 , TNC->hDlg, NULL, hInstance, NULL);
@@ -2285,6 +2296,14 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	}
 
 
+	if (_memicmp(Buffer, "INPUTPEAKS", 10) == 0)
+	{
+		sscanf(&Buffer[10], "%i %i", &TNC->InputLevelMin, &TNC->InputLevelMax);
+		sprintf(TNC->WEB_LEVELS, "Input peaks %s", &Buffer[10]);
+		MySetWindowText(TNC->xIDC_LEVELS, TNC->WEB_LEVELS);
+		return;				// Response shouldn't go to user
+	}
+
 	if (_memicmp(Buffer, "LISTEN NOW", 10) == 0)
 		return;				// Response shouldn't go to user
 
@@ -2556,6 +2575,16 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					char Msg[] = "Application not available\r\n";
 					
 					// Send a Message, then a disconenct
+
+					// Send CTEXT First
+
+					if (TNC->Streams[0].BPQtoPACTOR_Q)		//Used for CTEXT
+					{
+						UINT * buffptr = Q_REM(&TNC->Streams[0].BPQtoPACTOR_Q);
+						int txlen=buffptr[1];
+						ARDOPSendData(TNC, (char *)buffptr+2, txlen);
+						ReleaseBuffer(buffptr);
+					}
 					
 					ARDOPSendData(TNC, Msg, strlen(Msg));
 					STREAM->NeedDisc = 100;	// 10 secs
@@ -3148,9 +3177,9 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 	
 	if (TNC->FECMode)
 	{	
-		Length = strlen(Data);
-		if (Data[Length - 1] == 10)
-			Data[Length - 1] = 13;	
+			Length = strlen(Data);
+			if (Data[Length - 1] == 10)
+				Data[Length - 1] = 13;	
 
 	}
 
@@ -3164,7 +3193,6 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 		char * ptr = Data;
 		char * ptr1;
 		char * ptr2;
-		char * ptr3;
 		char c;
 		int Len = Length;
 
@@ -3197,7 +3225,8 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 					{
 						// Could be APRS
 
-						if (memcmp(ptr2 + 1, "AP", 2) == 0)
+//						if ((memcmp(ptr2 + 1, "AP", 2) == 0) || (memcmp(ptr2 + 1, "BE", 2) == 0))
+						if (1)			// People using other dests
 						{
 							int APLen;
 
@@ -3286,6 +3315,11 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 			
 				char Call[20];
 				char * ptr;
+
+				// Add a Newline for monitoring 
+
+				Data[Length++] = 13;
+				Data[Length] = 0;
 
 				ptr = strchr(Data, ':');
 
@@ -3793,13 +3827,14 @@ VOID ARDOPDoTNCReinit(struct TNCINFO * TNC)
 
 		if (ARDOPWriteCommBlock(TNC) == FALSE)
 		{
-			Debugprintf("ARDOPWriteCommBlock Failed Mode %c", TNC->ARDOPCommsMode);
-
-			CloseCOMPort(TNC->hDevice);
-			
+			if (TNC->hDevice)
+			{
+				Debugprintf("ARDOPWriteCommBlock Failed Mode %c", TNC->ARDOPCommsMode);
+				CloseCOMPort(TNC->hDevice);
+			}
 			if (TNC->ARDOPCommsMode == 'S')
 			{
-				OpenCOMMPort(TNC, TNC->ARDOPSerialPort, TNC->ARDOPSerialSpeed, FALSE);
+				OpenCOMMPort(TNC, TNC->ARDOPSerialPort, TNC->ARDOPSerialSpeed, TRUE);
 			}
 			else
 			{
@@ -3964,7 +3999,6 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 {
 	UINT * buffptr;
 	UCHAR * Buffer;				// Data portion of frame
-	char Status[80];
 	unsigned int Stream = 0, RealStream;
 
 	if (TNC->HostMode == 0)
@@ -4060,7 +4094,6 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		char timebuf[32];
 		char Line[256];
 		char * ptr, * ptr2;
-		UCHAR Value[100];
 #ifdef WIN32
 		SYSTEMTIME st;
 #else
@@ -4185,7 +4218,10 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		buffptr[1] = sprintf((UCHAR *)&buffptr[2],"ARDOP} Ok\r");
 
-		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+
+		C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+//		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+
 		return;
 	}
 
@@ -4279,10 +4315,7 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	}
 
 	if (Msg[3] == 7)
-	{
-		char StatusMsg[60];
-		int Status, ISS, Offset;
-		
+	{	
 		if (Stream == 32)			// Command string
 		{
 			int Len = Msg[4] + 1;
@@ -4369,6 +4402,18 @@ VOID ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			}
 			return;
 		}	
+
+		if (Msg[2] == 250)						// KISS
+		{
+			// Pass to KISS Code
+			
+			int datalen = Msg[4] + 1;
+			UINT * buffptr = NULL;
+
+			ProcessKISSBytes(TNC, &Msg[5], datalen);
+			return;
+		}
+		
 		return;
 	}
 }
@@ -4604,7 +4649,6 @@ void ARDOPSCSCheckRX(struct TNCINFO * TNC)
 VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
-	char Status[80];
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 
@@ -4665,7 +4709,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 	}
 
 
-	// Use two streams (actualy 32 and 33)
+	// Use two streams (actually 32 and 33)
 
 	for (Stream = 2; Stream <= 4; Stream++)
 	{
@@ -4730,8 +4774,26 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 			ARDOPCRCStuffAndSend(TNC, Poll, datalen + 5);
 			return;
 		}
-
 	}
+
+	if (TNC->TNCOK && TNC->KISSTX_Q)
+	{
+		int datalen;
+		UINT * buffptr;
+			
+		buffptr=Q_REM(&TNC->KISSTX_Q);
+		datalen=buffptr[1];
+		Poll[2] = 250;		// KISS Channel
+		Poll[3] = 0;		// Data
+		Poll[4] = datalen - 1;
+		memcpy(&Poll[5], buffptr+2, datalen);
+	
+		ReleaseBuffer(buffptr);	
+		ARDOPCRCStuffAndSend(TNC, Poll, datalen + 5);
+		return;
+	}
+
+
 
 	TNC->PollSent = TRUE;
 
@@ -4776,7 +4838,6 @@ VOID SerialConnecttoTCPThread(struct TNCINFO * TNC)
 	int err,i;
 	u_long param = 1;
 	BOOL bcopt=TRUE;
-	SOCKET sock;
 	struct hostent * HostEnt;
 	SOCKADDR_IN sinx; 
 	int addrlen=sizeof(sinx);
@@ -4949,5 +5010,354 @@ int ARDOPWriteCommBlock(struct TNCINFO * TNC)
 		return 1;
 	}
 	return (WriteCommBlock(TNC));
+}
+
+// Teensy Combined ARDOP/AX.25 Support
+
+#define	FEND	0xC0	// KISS CONTROL CODES 
+#define	FESC	0xDB
+#define	TFEND	0xDC
+#define	TFESC	0xDD
+
+
+VOID ARAXINIT(struct PORTCONTROL * PORT)
+{
+	char Msg[80] = "";
+	
+	memcpy(Msg, PORT->PORTDESCRIPTION, 30);
+	sprintf(Msg, "%s\n", Msg);
+		
+	WritetoConsoleLocal(Msg);
+}
+
+VOID ARAXTX(struct PORTCONTROL * PORT, UINT * Buffer)
+{
+	// KISS Encode and Queue to Host Mode KISS Queue
+
+	UINT * TXMsg = NULL;			// KISS Message to queue to Hostmode KISS Queue
+	UCHAR * TXPtr;
+	int TXLen = 0;
+	UINT ACKWORD = Buffer[(BUFFLEN-4)/4];
+	struct _MESSAGE * Message = (struct _MESSAGE *)Buffer;
+	UCHAR c;
+
+	char * ptr1;
+	int Len;
+
+	struct TNCINFO * TNC = PORT->TNC;
+
+	if (TNC && TNC->CONNECTED)		// Have a Host Session
+		TXMsg = GetBuff();	// KISS Message to queue to Hostmode KISS Queue
+	
+	if (TXMsg == NULL)		// No Session or No buffers
+	{
+		// Reset any ACKMODE Timer and release buffer	C_Q_ADD(&TRACE_Q, Buffer);
+
+		struct _LINKTABLE * LINK = (struct _LINKTABLE *)Buffer[(BUFFLEN-4)/4];
+
+		if (LINK)
+		{
+			if (LINK->L2TIMER)
+				LINK->L2TIMER = LINK->L2TIME;
+
+			Buffer[(BUFFLEN-4)/4] = 0;	// CLEAR FLAG FROM BUFFER
+		}
+		C_Q_ADD(&TRACE_Q, Buffer);
+		return;
+	}
+
+	TXPtr = (UCHAR *)&TXMsg[2];
+
+	ptr1 = &Message->DEST[0];
+	Len = Message->LENGTH - 7;
+	*(TXPtr++) = FEND;
+
+	if (ACKWORD)					// Frame Needs ACK
+	{
+		*TXPtr++ = 0x0c;			// ACK OPCODE 
+		ACKWORD -= (UINT)LINKS;		// Con only send 16 bits, so use offset into LINKS
+		*TXPtr++ = ACKWORD & 0xff;
+		*TXPtr++ = (ACKWORD >> 8) &0xff;
+
+		// have to reset flag so trace doesnt clear it
+
+		Buffer[(BUFFLEN-4)/4] = 0;
+		TXLen = 4;
+	}
+	else	
+	{
+		*TXPtr++ = 0;
+		TXLen = 2;
+	}
+
+	while (Len--)
+	{
+		c = *(ptr1++);
+
+		switch (c)
+		{
+		case FEND:
+			(*TXPtr++) = FESC;
+			(*TXPtr++) = TFEND;
+			TXLen += 2;
+			break;
+
+		case FESC:
+			(*TXPtr++) = FESC;
+			(*TXPtr++) = TFESC;
+			TXLen += 2;
+			break;
+
+		default:
+			(*TXPtr++) = c;
+			TXLen++;
+		}
+		if (TXLen > 250)
+		{
+			// Queue frame to KISS Channel and get another buffer
+			// can take up to 256, but sometimes add 2 at a time
+			TXMsg[1] = TXPtr - (UCHAR *)&TXMsg[2];
+		}
+	}
+
+	(*TXPtr++) = FEND;
+	TXLen++;
+
+	TXMsg[1] = TXLen;
+
+	C_Q_ADD(&TNC->KISSTX_Q, TXMsg);
+
+	// Pass buffer to trace routines
+
+	C_Q_ADD(&TRACE_Q, Buffer);
+
+}
+
+
+VOID ARAXRX()
+{
+}
+
+
+VOID ARAXTIMER()
+{
+}
+	
+VOID ARAXCLOSE()
+{
+}
+
+BOOL ARAXTXCHECK()
+{
+	return 0;
+}
+
+
+#define DATABYTES 400000		// WAS 320000
+extern UCHAR * NEXTFREEDATA;	// ADDRESS OF NEXT FREE BYTE in shared memory
+extern UCHAR DATAAREA[DATABYTES];
+
+
+
+VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort)
+{
+	// Adds a Virtual KISS port for simultaneous ARDOP and Packet on Teensy TNC
+
+	struct PORTCONTROL * PORTVEC=PORTTABLE;
+	struct PORTCONTROL * PORT;
+	int pl = sizeof(struct PORTCONTROL);
+	int mh = MHENTRIES * sizeof(MHSTRUC);
+	int space = &DATAAREA[DATABYTES] - NEXTFREEDATA;
+	char Msg[64];
+	unsigned char * ptr3;
+	unsigned int3;
+
+	if (space < (pl + mh))
+	{
+		WritetoConsoleLocal("Insufficient space to add ARDOP/Packet Port\n");
+		return;
+	}
+
+
+	while (PORTVEC->PORTPOINTER)
+	{
+		PORTVEC=PORTVEC->PORTPOINTER;
+	}
+	
+	// PORTVEC is now last port in chain
+	
+	ptr3 = NEXTFREEDATA;
+		
+	PORT = (struct PORTCONTROL *)ptr3;
+	
+	ptr3 += sizeof (struct PORTCONTROL);
+
+	//	Round to word boundary (for ARM5 etc)
+
+	int3 = (int)ptr3;
+	int3 += 3;
+	int3 &= 0xfffffffc;
+	ptr3 = (UCHAR *)int3;
+
+	PORTVEC->PORTPOINTER = PORT;		// Chain to previous last port
+
+	NUMBEROFPORTS++;
+
+	PORT->PORTNUMBER = NUMBEROFPORTS;
+	PORT->PortSlot = PORTVEC->PortSlot + 1;
+	
+	sprintf(Msg, "Packet Port for ARDOP Port %d  ", ARDOPPort);
+	memcpy(PORT->PORTDESCRIPTION, Msg, 30);
+
+	PORT->TNC = TNC;
+	TNC->VirtualPORT = PORT;		// Link TNC and PORT both ways
+	PORT->PORTINITCODE = ARAXINIT;
+	PORT->PORTTIMERCODE = ARAXTIMER;
+	PORT->PORTRXROUTINE = ARAXRX;
+	PORT->PORTTXROUTINE = ARAXTX;
+	PORT->PORTCLOSECODE = ARAXCLOSE;
+	PORT->PORTTXCHECKCODE = ARAXTXCHECK;
+
+	PORT->PORTN2 = 5;
+	PORT->PORTT1 = 15;		// 5 secs
+
+//	PORT->PORTT1 = FRACK / 333;
+//	PORT->PORTT2 = RESPTIME /333;
+//	PORT->PORTN2 = RETRIES;
+	PORT->PORTPACLEN = PACLEN;
+	PORT->PORTWINDOW = 4;
+
+
+	//	ADD MH AREA IF NEEDED
+
+	NEEDMH = 1;								// Include MH in Command List
+
+	PORT->PORTMHEARD = (PMHSTRUC)ptr3;
+
+	ptr3 += MHENTRIES * sizeof(MHSTRUC);
+	
+	//	Round to word boundary (for ARM5 etc)
+
+	int3 = (int)ptr3;
+	int3 += 3;
+	int3 &= 0xfffffffc;
+	ptr3 = (UCHAR *)int3;
+
+	NEXTFREEDATA = ptr3;
+
+	return;
+}
+
+void ProcessKISSBytes(struct TNCINFO * TNC, UCHAR * Data, int Len)
+{
+	// Kiss data received from TNC but not necessarrily a full packet
+	// and could be multiple packets
+
+	// The TNC record is for the ARDOP Port, but we need to queue data 
+	// to the linked Virtual Packet Port
+
+	struct PORTCONTROL * PORT = TNC->VirtualPORT;
+	UCHAR * KISSBuffer = TNC->KISSBuffer;
+	UCHAR c;
+	UCHAR * inptr = Data;
+	int outptr = TNC->KISSInputLen;
+
+	if (PORT == NULL)
+		return;
+
+	while(Len--)
+	{
+		c = *(inptr++);
+
+		if (TNC->ESCFLAG)
+		{
+			//
+			//	FESC received - next should be TFESC or TFEND
+
+			TNC->ESCFLAG = FALSE;
+
+			if (c == TFESC)
+				c = FESC;
+	
+			if (c == TFEND)
+				c = FEND;
+		}
+		else
+		{
+			switch (c)
+			{
+			case FEND:		
+	
+				//
+				//	Either start of message or message complete
+				//
+				
+				if (outptr == 0)
+				{
+					// Start of Message. If polling, extend timeout
+
+					continue;
+				}
+
+				ProcessKISSPacket(TNC, KISSBuffer, outptr);
+				outptr = 0;
+				return;
+
+			case FESC:
+		
+				TNC->ESCFLAG = TRUE;
+				continue;
+
+			}
+		}
+		
+		//
+		//	Ok, a normal char
+		//
+
+		KISSBuffer[outptr++] = c;
+	}
+
+	if (outptr > 510)
+		outptr = 0;			// Protect Buffer
+	
+	TNC->KISSInputLen = outptr;
+	
+ 	return;
+}
+
+void ProcessKISSPacket(struct TNCINFO * TNC, UCHAR * KISSBuffer, int Len)
+{
+	if (KISSBuffer[0] == 0x0c)		// ACK Frame
+	{
+		//	ACK FRAME - reset link timer
+
+		struct _LINKTABLE * LINK;
+		UINT ACKWORD = KISSBuffer[1] | KISSBuffer[2] << 8;
+
+		ACKWORD += (UINT)LINKS;
+		LINK = (struct _LINKTABLE *)ACKWORD;
+
+		if (LINK->L2TIMER)
+			LINK->L2TIMER = LINK->L2TIME;
+
+		return;
+	}
+	if (KISSBuffer[0] == 0)		// Data Frame
+	{
+		UCHAR * Buffer = (UCHAR *)GetBuff();
+		
+		if (Buffer)
+		{
+			memcpy(&Buffer[7], &KISSBuffer[1], --Len);
+			Len += 7;
+
+			PutLengthinBuffer(Buffer, Len);
+//			Buffer[5] = (len & 0xff);
+//			Buffer[6] = (len >> 8);
+
+			C_Q_ADD(&TNC->VirtualPORT->PORTRX_Q, (UINT *)Buffer);
+		}
+	}
 }
 

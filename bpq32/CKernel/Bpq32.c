@@ -810,6 +810,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add Input source seiect for IC7300
 //	Remove % transparency from web terminal signon message
 //	Fix L4 COnnects In count on stats
+//	Fix crash caused by corrupt CMSInfo.txt
+//	Add Input peaks display to ARDOP status window
+//  Add options to show time in local and distances in KM on APRS Web pages
+//	Add VARA support
+
 
 #define CKernel
 
@@ -832,6 +837,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "kernelresource.h"
 
 #include <tlhelp32.h>
+#include <Iphlpapi.h>
 #include "BPQTermMDI.h"
 
 #include "GetVersion.h"
@@ -895,7 +901,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT UIARQExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
-UINT ARDOPAXExtInit(EXTPORTDATA * PortEntry);
+UINT VARAExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -942,7 +948,7 @@ extern int TIMERINTERRUPT();
 extern int MONDECODE();
 extern int BPQMONOPTIONS();
 extern char PWTEXT[];
-extern char PWLEN;
+extern char PWLen;
 
 extern int FINDFREEDESTINATION();
 extern int RAWTX();
@@ -2334,7 +2340,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 					if (handle == INVALID_HANDLE_VALUE)
 					{
 						WritetoConsole("Can't open PASSWORD.BPQ\n");
-						PWLEN=0;
+						PWLen=0;
 						PWTEXT[0]=0;
 					}
 					else
@@ -2345,7 +2351,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				}
 */			
 				for (i=0;PWTEXT[i] > 0x20;i++); //Scan for cr or null 
-				PWLEN=i;
+				PWLen=i;
 				
 			}
 		}
@@ -3338,8 +3344,8 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
 
-	if (strstr(Value, "ARDOPAX25"))
-		return (UINT) ARDOPAXExtInit;
+	if (strstr(Value, "VARA"))
+		return (UINT) VARAExtInit;
 
 	if (strstr(Value, "ARDOP"))
 		return (UINT) ARDOPExtInit;
@@ -4796,7 +4802,7 @@ char * stack;
 //char screen[1920];
 //COORD ReadCoord;
 
-#define DATABYTES 320000
+#define DATABYTES 400000
 
 extern UCHAR DATAAREA[];
 
@@ -5932,3 +5938,33 @@ VOID GetParam(char * input, char * key, char * value)
 		strcpy(value, Param);
 	}
 }
+
+int GetListeningPortsPID(int Port)
+{
+	MIB_TCPTABLE_OWNER_PID * TcpTable = NULL;
+	PMIB_TCPROW_OWNER_PID Row;
+	int dwSize = 0;
+	int n;
+
+	// Get PID of process for this TCP Port
+
+	// Get Length of table
+	
+	GetExtendedTcpTable(TcpTable, &dwSize, TRUE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+
+	TcpTable = malloc(dwSize);
+	GetExtendedTcpTable(TcpTable, &dwSize, TRUE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+
+	for (n = 0; n < TcpTable->dwNumEntries; n++)
+	{
+		Row = &TcpTable->table[n];
+		
+		if (Row->dwLocalPort == Port && Row->dwState == MIB_TCP_STATE_LISTEN)
+		{
+			return Row->dwOwningPid;
+			break;
+		}
+	}
+	return 0;			// Not found
+}
+

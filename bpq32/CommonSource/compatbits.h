@@ -23,7 +23,7 @@ Stuff to make compiling on WINDOWS and LINUX easier
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 #include <crtdbg.h>
-
+#include "winstdint.h"
 
 
 #include "winsock2.h"

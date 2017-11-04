@@ -149,6 +149,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		{
 			FBBputs(conn, "FQ\r");
 
+			conn->BBSFlags |= DISCONNECTING;
+
 			// LinFBB needs a Disconnect Here
 
 			if (conn->BPQBBS)

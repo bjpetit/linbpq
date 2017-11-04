@@ -347,7 +347,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	RegisterClass(&wc);
 
 	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||TNC->Hardware == H_ARDOP ||
-			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ)
+			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ || TNC->Hardware == H_VARA)
 		sprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
 	else if (TNC->Hardware == H_UZ7HO)
 		sprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);
@@ -1342,3 +1342,4 @@ BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
 	return TRUE;
 
 }
+// http://server.winlink.org:8085/csv/reply/ChannelList?Modes=40,41,42,43,44&ServiceCodes=BPQTEST,PUBLIC

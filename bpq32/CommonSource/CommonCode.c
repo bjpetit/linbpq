@@ -67,7 +67,7 @@ VOID COMClearRTS(HANDLE fd);
 VOID WriteMiniDump();
 void printStack(void);
 
-//	Read/Write lenght field in a buffer header
+//	Read/Write length field in a buffer header
 
 //	Needed for Big/LittleEndian and ARM5 (unaligned operation problem) portability
 
@@ -2267,7 +2267,7 @@ int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
 
 	if (Length == 0 && errno == 22222)	// seems to be result of unpluging USB
 	{
-		printf("KISS read returned zero len and no errno\n");
+//		printf("KISS read returned zero len and no errno\n");
 		*Error = 1;
 		return 0;
 	}

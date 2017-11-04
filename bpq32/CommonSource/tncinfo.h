@@ -349,7 +349,7 @@ typedef struct TNCINFO
 #define H_FLDIGI 11
 #define H_UIARQ 12
 #define H_ARDOP 13
-#define H_AXARDOP 14
+#define H_VARA 14
 
 
 	int Port;					// BPQ Port Number
@@ -374,13 +374,16 @@ typedef struct TNCINFO
 	{
 		UCHAR TCPBuffer[1000];		// For converting byte stream to messages
 		UCHAR DEDBuffer[1000];		// For converting byte stream to messages
+		UCHAR KISSBuffer[1000];		// For KISS over Host Mode
 	};
 
 	UCHAR * ARDOPBuffer;			// Needs to be pretty big, so Malloc
 	UCHAR * ARDOPDataBuffer;		// Needs to be pretty big, so Malloc
 
-	int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+	int InputLen;					// Data we have alreasdy = Offset of end of an incomplete packet;
 	int DataInputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+	int KISSInputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+	int ESCFLAG;					// KISS Escape received
 
 	int	MSGCOUNT;				// DED WORKING FIELD
 	int	MSGLENGTH;				// DED Msg Len
@@ -488,6 +491,9 @@ typedef struct TNCINFO
 
 	void * BPQtoRadio_Q;			// Frames to Rig Interface
 	void * RadiotoBPQ_Q;			// Frames from Rig Interface
+
+	void * KISSTX_Q;				// Frames to Host Mode KISS interface
+	struct PORTCONTROL * VirtualPORT; // Pointer to Virtual Packet Port of Host Mode KISS
 
 	char * InitPtr;				// Next Command
 	int	ReinitState;			// Reinit State Machine
@@ -624,6 +630,7 @@ typedef struct TNCINFO
 	HWND xIDC_TRAFFIC;
 	HWND xIDC_BUFFERS;
 	HWND xIDC_CHANSTATE;
+	HWND xIDC_LEVELS;
 	HWND xIDC_STATE;
 	HWND xIDC_TXRX;
 	HWND xIDC_PROTOSTATE;
@@ -644,6 +651,7 @@ typedef struct TNCINFO
 	char * WEB_RESTARTTIME;
 	char * WEB_RESTARTS;
 	char * WEB_PACTORLEVEL;
+	char * WEB_LEVELS;
 	int WEB_CHANGED;				// Used to speed up refresh when active
 
 	HMENU hMenu;
@@ -672,6 +680,8 @@ typedef struct TNCINFO
 	int ARDOPAPRSLen;
 
 	BOOL WRITELOG;					// Enable debug logging
+	int	 InputLevelMin;				// Sound card levels
+	int	 InputLevelMax;				// Sound card levels
 
 } *PTNCINFO;
 

@@ -87,7 +87,7 @@ static VOID TCPConnect();
 struct STATIONRECORD * DecodeAPRSISMsg(char * msg);
 struct STATIONRECORD * ProcessRFFrame(char * buffer, int len);
 VOID APRSSecTimer();
-double Distance(double laa, double loa);
+double Distance(double laa, double loa, BOOL KM);
 struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
 VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
 BOOL KillOldTNC(char * Path);
@@ -115,6 +115,9 @@ extern char TextVerstring[];
 
 extern HWND hConsWnd;
 extern HKEY REGTREE;
+
+extern char LOCATOR[80];
+extern char LOC[7];
 
 static int SecTimer = 10;
 static int MinTimer = 60;
@@ -161,6 +164,8 @@ char LON[] = "00000.00W";	//in standard APRS Format
 char HostName[80];			// for BlueNMEA
 BOOL BlueNMEAOK = FALSE;
 int BlueNMEATimer = 0;
+
+BOOL GPSSetsLocator = 0;	// Update Map Location from GPS
 
 double SOG, COG;		// From GPS
 
@@ -214,6 +219,9 @@ char SYMSET = '/';
 BOOL TraceDigi = FALSE;					// Add Trace to packets relayed on Digi Calls
 BOOL SATGate = FALSE;					// Delay Gating to IS directly heard packets
 
+BOOL DefaultLocalTime = FALSE;
+BOOL DefaultDistKM = FALSE;
+
 typedef struct _ISDELAY
 {
 	struct _ISDELAY * Next;
@@ -230,8 +238,8 @@ int BeaconInterval = 0;
 int MobileBeaconInterval = 0;
 time_t LastMobileBeacon = 0;
 int BeaconCounter = 0;
-int IStatusCounter = 0;					// Used to send ?ISTATUS? Responses
-int StatusCounter = 0;					// Used to send Status Messages
+int IStatusCounter = 3600;				// Used to send ?ISTATUS? Responses
+//int StatusCounter = 0;					// Used to send Status Messages
 
 char RunProgram[128] = "";				// Program to start
 
@@ -339,7 +347,6 @@ int ExpireTime = 120;
 int TrackExpireTime = 1440;
 BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
-BOOL LocalTime = TRUE;
 
 int MaxStations = 500;
 
@@ -1633,6 +1640,17 @@ static APRSProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr, "DISTKM") == 0)
+	{
+		DefaultDistKM = TRUE;
+		return TRUE;
+	}
+	if (_stricmp(ptr, "LOCALTIME") == 0)
+	{
+		DefaultLocalTime = TRUE;
+		return TRUE;
+	}
+
 	p_value = strtok(NULL, " \t\n\r");
 
 	if (p_value == NULL)
@@ -1721,7 +1739,7 @@ static APRSProcessLine(char * buf)
 		{
 			DigiTo = atoi(ptr);				// this gives zero for IS
 	
-			if (DigiTo > NUMBEROFPORTS)
+			if (DigiTo && GetPortTableEntryFromPortNum(DigiTo) == NULL)
 				return FALSE;
 
 			CrossPortMap[Port][DigiTo] = TRUE;	
@@ -1858,6 +1876,14 @@ static APRSProcessLine(char * buf)
 		strcpy(HostName, p_value);
 		return TRUE;
 	}
+
+	if (_stricmp(ptr, "GPSSetsLocator") == 0)
+	{
+		GPSSetsLocator = atoi(p_value);
+		return TRUE;
+	}
+
+
 	if (_stricmp(ptr, "LAT") == 0)
 	{
 		if (strlen(p_value) != 8)
@@ -2078,14 +2104,37 @@ Dll VOID APIENTRY APISendBeacon()
 	BeaconCounter = 2;
 }
 
-VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCOG)
+VOID * BeaconParams[4];
+
+VOID SendBeaconThread(VOID * BeaconParams[4]);
+
+VOID SendBeacon(int toPort, char * BeaconText, BOOL SendStatus, BOOL SendSOGCOG)
 {
+	BeaconParams[0] = (VOID *)toPort;
+	BeaconParams[1] = BeaconText;
+	BeaconParams[2] = (VOID *)SendStatus;
+	BeaconParams[3] = (VOID *)SendSOGCOG;
+
+	_beginthread(SendBeaconThread, 0, (VOID *) BeaconParams);
+}
+
+VOID SendBeaconThread(VOID * BeaconParams[4])
+{
+	// runs as a thread so we can sleep() between calls
+
+	// Params are passed via a param block
+
+	int toPort = (int)BeaconParams[0];
+	char * BeaconText = BeaconParams[1];
+	BOOL SendStatus = (BOOL)BeaconParams[2];
+	BOOL SendSOGCOG = (BOOL)BeaconParams[3];
+
 	int Port;
 	DIGIMESSAGE Msg;
-	char * StMsg = BeaconText;
 	int Len;
 	char SOGCOG[10] = "";
 	struct STATIONRECORD * Station;
+	struct PORTCONTROL * PORT;
 	
 	if (PosnSet == FALSE)
 		return;
@@ -2094,16 +2143,13 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 		sprintf(SOGCOG, "%03.0f/%03.0f", COG, SOG);
 
 	BeaconCounter = BeaconInterval * 60;
-
-	if (StMsg == NULL)
-		StMsg = StatusMsg;
 	
 	if (ISPort && IGateEnabled)
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
-			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 	else
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
-			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 	
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
@@ -2139,17 +2185,25 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
-	if (ISPort && IGateEnabled)
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
-			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
-	else
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
-			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+			if (ISPort && IGateEnabled)
+				Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
+					LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
+			else
+				Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
+					LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
+					
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;
 
 			memcpy(Msg.DEST, &BeaconHeader[Port][0][0], 10 * 7);
 			Send_AX_Datagram(&Msg, Len + 2, Port);
+
+			// if Port has interlock set pause before next
+
+			PORT = GetPortTableEntryFromPortNum(Port);
+	
+			if (PORT && PORT->PORTINTERLOCK)
+				Sleep(20000);
 		}
 	}
 
@@ -2159,19 +2213,13 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	{
 		char ISMsg[300];
 
-		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s BPQ32 Igate V %s\r\n", APRSCall, APRSDest,
-			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s %s\r\n", APRSCall, APRSDest,
+			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 
 		ISSend(sock, ISMsg, Len, 0);
 		Debugprintf(">%s", ISMsg);
 
-		if (SendISStatus)
-			IStatusCounter = 5;
 	}
-
-	if (SendISStatus)
-		StatusCounter = 10;
-
 }
 
 VOID SendObject(struct OBJECT * Object)
@@ -2208,7 +2256,7 @@ VOID SendObject(struct OBJECT * Object)
 }
 
 
-
+/*
 VOID SendStatus(char * StatusText)
 {
 	int Port;
@@ -2238,11 +2286,14 @@ VOID SendStatus(char * StatusText)
 }
 
 
+*/
 VOID SendIStatus()
 {
 	int Port;
 	DIGIMESSAGE Msg;
 	int Len;
+
+	IStatusCounter = 3600;		// One per hour
 
 	if (APRSISOpen)
 	{
@@ -2264,6 +2315,7 @@ VOID SendIStatus()
 		ISSend(sock, Msg.L2DATA, Len, 0);
 //		Debugprintf(">%s", Msg.L2DATA);
 	}
+
 }
 
 
@@ -2350,15 +2402,6 @@ VOID DoSecTimer()
 		}
 	}
 
-	if (StatusCounter)
-	{
-		StatusCounter--;
-
-		if (StatusCounter == 0)
-		{
-			SendStatus(StatusMsg);
-		}
-	}
 	if (IStatusCounter)
 	{
 		IStatusCounter--;
@@ -2834,7 +2877,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		if (Station->Object)
 			Station = Station->Object;		// If Object Report, base distance on Object, not station
 		
-		if (Station->Lat != 0.0 && Station->Lon != 0.0 && Distance(Station->Lat, Station->Lon) < GateLocalDistance)
+		if (Station->Lat != 0.0 && Station->Lon != 0.0 && Distance(Station->Lat, Station->Lon, 0) < GateLocalDistance)
 		{
 			sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
 			GetSemaphore(&Semaphore, 12);
@@ -3317,14 +3360,22 @@ void DecodeRMC(char * msg, int len)
 	SOG = atof(OurSog);
 	COG = atof(OurCog);
 
-	if (MobileBeaconInterval && (strcmp(NewLat, LAT) || strcmp(NewLon, LON)))
+	if (strcmp(NewLat, LAT) || strcmp(NewLon, LON))
 	{
-		time_t NOW = time(NULL);
-
-		if ((NOW - LastMobileBeacon) > MobileBeaconInterval)
+		if (MobileBeaconInterval)
 		{
-			LastMobileBeacon = NOW;
-			SendBeacon(0, StatusMsg, FALSE, TRUE);
+			time_t NOW = time(NULL);
+
+			if ((NOW - LastMobileBeacon) > MobileBeaconInterval)
+			{
+				LastMobileBeacon = NOW;
+				SendBeacon(0, StatusMsg, FALSE, TRUE);
+			}
+		}
+		if (GPSSetsLocator)
+		{
+			ToLOC(Lat, Lon, LOC);
+			sprintf(LOCATOR, "%f:%f", Lat, Lon);
 		}
 	}
 
@@ -3734,7 +3785,7 @@ VOID ResolveThread();
 VOID RefreshTile(char * FN, int Zoom, int x, int y);
 VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
 VOID APRSSecTimer();
-double Distance(double laa, double loa);
+double Distance(double laa, double loa, BOOL KM);
 double Bearing(double laa, double loa);
 
 BOOL CreatePipeThread();
@@ -5131,7 +5182,7 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 		
 	NOW = time(NULL);
 
-	if (LocalTime)
+	if (DefaultLocalTime)
 		TM = localtime(&NOW);
 	else
 		TM = gmtime(&NOW);
@@ -5224,7 +5275,7 @@ double degrees(double Radians)
 	return Radians * 180 / M_PI;
 }
 
-double Distance(double laa, double loa)
+double Distance(double laa, double loa, BOOL KM)
 {
 	double lah, loh;
 
@@ -5254,6 +5305,10 @@ double Distance(double laa, double loa)
 	loa = radians(loa); laa = radians(laa);
 
 	loh = 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
+	
+	if (KM)
+		loh *= 1.60934;
+	
 	return loh;
 }
 
@@ -5589,7 +5644,7 @@ char * DoSummaryLine(struct STATIONRECORD * ptr, int n, int Width)
 	return Line2;
 }
 
-char * DoDetailLine(struct STATIONRECORD * ptr)
+char * DoDetailLine(struct STATIONRECORD * ptr, BOOL LocalTime, BOOL KM)
 {
 	static char Line[512];
 	double Lat = ptr->Lat;
@@ -5627,7 +5682,10 @@ char * DoDetailLine(struct STATIONRECORD * ptr)
 //	if (ptr->ObjState == '_')	// Killed Object
 //		return;
 
-	TM = gmtime(&ptr->TimeLastUpdated);
+	if (LocalTime)
+		TM = localtime(&ptr->TimeLastUpdated);
+	else
+		TM = gmtime(&ptr->TimeLastUpdated);
 
 	sprintf(Time, "%.2d:%.2d:%.2d", TM->tm_hour, TM->tm_min, TM->tm_sec);
 
@@ -5658,7 +5716,7 @@ char * DoDetailLine(struct STATIONRECORD * ptr)
 
 	sprintf(LongString, "%3d°%05.2f'%c",Degrees, Minutes, EW);
 
-	sprintf(DistString, "%6.1f", Distance(ptr->Lat, ptr->Lon));
+	sprintf(DistString, "%6.1f", Distance(ptr->Lat, ptr->Lon, KM));
 	sprintf(BearingString, "%3.0f", Bearing(ptr->Lat, ptr->Lon));
 	
 	sprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>",
@@ -5685,13 +5743,19 @@ int CompareFN(const void *a, const void *b)
 
 
 
-char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * Count, char * Param)
+char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * Count, char * Param, BOOL KM)
 {
 	char * Line = malloc(100000);
 	struct STATIONRECORD * ptr = *StationRecords;
 	int n = 0, i;
 	struct STATIONRECORD * List[1000];
 	int TableWidth = 8;
+	BOOL LocalTime = DefaultLocalTime;
+
+	if (strstr(Param, "time=local"))
+		LocalTime = TRUE;
+	else if (strstr(Param, "time=utc"))
+		LocalTime = FALSE;
 
 	Line[0] = 0;
 	
@@ -5701,7 +5765,8 @@ char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * 
 
 		Key = strtok_s(Param, "=", &Context);
 
-		TableWidth = atoi(Context);
+		if (_stricmp(Key, "width") == 0)
+			TableWidth = atoi(Context);
 
 		if (TableWidth == 0)
 			TableWidth = 8;
@@ -5735,7 +5800,7 @@ char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * 
 	for (i = 0; i < n; i++)
 	{
 		if (RFOnly)
-			strcat(Line, DoDetailLine(List[i]));
+			strcat(Line, DoDetailLine(List[i], LocalTime, KM));
 		else
 			strcat(Line, DoSummaryLine(List[i], i, TableWidth));
 	}	
@@ -5746,7 +5811,7 @@ char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * 
 
 }
 
-char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key)
+char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key, BOOL KM)
 {
 	struct STATIONRECORD * stn = sockptr->SelCall;
 
@@ -5775,7 +5840,10 @@ char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key)
 		return _strdup(WXComment);
 
 	if (strcmp(Key, "##MILES_KM##") == 0)
-		return _strdup("Miles");
+		if (KM)
+			return _strdup("KM");
+		else
+			return _strdup("Miles");
 
 	if (strcmp(Key, "##EXPIRE_TIME##") == 0)
 	{
@@ -5922,7 +5990,7 @@ char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key)
 	{
 		char val[80];
 
-		sprintf(val, "%5.1f", Distance(sockptr->SelCall->Lat, sockptr->SelCall->Lon));
+		sprintf(val, "%5.1f", Distance(sockptr->SelCall->Lat, sockptr->SelCall->Lon, KM));
 		return _strdup(val);
 	}
 
@@ -6048,7 +6116,7 @@ char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key)
 	return NULL;
 }
 
-VOID APRSProcessSpecialPage(struct APRSConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
+VOID APRSProcessSpecialPage(struct APRSConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX, BOOL KM)
 {
 	// replaces ##xxx### constructs with the requested data
 
@@ -6127,7 +6195,7 @@ loop:
 					NewText = _strdup(val);
 				}
 				else
-					NewText = APRSLookupKey(sockptr, Key);
+					NewText = APRSLookupKey(sockptr, Key, KM);
 			}
 			
 			if (NewText)
@@ -6246,10 +6314,18 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 		BOOL Mobile = (BOOL)strstr(FN, "mobile");
 		char Objects = (strstr(FN, "obj"))? '*' :0;
 		char * StationList;
-				
-		StationList = CreateStationList(RFOnly, WX, Mobile, Objects, &Count, Param);
+		BOOL KM = DefaultDistKM;
 
-		APRSProcessSpecialPage(sockptr, MsgBytes, FileSize, StationList, Count, WX); 
+		_strlwr(Param);
+		
+		if (strstr(Param, "dist=km"))
+			KM = TRUE;
+		else if (strstr(Param, "dist=miles"))
+			KM = FALSE;
+		
+		StationList = CreateStationList(RFOnly, WX, Mobile, Objects, &Count, Param, KM);
+
+		APRSProcessSpecialPage(sockptr, MsgBytes, FileSize, StationList, Count, WX, KM); 
 		free (MsgBytes);
 		return;			// ProcessSpecial has sent the reply
 	}

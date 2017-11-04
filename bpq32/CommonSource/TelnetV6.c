@@ -2176,6 +2176,7 @@ nosocks:
 
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = TRUE;
+						STREAM->ConnectionInfo->RelaySession = FALSE;
 						CMSConnect(TNC, TCP, STREAM, Stream);
 						ReleaseBuffer(buffptr);
 
@@ -3759,7 +3760,7 @@ MsgLoop:
 
 			sockptr->LogonSent = TRUE;
 
-			if (TCP->SecureCMSPassword[0])
+			if (TCP->SecureCMSPassword[0] && sockptr->RelaySession == 0)
 				Len = sprintf(Msg, "%s %s\r", TNC->Streams[sockptr->Number].MyCall, TCP->GatewayCall);			
 			else
 				Len = sprintf(Msg, "%s\r", TNC->Streams[sockptr->Number].MyCall);			
@@ -4814,6 +4815,9 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 		ptr2 =  strtok_s(NULL, ", ", &context);		// Skip Time
 		ptr2 =  strtok_s(NULL, ", ", &context);
 			
+		if (ptr2 == NULL)
+			continue;
+		
 		IPAD = inet_addr(ptr2);
 
 		memcpy(&TCP->CMSAddr[i], &IPAD, 4);
@@ -5144,6 +5148,12 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 	if (!(in))
 	{
 		in = fopen("CMSInfo.txt", "w");
+		if (!(in))
+		{
+			perror("Failed to create CMSInfo.txt");
+			Debugprintf("Failed to create CMSInfo.txt");
+			return;
+		}
 		fclose(in);
 		in = fopen("CMSInfo.txt", "r");
 	}

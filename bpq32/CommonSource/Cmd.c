@@ -774,7 +774,7 @@ VOID CMDT00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
-UCHAR PWLEN;
+UCHAR PWLen;
 char PWTEXT[80];
 
 VOID PWDCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
@@ -820,22 +820,22 @@ VOID PWDCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	//	SEND PASSWORD PROMPT
 
-	if (PWLEN == 0)
-		PWLEN = 1;
+	if (PWLen == 0)
+		PWLen = 1;
 
-	p1 = rand() % PWLEN;
+	p1 = rand() % PWLen;
 	pwsum += PWTEXT[p1++];
 
-	p2 = rand() % PWLEN;
+	p2 = rand() % PWLen;
 	pwsum += PWTEXT[p2++];
 
-	p3 = rand() % PWLEN;
+	p3 = rand() % PWLen;
 	pwsum += PWTEXT[p3++];
 
-	p4 = rand() % PWLEN;
+	p4 = rand() % PWLen;
 	pwsum += PWTEXT[p4++];
 
-	p5 = rand() % PWLEN;
+	p5 = rand() % PWLen;
 	pwsum += PWTEXT[p5++];
 
 	Session->PASSWORD = pwsum;
@@ -4557,7 +4557,7 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 			strcat(Flags, "A");
 								
 		if (arp->port == arp->SourcePort)
-			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d = %-.30s %s\r",
+			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d = %-.42s %s\r",
 				Normcall,
 				arp->hostname,
 				arp->port,
@@ -4565,7 +4565,7 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 				Flags);
 
 		else
-			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d<%d = %-.30s %s\r",
+			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d<%d = %-.42s %s\r",
 				Normcall,
 				arp->hostname,
 				arp->port,

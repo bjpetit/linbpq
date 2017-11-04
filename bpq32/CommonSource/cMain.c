@@ -130,6 +130,7 @@ BOOL LogL4Connects = FALSE;
 extern VOID * ENDPOOL;
 extern UINT APPL_Q;				// Queue of frames for APRS Appl
 
+extern BOOL APRSActive;
 
 #define BPQHOSTSTREAMS	64
 
@@ -209,7 +210,7 @@ int	L3TIMER	= 1;					// TIMER FOR 'NODES' MESSAGE
 int	IDTIMER = 0;					// TIMER FOR ID MESSAGE
 int	BTTIMER = 0;					// TIMER FOR BT MESSAGE
 
-UCHAR * NEXTFREEDATA = NULL;				// ADDRESS OF NEXT FREE BYTE
+UCHAR * NEXTFREEDATA = NULL;				// ADDRESS OF NEXT FREE BYTE of shared memory
 
 int NEEDMH = 0;
 
@@ -1224,7 +1225,7 @@ BOOL Start()
 
 	NUMBEROFBUFFERS = 0;
 
-	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - 400))	// was BUFFLEN
+	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - (400 + 8192)))	// 400 was BUFFLEN. Keep 8K free for anything that needs shared memory
 	{
 		Bufferlist[NUMBEROFBUFFERS] = (UINT *)NEXTFREEDATA;
 
@@ -1681,7 +1682,10 @@ VOID TIMERINTERRUPT()
 		L3TIMERFLAG -= 549;
 
 		L3TimerProc();
-		Debugprintf("BPQ32 Heartbeat Buffers %d APRS Queues %d %d", QCOUNT, C_Q_COUNT(&APRSMONVECPTR->HOSTTRACEQ), C_Q_COUNT(&APPL_Q));
+		if (APRSActive)
+			Debugprintf("BPQ32 Heartbeat Buffers %d APRS Queues %d %d", QCOUNT, C_Q_COUNT(&APRSMONVECPTR->HOSTTRACEQ), C_Q_COUNT(&APPL_Q));
+		else
+			Debugprintf("BPQ32 Heartbeat Buffers %d", QCOUNT);
 		StatsTimer();
 
 /*
@@ -2093,13 +2097,10 @@ int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 
 VOID INITIALISEPORTS()
 {
-	int i;
 	char INITMSG[80];
 	struct PORTCONTROL * PORT = PORTTABLE;
-
-	i = NUMBEROFPORTS;
 	
-	while (i--)
+	while (PORT)
 	{
 		sprintf(INITMSG, "Initialising Port %02d     ", PORT->PORTNUMBER);
 		WritetoConsoleLocal(INITMSG);

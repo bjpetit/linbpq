@@ -754,7 +754,7 @@ VOID MailHousekeepingResults()
 	int Length=0;
 	char * MailBuffer = malloc(10000);
 
-	Length += sprintf(&MailBuffer[Length], "Killed Messsages Removed %d\r\n", Removed);
+	Length += sprintf(&MailBuffer[Length], "Killed Messages Removed  %d\r\n", Removed);
 	Length += sprintf(&MailBuffer[Length], "Messages Killed          %d\r\n", Killed);
 	Length += sprintf(&MailBuffer[Length], "Live Messages            %d\r\n", NumberofMessages - Killed);
 	Length += sprintf(&MailBuffer[Length], "Total Messages           %d\r\n", NumberofMessages);

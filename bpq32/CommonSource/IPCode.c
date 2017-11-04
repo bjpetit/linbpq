@@ -72,18 +72,6 @@ TODo	?Multiple Adapters
 */
 
 
-/*
-
-ShellExecute( NULL, 
-    "runas",  
-    "c:\\windows\\notepad.exe",  
-    " c:\\temp\\report.txt",     
-    NULL,                        // default dir 
-    SW_SHOWNORMAL  
-); 
-
-*/
-
 
 #pragma data_seg("_BPQDATA")
 
