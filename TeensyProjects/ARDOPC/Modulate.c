@@ -2,13 +2,6 @@
 
 #include "ARDOPC.h"
 
-extern int pktNumCar;
-extern int pktDataLen;
-extern int pktRSLen;
-extern char pktMod[4][8];
-extern int pktMode;
-
-
 #pragma warning(disable : 4244)		// Code does lots of  float to int
 
 FILE * fp1;
@@ -536,6 +529,21 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
+	if (Type == PktFrameHeader)
+	{
+		// Header is always 500 but Packet Data may vary
+
+		if (pktNumCar == 1)
+			initFilter(500,1500);
+		else if (pktNumCar == 2)
+			initFilter(500,1500);
+		else if (pktNumCar == 4)
+			initFilter(1000,1500);
+		else if (pktNumCar == 8)
+			initFilter(2000,1500);
+	}
+	else
+	{
 	if (intNumCar == 1)
 		initFilter(200,1500);
 	else if (intNumCar == 2)
@@ -544,7 +552,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 		initFilter(1000,1500);
 	else if (intNumCar == 8)
 		initFilter(2000,1500);
-
+	}
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
 //               strLastWavStream = strType
 //          End If
@@ -595,7 +603,12 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
 
 	intPeakAmp = 0;
-            
+
+	intDataPtr = 2;  // initialize pointer to start of data.
+
+PktLoopBack:		// Reenter here to send rest of variable length packet frame
+
+           
 	// Now create a reference symbol for each carrier
       
 	//	We have to do each carrier for each sample, as we write
@@ -626,10 +639,6 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	}
       
 	// End of reference phase generation 
-
-	intDataPtr = 2;  // initialize pointer to start of data.
-
-PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 	if (strcmp(strMod, "4PSK") == 0)
 	{
@@ -809,6 +818,26 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 		strcpy(strMod, &pktMod[pktMode][0]);
 		intDataBytesPerCar = pktDataLen + pktRSLen + 3;
 		intDataPtr = 18;		// Over Header
+		intNumCar = pktNumCar;
+
+		switch(intNumCar)
+		{		
+		case 1:
+			intCarStartIndex = 4;
+			dblCarScalingFactor = 1.0f; // Starting at 1500 Hz  (scaling factors determined emperically to minimize crest factor)  TODO:  needs verification
+			break;
+		case 2:
+			intCarStartIndex = 3;
+			dblCarScalingFactor = 0.53f; // Starting at 1400 Hz
+			break;
+		case 4:
+			intCarStartIndex = 2;
+			dblCarScalingFactor = 0.29f; // Starting at 1200 Hz
+			break;
+		case 8:
+			intCarStartIndex = 0;
+			dblCarScalingFactor = 0.17f; // Starting at 800 Hz
+		} 
 		goto PktLoopBack;		// Reenter to send rest of variable length packet frame
 	}
 	Flush();

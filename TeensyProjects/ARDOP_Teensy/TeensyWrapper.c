@@ -29,11 +29,4 @@
 //#include "../../ARDOPC/modem.c"
 #include "../../ARDOPC/pktARDOP.c"
 
-#include "../../ARDOPC/galois.c"
-#include "../../ARDOPC/HostInterface.c"
-#include "../../ARDOPC/Modulate.c"
-#include "../../ARDOPC/rs.c"
-#include "../../ARDOPC/SCSHostInterface.c"
-#include "../../ARDOPC/SoundInput.c"
-
 

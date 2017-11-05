@@ -272,6 +272,8 @@ BOOL GetNextKISSFrame()
  	return FALSE;
 }
 
+#ifdef PTC
+
 // Called by SCS Host Interface
 
 BOOL CheckKISS(UCHAR * SCSReply)
@@ -308,7 +310,8 @@ BOOL CheckKISS(UCHAR * SCSReply)
 	EmCRCStuffAndSend(SCSReply, Length + 5);
 	return TRUE;
 }
-	
+#endif
+
 VOID ProcessKISSControlFrame()
 {}
 

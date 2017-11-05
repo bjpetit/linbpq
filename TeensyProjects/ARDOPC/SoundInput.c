@@ -236,10 +236,6 @@ int	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the f
 
 int RcvdSamplesLen = 0;				// Samples in RX buffer
 
-//char rxpktMod[10] = "16QAM";		// Mode for data part of current packet frame when receving
-
-extern char pktMod[4][8];
-
 
 BOOL Acquire2ToneLeaderSymbolFraming();
 BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN);
@@ -378,21 +374,6 @@ BOOL IsValidFrameType(UCHAR bytType)
 	//  used in the minimum distance decoder (update if frames added or removed)
 
 	return (isValidFrame[bytType]);
-/*
-	if (bytType >= 0 && bytType <= 0x1F)  return TRUE;
-    if (bytType == 0x23 || bytType == 0x26 || bytType == 0x29 || bytType == 0x2C || bytType == 0x2D || bytType == 0x2E) return TRUE;
-
-	if (bytType >= 0x30 && bytType <= 0x3c)  return TRUE;
-	if (bytType >= 0x30 && bytType <= 0x3c)  return TRUE;
-	if (bytType >= 0x40 && bytType <= 0x4f)  return TRUE;
-	if (bytType >= 0x50 && bytType <= 0x5b)  return TRUE;
-	if (bytType >= 0x60 && bytType <= 0x69)  return TRUE;
-	if (bytType >= 0x70 && bytType <= 0x7d)  return TRUE;
-	if (bytType >= 0xe0 && bytType <= 0xff)  return TRUE;
-	if (bytType == 0xd0)  return TRUE;
-
-	return FALSE;
-*/
 }
 
 // Function to determine if frame type is short control frame
@@ -3555,14 +3536,6 @@ void DemodulateFrame(int intFrameType)
 
 			intFilteredMixedSamplesLength = 0;	// Testing
 	}
-	
-//	if (blnDecodeOK)
-//		stcStatus.BackColor = Color.LightGreen;
-//	else
-//		stcStatus.BackColor = Color.LightSalmon;
-   
-//	queTNCStatus.Enqueue(stcStatus);
-
 }
 
 
@@ -3582,7 +3555,6 @@ int intSNdB = 0, intQuality = 0;
 BOOL DecodeFrame(int xxx, UCHAR * bytData)
 {
 	BOOL blnDecodeOK = FALSE;
- //       Dim stcStatus As Status = Nothing
 	char strCallerCallsign[10] = "";
 	char strTargetCallsign[10] = "";
 	char strIDCallSign[11] = "";
@@ -3592,7 +3564,6 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 	char Reply[80];
 
 	strRcvFrameTag[0] = 0;
-	//stcStatus.ControlName = "lblRcvFrame"
 
 	//DataACK/NAK and short control frames 
 
@@ -3602,14 +3573,11 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 	if ((intFrameType >= 0 && intFrameType <= 0x1F) || intFrameType >= 0xE0) // DataACK/NAK
 	{
 		blnDecodeOK = DecodeACKNAK(intFrameType, &intRcvdQuality);
-        //stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
-
 		goto returnframe;
 	}
 	else if (IsShortControlFrame(intFrameType)) // Short Control Frames
 	{
 		blnDecodeOK = TRUE;
-        //    stcStatus.Text = objFrameInfo.Name(intFrameType)
 		goto returnframe;
 	}
 
@@ -3633,7 +3601,6 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 			if (blnDecodeOK)
 				bytData[0] = intTiming / 10;
-//                stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
 
 		break;
 		
@@ -3655,9 +3622,6 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			blnDecodeOK = Decode4FSKID(0x30, strIDCallSign, strGridSQ);
 			
 			frameLen = sprintf(bytData, "ID:%s %s:" , strIDCallSign, strGridSQ);
-
-			//stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
-
 			break;
 
 		case 0x31:
@@ -3838,22 +3802,26 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 		case PktFrameHeader:
 		{
-		// Variable Length Packet Frame Header
+			// Variable Length Packet Frame Header
+			// 3 bits Mod Type 3 bits Carriers (minus 1) 10 Bits Len
 
 			int Type;
 			int Len;
-			int pktNumCar = 2;
+			int pktNumCar;
 			int pktDataLen;
 			int pktRSLen;
 
 				if (CarrierOk[0])
 				{
-					Type = bytFrameData1[1] >> 4;
-					Len =  ((bytFrameData1[1] & 0xf) << 8) | bytFrameData1[2];
+					Type = bytFrameData1[1] >> 5;
+					pktNumCar = ((bytFrameData1[1] & 0x1c) >> 2) + 1;
+
+					Len =  ((bytFrameData1[1] & 0x3) << 8) | bytFrameData1[2];
 				}
 				else if (CarrierOk[1])
 				{
-					Type = bytFrameData2[1] >> 4;
+					Type = bytFrameData2[1] >> 5;
+					pktNumCar = ((bytFrameData1[1] & 0x1c) >> 2) + 1;
 					Len =  ((bytFrameData2[1] & 0xf) << 8) | bytFrameData2[2];
 				}
 				else
@@ -3865,17 +3833,14 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 					break;
 				}
 								
-				WriteDebugLog(7, "Pkt Frame Header Type %s Len %d", &pktMod[Type][0], Len);
+				WriteDebugLog(6, "Pkt Frame Header Type %s Carriers %d Len %d", &pktMod[Type][0], pktNumCar, Len);
 				blnDecodeOK = TRUE;
 
 				// Reset to receive rest of frame
 
 				strcpy(strMod, &pktMod[Type][0]);
 
-				pktDataLen = Len / pktNumCar;
-
-				if (Len & 1)		// Odd
-					pktDataLen++;
+				pktDataLen = (Len + (pktNumCar - 1))/pktNumCar; // Round up
 
 				pktRSLen = pktDataLen >> 2;			// Try 25% for now
 				if (pktRSLen & 1)
@@ -3893,6 +3858,8 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				intPhasesLen = 0;
 				intDataLen = pktDataLen;
 				intRSLen = pktRSLen;
+				intNumCar = pktNumCar;
+				PSKInitDone = 0;
 				
 				return 0;
 		}
@@ -3900,7 +3867,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 					
 		case PktFrameData:
 		{
-			if (CarrierOk[0] && CarrierOk[1])
+			char Good[8] = {1,1,1,1,1,1,1,1};
+
+			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 			{
 				blnDecodeOK = TRUE;
 
@@ -4673,14 +4642,7 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 	int	intAccOffsetBeginning = 0, intAccOffsetEnd = 0, intAccOffset = 0;
     int intPSKMode;
 
-	if ((CarrierOk[0] && CarrierOk[0] != 1)
-		|| (CarrierOk[1] && CarrierOk[1] != 1)
-		|| (CarrierOk[2] && CarrierOk[2] != 1)
-		|| (CarrierOk[3] && CarrierOk[3] != 1))
-	
-		CarrierOk[0] = CarrierOk[0];
 
-	
 	if (strcmp(strMod, "8PSK") == 0 || strcmp(strMod, "16QAM") == 0)
 		intPSKMode = 8;
 	else
@@ -4753,13 +4715,6 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 				intAvgOffset, intAccOffsetCnt, intPhaseLength);
 
 	}
-	if ((CarrierOk[0] && CarrierOk[0] != 1)
-		|| (CarrierOk[1] && CarrierOk[1] != 1)
-		|| (CarrierOk[2] && CarrierOk[2] != 1)
-		|| (CarrierOk[3] && CarrierOk[3] != 1))
-	
-		CarrierOk[0] = CarrierOk[0];
-
 }
 
 // Function to Decode one Carrier of 16QAM modulation 
@@ -4930,7 +4885,7 @@ void SavePSKSamples(int i);
 
 void DemodPSK()
 {
-	int Used, Carrier;
+	int Used[8] = {0}, Carrier;
 	int Start = 0;
 	int MemARQRetries = 0;
 
@@ -4975,71 +4930,45 @@ void DemodPSK()
 		else
 			intCarFreq = 1400 + (intNumCar / 2) * 200; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
 
-	
-		switch (intNumCar)
+		Used[0] = Demod1CarPSKChar(Start, 0);
+
+		if (intNumCar > 1)
 		{
-		case 1:
-
-			Used = Demod1CarPSKChar(Start, 0);
-			break;
-
-		case 2:
-
-			Demod1CarPSKChar(Start, 0);
 			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
-			Used = Demod1CarPSKChar(Start, 1);
-			break;
+			Used[1] = Demod1CarPSKChar(Start, 1);
+		}
 
-		case 4:
-
-			Demod1CarPSKChar(Start, 0);
+		if (intNumCar > 2)
+		{
 			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-	
-			Demod1CarPSKChar(Start, 1);
+			Used[2] = Demod1CarPSKChar(Start, 2);
+			
 			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Used[3] = Demod1CarPSKChar(Start, 3);
+		}
 
-			Demod1CarPSKChar(Start, 2);
-			intPhasesLen -= intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Used = Demod1CarPSKChar(Start, 3);
-			break;
-
-		case 8:
-
-			Demod1CarPSKChar(Start, 0);
+		if (intNumCar > 4)
+		{
 			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
-			Demod1CarPSKChar(Start, 1);
+			Used[4] = Demod1CarPSKChar(Start, 4);
 			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
-			Demod1CarPSKChar(Start, 2);
+			Used[5] = Demod1CarPSKChar(Start, 5);
 			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
-			Demod1CarPSKChar(Start, 3);
+			Used[6] = Demod1CarPSKChar(Start, 6);
 			intPhasesLen -= intPSKMode;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
 
-			Demod1CarPSKChar(Start, 4);
-			intPhasesLen -= intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 5);
-			intPhasesLen -= intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 6);
-			intPhasesLen -= intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Used = Demod1CarPSKChar(Start, 7);	
+			Used[7] = Demod1CarPSKChar(Start, 7);	
 		}
 
 		if (intPSKMode == 4)
@@ -5047,8 +4976,11 @@ void DemodPSK()
 		else
 			SymbolsLeft -=3;
 
-		Start += Used;
-		intFilteredMixedSamplesLength -= Used;
+		// If/when we reenable phase correstion we can take average of Used values.
+		// ?? Should be also keep start value per carrier ??
+
+		Start += Used[0];
+		intFilteredMixedSamplesLength -= Used[0];
 
 		if (intFilteredMixedSamplesLength < 0)
 			WriteDebugLog(LOGERROR, "Corrupt intFilteredMixedSamplesLength");
@@ -5198,7 +5130,7 @@ int Demod1CarPSKChar(int Start, int Carrier)
 
 	for (i = 0; i <  intNumOfSymbols; i++)
 	{
-		if (intCP[i] == 0)
+		if (intCP[Carrier] == 0)
 			GoertzelRealImagHanning(intFilteredMixedSamples, Start, intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
 		else
 			GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
@@ -5207,24 +5139,29 @@ int Demod1CarPSKChar(int Start, int Carrier)
 		intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
 		intPhases[Carrier][intPhasesLen] = -(ComputeAng1_Ang2(intPSKPhase_0[Carrier], intPSKPhase_1[Carrier]));
 
-		Corrections = Track1CarPSK(intCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
+/*
+		if (Carrier == 0)
+		{
+			Corrections = Track1CarPSK(intCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
 
-//		if (Corrections != 0)
-//		{
-//			Start += Corrections;
+			if (Corrections != 0)
+			{
+				Start += Corrections;
 
-//			if (intCP[i] == 0)
-//				GoertzelRealImagHanning(intFilteredMixedSamples, Start, intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
-//			else
-//				GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+				if (intCP[i] == 0)
+					GoertzelRealImagHanning(intFilteredMixedSamples, Start, intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+				else
+					GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
 
-//			intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
-//		}
+				intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+			}
+		}
+*/
 		intPSKPhase_1[Carrier] = intPSKPhase_0[Carrier];
 		intPhasesLen++;
 		Start += intSampPerSym;
+	
 	}
- 
 	if (AccumulateStats)
 		intPSKSymbolCnt += intNumOfSymbols;
 
@@ -5264,7 +5201,7 @@ VOID InitDemodQAM()
 		GoertzelRealImagHanning(intFilteredMixedSamples, intCP[i], intNforGoertzel[i], dblFreqBin[i], &dblReal, &dblImag);
 		dblPhase = atan2f(dblImag, dblReal);
 
-		// Set initial mag from REeference Phase (which should be full power)
+		// Set initial mag from Reference Phase (which should be full power)
 
 		intCarMagThreshold[i] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
 		intCarMagThreshold[i] *= 0.75;
@@ -5374,7 +5311,6 @@ BOOL DemodQAM()
 			return FALSE;
 		}
 		
-
 		if (PSKInitDone == 0)		// First time through
 		{	
 			if (intFilteredMixedSamplesLength < 9 * intSampPerSym + 10) 
@@ -5394,21 +5330,42 @@ BOOL DemodQAM()
 			intCarFreq = 1400 + (intNumCar / 2) * 200; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
 
 	
-		switch (intNumCar)
+		Used = Demod1CarQAMChar(Start, 0);		// demods two phase values - enough for one char
+	
+		if (intNumCar > 1)
 		{
-		case 1:
-
-			Used = Demod1CarQAMChar(Start, 0);		// demods two phase values - enough for one char
-			break;
-
-		case 2:
-
-			Demod1CarQAMChar(Start, 0);
 			intPhasesLen -= 2;
 			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Demod1CarQAMChar(Start, 1);
+		}
 
-			Used = Demod1CarQAMChar(Start, 1);
-			break;
+		if (intNumCar > 2)
+		{
+			intPhasesLen -= 2;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Demod1CarQAMChar(Start, 2);
+			intPhasesLen -= 2;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Demod1CarQAMChar(Start, 3);
+		}
+
+		if (intNumCar > 4)
+		{
+			intPhasesLen -= 2;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Demod1CarQAMChar(Start, 4);
+	
+			intPhasesLen -= 2;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Demod1CarQAMChar(Start, 5);
+
+			intPhasesLen -= 2;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Demod1CarQAMChar(Start, 6);
+
+			intPhasesLen -= 2;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Demod1CarQAMChar(Start, 7);	
 		}
 
 		SymbolsLeft--;		// number still to decode - we've done one
@@ -5422,24 +5379,61 @@ BOOL DemodQAM()
 
 			DecodeCompleteTime = Now;
 
-			CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
-
-			if (intNumCar > 1)
-				CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
+		CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
+			
+		if (intNumCar > 1)
+			CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
+			
+		if (intNumCar > 2)
+		{
+			CorrectPhaseForTuningOffset(&intPhases[2][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[3][0], intPhasesLen, strMod);
+		}
+		if (intNumCar > 4)
+		{
+			CorrectPhaseForTuningOffset(&intPhases[4][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[5][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[6][0], intPhasesLen, strMod);
+			CorrectPhaseForTuningOffset(&intPhases[7][0], intPhasesLen, strMod);
+		}
 
 			intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[intNumCar - 1][0], &intMags[intNumCar - 1][0], strMod, TRUE);
 
 			Decode1CarQAM(bytFrameData1, 0);
+			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
 
 			if (intNumCar > 1)
+			{
 				Decode1CarQAM(bytFrameData2, 1);
+				frameLen +=  CorrectRawDataWithRS(bytFrameData2, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 1);
+
+			}
+
+		if (intNumCar > 2)
+		{
+			Decode1CarQAM(bytFrameData3, 2);
+			Decode1CarQAM(bytFrameData4, 3);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData3, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 2);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData4, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 3);
+
+		}
+		if (intNumCar > 4)
+		{
+			Decode1CarQAM(bytFrameData5, 4);
+			Decode1CarQAM(bytFrameData6, 5);
+			Decode1CarQAM(bytFrameData7, 6);
+			Decode1CarQAM(bytFrameData8, 7);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData5, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 4);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData6, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 5);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData7, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 6);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData8, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 7);
+
+		}
+
+
 
 			// Check Data
 
-			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
-		
-			if (intNumCar > 1)
-				frameLen +=  CorrectRawDataWithRS(bytFrameData2, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 1);
 
 #ifdef MEMORYARQ
 
@@ -5490,7 +5484,6 @@ BOOL DemodQAM()
 	return TRUE;
 }
 
-// Function to demodulate one carrier for all PSK frame types
 int Demod1CarQAMChar(int Start, int Carrier)
 {
 	// Converts intSample to an array of differential phase and magnitude values for the Specific Carrier Freq
@@ -5515,21 +5508,28 @@ int Demod1CarQAMChar(int Start, int Carrier)
 
 	for (i = 0; i <  intNumOfSymbols; i++)
 	{
-//		GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+	//	GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
 		GoertzelRealImagHanning(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
 		intMags[Carrier][intPhasesLen] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
 		intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
 		intPhases[Carrier][intPhasesLen] = -(ComputeAng1_Ang2(intPSKPhase_0[Carrier], intPSKPhase_1[Carrier]));
 
-		Corrections = Track1CarPSK(intCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
 
-		if (Corrections != 0)
+/*
+		if (Carrier == 0)
 		{
-			Start += Corrections;
+			Corrections = Track1CarPSK(intCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
 
-			GoertzelRealImagHanning(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
-			intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+			if (Corrections != 0)
+			{
+				Start += Corrections;
+
+		//	GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+				GoertzelRealImagHanning(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+				intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+			}
 		}
+*/
 		intPSKPhase_1[Carrier] = intPSKPhase_0[Carrier];
 		intPhasesLen++;
 		Start += intSampPerSym;

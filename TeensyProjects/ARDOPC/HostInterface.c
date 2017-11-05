@@ -1123,6 +1123,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams)
 		{
 			char * PacVal = strlop(ptrParams, ' ');
+			char * PacBW;
 
 			if (strcmp(ptrParams, "MODE") == 0)
 			{
@@ -1130,24 +1131,45 @@ void ProcessCommandFromHost(char * strCMD)
 
 				if (PacVal == NULL)
 				{
-					sprintf(cmdReply, "%PAC MODE %s", &pktMod[pktMode][0]);
+					sprintf(cmdReply, "%PAC MODE %s/%s", &pktMod[pktMode][0], pktBW[pktNumCar]);
 					SendReplyToHost(cmdReply);
 					goto cmddone;
+				}
+
+				// Mode may include Bandwidth change
+
+				PacBW = strlop(PacVal, '/');
+
+				if (PacBW)
+				{
+					for (i = 0; i < 9; i++)
+					{
+						if (strcmp(PacBW, &pktBW[i][0]) == 0)
+						{
+							pktNumCar = i;
+							break;
+						}
+					}
+					if (i == 9)
+					{
+						sprintf(strFault, "Syntax Err: PAC MODE %s/%s", PacVal, PacBW);
+						goto cmddone;
+					}
 				}
 
 				for (i = 0; i < pktModeLen; i++)
 				{
 					if (strcmp(PacVal, &pktMod[i][0]) == 0)
 					{
-						pktMode = i;		// Force mode to be reevaluated
-						sprintf(cmdReply, "%PAC MODE now %s", PacVal);
+						pktMode = i;
+						sprintf(cmdReply, "%PAC MODE now %s/%s", PacVal, pktBW[pktNumCar]);
 						SendReplyToHost(cmdReply);
 						goto cmddone;
 					}
 				}
 	
 				sprintf(strFault, "Syntax Err: PAC MODE %s", PacVal);
-
+				goto cmddone;
 			}
 
 			SendReplyToHost(_strupr(cmdCopy)); // echo command back to host.

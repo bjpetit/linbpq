@@ -534,9 +534,10 @@ extern int dttLastLeaderDetect;
 extern int pktNumCar;
 extern int pktDataLen;
 extern int pktRSLen;
-extern char pktMod[4][8];
+extern const char pktMod[4][8];
 extern int pktMode;
 extern int pktModeLen;
+extern const char pktBW[9][8];
 
 
 // Has to follow enum defs

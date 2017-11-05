@@ -43,7 +43,9 @@ extern int EncLen;
 int pktNumCar = 2;
 int pktDataLen;
 int pktRSLen;
-char pktMod[4][8] = {"4PSK", "8PSK", "16QAM"};
+const char pktMod[4][8] = {"4PSK", "8PSK", "16QAM"};
+const char pktBW[9][8] = {"", "200", "500", "", "1000", "", "", "", "2000"};
+
 
 int pktModeLen = 3;
 
@@ -53,10 +55,13 @@ VOID PktARDOPEncode(UCHAR * Data, int Len)
 {
 	unsigned char DataToSend[4];
 
-	// Create Packet Header. 4 bits Type 12 Bits Len
+	// Create Packet Header.  3 bits Mod Type 3 bits Carriers 10 Bits Len
 	// Same is sent on each carrier of 4PSK.500.100 frame for robustness
 
-	DataToSend[0] = pktMode << 4 | Len >>8;
+	if (Len > 1023)
+		return;
+
+	DataToSend[0] = (pktMode << 5) | ((pktNumCar - 1) << 2) | (Len >> 8);
 	DataToSend[1] = Len & 0xff;
 	
 	DataToSend[2] = DataToSend[0];
@@ -64,7 +69,7 @@ VOID PktARDOPEncode(UCHAR * Data, int Len)
 
 	// Calc Data and RS Length
 
-	pktDataLen = (Len + 1 )/pktNumCar; // Round up
+	pktDataLen = (Len + (pktNumCar - 1))/pktNumCar; // Round up
 
 	pktRSLen = pktDataLen >> 2;			// Try 25% for now
 

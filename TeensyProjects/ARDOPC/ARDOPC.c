@@ -411,7 +411,7 @@ const char strFrameType[256][18] = {
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
-	"PktFrame","","","","","","","","","","","","","","","", //C0
+	"PktHddr","PktData","","","","","","","","","","","","","","", //C0
 
 	//Frame Types 0xA0 to 0xDF reserved for experimentation 
 	"SOUND2K" //D0
@@ -540,7 +540,7 @@ const char shortFrameType[256][12] = {
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
-	"","","","","","","","","","","","","","","","", //C0
+	"PktHDDR","PktData","","","","","","","","","","","","","","", //C0
 
 	//Frame Types 0xA0 to 0xDF reserved for experimentation 
 	"SOUND2K" //D0
@@ -2534,7 +2534,7 @@ BOOL MainPoll()
 		// Send anything on Packet Queue
 
 		if (UseKISS)
-			if (blnBusyStatus == FALSE)
+//			if (blnBusyStatus == FALSE)
 //				PacketStartTX();		// Won't return till all sent
 				PktARDOPStartTX();
 
