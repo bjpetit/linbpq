@@ -10,8 +10,11 @@
 //	New idea is to support via SCS Host Channel 250, but will
 //	probably leave serial/i2c support in
 
+//	Now supports KISS over SCS Channel 250 or a KISS over TCP Connection
+
+
+
 #ifdef WIN32
-#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
@@ -19,6 +22,7 @@
 #include <winioctl.h>
 #else
 #define HANDLE int
+#define SOCKET int
 #endif
 
 #include "ARDOPC.h"
@@ -88,7 +92,8 @@ HANDLE KISSHandle = 0;
 
 int TXDelay = 500;	
 
-
+extern SOCKET PktSock;
+extern BOOL PKTCONNECTED;
 
 BOOL KISSInit()
 {
@@ -326,12 +331,27 @@ VOID SendAckModeAck()
 	KISSTXBUFF[KTXPutPtr++] = KISSBUFFER[2];
 	KTXPutPtr &= KISSBUFFERMASK;
 	KISSTXBUFF[KTXPutPtr++] = FEND;
+
+	// If using KISS over TCP, send it
+
+//#ifndef PTC	
+	
+	// If Using TCP, send it
+
+	if (pktport)
+	{
+		if (PKTCONNECTED)
+			send(PktSock, KISSTXBUFF, KTXPutPtr, 0);
+	
+		KTXPutPtr = 0;
+	}
+
+//#endif
+
 }
 
 void SendFrametoHost(unsigned char *data, unsigned dlen)
 {
-	int i, len;
-
 	KISSTXBUFF[KTXPutPtr++] = FEND;
 	KTXPutPtr &= KISSBUFFERMASK;
 
@@ -364,7 +384,19 @@ void SendFrametoHost(unsigned char *data, unsigned dlen)
 	KISSTXBUFF[KTXPutPtr++] = FEND;
 	KTXPutPtr &= KISSBUFFERMASK;
 
-//	chan->pkt.stat.kiss_out++;
+//#ifndef PTC	
+	
+	// If Using TCP, send it
+
+	if (pktport)
+	{
+		if (PKTCONNECTED)
+			send(PktSock, KISSTXBUFF, KTXPutPtr, 0);
+	
+		KTXPutPtr = 0;
+	}
+
+//#endif
 }
  
 

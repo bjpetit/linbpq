@@ -56,13 +56,21 @@ int C_Q_COUNT(VOID *Q);
 void ProcessCommandFromHost(char * strCMD);
 BOOL checkcrc16(unsigned char * Data, unsigned short length);
 int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
+VOID ProcessKISSBytes(UCHAR * RXBuffer, int Read);
+int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength );
 
 extern int port;
+extern int pktport;
 
-SOCKET TCPControlSock, TCPDataSock, ListenSock, DataListenSock;
+extern BOOL UseKISS;			// Enable Packet (KISS) interface
+
+
+SOCKET TCPControlSock, TCPDataSock, PktSock;
+SOCKET ListenSock = 0, DataListenSock = 0, PktListenSock = 0;
 
 BOOL CONNECTED = FALSE;
 BOOL DATACONNECTED = FALSE;
+BOOL PKTCONNECTED = FALSE;
 
 // Host to TNC RX Buffer
 
@@ -475,10 +483,15 @@ BOOL HostInit()
 #endif
 
 	WriteDebugLog(LOGALERT, "ARDOPC listening on port %d", port);
+	if (UseKISS && pktport)
+		WriteDebugLog(LOGALERT, "ARDOPC listening for KISS frames on port %d", pktport);
 //	InitQueue();
 
 	ListenSock = OpenSocket4(port);
 	DataListenSock = OpenSocket4(port + 1);
+	if (UseKISS && pktport)
+		PktListenSock = OpenSocket4(pktport);
+
 	return ListenSock;
 }
 
@@ -498,7 +511,6 @@ void HostPoll()
 
 	if (hRIGDevice && CONNECTED)
 	{
-		BOOL Error;
 		UCHAR RigBlock[256];
 		int Len;
 
@@ -575,6 +587,8 @@ void HostPoll()
 	if (DataListenSock == 0)
 		return;
 
+	FD_ZERO(&readfs);	
+	FD_ZERO(&errorfs);
 	FD_SET(DataListenSock,&readfs);
 
 	timeout.tv_sec = 0;				// No wait
@@ -586,7 +600,7 @@ void HostPoll()
 	{
 		ret = WSAGetLastError();
 		WriteDebugLog(LOGDEBUG, "%d ", ret);
-		perror("listen select");
+		perror("data listen select");
 	}
 	else
 	{
@@ -609,91 +623,184 @@ void HostPoll()
 		}
 	}
 
-	if (CONNECTED)
-	{
+	if (PktListenSock == 0)
+		return;
 
 	FD_ZERO(&readfs);	
 	FD_ZERO(&errorfs);
-
-	FD_SET(TCPControlSock,&readfs);
-	FD_SET(TCPControlSock,&errorfs);
+	FD_SET(PktListenSock,&readfs);
 
 	timeout.tv_sec = 0;				// No wait
 	timeout.tv_usec = 0;	
+
+	ret = select(PktListenSock + 1, &readfs, NULL, NULL, &timeout);
+
+	if (ret == -1)
+	{
+		ret = WSAGetLastError();
+		WriteDebugLog(LOGDEBUG, "%d ", ret);
+		perror("pkt listen select");
+	}
+	else
+	{
+		if (ret)
+		{
+			if (FD_ISSET(PktListenSock, &readfs))
+			{
+				PktSock = accept(PktListenSock, (struct sockaddr * )&sin, &addrlen);
+	    
+				if (PktSock == INVALID_SOCKET)
+				{
+					WriteDebugLog(LOGDEBUG, "accept() pkt failed error %d", WSAGetLastError());
+					return;
+				}
+				WriteDebugLog(LOGINFO, "Packet Session Connected");
+					
+				ioctl(PktSock, FIONBIO, &param);
+				PKTCONNECTED = TRUE;
+			}
+		}
+	}
+
+	if (CONNECTED)
+	{
+		FD_ZERO(&readfs);	
+		FD_ZERO(&errorfs);
+
+		FD_SET(TCPControlSock,&readfs);
+		FD_SET(TCPControlSock,&errorfs);
+
+		timeout.tv_sec = 0;				// No wait
+		timeout.tv_usec = 0;	
 		
-	ret = select(TCPControlSock + 1, &readfs, NULL, &errorfs, &timeout);
+		ret = select(TCPControlSock + 1, &readfs, NULL, &errorfs, &timeout);
 
-	if (ret == SOCKET_ERROR)
-	{
-		WriteDebugLog(LOGDEBUG, "Data Select failed %d ", WSAGetLastError());
-		goto Lost;
-	}
-	if (ret > 0)
-	{
-		//	See what happened
-
-		if (FD_ISSET(TCPControlSock, &readfs))
+		if (ret == SOCKET_ERROR)
 		{
-			GetSemaphore();
-			ProcessReceivedControl();
-			FreeSemaphore();
+			WriteDebugLog(LOGDEBUG, "Data Select failed %d ", WSAGetLastError());
+			goto Lost;
 		}
+		if (ret > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(TCPControlSock, &readfs))
+			{
+				GetSemaphore();
+				ProcessReceivedControl();
+				FreeSemaphore();
+			}
 								
-		if (FD_ISSET(TCPControlSock, &errorfs))
-		{
+			if (FD_ISSET(TCPControlSock, &errorfs))
+			{
 Lost:	
-			WriteDebugLog(LOGDEBUG, "TCP Connection lost");
+				WriteDebugLog(LOGDEBUG, "TCP Control Connection lost");
 			
-			CONNECTED = FALSE;
+				CONNECTED = FALSE;
 
-			closesocket(TCPControlSock);
-			TCPControlSock= 0;
-			return;
+				closesocket(TCPControlSock);
+				TCPControlSock= 0;
+				return;
+			}
 		}
-	}
 	}
 	if (DATACONNECTED)
 	{
+		FD_ZERO(&readfs);	
+		FD_ZERO(&errorfs);
 
-	FD_ZERO(&readfs);	
-	FD_ZERO(&errorfs);
+		FD_SET(TCPDataSock,&readfs);
+		FD_SET(TCPDataSock,&errorfs);
 
-	FD_SET(TCPDataSock,&readfs);
-	FD_SET(TCPDataSock,&errorfs);
-
-	timeout.tv_sec = 0;				// No wait
-	timeout.tv_usec = 0;	
+		timeout.tv_sec = 0;				// No wait
+		timeout.tv_usec = 0;	
 		
-	ret = select(TCPDataSock + 1, &readfs, NULL, &errorfs, &timeout);
+		ret = select(TCPDataSock + 1, &readfs, NULL, &errorfs, &timeout);
 
-	if (ret == SOCKET_ERROR)
-	{
-		WriteDebugLog(LOGDEBUG, "Data Select failed %d ", WSAGetLastError());
-		goto DCLost;
-	}
-	if (ret > 0)
-	{
-		//	See what happened
-
-		if (FD_ISSET(TCPDataSock, &readfs))
+		if (ret == SOCKET_ERROR)
 		{
-			GetSemaphore();
-			ProcessReceivedData();
-			FreeSemaphore();
+			WriteDebugLog(LOGDEBUG, "Data Select failed %d ", WSAGetLastError());
+			goto DCLost;
 		}
+		if (ret > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(TCPDataSock, &readfs))
+			{
+				GetSemaphore();
+				ProcessReceivedData();
+				FreeSemaphore();
+			}
 								
-		if (FD_ISSET(TCPDataSock, &errorfs))
-		{
-DCLost:	
-			WriteDebugLog(LOGDEBUG, "TCP Connection lost");
+			if (FD_ISSET(TCPDataSock, &errorfs))
+			{
+	DCLost:	
+				WriteDebugLog(LOGDEBUG, "TCP Data Connection lost");
 			
-			DATACONNECTED = FALSE;
+				DATACONNECTED = FALSE;
 
-			closesocket(TCPControlSock);
-			TCPDataSock= 0;
-			return;
+				closesocket(TCPControlSock);
+				TCPDataSock= 0;
+				return;
+			}
 		}
 	}
+
+	if (PKTCONNECTED)
+	{
+		FD_ZERO(&readfs);	
+		FD_ZERO(&errorfs);
+
+		FD_SET(PktSock,&readfs);
+		FD_SET(PktSock,&errorfs);
+
+		timeout.tv_sec = 0;				// No wait
+		timeout.tv_usec = 0;	
+		
+		ret = select(PktSock + 1, &readfs, NULL, &errorfs, &timeout);
+
+		if (ret == SOCKET_ERROR)
+		{
+			WriteDebugLog(LOGDEBUG, "Pkt Select failed %d ", WSAGetLastError());
+			goto PktLost;
+		}
+		if (ret > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(PktSock, &readfs))
+			{
+				unsigned long Read;
+				unsigned char RXBuffer[512];
+				
+				Read = recv(PktSock, RXBuffer, 512, 0);
+
+				if (Read == 0 || Read == SOCKET_ERROR)
+				{
+					// Does this mean closed?
+		
+					closesocket(PktSock);
+					PktSock = 0;
+
+					PKTCONNECTED = FALSE;
+					return;					
+				}
+				ProcessKISSBytes(RXBuffer, Read);;
+			}
+										
+			if (FD_ISSET(PktSock, &errorfs))
+			{
+PktLost:	
+				WriteDebugLog(LOGDEBUG, "Pkt Data Connection lost");
+			
+				PKTCONNECTED = FALSE;
+
+				closesocket(PktSock);
+				PktSock = 0;
+				return;
+			}
+		}
 	}
 }
 

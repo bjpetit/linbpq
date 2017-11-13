@@ -156,8 +156,14 @@ void main(int argc, char * argv[])
 	WriteDebugLog(LOGALERT, "ARDOPC Version %s", ProductVersion);
 
 	if (argc > 1)
+	{
+		char *pkt = strlop(argv[1], '/');
+
 		port = atoi(argv[1]);
-	
+		if (pkt)
+			pktport = atoi(pkt);
+	}
+
 	if (argc > 3)
 	{
 		strcpy(CaptureDevice, argv[2]);

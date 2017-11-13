@@ -40,7 +40,7 @@ VOID SendAckModeAck();
 extern unsigned char bytEncodedBytes[1800];		// I think the biggest is 600 bd 768 + overhead
 extern int EncLen;
 
-int pktNumCar = 2;
+int pktNumCar = 1;
 int pktDataLen;
 int pktRSLen;
 const char pktMod[4][8] = {"4PSK", "8PSK", "16QAM"};

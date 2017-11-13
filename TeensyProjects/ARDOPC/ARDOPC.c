@@ -76,6 +76,7 @@ int Squelch = 5;
 int BusyDet = 5;
 enum _ARQBandwidth ARQBandwidth = B2000MAX;
 int port = 8515;
+int pktport = 0;
 BOOL RadioControl = FALSE;
 BOOL SlowCPU = FALSE;
 BOOL AccumulateStats = TRUE;
@@ -2534,9 +2535,10 @@ BOOL MainPoll()
 		// Send anything on Packet Queue
 
 		if (UseKISS)
-//			if (blnBusyStatus == FALSE)
-//				PacketStartTX();		// Won't return till all sent
-				PktARDOPStartTX();
+			if (State == SearchingForLeader)	// Dont send while receiving
+//				if (blnBusyStatus == FALSE)
+//					PacketStartTX();		// Won't return till all sent
+					PktARDOPStartTX();
 
 	}
 //            If Not SoundIsPlaying Then

@@ -30,6 +30,8 @@ VOID COMClearRTS(HANDLE fd);
 VOID RadioPTT(int PTTState)	;
 
 extern BOOL blnDISCRepeating;
+extern BOOL UseKISS;			// Enable Packet (KISS) interface
+
 
 void Sleep(int mS)
 {
@@ -258,7 +260,13 @@ void main(int argc, char * argv[])
 	Sleep(1000);	// Give LinBPQ time to complete init if exec'ed by linbpq
 
 	if (argc > 1)
+	{
+		char *pkt = strlop(argv[1], '/');
+
 		port = atoi(argv[1]);
+		if (pkt)
+			pktport = atoi(pkt);
+	}
 
 	Debugprintf("ARDOPC Version %s", ProductVersion);
 	
@@ -314,6 +322,8 @@ void main(int argc, char * argv[])
 	initdisplay();
 
 	Debugprintf("ARDOPC listening on port %d", port);
+	if (UseKISS && pktport)
+		Debugprintf("ARDOPC listening for KISS frames on port %d", pktport);
 
 	// Get Time Reference
 		
