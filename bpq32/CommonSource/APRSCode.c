@@ -58,7 +58,7 @@ socklen_t peer_addr_size;
 static BOOL APIENTRY  GETSENDNETFRAMEADDR();
 static VOID DoSecTimer();
 static VOID DoMinTimer();
-static APRSProcessLine(char * buf);
+static int APRSProcessLine(char * buf);
 static BOOL APRSReadConfigFile();
 VOID APRSISThread(BOOL Report);
 unsigned long _beginthread( void( *start_address )(BOOL Report), unsigned stack_size, void * arglist);
@@ -91,7 +91,7 @@ double Distance(double laa, double loa, BOOL KM);
 struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
 VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
 BOOL KillOldTNC(char * Path);
-
+BOOL ToLOC(double Lat, double Lon , char * Locator);
 
 BOOL ProcessConfig();
 
@@ -1054,6 +1054,12 @@ Dll VOID APIENTRY Poll_APRS()
 		Station = ProcessRFFrame(MsgCopy, len);
 #endif
 
+		if (Station == NULL)
+		{	
+			ReleaseBuffer(monbuff);
+			continue;			
+		}
+
 		memcpy(MsgCopy, buffer, len);			// Process RF Frame may have changed it
 		MsgCopy[len] = 0;
 
@@ -1476,7 +1482,7 @@ BOOL ConvertCalls(char * DigiCalls, UCHAR * AX, int * Lens)
 
 
 
-static APRSProcessLine(char * buf)
+static int APRSProcessLine(char * buf)
 {
 	char * ptr, * p_value;
 
@@ -1596,7 +1602,7 @@ static APRSProcessLine(char * buf)
 	if (_stricmp(ptr, "STATUSMSG") == 0)
 	{
 		p_value = strtok(NULL, ";\t\n\r");
-		memcpy(StatusMsg, p_value, 255);	// Just in case too long
+		memcpy(StatusMsg, p_value, 128);	// Just in case too long
 		StatusMsgLen = strlen(p_value);
 		return TRUE;
 	}
@@ -2106,10 +2112,37 @@ Dll VOID APIENTRY APISendBeacon()
 
 VOID * BeaconParams[4];
 
-VOID SendBeaconThread(VOID * BeaconParams[4]);
+int SendBeaconThread(VOID * BeaconParams[4]);
 
 VOID SendBeacon(int toPort, char * BeaconText, BOOL SendStatus, BOOL SendSOGCOG)
 {
+	// Send to IS if needed then start a thread to send to radio ports
+
+	if (PosnSet == FALSE)
+		return;
+
+	if (APRSISOpen && toPort == 0)
+	{
+		char SOGCOG[10] = "";
+		char ISMsg[300];
+		int Len;
+
+		Debugprintf("Sending APRS Beacon to APRS-IS");
+
+		if (SendSOGCOG | (COG != 0.0))
+			sprintf(SOGCOG, "%03.0f/%03.0f", COG, SOG);
+	
+//		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s %s\r\n", APRSCall, APRSDest,
+//			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
+
+		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s BPQ32 Igate V %s\r\n", APRSCall, APRSDest,
+			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+
+
+		ISSend(sock, ISMsg, Len, 0);
+		Debugprintf(">%s", ISMsg);
+	}
+
 	BeaconParams[0] = (VOID *)toPort;
 	BeaconParams[1] = BeaconText;
 	BeaconParams[2] = (VOID *)SendStatus;
@@ -2118,7 +2151,7 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendStatus, BOOL SendSOGCOG)
 	_beginthread(SendBeaconThread, 0, (VOID *) BeaconParams);
 }
 
-VOID SendBeaconThread(VOID * BeaconParams[4])
+int SendBeaconThread(VOID * BeaconParams[])
 {
 	// runs as a thread so we can sleep() between calls
 
@@ -2137,7 +2170,7 @@ VOID SendBeaconThread(VOID * BeaconParams[4])
 	struct PORTCONTROL * PORT;
 	
 	if (PosnSet == FALSE)
-		return;
+		return 0;
 
 	if (SendSOGCOG | (COG != 0.0))
 		sprintf(SOGCOG, "%03.0f/%03.0f", COG, SOG);
@@ -2145,10 +2178,10 @@ VOID SendBeaconThread(VOID * BeaconParams[4])
 	BeaconCounter = BeaconInterval * 60;
 	
 	if (ISPort && IGateEnabled)
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
 			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 	else
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
 			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 	
 	Msg.PID = 0xf0;
@@ -2158,11 +2191,15 @@ VOID SendBeaconThread(VOID * BeaconParams[4])
 	// Should we drop it if we've sent it recently ??
 
 	if (CheckforDups(APRSCall, Msg.L2DATA, Len - 23))
-		return;
+		return 0;
 
 	// Add to our station list
 
 	Station = FindStation(APRSCall, TRUE);
+
+	if (Station == NULL)
+		return 0;
+
 		
 	strcpy(Station->Path, "APBPQ1");
 	strcpy(Station->LastPacket, Msg.L2DATA);
@@ -2171,32 +2208,41 @@ VOID SendBeaconThread(VOID * BeaconParams[4])
 	DecodeAPRSPayload(Msg.L2DATA, Station);
 	Station->TimeLastUpdated = time(NULL);
 
-
-
-	if (toPort && BeaconHddrLen[toPort])
+	if (toPort)
 	{
-		memcpy(Msg.DEST, &BeaconHeader[toPort][0][0], 10 * 7);		// Clear unused digis
-		Send_AX_Datagram(&Msg, Len + 2, toPort);
+		if (BeaconHddrLen[toPort] == 0)
+			return 0;
 
-		return;
+		Debugprintf("Sending APRS Beacon to port %d", toPort);
+
+		memcpy(Msg.DEST, &BeaconHeader[toPort][0][0], 10 * 7);		// Clear unused digis
+		
+		GetSemaphore(&Semaphore, 12);
+		Send_AX_Datagram(&Msg, Len + 2, toPort);
+		FreeSemaphore(&Semaphore);
+
+		return 0;
 	}
 
 	for (Port = 1; Port <= NUMBEROFPORTS; Port++)
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
+			Debugprintf("Sending APRS Beacon to port %d", Port);
+
 			if (ISPort && IGateEnabled)
-				Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
-					LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 			else
-				Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
-					LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
-					
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;
 
 			memcpy(Msg.DEST, &BeaconHeader[Port][0][0], 10 * 7);
+			GetSemaphore(&Semaphore, 12);
 			Send_AX_Datagram(&Msg, Len + 2, Port);
+			FreeSemaphore(&Semaphore);
 
 			// if Port has interlock set pause before next
 
@@ -2205,20 +2251,6 @@ VOID SendBeaconThread(VOID * BeaconParams[4])
 			if (PORT && PORT->PORTINTERLOCK)
 				Sleep(20000);
 		}
-	}
-
-	// Also send to APRS-IS if connected
-
-	if (APRSISOpen)
-	{
-		char ISMsg[300];
-
-		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s %s\r\n", APRSCall, APRSDest,
-			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
-
-		ISSend(sock, ISMsg, Len, 0);
-		Debugprintf(">%s", ISMsg);
-
 	}
 }
 
@@ -5383,7 +5415,7 @@ VOID SendWeatherBeacon()
 
 	if (stat(WXFileName, &STAT))
 	{
-		Debugprintf("APRS WX File %s stat() falied %d", WXFileName, GetLastError());
+		Debugprintf("APRS WX File %s stat() failed %d", WXFileName, GetLastError());
 		return;
 	}
 

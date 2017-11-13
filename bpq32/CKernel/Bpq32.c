@@ -809,11 +809,13 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix scan interlock with ARDOP
 //	Add Input source seiect for IC7300
 //	Remove % transparency from web terminal signon message
-//	Fix L4 COnnects In count on stats
+//	Fix L4 Connects In count on stats
 //	Fix crash caused by corrupt CMSInfo.txt
 //	Add Input peaks display to ARDOP status window
 //  Add options to show time in local and distances in KM on APRS Web pages
 //	Add VARA support
+//	Fix WINMOR Busy left set when port Suspended
+//	Add ARDOP-Packet Support
 
 
 #define CKernel

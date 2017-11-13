@@ -40,6 +40,7 @@ int _C_Q_ADD(VOID *Q, VOID *BUFF, char * File, int Line);
 UINT _ReleaseBuffer(VOID *BUFF, char * File, int Line);
 
 VOID * _GetBuff(char * File, int Line);
+int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line);
 
 int C_Q_COUNT(VOID *Q);
 

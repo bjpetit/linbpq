@@ -95,7 +95,7 @@ unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int a
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;
@@ -337,8 +337,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				// No, so send
 
-//				VARASendCommand(TNC, "LISTEN TRUE", TRUE);  // !!!! Temp bug workaround !!!!
-
 				VARASendCommand(TNC, TNC->ConnectCmd, TRUE);
 				TNC->Streams[0].Connecting = TRUE;
 
@@ -491,7 +489,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// Stop Listening, and set MYCALL to user's call
 
-//			VARASendCommand(TNC, "LISTEN FALSE", TRUE);
+			VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
 
 			// Stop other ports in same group
 
@@ -525,8 +523,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			time(&ltime);
 			if (ltime - TNC->lasttime > 9 )
 			{
-				ConnecttoVARA(port);
 				TNC->lasttime = ltime;
+				ConnecttoVARA(port);
 			}
 		}
 		
@@ -697,43 +695,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 
-			if (_memicmp(&buff[8], "FEC\r", 4) == 0 || _memicmp(&buff[8], "FEC ", 4) == 0)
-			{
-				TNC->FECMode = TRUE;
-				TNC->FECIDTimer = 0;
-//				ARDOPSendCommand(TNC,"FECRCV TRUE");
-		
-				if (_memicmp(&buff[8], "FEC 1600", 8) == 0)
-					TNC->FEC1600 = TRUE;
-				else
-					TNC->FEC1600 = FALSE;
-
-				return 0;
-			}
-
-			if (_memicmp(&buff[8], "PING ", 5) == 0)
-			{
-				if (InterlockedCheckBusy(TNC))
-				{
-					// Channel Busy. Unless override set, reject
-
-					if (TNC->OverrideBusy == 0)
-					{
-						// Reject
-				
-						UINT * buffptr = GetBuff();
-						
-						if (buffptr)
-						{
-							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} Ping blocked by Busy\r");
-							C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
-						}
-						return 0;
-					}
-				}
-				TNC->OverrideBusy = FALSE;
-			}
-
 			// See if a Connect Command. If so set Connecting
 
 			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
@@ -799,6 +760,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 4:				// reinit
 
+		shutdown(TNC->WINMORSock, SD_BOTH);
+		Sleep(100);
+		closesocket(TNC->WINMORSock);
+
+		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		{
+			VARAKillTNC(TNC);
+			VARARestartTNC(TNC);
+		}
 		return 0;
 
 	case 5:				// Close
@@ -808,12 +778,19 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 //			GetSemaphore(&Semaphore, 52);
 //			VARASendCommand(TNC, "CLOSE", FALSE);
 //			FreeSemaphore(&Semaphore);
-			Sleep(100);
+//			Sleep(100);
 		}
+
 		shutdown(TNC->WINMORSock, SD_BOTH);
 		Sleep(100);
 		closesocket(TNC->WINMORSock);
+		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		{
+			VARAKillTNC(TNC);
+		}
+
 		return 0;
+
 
 	case 6:				// Scan Stop Interface
 
@@ -827,7 +804,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
-//			VARASendCommand(TNC, "LISTEN FALSE", TRUE);
+			VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
 
 			return TRUE;
 		}
@@ -844,7 +821,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
-//			VARASendCommand(TNC, "LISTEN TRUE", TRUE);
+			VARASendCommand(TNC, "LISTEN ON\r", TRUE);
 			return 0;
 		}
 
@@ -858,8 +835,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			char CMD[32];
 			
-//			if (TNC->ARDOPCurrentMode[0] == 0)
-//					VARASendCommand(TNC, "LISTEN TRUE", TRUE);
 
 			strcpy(TNC->ARDOPCurrentMode, Scan->ARDOPMode); 
 
@@ -868,12 +843,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				if (TNC->ARDOPCurrentMode[0] != 0)
 				{
-//					VARASendCommand(TNC, "LISTEN FALSE", TRUE);
+					VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
 					TNC->ARDOPCurrentMode[0] = 0;
 				}
 
 				TNC->WL2KMode = 0;
 				return 0;
+			}
+			else
+			{
+				if (TNC->ARDOPCurrentMode[0] == 0)
+					VARASendCommand(TNC, "LISTEN ON\r", TRUE);
 			}
 
 			if (strchr(Scan->ARDOPMode, 'F'))
@@ -919,10 +899,14 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 }
 
 VOID VARASuspendPort(struct TNCINFO * TNC)
-{}
+{
+	VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
+}
 
 VOID VARAReleasePort(struct TNCINFO * TNC)
-{}
+{
+	VARASendCommand(TNC, "LISTEN ON\r", TRUE);
+}
 
 
 UINT VARAExtInit(EXTPORTDATA * PortEntry)
@@ -932,7 +916,7 @@ UINT VARAExtInit(EXTPORTDATA * PortEntry)
 	char * ptr;
 	APPLCALLS * APPL;
 	struct TNCINFO * TNC;
-	char Aux[100] = "MYAUX ";
+	int AuxCount = 0;
 	char Appl[11];
 	char * TempScript;
 	struct PORTCONTROL * PORT = &PortEntry->PORTCONTROL;
@@ -957,11 +941,6 @@ UINT VARAExtInit(EXTPORTDATA * PortEntry)
 
 		return (int) ExtProc;
 	}
-
-	PORT->PORTT1 = 15;
-	PORT->PORTT2 = 3;
-	PORT->PORTN2 = 5;
-	PORT->PORTPACLEN = 128;
 	
 	TNC->Port = port;
 
@@ -1014,15 +993,7 @@ UINT VARAExtInit(EXTPORTDATA * PortEntry)
 
 //	strcat(TempScript, "ROBUST False\r");
 
-	strcat(TempScript, TNC->InitScript);
-
-	free(TNC->InitScript);
-	TNC->InitScript = TempScript;
-
 	// Set MYCALL
-
-//	strcat(TNC->InitScript,"FECRCV True\r");
-//	strcat(TNC->InitScript,"AUTOBREAK True\r");
 
 	sprintf(Msg, "MYCALL %s", TNC->NodeCall);
 
@@ -1043,23 +1014,23 @@ UINT VARAExtInit(EXTPORTDATA * PortEntry)
 			}
 			strcat(Msg, " ");
 			strcat(Msg, Appl);
+			AuxCount++;
+			if (AuxCount == 4)			// Max 5 in MYCALL
+				break;
 		}
 	}
 
 	strcat(Msg, "\r");
 
-//	strcat(TNC->InitScript, Msg);
+	strcat(TempScript, Msg);
 
-	if (strlen(Aux) > 8)
-	{
-		Aux[strlen(Aux) - 1] = '\r';
-//		strcat(TNC->InitScript, Aux);
-	}
+	strcat(TempScript, TNC->InitScript);
 
-//	strcat(TNC->InitScript,"PROCESSID\r");
-//	strcat(TNC->InitScript,"CODEC TRUE\r");
-//	strcat(TNC->InitScript,"LISTEN FALSE\r");		// Will use TNC in FEC mode only
-//	strcat(TNC->InitScript,"MYCALL\r");
+	free(TNC->InitScript);
+	TNC->InitScript = TempScript;
+
+
+	strcat(TNC->InitScript,"LISTEN ON\r");	
 
 	strcpy(TNC->CurrentMYC, TNC->NodeCall);
 
@@ -1160,7 +1131,7 @@ int ConnecttoVARA(int port)
 	return 0;
 }
 
-VOID VARAThread(port)
+VOID VARAThread(int port)
 {
 	// Opens sockets and looks for data on control and data sockets.
 	
@@ -1174,6 +1145,7 @@ VOID VARAThread(port)
 	fd_set errorfs;
 	struct timeval timeout;
 	char * ptr1;
+	char * ptr2;
 	UINT * buffptr;
 
 	if (TNC->WINMORHostName == NULL)
@@ -1181,19 +1153,23 @@ VOID VARAThread(port)
 
 	TNC->BusyFlags = 0;
 
+	TNC->CONNECTING = TRUE;
+
+	Sleep(3000);		// Allow init to complete 
+
 #ifdef WIN32
 	if (strcmp(TNC->WINMORHostName, "127.0.0.1") == 0)
 	{
-		// can only check if running on local ost
+		// can only check if running on local host
 		
 		TNC->WIMMORPID = GetListeningPortsPID(TNC->destaddr.sin_port);
 		if (TNC->WIMMORPID == 0)
+		{
+			TNC->CONNECTING = FALSE;
 			return;						// Not listening so no point trying to connect
+		}
 	}
 #endif
-	TNC->CONNECTING = TRUE;
-
-	Sleep(5000);		// Allow init to complete 
 
 //	// If we started the TNC make sure it is still running.
 
@@ -1343,26 +1319,27 @@ VOID VARAThread(port)
 		if (buffptr)
 			ReleaseBuffer(buffptr);
 	}
-/*
 
-	buffptr = GetBuff();
-	buffptr[1] = 0;
-	C_Q_ADD(&TNC->BPQtoWINMOR_Q, buffptr);
 
 	while (ptr1 && ptr1[0])
 	{
+		unsigned char c;
+		
 		ptr2 = strchr(ptr1, 13);
+		
 		if (ptr2)
-			*(ptr2) = 0; 
-
+		{
+			c = *(ptr2 + 1);		// Save next char
+			*(ptr2 + 1) = 0;		// Terminate string
+		}
 		VARASendCommand(TNC, ptr1, TRUE);
 
 		if (ptr2)
-			*(ptr2++) = 13;		// Put CR back for next time 
+			*(1 + ptr2++) = c;		// Put char back 
 
 		ptr1 = ptr2;
 	}
-	*/
+	
 	TNC->Alerted = TRUE;
 
 	sprintf(TNC->WEB_COMMSSTATE, "Connected to VARA TNC");		
@@ -1522,21 +1499,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	Buffer[MsgLen - 1] = 0;		// Remove CR
-	
-	if (_memicmp(Buffer, "STATE ", 6) == 0)
-	{
-		Debugprintf(Buffer);
-	
-		if (_memicmp(&Buffer[6], "OFFLINE", 7) == 0)
-		{
-			// Force a restart
-
-	//		VARASendCommand(TNC, "CODEC FALSE", TRUE);
-	//		VARASendCommand(TNC, "CODEC TRUE", TRUE);
-		}
-		return;
-	}
-	
+		
 	if (_memicmp(Buffer, "PTT ON", 6) == 0)
 	{
 		TNC->Busy = TNC->BusyHold * 10;				// BusyHold  delay
@@ -1554,6 +1517,34 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		return;
 	}
+
+	if (_memicmp(&Buffer[0], "PENDING", 7) == 0)	// Save Pending state for scan control
+	{
+		TNC->ConnectPending = 6;				// Time out after 6 Scanintervals
+		return;
+	}
+
+	if (_memicmp(&Buffer[0], "CANCELPENDING", 13) == 0)
+	{
+		TNC->ConnectPending = FALSE;
+		return;
+	}
+
+
+	if (strcmp(Buffer, "OK") == 0)
+	{
+		if (TNC->Streams[0].Connecting == TRUE)
+			return;		// Discard response or it will mess up connect scripts
+
+		// Need also to discard response to LISTEN OFF after attach
+
+		if (TNC->DiscardNextOK)
+		{
+			TNC->DiscardNextOK = 0;
+			return;
+		}
+	}
+
 
 	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
 	{	
@@ -1800,7 +1791,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			
 			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
-			UpdateMH(TNC, Call, '+', 'O');
+			UpdateMH(TNC, TNC->TargetCall, '+', 'O');
 			return;
 		}
 	}
@@ -2101,6 +2092,9 @@ VOID VARASendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue)
 	if (Buff[0] == 0)		// Terminal Keepalive?
 		return;
 
+	if (memcmp(Buff, "LISTEN O", 8) == 0)
+		TNC->DiscardNextOK = TRUE;			// Responding to LISTEN  messes up forwarding
+
 
 	if(TNC->WINMORSock)
 	{
@@ -2364,7 +2358,7 @@ VOID VARAReleaseTNC(struct TNCINFO * TNC)
 
 //	ARDOPChangeMYC(TNC, TNC->NodeCall);
 
-//	ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+	VARASendCommand(TNC, "LISTEN ON\r", TRUE);
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
 	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);

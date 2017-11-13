@@ -66,7 +66,7 @@ int SemHeldByAPI;
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessReceivedData(int bpqport);
-static ProcessLine(char * buf, int Port);
+static int ProcessLine(char * buf, int Port);
 static VOID ProcessFLDigiPacket(struct TNCINFO * TNC, char * Message, int Len);
 VOID ProcessFLDigiKISSPacket(struct TNCINFO * TNC, char * Message, int Len);
 struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
@@ -547,7 +547,7 @@ UINT UIARQExtInit(EXTPORTDATA * PortEntry)
 }
 
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr;
 	char * p_ipad = 0;

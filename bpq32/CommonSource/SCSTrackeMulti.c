@@ -58,8 +58,9 @@ char * strlop(char * buf, char delim);
 char NodeCall[11];		// Nodecall, Null Terminated
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen);
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr;
 	char * p_port = 0;
@@ -656,7 +657,7 @@ static VOID DEDPoll(int Port)
 
 		// Timed out in host mode - Clear any connection and reinit the TNC
 
-		Debugprintf("DEDHOST - Link to TNC Lost");
+		Debugprintf("DEDHOST - Link to TNC Lost Port %d", TNC->Port);
 		TNC->TNCOK = FALSE;
 
 		TNC->HostMode = 0;
@@ -704,6 +705,7 @@ static VOID DEDPoll(int Port)
 		if (*(start) == 0)			// End of Script
 		{
 			TNC->InitPtr = NULL;
+			Debugprintf("TRK - Init Complete Port %d", TNC->Port);
 		}
 		else
 		{
@@ -881,7 +883,7 @@ static VOID DEDPoll(int Port)
 		Buffer = &buffptr->DEST[0];		// Raw Frame
 		Buffer[datalen] = 0;
 
-		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
+		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(500);
 							
 //		sprintf(TNC->Streams[Stream].CmdSet, "I%s\r%s\r", TNC->Streams[Stream].MyCall, buffptr+2);
 

@@ -78,7 +78,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT);
 BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT);
 BOOL DestroyTTYInfo(int port);
 void CheckRX(struct RIGPORTINFO * PORT);
-static OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed);
+int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed);
 VOID ICOMPoll(struct RIGPORTINFO * PORT);
 VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuff, int len);
 VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len);
@@ -1468,7 +1468,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 #define TWOSTOPBITS         2
 #endif
 
-OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
+int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 {
 	if (PORT->PortType == FT2000 || strcmp(PORT->Rigs[0].RigName, "FT847") == 0)		// FT2000 and similar seem to need two stop bits
 		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, TWOSTOPBITS);
@@ -1773,7 +1773,7 @@ VOID ReleasePermission(struct RIGINFO *RIG)
 	}
 }
 
-GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
+int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 {
 	struct ScanEntry ** ptr;
 	struct _EXTPORTDATA * PortRecord;
@@ -2405,7 +2405,7 @@ SetFinished:
 	}
 }
 
-SendResponse(int Session, char * Msg)
+int SendResponse(int Session, char * Msg)
 {
 	PMESSAGE Buffer = GetBuff();
 	BPQVECSTRUC * VEC;

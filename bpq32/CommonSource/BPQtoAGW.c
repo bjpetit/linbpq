@@ -91,7 +91,7 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto);
 static BOOL ReadConfigFile(int Port);
 int ConnecttoAGW();
 int ProcessReceivedData(int bpqport);
-static ProcessLine(char * buf, int Port, BOOL CheckPort);
+static int ProcessLine(char * buf, int Port, BOOL CheckPort);
 
 
 extern UCHAR BPQDirectory[];

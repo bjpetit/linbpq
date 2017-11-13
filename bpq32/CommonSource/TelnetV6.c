@@ -571,6 +571,8 @@ static VOID WritetoTrace(int Stream, char * Msg, int Len)
 	int LineLen, i;
 	char logmsg[200];
 
+	Msg[Len] = 0;
+
 lineloop:
 
 	if (Len > 0)
@@ -606,14 +608,14 @@ lineloop:
 
 			for (i = 0; i < LineLen; i++)
 			{
-				if (Line[i] > 127)
+				if (Line[i] > 127 || Line[i] < 32)
 					goto Skip;
 			}
 
 			if (strlen(Line) < 100)
 			{
 				sprintf(logmsg,"%d %s\r\n", Stream, Line);
-				WriteCMSLog (logmsg);
+				  (logmsg);
 			}
 
 		Skip:

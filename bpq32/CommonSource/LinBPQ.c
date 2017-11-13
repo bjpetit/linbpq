@@ -25,7 +25,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "CHeaders.h"
 #include "BPQMail.h"
 #ifdef WIN32
-#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
+#include <Iphlpapi.h>
+//#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
 #else
 #include <iconv.h>
 #ifndef MACBPQ
@@ -249,13 +250,6 @@ VOID CheckProgramErrors()
 }
 
 #ifdef WIN32
-
-WINBASEAPI
-HWND
-APIENTRY
-GetConsoleWindow(
-    VOID
-    );
 
 BOOL CtrlHandler(DWORD fdwCtrlType)
 {
@@ -1314,7 +1308,7 @@ int APIENTRY Restart()
 int APIENTRY Reboot()
 {
 	// Run sudo shutdown -r -f
-#ifndef LINBPQ
+#ifdef WIN32
 	STARTUPINFO  SInfo;
     PROCESS_INFORMATION PInfo;
 	char Cmd[] = "shutdown -r -f";
@@ -1418,7 +1412,7 @@ int GetTickCount()
 	clock_gettime(CLOCK_REALTIME, &ts);
 	return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
-#endif
+
 
 
 void SetWindowText(HWND hWnd, char * lpString)
@@ -1426,10 +1420,46 @@ void SetWindowText(HWND hWnd, char * lpString)
 	return;
 };
 
-BOOL MySetDlgItemText(HWND hWnd, char * lpString)
+BOOL SetDlgItemText(HWND hWnd, int item, char * lpString)
 {
 	return 0;
 };
+
+#endif
+
+int GetListeningPortsPID(int Port)
+{
+#ifdef WIN32
+
+	MIB_TCPTABLE_OWNER_PID * TcpTable = NULL;
+	PMIB_TCPROW_OWNER_PID Row;
+	int dwSize = 0;
+	int n;
+
+	// Get PID of process for this TCP Port
+
+	// Get Length of table
+	
+	GetExtendedTcpTable(TcpTable, &dwSize, TRUE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+
+	TcpTable = malloc(dwSize);
+	GetExtendedTcpTable(TcpTable, &dwSize, TRUE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+
+	for (n = 0; n < TcpTable->dwNumEntries; n++)
+	{
+		Row = &TcpTable->table[n];
+		
+		if (Row->dwLocalPort == Port && Row->dwState == MIB_TCP_STATE_LISTEN)
+		{
+			return Row->dwOwningPid;
+			break;
+		}
+	}
+#endif
+	return 0;			// Not found
+}
+
+
 
 VOID Check_Timer()
 {

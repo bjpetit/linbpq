@@ -1650,7 +1650,7 @@ LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
 		
-		if (wmId > BPQBASE && wmId < BPQBASE + 32)
+		if (wmId > BPQBASE && wmId < BPQBASE + 33)
 		{
 			TogglePort(hWnd, wmId, 0x1 << (wmId - (BPQBASE + 1)));
 			break;

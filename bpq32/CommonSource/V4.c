@@ -84,7 +84,7 @@ unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int a
 
 
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;

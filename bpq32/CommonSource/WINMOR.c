@@ -312,7 +312,7 @@ VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
 }
 #endif
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;
@@ -1335,6 +1335,13 @@ VOID WinmorSuspendPort(struct TNCINFO * TNC)
 {
 	if (TNC->CONNECTED)
 		send(TNC->WINMORSock, "CODEC FALSE\r\n", 14, 0);
+
+	if (TNC->Busy)
+	{
+		TNC->Busy = FALSE;		// Can't clear detector if CODEC off.
+		MySetWindowText(TNC->xIDC_CHANSTATE, "Clear");
+		strcpy(TNC->WEB_CHANSTATE, "Clear");
+	}
 }
 
 VOID WinmorReleasePort(struct TNCINFO * TNC)
@@ -1613,7 +1620,21 @@ VOID WINMORThread(int port)
 
 	TNC->CONNECTING = TRUE;
 
-	Sleep(5000);		// Allow init to complete 
+	Sleep(3000);		// Allow init to complete 
+
+#ifdef WIN32
+	if (strcmp(TNC->WINMORHostName, "127.0.0.1") == 0)
+	{
+		// can only check if running on local host
+		
+		TNC->WIMMORPID = GetListeningPortsPID(TNC->destaddr.sin_port);
+		if (TNC->WIMMORPID == 0)
+		{
+			TNC->CONNECTING = FALSE;
+			return;						// Not listening so no point trying to connect
+		}
+	}
+#endif
 
 //	// If we started the TNC make sure it is still running.
 

@@ -134,6 +134,9 @@ typedef DWORD   COLORREF;
 #define MoveFile rename
 #define CreateDirectory mkdir
 
+int sprintf_s(char * string, int plen, const char * format, ...);
+
+
 int memicmp(unsigned char *a, unsigned char *b, int n);
 int stricmp(const unsigned char * pStr1, const unsigned char *pStr2);
 char * strupr(char* s);
@@ -176,21 +179,16 @@ typedef struct tagRECT
 
 #ifdef LINBPQ
 
-#ifdef SetWindowText
-#undef SetWindowText
-#endif
-//#define SetWindowText  MySetWindowText
 
-
-#ifdef SetDlgItemText
-#undef SetDlgItemText
-#endif
-#define SetDlgItemText MySetDlgItemText
-
+#ifndef WIN32
+void SetWindowText(HWND hWnd, char * lpString);
+BOOL MySetDlgItemText(HWND hWnd, int item, char * lpString);
 
 BOOL MySetDlgItemText();
 
-//BOOL MySetWindowText();
+VOID OutputDebugString(char * string);
+
+#endif
 
 #ifdef APIENTRY
 #undef APIENTRY

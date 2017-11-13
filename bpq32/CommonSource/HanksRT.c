@@ -33,7 +33,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "bpqchat.h"
 
-#ifdef LINBPQ
+#ifndef WIN32
 
 iconv_t link_toUTF8 = NULL;
 
@@ -497,7 +497,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 		// With Windows it is simple - convert using current codepage
 		// I think the only reliable way is to convert to unicode and back
 
-#ifndef LINBPQ
+#ifdef WIN32
 
 		int wlen;
 
@@ -701,7 +701,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 		{
 			char * Context;
 			char * CP = strtok_s(&Buffer[1], " ,\r", &Context);
-#ifdef LINBPQ
+#ifndef WIN32
 			iconv_t temp = NULL;
 #else 
 			int temp = 0;
@@ -711,7 +711,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 			
 			if (CP == NULL || CP[0] == 0)
 			{
-#ifdef LINBPQ
+#ifndef WIN32
 				if (conn->u.user->Codepage[0])
 					nprintf(conn, "Codepage is %s\r", conn->u.user->Codepage);
 #else
@@ -725,7 +725,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 			}
 			_strupr(CP);
 
-#ifdef LINBPQ
+#ifndef WIN32
 
 			// Validate Code Page by trying to open an iconv descriptor
 			
@@ -944,7 +944,7 @@ void rduser(USER *user)
 			if (ptr)
 			{
 				*ptr++ = 0;
-#ifdef LINBPQ
+#ifndef WIN32
  				strcpy(user->Codepage, ptr);
 #else
  				user->Codepage = atoi(ptr);
@@ -957,7 +957,7 @@ void rduser(USER *user)
 	}
 	fclose(in);
 
-#ifdef LINBPQ
+#ifndef WIN32
 
 	// Open an iconv decriptor for each conversion
 
@@ -1710,7 +1710,7 @@ void put_text(ChatCIRCUIT * circuit, USER * user, UCHAR * buf)
 
 	if (circuit->u.user->rtflags & u_noUTF8)
 	{
-#ifndef LINBPQ
+#ifdef WIN32
 		char * Buffer = buf;
 		WCHAR BufferW[4096];
 		int wlen, blen;
@@ -1988,7 +1988,7 @@ static void user_leave(USER *user)
 			free(t->name);
 			free(t->call);
 			free(t->qth);
-#ifdef LINBPQ
+#ifndef WIN32
 			if (t->iconv_fromUTF8)
 				iconv_close(t->iconv_fromUTF8);
 			if (t->iconv_toUTF8)

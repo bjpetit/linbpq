@@ -945,7 +945,7 @@
 
 //	Fix PE if Filename missing from FILE connect script command
 //	Suppress reporting errors after receiving FQ
-
+//	Fix problem caused by trailing spaces on callsign in WP database
 
 
 #include "BPQMail.h"

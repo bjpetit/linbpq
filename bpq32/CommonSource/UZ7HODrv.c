@@ -68,7 +68,7 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto);
 
 int ConnecttoUZ7HO();
 static int ProcessReceivedData(int bpqport);
-static ProcessLine(char * buf, int Port);
+static int ProcessLine(char * buf, int Port);
 int static KillTNC(struct TNCINFO * TNC);
 int static RestartTNC(struct TNCINFO * TNC);
 VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message);
@@ -1136,7 +1136,7 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 */
 
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;
@@ -1267,7 +1267,25 @@ VOID ConnecttoUZ7HOThread(port)
 	struct hostent * HostEnt;
 	struct TNCINFO * TNC = TNCInfo[port];
 
-	Sleep(5000);		// Allow init to complete 
+	TNC->CONNECTING = TRUE;
+
+	Sleep(3000);		// Allow init to complete 
+
+#ifdef WIN32
+	if (strcmp(TNC->WINMORHostName, "127.0.0.1") == 0)
+	{
+		// can only check if running on local host
+		
+		TNC->WIMMORPID = GetListeningPortsPID(TNC->destaddr.sin_port);
+		if (TNC->WIMMORPID == 0)
+		{
+			TNC->CONNECTING = FALSE;
+			return;						// Not listening so no point trying to connect
+		}
+	}
+#endif
+
+
 
 	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
 
@@ -1288,6 +1306,7 @@ VOID ConnecttoUZ7HOThread(port)
 	{
 		Debugprintf("UZ7HO Closing Sock %d", TNC->WINMORSock); 
 		closesocket(TNC->WINMORSock);
+		TNC->CONNECTING = FALSE;
 	}
 
 	TNC->WINMORSock = 0;
@@ -1298,7 +1317,7 @@ VOID ConnecttoUZ7HOThread(port)
 	{
 		i=sprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
-
+		TNC->CONNECTING = FALSE;
   	 	return; 
 	}
  

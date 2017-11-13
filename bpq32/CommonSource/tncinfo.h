@@ -683,6 +683,8 @@ typedef struct TNCINFO
 	int	 InputLevelMin;				// Sound card levels
 	int	 InputLevelMax;				// Sound card levels
 
+	int	DiscardNextOK;				// Used bt VARA to suppress OK response to LISTEN commands
+
 } *PTNCINFO;
 
 VOID * zalloc(int len);

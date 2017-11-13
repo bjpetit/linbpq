@@ -94,7 +94,8 @@ int ARDOPWriteCommBlock(struct TNCINFO * TNC);
 int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
 int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
 BOOL WriteCommBlock(struct TNCINFO * TNC);
-VOID AddVirtualKISSPort(struct TNCINFO * TNC, int Port);
+VOID AddVirtualKISSPort(struct TNCINFO * TNC, int Port, char * buf);
+int ConfigVirtualKISSPort(struct TNCINFO * TNC, char * Cmd);
 void ProcessKISSBytes(struct TNCINFO * TNC, UCHAR * Data, int Len);
 void ProcessKISSPacket(struct TNCINFO * TNC, UCHAR * KISSBuffer, int Len);
 
@@ -250,7 +251,7 @@ BOOL ARDOPOpenLogFiles(struct TNCINFO * TNC)
 
 
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;
@@ -453,7 +454,14 @@ static ProcessLine(char * buf, int Port)
 				TNC->LogPath = _strdup(&buf[7]);
 			else
 			if (_memicmp(buf, "ENABLEPACKET", 12) == 0)
-				AddVirtualKISSPort(TNC, Port);
+				AddVirtualKISSPort(TNC, Port, buf);
+			else
+			if (_memicmp(buf, "PAC ", 4) == 0 && _memicmp(buf, "PAC MODE", 8) != 0)
+			{
+				// PAC MODE goes to TNC, others are parsed locally
+
+				ConfigVirtualKISSPort(TNC, buf);
+			}
 			else
 
 			strcat (TNC->InitScript, buf);
@@ -1195,6 +1203,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				}
 				return 1;
 			}
+			
+			if (_memicmp(&buff[8], "PAC ", 4) == 0 && _memicmp(&buff[8], "PAC MODE", 8) != 0)
+			{
+				// PAC MODE goes to TNC, others are parsed locally
+
+				buff[7 + txlen] = 0;
+				ConfigVirtualKISSPort(TNC, &buff[8]);
+				return 1;
+			}
 
 			if (_memicmp(&buff[8], "OVERRIDEBUSY", 12) == 0)
 			{
@@ -1857,7 +1874,22 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 
 	TNC->CONNECTING = TRUE;
 
-	Sleep(5000);		// Allow init to complete 
+	Sleep(3000);		// Allow init to complete 
+
+#ifdef WIN32
+	if (strcmp(TNC->WINMORHostName, "127.0.0.1") == 0)
+	{
+		// can only check if running on local host
+		
+		TNC->WIMMORPID = GetListeningPortsPID(TNC->destaddr.sin_port);
+		if (TNC->WIMMORPID == 0)
+		{
+			TNC->CONNECTING = FALSE;
+			return;						// Not listening so no point trying to connect
+		}
+	}
+#endif
+
 
 //	// If we started the TNC make sure it is still running.
 
@@ -2371,7 +2403,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "BUSY FALSE", 10) == 0)
 	{
 		TNC->BusyFlags &= ~CDBusy;
-		if (TNC->BusyHold)
+		if (TNC->Busy)
 			strcpy(TNC->WEB_CHANSTATE, "BusyHold");
 		else
 			strcpy(TNC->WEB_CHANSTATE, "Clear");
@@ -3177,9 +3209,9 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 	
 	if (TNC->FECMode)
 	{	
-			Length = strlen(Data);
-			if (Data[Length - 1] == 10)
-				Data[Length - 1] = 13;	
+		Length = strlen(Data);
+		if (Data[Length - 1] == 10)
+			Data[Length - 1] = 13;	
 
 	}
 
@@ -5159,9 +5191,12 @@ extern UCHAR DATAAREA[DATABYTES];
 
 
 
-VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort)
+VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort, char * buf)
 {
 	// Adds a Virtual KISS port for simultaneous ARDOP and Packet on Teensy TNC
+	// or ARDOP_PTC ovet a single host mode port. 
+
+	// Not needed if using TCP interface as that  uses KISS over TCP		
 
 	struct PORTCONTROL * PORTVEC=PORTTABLE;
 	struct PORTCONTROL * PORT;
@@ -5171,6 +5206,13 @@ VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort)
 	char Msg[64];
 	unsigned char * ptr3;
 	unsigned int3;
+	int newPortNumber = 0;
+
+	if (TNC->ARDOPCommsMode == 'T')			// TCP
+		return;
+
+	if (buf[12] == '=')
+		newPortNumber = atoi(&buf[13]);
 
 	if (space < (pl + mh))
 	{
@@ -5201,9 +5243,35 @@ VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort)
 
 	PORTVEC->PORTPOINTER = PORT;		// Chain to previous last port
 
+	if (newPortNumber == 0)
+		newPortNumber = 32;;
+
+	if (GetPortTableEntryFromPortNum(newPortNumber))
+	{
+		// Number in use
+
+		// If user specified search up, if default search down
+
+		if (newPortNumber == 32)
+			while(newPortNumber && GetPortTableEntryFromPortNum(newPortNumber))		// Try next lower
+				newPortNumber--;
+		else
+			while(newPortNumber < 32 && GetPortTableEntryFromPortNum(newPortNumber))		// Try next highest
+				newPortNumber++;
+
+	}
+
+	if (newPortNumber == 0 || newPortNumber > 32)
+	{
+		WritetoConsoleLocal("No free Port Number to add ARDOP/Packet Port\n");
+		return;
+	}
+
+
+
 	NUMBEROFPORTS++;
 
-	PORT->PORTNUMBER = NUMBEROFPORTS;
+	PORT->PORTNUMBER = newPortNumber;
 	PORT->PortSlot = PORTVEC->PortSlot + 1;
 	
 	sprintf(Msg, "Packet Port for ARDOP Port %d  ", ARDOPPort);
@@ -5218,15 +5286,16 @@ VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort)
 	PORT->PORTCLOSECODE = ARAXCLOSE;
 	PORT->PORTTXCHECKCODE = ARAXTXCHECK;
 
+	// Default L2 Params
+
 	PORT->PORTN2 = 5;
-	PORT->PORTT1 = 15;		// 5 secs
+	PORT->PORTT1 = 5000/333;		// FRACK 5 secs
 
-//	PORT->PORTT1 = FRACK / 333;
-//	PORT->PORTT2 = RESPTIME /333;
-//	PORT->PORTN2 = RETRIES;
-	PORT->PORTPACLEN = PACLEN;
-	PORT->PORTWINDOW = 4;
+	// As we use IPoll we can set RESPTIME very long and FRACK short
 
+	PORT->PORTT2 =  20000/333;		// RESPTIME
+	PORT->PORTPACLEN = 128;
+	PORT->PORTWINDOW = 1;
 
 	//	ADD MH AREA IF NEEDED
 
@@ -5246,6 +5315,113 @@ VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort)
 	NEXTFREEDATA = ptr3;
 
 	return;
+}
+
+int ConfigVirtualKISSPort(struct TNCINFO * TNC, char * Cmd)
+{
+	struct PORTCONTROL * PORT = TNC->VirtualPORT;
+	UINT * buffptr = GetBuff();
+	char * Context;
+	char * Param;
+	char * Command;
+	int Value;
+
+	if (buffptr == NULL)
+		return 0;
+	
+	if (PORT == NULL)
+	{
+		buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} Packet Mode nor Enabled\r");
+		C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+		return 0;
+	}
+
+	_strupr(Cmd);
+
+	Command = strtok_s(&Cmd[4], " \n\r", &Context);
+	Param = strtok_s(NULL, " \n\r", &Context);
+
+	if (Param)
+		Value = atoi(Param);
+
+	if (strcmp(Command, "PACLEN") == 0)
+	{
+		if (Param == NULL)
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s %d\r", Command, PORT->PORTPACLEN);
+		else
+		{
+			if (Value > 0 && Value <= 256)
+				PORT->PORTPACLEN = Value;
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s now %d\r", Command, PORT->PORTPACLEN);
+		}
+		C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+		return 0;
+	}
+	else if (strcmp(Command, "RETRIES") == 0)
+	{
+		if (Param == NULL)
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s %d\r", Command, PORT->PORTN2);
+		else
+		{
+			if (Value > 0 && Value <= 16)
+				PORT->PORTPACLEN = Value;
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s now %d\r", Command, PORT->PORTN2);
+		}
+		C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+		return 0;
+	}
+	else if (strcmp(Command, "WINDOW") == 0 || strcmp(Command, "MAXFRAME") == 0)
+	{
+		if (Param == NULL)
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s %d\r", Command, PORT->PORTWINDOW);
+		else
+		{
+			if (Value > 0 && Value <= 7)
+				PORT->PORTWINDOW = Value;
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s now %d\r", Command, PORT->PORTWINDOW);
+		}
+		C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+		return 0;
+	}
+	else if (strcmp(Command, "FRACK") == 0)
+	{
+		if (Param == NULL)
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s %d mS\r", Command, PORT->PORTT1 * 333);
+		else
+		{
+			if (Value > 0 && Value <= 20000)
+				PORT->PORTT1 = Value / 333;
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s now %d mS\r", Command, PORT->PORTT1 * 333);
+		}
+		C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+		return 0;
+	}
+	else if (strcmp(Command, "RESPTIME") == 0)
+	{
+		if (Param == NULL)
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s %d mS\r", Command, PORT->PORTT2 * 333);
+		else
+		{
+			if (Value > 0 && Value <= 20000)
+				PORT->PORTT2 = Value / 333;
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s now %d mS\r", Command, PORT->PORTT2 * 333);
+		}
+		C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+		return 0;
+	}
+	else
+		buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} Invalid Command %s\r", Cmd);
+
+
+	C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+	return 0;
+
+
 }
 
 void ProcessKISSBytes(struct TNCINFO * TNC, UCHAR * Data, int Len)

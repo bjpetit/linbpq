@@ -773,7 +773,7 @@ UINT AXIPExtInit(struct PORTCONTROL *  PortEntry)
 	return ((int) ExtProc);
 }
 
-InitAXIP(int Port)
+int InitAXIP(int Port)
 {
 	struct AXIPPORTINFO * PORT;
 
@@ -942,7 +942,7 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
 		}
 	}
 }	
-OpenListeningSocket(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp)
+int OpenListeningSocket(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp)
 {
 	char Msg[255];
 	struct sockaddr_in * psin;
@@ -2075,7 +2075,7 @@ broadcast QST-0 NODES-0
 	return FALSE;
 }
 
-static ProcessLine(char * buf, struct AXIPPORTINFO * PORT)
+static int ProcessLine(char * buf, struct AXIPPORTINFO * PORT)
 {
 	char * ptr;
 	char * p_call;

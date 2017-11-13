@@ -68,7 +68,7 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto);
 
 static int ConnecttoMPSK();
 static int ProcessReceivedData(int bpqport);
-static ProcessLine(char * buf, int Port);
+static int ProcessLine(char * buf, int Port);
 int KillTNC(struct TNCINFO * TNC);
 int RestartTNC(struct TNCINFO * TNC);
 VOID ProcessMPSKPacket(struct TNCINFO * TNC, char * Message, int Len);
@@ -772,7 +772,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 }
 
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;

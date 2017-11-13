@@ -536,7 +536,7 @@ void ConvertTitletoUTF8(char * Title, char * UTF8Title)
 		// I think the only reliable way is to convert to unicode and back
 
 		int origlen = strlen(Title) + 1;
-#ifndef LINBPQ
+#ifdef WIN32
 		WCHAR BufferW[128];
 		int wlen;
 		int len = origlen;
@@ -797,7 +797,7 @@ int SendWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Num
 
 		UCHAR * BufferB = malloc(2 * origlen);
 
-#ifndef LINBPQ
+#ifdef WIN32
 
 		WCHAR * BufferW = malloc(2 * origlen);
 		int wlen;

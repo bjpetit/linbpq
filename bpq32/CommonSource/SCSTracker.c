@@ -190,7 +190,7 @@ void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen)
 
 
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_port = 0;
@@ -1028,7 +1028,7 @@ VOID DEDPoll(int Port)
 
 		// Timed out in host mode - Clear any connection and reinit the TNC
 
-		Debugprintf("DEDHOST - Link to TNC Lost");
+		Debugprintf("DEDHOST - Link to TNC Lost Port %d", TNC->Port);
 		TNC->TNCOK = FALSE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
@@ -1113,7 +1113,7 @@ VOID DEDPoll(int Port)
 		if (*(start) == 0)			// End of Script
 		{
 			TNC->InitPtr = NULL;
-			Debugprintf("TRK - Init Complete");
+			Debugprintf("TRK - Init Complete Port %d", TNC->Port);
 		}
 		else
 		{

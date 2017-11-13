@@ -181,7 +181,7 @@ static void WriteLogLine(int Flags, char * Msg, int MsgLen)
 }
 
 
-static ProcessLine(char * buf, int Port)
+static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;

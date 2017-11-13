@@ -1265,7 +1265,7 @@ static BOOL ReadConfigFile()
 }
 
 
-static ProcessLine(char * buf)
+static int ProcessLine(char * buf)
 {
 	char * ptr, * p_value, * p_origport, * p_host, * p_port;
 	int port, mappedport, ipad;

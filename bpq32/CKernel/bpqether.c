@@ -518,7 +518,7 @@ static BOOL ReadConfigFile(int Port)
 }
 
 
-static ProcessLine(char * buf, int Port, BOOL CheckPort)
+static int ProcessLine(char * buf, int Port, BOOL CheckPort)
 {
 	char * ptr;
 	char * p_port;
