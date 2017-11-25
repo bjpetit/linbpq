@@ -575,7 +575,7 @@ void HostPoll()
 					WriteDebugLog(LOGDEBUG, "accept() failed error %d", WSAGetLastError());
 					return;
 				}
-				WriteDebugLog(LOGDEBUG, "Host Control Session Connected");
+				WriteDebugLog(LOGINFO, "Host Control Session Connected");
 					
 				ioctl(TCPControlSock, FIONBIO, &param);
 				CONNECTED = TRUE;
@@ -624,7 +624,7 @@ void HostPoll()
 	}
 
 	if (PktListenSock == 0)
-		return;
+		goto NoPkt;
 
 	FD_ZERO(&readfs);	
 	FD_ZERO(&errorfs);
@@ -661,6 +661,8 @@ void HostPoll()
 			}
 		}
 	}
+
+NoPkt:
 
 	if (CONNECTED)
 	{

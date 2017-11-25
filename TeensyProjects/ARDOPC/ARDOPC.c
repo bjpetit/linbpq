@@ -2026,7 +2026,7 @@ void Bit6ToASCII(UCHAR * Padded, UCHAR * UnCompressed)
     
 void CompressCallsign(char * inCallsign, UCHAR * Compressed)
 {
-	char Callsign[10];
+	char Callsign[10] = "";
 	char Padded[16];
 	int SSID;
 	char * Dash;

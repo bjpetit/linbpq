@@ -334,7 +334,7 @@ VOID SendAckModeAck()
 
 	// If using KISS over TCP, send it
 
-//#ifndef PTC	
+#ifndef TEENSY	
 	
 	// If Using TCP, send it
 
@@ -346,7 +346,7 @@ VOID SendAckModeAck()
 		KTXPutPtr = 0;
 	}
 
-//#endif
+#endif
 
 }
 
@@ -384,7 +384,7 @@ void SendFrametoHost(unsigned char *data, unsigned dlen)
 	KISSTXBUFF[KTXPutPtr++] = FEND;
 	KTXPutPtr &= KISSBUFFERMASK;
 
-//#ifndef PTC	
+#ifndef TEENSY	
 	
 	// If Using TCP, send it
 
@@ -396,7 +396,7 @@ void SendFrametoHost(unsigned char *data, unsigned dlen)
 		KTXPutPtr = 0;
 	}
 
-//#endif
+#endif
 }
  
 

@@ -132,6 +132,91 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
+#define POOLCOUNT 32
+#define AUDIO_BLOCK_SAMPLES 192
+
+#define int16_t unsigned short
+
+typedef struct my_audio_block_struct
+{
+	struct my_audio_block_struct * chain;
+	int16_t data[AUDIO_BLOCK_SAMPLES];
+} my_audio_block_t;
+
+
+
+volatile int q_count;
+
+my_audio_block_t pool[POOLCOUNT];
+my_audio_block_t free_q;
+my_audio_block_t tohost_q;
+
+
+my_audio_block_t * allocate(void)
+{
+  my_audio_block_t * block = free_q.chain;
+
+  if (block == NULL)
+  {
+    return NULL;
+  }
+
+  free_q.chain = block->chain;
+  q_count--;
+
+  return block;
+}
+void release(my_audio_block_t *block)
+{
+  block->chain = free_q.chain;
+  free_q.chain = block;
+  q_count++;
+}
+
+my_audio_block_t * q_rem(my_audio_block_t *Q)
+{
+	my_audio_block_t * first;
+	my_audio_block_t * next;
+
+	//	PQ may not be word aligned, so copy as bytes (for ARM5)
+
+
+	first = Q->chain;
+
+	if (first == 0) return (0);			// Empty
+
+	next = first->chain;					// Address of next buffer
+
+	Q->chain = next;
+
+	return (first);
+}
+
+int q_add(my_audio_block_t * Q, my_audio_block_t * BUFF)
+{
+	my_audio_block_t * next;
+
+	BUFF->chain = 0;					// Clear chain in new buffer
+
+	if (Q->chain == NULL)				// Empty
+	{
+		Q->chain = BUFF;				// New one on front
+		return(0);
+	}
+
+	next = Q->chain;
+
+	while (next->chain != 0)
+	{
+		next=next->chain;				// Chain to end of queue
+	}
+	next->chain = BUFF;					// New one on end
+
+	return(0);
+}
+
+
+
 
 void main(int argc, char * argv[])
 {
@@ -139,6 +224,21 @@ void main(int argc, char * argv[])
 	TIMECAPS tc;
 	UINT     wTimerRes;
 	DWORD	t, lastt = 0;
+
+	// Set up the pool
+
+  int i = 0;
+  my_audio_block_t * BUFF;
+
+  while (i < POOLCOUNT)
+  {
+    release(&pool[i++]);
+  }
+
+  BUFF = allocate();
+
+  q_add(&tohost_q, BUFF);
+ 
 
 //	Generate50BaudTwoToneLeaderTemplate();
 //	GeneratePSKTemplates();
@@ -959,5 +1059,4 @@ void DrawAxes(int Qual, char * Mode)
 {}
 void DrawDecode(char * Decode)
 {}
-
 

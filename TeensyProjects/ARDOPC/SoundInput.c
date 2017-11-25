@@ -1292,9 +1292,14 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 ProcessFrame:	
 
-		 if (intFrameType == PktFrameData)
+		if (intFrameType == PktFrameData)
+		{
+#ifdef TEENSY
+			SetLED(PKTLED, TRUE);		// Flash LED
+			PKTLEDTimer = Now + 400;	// For 400 Ms
+#endif	
 			return;
-
+		}
 
 		if (blnFrameDecodedOK)
 		{
