@@ -140,7 +140,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
-				OutputFile="\devprogs\bpq32\ARDOPC.exe"
+				OutputFile="c:\devprogs\bpq32\ARDOPC.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"

@@ -31,7 +31,7 @@ void PlatformSleep();
 BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
 BOOL IsPingToMe(char * strCallsign);
 void LookforPacket(float * dblMag, float dblMagAvg, int count, float * real, float * imag);
-
+void PktARDOPStartTX();
 
 // Config parameters
 
@@ -45,7 +45,7 @@ BOOL NeedPing = FALSE;		// PING Command Flag
 BOOL NeedTwoToneTest = FALSE;
 enum _ARQBandwidth CallBandwidth = UNDEFINED;
 BOOL UseKISS = TRUE;			// Enable Packet (KISS) interface
-
+BOOL NewMode = FALSE;			// Using New interface Protocol (no C: or D:)
 int PingCount;
 
 BOOL blnPINGrepeating = False;
@@ -191,11 +191,16 @@ const UCHAR bytValidFrameTypesALL[]=
 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
 35, 36, 41, 44, 45,
- 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, PINGACK, PING, 64, 65, 66,
- 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
- 84, 85, 88, 89, 90, 91, 92, 93, 96, 97, 98, 99, 100, 101, 102, 103,
- 104, 105, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
- 124, 125, PktFrameHeader, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
+ 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, PINGACK, PING,
+
+	0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,	// 40 - 4F
+	0x4A,0x4B,0x4C,0x4D,
+	0x50,0x51,0x52,0x53,0x54,0x55,						// 50 - 5F 
+	0x60,0x61,0x62,0x63,0x64,0x65,						// 60 - 6F
+	0x70,0x71,0x72,0x73,0x74,0x75,0x7A,0x7B,0x7C,0x7D,	// 70 - 7F
+
+ 
+ PktFrameHeader, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  124, 125, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248,
  249, 250, 251, 252, 253, 254, 255};
@@ -220,17 +225,18 @@ int bytValidFrameTypesLengthISS = sizeof(bytValidFrameTypesISS);
 int bytValidFrameTypesLengthALL = sizeof(bytValidFrameTypesALL);
 int bytValidFrameTypesLength;
 
+/*
 const UCHAR isValidFrame[256]= 
 {
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 00 - 0F    ACK and NAK
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 10 - 1F
 	0,0,0,1,1,0,0,0,0,1,0,0,1,1,1,0,	// BREAK=23, IDLE=24, DISC=29, END=2C, ConRejBusy=2D, ConRejBW=2E
 
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,	// 30 - 3F (3d PINKAck 3E Ping
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 40 - 4F
-	1,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,	// 50 - 5F - 56, 57 were 167 500
-	1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,	// 60 - 6F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,	// 70 - 7F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,	// 30 - 3F (3d PING Ack 3E Ping
+	1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,	// 40 - 4F
+	1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,	// 50 - 5F 
+	1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,	// 60 - 6F
+	1,1,1,1,1,1,0,0,0,0,1,1,1,1,0,0,	// 70 - 7F
 			
 
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// 80 - 8F
@@ -245,7 +251,7 @@ const UCHAR isValidFrame[256]=
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// e0 - eF    ACK and NAK
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1		// f0 - ff
 };
-
+*/
 
 BOOL blnTimeoutTriggered = FALSE;
 
@@ -262,12 +268,14 @@ int intLastRcvdFrameQuality;
 
 int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
-const char strAllDataModes[26][15] = {"8FSK.200.25", "4FSK.200.50S", "4FSK.200.50", "4PSK.200.100S",
-		"4PSK.200.100", "8PSK.200.100",  "16QAM.200.100", "16FSK.500.25S", "16FSK.500.25", "4FSK.500.100S",
-		"4FSK.500.100", "4PSK.500.100", "8PSK.500.100", "16QAM.500.100",
-		"4FSK.1000.100", "4PSK.1000.100", "8PSK.1000.100", "4PSK.1000.167", "8PSK.1000.167", 
-		"4FSK.2000.600S", "4FSK.2000.600", "4FSK.2000.100", "4PSK.2000.100", "8PSK.2000.100",
-		"4PSK.2000.167", "8PSK.2000.167"};
+const char strAllDataModes[26][15] =
+		{"4FSK.200.50S", "4PSK.200.100S",
+		"4PSK.200.100", "8PSK.200.100", "16QAM.200.100",
+		"4FSK.500.100S", "4FSK.500.100",
+		"4PSK.500.100", "8PSK.500.100", "16QAM.500.100",
+		"4PSK.1000.100", "8PSK.1000.100", "16QAM.1000.100", 
+		"4PSK.2000.100", "8PSK.2000.100", "16QAM.2000.100", 
+		"4FSK.2000.600", "4FSK.2000.600S"};
 
 int strAllDataModesLen = 26;
 
@@ -335,18 +343,23 @@ const char strFrameType[256][18] = {
 	"8PSK.200.100.E",
 	"8PSK.200.100.O",
 
+		// 1 Car 16QAM Data mode 200 Hz BW, 100 baud
+
+	"16QAM.200.100.E",	// 46
+    "16QAM.200.100.O",	// 47
+
 	// 1 Car 4FSK Data mode 200 HzBW, 50 baud 
 
-	"4FSK.200.50.E",
-	"4FSK.200.50.O",
+	//"4FSK.200.50.E",
+	//"4FSK.200.50.O",
 	"4FSK.200.50S.E", // 48
 	"4FSK.200.50S.O",
 	"4FSK.500.100.E",
 	"4FSK.500.100.O",
 	"4FSK.500.100S.E",
 	"4FSK.500.100S.O",
-	"8FSK.200.25.E",
-	"8FSK.200.25.O",
+	"",//"8FSK.200.25.E",
+	"",//"8FSK.200.25.O",
 
 	//' 2 Car PSK Data Modes 100 baud
 	"4PSK.500.100.E", // 50
@@ -362,16 +375,13 @@ const char strFrameType[256][18] = {
 
 	// 1 Car 16FSK mode 25 baud
 
-	"16FSK.500.25.E", // 58
-	"16FSK.500.25.O",
-	"16FSK.500.25S.E",
-	"16FSK.500.25S.O",
-	
-	// 1 Car 16QAM Data mode 200 Hz BW, 100 baud
+//	"16FSK.500.25.E", // 58
+//	"16FSK.500.25.O",
+//	"16FSK.500.25S.E",
+//	"16FSK.500.25S.O",
 
-	"16QAM.200.100.E",	// 5C
-    "16QAM.200.100.O",	// 5D
-	"","",				// 5E/F
+	"","","","",		// 58 -5B
+	"","","","",		// 5C-5F
 
 	//1 Khz Bandwidth Data Modes 
 	//  4 Car 100 baud PSK
@@ -380,13 +390,13 @@ const char strFrameType[256][18] = {
 	"8PSK.1000.100.E",
 	"8PSK.1000.100.O",
 	// 4 car 167 baud PSK
-	"4PSK.1000.167.E",
-	"4PSK.1000.167.O",
-	"8PSK.1000.167.E",
-	"8PSK.1000.167.O",
+	"16QAM.1000.100.E",
+	"16QAM.1000.100.O",
+	"",
+	"",
 	// 2 Car 4FSK 100 baud
-	"4FSK.1000.100.E", //68
-	"4FSK.1000.100.O","","","","","","",
+	"", //68
+	"","","","","","","",
 
 	// 2Khz Bandwidth Data Modes 
 	//  8 Car 100 baud PSK
@@ -395,18 +405,14 @@ const char strFrameType[256][18] = {
 	"8PSK.2000.100.E",
 	"8PSK.2000.100.O",
 	//  8 Car 167 baud PSK
-	"4PSK.2000.167.E",
-	"4PSK.2000.167.O",
-	"8PSK.2000.167.E",
-	"8PSK.2000.167.O",
-	// 4 Car 4FSK 100 baud
-	"4FSK.2000.100.E",
-	"4FSK.2000.100.O",
+	"16QAM.2000.100.E",
+	"16QAM.2000.100.O",	// 75
+	"","","","",		// 79=79
 	// 1 Car 4FSK 600 baud (FM only)
-	"4FSK.2000.600.E", // Experimental 
+	"4FSK.2000.600.E", // Experimental //7A
 	"4FSK.2000.600.O", // Experimental
 	"4FSK.2000.600S.E", // Experimental
-	"4FSK.2000.600S.O", // Experimental //7d
+	"4FSK.2000.600S.O", // Experimental //7D
 	"","",	// 7e-7f
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
@@ -896,19 +902,21 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*bytQualThres = 30;
 		break;
 
-	// 50 baud 4FSK 200 Hz bandwidth
-
 	case 0x46:
-	case 0x47:
+ 	case 0x47:
 
+		// 100 baud 16QAM 
+  
 		*blnOdd = (1 & bytFrameType) != 0;
 		*intNumCar = 1;
-		*intDataLen = 32;
-		*intRSLen = 8;
-		strcpy(strMod, "4FSK");
-		*intBaud = 50;
+		*intDataLen = 128;
+		*intRSLen = 64;
+		strcpy(strMod, "16QAM");
+		*intBaud = 100;
 		*bytQualThres = 30;
-		break;
+ 		break;
+
+
 
 	case 0x48:
 	case 0x49:
@@ -922,8 +930,6 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*bytQualThres = 30;
 		break;
 	
-	// 100 baud 4FSK 500 Hz bandwidth
-
 	case 0x4A:
 	case 0x4B:
 
@@ -935,8 +941,8 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*intBaud = 100;
 		*bytQualThres = 30;
 		break;
- 
- 	case 0x4C:
+	
+	case 0x4C:
 	case 0x4D:
 
 		*blnOdd = (1 & bytFrameType) != 0;
@@ -947,86 +953,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*intBaud = 100;
 		*bytQualThres = 30;
 		break;
-
-	// 25 baud 8FSK 200 Hz bandwidth (in testing)
- 
- 	case 0x4E:
-	case 0x4F:
-
-		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = 1;
-		*intDataLen = 24;
-		*intRSLen = 6;
-		strcpy(strMod, "8FSK");
-		*intBaud = 25;
-		*bytQualThres = 30; 
-		break;
-		
-	// 25 baud 16FSK 500 Hz bandwidth 
-
- 	case 0x58:
-	case 0x59:
-
-		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = 1;
-		*intDataLen = 32;
-		*intRSLen = 8;
-		strcpy(strMod, "16FSK");
-		*intBaud = 25;
-		*bytQualThres = 30;
- 		break;
-
-	case 0x5A:
- 	case 0x5B:
-
-		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = 1;
-		*intDataLen = 16;
-		*intRSLen = 4;
-		strcpy(strMod, "16FSK");
-		*intBaud = 25;
-		*bytQualThres = 30;
- 		break;
-
-	case 0x5C:
- 	case 0x5D:
-
-		// 100 baud 16QAM 
-  
-		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = 1;
-		*intDataLen = 128;
-		*intRSLen = 64;
-		strcpy(strMod, "16QAM");
-		*intBaud = 100;
-		*bytQualThres = 30;
- 		break;
-
-	// 600 baud 4FSK 2000 Hz bandwidth 
-
-	case 0x7a:
-	case 0x7b:
-
-		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = 1;
-		*intDataLen = 600;
-		*intRSLen = 150;
-		strcpy(strMod, "4FSK");
-		*intBaud = 600;
-		*bytQualThres = 30;
-		break;
- 
-	case 0x7C:
-	case 0x7D:
-
-		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = 1;
-		*intDataLen = 200;
-		*intRSLen = 50;
-		strcpy(strMod, "4FSK");
-		*intBaud = 600;
-		*bytQualThres = 30;
-		break;
+			
  
 	// 2 Carrier Data Modes
 	// 100 baud 
@@ -1098,45 +1025,20 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*bytQualThres = 50;
 		break;
 
-	//	167 Baud
+	//	16QAM Baud
 
 	case 0x64:
 	case 0x65:
 
 		*blnOdd = bytFrameType & 1;
 		*intNumCar = 4;
-		*intDataLen = 120;
-		*intRSLen = 40;
-		strcpy(strMod, "4PSK");
-		*intBaud = 167;
-		*bytQualThres = 50;
-		break;
-
-	case 0x66:
-	case 0x67:
-
-		*blnOdd = bytFrameType & 1;
-		*intNumCar = 4;
-		*intDataLen = 159;
-		*intRSLen = 60;
-		strcpy(strMod, "8PSK");
-		*intBaud = 167;
-		*bytQualThres = 50;
-		break;
-	
-	// 100 baud 2 carrier 4FSK
-     
-	case 0x68:
-	case 0x69:
-
-		*blnOdd = bytFrameType & 1;
-		*intNumCar = 2;
-		*intDataLen = 64;
-		*intRSLen = 16;
-		strcpy(strMod, "4FSK");
+		*intDataLen = 128;
+		*intRSLen = 64;
+		strcpy(strMod, "16QAM");
 		*intBaud = 100;
 		*bytQualThres = 50;
 		break;
+
 
 	// 8 Carrier Data modes
 	//	100 baud
@@ -1165,44 +1067,45 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*bytQualThres = 50;
 		break;
 
-	// 167 baud
+	// 16QAM 
 
 	case 0x74:
 	case 0x75:
 
 		*blnOdd = bytFrameType & 1;
 		*intNumCar = 8;
-		*intDataLen = 120;
-		*intRSLen = 40;
-		strcpy(strMod, "4PSK");
-		*intBaud = 167;
+		*intDataLen = 128;
+		*intRSLen = 64;
+		strcpy(strMod, "16QAM");
+		*intBaud = 100;
 		*bytQualThres = 50;
 		break;
 		
-	case 0x76:
-	case 0x77:
 
-		*blnOdd = bytFrameType & 1;
-		*intNumCar = 8;
-		*intDataLen = 159;
-		*intRSLen = 60;
-		strcpy(strMod, "8PSK");
-		*intBaud = 167;
-		*bytQualThres = 50;
-		break;
+	// 600 baud 4FSK 2000 Hz bandwidth 
 
-	// 100 baud 4 carrier 4FSK
- 
-	case 0x78:
-	case 0x79:
+	case 0x7a:
+	case 0x7b:
 
-		*blnOdd = bytFrameType & 1;
-		*intNumCar = 4;
-		*intDataLen = 64;
-		*intRSLen = 16;
+		*blnOdd = (1 & bytFrameType) != 0;
+		*intNumCar = 1;
+		*intDataLen = 600;
+		*intRSLen = 150;
 		strcpy(strMod, "4FSK");
-		*intBaud = 100;
-		*bytQualThres = 50;
+		*intBaud = 600;
+		*bytQualThres = 30;
+		break;
+ 
+	case 0x7C:
+	case 0x7D:
+
+		*blnOdd = (1 & bytFrameType) != 0;
+		*intNumCar = 1;
+		*intDataLen = 200;
+		*intRSLen = 50;
+		strcpy(strMod, "4FSK");
+		*intBaud = 600;
+		*bytQualThres = 30;
 		break;
 
 	case PktFrameHeader:

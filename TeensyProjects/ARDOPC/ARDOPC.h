@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.9.5.11-BPQ"
+#define ProductVersion "1.0.2.5-BPQ"
 
 //	Sound interface buffer size
 
@@ -322,7 +322,7 @@ extern struct SEM Semaphore;
 #define ConAck500 0x3A
 #define ConAck1000 0x3B
 #define ConAck2000 0x3C
-#define PINGACK 0x3d
+#define PINGACK 0x3D
 #define PING 0x3E
 #define PktFrameHeader 0xC0		// Variable length frame Header
 #define PktFrameData 0xC1		// Variable length frame Data (Virtual Frsme Type)
@@ -368,6 +368,9 @@ extern BOOL fastStart;
 extern BOOL skip167;
 extern BOOL ConsoleLogLevel;
 extern BOOL EnablePingAck;
+
+extern BOOL NewMode;			// Using New interface Protocol (no C: or D:)
+
 
 extern int dttLastPINGSent;
 

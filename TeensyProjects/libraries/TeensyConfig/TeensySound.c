@@ -52,9 +52,9 @@ int totSamples = 0;
 extern int Capturing ;
 
 unsigned short * DMABuffer = &dac1_buffer[0];
-
-
-
+volatile int dmaints = 0;
+volatile int samplessent = 0;
+volatile int samplesqueued = 0;
 
 extern int Index;				// DMA Buffer being used 0 or 1
 extern int inIndex;			// DMA Buffer being used 0 or 1

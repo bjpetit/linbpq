@@ -132,6 +132,7 @@ int IRSNegotiateBW(int intConReqFrameType);
 int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, BOOL blnInitialize);
 BOOL CheckForDisconnect();
 BOOL Send10MinID();
+void ProcessPingFrame(char * bytData);
 
 void LogStats();
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
@@ -589,29 +590,52 @@ ModeToSpeed() = {
 //	 200  8FSK.200.25, 4FSK.200.50, 4PSK.200.100, 8PSK.200.100, 16QAM.200.100
 //  (288, 429, 768, 1296, 1512 byte/min)
      
-static UCHAR DataModes200[] = {0x4E, 0x46, 0x40, 0x44, 0x5C};
-static UCHAR DataModes200FSK[] = {0x4E, 0x46};
+// New version for more robust modes: Rev 1.0.2  11/21/2017
+//  (310, 436, 756, 1296, 1512 byte/min)
+//4FSK.200.50S, 4PSK.200.100S, 4PSK.200.100, 8PSK.200.100, 16QAM.200.100
+//Dim byt200 As Byte() = {&H48, &H42, &H40, &H44, &H46}
+
+static UCHAR DataModes200[] = {0x48, 0x42, 0x40, 0x44, 0x46};
+static UCHAR DataModes200FSK[] = {0x48};
 
 	// 500  streamlined 0.3.1.6
 	//8FSK.200.25, 16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4PSK.500.100, 8PSK.500.100, 16QAM.500.100)
 	//' (288, 329, 429, 881, 1536, 2592, 4305 bytes/min)
-static UCHAR DataModes500[] = {0x4E, 0x5A, 0x58, 0x4A, 0x50, 0x52, 0x54};
-static UCHAR DataModes500FSK[] = {0x5A, 0x58, 0x4A};
+
+// New version for more robust modes: Rev 1.0.2  11/21/2017
+//4FSK.200.50S, 4PSK.200.100S, 4PSK.200.100, 4PSK.500.100, 8PSK.500.100, 16QAM.500.100)
+// (310, 436, 756, 1509, 2566, 3024 bytes/min)
+//Dim byt500 As Byte() = {&H48, &H42, &H40, &H50, &H52, &H54}
+ 
+static UCHAR DataModes500[] = {0x48, 0x42, 0x40, 0x50, 0x52, 0x54};
+static UCHAR DataModes500FSK[] = {0x48};
 
 
 // 1000 ' Streamlined 0.3.1.6
 	//'8FSK.200.25, 16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4PSK.1000.100, 8PSK.1000.100, 8PSK.1000.167
-	//'(288, 329, 429, 881, 1762, 3072, 5184, 8610 bytes/min) 
-static UCHAR DataModes1000[] = {0x4E, 0x5A, 0x58, 0x4A, 0x68, 0x60, 0x62, 0x66};
-static UCHAR DataModes1000FSK[] = {0x5A, 0x58, 0x4A, 0x68};
+	//'(288, 329, 429, 881, 1762, 3072, 5184, 8610 bytes/min)
+
+// New version for more robust modes: Rev 1.0.2  11/21/2017
+//4FSK500.100S, 4FSK500.100, 4PSK500.100, 4PSK1000.100, 8PSK.1000.100
+//(701, 865, 1509, 3018, 5133 bytes/min) 
+//Dim byt1000 As Byte() = {&H4C, &H4A, &H50, &H60, &H62, &H64} ' Note  addtion of 16QAM 4 carrier mode 16QAM1000.100.E/O
+
+static UCHAR DataModes1000[] = {0x4C, 0x4A, 0x50, 0x60, 0x62, 0x64};
+static UCHAR DataModes1000FSK[] = {0x4C, 0x4A};
 
 // 2000 Non-FM
 //' These do not include the 600 baud modes for FM only.
 //'8FSK.200.25, 16FSK.500.25S, 16FSK.500.25, 4FSK.500.100, 4FSK.1000.100, 4FSK.2000.100, 4PSK.2000.100, 8PSK.2000.100, 4PSK.2000.167, 8PSK.2000.167)
 //'(288, 329, 429, 881, 1762, 3624, 6144, 10386, 17220 bytes/min) 
 
-static UCHAR DataModes2000[] = {0x4E, 0x5A, 0x58, 0x4A, 0x68, 0x78, 0x70, 0x72, 0x74, 0x76};
-static UCHAR DataModes2000FSK[] = {0x5A, 0x58, 0x4A, 0x68, 0x78};
+
+// New version for more robust modes: Rev 1.0.2  11/21/2017
+//4FSK500.100S, 4FSK500.100, 4PSK500.100, 4PSK1000.100, 4PSK2000.100, 8PSK.2000.100, 16QAM.2000.100
+//(701, 865, 1509, 3018, 6144, 10386 bytes/min) 
+//Dim byt2000 As Byte() = {&H4C, &H4A, &H50, &H60, &H70, &H72, &H74}  ' Note  addtion of 16QAM 8 carrier mode 16QAM2000.100.E/O
+
+static UCHAR DataModes2000[] = {0x4C, 0x4A, 0x50, 0x60, 0x70, 0x72, 0x74};
+static UCHAR DataModes2000FSK[] = {0x4C, 0x4A};
 
 //2000 FM
 //' These include the 600 baud modes for FM only.
@@ -620,7 +644,14 @@ static UCHAR DataModes2000FSK[] = {0x5A, 0x58, 0x4A, 0x68, 0x78};
 //' 4FSK.500.100S, 4FSK.500.100, 4FSK.2000.600S, 4FSK.200.600, 4PSK.2000.100, 8PSK.2000.100, 8PSK.2000.167)
 //' (696, 881, 4338, 5863, 6144, 10386 bytes/min)
 
-static UCHAR DataModes2000FM[] = {0x4C, 0x4A, 0x7C, 0x7A, 0x70, 0x72, 0x76};
+// These include the 100 and 600 baud FSK modes for FM/AM only. (tuning range = 0)
+// New version for more robust modes: Rev 1.0.2  11/21/2017
+// 4FSK.500.100S, 4FSK.500.100, 4FSK.2000.600S, 4FSK.2000.600)
+// (701, 865, 4338, 5853 bytes/min)
+//Dim byt2000 As Byte() = {&H4C, &H4A, &H7C, &H7A}
+
+
+static UCHAR DataModes2000FM[] = {0x4C, 0x4A, 0x7C, 0x7A};
 static UCHAR DataModes2000FMFSK[] = {0x4C, 0x4A, 0x7C, 0x7A};
 
 static UCHAR NoDataModes[1] = {0};

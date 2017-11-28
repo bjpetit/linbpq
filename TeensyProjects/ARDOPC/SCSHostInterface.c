@@ -27,6 +27,7 @@ int RadioPoll();
 void ProcessCommandFromHost(char * strCMD);
 BOOL GetNextARQFrame();
 VOID ProcessKISSBytes(UCHAR * RXBUFFER, int Read);
+BOOL CheckKISS(UCHAR * SCSReply);
 
 #ifdef LOGTOHOST
 
@@ -113,13 +114,19 @@ void SendCommandToHost(char * Cmd)
 
 		// Add headers and queue for host
 
-		*ptr++ = 'c';
-		*ptr++ = ':';
+		if (NewMode == FALSE)
+		{
+			*ptr++ = 'c';
+			*ptr++ = ':';
+		}
 		strcpy(ptr, Cmd);
 		ptr += len;
 		*ptr++ = '\r';
 
-		CommandToHostBufferLen += (len + 3);
+		if (NewMode)
+			CommandToHostBufferLen += (len + 1);
+		else
+			CommandToHostBufferLen += (len + 3);
 
 		if (CommandToHostBufferLen > 512)
 			CommandToHostBufferLen = 0;
@@ -230,9 +237,13 @@ void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 
 	// In ARDOP Native add header (Type and Len)
 
-	bytDataforHost[bytesforHost++] = 'd';			// indicates data from TNC
-	bytDataforHost[bytesforHost++] = ':';
+	if (NewMode == 0)
+	{
+		bytDataforHost[bytesforHost++] = 'd';			// indicates data from TNC
+		bytDataforHost[bytesforHost++] = ':';
+	}
 	Len += 3;		// Tag
+
 	bytDataforHost[bytesforHost++] = Len >> 8;		//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
 	bytDataforHost[bytesforHost++] = Len  & 0xFF;	// LS Byte
 	memcpy(&bytDataforHost[bytesforHost], Type, 3);
@@ -681,7 +692,16 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		{
 			Buffer[Len + 3] = 0;
 			CMDReplyBuffer[0] = 0;	// in case no reply
-			ProcessCommandFromHost(&Buffer[5]); // Skip C:
+
+			if (Buffer[3] == 'C' && Buffer[4] == ':')
+				NewMode = FALSE;
+			else
+				NewMode = TRUE;
+
+			if (NewMode)
+				ProcessCommandFromHost(&Buffer[3]); // No C:
+			else
+				ProcessCommandFromHost(&Buffer[5]); // Skip C:
 
 			// Command will have put reply in CMDReplyBuffer
 
@@ -701,7 +721,10 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		else if (Channel == 33)		// Native Mode Data
 
 			// Format is D: Len Data - remove D: and Len
-			AddDataToDataToSend(&Buffer[7], Buffer[2] - 3);
+			if (NewMode)
+				AddDataToDataToSend(&Buffer[5], Buffer[2] - 1);
+			else
+				AddDataToDataToSend(&Buffer[7], Buffer[2] - 3);
 
 		goto AckIt;
 	}

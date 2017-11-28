@@ -1131,7 +1131,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 				if (PacVal == NULL)
 				{
-					sprintf(cmdReply, "%PAC MODE %s/%s", &pktMod[pktMode][0], pktBW[pktNumCar]);
+					sprintf(cmdReply, "PAC MODE %s/%s", &pktMod[pktMode][0], pktBW[pktNumCar]);
 					SendReplyToHost(cmdReply);
 					goto cmddone;
 				}
@@ -1162,7 +1162,7 @@ void ProcessCommandFromHost(char * strCMD)
 					if (strcmp(PacVal, &pktMod[i][0]) == 0)
 					{
 						pktMode = i;
-						sprintf(cmdReply, "%PAC MODE now %s/%s", PacVal, pktBW[pktNumCar]);
+						sprintf(cmdReply, "PAC MODE now %s/%s", PacVal, pktBW[pktNumCar]);
 						SendReplyToHost(cmdReply);
 						goto cmddone;
 					}
@@ -1625,18 +1625,6 @@ Case "RADIOCTRLRTS"
 		goto cmddone;
 	}
 
-	if (strcmp(strCMD, "SENDPKT") == 0)
-	{
-		if (ProtocolState == DISC)
-		{
-			PktARDOPEncode("Test Test Test\r                 ", 29);
-			SendReplyToHost(strCMD);
-		}
-		else
-			sprintf(strFault, "Not from State %s", ARDOPStates[ProtocolState]);
-
-		goto cmddone;
-	}
 /*
             Case "SETUPMENU"
                 If ptrSpace = -1 Then

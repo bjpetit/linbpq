@@ -222,7 +222,7 @@ BOOL GetNextFECFrame()
 	{
 		// Initialize the first FEC Data frame (even) from the queue and compute the Filtered samples and filename
 
-		char FullType[16];
+		char FullType[18];
 
 		strcpy(FullType, strFECMode);
 		strcat(FullType, ".E");

@@ -6,6 +6,8 @@
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
 
+extern "C"  void debugprintf(const char * format, ...);
+
 // This seems to be the only way to change the serial port buffer size
 // without editing the IDE core file. We set the equates then include the
 // core library source
@@ -81,6 +83,12 @@ unsigned int PKTLEDTimer = 0;
 
 extern int KISSCHECKSUM;
 
+
+extern volatile unsigned short * DMABuffer;
+extern volatile int dmaints;
+extern volatile int samplessent;
+
+extern volatile int lastperiod, lastint;
 
 void CommonSetup()
 {
@@ -567,6 +575,16 @@ void setupPDB(int SampleRate)
   PDB0_CH0C1 = 0x0101;				// ?? PDB triggers ADC
 }
 
+void isr(void)
+{
+	dmaints++;
+	samplessent += 1200;
+	lastperiod = millis() - lastint;
+	lastint = millis();
+	dma1.clearInterrupt();
+}
+
+
 void setupDAC()
 {
   // Configure DAC
@@ -576,6 +594,8 @@ void setupDAC()
 
   DAC0_DAT0L = 0;
   DAC0_DATH = 8;		// Set output to mid value (should ramp up??)
+  
+  DMABuffer = &dac1_buffer[0];
 }
 extern "C" void StartDAC()
 {
@@ -596,10 +616,16 @@ extern "C" void StartDAC()
   dma1.TCD->CITER_ELINKNO = sizeof(dac1_buffer) / 2;
   dma1.TCD->DLASTSGA = 0;
   dma1.TCD->BITER_ELINKNO = sizeof(dac1_buffer) / 2;
-  dma1.TCD->CSR = 0; //DMA_TCD_CSR_INTHALF | DMA_TCD_CSR_INTMAJOR;
+  dma1.TCD->CSR = DMA_TCD_CSR_INTMAJOR | DMA_TCD_CSR_INTHALF; 
   dma1.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
+  
+//  debugprintf("dma1.TCD->CITER_ELINKNO %d", dma1.TCD->CITER_ELINKNO);
+  
+  
   dma1.enable();
+  dma1.attachInterrupt(isr);
 }
+
 
 extern "C" void stopDAC()
 {

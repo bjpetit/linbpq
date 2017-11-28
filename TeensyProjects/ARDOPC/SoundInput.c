@@ -367,14 +367,14 @@ const int SamplesToComplete[256] = {
 
 // Function to determine if a valid frame type
 
-extern const UCHAR isValidFrame[256];
+//extern const UCHAR isValidFrame[256];
 
-BOOL IsValidFrameType(UCHAR bytType)
-{
-	//  used in the minimum distance decoder (update if frames added or removed)
+//BOOL IsValidFrameType(UCHAR bytType)
+//{
+//	//  used in the minimum distance decoder (update if frames added or removed)
 
-	return (isValidFrame[bytType]);
-}
+//	return (isValidFrame[bytType]);
+//}
 
 // Function to determine if frame type is short control frame
   
@@ -3406,60 +3406,27 @@ void DemodulateFrame(int intFrameType)
 			DemodPSK();
 			break;
 
-		case 0x5c:
-		case 0x5d:
-
 		// 1 car 16qam
+
+		case 0x46:
+		case 0x47:
 
 			DemodQAM();
 			break;
 
 		//4FSK Data
 
-		case 0x46:
-		case 0x47:
 		case 0x48:
 		case 0x49:
-		case 0x4a:
-		case 0x4b:
-		case 0x4c:
-		case 0x4d:
-
-		case 0x68:		// 2 Carrier FSK
-		case 0x69:		// 2 Carrier FSK
+		case 0x4A:
+		case 0x4B:
+		case 0x4C:
+		case 0x4D:
 
 			Demod1Car4FSK();
 			break;
 
-		// 8FSK Data
-
-		case 0x4E:
-		case 0x4F:
-
-			Demod1Car8FSK();
-			break;
-
-        // 4FSK Data (600 bd)
-
-		case 0x7A:
-		case 0x7B:
-		case 0x7C:
-		case 0x7D:
-
-			Demod1Car4FSK600();
-			break;
-  
-		// 16FSK Data
-
-		case 0x58:
-		case 0x59:
-		case 0x5A:
-		case 0x5B:
-			
-			Demod1Car16FSK();
-			break;
-
-			 //2 Carrier PSK Data frames
+ 		//2 Carrier PSK Data frames
 
 		case 0x50:
 		case 0x51:
@@ -3477,19 +3444,21 @@ void DemodulateFrame(int intFrameType)
 			DemodQAM();
 			break;
 
-			
+  	
 		// 1000 Hz  Data frames
 
 		case 0x60:
 		case 0x61:
 		case 0x62:
 		case 0x63:
-		case 0x64:
-		case 0x65:
-		case 0x66:
-		case 0x67:
 
 			DemodPSK();
+			break;
+
+		case 0x64:
+		case 0x65:
+
+			DemodQAM();
 			break;
 
 			// 2000 Hz PSK 8 Carr Data frames
@@ -3498,18 +3467,24 @@ void DemodulateFrame(int intFrameType)
 		case 0x71:
 		case 0x72:
 		case 0x73:
-		case 0x74:
-		case 0x75:
-		case 0x76:
-		case 0x77:
-
+	
 			DemodPSK();
 			break;
-	
-		case 0x78:		// 4 Carrier FSK
-		case 0x79:		// 4 Carrier FSK
 
-			Demod1Car4FSK();
+		case 0x74:
+		case 0x75:
+
+			DemodQAM();
+			break;
+
+       // 4FSK Data (600 bd)
+
+		case 0x7A:
+		case 0x7B:
+		case 0x7C:
+		case 0x7D:
+
+			Demod1Car4FSK600();
 			break;
 
 		case PktFrameHeader:	// Experimantal Variable Length Frame 
@@ -3567,6 +3542,8 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 	int intTiming;
 	int intRcvdQuality;
 	char Reply[80];
+	char Good[8] = {1,1,1,1,1,1,1,1};
+
 
 	strRcvFrameTag[0] = 0;
 
@@ -3659,46 +3636,37 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			blnDecodeOK = CarrierOk[0];
 			break;
 
-		// FSK 1 Carrier Modes
-
+		// QAM
+		
 		case 0x46:
 		case 0x47:
+		case 0x54:
+		case 0x55:
+		case 0x64:
+		case 0x65:
+		case 0x74:
+		case 0x75:
+
+			if (memcmp(CarrierOk, Good, intNumCar) == 0)
+				blnDecodeOK = TRUE;
+
+			break;
+
+		// FSK 1 Carrier Modes
+
 		case 0x48:
 		case 0x49:
 		case 0x4a:
 		case 0x4b:
 		case 0x4c:
 		case 0x4d:
-		case 0x4e:
-		case 0x4f:
-		case 0x58:
-		case 0x59:
-		case 0x5A:
-		case 0x5B:
 
 			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
 			blnDecodeOK = CarrierOk[0];
 			break;
 
-		// 16 QAM - CRC Checked earlier
 
-		case 0x54:
-		case 0x55:
-
-			if (CarrierOk[0] && CarrierOk[1])
-				blnDecodeOK = TRUE;
-			break;
-
-		case 0x5C:
-		case 0x5D:
-		
-			// Checked earlier
-	
-			blnDecodeOK = CarrierOk[0];
-			break;
-
-
-			// 2 Carrier PSK Data frames
+		// 2 Carrier PSK Data frames
 			
 		case 0x50:
 		case 0x51:
@@ -3710,39 +3678,30 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 		break;
 
-		case 0x68:		// FSK
-		case 0x69:
+		// 1000 Hz Data frames 4 Carrier
 
-			// 2 Carrier FSK Modes
-			
-			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
-			frameLen +=  CorrectRawDataWithRS(bytFrameData2, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 1);
+		case 0x60:
+		case 0x61:
+		case 0x62:
+		case 0x63:
 
-			if (CarrierOk[0] && CarrierOk[1])
+			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 				blnDecodeOK = TRUE;
 
 			break;
-
-
+	
 		// 2000 Hz Data frames 8 Carrier
 
 		case 0x70:
 		case 0x71:
 		case 0x72:
 		case 0x73:
-		case 0x74:
-		case 0x75:
-		case 0x76:
-		case 0x77:
 
-			// 8 Carrier Modes
-
-			if (CarrierOk[0] && CarrierOk[1] && CarrierOk[2] && CarrierOk[3] 
-				&& CarrierOk[4] && CarrierOk[6] && CarrierOk[6] && CarrierOk[7])
+			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 				blnDecodeOK = TRUE;
 
 			break;
-	
+
 		case 0x78:
 		case 0x79:
 
@@ -3758,22 +3717,6 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				blnDecodeOK = TRUE;
 
 
-		case 0x60:
-		case 0x61:
-		case 0x62:
-		case 0x63:
-		case 0x64:
-		case 0x65:
-		case 0x66:
-		case 0x67:
-
-			//	4 carrrier PSK 1000 Hz  Data frames
- 
-			if (CarrierOk[0] && CarrierOk[1] && CarrierOk[2] && CarrierOk[3]) 
-				blnDecodeOK = TRUE;
-
-			break;
-		
 		case 0x7A:
 		case 0x7B:
 

@@ -43,9 +43,21 @@
 */
 
 #include "SoundCard.h"
+#include "TeensyConfig.h"
+#include "TeensyCommon.h"
+
 #include "usb_dev.h"
 #include <string.h> // for memcpy()
 
+
+#define __disable_irq() __asm__ volatile("CPSID i":::"memory");
+#define __enable_irq()	__asm__ volatile("CPSIE i":::"memory");
+
+#define WDOG_REFRESH		(*(volatile uint16_t *)0x4005200C) // Watchdog Refresh register
+
+
+my_audio_block_t * q_rem(my_audio_block_t *Q);
+my_audio_block_t * allocate(void);
 
 #ifdef AUDIO_INTERFACE // defined by usb_dev.h -> usb_desc.h
 #else
@@ -54,85 +66,180 @@
 
 int SampleRate = 48000;
 
+int SoundIsPlaying = 0;
+
+volatile int pttActive = 0;				// Transmitting Flag/Timer
+volatile int dacActive = 0;				// Transmitting Flag/Timer
+
+volatile int timestarted = 0;
+extern volatile int samplesqueued;
+extern volatile int samplessent;
+
+extern unsigned short * DMABuffer ;
+
+volatile int Number = 0;
+
+
+struct setup_struct {
+  union {
+    struct {
+	uint8_t bmRequestType;
+	uint8_t bRequest;
+	union {
+		struct {
+			uint8_t bChannel;  // 0=main, 1=left, 2=right
+			uint8_t bCS;       // Control Selector
+		};
+		uint16_t wValue;
+	};
+	union {
+		struct {
+			uint8_t bIfEp;     // type of entity
+			uint8_t bEntityId; // UnitID, TerminalID, etc.
+		};
+		uint16_t wIndex;
+	};
+	uint16_t wLength;
+    };
+  };
+};
+
+
+// audio features supported
+
+struct usb_audio_features_struct
+{
+  int change;  // set to 1 when any value is changed
+  int mute;    // 1=mute, 0=unmute
+  int volume;  // volume from 0 to FEATURE_MAX_VOLUME, maybe should be float from 0.0 to 1.0
+};
+
+struct usb_audio_features_struct features = {0, 0, 25};		// Defualt level about 300 mV
+
+int lastTicks = 0;
+
+void  SoundCardBG()
+{
+	int Ticks = getTicks();
+
+	if ((Ticks - lastTicks) > 999)
+	{
+		lastTicks = Ticks;
+		debugprintf("in Ints %d Out ints %d Q %d tot rx %d tot tx %d queued %d", inInts, outInts, q_count, rxtot / 4, txtot / 4, samplesqueued - samplessent);
+		inInts = outInts = rxtot = txtot = 0;
+		__disable_irq();
+		WDOG_REFRESH = 0xA602;
+		WDOG_REFRESH = 0xB480;
+		__enable_irq();
+	}
+
+	PollReceivedSamples();
+	
+	if (features.change == 1)		// TX Level (or Mute) changed
+	{
+		features.change = 0;
+		SetPot(1, features.volume);				// Write to live pt (should we save in NVRAM??)
+	}
+		
+	if (dacActive)
+	{
+		if (samplessent >= samplesqueued)		// Not really fast enough - maybe count millisecs since start
+		{
+			 KeyPTT(0);		// Drop PTT
+			 dacActive = 0;
+			 pttActive = 0;
+			 stopDAC();
+		}
+	}
+}
+
+
 // Called from the USB interrupt when an isochronous packet arrives
 // we must completely remove it from the receive buffer before returning
-//
+
+// We need to detect start and end of transmission so we can key ptt (could derive from samples but dont see the need)
+// We can alao start/stop DAC (same as for ARDOP etc) at the same time.
+// To provide a bit if buffering don't start TX until we have 10 ms worth of data, but ket ptt immediately
+// At end must delay dropping PTT until buffer is empty (sent > queued)
+
+
 void usb_audio_receive_callback(unsigned int len)
 {
-  unsigned int count, avail;
-  my_audio_block_t *left, *right;
-  const uint32_t *data;
-
+  int32_t value;
+  int i = 0;
+  int count = len /4;		//Len is in bytes, 4 bytes per samples (2 chan 16 bit)
+  
+  // Check for silence. Some programs send silence instead of stopping sending
+  
+  int silent = TRUE;
+  
+  
+  for (i = 0; i < count; i++)
+  {
+	value = usb_audio_receive_buffer[i + i];
+	if (value)
+		silent = FALSE;
+	
+	dac1_buffer[Number++] = (value + 32768) >> 4;
+  }
+  
+  if (silent)
+  {
+	  Number -= count;
+	  return;
+  }
+	  
+  
+  if (pttActive == 0)
+  {
+	  // Starting TX
+	  
+	    if (features.mute == 0)
+			KeyPTT(1);		// Raise PTT	unless muted
+		pttActive =1;
+		samplessent = 0;
+		samplesqueued = 0;
+		Number = 0;
+  }
+  
   inInts++;
   rxtot += len;
-
+  samplesqueued += count;
+  
+/*  if (Number == 1200)
+  {
+	  debugprintf("%d %d %d %d %d %d %d %d ", 
+	  usb_audio_receive_buffer[0],
+	  usb_audio_receive_buffer[2],
+	  usb_audio_receive_buffer[4],
+	  usb_audio_receive_buffer[6],
+	  usb_audio_receive_buffer[8],
+	  usb_audio_receive_buffer[10],
+	  usb_audio_receive_buffer[12],
+	  usb_audio_receive_buffer[14]);
+  }
+*/	  
+  if (Number == 2400)
+  {
+	// Just loop. DMA sends buffer continuously. Will need sync updates
+		
+	Number = 0;
+  }	
+ 
+  if (dacActive == 0)
+  {
+	  // Start dac when we've queued enogh to give a bit of buffering
+	  
+	  if (Number > 960) 	// 20 mS
+	  {
+	      StartDAC();
+		  dacActive = 1;
+		 // timestarted = millis();
+	  }
+  }
+  
   return;
- /*
-  receive_flag = 1;
-  len >>= 2; // 1 sample = 4 bytes: 2 left, 2 right
-  data = (const uint32_t *)usb_audio_receive_buffer;
 
-  count = incoming_count;
-  left = incoming_left;
-  right = incoming_right;
-  if (left == NULL) {
-    left = allocate();
-    if (left == NULL) return;
-    incoming_left = left;
-  }
-  if (right == NULL) {
-    right = allocate();
-    if (right == NULL) return;
-    incoming_right = right;
-  }
-  while (len > 0) {
-    avail = AUDIO_BLOCK_SAMPLES - count;
-    if (len < avail) {
-      copy_to_buffers(data, left->data + count, right->data + count, len);
-      incoming_count = count + len;
-      return;
-    } else if (avail > 0) {
-      copy_to_buffers(data, left->data + count, right->data + count, avail);
-      data += avail;
-      len -= avail;
-      if (ready_left || ready_right) {
-        // buffer overrun, PC sending too fast
-        incoming_count = count + avail;
-        //if (len > 0) {
-        //serial_print("!");
-        //serial_phex(len);
-        //}
-        return;
-      }
-send:
-      ready_left = left;
-      ready_right = right;
-      //if (AudioInputUSB::update_responsibility) AudioStream::update_all();
-      left = allocate();
-      if (left == NULL) {
-        incoming_left = NULL;
-        incoming_right = NULL;
-        incoming_count = 0;
-        return;
-      }
-      right = allocate();
-      if (right == NULL) {
-        release(left);
-        incoming_left = NULL;
-        incoming_right = NULL;
-        incoming_count = 0;
-        return;
-      }
-      incoming_left = left;
-      incoming_right = right;
-      count = 0;
-    } else {
-      if (ready_left || ready_right) return;
-      goto send; // recover from buffer overrun
-    }
-  }
-  incoming_count = count;
-*/
 }
 
 
@@ -147,57 +254,237 @@ unsigned int usb_audio_transmit_callback(void)
 {
   static uint32_t count = 5;
   uint32_t avail, num, target, offset, len = 0;
-  my_audio_block_t *left, *right;
+  my_audio_block_t *buff;
 
-  outInts++;
+	outInts++;
 
-  /*
-  // This is for 44.1. Send 44 9 times out of `10, then 45
-  
-  if (++count < 9) {   // TODO: dynamic adjust to match USB rate
-    target = 44;
-  } else {
-    count = 0;
-    target = 45;
-  }
-  */
-  
-	target = SampleRate / 1000;
-  
-	memset(usb_audio_transmit_buffer + len, 0xaa, target * 2);
-   
-  /*
-   while (len < target) {
-    num = target - len;
-    left = left_1st;
-    if (left == NULL) {
-      // buffer underrun - PC is consuming too quickly
-      memset(usb_audio_transmit_buffer + len, 0xaa, num * 2);
-      //serial_print("%");
-      break;
-    }
-    right = right_1st;
-    offset = offset_1st;
+	target = 4 * SampleRate / 1000;
+	
+	buff = q_rem(&tohost_q);	// nothing on free_q so get first from tohost_q
+	if (buff == NULL)
+		return 192;
 
-    avail = AUDIO_BLOCK_SAMPLES - offset;
-    if (num > avail) num = avail;
+	memcpy(usb_audio_transmit_buffer, &buff->data[0], target);
+	
+	release(buff);
+	
+	txtot += target;
 
-    copy_from_buffers((uint32_t *)usb_audio_transmit_buffer + len,
-                      left->data + offset, right->data + offset, num);
-    len += num;
-    offset += num;
-    if (offset >= AUDIO_BLOCK_SAMPLES) {
-      release(left);
-      release(right);
-      left_1st = left_2nd;
-      left_2nd = NULL;
-      right_1st = right_2nd;
-      right_2nd = NULL;
-      offset_1st = 0;
-    } else {
-      offset_1st = offset;
-    }
-  }
- */
-	return target * 4;
+	return target;
 }
+
+int usb_audio_set_feature(void *stp, uint8_t *buf)
+{
+	struct setup_struct setup = *((struct setup_struct *)stp);
+
+	debugprintf("set feature %x %x %x %x %x %x %x %x %x", setup.bmRequestType, setup.bCS, setup.bRequest, buf[0], buf[1],
+                buf[2], buf[3], buf[4], buf[5]);
+
+	if (setup.bmRequestType == 0x21)
+	{ // should check bRequest, bChannel and UnitID
+		if (setup.bCS == 0x01)
+		{ // mute
+			if (setup.bRequest == 0x01)
+			{ // SET_CUR
+        features.mute = buf[0]; // 1=mute,0=unmute
+        features.change = 1;
+        return 1;
+      }
+    }
+    else if (setup.bCS == 0x02) { // volume
+      if (setup.bRequest == 0x01) { // SET_CUR
+        features.volume = buf[0] + (buf[1] << 8);
+        features.change = 1;
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+int usb_audio_get_feature(void *stp, uint8_t *data, uint32_t *datalen)
+{
+  struct setup_struct setup = *((struct setup_struct *)stp);
+
+  debugprintf("get feature %x %x %x", setup.bmRequestType, setup.bCS, setup.bRequest);
+
+  if (setup.bmRequestType == 0xA1)
+  { // should check bRequest, bChannel, and UnitID
+    if (setup.bCS == 0x01) 
+	{ // mute
+      data[0] = features.mute;  // 1=mute, 0=unmute
+      *datalen = 1;
+      return 1;
+    }
+    else if (setup.bCS == 0x02)
+	{ // volume
+		if (setup.bRequest == 0x81)
+		{ // GET_CURR
+			data[0] = features.volume & 0xFF;
+			data[1] = 0;
+		}
+		else if (setup.bRequest == 0x82) 
+		{ // GET_MIN
+			//serial_print("vol get_min\n");
+			data[0] = 0;     // min level is 0
+			data[1] = 0;
+		}
+		else if (setup.bRequest == 0x83) 
+		{ // GET_MAX
+			data[0] = 0xFF;  // max level, for range of 0 to 255
+			data[1] = 0;
+		}
+		else if (setup.bRequest == 0x84) 
+		{ // GET_RES
+			data[0] = 1; // increment vol by by 1
+			data[1] = 0;
+		}
+		else 
+		{ // pass over SET_MEM, etc.
+			return 0;
+		}
+		*datalen = 2;
+		return 1;
+    }
+  }
+  return 0;
+}
+
+
+
+
+
+
+my_audio_block_t * allocate(void)
+{
+  __disable_irq();
+
+  my_audio_block_t * block = free_q.chain;
+
+  if (block == NULL)
+  {
+    __enable_irq();
+    return NULL;
+  }
+
+  free_q.chain = block->chain;
+  q_count--;
+
+  __enable_irq();
+  return block;
+}
+
+void release(my_audio_block_t *block)
+{
+  __disable_irq();
+  block->chain = free_q.chain;
+  free_q.chain = block;
+  q_count++;
+  __enable_irq();
+}
+
+my_audio_block_t * q_rem(my_audio_block_t *Q)
+{
+	my_audio_block_t * first;
+	my_audio_block_t * next;
+
+  __disable_irq();
+	first = Q->chain;
+
+	if (first == 0)
+	{
+		__enable_irq();
+		return (0);			// Empty
+	}
+	next = first->chain;					// Address of next buffer
+
+	Q->chain = next;
+	
+	__enable_irq();
+
+
+	return (first);
+}
+
+int q_add(my_audio_block_t * Q, my_audio_block_t * BUFF)
+{
+	my_audio_block_t * next;
+
+	BUFF->chain = 0;					// Clear chain in new buffer
+
+	__disable_irq();
+
+	if (Q->chain == NULL)				// Empty
+	{
+		Q->chain = BUFF;				// New one on front
+		__enable_irq();
+		return(0);
+	}
+
+	next = Q->chain;
+
+	while (next->chain != 0)
+	{
+		next=next->chain;				// Chain to end of queue
+	}
+	next->chain = BUFF;					// New one on end
+	__enable_irq();
+
+	return(0);
+}
+
+
+
+
+
+
+// ADC/DAC drivers work in blocks of 1200 samples = 25ms at 48000 sample rate.
+
+// USB requests a block every millisecond and needs 48 samples (192 bytes, 16 but L/R)
+
+// I think I'll use buffers of 48 samplees, so will need 25 by ADC block
+
+//	I don't know yet how to sync if pc is faster or slower than Teensy Clock.
+//	Can I return a double block or return 0? Will try....
+
+
+
+
+void ProcessNewSamples(short * Samples, int nSamples)
+{
+	// copy to 25 buffers
+	
+	int i, j, k = 0;;
+	short sample;
+	short * ptr;
+	
+	my_audio_block_t * buff;
+	
+	if (q_count < 25)
+	{
+//		debugprintf("Insufficient buffers\n");
+		return;
+	}
+	
+	for (i = 0; i< 25; i++)
+	{
+		buff = allocate();				// get buffer from free_q
+			
+		if (buff == NULL)
+		{
+			buff = q_rem(&tohost_q);	// nothing on free_q so get first from tohost_q
+			if (buff == NULL)
+				return;
+		}
+		
+		ptr = &buff->data[0];
+				
+		for (j = 0; j< 48; j++)
+		{
+			*(ptr++) = Samples[k];
+			*(ptr++) = Samples[k++];			// Two channels
+		}
+		q_add(&tohost_q, buff);
+	}
+}
+

@@ -449,6 +449,7 @@ static void usb_setup(void)
 
 	  case 0x81A2: // GET_CUR (wValue=0, wIndex=interface, wLength=len)
 		if (setup.wLength >= 3) {
+			debugprintf("GET_CUR");
 			reply_buffer[0] = 48000 & 255;
 			reply_buffer[1] = 48000 >> 8;
 			reply_buffer[2] = 0;
@@ -941,6 +942,7 @@ void usb_isr(void)
 			} else if ((endpoint == AUDIO_SYNC_ENDPOINT-1) && (stat & 0x08)) {
 				b = (bdt_t *)((uint32_t)b ^ 8);
 				b->addr = &usb_audio_sync_feedback;
+//				debugprintf("Feedback %x", usb_audio_sync_feedback);
 				b->desc = (3 << 16) | BDT_OWN;
 				tx_state[endpoint] ^= 1;
 			} else
@@ -949,7 +951,7 @@ void usb_isr(void)
 				usb_free(packet);
 				packet = tx_first[endpoint];
 				if (packet) {
-					//serial_print("tx packet\n");
+					//debugprintf("tx packet");
 					tx_first[endpoint] = packet->next;
 					b->addr = packet->buf;
 					switch (tx_state[endpoint]) {
@@ -971,7 +973,7 @@ void usb_isr(void)
 					b->desc = BDT_DESC(packet->len,
 						((uint32_t)b & 8) ? DATA1 : DATA0);
 				} else {
-					//serial_print("tx no packet\n");
+					//debugprintf("tx no packet");
 					switch (tx_state[endpoint]) {
 					  case TX_STATE_BOTH_FREE_EVEN_FIRST:
 					  case TX_STATE_BOTH_FREE_ODD_FIRST:

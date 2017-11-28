@@ -114,14 +114,18 @@ void SendCommandToHost(char * strText)
 	UCHAR bytToSend[1024];
 	int len;
 	int ret;
-	len = sprintf(bytToSend,"c:%s\r", strText);
+	
+	if (NewMode)
+		len = sprintf(bytToSend,"%s\r", strText);
+	else
+		len = sprintf(bytToSend,"c:%s\r", strText);
 
 	if (CONNECTED)
 	{
 		ret = send(TCPControlSock, bytToSend, len, 0);
 		ret = WSAGetLastError();
 
-		if (CommandTrace) WriteDebugLog(LOGDEBUG, " Command Trace TO Host  c:%s", strText);
+		if (CommandTrace) WriteDebugLog(LOGDEBUG, " Command Trace TO Host %s", strText);
 		return;
 	}
 	return;
@@ -134,14 +138,17 @@ void SendCommandToHostQuiet(char * strText)		// Higher Debug Level for PTT
 	int len;
 	int ret;
 	
-	len = sprintf(bytToSend,"c:%s\r", strText);
+	if (NewMode)
+		len = sprintf(bytToSend,"%s\r", strText);
+	else
+		len = sprintf(bytToSend,"c:%s\r", strText);
 
 	if (CONNECTED)
 	{
 		ret = send(TCPControlSock, bytToSend, len, 0);
 		ret = WSAGetLastError();
 
-		if (CommandTrace) WriteDebugLog(LOGDEBUG, " Command Trace TO Host  c:%s", strText);
+		if (CommandTrace) WriteDebugLog(LOGDEBUG, " Command Trace TO Host %s", strText);
 		return;
 	}
 	return;
@@ -185,15 +192,26 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 
 	bytToSend = buff;
 
-	bytToSend[0] = 'd';			// indicates data from TNC
-	bytToSend[1] = ':';
-	Len += 3;					// Tag
-	bytToSend[2] = Len >> 8;	//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
-	bytToSend[3] = Len  & 0xFF;// LS Byte
-	memcpy(&bytToSend[4], strTag, 3);
-	memcpy(&bytToSend[7], bytData, Len - 3);
-	Len +=4;				// d: and len
-
+	if (NewMode)		// No d:
+	{
+		Len += 3;					// Tag
+		bytToSend[0] = Len >> 8;	//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
+		bytToSend[1] = Len  & 0xFF;// LS Byte
+		memcpy(&bytToSend[2], strTag, 3);
+		memcpy(&bytToSend[5], bytData, Len - 3);
+		Len +=2;				//  len
+	}
+	else
+	{
+		bytToSend[0] = 'd';			// indicates data from TNC
+		bytToSend[1] = ':';
+		Len += 3;					// Tag
+		bytToSend[2] = Len >> 8;	//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
+		bytToSend[3] = Len  & 0xFF;// LS Byte
+		memcpy(&bytToSend[4], strTag, 3);
+		memcpy(&bytToSend[7], bytData, Len - 3);
+		Len +=4;				// d: and len
+	}
 	ret = send(TCPDataSock, bytToSend, Len, 0);
 	ret = WSAGetLastError();
 
@@ -204,7 +222,13 @@ VOID ARDOPProcessCommand(UCHAR * Buffer, int MsgLen)
 {
 	Buffer[MsgLen - 1] = 0;		// Remove CR
 	
-	Buffer+=2;					// Skip c:
+	if (Buffer[0] == 'C' && Buffer[1] == ':')
+		NewMode = FALSE;
+	else
+		NewMode = TRUE;
+
+	if (NewMode == FALSE)
+		Buffer+=2;					// Skip c:
 
 	if (_memicmp(Buffer, "RDY", 3) == 0)
 	{
@@ -259,6 +283,62 @@ void ProcessReceivedControl()
 
 loop:
 
+	if (NewMode)			// No c:
+	{
+		if (InputLen < 4)
+			return;					// Wait for more to arrive (?? timeout??)
+
+		// Command = look for CR
+
+		ptr = memchr(ARDOPBuffer, '\r', InputLen);
+
+		if (ptr == 0)	//  CR in buffer
+			return;		// Wait for it
+
+		ptr2 = &ARDOPBuffer[InputLen];
+
+		if ((ptr2 - ptr) == 1)	// CR + CRC
+		{
+			// Usual Case - single meg in buffer
+	
+			MsgLen = InputLen;
+
+			// We may be reentered as a result of processing,
+			//	so reset InputLen Here
+
+			InputLen=0;
+			InReceiveProcess = TRUE;
+			ARDOPProcessCommand(ARDOPBuffer, MsgLen);
+			InReceiveProcess = FALSE;
+			return;
+		}
+		else
+		{
+			// buffer contains more that 1 message
+
+			//	I dont think this should happen, but...
+
+			MsgLen = InputLen - (ptr2-ptr) + 1;	// Include CR and CRC
+
+			memcpy(Buffer, ARDOPBuffer, MsgLen);
+
+			memmove(ARDOPBuffer, ptr + 1,  InputLen-MsgLen);
+			InputLen -= MsgLen;
+
+			InReceiveProcess = TRUE;
+			ARDOPProcessCommand(Buffer, MsgLen);
+			InReceiveProcess = FALSE;
+
+			if (InputLen < 0)
+			{
+				InputLen = 0;
+				InReceiveProcess = FALSE;
+				return;
+			}
+			goto loop;
+		}
+	}
+
 	if (InputLen < 6)
 		return;					// Wait for more to arrive (?? timeout??)
 
@@ -268,10 +348,6 @@ loop:
 
 
 
-	if (ARDOPBuffer[1] == ':')	// At least message looks reasonable
-	{
-		if (ARDOPBuffer[0] == 'C')
-		{
 			// Command = look for CR
 
 			ptr = memchr(ARDOPBuffer, '\r', InputLen);
@@ -321,9 +397,7 @@ loop:
 				}
 				goto loop;
 			}
-		}
-	}
-
+		
 	// Getting bad data ?? Should we just reset ??
 	
 	WriteDebugLog(LOGDEBUG, "ARDOP BadHost Message ?? %s", ARDOPBuffer);
@@ -374,6 +448,48 @@ void ProcessReceivedData()
 	DataInputLen += Len;
 
 loop:
+
+	if (NewMode)
+	{
+		// No D:
+
+		int DataLen;
+		
+		if (DataInputLen < 3)
+			return;					// Wait for more to arrive (?? timeout??)
+
+		// check we have it all
+
+		DataLen = (ARDOPDataBuffer[0] << 8) + ARDOPDataBuffer[1]; // HI First
+			
+		if (DataInputLen < DataLen + 2)
+			return;					// Wait for more
+
+		MsgLen = DataLen + 2;		// Len
+
+		memcpy(Buffer, &ARDOPDataBuffer[2], DataLen);
+
+		DataInputLen -= MsgLen;
+
+		if (DataInputLen > 0)
+			memmove(ARDOPDataBuffer, &ARDOPDataBuffer[MsgLen],  DataInputLen);
+
+		InReceiveProcess = TRUE;
+		AddDataToDataToSend(Buffer, DataLen);
+		InReceiveProcess = FALSE;
+	
+		// See if anything else in buffer
+
+		if (DataInputLen > 0)
+			goto loop;
+
+		if (DataInputLen < 0)
+			DataInputLen = 0;
+
+		return;
+	}
+
+	// Old Mode
 
 	if (DataInputLen < 5)
 		return;					// Wait for more to arrive (?? timeout??)

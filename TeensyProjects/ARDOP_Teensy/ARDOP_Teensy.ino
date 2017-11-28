@@ -17,6 +17,8 @@ unsigned char RXBUFFER[500];	// Async RX Buffer. Enough for Stuffed Host Mode Fr
 extern volatile int RXBPtr;
 volatile int flag = 0;
 volatile int flag2 = 0;
+volatile int lastperiod = 0, lastint = 0;
+
 int SerialHost = TRUE;				// Will eventually allow switching from Serial to I2c without reconfig
 int ActivePort = 0;						// Serial port in use
 int SerialWatchDog = 0;

@@ -546,9 +546,9 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define SEREMU_RX_INTERVAL    2
   #define AUDIO_INTERFACE	1	// Audio (uses 3 consecutive interfaces)
   #define AUDIO_TX_ENDPOINT     3
-  #define AUDIO_TX_SIZE         196
+  #define AUDIO_TX_SIZE         192
   #define AUDIO_RX_ENDPOINT     4
-  #define AUDIO_RX_SIZE         196
+  #define AUDIO_RX_SIZE         192
   #define AUDIO_SYNC_ENDPOINT	5
   #define ENDPOINT1_CONFIG	ENDPOINT_TRANSIMIT_ONLY
   #define ENDPOINT2_CONFIG	ENDPOINT_RECEIVE_ONLY
@@ -583,9 +583,9 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define MIDI_RX_SIZE          64
   #define AUDIO_INTERFACE	3	// Audio (uses 3 consecutive interfaces)
   #define AUDIO_TX_ENDPOINT     6
-  #define AUDIO_TX_SIZE         196
+  #define AUDIO_TX_SIZE         192
   #define AUDIO_RX_ENDPOINT     7
-  #define AUDIO_RX_SIZE         196
+  #define AUDIO_RX_SIZE         192
   #define AUDIO_SYNC_ENDPOINT	8
   #define ENDPOINT1_CONFIG	ENDPOINT_TRANSIMIT_ONLY
   #define ENDPOINT2_CONFIG	ENDPOINT_RECEIVE_ONLY
@@ -595,6 +595,41 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define ENDPOINT6_CONFIG	ENDPOINT_TRANSMIT_ISOCHRONOUS
   #define ENDPOINT7_CONFIG	ENDPOINT_RECEIVE_ISOCHRONOUS
   #define ENDPOINT8_CONFIG	ENDPOINT_TRANSMIT_ISOCHRONOUS
+  
+  #elif defined(USB_AUDIO_SERIAL)
+  #define VENDOR_ID		0x16C0
+  #define PRODUCT_ID		0x048B
+  #define MANUFACTURER_NAME	{'T','e','e','n','s','y','d','u','i','n','o'}
+  #define MANUFACTURER_NAME_LEN	11
+  #define PRODUCT_NAME		{'T','e','e','n','s','y',' ','A','u','d','i','o'}
+  #define PRODUCT_NAME_LEN	12
+  #define EP0_SIZE		64
+  #define NUM_ENDPOINTS         6
+  #define NUM_USB_BUFFERS	30
+  #define NUM_INTERFACE		5
+  #define CDC_IAD_DESCRIPTOR	1
+  #define CDC_STATUS_INTERFACE	0
+  #define CDC_DATA_INTERFACE	1	// Serial
+  #define CDC_ACM_ENDPOINT	1
+  #define CDC_RX_ENDPOINT       2
+  #define CDC_TX_ENDPOINT       3
+  #define CDC_ACM_SIZE          16
+  #define CDC_RX_SIZE           64
+  #define CDC_TX_SIZE           64
+  #define AUDIO_INTERFACE	2	// Audio (uses 3 consecutive interfaces)
+  #define AUDIO_TX_ENDPOINT     4
+  #define AUDIO_TX_SIZE         192
+  #define AUDIO_RX_ENDPOINT     5
+  #define AUDIO_RX_SIZE         192
+  #define AUDIO_SYNC_ENDPOINT	6
+  #define ENDPOINT1_CONFIG	ENDPOINT_TRANSIMIT_ONLY
+  #define ENDPOINT2_CONFIG	ENDPOINT_RECEIVE_ONLY
+  #define ENDPOINT3_CONFIG	ENDPOINT_TRANSIMIT_ONLY
+  #define ENDPOINT4_CONFIG	ENDPOINT_TRANSMIT_ISOCHRONOUS
+  #define ENDPOINT5_CONFIG	ENDPOINT_RECEIVE_ISOCHRONOUS
+  #define ENDPOINT6_CONFIG	ENDPOINT_TRANSMIT_ISOCHRONOUS
+
+
 
 #elif defined(USB_EVERYTHING)
   #define VENDOR_ID		0x16C0
@@ -668,9 +703,9 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define KEYMEDIA_INTERVAL     4
   #define AUDIO_INTERFACE	9	// Audio (uses 3 consecutive interfaces)
   #define AUDIO_TX_ENDPOINT     13
-  #define AUDIO_TX_SIZE         196
+  #define AUDIO_TX_SIZE         192
   #define AUDIO_RX_ENDPOINT     13
-  #define AUDIO_RX_SIZE         196
+  #define AUDIO_RX_SIZE         192
   #define AUDIO_SYNC_ENDPOINT	14
   #define MULTITOUCH_INTERFACE  12	// Touchscreen
   #define MULTITOUCH_ENDPOINT   15
