@@ -48,7 +48,7 @@
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
-				CompileAs="1"
+				CompileAs="2"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="wsock32.lib c:\devprogs\AIS\AIS_MM_Iface.lib Winmm.lib comctl32.lib"
+				AdditionalDependencies="wsock32.lib C:\Users\johnw\OneDrive\Dev\Source\AIS\mmapi.lib Winmm.lib comctl32.lib"
 				OutputFile="c:\devprogs\AIS\$(ProjectName).exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -177,31 +177,27 @@
 	</References>
 	<Files>
 		<File
-			RelativePath="S:\DEV\Source\AIS\AIS_MM.c"
+			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AIS_MM.c"
 			>
 		</File>
 		<File
-			RelativePath="S:\DEV\Source\AIS\ais_mm.h"
+			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AIS_MM.rc"
 			>
 		</File>
 		<File
-			RelativePath="S:\DEV\Source\AIS\AIS_MM.rc"
+			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AIS_MM_IFace.c"
 			>
 		</File>
 		<File
-			RelativePath="S:\DEV\Source\AIS\AIS_MM_IFace.c"
+			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AISCommon.c"
 			>
 		</File>
 		<File
-			RelativePath="S:\DEV\Source\AIS\AISCommon.c"
+			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AutoPilot.c"
 			>
 		</File>
 		<File
-			RelativePath="S:\DEV\Source\AIS\AutoPilot.c"
-			>
-		</File>
-		<File
-			RelativePath="S:\DEV\Source\AIS\stdafx.c"
+			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\stdafx.c"
 			>
 			<FileConfiguration
 				Name="Debug|Win32"
@@ -209,6 +205,17 @@
 				<Tool
 					Name="VCCLCompilerTool"
 					UsePrecompiledHeader="1"
+					ObjectFile="$(IntDir)\$(InputName)1.obj"
+					XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+					ObjectFile="$(IntDir)\$(InputName)1.obj"
+					XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 				/>
 			</FileConfiguration>
 		</File>
