@@ -816,7 +816,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add VARA support
 //	Fix WINMOR Busy left set when port Suspended
 //	Add ARDOP-Packet Support
-
+//	Add Antenna Switching for TS 480
+//	Fix possible crash in Web Terminal
+//	Support different Code Pages on Console sessions
 
 #define CKernel
 

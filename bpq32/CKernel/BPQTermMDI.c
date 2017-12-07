@@ -246,7 +246,7 @@ int RTFHddrLen;
 char FontName[100] = "FixedSys";
 int FontSize = 20;
 int FontWidth = 8;
-int CodePage = 437;
+int CodePage = 1252;
 int CharSet = 0;
 
 
@@ -334,6 +334,14 @@ extern ULONG MMASK;
 extern byte	MUIONLY;
 
 HMENU hPopMenu1;
+
+#define AUTO -1
+#define CP437 437
+#define CP1251 1251
+#define CP1252 1252
+
+int RXMode = AUTO; //CP1252;
+int TXMode = CP_UTF8;
 
 VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 {
@@ -2904,6 +2912,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				Cinfo->Scrolled = FALSE;
 			}
 
+
 			DoRefresh(Cinfo);
 //			ProcessLine(Cinfo, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
 			SendMsg(Cinfo->BPQStream, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
@@ -3205,6 +3214,10 @@ DoReceivedData(int Stream)
 		do {
 
 			GetMsg(Cinfo->BPQStream, &Msg[0],&len,&count);
+
+			if (len == 1 && Msg[0] == 0)
+				continue;
+
 			WritetoOutputWindow(Cinfo, Msg, len, FALSE);
 	
 			Cinfo->SlowTimer = 0;
@@ -3220,11 +3233,39 @@ DoReceivedData(int Stream)
 	}
 	return (0);
 }
+
+VOID wcstoRTF(char * out, WCHAR * in)
+{
+	WCHAR * ptr1 = in;
+	char * ptr2 = out;
+	int val = *ptr1++;
+
+	while (val)
+	{
+		// May be Code Page or Unicode
+		{
+			if (val > 255 || val < -255 )
+				ptr2 += sprintf(ptr2, "\\u%d ", val);
+			else if (val > 127 || val < -128)
+				ptr2 += sprintf(ptr2, "\\'%02X", val);
+			else
+				*(ptr2++) = val;
+		}
+		val = *ptr1++;
+	}
+	*ptr2 = 0;
+}
+
 DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LONG cb, PLONG pcb)
 {
 	int ReqLen = cb;
 	int i;
 	int Line;
+	int NewLen;
+	int err;
+
+	char LineB[2048];
+	WCHAR LineW[2048];
 
 //	if (cb != 4092)
 //		return 0;
@@ -3266,13 +3307,34 @@ DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LON
 
 	for (i = 0; i < 10; i++);
 	{
-	Line = Cinfo->Index++ + Cinfo->CurrentLine - MAXLINES;
+		Line = Cinfo->Index++ + Cinfo->CurrentLine - MAXLINES;
 
-	if (Line <0)
-		Line = Line + MAXLINES;
+		if (Line <0)
+			Line = Line + MAXLINES;
 
-	sprintf(lpBuff, "\\cf%d ", Cinfo->Colourvalue[Line]);
-	strcat(lpBuff, Cinfo->OutputScreen[Line]);
+		sprintf(lpBuff, "\\cf%d ", Cinfo->Colourvalue[Line]);
+	
+		// Handle UTF-8
+
+		NewLen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Cinfo->OutputScreen[Line], -1, LineW, 2000); 
+
+		err =  GetLastError();
+
+		if (err == ERROR_NO_UNICODE_TRANSLATION)
+		{
+			// Input isn't UTF 8. Juat use default 8 bit set#
+
+			strcat(lpBuff, Cinfo->OutputScreen[Line]);
+		}
+		else
+		{
+			if (LineW[0] != 0)
+			{
+				wcstoRTF(LineB, LineW);
+				strcat(lpBuff, LineB);
+			}
+		}
+	}
 	strcat(lpBuff, "\\line");
 
 	if (Cinfo->Index == MAXLINES)
@@ -3281,7 +3343,7 @@ DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LON
 		strcat(lpBuff, "}");
 		i = 10;
 	}
-	}
+	
 	*pcb = strlen(lpBuff);
 	return 0;
 }
