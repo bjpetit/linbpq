@@ -1001,9 +1001,8 @@ int PackSamplesAndSend(short * input, int nSamples)
 		int i = 0;
 		for (n = 0; n < nSamples; n++)
 		{
-			*(sampptr) = input[0];
-			*(sampptr + 1) = *(sampptr);		// same to both channels
-			*(sampptr) += 2;
+			*(sampptr++) = input[0];
+			*(sampptr++) = input[0];
 			input ++;
 		}
 	}

@@ -167,7 +167,11 @@ void usb_audio_receive_callback(unsigned int len)
 {
   int32_t value;
   int i = 0;
-  int count = len /4;		//Len is in bytes, 4 bytes per samples (2 chan 16 bit)
+  #ifdef MONO
+   int count = len /2;		//Len is in bytes, 1 bytes per samples (1 chan 16 bit)
+  #else
+ int count = len /4;		//Len is in bytes, 4 bytes per samples (2 chan 16 bit)
+  #endif
   
   // Check for silence. Some programs send silence instead of stopping sending
   
@@ -176,7 +180,7 @@ void usb_audio_receive_callback(unsigned int len)
   
   for (i = 0; i < count; i++)
   {
-	value = usb_audio_receive_buffer[i + i];
+	value = usb_audio_receive_buffer[i * CHANNELS];
 	if (value)
 		silent = FALSE;
 	
@@ -258,7 +262,7 @@ unsigned int usb_audio_transmit_callback(void)
 
 	outInts++;
 
-	target = 4 * SampleRate / 1000;
+	target = 2 * CHANNELS * SampleRate / 1000;		// Called every Millisecond
 	
 	buff = q_rem(&tohost_q);	// nothing on free_q so get first from tohost_q
 	if (buff == NULL)
@@ -482,7 +486,9 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		for (j = 0; j< 48; j++)
 		{
 			*(ptr++) = Samples[k];
+#ifndef MONO
 			*(ptr++) = Samples[k++];			// Two channels
+#endif
 		}
 		q_add(&tohost_q, buff);
 	}

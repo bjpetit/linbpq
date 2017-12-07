@@ -9,6 +9,14 @@
 
 #define DAC_SAMPLES_PER_BLOCK 1200
 
+//#define MONO
+
+#ifdef MONO
+#define CHANNELS 1
+#else
+#define CHANNELS 2
+#endif
+
 
 typedef struct my_audio_block_struct
 {

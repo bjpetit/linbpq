@@ -37,6 +37,15 @@
 #include "kinetis.h"
 #include "avr_functions.h"
 
+//#define MONO
+
+#ifdef MONO
+#define CHANNELS 1
+#else
+#define CHANNELS 2
+#endif
+
+
 // USB Descriptors are binary data which the USB host reads to
 // automatically detect a USB device's capabilities.  The format
 // and meaning of every field is documented in numerous USB
@@ -970,8 +979,8 @@ static uint8_t config_descriptor[CONFIG_DESC_SIZE] = {
 	//0x03, 0x06,				// wTerminalType, 0x0603 = Line Connector
 	0x02, 0x06,				// wTerminalType, 0x0602 = Digital Audio
 	0,					// bAssocTerminal, 0 = unidirectional
-	2,					// bNrChannels
-	0x03, 0x00,				// wChannelConfig, 0x0003 = Left & Right Front
+	CHANNELS,					// bNrChannels
+	(CHANNELS - 1) * 3, 0x00,				// wChannelConfig, 0x0003 = Left & Right Front
 	0,					// iChannelNames
 	0, 					// iTerminal
 	// Output Terminal Descriptor
@@ -992,8 +1001,8 @@ static uint8_t config_descriptor[CONFIG_DESC_SIZE] = {
 	3,					// bTerminalID
 	0x01, 0x01,				// wTerminalType, 0x0101 = USB_STREAMING
 	0,					// bAssocTerminal, 0 = unidirectional
-	2,					// bNrChannels
-	0x03, 0x00,				// wChannelConfig, 0x0003 = Left & Right Front
+	CHANNELS,					// bNrChannels
+	(CHANNELS - 1) * 3, 0x00,				// wChannelConfig, 0x0003 = Left & Right Front
 	0,					// iChannelNames
 	0, 					// iTerminal
 	// Volume feature descriptor
@@ -1054,7 +1063,7 @@ static uint8_t config_descriptor[CONFIG_DESC_SIZE] = {
 	0x24,					// bDescriptorType = CS_INTERFACE
 	2,					// bDescriptorSubtype = FORMAT_TYPE
 	1,					// bFormatType = FORMAT_TYPE_I
-	2,					// bNrChannels = 2
+	CHANNELS,					// bNrChannels = 2
 	2,					// bSubFrameSize = 2 byte
 	16,					// bBitResolution = 16 bits
 	1,					// bSamFreqType = 1 frequency
@@ -1113,7 +1122,7 @@ static uint8_t config_descriptor[CONFIG_DESC_SIZE] = {
 	0x24,					// bDescriptorType = CS_INTERFACE
 	2,					// bDescriptorSubtype = FORMAT_TYPE
 	1,					// bFormatType = FORMAT_TYPE_I
-	2,					// bNrChannels = 2
+	CHANNELS,					// bNrChannels = 2
 	2,					// bSubFrameSize = 2 byte
 	16,					// bBitResolution = 16 bits
 	1,					// bSamFreqType = 1 frequency

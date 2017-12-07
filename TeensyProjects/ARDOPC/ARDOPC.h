@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "1.0.2.5-BPQ"
+#define ProductVersion "1.0.2.5a-BPQ"
 
 //	Sound interface buffer size
 

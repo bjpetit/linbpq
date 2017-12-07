@@ -56,6 +56,7 @@ BOOL blnLastFrameSentData = FALSE;
 extern char CarrierOk[8];
 extern int LastDataFrameType;	
 extern BOOL blnARQDisconnect;
+extern const short FrameSize[256];
 
 // ARQ State Variables
 
@@ -731,12 +732,12 @@ UCHAR  * GetDataModes(int intBW)
 
 // Function to get Shift up thresholds by bandwidth for ARQ sessions
 
-static UCHAR byt200[] = {82, 85, 83, 76, 0};
-static UCHAR byt500[] = {82, 82, 82, 84, 75, 0};
-static UCHAR byt1000[] = {82, 82, 82, 77, 82, 80, 0}; //  ' Threshold for 8PSK 167 baud changed from 75 to 80 on rev 0.7.2.3
-static UCHAR byt2000[] = {82, 82, 82, 85, 86, 87, 80, 0}; //  Threshold for 8PSK 167 baud changed from 73 to 80 on rev 0.7.2.3
-static UCHAR byt2000FM[] = {90, 90, 75, 75, 73, 0};
-
+static UCHAR byt200[] = {82, 84, 84, 85, 0};
+static UCHAR byt500[] = {80, 84, 84, 75, 79, 0};
+static UCHAR byt1000[] = {80, 80, 80, 80, 75, 0}; 
+static UCHAR byt2000[] = {80, 80, 80, 76, 85, 75, 0}; //  Threshold for 8PSK 167 baud changed from 73 to 80 on rev 0.7.2.3
+static UCHAR byt2000FM[] = {60, 85, 85, 0};
+ 
 UCHAR * GetShiftUpThresholds(int intBW)
 {
 	//' Initial values determined by finding the following process: (all using Pink Gaussian Noise channel 0 to 3 KHz) 
@@ -763,13 +764,14 @@ UCHAR * GetShiftUpThresholds(int intBW)
 		return byt2000FM;
 }
 
+
 unsigned short  ModeHasWorked[16] = {0};		// used to attempt to make gear shift more stable.
 unsigned short  ModeHasBeenTried[16] = {0};
 unsigned short  ModeNAKS[16] = {0};
 
 //  Subroutine to shift up to the next higher throughput or down to the next more robust data modes based on average reported quality 
 
-void Gearshift_8()
+void Gearshift_9()
 {
 	// More complex mechanism to gear shift based on intAvgQuality, current state and bytes remaining.
 	// This can be refined later with different or dynamic Trip points etc. 
@@ -777,14 +779,12 @@ void Gearshift_8()
 
 	char strOldMode[18] = "";
 	char strNewMode[18] = "";
-	int DownNAKS = 3;			// Normal
+	int DownNAKS = 2;			// Normal (changed from 3 Nov 17)
 
 	int intBytesRemaining = bytDataToSendLength;
 
 	if (ModeHasWorked[intFrameTypePtr] == 0)		// This mode has never worked
-		DownNAKS = 1;			// Revent immediately
-	else if (strstr(Name(bytFrameTypesForBW[intFrameTypePtr]), "FSK") == 0)
-		DownNAKS = 2;			// Lower for FSK
+		DownNAKS = 1;			// Revert immediately
 
 	if (intACKctr)
 		ModeHasWorked[intFrameTypePtr]++;
@@ -793,101 +793,56 @@ void Gearshift_8()
 
 	if (intFrameTypePtr > 0 && intNAKctr >= DownNAKS)
 	{
-		// NAK threshold changed from 4 to 3 on rev 0.5.3.1, also less for PSK
-
 		strcpy(strOldMode, Name(bytFrameTypesForBW[intFrameTypePtr]));
 		strOldMode[strlen(strOldMode) - 2] = 0;
 		strcpy(strNewMode, Name(bytFrameTypesForBW[intFrameTypePtr - 1]));
 		strNewMode[strlen(strNewMode) - 2] = 0;
 
- 		WriteDebugLog(LOGINFO, "[ARDOPprotocol.Gearshift_8] intNAKCtr= %d intNAKctr  Shift down from Frame type %s New Mode: %s", intNAKctr, strOldMode, strNewMode);
-		intShiftUpDn = -1;  // Shift down if 3 NAKs without ACK or 2 NAKs without an ACK from non FSK modes.
-		intAvgQuality;
+ 		WriteDebugLog(LOGINFO, "[ARDOPprotocol.Gearshift_9] intNAKCtr= %d Shift down from Frame type %s New Mode: %s", intNAKctr, strOldMode, strNewMode);
+		intShiftUpDn = -1;
 		
+		intAvgQuality = 0; // Clear intAvgQuality causing the first received Quality to become the new average
 		intNAKctr = 0;
 		intACKctr = 0;
+		intShiftDNs++;
 	}
 	else if (intAvgQuality > bytShiftUpThresholds[intFrameTypePtr] && intFrameTypePtr < (bytFrameTypesForBWLength - 1) && intACKctr >= 2)
 	{
 		// if above Hi Trip setup so next call of GetNextFrameData will select a faster mode if one is available 
 		
-		intShiftUpDn = 0;
+		// But don't shift if we can send remaining data in current mode
 		
-		if (TuningRange == 0)
+		if (intBytesRemaining <= FrameSize[bytFrameTypesForBW[intFrameTypePtr]])
 		{
-			switch (intFrameTypePtr)
-			{
-			case 0:
-				
-				if (intBytesRemaining > 64)
-					intShiftUpDn = 2;
-				else if (intBytesRemaining > 32)
-					intShiftUpDn = 1;
-
-				break;
-
-			case 1:
-		
-				if (intBytesRemaining > 200)
-					intShiftUpDn = 2;
-				else if (intBytesRemaining > 64)
-					intShiftUpDn = 1;
-
-				break;
- 
-			case 2:
-	
-				if (intBytesRemaining > 400)
-					intShiftUpDn = 2;
-				else if (intBytesRemaining > 200)
-					intShiftUpDn = 1;
-
-				break;
-
-			case 3:
-				
-				if (intBytesRemaining > 600) intShiftUpDn = 1;
-				break;
-		
-			case 4:
-				
-				if (intBytesRemaining > 512) intShiftUpDn = 1;
-				break;
-			}
+			intShiftUpDn = 0;
+			return;
 		}
-		else if (intSessionBW == 200)
-			intShiftUpDn = 1;
-		else if (intFrameTypePtr == 0 && intBytesRemaining > 32)
-			intShiftUpDn = 2;
-		else
-			intShiftUpDn = 1;
-
+		
 		// if the new mode has been tried before, and immediately failed, don't try again
 		// till we get at least 5 sucessive acks
 
-		if (ModeHasBeenTried[intFrameTypePtr] && ModeHasWorked[intFrameTypePtr] == 0 && intACKctr < 5)
+		if (ModeHasBeenTried[intFrameTypePtr + 1] && ModeHasWorked[intFrameTypePtr + 1] == 0 && intACKctr < 5)
 		{
 			intShiftUpDn = 0;
 			return;
 		}
 
-		ModeHasBeenTried[intFrameTypePtr] = 1;
+		intShiftUpDn = 1;
+
+		ModeHasBeenTried[intFrameTypePtr + intShiftUpDn] = 1;
 
 		strcpy(strNewMode, Name(bytFrameTypesForBW[intFrameTypePtr + intShiftUpDn]));
 		strNewMode[strlen(strNewMode) - 2] = 0;
 	
-		WriteDebugLog(LOGINFO, "[ARDOPprotocol.Gearshift_8] ShiftUpDn = %d, AvgQuality=%d New Mode: %s",
+		WriteDebugLog(LOGINFO, "[ARDOPprotocol.Gearshift_9] ShiftUpDn = %d, AvgQuality=%d New Mode: %s",
 			intShiftUpDn, intAvgQuality, strNewMode);
            
 		intAvgQuality = 0; // Clear intAvgQuality causing the first received Quality to become the new average
 		intNAKctr = 0;
 		intACKctr = 0;
-	}
 
-  	if (intShiftUpDn < 0)
-		intShiftDNs++;
-	else if (intShiftUpDn > 0)
 		intShiftUPs++;
+	}
 }
 
 /*
@@ -2137,7 +2092,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					}
 
 					ComputeQualityAvg(38 + 2 * (intFrameType - 0xE0)); // Average ACK quality to exponential averager.
-					Gearshift_8();		// gear shift based on average quality
+					Gearshift_9();		// gear shift based on average quality
 				}
 				intNAKctr = 0;
 				blnEnbARQRpt = FALSE;	// stops repeat and forces new data frame or IDLE
@@ -2203,7 +2158,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			        intNAKctr++;
 				
 					ComputeQualityAvg(38 + 2 * intFrameType);	 // Average in NAK quality to exponential averager.  
-					Gearshift_8();		//' gear shift based on average quality or Shift Down if intNAKcnt >= 10
+					Gearshift_9();		//' gear shift based on average quality or Shift Down if intNAKcnt >= 10
 					
 					if (intShiftUpDn != 0)
 					{

@@ -45,7 +45,7 @@
 //#define SERIAL1SIZE 512
 //#define HOSTSPEED 115200
 
-#define MONPORT Serial1
+#define MONPORT Serial
 
 // Shouldn't need to change anything below here
 

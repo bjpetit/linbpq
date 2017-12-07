@@ -3,9 +3,9 @@
 // At the moment only Packet, ARDOP or SOUNDCARD
 
 //#define PACKET
-#define ARDOP
+//#define ARDOP
 
-//#define SOUNDCARD
+#define SOUNDCARD
 // Standard definitions
 
 #define TEENSY
