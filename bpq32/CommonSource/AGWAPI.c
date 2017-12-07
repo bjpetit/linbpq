@@ -56,7 +56,8 @@ struct AGWSocketConnectionInfo
 	BOOL SocketActive;
     BOOL RawFlag;
     BOOL MonFlag;
-    unsigned char  CallSign[10];
+    unsigned char CallSign1[10];
+    unsigned char CallSign2[10];
     BOOL GotHeader;
     int MsgDataLength;
     struct AGWHeader AGWRXHeader;   
@@ -427,7 +428,7 @@ VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			sprintf(IPAddr, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
 			Bufferptr = CHECKBUFFER(Session, Bufferptr);
-			Bufferptr += sprintf(Bufferptr, "%2d   %-16s %5d %-10s\r", i, IPAddr, htons(sockptr->sin.sin_port), &sockptr->CallSign[0]);
+			Bufferptr += sprintf(Bufferptr, "%2d   %-16s %5d %-10s %-10s\r", i, IPAddr, htons(sockptr->sin.sin_port), &sockptr->CallSign1,  &sockptr->CallSign2);
 		}
 		else
 		{
@@ -556,14 +557,15 @@ int AGWConnected(struct BPQConnectionInfo * Con, int Stream)
                           
 		for (sockptr=&Sockets[1]; sockptr <= &Sockets[CurrentSockets]; sockptr++)
 		{
-			if (sockptr->SocketActive && (memcmp(sockptr->CallSign,ApplCall,10) == 0))
+			if (sockptr->SocketActive &&
+				(memcmp(sockptr->CallSign1, ApplCall, 10) == 0) || (memcmp(sockptr->CallSign2, ApplCall, 10) == 0))
 			{
 				// Create Key
             
 				keyptr=(byte *)&Con->CallKey;
 
 				*(keyptr++)='1';
-				memcpy(keyptr,sockptr->CallSign, 10);
+				memcpy(keyptr, ApplCall, 10);
 				keyptr+=10;
 				memcpy(keyptr,ConnectingCall, 10);
                         		
@@ -857,9 +859,9 @@ int DeleteConnection(struct BPQConnectionInfo * Con)
 
 //   move all down one
 
-	con = (Con - &AGWConnections[0]) / sizeof(struct BPQConnectionInfo);
-
-	for (i = con; i <= CurrentConnections - 2; i++)
+	con = (Con - &AGWConnections[0]);
+	
+	for (i = con; i <= CurrentConnections - 1; i++)
 	{
 	    memcpy(&AGWConnections[i],&AGWConnections[i + 1],sizeof ConInfoRec);  
 	}
@@ -1088,6 +1090,7 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 	struct BPQConnectionInfo * Connection;
 	int Stream;
 	char AXCall[10];
+	char RegCall[10];
 	unsigned char TXMessage[500];
 	int Digis,MsgStart,j;
 	byte * TXMessageptr;
@@ -1126,7 +1129,7 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
         
         Connect(Stream);				// Connect
         
-		ConvToAX25(sockptr->CallSign, AXCall);
+		ConvToAX25(sockptr->CallSign1, AXCall);
 		ChangeSessionCallsign(Stream, AXCall);
 
         DisplaySessions();
@@ -1319,9 +1322,14 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
         
 		memset(&AGWTXHeader,0,36);
 		
-		memset(&sockptr->CallSign,0,10);
-	  
-		memcpy(sockptr->CallSign, sockptr->AGWRXHeader.callfrom,strlen(sockptr->AGWRXHeader.callfrom));  
+		memset(RegCall,0,10);
+		memcpy(RegCall, sockptr->AGWRXHeader.callfrom, strlen(sockptr->AGWRXHeader.callfrom));  
+
+		if (sockptr->CallSign1[0] == 0)
+			memcpy(sockptr->CallSign1, RegCall, 10);  
+		else
+			memcpy(sockptr->CallSign2, RegCall, 10); 
+
         AGWTXHeader.DataKind = 'X';
         
         AGWTXHeader.DataLength = 1;      // Length

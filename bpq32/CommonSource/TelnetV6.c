@@ -286,7 +286,7 @@ int ProcessLine(char * buf, int Port)
 		TCP->MaxSessions = 10;				// Default Values
 		TNC->Hardware = H_TELNET;
 		TCP->IPV4 = TRUE;
-		strcpy(TCP->CMSServer, "Server.Winlink.org");
+		strcpy(TCP->CMSServer, "CMS.Winlink.org");
 	}
 
 	TNC = TNCInfo[Port];
@@ -2228,6 +2228,7 @@ nosocks:
 							if (P4[0])
 								sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r", P3, P4);
 							else
+							if (P3[0])
 								sprintf(STREAM->ConnectionInfo->Signon, "%s\r", P3);
 						}
 
@@ -5209,9 +5210,6 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 #endif
 	return;
 }
-
-
-//Keep this in case we ever do general outgoing TCP
 
 TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port, BOOL FBB)
 {

@@ -225,6 +225,7 @@ char PassError[] = "<p align=center>Sorry, User or Password is invalid - please 
 char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
 
 char LostSession[] = "<html><body>Sorry, Session had been lost - refresh page to sign in again";
+char NoSessions[] = "<html><body>Sorry, No Sessions available - refresh page to try again";
 
 char TermPage[] = "<html><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />"
 	"<head><title>BPQ32 Node %s</title></head>"
@@ -708,9 +709,24 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 		{
 			char AXCall[10];
 			SessionControl(Stream, 1, 0);
+			if (BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION == NULL)
+			{
+				//No L4 sessions free
+
+				ReplyLen = sprintf(_REPLYBUFFER, "%s", NoSessions);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+				send(sock, Header, HeaderLen, 0);
+				send(sock, _REPLYBUFFER, ReplyLen, 0);
+				send(sock, Tail, strlen(Tail), 0);
+				return;
+			}
+
 			ConvToAX25(Session->HTTPCall, AXCall);
 			ChangeSessionCallsign(Stream, AXCall);
-			BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = Session->USER->Secure;
+			if (Session->USER)
+				BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = Session->USER->Secure;
+			else
+				Debugprintf("HTTP Term Session->USER is NULL");
 		}
 
 		SendMsg(Stream, input, end - input);

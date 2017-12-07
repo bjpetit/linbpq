@@ -2148,7 +2148,7 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendStatus, BOOL SendSOGCOG)
 	BeaconParams[2] = (VOID *)SendStatus;
 	BeaconParams[3] = (VOID *)SendSOGCOG;
 
-	_beginthread(SendBeaconThread, 0, (VOID *) BeaconParams);
+	_beginthread((void (*)(int))SendBeaconThread, 0, (VOID *) BeaconParams);
 }
 
 int SendBeaconThread(VOID * BeaconParams[])

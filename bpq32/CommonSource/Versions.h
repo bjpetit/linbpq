@@ -9,14 +9,14 @@
 
 #endif
 
-#define KVers 6,0,14,25
-#define KVerstring "6.0.14.25\0"
+#define KVers 6,0,14,34
+#define KVerstring "6.0.14.34\0"
 
 #ifdef CKernel
 
 #define Vers KVers
 #define Verstring KVerstring
-#define Datestring "November 2017"
+#define Datestring "December 2017"
 #define VerComments "G8BPQ Packet Switch (C Version)" KVerstring
 #define VerCopyright "Copyright © 2001-2017 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
@@ -26,8 +26,8 @@
 
 #ifdef TermTCP
 
-#define Vers 1,0,14,2
-#define Verstring "1.0.14.2\0"
+#define Vers 1,0,14,5
+#define Verstring "1.0.14.5\0"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011-2017 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"

@@ -488,6 +488,8 @@ VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value)
 	return;
 }
 
+char APIKey[] = ",\"Key\":\"0D0C7AD6B38C45A7A9534E67111C38A7\"";
+
 
 VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return)
 {
@@ -497,6 +499,9 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 	char Header[2048];
 	char * ptr, * ptr1;
 	int Sent;
+
+	strcat(Params, APIKey);
+	Len += strlen(APIKey);
 
 	sprintf(Header, HeaderTemplate, Request, Host, Port, Len + 2, Params);
 	Sent = send(sock, Header, strlen(Header), 0);
@@ -536,7 +541,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 
 			if (ptr1)
 			{
-				// Have content lengthRLOP
+				// Have content length
 
 				int ContentLen = atoi(ptr1 + 16);
 
@@ -559,7 +564,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 			}
 			else
 			{
-				ptr1 = strstr(Buffer, "Transfer-Encoding:");
+				ptr1 = strstr(strlwr(Buffer), "transfer-encoding:");
 				
 				if (ptr1)
 				{
@@ -580,7 +585,7 @@ VOID SendHTTPReporttoWL2KThread()
 	struct WL2KInfo * WL2KReport = WL2KReports;
 	char * LastHost = NULL;
 	char * LastRMSCall = NULL;
-	char Message[256];
+	char Message[512];
 	int LastSocket = 0;
 	SOCKET sock = 0;
 	struct sockaddr_in destaddr;
@@ -750,18 +755,20 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 
 	_strlwr(p_cmd);
 
+	WL2KReport->WL2KPort = atoi(p_cmd);
+
 	if (strstr(p_cmd, "winlink.org"))
-		WL2KReport->Host = _strdup("server.winlink.org");
+	{
+		WL2KReport->WL2KPort = 80;			// HTTP Interface
+		WL2KReport->Host = _strdup("api.winlink.org");
+	}
 	else
 		WL2KReport->Host = _strdup(p_cmd);
 
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);			
 	if (p_cmd == NULL) goto BadLine;
 
-	WL2KReport->WL2KPort = atoi(p_cmd);
 
-	if (WL2KReport->WL2KPort == 8778)
-		WL2KReport->WL2KPort = 8085;			// HTTP Interface
 
 	if (WL2KReport->WL2KPort == 0) goto BadLine;
 

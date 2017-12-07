@@ -391,6 +391,7 @@ static int ProcessLine(char * buf, int Port)
 		}
 
 		TNC->MaxConReq = 10;		// Default
+		TNC->OldMode = FALSE;		// Default 
 
 		// Read Initialisation lines
 
@@ -463,8 +464,10 @@ static int ProcessLine(char * buf, int Port)
 				ConfigVirtualKISSPort(TNC, buf);
 			}
 			else
-
-			strcat (TNC->InitScript, buf);
+			if (_memicmp(buf, "OLDMODE", 7) == 0)
+				TNC->OldMode = TRUE;
+			else
+				strcat (TNC->InitScript, buf);
 		}
 
 
@@ -509,7 +512,10 @@ VOID ARDOPSendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue)
 	if (Buff[0] == 0)		// Terminal Keepalive?
 		return;
 
-	EncLen = sprintf(Encoded, "C:%s\r", Buff);
+	if (TNC->OldMode)
+		EncLen = sprintf(Encoded, "C:%s\r", Buff);
+	else
+		EncLen = sprintf(Encoded, "%s\r", Buff);
 
 //	CRC = GenCRC16(Encoded + 2, EncLen -2);			// Don't include c:
 
@@ -649,15 +655,19 @@ int ARDOPSendData(struct TNCINFO * TNC, char * Buff, int Len)
 	UCHAR Msg[400];
 	UCHAR * Encoded = Msg;
 	
-	*(Encoded++) = 'D';
-	*(Encoded++) = ':';
+	if (TNC->OldMode)				// No D: on New Version
+	{	*(Encoded++) = 'D';
+		*(Encoded++) = ':';
+	}
 	*(Encoded++) = Len >> 8;
 	*(Encoded++) = Len & 0xff;
 
 	memcpy(Encoded, Buff, Len);
-	Encoded += Len;
 
-	EncLen = Len + 4;
+	if (TNC->OldMode)
+		EncLen = Len + 4;
+	else
+		EncLen = Len + 2;
 
 	SendDataToTNC(TNC, Msg, EncLen);
 
@@ -2277,8 +2287,11 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	Buffer[MsgLen - 1] = 0;		// Remove CR
 	
-	Buffer+=2;					// Skip c:
-
+	if (Buffer[0] == 'c')		// New format doesn;t have c:
+	{
+		Buffer += 2;					// Skip c:
+		MsgLen -= 2;
+	}
 	if (_memicmp(Buffer, "RDY", 3) == 0)
 		return;		// RDY not used now
 
@@ -2417,7 +2430,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		TNC->ConnectPending = 6;					// This comes before Pending
 		Debugprintf(Buffer);
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 		memcpy(TNC->TargetCall, &Buffer[7], 10);
 		return;
 	}
@@ -2475,7 +2488,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		int Speed = 0;
 
 		Debugprintf(Buffer);
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 
 		STREAM->ConnectTime = time(NULL); 
 		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
@@ -2701,7 +2714,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			return;
 		}
 
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 
 		// Release Session3
 
@@ -2821,7 +2834,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
 	{
 		Debugprintf(Buffer);
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 //		return;
 	}
 
@@ -2883,13 +2896,13 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "BLOCKED", 6) == 0)
 	{
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 		return;
 	}
 
 	if (_memicmp(Buffer, "OVER", 4) == 0)
 	{
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 		return;
 	}
 
@@ -2905,7 +2918,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		if (strchr(Buffer, '>') == 0)	// Echoed
 			return;
 		
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 	
 		// Release scanlock after another interval (to allow time for response to be sent)
 		// ?? use cancelpending TNC->ConnectPending = 1;
@@ -2920,7 +2933,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "PINGACK ", 8) == 0)
 	{
-		WritetoTrace(TNC, Buffer, MsgLen - 3);
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
 		// Drop through to return touser
 	}
 
@@ -2955,9 +2968,8 @@ static VOID ARDOPProcessReceivedData(struct TNCINFO * TNC)
 	// May get message split over packets
 
 	//	Data starts with d: and has a length field
-	//	“d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data, +2 Byte CRC”
-
-	//	As far as I can see, shortest frame is “c:RDY<Cr> + 2 byte CRC” = 8 bytes
+	//	“d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data”
+	//	New standard doesnt have d:
 
 	if (TNC->DataInputLen > 8000)	// Shouldnt have packets longer than this
 		TNC->DataInputLen=0;
@@ -2993,6 +3005,44 @@ static VOID ARDOPProcessReceivedData(struct TNCINFO * TNC)
 		TNC->DataInputLen += InputLen;
 	}
 loop:
+
+	if (TNC->OldMode)
+		goto OldRX;
+
+	else
+	{	// No D:
+
+		// Data = check we have it all
+
+		int DataLen = (TNC->ARDOPDataBuffer[0] << 8) + TNC->ARDOPDataBuffer[1]; // HI First
+		UCHAR DataType[4];
+		UCHAR * Data;
+			
+		if (TNC->DataInputLen < DataLen + 2)
+			return;					// Wait for more
+
+		MsgLen = DataLen + 2;		// Len 
+
+		memcpy(DataType, &TNC->ARDOPDataBuffer[2] , 3);
+		DataType[3] = 0;
+		
+		Data = &TNC->ARDOPDataBuffer[5];
+		DataLen -= 3;
+
+		ARDOPProcessDataPacket(TNC, DataType, Data, DataLen);
+
+		// See if anything else in buffer
+
+		TNC->DataInputLen -= MsgLen;
+
+		if (TNC->DataInputLen == 0)
+			return;
+
+		memmove(TNC->ARDOPDataBuffer, &TNC->ARDOPDataBuffer[MsgLen],  TNC->DataInputLen);
+		goto loop;
+	}
+		
+OldRX:
 
 	if (TNC->DataInputLen < 8)
 		return;					// Wait for more to arrive (?? timeout??)
@@ -3087,61 +3137,41 @@ static VOID ARDOPProcessReceivedControl(struct TNCINFO * TNC)
 
 loop:
 
-	if (TNC->InputLen < 6)
-		return;					// Wait for more to arrive (?? timeout??)
+	ptr = memchr(TNC->ARDOPBuffer, '\r', TNC->InputLen);
 
-	if (TNC->ARDOPBuffer[1] = ':')	// At least message looks reasonable
+	if (ptr == 0)	//  CR in buffer
+		return;		// Wait for it
+
+	ptr2 = &TNC->ARDOPBuffer[TNC->InputLen];
+
+	if ((ptr2 - ptr) == 1)	// CR (no CRC in new version)
 	{
-		if (TNC->ARDOPBuffer[0] == 'c')
-		{
-			// Command = look for CR
-
-			ptr = memchr(TNC->ARDOPBuffer, '\r', TNC->InputLen);
-
-			if (ptr == 0)	//  CR in buffer
-				return;		// Wait for it
-
-			ptr2 = &TNC->ARDOPBuffer[TNC->InputLen];
-
-			if ((ptr2 - ptr) == 1)	// CR (no CRC in new version)
-			{
-				// Usual Case - single meg in buffer
+		// Usual Case - single meg in buffer
 	
-				ARDOPProcessResponse(TNC, TNC->ARDOPBuffer, TNC->InputLen);
-				TNC->InputLen=0;
-				return;
-			}
-			else
-			{
-				// buffer contains more that 1 message
+		ARDOPProcessResponse(TNC, TNC->ARDOPBuffer, TNC->InputLen);
+		TNC->InputLen=0;
+		return;
+	}
+	else
+	{
+		// buffer contains more that 1 message
 
-				//	I dont think this should happen, but...
 
-				MsgLen = TNC->InputLen - (ptr2-ptr) + 1;	// Include CR 
+		MsgLen = TNC->InputLen - (ptr2-ptr) + 1;	// Include CR 
 
-				memcpy(Buffer, TNC->ARDOPBuffer, MsgLen);
+		memcpy(Buffer, TNC->ARDOPBuffer, MsgLen);
 
-				ARDOPProcessResponse(TNC, Buffer, MsgLen);
+		ARDOPProcessResponse(TNC, Buffer, MsgLen);
 
-				if (TNC->InputLen < MsgLen)
-				{
-					TNC->InputLen = 0;
-					return;
-				}
-				memmove(TNC->ARDOPBuffer, ptr + 1,  TNC->InputLen-MsgLen);
-
-				TNC->InputLen -= MsgLen;
-				goto loop;
-			}
-		}
-		else
+		if (TNC->InputLen < MsgLen)
 		{
-			// Message corrupt
-
-			TNC->ARDOPBuffer[TNC->InputLen] = 0;
-			Debugprintf("Corrupt frame from TNC %s", TNC->ARDOPBuffer);
 			TNC->InputLen = 0;
+			return;
 		}
+		memmove(TNC->ARDOPBuffer, ptr + 1,  TNC->InputLen-MsgLen);
+
+		TNC->InputLen -= MsgLen;
+		goto loop;
 	}	
 	return;
 }
@@ -5365,7 +5395,7 @@ int ConfigVirtualKISSPort(struct TNCINFO * TNC, char * Cmd)
 		else
 		{
 			if (Value > 0 && Value <= 16)
-				PORT->PORTPACLEN = Value;
+				PORT->PORTN2 = Value;
 
 			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} PAC %s now %d\r", Command, PORT->PORTN2);
 		}
