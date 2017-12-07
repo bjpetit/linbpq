@@ -91,6 +91,11 @@
 //	Version 1.0.x
 
 //	Add popup if keywords file can't be found
+//  Allow use of IPV6 even if host resolves to both V4 and V6 addresses (add IPV6: on front of hostname)
+//	Add Listen Mode
+//	Only send UTF-8 option if send in UTF-8 is set
+//	Drop received Keepalive packets
+
 
 #define _USE_32BIT_TIME_T
 
@@ -176,6 +181,8 @@ TCPConnect(TCHAR * Host, int Port);
 int Telnet_Connected(SOCKET sock, int Error);
 VOID DataSocket_Read(SOCKET sock);
 VOID Socket_Data(int sock, int error, int eventcode);
+VOID Socket_Accept(int sock, int error, int eventcode);
+SOCKET OpenListenSocket4(int port);
 
 COLORREF Colours[256] = {0,
 		RGB(0,0,0), RGB(0,0,128), RGB(0,0,192), RGB(0,0,255),				// 1 - 4
@@ -259,6 +266,7 @@ int Port[MAXHOSTS + 1] = {0};
 TCHAR UserName[MAXHOSTS + 1][80] = {L""};
 TCHAR Password[MAXHOSTS + 1][80] = {L""};
 TCHAR MonParams[MAXHOSTS + 1][80] = {L""};
+int ListenPort = 8015;
 
 TCHAR HN[MAXHOSTS + 1][7] = {L"Host1", L"Host2", L"Host3", L"Host4", L"Host5", L"Host6", L"Host7", L"Host8",
 		L"Host9", L"Host10", L"Host11", L"Host12", L"Host13", L"Host14", L"Host15", L"Host16"};
@@ -312,7 +320,8 @@ struct RTFTerm OutputData;
 int CurrentHost = 0;
 int CfgNo = 0;
 
-SOCKET sock;
+SOCKET sock = 0;
+SOCKET ListenSock = 0;
 
 BOOL MonData = FALSE;
 
@@ -334,8 +343,6 @@ int len,count;
 TCHAR callsign[10];
 int state;
 int change;
-int applflags = 2;				// Message to Application
-int Sessno = 0;
 
 int PartLinePtr=0;
 int PartLineIndex=0;		// Listbox index of (last) incomplete line
@@ -349,6 +356,7 @@ BOOL MonitorNODES = TRUE;
 BOOL MonitorColour = TRUE;
 BOOL ChatMode = FALSE;
 int MonPorts = 1;
+BOOL ListenOn = FALSE;
 
 time_t LastWrite = 0xffffffff;
 int AlertInterval = 300;
@@ -567,13 +575,20 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char * lpCmdL
 	MSG msg;
 	TCHAR Size[80];
 
-	sscanf(lpCmdLine, "%d %x",&Sessno, &applflags);
+	if (_stricmp(lpCmdLine, "Listen") == 0)
+		ListenOn = TRUE;
 
 	if (!InitApplication(hInstance)) 
 			return (FALSE);
 
 	if (!InitInstance(hInstance, nCmdShow))
 		return (FALSE);
+
+	if (ListenOn == TRUE)
+	{
+		DisableConnectMenu(hWnd);
+		ListenSock = OpenListenSocket4(ListenPort);
+	}
 
 	// Main message loop:
 	while (GetMessage(&msg, NULL, 0, 0)) 
@@ -762,6 +777,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetStringValue(L"AlertFileName", AlertFileName, MAX_PATH - 1);
 
+	ListenPort = GetIntValue(L"ListenPort", 8515);
+	
 	UseKeywords = GetIntValue(L"UseKeywords", 1);
 	GetStringValue(L"AlertKeyFile", KeyWordsName, MAX_PATH - 1);
 
@@ -840,38 +857,32 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	mbstowcs(VersionStringW, VersionString, 50);
 
-	wsprintf(Title,L"BPQTermTCP Version %s", VersionStringW);
+	if (ListenOn)
+		wsprintf(Title,L"BPQTermTCP Version %s Listening for Calls", VersionStringW);
+	else
+		wsprintf(Title,L"BPQTermTCP Version %s", VersionStringW);
 
 	SetWindowText(hWnd,Title);
 		
-
-//	Sets Application Flags and Mask for stream. (BPQHOST function 1)
-//	AH = 1	Set application mask to value in DL (or even DX if 16
-//		applications are ever to be supported).
-//
-//		Set application flag(s) to value in CL (or CX).
-//		whether user gets connected/disconnected messages issued
-//		by the node etc.
-//
-//		Top bit of flags controls monitoring
-
 	hMenu=GetMenu(hWnd);
 
-	hPopMenu1=GetSubMenu(hMenu,3);
+	hPopMenu1=GetSubMenu(hMenu,4);
 
-	for (i = 1; i <= MonPorts; i++)
+	if (ListenOn == 0)
 	{
-		wsprintf(msg,L"Port %d",i);
-
-		if (tempmask & (1<<(i-1)))
+		for (i = 1; i <= MonPorts; i++)
 		{
-			AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i, &msg[0]);
-			portmask |= (1<<(i-1));
-		}
-		else
-			AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i, &msg[0]); 
-	}
+			wsprintf(msg,L"Port %d",i);
 
+			if (tempmask & (1<<(i-1)))
+			{
+				AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i, &msg[0]);
+				portmask |= (1<<(i-1));
+			}
+			else
+				AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i, &msg[0]); 
+		}
+	}
 	CheckMenuItem(hMenu, BPQMTX, (mtxparam) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, BPQMCOM, (mcomparam) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, MUIONLY, (monUI) ? MF_CHECKED : MF_UNCHECKED);
@@ -880,6 +891,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	CheckMenuItem(hMenu, BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, CHATTERM, (ChatMode) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQBELLS, (Bells) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQENABLE, (ListenOn) ? MF_CHECKED : MF_UNCHECKED);
 
 	for (i = 0; i < MAXHOSTS; i++)
 	{
@@ -893,8 +906,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	EnableMenuItem(hMenu,BPQDISCONNECT,MF_GRAYED);
 
 	DrawMenuBar(hWnd);	
-
-	if (portmask) applflags |= 0x80;
 	
 	DragCursor = LoadCursor(hInstance, L"IDC_DragSize");
 	Cursor = LoadCursor(NULL, IDC_ARROW);
@@ -967,6 +978,49 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 				SaveStringValue(MON[n], MonParams[n]);
 			}
 
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+
+}
+
+INT_PTR CALLBACK ListenWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+		SetDlgItemInt(hDlg, IDC_LISTENPORT, ListenPort, FALSE);
+
+		return (INT_PTR)TRUE;
+
+	case WM_CTLCOLORDLG:
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
+
+	case WM_COMMAND:
+
+		switch (LOWORD(wParam))
+		{
+		case IDOK:
+
+			ListenPort = GetDlgItemInt(hDlg, IDC_LISTENPORT,NULL, FALSE);
+
+			SaveIntValue(L"ListenPort", ListenPort);
 
 		case IDCANCEL:
 
@@ -1182,6 +1236,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WSA_ACCEPT: /* Notification if a socket connection is pending. */
 
+		Socket_Accept(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
 		return 0;
 
 	case WSA_CONNECT: /* Notification if a socket connection is pending. */
@@ -1309,7 +1364,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		//Parse the menu selections:
 		
-		if (wmId > BPQBASE && wmId < BPQBASE + 32)
+		if (wmId > BPQBASE && wmId <= BPQBASE + 32)
 		{
 			TogglePort(hWnd,wmId,0x1 << (wmId - (BPQBASE + 1)));
 			break;
@@ -1349,7 +1404,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 
-		switch (wmId) {
+		switch (wmId)
+		{
+		case BPQPORT:
+
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_LISTEN), hWnd, ListenWndProc);
+			break;
+
 
 		case 40000:
 		{
@@ -1431,6 +1492,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			ToggleParam(hWnd, &Bells, BPQBELLS);
 			break;
+
+		case BPQENABLE:
+
+			ToggleParam(hWnd, &ListenOn, BPQENABLE);
+			if (ListenOn)
+			{
+				DisableConnectMenu(hWnd);
+				ListenSock = OpenListenSocket4(ListenPort);
+			}
+			else
+			{
+				EnableConnectMenu(hWnd);
+				closesocket(ListenSock);
+			}
+
+			break;
+
 
 		case BPQStripLF:
 
@@ -2100,6 +2178,19 @@ lineloop:
 		{
 			// no newline. Move data to start of buffer and Save pointer
 
+			while (len > LINELEN)
+			{
+				// Break up
+
+				TCHAR * partptr = ptr1 + LINELEN;
+				TCHAR Save = *partptr;
+				*ptr1 = 0;
+				AddLinetoWindow(OPData, ptr1);
+				*partptr = Save;
+				ptr1 = partptr;
+				len -= LINELEN;
+			}
+
 			PartLinePtr = len;
 			memmove(readbuff, ptr1, len * 2);
 			AddLinetoWindow(OPData, ptr1);
@@ -2268,26 +2359,6 @@ VOID EnableDisconnectMenu(HWND hWnd)
 	DrawMenuBar(hWnd);
 }
 
-
-int ToggleFlags(HWND hWnd, int Item, int mask)
-{
-	HMENU hMenu;	// handle of menu 
-
-	hMenu=GetMenu(hWnd);
-	
-	applflags ^= mask;
-	
-	if (applflags & mask)
-
-		CheckMenuItem(hMenu,Item,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,Item,MF_UNCHECKED);
-
-    return (0);
-  
-}
 
 int TogglePort(HWND hWnd, int Item, int mask)
 {
@@ -2500,17 +2571,30 @@ TCPConnect(TCHAR * Host, int Port)
 	char PortString[10];
 	char HostB[256];
 	struct addrinfo hints, *res;
+	BOOL UseV6 = FALSE;
+
 
 	wcstombs(HostB, Host, 256);
 	sprintf(PortString, "%d", Port);
 
+	if (_memicmp(HostB, "ipv6:", 5) == 0)
+		UseV6 = TRUE;
 
 	// get host info, make socket, and connect it
 
 	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_STREAM;
-	getaddrinfo(HostB, PortString, &hints, &res);
+
+	if (UseV6)
+	{
+		hints.ai_family = AF_INET6;  // use IPv6
+		getaddrinfo(&HostB[5], PortString, &hints, &res);
+	}
+	else
+	{
+		hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+		getaddrinfo(HostB, PortString, &hints, &res);
+	}
 
 	if (!res)
 	{
@@ -2519,7 +2603,6 @@ TCPConnect(TCHAR * Host, int Port)
 		SetWindowText(hWnd,Title);
 
 		return FALSE;			// Resolve failed
-	
 	}
 
 	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
@@ -2688,6 +2771,55 @@ int Telnet_Connected(SOCKET sock, int Error)
 	return 0;
 }
 
+VOID Socket_Accept(int SocketId, int error, int eventcode)
+{
+	int i = 1, addrlen = sizeof(struct sockaddr_in6);
+	struct sockaddr_in sin; 
+	unsigned char work[4];
+
+	u_long param=1;
+
+	sock = accept(SocketId, (struct sockaddr *)&sin, &addrlen);
+
+
+	WSAAsyncSelect(sock, hWnd, WSA_DATA, FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
+	
+	SocketActive = TRUE;
+	Connecting = FALSE;
+	Connected = TRUE;
+
+	// Reset Monitor Menu
+
+	// Remove old menu
+
+	while (i)
+	{
+		i = RemoveMenu(hPopMenu1, 6, MF_BYPOSITION);
+	}
+
+//	Len = wsprintf(Msg, L"Connected to BPQTermTCP\r");
+//	SendMsg(Msg, Len);
+
+//	SendTraceOptions();
+
+	SlowTimer = 0;
+			
+	memcpy(work, &sin.sin_addr.s_addr, 4);
+	wsprintf(Title, L"BPQTermTCP Version %s - Incoming Connection from %d.%d.%d.%d", VersionStringW, work[0], work[1], work[2], work[3]);
+	SetWindowText(hWnd,Title);
+	DisableConnectMenu(hWnd);
+	EnableDisconnectMenu(hWnd);
+
+	if (AlertFileName[0])
+		PlaySound(AlertFileName, NULL, SND_FILENAME | SND_ASYNC);
+	else
+		Beep(AlertFreq, AlertDuration);
+		
+	return;
+}
+
+
+
 VOID Socket_Data(int sock, int error, int eventcode)
 {
 	TCHAR Title[100];
@@ -2711,10 +2843,15 @@ VOID Socket_Data(int sock, int error, int eventcode)
 			if (SocketActive)
 				closesocket(sock);
 
-			wsprintf(Title, L"BPQTermTCP Version %s - Disconnected", VersionStringW);
+			if (ListenOn)
+				wsprintf(Title, L"BPQTermTCP Version %s Listening for Calls", VersionStringW);
+			else
+				wsprintf(Title, L"BPQTermTCP Version %s - Disconnected", VersionStringW);
+
 			SetWindowText(hWnd,Title);
 			DisableDisconnectMenu(hWnd);
-			EnableConnectMenu(hWnd);
+			if (ListenOn == 0)
+				EnableConnectMenu(hWnd);
 
 			WritetoOutputWindow(&OutputData, L"*** Disconnected\r", 17);		
 			DoRefresh(&OutputData);
@@ -2888,6 +3025,7 @@ MonLoop:
 			int i = 1;
 			TCHAR msg[80];
 			TCHAR ID[80];
+			int portnum;
 
 			// Remove old menu
 
@@ -2901,14 +3039,15 @@ MonLoop:
 			while(NumberofPorts--)
 			{
 				p = strtok_s(NULL, "|", &Context);
+				portnum = atoi(p);
 				mbstowcs(ID, p, strlen(p) +1);
 				
 				wsprintf(msg, L"Port %s", ID);
 
-				if (portmask & (1<<(i)))
-					AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i + 1, &msg[0]);
+				if (portmask & (1<<(portnum - 1)))
+					AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + portnum, &msg[0]);
 				else
-					AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i + 1, &msg[0]); 
+					AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + portnum, &msg[0]); 
 			
 				i++;
 			}
@@ -2960,6 +3099,9 @@ MonLoop:
 	// No FF, so must be session data
 
 
+	if (len == 1 && Buffptr[0] == 0)
+		return;							// Keepalive
+
 	CheckKeyWords(Buffptr, len);
 
 	newlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, len, BufferW, 2000); 
@@ -3004,14 +3146,62 @@ VOID SendTraceOptions()
 {
 	char Buffer[80];
 
- 	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI, 1, 1);
+ 	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI, TXMode == CP_UTF8, 1);
 	mbstowcs(&MonParams[CurrentHost][0], &Buffer[4], Len - 4);
 	SaveStringValue(MON[CurrentHost], MonParams[CurrentHost]);
 	send(sock, Buffer, Len, 0);
 
 }
 
+SOCKET OpenListenSocket4(int port)
+{
+	struct sockaddr_in  local_sin;  /* Local socket - internet style */
+	struct sockaddr_in * psin;
+	SOCKET sock = 0;
+	u_long param=1;
+	WCHAR Msg[80];
 
+	psin=&local_sin;
+	psin->sin_family = AF_INET;
+	psin->sin_addr.s_addr = INADDR_ANY;
+
+	if (port)
+	{
+		sock = socket(AF_INET, SOCK_STREAM, 0);
+
+	    if (sock == INVALID_SOCKET)
+		{
+			wsprintf(Msg, L"socket() failed error %d", WSAGetLastError());
+			MessageBox(NULL, Msg, L"BPQTermTCP", MB_OK);
+			return 0;
+		}
+
+		setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (char *)&param,4);
+
+		psin->sin_port = htons(port);        // Convert to network ordering 
+
+		if (bind( sock, (struct sockaddr *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+		{
+			wsprintf(Msg, L"bind(sock) failed port %d Error %d", port, WSAGetLastError());
+			MessageBox(NULL, Msg, L"BPQTermTCP", MB_OK);
+		    closesocket(sock);
+			return FALSE;
+		}
+
+		if (listen(sock, 4) < 0)
+		{
+			wsprintf(Msg, L"listen(sock) failed port %d Error %d", port, WSAGetLastError());
+			MessageBox(NULL, Msg, L"BPQTermTCP", MB_OK);
+		    closesocket(sock);
+		}
+
+		WSAAsyncSelect(sock, hWnd, WSA_ACCEPT, FD_ACCEPT | FD_CLOSE);
+	}
+	return sock;
+}
+
+
+ 
 static unsigned int cp1251Map[256] = {
   0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
   0x0008, 0x0009, '\n', 0x000B, 0x000C, '\r', 0x000E, 0x000F,

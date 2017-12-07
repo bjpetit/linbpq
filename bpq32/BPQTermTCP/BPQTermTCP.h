@@ -8,6 +8,8 @@
 #define IDD_CONFIG                      104
 #define IDD_FONT                        105
 #define IDD_ALERTDLG                    106
+#define IDD_LISTEN                      107
+
 #define MONITOR_ADDPORT                 400
 #define IDC_HOST                        1004
 #define IDC_PORT                        1005
@@ -34,6 +36,8 @@
 #define IDC_DURATION                    1025
 #define IDC_USEKEYWORDS                 1026
 #define IDC_ALERTKEYNAME                1027
+#define IDC_LISTENPORT                  1028
+
 #define BPQMTX                          1164
 #define BPQMCOM                         1165
 #define BPQCOPYMON                      1166
@@ -51,6 +55,8 @@
 #define MONCOLOUR                       1178
 #define CHATTERM                        1179
 #define MUIONLY                         1180
+#define BPQPORT							1181
+#define BPQENABLE						1182
 #define BPQAUTOCONNECT                  40001
 #define BPQAPPL1                        40002
 #define BPQAPPL2                        40003
