@@ -125,6 +125,7 @@ int TrackExpireTime = 1440;
 BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
 BOOL LocalTime = TRUE;
+BOOL KM = FALSE;
 
 char WXFileName[MAX_PATH];
 char WXComment[80];
@@ -1147,6 +1148,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "LocalTime", 0, &Type,(UCHAR *)&LocalTime, &Vallen);
 		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "KM", 0, &Type,(UCHAR *)&KM, &Vallen);
+		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "SuppressNullPosn", 0, &Type,(UCHAR *)&SuppressNullPosn, &Vallen);
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "DefaultNoTracks", 0, &Type,(UCHAR *)&DefaultNoTracks, &Vallen);
@@ -1401,6 +1404,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		CheckDlgButton(hDlg, IDC_SUPZERO, SuppressNullPosn);
 		CheckDlgButton(hDlg, IDC_NOTRACKS, DefaultNoTracks);
 		CheckDlgButton(hDlg, IDC_LOCALTIME, LocalTime);	
+		CheckDlgButton(hDlg, IDC_KM, KM);	
 					
 		EnableWindow(GetDlgItem(hDlg, IDC_WXFILE), SendWX);
 		EnableWindow(GetDlgItem(hDlg, IDC_WXTEXT), SendWX);
@@ -1481,6 +1485,11 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			LocalTime = IsDlgButtonChecked(hDlg, IDC_LOCALTIME);
 			break;
 
+		case IDC_KM:
+	
+			KM = IsDlgButtonChecked(hDlg, IDC_KM);
+			break;
+
 		case IDC_NOTRACKS:
 
 			DefaultNoTracks = IsDlgButtonChecked(hDlg, IDC_NOTRACKS);
@@ -1520,6 +1529,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			retCode = RegSetValueEx(hKey, "SuppressNullPosn", 0, REG_DWORD, (BYTE *)&SuppressNullPosn, 4);
 			retCode = RegSetValueEx(hKey, "DefaultNoTracks", 0, REG_DWORD, (BYTE *)&DefaultNoTracks, 4);
 			retCode = RegSetValueEx(hKey, "LocalTime", 0, REG_DWORD, (BYTE *)&LocalTime, 4);
+			retCode = RegSetValueEx(hKey, "KM", 0, REG_DWORD, (BYTE *)&KM, 4);
 			retCode = RegSetValueEx(hKey, "CreateJPEG", 0, REG_DWORD, (BYTE *)&CreateJPEG, 4);
 
 			APRSConnect(APRSCall, ISFilter);			// Will resend Filter
@@ -5769,7 +5779,7 @@ double degrees(double Radians)
 
 double Distance(double laa, double loa)
 {
-	double lah, loh;
+	double lah, loh, dist;
 
 	GetAPRSLatLon(&lah, &loh);
 
@@ -5793,11 +5803,15 @@ double Distance(double laa, double loa)
 'p1 = 3.1415926535: P2 = p1 / 180: Rem -- PI, Deg =>= Radians
 */
 
-loh = radians(loh); lah = radians(lah);
-loa = radians(loa); laa = radians(laa);
+	loh = radians(loh); lah = radians(lah);
+	loa = radians(loa); laa = radians(laa);
 
-return 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
+	dist =  60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
 
+	if (KM)
+		dist *= 1.60934;
+
+	return dist;
 }
 
 double Bearing(double lat2, double lon2)
@@ -6852,7 +6866,11 @@ char * LookupKey(struct APRSConnectionInfo * sockptr, char * Key)
 		return _strdup(WXComment);
 
 	if (strcmp(Key, "##MILES_KM##") == 0)
-		return _strdup("Miles");
+		if (KM)
+			return _strdup("KM");
+		else
+			return _strdup("Miles");
+
 
 	if (strcmp(Key, "##EXPIRE_TIME##") == 0)
 	{
@@ -7532,6 +7550,7 @@ DWORD WINAPI InstanceThread(LPVOID lpvParam)
 
 					if (val)
 					{
+						strlop(val, ' ');
 						if (_stricmp(param, "call") == 0)
 							MsgCall = _strupr(val);
 						else if (_stricmp(param, "bulls") == 0)

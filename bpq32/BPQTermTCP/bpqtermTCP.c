@@ -2986,30 +2986,38 @@ MonLoop:
 
 			int NormLen = ptr - Buffptr;				// Before the FF
 
-			CheckKeyWords(Buffptr, NormLen);
-	
-			wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, NormLen, BufferW, 2000); 
-
-			err =  GetLastError();
-			
-			if (err == ERROR_NO_UNICODE_TRANSLATION)
+			if (NormLen == 1 && Buffptr[0] == 0)
 			{
-				// Input isn't UTF 8. if RXMode = AURO, Try to figure out what it is, otherwise convert usong specified mode
-
-				if (RXMode == AUTO)
-				{
-					int Table = TrytoGuessCode(Buffptr, NormLen);
-					
-					wlen = MultiByteToWideChar(Table, 0, Buffptr, NormLen, BufferW, 2000); 
-				}
-				else 
-				{
-					wlen = MultiByteToWideChar(RXMode, 0, Buffptr, NormLen, BufferW, 2000); 
-				}
+				// Keepalive
 			}
 
-			if (wlen)
-				WritetoOutputWindow(&OutputData, BufferW, wlen);
+			else
+			{
+				CheckKeyWords(Buffptr, NormLen);
+	
+				wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, NormLen, BufferW, 2000); 
+
+				err =  GetLastError();
+			
+				if (err == ERROR_NO_UNICODE_TRANSLATION)
+				{
+					// Input isn't UTF 8. if RXMode = AURO, Try to figure out what it is, otherwise convert usong specified mode
+
+					if (RXMode == AUTO)
+					{
+						int Table = TrytoGuessCode(Buffptr, NormLen);
+					
+						wlen = MultiByteToWideChar(Table, 0, Buffptr, NormLen, BufferW, 2000); 
+					}
+					else 
+					{
+						wlen = MultiByteToWideChar(RXMode, 0, Buffptr, NormLen, BufferW, 2000); 
+					}
+				}
+
+				if (wlen)
+					WritetoOutputWindow(&OutputData, BufferW, wlen);
+			}
 
 			len -= NormLen;
 			Buffptr = ptr;

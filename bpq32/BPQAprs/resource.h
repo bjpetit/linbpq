@@ -77,6 +77,7 @@
 #define IDC_LOCALTIME                   1084
 #define IDC_CLEARTX                     1084
 #define IDC_CHECK1                      1085
+#define IDC_KM                          1085
 #define IDC_CHECK2                      1086
 #define IDC_STATUS                      9990
 #define IDD_CHATCOLCONFIG               30008

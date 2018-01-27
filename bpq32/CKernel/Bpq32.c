@@ -819,6 +819,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add Antenna Switching for TS 480
 //	Fix possible crash in Web Terminal
 //	Support different Code Pages on Console sessions
+//	Use new Winlink API interface (api.winlink.org)
+//	Support USB/ACC switching on TS590SG
+//	Fix scanning when ARDOP or WINMOR is used without an Interlocked Pactor port.
+//	Set NODECALL to first Application Callsign if NODE=0 and BBSCALL not set.
 
 #define CKernel
 
@@ -5957,6 +5961,10 @@ int GetListeningPortsPID(int Port)
 	GetExtendedTcpTable(TcpTable, &dwSize, TRUE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
 
 	TcpTable = malloc(dwSize);
+
+	if (TcpTable == NULL)
+		return 0;
+
 	GetExtendedTcpTable(TcpTable, &dwSize, TRUE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
 
 	for (n = 0; n < TcpTable->dwNumEntries; n++)

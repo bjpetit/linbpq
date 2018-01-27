@@ -94,7 +94,7 @@ BEGIN
     LTEXT           "Track Expire Time",IDC_STATIC,2,8,59,12,SS_CENTERIMAGE
     EDITTEXT        IDC_EXPIRETRACKS,66,8,27,12,ES_AUTOHSCROLL | ES_NUMBER
     CONTROL         "Use Local Time",IDC_LOCALTIME,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,146,107,75,10
+                    BS_LEFTTEXT | WS_TABSTOP,143,107,65,10
     LTEXT           "Filename",IDC_STATIC,8,203,33,12,SS_CENTERIMAGE
     EDITTEXT        IDC_JPEGFILE,57,203,212,12,ES_AUTOHSCROLL
     LTEXT           "Interval (Seconds)",IDC_STATIC,100,185,62,12,
@@ -103,10 +103,12 @@ BEGIN
                     ES_NUMBER
     PUSHBUTTON      "Browse",IDC_FILE2,275,203,33,12
     CONTROL         "Create JPEG of display",IDC_CREATEJPEG,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,169,84,10
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,173,84,10
     CONTROL         "Use Decay Retry Algorithm",IDC_CHECK2,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | NOT WS_VISIBLE | 
                     WS_TABSTOP,195,31,101,10
+    CONTROL         "Distances in Kilometers",IDC_KM,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,224,107,92,10
 END
 
 APRSMSGS DIALOGEX 100, 100, 467, 275
