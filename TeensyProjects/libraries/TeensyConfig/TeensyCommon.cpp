@@ -67,6 +67,7 @@ extern "C" void SendMonUI(char * Mess);
 
 extern int VesionNo;
 extern int ActivePort;
+extern int SerialMode;
   
 extern BOOL SerialHost;
 
@@ -931,7 +932,7 @@ extern "C"
   }
 
   unsigned char CatRXbuffer[256];
-  int CatRXLen = 0;
+  extern int CatRXLen;
 
   int RadioPoll()
   {
@@ -1239,7 +1240,8 @@ extern "C"
 {
   int HostInit()
   {
-    return true;
+    SerialMode = 1;			// Teensy always uses Serial (PTC) Interface
+	return true;
   }
 
 
@@ -1401,7 +1403,8 @@ extern "C"
 #ifdef UIMON
     vsnprintf(Mess, sizeof(Mess), format, arglist);
     SendMonUI(Mess);
-#endif    return;
+#endif
+    return;
   }
 
   void CloseDebugLog()

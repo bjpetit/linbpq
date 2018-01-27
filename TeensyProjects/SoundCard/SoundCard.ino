@@ -59,6 +59,11 @@
 #error ("USB Audio Not Enabled")
 #endif // AUDIO_INTERFACE
 
+#if AUDIO_TX_SIZE != 196
+#error ("usb_desc.h has not been updated. See libraries/SoundCard/README.txt
+#endif
+
+
 void CommonSetup();
 void setupPDB(int SampleRate);
 void setupDAC();
@@ -223,14 +228,17 @@ void setup()
   SPI.begin();
   MONPORT.begin(115200);
 
-//  while (!MONPORT);
+  //  while (!MONPORT);
   delay(5000);
+
 
   memset(usb_audio_transmit_buffer, 0, 192);
 
   // Set up ADC and DAC
 
   int i, sum = 0;
+
+ // MONPORT.printf("%s\r\n", __FILE__);
 
   MONPORT.printf("InitSound\r\n");
   InitSound();

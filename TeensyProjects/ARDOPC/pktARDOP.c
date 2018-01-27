@@ -40,7 +40,19 @@ VOID SendAckModeAck();
 extern unsigned char bytEncodedBytes[1800];		// I think the biggest is 600 bd 768 + overhead
 extern int EncLen;
 
-int pktNumCar = 1;
+extern UCHAR PacketMon[360];
+extern int PacketMonMore;
+extern int PacketMonLength;
+
+
+int pktNumCar = 4;
+int pktMaxCar = 8;
+int pktMaxFrame = 4;
+int pktPacLen = 80;
+
+int pktMode = 2; // QAM
+int pktRXMode;		// Corrently receiving mode
+
 int pktDataLen;
 int pktRSLen;
 const char pktMod[4][8] = {"4PSK", "8PSK", "16QAM"};
@@ -49,7 +61,6 @@ const char pktBW[9][8] = {"", "200", "500", "", "1000", "", "", "", "2000"};
 
 int pktModeLen = 3;
 
-int pktMode = 0; // QAM
 
 VOID PktARDOPEncode(UCHAR * Data, int Len)
 {
@@ -57,6 +68,7 @@ VOID PktARDOPEncode(UCHAR * Data, int Len)
 
 	// Create Packet Header.  3 bits Mod Type 3 bits Carriers 10 Bits Len
 	// Same is sent on each carrier of 4PSK.500.100 frame for robustness
+	// Now just use one carrier (200 Hz) with more FEC
 
 	if (Len > 1023)
 		return;
@@ -64,8 +76,8 @@ VOID PktARDOPEncode(UCHAR * Data, int Len)
 	DataToSend[0] = (pktMode << 5) | ((pktNumCar - 1) << 2) | (Len >> 8);
 	DataToSend[1] = Len & 0xff;
 	
-	DataToSend[2] = DataToSend[0];
-	DataToSend[3] = DataToSend[1];
+//	DataToSend[2] = DataToSend[0];
+//	DataToSend[3] = DataToSend[1];
 
 	// Calc Data and RS Length
 
@@ -81,7 +93,7 @@ VOID PktARDOPEncode(UCHAR * Data, int Len)
 
 	// Encode Header
 	
-	EncLen = EncodePSKData(PktFrameHeader, DataToSend, 4, bytEncodedBytes);
+	EncLen = EncodePSKData(PktFrameHeader, DataToSend, 2, bytEncodedBytes);
 	
 	// Encode Data
 
@@ -99,19 +111,37 @@ void PktARDOPStartTX()
 	
 	while (TRUE)				// loop till we run out of packets
 	{
-		WriteDebugLog(LOGALERT, "Sending Packet Frame Len %d", KISSLength); 
-	
 		switch(KISSBUFFER[0])
 		{
 		case 0:			// Normal Data
 
+			WriteDebugLog(LOGALERT, "Sending Packet Frame Len %d", KISSLength - 1); 
+
 			PktARDOPEncode(KISSBUFFER + 1, KISSLength - 1);
+
+			// Trace it
+
+			if (PacketMonLength == 0)	// Ingore if one queued
+			{
+				PacketMon[0] = 0x80;		// TX Flag
+				memcpy(&PacketMon[1], &KISSBUFFER[1], KISSLength);
+	
+				PacketMonLength = KISSLength;
+			}
+
 			break;
 
+		case 6:			// HW Paramters. Set Mode and Bandwidth
+
+			pktNumCar = KISSBUFFER[1] >> 4;
+			pktMode = KISSBUFFER[1] & 0xF; 
+			break;
+		
 		case 12:
 		
 		// Ackmode frame. Return ACK Bytes (first 2) to host when TX complete
-
+		
+			WriteDebugLog(LOGALERT, "Sending Packet Frame Len %d", KISSLength - 3); 
 			PktARDOPEncode(KISSBUFFER + 3, KISSLength - 3);
 
 			// Returns when Complete so can send ACK

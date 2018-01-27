@@ -23,6 +23,7 @@ WriteCOMBlock(hDevice, Message, MsgLen);
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 VOID ProcessKISSBytes(UCHAR * RXBuffer, int Read);
 void KISSTCPPoll();
+SOCKET OpenSocket4(int port);
 
 extern int port;
 extern BOOL UseKISS;			// Enable Packet (KISS) interface
@@ -30,9 +31,9 @@ int Speed;
 int PollDelay;
 
 SOCKET PktSock;
-SOCKET PktListenSock = 0;
+extern SOCKET PktListenSock;
 
-BOOL PKTCONNECTED = FALSE;
+extern BOOL PKTCONNECTED;
 
 
 BOOL NewVCOM;
@@ -47,7 +48,7 @@ char PORTNAME[80];
 int CTS, DTR, RTS;
 
 
-int RXBPtr;
+extern volatile int RXBPtr;
 
 /*
 
@@ -291,50 +292,7 @@ int PutChar(UCHAR c)
 	return 0;
 }
 
-SOCKET OpenSocket4(int port)
-{
-	struct sockaddr_in  local_sin;  /* Local socket - internet style */
-	struct sockaddr_in * psin;
-	SOCKET sock = 0;
-	u_long param=1;
-
-	psin=&local_sin;
-	psin->sin_family = AF_INET;
-	psin->sin_addr.s_addr = INADDR_ANY;
-
-	if (port)
-	{
-		sock = socket(AF_INET, SOCK_STREAM, 0);
-
-	    if (sock == INVALID_SOCKET)
-		{
-	        WriteDebugLog(LOGDEBUG, "socket() failed error %d", WSAGetLastError());
-			return 0;
-		}
-
-		setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (char *)&param,4);
-
-		psin->sin_port = htons(port);        // Convert to network ordering 
-
-		if (bind( sock, (struct sockaddr *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
-		{
-			WriteDebugLog(LOGINFO, "bind(sock) failed port %d Error %d", port, WSAGetLastError());
-
-		    closesocket(sock);
-			return FALSE;
-		}
-
-		if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
-		{
-			WriteDebugLog(LOGINFO, "listen(sock) failed port %d Error %d", port, WSAGetLastError());
-			return FALSE;
-		}
-		ioctl(sock, FIONBIO, &param);
-	}
-	return sock;
-}
-
-BOOL HostInit()
+BOOL SerialHostInit()
 {
 	WSADATA WsaData;			 // receives data from WSAStartup
 	unsigned long OpenCount = 0;
@@ -365,7 +323,7 @@ BOOL HostInit()
 
 UCHAR RXBUFFER[500]; // Long enough for stuffed Host Mode frame
 
-VOID HostPoll()
+VOID SerialHostPoll()
 {
 	unsigned int n;
 	unsigned long Read = 0;
@@ -379,9 +337,6 @@ VOID HostPoll()
 		ProcessSCSPacket(RXBUFFER, RXBPtr);
 	}
 	n=0;
-
-	if (UseKISS)
-		KISSTCPPoll();
 }
 
 
@@ -422,114 +377,3 @@ int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
 
    return dwLength;
 }
-
-// Code to add KISS over TCP to ARDOP_PTC
-
-void KISSTCPPoll()
-{
-	// Check for incoming connect or data
-
-	fd_set readfs;
-	fd_set errorfs;
-	struct timeval timeout;
-	int ret;
-	int addrlen = sizeof(struct sockaddr_in);
-	struct sockaddr_in sin;  
-	u_long param=1;
-
-	if (PktListenSock == 0)
-		return;
-
-	FD_ZERO(&readfs);	
-	FD_ZERO(&errorfs);
-	FD_SET(PktListenSock,&readfs);
-
-	timeout.tv_sec = 0;				// No wait
-	timeout.tv_usec = 0;	
-
-	ret = select(PktListenSock + 1, &readfs, NULL, NULL, &timeout);
-
-	if (ret == -1)
-	{
-		ret = WSAGetLastError();
-		WriteDebugLog(LOGDEBUG, "%d ", ret);
-		perror("pkt listen select");
-	}
-	else
-	{
-		if (ret)
-		{
-			if (FD_ISSET(PktListenSock, &readfs))
-			{
-				PktSock = accept(PktListenSock, (struct sockaddr * )&sin, &addrlen);
-	    
-				if (PktSock == INVALID_SOCKET)
-				{
-					WriteDebugLog(LOGDEBUG, "accept() pkt failed error %d", WSAGetLastError());
-					return;
-				}
-				WriteDebugLog(LOGINFO, "Packet Session Connected");
-					
-				ioctl(PktSock, FIONBIO, &param);
-				PKTCONNECTED = TRUE;
-			}
-		}
-	}
-
-	if (PKTCONNECTED)
-	{
-		FD_ZERO(&readfs);	
-		FD_ZERO(&errorfs);
-
-		FD_SET(PktSock,&readfs);
-		FD_SET(PktSock,&errorfs);
-
-		timeout.tv_sec = 0;				// No wait
-		timeout.tv_usec = 0;	
-		
-		ret = select(PktSock + 1, &readfs, NULL, &errorfs, &timeout);
-
-		if (ret == SOCKET_ERROR)
-		{
-			WriteDebugLog(LOGDEBUG, "Pkt Select failed %d ", WSAGetLastError());
-			goto PktLost;
-		}
-		if (ret > 0)
-		{
-			//	See what happened
-
-			if (FD_ISSET(PktSock, &readfs))
-			{
-				unsigned long Read;
-				unsigned char RXBuffer[512];
-				
-				Read = recv(PktSock, RXBuffer, 512, 0);
-
-				if (Read == 0 || Read == SOCKET_ERROR)
-				{
-					// Does this mean closed?
-		
-					closesocket(PktSock);
-					PktSock = 0;
-
-					PKTCONNECTED = FALSE;
-					return;					
-				}
-				ProcessKISSBytes(RXBuffer, Read);;
-			}
-										
-			if (FD_ISSET(PktSock, &errorfs))
-			{
-PktLost:	
-				WriteDebugLog(LOGDEBUG, "Pkt Data Connection lost");
-			
-				PKTCONNECTED = FALSE;
-
-				closesocket(PktSock);
-				PktSock = 0;
-				return;
-			}
-		}
-	}
-}
-

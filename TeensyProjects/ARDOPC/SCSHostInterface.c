@@ -16,6 +16,15 @@
 
 #define LOGTOHOST
 
+#ifndef WIN32
+
+#define strtok_s strtok_r
+#define _strupr strupr
+int _memicmp(unsigned char *a, unsigned char *b, int n);
+char * strupr(char* s);
+
+#endif
+
 VOID ProcessSCSPacket(UCHAR * rxbuffer, unsigned int Length);
 VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
 void ProcessRIGPacket(int Command, char * Buffer, int Len);
@@ -28,6 +37,10 @@ void ProcessCommandFromHost(char * strCMD);
 BOOL GetNextARQFrame();
 VOID ProcessKISSBytes(UCHAR * RXBUFFER, int Read);
 BOOL CheckKISS(UCHAR * SCSReply);
+UCHAR * PacketSessionPoll(UCHAR * NextChan);
+BOOL CheckForPktData(int Channel);
+VOID ProcessPktData(int Channel, UCHAR * Buffer, int Len);
+BOOL ProcessPktCommand(int Channel, char *Buffer, int Len);
 
 #ifdef LOGTOHOST
 
@@ -40,11 +53,11 @@ int LogToHostBufferLen = 0;
 
 #endif
 
+int bytDataToSendLength = 0;
+
 UCHAR bytDataToSend[4096];
 
-// Outboind data buffer 
-
-int bytDataToSendLength = 0;
+// Outbound data buffer 
 
 char ReportCall[10];
 
@@ -77,13 +90,14 @@ extern int intDataPtr;
 extern int intSampPerSym;
 extern int intDataBytesPerCar;
 
-extern unsigned char CatRXbuffer[256];
-extern int CatRXLen;
+unsigned char CatRXbuffer[256];
+int CatRXLen = 0;
 
 BOOL Term4Mode;
-BOOL PACMode;
+BOOL DEDMode = 0;		// Used by RMS Express for Packet
+BOOL PACMode = 0;
 
-BOOL HostMode;		// Host or Term
+BOOL HostMode = 0;		// Host or Term
 
 BOOL PTCMode = FALSE;	// Running in PTC compatibility mode?
 
@@ -100,7 +114,7 @@ extern int intSessionBW;
 
 extern int SerialWatchDog;
 
-void SendCommandToHost(char * Cmd)
+void SCSSendCommandToHost(char * Cmd)
 {
 	if (HostMode & !PTCMode)	// ARDOP Native
 	{
@@ -114,19 +128,11 @@ void SendCommandToHost(char * Cmd)
 
 		// Add headers and queue for host
 
-		if (NewMode == FALSE)
-		{
-			*ptr++ = 'c';
-			*ptr++ = ':';
-		}
 		strcpy(ptr, Cmd);
 		ptr += len;
 		*ptr++ = '\r';
 
-		if (NewMode)
-			CommandToHostBufferLen += (len + 1);
-		else
-			CommandToHostBufferLen += (len + 3);
+		CommandToHostBufferLen += (len + 1);
 
 		if (CommandToHostBufferLen > 512)
 			CommandToHostBufferLen = 0;
@@ -179,13 +185,13 @@ void SendCommandToHost(char * Cmd)
 }
 
 
-void QueueCommandToHost(char * Cmd)
+void SCSQueueCommandToHost(char * Cmd)
 {
 	SendCommandToHost(Cmd);		// no queuing now
 }
 
 
-void SendReplyToHost(char * Cmd)
+void SCSSendReplyToHost(char * Cmd)
 {
 	// Used by command handler
 
@@ -199,7 +205,7 @@ void SendReplyToHost(char * Cmd)
 		PutString(Cmd);
 }
 
-void SendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
+void SCSSendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
 {
 	// if possible convert to equivalent PTC message
 
@@ -213,7 +219,7 @@ void SendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
 }
 
 
-void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
+void SCSAddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 {
 	if (!HostMode)
 	{
@@ -237,11 +243,6 @@ void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 
 	// In ARDOP Native add header (Type and Len)
 
-	if (NewMode == 0)
-	{
-		bytDataforHost[bytesforHost++] = 'd';			// indicates data from TNC
-		bytDataforHost[bytesforHost++] = ':';
-	}
 	Len += 3;		// Tag
 
 	bytDataforHost[bytesforHost++] = Len >> 8;		//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
@@ -458,6 +459,10 @@ int EmUnstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len)
 	return j;
 }
 
+UCHAR PacketMon[360];
+
+int PacketMonMore = 0;
+int PacketMonLength = 0;
 
 VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 {
@@ -488,7 +493,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		
 		// General Poll
 
-		// if Teensy,kick link watchdog
+		// if Teensy, kick link watchdog
 
 #ifdef TEENSY
 		SerialWatchDog = 0;
@@ -497,6 +502,52 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		// Although spec say Dragon only sends log data in response
 		// to poll of chan 248 it seems to send in response to gen poll
+
+
+		// Give priority to packet monitor data, as
+		// we only have one buffer
+
+		if (PacketMonLength)
+		{
+			// If length is less than 257, return whole 
+			// lot in a Type 4 message
+
+			// if not, first 256 as a type 5 Message
+			// Next poll return rest in type 6
+
+			int Length = PacketMonLength;
+			
+			if (Length > 256)
+				Length = 256;
+	
+			if (PacketMonMore)
+				memcpy(&SCSReply[5], &PacketMon[256], Length);
+			else
+				memcpy(&SCSReply[5], PacketMon, Length);
+				
+			SCSReply[2] = 0;		// Channel 0
+
+			if (PacketMonLength > 256)
+			{
+				PacketMonMore = 1;
+				PacketMonLength -= 256;
+				SCSReply[3] = 5;
+			}
+			else
+			{
+				if (PacketMonMore)
+					SCSReply[3] = 6;
+				else
+					SCSReply[3] = 4;
+
+				PacketMonLength = PacketMonMore = 0;
+			}
+
+			SCSReply[4] = Length - 1;
+
+			EmCRCStuffAndSend(SCSReply, Length + 5);
+			return;
+		}
 
 		// Send KISS data in response to gen poll
 
@@ -514,11 +565,21 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			*(NextChan++) = 255;
 		}
 
+		if (CatRXLen == 0)
+		{
+#ifndef TEENSY
+			if (hCATDevice)
+			{
+				CatRXLen = ReadCOMBlock(hCATDevice, CatRXbuffer, 256);
+			}
+#endif
+		}
+
 		if (CatRXLen)		// Cat data available?
 		{
-//			WriteDebugLog(LOGDEBUG, "Radio Poll Returned %d",CatRXLen);
 			*(NextChan++) = 254;	// 253 + 1
 		}
+
 		if (CommandToHostBufferLen)	// only used in Native mode
 			*(NextChan++) = 33;		// Native mode cmd channel
 
@@ -527,6 +588,8 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 				*(NextChan++) = DataChannel; // Something for this channel
 			else
 				*(NextChan++) = 34;		// Native mode data channel
+
+		NextChan = PacketSessionPoll(NextChan);	// See if anythinkg from packet Sessions
 
 #ifdef LOGTOHOST
 //		if (LogToHostBufferLen)	// only used in Native mode
@@ -685,7 +748,13 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 //		WriteDebugLog(LOGDEBUG, "Data Frame Channel %d", Channel);
 
-		if (Channel == 31)			// PTC Mode Data
+		if (Channel < 11)			// Packet Data
+		{
+			ProcessPktData(Channel, &Buffer[3], Buffer[2] + 1);
+			return;
+		}
+
+		else if (Channel == 31)			// PTC Mode Data
 			AddDataToDataToSend(&Buffer[3], Buffer[2] + 1);
 
 		else if (Channel == 32)		// Native Mode Command
@@ -693,15 +762,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			Buffer[Len + 3] = 0;
 			CMDReplyBuffer[0] = 0;	// in case no reply
 
-			if (Buffer[3] == 'C' && Buffer[4] == ':')
-				NewMode = FALSE;
-			else
-				NewMode = TRUE;
-
-			if (NewMode)
-				ProcessCommandFromHost(&Buffer[3]); // No C:
-			else
-				ProcessCommandFromHost(&Buffer[5]); // Skip C:
+			ProcessCommandFromHost(&Buffer[3]); // No C:
 
 			// Command will have put reply in CMDReplyBuffer
 
@@ -720,13 +781,19 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		else if (Channel == 33)		// Native Mode Data
 
-			// Format is D: Len Data - remove D: and Len
-			if (NewMode)
-				AddDataToDataToSend(&Buffer[5], Buffer[2] - 1);
-			else
-				AddDataToDataToSend(&Buffer[7], Buffer[2] - 3);
-
+			AddDataToDataToSend(&Buffer[5], Buffer[2] - 1);
+		
 		goto AckIt;
+	}
+
+	// Command Frame
+
+	if (Channel < 11 && Buffer[3] != 'G')
+	{
+		// Packet Channel Command
+
+		ProcessPktCommand(Channel, &Buffer[3], Len);
+		return;
 	}
 
 	switch (Buffer[3])
@@ -780,6 +847,10 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		return;
 
 	case 'G':				// Specific Poll
+	
+		if (Channel > 0 && Channel < 11)
+			if (CheckForPktData(Channel))
+				return;				// It has sent reply
 	
 		if (PTCMode)
 		{
@@ -937,7 +1008,6 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 	}
 }
 
-
 VOID ProcessSCSTextCommand(char * Command, int Len)
 {
 	// Command to SCS in non-Host mode.
@@ -955,8 +1025,16 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 //		return;
 	}
 
-	Command[Len - 1] = 0;		// Remove CR
+	Command[Len - 1] = 0;		// Remove 
 
+	if (Command[0] == -64 && Command[1] == -1 && Command[2] == -64)
+	{
+		// Exit KISS
+
+		WriteDebugLog(LOGDEBUG, "Exit KISS Command");
+		goto SendPrompt;	
+
+	}
 	WriteDebugLog(LOGDEBUG, "SCS Command %s", Command);
 
 	if (Len == 1)
@@ -973,6 +1051,7 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	if (_memicmp(Command, "JHOST4", 6) == 0)
 	{
 		HostMode = TRUE;
+		DEDMode = FALSE;
 		WriteDebugLog(LOGINFO, "Entering Host Mode");
 		Toggle = 0;
 		blnAbort = True;
@@ -983,17 +1062,31 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 		return;
 	}
 
+	if (_memicmp(Command, "JHOST1", 6) == 0)
+	{
+		HostMode = TRUE;
+		DEDMode = TRUE;
+		WriteDebugLog(LOGINFO, "Entering DED Host Mode");
+		blnAbort = True;
+
+		goto SendPrompt;
+//		return;
+	}
+
 	if (_memicmp(Command, "RESTART", 7) == 0)
 	{
 		PutString("\r\nOK");
 		PTCMode = TRUE;
+		blnListen = TRUE;
 		WriteDebugLog(LOGINFO, "PTC Emulation Mode");
 	}
 
-	if (_memicmp(Command, "ARDOP", 5) == 0)
+	else if (_memicmp(Command, "ARDOP", 5) == 0)
 	{
 		PutString("\r\nOK");
 		PTCMode = FALSE;
+		blnListen = TRUE;
+		ConsoleLogLevel = 6;
 		WriteDebugLog(LOGINFO, "ARDOP Native Mode");
 	}
 
@@ -1003,8 +1096,11 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	else if (_memicmp(Command, "T 0", 3) == 0)
 		Term4Mode = FALSE;
 
-	else if (_memicmp(Command, "PAC 4", 5) == 0)
+	else if (_memicmp(Command, "PAC", 3) == 0)
 		PACMode = TRUE;
+
+	else if (_memicmp(Command, "QUIT", 4) == 0)
+		PACMode = FALSE;
 
 	else if (_memicmp(Command, "MYC", 3) == 0)
 	{
@@ -1034,7 +1130,8 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 		PutString("\r\nLICENSE: 010000141714CB53 ABCDEFGHIJKL");
 	}
 
-	else if (_memicmp(Command, "PSKA", 4) == 0)
+	else if (_memicmp(Command, "PSKA", 4) == 0 ||
+		(PACMode && _memicmp(Command, "TXL A", 5) == 0))
 	{
 		char cmdReply[80];
 		int i;
@@ -1064,7 +1161,6 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 
 		if (i >= 0 && i <= 3000)	
 		{
-			int Pot;
 			RXLevel = i;
 			sprintf(cmdReply, "\r\nFSKA: %d", i);
 #ifdef HASPOTS
@@ -1102,6 +1198,18 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 			ARQBandwidth = B2000MAX;
 
 		PutString(Resp);
+	}
+	else if (PACMode)
+	{
+		if (_memicmp(Command, "BAUD 1200", 9) == 0) 
+			pktMaxCar = 2;
+		else if (_memicmp(Command, "BAUD 9600", 9) == 0) 
+			pktMaxCar = 8;
+		else if (_memicmp(Command, "MAX ", 4) == 0) 
+			pktMaxFrame = atoi(&Command[4]);
+		else if (_memicmp(Command, "PACL", 4) == 0)
+			pktPacLen = atoi(&Command[4]);
+
 	}
 	else 
 	{
@@ -1180,9 +1288,52 @@ VOID ProcessSCSPacket(UCHAR * rxbuffer, unsigned int Length)
 	// we haen't checked CRC. All I can think of is to check the CRC and if it is ok, assume frame is
 	// complete. If CRC is duff, we will eventually time out and get a retry. The retry code
 	// can clear the RC buffer
+
+	if (HostMode & DEDMode)
+	{
+		// original DED Mode. 
+
+		if (rxbuffer[0] > 1)
+		{
+			// ?? Char Mode
 			
+			HostMode = 0;
+			DEDMode = 0;
+			RXBPtr = 0;
+			return;
+		}
+		if (rxbuffer[2]  > Length - 4)
+		{
+			// Dont have it all yet
+
+			return;
+		}
+
+		ProcessDEDModeFrame(rxbuffer, Length);
+		RXBPtr = 0;
+		return;		
+	}		
+
 Loop:
 
+	if (rxbuffer[0] == 0 && rxbuffer[1] == 1)
+	{
+		// Could be host command if in recovery
+		
+		if (rxbuffer[2] <= RXBPtr - 4)
+		{
+			//  Host In text mode - recovery attempt
+
+			RXBPtr -= (rxbuffer[2] +4);		// Remove command
+		
+			if (RXBPtr)
+			{
+				memmove(rxbuffer, rxbuffer + 9, RXBPtr + 1);
+				goto Loop;
+			}
+			return;		// All gone
+		}
+	}
 	if (rxbuffer[0] != 170)
 	{
 		UCHAR *ptr;

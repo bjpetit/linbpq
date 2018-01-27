@@ -63,7 +63,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib $(NoInherit)"
+				AdditionalDependencies="kernel32.lib User32.lib $(NoInherit)"
 				OutputFile="c:\devprogs\bpq32\ARDOPC.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -225,6 +225,18 @@
 				>
 			</File>
 			<File
+				RelativePath=".\getopt.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						CompileAs="1"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath=".\HostInterface.c"
 				>
 			</File>
@@ -241,7 +253,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\pktSession.c"
+				>
+			</File>
+			<File
 				RelativePath=".\rs.c"
+				>
+			</File>
+			<File
+				RelativePath=".\SCSHostInterface.c"
 				>
 			</File>
 			<File
@@ -261,7 +281,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\xrs.c"
+				RelativePath=".\WinSerial.c"
 				>
 			</File>
 			<Filter

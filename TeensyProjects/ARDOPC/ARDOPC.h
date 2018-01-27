@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "1.0.2.5a-BPQ"
+#define ProductVersion "1.0.2.5d-BPQ"
 
 //	Sound interface buffer size
 
@@ -133,6 +133,11 @@ BOOL CheckGSSyntax(char * GS);
 //void SetARDOPProtocolState(int value);
 unsigned int GenCRC16(unsigned char * Data, unsigned short length);
 void SendCommandToHost(char * Cmd);
+void TCPSendCommandToHost(char * Cmd);
+void SCSSendCommandToHost(char * Cmd);
+void SendCommandToHostQuiet(char * Cmd);
+void TCPSendCommandToHostQuiet(char * Cmd);
+void SCSSendCommandToHostQuiet(char * Cmd);
 void UpdateBusyDetector(short * bytNewSamples);
 int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM);
 void SetARDOPProtocolState(int value);
@@ -159,8 +164,11 @@ void GenCRC16FrameType(char * Data, int Length, UCHAR bytFrameType);
 BOOL CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType);
 char * strlop(char * buf, char delim);
 void QueueCommandToHost(char * Cmd);
-void SendCommandToHostQuiet(char * Cmd);
+void SCSQueueCommandToHost(char * Cmd);
+void TCPQueueCommandToHost(char * Cmd);
 void SendReplyToHost(char * strText);
+void TCPSendReplyToHost(char * strText);
+void SCSSendReplyToHost(char * strText);
 void LogStats();
 int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, BOOL blnInitialize);
 void SendData();
@@ -205,6 +213,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 void InitializeConnection();
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len);
+void TCPAddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len);
+void SCSAddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len);
 
 void RemoveDataFromQueue(int Len);
 void RemodulateLastFrame();
@@ -216,6 +226,14 @@ const char * shortName(UCHAR bytID);
 void InitSound();
 void initFilter(int Width, int centerFreq);
 void FourierTransform(int NumSamples, short * RealIn, float * RealOut, float * ImagOut, int InverseTransform);
+VOID ClosePacketSessions();
+VOID LostHost();
+VOID ProcessPacketHostBytes(UCHAR * RXBuffer, int Len);
+int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
+VOID ProcessDEDModeFrame(UCHAR * rxbuffer, unsigned int Length);
+BOOL CheckForPktMon();
+BOOL CheckForPktData();
+
 
 
 extern char stcLastPingstrSender[10];
@@ -358,6 +376,7 @@ extern char strFECMode[];
 extern char CaptureDevice[];
 extern char PlaybackDevice[];
 extern int port;
+extern char HostPort[80];
 extern int pktport;
 extern BOOL RadioControl;
 extern BOOL SlowCPU;
@@ -368,9 +387,6 @@ extern BOOL fastStart;
 extern BOOL skip167;
 extern BOOL ConsoleLogLevel;
 extern BOOL EnablePingAck;
-
-extern BOOL NewMode;			// Using New interface Protocol (no C: or D:)
-
 
 extern int dttLastPINGSent;
 
@@ -383,17 +399,23 @@ extern BOOL useGPIO;
 
 extern int pttGPIOPin;
 
-extern HANDLE hRIGDevice;		// port for Rig Control
-extern char RIGPORT[80];
-extern int RIGBAUD;
+extern HANDLE hCATDevice;		// port for Rig Control
+extern char CATPort[80];
+extern int CATBAUD;
 
-
-extern HANDLE hPTTDevice;					// port for PTT
-extern char PTTPORT[80];			// Port for Hardware PTT - may be same as control port.
+extern HANDLE hPTTDevice;			// port for PTT
+extern char PTTPort[80];			// Port for Hardware PTT - may be same as control port.
+extern int PTTBAUD;
 
 #define PTTRTS		1
 #define PTTDTR		2
-#define PTTCI_V		4		// Not used here (but may be later)
+#define PTTCI_V		4
+
+extern UCHAR PTTOnCmd[];
+extern UCHAR PTTOnCmdLen;
+
+extern UCHAR PTTOffCmd[];
+extern UCHAR PTTOffCmdLen;
 
 extern int PTTMode;				// PTT Control Flags.
 
@@ -536,13 +558,20 @@ extern int LastBusyOff;
 extern int dttLastLeaderDetect;
 
 extern int pktNumCar;
+extern int pktMaxCar;
 extern int pktDataLen;
 extern int pktRSLen;
 extern const char pktMod[4][8];
 extern int pktMode;
 extern int pktModeLen;
 extern const char pktBW[9][8];
+extern int pktMaxFrame;
+extern int pktPacLen;
+extern int initNumCar;
+extern int initMode;		 // 0 - 4PSK 1 - 8PSK 2 = 16QAM
 
+
+extern BOOL SerialMode;			// Set if using SCS Mode, Unset ofr TCP Mode
 
 // Has to follow enum defs
 

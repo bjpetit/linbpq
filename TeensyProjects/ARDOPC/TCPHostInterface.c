@@ -36,6 +36,7 @@
 #define WSAGetLastError() errno
 #define GetLastError() errno 
 #define closesocket close
+int _memicmp(unsigned char *a, unsigned char *b, int n);
 #endif
 
 #define MAX_PENDING_CONNECTS 4
@@ -56,7 +57,7 @@ int C_Q_COUNT(VOID *Q);
 void ProcessCommandFromHost(char * strCMD);
 BOOL checkcrc16(unsigned char * Data, unsigned short length);
 int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
-VOID ProcessKISSBytes(UCHAR * RXBuffer, int Read);
+VOID ProcessPacketBytes(UCHAR * RXBuffer, int Read);
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength );
 
 extern int port;
@@ -65,7 +66,7 @@ extern int pktport;
 extern BOOL UseKISS;			// Enable Packet (KISS) interface
 
 
-SOCKET TCPControlSock, TCPDataSock, PktSock;
+SOCKET TCPControlSock = 0, TCPDataSock = 0, PktSock = 0;
 SOCKET ListenSock = 0, DataListenSock = 0, PktListenSock = 0;
 
 BOOL CONNECTED = FALSE;
@@ -84,7 +85,6 @@ int DataInputLen = 0;
 
 UCHAR bytDataToSend[100000];
 
-int bytDataToSendLength = 0;
 
 /*UINT FREE_Q = 0;
 
@@ -102,7 +102,7 @@ UCHAR bytLastCMD_DataSent[256];
 
 //	Function to send a text command to the Host
 
-void SendCommandToHost(char * strText)
+void TCPSendCommandToHost(char * strText)
 {
 	// This is from TNC side as identified by the leading "c:"   (Host side sends "C:")
 	// Subroutine to send a line of text (terminated with <Cr>) on the command port... All commands beging with "c:" and end with <Cr>
@@ -115,10 +115,7 @@ void SendCommandToHost(char * strText)
 	int len;
 	int ret;
 	
-	if (NewMode)
-		len = sprintf(bytToSend,"%s\r", strText);
-	else
-		len = sprintf(bytToSend,"c:%s\r", strText);
+	len = sprintf(bytToSend,"%s\r", strText);
 
 	if (CONNECTED)
 	{
@@ -132,16 +129,13 @@ void SendCommandToHost(char * strText)
 }
 
 
-void SendCommandToHostQuiet(char * strText)		// Higher Debug Level for PTT
+void TCPSendCommandToHostQuiet(char * strText)		// Higher Debug Level for PTT
 {
 	UCHAR bytToSend[256];
 	int len;
 	int ret;
 	
-	if (NewMode)
-		len = sprintf(bytToSend,"%s\r", strText);
-	else
-		len = sprintf(bytToSend,"c:%s\r", strText);
+	len = sprintf(bytToSend,"%s\r", strText);
 
 	if (CONNECTED)
 	{
@@ -156,12 +150,12 @@ void SendCommandToHostQuiet(char * strText)		// Higher Debug Level for PTT
 
 //	Function to queue a text command to the Host used for all asynchronous Commmands (e.g. BUSY etc)
 
-void QueueCommandToHost(char * strText)
+void TCPQueueCommandToHost(char * strText)
 {
 	SendCommandToHost(strText);		// no queuing in lastest code
 }
 
-void SendReplyToHost(char * strText)
+void TCPSendReplyToHost(char * strText)
 {
 	//	Used for replies to ARDOP commands. In TCP mode treat as SendCommandToHost
 
@@ -169,7 +163,7 @@ void SendReplyToHost(char * strText)
 }
 //  Subroutine to add a short 3 byte tag (ARQ, FEC, ERR, or IDF) to data and send to the host 
 
-void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
+void TCPAddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 {
 	//  This is from TNC side as identified by the leading "d:"   (Host side sends data with leading  "D:")
 	// includes 16 bit CRC check on Data Len + Data (does not CRC the leading "d:")
@@ -192,26 +186,13 @@ void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 
 	bytToSend = buff;
 
-	if (NewMode)		// No d:
-	{
-		Len += 3;					// Tag
-		bytToSend[0] = Len >> 8;	//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
-		bytToSend[1] = Len  & 0xFF;// LS Byte
-		memcpy(&bytToSend[2], strTag, 3);
-		memcpy(&bytToSend[5], bytData, Len - 3);
-		Len +=2;				//  len
-	}
-	else
-	{
-		bytToSend[0] = 'd';			// indicates data from TNC
-		bytToSend[1] = ':';
-		Len += 3;					// Tag
-		bytToSend[2] = Len >> 8;	//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
-		bytToSend[3] = Len  & 0xFF;// LS Byte
-		memcpy(&bytToSend[4], strTag, 3);
-		memcpy(&bytToSend[7], bytData, Len - 3);
-		Len +=4;				// d: and len
-	}
+	Len += 3;					// Tag
+	bytToSend[0] = Len >> 8;	//' MS byte of count  (Includes strDataType but does not include the two trailing CRC bytes)
+	bytToSend[1] = Len  & 0xFF;// LS Byte
+	memcpy(&bytToSend[2], strTag, 3);
+	memcpy(&bytToSend[5], bytData, Len - 3);
+	Len +=2;				//  len
+
 	ret = send(TCPDataSock, bytToSend, Len, 0);
 	ret = WSAGetLastError();
 
@@ -222,14 +203,6 @@ VOID ARDOPProcessCommand(UCHAR * Buffer, int MsgLen)
 {
 	Buffer[MsgLen - 1] = 0;		// Remove CR
 	
-	if (Buffer[0] == 'C' && Buffer[1] == ':')
-		NewMode = FALSE;
-	else
-		NewMode = TRUE;
-
-	if (NewMode == FALSE)
-		Buffer+=2;					// Skip c:
-
 	if (_memicmp(Buffer, "RDY", 3) == 0)
 	{
 		//	Command ACK. Remove from buffer and send next if a
@@ -276,6 +249,8 @@ void ProcessReceivedControl()
 		TCPControlSock = 0;
 
 		CONNECTED = FALSE;
+		LostHost();
+
 		return;					
 	}
 
@@ -283,120 +258,59 @@ void ProcessReceivedControl()
 
 loop:
 
-	if (NewMode)			// No c:
-	{
-		if (InputLen < 4)
-			return;					// Wait for more to arrive (?? timeout??)
 
-		// Command = look for CR
+	if (InputLen < 4)
+		return;					// Wait for more to arrive (?? timeout??)
 
-		ptr = memchr(ARDOPBuffer, '\r', InputLen);
+	// Command = look for CR
 
-		if (ptr == 0)	//  CR in buffer
-			return;		// Wait for it
+	ptr = memchr(ARDOPBuffer, '\r', InputLen);
+
+	if (ptr == 0)	//  CR in buffer
+		return;		// Wait for it
 
 		ptr2 = &ARDOPBuffer[InputLen];
 
-		if ((ptr2 - ptr) == 1)	// CR + CRC
-		{
-			// Usual Case - single meg in buffer
+	if ((ptr2 - ptr) == 1)	// CR + CRC
+	{
+		// Usual Case - single meg in buffer
 	
-			MsgLen = InputLen;
+		MsgLen = InputLen;
 
-			// We may be reentered as a result of processing,
-			//	so reset InputLen Here
+		// We may be reentered as a result of processing,
+		//	so reset InputLen Here
 
-			InputLen=0;
-			InReceiveProcess = TRUE;
-			ARDOPProcessCommand(ARDOPBuffer, MsgLen);
+		InputLen=0;
+		InReceiveProcess = TRUE;
+		ARDOPProcessCommand(ARDOPBuffer, MsgLen);
+		InReceiveProcess = FALSE;
+		return;
+	}
+	else
+	{
+		// buffer contains more that 1 message
+
+		//	I dont think this should happen, but...
+
+		MsgLen = InputLen - (ptr2-ptr) + 1;	// Include CR and CRC
+
+		memcpy(Buffer, ARDOPBuffer, MsgLen);
+
+		memmove(ARDOPBuffer, ptr + 1,  InputLen-MsgLen);
+		InputLen -= MsgLen;
+
+		InReceiveProcess = TRUE;
+		ARDOPProcessCommand(Buffer, MsgLen);
+		InReceiveProcess = FALSE;
+
+		if (InputLen < 0)
+		{
+			InputLen = 0;
 			InReceiveProcess = FALSE;
 			return;
 		}
-		else
-		{
-			// buffer contains more that 1 message
-
-			//	I dont think this should happen, but...
-
-			MsgLen = InputLen - (ptr2-ptr) + 1;	// Include CR and CRC
-
-			memcpy(Buffer, ARDOPBuffer, MsgLen);
-
-			memmove(ARDOPBuffer, ptr + 1,  InputLen-MsgLen);
-			InputLen -= MsgLen;
-
-			InReceiveProcess = TRUE;
-			ARDOPProcessCommand(Buffer, MsgLen);
-			InReceiveProcess = FALSE;
-
-			if (InputLen < 0)
-			{
-				InputLen = 0;
-				InReceiveProcess = FALSE;
-				return;
-			}
-			goto loop;
-		}
+		goto loop;
 	}
-
-	if (InputLen < 6)
-		return;					// Wait for more to arrive (?? timeout??)
-
-
-//	ARDOPBuffer[InputLen] = 0;
-//	WriteDebugLog(LOG_DEBUG, "%s", ARDOPBuffer);
-
-
-
-			// Command = look for CR
-
-			ptr = memchr(ARDOPBuffer, '\r', InputLen);
-
-			if (ptr == 0)	//  CR in buffer
-				return;		// Wait for it
-
-			ptr2 = &ARDOPBuffer[InputLen];
-
-			if ((ptr2 - ptr) == 1)	// CR + CRC
-			{
-				// Usual Case - single meg in buffer
-	
-				MsgLen = InputLen;
-
-				// We may be reentered as a result of processing,
-				//	so reset InputLen Here
-
-				InputLen=0;
-				InReceiveProcess = TRUE;
-				ARDOPProcessCommand(ARDOPBuffer, MsgLen);
-				InReceiveProcess = FALSE;
-				return;
-			}
-			else
-			{
-				// buffer contains more that 1 message
-
-				//	I dont think this should happen, but...
-
-				MsgLen = InputLen - (ptr2-ptr) + 1;	// Include CR and CRC
-
-				memcpy(Buffer, ARDOPBuffer, MsgLen);
-
-				memmove(ARDOPBuffer, ptr + 1,  InputLen-MsgLen);
-				InputLen -= MsgLen;
-
-				InReceiveProcess = TRUE;
-				ARDOPProcessCommand(Buffer, MsgLen);
-				InReceiveProcess = FALSE;
-
-				if (InputLen < 0)
-				{
-					InputLen = 0;
-					InReceiveProcess = FALSE;
-					return;
-				}
-				goto loop;
-			}
 		
 	// Getting bad data ?? Should we just reset ??
 	
@@ -413,6 +327,7 @@ void ProcessReceivedData()
 {
 	int Len, MsgLen;
 	char Buffer[8192];
+	int DataLen;
 
 	if (InReceiveProcess)
 		return;
@@ -442,105 +357,46 @@ void ProcessReceivedData()
 		TCPDataSock = 0;
 
 		DATACONNECTED = FALSE;
+		LostHost();
 		return;					
 	}
 
 	DataInputLen += Len;
 
 loop:
-
-	if (NewMode)
-	{
-		// No D:
-
-		int DataLen;
 		
-		if (DataInputLen < 3)
-			return;					// Wait for more to arrive (?? timeout??)
-
-		// check we have it all
-
-		DataLen = (ARDOPDataBuffer[0] << 8) + ARDOPDataBuffer[1]; // HI First
-			
-		if (DataInputLen < DataLen + 2)
-			return;					// Wait for more
-
-		MsgLen = DataLen + 2;		// Len
-
-		memcpy(Buffer, &ARDOPDataBuffer[2], DataLen);
-
-		DataInputLen -= MsgLen;
-
-		if (DataInputLen > 0)
-			memmove(ARDOPDataBuffer, &ARDOPDataBuffer[MsgLen],  DataInputLen);
-
-		InReceiveProcess = TRUE;
-		AddDataToDataToSend(Buffer, DataLen);
-		InReceiveProcess = FALSE;
-	
-		// See if anything else in buffer
-
-		if (DataInputLen > 0)
-			goto loop;
-
-		if (DataInputLen < 0)
-			DataInputLen = 0;
-
-		return;
-	}
-
-	// Old Mode
-
-	if (DataInputLen < 5)
+	if (DataInputLen < 3)
 		return;					// Wait for more to arrive (?? timeout??)
 
-	if (ARDOPDataBuffer[1] == ':')	// At least message looks reasonable
-	{
-		if (ARDOPDataBuffer[0] == 'D')
-		{
-			// Data = check we have it all
+	// check we have it all
 
-			int DataLen = (ARDOPDataBuffer[2] << 8) + ARDOPDataBuffer[3]; // HI First
+	DataLen = (ARDOPDataBuffer[0] << 8) + ARDOPDataBuffer[1]; // HI First
 			
-			if (DataInputLen < DataLen + 4)
-				return;					// Wait for more
+	if (DataInputLen < DataLen + 2)
+		return;					// Wait for more
 
-			MsgLen = DataLen + 4;		// D: Len
+	MsgLen = DataLen + 2;		// Len
 
-			memcpy(Buffer, &ARDOPDataBuffer[4], DataLen);
+	memcpy(Buffer, &ARDOPDataBuffer[2], DataLen);
 
-			DataInputLen -= MsgLen;
+	DataInputLen -= MsgLen;
 
-			if (DataInputLen > 0)
-				memmove(ARDOPDataBuffer, &ARDOPDataBuffer[MsgLen],  DataInputLen);
+	if (DataInputLen > 0)
+		memmove(ARDOPDataBuffer, &ARDOPDataBuffer[MsgLen],  DataInputLen);
 
-			InReceiveProcess = TRUE;
-			AddDataToDataToSend(Buffer, DataLen);
-			InReceiveProcess = FALSE;
+	InReceiveProcess = TRUE;
+	AddDataToDataToSend(Buffer, DataLen);
+	InReceiveProcess = FALSE;
 	
-			// See if anything else in buffer
+	// See if anything else in buffer
 
-			if (DataInputLen > 0)
-				goto loop;
+	if (DataInputLen > 0)
+		goto loop;
 
-			if (DataInputLen < 0)
-				DataInputLen = 0;
-
-			return;
-
-		}
-	}
-	else
-	{
-		// Duff frame - clear buffer
-
+	if (DataInputLen < 0)
 		DataInputLen = 0;
 
-		// Getting bad data ?? Should we just reset ??
-	
-		WriteDebugLog(LOGDEBUG, "ARDOP BadHost Message ?? %c %c %s",
-			ARDOPBuffer[0], ARDOPBuffer[1], &ARDOPBuffer[4]);
-	}
+	return;
 }
 
 
@@ -590,7 +446,7 @@ SOCKET OpenSocket4(int port)
 
 VOID InitQueue();
 
-BOOL HostInit()
+BOOL TCPHostInit()
 {
 #ifdef WIN32
 	WSADATA WsaData;			 // receives data from WSAStartup
@@ -611,7 +467,7 @@ BOOL HostInit()
 	return ListenSock;
 }
 
-void HostPoll()
+void TCPHostPoll()
 {
 	// Check for incoming connect or data
 
@@ -625,12 +481,12 @@ void HostPoll()
 
 	// Check for Rig control data
 
-	if (hRIGDevice && CONNECTED)
+	if (hCATDevice && CONNECTED)
 	{
 		UCHAR RigBlock[256];
 		int Len;
 
-		Len = ReadCOMBlock(hRIGDevice, RigBlock, 256);
+		Len = ReadCOMBlock(hCATDevice, RigBlock, 256);
 
 		if (Len)
 		{
@@ -660,7 +516,7 @@ void HostPoll()
 	}
 
 	if (ListenSock == 0)
-		return;
+		goto NoARDOPTCP;			// Could just be runing packet over TCP
 
 	FD_ZERO(&readfs);	
 	FD_ZERO(&errorfs);
@@ -738,6 +594,8 @@ void HostPoll()
 			}
 		}
 	}
+
+NoARDOPTCP:
 
 	if (PktListenSock == 0)
 		goto NoPkt;
@@ -890,9 +748,9 @@ Lost:
 			if (FD_ISSET(PktSock, &readfs))
 			{
 				unsigned long Read;
-				unsigned char RXBuffer[512];
+				unsigned char RXBuffer[4096];
 				
-				Read = recv(PktSock, RXBuffer, 512, 0);
+				Read = recv(PktSock, RXBuffer, 4096, 0);
 
 				if (Read == 0 || Read == SOCKET_ERROR)
 				{
@@ -902,9 +760,10 @@ Lost:
 					PktSock = 0;
 
 					PKTCONNECTED = FALSE;
-					return;					
+					LostHost();					
 				}
-				ProcessKISSBytes(RXBuffer, Read);;
+				else
+					ProcessPacketBytes(RXBuffer, Read);		// Process all in buffer
 			}
 										
 			if (FD_ISSET(PktSock, &errorfs))
@@ -919,6 +778,10 @@ PktLost:
 				return;
 			}
 		}
+		// Look for anything to send on packet sessions
+
+		CheckForPktMon();
+		CheckForPktData(0);
 	}
 }
 

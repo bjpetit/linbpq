@@ -23,6 +23,10 @@
 #else
 #define HANDLE int
 #define SOCKET int
+#include <sys/types.h>
+#ifndef TEENSY
+#include <sys/socket.h>
+#endif
 #endif
 
 #include "ARDOPC.h"
@@ -41,6 +45,9 @@ VOID ProcessKISSBytes(UCHAR * RXBUFFER, int Read);
 void PacketStartTX();
 VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
 VOID ProcessKISSControlFrame();
+VOID ptkSessionBG();
+
+
 
 HANDLE hDevice;
 
@@ -90,6 +97,8 @@ BOOL ESCFlag = FALSE;
 
 HANDLE KISSHandle = 0;
 
+extern BOOL PacketHost;
+
 int TXDelay = 500;	
 
 extern SOCKET PktSock;
@@ -129,7 +138,33 @@ VOID KISSPoll()
 	ProcessKISSBytes(RXBuffer, Read);
 #endif
 }
+VOID ProcessPacketBytes(UCHAR * Buffer, int Read)
+{
+	// Called when frame received on TCP Packet Connection. Could be for
+	// KISS or ARDOP Packet Session mode
 
+	// Assumes that Complete KISS or Host packet will be received (pretty safe
+	// with TCP (I hope!)
+
+	// But could bemore than one in buffer
+
+	if (Buffer[0] == 192)
+		ProcessKISSBytes(Buffer, Read);
+	else
+	{
+		while (Read > 0)
+		{
+			int Used = Buffer[2] + 4;
+			ProcessPacketHostBytes(Buffer, Read);
+			Read -= Used;
+
+			if (Read > 0)
+			{
+				memmove(Buffer, &Buffer[Used], Read);
+			}
+		}
+	}
+}
 
 VOID ProcessKISSBytes(UCHAR * RXBuffer, int Read)
 {
@@ -155,6 +190,23 @@ VOID ProcessKISSBytes(UCHAR * RXBuffer, int Read)
 			FENDCount = 0;		// Buffer is now empty
 	}
 }
+
+
+VOID ProcessKISSByte(UCHAR c)
+{
+	// Store in cyclic buffer, counting FENDS so we know if we
+	// have a full frame in the buffer
+
+	if (c == FEND)
+		FENDCount++;
+
+	KISSRXBUFF[KRXPutPtr++] = c;
+	KRXPutPtr &= KISSBUFFERMASK;
+
+	if (KRXPutPtr == KRXGetPtr)			// should never happen, but nasty if it does
+		FENDCount = 0;		// Buffer is now empty
+}
+
 	
 BOOL GetNextKISSFrame()
 {
@@ -164,11 +216,18 @@ BOOL GetNextKISSFrame()
 	unsigned char c;
 	UCHAR * RXMPTR;
 
-	if (KRXPutPtr == KRXGetPtr)
-		return FALSE;			// Buffer empty
+	ptkSessionBG();			// See if any session events to process
 
+	if (KRXPutPtr == KRXGetPtr)	// Nothing to send
+	{
+		ptkSessionBG();			// See if any session events to process
+		
+		if (KRXPutPtr == KRXGetPtr)	// Still nothing to send
+			return FALSE;			// Buffer empty
+
+	}
 	if (FENDCount < 2)
-		return FALSE;			// Not a complete KISS frame
+		return FALSE;				// Not a complete KISS frame
 
 	if (KISSRXBUFF[KRXGetPtr++] != FEND)
 	{
@@ -245,7 +304,7 @@ BOOL GetNextKISSFrame()
 
 				// Process Control Frames here
 
-				if (KISSBUFFER[0] != 0 && KISSBUFFER[0] != 12)
+				if (KISSBUFFER[0] != 0 && KISSBUFFER[0] != 6 && KISSBUFFER[0] != 12)
 				{
 					ProcessKISSControlFrame();
 					return FALSE;
@@ -277,7 +336,6 @@ BOOL GetNextKISSFrame()
  	return FALSE;
 }
 
-#ifdef PTC
 
 // Called by SCS Host Interface
 
@@ -315,10 +373,11 @@ BOOL CheckKISS(UCHAR * SCSReply)
 	EmCRCStuffAndSend(SCSReply, Length + 5);
 	return TRUE;
 }
-#endif
+
 
 VOID ProcessKISSControlFrame()
-{}
+{
+}
 
 VOID SendAckModeAck()
 {

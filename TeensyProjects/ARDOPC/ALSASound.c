@@ -18,16 +18,30 @@
 
 #include "ARDOPC.h"
 
+#define HANDLE int
+
 void gpioSetMode(unsigned gpio, unsigned mode);
 void gpioWrite(unsigned gpio, unsigned level);
-
-#define HANDLE int
+int WriteLog(char * msg, int Log);
+int _memicmp(unsigned char *a, unsigned char *b, int n);
+int stricmp(const unsigned char * pStr1, const unsigned char *pStr2);
+int gpioInitialise(void);
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
 
 VOID COMSetDTR(HANDLE fd);
 VOID COMClearDTR(HANDLE fd);
 VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
-VOID RadioPTT(int PTTState)	;
+VOID RadioPTT(int PTTState);
+VOID SerialHostPoll();
+VOID TCPHostPoll();
+int CloseSoundCard();
+int PackSamplesAndSend(short * input, int nSamples);
+void displayLevel(int max);
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
+VOID processargs(int argc, char * argv[]);
+
+int initdisplay();
 
 extern BOOL blnDISCRepeating;
 extern BOOL UseKISS;			// Enable Packet (KISS) interface
@@ -233,7 +247,7 @@ void PlatformSleep()
 
 // Set GPIO pin as output and set low
 
-SetupGPIOPTT()
+void SetupGPIOPTT()
 {
 	if (pttGPIOPin == -1)
 	{
@@ -253,75 +267,126 @@ SetupGPIOPTT()
 #endif
 
 
+static void sigterm_handler(int sig)
+{
+	printf("terminating on SIGTERM\n");
+	blnClosing = TRUE;
+}
+
+static void sigint_handler(int sig)
+{
+	printf("terminating on SIGINT\n");
+	blnClosing = TRUE;
+}
+
+char * PortString = NULL;
+
+
 void main(int argc, char * argv[])
 {
 	struct timespec tp;
+	struct sigaction act;
 
-	Sleep(1000);	// Give LinBPQ time to complete init if exec'ed by linbpq
+//	Sleep(1000);	// Give LinBPQ time to complete init if exec'ed by linbpq
 
-	if (argc > 1)
-	{
-		char *pkt = strlop(argv[1], '/');
+	processargs(argc, argv);
 
-		port = atoi(argv[1]);
+	Debugprintf("ARDOPC Version %s", ProductVersion);
+
+	if (HostPort[0])
+	{		
+		char *pkt = strlop(HostPort, '/');
+
+		if (_memicmp(HostPort, "COM", 3) == 0)
+		{
+			SerialMode = 1;
+		}
+		else
+			port = atoi(HostPort);
+
 		if (pkt)
 			pktport = atoi(pkt);
 	}
 
-	Debugprintf("ARDOPC Version %s", ProductVersion);
 	
-	if (argc > 3)
+	if (CATPort[0])
 	{
-		strcpy(CaptureDevice, argv[2]);
-		strcpy(PlaybackDevice, argv[3]);
+		char * Baud = strlop(CATPort, ':');
+		if (Baud)
+			CATBAUD = atoi(Baud);
+		hCATDevice = OpenCOMPort(CATPort, CATBAUD, FALSE, FALSE, FALSE, 0);
 	}
 
-	if (argc > 4)
+	if (PTTPort[0])
 	{
-		if (stricmp(argv[4], "GPIO") == 0)
+		char * Baud = strlop(PTTPort, ':');
+		char * pin = strlop(PTTPort, '=');
+	
+		if (Baud)
+			CATBAUD = atoi(Baud);
+
+		if (strcmp(CATPort, PTTPort) == 0)
 		{
-		// Initialise GPIO for PTT if available
+			hPTTDevice = hCATDevice;
+		}
+		else
+		{
+			if (stricmp(PTTPort, "GPIO") == 0)
+			{
+				// Initialise GPIO for PTT if available
 
 #ifdef __ARM_ARCH
 
-			if (gpioInitialise() == 0)
-			{	
-				printf("GPIO interface for PTT available\n");
-				gotGPIO = TRUE;
+				if (gpioInitialise() == 0)
+				{	
+					printf("GPIO interface for PTT available\n");
+					gotGPIO = TRUE;
 
-				pttGPIOPin = 17;
-				SetupGPIOPTT();
-				RadioPTT(1);
-				txSleep(1000);
-				RadioPTT(0);
-		   }
-			else
-				printf("Couldn't initialise GPIO interface for PTT\n");
+					if (pin)
+						pttGPIOPin = atoi(pin);
+					else
+						pttGPIOPin = 17;
+				
+					SetupGPIOPTT();
+			   }
+				else
+					printf("Couldn't initialise GPIO interface for PTT\n");
 
 #else
 			printf("GPIO interface for PTT not available on this platform\n");
 #endif
 
-		}
-		else
-		{
-			strcpy(PTTPORT, argv[4]);
-			if (PTTPORT)
-				hPTTDevice = OpenCOMPort(PTTPORT, 19200, FALSE, FALSE, FALSE, 0);
-	
-			if (hPTTDevice)
+			}
+			else		//  Not GPIO
 			{
-				WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPORT); 
-				COMClearRTS(hPTTDevice);
-				COMClearDTR(hPTTDevice);
-				RadioControl = TRUE;
-			}	
+				hPTTDevice = OpenCOMPort(PTTPort, PTTBAUD, FALSE, FALSE, FALSE, 0);
+	
+			}
 		}
+	}
+
+	if (hPTTDevice)
+	{
+		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPort); 
+		COMClearRTS(hPTTDevice);
+		COMClearDTR(hPTTDevice);
+		RadioControl = TRUE;
+	}	
+
+	if (hCATDevice)
+	{
+		WriteDebugLog(LOGALERT, "CAT Control on port %s", CATPort); 
+		COMClearRTS(hPTTDevice);
+		COMClearDTR(hPTTDevice);
 	}
 
 	initdisplay();
 
-	Debugprintf("ARDOPC listening on port %d", port);
+	if (SerialMode)
+		Debugprintf("ARDOPC Using a pseudotty symlinked to %s", HostPort);
+	else
+		Debugprintf("ARDOPC listening on port %d", port);
+
 	if (UseKISS && pktport)
 		Debugprintf("ARDOPC listening for KISS frames on port %d", pktport);
 
@@ -330,7 +395,33 @@ void main(int argc, char * argv[])
 	clock_gettime(CLOCK_MONOTONIC, &time_start);
 	LastNow = getTicks();
 
+	// Trap signals
+
+	memset (&act, '\0', sizeof(act));
+ 
+	act.sa_handler = &sigint_handler; 
+	if (sigaction(SIGINT, &act, NULL) < 0) 
+		perror ("SIGINT");
+
+	act.sa_handler = &sigterm_handler; 
+	if (sigaction(SIGTERM, &act, NULL) < 0) 
+		perror ("SIGTERM");
+
+	act.sa_handler = SIG_IGN; 
+
+	if (sigaction(SIGHUP, &act, NULL) < 0) 
+		perror ("SIGHUP");
+
+	if (sigaction(SIGPIPE, &act, NULL) < 0) 
+		perror ("SIGPIPE");
+
 	ardopmain();
+
+	// if PTY used, remove it
+
+	if (SerialMode)
+		unlink (HostPort);
+
 }
 
 void txSleep(int mS)
@@ -338,7 +429,11 @@ void txSleep(int mS)
 	// called while waiting for next TX buffer or to delay response.
 	// Run background processes
 
-	HostPoll();
+	if (SerialMode)
+		SerialHostPoll();
+	else
+		TCPHostPoll();
+
 	Sleep(mS);
 }
 
@@ -701,19 +796,6 @@ int GetNextInputDevice(char * dest, int max, int n)
 	strcpy(dest, ReadDevices[n]);
 	return strlen(dest);
 }
-int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate, int p_sampleRate, char * ErrorMsg)
-{
-	Debugprintf("Opening Playback Device %s Rate %d", PlaybackDevice, p_sampleRate);
-
-	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, ErrorMsg))
-	{
-		Debugprintf("Opening Capture Device %s Rate %d", CaptureDevice, c_sampleRate);
-		return OpenSoundCapture(CaptureDevice, c_sampleRate, ErrorMsg);
-	}
-	else
-		return false;
-}
-
 int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, char * ErrorMsg)
 {
 	int err = 0;
@@ -912,6 +994,21 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 
  	return TRUE;
 }
+
+int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate, int p_sampleRate, char * ErrorMsg)
+{
+	Debugprintf("Opening Playback Device %s Rate %d", PlaybackDevice, p_sampleRate);
+
+	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, ErrorMsg))
+	{
+		Debugprintf("Opening Capture Device %s Rate %d", CaptureDevice, c_sampleRate);
+		return OpenSoundCapture(CaptureDevice, c_sampleRate, ErrorMsg);
+	}
+	else
+		return false;
+}
+
+
 
 int CloseSoundCard()
 {
@@ -1168,7 +1265,7 @@ void InitSound(BOOL Quiet)
 
 int min = 0, max = 0, leveltimer = 0;
 
-PollReceivedSamples()
+void PollReceivedSamples()
 {
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
@@ -1262,9 +1359,13 @@ int WriteLog(char * msg, int Log)
 		T = time(NULL);
 		tm = gmtime(&T);
 
-		sprintf(Value, "%s%d_%04d%02d%02d.log",
-		LogName[Log], port, tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
-
+		if (HostPort[0])
+			sprintf(Value, "%s%s_%04d%02d%02d.log",
+				LogName[Log], HostPort, tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+		else
+			sprintf(Value, "%s%d_%04d%02d%02d.log",
+				LogName[Log], port, tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+	
 		if ((logfile[Log] = fopen(Value, "a")) == NULL)
 			return FALSE;
 	}
@@ -1380,6 +1481,12 @@ VOID RadioPTT(int PTTState)
 				COMSetDTR(hPTTDevice);
 			else
 				COMClearDTR(hPTTDevice);
+
+		if (PTTMode & PTTCI_V)
+			if (PTTState)
+				WriteCOMBlock(hPTTDevice, PTTOnCmd, PTTOnCmdLen);
+			else
+				WriteCOMBlock(hPTTDevice, PTTOffCmd, PTTOffCmdLen);
 	}
 }
 
@@ -1427,152 +1534,6 @@ static struct speed_struct
 	{115200,      B115200},
 	{-1,          B0}
 };
-
-
-HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
-{
-	char buf[100];
-
-	//	Linux Version.
-
-	int fd;
-	int hwflag = 0;
-	u_long param=1;
-	struct termios term;
-	struct speed_struct *s;
-
-	if ((fd = open(pPort, O_RDWR | O_NDELAY)) == -1)
-	{
-		if (Quiet == 0)
-		{
-			perror("Com Open Failed");
-			printf(" %s could not be opened \n", pPort);
-		}
-		return 0;
-	}
-
-	// Validate Speed Param
-
-	for (s = speed_table; s->user_speed != -1; s++)
-		if (s->user_speed == speed)
-			break;
-
-   if (s->user_speed == -1)
-   {
-	   fprintf(stderr, "tty_speed: invalid speed %d\n", speed);
-	   return FALSE;
-   }
-
-   if (tcgetattr(fd, &term) == -1)
-   {
-	   perror("tty_speed: tcgetattr");
-	   return FALSE;
-   }
-
-   	cfmakeraw(&term);
-	cfsetispeed(&term, s->termios_speed);
-	cfsetospeed(&term, s->termios_speed);
-
-	if (tcsetattr(fd, TCSANOW, &term) == -1)
-	{
-		perror("tty_speed: tcsetattr");
-		return FALSE;
-	}
-
-	ioctl(fd, FIONBIO, &param);
-	return fd;
-}
-
-/*
-int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
-{
-	int Length;
-
-	Length = read(fd, Block, MaxLength);
-
-	if (Length < 0)
-	{
-		if (errno != 11 && errno != 35)					// Would Block
-		{
-			perror("read");
-			printf("Handle %d Errno %d\n", fd, errno);
-		}
-		return 0;
-	}
-
-	return Length;
-}
-
-BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
-{
-	//	Some systems seem to have a very small max write size
-	
-	int ToSend = BytesToWrite;
-	int Sent = 0, ret;
-
-	while (ToSend)
-	{
-		ret = write(fd, &Block[Sent], ToSend);
-
-		if (ret >= ToSend)
-			return TRUE;
-
-		if (ret == -1)
-		{
-			if (errno != 11 && errno != 35)					// Would Block
-				return FALSE;
-	
-			usleep(10000);
-			ret = 0;
-		}
-						
-		Sent += ret;
-		ToSend -= ret;
-	}
-	return TRUE;
-}
-
-*/
-VOID CloseCOMPort(HANDLE fd)
-{
-	close(fd);
-}
-
-VOID COMSetDTR(HANDLE fd)
-{
-	int status;
-
-	ioctl(fd, TIOCMGET, &status);
-	status |= TIOCM_DTR;
-    ioctl(fd, TIOCMSET, &status);
-}
-
-VOID COMClearDTR(HANDLE fd)
-{
-	int status;
-
-	ioctl(fd, TIOCMGET, &status);
-	status &= ~TIOCM_DTR;
-    ioctl(fd, TIOCMSET, &status);
-}
-
-VOID COMSetRTS(HANDLE fd)
-{
-	int status;
-
-	ioctl(fd, TIOCMGET, &status);
-	status |= TIOCM_RTS;
-    ioctl(fd, TIOCMSET, &status);
-}
-
-VOID COMClearRTS(HANDLE fd)
-{
-	int status;
-
-	ioctl(fd, TIOCMGET, &status);
-	status &= ~TIOCM_RTS;
-    ioctl(fd, TIOCMSET, &status);
-}
 
 
 
@@ -1815,50 +1776,3 @@ void SetLED(int LED, int State)
 {
 }
 
-int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
-{
-	int Length;
-
-	Length = read(fd, Block, MaxLength);
-
-	if (Length < 0)
-	{
-		if (errno != 11 && errno != 35)					// Would Block
-		{
-			perror("read");
-			Debugprintf("Handle %d Errno %d", fd, errno);
-		}
-		return 0;
-	}
-
-	return Length;
-}
-
-BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
-{
-	//	Some systems seem to have a very small max write size
-	
-	int ToSend = BytesToWrite;
-	int Sent = 0, ret;
-
-	while (ToSend)
-	{
-		ret = write(fd, &Block[Sent], ToSend);
-
-		if (ret >= ToSend)
-			return TRUE;
-
-		if (ret == -1)
-		{
-			if (errno != 11 && errno != 35)					// Would Block
-				return FALSE;
-	
-			usleep(10000);
-			ret = 0;
-		}
-						
-		Sent += ret;
-		ToSend -= ret;
-	}
-	return TRUE;
-}

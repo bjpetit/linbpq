@@ -45,6 +45,7 @@ int Capturing = FALSE;
 int SerialHost = TRUE;
 int ActivePort = 0;						// Serial port in use
 
+volatile int lastperiod = 0, lastint = 0;
 
 extern volatile int RXBPtr;
 volatile int flag = 0;

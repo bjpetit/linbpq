@@ -37,6 +37,8 @@ void CheckandAdjustRXLevel(int maxlevel, int minlevel, BOOL Force);
 void mySetPixel(unsigned short x, unsigned short y, unsigned short Colour);
 void clearDisplay();
 void updateDisplay();
+VOID L2Routine(UCHAR * Packet, int Length, int FrameQuality, int totalRSErrors, int NumCar, int pktRXMode);
+
 
 void DrawAxes(int Qual, char * Mode);
 
@@ -56,6 +58,9 @@ extern BOOL blnBREAKCmd;
 extern UCHAR bytLastACKedDataFrameType;
 extern int intARQDefaultDlyMs;
 unsigned int tmrFinalID;
+extern BOOL PKTCONNECTED;
+
+extern int pktRXMode;
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
@@ -76,8 +81,6 @@ char strDecodeCapture[1024];
 
 //	Frame type parameters
 
-#define MAX_DATA_LENGTH	8 * 159 // I think! 8PSK.2000.167
-
 int intCenterFreq = 1500;
 float intCarFreq;			//(was int)	// Are these the same ??
 int intNumCar;
@@ -96,7 +99,7 @@ UCHAR bytMinQualThresh;
 int intPSKMode;
 
 #define MAX_RAW_LENGTH	256     // I think! Max length of an RS block
-#define MAX_DATA_LENGTH	8 * 159 // I think! 8PSK.2000.167
+#define MAX_DATA_LENGTH	8 * 128 // I think! 16QAM.2000.100
 
 // intToneMags should be an array with one row per carrier.
 // and 16 * max bytes data (2 bits per symbol, 4 samples per symbol in 4FSK.
@@ -1632,14 +1635,14 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 	float dblGoertzelImag[56];
 	float dblMag[56];
 	float dblPower, dblLeftMag, dblRightMag;
-	float dblMaxPeak = 0.0, dblMaxPeakSN = 0.0, dblInterpM, dblBinAdj;
+	float dblMaxPeak = 0.0, dblMaxPeakSN = 0.0, dblBinAdj;
 	int intInterpCnt = 0;  // the count 0 to 3 of the interpolations that were < +/- .5 bin
 	int  intIatMaxPeak = 0;
 	float dblAlpha = 0.3f;  // Works well possibly some room for optimization Changed from .5 to .3 on Rev 0.1.5.3
 	float dblInterpretThreshold= 1.0f; // Good results June 6, 2014 (was .4)  ' Works well possibly some room for optimization
 	float dblFilteredMaxPeak = 0;
 	int intStartBin, intStopBin;
-	float dblLeftCar, dblRightCar, dblBinInterpLeft, dblBinInterpRight, dblCtrR, dblCtrI, dblCtrP, dblLeftP, dblRightP;
+	float dblLeftCar, dblRightCar, dblBinInterpLeft, dblBinInterpRight, dblCtrR, dblCtrI, dblLeftP, dblRightP;
 	float dblLeftR[3], dblLeftI[3], dblRightR[3], dblRightI[3];
 	int i;
 	int Ptr = 0;
@@ -2676,7 +2679,7 @@ void Demod1Car4FSK600Char(int Start, UCHAR * Decoded, int Carrier)
   	float dblReal, dblImag;
 	float dblSearchFreq;
 	float dblMagSum = 0;
-	float  dblMag[4];	// The magnitude for each of the 4FSK frequency bins
+//	float  dblMag[4];	// The magnitude for each of the 4FSK frequency bins
 	UCHAR bytSym = 0;
 	static UCHAR bytSymHistory[3];
 	int j, k;
@@ -3641,7 +3644,7 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 		case 0x46:
 		case 0x47:
 		case 0x54:
-		case 0x55:
+		case 0xF55:
 		case 0x64:
 		case 0x65:
 		case 0x74:
@@ -3753,7 +3756,6 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			// Variable Length Packet Frame Header
 			// 3 bits Mod Type 3 bits Carriers (minus 1) 10 Bits Len
 
-			int Type;
 			int Len;
 			int pktNumCar;
 			int pktDataLen;
@@ -3761,17 +3763,19 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 				if (CarrierOk[0])
 				{
-					Type = bytFrameData1[1] >> 5;
+					pktRXMode = bytFrameData1[1] >> 5;
 					pktNumCar = ((bytFrameData1[1] & 0x1c) >> 2) + 1;
 
 					Len =  ((bytFrameData1[1] & 0x3) << 8) | bytFrameData1[2];
 				}
-				else if (CarrierOk[1])
-				{
-					Type = bytFrameData2[1] >> 5;
-					pktNumCar = ((bytFrameData1[1] & 0x1c) >> 2) + 1;
-					Len =  ((bytFrameData2[1] & 0xf) << 8) | bytFrameData2[2];
-				}
+//	Now only using one carrier
+
+//				else if (CarrierOk[1])
+//				{
+//					pktRXMode = bytFrameData2[1] >> 5;
+//					pktNumCar = ((bytFrameData2[1] & 0x1c) >> 2) + 1;
+//					Len =  ((bytFrameData2[1] & 0x3) << 8) | bytFrameData2[2];
+//				}
 				else
 				{
 					// Cant decode
@@ -3781,15 +3785,14 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 					break;
 				}
 								
-				WriteDebugLog(6, "Pkt Frame Header Type %s Carriers %d Len %d", &pktMod[Type][0], pktNumCar, Len);
-				blnDecodeOK = TRUE;
+				strcpy(strMod, &pktMod[pktRXMode][0]);
 
 				// Reset to receive rest of frame
 
-				strcpy(strMod, &pktMod[Type][0]);
-
 				pktDataLen = (Len + (pktNumCar - 1))/pktNumCar; // Round up
 
+				// This must match the encode settings
+				
 				pktRSLen = pktDataLen >> 2;			// Try 25% for now
 				if (pktRSLen & 1)
 					pktRSLen++;						// Odd RS bytes no use
@@ -3808,24 +3811,35 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				intRSLen = pktRSLen;
 				intNumCar = pktNumCar;
 				PSKInitDone = 0;
-				
+
+				WriteDebugLog(6, "Pkt Frame Header Type %s Carriers %d Len %d", strMod, pktNumCar, Len);
+				blnDecodeOK = TRUE;
+
 				return 0;
 		}
 
 					
 		case PktFrameData:
 		{
-			char Good[8] = {1,1,1,1,1,1,1,1};
-
 			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 			{
 				blnDecodeOK = TRUE;
 
-				// Packet Data  - Pass to Host as KISS frame
+				// Packet Data  - if KISS interface ias active
+				// Pass to Host as KISS frame, else pass to
+				// Session code
+
 				// Data in bytData  len in frameLen
 
-				SendFrametoHost(bytData, frameLen);
-			
+
+#ifdef TEENSY
+				L2Routine(bytData, frameLen, intLastRcvdFrameQuality, totalRSErrors, intNumCar, pktRXMode);
+#else
+//				if (PKTCONNECTED)
+//					SendFrametoHost(bytData, frameLen);
+//				else
+					L2Routine(bytData, frameLen, intLastRcvdFrameQuality, totalRSErrors, intNumCar, pktRXMode);
+#endif
 			}
 			break;
 		}
@@ -3905,10 +3919,11 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 	float dblPi4  = 0.25 * M_PI;
 	float dblDistanceSum = 0;
 	int intRad = 0;
-	int i, clrPixel;
+	int i;
 
 #ifdef PLOTCONSTELLATION
 
+	int clrPixel;
 	int yCenter = (ConstellationHeight - 2)/ 2;
 	int xCenter = (ConstellationWidth - 2) / 2;
 
@@ -4036,20 +4051,22 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 {
 	//	Subroutine to update bmpConstellation plot for 16FSK modes...
 
-	float dblRad;
+
 	int	intToneSum = 0;
 	float intMagMax = 0;
-	float dblAng;
 	float dblDistanceSum = 0;
 	float dblPlotRotation = 0;
 //            Dim stcStatus As Status
 	int	intRad;
 //            Dim clrPixel As System.Drawing.Color
 	int	intJatMaxMag;
-	int i, j, x, y,clrPixel;
+	int i, j;
 
 #ifdef PLOTCONSTELLATION
 
+	float dblRad;
+	float dblAng;
+	int x, y,clrPixel;
 	int yCenter = (ConstellationHeight - 2)/ 2;
 	int xCenter = (ConstellationWidth - 2) / 2;
 
@@ -4119,10 +4136,10 @@ void Update8FSKConstellation(int * intToneMags, int * intQuality)
 	float dblDistanceSum = 0;
 	int intRad = 0;
 	int i, j, intJatMaxMag;
-	float dblAng;
 
 #ifdef PLOTCONSTELLATION
 
+	float dblAng;
 	int yCenter = (ConstellationHeight - 2)/ 2;
 	int xCenter = (ConstellationWidth - 2) / 2;
 	unsigned short clrPixel = WHITE;
@@ -4195,7 +4212,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 	float dblPhaseError; 
 	float dblPhaseErrorSum = 0;
 	int intPSKIndex;
-	int intX, intY, intP = 0;
+	int intP = 0;
 	float dblRad = 0;
 	float dblAvgRad = 0;
 	float intMagMax = 0;
@@ -4210,6 +4227,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 
 #ifdef PLOTCONSTELLATION
 
+	int intX, intY;
 	int yCenter = (ConstellationHeight - 2)/ 2;
 	int xCenter = (ConstellationWidth - 2) / 2;
 
@@ -4940,22 +4958,22 @@ void DemodPSK()
 
 		DecodeCompleteTime = Now;
 
-		CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
+//		CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
 			
-		if (intNumCar > 1)
-			CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
+//		if (intNumCar > 1)
+//			CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
 			
 		if (intNumCar > 2)
 		{
-			CorrectPhaseForTuningOffset(&intPhases[2][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[3][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[2][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[3][0], intPhasesLen, strMod);
 		}
 		if (intNumCar > 4)
 		{
-			CorrectPhaseForTuningOffset(&intPhases[4][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[5][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[6][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[7][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[4][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[5][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[6][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[7][0], intPhasesLen, strMod);
 		}
 
 		// Rick uses the last carier for Quality
@@ -5329,20 +5347,20 @@ BOOL DemodQAM()
 
 		CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
 			
-		if (intNumCar > 1)
-			CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
+//		if (intNumCar > 1)
+//			CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);
 			
 		if (intNumCar > 2)
 		{
-			CorrectPhaseForTuningOffset(&intPhases[2][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[3][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[2][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[3][0], intPhasesLen, strMod);
 		}
 		if (intNumCar > 4)
 		{
-			CorrectPhaseForTuningOffset(&intPhases[4][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[5][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[6][0], intPhasesLen, strMod);
-			CorrectPhaseForTuningOffset(&intPhases[7][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[4][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[5][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[6][0], intPhasesLen, strMod);
+//			CorrectPhaseForTuningOffset(&intPhases[7][0], intPhasesLen, strMod);
 		}
 
 			intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[intNumCar - 1][0], &intMags[intNumCar - 1][0], strMod, TRUE);

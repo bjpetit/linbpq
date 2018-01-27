@@ -370,7 +370,7 @@ BOOL GetNextARQFrame()
 		return TRUE;			// continue with DISC repeats
 	}
 
-	if (ProtocolState == ISS)
+	if (ProtocolState == ISS || ProtocolState == IDLE)
 		if (CheckForDisconnect())
 			return FALSE;
 
@@ -1319,8 +1319,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
             return;
 		}
 
-		if (!blnListen)
-			return;			 // ignore connect request if not blnListen
     
 		// Process Connect request to MyCallsign or Aux Call signs  (Handles protocol rule 1.2)
    
@@ -1329,6 +1327,11 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 		strCallsign  = strlop(bytData, ' '); // "fromcall tocall"
 		strcpy(strRemoteCallsign, bytData);
+
+		WriteDebugLog(LOGDEBUG, "CONREQ From %s to %s Listen = %d", strRemoteCallsign, strCallsign, blnListen);
+
+		if (!blnListen)
+			return;			 // ignore connect request if not blnListen
 
 		// see if connect request is to MyCallsign or any Aux call sign
         
@@ -1802,7 +1805,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 	
 		case IRStoISS: // In this state answer any data frame with a BREAK. If ACK received go to Protocol State ISS
 
-			WriteExceptionLog("[ARDPprtocol.ProcessRcvdARQFrame] Protocol State IRStoISS...should not get here!");
 			break;
  
 		case IDLE:			// The state where the ISS has no data to send and is looking for a BREAK from the IRS

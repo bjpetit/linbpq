@@ -16,6 +16,7 @@
 #include <windows.h>
 #include <mmsystem.h>
 
+
 #ifdef USE_DIREWOLF
 #include "direwolf/fsk_demod_state.h"
 #include "direwolf/demod_afsk.h"
@@ -30,6 +31,7 @@ VOID COMSetDTR(HANDLE fd);
 VOID COMClearDTR(HANDLE fd);
 VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
+VOID processargs(int argc, char * argv[]);
 
 
 #include <math.h>
@@ -104,6 +106,9 @@ unsigned int RTC = 0;
 
 void InitSound(BOOL Quiet);
 void HostPoll();
+void TCPHostPoll();
+void SerialHostPoll();
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
 
 int Ticks;
 
@@ -132,116 +137,63 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
-#define POOLCOUNT 32
-#define AUDIO_BLOCK_SAMPLES 192
-
-#define int16_t unsigned short
-
-typedef struct my_audio_block_struct
+BOOL CtrlHandler(DWORD fdwCtrlType)
 {
-	struct my_audio_block_struct * chain;
-	int16_t data[AUDIO_BLOCK_SAMPLES];
-} my_audio_block_t;
-
-
-
-volatile int q_count;
-
-my_audio_block_t pool[POOLCOUNT];
-my_audio_block_t free_q;
-my_audio_block_t tohost_q;
-
-
-my_audio_block_t * allocate(void)
-{
-  my_audio_block_t * block = free_q.chain;
-
-  if (block == NULL)
+  switch( fdwCtrlType )
   {
-    return NULL;
+    // Handle the CTRL-C signal.
+    case CTRL_C_EVENT:
+      printf( "Ctrl-C event\n\n" );
+	  blnClosing = TRUE;
+      Beep( 750, 300 );
+	  Sleep(1000);
+      return( TRUE );
+
+    // CTRL-CLOSE: confirm that the user wants to exit.
+ 
+	case CTRL_CLOSE_EVENT:
+
+	  blnClosing = TRUE;
+     printf( "Ctrl-Close event\n\n" );
+	 Sleep(20000);
+       Beep( 750, 300 );
+	   return( TRUE );
+
+    // Pass other signals to the next handler.
+    case CTRL_BREAK_EVENT:
+      Beep( 900, 200 );
+      printf( "Ctrl-Break event\n\n" );
+	  blnClosing = TRUE;
+      Beep( 750, 300 );
+     return FALSE;
+
+    case CTRL_LOGOFF_EVENT:
+      Beep( 1000, 200 );
+      printf( "Ctrl-Logoff event\n\n" );
+      return FALSE;
+
+    case CTRL_SHUTDOWN_EVENT:
+      Beep( 750, 500 );
+      printf( "Ctrl-Shutdown event\n\n" );
+	  blnClosing = TRUE;
+      Beep( 750, 300 );
+    return FALSE;
+
+    default:
+      return FALSE;
   }
-
-  free_q.chain = block->chain;
-  q_count--;
-
-  return block;
 }
-void release(my_audio_block_t *block)
-{
-  block->chain = free_q.chain;
-  free_q.chain = block;
-  q_count++;
-}
-
-my_audio_block_t * q_rem(my_audio_block_t *Q)
-{
-	my_audio_block_t * first;
-	my_audio_block_t * next;
-
-	//	PQ may not be word aligned, so copy as bytes (for ARM5)
-
-
-	first = Q->chain;
-
-	if (first == 0) return (0);			// Empty
-
-	next = first->chain;					// Address of next buffer
-
-	Q->chain = next;
-
-	return (first);
-}
-
-int q_add(my_audio_block_t * Q, my_audio_block_t * BUFF)
-{
-	my_audio_block_t * next;
-
-	BUFF->chain = 0;					// Clear chain in new buffer
-
-	if (Q->chain == NULL)				// Empty
-	{
-		Q->chain = BUFF;				// New one on front
-		return(0);
-	}
-
-	next = Q->chain;
-
-	while (next->chain != 0)
-	{
-		next=next->chain;				// Chain to end of queue
-	}
-	next->chain = BUFF;					// New one on end
-
-	return(0);
-}
-
 
 
 
 void main(int argc, char * argv[])
 {
-
 	TIMECAPS tc;
-	UINT     wTimerRes;
+	unsigned int     wTimerRes;
 	DWORD	t, lastt = 0;
+	int i = 0;
 
-	// Set up the pool
-
-  int i = 0;
-  my_audio_block_t * BUFF;
-
-  while (i < POOLCOUNT)
-  {
-    release(&pool[i++]);
-  }
-
-  BUFF = allocate();
-
-  q_add(&tohost_q, BUFF);
- 
-
-//	Generate50BaudTwoToneLeaderTemplate();
-//	GeneratePSKTemplates();
+	SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
 
 	if (timeGetDevCaps(&tc, sizeof(TIMECAPS)) != TIMERR_NOERROR) 
 	{
@@ -255,36 +207,65 @@ void main(int argc, char * argv[])
 
 	WriteDebugLog(LOGALERT, "ARDOPC Version %s", ProductVersion);
 
-	if (argc > 1)
-	{
-		char *pkt = strlop(argv[1], '/');
+	processargs(argc, argv);
 
-		port = atoi(argv[1]);
+	if (HostPort[0])
+	{		
+		char *pkt = strlop(HostPort, '/');
+
+		if (_memicmp(HostPort, "COM", 3) == 0)
+		{
+			SerialMode = 1;
+			port = atoi(HostPort + 3);
+		}
+		else
+			port = atoi(HostPort);
+
 		if (pkt)
 			pktport = atoi(pkt);
 	}
 
-	if (argc > 3)
+	_strupr(CaptureDevice);
+	_strupr(PlaybackDevice);
+
+	if (PTTPort[0])
 	{
-		strcpy(CaptureDevice, argv[2]);
-		strcpy(PlaybackDevice, argv[3]);
-		_strupr(CaptureDevice);
-		_strupr(PlaybackDevice);
+		char * Baud = strlop(PTTPort, ':');
+		if (Baud)
+			PTTBAUD = atoi(Baud);
+
+		hPTTDevice = OpenCOMPort(PTTPort, PTTBAUD, FALSE, FALSE, FALSE, 0);
 	}
 
-	if (argc > 4)
-		strcpy(PTTPORT, argv[4]);
-
-	if (PTTPORT)
-		hPTTDevice = OpenCOMPort(PTTPORT, 19200, FALSE, FALSE, FALSE, 0);
-
+	if (CATPort[0])
+	{
+		char * Baud = strlop(CATPort, ':');
+		if (strcmp(CATPort, PTTPort) == 0)
+		{
+			hCATDevice = hPTTDevice;
+		}
+		else
+		{
+			if (Baud)
+			CATBAUD = atoi(Baud);
+			hCATDevice = OpenCOMPort(CATPort, CATBAUD, FALSE, FALSE, FALSE, 0);
+		}
+	}
 	if (hPTTDevice)
 	{
 		COMClearRTS(hPTTDevice);
 		COMClearDTR(hPTTDevice);
-		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPORT); 
+		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPort); 
 		RadioControl = TRUE;
 	}
+
+	if (hCATDevice)
+	{
+		WriteDebugLog(LOGALERT, "CAT Control on port %s", CATPort); 
+		COMClearRTS(hPTTDevice);
+		COMClearDTR(hPTTDevice);
+	}
+
 
 	QueryPerformanceFrequency(&Frequency);
 	Frequency.QuadPart /= 1000;			// Microsecs
@@ -294,6 +275,8 @@ void main(int argc, char * argv[])
 	
 	if(!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS))
 		printf("Failed to set High Priority (%d)\n"), GetLastError();
+
+
 
 	ardopmain();
 }
@@ -317,7 +300,11 @@ void txSleep(int mS)
 	// called while waiting for next TX buffer. Run background processes
 
 	PollReceivedSamples();			// discard any received samples
-	HostPoll();
+	if (SerialMode)
+		SerialHostPoll();
+	else
+		TCPHostPoll();
+
 	Sleep(mS);
 }
 
@@ -590,9 +577,13 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 	
 	if (logfile == NULL)
 	{
-		sprintf(Value, "%s%d_%04d%02d%02d.log",
-			"ARDOPDebug", port, st.wYear, st.wMonth, st.wDay);
-
+		if (HostPort[0])
+			sprintf(Value, "%s%s_%04d%02d%02d.log",
+				"ARDOPDebug", HostPort, st.wYear, st.wMonth, st.wDay);
+		else
+			sprintf(Value, "%s%d_%04d%02d%02d.log",
+				"ARDOPDebug", port, st.wYear, st.wMonth, st.wDay);
+		
 		if ((logfile = fopen(Value, "ab")) == NULL)
 			return;
 	}
@@ -623,7 +614,12 @@ VOID WriteExceptionLog(const char * format, ...)
 	printf(Mess);
 
 	GetSystemTime(&st);
-	sprintf(Value, "%s%d_%04d%02d%02d.log",
+
+	if (HostPort[0])
+		sprintf(Value, "%s%s_%04d%02d%02d.log",
+				"ARDOPException", HostPort, st.wYear, st.wMonth, st.wDay);
+	else	
+		sprintf(Value, "%s%d_%04d%02d%02d.log",
 				"ARDOPException", port, st.wYear, st.wMonth, st.wDay);
 	
 	if ((logfile = fopen(Value, "ab")) == NULL)
@@ -659,12 +655,16 @@ VOID Statsprintf(const char * format, ...)
 	va_start(arglist, format);
 	vsnprintf(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
-
+	
 	if (statslogfile == NULL)
 	{
 		GetSystemTime(&st);
-		sprintf(Value, "%s%d_%04d%02d%02d.log",
-			"ARDOPSession", port, st.wYear, st.wMonth, st.wDay);
+		if (HostPort[0])
+			sprintf(Value, "%s%s_%04d%02d%02d.log",
+				"ARDOPSession", HostPort, st.wYear, st.wMonth, st.wDay);
+		else
+			sprintf(Value, "%s%d_%04d%02d%02d.log",
+				"ARDOPSession", port, st.wYear, st.wMonth, st.wDay);
 
 		if ((statslogfile = fopen(Value, "ab")) == NULL)
 			return;
@@ -777,6 +777,13 @@ VOID RadioPTT(BOOL PTTState)
 			COMSetDTR(hPTTDevice);
 		else
 			COMClearDTR(hPTTDevice);
+
+	if (PTTMode & PTTCI_V)
+		if (PTTState)
+			WriteCOMBlock(hCATDevice, PTTOnCmd, PTTOnCmdLen);
+		else
+			WriteCOMBlock(hCATDevice, PTTOffCmd, PTTOffCmdLen);
+
 }
 
 //  Function to send PTT TRUE or PTT FALSE comannad to Host or if local Radio control Keys radio PTT 
@@ -838,7 +845,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	// if Port Name starts COM, convert to \\.\COM or ports above 10 wont work
 
-	if ((UINT)pPort < 256)			// just a com port number
+	if ((unsigned int)pPort < 256)			// just a com port number
 		sprintf( szPort, "\\\\.\\COM%d", pPort);
 
 	else if (_memicmp(pPort, "COM", 3) == 0)
@@ -864,7 +871,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 		if (Quiet == 0)
 		{
 			if (pPort < (VOID *)256)
-				sprintf(buf," COM%d could not be opened \r\n ", (UINT)pPort);
+				sprintf(buf," COM%d could not be opened \r\n ", (unsigned int)pPort);
 			else
 				sprintf(buf," %s could not be opened \r\n ", pPort);
 
@@ -937,7 +944,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	}
 	else
 	{
-		if ((UINT)pPort < 256)
+		if ((unsigned int)pPort < 256)
 			sprintf(buf,"COM%d Setup Failed %d ", pPort, GetLastError());
 		else
 			sprintf(buf,"%s Setup Failed %d ", pPort, GetLastError());
@@ -1038,11 +1045,12 @@ VOID COMClearRTS(HANDLE fd)
 
 void CatWrite(char * Buffer, int Len)
 {
-	WriteDebugLog(5, "CAT Write Len %d %s", Len, Buffer);
+	if (hCATDevice)
+		WriteCOMBlock(hCATDevice, Buffer, Len);
 }
 
-unsigned char CatRXbuffer[256];
-int CatRXLen = 0;
+extern unsigned char CatRXbuffer[256];
+extern int CatRXLen;
 
 int RadioPoll()
 {

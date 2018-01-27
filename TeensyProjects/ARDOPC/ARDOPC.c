@@ -3,16 +3,19 @@
 
 
 #ifdef WIN32
-#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
 #include <windows.h>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
+#else
+#define SOCKET int
+#define closesocket close
 #endif
 
 #include "ARDOPC.h"
+#include "getopt.h"
 
 void CompressCallsign(char * Callsign, UCHAR * Compressed);
 void CompressGridSquare(char * Square, UCHAR * Compressed);
@@ -22,9 +25,11 @@ void SendID(BOOL blnEnableCWID);
 void PollReceivedSamples();
 void CheckTimers();
 BOOL GetNextARQFrame();
-BOOL HostInit();
+BOOL TCPHostInit();
+BOOL SerialHostInit();
 BOOL KISSInit();
-void HostPoll();
+void SerialHostPoll();
+void TCPHostPoll();
 BOOL MainPoll();
 VOID PacketStartTX();
 void PlatformSleep();
@@ -45,7 +50,6 @@ BOOL NeedPing = FALSE;		// PING Command Flag
 BOOL NeedTwoToneTest = FALSE;
 enum _ARQBandwidth CallBandwidth = UNDEFINED;
 BOOL UseKISS = TRUE;			// Enable Packet (KISS) interface
-BOOL NewMode = FALSE;			// Using New interface Protocol (no C: or D:)
 int PingCount;
 
 BOOL blnPINGrepeating = False;
@@ -75,6 +79,7 @@ BOOL FECId = FALSE;
 int Squelch = 5;
 int BusyDet = 5;
 enum _ARQBandwidth ARQBandwidth = B2000MAX;
+char HostPort[80] = "";
 int port = 8515;
 int pktport = 0;
 BOOL RadioControl = FALSE;
@@ -84,7 +89,7 @@ BOOL Use600Modes = FALSE;
 BOOL FSKOnly = FALSE;
 BOOL fastStart = TRUE;
 BOOL skip167 = FALSE;
-BOOL ConsoleLogLevel = LOGINFO;
+BOOL ConsoleLogLevel = LOGDEBUG;
 BOOL EnablePingAck = TRUE;
 
 BOOL gotGPIO = FALSE;
@@ -92,12 +97,19 @@ BOOL useGPIO = FALSE;
 
 int pttGPIOPin = -1;
 
-HANDLE hRIGDevice = 0;			// port for PTT
-char RIGPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
-int RIGBAUD = 19200;
+HANDLE hCATDevice = 0;	
+char CATPort[80] = "";			// Port for CAT.
+int CATBAUD = 19200;
 
-HANDLE hPTTDevice = 0;			// port for PTT
-char PTTPORT[80] = "";			// Port for Hardware PTT - may be same as control port.
+HANDLE hPTTDevice = 0;
+char PTTPort[80] = "";			// Port for Hardware PTT - may be same as control port.
+int PTTBAUD = 19200;
+
+UCHAR PTTOnCmd[64];
+UCHAR PTTOnCmdLen = 0;
+
+UCHAR PTTOffCmd[64];
+UCHAR PTTOffCmdLen = 0;
 
 int PTTMode = PTTRTS;				// PTT Control Flags.
 
@@ -180,6 +192,8 @@ int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn)
 void SendPING(char * strMycall, char * strTargetCall, int intRpt);
 
 int intRepeatCnt;
+
+extern SOCKET TCPControlSock, TCPDataSock, PktSock;
 
 BOOL blnClosing = FALSE;
 BOOL blnCodecStarted = FALSE;
@@ -729,7 +743,10 @@ void ardopmain()
 
 	InitSound();
 
-	HostInit();
+	if (SerialMode)
+		SerialHostInit();
+	else
+		TCPHostInit();
 
 	if (UseKISS)
 	{
@@ -749,9 +766,19 @@ void ardopmain()
 	{
 		PollReceivedSamples();
 		CheckTimers();	
-		HostPoll();
+		if (SerialMode)
+			SerialHostPoll();
+		else
+			TCPHostPoll();
 		MainPoll();
 		PlatformSleep();
+	}
+
+	if (!SerialMode)
+	{
+		closesocket(TCPControlSock);
+		closesocket(TCPDataSock);
+		closesocket(PktSock);
 	}
 	return;
 }
@@ -1132,15 +1159,15 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 
 		// Special Variable Length frame
 
-		// This defines the header, 4PSK.500.100. Length is 6 bytes
+		// This defines the header, 4PSK.200.100. Length is 8 bytes
 		// Once we have that we receive the rest of the packet in the 
 		// mode defined in the header.
-		// Header is 4 bits Type 12 Bits Len 2 bytes CRC 2 bytes RS
+		// Header is 4 bits Type 12 Bits Len 2 bytes CRC 4 bytes RS
 
 		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = 2;
+		*intNumCar = 1;
 		*intDataLen = 2;
-		*intRSLen = 2;
+		*intRSLen = 4;
 		strcpy(strMod, "4PSK");
 		*intBaud = 100;
 		*bytQualThres = 50;
@@ -2218,16 +2245,11 @@ void SaveQueueOnBreak()
 }
 
 
-
-#ifdef PTC
-
 extern UCHAR bytEchoData[1280];		// has to be at least max packet size (?1280)
 
 extern int bytesEchoed;
 
 extern UCHAR DelayedEcho;
-
-#endif
 
 
 void RemoveDataFromQueue(int Len)
@@ -2241,15 +2263,11 @@ void RemoveDataFromQueue(int Len)
 
 	//	If using PTC Serial Interface and delayed echo requested, send it
 
-#ifdef PTC
-
 	if (DelayedEcho == '1')
 	{
 		memcpy(bytEchoData, bytDataToSend, Len);
 		bytesEchoed = Len;
 	}
-
-#endif
 
 	GetSemaphore();
 
@@ -2838,12 +2856,12 @@ void ProcessPingFrame(char * bytData)
 
 
 unsigned const short CRCTAB[256] = {
-	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
-	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
-	0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e, 
-	0x9cc9, 0x8d40, 0xbfdb, 0xae52, 0xdaed, 0xcb64, 0xf9ff, 0xe876, 
-	0x2102, 0x308b, 0x0210, 0x1399, 0x6726, 0x76af, 0x4434, 0x55bd, 
-	0xad4a, 0xbcc3, 0x8e58, 0x9fd1, 0xeb6e, 0xfae7, 0xc87c, 0xd9f5, 
+0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
+0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
+0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e, 
+0x9cc9, 0x8d40, 0xbfdb, 0xae52, 0xdaed, 0xcb64, 0xf9ff, 0xe876, 
+0x2102, 0x308b, 0x0210, 0x1399, 0x6726, 0x76af, 0x4434, 0x55bd, 
+0xad4a, 0xbcc3, 0x8e58, 0x9fd1, 0xeb6e, 0xfae7, 0xc87c, 0xd9f5, 
 0x3183, 0x200a, 0x1291, 0x0318, 0x77a7, 0x662e, 0x54b5, 0x453c, 
 0xbdcb, 0xac42, 0x9ed9, 0x8f50, 0xfbef, 0xea66, 0xd8fd, 0xc974, 
 0x4204, 0x538d, 0x6116, 0x709f, 0x0420, 0x15a9, 0x2732, 0x36bb, 
@@ -2884,4 +2902,173 @@ unsigned short int compute_crc(unsigned char *buf,int len)
 	return fcs;
 }
 
+static struct option long_options[] =
+{
+	{"ptt",  required_argument, 0 , 'p'},
+	{"cat",  required_argument, 0 , 'c'},
+	{"keystring",  required_argument, 0 , 'k'},
+	{"unkeystring",  required_argument, 0 , 'u'},
+	{"help",  no_argument, 0 , 'h'},
+	{ NULL , no_argument , NULL , no_argument }
+};
+
+char HelpScreen[] =
+	"Usage:\n"
+	"ardopc port [capture device playbackdevice] [Options]\n"
+	"defaults are port = 8515, capture device ARDOP playback device ARDOP\n"
+	"If you need to specify capture and playback devices you must specify port\n"
+	"\n"
+	"For TCP Host connection, port is TCP Port Number\n"
+	"For Serial Host Connection port must start with \"COM\" or \"com\"\n"
+	"  On Windows use the name of the BPQ Virtual COM Port, eg COM4\n"
+	"  On Linux the program will create a pty and symlink it to the specified name.\n"
+	"\n"
+	"Optional Paramters\n"
+	"-c device or --cat device         Device to use for CAT Control\n"
+	"-p device or --ptt device         Device to use for PTT control using RTS\n"
+	"-k string or --keystring string   String (In HEX) to send to the radio to key PTT\n"
+	"-u string or --unkeystring string String (In HEX) to send to the radio to unkeykey PTT\n"
+	"\n"
+	" CAT and RTS PTT can share the same port.\n"
+	" See the ardop documentation for more information on cat and ptt options\n"
+	"  including when you need to use -k and -u\n\n";
+
+VOID processargs(int argc, char * argv[])
+{
+	int val;
+	UCHAR * ptr1;
+	UCHAR * ptr2;
+	int c;
+
+	while (1)
+	{		
+		int option_index = 0;
+
+		c = getopt_long(argc, argv, "c:p:g::k:u:h", long_options, &option_index);
+
+		// Check for end of operation or error
+		if (c == -1)
+			break;
+
+		// Handle options
+		switch (c)
+		{
+		case 'h':
+	
+			printf("ARDOPC Version %s\n", ProductVersion);
+			printf ("%s", HelpScreen);
+			exit(0);
+			
+		case 'g':
+			if (optarg)
+				pttGPIOPin = atoi(optarg);
+			else
+				pttGPIOPin = 17;
+			break;
+
+		case 'k':
+
+			ptr1 = optarg;
+			ptr2 = PTTOnCmd;
+		
+			if (ptr1 == NULL)
+			{
+				printf("RADIOPTTON command string missing\r");
+				break;
+			}
+
+			while (c = *(ptr1++))
+			{
+				val = c - 0x30;
+				if (val > 15) val -= 7;
+				val <<= 4;
+				c = *(ptr1++) - 0x30;
+				if (c > 15) c -= 7;
+				val |= c;
+				*(ptr2++) = val;
+			}
+
+			PTTOnCmdLen = ptr2 - PTTOnCmd;
+			PTTMode = PTTCI_V;
+
+			printf ("PTTOnString %s len %d\n", optarg, PTTOnCmdLen);
+			break;
+
+		case 'u':
+
+			ptr1 = optarg;
+			ptr2 = PTTOffCmd;
+
+			if (ptr1 == NULL)
+			{
+				printf("RADIOPTTOFF command string missing\r");
+				break;
+			}
+
+			while (c = *(ptr1++))
+			{
+				val = c - 0x30;
+				if (val > 15) val -= 7;
+				val <<= 4;
+				c = *(ptr1++) - 0x30;
+				if (c > 15) c -= 7;
+				val |= c;
+				*(ptr2++) = val;
+			}
+
+			PTTOffCmdLen = ptr2 - PTTOffCmd;
+			PTTMode = PTTCI_V;
+
+			printf ("PTTOffString %s len %d\n", optarg, PTTOffCmdLen);
+			break;
+
+		case 'p':
+			strcpy(PTTPort, optarg);
+			break;
+
+		case 'c':
+			strcpy(CATPort, optarg);
+			break;
+
+		case '?':
+			/* getopt_long already printed an error message. */
+			break;
+
+		default:
+			abort();
+		}
+	}
+
+
+	if (argc > optind)
+	{
+		strcpy(HostPort, argv[optind]);
+	}
+
+	if (argc > optind + 2)
+	{
+		strcpy(CaptureDevice, argv[optind + 1]);
+		strcpy(PlaybackDevice, argv[optind + 2]);
+	}
+
+	if (argc > optind + 3)
+	{
+		printf("ARDOPC Version %s\n", ProductVersion);
+		printf("Only three positional parameters allowed\n");
+		printf ("%s", HelpScreen);
+		exit(0);
+	}
+}
+
+VOID LostHost()
+{
+	// Called if Link to host is lost
+
+	// Close any sessions
+
+	if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS || ProtocolState == IRStoISS)
+		blnARQDisconnect = TRUE;
+
+	ClosePacketSessions();
+}
 

@@ -223,6 +223,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\getopt.c"
+				>
+			</File>
+			<File
 				RelativePath="..\HostInterface.c"
 				>
 			</File>
@@ -239,6 +243,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\pktSession.c"
+				>
+			</File>
+			<File
 				RelativePath="..\rs.c"
 				>
 			</File>
@@ -248,6 +256,10 @@
 			</File>
 			<File
 				RelativePath="..\SoundInput.c"
+				>
+			</File>
+			<File
+				RelativePath="..\TCPHostInterface.c"
 				>
 			</File>
 			<File

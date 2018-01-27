@@ -546,9 +546,9 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define SEREMU_RX_INTERVAL    2
   #define AUDIO_INTERFACE	1	// Audio (uses 3 consecutive interfaces)
   #define AUDIO_TX_ENDPOINT     3
-  #define AUDIO_TX_SIZE         192
+  #define AUDIO_TX_SIZE         196
   #define AUDIO_RX_ENDPOINT     4
-  #define AUDIO_RX_SIZE         192
+  #define AUDIO_RX_SIZE         196
   #define AUDIO_SYNC_ENDPOINT	5
   #define ENDPOINT1_CONFIG	ENDPOINT_TRANSIMIT_ONLY
   #define ENDPOINT2_CONFIG	ENDPOINT_RECEIVE_ONLY
@@ -583,9 +583,9 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define MIDI_RX_SIZE          64
   #define AUDIO_INTERFACE	3	// Audio (uses 3 consecutive interfaces)
   #define AUDIO_TX_ENDPOINT     6
-  #define AUDIO_TX_SIZE         192
+  #define AUDIO_TX_SIZE         196
   #define AUDIO_RX_ENDPOINT     7
-  #define AUDIO_RX_SIZE         192
+  #define AUDIO_RX_SIZE         196
   #define AUDIO_SYNC_ENDPOINT	8
   #define ENDPOINT1_CONFIG	ENDPOINT_TRANSIMIT_ONLY
   #define ENDPOINT2_CONFIG	ENDPOINT_RECEIVE_ONLY
@@ -598,7 +598,7 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   
   #elif defined(USB_AUDIO_SERIAL)
   #define VENDOR_ID		0x16C0
-  #define PRODUCT_ID		0x048B
+  #define PRODUCT_ID		0x048A
   #define MANUFACTURER_NAME	{'T','e','e','n','s','y','d','u','i','n','o'}
   #define MANUFACTURER_NAME_LEN	11
   #define PRODUCT_NAME		{'T','e','e','n','s','y',' ','A','u','d','i','o'}
@@ -618,9 +618,9 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define CDC_TX_SIZE           64
   #define AUDIO_INTERFACE	2	// Audio (uses 3 consecutive interfaces)
   #define AUDIO_TX_ENDPOINT     4
-  #define AUDIO_TX_SIZE         192
+  #define AUDIO_TX_SIZE         196
   #define AUDIO_RX_ENDPOINT     5
-  #define AUDIO_RX_SIZE         192
+  #define AUDIO_RX_SIZE         196
   #define AUDIO_SYNC_ENDPOINT	6
   #define ENDPOINT1_CONFIG	ENDPOINT_TRANSIMIT_ONLY
   #define ENDPOINT2_CONFIG	ENDPOINT_RECEIVE_ONLY
@@ -703,9 +703,9 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define KEYMEDIA_INTERVAL     4
   #define AUDIO_INTERFACE	9	// Audio (uses 3 consecutive interfaces)
   #define AUDIO_TX_ENDPOINT     13
-  #define AUDIO_TX_SIZE         192
+  #define AUDIO_TX_SIZE         196
   #define AUDIO_RX_ENDPOINT     13
-  #define AUDIO_RX_SIZE         192
+  #define AUDIO_RX_SIZE         196
   #define AUDIO_SYNC_ENDPOINT	14
   #define MULTITOUCH_INTERFACE  12	// Touchscreen
   #define MULTITOUCH_ENDPOINT   15

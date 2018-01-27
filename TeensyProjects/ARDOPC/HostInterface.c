@@ -12,6 +12,8 @@ int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn)
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
+void SetupGPIOPTT();
+VOID ConvertCallstoAX25();
 
 void Break();
 
@@ -22,6 +24,7 @@ extern BOOL PingCount;
 extern char ConnectToCall[16];
 extern enum _ARQBandwidth CallBandwidth;
 
+int SerialMode = 0;
 
 extern BOOL NeedTwoToneTest;
 
@@ -105,7 +108,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 	_strupr(strCMD);
 
-	if (CommandTrace) WriteDebugLog(LOGDEBUG, "[obCommand Trace FROM host: C:%s", strCMD);
+	if (CommandTrace) WriteDebugLog(LOGDEBUG, "[Command Trace FROM host: %s", strCMD);
 
 	ptrParams = strlop(strCMD, ' ');
 
@@ -1051,6 +1054,7 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		cmdReply[len - 1] = 0;	// remove trailing space or ,
 		SendReplyToHost(cmdReply);	
+		ConvertCallstoAX25();
 
 		goto cmddone;
 	}
@@ -1069,6 +1073,7 @@ void ProcessCommandFromHost(char * strCMD)
 				strcpy(Callsign, ptrParams);
 				sprintf(cmdReply, "%s now %s", strCMD, Callsign);
 				SendReplyToHost(cmdReply);
+				ConvertCallstoAX25();
 			}
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
@@ -1131,7 +1136,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 				if (PacVal == NULL)
 				{
-					sprintf(cmdReply, "PAC MODE %s/%s", &pktMod[pktMode][0], pktBW[pktNumCar]);
+					sprintf(cmdReply, "PAC MODE %s/%s", &pktMod[initMode][0], pktBW[initNumCar]);
 					SendReplyToHost(cmdReply);
 					goto cmddone;
 				}
@@ -1146,7 +1151,7 @@ void ProcessCommandFromHost(char * strCMD)
 					{
 						if (strcmp(PacBW, &pktBW[i][0]) == 0)
 						{
-							pktNumCar = i;
+							initNumCar = i;
 							break;
 						}
 					}
@@ -1161,8 +1166,8 @@ void ProcessCommandFromHost(char * strCMD)
 				{
 					if (strcmp(PacVal, &pktMod[i][0]) == 0)
 					{
-						pktMode = i;
-						sprintf(cmdReply, "PAC MODE now %s/%s", PacVal, pktBW[pktNumCar]);
+						initMode = i;
+						sprintf(cmdReply, "PAC MODE now %s/%s", PacVal, pktBW[initNumCar]);
 						SendReplyToHost(cmdReply);
 						goto cmddone;
 					}
@@ -1277,127 +1282,12 @@ void ProcessCommandFromHost(char * strCMD)
                     strFault = "Syntax Err:" & strCMD
                 End If
 */
-	if (strcmp(strCMD, "RADIOCTRLBAUD") == 0)	
-	{
-#ifdef TEENSY
- 		sprintf(strFault, "RADIOCTRLBAUD not supported on this platform");
-#else
-		int Baud;
-		
-		if (ptrParams == NULL)
-		{
-			sprintf(cmdReply, "RADIOCTRLBAUD %d", RIGBAUD);
-			SendReplyToHost(cmdReply);
-  			goto cmddone;
-		}
-
- 		Baud = atoi(ptrParams);
-		
-		RIGBAUD = Baud;
-
-		if (hRIGDevice)
-		{
-			CloseCOMPort(hRIGDevice);
-			hRIGDevice = 0;
-		}
-		if (RIGPORT[0])
-		{
-			hRIGDevice = OpenCOMPort(RIGPORT, RIGBAUD, FALSE, FALSE, FALSE, 0);
-
-			if (hRIGDevice)
-			{
-				WriteDebugLog(LOGINFO, "Using port %s for CAT Baud %d", RIGPORT, RIGBAUD); 
-				sprintf(cmdReply, "RADIOCTRLBAUD now %d", RIGBAUD);
-				SendReplyToHost(cmdReply);
-			}
-			else
-				sprintf(strFault, "Couldn't open CAT device %s", PTTPORT);
-		}
-		else
-			sprintf(cmdReply, "RADIOCTRLBAUD now %d", RIGBAUD);
-#endif
-		goto cmddone;
-	}
-
- /*
-    
-		 Case "RADIOCTRLDTR"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & RCB.CtrlPortDTR.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    RCB.CtrlPortDTR = CBool(strParameters)
-                    objMain.objRadio.InitRadioPorts()
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-*/
-		
-	if (strcmp(strCMD, "RADIOCTRLPORT") == 0)	
-	{
-#ifdef TEENSY
- 		sprintf(strFault, "RADIOCTRLPORT not supported on this platform");
-#else
-		if (ptrParams == NULL)
-		{
-			sprintf(cmdReply, "RADIOCTRLPORT %s", RIGPORT);
-			SendReplyToHost(cmdReply);
-  			goto cmddone;
-		}
- 		strcpy(RIGPORT, &cmdCopy[14]);	// Need original case
-
-		if (hRIGDevice)
-			CloseCOMPort(hRIGDevice);
-			
-		hRIGDevice = OpenCOMPort(RIGPORT, 19200, FALSE, FALSE, FALSE, 0);
-
-		if (hRIGDevice)
-		{
-			WriteDebugLog(LOGALERT, "Using port %s for CAT Baud %d", RIGPORT, RIGBAUD); 
-			sprintf(cmdReply, "RADIOCTRLPORT now %s", RIGPORT);
-			SendReplyToHost(cmdReply);
-		}
-		else
-			sprintf(strFault, "Couldn't open CAT device %s", RIGPORT);
-#endif
-		goto cmddone;
-	}
-   
-/*
-Case "RADIOCTRLRTS"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & RCB.CtrlPortRTS.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    RCB.CtrlPortRTS = CBool(strParameters)
-                    objMain.objRadio.InitRadioPorts()
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOFILTER"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & RCB.Filter.ToString)
-                ElseIf IsNumeric(strParameters) AndAlso (CInt(strParameters) >= 0 And CInt(strParameters <= 3)) Then
-                    RCB.Filter = CInt(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOFREQ"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & RCB.Frequency.ToString)
-                ElseIf IsNumeric(strParameters) Then ' Later expand to tighter syntax checking
-                    RCB.Frequency = CInt(strParameters)
-                    If Not IsNothing(objMain.objRadio) Then
-                        objMain.objRadio.SetDialFrequency(RCB.Frequency)
-                    End If
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-*/
 	if (strcmp(strCMD, "RADIOHEX") == 0)
 	{
 #ifdef TEENSY
  		sprintf(strFault, "RADIOHEX not supported on this platform");
 #else
-		// Parameter is blockto send to radio, in hex
+		// Parameter is block to send to radio, in hex
 		
 		char c;
 		int val;
@@ -1409,7 +1299,7 @@ Case "RADIOCTRLRTS"
 			sprintf(strFault, "RADIOHEX command string missing");
 			goto cmddone;
 		}
-		if (hRIGDevice)
+		if (hCATDevice)
 		{
 			while (c = *(ptr1++))
 			{
@@ -1421,7 +1311,7 @@ Case "RADIOCTRLRTS"
 				val |= c;
 				*(ptr2++) = val;
 			}
-			WriteCOMBlock(hRIGDevice, ptrParams, ptr2 - ptrParams);
+			WriteCOMBlock(hCATDevice, ptrParams, ptr2 - ptrParams);
 		}
 #endif	
 		goto cmddone;
@@ -1489,40 +1379,7 @@ Case "RADIOCTRLRTS"
                 End If
 				*/
 
-#ifndef TEENSY
-	if (strcmp(strCMD, "RADIOPTT") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			sprintf(cmdReply, "RADIOPTT %s", PTTPORT);
-			SendReplyToHost(cmdReply);
-  			goto cmddone;
-		}
-
-		strcpy(PTTPORT, &cmdCopy[9]);	// Need original case
-
-		if (hPTTDevice)
-			CloseCOMPort(hPTTDevice);
-			
-		hPTTDevice = OpenCOMPort(PTTPORT, 19200, FALSE, FALSE, FALSE, 0);
-
-		if (hPTTDevice)
-		{
-			COMClearRTS(hPTTDevice);
-			COMClearDTR(hPTTDevice);
-			WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPORT); 
-			RadioControl = TRUE;
-		}
-		else
-		{
-			RadioControl = FALSE;
-			sprintf(strFault, "Could'n open PTT device %s", PTTPORT);
-		}
-		sprintf(cmdReply, "RADIOPTT now %s", PTTPORT);
-		SendReplyToHost(cmdReply);
-		goto cmddone;
-	}
-	/*
+/*
 
              Case "RADIOPTTDTR"
                 If ptrSpace = -1 Then
@@ -1545,38 +1402,72 @@ Case "RADIOCTRLRTS"
                 ' End of optional Radio Commands
 */
 
- 	if (strcmp(strCMD, "RADIOPTTGPIO") == 0)
+
+	if (strcmp(strCMD, "RADIOPTTOFF") == 0)
 	{
-		if (!gotGPIO)
-		{
-			sprintf(strFault, "PTT via GPIO not available on this system");
-			goto cmddone;
-		}
+		// Parameter is block to send to radio to disable PTT, in hex
+		
+		char c;
+		int val;
+		UCHAR * ptr1 = ptrParams;
+		UCHAR * ptr2 = PTTOffCmd;
 
 		if (ptrParams == NULL)
 		{
-			if (pttGPIOPin == -1)
-				sprintf(cmdReply, "RADIOPTTGPIO DISABLED");
-			else
-				sprintf(cmdReply, "RADIOPTTGPIO ENABLED on pin %d", pttGPIOPin);
-
-			SendReplyToHost(cmdReply);
+			sprintf(strFault, "RADIOPTTOFF command string missing");
 			goto cmddone;
 		}
 
-		pttGPIOPin = atoi(ptrParams);
-#ifdef __ARM_ARCH
-		SetupGPIOPTT();
-#endif
-		if (pttGPIOPin == -1)
-			sprintf(cmdReply, "RADIOPTTGPIO now DISABLED");
-		else
-			sprintf(cmdReply, "RADIOPTTGPIO now ENABLED on pin %d", pttGPIOPin);
-		
+		while (c = *(ptr1++))
+		{
+			val = c - 0x30;
+			if (val > 15) val -= 7;
+			val <<= 4;
+			c = *(ptr1++) - 0x30;
+			if (c > 15) c -= 7;
+			val |= c;
+			*(ptr2++) = val;
+		}	
+		PTTOffCmdLen = ptr2 - PTTOffCmd;
+		PTTMode = PTTCI_V;
+
+		sprintf(cmdReply, "CAT PTT Off Command Defined");
 		SendReplyToHost(cmdReply);
 		goto cmddone;
 	}
-#endif
+
+	if (strcmp(strCMD, "RADIOPTTON") == 0)
+	{
+		// Parameter is block to send to radio to enable PTT, in hex
+		
+		char c;
+		int val;
+		char * ptr1 = ptrParams;
+		UCHAR * ptr2 = PTTOnCmd;
+
+		if (ptrParams == NULL)
+		{
+			sprintf(strFault, "RADIOPTTON command string missing");
+			goto cmddone;
+		}
+		while (c = *(ptr1++))
+		{
+			val = c - 0x30;
+			if (val > 15) val -= 7;
+			val <<= 4;
+			c = *(ptr1++) - 0x30;
+			if (c > 15) c -= 7;
+			val |= c;
+			*(ptr2++) = val;
+		}
+
+		PTTOnCmdLen = ptr2 - PTTOnCmd;
+
+		sprintf(cmdReply, "CAT PTT On Command Defined");
+		SendReplyToHost(cmdReply);
+		goto cmddone;
+	}
+
 
 	if (strcmp(strCMD, "RXLEVEL") == 0)
 	{
@@ -1844,7 +1735,6 @@ Case "RADIOCTRLRTS"
 		goto cmddone;
 	}
 
-
 	if (strcmp(strCMD, "VERSION") == 0)
 	{
 		sprintf(cmdReply, "VERSION %s_%s", ProductName, ProductVersion);
@@ -1865,6 +1755,67 @@ cmddone:
 	}
 //	SendCommandToHost("RDY");		// signals host a new command may be sent
 }
+
+//	Function to send a text command to the Host
+
+void SendCommandToHost(char * strText)
+{
+	if (SerialMode)
+		SCSSendCommandToHost(strText);
+	else
+		TCPSendCommandToHost(strText);
+}
+
+
+void SendCommandToHostQuiet(char * strText)		// Higher Debug Level for PTT
+{
+	if (SerialMode)
+		SCSSendCommandToHostQuiet(strText);
+	else
+		TCPSendCommandToHostQuiet(strText);
+}
+
+void QueueCommandToHost(char * strText)
+{
+	if (SerialMode)
+		SCSQueueCommandToHost(strText);
+	else
+		TCPQueueCommandToHost(strText);
+}
+
+void SendReplyToHost(char * strText)
+{
+	if (SerialMode)
+		SCSSendReplyToHost(strText);
+	else
+		TCPSendReplyToHost(strText);
+}
+//  Subroutine to add a short 3 byte tag (ARQ, FEC, ERR, or IDF) to data and send to the host 
+
+void AddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
+{
+	if (SerialMode)
+		SCSAddTagToDataAndSendToHost(bytData, strTag, Len);
+	else
+		TCPAddTagToDataAndSendToHost(bytData, strTag, Len);
+
+}
+
+#ifdef TEENSY
+
+// Dummies for Linker
+
+void TCPSendCommandToHost(char * strText)
+{}
+void TCPQueueCommandToHost(char * strText)
+{}
+void TCPSendReplyToHost(char * strText)
+{}
+void TCPAddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
+{}
+
+#endif
+
 
  
 

@@ -531,10 +531,10 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 
 	if (Type == PktFrameHeader)
 	{
-		// Header is always 500 but Packet Data may vary
+		// Header is always 200 but Packet Data may vary
 
 		if (pktNumCar == 1)
-			initFilter(500,1500);
+			initFilter(200,1500);
 		else if (pktNumCar == 2)
 			initFilter(500,1500);
 		else if (pktNumCar == 4)
@@ -817,7 +817,7 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 		strcpy(strMod, &pktMod[pktMode][0]);
 		intDataBytesPerCar = pktDataLen + pktRSLen + 3;
-		intDataPtr = 18;		// Over Header
+		intDataPtr = 13;		// Over Header
 		intNumCar = pktNumCar;
 
 		switch(intNumCar)
