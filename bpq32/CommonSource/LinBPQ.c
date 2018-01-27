@@ -1238,7 +1238,6 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
 UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
 UINT VARAExtInit(EXTPORTDATA * PortEntry);
-UINT DragonExtInit(EXTPORTDATA * PortEntry);
 
 UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
@@ -1310,9 +1309,6 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "VARA"))
 		return (UINT) VARAExtInit;
-
-	if (strstr(Value, "DRAGON"))
-		return (UINT) DragonExtInit;
 
 	return(0);
 }

@@ -180,7 +180,7 @@ struct STREAMINFO
 								// Used when appplication disconnects the bpq session, and
 								// prevents new attaches while a dirty disconnect is in progress
 	int DisconnectingTimeout;	// A hard disconnect occurs if this expires before the disconnect complete
-	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
+	int ReportDISC;			// Need to report an incoming DISC to kernel
 	BOOL DiscWhenAllSent;		// Close session when all msgs have been sent to node
 	BOOL ARQENDSent;			// Set when V4 ARQEND Sent
 
@@ -361,12 +361,14 @@ typedef struct TNCINFO
 	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
 	int BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
 
-	SOCKET WINMORSock;			// Control Socket
-	SOCKET WINMORDataSock;		// Data Socket
+	SOCKET TCPSock;				// Control Socket
+	SOCKET TCPDataSock;			// Data Socket
+	SOCKET PacketSock;			// Packet Over TCP (ARDOP)
 
 	char * WINMORSignon;		// Pointer to message for secure signin
-	char * WINMORHostName;		// WINMOR Host - may be dotted decimal or DNS Name
-	int WINMORPort;				//
+	char * HostName;			// WINMOR Host - may be dotted decimal or DNS Name
+	int TCPPort;				//
+	int PacketPort;				// Packet Over TCP (ARDOP)
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
 	BOOL SwallowSignon;			// Set to suppress *** connected to APPL
 
@@ -431,7 +433,7 @@ typedef struct TNCINFO
 
 	int PTTMode;					// PTT Mode Flags
 
-	int WIMMORPID;
+	int PID;
 	char * CaptureDevices;
 	char * PlaybackDevices;
 	char * ProgramPath;
@@ -683,7 +685,10 @@ typedef struct TNCINFO
 	int	 InputLevelMin;				// Sound card levels
 	int	 InputLevelMax;				// Sound card levels
 
-	int	DiscardNextOK;				// Used bt VARA to suppress OK response to LISTEN commands
+	int	DiscardNextOK;				// Used by VARA to suppress OK response to LISTEN commands
+
+	MESSAGE * Monframe;				// Used by DED Host for receiving Packet Monitor Frame
+									// split over 2 packets
 
 } *PTNCINFO;
 

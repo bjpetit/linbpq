@@ -606,11 +606,30 @@ BOOL Start()
 
 	if (cfg->C_NODE == 0)
 	{
-		//	USE BBS CALL FOR NODE AS WELL
+		//	USE BBS CALL FOR NODE if Set, otherwise find first APPLCALL
 
-		memcpy(MYNODECALL, cfg->C_BBSCALL, 10);
-		memcpy(MYALIASTEXT, cfg->C_BBSALIAS, 6);
-		memcpy(MYALIASLOPPED, cfg->C_BBSALIAS, 10);
+		if (cfg->C_BBSCALL[0])
+		{
+			memcpy(MYNODECALL, cfg->C_BBSCALL, 10);
+			memcpy(MYALIASTEXT, cfg->C_BBSALIAS, 6);
+			memcpy(MYALIASLOPPED, cfg->C_BBSALIAS, 10);
+		}
+		else
+		{
+			ptr2 = ConfigBuffer + ApplOffset;
+			ptr1 = (struct APPLCONFIG *)ptr2;
+
+			for (i = 0; i < NumberofAppls; i++)
+			{
+				if (ptr1->ApplCall[0] != ' ')
+				{
+					memcpy(MYNODECALL, &ptr1->ApplCall[0], 10);
+					break;
+				}
+				ptr1++;
+			}
+		}
+
 	}
 	else
 	{

@@ -120,6 +120,8 @@ struct RIGINFO
 	char PTTCATPort[4][10];
 	HANDLE PTTCATHandles[4];
 
+	int TSMenu;			// Menu number for ACC?USB switching on TS590S/SG
+	BOOL RIG_DEBUG;
 };
 
 // PortType Equates

@@ -211,7 +211,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->MPSKInfo->TX)
 				TNC->CmdSet = TNC->CmdSave = _strdup(Cmd);		// Savde till not transmitting
 			else
-				SendPacket(TNC->WINMORDataSock, Cmd, len, 0);
+				SendPacket(TNC->TCPDataSock, Cmd, len, 0);
 */
 		}
 	}
@@ -245,7 +245,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				ARQ->ARQState = ARQ_ACTIVE;
 
 				ARQ->ARQTimerState = ARQ_CONNECTING;
-				SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+				SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 
 				STREAM->Connecting = TRUE;	
 
@@ -328,39 +328,39 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			FD_ZERO(&readfs);
 			
 			if (TNC->CONNECTED)
-				if (TNC->WINMORSock)
-					FD_SET(TNC->WINMORSock,&readfs);
+				if (TNC->TCPSock)
+					FD_SET(TNC->TCPSock,&readfs);
 
 			if (TNC->CONNECTED || TNC->FLInfo->KISSMODE)
-				FD_SET(TNC->WINMORDataSock,&readfs);
+				FD_SET(TNC->TCPDataSock,&readfs);
 			
 			
 //			FD_ZERO(&writefs);
 
-//			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->WINMORDataSock,&writefs);	// Need notification of busy clearing
+//			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPDataSock,&writefs);	// Need notification of busy clearing
 
 			FD_ZERO(&errorfs);
 		
 			if (TNC->CONNECTED)
-				if (TNC->WINMORSock)
-					FD_SET(TNC->WINMORSock,&errorfs);
+				if (TNC->TCPSock)
+					FD_SET(TNC->TCPSock,&errorfs);
 	
 			if (TNC->CONNECTED || TNC->FLInfo->KISSMODE)
-				FD_SET(TNC->WINMORDataSock,&errorfs);
+				FD_SET(TNC->TCPDataSock,&errorfs);
 			
 
-			if (select(TNC->WINMORDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
+			if (select(TNC->TCPDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
 			{
 				//	See what happened
 
-				if (FD_ISSET(TNC->WINMORDataSock,&readfs))
+				if (FD_ISSET(TNC->TCPDataSock,&readfs))
 				{
 					// data available
 			
 					ProcessReceivedData(port);			
 				}
 
-				if (FD_ISSET(TNC->WINMORSock,&readfs))
+				if (FD_ISSET(TNC->TCPSock,&readfs))
 				{
 					// data available
 			
@@ -368,7 +368,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				}
 
 
-				if (FD_ISSET(TNC->WINMORDataSock,&writefs))
+				if (FD_ISSET(TNC->TCPDataSock,&writefs))
 				{
 					if (BPQtoMPSK_Q[port] == 0)
 					{
@@ -382,9 +382,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 						// If required, send signon
 				
-//						SendPacket(TNC->WINMORDataSock,"\x1a", 1, 0);
-//						SendPacket(TNC->WINMORDataSock,"DIGITAL MODE ?", 14, 0);
-//						SendPacket(TNC->WINMORDataSock,"\x1b", 1, 0);
+//						SendPacket(TNC->TCPDataSock,"\x1a", 1, 0);
+//						SendPacket(TNC->TCPDataSock,"DIGITAL MODE ?", 14, 0);
+//						SendPacket(TNC->TCPDataSock,"\x1b", 1, 0);
 
 //						EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 					}
@@ -406,7 +406,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				}
 					
-				if (FD_ISSET(TNC->WINMORDataSock,&errorfs) || FD_ISSET(TNC->WINMORSock,&errorfs))
+				if (FD_ISSET(TNC->TCPDataSock,&errorfs) || FD_ISSET(TNC->TCPSock,&errorfs))
 				{
 					//	if connecting, then failed, if connected then has just disconnected
 
@@ -656,7 +656,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 //				if (TNC->MPSKInfo->TX)
 //					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 //				else
-//					SendPacket(TNC->WINMORDataSock, Command, len, 0);
+//					SendPacket(TNC->TCPDataSock, Command, len, 0);
 
 //				TNC->InternalCmd = TRUE;
 				return (0);
@@ -780,7 +780,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				ARQ->ARQState = ARQ_ACTIVE;
 
 				ARQ->ARQTimerState = ARQ_CONNECTING;
-				SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+				SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 
 				STREAM->Connecting = TRUE;	
 
@@ -808,7 +808,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				buff[7] = 6;				// KISS Control
 
 				newlen = KissEncode(&buff[7], outbuff, txlen);	
-				sendto(TNC->WINMORDataSock, outbuff, newlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
+				sendto(TNC->TCPDataSock, outbuff, newlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
 			}
 			else
 			{
@@ -850,12 +850,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 	case 4:				// reinit
 
-		shutdown(TNC->WINMORSock, SD_BOTH);
-		shutdown(TNC->WINMORDataSock, SD_BOTH);
+		shutdown(TNC->TCPSock, SD_BOTH);
+		shutdown(TNC->TCPDataSock, SD_BOTH);
 		Sleep(100);
 
-		closesocket(TNC->WINMORSock);
-		closesocket(TNC->WINMORDataSock);
+		closesocket(TNC->TCPSock);
+		closesocket(TNC->TCPDataSock);
 		TNC->CONNECTED = FALSE;
 
 		if (TNC->WeStartedTNC)
@@ -868,12 +868,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		shutdown(TNC->WINMORSock, SD_BOTH);
-		shutdown(TNC->WINMORDataSock, SD_BOTH);
+		shutdown(TNC->TCPSock, SD_BOTH);
+		shutdown(TNC->TCPDataSock, SD_BOTH);
 		Sleep(100);
 
-		closesocket(TNC->WINMORSock);
-		closesocket(TNC->WINMORDataSock);
+		closesocket(TNC->TCPSock);
+		closesocket(TNC->TCPDataSock);
 
 		if (TNC->WeStartedTNC)
 		{
@@ -943,11 +943,11 @@ static KillTNC(struct TNCINFO * TNC)
 		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
 
 	if (TNC->ProgramPath)
-		TNC->WIMMORPID = FindFLDIGI(TNC->ProgramPath);
+		TNC->PID = FindFLDIGI(TNC->ProgramPath);
 
-	if (TNC->WIMMORPID == 0) return 0;
+	if (TNC->PID == 0) return 0;
 
-	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
+	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
 
 	if (hProc)
 	{
@@ -984,14 +984,14 @@ static RestartTNC(struct TNCINFO * TNC)
 			return 0;
 
 		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 		destaddr.sin_port = htons(8500);
 
 		if (destaddr.sin_addr.s_addr == INADDR_NONE)
 		{
 			//	Resolve name to address
 
-			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+			struct hostent * HostEnt = gethostbyname (TNC->HostName);
 		 
 			if (!HostEnt)
 				return 0;			// Resolve failed
@@ -1096,7 +1096,7 @@ VOID SendKISSCommand(struct TNCINFO * TNC, char * Msg)
 
 	txlen = sprintf(txbuff, "%c%s", 6, Msg);
 	txlen = KissEncode(txbuff, outbuff, txlen);	
-	rc = sendto(TNC->WINMORDataSock, outbuff, txlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
+	rc = sendto(TNC->TCPDataSock, outbuff, txlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
 }
 
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
@@ -1167,16 +1167,16 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->MAXHOSTMODESESSIONS = 1;	
 
 	i=sprintf(Msg,"FLDigi Host %s Port %d \n",
-		TNC->WINMORHostName, TNC->WINMORPort);
+		TNC->HostName, TNC->TCPPort);
 
 	WritetoConsole(Msg);
 
 #ifndef LINBPQ
 
 	if (TNC->ProgramPath)
-		TNC->WIMMORPID = FindFLDIGI(TNC->ProgramPath);
+		TNC->PID = FindFLDIGI(TNC->ProgramPath);
 
-	if (TNC->WIMMORPID == 0)	// Not running
+	if (TNC->PID == 0)	// Not running
 #endif
 		TNC->WeStartedTNC = RestartTNC(TNC);		// Always try if Linux
 
@@ -1192,13 +1192,13 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 
 		TNC->FLInfo->CmdControl = 5;			//Send params immediately
 		
-		TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 
 		if (TNC->Datadestaddr.sin_addr.s_addr == INADDR_NONE)
 		{
 			//	Resolve name to address
 
-			 HostEnt = gethostbyname (TNC->WINMORHostName);
+			 HostEnt = gethostbyname (TNC->HostName);
 		 
 			if (HostEnt)
 			{
@@ -1206,7 +1206,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 			}
 		}
 
-		TNC->WINMORDataSock = sock = socket(AF_INET,SOCK_DGRAM,0);
+		TNC->TCPDataSock = sock = socket(AF_INET,SOCK_DGRAM,0);
 
 		ioctl(sock, FIONBIO, &param);
 
@@ -1214,18 +1214,18 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 
 		sinx.sin_family = AF_INET;
 		sinx.sin_addr.s_addr = INADDR_ANY;		
-		sinx.sin_port = htons(TNC->WINMORPort + 1);
+		sinx.sin_port = htons(TNC->TCPPort + 1);
 
 		if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
 		{
 			//	Bind Failed
 
 			int err = WSAGetLastError();
-			Consoleprintf("Bind Failed for UDP port %d - error code = %d", TNC->WINMORPort, err);
+			Consoleprintf("Bind Failed for UDP port %d - error code = %d", TNC->TCPPort, err);
 		}
 
 		TNC->Datadestaddr.sin_family = AF_INET;	
-		TNC->Datadestaddr.sin_port = htons(TNC->WINMORPort);
+		TNC->Datadestaddr.sin_port = htons(TNC->TCPPort);
 	}
 	else
 		ConnecttoFLDigi(port);
@@ -1346,19 +1346,19 @@ static int ProcessLine(char * buf, int Port)
 			
 		if (p_port == NULL) return (FALSE);
 
-		TNC->WINMORPort = atoi(p_port);
+		TNC->TCPPort = atoi(p_port);
 
 		TNC->destaddr.sin_family = AF_INET;
-		TNC->destaddr.sin_port = htons(TNC->WINMORPort + 40);		// Defaults XML 7362 ARQ 7322
+		TNC->destaddr.sin_port = htons(TNC->TCPPort + 40);		// Defaults XML 7362 ARQ 7322
 		
 		TNC->Datadestaddr.sin_family = AF_INET;
-		TNC->Datadestaddr.sin_port = htons(TNC->WINMORPort);
+		TNC->Datadestaddr.sin_port = htons(TNC->TCPPort);
 
-		TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
+		TNC->HostName = malloc(strlen(p_ipad)+1);
 
-		if (TNC->WINMORHostName == NULL) return TRUE;
+		if (TNC->HostName == NULL) return TRUE;
 
-		strcpy(TNC->WINMORHostName,p_ipad);
+		strcpy(TNC->HostName,p_ipad);
 
 		ptr = strtok(NULL, " \t\n\r");
 
@@ -1443,14 +1443,14 @@ static VOID ConnecttoFLDigiThread(port)
 
 	Sleep(5000);		// Allow init to complete 
 
-	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
-	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
+	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 
 	if (TNC->destaddr.sin_addr.s_addr == INADDR_NONE)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname (TNC->WINMORHostName);
+		 HostEnt = gethostbyname (TNC->HostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
@@ -1458,25 +1458,25 @@ static VOID ConnecttoFLDigiThread(port)
 		 memcpy(&TNC->Datadestaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 	}
 
-	if (TNC->WINMORSock)
+	if (TNC->TCPSock)
 	{
-		Debugprintf("FLDIGI Closing Sock %d", TNC->WINMORSock); 
-		closesocket(TNC->WINMORSock);
+		Debugprintf("FLDIGI Closing Sock %d", TNC->TCPSock); 
+		closesocket(TNC->TCPSock);
 	}
 
-	TNC->WINMORSock = 0;
+	TNC->TCPSock = 0;
 
 
-	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
+	TNC->TCPSock=socket(AF_INET,SOCK_STREAM,0);
 
-	if (TNC->WINMORSock == INVALID_SOCKET)
+	if (TNC->TCPSock == INVALID_SOCKET)
 	{
 		i=sprintf(Msg, "Socket Failed for FLDigi Control socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
   	 	return; 
 	}
  
-	setsockopt (TNC->WINMORSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+	setsockopt (TNC->TCPSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 
 	sinx.sin_family = AF_INET;
 	sinx.sin_addr.s_addr = INADDR_ANY;
@@ -1484,7 +1484,7 @@ static VOID ConnecttoFLDigiThread(port)
 
 	TNC->CONNECTING = TRUE;
 
-	if (connect(TNC->WINMORSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
+	if (connect(TNC->TCPSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
 	{
 		//
 		//	Connected successful
@@ -1503,37 +1503,37 @@ static VOID ConnecttoFLDigiThread(port)
 			TNC->Alerted = TRUE;
 		}
 		
-		closesocket(TNC->WINMORSock);
-		TNC->WINMORSock = 0;
+		closesocket(TNC->TCPSock);
+		TNC->TCPSock = 0;
 		TNC->CONNECTING = FALSE;
 		return;
 	}
 
 	TNC->LastFreq = 0;
 
-	if (TNC->WINMORDataSock)
-		closesocket(TNC->WINMORDataSock);
+	if (TNC->TCPDataSock)
+		closesocket(TNC->TCPDataSock);
 
-	TNC->WINMORDataSock = 0;
+	TNC->TCPDataSock = 0;
 
-	TNC->WINMORDataSock=socket(AF_INET,SOCK_STREAM,0);
+	TNC->TCPDataSock=socket(AF_INET,SOCK_STREAM,0);
 
-	setsockopt (TNC->WINMORDataSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+	setsockopt (TNC->TCPDataSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 
-	if (TNC->WINMORDataSock == INVALID_SOCKET)
+	if (TNC->TCPDataSock == INVALID_SOCKET)
 	{
 		i=sprintf(Msg, "Socket Failed for FLDigi socket - error code = %d\r\n", WSAGetLastError());
 		WritetoConsole(Msg);
 
-		closesocket(TNC->WINMORSock);
-		closesocket(TNC->WINMORDataSock);
-		TNC->WINMORSock = 0;
+		closesocket(TNC->TCPSock);
+		closesocket(TNC->TCPDataSock);
+		TNC->TCPSock = 0;
 	 	TNC->CONNECTING = FALSE;
 
   	 	return; 
 	}
  
-	if (bind(TNC->WINMORDataSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+	if (bind(TNC->TCPDataSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
 	{
 		//
 		//	Bind Failed
@@ -1542,17 +1542,17 @@ static VOID ConnecttoFLDigiThread(port)
 		i=sprintf(Msg, "Bind Failed for FLDigi Data socket - error code = %d\r\n", WSAGetLastError());
 		WritetoConsole(Msg);
 
-		closesocket(TNC->WINMORSock);
-		closesocket(TNC->WINMORDataSock);
-		TNC->WINMORSock = 0;
-		TNC->WINMORDataSock = 0;
+		closesocket(TNC->TCPSock);
+		closesocket(TNC->TCPDataSock);
+		TNC->TCPSock = 0;
+		TNC->TCPDataSock = 0;
 	 	TNC->CONNECTING = FALSE;
   	 	return; 
 	}
 
-	if (connect(TNC->WINMORDataSock,(LPSOCKADDR) &TNC->Datadestaddr,sizeof(TNC->Datadestaddr)) == 0)
+	if (connect(TNC->TCPDataSock,(LPSOCKADDR) &TNC->Datadestaddr,sizeof(TNC->Datadestaddr)) == 0)
 	{
-		ioctlsocket (TNC->WINMORDataSock,FIONBIO,&param);		// Set nonblocking
+		ioctlsocket (TNC->TCPDataSock,FIONBIO,&param);		// Set nonblocking
 		TNC->CONNECTED = TRUE;
 	 	TNC->CONNECTING = FALSE;
 
@@ -1566,10 +1566,10 @@ static VOID ConnecttoFLDigiThread(port)
 		sprintf(Msg, "Connect Failed for FLDigi Data socket Port %d - error code = %d\r\n", port, WSAGetLastError());
 		WritetoConsole(Msg);
 
-		closesocket(TNC->WINMORSock);
-		closesocket(TNC->WINMORDataSock);
-		TNC->WINMORSock = 0;
-		TNC->WINMORDataSock = 0;
+		closesocket(TNC->TCPSock);
+		closesocket(TNC->TCPDataSock);
+		TNC->TCPSock = 0;
+		TNC->TCPDataSock = 0;
 	 	TNC->CONNECTING = FALSE;
 	}
 
@@ -1627,7 +1627,7 @@ VOID SendPacket(struct TNCINFO * TNC, UCHAR * Msg, int MsgLen)
 		}
 
 		newlen = KissEncode(KissMsg, outbuff, MsgLen);
-		sendto(TNC->WINMORDataSock, outbuff, newlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
+		sendto(TNC->TCPDataSock, outbuff, newlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
 
 		SendKISSCommand(TNC, "TXBUF:");
 
@@ -1657,7 +1657,7 @@ VOID SendPacket(struct TNCINFO * TNC, UCHAR * Msg, int MsgLen)
 		strcat(outbuff, crcstring);
 		MsgLen += 8;
 
-		send(TNC->WINMORDataSock, outbuff, MsgLen, 0);
+		send(TNC->TCPDataSock, outbuff, MsgLen, 0);
 	}
 }
 
@@ -1684,7 +1684,7 @@ static int ProcessReceivedData(int port)
 		int addrlen = sizeof(struct sockaddr_in);
 		unsigned char * KissEnd;
 
-		bytesleft = recvfrom(TNC->WINMORDataSock, Message, 1500, 0, (struct sockaddr *)&rxaddr, &addrlen);
+		bytesleft = recvfrom(TNC->TCPDataSock, Message, 1500, 0, (struct sockaddr *)&rxaddr, &addrlen);
 	
 		if (bytesleft < 0)
 		{
@@ -1944,14 +1944,14 @@ static int ProcessReceivedData(int port)
 
 	//	Need to extract messages from byte stream
 
-	bytes = recv(TNC->WINMORDataSock, Message, 500, 0);
+	bytes = recv(TNC->TCPDataSock, Message, 500, 0);
 
 	if (bytes == SOCKET_ERROR)
 	{
 //		i=sprintf(ErrMsg, "Read Failed for MPSK socket - error code = %d\r\n", WSAGetLastError());
 //		WritetoConsole(ErrMsg);
 				
-		closesocket(TNC->WINMORDataSock);
+		closesocket(TNC->TCPDataSock);
 					
 		TNC->CONNECTED = FALSE;
 		if (TNC->Streams[0].Attached)
@@ -2588,7 +2588,7 @@ AckConnectRequest:
 
 		SendLen = sprintf(Reply, "k%s:24 %s %c 7", call2, call1, ARQ->OurStream); 
 
-		SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		ARQ->ARQTimerState = ARQ_CONNECTACK;
 
 		return;
@@ -2699,7 +2699,7 @@ SendKReply:
 			}
 		}
 
-		QueueAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		QueueAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		return;
 	}
 
@@ -2757,7 +2757,7 @@ SendKReply:
 		else
 			ARQ->TurnroundTimer = 15;			// Allow us to send it all acked
 
-		QueueAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		QueueAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 
 		return;
 	}
@@ -2795,7 +2795,7 @@ SendKReply:
 			}
 		}
 
-		QueueAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		QueueAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		return;
 	}
 
@@ -2844,7 +2844,7 @@ SendKReply:
 		SendLen = sprintf(Reply, "b%s:91", STREAM->MyCall); 
 
 		ARQ->ARQTimerState = ARQ_WAITACK;
-		SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		ARQ->Retries = 2;
 		return;
 	}
@@ -3013,7 +3013,7 @@ VOID SendARQData(struct TNCINFO * TNC, UINT * Buffer)
 
 
 	UCHAR TXBuffer[300];
-	SOCKET sock = TNC->WINMORDataSock;
+	SOCKET sock = TNC->TCPDataSock;
 	int SendLen;
 	UCHAR * ptr;
 	int Origlen = Buffer[1];
@@ -3093,7 +3093,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 
 	SendLen = sprintf(Reply, "d%s:90", TNC->Streams[0].MyCall); 
 
-	SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+	SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 	ARQ->ARQTimerState = ARQ_DISC;
 
 	strcpy(TNC->WEB_PROTOSTATE, "Disconncting");
@@ -3540,7 +3540,7 @@ VOID ProcessARQStatus(struct TNCINFO * TNC, struct ARQINFO * ARQ, char * Input)
 		{
 			UINT * Buffer = ARQ->TXHOLDQ[First];
 			UCHAR TXBuffer[300];
-			SOCKET sock = TNC->WINMORDataSock;
+			SOCKET sock = TNC->TCPDataSock;
 			int SendLen;
 
 //			Debugprintf("Resend %d", First);
@@ -3642,14 +3642,14 @@ static int ProcessXMLData(int port)
 
 	//	Need to extract messages from byte stream
 
-	bytes = recv(TNC->WINMORSock,(char *)&Message, 500, 0);
+	bytes = recv(TNC->TCPSock,(char *)&Message, 500, 0);
 
 	if (bytes == SOCKET_ERROR)
 	{
 //		i=sprintf(ErrMsg, "Read Failed for MPSK socket - error code = %d\r\n", WSAGetLastError());
 //		WritetoConsole(ErrMsg);
 				
-		closesocket(TNC->WINMORSock);
+		closesocket(TNC->TCPSock);
 					
 		TNC->CONNECTED = FALSE;
 		if (TNC->Streams[0].Attached)
@@ -3821,7 +3821,7 @@ VOID SendXMLCommand(struct TNCINFO * TNC, char * Command, char * Value, char Par
 	strcpy(FL->LastXML, Command);
 	Len = sprintf(ReqBuf, Req, FL->LastXML, ValueString);
 	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
-	send(TNC->WINMORSock, SendBuff, Len, 0); 
+	send(TNC->TCPSock, SendBuff, Len, 0); 
 	return;
 }
 
@@ -3846,7 +3846,7 @@ VOID SendXMLPoll(struct TNCINFO * TNC)
 		strcpy(FL->LastXML, "main.get_trx_state");
 		Len = sprintf(ReqBuf, Req, FL->LastXML, "");
 		Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
-		send(TNC->WINMORSock, SendBuff, Len, 0); 
+		send(TNC->TCPSock, SendBuff, Len, 0); 
 		return;
 	}
 
@@ -3868,7 +3868,7 @@ VOID SendXMLPoll(struct TNCINFO * TNC)
 
 	Len = sprintf(ReqBuf, Req, FL->LastXML, "");
 	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
-	send(TNC->WINMORSock, SendBuff, Len, 0); 
+	send(TNC->TCPSock, SendBuff, Len, 0); 
 }
 
 //  sudo add-apt-repository ppa:kamalmostafa/fldigi

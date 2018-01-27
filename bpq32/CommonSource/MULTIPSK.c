@@ -148,7 +148,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 	{
 		GetWindowThreadProcessId(hwnd, &ProcessId);
 
-		TNC->WIMMORPID = ProcessId;
+		TNC->PID = ProcessId;
 		return FALSE;
 	}
 	
@@ -200,7 +200,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->MPSKInfo->TX)
 				TNC->CmdSet = TNC->CmdSave = _strdup(Cmd);		// Savde till not transmitting
 			else
-				send(TNC->WINMORSock, Cmd, len, 0);
+				send(TNC->TCPSock, Cmd, len, 0);
 
 		}
 	}
@@ -227,33 +227,33 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 			FD_ZERO(&readfs);
 			
-			if (TNC->CONNECTED) FD_SET(TNC->WINMORSock,&readfs);
+			if (TNC->CONNECTED) FD_SET(TNC->TCPSock,&readfs);
 
 			
 			FD_ZERO(&writefs);
 
-			if (TNC->CONNECTING) FD_SET(TNC->WINMORSock,&writefs);	// Need notification of Connect
+			if (TNC->CONNECTING) FD_SET(TNC->TCPSock,&writefs);	// Need notification of Connect
 
-			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->WINMORSock,&writefs);	// Need notification of busy clearing
+			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPSock,&writefs);	// Need notification of busy clearing
 
 
 
 			FD_ZERO(&errorfs);
 		
-			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->WINMORSock,&errorfs);
+			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
 
 			if (select(3,&readfs,&writefs,&errorfs,&timeout) > 0)
 			{
 				//	See what happened
 
-				if (FD_ISSET(TNC->WINMORSock,&readfs))
+				if (FD_ISSET(TNC->TCPSock,&readfs))
 				{
 					// data available
 			
 					ProcessReceivedData(port);			
 				}
 
-				if (FD_ISSET(TNC->WINMORSock,&writefs))
+				if (FD_ISSET(TNC->TCPSock,&writefs))
 				{
 					if (BPQtoMPSK_Q[port] == 0)
 					{
@@ -264,9 +264,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 						// If required, send signon
 				
-						send(TNC->WINMORSock,"\x1a", 1, 0);
-						send(TNC->WINMORSock,"DIGITAL MODE ?", 14, 0);
-						send(TNC->WINMORSock,"\x1b", 1, 0);
+						send(TNC->TCPSock,"\x1a", 1, 0);
+						send(TNC->TCPSock,"DIGITAL MODE ?", 14, 0);
+						send(TNC->TCPSock,"\x1b", 1, 0);
 
 //						EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 					}
@@ -280,7 +280,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 						memcpy(txbuff,buffptr+2,txlen);
 
-						bytes=send(TNC->WINMORSock,(const char FAR *)&txbuff,txlen,0);
+						bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
 					
 						ReleaseBuffer(buffptr);
 
@@ -288,7 +288,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				}
 					
-				if (FD_ISSET(TNC->WINMORSock,&errorfs))
+				if (FD_ISSET(TNC->TCPSock,&errorfs))
 				{
 
 					//	if connecting, then failed, if connected then has just disconnected
@@ -394,7 +394,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			SOCKET Sock;	
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 
-			Sock = TNCInfo[MasterPort[port]]->WINMORSock;
+			Sock = TNCInfo[MasterPort[port]]->TCPSock;
 	
 			ReleaseBuffer((UINT *)buffptr);
 		}
@@ -464,7 +464,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (TNC->MPSKInfo->TX)
 					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 				else
-					send(TNC->WINMORSock, Command, len, 0);
+					send(TNC->TCPSock, Command, len, 0);
 
 				TNC->InternalCmd = TRUE;
 				return (0);
@@ -479,7 +479,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (TNC->MPSKInfo->TX)
 					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 				else
-					send(TNC->WINMORSock, Command, len, 0);
+					send(TNC->TCPSock, Command, len, 0);
 
 				TNC->InternalCmd = TRUE;
 				return (0);
@@ -533,7 +533,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (TNC->MPSKInfo->TX)
 					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 				else
-					send(TNC->WINMORSock, Command, len, 0);
+					send(TNC->TCPSock, Command, len, 0);
 		
 				STREAM->Connecting = TNC->MPSKInfo->ConnTimeOut;	// It doesn't report failure
 
@@ -552,7 +552,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->MPSKInfo->TX)
 				TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 			else
-				send(TNC->WINMORSock, Command, len, 0);
+				send(TNC->TCPSock, Command, len, 0);
 
 			TNC->InternalCmd = TRUE;
 
@@ -577,13 +577,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 4:				// reinit
 
-		shutdown(TNC->WINMORSock, SD_BOTH);
+		shutdown(TNC->TCPSock, SD_BOTH);
 		Sleep(100);
 
-		closesocket(TNC->WINMORSock);
+		closesocket(TNC->TCPSock);
 		TNC->CONNECTED = FALSE;
 
-		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		if (TNC->PID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 			RestartTNC(TNC);
@@ -593,12 +593,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		shutdown(TNC->WINMORSock, SD_BOTH);
+		shutdown(TNC->TCPSock, SD_BOTH);
 		Sleep(100);
 
-		closesocket(TNC->WINMORSock);
+		closesocket(TNC->TCPSock);
 
-		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		if (TNC->PID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 		}
@@ -618,9 +618,9 @@ static KillTNC(struct TNCINFO * TNC)
 	if (TNC->PTTMode)
 		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
 
-	if (TNC->WIMMORPID == 0) return 0;
+	if (TNC->PID == 0) return 0;
 
-	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
+	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
 
 	if (hProc)
 	{
@@ -628,7 +628,7 @@ static KillTNC(struct TNCINFO * TNC)
 		CloseHandle(hProc);
 	}
 
-	TNC->WIMMORPID = 0;			// So we don't try again
+	TNC->PID = 0;			// So we don't try again
 
 	return 0;
 }
@@ -664,7 +664,7 @@ static RestartTNC(struct TNCINFO * TNC)
 		ret = CreateProcess(TNC->ProgramPath, "MultiPSK TCP_IP_ON", NULL, NULL, FALSE,0 ,NULL ,HomeDir, &SInfo, &PInfo);
 
 		if (ret)
-			TNC->WIMMORPID = PInfo.dwProcessId;
+			TNC->PID = PInfo.dwProcessId;
 
 		return ret;
 	}
@@ -731,7 +731,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->MAXHOSTMODESESSIONS = 1;	
 
 	i=sprintf(Msg,"MPSK Host %s Port %d \n",
-		TNC->WINMORHostName, TNC->WINMORPort);
+		TNC->HostName, TNC->TCPPort);
 
 	WritetoConsole(Msg);
 
@@ -743,8 +743,8 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 	{
 		if (i == port) continue;
 
-		if (TNCInfo[i] && TNCInfo[i]->WINMORPort == TNC->WINMORPort &&
-			 _stricmp(TNCInfo[i]->WINMORHostName, TNC->WINMORHostName) == 0)
+		if (TNCInfo[i] && TNCInfo[i]->TCPPort == TNC->TCPPort &&
+			 _stricmp(TNCInfo[i]->HostName, TNC->HostName) == 0)
 		{
 			MasterPort[port] = i;
 			break;
@@ -821,15 +821,15 @@ static int ProcessLine(char * buf, int Port)
 			
 		if (p_port == NULL) return (FALSE);
 
-		TNC->WINMORPort = atoi(p_port);
+		TNC->TCPPort = atoi(p_port);
 
 		TNC->destaddr.sin_family = AF_INET;
-		TNC->destaddr.sin_port = htons(TNC->WINMORPort);
-		TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
+		TNC->destaddr.sin_port = htons(TNC->TCPPort);
+		TNC->HostName = malloc(strlen(p_ipad)+1);
 
-		if (TNC->WINMORHostName == NULL) return TRUE;
+		if (TNC->HostName == NULL) return TRUE;
 
-		strcpy(TNC->WINMORHostName,p_ipad);
+		strcpy(TNC->HostName,p_ipad);
 
 		ptr = strtok(NULL, " \t\n\r");
 
@@ -899,13 +899,13 @@ static VOID ConnecttoMPSKThread(port)
 
 	Sleep(5000);		// Allow init to complete 
 
-	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 
 	if (TNC->destaddr.sin_addr.s_addr == INADDR_NONE)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname (TNC->WINMORHostName);
+		 HostEnt = gethostbyname (TNC->HostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
@@ -914,14 +914,14 @@ static VOID ConnecttoMPSKThread(port)
 
 	}
 
-	if (TNC->WINMORSock)
-		closesocket(TNC->WINMORSock);
+	if (TNC->TCPSock)
+		closesocket(TNC->TCPSock);
 
-	TNC->WINMORSock = 0;
+	TNC->TCPSock = 0;
 
-	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
+	TNC->TCPSock=socket(AF_INET,SOCK_STREAM,0);
 
-	if (TNC->WINMORSock == INVALID_SOCKET)
+	if (TNC->TCPSock == INVALID_SOCKET)
 	{
 		i=sprintf(Msg, "Socket Failed for MPSK socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
@@ -935,7 +935,7 @@ static VOID ConnecttoMPSKThread(port)
 
 	TNC->CONNECTING = TRUE;
 
-	if (connect(TNC->WINMORSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
+	if (connect(TNC->TCPSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
 	{
 		//
 		//	Connected successful
@@ -977,14 +977,14 @@ static int ProcessReceivedData(int port)
 
 	//	Need to extract messages from byte stream
 
-	bytes = recv(TNC->WINMORSock,(char *)&Message, 500, 0);
+	bytes = recv(TNC->TCPSock,(char *)&Message, 500, 0);
 
 	if (bytes == SOCKET_ERROR)
 	{
 //		i=sprintf(ErrMsg, "Read Failed for MPSK socket - error code = %d\r\n", WSAGetLastError());
 //		WritetoConsole(ErrMsg);
 				
-		closesocket(TNC->WINMORSock);
+		closesocket(TNC->TCPSock);
 					
 		TNC->CONNECTED = FALSE;
 		if (TNC->Streams[0].Attached)
@@ -1197,7 +1197,7 @@ VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 			
 			if (TNC->CmdSet)
 			{
-				send(TNC->WINMORSock, TNC->CmdSet, strlen(TNC->CmdSet), 0);
+				send(TNC->TCPSock, TNC->CmdSet, strlen(TNC->CmdSet), 0);
 				free (TNC->CmdSet);
 				TNC->CmdSet = NULL;
 			}
@@ -1491,7 +1491,7 @@ VOID SendData(struct TNCINFO * TNC, char * Msg, int MsgLen)
 	int ExtraLen = 0;
 	char * ptr = NewMsg;
 	char * inptr = Msg;
-	SOCKET sock = TNCInfo[MasterPort[TNC->Port]]->WINMORSock;
+	SOCKET sock = TNCInfo[MasterPort[TNC->Port]]->TCPSock;
 
 	TNC->Streams[0].BytesTXed += MsgLen;
 
@@ -1529,7 +1529,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 	if (TNC->MPSKInfo->TX)
 		TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Savde till not transmitting
 	else
-		send(TNC->WINMORSock, Command, len, 0);
+		send(TNC->TCPSock, Command, len, 0);
 }
 
 VOID ForcedClose(struct TNCINFO * TNC, int Stream)
@@ -1560,7 +1560,7 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		if (TNC->MPSKInfo->TX)
 			TNC->CmdSet = TNC->CmdSave = _strdup(Cmd);		// Savde till not transmitting
 		else
-			send(TNC->WINMORSock, Cmd, Len, 0);
+			send(TNC->TCPSock, Cmd, Len, 0);
 	}
 }
 

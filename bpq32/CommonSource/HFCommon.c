@@ -102,7 +102,10 @@ VOID MoveWindows(struct TNCINFO * TNC)
 	ClientWidth = rcClient.right;
 
 	if (TNC->hMonitor)
-		MoveWindow(TNC->hMonitor,2 , 185, ClientWidth-4, ClientHeight-187, TRUE);
+		if (RigConfigMsg[TNC->Port])
+			MoveWindow(TNC->hMonitor,2 , TNC->RigControlRow + 25, ClientWidth-4, ClientHeight - (TNC->RigControlRow + 25), TRUE);
+		else
+			MoveWindow(TNC->hMonitor,2 , TNC->RigControlRow + 3, ClientWidth-4, ClientHeight - (TNC->RigControlRow + 3), TRUE);
 #endif
 }
 
@@ -564,7 +567,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 			}
 			else
 			{
-				ptr1 = strstr(strlwr(Buffer), "transfer-encoding:");
+				ptr1 = strstr(_strlwr(Buffer), "transfer-encoding:");
 				
 				if (ptr1)
 				{
@@ -741,7 +744,11 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	char errbuf[256];
 	struct WL2KInfo * WL2KReport = zalloc(sizeof(struct WL2KInfo));
 	char * ptr;
+	char Param[8][256];
+	char * ptr1, * ptr2;
+	int n = 0;
 
+	memset(Param, 0, 2048);
 
 	strcpy(errbuf, buf); 
 
@@ -750,30 +757,53 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	
 	strcpy(WL2KReport->ServiceCode, p_cmd);
 
+	// Can default Host and Port, so cant use strtok for them
+	
+	ptr1 = Context;
+
+	while (ptr1 && *ptr1 && n < 2)
+	{
+		while(ptr1 && *ptr1 && *ptr1 == ' ')
+			ptr1++;	
+		
+		ptr2 = strchr(ptr1, ',');
+		if (ptr2) *ptr2++ = 0;
+
+		strcpy(&Param[n][0], ptr1);
+		strlop(Param[n++], ' ');
+		ptr1 = ptr2;
+
+	}
+
+	if (n < 2)
+		goto BadLine;
+
+	if (Param[1][0] == 0)
+		WL2KReport->WL2KPort = 80;			// HTTP Interface
+	else
+		WL2KReport->WL2KPort = atoi(&Param[1][0]);
+
+	if (Param[0][0] == 0)
+		WL2KReport->Host = _strdup("api.winlink.org");
+	else
+	{
+		_strlwr(&Param[0][0]);
+
+		if (strstr(&Param[0][0], "winlink.org"))
+		{
+			WL2KReport->WL2KPort = 80;		// HTTP Interface
+			WL2KReport->Host = _strdup("api.winlink.org");
+		}
+		else
+			WL2KReport->Host = _strdup(&Param[0][0]);
+	}
+
+	Context = ptr1;
+
 	p_cmd = strtok_s(NULL, ", \t\n\r", &Context);
 	if (p_cmd == NULL) goto BadLine;
 
-	_strlwr(p_cmd);
-
-	WL2KReport->WL2KPort = atoi(p_cmd);
-
-	if (strstr(p_cmd, "winlink.org"))
-	{
-		WL2KReport->WL2KPort = 80;			// HTTP Interface
-		WL2KReport->Host = _strdup("api.winlink.org");
-	}
-	else
-		WL2KReport->Host = _strdup(p_cmd);
-
-	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);			
-	if (p_cmd == NULL) goto BadLine;
-
-
-
 	if (WL2KReport->WL2KPort == 0) goto BadLine;
-
-	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
-	if (p_cmd == NULL) goto BadLine;
 
 	strcpy(WL2KReport->RMSCall, p_cmd);
 	strcpy(WL2KReport->BaseCall, p_cmd);

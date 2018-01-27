@@ -537,7 +537,7 @@ VOID SendMailFor(char * Msg, BOOL HaveCalls)
 		{
 			if (UIMF[i] && (HaveCalls || UINull[i]))
 			{
-				Send_AX_Datagram(Msg, strlen(Msg) - 1, i, AXDEST, TRUE);
+				Send_AX_Datagram(Msg, strlen(Msg) - 1, i, AXMAIL, TRUE);
 			}
 		}
 		Mask>>=1;

@@ -136,11 +136,11 @@ static int ProcessLine(char * buf, int Port)
 	TNC->Datadestaddr.sin_family = AF_INET;
 	TNC->Datadestaddr.sin_port = htons(WINMORport+1);
 
-	TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
+	TNC->HostName = malloc(strlen(p_ipad)+1);
 
-	if (TNC->WINMORHostName == NULL) return TRUE;
+	if (TNC->HostName == NULL) return TRUE;
 
-	strcpy(TNC->WINMORHostName,p_ipad);
+	strcpy(TNC->HostName,p_ipad);
 
 	ptr = strtok(NULL, " \t\n\r");
 
@@ -246,15 +246,15 @@ static VOID ChangeMYC(struct TNCINFO * TNC, char * Call)
 
 	strcpy(TNC->CurrentMYC, Call);
 
-//	send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+//	send(TNC->TCPSock, "CODEC FALSE\r\n", 13, 0);
 
 	datalen = sprintf(TXMsg, "MYCALL %s\r\n", Call);
-	send(TNC->WINMORSock,TXMsg, datalen, 0);
+	send(TNC->TCPSock,TXMsg, datalen, 0);
 
-//	send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+//	send(TNC->TCPSock, "CODEC TRUE\r\n", 12, 0);
 //	TNC->StartSent = TRUE;
 
-//	send(TNC->WINMORSock, "MYCALL\r\n", 8, 0);
+//	send(TNC->TCPSock, "MYCALL\r\n", 8, 0);
 }
 
 static int ExtProc(int fn, int port,unsigned char * buff)
@@ -292,7 +292,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				// No, so send
 
-				send(TNC->WINMORSock, TNC->ConnectCmd, strlen(TNC->ConnectCmd), 0);
+				send(TNC->TCPSock, TNC->ConnectCmd, strlen(TNC->ConnectCmd), 0);
 				TNC->Streams[0].Connecting = TRUE;
 
 				memset(TNC->Streams[0].RemoteCall, 0, 10);
@@ -337,7 +337,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				// Probe link
 
-				send(TNC->WINMORSock, "BUFFER\r\n", 8, 0);
+				send(TNC->TCPSock, "BUFFER\r\n", 8, 0);
 		}
 
 		if (TNC->FECMode)
@@ -347,7 +347,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (!TNC->Busy)
 				{
 					TNC->FECIDTimer = 0;
-					send(TNC->WINMORSock, "SENDID 0\r\n", 10, 0);
+					send(TNC->TCPSock, "SENDID 0\r\n", 10, 0);
 				}
 			}
 			if (TNC->FECPending)	// Check if FEC Send needed
@@ -357,9 +357,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					TNC->FECPending = 0;
 
 					if (TNC->FEC1600)
-						send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
+						send(TNC->TCPSock,"FECSEND 1600\r\n", 14, 0);
 					else
-						send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
+						send(TNC->TCPSock,"FECSEND 500\r\n", 13, 0);
 				}
 			}
 		}
@@ -372,7 +372,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				// Send the DISCONNECT
 
-				send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);
+				send(TNC->TCPSock,"ARQEND\r\n", 8, 0);
 				TNC->Streams[0].ARQENDSent = TRUE;
 			}
 		}
@@ -385,7 +385,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				// Too long in Disc Pending - Kill and Restart TNC
 
-				if (TNC->WIMMORPID)
+				if (TNC->PID)
 				{
 					KillTNC(TNC);
 					RestartTNC(TNC);
@@ -414,7 +414,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				
 				TNC->LastFreq = TNC->RIG->RigFreq;
 				Len = sprintf(FREQMsg, "DISPLAY CF:%1.4f\r\n", TNC->LastFreq + .0015);
-				send(TNC->WINMORSock,FREQMsg, Len, 0);
+				send(TNC->TCPSock,FREQMsg, Len, 0);
 			}
 		}
 
@@ -467,7 +467,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// Stop Listening, and set MYCALL to user's call
 
-//			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+//			send(TNC->TCPSock, "LISTEN FALSE\r\n", 14, 0);
 			ChangeMYC(TNC, TNC->Streams[0].MyCall);
 
 			// Stop other ports in same group
@@ -511,15 +511,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 			FD_ZERO(&readfs);
 			
-			if (TNC->CONNECTED) FD_SET(TNC->WINMORDataSock,&readfs);
+			if (TNC->CONNECTED) FD_SET(TNC->TCPDataSock,&readfs);
 			
 			FD_ZERO(&writefs);
 
-			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->WINMORDataSock,&writefs);	// Need notification of busy clearing
+			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPDataSock,&writefs);	// Need notification of busy clearing
 
 			FD_ZERO(&errorfs);
 		
-			if (TNC->CONNECTING || TNC->CONNECTED) FD_SET(TNC->WINMORDataSock,&errorfs);
+			if (TNC->CONNECTING || TNC->CONNECTED) FD_SET(TNC->TCPDataSock,&errorfs);
 
 			if (select(3,&readfs,&writefs,&errorfs,&timeout) > 0)
 			{
@@ -535,7 +535,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					buffptr=Q_REM(&TNC->BPQtoWINMOR_Q);
 					txlen=buffptr[1];
 					memcpy(txbuff,buffptr+2,txlen);
-					bytes=send(TNC->WINMORSock,(const char FAR *)&txbuff,txlen,0);
+					bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
 					ReleaseBuffer(buffptr);
 				}
 					
@@ -601,7 +601,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		txlen=(buff[6]<<8) + buff[5]-8;	
 		
 		if (TNC->Streams[0].Connected)
-			bytes=send(TNC->WINMORDataSock,(const char FAR *)&buff[8],txlen,0);
+			bytes=send(TNC->TCPDataSock,(const char FAR *)&buff[8],txlen,0);
 		else
 		{
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
@@ -620,7 +620,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				buff[8 + txlen] = 0;
 				len = sprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, &buff[8]);
 
-				send(TNC->WINMORDataSock, Buffer, len, 0);
+				send(TNC->TCPDataSock, Buffer, len, 0);
 
 /*				if (TNC->Busy)
 				{
@@ -629,9 +629,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				else
 				{
 					if (TNC->FEC1600)
-						send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
+						send(TNC->TCPSock,"FECSEND 1600\r\n", 14, 0);
 					else
-						send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
+						send(TNC->TCPSock,"FECSEND 500\r\n", 13, 0);
 				}
 */				return 0;
 			}
@@ -671,7 +671,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				TNC->FECMode = TRUE;
 				TNC->FECIDTimer = 0;
-				send(TNC->WINMORSock,"MODE FEC\r\n", 10, 0);
+				send(TNC->TCPSock,"MODE FEC\r\n", 10, 0);
 				strcpy(TNC->WEB_MODE, "FEC");
 				MySetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
 
@@ -709,7 +709,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				TNC->OverrideBusy = FALSE;
 
-				bytes=send(TNC->WINMORSock, Connect, txlen, 0);
+				bytes=send(TNC->TCPSock, Connect, txlen, 0);
 				TNC->Streams[0].Connecting = TRUE;
 
 				memset(TNC->Streams[0].RemoteCall, 0, 10);
@@ -723,7 +723,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			else
 			{
 				buff[8 + txlen++] = 0x0a;
-				bytes=send(TNC->WINMORSock,(const char FAR *)&buff[8],txlen,0);
+				bytes=send(TNC->TCPSock,(const char FAR *)&buff[8],txlen,0);
 			}
 		}
 		if (bytes != txlen)
@@ -741,7 +741,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 //				if (winerr != WSAEWOULDBLOCK)
 //				{
-				closesocket(TNC->WINMORSock);
+				closesocket(TNC->TCPSock);
 					
 					TNC->CONNECTED = FALSE;
 
@@ -765,7 +765,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 //			{
 				// No buffers, so can only break connection and try again
 
-//				closesocket(WINMORSock[MasterPort[port]]);
+//				closesocket(TCPSock[MasterPort[port]]);
 					
 //				CONNECTED[MasterPort[port]]=FALSE;
 
@@ -801,16 +801,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+		send(TNC->TCPSock, "CODEC FALSE\r\n", 13, 0);
 		Sleep(100);
-		shutdown(TNC->WINMORDataSock, SD_BOTH);
-		shutdown(TNC->WINMORSock, SD_BOTH);
+		shutdown(TNC->TCPDataSock, SD_BOTH);
+		shutdown(TNC->TCPSock, SD_BOTH);
 		Sleep(100);
 
-		closesocket(TNC->WINMORDataSock);
-		closesocket(TNC->WINMORSock);
+		closesocket(TNC->TCPDataSock);
+		closesocket(TNC->TCPSock);
 
-		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		if (TNC->PID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 		}
@@ -830,7 +830,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
-//			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+//			send(TNC->TCPSock, "LISTEN FALSE\r\n", 14, 0);
 
 			return TRUE;
 		}
@@ -845,19 +845,19 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
-//			send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+//			send(TNC->TCPSock, "LISTEN TRUE\r\n", 13, 0);
 			return 0;
 		}
 
 		if (Param == 4)		// Set Wide Mode
 		{
-			send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
+			send(TNC->TCPSock, "BW 1600\r\n", 9, 0);
 			return 0;
 		}
 
 		if (Param == 5)		// Set Narrow Mode
 		{
-			send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
+			send(TNC->TCPSock, "BW 500\r\n", 8, 0);
 			return 0;
 		}
 
@@ -882,7 +882,7 @@ loop:
 
 	if (buffptr == NULL) return;			// No buffers, so ignore
 			
-	InputLen=recv(TNC->WINMORDataSock, (char *)&buffptr[2], PacLen, 0);
+	InputLen=recv(TNC->TCPDataSock, (char *)&buffptr[2], PacLen, 0);
 
 	if (InputLen == -1)
 	{
@@ -970,7 +970,7 @@ static VOID ReleaseTNC(struct TNCINFO * TNC)
 
 	ChangeMYC(TNC, TNC->NodeCall);
 
-//	send(TNC->WINMORSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
+//	send(TNC->TCPSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
 
 	MySetWindowText(TNC->xIDC_TNCSTATE, "Free");
 	strcpy(TNC->WEB_TNCSTATE, "Free");
@@ -1101,10 +1101,10 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry)
 		TNC->Datadestaddr.sin_family = AF_INET;
 		TNC->Datadestaddr.sin_port = htons(PortEntry->PORTCONTROL.IOBASE+1);
 
-		TNC->WINMORHostName=malloc(10);
+		TNC->HostName=malloc(10);
 
-		if (TNC->WINMORHostName != NULL) 
-			strcpy(TNC->WINMORHostName,"127.0.0.1");
+		if (TNC->HostName != NULL) 
+			strcpy(TNC->HostName,"127.0.0.1");
 
 	}
 
@@ -1169,7 +1169,7 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry)
 	
 	MoveWindows(TNC);
 #endif
-	i=sprintf(Msg,"V4 Host %s %d\n", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
+	i=sprintf(Msg,"V4 Host %s %d\n", TNC->HostName, htons(TNC->destaddr.sin_port));
 	WritetoConsole(Msg);
 
 	strcpy(TNC->WEB_MODE, "ARQ");
@@ -1200,7 +1200,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 	{
 		GetWindowThreadProcessId(hwnd, &ProcessId);
 
-		if (TNC->WIMMORPID == ProcessId)
+		if (TNC->PID == ProcessId)
 		{
 			 // Our Process
 
@@ -1227,8 +1227,8 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		// Force a restart
 
-			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
-			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+			send(TNC->TCPSock, "CODEC FALSE\r\n", 13, 0);
+			send(TNC->TCPSock, "CODEC TRUE\r\n", 12, 0);
 	}
 	else
 	{
@@ -1368,7 +1368,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					
 					// Send a Message, then a disconenct
 					
-					send(TNC->WINMORDataSock, Msg, strlen(Msg), 0);
+					send(TNC->TCPDataSock, Msg, strlen(Msg), 0);
 					STREAM->NeedDisc = 100;	// 10 secs
 				}
 			}
@@ -1501,7 +1501,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			{
 				if (TNC->Streams[0].ARQENDSent == FALSE)
 				{
-					send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);
+					send(TNC->TCPSock,"ARQEND\r\n", 8, 0);
 					TNC->Streams[0].ARQENDSent = TRUE;
 				}
 			}
@@ -1532,13 +1532,13 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		HANDLE hProc;
 		char ExeName[256] = "";
 
-		TNC->WIMMORPID = atoi(&Buffer[10]);
+		TNC->PID = atoi(&Buffer[10]);
 
 		// Get the File Name in case we want to restart it.
 
 		if (GetModuleFileNameExPtr)
 		{
-			hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
+			hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->PID);
 	
 			if (hProc)
 			{
@@ -1642,7 +1642,7 @@ int V4ProcessReceivedData(struct TNCINFO * TNC)
 	if (TNC->InputLen > 1000)	// Shouldnt have lines longer  than this on command connection
 		TNC->InputLen=0;
 				
-	InputLen=recv(TNC->WINMORSock, &TNC->TCPBuffer[TNC->InputLen], 1000 - TNC->InputLen, 0);
+	InputLen=recv(TNC->TCPSock, &TNC->TCPBuffer[TNC->InputLen], 1000 - TNC->InputLen, 0);
 
 	if (InputLen == 0 || InputLen == SOCKET_ERROR)
 	{
@@ -1797,14 +1797,14 @@ static VOID TidyClose(struct TNCINFO * TNC, int Stream)
 	
 	if (TNC->Streams[0].BytesOutstanding == 0)
 	{
-		send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);
+		send(TNC->TCPSock,"ARQEND\r\n", 8, 0);
 		TNC->Streams[0].ARQENDSent = TRUE;
 	}
 }
 
 static VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 {
-	send(TNC->WINMORSock,"ABORT\r\n", 7, 0);
+	send(TNC->TCPSock,"ABORT\r\n", 7, 0);
 }
 
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
@@ -1816,7 +1816,7 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 	if (TNC->FECMode)
 	{
 		TNC->FECMode = FALSE;
-		send(TNC->WINMORSock,"MODE ARQ\r\n", 10, 0);
+		send(TNC->TCPSock,"MODE ARQ\r\n", 10, 0);
 		strcpy(TNC->WEB_MODE, "ARQ");
 		MySetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
 	}

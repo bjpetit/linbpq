@@ -2312,7 +2312,7 @@ static MESSAGEY Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
-MESSAGEY * AdjMsg;		// Adjusted fir digis
+MESSAGEY * AdjMsg;		// Adjusted for digis
 
 
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)

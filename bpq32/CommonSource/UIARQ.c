@@ -311,7 +311,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				ARQ->ARQState = ARQ_ACTIVE;
 
 				ARQ->ARQTimerState = ARQ_CONNECTING;
-				SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+				SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 
 				SetWindowText(STREAM->xIDC_STATUS, "Connecting");
 				SetWindowText(STREAM->xIDC_MYCALL, STREAM->MyCall);
@@ -951,7 +951,7 @@ AckConnectRequest:
 
 		SendLen = sprintf(Reply, "k%s:24 %s %c 7", call2, call1, ARQ->OurStream); 
 
-		SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		ARQ->ARQTimerState = ARQ_CONNECTACK;
 
 		return;
@@ -1061,7 +1061,7 @@ SendKReply:
 			}
 		}
 
-		QueueAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		QueueAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		return;
 	}
 
@@ -1121,7 +1121,7 @@ SendKReply:
 		else
 			ARQ->TurnroundTimer = 15;			// Allow us to send it all acked
 
-		QueueAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		QueueAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 
 		return;
 	}
@@ -1159,7 +1159,7 @@ SendKReply:
 			}
 		}
 
-		QueueAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		QueueAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		return;
 	}
 
@@ -1212,7 +1212,7 @@ SendKReply:
 		SendLen = sprintf(Reply, "b%s:91", STREAM->MyCall); 
 
 		ARQ->ARQTimerState = ARQ_WAITACK;
-		SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+		SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 		ARQ->Retries = 2;
 		return;
 	}
@@ -1377,7 +1377,7 @@ static VOID SendARQData(struct TNCINFO * TNC, UINT * Buffer, int Stream)
 
 
 	UCHAR TXBuffer[300];
-	SOCKET sock = TNC->WINMORDataSock;
+	SOCKET sock = TNC->TCPDataSock;
 	int SendLen;
 	UCHAR * ptr;
 	int Origlen = Buffer[1];
@@ -1430,7 +1430,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 
 	SendLen = sprintf(Reply, "d%s:90", STREAM->MyCall); 
 
-	SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+	SaveAndSend(TNC, ARQ, TNC->TCPDataSock, Reply, SendLen);
 	ARQ->ARQTimerState = ARQ_DISC;
 }
 
@@ -1809,7 +1809,7 @@ static VOID ProcessARQStatus(struct TNCINFO * TNC, int Stream, struct ARQINFO * 
 		{
 			UINT * Buffer = ARQ->TXHOLDQ[First];
 			UCHAR TXBuffer[300];
-			SOCKET sock = TNC->WINMORDataSock;
+			SOCKET sock = TNC->TCPDataSock;
 			int SendLen;
 
 			Debugprintf("Resend %d", First);

@@ -2837,7 +2837,7 @@ CHARMODE:
 }
 	
 
-PROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC)
+int PROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC)
 {
 	UCHAR * TXBUFFERPTR;
 	int i;
@@ -3393,7 +3393,7 @@ SENDHOSTOK:
 	return TRUE;
 
 }
-PROCESSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel)
+int PROCESSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel)
 {
 	int PollType;
 	

@@ -102,7 +102,6 @@ static int RigControlRow = 185;
 extern UCHAR BPQDirectory[];
 
 extern char * PortConfig[33];
-extern BOOL RIG_DEBUG;
 
 static RECT Rect;
 
@@ -159,7 +158,7 @@ static BOOL OpenLogFile(int Flags)
 		T = time(NULL);
 		tm = gmtime(&T);	
 
-		sprintf(FN,"%s/SCSLog_%02d%02d_%d.txt", BPQDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
+		sprintf(FN,"%s/Logs/SCSLog_%02d%02d_%d.txt", BPQDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
 
 		LogHandle[Flags] = fopen(FN, "ab");
 	
@@ -641,7 +640,7 @@ ok:
 			{
 				// Switch to Packet for this Interval
 				
-				if (RIG_DEBUG)
+				if (TNC->RIG->RIG_DEBUG)
 					Debugprintf("SCS Switching to Packet, %d", TNC->HFPacket);
 
 				if (TNC->HFPacket == FALSE)
@@ -669,7 +668,7 @@ ok:
 					strcpy(STREAM->MyCall, Scan->APPLCALL);
 
 					sprintf(STREAM->CmdSet, "I%s\rI\r", STREAM->MyCall);
-					if (RIG_DEBUG)
+					if (TNC->RIG->RIG_DEBUG)
 						Debugprintf("SCS Pactor APPLCALL Set to  %s", STREAM->MyCall);
 				}
 
@@ -728,6 +727,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_PACTORLEVEL);
 	Len += sprintf(&Buff[Len], "</table>");
 
+	Len += sprintf(&Buff[Len], "<textarea rows=10 style=\"width:500px; height:250px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
 	Len = DoScanLine(TNC, Buff, Len);
 
 	return Len;
@@ -890,10 +890,12 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 	TNC->WEB_STATE = zalloc(100);
 	TNC->WEB_TXRX = zalloc(100);
 	TNC->WEB_PACTORLEVEL = zalloc(100);
+	TNC->WebBuffer = zalloc(5000);
+
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 235, 500);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 500);
  
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -918,9 +920,13 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->xIDC_PACTORLEVEL = CreateWindowEx(0, "STATIC", "Mode", WS_CHILD | WS_VISIBLE,10,160,430,20, TNC->hDlg, NULL, hInstance, NULL);
 
-	TNC->ClientHeight = 240;
+	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
+            LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
+			0,RigControlRow + 44,250,300, TNC->hDlg, NULL, hInstance, NULL);
+
+	TNC->ClientHeight = 500;
 	TNC->ClientWidth = 500;
-	
+
 	MoveWindows(TNC);
 #endif
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
@@ -960,6 +966,11 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 		SwitchToPacket(TNC);
 
 	WritetoConsole("\n");
+
+	WritetoTrace(TNC, "TEST\r", 5);
+	WritetoTrace(TNC, "TEST\r", 5);
+	WritetoTrace(TNC, "TEST\r", 5);
+
 
 	return ((int)ExtProc);
 }
@@ -1531,7 +1542,7 @@ VOID SCSPoll(int Port)
 		
 		CRCStuffAndSend(TNC, Poll, datalen + 5);
 
-		if (RIG_DEBUG)
+		if (TNC->RIG->RIG_DEBUG)
 		{
 			Debugprintf("SCS Rig Command Queued, Len = %d", datalen );
 			Debugprintf("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
@@ -2162,7 +2173,7 @@ BOOL CheckRXText(struct TNCINFO * TNC)
 
 	TNC->RXBuffer[TNC->RXLen] = 0;
 	
-	if (RIG_DEBUG)
+	if (TNC->RIG->RIG_DEBUG)
 		Debugprintf(TNC->RXBuffer);
 
 	TNC->RXLen = 0;		// Ready for next frame
@@ -2369,7 +2380,7 @@ VOID SwitchToPactor(struct TNCINFO * TNC)
 	TNC->HFPacket = FALSE;
 	TNC->Streams[0].DEDStream = 31;		// Pactor Channel
 
-	if (RIG_DEBUG)
+	if (TNC->RIG->RIG_DEBUG)
 		Debugprintf("BPQ32 Scan - switch to Pactor");
 }
 
@@ -2383,7 +2394,7 @@ VOID SwitchToPacket(struct TNCINFO * TNC)
 
 	TNC->SwitchToPactor = TNC->RobustTime;
 
-	if (RIG_DEBUG)
+	if (TNC->RIG->RIG_DEBUG)
 		Debugprintf("BPQ32 Scan - switch to Packet");
 }
 
@@ -2967,7 +2978,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			
 			// See if a response to internal command
 
-			if (RIG_DEBUG)
+			if (TNC->RIG->RIG_DEBUG)
 				if (LastCmd == 'I')
 					Debugprintf("SCS I Cmd Response %s", Buffer);
 
@@ -3362,7 +3373,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				{
 					// New Sync
 
-					if (RIG_DEBUG)
+					if (TNC->RIG->RIG_DEBUG)
 						Debugprintf("SCS New SYNC Detected");
 	
 					TNC->TimeEnteredSYNCMode = time(NULL);
@@ -3372,7 +3383,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				{
 					if (TNC->PTCStatus == 6)
 					{
-						if (RIG_DEBUG)
+						if (TNC->RIG->RIG_DEBUG)
 							Debugprintf("SCS left SYNC, now %s", status[Status]);
 	
 						TNC->TimeEnteredSYNCMode = 0;
@@ -3452,7 +3463,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				buffptr[1] = datalen;
 				memcpy(buffptr + 2, &Msg[5], datalen);
 				C_Q_ADD(&TNC->RadiotoBPQ_Q, buffptr);
-				if (RIG_DEBUG)
+				if (TNC->RIG->RIG_DEBUG)
 				{
 					Debugprintf("SCS RIG frame received, len %d", datalen);
 					Debugprintf("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
@@ -3473,6 +3484,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		buffptr[1] = Msg[4] + 1;				// Length
 		TNC->Streams[Stream].BytesRXed += buffptr[1];
 		memcpy(&buffptr[2], &Msg[5], buffptr[1]);
+
+		WritetoTrace(TNC, &Msg[5], buffptr[1]);
+
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		return;

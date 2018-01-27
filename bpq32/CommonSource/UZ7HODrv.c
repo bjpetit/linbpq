@@ -168,7 +168,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 	{
 		GetWindowThreadProcessId(hwnd, &ProcessId);
 
-//		if (TNC->WIMMORPID == ProcessId)
+//		if (TNC->PID == ProcessId)
 		{
 			 // Our Process
 
@@ -186,7 +186,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 					return TRUE;					//Wrong Copy
 			}
 
-			TNC->WIMMORPID = ProcessId;
+			TNC->PID = ProcessId;
 
 			sprintf (wtext, "Soundmodem - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
 			SetWindowText(hwnd, wtext);
@@ -264,26 +264,26 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 			FD_ZERO(&readfs);
 			
-			if (TNC->CONNECTED) FD_SET(TNC->WINMORSock,&readfs);
+			if (TNC->CONNECTED) FD_SET(TNC->TCPSock,&readfs);
 
 			
 			FD_ZERO(&writefs);
 
-			if (TNC->CONNECTING) FD_SET(TNC->WINMORSock,&writefs);	// Need notification of Connect
+			if (TNC->CONNECTING) FD_SET(TNC->TCPSock,&writefs);	// Need notification of Connect
 
-			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->WINMORSock,&writefs);	// Need notification of busy clearing
+			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPSock,&writefs);	// Need notification of busy clearing
 
 
 
 			FD_ZERO(&errorfs);
 		
-			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->WINMORSock,&errorfs);
+			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
 
 			if (select(3,&readfs,&writefs,&errorfs,&timeout) > 0)
 			{
 				//	See what happened
 
-				if (FD_ISSET(TNC->WINMORSock,&readfs))
+				if (FD_ISSET(TNC->TCPSock,&readfs))
 				{			
 					// data available
 			
@@ -291,7 +291,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				
 				}
 
-				if (FD_ISSET(TNC->WINMORSock,&writefs))
+				if (FD_ISSET(TNC->TCPSock,&writefs))
 				{
 					if (BPQtoUZ7HO_Q[port] == 0)
 					{
@@ -314,28 +314,28 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						// If required, send signon
 
 						if (UZ7HOSignon[port])
-							send(TNC->WINMORSock,UZ7HOSignon[port],546,0);
+							send(TNC->TCPSock,UZ7HOSignon[port],546,0);
 
 						// Request Raw Frames
 
 						AGW->TXHeader.Port=0;
 						AGW->TXHeader.DataKind='k';		// Raw Frames
 						AGW->TXHeader.DataLength=0;
-						send(TNC->WINMORSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 
 						AGW->TXHeader.DataKind='m';		// Monitor Frames
-						send(TNC->WINMORSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 		
 						// Register all applcalls
 
 						AGW->TXHeader.DataKind='X';		// Register
 						memset(AGW->TXHeader.callfrom, 0, 10);
 						strcpy(AGW->TXHeader.callfrom, TNC->NodeCall);
-						send(TNC->WINMORSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 					
 						memset(AGW->TXHeader.callfrom, 0, 10);
 						strcpy(AGW->TXHeader.callfrom, NodeCall);
-						send(TNC->WINMORSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 
 						for (App = 0; App < 32; App++)
 						{
@@ -350,7 +350,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 							{
 								memset(AGW->TXHeader.callfrom, 0, 10);
 								strcpy(AGW->TXHeader.callfrom, Appl);
-								send(TNC->WINMORSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+								send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 							}
 						}
 #ifndef LINBPQ
@@ -367,7 +367,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 						memcpy(txbuff,buffptr+2,txlen);
 
-						bytes=send(TNC->WINMORSock,(const char FAR *)&txbuff,txlen,0);
+						bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
 					
 						ReleaseBuffer(buffptr);
 
@@ -375,7 +375,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				}
 					
-				if (FD_ISSET(TNC->WINMORSock,&errorfs))
+				if (FD_ISSET(TNC->TCPSock,&errorfs))
 				{
 
 					//	if connecting, then failed, if connected then has just disconnected
@@ -460,7 +460,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					strcpy(AGW->TXHeader.callto, &Key[1]);
 					AGW->TXHeader.DataLength = 0;
 
-					send(TNCInfo[MasterPort[port]]->WINMORSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+					send(TNCInfo[MasterPort[port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 				}
 			}
 	
@@ -507,7 +507,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			SOCKET Sock;	
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 
-			Sock = TNCInfo[MasterPort[port]]->WINMORSock;
+			Sock = TNCInfo[MasterPort[port]]->TCPSock;
 		
 			MsgLen = buffptr->LENGTH - 6;	// 7 Header, need extra Null
 			buffptr->LENGTH = 0;				// Need a NULL on front	
@@ -704,9 +704,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					ViaList[0] = Digis;
 				}
 
-				send(TNCInfo[MasterPort[port]]->WINMORSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+				send(TNCInfo[MasterPort[port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 				if (Digis)
-					send(TNCInfo[MasterPort[port]]->WINMORSock, ViaList, Digis * 10 + 1, 0);
+					send(TNCInfo[MasterPort[port]]->TCPSock, ViaList, Digis * 10 + 1, 0);
 
 				STREAM->Connecting = TNC->AGWInfo->ConnTimeOut;	// It doesn't report failure
 
@@ -728,7 +728,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		txbuff[AGWHDDRLEN] = 0;
 		txlen+=AGWHDDRLEN;
 
-		bytes=send(TNC->WINMORSock,(const char FAR *)&txbuff,txlen,0);
+		bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
 		
 		if (bytes != txlen)
 		{
@@ -746,7 +746,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 //				if (winerr != WSAEWOULDBLOCK)
 //				{
 				
-					closesocket(TNC->WINMORSock);
+					closesocket(TNC->TCPSock);
 					
 					TNC->CONNECTED = FALSE;
 
@@ -805,13 +805,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 4:				// reinit
 
-		shutdown(TNC->WINMORSock, SD_BOTH);
+		shutdown(TNC->TCPSock, SD_BOTH);
 		Sleep(100);
 
-		closesocket(TNC->WINMORSock);
+		closesocket(TNC->TCPSock);
 		TNC->CONNECTED = FALSE;
 
-		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		if (TNC->PID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 			RestartTNC(TNC);
@@ -821,12 +821,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		shutdown(TNC->WINMORSock, SD_BOTH);
+		shutdown(TNC->TCPSock, SD_BOTH);
 		Sleep(100);
 
-		closesocket(TNC->WINMORSock);
+		closesocket(TNC->TCPSock);
 
-		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		if (TNC->PID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 		}
@@ -856,26 +856,26 @@ static int KillTNC(struct TNCINFO * TNC)
 			return 0;
 
 		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 		destaddr.sin_port = htons(8500);
 
 		if (destaddr.sin_addr.s_addr == INADDR_NONE)
 		{
 			//	Resolve name to address
 
-			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+			struct hostent * HostEnt = gethostbyname (TNC->HostName);
 		 
 			if (!HostEnt)
 				return 0;			// Resolve failed
 
 			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 		}
-		Len = sprintf(Msg, "KILL %d", TNC->WIMMORPID);
+		Len = sprintf(Msg, "KILL %d", TNC->PID);
 		sendto(sock, Msg, Len, 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
 		Sleep(100);
 		closesocket(sock);
 
-		TNC->WIMMORPID = 0;			// So we don't try again
+		TNC->PID = 0;			// So we don't try again
 		return 1;				// Cant tell if it worked, but assume ok
 	}
 
@@ -885,7 +885,7 @@ static int KillTNC(struct TNCINFO * TNC)
 		HANDLE hProc;
 
 
-		hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
+		hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
 
 		if (hProc)
 		{
@@ -893,7 +893,7 @@ static int KillTNC(struct TNCINFO * TNC)
 			CloseHandle(hProc);
 		}
 
-		TNC->WIMMORPID = 0;			// So we don't try again
+		TNC->PID = 0;			// So we don't try again
 	}
 #endif
 	return 0;
@@ -917,14 +917,14 @@ static int RestartTNC(struct TNCINFO * TNC)
 			return 0;
 
 		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 		destaddr.sin_port = htons(8500);
 
 		if (destaddr.sin_addr.s_addr == INADDR_NONE)
 		{
 			//	Resolve name to address
 
-			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+			struct hostent * HostEnt = gethostbyname (TNC->HostName);
 		 
 			if (!HostEnt)
 				return 0;			// Resolve failed
@@ -1009,7 +1009,7 @@ static int RestartTNC(struct TNCINFO * TNC)
 		ret = CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,HomeDir, &SInfo, &PInfo);
 
 		if (ret)
-			TNC->WIMMORPID = PInfo.dwProcessId;
+			TNC->PID = PInfo.dwProcessId;
 
 		return ret;
 	}
@@ -1079,7 +1079,7 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->MAXHOSTMODESESSIONS = TNC->AGWInfo->MaxSessions;	
 
 	i=sprintf(Msg,"UZ7HO Host %s Port %d Chan %c\n",
-		TNC->WINMORHostName, TNC->WINMORPort, PortEntry->PORTCONTROL.CHANNELNUM);
+		TNC->HostName, TNC->TCPPort, PortEntry->PORTCONTROL.CHANNELNUM);
 	WritetoConsole(Msg);
 
 	// See if we already have a port for this host
@@ -1090,8 +1090,8 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	{
 		if (i == port) continue;
 
-		if (TNCInfo[i] && TNCInfo[i]->WINMORPort == TNC->WINMORPort &&
-			 _stricmp(TNCInfo[i]->WINMORHostName, TNC->WINMORHostName) == 0)
+		if (TNCInfo[i] && TNCInfo[i]->TCPPort == TNC->TCPPort &&
+			 _stricmp(TNCInfo[i]->HostName, TNC->HostName) == 0)
 		{
 			MasterPort[port] = i;
 			break;
@@ -1185,15 +1185,15 @@ static int ProcessLine(char * buf, int Port)
 			
 		if (p_port == NULL) return (FALSE);
 
-		TNC->WINMORPort = atoi(p_port);
+		TNC->TCPPort = atoi(p_port);
 
 		TNC->destaddr.sin_family = AF_INET;
-		TNC->destaddr.sin_port = htons(TNC->WINMORPort);
-		TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
+		TNC->destaddr.sin_port = htons(TNC->TCPPort);
+		TNC->HostName = malloc(strlen(p_ipad)+1);
 
-		if (TNC->WINMORHostName == NULL) return TRUE;
+		if (TNC->HostName == NULL) return TRUE;
 
-		strcpy(TNC->WINMORHostName,p_ipad);
+		strcpy(TNC->HostName,p_ipad);
 
 		ptr = strtok(NULL, " \t\n\r");
 
@@ -1272,12 +1272,12 @@ VOID ConnecttoUZ7HOThread(port)
 	Sleep(3000);		// Allow init to complete 
 
 #ifdef WIN32
-	if (strcmp(TNC->WINMORHostName, "127.0.0.1") == 0)
+	if (strcmp(TNC->HostName, "127.0.0.1") == 0)
 	{
 		// can only check if running on local host
 		
-		TNC->WIMMORPID = GetListeningPortsPID(TNC->destaddr.sin_port);
-		if (TNC->WIMMORPID == 0)
+		TNC->PID = GetListeningPortsPID(TNC->destaddr.sin_port);
+		if (TNC->PID == 0)
 		{
 			TNC->CONNECTING = FALSE;
 			return;						// Not listening so no point trying to connect
@@ -1287,13 +1287,13 @@ VOID ConnecttoUZ7HOThread(port)
 
 
 
-	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 
 	if (TNC->destaddr.sin_addr.s_addr == INADDR_NONE)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname (TNC->WINMORHostName);
+		 HostEnt = gethostbyname (TNC->HostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
@@ -1302,18 +1302,18 @@ VOID ConnecttoUZ7HOThread(port)
 
 	}
 
-	if (TNC->WINMORSock)
+	if (TNC->TCPSock)
 	{
-		Debugprintf("UZ7HO Closing Sock %d", TNC->WINMORSock); 
-		closesocket(TNC->WINMORSock);
+		Debugprintf("UZ7HO Closing Sock %d", TNC->TCPSock); 
+		closesocket(TNC->TCPSock);
 		TNC->CONNECTING = FALSE;
 	}
 
-	TNC->WINMORSock = 0;
+	TNC->TCPSock = 0;
 
-	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
+	TNC->TCPSock=socket(AF_INET,SOCK_STREAM,0);
 
-	if (TNC->WINMORSock == INVALID_SOCKET)
+	if (TNC->TCPSock == INVALID_SOCKET)
 	{
 		i=sprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
@@ -1327,7 +1327,7 @@ VOID ConnecttoUZ7HOThread(port)
 
 	TNC->CONNECTING = TRUE;
 
-	if (connect(TNC->WINMORSock,(struct sockaddr *) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
+	if (connect(TNC->TCPSock,(struct sockaddr *) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
 	{
 		//
 		//	Connected successful
@@ -1347,8 +1347,8 @@ VOID ConnecttoUZ7HOThread(port)
 		}
 		
 		TNC->CONNECTING = FALSE;
-		closesocket(TNC->WINMORSock);
-		TNC->WINMORSock = 0;
+		closesocket(TNC->TCPSock);
+		TNC->TCPSock = 0;
 	
 		return;
 	}
@@ -1373,15 +1373,15 @@ static int ProcessReceivedData(int port)
 
 	//	Use MSG_PEEK to ensure whole message is available
 
-	bytes = recv(TNC->WINMORSock, (char *) &AGW->RXHeader, AGWHDDRLEN, MSG_PEEK);
+	bytes = recv(TNC->TCPSock, (char *) &AGW->RXHeader, AGWHDDRLEN, MSG_PEEK);
 
 	if (bytes == SOCKET_ERROR)
 	{
 //		i=sprintf(ErrMsg, "Read Failed for UZ7HO socket - error code = %d\r\n", WSAGetLastError());
 //		WritetoConsole(ErrMsg);
 				
-		closesocket(TNC->WINMORSock);
-		TNC->WINMORSock = 0;
+		closesocket(TNC->TCPSock);
+		TNC->TCPSock = 0;
 					
 		TNC->CONNECTED = FALSE;
 
@@ -1396,8 +1396,8 @@ static int ProcessReceivedData(int port)
 		WritetoConsole(ErrMsg);
 
 		TNC->CONNECTED = FALSE;
-		closesocket(TNC->WINMORSock);
-		TNC->WINMORSock = 0;
+		closesocket(TNC->TCPSock);
+		TNC->TCPSock = 0;
 		return (0);
 	}
 
@@ -1416,10 +1416,10 @@ static int ProcessReceivedData(int port)
 		{
 			// corrupt - reset connection
 
-			shutdown(TNC->WINMORSock, SD_BOTH);
+			shutdown(TNC->TCPSock, SD_BOTH);
 			Sleep(100);
 
-			closesocket(TNC->WINMORSock);
+			closesocket(TNC->TCPSock);
 			TNC->CONNECTED = FALSE;
 			return 0;
 		}
@@ -1428,16 +1428,16 @@ static int ProcessReceivedData(int port)
 		{
 			// Need data - See if enough there
 				
-			bytes = recv(TNC->WINMORSock, (char *)&Message, AGWHDDRLEN + datalen, MSG_PEEK);
+			bytes = recv(TNC->TCPSock, (char *)&Message, AGWHDDRLEN + datalen, MSG_PEEK);
 		}
 
 		if (bytes == AGWHDDRLEN + datalen)
 		{
-			bytes = recv(TNC->WINMORSock, (char *)&AGW->RXHeader, AGWHDDRLEN,0);
+			bytes = recv(TNC->TCPSock, (char *)&AGW->RXHeader, AGWHDDRLEN,0);
 
 			if (datalen > 0)
 			{
-				bytes = recv(TNC->WINMORSock,(char *)&Message, datalen,0);
+				bytes = recv(TNC->TCPSock,(char *)&Message, datalen,0);
 			}
 
 			// Have header, and data if needed
@@ -1481,14 +1481,14 @@ VOID ConnecttoMODEMThread(port)
 
 	Sleep(5000);		// Allow init to complete 
 
-	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
-	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
+	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 
 	if (TNC->destaddr.sin_addr.s_addr == INADDR_NONE)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname(TNC->WINMORHostName);
+		 HostEnt = gethostbyname(TNC->HostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
@@ -1497,13 +1497,13 @@ VOID ConnecttoMODEMThread(port)
 
 	}
 
-	closesocket(TNC->WINMORSock);
-	closesocket(TNC->WINMORDataSock);
+	closesocket(TNC->TCPSock);
+	closesocket(TNC->TCPDataSock);
 
-	TNC->WINMORSock=socket(AF_INET,SOCK_STREAM,0);
-	TNC->WINMORDataSock=socket(AF_INET,SOCK_STREAM,0);
+	TNC->TCPSock=socket(AF_INET,SOCK_STREAM,0);
+	TNC->TCPDataSock=socket(AF_INET,SOCK_STREAM,0);
 
-	if (TNC->WINMORSock == INVALID_SOCKET || TNC->WINMORDataSock == INVALID_SOCKET)
+	if (TNC->TCPSock == INVALID_SOCKET || TNC->TCPDataSock == INVALID_SOCKET)
 	{
 		i=sprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
@@ -1511,13 +1511,13 @@ VOID ConnecttoMODEMThread(port)
   	 	return; 
 	}
  
-	setsockopt (TNC->WINMORDataSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+	setsockopt (TNC->TCPDataSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 
 	sinx.sin_family = AF_INET;
 	sinx.sin_addr.s_addr = INADDR_ANY;
 	sinx.sin_port = 0;
 
-	if (bind(TNC->WINMORSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+	if (bind(TNC->TCPSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
 	{
 		//
 		//	Bind Failed
@@ -1531,7 +1531,7 @@ VOID ConnecttoMODEMThread(port)
 
 	TNC->CONNECTING = TRUE;
 
-	if (connect(TNC->WINMORSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
+	if (connect(TNC->TCPSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
 	{
 		//
 		//	Connected successful
@@ -2080,7 +2080,7 @@ DataLen is the length of the data that follow
 VOID SendData(struct TNCINFO * TNC, char * Key, char * Msg, int MsgLen)
 {
 	struct AGWINFO * AGW = TNC->AGWInfo;
-	SOCKET sock = TNCInfo[MasterPort[TNC->Port]]->WINMORSock;
+	SOCKET sock = TNCInfo[MasterPort[TNC->Port]]->TCPSock;
 	
 	AGW->TXHeader.Port = Key[0] - '1';
 	AGW->TXHeader.DataKind='D';
@@ -2107,7 +2107,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 	strcpy(AGW->TXHeader.callto, &Key[1]);
 	AGW->TXHeader.DataLength = 0;
 
-	send(TNCInfo[MasterPort[TNC->Port]]->WINMORSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+	send(TNCInfo[MasterPort[TNC->Port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 }
 
 

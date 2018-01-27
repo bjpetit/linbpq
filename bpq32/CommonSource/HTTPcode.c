@@ -1850,6 +1850,9 @@ doHeader:
 
 	NodeURL = strtok_s(NULL, "?", &Context);
 
+	if (NodeURL == NULL)
+		return 0;
+
 	if (strcmp(Method, "POST") == 0)
 	{
 		char _REPLYBUFFER[8192];

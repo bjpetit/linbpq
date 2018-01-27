@@ -64,8 +64,6 @@ extern char * RigConfigMsg[35];
 
 int Row = -20;
 
-BOOL RIG_DEBUG = FALSE;
-
 extern struct PORTCONTROL * PORTTABLE;
 
 VOID __cdecl Debugprintf(const char * format, ...);
@@ -78,7 +76,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT);
 BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT);
 BOOL DestroyTTYInfo(int port);
 void CheckRX(struct RIGPORTINFO * PORT);
-int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed);
+static int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed);
 VOID ICOMPoll(struct RIGPORTINFO * PORT);
 VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuff, int len);
 VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len);
@@ -432,7 +430,7 @@ portok:
 				}
 				sprintf(Command, "Ok\r");
 
-				if (RIG_DEBUG)
+				if (RIG->RIG_DEBUG)
 					Debugprintf("BPQ32 SCANSTART Port %d", Port);
 			}
 			else
@@ -453,7 +451,7 @@ portok:
 
 			sprintf(Command, "Ok\r");
 
-			if (RIG_DEBUG)
+			if (RIG->RIG_DEBUG)
 				Debugprintf("BPQ32 SCANSTOP Port %d", Port);
 
 			RIG->PollCounter = 50;	// Dont read freq for 5 secs
@@ -1022,8 +1020,12 @@ portok:
 		if (PORT->PortType == FLEX)
 			buffptr[1] = sprintf(Poll, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", &FreqString[1], ModeNo);
 		else
-			buffptr[1] = sprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
-		
+		{
+			if (Antenna == '5' || Antenna == '6')
+				buffptr[1] = sprintf(Poll, "FA00%s;MD%d;AN%c;FA;MD;", FreqString, ModeNo, Antenna - 4);
+			else
+				buffptr[1] = sprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+		}
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
 		return TRUE;
@@ -1777,17 +1779,17 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 {
 	struct ScanEntry ** ptr;
 	struct _EXTPORTDATA * PortRecord;
-	int i;
+	int i = 0;
 
 	// Get Permission to change
 
-	if (RIG_DEBUG)
+	if (RIG->RIG_DEBUG)
 		Debugprintf("GetPermissionToChange - WaitingForPermission = %d",  RIG->WaitingForPermission);
 
 	// See if any two stage (CONLOCK) ports
 
-//	if (RIG->PortRecord[0]->SCANCAPABILITIES != CONLOCK)
-//		goto CheckOtherPorts;
+	if (RIG->PortRecord[0]->SCANCAPABILITIES != CONLOCK)
+		goto CheckOtherPorts;
 
 	
 	if (RIG->WaitingForPermission)
@@ -1796,16 +1798,16 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 		// eg Request then confirm. only SCS Pactor at the moment.
 		
 		// TNC has been asked for permission, and we are waiting respoonse
-
 		// Only SCS pactor returns WaitingForPrmission, so check shouldn't be called on others
 		
 		RIG->OKtoChange = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
 	
 		if (RIG->OKtoChange == 1)
 		{
-			if (RIG_DEBUG)
+			if (RIG->RIG_DEBUG)
 				Debugprintf("Check Permission returned OK to change");
 
+			i = 1;
 			goto CheckOtherPorts;
 		}
 
@@ -1813,7 +1815,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 		{
 			// Permission Refused. Wait Scan Interval and try again
 
-			if (RIG_DEBUG)
+			if (RIG->RIG_DEBUG)
 				Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
 						RIG->PortRecord[0]->PORT_DLL_NAME, PORT->FreqPtr->Dwell ); 
 
@@ -1829,7 +1831,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 			return FALSE;
 		}
 		
-		return FALSE;			// Haven't got reply yet.
+		return FALSE;			// Haven't got reply yet. Will re-enter next tick
 	}
 	else
 	{
@@ -1839,33 +1841,21 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 			RIG->WaitingForPermission = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 		// If it returns zero there is no need to wait.
-		// SCS Returns True if it is waiting for permission
-		// ARDOP returns True if you can't change so should defet scan
+		// Normally SCS Returns True for first call, but returns 0 if Link not running
 
 		if (RIG->WaitingForPermission)
-		{
-			if (RIG->PortRecord[0]->SCANCAPABILITIES == CONLOCK)	// Pactor style 2 stage lock
-				return FALSE;		// Wait till driver has status
+			return FALSE;		// Wait till driver has status
 
-			// Single stage - Should defer scan
-			
-			if (RIG_DEBUG)
-				Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
-						RIG->PortRecord[0]->PORT_DLL_NAME, PORT->FreqPtr->Dwell ); 
-
-			return FALSE;
-		}	
-
-		if (RIG_DEBUG)
+		if (RIG->RIG_DEBUG)
 			Debugprintf("First call to %s returned OK to change", RIG->PortRecord[0]->PORT_DLL_NAME);
+
+		i = 1;
 	}
 
 CheckOtherPorts:
 
 	// Either first TNC gave permission or there are no SCS like ports.
 	// Ask any others (these are assumed to give immediate yes/no
-
-	i = 1;
 
 	while (RIG->PortRecord[i])
 	{
@@ -1875,7 +1865,7 @@ CheckOtherPorts:
 		{
 			// 1 means can't change - release all
 
-			if (RIG_DEBUG)
+			if (RIG->RIG_DEBUG)
 				Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
 						PortRecord->PORT_DLL_NAME, PORT->FreqPtr->Dwell); 
 
@@ -1891,7 +1881,7 @@ CheckOtherPorts:
 			return FALSE;
 		}
 		else
-			if (RIG_DEBUG)
+			if (RIG->RIG_DEBUG)
 				Debugprintf("Scan Debug %s gave permission", PortRecord->PORT_DLL_NAME); 
 
 		i++;
@@ -2052,7 +2042,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 			if	(GetPermissionToChange(PORT, RIG))
 			{
-				if (RIG_DEBUG)
+				if (RIG->RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
@@ -2082,7 +2072,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 
-		if (RIG_DEBUG)
+		if (RIG->RIG_DEBUG)
 			Debugprintf("BPQ32 Manual Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 
@@ -2751,7 +2741,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 			if	(GetPermissionToChange(PORT, RIG))
 			{
-				if (RIG_DEBUG)
+				if (RIG->RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
@@ -2799,7 +2789,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
-		if (RIG_DEBUG)
+		if (RIG->RIG_DEBUG)
 			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
@@ -3099,7 +3089,7 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 			if (GetPermissionToChange(PORT, RIG))
 			{
-				if (RIG_DEBUG)
+				if (RIG->RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
@@ -3135,7 +3125,7 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
-		if (RIG_DEBUG)
+		if (RIG->RIG_DEBUG)
 			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
@@ -3198,7 +3188,7 @@ VOID DummyPoll(struct RIGPORTINFO * PORT)
 
 			if (GetPermissionToChange(PORT, RIG))
 			{
-				if (RIG_DEBUG)
+				if (RIG->RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
@@ -3414,6 +3404,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	double Dwell;
 	char MemoryBank;	// For Memory Scanning
 	int MemoryNumber;
+	BOOL RIG_DEBUG = FALSE;
 
 	BOOL PTTControlsInputMUX = FALSE;
 	BOOL DataPTT = FALSE;
@@ -3657,13 +3648,25 @@ PortFound:
 		PORT->ConfiguredRigs = 1;
 		RIG = &PORT->Rigs[0];
 	}
+
+	RIG->RIG_DEBUG = RIG_DEBUG;
 	
 	strcpy(RIG->RigName, RigName);
+
+	RIG->TSMenu = 63;		// Default to TS590S
 
 	// IC735 uses shorter freq message
 
 	if (strcmp(RigName, "IC735") == 0 && PORT->PortType == ICOM)
 		RIG->IC735 = TRUE;
+
+	if (PORT->PortType == KENWOOD)
+	{
+		RIG->TSMenu = 63;		// Default to TS590S
+
+		if (strcmp(RigName, "TS590SG") == 0)
+			RIG->TSMenu = 69;
+	}
 
 	RIG->PortNum = Port;
 	RIG->BPQPort |=  (1 << Port);
@@ -3845,8 +3848,8 @@ PortFound:
 
 		if (PTTControlsInputMUX)
 		{
-			strcpy(RIG->PTTOn, "EX06300001;TX1;");			// Select USB before PTT
-			strcpy(RIG->PTTOff, "RX;EX06300000;");			// Select ACC after dropping PTT
+			sprintf(RIG->PTTOn, "EX%03d00001;TX1;", RIG->TSMenu); // Select USB before PTT
+			sprintf(RIG->PTTOff, "RX;EX%03d00000;", RIG->TSMenu); // Select ACC after dropping PTT
 		}
 		else
 		{
@@ -4486,7 +4489,11 @@ CheckScan:
 		}
 		else if	(PORT->PortType == KENWOOD)
 		{	
-			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+			if (Antenna == '5' || Antenna == '6')
+				FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;AN%c;FA;MD;", FreqString, ModeNo, Antenna - 4);
+			else
+				FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+	
 		}
 		else if	(PORT->PortType == FLEX)
 		{	
@@ -4569,6 +4576,12 @@ CheckScan:
 		RIG->ScanCounter = 20;
 
 		ptr = strtok_s(NULL, " \t\n\r", &Context);		// Next Freq
+	}
+
+	if (RIG->NumberofBands)
+	{
+		CheckTimeBands(RIG);		// Set initial FreqPtr;
+		PORT->FreqPtr = RIG->FreqPtr[0];	
 	}
 
 	return RIG;

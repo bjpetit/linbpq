@@ -307,12 +307,23 @@ int ProcessLine(char * buf, int Port)
 	else
 	if (_stricmp(param, "CMSPASS") == 0)
 	{
+		char Temp[80];
+		
 		if (strlen(value) > 79)
 			value[79] = 0;
-		strcpy(TCP->SecureCMSPassword, value);
-		strlop(TCP->SecureCMSPassword, 32);
-		strlop(TCP->SecureCMSPassword, 13);
+	
+		strcpy(Temp, value);
+		strlop(Temp, 32);
+		strlop(Temp, 13);
+		strcpy(TCP->SecureCMSPassword, Temp);
 		_strupr(TCP->SecureCMSPassword);
+
+		if (strcmp(TCP->SecureCMSPassword, Temp) != 0)
+		{
+			// Warn that Password was not in upper case
+
+				WritetoConsoleLocal(" ** Warning CMS Password is not in Upper Case **");
+		}
 	}
 	else
 	if (_stricmp(param, "CMSCALL") == 0)
@@ -1204,7 +1215,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, TelWndProc, 400, 300);
 
 	TCP->hCMSWnd = CreateWindowEx(0, "STATIC", "CMS OK ", WS_CHILD | WS_VISIBLE,
-			240,0,50,16, TNC->hDlg, NULL, hInstance, NULL);
+			240,0,60,16, TNC->hDlg, NULL, hInstance, NULL);
 
 	SendMessage(TCP->hCMSWnd, WM_SETFONT, (WPARAM)hFont, 0);
 
@@ -2445,7 +2456,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			else
 			{
 				TCP->CMSOK = FALSE;
-				SetWindowText(TCP->hCMSWnd, ""); 
+				SetWindowText(TCP->hCMSWnd, "CMS Off"); 
 			}
 			break;
 
@@ -4617,9 +4628,11 @@ BOOL CheckCMSThread(struct TNCINFO * TNC);
 BOOL CheckCMS(struct TNCINFO * TNC)
 {
 
-	TNC->TCPInfo->CheckCMSTimer = 0;
-	_beginthread((void (*)())CheckCMSThread, 0, TNC);
-
+	if (TNC->TCPInfo->CMS)
+	{
+		TNC->TCPInfo->CheckCMSTimer = 0;
+		_beginthread((void (*)())CheckCMSThread, 0, TNC);
+	}
 	return 0;
 }
 

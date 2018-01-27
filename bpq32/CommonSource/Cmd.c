@@ -59,6 +59,8 @@ VOID FormatTime2(char * Time, time_t cTime);
 VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
 VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst);
 VOID FindLostBuffers();
+BOOL CheckCMS(struct TNCINFO * TNC);
+VOID L2SENDXID(struct _LINKTABLE * LINK);
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 char OrigCmdBuffer[81] = "";		// Command Hander input buffer
@@ -143,6 +145,8 @@ int CMDXLEN	= sizeof (CMDX);
 
 VOID SENDNODESMSG();
 VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID STOPCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID STARTCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID FINDBUFFS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
@@ -520,7 +524,7 @@ TRANSPORTENTRY * SetupSessionFromSession(TRANSPORTENTRY * Session, PBPQVECSTRUC 
 	return NULL;
 }
 
-extern GETCONNECTIONINFO();
+extern int GETCONNECTIONINFO();
 
 
 BOOL cATTACHTOBBS(TRANSPORTENTRY * Session, UINT Mask, int Paclen, int * AnySessions)
@@ -3940,6 +3944,9 @@ CMDX COMMANDS[] =
 	"WL2KSYSOP   ",5,WL2KSYSOP,0,
 	"STOPPORT    ",4,STOPPORT,0,
 	"STARTPORT   ",5,STARTPORT,0,
+	"STOPCMS     ",7,STOPCMS,0,
+	"STARTCMS    ",8,STARTCMS,0,
+
 	"FINDBUFFS   ",4,FINDBUFFS,0,
 	"KISS        ",4,KISSCMD,0,
 
@@ -4897,6 +4904,127 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 VOID CloseKISSPort(struct PORTCONTROL * PortVector);
 int OpenConnection(struct PORTCONTROL * PortVector, int port);
 
+VOID STOPCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char _REPLYBUFFER[1000] = "";
+	char * ptr, * Context;
+
+	int portno;
+
+	struct TNCINFO * TNC;
+	struct TCPINFO * TCP;
+	struct PORTCONTROL * PORT = PORTTABLE;
+	int n = NUMBEROFPORTS;
+
+	// Get port number
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+	{
+		portno = atoi (ptr);
+
+		if (portno)
+		{
+			while (n--)
+			{
+				if (PORT->PORTNUMBER == portno)
+				{
+					TNC = TNCInfo[portno];
+
+					if (!TNC || !TNC->TCPInfo)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not a Telnet Port\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
+					TCP = TNC->TCPInfo;
+			
+					TCP->CMS = 0;
+					TCP->CMSOK = FALSE;
+#ifndef LINBPQ
+					CheckMenuItem(TCP->hActionMenu, 3, MF_BYPOSITION | TCP->CMS<<3);
+					SetWindowText(TCP->hCMSWnd, "CMS Off"); 
+#endif
+					Bufferptr += sprintf(Bufferptr, "CMS Server Disabled\r");
+					SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+					return;
+				}
+				PORT = PORT->PORTPOINTER;
+			}
+		}
+	}
+
+	// Bad port
+
+	strcpy(Bufferptr, BADPORT);
+	Bufferptr += strlen(BADPORT);
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+}
+
+
+VOID STARTCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char _REPLYBUFFER[1000] = "";
+	char * ptr, * Context;
+
+	int portno;
+
+	struct TNCINFO * TNC;
+	struct TCPINFO * TCP;
+	struct PORTCONTROL * PORT = PORTTABLE;
+	int n = NUMBEROFPORTS;
+
+	// Get port number
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+	{
+		portno = atoi (ptr);
+
+		if (portno)
+		{
+			while (n--)
+			{
+				if (PORT->PORTNUMBER == portno)
+				{
+					TNC = TNCInfo[portno];
+
+					if (!TNC || !TNC->TCPInfo)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not a Telnet Port\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
+					TCP = TNC->TCPInfo;
+					TCP->CMS = 1;
+#ifndef LINBPQ
+					CheckMenuItem(TCP->hActionMenu, 3, MF_BYPOSITION | TCP->CMS<<3);
+#endif	
+					CheckCMS(TNC);
+	
+					Bufferptr += sprintf(Bufferptr, "CMS Server Enabled\r");
+					SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+					return;
+				}
+				PORT = PORT->PORTPOINTER;
+			}
+		}
+	}
+
+	// Bad port
+
+	strcpy(Bufferptr, BADPORT);
+	Bufferptr += strlen(BADPORT);
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+}
+
+
 VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	char _REPLYBUFFER[1000] = "";
@@ -5022,6 +5150,8 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 	return;
 }
+
+
 
 #define FEND 0xC0 
 int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count);
