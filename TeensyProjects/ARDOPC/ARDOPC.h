@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "1.0.2.5d-BPQ"
+#define ProductVersion "1.0.2.5k-BPQ"
 
 //	Sound interface buffer size
 
@@ -384,7 +384,6 @@ extern BOOL AccumulateStats;
 extern BOOL Use600Modes;
 extern BOOL FSKOnly;
 extern BOOL fastStart;
-extern BOOL skip167;
 extern BOOL ConsoleLogLevel;
 extern BOOL EnablePingAck;
 
@@ -402,6 +401,7 @@ extern int pttGPIOPin;
 extern HANDLE hCATDevice;		// port for Rig Control
 extern char CATPort[80];
 extern int CATBAUD;
+extern int EnableHostCATRX;
 
 extern HANDLE hPTTDevice;			// port for PTT
 extern char PTTPort[80];			// Port for Hardware PTT - may be same as control port.
@@ -557,17 +557,19 @@ extern int LastBusyOn;
 extern int LastBusyOff;
 extern int dttLastLeaderDetect;
 
-extern int pktNumCar;
-extern int pktMaxCar;
 extern int pktDataLen;
 extern int pktRSLen;
-extern const char pktMod[4][8];
+extern const char pktMod[16][12];
 extern int pktMode;
 extern int pktModeLen;
-extern const char pktBW[9][8];
+extern const int pktBW[16];
+extern const int pktCarriers[16];
+extern const int defaultPacLen[16];
+extern const BOOL pktFSK[16];
+
 extern int pktMaxFrame;
+extern int pktMaxBandwidth;
 extern int pktPacLen;
-extern int initNumCar;
 extern int initMode;		 // 0 - 4PSK 1 - 8PSK 2 = 16QAM
 
 

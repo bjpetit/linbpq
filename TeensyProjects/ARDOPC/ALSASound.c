@@ -323,7 +323,7 @@ void main(int argc, char * argv[])
 		char * pin = strlop(PTTPort, '=');
 	
 		if (Baud)
-			CATBAUD = atoi(Baud);
+			PTTBAUD = atoi(Baud);
 
 		if (strcmp(CATPort, PTTPort) == 0)
 		{
@@ -365,6 +365,27 @@ void main(int argc, char * argv[])
 		}
 	}
 
+	if (hCATDevice)
+	{
+		WriteDebugLog(LOGALERT, "CAT Control on port %s", CATPort); 
+		COMSetRTS(hPTTDevice);
+		COMSetDTR(hPTTDevice);
+		if (PTTOffCmdLen)
+		{
+			WriteDebugLog(LOGALERT, "PTT using CAT Port", CATPort); 
+			RadioControl = TRUE;
+		}
+	}
+	else
+	{
+		// Warn of -u and -k defined but no CAT Port
+
+		if (PTTOffCmdLen)
+		{
+			WriteDebugLog(LOGALERT, "Warning PTT Off string defined but no CAT port", CATPort); 
+		}
+	}
+
 	if (hPTTDevice)
 	{
 		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPort); 
@@ -373,12 +394,6 @@ void main(int argc, char * argv[])
 		RadioControl = TRUE;
 	}	
 
-	if (hCATDevice)
-	{
-		WriteDebugLog(LOGALERT, "CAT Control on port %s", CATPort); 
-		COMClearRTS(hPTTDevice);
-		COMClearDTR(hPTTDevice);
-	}
 
 	initdisplay();
 
@@ -1118,8 +1133,8 @@ int PackSamplesAndSend(short * input, int nSamples)
 	return ret;
 
 }
-
-int SoundCardClearInput()
+/*
+int xSoundCardClearInput()
 {
 	short samples[65536];
 	int n;
@@ -1158,7 +1173,7 @@ int SoundCardClearInput()
 	}
 	return 0;
 }
-
+*/
 
 int SoundCardRead(short * input, unsigned int nSamples)
 {
@@ -1410,6 +1425,7 @@ void SoundFlush()
 
 	snd_pcm_status_t *status = NULL;
 	int err, res;
+	char strFault[100] = "";
 
 	AddTrailer();			// add the trailer.
 
@@ -1443,7 +1459,7 @@ void SoundFlush()
 		{
 			// Send complete - Restart Capture
 
-			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);	
+			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, strFault);	
 			break;
 		}
 		usleep(50000);
@@ -1484,9 +1500,9 @@ VOID RadioPTT(int PTTState)
 
 		if (PTTMode & PTTCI_V)
 			if (PTTState)
-				WriteCOMBlock(hPTTDevice, PTTOnCmd, PTTOnCmdLen);
+				WriteCOMBlock(hCATDevice, PTTOnCmd, PTTOnCmdLen);
 			else
-				WriteCOMBlock(hPTTDevice, PTTOffCmd, PTTOffCmdLen);
+				WriteCOMBlock(hCATDevice, PTTOffCmd, PTTOffCmdLen);
 	}
 }
 

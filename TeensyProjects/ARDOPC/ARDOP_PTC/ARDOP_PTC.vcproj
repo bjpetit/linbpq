@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)\ARDOP_PTC\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)\ARDOP_PTC)\$(ConfigurationName)"
+			OutputDirectory="D:\DEV\ARDOP_PTC\$(ConfigurationName)"
+			IntermediateDirectory="D:\DEV\ARDOP_PTC\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -62,7 +62,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
-				OutputFile="c:\devprogs\bpq32\ARDOP_PTC.exe"
+				OutputFile="d:\devprogs\bpq32\ARDOP_PTC.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
@@ -96,8 +96,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)\ARDOP_PTC\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)\ARDOP_PTC)\$(ConfigurationName)"
+			OutputDirectory="D:\DEV\ARDOP_PTC\$(ConfigurationName)"
+			IntermediateDirectory="D:\DEV\ARDOP_PTC\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"
@@ -139,7 +139,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
-				OutputFile="c:\devprogs\bpq32\ARDOP_PTC.exe"
+				OutputFile="d:\devprogs\bpq32\ARDOP_PTC.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"

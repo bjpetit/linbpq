@@ -119,14 +119,28 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
 
-	if (intBaud == 50)
-		initFilter(200,1500);
-	else if (intNumCar == 1)
-		initFilter(500,1500);
-	else if (intNumCar == 2)
-		initFilter(1000,1500);
-	else if (intNumCar == 4)
-		initFilter(2000,1500);
+	if (Type == PktFrameHeader)
+	{
+		// Meader is 4FSK which needs 500 filter
+
+		if (pktBW[pktMode] < 1000)
+			initFilter(500,1500);
+		else if (pktBW[pktMode] < 2000)
+			initFilter(1000,1500);
+		else
+			initFilter(2000,1500);
+	}
+	else
+	{
+		if (intBaud == 50)
+			initFilter(200,1500);
+		else if (intNumCar == 1)
+			initFilter(500,1500);
+		else if (intNumCar == 2)
+			initFilter(1000,1500);
+		else if (intNumCar == 4)
+			initFilter(2000,1500);
+	}
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
@@ -155,6 +169,8 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
 
 	intDataPtr = 2;
+
+Reenter:
 
 	switch(intNumCar)
 	{
@@ -195,6 +211,49 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 				bytMask = bytMask >> 2;
 			}
 			intDataPtr += 1;
+		}
+
+		if (Type == PktFrameHeader)
+		{
+		
+			// just sent packet header. Send rest in current mode
+			// Assumes we are using 4FSK for Packet Header
+
+			Type = 0;			// Prevent reentry
+	
+			strcpy(strMod, &pktMod[pktMode][0]);
+			intDataBytesPerCar = pktDataLen + pktRSLen + 3;
+			intDataPtr = 11;		// Over Header
+			intNumCar = pktCarriers[pktMode];
+
+			// This assumes Packet Data is sent as PSK/QAM
+
+			switch(intNumCar)
+			{		
+			case 1:
+		//		intCarStartIndex = 4;
+				dblCarScalingFactor = 1.0f; // Starting at 1500 Hz  (scaling factors determined emperically to minimize crest factor)  TODO:  needs verification
+				break;
+			case 2:
+		//		intCarStartIndex = 3;
+				dblCarScalingFactor = 0.53f; // Starting at 1400 Hz
+				break;
+			case 4:
+		//		intCarStartIndex = 2;
+				dblCarScalingFactor = 0.29f; // Starting at 1200 Hz
+				break;
+			case 8:
+		//		intCarStartIndex = 0;
+				dblCarScalingFactor = 0.17f; // Starting at 800 Hz
+			}
+			
+			// Reenter to send rest of variable length packet frame
+		
+			if (pktFSK[pktMode])
+				goto Reenter;
+			else
+				ModPSKDataAndPlay(PktFrameData, bytEncodedBytes, 0, 0);
+			return;
 		}
 
 		Flush();
@@ -527,56 +586,8 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
 
-	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
 
-	if (Type == PktFrameHeader)
-	{
-		// Header is always 200 but Packet Data may vary
-
-		if (pktNumCar == 1)
-			initFilter(200,1500);
-		else if (pktNumCar == 2)
-			initFilter(500,1500);
-		else if (pktNumCar == 4)
-			initFilter(1000,1500);
-		else if (pktNumCar == 8)
-			initFilter(2000,1500);
-	}
-	else
-	{
-	if (intNumCar == 1)
-		initFilter(200,1500);
-	else if (intNumCar == 2)
-		initFilter(500,1500);
-	else if (intNumCar == 4)
-		initFilter(1000,1500);
-	else if (intNumCar == 8)
-		initFilter(2000,1500);
-	}
-//	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
-//               strLastWavStream = strType
-//          End If
-
-	if (intLeaderLen == 0)
-		intLeaderLenMS = LeaderLength;
-	else
-		intLeaderLenMS = intLeaderLen;
-
-	switch(intBaud)
-	{		
-	case 100:
-		
-		intSampPerSym = 120;
-		break;
-                
-	case 167:
-		
-		intSampPerSym = 72; // the total number of samples per symbol 
-		break;
-	}
-	
-	// Create the leader
-	
 	switch(intNumCar)
 	{		
 	case 1:
@@ -596,8 +607,53 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 		dblCarScalingFactor = 0.17f; // Starting at 800 Hz
 	} 
 
-	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
+	intSampPerSym = 120;
 
+	if (Type == PktFrameData)
+	{
+		intDataBytesPerCar = pktDataLen + pktRSLen + 3;
+		intDataPtr = 11;		// Over Header
+		goto PktLoopBack;
+	}
+	
+	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+
+/*	// DOnt use PSK Header at the moment
+	if (Type == PktFrameHeader)
+	{
+		// Header is always 200 but Packet Data may vary
+
+		if (pktNumCar == 1)
+			initFilter(200,1500);
+		else if (pktNumCar == 2)
+			initFilter(500,1500);
+		else if (pktNumCar == 4)
+			initFilter(1000,1500);
+		else if (pktNumCar == 8)
+			initFilter(2000,1500);
+	}
+	else
+	{
+*/
+	if (intNumCar == 1)
+		initFilter(200,1500);
+	else if (intNumCar == 2)
+		initFilter(500,1500);
+	else if (intNumCar == 4)
+		initFilter(1000,1500);
+	else if (intNumCar == 8)
+		initFilter(2000,1500);
+//	}
+//	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
+//               strLastWavStream = strType
+//          End If
+
+	if (intLeaderLen == 0)
+		intLeaderLenMS = LeaderLength;
+	else
+		intLeaderLenMS = intLeaderLen;
+	
+	
 	// Create the leader
 
 	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
@@ -817,8 +873,8 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 		strcpy(strMod, &pktMod[pktMode][0]);
 		intDataBytesPerCar = pktDataLen + pktRSLen + 3;
-		intDataPtr = 13;		// Over Header
-		intNumCar = pktNumCar;
+		intDataPtr = 11;		// Over Header
+		intNumCar = pktCarriers[pktMode];
 
 		switch(intNumCar)
 		{		

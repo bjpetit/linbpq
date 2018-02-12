@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)\ARDOP\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)\ARDOP\$(ConfigurationName)"
+			OutputDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
+			IntermediateDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -64,7 +64,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib User32.lib $(NoInherit)"
-				OutputFile="c:\devprogs\bpq32\ARDOPC.exe"
+				OutputFile="d:\devprogs\bpq32\ARDOPC.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
@@ -98,8 +98,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)\ARDOP\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)\ARDOP\$(ConfigurationName)"
+			OutputDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
+			IntermediateDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"
@@ -140,7 +140,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
-				OutputFile="c:\devprogs\bpq32\ARDOPC.exe"
+				OutputFile="d:\devprogs\bpq32\ARDOPC.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"

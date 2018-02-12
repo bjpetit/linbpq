@@ -282,7 +282,7 @@ int BPQSerialGetData(UCHAR * Message, unsigned int BufLen, unsigned long * MsgLe
 
 VOID PutString(UCHAR * Msg)
 {
-	WriteDebugLog(7, Msg);
+//	WriteDebugLog(7, Msg);
 	SerialSendData(Msg, strlen(Msg));
 }
 

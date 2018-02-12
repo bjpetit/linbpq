@@ -72,9 +72,9 @@
 // If using Serial1 or Serial3 also define SERIAL1SIZE or SERIAL3SIZE to
 // increase size of serial port buffers
 
-//#define HOSTPORT Serial3
+//#define HOSTPORT Serial1
 //#define HOSTSPEED 115200
-//#define SERIAL3SIZE 512
+//#define SERIAL1SIZE 512
 
 //#define MONPORT Serial
 //#define CPULOAD

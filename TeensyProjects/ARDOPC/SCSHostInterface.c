@@ -771,8 +771,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			
 			SCSReply[2] = Channel;
 			SCSReply[3] = 1;
-			strcpy(&SCSReply[4], "c:");
-			strcpy(&SCSReply[6], CMDReplyBuffer);
+			strcpy(&SCSReply[4], CMDReplyBuffer);
 			ReplyLen = strlen(CMDReplyBuffer) + 7;
 			EmCRCStuffAndSend(SCSReply, ReplyLen);
 			WriteDebugLog(LOGDEBUG, "Sending CMD Reply %s", CMDReplyBuffer);
@@ -1096,7 +1095,7 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	else if (_memicmp(Command, "T 0", 3) == 0)
 		Term4Mode = FALSE;
 
-	else if (_memicmp(Command, "PAC", 3) == 0)
+	else if (strcmp(Command, "PAC") == 0)
 		PACMode = TRUE;
 
 	else if (_memicmp(Command, "QUIT", 4) == 0)
@@ -1202,9 +1201,9 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 	else if (PACMode)
 	{
 		if (_memicmp(Command, "BAUD 1200", 9) == 0) 
-			pktMaxCar = 2;
+			pktMaxBandwidth = 1000;
 		else if (_memicmp(Command, "BAUD 9600", 9) == 0) 
-			pktMaxCar = 8;
+			pktMaxBandwidth = 2000;
 		else if (_memicmp(Command, "MAX ", 4) == 0) 
 			pktMaxFrame = atoi(&Command[4]);
 		else if (_memicmp(Command, "PACL", 4) == 0)
@@ -1315,10 +1314,13 @@ VOID ProcessSCSPacket(UCHAR * rxbuffer, unsigned int Length)
 	}		
 
 Loop:
-
+/*
 	if (rxbuffer[0] == 0 && rxbuffer[1] == 1)
 	{
 		// Could be host command if in recovery
+
+		WriteDebugLog(LOGINFO, "?? Host mode Recovery ??");
+
 		
 		if (rxbuffer[2] <= RXBPtr - 4)
 		{
@@ -1334,6 +1336,7 @@ Loop:
 			return;		// All gone
 		}
 	}
+	*/
 	if (rxbuffer[0] != 170)
 	{
 		UCHAR *ptr;

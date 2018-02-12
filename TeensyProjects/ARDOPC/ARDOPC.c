@@ -73,7 +73,7 @@ int ARQConReqRepeats = 5;
 BOOL DebugLog = TRUE;
 BOOL CommandTrace = TRUE;
 int DriveLevel = 100;
-char strFECMode[16] = "4FSK.200.50";
+char strFECMode[16] = "4FSK.500.100";
 int FECRepeats = 0;
 BOOL FECId = FALSE;
 int Squelch = 5;
@@ -88,7 +88,6 @@ BOOL AccumulateStats = TRUE;
 BOOL Use600Modes = FALSE;
 BOOL FSKOnly = FALSE;
 BOOL fastStart = TRUE;
-BOOL skip167 = FALSE;
 BOOL ConsoleLogLevel = LOGDEBUG;
 BOOL EnablePingAck = TRUE;
 
@@ -100,6 +99,7 @@ int pttGPIOPin = -1;
 HANDLE hCATDevice = 0;	
 char CATPort[80] = "";			// Port for CAT.
 int CATBAUD = 19200;
+int EnableHostCATRX = FALSE;	// Set when host sends RADIOHEX command
 
 HANDLE hPTTDevice = 0;
 char PTTPort[80] = "";			// Port for Hardware PTT - may be same as control port.
@@ -213,7 +213,6 @@ const UCHAR bytValidFrameTypesALL[]=
 	0x60,0x61,0x62,0x63,0x64,0x65,						// 60 - 6F
 	0x70,0x71,0x72,0x73,0x74,0x75,0x7A,0x7B,0x7C,0x7D,	// 70 - 7F
 
- 
  PktFrameHeader, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  124, 125, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
  235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248,
@@ -229,7 +228,7 @@ const UCHAR bytValidFrameTypesISS[]=		// ACKs, NAKs, END, DISC, BREAK
 // Con req and Con ACK
  49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
  //ACK
- 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+ PktFrameHeader, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
  240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
 
 
@@ -1159,16 +1158,16 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 
 		// Special Variable Length frame
 
-		// This defines the header, 4PSK.200.100. Length is 8 bytes
+		// This defines the header, 4PSK.500.100. Length is 6 bytes
 		// Once we have that we receive the rest of the packet in the 
 		// mode defined in the header.
-		// Header is 4 bits Type 12 Bits Len 2 bytes CRC 4 bytes RS
+		// Header is 4 bits Type 12 Bits Len 2 bytes CRC 2 bytes RS
 
-		*blnOdd = (1 & bytFrameType) != 0;
+		*blnOdd = 0;
 		*intNumCar = 1;
 		*intDataLen = 2;
-		*intRSLen = 4;
-		strcpy(strMod, "4PSK");
+		*intRSLen = 2;
+		strcpy(strMod, "4FSK");
 		*intBaud = 100;
 		*bytQualThres = 50;
  		break;
@@ -1182,16 +1181,15 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		// are variable
 		
 
-		*blnOdd = (1 & bytFrameType) != 0;
-		*intNumCar = pktNumCar;
+		*blnOdd = 1;
+		*intNumCar = pktCarriers[pktMode];
 		*intDataLen = pktDataLen;
 		*intRSLen = pktRSLen;
 		strcpy(strMod, &pktMod[pktMode][0]);
+		strlop(strMod, '/');
 		*intBaud = 100;
 		*bytQualThres = 50;
  		break;
-
-
 
 	default:
 		//'Logs.Exception("[PSKDataInfo] No data for frame type= H" & Format(bytFrameType, "x"))
@@ -2747,8 +2745,8 @@ void UpdateBusyDetector(short * bytNewSamples)
 	if (ProtocolState != DISC)		// ' Only process busy when in DISC state
 		return;
 
-	if (State != SearchingForLeader)
-		return;						// only when looking for leader
+//	if (State != SearchingForLeader)
+//		return;						// only when looking for leader
 
 	if (Now - LastBusyCheck < 100)
 		return;

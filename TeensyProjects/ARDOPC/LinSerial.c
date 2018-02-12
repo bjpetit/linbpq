@@ -270,18 +270,22 @@ VOID COMSetRTS(HANDLE fd)
 {
 	int status;
 
-	ioctl(fd, TIOCMGET, &status);
+	if (ioctl(fd, TIOCMGET, &status) == -1)
+		perror("ARDOP PTT TIOCMGET");
 	status |= TIOCM_RTS;
-    ioctl(fd, TIOCMSET, &status);
+	if (ioctl(fd, TIOCMSET, &status) == -1)
+		perror("ARDOP PTT TIOCMSET");
 }
 
 VOID COMClearRTS(HANDLE fd)
 {
 	int status;
 
-	ioctl(fd, TIOCMGET, &status);
+	if (ioctl(fd, TIOCMGET, &status) == -1)
+		perror("ARDOP PTT TIOCMGET");
 	status &= ~TIOCM_RTS;
-    ioctl(fd, TIOCMSET, &status);
+	if (ioctl(fd, TIOCMSET, &status) == -1)
+		perror("ARDOP PTT TIOCMSET");
 }
 
 

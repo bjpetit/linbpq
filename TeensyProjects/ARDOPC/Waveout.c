@@ -251,20 +251,34 @@ void main(int argc, char * argv[])
 			hCATDevice = OpenCOMPort(CATPort, CATBAUD, FALSE, FALSE, FALSE, 0);
 		}
 	}
-	if (hPTTDevice)
-	{
-		COMClearRTS(hPTTDevice);
-		COMClearDTR(hPTTDevice);
-		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPort); 
-		RadioControl = TRUE;
-	}
 
 	if (hCATDevice)
 	{
 		WriteDebugLog(LOGALERT, "CAT Control on port %s", CATPort); 
+		COMSetRTS(hPTTDevice);
+		COMSetDTR(hPTTDevice);
+		if (PTTOffCmdLen)
+		{
+			WriteDebugLog(LOGALERT, "PTT using CAT Port", CATPort); 
+			RadioControl = TRUE;
+		}
+	}
+	else
+	{
+		// Warn of -u and -k defined but no CAT Port
+
+		if (PTTOffCmdLen)
+			WriteDebugLog(LOGALERT, "Warning PTT Off string defined but no CAT port", CATPort); 
+	}
+
+	if (hPTTDevice)
+	{
+		WriteDebugLog(LOGALERT, "Using RTS on port %s for PTT", PTTPort); 
 		COMClearRTS(hPTTDevice);
 		COMClearDTR(hPTTDevice);
-	}
+		RadioControl = TRUE;
+	}	
+
 
 
 	QueryPerformanceFrequency(&Frequency);

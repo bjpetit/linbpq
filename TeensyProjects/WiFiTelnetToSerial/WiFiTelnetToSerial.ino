@@ -35,7 +35,7 @@ ESP8266WebServer webserver(80);		// For configuration/Status
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   // Set SSID and Password from EEPROM
 
@@ -113,34 +113,22 @@ void loop()
 
   if (server.hasClient())
   {
-    if (!serverClient || !serverClient.connected())
+    serverClient = server.available();
+    Serial.print("New client");
+  }
+
+  //check client for data
+
+  if (serverClient && serverClient.connected())
+  {
+    if (serverClient.available())
     {
-      if (serverClient)
-        serverClient.stop();
-
-      serverClient = server.available();
-      Serial.print("New client");
-    }
-    else
-    {
-      // already connected so reject
-
-      WiFiClient serverClient = server.available();
-      serverClient.stop();
-    }
-
-    //check client for data
-
-    if (serverClient && serverClient.connected())
-    {
-      if (serverClient.available())
-      {
-        //get data from the telnet client and push it to the UART
-        while (serverClient.available())
-          Serial.write(serverClient.read());
-      }
+      //get data from the telnet client and push it to the UART
+      while (serverClient.available())
+        Serial.write(serverClient.read());
     }
   }
+
   //check UART for data
 
   if (Serial.available())
@@ -168,6 +156,7 @@ void loop()
     if (serverClient && serverClient.connected())
       serverClient.write(sbuf, tot);
   }
+
 }
 
 void handleRoot()

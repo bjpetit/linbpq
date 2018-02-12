@@ -82,6 +82,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define SETUPFAILED 2
 #define LINKLOST 3
 #define LINKSTUCK 4
+#define LINKIDLE 5
 
 // XID Optional Functions
 
@@ -148,11 +149,10 @@ typedef struct _LINKTABLE
 	int		PACLEN;
 
 	UCHAR	L2FLAGS;		// CONTROL BITS
-	UCHAR	VER1FLAG;		// SET IF OTHER END RUNNING VERSION 1
   
 	UCHAR *	TXBuffer;		// Bytes to send (Malloced)
-	int TXCount;			// COunt of nytes to send
-	int TXBuffersize;		// CUrrently allocated size
+	int TXCount;			// Count of bytes to send
+	int TXBuffersize;		// Currently allocated size
 
 	UCHAR *	RXBuffer;		// Bytes to send (Malloced)
 	int RXCount;			// COunt of nytes to send
@@ -166,7 +166,6 @@ typedef struct _LINKTABLE
 	unsigned short	L2TIMER;		// FRAME RETRY TIMER
 	UCHAR	L2TIME;			// RETRY TIMER INITIAL VALUE
 	unsigned short	L2SLOTIM;		// DELAY FOR LINK VALIDATION POLL
-	UCHAR	L2ACKREQ;		// DELAYED TEXT ACK TIMER
 	UCHAR	REJTIMER;		// TO TIME OUT REJ  IN VERSION 1
 	unsigned short	LAST_F_TIME;	// TIME LAST R(F) SENT
 	UCHAR	SDREJF;			// FLAGS FOR FRMR
@@ -194,12 +193,15 @@ typedef struct _LINKTABLE
 
 	// Stats for dynamic frame type, window and paclen
 
-	int pktNumCar;
 	int pktMode;
 
 	int L2FRAMESFORUS;
 	int L2FRAMESSENT;
 	int L2TIMEOUTS;
+	int BytesSent;
+	int BytesReceived;
+	int PacketsSent;
+	int PacketsReceived;
 	int L2FRMRRX;
 	int L2FRMRTX;
 //	int RXERRORS;			// RECEIVE ERRORS
@@ -225,27 +227,45 @@ UCHAR AVSENDING;			// LAST MINUTE
 UCHAR AVACTIVE;
 
 UCHAR PORTWINDOW = 4;	// L2 WINDOW FOR THIS PORT
-int PORTTXDELAY;	// TX DELAY FOR THIS PORT
+int PORTTXDELAY;		// TX DELAY FOR THIS PORT
 UCHAR PORTPERSISTANCE;	// PERSISTANCE VALUE FOR THIS PORT
-int PORTSLOTTIME;	// SLOT TIME
-int PORTT1 = 5 * L2TICK;	// L2 TIMEOUT
-int PORTT2 = 2 * L2TICK;	// L2 DELAYED ACK TIMER
-int PORTN2 = 6;				// RETRIES
-int PORTPACLEN;	// DEFAULT PACLEN FOR INCOMING SESSIONS
+int PORTSLOTTIME;		// SLOT TIME
+int PORTT1 = 4 * L2TICK;// L2 TIMEOUT
+int PORTN2 = 6;			// RETRIES
+int PORTPACLEN;			// DEFAULT PACLEN FOR INCOMING SESSIONS
 
 int PORTMAXDIGIS = 3;
-int T3 = 120 * L2TICK;
+int T3 = 180 * L2TICK;
 int L2KILLTIME = 600 * L2TICK;
 
 
 VOID * PORTTX_Q;
 VOID * FREE_Q;
 
-int initNumCar = 2;
-int initMode = 1;		 // 0 - 4PSK 1 - 8PSK 2 = 16QAM
+int initMode = 1;
+int SABMMode = 1;
+
+// Modes now
+
+//	"4PSK/200",
+//	"4FSK/500", "4PSK/500", "8PSK/500", "16QAM/500",
+//	"4FSK/1000", "4PSK/1000", "8PSK/1000", "16QAM/1000",
+//	"4FSK/2000", "4PSK/2000", "8PSK/2000", "16QAM/2000"
+
+int CtlMode[16]	= {			// Control frames are sent in faster modes but not full speed as they are short
+			1,
+			1, 2, 2, 2,
+			5, 6, 6, 6,
+			9, 9, 9 ,9};
 
 int initMaxFrame = 7;	// Will be overriden depending on Mode
-int initPacLen = 256;
+int initPacLen = 0;
+
+const int defaultPacLen[16] = {
+			32,
+			32, 64, 64, 64,
+			64, 128, 128, 128,
+			128, 256, 256, 256};
 
 // Paclen 256 is fine with 8 car 4PSK and just about ok with 4 car 4PSK.
 // Also just about ok with 2 car QAM (4 Secs packet time)
@@ -310,13 +330,15 @@ VOID PutString(UCHAR * Msg);
 int PutChar(UCHAR c);
 int SerialSendData(UCHAR * Message,int MsgLen);
 VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
+VOID DisplaySessionStats(struct _LINKTABLE * LINK, int Exitcode);
+
+
 int REALTIMETICKS = 0;
 
 //	MSGFLAG contains CMD/RESPONSE BITS
 
 #define	CMDBIT	4		// CURRENT MESSAGE IS A COMMAND
 #define	RESP 2		// CURRENT MSG IS RESPONSE
-#define	VER1 1 		// CURRENT MSG IS VERSION 1
 
 //	FRMR REJECT FLAGS
 
@@ -539,29 +561,20 @@ struct _LINKTABLE * NewLink()
 	LINK->RXBuffersize = 512;	// Currently allocated size
 
 	LINK->pktMode = initMode;			// Set by PAC commands
-	LINK->pktNumCar = initNumCar;// 
 
-	// Calculate suitable PACLEN for Mode
+	// Get Default PACLEN for Mode
 
 	// Paclen 256 is fine with 8 car 4PSK and just about ok with 4 car 4PSK.
 	// Also just about ok with 2 car QAM (4 Secs packet time)
 	// 2 Car 4PSK best limited to 128
 
-	if (initNumCar > 2)
-		initPacLen = 256;
-	else if (initNumCar == 2)
-		initPacLen = 128;
+	if (initPacLen == 0)		// Use configured if set
+		LINK->PACLEN = defaultPacLen[initMode];	// Starting Point
 	else
-		initPacLen = 64;
+		LINK->PACLEN = initPacLen;			// Starting Point
 
-	LINK->PACLEN = initPacLen;			// Starting Point
 
-	if (initNumCar == 8)
-		initMaxFrame = 7;
-	else if (initNumCar == 1)
-		initMaxFrame = 2;
-	else
-		initMaxFrame = 4;
+	initMaxFrame = 7;
 
 	LINK->LINKWINDOW = initMaxFrame;		// Starting Point
 
@@ -571,7 +584,7 @@ struct _LINKTABLE * NewLink()
 
 	for (i = 0; i < 8; i++)
 	{
-		LINK->FRAMES[i].Data = malloc(initPacLen);	// paclen
+		LINK->FRAMES[i].Data = malloc(LINK->PACLEN);	// paclen
 	}
 
 	if (LINK->FRAMES[7].Data == NULL)
@@ -786,17 +799,12 @@ VOID L2Routine(UCHAR * Packet, int Length, int FrameQuality, int totalRSErrors, 
 
 	if (Buffer.DEST[6] & 0x80)
 	{
-		if (Buffer.ORIGIN[6] & 0x80)			//	Both set, assume V1
-			MSGFLAG |= VER1;
-		else
-			MSGFLAG |= CMDBIT;
+		MSGFLAG |= CMDBIT;
 	}
 	else
 	{
 		if (Buffer.ORIGIN[6] & 0x80)			//	Only Dest Set
 			MSGFLAG |= RESP;
-		else
-			MSGFLAG |= VER1;				// Neither, assume V1
 	}
 
 	//	SEE IF FOR AN ACTIVE LINK SESSION
@@ -878,14 +886,9 @@ VOID L2FORUS(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR MSGFLA
 
 	if (CTLlessPF == SREJ)		// Used to see if other end supports SREJ on 2.0
 	{
-		// Send FRMR if dont support SREJ
-		// Send DM if we do
+		// We do, so send DM 
 
-		if (SUPPORT2point2)
-			L2SENDRESP(LINK, Buffer, DM);
-		else
-			L2SENDINVALIDCTRL(LINK, Buffer, CTL);
-		
+		L2SENDRESP(LINK, Buffer, DM);
 		return;
 	}
 
@@ -1148,6 +1151,7 @@ VOID L2LINKACTIVE(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR M
 	if (CTLlessPF == DISC)
 	{
 		InformPartner(LINK, NORMALCLOSE);		// SEND DISC TO OTHER END
+		DisplaySessionStats(LINK, NORMALCLOSE);
 		CLEAROUTLINK(LINK);
 
 		L2SENDUA(LINK, Buffer);
@@ -1344,11 +1348,6 @@ VOID SETUPNEWL2SESSION(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR MSGFLAG
 
 	LINK->L2STATE = 5;
 
-	//	IF VERSION 1 MSG, SET FLAG
-
-	if (MSGFLAG & VER1)
-		LINK->VER1FLAG |= 1;
-
 	LINK->ReportFlags |= Incomming;
 
 }
@@ -1367,11 +1366,23 @@ VOID L2SENDRESP(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL)
 {
 	//	QUEUE RESPONSE TO PORT CONTROL - MAY NOT HAVE A LINK ENTRY 
 
+	int timeSinceDecoded = Now - DecodeCompleteTime;
+
+	WriteDebugLog(LOGDEBUG, "Time since received = %d", timeSinceDecoded);
+
 	//	SET APPROPRIATE P/F BIT 
 
 	Buffer->CTL = CTL | PFBIT;
 
 	L2SWAPADDRESSES(Buffer);			// SWAP ADDRESSES AND SET RESP BITS
+
+// We should only send RR(RF) but in any case
+// should delay a bit for link turnround,
+
+// ?? is this best done by extending header or waiting ??
+
+	if (timeSinceDecoded < 250)
+		txSleep(250 - timeSinceDecoded);
 
 	PUT_ON_PORT_Q(LINK, Buffer);
 
@@ -1469,14 +1480,13 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR MSG
 
 	if ((MSGFLAG & CMDBIT) == 0)
 	{
+		// RESPONSE
 
-		// RESPONSE OR VERSION 1
+		//	IF RETRYING, MUST ONLY ACCEPT RESPONSES WITH F SET
 
-		//	IF RETRYING, MUST ONLY ACCEPT RESPONSES WITH F SET (UNLESS RUNNING V1) 
-
-		if ((CTL & PFBIT) || LINK->VER1FLAG == 1)
+		if (CTL & PFBIT)
 		{
-			//	F SET or V1 - CAN CANCEL TIMER
+			//	F SET or CAN CANCEL TIMER
 
 			LINK->L2TIMER = 0;			// CANCEL LINK TIMER
 		}
@@ -1494,7 +1504,6 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR MSG
 				RESET2(LINK);
 
 				LINK->L2STATE = 2;				// INITIALISING
-				LINK->L2ACKREQ = 0;				// DONT SEND ANYTHING ELSE
 				LINK->L2RETRIES = 0;			// ALLOW FULL RETRY COUNT FOR SABM
 
 				L2SENDCOMMAND(LINK, SABM | PFBIT);
@@ -1575,12 +1584,7 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR MSG
 			LINK->L2STATE = 5;
 			LINK->L2TIMER = 0;		// CANCEL TIMER
 			LINK->L2RETRIES = 0;
-			LINK->L2SLOTIM, T3;		// SET FRAME SENT RECENTLY
-
-			//	IF VERSION 1 MSG, SET FLAG
-
-			if (MSGFLAG & VER1)
-				LINK->VER1FLAG |= 1;
+			LINK->L2SLOTIM = T3;		// SET FRAME SENT RECENTLY
 
 			//	TELL PARTNER CONNECTION IS ESTABLISHED
 			
@@ -1590,6 +1594,7 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR MSG
 
 		if (LINK->L2STATE == 4)				// DISCONNECTING?
 		{
+			DisplaySessionStats(LINK, NORMALCLOSE);
 			InformPartner(LINK, NORMALCLOSE);	// SEND DISC TO OTHER END
 			CLEAROUTLINK(LINK);
 		}
@@ -1612,6 +1617,7 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR MSG
 
 		//	CLEAR OUT TABLE ENTRY - IF INTERNAL TNC, SHOULD SEND *** DISCONNECTED
 
+		DisplaySessionStats(LINK, LINKLOST);
 		InformPartner(LINK, LINKLOST);		// SEND DISC TO OTHER END
 		CLEAROUTLINK(LINK);
 		return;
@@ -1623,7 +1629,6 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL, UCHAR MSG
 		RESET2(LINK);
 	
 		LINK->L2STATE = 2;				// INITIALISING
-		LINK->L2ACKREQ = 0;				// DONT SEND ANYTHING ELSE
 		LINK->L2RETRIES = 0;			// ALLOW FULL RETRY COUNT FOR SABM
 
 		LINK->L2FRMRRX++;
@@ -1658,7 +1663,6 @@ VOID SDUFRM(struct _LINKTABLE * LINK, MESSAGE * Buffer, UCHAR CTL)
 		RESET2(LINK);
 
 		LINK->L2STATE = 2;				// INITIALISING
-		LINK->L2ACKREQ = 0;				// DONT SEND ANYTHING ELSE
 		LINK->L2RETRIES = 0;			// ALLOW FULL RETRY COUNT FOR SABM
 
 		LINK->L2FRMRRX++;
@@ -1735,6 +1739,8 @@ VOID SFRAME(struct _LINKTABLE * LINK, UCHAR CTL, UCHAR MSGFLAG)
 				MESSAGE Buffer;
 				UCHAR Data[256];
 				Buffer.L2DATA = Data;
+
+				WriteDebugLog(LOGINFO, "Got SREJ, resending Frame Retries = %d", LINK->L2RETRIES);
 		
 				if (LINK->FRAMES[NS].DataLen == 0)	// is frame available?
 					return;				// Wot!!
@@ -1747,7 +1753,6 @@ VOID SFRAME(struct _LINKTABLE * LINK, UCHAR CTL, UCHAR MSGFLAG)
 
 				//	GOING TO SEND I FRAME - WILL ACK ANY RECEIVED FRAMES
 
-				LINK->L2ACKREQ = 0;			// CLEAR ACK NEEDED
 				LINK->L2SLOTIM = T3 + rand() % 255;		// SET FRAME SENT RECENTLY
 				LINK->KILLTIMER = 0;		// RESET IDLE CIRCUIT TIMER
 
@@ -1756,13 +1761,10 @@ VOID SFRAME(struct _LINKTABLE * LINK, UCHAR CTL, UCHAR MSGFLAG)
 
 				//	SET P BIT IF NO MORE TO SEND (only more if Multi SREJ)
 
-				if (LINK->VER1FLAG == 0)	// NO POLL BIT IF V1
-				{
-					CTL |= PFBIT;
-					LINK->L2FLAGS |= POLLSENT;
-					LINK->L2TIMER = LINK->L2TIME;	// (RE)SET TIMER
-				}
-			
+				CTL |= PFBIT;
+				LINK->L2FLAGS |= POLLSENT;
+				LINK->L2TIMER = LINK->L2TIME;	// (RE)SET TIMER
+		
 				Buffer.CTL = CTL;		// TO DATA (STARTING WITH PID)
 				Buffer.PID = 0xf0;
 
@@ -1810,8 +1812,6 @@ VOID SFRAME(struct _LINKTABLE * LINK, UCHAR CTL, UCHAR MSGFLAG)
 		L2SENDRESPONSE(LINK, CTL);
 
 		LINK->L2SLOTIM = T3 + rand() % 255;	// SET FRAME SENT RECENTLY	
-
-		LINK->L2ACKREQ = 0;				// CANCEL DELAYED ACKL2
 	
 		//	SAVE TIME IF 'F' SENT'
 
@@ -1822,12 +1822,11 @@ VOID SFRAME(struct _LINKTABLE * LINK, UCHAR CTL, UCHAR MSGFLAG)
 
 	// Response
 
-	if ((CTL & PFBIT) == 0 && LINK->VER1FLAG == 0)
+	if ((CTL & PFBIT) == 0)
 	{
 		//	RESPONSE WITHOUT P/F DONT RESET N(S) (UNLESS V1)
 	
 		return;
-
 	}
 
 	//	RESPONSE WITH P/F - MUST BE REPLY TO POLL FOLLOWING TIMEOUT OR I(P)
@@ -1843,9 +1842,10 @@ VOID SFRAME(struct _LINKTABLE * LINK, UCHAR CTL, UCHAR MSGFLAG)
 
 	if ((CTL & 0xf) == REJ || LINK->L2RETRIES)
 	{
-		RESETNS(LINK, (CTL >> 5) & 7);	// RESET N(S) AND COUNT RETRIED FRAMES
+		if (LINK->LINKNS == ((CTL >> 5) & 7))	// All Acked
+			LINK->L2RETRIES = 0;
 
-		LINK->L2RETRIES = 0;
+		RESETNS(LINK, (CTL >> 5) & 7);	// RESET N(S) AND COUNT RETRIED FRAMES
 		LINK->L2TIMER = 0;			// WILL RESTART TIMER WHEN RETRY SENT
 	}
 
@@ -1912,26 +1912,17 @@ CheckNSLoop:
 			goto CheckNSLoop;		// See if OK or we have another saved frame
 		}
 		
-		//	BAD FRAME, SEND REJ (AFTER RESPTIME - OR WE MAY SEND LOTS!)
+		//	BAD FRAME, SEND SREJ nexr time polled
+		//	SAVE THE FRAME 
 
-		//	ALSO SAVE THE FRAME - NEXT TIME WE MAY GET A DIFFERENT SUBSET
-		//  AND SOON WE WILL HANDLE SREJ
 
 		LINK->L2OUTOFSEQ++;
-
 		LINK->L2STATE = 6;
 
 		//	IF RUNNING VER1, AND OTHER END MISSES THIS REJ, LINK WILL FAIL
 		//	SO TIME OUT REJ SENT STATE (MUST KEEP IT FOR A WHILE TO AVOID
 		//	'MULTIPLE REJ' PROBLEM)
 	
-		if (LINK->VER1FLAG == 1)
-			LINK->REJTIMER = TENSECS;
-
-		//	SET ACK REQUIRED TIMER - REJ WILL BE SENT WHEN IT EXPIRES
-
-		LINK->L2ACKREQ = THREESECS;		// EXTRA LONG RESPTIME, AS SENDING TOO MANY REJ'S IS SERIOUS
-
 		if (LINK->RXFRAMES[NS].DataLen)
 		{
 			// Already have a copy, so discard this one
@@ -1997,8 +1988,6 @@ CheckPF:
 	{
 		if (LINK->L2STATE == 6)
 			LINK->L2FLAGS |= REJSENT;	// Set "REJ Sent"
-
-		LINK->L2ACKREQ = 0;					// CANCEL RR NEEDED
 
 		SEND_RR_RESP(LINK, PFBIT);
 	
@@ -2101,10 +2090,12 @@ VOID PROC_I_FRAME(struct _LINKTABLE * LINK, UCHAR * Data, int DataLen)
 	memcpy(&LINK->RXBuffer[LINK->RXCount], Data, DataLen);
 	LINK->RXCount += DataLen;
 
+	LINK->BytesReceived += DataLen;
+	LINK->PacketsReceived ++;
+
 	LINK->LINKNR++;				// INCREMENT OUR N(R)
 	LINK->LINKNR &= 7;			//  MODULO 8
 
-	LINK->L2ACKREQ = PORTT2;	// SET RR NEEDED
 	LINK->KILLTIMER = 0;		// RESET IDLE LINK TIMER
 }
 
@@ -2241,11 +2232,20 @@ VOID PutKISS(UCHAR c)
 
 VOID PUT_ON_PORT_Q(struct _LINKTABLE * LINK, MESSAGE * Buffer)
 {
-	// Copy Message to cyclic TX Buffer. COde expects to see KISS frames in buffer,
+	// Copy Message to cyclic TX Buffer. Code expects to see KISS frames in buffer,
 	// so KISS Encode
 
 	UCHAR * ptr;
 	int n;
+	int timeSinceDecoded = Now - DecodeCompleteTime;
+
+	// Allow for link turnround before responding
+
+	if (timeSinceDecoded < 250)
+	{
+		txSleep(250 - timeSinceDecoded);
+		DecodeCompleteTime = Now;			// so we dont add extra delay for back to back
+	}
 
 	// Send Set Mode Packet then the message
 
@@ -2254,13 +2254,15 @@ VOID PUT_ON_PORT_Q(struct _LINKTABLE * LINK, MESSAGE * Buffer)
 		ProcessKISSByte(FEND);
 		ProcessKISSByte(6);
 		if (Buffer->DataLen > 0)
-			ProcessKISSByte((LINK->pktNumCar << 4) | LINK->pktMode);
+			ProcessKISSByte(LINK->pktMode);
 		else
-			if (LINK->pktNumCar > 1)
-				ProcessKISSByte((1 << 4) | 0);		// Always send CTL frames 2 car 4PSK unless 1 car selected
+		{
+			if (Buffer->CTL == 0x3f || Buffer->CTL == 0x73)		// SABM or 
+				ProcessKISSByte(SABMMode);	
 			else
-				ProcessKISSByte((2 << 4) | 0);		
-			
+				ProcessKISSByte(CtlMode[LINK->pktMode]);
+		}
+
 		ProcessKISSByte(FEND);
 	}
 
@@ -2366,6 +2368,9 @@ VOID SDETX(struct _LINKTABLE * LINK)
 
 		LINK->SDTSLOT ++;
 		LINK->SDTSLOT &= 7;
+
+		LINK->BytesSent += Len;
+		LINK->PacketsSent++;
 	}
 	
 	// dont send while poll outstanding
@@ -2382,7 +2387,6 @@ VOID SDETX(struct _LINKTABLE * LINK)
 
 		//	GOING TO SEND I FRAME - WILL ACK ANY RECEIVED FRAMES
 
-		LINK->L2ACKREQ = 0;			// CLEAR ACK NEEDED
 		LINK->L2SLOTIM = T3 + rand() % 255;		// SET FRAME SENT RECENTLY
 		LINK->KILLTIMER = 0;		// RESET IDLE CIRCUIT TIMER
 
@@ -2397,21 +2401,18 @@ VOID SDETX(struct _LINKTABLE * LINK)
 
 		//	SET P BIT IF END OF WINDOW OR NO MORE TO SEND
 
-		if (LINK->VER1FLAG == 0)	// NO POLL BIT IF V1
-		{
-			Outstanding = LINK->LINKNS - LINK->LINKOWS;
+		Outstanding = LINK->LINKNS - LINK->LINKOWS;
 
-			if (Outstanding < 0)
-				Outstanding += 8;		// allow for wrap
+		if (Outstanding < 0)
+			Outstanding += 8;		// allow for wrap
 
-			// if at limit, or no more to send, set P)
+		// if at limit, or no more to send, set P)
 	
-			if (Outstanding >= LINK->LINKWINDOW || LINK->FRAMES[LINK->LINKNS].DataLen == 0)
-			{
-				CTL |= PFBIT;
-				LINK->L2FLAGS |= POLLSENT;
-				LINK->L2TIMER = LINK->L2TIME;	// (RE)SET TIMER
-			}
+		if (Outstanding >= LINK->LINKWINDOW || LINK->FRAMES[LINK->LINKNS].DataLen == 0)
+		{
+			CTL |= PFBIT;
+			LINK->L2FLAGS |= POLLSENT;
+			LINK->L2TIMER = LINK->L2TIME;	// (RE)SET TIMER
 		}
 	
 		Buffer.CTL = CTL;		// TO DATA (STARTING WITH PID)
@@ -2474,8 +2475,6 @@ VOID L2TimerProc()
 
 				//	Just sending RR will hause a hang of RR is missed, and other end does not poll on Busy
 				//	Try sending RR CP, so we will retry if not acked
-
-				LINK->L2ACKREQ = 0;					// CLEAR ANY DELAYED ACK TIMER
 	
 				if (LINK->L2RETRIES == 0)			// IF RR(P) OUTSTANDING WILl REPORT ANYWAY
 				{
@@ -2489,19 +2488,6 @@ VOID L2TimerProc()
 		{
 			// NOT	BUSY
 
-			if (LINK->L2ACKREQ)							// DELAYED ACK TIMER
-			{
-				if (LINK->L2RETRIES == 0)				// DONT SEND RR RESPONSE WHILEST RR(P) OUTSTANDING
-				{
-					LINK->L2ACKREQ--;
-					if (LINK->L2ACKREQ == 0)
-					{
-						SEND_RR_RESP(LINK, 0);	// NO F BIT
-						LINK = LINK->Next;
-						continue;
-					}
-				}
-			}
 		}
 
 		//	CHECK FOR REJ TIMEOUT
@@ -2545,6 +2531,7 @@ VOID L2TimerProc()
 
 			//	TELL OTHER LEVELS
 
+			DisplaySessionStats(LINK, LINKIDLE);
 			InformPartner(LINK, NORMALCLOSE);
 		}
 		LINK = LINK->Next;
@@ -2557,20 +2544,7 @@ VOID SendSupervisCmd(struct _LINKTABLE * LINK)
 
 	UCHAR CTL;
 	
-	if (LINK->VER1FLAG == 1)
-	{
-		//	VERSION 1 TIMEOUT
-
-		//	RESET TO RESEND I FRAMES
-
-		LINK->LINKNS = LINK->LINKOWS;
-
-		SDETX(LINK);				// PREVENT FRMR (I HOPE)
-	}
-
 	//	SEND RR COMMAND - EITHER AS LINK VALIDATION POLL OR FOLLOWING TIMEOUT
-
-	LINK->L2ACKREQ = 0;			// CLEAR ACK NEEDED
 
 	CTL = RR_OR_RNR(LINK);
 
@@ -2646,7 +2620,7 @@ VOID ACKMSG(struct _LINKTABLE * LINK)
 	//	ALL FRAMES HAVE BEEN ACKED - CANCEL TIMER UNLESS RETRYING
 	//	   IF RETRYING, MUST ONLY CANCEL WHEN RR(F) RECEIVED
 
-	if (LINK->VER1FLAG == 1 || LINK->L2RETRIES == 0)	 // STOP TIMER IF LEVEL 1 or not retrying
+	if (LINK->L2RETRIES == 0)	 // STOP TIMER IF LEVEL 1 or not retrying
 	{
 		LINK->L2TIMER = 0;
 		LINK->L2FLAGS &= ~POLLSENT;	// CLEAR I(P) SET (IN CASE TALKING TO OLD BPQ!)
@@ -2759,6 +2733,7 @@ VOID L2TIMEOUT(struct _LINKTABLE * LINK)
 	{
 		//	RETRIED N TIMES SEND A COUPLE OF DISCS AND THEN CLOSE
 
+		DisplaySessionStats(LINK, RETRIEDOUT);
 		InformPartner(LINK, RETRIEDOUT);	// TELL OTHER END ITS GONE
 
 		LINK->L2RETRIES =-2;
@@ -2965,6 +2940,16 @@ VOID L2SENDRESPONSE(struct _LINKTABLE * LINK, int CMD)
 	//	SEND Response IN CMD
 
 	MESSAGE Buffer;
+	int timeSinceDecoded = Now - DecodeCompleteTime;
+
+	WriteDebugLog(LOGDEBUG, "Time since received = %d", timeSinceDecoded);
+
+// Should delay a bit for link turnround,
+
+// ?? is this best done by extending header or waiting ??
+
+	if (timeSinceDecoded < 250)
+		txSleep(250 - timeSinceDecoded);
 
 	SETUPL2MESSAGE(&Buffer, LINK, CMD);
 
@@ -3052,7 +3037,6 @@ CheckNSLoop2:
 			LINK->L2STATE = 5;
 			LINK->L2FLAGS &= ~REJSENT;
 stayinREJ2:
-			LINK->L2ACKREQ = 0;		// Cancel Resptime (Set by PROC_I_FRAME)
 
 			goto CheckNSLoop2;		// See if OK or we have another saved frame
 		}
@@ -3265,6 +3249,7 @@ BOOL ProcessPktCommand(int Channel, char *Buffer, int Len)
 
 		LINK->L2STATE = 2;
 		LINK->L2TIMER = 1;			// Use retry to send SABM
+		LINK->L2TIMEOUTS--;			// Keep Stats right
 
 		SCSReply[2] = Channel;
 		SCSReply[3] = 0;
@@ -3283,6 +3268,8 @@ BOOL ProcessPktCommand(int Channel, char *Buffer, int Len)
 		{
 			LINK->L2STATE = 4;			// CLOSING
 			LINK->L2TIMER = 1;			// Use retry to send DISC
+			LINK->L2TIMEOUTS--;			// Keep stats right
+
 			SCSReply[2] = Channel;
 			SCSReply[3] = 0;
 			PktSend(SCSReply, 4);
@@ -3568,7 +3555,6 @@ VOID ProcessDEDModeFrame(UCHAR * rxbuffer, unsigned int Length)
 				if (LINK->L2STATE == 0)		// Dead Link
 					CLEAROUTLINK(LINK);		// Get rid of entry
 
-				WriteDebugLog(7, "Status Reply %s", Message);
 				PutString(Message);
 				PutChar(0);					// Null Terminate
 				break;
@@ -3618,7 +3604,7 @@ VOID ProcessDEDModeFrame(UCHAR * rxbuffer, unsigned int Length)
 			else
 				sprintf(Message, "0 0 0 0 0 0\r");
 
-			WriteDebugLog(LOGDEBUG, "Status Reply %s", Message);
+//			WriteDebugLog(LOGDEBUG, "Status Reply %s", Message);
 
 			PutChar(Chan);				// REPLY ON SAME CHANNEL
 			PutChar(1);					// Success Null Terminted
@@ -3792,4 +3778,26 @@ VOID ClosePacketSessions()
 		}
 		LINK = LINK->Next;
 	}
+}
+
+VOID DisplaySessionStats(struct _LINKTABLE * LINK, int Exitcode)
+{
+	char FarCall[10];
+	char OurCall[10];
+	
+	FarCall[ConvFromAX25(LINK->LINKCALL, FarCall)] = 0;
+	OurCall[ConvFromAX25(LINK->OURCALL, OurCall)] = 0;
+
+	Statsprintf("****** Packet Session stats %s and %s  Last Mode %s ******", OurCall, FarCall, pktMod[LINK->pktMode]); 
+	Statsprintf("");
+	Statsprintf("Packets Received %d Bytes Received %d", LINK->PacketsReceived, LINK->BytesReceived);
+	Statsprintf("Packets Sent %d Bytes Sent %d", LINK->PacketsSent, LINK->BytesSent);
+	Statsprintf("");
+	Statsprintf("Timeouts %d", LINK->L2TIMEOUTS);
+	Statsprintf("Packets received out of Sequence %d", LINK->L2OUTOFSEQ);
+	Statsprintf("SREJ Frames Sent %d", LINK->L2REJCOUNT);
+	Statsprintf("");
+	Statsprintf("**********************************************************");
+
+	CloseStatsLog();
 }

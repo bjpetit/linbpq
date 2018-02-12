@@ -488,7 +488,7 @@ void TCPHostPoll()
 
 		Len = ReadCOMBlock(hCATDevice, RigBlock, 256);
 
-		if (Len)
+		if (Len && EnableHostCATRX)
 		{
 			UCHAR * ptr = RigBlock;
 			char RigCommand[1024] = "RADIOHEX ";

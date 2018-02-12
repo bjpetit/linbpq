@@ -23,6 +23,10 @@ extern BOOL NeedPing;
 extern BOOL PingCount;
 extern char ConnectToCall[16];
 extern enum _ARQBandwidth CallBandwidth;
+extern int PORTT1;			// L2 TIMEOUT
+extern int PORTN2;			// RETRIES
+#define L2TICK 10			// Timer called every 1/10 sec
+
 
 int SerialMode = 0;
 
@@ -891,8 +895,6 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
-
-
 	if (strcmp(strCMD, "GRIDSQUARE") == 0)
 	{
 		if (ptrParams == 0)
@@ -1128,7 +1130,6 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams)
 		{
 			char * PacVal = strlop(ptrParams, ' ');
-			char * PacBW;
 
 			if (strcmp(ptrParams, "MODE") == 0)
 			{
@@ -1136,30 +1137,9 @@ void ProcessCommandFromHost(char * strCMD)
 
 				if (PacVal == NULL)
 				{
-					sprintf(cmdReply, "PAC MODE %s/%s", &pktMod[initMode][0], pktBW[initNumCar]);
+					sprintf(cmdReply, "PAC MODE %s", &pktMod[initMode][0]);
 					SendReplyToHost(cmdReply);
 					goto cmddone;
-				}
-
-				// Mode may include Bandwidth change
-
-				PacBW = strlop(PacVal, '/');
-
-				if (PacBW)
-				{
-					for (i = 0; i < 9; i++)
-					{
-						if (strcmp(PacBW, &pktBW[i][0]) == 0)
-						{
-							initNumCar = i;
-							break;
-						}
-					}
-					if (i == 9)
-					{
-						sprintf(strFault, "Syntax Err: PAC MODE %s/%s", PacVal, PacBW);
-						goto cmddone;
-					}
 				}
 
 				for (i = 0; i < pktModeLen; i++)
@@ -1167,13 +1147,57 @@ void ProcessCommandFromHost(char * strCMD)
 					if (strcmp(PacVal, &pktMod[i][0]) == 0)
 					{
 						initMode = i;
-						sprintf(cmdReply, "PAC MODE now %s/%s", PacVal, pktBW[initNumCar]);
+						sprintf(cmdReply, "PAC MODE now %s", PacVal);
 						SendReplyToHost(cmdReply);
 						goto cmddone;
 					}
 				}
 	
 				sprintf(strFault, "Syntax Err: PAC MODE %s", PacVal);
+				goto cmddone;
+			}
+
+			if (strcmp(ptrParams, "RETRIES") == 0)
+			{
+				int i;
+
+				if (PacVal == NULL)
+				{
+					sprintf(cmdReply, "PAC RETRIES %d", PORTN2);
+					SendReplyToHost(cmdReply);
+					goto cmddone;
+				}
+
+				i = atoi(PacVal);
+				
+				if (i >= 3  && i <= 30)
+					PORTN2 = i;
+
+				sprintf(cmdReply, "PAC RETRIES now %d", PORTN2);
+				SendReplyToHost(cmdReply);
+				goto cmddone;
+			}
+
+			//PORTT1 = 4 * L2TICK
+
+			if (strcmp(ptrParams, "FRACK") == 0)
+			{
+				int i;
+
+				if (PacVal == NULL)
+				{
+					sprintf(cmdReply, "PAC FRACK %d", PORTT1 / L2TICK);
+					SendReplyToHost(cmdReply);
+					goto cmddone;
+				}
+
+				i = atoi(PacVal);
+				
+				if (i >= 2  && i <= 15)
+					PORTT1 = i * L2TICK;
+
+				sprintf(cmdReply, "PAC FRACK now %d",  PORTT1 / L2TICK);
+				SendReplyToHost(cmdReply);
 				goto cmddone;
 			}
 
@@ -1312,6 +1336,7 @@ void ProcessCommandFromHost(char * strCMD)
 				*(ptr2++) = val;
 			}
 			WriteCOMBlock(hCATDevice, ptrParams, ptr2 - ptrParams);
+			EnableHostCATRX = TRUE;
 		}
 #endif	
 		goto cmddone;
@@ -1418,6 +1443,12 @@ void ProcessCommandFromHost(char * strCMD)
 			goto cmddone;
 		}
 
+		if (hCATDevice == 0)
+		{
+			sprintf(strFault, "RADIOPTTOFF command CAT Port not defined");
+			goto cmddone;
+		}
+
 		while (c = *(ptr1++))
 		{
 			val = c - 0x30;
@@ -1430,6 +1461,7 @@ void ProcessCommandFromHost(char * strCMD)
 		}	
 		PTTOffCmdLen = ptr2 - PTTOffCmd;
 		PTTMode = PTTCI_V;
+		RadioControl = TRUE;
 
 		sprintf(cmdReply, "CAT PTT Off Command Defined");
 		SendReplyToHost(cmdReply);
@@ -1450,6 +1482,13 @@ void ProcessCommandFromHost(char * strCMD)
 			sprintf(strFault, "RADIOPTTON command string missing");
 			goto cmddone;
 		}
+
+		if (hCATDevice == 0)
+		{
+			sprintf(strFault, "RADIOPTTON command CAT Port not defined");
+			goto cmddone;
+		}
+
 		while (c = *(ptr1++))
 		{
 			val = c - 0x30;
@@ -1527,39 +1566,6 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
 
 */
-
-	if (strcmp(strCMD, "NO2000.167") == 0 || strcmp(strCMD, "NO167") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			if (skip167)
-				sprintf(cmdReply, "%s TRUE", strCMD);
-			else
-				sprintf(cmdReply, "%s FALSE", strCMD);
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			skip167 = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			skip167 = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (skip167)
-			sprintf(cmdReply, "%s now TRUE", strCMD);
-		else
-			sprintf(cmdReply, "%s now FALSE", strCMD);
-		
-		SendReplyToHost(cmdReply);
-		goto cmddone;
-	}
-
 
 	if (strcmp(strCMD, "SQUELCH") == 0)
 	{

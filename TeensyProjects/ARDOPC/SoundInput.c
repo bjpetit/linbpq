@@ -2502,6 +2502,21 @@ BOOL Demod1Car4FSK()
 		{	
 			//- prepare for next
 
+			// If variable length packet frame header we only have header - leave rx running
+		
+			if (intFrameType == PktFrameHeader)
+			{
+				State = SearchingForLeader;
+			
+				// Save any unused samples
+			
+				if (intFilteredMixedSamplesLength > 0 && Start > 0)
+					memmove(intFilteredMixedSamples,
+						&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
+
+				return TRUE;
+			}
+
 			DecodeCompleteTime = Now;
 			DiscardOldSamples();
 			ClearAllMixedSamples();
@@ -3102,6 +3117,8 @@ BOOL Decode4FSKConReq()
 
 	if (FrameOK)
 		memcpy(lastGoodID, strCaller, 10);
+	else
+		SendCommandToHost("CANCELPENDING");	
 
 	intConReqSN = Compute4FSKSN();
 	WriteDebugLog(LOGDEBUG, "DemodDecode4FSKConReq:  S:N=%d Q=%d", intConReqSN, intLastRcvdFrameQuality);
@@ -3199,7 +3216,10 @@ BOOL Decode4FSKPing()
 	sprintf(bytData, "%s %s", strCaller, strTarget);
 
 	if (FrameOK == FALSE)
+	{
+		SendCommandToHost("CANCELPENDING");	
 		return FALSE;
+	}
 
 	intSNdB = Compute4FSKSN();
 
@@ -3220,6 +3240,8 @@ BOOL Decode4FSKPing()
 
 		return TRUE;
 	}
+	else
+		SendCommandToHost("CANCELPENDING");	
 
 	return FALSE;
 }
@@ -3492,12 +3514,14 @@ void DemodulateFrame(int intFrameType)
 
 		case PktFrameHeader:	// Experimantal Variable Length Frame 
 
-			DemodPSK();
+			Demod1Car4FSK();
 			break;
 
 		case PktFrameData:	// Experimantal Variable Length Frame 
 			
-			if (strcmp(strMod, "16QAM") == 0)
+			if (strcmp(strMod, "4FSK") == 0)
+				Demod1Car4FSK();
+			else if (strcmp(strMod, "16QAM") == 0)
 				DemodQAM();
 			else
 				DemodPSK();
@@ -3754,17 +3778,19 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 		case PktFrameHeader:
 		{
 			// Variable Length Packet Frame Header
-			// 3 bits Mod Type 3 bits Carriers (minus 1) 10 Bits Len
+			// 6 bits Type 10 Bits Len
 
 			int Len;
 			int pktNumCar;
 			int pktDataLen;
 			int pktRSLen;
-
-				if (CarrierOk[0])
-				{
-					pktRXMode = bytFrameData1[1] >> 5;
-					pktNumCar = ((bytFrameData1[1] & 0x1c) >> 2) + 1;
+						
+			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
+		
+			if (CarrierOk[0])
+			{
+					pktRXMode = bytFrameData1[1] >> 2;
+					pktNumCar = pktCarriers[pktRXMode];
 
 					Len =  ((bytFrameData1[1] & 0x3) << 8) | bytFrameData1[2];
 				}
@@ -3807,12 +3833,14 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				charIndex = 0;	
 				frameLen = 0;
 				intPhasesLen = 0;
+				memset(intToneMagsIndex, 0, sizeof(intToneMagsIndex));
 				intDataLen = pktDataLen;
 				intRSLen = pktRSLen;
 				intNumCar = pktNumCar;
 				PSKInitDone = 0;
 
-				WriteDebugLog(6, "Pkt Frame Header Type %s Carriers %d Len %d", strMod, pktNumCar, Len);
+				WriteDebugLog(6, "Pkt Frame Header Type %s Len %d", strMod, Len);
+				strlop(strMod, '/');
 				blnDecodeOK = TRUE;
 
 				return 0;
@@ -3821,6 +3849,21 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 					
 		case PktFrameData:
 		{
+			if (pktFSK[pktRXMode])
+			{
+				// Need to Check RS
+
+				frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
+				if (intNumCar > 1)
+					frameLen +=  CorrectRawDataWithRS(bytFrameData2, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 1);
+
+				if (intNumCar > 2)
+				{
+					frameLen +=  CorrectRawDataWithRS(bytFrameData3, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 2);
+					frameLen +=  CorrectRawDataWithRS(bytFrameData4, &bytData[frameLen], intDataLen, intRSLen, intFrameType, 3);
+				}
+			}
+
 			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 			{
 				blnDecodeOK = TRUE;
@@ -3830,7 +3873,6 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				// Session code
 
 				// Data in bytData  len in frameLen
-
 
 #ifdef TEENSY
 				L2Routine(bytData, frameLen, intLastRcvdFrameQuality, totalRSErrors, intNumCar, pktRXMode);
@@ -4471,6 +4513,9 @@ VOID Decode1CarPSK(UCHAR * Decoded, int Carrier)
 
 			Len -= 8;
 			break;
+	
+		default:
+			return; //????
 		}
 	}
 	return;
