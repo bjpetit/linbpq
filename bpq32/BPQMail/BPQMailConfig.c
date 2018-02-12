@@ -1167,10 +1167,8 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 	GetDlgItemText(hDlg, IDC_UZIP, user->ZIP, 8);
 	GetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS, 40);
 	GetDlgItemText(hDlg, IDC_CMSPASS, user->CMSPass, 15);
-	_strupr(user->CMSPass);
 
-
-user->lastmsg = GetDlgItemInt(hDlg, IDC_LASTLISTED, &OK, FALSE);
+	user->lastmsg = GetDlgItemInt(hDlg, IDC_LASTLISTED, &OK, FALSE);
 
 	if (IsDlgButtonChecked(hDlg, IDC_BBSFLAG))
 	{

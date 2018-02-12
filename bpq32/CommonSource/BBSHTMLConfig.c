@@ -3006,7 +3006,6 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		if (memcmp("****************", ptr1, strlen(ptr1) != 0))
 		{
 			strcpy(USER->CMSPass, ptr1);
-			_strupr(USER->CMSPass);
 		}
 		
 		ptr1 = GetNextParam(&ptr2);		// QTH

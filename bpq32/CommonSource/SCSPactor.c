@@ -967,11 +967,6 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	WritetoConsole("\n");
 
-	WritetoTrace(TNC, "TEST\r", 5);
-	WritetoTrace(TNC, "TEST\r", 5);
-	WritetoTrace(TNC, "TEST\r", 5);
-
-
 	return ((int)ExtProc);
 }
 

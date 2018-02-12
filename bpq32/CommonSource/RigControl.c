@@ -206,6 +206,7 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 		UCHAR * Poll = PORT->TXBuffer;
 
 		RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+		PORT->AutoPoll = TRUE;
 
 		switch (PORT->PortType)
 		{
@@ -226,10 +227,11 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 				PORT->TXLen = RIG->PTTOffLen;
 			}
 
+
 			RigWriteCommBlock(PORT);
 
 			if (PORT->PortType == ICOM && !PTTState)
-				RigWriteCommBlock(PORT); // Send ICOP PTT OFF Twice
+				RigWriteCommBlock(PORT); // Send ICOM PTT OFF Twice
 
 			PORT->Retries = 1;
 			
@@ -459,6 +461,170 @@ portok:
 			return FALSE;
 		}
 	}
+
+	if (_stricmp(FreqString, "TUNE") == 0)
+	{
+		switch (PORT->PortType)
+		{ 
+		case ICOM:
+
+			buffptr = GetBuff();
+
+			if (buffptr == 0)
+			{
+				sprintf(Command, "Sorry - No Buffers available\r");
+				return FALSE;
+			}
+
+			
+			// Build a ScanEntry in the buffer
+
+			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			memset(FreqPtr, 0, sizeof(struct ScanEntry));
+
+			CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
+			FreqPtr->Cmd2 = NULL;
+			FreqPtr->Cmd3 = NULL;
+
+			// IC7100 Tune  Fe fe 88 e0 1c 01 02 fd
+
+
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = RIG->RigAddr;
+			*(CmdPtr++) = 0xE0;
+			*(CmdPtr++) = 0x1C;
+			*(CmdPtr++) = 0x01;
+			*(CmdPtr++) = 0x02;
+			*(CmdPtr++) = 0xFD;
+			FreqPtr[0].Cmd1Len = 8;
+	
+			buffptr[1] = 200;
+		
+			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+
+			return TRUE;
+
+		case KENWOOD:
+
+			buffptr = GetBuff();
+	
+			if (buffptr == 0)
+			{
+				sprintf(Command, "Sorry - No Buffers available\r");
+				return FALSE;
+			}
+
+			// Build a ScanEntry in the buffer
+
+			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			memset(FreqPtr, 0, sizeof(struct ScanEntry));
+	
+			Poll = (UCHAR *)&buffptr[30];
+
+			buffptr[1] = sprintf(Poll, "AC111;AC;");
+
+			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+			return TRUE;
+		}
+
+		sprintf(Command, "Sorry - TUNE only supported on ICOM and Kenwood Radios\r");
+		return FALSE;
+	}
+
+	if (_stricmp(FreqString, "POWER") == 0)
+	{
+		char PowerString[8] = "";
+		int Power = atoi(Mode);
+
+		switch (PORT->PortType)
+		{ 
+		case ICOM:
+
+			if (n != 3 || Power > 255)
+			{
+				strcpy(Command, "Sorry - Invalid Format - should be POWER Level (0 - 255)\r");
+				return FALSE;
+			}
+
+			sprintf(PowerString, "%04d", Power);
+
+			buffptr = GetBuff();
+
+			if (buffptr == 0)
+			{
+				sprintf(Command, "Sorry - No Buffers available\r");
+				return FALSE;
+			}
+
+			
+			// Build a ScanEntry in the buffer
+
+			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			memset(FreqPtr, 0, sizeof(struct ScanEntry));
+
+			CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
+			FreqPtr->Cmd2 = NULL;
+			FreqPtr->Cmd3 = NULL;
+
+			// IC7100 Set Power Fe fe 88 e0 14 0a xx xx fd
+
+
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = RIG->RigAddr;
+			*(CmdPtr++) = 0xE0;
+			*(CmdPtr++) = 0x14;
+			*(CmdPtr++) = 0x0A;
+
+			// Need to convert param to decimal digits
+
+			*(CmdPtr++) = (PowerString[1] - 48) | ((PowerString[0] - 48) << 4);
+			*(CmdPtr++) = (PowerString[3] - 48) | ((PowerString[2] - 48) << 4);
+
+			*(CmdPtr++) = 0xFD;
+			FreqPtr[0].Cmd1Len = 9;
+	
+			buffptr[1] = 200;
+		
+			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+
+			return TRUE;
+
+		case KENWOOD:
+
+			if (n != 3 || Power > 200 || Power < 5)
+			{
+				strcpy(Command, "Sorry - Invalid Format - should be POWER Level (5 - 200)\r");
+				return FALSE;
+			}
+
+			buffptr = GetBuff();
+
+			if (buffptr == 0)
+			{
+				sprintf(Command, "Sorry - No Buffers available\r");
+				return FALSE;
+			}
+
+			// Build a ScanEntry in the buffer
+
+			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			memset(FreqPtr, 0, sizeof(struct ScanEntry));
+	
+			Poll = (UCHAR *)&buffptr[30];
+
+			buffptr[1] = sprintf(Poll, "PC%03d;PC;", Power);
+
+			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+			return TRUE;
+		}
+
+		sprintf(Command, "Sorry - POWER only supported on ICOM and Kenwood Radios\r");
+		return FALSE;
+	}
+
+
 
 	RIG->Session = Session;		// BPQ Stream
 
@@ -2097,8 +2263,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		}
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
-
-		
+	
 		PORT->TXLen = PORT->FreqPtr->Cmd1Len;					// First send the set Freq
 		RigWriteCommBlock(PORT);
 		PORT->Retries = 2;
@@ -2189,6 +2354,24 @@ ok:
 	if (Msg[4] == 0xFB)
 	{
 		// Accept
+
+		if (cmdSent == 0x1C && PORT->TXBuffer[5] == 1)		// Tune
+		{
+			if (!PORT->AutoPoll)
+				SendResponse(RIG->Session, "Tune OK");
+		
+			PORT->Timeout = 0;
+			return;
+		}
+
+		if (cmdSent == 0x14 && PORT->TXBuffer[5] == 0x0A)		// Power
+		{
+			if (!PORT->AutoPoll)
+				SendResponse(RIG->Session, "Set Power OK");
+		
+			PORT->Timeout = 0;
+			return;
+		}
 
 		// if it was the set freq, send the set mode
 
@@ -2307,6 +2490,12 @@ SetFinished:
 			else
 			if (cmdSent == 0x12)
 				SendResponse(RIG->Session, "Sorry - Set Antenna Command Rejected");
+			else
+			if (cmdSent == 0x1C && PORT->TXBuffer[5] == 1)		// Tune
+				SendResponse(RIG->Session, "Sorry - Tune Command Rejected");
+			else
+				if (cmdSent == 0x14 && PORT->TXBuffer[5] == 0x0a)		// Power
+				SendResponse(RIG->Session, "Sorry - Power Command Rejected");
 		}
 		return;
 	}
@@ -2948,6 +3137,10 @@ VOID ProcessKenwoodFrame(struct RIGPORTINFO * PORT, int Length)
 
 		if (Msg[0] == '?')
 			SendResponse(RIG->Session, "Sorry - Command Rejected");
+		else if (Msg[0] == 'A' && Msg[1] == 'C')
+			SendResponse(RIG->Session, "TUNE OK");
+		else if (Msg[0] == 'P' && Msg[1] == 'C') 
+			SendResponse(RIG->Session, "Power Set OK");
 		else
 			SendResponse(RIG->Session, "Mode and Frequency Set OK");
 	

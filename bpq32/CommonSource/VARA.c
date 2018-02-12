@@ -571,7 +571,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (buffptr == 0) return (0);			// No buffers, so ignore
 
 			buffptr[1]=36;
-			memcpy(buffptr+2,"No Connection to ARDOP TNC\r", 36);
+			memcpy(buffptr+2,"No Connection to VARA TNC\r", 36);
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 			
@@ -652,7 +652,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				if (buffptr)
 				{
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} OK\r");
+					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "VARA} OK\r");
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 				}
 
@@ -676,7 +676,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 					if (buffptr)
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} OK\r");
+						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "VARA} OK\r");
 						C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 					}
 					return 0;

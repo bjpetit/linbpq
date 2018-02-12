@@ -823,6 +823,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Support USB/ACC switching on TS590SG
 //	Fix scanning when ARDOP or WINMOR is used without an Interlocked Pactor port.
 //	Set NODECALL to first Application Callsign if NODE=0 and BBSCALL not set.
+//	Add RIGCONTROL TUNE and POWER commands for some ICOM and Kenwwod rigs
+//	Fix timing out ARDOP PENDING Lock
+
+
 
 #define CKernel
 

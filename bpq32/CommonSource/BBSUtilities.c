@@ -10023,7 +10023,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			if (strlen(Arg1) > 15)
 				Arg1[15] = 0;
 
-			strcpy(user->CMSPass, _strupr(Arg1));
+			strcpy(user->CMSPass, Arg1);
 			UpdateWPWithUserInfo(user);
 			nodeprintf(conn,"CMS Password Set\r");
 			SaveUserDatabase();

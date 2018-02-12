@@ -316,14 +316,7 @@ int ProcessLine(char * buf, int Port)
 		strlop(Temp, 32);
 		strlop(Temp, 13);
 		strcpy(TCP->SecureCMSPassword, Temp);
-		_strupr(TCP->SecureCMSPassword);
 
-		if (strcmp(TCP->SecureCMSPassword, Temp) != 0)
-		{
-			// Warn that Password was not in upper case
-
-				WritetoConsoleLocal(" ** Warning CMS Password is not in Upper Case **");
-		}
 	}
 	else
 	if (_stricmp(param, "CMSCALL") == 0)

@@ -432,6 +432,7 @@ typedef struct TNCINFO
 	struct sockaddr_in  Datadestaddr;
 
 	int PTTMode;					// PTT Mode Flags
+	int PTTState;					// Current State
 
 	int PID;
 	char * CaptureDevices;
