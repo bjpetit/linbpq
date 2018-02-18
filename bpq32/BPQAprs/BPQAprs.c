@@ -67,9 +67,11 @@
 // July 2017 1.1.11.1
 // Add Messages Web Page
 
+// February 2018 1.1.12.1
+// Add option to show distances in KM
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
-
 #define _WIN32_WINNT 0x0501	
 
 #define MARGIN 0

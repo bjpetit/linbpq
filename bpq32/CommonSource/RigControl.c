@@ -624,7 +624,86 @@ portok:
 		return FALSE;
 	}
 
+	if (_stricmp(FreqString, "CMD") == 0)
+	{
+		// Send arbitrary command to radio
 
+		char c;
+		int val;
+ 		char * ptr1;
+		int Len;
+
+		if (n < 3)
+		{
+			strcpy(Command, "Sorry - Invalid Format - should be HEX Hexstring\r");
+			return FALSE;
+		}
+
+		buffptr = GetBuff();
+
+		if (buffptr == NULL)
+			return FALSE;
+
+		ptr1 = strstr(Command, "CMD");
+
+		if (ptr1 == NULL)
+			return FALSE;
+
+		ptr1 += 4;
+
+
+		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
+		FreqPtr->Cmd2 = NULL;
+		FreqPtr->Cmd3 = NULL;
+
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
+	
+		switch (PORT->PortType)
+		{ 
+		case ICOM:
+
+			// String is in Hex
+
+			while (c = *(ptr1++))
+			{
+				if (c == ' ') continue;		// Allow space between pairs
+			
+				val = c - 0x30;
+				if (val > 15) val -= 7;
+				val <<= 4;
+				c = *(ptr1++) - 0x30;
+				if (c > 15) c -= 7;
+				val |= c;
+				*(CmdPtr++) = val;
+			}
+ 		
+			*(CmdPtr) = 0; 
+
+			Len = CmdPtr - (UCHAR *)&buffptr[30];
+			break;
+
+		case KENWOOD:
+		case FT2000:
+		case FLEX:
+		case NMEA:
+
+			// use text command
+
+			Len = sprintf(CmdPtr, ptr1);
+			break;
+
+		default:
+			sprintf(Command, "Sorry - CMD not supported on your Radio\r");
+			return FALSE;
+	
+		}
+
+		FreqPtr[0].Cmd1Len = Len;		// for ICOM
+		buffptr[1] = Len;
+		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+		return TRUE;
+	}
 
 	RIG->Session = Session;		// BPQ Stream
 

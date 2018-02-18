@@ -88,9 +88,12 @@
 //	Fix buffer overrun introduced in 1.0.12.1 
 //	Fix saving Alert and Keyword filenames
 
-//	Version 1.0.x
+//	Version 1.0.14.1 July 2017
 
 //	Add popup if keywords file can't be found
+
+//	Version 1.0.15.1 Feb 2018
+
 //  Allow use of IPV6 even if host resolves to both V4 and V6 addresses (add IPV6: on front of hostname)
 //	Add Listen Mode
 //	Only send UTF-8 option if send in UTF-8 is set

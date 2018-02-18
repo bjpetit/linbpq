@@ -802,7 +802,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Support REBOOT command on LinBPQ
 //  Allow LISTEN command on all ports that support ax.25 monitoring
 
-//	Version 6.0.15.1 ??
+//	Version 6.0.15.1 Feb 2018
 
 //	partial support for ax.25 V2.2
 //	Add MHU and MHL commands and MH filter option
@@ -825,6 +825,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Set NODECALL to first Application Callsign if NODE=0 and BBSCALL not set.
 //	Add RIGCONTROL TUNE and POWER commands for some ICOM and Kenwwod rigs
 //	Fix timing out ARDOP PENDING Lock
+//	Support mixed case WINLINK Passwords
+//	Add TUNE and POWER Rigcontol Commands for some radios
+//  ADD LOCALTIME and DISPKM options to APRS Digi/Igate
 
 
 

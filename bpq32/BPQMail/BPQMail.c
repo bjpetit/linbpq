@@ -941,11 +941,12 @@
 //	Fix "nowhere to go" message on some messages sent to smtp addresses
 //	Add @ from Home BBS or WP is not spcified in "Send from Clipboard"
 
-//	6.0.15.1 ????
+//	6.0.15.1 Feb 2018
 
 //	Fix PE if Filename missing from FILE connect script command
 //	Suppress reporting errors after receiving FQ
 //	Fix problem caused by trailing spaces on callsign in WP database
+//	Support mixed case WINLINK Passwords
 
 
 #include "BPQMail.h"
