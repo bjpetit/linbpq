@@ -74,8 +74,7 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
-
-ProcessLine(char * buf, int Port)
+int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;

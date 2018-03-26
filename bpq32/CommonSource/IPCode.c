@@ -265,6 +265,7 @@ FARPROCX pcap_datalinkx;
 FARPROCX pcap_next_exx;
 FARPROCX pcap_geterrx;
 FARPROCX pcap_closex;
+FARPROCX pcap_setnonblockx;
 
 
 char Dllname[6]="wpcap";
@@ -281,7 +282,9 @@ FARPROCX GetAddress(char * Proc);
 #define pcap_geterrx pcap_geterr
 #define pcap_sendpacketx pcap_sendpacket
 #define pcap_closex pcap_close
+#define pcap_setnonblockx pcap_setnonblock
 #endif
+
 VOID __cdecl Debugprintf(const char * format, ...);
 
 #ifdef WIN32
@@ -450,6 +453,7 @@ BOOL GetPCAP()
 
 	if ((pcap_closex = GetAddress("pcap_close")) == 0 ) return FALSE;
 
+	if ((pcap_setnonblockx = GetAddress("pcap_setnonblock")) == 0 ) return FALSE;
 
 #endif
 	return TRUE;
@@ -3630,6 +3634,8 @@ int OpenPCAP()
 	
 	if (adhandle == NULL)
 		return FALSE;
+
+	pcap_setnonblockx(adhandle, 1, errbuf);
 	
 	/* Check the link layer. We support only Ethernet for simplicity. */
 	if(pcap_datalinkx(adhandle) != DLT_EN10MB)

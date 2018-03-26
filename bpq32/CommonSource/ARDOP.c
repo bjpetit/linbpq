@@ -270,6 +270,7 @@ void SendARDOPorPacketData(struct TNCINFO * TNC, int Stream, UCHAR * Buff, int t
 		// Packet. Only works over Serial
 
 		UINT * buffptr;
+		UINT * dataint;
 		UCHAR * buffp;
 
 		if (TNC->ARDOPCommsMode == 'T')
@@ -280,7 +281,9 @@ void SendARDOPorPacketData(struct TNCINFO * TNC, int Stream, UCHAR * Buff, int t
 		if (buffptr == 0) return;			// No buffers, so ignore
 
 		buffptr[1] = txlen + 1;
-		buffp = buffptr+2;
+	
+		dataint = &buffptr[2];
+		buffp = (UCHAR *)dataint;
 		buffp[0] = 0;					// CMD/Data Flag on front
 
 		memcpy(buffp +1, Buff, txlen);
@@ -1204,14 +1207,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (STREAM->BPQtoPACTOR_Q)
 				{
 					UINT * buffptr = Q_REM(&STREAM->BPQtoPACTOR_Q);
+					UINT * dataint = &buffptr[2];
+					UCHAR * data = (UCHAR *)dataint;
 					STREAM->FramesQueued--;
 					txlen=buffptr[1];
 					STREAM->BytesTXed += txlen;
 
 					if (Stream == 0)
 					{
-						bytes=ARDOPSendData(TNC, &buffptr[2], txlen);
-						WritetoTrace(TNC, &buffptr[2], txlen);
+						bytes=ARDOPSendData(TNC, data, txlen);
+						WritetoTrace(TNC, data, txlen);
 					}
 					else
 					{
@@ -1224,7 +1229,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 							int EncLen;
 							int SentLen; 
 		
-							EncLen = sprintf(Encoded, "%c%c%c%s\r", Stream, 0, txlen - 1, &buffptr[2]);
+							EncLen = sprintf(Encoded, "%c%c%c%s\r", Stream, 0, txlen - 1, data);
 							SentLen = send(TNC->PacketSock, Encoded, EncLen, 0);
 		
 							if (SentLen != EncLen)
@@ -1324,6 +1329,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				// Packet. Only works over Serial
 
 				UINT * buffptr;
+				UINT * dataint;
 				UCHAR * buffp;
 
 				if (TNC->PacketSock)
@@ -1371,7 +1377,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (buffptr == 0) return 0;			// No buffers, so ignore
 
 				buffptr[1] = txlen + 1;
-				buffp = buffptr+2;
+				dataint = &buffptr[2];
+				buffp = (UCHAR *)dataint;
 				buffp[0] = 0;					// CMD/Data Flag on front
 
 				memcpy(buffp +1, &buff[8], txlen);
@@ -1880,6 +1887,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->MAXHOSTMODESESSIONS = TNC->PacketChannels + 1;
 
 	PortEntry->SCANCAPABILITIES = SIMPLE;			// Scan Control - pending connect only
+	PortEntry->PERMITGATEWAY = TRUE;				// Can change ax.25 call on each stream
 
 	PortEntry->PORTCONTROL.UICAPABLE = TRUE;
 
@@ -3977,7 +3985,7 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 		{
 			//	Resolve name to address
 
-			struct hostent * HostEnt = gethostbyname (TNC->HostName);
+			struct hostent * HostEnt = gethostbyname(TNC->HostName);
 		 
 			if (!HostEnt)
 				return 0;			// Resolve failed
@@ -3987,7 +3995,7 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 
 		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
 	
-		Debugprintf("Restart ARDOP TNC - sento returned %d", n);
+		Debugprintf("Restart ARDOP TNC - sendto returned %d", n);
 
 		Sleep(100);
 		closesocket(sock);
@@ -4759,7 +4767,7 @@ tcpHostFrame:
 		int Len = Msg[4] + 1;
 
 		MESSAGE Monframe;
-		UCHAR * ptr = &Monframe;
+		UCHAR * ptr = (UCHAR *)&Monframe;
 
 		if (TNC->Monframe)
 		{
@@ -5010,8 +5018,10 @@ tcpHostFrame:
 						if (STREAM->BPQtoPACTOR_Q)		//Used for CTEXT
 						{
 							UINT * buffptr = Q_REM(&STREAM->BPQtoPACTOR_Q);
+							UINT * dataint = &buffptr[2];
+							UCHAR * data = (UCHAR *)dataint;
 							int txlen=buffptr[1];
-							SendARDOPorPacketData(TNC, Stream, buffptr+2, txlen);
+							SendARDOPorPacketData(TNC, Stream, data, txlen);
 							ReleaseBuffer(buffptr);
 						}
 					

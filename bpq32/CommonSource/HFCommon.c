@@ -211,7 +211,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		{
 			if (TNC->ProgramPath)
 			{
-				if (strstr(TNC->ProgramPath, " TNC") || strstr(TNC->ProgramPath, "ARDOP"))
+				if (strstr(TNC->ProgramPath, " TNC") || strstr(TNC->ProgramPath, "ARDOP") || strstr(TNC->ProgramPath, "VARA"))
 				{
 					EnableMenuItem(TNC->hMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
 					EnableMenuItem(TNC->hMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
@@ -349,15 +349,15 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 	RegisterClass(&wc);
 
-	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||TNC->Hardware == H_ARDOP ||
-			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ || TNC->Hardware == H_VARA)
-		sprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
-	else if (TNC->Hardware == H_UZ7HO)
+//	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||TNC->Hardware == H_ARDOP ||
+//			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ || TNC->Hardware == H_VARA)
+		sprintf(Title, "%s Status - Port %d %s", WindowTitle, TNC->Port, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
+	if (TNC->Hardware == H_UZ7HO)
 		sprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);
 	else if (TNC->Hardware == H_MPSK)
 		sprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
 	else
-		sprintf(Title,"%s Status - %s", WindowTitle, TNC->PortRecord->PORTCONTROL.SerialPortName);
+		sprintf(Title, "%s Status - Port %d  %s", WindowTitle, TNC->Port, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
 
 
 	TNC->hDlg = hDlg =  CreateMDIWindow(ClassName, Title, 0,
@@ -916,6 +916,8 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 		WL2KReport->mode = 19;
 	else if (_stricmp(param, "P4") == 0)
 		WL2KReport->mode = 20;
+	else if (_stricmp(param, "VARA") == 0)
+		WL2KReport->mode = 50;
 	else
 		goto BadLine;
 	

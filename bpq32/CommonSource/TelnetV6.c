@@ -4994,7 +4994,7 @@ BOOL CMSCheck(struct TNCINFO * TNC, struct TCPINFO * TCP)
 
 
 					
-CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, int Stream)
+int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, int Stream)
 {
 	int err;
 	u_long param=1;
@@ -5217,7 +5217,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 	return;
 }
 
-TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port, BOOL FBB)
+int TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port, BOOL FBB)
 {
 	int err;
 	u_long param=1;

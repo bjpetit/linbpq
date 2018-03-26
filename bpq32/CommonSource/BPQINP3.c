@@ -879,7 +879,7 @@ VOID SendOurRIF(struct ROUTE * Route)
 	SendNetFrame(Route, Msg);
 }
 
-SendRIPTimer()
+int SendRIPTimer()
 {
 	int count, nodes;
 	struct ROUTE * Route = NEIGHBOURS;

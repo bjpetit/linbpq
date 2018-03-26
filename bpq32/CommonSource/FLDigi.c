@@ -962,7 +962,7 @@ static KillTNC(struct TNCINFO * TNC)
 
 #endif
 
-static RestartTNC(struct TNCINFO * TNC)
+static int RestartTNC(struct TNCINFO * TNC)
 {
 	if (TNC->ProgramPath == NULL)
 		return 0;
@@ -1432,7 +1432,7 @@ static int ConnecttoFLDigi(int port)
 	return 0;
 }
 
-static VOID ConnecttoFLDigiThread(port)
+static VOID ConnecttoFLDigiThread(int port)
 {
 	char Msg[255];
 	int err,i;

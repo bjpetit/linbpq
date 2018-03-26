@@ -122,6 +122,7 @@ VOID PTCSuspendPort(struct TNCINFO * TNC);
 VOID PTCReleasePort(struct TNCINFO * TNC);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int CheckMode(struct TNCINFO * TNC);
+VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
@@ -1765,7 +1766,9 @@ VOID SCSPoll(int Port)
 
 				Poll[4] = datalen - 1;
 				memcpy(&Poll[5], buffptr+2, datalen);
-		
+				
+				WritetoTrace(TNC, Buffer, datalen);
+	
 				ReleaseBuffer(buffptr);
 				OpenLogFile(TNC->Port);
 				WriteLogLine(TNC->Port, &Poll[5], datalen);
@@ -3724,7 +3727,6 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 
 	unsigned char Resp[500] = "";
 	char * Poll = &TNC->TXBuffer[0]; 
-	int n;
 
 	Debugprintf("Failed to disconnect TNC - trying a forced disconnect");
 

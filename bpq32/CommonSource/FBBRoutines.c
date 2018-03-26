@@ -1361,6 +1361,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	// If a B2 Message  add R:line at start of Body, but otherwise leave intact.
 	// Unless a message to Paclink, when we must remove any HA from the TO address
+	// Or to a CMS, when we remove HA from From or Reply-to
 
 	if (Msg->B2Flags & B2Msg)
 	{
@@ -1394,6 +1395,33 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 			}
 		}
 
+		if (conn->WL2K)
+		{
+			// Remove any HA on the From or Reply-To address
+		
+			ptr = strstr(MsgBytes, "From:");
+			if (ptr == NULL)
+				ptr = strstr(MsgBytes, "Reply-To:");
+
+			if (ptr)
+			{
+				ptr2 = strstr(ptr, "\r\n");
+				if (ptr2)
+				{
+					while (ptr < ptr2)
+					{
+						if (*ptr == '.' || *ptr == '@')
+						{
+							memset(ptr, ' ', ptr2 - ptr);
+							break;
+						}
+						ptr++;
+					}
+				}
+			}
+		}
+
+
 		// Add R: Line at start of body. Will Need to Update Body Length
 
 		ptr = strstr(MsgBytes, "Body:");
@@ -1411,6 +1439,19 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		{
 			Debugprintf("B2 Message Body: line position invalid - %d", Index);
 			return FALSE;
+		}
+
+		// If message to saildocs adding an R: line will mess up the message processing, so add as an X header
+
+		if (strstr(MsgBytes, "To: query@saildocs.com"))
+		{
+			int x_Len;
+
+			memcpy(UnCompressed, MsgBytes, Index);	// Up to Old Body;
+			x_Len = sprintf(&UnCompressed[Index], "x-R: %s", &Rline[2]);
+			MsgLen = OrigLen + x_Len;
+			Index +=x_Len;
+			goto copyRest;
 		}
 
 		BodyLen = atoi(&ptr[5]);
@@ -1463,6 +1504,8 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 		memcpy(&UnCompressed[Index], Rline, RlineLen);
 		Index += RlineLen;
+
+copyRest:
 
 		memcpy(&UnCompressed[Index], ptr, MsgLen - Index);		// Rest of Message
 
@@ -1532,7 +1575,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	Logprintf(LOG_BBS, conn, '?', "B2 From %s", B2From);
 
-	if (strcmp(conn->Callsign, "RMS") != 0)		// if going to RMS - just send calll
+	if (strcmp(conn->Callsign, "RMS") != 0 && conn->WL2K == 0)		// if going to RMS - just send calll
 	{
 		if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
 			strcpy(B2From, Msg->emailfrom);

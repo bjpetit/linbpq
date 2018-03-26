@@ -42,6 +42,7 @@ iconv_t link_toUTF8 = NULL;
 VOID ChatClearQueue(ChatCIRCUIT * conn);
 VOID ChatFlush(ChatCIRCUIT * conn);
 VOID APIENTRY SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen);
+unsigned short int compute_crc(unsigned char *buf,int len);
 
 extern struct SEM ChatSemaphore;
 
@@ -3328,7 +3329,7 @@ char ChatSYSOPCall[50] = "";
 VOID ChatSendWelcomeMsg(int Stream, ChatCIRCUIT * conn, struct UserInfo * user);
 
 
-int ChatConnected(Stream)
+int ChatConnected(int Stream)
 {
 	int n;
 	ChatCIRCUIT * conn;

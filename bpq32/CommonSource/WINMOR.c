@@ -143,6 +143,8 @@ VOID WritetoTraceSupport(struct TNCINFO * TNC, char * Msg, int Len)
 	UCHAR Line[1000];
 	int LineLen, i;
 
+	Msg[Len] = 0;
+
 #ifndef LINBPQ
 	index=SendMessage(TNC->hMonitor, LB_SETCURSEL, -1, 0);
 #endif
@@ -153,7 +155,7 @@ lineloop:
 	{
 		//	copy text to control a line at a time	
 					
-		ptr2=memchr(ptr1,13,Len);
+		ptr2 = memchr(ptr1, 13, Len);
 
 		if (ptr2)
 		{
@@ -198,6 +200,8 @@ lineloop:
 
 		}
 
+		// Process incomplete line
+
 		for (i = 0; i < Len; i++)
 		{
 			if (ptr1[i] > 126 || ptr1[i] < 32)
@@ -220,13 +224,10 @@ lineloop:
 #ifdef LINBPQ
 #else
 
-	if (index > 1200)
-						
-	do{
-
+	if (index > 1200)					
+	do
 		index=index=SendMessage(TNC->hMonitor, LB_DELETESTRING, 0, 0);
-			
-	} while (index > 1000);
+	while (index > 1000);
 
 	if (index > -1)
 		index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
@@ -603,7 +604,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		}
 
 		if (TNC->HeartBeat++ > 600 || (TNC->Streams[0].Connected && TNC->HeartBeat > 50))			// Every Minute unless connected
-		{
+		{	
+			if (TNC->HeartBeat > 600 && TNC->hWnd)
+			{
+				char wtext[100];
+				sprintf (wtext, "WINMOR Sound Card TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
+				MySetWindowText(TNC->hWnd, wtext);
+			}
+
 			TNC->HeartBeat = 0;
 
 			if (TNC->CONNECTED)
@@ -614,7 +622,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					send(TNC->TCPSock, "MODE\r\n", 6, 0);
 				else
 				{
-					if (time(NULL) - TNC->WinmorRestartCodecTimer > 300)	// 5 mins
+					if (time(NULL) - TNC->WinmorRestartCodecTimer > 900)	// 15 mins
 					{
 						send(TNC->TCPSock, "CODEC FALSE\r\n", 13, 0);
 						send(TNC->TCPSock, "CODEC TRUE\r\n", 12, 0);
@@ -1261,7 +1269,8 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 {
 	// Set mycall back to Node or Port Call, and Start Scanner
 
-	UCHAR TXMsg[1000];
+	UCHAR TXMsg[256];
+	char wtext[100];
 
 	ChangeMYC(TNC, TNC->NodeCall);
 
@@ -1269,7 +1278,13 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 		send(TNC->TCPSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
+	if (TNC->hWnd)
+	{
+		sprintf (wtext, "WINMOR Sound Card TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
+		MySetWindowText(TNC->hWnd, wtext);
+	}
 
 	//	Start Scanner
 				
@@ -1923,6 +1938,7 @@ BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 		{
 			 // Our Process
 
+			TNC->hWnd = hwnd;		// save so we can reset title when sessicn closes
 			sprintf (wtext, "WINMOR Sound Card TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
 			SetWindowText(hwnd, wtext);
 			return FALSE;
@@ -2116,6 +2132,18 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				}
 			}
 
+			if (STREAM->BPQtoPACTOR_Q)		//Used for CTEXT
+			{
+				UINT * buffptr = Q_REM(&STREAM->BPQtoPACTOR_Q);
+				UINT * dataint = &buffptr[2];
+				UCHAR * data = (UCHAR *)dataint;
+
+				send(TNC->TCPDataSock, data, buffptr[1], 0);
+				STREAM->BytesTXed += buffptr[1];
+				WritetoTrace(TNC, data, buffptr[1]);
+				ReleaseBuffer(buffptr);
+			}
+		
 			// See which application the connect is for
 
 			for (App = 0; App < 32; App++)
@@ -2268,7 +2296,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			time_t Duration;
 
 			Duration = time(NULL) - STREAM->ConnectTime;
-				
+
+			if (Duration == 0)
+				Duration = 1;		// Avoid zero divide
+	
 			sprintf(logmsg,"Port %2d %9s Bytes Sent %d  BPS %d Bytes Received %d BPS %d Time %d Seconds",
 				TNC->Port, STREAM->RemoteCall,
 				STREAM->BytesTXed, (int)(STREAM->BytesTXed/Duration),

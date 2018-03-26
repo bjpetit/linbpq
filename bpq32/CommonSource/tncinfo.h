@@ -434,7 +434,8 @@ typedef struct TNCINFO
 	int PTTMode;					// PTT Mode Flags
 	int PTTState;					// Current State
 
-	int PID;
+	int PID;						// Process ID for Software TNC
+	HWND hWnd;						// Main window handle for Software TNC
 	char * CaptureDevices;
 	char * PlaybackDevices;
 	char * ProgramPath;

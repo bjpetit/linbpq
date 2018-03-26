@@ -192,7 +192,7 @@ VOID InitialiseNNTP()
 		nntpsock = CreateListeningSocket(NNTPInPort);
 }
 
-CreateNNTPMessage(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
+int CreateNNTPMessage(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
 {
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;

@@ -196,6 +196,7 @@ typedef struct ConnectionInfo_S
 
 	int CloseAfterFlush;		// Close session when all sent. Set to 100ms intervals to wait.
 	
+	int ErrorCount;				// Invalid Command  count
 	BOOL Paging;				// Set if user wants paging
 	int LinesSent;				// Count when paging
 	int PageLen;				// Lines per page
@@ -241,6 +242,7 @@ typedef struct ConnectionInfo_S
 	BOOL NewUser;						// Set if first time user has accessed BBS
 	BOOL Paclink;						// Set if receiving messages from Paclink
 	BOOL RMSExpress;					// Set if receiving messages from RMS Express
+	BOOL WL2K;							// Set if communicating with a CMS
 	char ** PacLinkCalls;				// Calls we are getting messages for
 	BOOL SkipPrompt;					// Set if a remote node sends a > at the end of his CTEXT
 	BOOL SkipConn;						// Node sends "connected" in its CTEXT

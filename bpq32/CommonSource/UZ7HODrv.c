@@ -1258,7 +1258,7 @@ int ConnecttoUZ7HO(int port)
 	return 0;
 }
 
-VOID ConnecttoUZ7HOThread(port)
+VOID ConnecttoUZ7HOThread(int port)
 {
 	char Msg[255];
 	int err,i;

@@ -1287,11 +1287,6 @@ VOID VARAThread(int port)
 	}
 
 
-#ifndef LINBPQ
-//	FreeSemaphore(&Semaphore);
-	EnumWindows(EnumVARAWindowsProc, (LPARAM)TNC);
-//	GetSemaphore(&Semaphore, 52);
-#endif
 	Sleep(1000);
 
 	TNC->LastFreq = 0;			//	so V4 display will be updated
@@ -1348,6 +1343,15 @@ VOID VARAThread(int port)
 
 	sprintf(Msg, "Connected to VARA TNC Port %d\r\n", TNC->Port);
 	WritetoConsole(Msg);
+
+
+	#ifndef LINBPQ
+//	FreeSemaphore(&Semaphore);
+	Sleep(1000);		// Give VARA time to update Window title
+	EnumWindows(EnumVARAWindowsProc, (LPARAM)TNC);
+//	GetSemaphore(&Semaphore, 52);
+#endif
+
 
 	while (TNC->CONNECTED)
 	{
@@ -1682,7 +1686,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			if (WL2K)
 				strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			
 			// Check for ExcludeList
 
@@ -1796,7 +1800,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			else
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 			
-			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			UpdateMH(TNC, TNC->TargetCall, '+', 'O');
 			return;
@@ -1917,12 +1921,22 @@ VOID VARAProcessReceivedData(struct TNCINFO * TNC)
 		// Does this mean closed?
 		
 //		closesocket(TNC->TCPSock);
-		closesocket(TNC->TCPDataSock);
-
-		TNC->TCPDataSock = 0;
+	
+		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
+		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		TNC->CONNECTED = FALSE;
-		TNC->Streams[0].ReportDISC = TRUE;
+		TNC->Alerted = FALSE;
+
+		if (TNC->PTTMode)
+			Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+
+		if (TNC->Streams[0].Attached)
+			TNC->Streams[0].ReportDISC = TRUE;
+
+		closesocket(TNC->TCPDataSock);
+		TNC->TCPSock = 0;
+
 
 		return;					
 	}
@@ -1964,6 +1978,9 @@ if (TNC->InputLen > 8000)	// Shouldnt have packets longer than this
 
 		TNC->CONNECTED = FALSE;
 		TNC->Streams[0].ReportDISC = TRUE;
+
+		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
+		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -2049,6 +2066,8 @@ VOID VARAProcessDataPacket(struct TNCINFO * TNC, UCHAR * Data, int Length)
 			return;			// No buffers, so ignore
 				
 		memcpy(&buffptr[2], Data, Fraglen);
+		
+		WritetoTrace(TNC, Data, Fraglen);
 
 		Data += Fraglen;
 
@@ -2324,11 +2343,12 @@ int VARASendData(struct TNCINFO * TNC, UCHAR * Buff, int Len)
 
 BOOL CALLBACK EnumVARAWindowsProc(HWND hwnd, LPARAM  lParam)
 {
-	char wtext[100];
+	char wtext[128];
 	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
 	UINT ProcessId;
+	int n;
 
-	GetWindowText(hwnd,wtext,99);
+	n = GetWindowText(hwnd, wtext, 127);
 
 	if (memcmp(wtext,"VARA HF", 7) == 0)
 	{
@@ -2338,8 +2358,8 @@ BOOL CALLBACK EnumVARAWindowsProc(HWND hwnd, LPARAM  lParam)
 		{
 			 // Our Process
 
-			wtext[52] = 0;
-			sprintf (wtext, "%s BPQ Port %d", wtext, TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			wtext[n] = 0;
+			sprintf (wtext, "%s- BPQ %s", wtext, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
 			SetWindowText(hwnd, wtext);
 			return FALSE;
 		}

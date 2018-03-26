@@ -48,6 +48,7 @@ int pthread_equal(pthread_t T1, pthread_t T2);
 #else
 
 int Sleep(int ms);
+int GetTickCount();
 
 #define ioctlsocket ioctl
 

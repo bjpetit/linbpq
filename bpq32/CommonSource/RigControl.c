@@ -680,7 +680,7 @@ portok:
  		
 			*(CmdPtr) = 0; 
 
-			Len = CmdPtr - (UCHAR *)&buffptr[30];
+			Len = CmdPtr - (char *)&buffptr[30];
 			break;
 
 		case KENWOOD:
@@ -956,7 +956,10 @@ portok:
 					*(CmdPtr++) = 0xE0;
 					*(CmdPtr++) = 0x1a;	
 
-					if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))				{
+					if ((strcmp(RIG->RigName, "IC7100") == 0) ||
+						(strcmp(RIG->RigName, "IC7410") == 0) ||
+						(strcmp(RIG->RigName, "IC7300") == 0))
+					{
 						FreqPtr[0].Cmd3Len = 9;
 						*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
 						*(CmdPtr++) = 0x1;		// Data On
@@ -1980,7 +1983,7 @@ BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 		BOOL        fWriteStat;
 		DWORD       BytesWritten;
 
-#ifdef LINBPQ
+#ifndef WIN32
 		BytesWritten = write(PORT->hDevice, PORT->TXBuffer, PORT->TXLen);
 #else
 		fWriteStat = WriteFile(PORT->hDevice, PORT->TXBuffer, PORT->TXLen, &BytesWritten, NULL );
@@ -1994,7 +1997,7 @@ BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 			{
 				// Try Again
 
-#ifdef LINBPQ
+#ifndef WIN32
 				BytesWritten = write(PORT->hDevice, PORT->TXBuffer, PORT->TXLen);
 #else
 				fWriteStat = WriteFile(PORT->hDevice, PORT->TXBuffer, PORT->TXLen, &BytesWritten, NULL );
@@ -2587,6 +2590,27 @@ SetFinished:
 
 		RIG->RIGOK = TRUE;
 		PORT->Timeout = 0;
+		if (!PORT->AutoPoll)
+		{
+			// Manual response probably to CMD Query. Retuen response
+
+			char reply[256] = "CMD Response ";
+			char * p1 = &reply[13];
+			UCHAR * p2 = &Msg[4];
+			int n = framelen - 4;
+
+			while (n > 0)
+			{
+				sprintf(p1, "%02X ", *(p2));
+				p1 += 3;
+				p2++;
+				n--;
+			}
+
+			SendResponse(RIG->Session, reply);
+
+		}
+
 	}
 	else 
 		return;		// What does this mean??
@@ -4674,7 +4698,10 @@ CheckScan:
 							*(CmdPtr++) = 0xE0;
 							*(CmdPtr++) = 0x1a;	
 
-							if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))
+
+							if ((strcmp(RIG->RigName, "IC7100") == 0) ||
+								(strcmp(RIG->RigName, "IC7410") == 0) ||
+								(strcmp(RIG->RigName, "IC7300") == 0))
 							{
 								FreqPtr[0]->Cmd3Len = 9;
 								*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set

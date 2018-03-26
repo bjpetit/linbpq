@@ -948,6 +948,12 @@
 //	Fix problem caused by trailing spaces on callsign in WP database
 //	Support mixed case WINLINK Passwords
 
+// 6.0.16.?
+
+//	Make sure messages sent to WL2K don;'t have @ on from: address
+//  If message to saildocs add R: line as an X header instead of to body
+//	Close session if more than 4 Invalid Commmad responses sent
+//	Report TOP in POP3 CAPA list. Allows POP3 to work with Windows Mail client
 
 #include "BPQMail.h"
 #define MAIL

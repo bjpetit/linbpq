@@ -88,6 +88,7 @@ BOOL APIENTRY Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
 VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
+VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 
 VOID TRKSuspendPort(struct TNCINFO * TNC)
 {
@@ -590,6 +591,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 	Len += sprintf(&Buff[Len], "</table>");
 
+	Len += sprintf(&Buff[Len], "<textarea rows=10 style=\"width:480px; height:250px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
 	Len = DoScanLine(TNC, Buff, Len);
 
 	return Len;
@@ -698,9 +700,11 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	strcpy(TNC->Streams[0].MyCall, TNC->NodeCall); // For 1st Connected Test 
 
+	
 	TNC->WebWindowProc = WebProc;
-	TNC->WebWinX = 500;
-	TNC->WebWinY = 200;
+	TNC->WebWinX = 520;
+	TNC->WebWinY = 500;
+	TNC->WebBuffer = zalloc(5000);
 
 	TNC->WEB_COMMSSTATE = zalloc(100);
 	TNC->WEB_TNCSTATE = zalloc(100);
@@ -709,7 +713,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 200);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,10,120,24, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,10,386,26, TNC->hDlg, NULL, hInstance, NULL);
@@ -726,9 +730,13 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	CreateWindowEx(0, "STATIC", "Traffic", WS_CHILD | WS_VISIBLE,10,114,80,24, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_TRAFFIC = CreateWindowEx(0, "STATIC", "RX 0 TX 0", WS_CHILD | WS_VISIBLE,116,114,374,24 , TNC->hDlg, NULL, hInstance, NULL);
 
+	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
+            LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
+			0,170,250,300, TNC->hDlg, NULL, hInstance, NULL);
 
-	TNC->ClientHeight = 200;
+	TNC->ClientHeight = 450;
 	TNC->ClientWidth = 500;
+
 
 	MoveWindows(TNC);
 	
@@ -1215,6 +1223,8 @@ VOID DEDPoll(int Port)
 
 				Poll[2] = datalen - 1;
 				memcpy(&Poll[3], buffptr+2, datalen);
+
+				WritetoTrace(TNC, Buffer, datalen);
 		
 				ReleaseBuffer(buffptr);
 		
@@ -2266,6 +2276,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		buffptr[1] = framelen;				// Length
 		TNC->Streams[Stream].BytesRXed += buffptr[1];
 		memcpy(&buffptr[2], Msg, buffptr[1]);
+		
+		WritetoTrace(TNC, Msg, buffptr[1]);
+
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 		ShowTraffic(TNC);
 

@@ -100,7 +100,7 @@ static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 static int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 static int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-ProcessLine(char * buf, int Port)
+int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;

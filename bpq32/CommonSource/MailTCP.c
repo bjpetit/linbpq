@@ -2250,6 +2250,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		SendSock(sockptr, "+OK Capability list follows");
 		SendSock(sockptr, "UIDL");
+		SendSock(sockptr, "TOP");
 		SendSock(sockptr, "EXPIRE 30");
 		SendSock(sockptr, ".");
 		return;

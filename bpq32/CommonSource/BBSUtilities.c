@@ -341,6 +341,22 @@ int	CriticalErrorHandler(char * error)
 	return 0;
 }
 
+BOOL CheckForTooManyErrors(ConnectionInfo * conn)
+{
+	conn->ErrorCount++;
+
+	if (conn->ErrorCount > 4)
+	{
+		BBSputs(conn, "Too many errors - closing\r");
+		conn->CloseAfterFlush = 20;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+
+
+
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
@@ -2426,6 +2442,7 @@ void Flush(CIRCUIT * conn)
 				return;
 
 			Disconnect(conn->BPQStream);
+			conn->ErrorCount = 0;
 		}
 
 		return;						// Nothing to send
@@ -7342,6 +7359,11 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 		conn->Paclink = TRUE;
 	}
 
+	if (strstr(SID, "WL2K-"))
+	{
+		conn->WL2K = TRUE;
+	}
+
 	if (_memicmp(SID, "OpenBCM", 7) == 0)
 	{
 		conn->OpenBCM = TRUE;
@@ -8433,6 +8455,7 @@ int Connected(int Stream)
 				ChangeSessionIdletime(Stream, USERIDLETIME);		// Default Idletime for BBS Sessions
 				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 				conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
+				conn->ErrorCount = 0;
 
 				if (conn->BBSFlags & RunningConnectScript)
 				{
@@ -8455,6 +8478,7 @@ int Connected(int Stream)
 
 			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 			conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
+			conn->ErrorCount = 0;
 
 			conn->Secure_Session = GetConnectionInfo(Stream, callsign,
 				&port, &conn->SessType, &paclen, &maxframe, &l4window);
@@ -9744,7 +9768,9 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (Cmd == NULL)
 	{
-		BBSputs(conn, "Invalid Command\r");
+		if (!CheckForTooManyErrors(conn))
+			BBSputs(conn, "Invalid Command\r");
+
 		SendPrompt(conn, user);
 		return;
 	}
@@ -10202,7 +10228,9 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (conn->Flags == 0)
 	{
-		BBSputs(conn, "Invalid Command\r");
+		if (!CheckForTooManyErrors(conn))
+			BBSputs(conn, "Invalid Command\r");
+
 		SendPrompt(conn, user);
 	}
 

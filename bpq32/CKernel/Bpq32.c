@@ -829,7 +829,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add TUNE and POWER Rigcontol Commands for some radios
 //  ADD LOCALTIME and DISPKM options to APRS Digi/Igate
 
+// 6.0.16.? ??
 
+//	Fix Setting data mode and filter for IC7300 radios
+//	Add VARA to WL2KREPORT
+//	Add trace to SCS Tracker status window
+//	Fix possible hang in IPGATEWAY
+//	Add BeacontoIS parameter to APRSDIGI. Allows you to stop sending beacons to APRS-IS.
+//	Fix sending CTEXT on WINMOR sessions 
 
 #define CKernel
 

@@ -244,6 +244,8 @@ int IStatusCounter = 3600;				// Used to send ?ISTATUS? Responses
 char RunProgram[128] = "";				// Program to start
 
 BOOL APRSISOpen = FALSE;
+BOOL BeacontoIS = TRUE;
+
 int ISDelayTimer = 0;					// Time before trying to reopen APRS-IS link
 
 char APRSDESTS[][7] = {"AIR*", "ALL*", "AP*", "BEACON", "CQ*", "GPS*", "DF*", "DGPS*", "DRILL*",
@@ -1814,6 +1816,13 @@ static int APRSProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr, "BeacontoIS") == 0)
+	{
+		BeacontoIS = atoi(p_value);
+		return TRUE;
+	}
+
+
 	if (_stricmp(ptr, "TRACECALLS") == 0)
 	{
 		TraceCalls = _strdup(_strupr(p_value));
@@ -1888,7 +1897,6 @@ static int APRSProcessLine(char * buf)
 		GPSSetsLocator = atoi(p_value);
 		return TRUE;
 	}
-
 
 	if (_stricmp(ptr, "LAT") == 0)
 	{
@@ -2121,7 +2129,7 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendStatus, BOOL SendSOGCOG)
 	if (PosnSet == FALSE)
 		return;
 
-	if (APRSISOpen && toPort == 0)
+	if (APRSISOpen && toPort == 0 && BeacontoIS)
 	{
 		char SOGCOG[10] = "";
 		char ISMsg[300];
@@ -2252,6 +2260,7 @@ int SendBeaconThread(VOID * BeaconParams[])
 				Sleep(20000);
 		}
 	}
+	return 0;
 }
 
 VOID SendObject(struct OBJECT * Object)

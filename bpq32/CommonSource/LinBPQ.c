@@ -165,6 +165,9 @@ int PollStreams();
 int APIENTRY SetAppl(int stream, int flags, int mask);
 int APIENTRY SessionState(int stream, int * state, int * change);
 int APIENTRY SessionControl(int stream, int command, int Mask);
+
+unsigned long _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
+
 BOOL ChatInit();
 VOID CloseChat();
 VOID CloseTNCEmulator();

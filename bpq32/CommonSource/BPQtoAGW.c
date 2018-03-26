@@ -520,7 +520,7 @@ BOOL ReadConfigFile(int Port)
 	return (TRUE);
 }
 
-ProcessLine(char * buf, int Port, BOOL CheckPort)
+static int ProcessLine(char * buf, int Port, BOOL CheckPort)
 {
 	char * ptr,* p_user,* p_password;
 	char * p_ipad;

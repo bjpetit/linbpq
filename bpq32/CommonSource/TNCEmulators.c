@@ -237,6 +237,13 @@ typedef struct _SERIAL_STATUS {
 #ifndef WIN32
 //	#include <pty.h>
 
+extern int posix_openpt (int __oflag) __wur;
+extern int grantpt (int __fd) __THROW;
+extern int unlockpt (int __fd) __THROW;
+extern char *ptsname (int __fd) __THROW __wur;
+extern int ptsname_r (int __fd, char *__buf, size_t __buflen) __THROW __nonnull ((2));
+extern int getpt (void);
+
 HANDLE LinuxOpenPTY(char * Name)
 {            
 	// Open a Virtual COM Port
