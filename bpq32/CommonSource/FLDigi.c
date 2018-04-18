@@ -1251,7 +1251,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -1282,6 +1282,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_KILL, "Kill FLDigi");
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart FLDigi");
+	AppendMenu(TNC->hMenu, MF_STRING, ARDOP_ABORT, "Abort Current Session");
 
 	MoveWindows(TNC);
 #endif

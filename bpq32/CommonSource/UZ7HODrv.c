@@ -69,8 +69,8 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto);
 int ConnecttoUZ7HO();
 static int ProcessReceivedData(int bpqport);
 static int ProcessLine(char * buf, int Port);
-int static KillTNC(struct TNCINFO * TNC);
-int static RestartTNC(struct TNCINFO * TNC);
+int KillTNC(struct TNCINFO * TNC);
+int RestartTNC(struct TNCINFO * TNC);
 VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message);
 struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
 static VOID SendData(struct TNCINFO * TNC, char * key, char * Msg, int MsgLen);
@@ -811,7 +811,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		closesocket(TNC->TCPSock);
 		TNC->CONNECTED = FALSE;
 
-		if (TNC->PID && TNC->WeStartedTNC)
+		if (TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 			RestartTNC(TNC);
@@ -826,7 +826,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		closesocket(TNC->TCPSock);
 
-		if (TNC->PID && TNC->WeStartedTNC)
+		if (TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 		}
@@ -836,188 +836,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	return 0;
 }
-
-static int KillTNC(struct TNCINFO * TNC)
-{
-	if (TNC->PTTMode)
-		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
-
-/*
-	if (TNC->ProgramPath && _memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
-	{
-		// Try to Kill TNC on a remote host
-
-		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
-		struct sockaddr_in destaddr;
-		char Msg[80];
-		int Len;
-
-		if (sock == INVALID_SOCKET)
-			return 0;
-
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
-		destaddr.sin_port = htons(8500);
-
-		if (destaddr.sin_addr.s_addr == INADDR_NONE)
-		{
-			//	Resolve name to address
-
-			struct hostent * HostEnt = gethostbyname (TNC->HostName);
-		 
-			if (!HostEnt)
-				return 0;			// Resolve failed
-
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-		}
-		Len = sprintf(Msg, "KILL %d", TNC->PID);
-		sendto(sock, Msg, Len, 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
-		Sleep(100);
-		closesocket(sock);
-
-		TNC->PID = 0;			// So we don't try again
-		return 1;				// Cant tell if it worked, but assume ok
-	}
-
-*/
-#ifndef LINBPQ
-	{
-		HANDLE hProc;
-
-
-		hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
-
-		if (hProc)
-		{
-			TerminateProcess(hProc, 0);
-			CloseHandle(hProc);
-		}
-
-		TNC->PID = 0;			// So we don't try again
-	}
-#endif
-	return 0;
-}
-
-
-static int RestartTNC(struct TNCINFO * TNC)
-{
-	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
-	{
-		int n;
-		
-		// Try to start TNC on a remote host
-
-		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
-		struct sockaddr_in destaddr;
-
-		Debugprintf("trying to restart UZ7HO TNC %s", TNC->ProgramPath);
-
-		if (sock == INVALID_SOCKET)
-			return 0;
-
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
-		destaddr.sin_port = htons(8500);
-
-		if (destaddr.sin_addr.s_addr == INADDR_NONE)
-		{
-			//	Resolve name to address
-
-			struct hostent * HostEnt = gethostbyname (TNC->HostName);
-		 
-			if (!HostEnt)
-				return 0;			// Resolve failed
-
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-		}
-
-		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
-	
-		Debugprintf("Restart UZ7HO TNC - sendto returned %d", n);
-
-		Sleep(100);
-		closesocket(sock);
-
-		return 1;				// Cant tell if it worked, but assume ok
-	}
-
-#ifndef WIN32
-	{
-		char * arg_list[] = {NULL, NULL};
-		pid_t child_pid;	
-
-		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
-
-		//	Fork and Exec UZ7HO TNC
-
-		printf("Trying to start %s\n", TNC->ProgramPath);
-
-		arg_list[0] = TNC->ProgramPath;
-	 
-    	/* Duplicate this process. */ 
-
-		child_pid = fork (); 
-
-		if (child_pid == -1) 
- 		{    				
-			printf ("UZ7HO TNC Start fork() Failed\n"); 
-			return 0;
-		}
-
-		if (child_pid == 0) 
- 		{    				
-			execvp (arg_list[0], arg_list); 
-        
-			/* The execvp  function returns only if an error occurs.  */ 
-
-			printf ("Failed to run UZ7HO TNC\n"); 
-			exit(0);			// Kill the new process
-		}
-		printf("Started UZ7HO TNC\n");
-		return TRUE;
-	}								 
-#else
-
-	{
-	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
-	char HomeDir[MAX_PATH];
-	int i, ret;
-
-	SInfo.cb=sizeof(SInfo);
-	SInfo.lpReserved=NULL; 
-	SInfo.lpDesktop=NULL; 
-	SInfo.lpTitle=NULL; 
-	SInfo.dwFlags=0; 
-	SInfo.cbReserved2=0; 
-  	SInfo.lpReserved2=NULL; 
-
-	if (TNC->ProgramPath)
-	{
-		strcpy(HomeDir, TNC->ProgramPath);
-		i = strlen(HomeDir);
-
-		while(--i)
-		{
-			if (HomeDir[i] == '/' || HomeDir[i] == '\\')
-			{
-				HomeDir[i] = 0;
-				break;
-			}
-		}
-		ret = CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,HomeDir, &SInfo, &PInfo);
-
-		if (ret)
-			TNC->PID = PInfo.dwProcessId;
-
-		return ret;
-	}
-	}
-#endif
-	return 0;
-}
-
 
 UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 {
@@ -2091,7 +1909,7 @@ VOID SendData(struct TNCINFO * TNC, char * Key, char * Msg, int MsgLen)
 #else
 	AGW->TXHeader.DataLength = MsgLen;
 #endif
-
+	AGW->TXHeader.PID = 0xf0;
 	send(sock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 	send(sock, Msg, MsgLen, 0);
 }

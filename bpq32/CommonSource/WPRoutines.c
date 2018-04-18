@@ -97,6 +97,9 @@ Next:
 		
 		if (strlen(WPRec.callsign) > 2)
 		{
+			if (strchr(WPRec.callsign, ':'))
+				goto Next;
+
 			if (_stricmp(WPRec.callsign, "RMS") == 0)
 				goto Next;
 

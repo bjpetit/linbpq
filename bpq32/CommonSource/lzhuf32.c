@@ -1415,6 +1415,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			BOOL SentToRMS = FALSE;
 			__int32 ToLen;
 			char * ToString = malloc(Recipients * 100);
+			char * bang;
 
 			SaveMsg = Msg;
 			SaveBody = conn->MailBuffer;
@@ -1475,7 +1476,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			}
 			else
 			{
-				// From a client - Create one copy with all RMS recipients, and another for each packet recipient	
+				// From a client - Create one copy with all RMS recipients, and one for each packet recipient	
 
 			// Merge all RMS To: lines 
 
@@ -1486,12 +1487,17 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				if (LocalMsg[i])
 					continue;						// For a local RMS user
+
+				// ?? Should a Bang Path override this ?? - I think so!
+
+				if (strchr(Via[i], '!'))
+					continue;
 				
 				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
 					_stricmp(RecpTo[i], "RMS") == 0)
 				{
-					if (ToLen == 0)			// First Addr
-						memcpy(HddrTo[i], "To", 2);			// In Case CC
+					if (ToLen == 0)					// First Addr
+						memcpy(HddrTo[i], "To", 2);	// In Case CC
 
 					ToLen += strlen(HddrTo[i]);
 					strcat(ToString, HddrTo[i]);
@@ -1533,11 +1539,14 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				// Only Process Non - RMS Dests or local RMS Users
 
-				if (LocalMsg[i] == 0)
-					if (_stricmp (Via[i], "WINLINK.ORG") == 0 ||
-						_memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
-						_stricmp(RecpTo[i], "RMS") == 0)		
-					continue;
+				// ?? Should a Bang Path override this ?? - I think so!
+
+				if (strchr(Via[i], '!') == 0)
+					if (LocalMsg[i] == 0)
+						if (_stricmp (Via[i], "WINLINK.ORG") == 0 ||
+							_memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+							_stricmp(RecpTo[i], "RMS") == 0)		
+						continue;
 
 				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
 				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
@@ -1554,6 +1563,19 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				// may be sending to more than one type
 				// If message contains Type: Private and not 'P',
 				// need to changes to Traffic or Bulletin
+
+				// But we need to remove last bang path if any
+
+				if (strchr(ptr, '!'))
+				{
+					bang = ptr + strlen(ptr);
+	
+					while (*(--bang) != '!');		// Find last !
+
+					*(bang++) = 13;					// Need CR;
+					*(bang++) = 10;					// Need LF;
+					*(bang) = 0;					// remove it;
+				}
 
 				ToLen = strlen(ptr);
 

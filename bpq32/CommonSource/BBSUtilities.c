@@ -2101,7 +2101,7 @@ int ImportMessages(CIRCUIT * conn, char * FN, BOOL Nopopup)
 		char * ATBBS = NULL;
 		char seps[] = " \t\r";
 		struct MsgInfo * Msg;
-		char SMTPTO[100]= "";
+		char To[100]= "";
 		int msglen;
 		char * Context;
 		char * Arg1, * Cmd;
@@ -2111,7 +2111,7 @@ NextMessage:
 		From = NULL;
 		BID = NULL;
 		ATBBS = NULL;
-		SMTPTO[0]= 0;
+		To[0]= 0;
 
 		Sleep(100);
 
@@ -2150,7 +2150,9 @@ NextMessage:
 			return Files;
 		}
 
-		if (DecodeSendParams(conn, Context, &From, &Arg1, &ATBBS, &BID))
+		strcpy(To, Arg1);
+
+		if (DecodeSendParams(conn, Context, &From, To, &ATBBS, &BID))
 		{
 			if (CreateMessage(conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID, NULL))
 			{
@@ -3774,7 +3776,7 @@ char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
 	return Date;
 }
 
-BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, char ** ATBBS, char ** BID);
+BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char * To, char ** ATBBS, char ** BID);
 
 
 BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
@@ -3788,7 +3790,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 	struct MsgInfo * OldMsg;
 	char OldTitle[62];
 	char NewTitle[62];
-	char SMTPTO[100]= "";
+	char To[100]= "";
 	int msgno;
 
 	if (Cmd[1] == 0) Cmd[1] ='P'; // Just S means SP
@@ -3819,10 +3821,12 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 			return FALSE;
 		}
 
-		if (!DecodeSendParams(conn, Context, &From, &Arg1, &ATBBS, &BID))
+		strcpy(To, Arg1);
+
+		if (!DecodeSendParams(conn, Context, &From, To, &ATBBS, &BID))
 			return FALSE;
 
-		return CreateMessage(conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID, NULL);	
+		return CreateMessage(conn, From, To, ATBBS, toupper(Cmd[1]), BID, NULL);	
 
 	case 'R':
 				
@@ -3850,16 +3854,16 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 		Arg1=&OldMsg->from[0];
 
+		strcpy(To, Arg1);
+
 		if (_stricmp(Arg1, "SMTP:") == 0 || _stricmp(Arg1, "RMS:") == 0 || OldMsg->emailfrom)
 		{
 			// SMTP message. Need to get the real sender from the message
 
-			sprintf(SMTPTO, "%s%s", Arg1, OldMsg->emailfrom);
-
-			Arg1 = SMTPTO;
+			sprintf(To, "%s%s", Arg1, OldMsg->emailfrom);
 		}
 
-		if (!DecodeSendParams(conn, "", &From, &Arg1, &ATBBS, &BID))
+		if (!DecodeSendParams(conn, "", &From, To, &ATBBS, &BID))
 			return FALSE;
 
 		strcpy(OldTitle, OldMsg->title);
@@ -3897,7 +3901,9 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 			return FALSE;
 		}
 
-		if (!DecodeSendParams(conn, Context, &From, &Arg1, &ATBBS, &BID))
+		strcpy(To, Arg1);
+
+		if (!DecodeSendParams(conn, Context, &From, To, &ATBBS, &BID))
 			return FALSE;
 	
 		OldMsg = FindMessage(user->Call, msgno, conn->sysop);
@@ -4016,59 +4022,90 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 }
 
 
-BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, char ** ATBBS, char ** BID)
+BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char *To, char ** ATBBS, char ** BID)
 {
 	char * ptr;
 	char seps[] = " \t\r";
 	WPRecP WP;
-	char * Addr = *To;
+	char * ToCopy = _strdup(To);
 	int Len;
 
 	conn->ToCount = 0;
 
 	// SB WANT @ ALLCAN < N6ZFJ $4567_N0ARY
 
-	if (strchr(Context, ';') || strchr(Addr, ';'))
+	if (strchr(Context, ';') || strchr(To, ';'))
 	{
 		// Multiple Addresses - put address list back together
 
-		Addr[strlen(Addr)] = ' ';
-		Context = Addr;
+		To[strlen(To)] = ' ';
+		Context = To;
 
 		while (strchr(Context, ';'))
 		{
 			// Multiple Addressees
 
-			Addr = strtok_s(NULL, ";", &Context);
-			Len = strlen(Addr);
+			To = strtok_s(NULL, ";", &Context);
+			Len = strlen(To);
 			conn->To = realloc(conn->To, (conn->ToCount+1)*4);
-			if (conn->To[conn->ToCount] = CheckToAddress(conn, Addr))
+			if (conn->To[conn->ToCount] = CheckToAddress(conn, To))
 				conn->ToCount++;
 		}
 
-		Addr = strtok_s(NULL, seps, &Context);
+		To = strtok_s(NULL, seps, &Context);
 
-		Len = strlen(Addr);
+		Len = strlen(To);
 		conn->To=realloc(conn->To, (conn->ToCount+1)*4);
-		if (conn->To[conn->ToCount] = CheckToAddress(conn, Addr))
+		if (conn->To[conn->ToCount] = CheckToAddress(conn, To))
 			conn->ToCount++;
 	}
 	else
 	{
 		// Single Call
 
+		// accept CALL!CALL for source routed message
+		
+		if (strchr(To, '@') == 0 && strchr(To, '!')) // Bang route without @
+		{
+			char * bang = strchr(To, '!');
+			
+			memmove(bang + 1, bang, strlen(bang));	// Move !call down one
+			
+			*ATBBS = strlop(To, '!');;
+		}
+
 		// Accept call@call (without spaces) - but check for smtp addresses
 
-		if (_memicmp(*To, "smtp:", 5) != 0 && _memicmp(*To, "rms:", 4) != 0  && _memicmp(*To, "rms/", 4) != 0)
+		if (_memicmp(To, "smtp:", 5) != 0 && _memicmp(To, "rms:", 4) != 0  && _memicmp(To, "rms/", 4) != 0)
 		{
-			ptr = strchr(*To, '@');
+			ptr = strchr(To, '@');
 
 			if (ptr)
 			{
-				*ATBBS = strlop(*To, '@');
+				// If looks like a valid email address, treat as such
+
+				int tolen;
+				*ATBBS = strlop(To, '@');
+
+				strlop(To, '-');		// Cant have SSID on BBS Name
+
+				tolen = strlen(To);
+
+				if (tolen > 6 || !CheckifPacket(*ATBBS))
+				{
+					// Probably Email address. Add smtp: or rms:
+
+					if (FindRMS() || strchr(*ATBBS, '!')) // have RMS or source route
+						sprintf(To, "rms:%s", ToCopy);
+					else if (ISP_Gateway_Enabled)
+						sprintf(To, "smtp:%s", ToCopy);
+
+				}
 			}
 		}
 	}
+
+	free(ToCopy);
 
 	// Look for Optional fields;
 
@@ -4112,7 +4149,7 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 	{
 		// if a normal user, check that TO and/or AT are known and warn if not.
 
-		if (_stricmp(*To, "SYSOP") == 0)
+		if (_stricmp(To, "SYSOP") == 0)
 		{
 			conn->LocalMsg = TRUE;
 			return TRUE;
@@ -4122,7 +4159,7 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 		{
 			// No routing, if not a user and not known to forwarding or WP warn
 
-			struct UserInfo * ToUser = LookupCall(*To);
+			struct UserInfo * ToUser = LookupCall(To);
 
 			if (ToUser)
 			{
@@ -4141,7 +4178,7 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 			else
 			{
 				conn->LocalMsg = FALSE;
-				WP = LookupWP(*To);
+				WP = LookupWP(To);
 
 				if (WP)
 				{

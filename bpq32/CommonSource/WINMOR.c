@@ -1374,7 +1374,12 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
 		"</head><title>WINMOR Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2>WINMOR Status</h2>");
+//		"<h2>WINMOR Status</h2>"
+		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
+		"'width=440,height=150');\" action=ARDOPAbort?%d>WINMOR Status"
+		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
+		TNC->Port);
+;
 
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
@@ -1557,7 +1562,7 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -1593,8 +1598,9 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_KILL, "Kill Winmor TNC");
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart Winmor TNC");
-	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after each Connection");
-	
+	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after failed Connection");
+	AppendMenu(TNC->hMenu, MF_STRING, ARDOP_ABORT, "Abort Current Session");
+
 	CheckMenuItem(TNC->hMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
 
 	MoveWindows(TNC);
@@ -1819,6 +1825,9 @@ VOID WINMORThread(int port)
 
 		return;
 	}
+
+	TNC->HeartBeat = 0;
+
 	while (TRUE)
 	{
 		FD_ZERO(&readfs);	
@@ -1880,7 +1889,7 @@ Lost:
 		}
 		else
 		{
-			// 60 secs without data. Shouldn't happen
+			// 90 secs without data. Shouldn't happen
 
 			sprintf(Msg, "WINMOR Connection Timeout Port %d\r\n", TNC->Port);
 			WritetoConsole(Msg);
@@ -1914,6 +1923,7 @@ Lost:
 			if (TNC->PID && TNC->WeStartedTNC)
 			{
 				KillTNC(TNC);
+				RestartTNC(TNC);
 			}
 			return;
 		}
@@ -2282,6 +2292,16 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
 			FreeSemaphore(&Semaphore);
+
+			if (TNC->RestartAfterFailure)
+			{
+				if (TNC->PID)
+				{
+					KillTNC(TNC);
+					RestartTNC(TNC);
+				}
+			}
+
 			return;
 		}
 
@@ -2427,19 +2447,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)
 		{
 			TNC->DiscPending = FALSE;
-			if (TNC->RestartAfterFailure)
-			{
-				if (TNC->HadConnect)
-				{
-					TNC->HadConnect = FALSE;
-
-					if (TNC->PID)
-					{
-						KillTNC(TNC);
-						RestartTNC(TNC);
-					}
-				}
-			}
 			return;
 		}
 
@@ -2633,7 +2640,7 @@ loop:
 		// Does this mean closed?
 		
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;
@@ -2762,9 +2769,6 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 int KillTNC(struct TNCINFO * TNC)
 {
-	if (TNC->PID == 0)
-		return 0;
-
 	if (TNC->ProgramPath && _memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
 	{
 		// Try to Kill TNC on a remote host
@@ -2792,7 +2796,12 @@ int KillTNC(struct TNCINFO * TNC)
 
 			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 		}
-		Len = sprintf(Msg, "KILL %d", TNC->PID);
+
+		if (TNC->PID)
+			Len = sprintf(Msg, "KILL %d", TNC->PID);
+		else
+			Len = sprintf(Msg, "KILLBYNAME %s", &TNC->ProgramPath[7]);
+
 		sendto(sock, Msg, Len, 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
 		Sleep(100);
 		closesocket(sock);
@@ -2800,6 +2809,9 @@ int KillTNC(struct TNCINFO * TNC)
 		TNC->PID = 0;			// So we don't try again
 		return 1;				// Cant tell if it worked, but assume ok
 	}
+
+	if (TNC->PID == 0)
+		return 0;
 
 #ifndef LINBPQ
 	{
@@ -2838,7 +2850,7 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
 		struct sockaddr_in destaddr;
 
-		Debugprintf("trying to restart WINMOR TNC %s", TNC->ProgramPath);
+		Debugprintf("trying to restart TNC %s", TNC->ProgramPath);
 
 		if (sock == INVALID_SOCKET)
 			return 0;
@@ -2861,14 +2873,73 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 
 		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
 	
-		Debugprintf("Restart WINMOR TNC - sento returned %d", n);
+		Debugprintf("Restart TNC - sento returned %d", n);
 
 		Sleep(100);
 		closesocket(sock);
 
 		return 1;				// Cant tell if it worked, but assume ok
 	}
-#ifndef LINBPQ
+
+	// Not Remote
+
+	// Extract any parameters from command string
+
+#ifndef WIN32
+	{
+		char * arg_list[] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+		pid_t child_pid;
+		char * Copy, * Context;
+		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
+
+		Copy = _strdup(TNC->ProgramPath);	// Save as strtok mangles it
+
+		arg_list[0] = strtok_s(Copy, " \n\r", &Context);
+		if (arg_list[0])
+			arg_list[1] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[1])
+			arg_list[2] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[2])
+			arg_list[3] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[3])
+			arg_list[4] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[4])
+			arg_list[5] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[5])
+			arg_list[6] = strtok_s(NULL, " \n\r", &Context);
+		if (arg_list[6])
+			arg_list[7] = strtok_s(NULL, " \n\r", &Context);
+
+		//	Fork and Exec ARDOP
+
+		printf("Trying to start %s\n", TNC->ProgramPath);
+
+		/* Duplicate this process. */ 
+
+		child_pid = fork (); 
+
+		if (child_pid == -1) 
+ 		{    				
+			printf ("ARDOPStart fork() Failed\n"); 
+			free(Copy);
+			return 0;
+		}
+
+		if (child_pid == 0) 
+ 		{    				
+			execvp (arg_list[0], arg_list); 
+        
+			/* The execvp  function returns only if an error occurs.  */ 
+
+			printf ("Failed to run ARDOP\n"); 
+			exit(0);			// Kill the new process
+		}
+		printf("Started ARDOP TNC\n");
+		free(Copy);
+		return TRUE;
+	}								 
+#else
+
 	{
 		int n = 0;
 		
@@ -2890,9 +2961,10 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 			Sleep(100);
 		}
 
-		if (CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+		if (CreateProcess(NULL, TNC->ProgramPath, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
 		{
 			Debugprintf("Restart TNC OK");
+			TNC->PID = PInfo.dwProcessId;
 			return TRUE;
 		}
 		else
@@ -2959,7 +3031,9 @@ BOOL KillOldTNC(char * Path)
 			{
 				GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
 
-				if (_stricmp(ExeName, Path) == 0)
+				// Path could have parameters, so use memcmp
+
+				if (_memicmp(ExeName, Path, strlen(ExeName)) == 0)
 				{
 					Debugprintf("Killing Pid %d %s", Processes[i], ExeName);
 					TerminateProcess(hProc, 0);

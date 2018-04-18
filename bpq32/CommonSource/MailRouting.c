@@ -757,8 +757,7 @@ VOID CheckAndSend(struct MsgInfo * Msg, CIRCUIT * conn, struct UserInfo * bbs)
 {
 	struct BBSForwardingInfo * ForwardingInfo = bbs->ForwardingInfo;
 		
-	if ((_stricmp(bbs->Call, BBSName) != 0) ||
-		ForwardToMe && _stricmp(Msg->to, BBSName) == 0)			// Dont forward to ourself - already here! (unless ForwardToMe set)
+	if (ForwardToMe || _stricmp(bbs->Call, BBSName) != 0) // Dont forward to ourself - already here! (unless ForwardToMe set)
 	{
 		if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
 		{
@@ -768,6 +767,8 @@ VOID CheckAndSend(struct MsgInfo * Msg, CIRCUIT * conn, struct UserInfo * bbs)
 				ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
 		}
 	}
+	else
+		Logprintf(LOG_BBS, conn, '?', "Message matches this BBS and ForwardToMe not set - not queuing message");
 }
 
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
@@ -801,6 +802,33 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	//	No, Not a good idea to use same aliss file for NTS and other messages
 	//	(What about OT 2*?)
 	//	If we need to alias other types, add a new file
+
+	if (strchr(RouteElements, '!'))		// Source Route ("Bang Routing")
+	{
+		char * bang = &RouteElements[strlen(RouteElements)];
+
+		while (*(--bang) != '!');		// Find last !
+
+		*(bang) = 0;					// remove it;
+		_strupr(++bang);
+
+		strcpy(Msg->via, RouteElements);	// Remove from via
+
+		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+		{
+			if (_stricmp(bbs->Call, bang) == 0)
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace Source Route via %s", bbs->Call);
+				CheckAndSend(Msg, conn, bbs);
+				return 1;
+			}
+		}
+
+		if (conn && !(conn->BBSFlags & BBS))
+			nodeprintf(conn, "Routing via %s requested but %s not known to this BBS\r", bang, bang);
+
+		Logprintf(LOG_BBS, conn, '?', "Routing via %s requested but %s not known to this BBS", bang, bang);
+	}
 
 	if (Msg->type == 'T')
 	{

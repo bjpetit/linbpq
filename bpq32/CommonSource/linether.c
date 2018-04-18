@@ -66,7 +66,7 @@ char Adapter[256];
 
 static BOOL ReadConfigFile(int Port);
 static int ProcessLine(char * buf,int Port, BOOL CheckPort);
-
+int WritetoConsoleLocal(char * buff);
 
 int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -229,7 +229,7 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
 	u_long param=1;
     struct ifreq buffer;
 
-	WritetoConsole("BPQEther ");
+	WritetoConsoleLocal("BPQEther ");
 
 	//
 	//	Read config 
@@ -268,7 +268,7 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
 	}
 
 	n=sprintf(buf,"Using %s = Interface %d\n", Adapter, ifr.ifr_ifindex);
-	WritetoConsole(buf);
+	WritetoConsoleLocal(buf);
 
 	/*prepare sockaddr_ll*/
 
@@ -339,22 +339,22 @@ static BOOL ReadConfigFile(int Port)
 	
 			if (!ProcessLine(buf, Port, FALSE))
 			{
-				WritetoConsole("BPQEther - Bad config record ");
-				WritetoConsole(errbuf);
-				WritetoConsole("\n");
+				WritetoConsoleLocal("BPQEther - Bad config record ");
+				WritetoConsoleLocal(errbuf);
+				WritetoConsoleLocal("\n");
 			}
 		}
 		return (TRUE);
 	}
 		
 	n=sprintf(buf,"No config info found in bpq32.cfg\n");
-	WritetoConsole(buf);
+	WritetoConsoleLocal(buf);
 
 	return (FALSE);
 }
 
 
-static ProcessLine(char * buf, int Port, BOOL CheckPort)
+static int ProcessLine(char * buf, int Port, BOOL CheckPort)
 {
 	char * ptr;
 	char * p_port;

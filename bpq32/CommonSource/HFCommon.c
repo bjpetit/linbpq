@@ -261,7 +261,9 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 		case ARDOP_ABORT:
 
-			ARDOPAbort(TNC);
+			if (TNC->ForcedCloseProc)
+				TNC->ForcedCloseProc(TNC, 0);
+
 			break;
 		}
 		return DefMDIChildProc(hWnd, message, wParam, lParam);
@@ -314,7 +316,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 }
 #endif
 
-BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, int Width, int Height)
+BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, int Width, int Height, VOID ForcedCloseProc())
 {
 #ifdef LINBPQ
 	return FALSE;
@@ -419,6 +421,8 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	TNC->RigControlRow = RigControlRow;
 
 	SetWindowText(TNC->xIDC_TNCSTATE, "Free");
+
+	TNC->ForcedCloseProc = ForcedCloseProc;
 
 	return TRUE;
 #endif

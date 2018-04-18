@@ -75,8 +75,8 @@ int (WINAPI FAR *EnumProcessesPtr)();
 
 static int Socket_Data(int sock, int error, int eventcode);
 
-int ARDOPKillTNC(struct TNCINFO * TNC);
-int ARDOPRestartTNC(struct TNCINFO * TNC);
+int KillTNC(struct TNCINFO * TNC);
+int RestartTNC(struct TNCINFO * TNC);
 int KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
 int SendReporttoWL2K(struct TNCINFO * TNC);
@@ -102,6 +102,8 @@ int ConfigVirtualKISSPort(struct TNCINFO * TNC, char * Cmd);
 void ProcessKISSBytes(struct TNCINFO * TNC, UCHAR * Data, int Len);
 void ProcessKISSPacket(struct TNCINFO * TNC, UCHAR * KISSBuffer, int Len);
 int ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen);
+int KillTNC(struct TNCINFO * TNC);
+int RestartTNC(struct TNCINFO * TNC);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -1065,10 +1067,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				// Too long in Disc Pending - Kill and Restart TNC
 
 				if (TNC->PID)
-				{
-					ARDOPKillTNC(TNC);
-					ARDOPRestartTNC(TNC);
-				}
+					KillTNC(TNC);
+
+				RestartTNC(TNC);
 			}
 		}
 
@@ -1078,34 +1079,30 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 			if (TNC->ProgramPath)
 			{
-				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
-				{
-					struct tm * tm;
-					char Time[80];
+				struct tm * tm;
+				char Time[80];
 				
-					TNC->Restarts++;
-					TNC->LastRestart = time(NULL);
+				TNC->Restarts++;
+				TNC->LastRestart = time(NULL);
 
-					tm = gmtime(&TNC->LastRestart);	
+				tm = gmtime(&TNC->LastRestart);	
 				
-					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
-						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+				sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
+					tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
-					MySetWindowText(TNC->xIDC_RESTARTTIME, Time);
-					strcpy(TNC->WEB_RESTARTTIME, Time);
+				MySetWindowText(TNC->xIDC_RESTARTTIME, Time);
+				strcpy(TNC->WEB_RESTARTTIME, Time);
 
-					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-					MySetWindowText(TNC->xIDC_RESTARTS, Time);
-					strcpy(TNC->WEB_RESTARTS, Time);
+				sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
+				MySetWindowText(TNC->xIDC_RESTARTS, Time);
+				strcpy(TNC->WEB_RESTARTS, Time);
 	
-					ARDOPKillTNC(TNC);
-					ARDOPRestartTNC(TNC);
+				KillTNC(TNC);
+				RestartTNC(TNC);
 
-					TNC->TimeSinceLast = 0;
-				}
+				TNC->TimeSinceLast = 0;
 			}
 		}
-
 
 		for (Stream = 0; Stream <= APMaxStreams; Stream++)
 		{
@@ -1788,7 +1785,9 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
 		"</head><title>ARDOP Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2><form method=post action=ARDOPAbort?%d>ARDOP Status <input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
+		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
+		"'width=440,height=150');\" action=ARDOPAbort?%d>ARDOP Status"
+		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
 		TNC->Port);
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
@@ -1854,7 +1853,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	TNC->ARDOPAPRSLen = 0;
 
 	if (TNC->ProgramPath)
-		TNC->WeStartedTNC = ARDOPRestartTNC(TNC);
+		TNC->WeStartedTNC = RestartTNC(TNC);
 
 	TNC->Hardware = H_ARDOP;
 
@@ -1997,7 +1996,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -2034,7 +2033,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_KILL, "Kill ARDOP TNC");
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart ARDOP TNC");
-	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after each Connection");
+	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after failed Connection");
 	AppendMenu(TNC->hMenu, MF_STRING, ARDOP_ABORT, "Abort Current Session");
 	
 	CheckMenuItem(TNC->hMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
@@ -2186,6 +2185,28 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 			TNC->CONNECTING = FALSE;
 			return;						// Not listening so no point trying to connect
 		}
+		
+		// Get the File Name in case we want to restart it.
+
+		if (TNC->ProgramPath == NULL)
+		{
+			if (GetModuleFileNameExPtr)
+			{
+				HANDLE hProc;
+				char ExeName[256] = "";
+
+				hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->PID);
+	
+				if (hProc)
+				{
+					GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
+					CloseHandle(hProc);
+
+					TNC->ProgramPath = _strdup(ExeName);
+				}
+			}
+		}
+
 	}
 #endif
 
@@ -2194,7 +2215,7 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 
 //	if (!IsProcess(TNC->PID))
 //	{
-//		ARDOPRestartTNC(TNC);
+//		RestartTNC(TNC);
 //		Sleep(3000);
 //	}
 
@@ -2645,7 +2666,7 @@ Lost:
 
 			if (TNC->PID && TNC->WeStartedTNC)
 			{
-				ARDOPKillTNC(TNC);
+				KillTNC(TNC);
 			}
 			return;
 		}
@@ -3107,7 +3128,13 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
-//			ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);  // !!!! Temp bug workaround !!!!
+			if (TNC->RestartAfterFailure)
+			{
+				if (TNC->PID)
+					KillTNC(TNC);
+					
+				RestartTNC(TNC);
+			}
 
 			return;
 		}
@@ -3248,19 +3275,6 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			TNC->DiscPending = FALSE;
 			TNC->ConnectPending = FALSE;
 
-			if (TNC->RestartAfterFailure)
-			{
-				if (TNC->HadConnect)
-				{
-					TNC->HadConnect = FALSE;
-
-					if (TNC->PID)
-					{
-						ARDOPKillTNC(TNC);
-						ARDOPRestartTNC(TNC);
-					}
-				}
-			}
 			return;
 		}
 
@@ -3859,7 +3873,7 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 		SendDlgItemMessage(hDlg, IDC_PLAYBACK, EM_SETSEL, -1, 0);
 
-//		ARDOPKillTNC(TNC);
+//		KillTNC(TNC);
 
 		return TRUE; 
 	}
@@ -3893,200 +3907,6 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 }
 */
 
-
-int ARDOPKillTNC(struct TNCINFO * TNC)
-{
-	if (TNC->PID == 0)
-		return 0;
-
-	if (TNC->ProgramPath && _memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
-	{
-		// Try to Kill TNC on a remote host
-
-		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
-		struct sockaddr_in destaddr;
-		char Msg[80];
-		int Len;
-
-		if (sock == INVALID_SOCKET)
-			return 0;
-
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
-		destaddr.sin_port = htons(8500);
-
-		if (destaddr.sin_addr.s_addr == INADDR_NONE)
-		{
-			//	Resolve name to address
-
-			struct hostent * HostEnt = gethostbyname (TNC->HostName);
-		 
-			if (!HostEnt)
-				return 0;			// Resolve failed
-
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-		}
-		Len = sprintf(Msg, "KILL %d", TNC->PID);
-		sendto(sock, Msg, Len, 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
-		Sleep(100);
-		closesocket(sock);
-
-		TNC->PID = 0;			// So we don't try again
-		return 1;				// Cant tell if it worked, but assume ok
-	}
-
-#ifndef LINBPQ
-	{
-	HANDLE hProc;
-
-	Debugprintf("ARDOPKillTNC Called for Pid %d", TNC->PID);
-
-	if (TNC->PTTMode)
-		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
-
-	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
-
-	if (hProc)
-	{
-		TerminateProcess(hProc, 0);
-		CloseHandle(hProc);
-	}
-	}
-#endif
-	TNC->PID = 0;			// So we don't try again
-
-	return 0;
-}
-
-BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
-{	
-	if (TNC->ProgramPath == NULL)
-		return 0;
-
-	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
-	{
-		int n;
-		
-		// Try to start TNC on a remote host
-
-		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
-		struct sockaddr_in destaddr;
-
-		Debugprintf("trying to restart ARDOP TNC %s on remote host", TNC->ProgramPath);
-
-		if (sock == INVALID_SOCKET)
-			return 0;
-
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
-		destaddr.sin_port = htons(8500);
-
-		if (destaddr.sin_addr.s_addr == INADDR_NONE)
-		{
-			//	Resolve name to address
-
-			struct hostent * HostEnt = gethostbyname(TNC->HostName);
-		 
-			if (!HostEnt)
-				return 0;			// Resolve failed
-
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-		}
-
-		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
-	
-		Debugprintf("Restart ARDOP TNC - sendto returned %d", n);
-
-		Sleep(100);
-		closesocket(sock);
-
-		return 1;				// Cant tell if it worked, but assume ok
-	}
-
-	// Extract any parameters from command string
-
-#ifndef WIN32
-	{
-		char * arg_list[] = {NULL, NULL, NULL, NULL, NULL};
-		pid_t child_pid;
-		char * Copy, * Context;
-		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
-
-		Copy = _strdup(TNC->ProgramPath);	// Save as strtok mangles it
-
-		arg_list[0] = strtok_s(Copy, " \n\r", &Context);
-		if (arg_list[0])
-			arg_list[1] = strtok_s(NULL, " \n\r", &Context);
-		if (arg_list[1])
-			arg_list[2] = strtok_s(NULL, " \n\r", &Context);
-		if (arg_list[2])
-			arg_list[3] = strtok_s(NULL, " \n\r", &Context);
-
-		//	Fork and Exec ARDOP
-
-		printf("Trying to start %s\n", TNC->ProgramPath);
-
-		/* Duplicate this process. */ 
-
-		child_pid = fork (); 
-
-		if (child_pid == -1) 
- 		{    				
-			printf ("ARDOPStart fork() Failed\n"); 
-			free(Copy);
-			return 0;
-		}
-
-		if (child_pid == 0) 
- 		{    				
-			execvp (arg_list[0], arg_list); 
-        
-			/* The execvp  function returns only if an error occurs.  */ 
-
-			printf ("Failed to run ARDOP\n"); 
-			exit(0);			// Kill the new process
-		}
-		printf("Started ARDOP TNC\n");
-		free(Copy);
-		return TRUE;
-	}								 
-#else
-	{
-		int n = 0;
-		
-		STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-	    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
-
-		SInfo.cb=sizeof(SInfo);
-		SInfo.lpReserved=NULL; 
-		SInfo.lpDesktop=NULL; 
-		SInfo.lpTitle=NULL; 
-		SInfo.dwFlags=0; 
-		SInfo.cbReserved2=0; 
-	  	SInfo.lpReserved2=NULL; 
-
-		Debugprintf("ARDOPRestartTNC Called for %s", TNC->ProgramPath);
-	
-		while (KillOldTNC(TNC->ProgramPath) && n++ < 100)
-		{
-			Sleep(100);
-		}
-
-		if (CreateProcess(NULL, TNC->ProgramPath, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
-		{
-			Debugprintf("Restart TNC OK");
-			TNC->PID = PInfo.dwProcessId;
-			return TRUE;
-		}
-		else
-		{
-			Debugprintf("Restart TNC Failed %d ", GetLastError());
-			return FALSE;
-		}
-	}
-#endif
-	return 0;
-}
 
 VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {

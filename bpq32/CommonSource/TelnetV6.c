@@ -619,7 +619,7 @@ lineloop:
 			if (strlen(Line) < 100)
 			{
 				sprintf(logmsg,"%d %s\r\n", Stream, Line);
-				  (logmsg);
+				WriteCMSLog(logmsg);
 			}
 
 		Skip:
@@ -640,7 +640,7 @@ lineloop:
 			if (strlen(ptr1) < 100)
 			{
 				sprintf(logmsg,"%d %s\r\n", Stream, ptr1);
-				WriteCMSLog (logmsg);
+				WriteCMSLog(logmsg);
 			}
 		}
 	}
@@ -1205,7 +1205,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, TelWndProc, 400, 300);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, TelWndProc, 400, 300, NULL);
 
 	TCP->hCMSWnd = CreateWindowEx(0, "STATIC", "CMS OK ", WS_CHILD | WS_VISIBLE,
 			240,0,60,16, TNC->hDlg, NULL, hInstance, NULL);

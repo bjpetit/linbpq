@@ -665,6 +665,7 @@ typedef struct TNCINFO
 
 	VOID (* SuspendPortProc) ();
 	VOID (* ReleasePortProc) ();
+	VOID (* ForcedCloseProc) ();
 
 	time_t WinmorRestartCodecTimer;
 	int WinmorCurrentMode;
@@ -688,6 +689,7 @@ typedef struct TNCINFO
 	int	 InputLevelMax;				// Sound card levels
 
 	int	DiscardNextOK;				// Used by VARA to suppress OK response to LISTEN commands
+	int SeenCancelPending;			// Used by VARA to suppress duplicate cancel pendings
 
 	MESSAGE * Monframe;				// Used by DED Host for receiving Packet Monitor Frame
 									// split over 2 packets
@@ -698,7 +700,7 @@ VOID * zalloc(int len);
 
 BOOL ReadConfigFile(int Port, int ProcLine());
 int GetLine(char * buf);
-BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, int Width, int Height);
+BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, int Width, int Height, VOID ForcedCloseProc());
 char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 struct WL2KInfo * DecodeWL2KReportLine(char *  buf);

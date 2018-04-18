@@ -1394,7 +1394,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			{
 				// Running on a port without a window, eg  UZ7HO or MultiPSK
 
-				CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 350, 80);
+				CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 350, 80, NULL);
 				hDlg = TNC->hDlg;
 				TNC->ClientHeight = 80;
 				TNC->ClientWidth = 350;

@@ -53,8 +53,8 @@ int (WINAPI FAR *EnumProcessesPtr)();
 
 static int Socket_Data(int sock, int error, int eventcode);
 
-int VARAKillTNC(struct TNCINFO * TNC);
-int VARARestartTNC(struct TNCINFO * TNC);
+int KillTNC(struct TNCINFO * TNC);
+int RestartTNC(struct TNCINFO * TNC);
 int KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
 int SendReporttoWL2K(struct TNCINFO * TNC);
@@ -375,7 +375,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		if (TNC->HeartBeat++ > 600 || (TNC->Streams[0].Connected && TNC->HeartBeat > 50))			// Every Minute unless connected
+		if (TNC->HeartBeat++ > 600)			// Every Minute 		{
 		{
 			TNC->HeartBeat = 0;
 
@@ -384,17 +384,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				// Probe link
 
 				if (TNC->Streams[0].Connecting || TNC->Streams[0].Connected)
-					fn =fn; //VARASendCommand(TNC, "MODE", TRUE);
+				{}
 				else
-				{
-//					if (time(NULL) - TNC->WinmorRestartCodecTimer > 300)	// 5 mins
-//					{
-//						VARASendCommand(TNC, "CODEC FALSE", TRUE);
-//						VARASendCommand(TNC, "CODEC TRUE", TRUE);
-//					}
-//					else
-//						VARASendCommand(TNC, "STATE", TRUE);
-				}
+					VARASendCommand(TNC, "STATE\r", TRUE);
 			}
 		}
 
@@ -433,10 +425,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				// Too long in Disc Pending - Kill and Restart TNC
 
 				if (TNC->PID)
-				{
-					VARAKillTNC(TNC);
-					VARARestartTNC(TNC);
-				}
+					KillTNC(TNC);
+					
+				RestartTNC(TNC);
 			}
 		}
 
@@ -444,9 +435,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			// Restart TNC
 		
+			TNC->TimeSinceLast = 0;
+			
 			if (TNC->ProgramPath)
 			{
-				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
+//				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
 				{
 					struct tm * tm;
 					char Time[80];
@@ -466,10 +459,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					MySetWindowText(TNC->xIDC_RESTARTS, Time);
 					strcpy(TNC->WEB_RESTARTS, Time);
 	
-					VARAKillTNC(TNC);
-					VARARestartTNC(TNC);
-
-					TNC->TimeSinceLast = 0;
+					KillTNC(TNC);
+					RestartTNC(TNC);
 				}
 			}
 		}
@@ -765,8 +756,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (TNC->PID && TNC->WeStartedTNC)
 		{
-			VARAKillTNC(TNC);
-			VARARestartTNC(TNC);
+			KillTNC(TNC);
+			RestartTNC(TNC);
 		}
 		return 0;
 
@@ -783,11 +774,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		shutdown(TNC->TCPSock, SD_BOTH);
 		Sleep(100);
 		closesocket(TNC->TCPSock);
-		if (TNC->PID && TNC->WeStartedTNC)
-		{
-			VARAKillTNC(TNC);
-		}
-
+		if (TNC->WeStartedTNC)
+			KillTNC(TNC);
+	
 		return 0;
 
 
@@ -876,7 +865,9 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
 		"</head><title>VARA Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2><form method=post action=VARAAbort?%d>VARA Status <input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
+		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
+		"'width=440,height=150');\" action=ARDOPAbort?%d>VARA Status"
+		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
 		TNC->Port);
 
 
@@ -947,7 +938,7 @@ UINT VARAExtInit(EXTPORTDATA * PortEntry)
 	TNC->ARDOPDataBuffer = malloc(8192);
 
 	if (TNC->ProgramPath)
-		TNC->WeStartedTNC = VARARestartTNC(TNC);
+		TNC->WeStartedTNC = RestartTNC(TNC);
 
 	TNC->Hardware = H_VARA;
 
@@ -1072,7 +1063,7 @@ UINT VARAExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -1108,9 +1099,9 @@ UINT VARAExtInit(EXTPORTDATA * PortEntry)
 
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_KILL, "Kill VARA TNC");
 	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart VARA TNC");
-	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after each Connection");
-	
+	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after failed Connection");	
 	CheckMenuItem(TNC->hMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
+	AppendMenu(TNC->hMenu, MF_STRING, ARDOP_ABORT, "Abort Current Session");
 
 	MoveWindows(TNC);
 #endif
@@ -1167,6 +1158,27 @@ VOID VARAThread(int port)
 			TNC->CONNECTING = FALSE;
 			return;						// Not listening so no point trying to connect
 		}
+
+		// Get the File Name in case we want to restart it.
+
+		if (TNC->ProgramPath == NULL)
+		{
+			if (GetModuleFileNameExPtr)
+			{
+				HANDLE hProc;
+				char ExeName[256] = "";
+
+				hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->PID);
+	
+				if (hProc)
+				{
+					GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
+					CloseHandle(hProc);
+
+					TNC->ProgramPath = _strdup(ExeName);
+				}
+			}
+		}
 	}
 #endif
 
@@ -1174,7 +1186,7 @@ VOID VARAThread(int port)
 
 //	if (!IsProcess(TNC->PID))
 //	{
-//		VARARestartTNC(TNC);
+//		RestartTNC(TNC);
 //		Sleep(3000);
 //	}
 
@@ -1404,7 +1416,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -1426,7 +1438,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -1486,7 +1498,7 @@ Lost:
 
 //	if (TNC->PID && TNC->WeStartedTNC)
 //	{
-//		VARAKillTNC(TNC);
+//		KillTNC(TNC);
 //
 			return;
 		}
@@ -1502,6 +1514,12 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	Buffer[MsgLen - 1] = 0;		// Remove CR
+
+	TNC->TimeSinceLast = 0;
+
+	if (TNC->HeartBeat < 2 && strcmp(Buffer, "WRONG") == 0)
+		return;			// Link probe
+
 		
 	if (_memicmp(Buffer, "PTT ON", 6) == 0)
 	{
@@ -1520,42 +1538,6 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		return;
 	}
-
-	if (_memicmp(&Buffer[0], "PENDING", 7) == 0)	// Save Pending state for scan control
-	{
-		TNC->ConnectPending = 6;				// Time out after 6 Scanintervals
-		Debugprintf(Buffer);
-//		WritetoTrace(TNC, Buffer, MsgLen - 1);
-		return;
-	}
-
-	if (_memicmp(&Buffer[0], "CANCELPENDING", 13) == 0)
-	{
-		TNC->ConnectPending = FALSE;
-
-		// If a callsign is present it is the calling station - add to MH
-
-		if (Buffer[13] == ' ')
-			UpdateMH(TNC, &Buffer[14], '!', 'I');
-
-		return;
-	}
-
-
-	if (strcmp(Buffer, "OK") == 0)
-	{
-		if (TNC->Streams[0].Connecting == TRUE)
-			return;		// Discard response or it will mess up connect scripts
-
-		// Need also to discard response to LISTEN OFF after attach
-
-		if (TNC->DiscardNextOK)
-		{
-			TNC->DiscardNextOK = 0;
-			return;
-		}
-	}
-
 
 	if (_stricmp(Buffer, "BUSY ON") == 0)
 	{	
@@ -1581,6 +1563,51 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->WinmorRestartCodecTimer = time(NULL);
 		return;
 	}
+
+
+	if (_memicmp(&Buffer[0], "PENDING", 7) == 0)	// Save Pending state for scan control
+	{
+		TNC->ConnectPending = 6;				// Time out after 6 Scanintervals
+		Debugprintf(Buffer);
+//		WritetoTrace(TNC, Buffer, MsgLen - 1);
+		return;
+	}
+
+	if (_memicmp(&Buffer[0], "CANCELPENDING", 13) == 0)
+	{
+		TNC->ConnectPending = FALSE;
+
+		// If a callsign is present it is the calling station - add to MH
+
+		if (TNC->SeenCancelPending == 0)
+		{
+			WritetoTrace(TNC, Buffer, MsgLen - 1);
+			TNC->SeenCancelPending = 1;
+		}
+
+		if (Buffer[13] == ' ')
+			UpdateMH(TNC, &Buffer[14], '!', 'I');
+
+		return;
+	}
+
+	TNC->SeenCancelPending = 0;
+
+	if (strcmp(Buffer, "OK") == 0)
+	{
+		if (TNC->Streams[0].Connecting == TRUE)
+			return;		// Discard response or it will mess up connect scripts
+
+		// Need also to discard response to LISTEN OFF after attach
+
+		if (TNC->DiscardNextOK)
+		{
+			TNC->DiscardNextOK = 0;
+			return;
+		}
+	}
+
+
 
 	if (_memicmp(Buffer, "BUFFER", 6) == 0)
 	{
@@ -1837,6 +1864,15 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
+
+			if (TNC->RestartAfterFailure)
+			{
+				if (TNC->PID)
+					KillTNC(TNC);
+
+				RestartTNC(TNC);
+			}
+
 			return;
 		}
 
@@ -1923,7 +1959,7 @@ VOID VARAProcessReceivedData(struct TNCINFO * TNC)
 //		closesocket(TNC->TCPSock);
 	
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		TNC->CONNECTED = FALSE;
 		TNC->Alerted = FALSE;
@@ -1980,7 +2016,7 @@ if (TNC->InputLen > 8000)	// Shouldnt have packets longer than this
 		TNC->Streams[0].ReportDISC = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -2133,200 +2169,6 @@ VOID VARASendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue)
 		}
 	}
 	return;
-}
-
-int VARAKillTNC(struct TNCINFO * TNC)
-{
-	if (TNC->PID == 0)
-		return 0;
-
-	if (TNC->ProgramPath && _memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
-	{
-		// Try to Kill TNC on a remote host
-
-		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
-		struct sockaddr_in destaddr;
-		char Msg[80];
-		int Len;
-
-		if (sock == INVALID_SOCKET)
-			return 0;
-
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
-		destaddr.sin_port = htons(8500);
-
-		if (destaddr.sin_addr.s_addr == INADDR_NONE)
-		{
-			//	Resolve name to address
-
-			struct hostent * HostEnt = gethostbyname (TNC->HostName);
-		 
-			if (!HostEnt)
-				return 0;			// Resolve failed
-
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-		}
-		Len = sprintf(Msg, "KILL %d", TNC->PID);
-		sendto(sock, Msg, Len, 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
-		Sleep(100);
-		closesocket(sock);
-
-		TNC->PID = 0;			// So we don't try again
-		return 1;				// Cant tell if it worked, but assume ok
-	}
-
-#ifndef LINBPQ
-	{
-	HANDLE hProc;
-
-	Debugprintf("VARAKillTNC Called for Pid %d", TNC->PID);
-
-	if (TNC->PTTMode)
-		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
-
-	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
-
-	if (hProc)
-	{
-		TerminateProcess(hProc, 0);
-		CloseHandle(hProc);
-	}
-	}
-#endif
-	TNC->PID = 0;			// So we don't try again
-
-	return 0;
-}
-
-BOOL VARARestartTNC(struct TNCINFO * TNC)
-{	
-	if (TNC->ProgramPath == NULL)
-		return 0;
-
-	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
-	{
-		int n;
-		
-		// Try to start TNC on a remote host
-
-		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
-		struct sockaddr_in destaddr;
-
-		Debugprintf("trying to restart VARA TNC %s on remote host", TNC->ProgramPath);
-
-		if (sock == INVALID_SOCKET)
-			return 0;
-
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
-		destaddr.sin_port = htons(8500);
-
-		if (destaddr.sin_addr.s_addr == INADDR_NONE)
-		{
-			//	Resolve name to address
-
-			struct hostent * HostEnt = gethostbyname (TNC->HostName);
-		 
-			if (!HostEnt)
-				return 0;			// Resolve failed
-
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-		}
-
-		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
-	
-		Debugprintf("Restart VARA TNC - sendto returned %d", n);
-
-		Sleep(100);
-		closesocket(sock);
-
-		return 1;				// Cant tell if it worked, but assume ok
-	}
-
-	// Extract any parameters from command string
-
-#ifndef WIN32
-	{
-		char * arg_list[] = {NULL, NULL, NULL, NULL, NULL};
-		pid_t child_pid;
-		char * Copy, * Context;
-		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
-
-		Copy = _strdup(TNC->ProgramPath);	// Save as strtok mangles it
-
-		arg_list[0] = strtok_s(Copy, " \n\r", &Context);
-		if (arg_list[0])
-			arg_list[1] = strtok_s(NULL, " \n\r", &Context);
-		if (arg_list[1])
-			arg_list[2] = strtok_s(NULL, " \n\r", &Context);
-		if (arg_list[2])
-			arg_list[3] = strtok_s(NULL, " \n\r", &Context);
-
-		//	Fork and Exec ARDOP
-
-		printf("Trying to start %s\n", TNC->ProgramPath);
-
-		/* Duplicate this process. */ 
-
-		child_pid = fork (); 
-
-		if (child_pid == -1) 
- 		{    				
-			printf ("VARA Start fork() Failed\n"); 
-			free(Copy);
-			return 0;
-		}
-
-		if (child_pid == 0) 
- 		{    				
-			execvp (arg_list[0], arg_list); 
-        
-			/* The execvp  function returns only if an error occurs.  */ 
-
-			printf ("Failed to run ARDOP\n"); 
-			exit(0);			// Kill the new process
-		}
-		printf("Started VARA TNC\n");
-		free(Copy);
-		return TRUE;
-	}								 
-#else
-	{
-		int n = 0;
-		
-		STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-	    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
-
-		SInfo.cb=sizeof(SInfo);
-		SInfo.lpReserved=NULL; 
-		SInfo.lpDesktop=NULL; 
-		SInfo.lpTitle=NULL; 
-		SInfo.dwFlags=0; 
-		SInfo.cbReserved2=0; 
-	  	SInfo.lpReserved2=NULL; 
-
-		Debugprintf("VARARestartTNC Called for %s", TNC->ProgramPath);
-	
-		while (KillOldTNC(TNC->ProgramPath) && n++ < 100)
-		{
-			Sleep(100);
-		}
-
-		if (CreateProcess(NULL, TNC->ProgramPath, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
-		{
-			Debugprintf("Restart TNC OK");
-			TNC->PID = PInfo.dwProcessId;
-			return TRUE;
-		}
-		else
-		{
-			Debugprintf("Restart TNC Failed %d ", GetLastError());
-			return FALSE;
-		}
-	}
-#endif
-	return 0;
 }
 
 int VARASendData(struct TNCINFO * TNC, UCHAR * Buff, int Len)

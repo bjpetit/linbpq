@@ -1350,6 +1350,8 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char URL[100000];
 	char * ptr;
 	char * Context, * Method, * NodeURL, * Key;
+	char _REPLYBUFFER[100000];
+
 	int ReplyLen = 0;
 	char Header[256];
 	int HeaderLen;
@@ -1417,8 +1419,6 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 	if (_memicmp(Context, "/APRS/MSGS/", 10) == 0)
 	{
-		char _REPLYBUFFER[8192];
-
 #ifdef WIN32
 
 		hPipe = CreateFile(APRSPipeFileName, GENERIC_READ | GENERIC_WRITE,
@@ -1855,8 +1855,6 @@ doHeader:
 
 	if (strcmp(Method, "POST") == 0)
 	{
-		char _REPLYBUFFER[8192];
-
 		if (_stricmp(NodeURL, "/TermInput") == 0)
 		{
 			ProcessTermInput(sock, MsgPtr, MsgLen, Context);
@@ -1882,8 +1880,6 @@ doHeader:
 
 		if (_stricmp(NodeURL, "/Node/BeaconAction") == 0)
 		{
-			char _REPLYBUFFER[8192];
-			int ReplyLen;
 			char Header[256];
 			int HeaderLen;
 			char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -2009,27 +2005,37 @@ doHeader:
 
 		if (_stricmp(NodeURL, "/Node/ARDOPAbort") == 0)
 		{
-		int port = atoi(Context);
+			int port = atoi(Context);
 
-		if (port > 0 && port < 33)
-		{
-			struct TNCINFO * TNC = TNCInfo[port];
+			if (port > 0 && port < 33)
+			{
+				struct TNCINFO * TNC = TNCInfo[port];
 
-			if (TNC)
-				ARDOPAbort(TNC);
+				if (TNC && TNC->ForcedCloseProc)
+					TNC->ForcedCloseProc(TNC, 0);
 
-			if (TNC && TNC->WebWindowProc)
-				ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
+
+				if (TNC && TNC->WebWindowProc)
+					ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
 			
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
-			send(sock, Header, HeaderLen, 0);
-			send(sock, _REPLYBUFFER, ReplyLen, 0);
-			send(sock, Tail, strlen(Tail), 0);
+	
+		ReplyLen = sprintf(Reply, "<html><script>alert(\"%s\");window.close();</script></html>", "Ok");
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+		send(sock, Header, HeaderLen, 0);
+		send(sock, Reply, ReplyLen, 0);
+		send(sock, Tail, strlen(Tail), 0);
 
-			return 1;
-		}
+//				goto SendResp;
+
+//				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+//				send(sock, Header, HeaderLen, 0);
+//				send(sock, _REPLYBUFFER, ReplyLen, 0);
+//				send(sock, Tail, strlen(Tail), 0);
+
+				return 1;
+			}
 		
-	}
+		}
 	
 		send(sock, _REPLYBUFFER, InputLen, 0);
 		return 0;
@@ -2044,9 +2050,7 @@ doHeader:
 		if (Bufferlen != -1)
 			return 0;						// We've sent it
 		else
-		{
-			char _REPLYBUFFER[1000];
-	
+		{	
 			if (APRSApplConnected)
 				ReplyLen = sprintf(_REPLYBUFFER, Index, Mycall, Mycall);
 			else
@@ -2083,11 +2087,9 @@ doHeader:
 
 	{
 
-	char _REPLYBUFFER[100000];
-
 	ReplyLen = SetupNodeMenu(_REPLYBUFFER);
 
-	if (_stricmp(NodeURL, "/Node/Port") == 0)
+	if (_stricmp(NodeURL, "/Node/Port") == 0 || _stricmp(NodeURL, "/Node/ARDOPAbort") == 0)
 	{
 		int port = atoi(Context);
 

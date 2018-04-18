@@ -1041,7 +1041,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len);
 VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len);
 VOID ProcessFBBLine(ConnectionInfo * conn, struct UserInfo * user, UCHAR * Buffer, int len);
 VOID SetupNextFBBMessage(CIRCUIT * conn);
-BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, char ** ATBBS, char ** BID);
+BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char * To, char ** ATBBS, char ** BID);
 int PrintMessages(HWND hDlg, int Count, int * Indexes);
 int check_fwd_bit(char *mask, int bbsnumber);
 void set_fwd_bit(char *mask, int bbsnumber);

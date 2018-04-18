@@ -508,7 +508,7 @@ UINT UIARQExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 560, 350);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 560, 350, ForcedClose);
 
 	CreateWindowEx(WS_EX_STATICEDGE, "STATIC", " MyCall", WS_CHILD | WS_VISIBLE, 5,6,79,20, TNC->hDlg, NULL, hInstance, NULL);
 	CreateWindowEx(WS_EX_STATICEDGE, "STATIC", " DestCall", WS_CHILD | WS_VISIBLE, 85,6,79,20, TNC->hDlg, NULL, hInstance, NULL);
