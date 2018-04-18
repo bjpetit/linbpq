@@ -30,8 +30,8 @@ BPQICON                 ICON    DISCARDABLE     "..\BPQIcon.ICO"
 //
 // Version
 //
-#define TEXTVER "1. 0. 1. 3\0"
-#define BINVER 1, 0, 1, 3
+#define TEXTVER "1. 0. 2. 1\0"
+#define BINVER 1, 0, 2, 1
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION BINVER
@@ -55,7 +55,7 @@ BEGIN
             VALUE "FileDescription", "WinmorControl\0"
             VALUE "FileVersion", TEXTVER
             VALUE "InternalName", "bpq32\0"
-            VALUE "LegalCopyright", "Copyright © 2013 G8BPQ\0"
+            VALUE "LegalCopyright", "Copyright © 2018 G8BPQ\0"
             VALUE "OriginalFilename", "\WinmorControl.exe\0"
             VALUE "ProductName", "WinmorControl\0"
             VALUE "ProductVersion", TEXTVER

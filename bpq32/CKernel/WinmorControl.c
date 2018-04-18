@@ -1,5 +1,14 @@
 
+// Program to start or stop a Software TNC on a remote host
+
+// Should work with ARDOP, WINMOR or VARA
+
 // Version 1. 0. 0. 1 June 2013
+
+// Version 1. 0. 2. 1 April 2018
+
+// Updated to support running programs with command line parameters
+// Add option to KILL by program name 
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -57,6 +66,20 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
+char * strlop(char * buf, char delim)
+{
+	// Terminate buf at delim, and return rest of string
+
+	char * ptr = strchr(buf, delim);
+
+	if (ptr == NULL) return NULL;
+
+	*(ptr)++=0;
+
+	return ptr;
+}
+
+
 BOOL KillOldTNC(char * Path)
 {
 	HANDLE hProc;
@@ -73,8 +96,6 @@ BOOL KillOldTNC(char * Path)
 
     Count = Needed / sizeof(DWORD);
 
-    // Print the name and process identifier for each process.
-
     for (i = 0; i < Count; i++)
     {
         if (Processes[i] != 0)
@@ -85,7 +106,7 @@ BOOL KillOldTNC(char * Path)
 			{
 				GetModuleFileNameEx(hProc, 0,  ExeName, 255);
 
-				if (_stricmp(ExeName, Path) == 0)
+				if (_memicmp(ExeName, Path, strlen(ExeName)) == 0)
 				{
 					Debugprintf("Killing Pid %d %s", Processes[i], ExeName);
 					TerminateProcess(hProc, 0);
@@ -96,6 +117,7 @@ BOOL KillOldTNC(char * Path)
 			}
 		}
 	}
+
 	return FALSE;
 }
 
@@ -135,7 +157,7 @@ RestartTNC(char * Path)
 		Sleep(100);
 	}
 
-	if (CreateProcess(Path, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+	if (CreateProcess(NULL, Path, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
 		Debugprintf("Restart TNC OK");
 	else
 		Debugprintf("Restart TNC Failed %d ", GetLastError());
@@ -330,7 +352,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
-	TimerHandle = SetTimer(hWnd, 1, 1000, NULL);		// Slow Timer
+	TimerHandle = SetTimer(hWnd, 1, 500, NULL);		// Slow Timer
 
 	return (TRUE);
 }
@@ -349,10 +371,13 @@ VOID Poll()
 
 	if (_memicmp(Msg, "REMOTE:", 7) == 0)
 		RestartTNC(&Msg[7]);
-
+	else
 	if (_memicmp(Msg, "KILL ", 5) == 0)
 		KillTNC(atoi(&Msg[5]));
-	
+	else
+	if (_memicmp(Msg, "KILLBYNAME ", 11) == 0)
+		KillOldTNC(&Msg[11]);
+
 }
 	
 //

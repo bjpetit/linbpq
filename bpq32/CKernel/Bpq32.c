@@ -829,7 +829,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add TUNE and POWER Rigcontol Commands for some radios
 //  ADD LOCALTIME and DISPKM options to APRS Digi/Igate
 
-// 6.0.16.? ??
+// 6.0.16.1 March 2018
 
 //	Fix Setting data mode and filter for IC7300 radios
 //	Add VARA to WL2KREPORT
@@ -837,6 +837,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix possible hang in IPGATEWAY
 //	Add BeacontoIS parameter to APRSDIGI. Allows you to stop sending beacons to APRS-IS.
 //	Fix sending CTEXT on WINMOR sessions 
+
+// 6.0.17.??
+
+//	Change WINMOR Restart after connection to Restart after Failure and add options to ARDOP and VARA
+//	Add Abort Connection to WINMOR and VARA Interfaces
+//	Reinstate accidentally removed CMS Access logging
 
 #define CKernel
 

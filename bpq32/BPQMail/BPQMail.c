@@ -948,12 +948,20 @@
 //	Fix problem caused by trailing spaces on callsign in WP database
 //	Support mixed case WINLINK Passwords
 
-// 6.0.16.?
+// 6.0.16.1 March 2018
 
 //	Make sure messages sent to WL2K don;'t have @ on from: address
 //  If message to saildocs add R: line as an X header instead of to body
 //	Close session if more than 4 Invalid Commmad responses sent
 //	Report TOP in POP3 CAPA list. Allows POP3 to work with Windows Mail client
+
+// 6.0.17.?? 
+
+//	Add source routing using ! eg sp g8bpq@winlink.org!gm8bpq to send via RMS on gm8bpq
+//	Accept an in internet email address without rms: or smtp: 
+//	Fix "Forward messages for BBS Call" when TO isn't BBS Call
+
+
 
 #include "BPQMail.h"
 #define MAIL
@@ -2209,6 +2217,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			HANDLE hFile = INVALID_HANDLE_VALUE;
 			int WriteLen=0;
 			char HDest[61];
+			char Destcopy[61];
 			char * Vptr;
 			char * FileName[100];
 			int FileLen[100];
@@ -2218,6 +2227,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			char * NewMsg;
 
 			GetDlgItemText(hDlg, IDC_MSGTO, HDest, 60);
+			strcpy(Destcopy, HDest);
 
 			GetDlgItemText(hDlg, IDC_MSGBID, BID, 13);
 			strlop(BID, ' ');
@@ -2312,25 +2322,67 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			strcpy(Msg->from, SYSOPCall);
 
+			Vptr = strlop(Destcopy, '@');
+
+			if (Vptr  == 0 && strchr(Destcopy, '!')) // Bang route without @
+			{
+				Vptr = strchr(Destcopy, '!');
+				strcpy(Msg->via, Vptr);
+				strlop(Destcopy, '!');
+				
+				if (strlen(Destcopy) > 6)
+					memcpy(Msg->to, Destcopy, 6);
+				else
+					strcpy(Msg->to, Destcopy);
+				goto gotAddr;
+			}
+
+			if (strlen(Destcopy) > 6)
+				memcpy(Msg->to, Destcopy, 6);
+			else
+				strcpy(Msg->to, Destcopy);
+			
+			_strupr(Msg->to);
+			
 			if (_memicmp(HDest, "rms:", 4) == 0 || _memicmp(HDest, "rms/", 4) == 0)
 			{
-				Vptr=&HDest[4];
+				Vptr = HDest;
+				memmove(HDest, &HDest[4], strlen(HDest));
 				strcpy(Msg->to, "RMS");
 
 			}
 			else if (_memicmp(HDest, "smtp:", 5) == 0)
 			{
-			if (ISP_Gateway_Enabled)
-
-				Vptr=&HDest[5];
-				Msg->to[0] = 0;
+				if (ISP_Gateway_Enabled)
+				{
+					Vptr = HDest;
+					memmove(HDest, &HDest[5], strlen(HDest));
+					Msg->to[0] = 0;
+				}
 			}
-			else
+			else if (Vptr)
 			{
-				Vptr = strlop(HDest, '@');
-				strcpy(Msg->to, _strupr(HDest));
-			}
+				// If looks like a valid email address, treat as such
 
+				int tolen = Vptr - Destcopy;
+
+				if (tolen > 6 || !CheckifPacket(Vptr))
+				{
+					// Assume Email address
+
+					Vptr = HDest;
+
+					if (FindRMS() || strchr(Vptr, '!')) // have RMS or source route
+						strcpy(Msg->to, "RMS");
+					else if (ISP_Gateway_Enabled)
+						Msg->to[0] = 0;
+					else
+					{		
+						MessageBox(NULL, "Sending to Internet Email not available", "BPQMail", MB_ICONERROR);
+						return TRUE;
+					}
+				}
+			}
 			if (Vptr)
 			{
 				if (strlen(Vptr) > 40)
@@ -2338,8 +2390,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 				strcpy(Msg->via, Vptr);
 			}
-
-
+gotAddr:
 			GetDlgItemText(hDlg, IDC_MSGTITLE, Msg->title, 61);
 			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
 			Msg->type = status[0];
@@ -2378,10 +2429,21 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 	
 				sprintf(DateString, "%04d/%02d/%02d %02d:%02d",
 					tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+				// Remove last Source Route
+
+				if (strchr(HDest, '!'))
+				{
+					char * bang = HDest + strlen(HDest);
+	
+					while (*(--bang) != '!');		// Find last !
+
+					*(bang) = 0;					// remove it;
+				}
 		
 				NewMsg += sprintf(NewMsg,
 					"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n",
-						Msg->bid, DateString, "Private", Msg->from, Msg->to, Msg->title, BBSName);
+						Msg->bid, DateString, "Private", Msg->from, HDest, Msg->title, BBSName);
 				
 
 				NewMsg += sprintf(NewMsg, "Body: %d\r\n", MsgLen);
