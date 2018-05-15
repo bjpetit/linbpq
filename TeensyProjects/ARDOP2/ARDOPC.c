@@ -60,11 +60,11 @@ int intPINGRepeats = 0;
 
 char ConnectToCall[16] = "";
 
-//#ifdef TEENSY
-//int LeaderLength = 500;
-//#else
+#ifdef TEENSY
+int LeaderLength = 500;
+#else
 int LeaderLength = 240;
-//#endif
+#endif
 int TrailerLength = 0;
 unsigned int ARQTimeout = 120;
 int TuningRange = 100;

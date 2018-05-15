@@ -6,11 +6,10 @@
 #ifdef CONST
 #undef CONST
 #endif
-//#define CONST // for building sample arrays
-#define CONST const
+#define CONST const	// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "2.0.3.7-BPQ"
+#define ProductVersion "2.0.3.9-BPQ"
 
 //#define USE_SOUNDMODEM
 

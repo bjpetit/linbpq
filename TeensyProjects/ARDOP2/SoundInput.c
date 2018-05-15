@@ -251,6 +251,7 @@ void Demod1Car4FSKChar(int Start, UCHAR * Decoded, int Carrier);
 VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float intSearchFreq, int intBaud, UCHAR * bytSymHistory);
 VOID Decode1CarPSK(int Carrier);
 int EnvelopeCorrelator();
+int EnvelopeCorrelatorNew();
 BOOL DecodeFrame(int intFrameType, UCHAR * bytData);
 
 void Update4FSKConstellation(int * intToneMags, int * intQuality);
@@ -438,6 +439,7 @@ void InitializeMixedSamples()
 	// Measure the time from release of PTT to leader detection of reply.
 
 	intARQRTmeasuredMs = min(10000, Now - dttStartRTMeasure); //?????? needs work
+	intPriorMixedSamplesLength = 120;  // zero out prior samples in Prior sample buffer
 	intFilteredMixedSamplesLength = 0;	// zero out the FilteredMixedSamples array
 	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
 }
@@ -477,10 +479,10 @@ float xdblR = 0.9995f;			// insures stability (must be < 1.0) (Value .9995 7/8/2
 int xintN = 120;				//Length of filter 12000/100
 
 
-void FSMixFilter2400Hz(short * intMixedSamples, int intMixedSamplesLength)
+void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 {
 	// assumes sample rate of 12000
-	// implements  27 100 Hz wide sections   (~2000 Hz wide @ - 30dB centered on 1500 Hz)
+	// implements  27 100 Hz wide sections   (~2500 Hz wide @ - 30dB centered on 1500 Hz)
 
 	// FSF (Frequency Selective Filter) variables
 
@@ -506,7 +508,7 @@ void FSMixFilter2400Hz(short * intMixedSamples, int intMixedSamplesLength)
 
 	// Initialize the coefficients
     
-	if (xdblCoef[26] == 0)
+	if (xdblCoef[28] == 0)
 	{
 		for (i = 2; i <= 28; i++)
 		{
@@ -530,7 +532,7 @@ void FSMixFilter2400Hz(short * intMixedSamples, int intMixedSamplesLength)
 		xdblZin_1 = dblZin;
 
 		// Now the resonators
-		for (j = 4; j <= 26; j++)	   // calculate output for 3 resonators 
+		for (j = 2; j <= 28; j++)	   // calculate output for 3 resonators 
 		{
 			xdblZout_0[j] = xdblZComb + xdblCoef[j] * xdblZout_1[j] - dblR2 * xdblZout_2[j];
 			xdblZout_2[j] = xdblZout_1[j];
@@ -646,12 +648,6 @@ void Filter75Hz(short * intFilterOut, BOOL blnInitialise, int intSamplesToFilter
 
 	// FSF (Frequency Selective Filter) variables
 
-	// Rick's code allows this to be called more than once and include prior mixed, but he never does call
-	// without init = TRUE, so no point wasting time doing it.
-
-	// Means first 120 samples are invalid
-
-
 	static float dblR = 0.9995f;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
 	static int intN = 240;				//Length of filter 12000/50 - delays output 120 samples from input
 	static float dblRn;
@@ -689,7 +685,6 @@ void Filter75Hz(short * intFilterOut, BOOL blnInitialise, int intSamplesToFilter
 			dblZin = intFilteredMixedSamples[intMFSReadPtr + i] - dblRn * 0;	// no prior mixed samples
 		else
 			dblZin = intFilteredMixedSamples[intMFSReadPtr + i] - dblRn * intFilteredMixedSamples[intMFSReadPtr + i - intN];
-  
 
 		// Compute the Comb
 		
@@ -732,9 +727,6 @@ void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
 	if (Length == 0)
 		return;
 
-	if (Length > 1200)
-		return;
-
 	// Nominal NCO freq is 3000 Hz  to downmix intNewSamples  (NCO - Fnew) to center of 1500 Hz (invertes the sideband too) 
 
 	dblNCOFreq = 3000 + dblOffsetHz;
@@ -744,15 +736,23 @@ void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
 
 	for (i = 0; i < Length; i++)
 	{
-		intMixedSamples[i] = (int)round(intNewSamples[i] * cosf(dblNCOPhase));  // later may want a lower "cost" implementation of "Cos"
+		intMixedSamples[i] = (int)ceilf(intNewSamples[i] * cosf(dblNCOPhase));  // later may want a lower "cost" implementation of "Cos"
 		dblNCOPhase += dblNCOPhaseInc;
 		if (dblNCOPhase > dbl2Pi)
 			dblNCOPhase -= dbl2Pi;
 	}
 
+	
+	
+	// showed no significant difference if the 2000 Hz filer used for all bandwidths.
 //	printtick("Start Filter");
-	FSMixFilter2400Hz(intMixedSamples, intMixedSamplesLength);   // filter through the FS filter (required to reject image from Local oscillator)
+	FSMixFilter2500Hz(intMixedSamples, intMixedSamplesLength);   // filter through the FS filter (required to reject image from Local oscillator)
 //	printtick("Done Filter");
+
+	// save for analysys
+
+//	WriteSamples(&intFilteredMixedSamples[oldlen], Length);
+//	WriteSamples(intMixedSamples, Length);
 
 }
 
@@ -1026,14 +1026,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			printtick("Got Frame Sync");
 
 		}
-		else if (intPhaseError > 2)
-		{
-			DiscardOldSamples();
-			ClearAllMixedSamples();
-			State = SearchingForLeader;
-			printtick("frame sync timeout");
-		}
-		else if ((Now - dttLastLeaderDetect) > 1000)		 // no Frame sync within 1000 ms (may want to make this limit a funciton of Mode and leaders)
+		else if (intPhaseError > 1)
 		{
 			DiscardOldSamples();
 			ClearAllMixedSamples();
@@ -2244,20 +2237,13 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 	// Check 2 samples either side of the intLocalPtr for minimum phase error.(closest to Pi or -Pi) 
 	// Could be as much as .4 Radians (~70 degrees) depending on sampling positions.
    
-	for (i = -3; i <= 3; i++)	 // 0 To 0 '  -2 To 2 ' for just 5 samples
+	for (i = -1; i <= 1; i++)	 // 0 To 0 '  -2 To 2 ' for just 5 samples
 	{
 		// using the full symbol seemed to work best on weak Signals (0 to -5 dB S/N) June 15, 2015
 	
 		GoertzelRealImagHann120(intFilteredMixedSamples, intLocalPtr + i, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning 
 		dblCarPh = atan2f(dblImag, dblReal);
-
-		if (dblCarPh > 0)
-			dblAbsPhErr = M_PI - dblCarPh;
-		else
-			dblAbsPhErr = M_PI + dblCarPh;
-
-		//dblAbsPhErr = fabsf(dblCarPh - (round(dblCarPh / M_PI) * M_PI));
-
+		dblAbsPhErr = fabsf(dblCarPh - (ceil(dblCarPh / M_PI) * M_PI));
 		if (dblAbsPhErr < dblMinAbsPhErr)
 		{
 			dblMinAbsPhErr = dblAbsPhErr;
@@ -2267,7 +2253,7 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 	}
 
 	intMFSReadPtr = intLocalPtr + intIatMinErr;
-	WriteDebugLog(LOGDEBUG, "[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d Phase = %1.2f", intIatMinErr, dblPhaseAtMinErr);
+	WriteDebugLog(LOGDEBUG, "[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d", intIatMinErr);
 	State = AcquireFrameSync;
 
 	if (AccumulateStats)
@@ -2303,7 +2289,7 @@ int EnvelopeCorrelator()
 	for (j = 0; j < 360; j++)		// Over 1.5 symbols
 	{
 		dblCorSum = 0;
-		for (i = 0; i < 240; i++)	 //  compute correlation at j pointer over 1  50 baud symbol
+		for (i = 0; i < 240; i++)	 // over 1 50 baud symbol (may be able to reduce to 1 symbol)
 		{
 			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomdates filter delay of 120 samples
 			dblCorSum += dblCorProduct;
@@ -2560,12 +2546,14 @@ int AcquireFrameSyncRSBAvg()
 //				return False;
 //			}
 		}
-		
+		else
+		{
 			//	keep searching available samples
 
-		dblPhaseSym1 = dblPhaseSym2;           
-		dblPhaseSym2 = dblPhaseSym3;
-		intLocalPtr += 240;			// advance one symbol 
+			dblPhaseSym1 = dblPhaseSym2;           
+			dblPhaseSym2 = dblPhaseSym3;
+			intLocalPtr += 240;			// advance one symbol 
+		}
 	}
  
 	intMFSReadPtr = intLocalPtr - 480;		 // back up 2 symbols for next attempt (Current Sym2 will become new Sym1)
@@ -5467,7 +5455,7 @@ BOOL DemodQAM()
 
 			DecodeCompleteTime = Now;
 
-		CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
+//		CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, strMod);
 			
 //		if (intNumCar > 1)
 //			CorrectPhaseForTuningOffset(&intPhases[1][0], intPhasesLen, strMod);

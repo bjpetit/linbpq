@@ -9,10 +9,9 @@
 
 // This only needs to be run once to generate the source files
 
+// Keep code in case we need to change, but don't compile
 
-
-#if 0  // Keep code in case we need to change, but don't compile
-
+#if 0
 
 #include "ARDOPC.h"
 
@@ -32,14 +31,14 @@ void Generate50BaudTwoToneLeaderTemplate()
 	char msg[80];
 	int len;
 
-	fp1 = fopen("d:\\leadercoeffs.txt", "wb");
+	fp1 = fopen("s:\\leadercoeffs.txt", "wb");
 
 	for (i = 0; i < 240; i++)
 	{
-		y = (sinf(((1500.0f - 25) / 1500.0f) * (i / 8.0f * 2 * M_PI)));
-		z = (sinf(((1500.0f + 25) / 1500.0f) * (i / 8.0f * 2 * M_PI)));
+		y = (sin(((1500.0 - 25) / 1500) * (i / 8.0 * 2 * M_PI)));
+		z = (sin(((1500.0 + 25) / 1500) * (i / 8.0 * 2 * M_PI)));
 
-		x = intAmp * 0.65f * (y - z);
+		x = intAmp * 0.55 * (y - z);
 		int50BaudTwoToneLeaderTemplate[i] = (short)x + 0.5;
 
 		if ((i - line) == 9)

@@ -192,7 +192,6 @@ void main(int argc, char * argv[])
 	DWORD	t, lastt = 0;
 	int i = 0;
 
-//	Generate50BaudTwoToneLeaderTemplate();
 //	GenerateFSKTemplates();
 //	Generate16QAMTemplates();
 

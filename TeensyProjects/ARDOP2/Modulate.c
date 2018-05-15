@@ -704,7 +704,7 @@ void initFilter(int Width, int Centre)
 		// implements 26 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
 
 		first = centreSlot - 13;
-		last = centreSlot + 13;		// 26 filter sections
+		last = centreSlot + 13;		// 27 filter sections
 		break;
 	
 	default:
