@@ -49,14 +49,14 @@ void DemodAFSKinit(void *state);
 void DemodFSKinit(void *state);
 void mainLoop();
 
-char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.6 August 2017\r\n"
+char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.9 June 2018\r\n"
 						"based on Soundmodem by Thomas Sailer";
 
-int VersionNo = 6;		
+int VersionNo = 9;		
 
-int Baud = 300;
-BOOL AFSK = TRUE;
-BOOL FSK = FALSE;
+int Baud = 9600;
+BOOL AFSK = FALSE;
+BOOL FSK = TRUE;
 BOOL PSK = FALSE;
 int samplerate;
 int centreFreq = 1700;
@@ -64,9 +64,9 @@ int centreFreq = 1700;
 //int Baud = 1200;
 //BOOL AFSK = TRUE;
 
-int TXLevel = 30;				// 300 mV p-p Used on Teensy
-int RXLevel = 0;				// Configured Level - zero means auto tune
-int autoRXLevel = 1500;			// calculated level
+int TXLevel;				// 300 mV p-p Used on Teensy
+int RXLevel;				// Configured Level - zero means auto tune
+int autoRXLevel;			// calculated level
 int logcheck(int x)
 {
 	return 1;
@@ -126,7 +126,7 @@ u_int16_t audiocurtime(struct modemchannel *chan)
 struct modulator *modchain = &afskmodulator;
 struct demodulator *demodchain = &afskdemodulator;
 
-void ProcessNewSamples(short * buf, int count)
+void pktProcessNewSamples(short * buf, int count)
 {
 	if (AFSK)
 		DemodAFSK(buf, count);

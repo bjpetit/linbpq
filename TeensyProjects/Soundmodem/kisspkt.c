@@ -162,6 +162,8 @@ extern unsigned int PKTLEDTimer;
 
 int KISSCHECKSUM = 0;		// Using checksums on KISS
 
+int SendCalibrate= 0;
+
 
 /* ---------------------------------------------------------------------- */
 /*
@@ -254,11 +256,25 @@ do {                                                            \
         goto encodeend##j;                                      \
 } while (0)
 
-static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned int len, BOOL ackmode)
+static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned int lenx, BOOL ackmode)
 {
 	unsigned bitstream, notbitstream, bitbuf, numbit;
 	unsigned wr = chan->pkt.htx.wr;
 	int lenptr;
+	int len = lenx;
+
+	// Drop packet if chance of buffer overflow
+
+	int space = TXBUFFER_SIZE - (chan->pkt.htx.wr - chan->pkt.htx.rd); 
+
+	if (space > TXBUFFER_SIZE)		// pointer wrapped
+		space -= TXBUFFER_SIZE;
+
+	if (space < 450)	// Full stuffed packet plus len and ackmode fields
+	{
+		WriteDebugLog(6, "KISS TX Buffer Overflow - discarding packet");
+		return;
+	}
 
 	chan->pkt.stat.pkt_out++;
 
@@ -280,15 +296,14 @@ static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned 
 	chan->pkt.htx.buf[wr++] = ackmode;
 	wr %= TXBUFFER_SIZE;
 
-	// we can't put length in till end, but savepointer
+	// we can't put length in till end, but save pointer
 	// and reserve space for it
 
 	lenptr = wr;
 
 	wr += 2;
 
-	if (wr > TXBUFFER_SIZE)
-		wr = wr % TXBUFFER_SIZE;
+	wr %= TXBUFFER_SIZE;
 
 	if (ackmode)
 	{
@@ -358,9 +373,10 @@ static void hdlc_encode(struct modemchannel *chan, unsigned char *pkt, unsigned 
 
 	// add length to packet
 
+	if (wr < lenptr)
+		wr += TXBUFFER_SIZE;		// Len has wrapped
+
 	len = wr - lenptr - 2;	// -2 for length field
-	if (len < 0 || len > 400)
-		len %= TXBUFFER_SIZE;
 	chan->pkt.htx.buf[lenptr++] = len & 0xff;
 	lenptr %= TXBUFFER_SIZE;
 	chan->pkt.htx.buf[lenptr] = len >> 8;
@@ -654,7 +670,13 @@ static void kiss_process_pkt(struct modemchannel *chan, u_int8_t *pkt, unsigned 
 		if (pkt[1] == 2)		// Reboot
 		   CPU_RESTART // reset processor
 
-        return;			// other immediate command
+		if (pkt[1] == 3)		// Calibrate
+		{
+			SendCalibrate = TRUE;
+			return;
+		}
+
+        // return;			// other immediate command
  
 #endif
 	
@@ -765,28 +787,18 @@ static int globaldcd(struct state *state)
 
 int pktget(struct modemchannel *chan, unsigned char *data, unsigned int len)
 {
-	unsigned int i, j, n = len;
+	// This only needs to return 1 byte
 
-	i = (chan->pkt.htx.rd - chan->pkt.htx.wr - 1) % TXBUFFER_SIZE;
 	if (chan->pkt.inhibittx || chan->pkt.htx.rd == chan->pkt.htx.txend)
 		return 0;
-	while (n > 0) {
-		if (chan->pkt.htx.txend >= chan->pkt.htx.rd)
-			j = chan->pkt.htx.txend - chan->pkt.htx.rd;
-		else
-			j = TXBUFFER_SIZE - chan->pkt.htx.rd;
-		if (j > n)
-			j = n;
-		if (!j)
-			break;
-		memcpy(data, &chan->pkt.htx.buf[chan->pkt.htx.rd], j);
-		data += j;
-		n -= j;
-		chan->pkt.htx.rd = (chan->pkt.htx.rd + j) % TXBUFFER_SIZE;
-	}
-	if (n > 0)
-		memset(data, 0, n);
-	return (len - n);
+
+	data[0] = chan->pkt.htx.buf[chan->pkt.htx.rd];
+	
+	chan->pkt.htx.rd++;
+	chan->pkt.htx.rd %= TXBUFFER_SIZE;
+
+	return 1;
+
 }
 
 void pktput(struct modemchannel *chan, const unsigned char *data, unsigned int len)
@@ -816,6 +828,20 @@ void pkttransmitloop(struct state *state)
 	// another two bytes for timestamp
 
 	// or do we use a cyclic buffer??? - yes, 4K for now
+
+	if (SendCalibrate)
+	{
+		SendCalibrate = FALSE;
+		KeyPTT(1);
+		WriteDebugLog(7, "Sending Flags for calibrate");
+			
+		// This sends flags for txd 
+
+		chan->mod->modulate(chan->modstate, 10000);
+		SoundFlush();
+		KeyPTT(0);
+		WriteDebugLog(7, "End Calibrate");
+	}
 
 	if (chan->pkt.htx.rd != chan->pkt.htx.wr)
 	{
@@ -874,7 +900,7 @@ void pkttransmitloop(struct state *state)
 			// I've changed modulate to stop when rd = txend, not wr,
 			
 			newwr = rd + len;
-			if (newwr > TXBUFFER_SIZE)
+			if (newwr >= TXBUFFER_SIZE)
 				newwr -= TXBUFFER_SIZE; 
 
 			chan->pkt.htx.rd = rd;

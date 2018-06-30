@@ -54,7 +54,7 @@ BOOL blnLastFrameSentData = FALSE;
 extern char CarrierOk[10];
 extern int LastDataFrameType;	
 extern BOOL blnARQDisconnect;
-extern const short FrameSize[256];
+extern const short FrameSize[64];
 
 int intNAKLoQThresholds[6]; // the following two integer arrays hold the quality thresholds for making faster mode shifts, one value for each data type. 
 int intACKHiQThresholds[6];
@@ -212,10 +212,10 @@ VOID GetNAKLoQLevels(int intBW)
 
 		intNAKLoQThresholds[0] = 0;
 		intNAKLoQThresholds[1] = 52;
-		intNAKLoQThresholds[2] = 49;
+		intNAKLoQThresholds[2] = 50;
 		intNAKLoQThresholds[3] = 55;
-		intNAKLoQThresholds[4] = 58;
-		intNAKLoQThresholds[5] = 62;
+		intNAKLoQThresholds[4] = 60;
+		intNAKLoQThresholds[5] = 65;
 		break;
 	}
 }
@@ -248,9 +248,9 @@ VOID GetACKHiQLevels(int intBW)
 
 		intACKHiQThresholds[0] = 66;
 		intACKHiQThresholds[1] = 77;
-		intACKHiQThresholds[2] = 65;
-		intACKHiQThresholds[3] = 79;
-		intACKHiQThresholds[4] = 75;
+		intACKHiQThresholds[2] = 75;
+		intACKHiQThresholds[3] = 80;
+		intACKHiQThresholds[4] = 80;
 		intACKHiQThresholds[5] = 0;
 		break;
 	}
@@ -660,7 +660,7 @@ ModeToSpeed() = {
 
 static UCHAR DataModes200[] = {D4PSK_200_50_E, D4PSK_200_100_E, D16QAM_200_100_E};
  
-static UCHAR DataModes500[] = {D4FSK_500_50_E, D4PSK_500_100_E, D16QAMR_500_100_E, D16QAM_500_100_E};
+static UCHAR DataModes500[] = {D4FSK_500_50_E, D4PSK_500_50_E, D16QAMR_500_100_E, D16QAM_500_100_E};
 static UCHAR DataModes500FSK[] = {D4FSK_500_50_E};
 
 // 2000 Non-FM
@@ -2119,29 +2119,29 @@ int IRSNegotiateBW(int intConReqFrameType)
 	//	returns the correct ConAck frame number to establish the session bandwidth to the ISS or the ConRejBW frame number if incompatible 
     //  if acceptable bandwidth sets stcConnection.intSessionBW
 
-	switch (ARQBandwidth)
+	switch (intConReqFrameType)
 	{
-	case XB200:
+	case ConReq200:
 
-		if (intConReqFrameType == ConReq200)
+		if ((ARQBandwidth == XB200) || NegotiateBW)
 		{
 			intSessionBW = 200;
 			return ConAck;
 		}
 		break;
 
-	case XB500:
-		
-		if (intConReqFrameType == ConReq500)
+	case ConReq500:
+
+		if ((ARQBandwidth == XB500) || NegotiateBW && (ARQBandwidth == XB2500))
 		{
 			intSessionBW = 500;
 			return ConAck;
 		}
 		break;
 
-	case XB2500:
+	case ConReq2500:
 		
-		if (intConReqFrameType == ConReq2500)
+		if (ARQBandwidth == XB2500)
 		{
 			intSessionBW = 2500;
 			return ConAck;
@@ -2149,7 +2149,7 @@ int IRSNegotiateBW(int intConReqFrameType)
 		break;
 	}
 
-	return ConRejBW;		// ConRejBW
+	return ConRejBW;
 }
 
 //	Function to send and ARQ connect request for the current MCB.ARQBandwidth

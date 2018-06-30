@@ -9,7 +9,7 @@
 #define CONST const	// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "2.0.3.9-BPQ"
+#define ProductVersion "2.0.3.7-BPQ"
 
 //#define USE_SOUNDMODEM
 
@@ -445,6 +445,7 @@ extern BOOL fastStart;
 extern BOOL ConsoleLogLevel;
 extern BOOL FileLogLevel;
 extern BOOL EnablePingAck;
+extern BOOL NegotiateBW;
 
 extern int dttLastPINGSent;
 
@@ -540,7 +541,7 @@ extern const UCHAR * bytValidFrameTypes;
 extern const char strAllDataModes[][16];
 extern int strAllDataModesLen;
 
-extern const short Rate[256];		// Data Rate (in bits/sec) by Frame Type
+extern const short Rate[64];		// Data Rate (in bits/sec) by Frame Type
 
 
 extern BOOL newStatus;

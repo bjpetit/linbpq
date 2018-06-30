@@ -17,6 +17,7 @@ float dblQAMCarRatio = 1.0f / 1.765f;   //Optimum for 8,8 circular constellation
 extern short Dummy;
 
 int intSoftClipCnt = 0;
+BOOL SendingHeader200 = 0;		// Set when sending header in 200 Hz Modes
 
 void Flush();
 
@@ -100,8 +101,13 @@ void SendLeaderAndSYNC(UCHAR * bytEncodedBytes, int intLeaderLen)
 
 			for(n = 0; n < 240; n++)
 			{
-				if (intSessionBW == 200 && (bytSymToSend == 0 || bytSymToSend == 3)) 
-					intSample = 1.0f * intFSK50bdCarTemplate[bytSymToSend + 4][n];
+				if ( ARQBandwidth == XB2500)		// 2500 Hz
+				{
+					if (bytSymToSend < 2)
+						intSample = (0.62 * intFSK50bdCarTemplate[4 + bytSymToSend][n]) + (0.62 * intFSK50bdCarTemplate[bytSymToSend][n]); // 4 is offset to center tones 1350, 1450, 1550, 1650Hz
+					else
+						intSample = (0.62 * intFSK50bdCarTemplate[4 + bytSymToSend][n]) + (0.62 * intFSK50bdCarTemplate[8 + bytSymToSend][n]); // 4 is offset to center tones 1350, 1450, 1550, 1650Hz, 8 is offset to tones 1800 and 1900
+				}
 				else
 					intSample = intFSK50bdCarTemplate[bytSymToSend + 4][n];
 				
@@ -154,9 +160,9 @@ void Mod4FSKDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderL
 	}
 	else
 	{
-//		if (intBaud == 50)
-//			initFilter(200,1500);
-		 if (intNumCar == 1)
+		 if (ARQBandwidth == XB200)
+			initFilter(200,1500);
+		 else if (ARQBandwidth == XB500)
 			initFilter(500,1500);
 		 else
 			initFilter(2500,1500);
@@ -426,6 +432,7 @@ void ModPSKDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderLe
 	// Create the leader
 
 	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
+	SendingHeader200 = FALSE;
 
 	intPeakAmp = 0;
 
@@ -622,14 +629,14 @@ static int intN = 120;				//Length of filter 12000/100
 static float dblRn;
 
 static float dblR2;
-static float dblCoef[32] = {0.0f};			// the coefficients
+static float dblCoef[34] = {0.0f};			// the coefficients
 float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
 
 // The resonators 
       
-float dblZout_0[32] = {0.0f};	// resonator outputs
-float dblZout_1[32] = {0.0f};	// resonator outputs delayed one sample
-float dblZout_2[32] = {0.0f};	// resonator outputs delayed two samples
+float dblZout_0[34] = {0.0f};	// resonator outputs
+float dblZout_1[34] = {0.0f};	// resonator outputs delayed one sample
+float dblZout_2[34] = {0.0f};	// resonator outputs delayed two samples
 
 int fWidth;				// Filter BandWidth
 int SampleNo;
@@ -640,12 +647,13 @@ int centreSlot;
 float largest = 0;
 float smallest = 0;
 
-short Last120[128];
+short Last120[256];		// Now need 240 for 200 Hz filter
 
 int Last120Get = 0;
 int Last120Put = 120;
 
 int Number = 0;				// Number waiting to be sent
+
 
 extern unsigned short buffer[2][1200];
 
@@ -685,16 +693,22 @@ void initFilter(int Width, int Centre)
 	{
 	case 200:
 
-		// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
-
-		first = centreSlot - 1;
-		last = centreSlot + 1;		// 3 filter sections
+		// Used for PSK 200 Hz modulation XMIT filter  
+		// implements 5 50 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
+ 
+		SendingHeader200 = TRUE;
+		intN = 240;
+		Last120Put = 240;
+		centreSlot = Centre / 50;
+		first = centreSlot - 3;
+		last = centreSlot + 3;		// 7 filter sections
 		break;
 
 	case 500:
 
 		// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
 
+		intN = 120;
 		first = centreSlot - 3;
 		last = centreSlot + 3;		// 7 filter sections
 		break;
@@ -703,6 +717,7 @@ void initFilter(int Width, int Centre)
 		
 		// implements 26 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
 
+		intN = 120;
 		first = centreSlot - 13;
 		last = centreSlot + 13;		// 27 filter sections
 		break;
@@ -751,7 +766,7 @@ void SampleSink(short Sample)
 	else 
 		dblZin = Sample - dblRn * Last120[Last120Get];
 
-	if (++Last120Get == 121)
+	if (++Last120Get == (intN + 1))
 		Last120Get = 0;
 
 	//Compute the Comb
@@ -762,7 +777,7 @@ void SampleSink(short Sample)
 
 	// Now the resonators
 		
-	for (j = first; j <= last; j++)	   // calculate output for 3 or 7 resonators 
+	for (j = first; j <= last; j++)
 	{
 		dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
 		dblZout_2[j] = dblZout_1[j];
@@ -777,16 +792,24 @@ void SampleSink(short Sample)
 			if (SampleNo >= intFilLen)
 			{
 				if (j == first || j == last)
-					intFilteredSample += (float)0.7389f * dblZout_0[j];
+				{
+					if (SendingHeader200)
+						intFilteredSample -= dblZout_0[j];  // This provides no attenuation to the Frame Type tones at 1350 and 1650
+					else
+						intFilteredSample -= 0.1 * dblZout_0[j]; // This smaller value required to filter down to 200 Hz bandwidth
+				}
+				else if ((j & 1) == 0)
+					intFilteredSample += (int)dblZout_0[j];
 				else
-					intFilteredSample -= (float)dblZout_0[j];
+					intFilteredSample -= (int)dblZout_0[j];
 			}
+  
 			break;
 
 		case 500:
 
 			// scale each by transition coeff and + (Even) or - (Odd) 
-			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// Resonators 12 and 18 scaled to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
 			// practical range of scaling .05 to .25
 			// Scaling also accomodates for the filter "gain" of approx 60. 
 
@@ -805,7 +828,7 @@ void SampleSink(short Sample)
 		case 2500:
 
 			// scale each by transition coeff and + (Even) or - (Odd) 
-			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// Resonators 2 and 28 scaled to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
 			// practical range of scaling .05 to .25
 			// Scaling also accomodates for the filter "gain" of approx 60. 
           
@@ -849,7 +872,7 @@ void SampleSink(short Sample)
 		
 	Last120[Last120Put++] = Sample;
 
-	if (Last120Put == 121)
+	if (Last120Put == (intN + 1))
 		Last120Put = 0;
 
 	SampleNo++;

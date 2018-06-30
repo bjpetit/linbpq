@@ -214,10 +214,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\afsk\modem.c"
-				>
-			</File>
-			<File
 				RelativePath=".\fsk\modem.c"
 				>
 				<FileConfiguration
@@ -238,6 +234,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\afsk\modem.c"
+				>
 			</File>
 			<File
 				RelativePath=".\p3dmodem\p3d.h"

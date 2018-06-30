@@ -305,6 +305,7 @@ void SetARDOPProtocolState(int value)
 
 		SetLED(IRSLED, TRUE);
 		SetLED(ISSLED, FALSE);
+		bytLastACKedDataFrameType = 0;	// Clear on entry to IRS or IRS to ISS states. 3/15/2018
 
 		break;
 
@@ -1238,7 +1239,9 @@ void InitializeConnection()
 	dttLastIDSent = Now ; //  date/time of last ID
 	intTotalSymbols = 0; //  To compute the sample rate error
 	strLocalCallsign[0] = 0; //  this stations call sign
-	intSessionBW = 0 ; //  ExtractARQBandwidth()
+	intSessionBW = 0; 
+	bytLastACKedDataFrameType = 0;
+
 	intCalcLeader = LeaderLength;
 
 	ClearQualityStats();
@@ -1379,6 +1382,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				sprintf(HostCmd, "TARGET %s", strCallsign);
 				QueueCommandToHost(HostCmd);
 				InitializeConnection();	
+				bytDataToSendLength = 0;
+
 				blnPending = TRUE;				
 				blnEnbARQRpt = FALSE;
 
@@ -1472,6 +1477,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 						intAvgQuality = 0;		// initialize avg quality 
 						intReceivedLeaderLen = intLeaderRcvdMs;		 // capture the received leader from the remote ISS's ConReq (used for timing optimization)
 						InitializeConnection();
+						bytDataToSendLength = 0;
+
 						dttTimeoutTrip = Now;
 
 						//Stop and restart the Pending timer upon each ConReq received to ME
@@ -1764,6 +1771,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				blnEnbARQRpt = FALSE;
 				EncLen = EncodeDATAACK(intLastRcvdFrameQuality, bytSessionID, bytEncodedBytes); // Send ACK
 				Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+				bytLastACKedDataFrameType = intFrameType;
 				return;
 			}
 

@@ -344,3 +344,9 @@ extern "C"  void debugprintf(const char * format, ...)
   return;
 }
 
+// Stuff to support Common Code for ARDOP and Packet
+
+extern "C" void pktProcessNewSamples(short * buf, int count) {}
+
+
+

@@ -29,7 +29,7 @@ VOID COMClearDTR(HANDLE fd);
 VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
 BOOL KeyPTT(BOOL blnPTT);
-void ProcessNewSamples(short * buf, int count);
+void pktProcessNewSamples(short * buf, int count);
 
 VOID WriteDebugLog(int LogLevel, const char * format, ...);
 
@@ -265,7 +265,7 @@ short * SendtoCard(unsigned short * buf, int n)
 	{
 		// Loop back   to decode for testing
 
-		ProcessNewSamples(buf, 1200);		// signed
+		pktProcessNewSamples(buf, 1200);		// signed
 	}
 
 //	WriteDebugLog(7, "SendtoCard %d", n);
@@ -452,7 +452,7 @@ void PollReceivedSamples()
 
 //		WriteDebugLog(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
-			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
+			pktProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
 
 		waveInUnprepareHeader(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
 		inheader[inIndex].dwFlags = 0;
@@ -533,7 +533,7 @@ void SoundFlush()
 	// Append Trailer then wait for TX to complete
 
 	if (Loopback)
-		ProcessNewSamples(buffer[Index], Number);
+		pktProcessNewSamples(buffer[Index], Number);
 
 	WriteDebugLog(7, "Flushing %d", Number);
 

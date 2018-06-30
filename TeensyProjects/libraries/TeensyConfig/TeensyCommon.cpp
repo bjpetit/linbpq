@@ -1638,7 +1638,7 @@ extern "C"
   {
 	TXType = TXMode;
 	display.setCursor(0, 52);
-	display.print("           ");	//CLear old mode
+	display.print("            ");	//Clear old mode
 	display.setCursor(0, 52);
 	display.print(TXMode);
   }

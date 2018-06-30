@@ -4,7 +4,7 @@
 // 1200 works both ways at 12000K sampling, but RX not at 48k
 // 9600 works at 48K
 // 1200 Ok on Tom's board.
-// 9600 uses about 14% of Teensy 3.1
+// 9600 uses about 14% of Teensy 3.2
 
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
@@ -19,7 +19,9 @@
 
 #include <EEPROM.h>
 
-unsigned char RXBUFFER[300];	// Async RX Bufferextern "C" void xxx_Setup(int bmRequestType)
+unsigned char RXBUFFER[300];	// Async RX Buffer
+
+extern "C" void xxx_Setup(int bmRequestType);
 
 extern int Baud;		// Modem Speed (1200 or 9600 for noe)
 extern int AFSK;		// Modem Mode
@@ -36,6 +38,7 @@ extern int VRef;
 extern int TXLevel;				// 300 mV p-p Used on Teensy
 extern int RXLevel;				// Configured Level - zero means auto tune
 extern int autoRXLevel;		// calculated level
+extern int ARDOPMode;
 
 #define TRUE 1
 #define FALSE 0
@@ -225,7 +228,8 @@ void setup()
 {
   uint32_t i, sum = 0;
 
-  Baud = 9600;	// FSK G3RUH
+  ARDOPMode = 0;
+  Baud = 9600;		// FSK G3RUH
   AFSK = FALSE;
   FSK = TRUE;
   PSK = FALSE;
@@ -300,6 +304,7 @@ void setup()
 
   RXLevel = EEPROM.read(9);
   TXLevel = EEPROM.read(10);
+  autoRXLevel = 1500;
 
   CommonSetup();
   print_mac();
@@ -544,3 +549,9 @@ extern "C"
     //	printf("Start Capture\n");
   }
 }
+
+// Stuff to support Common Code for ARDOP and Packet
+
+void ProcessNewSamples(short * buf, int count)
+{}
+

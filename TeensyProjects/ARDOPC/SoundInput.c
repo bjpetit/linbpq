@@ -1357,7 +1357,9 @@ ProcessFrame:
 				if (!blnTimeoutTriggered)
 					ProcessRcvdARQFrame(intFrameType, bytData, frameLen, blnFrameDecodedOK);  // Process connected ARQ frames here 
 
-				if (ProtocolState == DISC)		  // allows ARQ mode to operate like FEC when not connected
+				// If still in DISC monitor it
+				
+				if (ProtocolState == DISC && Monitor)		  // allows ARQ mode to operate like FEC when not connected
 					if (intFrameType == 0x30)				
 						AddTagToDataAndSendToHost(bytData, "IDF", frameLen);			
 					else if (intFrameType >= 0x31 && intFrameType <= 0x38)
@@ -4325,7 +4327,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 
 	for (i = 1; i <  intPhasesLen; i++)  // Don't plot the first phase (reference)
 	{
-		intP = round((0.001 * intPhases[i]) / dbPhaseStep);
+		intP = round((0.001f * intPhases[i]) / dbPhaseStep);
 
 		// compute the Phase and Radius errors
  

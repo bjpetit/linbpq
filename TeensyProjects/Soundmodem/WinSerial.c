@@ -312,16 +312,6 @@ VOID HostPoll()
 	unsigned long Read = 0;
 	struct kisspkt * pkt = &state.channels->pkt;
 
-	int space = TXBUFFER_SIZE - (pkt->htx.wr - pkt->htx.rd); 
-
-	if (space > TXBUFFER_SIZE)		// pointer wrapped
-		space -= TXBUFFER_SIZE;
-
-	// only continue if room for KISS packet in buffer
-
-	if (space < 450)	// Full stuffed packet plus len and ackmode fields
-		return;
-
 	if (VCOM)
 		n = BPQSerialGetData(RXBUFFER, 300, &Read);
 

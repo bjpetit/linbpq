@@ -29,7 +29,7 @@ const short int50BaudTwoToneLeaderTemplate[240] = {	// holds just 1 symbol (20 m
 	7402, 4978, 0, -4462, -5945, -3944, 0, 3424, 4474, 2902,
 	0, -2375, -2988, -1849, 0, 1322, 1496, 794, 0, -263};
 
-
+/*
 const short intTwoToneLeaderTemplate[120] = {  // holds just 1 symbol (10 ms) of the leader
 	0, -576, 0, 1730, 3261, 2879, 0, -4019, -6485, -5149,
 	0, 6265, 9641, 7364, 0, -8441, -12689, -9496, 0, 10526,
@@ -43,7 +43,7 @@ const short intTwoToneLeaderTemplate[120] = {  // holds just 1 symbol (10 ms) of
 	0, 15186, 20876, 14327, 0, -13429, -18337, -12494, 0, 11527,
 	15599, 10526, 0, -9496, -12689, -8441, 0, 7364, 9641, 6265,
 	0, -5149, -6485, -4019, 0, 2879, 3261, 1730, 0, -576};
-
+*/
 // Template for 4FSK carriers spaced at 50 Hz, 50 baud
 
 const short intFSK50bdCarTemplate[4][240] = {

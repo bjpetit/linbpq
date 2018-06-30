@@ -76,8 +76,8 @@
 //#define HOSTSPEED 115200
 //#define SERIAL1SIZE 512
 
-//#define MONPORT Serial
-//#define CPULOAD
+#define MONPORT Serial
+#define CPULOAD
 
 #define CATPORT Serial5
 #define CATSPEED 19200

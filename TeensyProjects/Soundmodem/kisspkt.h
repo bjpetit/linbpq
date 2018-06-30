@@ -37,8 +37,12 @@
 
 #define MAXFLEN           512U
 #define RXBUFFER_SIZE     ((MAXFLEN*6U/5U)+8U)
-#define TXBUFFER_SIZE     4096U  /* must be a power of 2 and >= MAXFLEN*6/5+8; NOTE: in words */
 
+#ifdef __MK20DX256__		// Teensy 3.2
+#define TXBUFFER_SIZE     8000
+#else
+#define TXBUFFER_SIZE     100000
+#endif
 #define KISSINBUF_SIZE    (2*MAXFLEN+8)
 
 #define IFNAMELEN 128

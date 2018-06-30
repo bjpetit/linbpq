@@ -215,7 +215,7 @@ BOOL BusyDetect3(float * dblMag, int intStart, int intStop)        // this only 
 		intLastStop = intStop;
 	}
 	
-	// Wide band (66% ofr current bandwidth)
+	// Wide band (66% of current bandwidth)
 	
 	SortSignals2(dblMag, intStart, intStop, intWide, &dblAVGSignalPerBinWide, &dblAVGBaselineWide);
 
@@ -253,6 +253,9 @@ BOOL BusyDetect3(float * dblMag, int intStart, int intStop)        // this only 
 	case B2000FORCED:
 		blnBusy = (dblAvgStoNNarrow > (3 + 0.008 * powf(BusyDet, 4))) || (dblAvgStoNWide > (5 + 0.016 * powf(BusyDet, 4)));  		
  	}
+
+	if (BusyDet == 0)
+		blnBusy = FALSE;		// 0 Disables check ?? Is this the best place to do this?
 
 //	WriteDebugLog(LOGDEBUG, "Busy %d Wide %f Narrow %f", blnBusy, dblAvgStoNWide, dblAvgStoNNarrow); 
 

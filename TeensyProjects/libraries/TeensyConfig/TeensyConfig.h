@@ -13,8 +13,21 @@
 #define ARDOP
 #endif
 
+#ifdef PROJECT_ARDOP2_Teensy
+#define ARDOP
+#endif
+
+#ifdef PROJECT_ARDOPOFDM_Teensy
+#define ARDOP
+#define _OFDM
+#endif
+
 #ifdef PROJECT_SM_Teensy
 #define PACKET
+#endif
+
+#ifdef PROJECT_ARDOPWithPacket
+#define ARDOP
 #endif
 
 // Standard definitions

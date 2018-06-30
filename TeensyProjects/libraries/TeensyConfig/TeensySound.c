@@ -45,6 +45,8 @@ char PlaybackDevice[] = "DAC";
 char * CaptureDevices = CaptureDevice;
 char * PlaybackDevices = PlaybackDevice;
 
+int ARDOPMode = 1;
+
 int LastNow;
 
 int Numbertosend = 0;				// Number waiting to be sent
@@ -112,7 +114,12 @@ void PollReceivedSamples()
     Samples += ADC_SAMPLES_PER_BLOCK;
 
     //  printtick("Process Sample Start");
-    ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+	if (ARDOPMode)
+		ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+	else
+		pktProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+
+	
     //  printtick("Process Sample End");
 
     // We save Max and Min every block so we can adjust level

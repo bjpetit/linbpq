@@ -272,8 +272,8 @@ static void modmodulate(void *state, unsigned int txdelay)
 		return;
 	}
 
-	while (pktget(s->chan, ch, sizeof(ch)))
-		modsendbits(s, ch, 8*sizeof(ch));
+	while (pktget(s->chan, ch, 1))
+		modsendbits(s, ch, 8);
 
 	ch[0] = ch[1] = 0x7e;
 	modsendbits(s, ch, 16);		// add two flags

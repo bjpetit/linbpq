@@ -209,6 +209,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\Soundmodem\afsk\costab.c"
+				>
+			</File>
+			<File
+				RelativePath="..\Soundmodem\afsk\costab.h"
+				>
+			</File>
+			<File
 				RelativePath=".\ecc.h"
 				>
 			</File>

@@ -181,7 +181,7 @@ void usb_audio_receive_callback(unsigned int len)
   for (i = 0; i < count; i++)
   {
 	value = usb_audio_receive_buffer[i * CHANNELS];
-	if (value)
+	if (value > 3 && value < 65534)
 		silent = FALSE;
 	
 	dac1_buffer[Number++] = (value + 32768) >> 4;
@@ -210,7 +210,8 @@ void usb_audio_receive_callback(unsigned int len)
   rxtot += len;
   samplesqueued += count;
   
-/*  if (Number == 1200)
+/*
+  if (Number == 1200)
   {
 	  debugprintf("%d %d %d %d %d %d %d %d ", 
 	  usb_audio_receive_buffer[0],
@@ -222,7 +223,7 @@ void usb_audio_receive_callback(unsigned int len)
 	  usb_audio_receive_buffer[12],
 	  usb_audio_receive_buffer[14]);
   }
-*/	  
+*/  
   if (Number == 2400)
   {
 	// Just loop. DMA sends buffer continuously. Will need sync updates
