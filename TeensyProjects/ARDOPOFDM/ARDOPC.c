@@ -87,6 +87,7 @@ BOOL RadioControl = FALSE;
 BOOL SlowCPU = FALSE;
 BOOL AccumulateStats = TRUE;
 BOOL Use600Modes = FALSE;
+BOOL UseOFDM = TRUE;
 BOOL FSKOnly = FALSE;
 BOOL fastStart = TRUE;
 BOOL ConsoleLogLevel = LOGDEBUG;
@@ -797,9 +798,9 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*blnOdd = 0;
 		*intNumCar = 1;
 		*intDataLen = 6;
-		*intRSLen = 2;
+		*intRSLen = 4;
 		strcpy(strMod, "4FSK");
-		*intBaud = 50;
+		*intBaud = 100;
 		break;
 
 	case PktFrameHeader:

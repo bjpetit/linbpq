@@ -19,6 +19,7 @@
 extern unsigned int PKTLEDTimer;
 #endif
 
+void RemoveProcessedOFDMData();
 
 extern UCHAR bytData[];
 extern int intLastRcvdFrameQuality;
@@ -676,20 +677,19 @@ ModeToSpeed() = {
 
 static UCHAR DataModes200[] = {D4PSK_200_50_E, D4PSK_200_100_E, D16QAM_200_100_E};
  
-//static UCHAR DataModes500[] = {D4FSK_500_50_E, D4PSK_500_50_E, D16QAMR_500_100_E, D16QAM_500_100_E};
-static UCHAR DataModes500[] = {D4FSK_500_50_E, D4PSK_500_50_E, DOFDM_500_55_E};
+static UCHAR DataModes500[] = {D4FSK_500_50_E, D4PSK_500_50_E, D16QAMR_500_100_E, D16QAM_500_100_E};
 
+static UCHAR DataModes500OFDM[] = {D4FSK_500_50_E, D4PSK_500_50_E, DOFDM_500_55_E};
 
 static UCHAR DataModes500FSK[] = {D4FSK_500_50_E};
 
 // 2000 Non-FM
 
-static UCHAR DataModes2500[] = {D4FSK_500_50_E, D4FSK_1000_50_E,
-								DOFDM_500_55_E, DOFDM_2500_55_E};
+static UCHAR DataModes2500[] = {D4FSK_500_50_E, D4FSK_1000_50_E, D4PSK_500_50_E,
+								D4PSKR_2500_50_E,  D16QAMR_2500_100_E, D16QAM_2500_100_E};
 
-//								D4PSKR_2500_50_E, DOFDM_500_55_E, 
-//								D16QAMR_2500_100_E, D16QAM_2500_100_E};
-
+static UCHAR DataModes2500OFDM[] = {D4FSK_500_50_E, D4FSK_1000_50_E,
+								D4PSK_500_50_E, DOFDM_500_55_E, DOFDM_2500_55_E};
 
 static UCHAR DataModes2500FSK[] = {D4FSK_500_50_E, D4FSK_1000_50_E};
 
@@ -714,6 +714,12 @@ UCHAR  * GetDataModes(int intBW)
 			return DataModes500FSK;
 		}
 
+		else if (UseOFDM)
+		{
+			bytFrameTypesForBWLength = sizeof(DataModes500OFDM);
+			return DataModes500OFDM;
+		}
+
 		bytFrameTypesForBWLength = sizeof(DataModes500);
 		return DataModes500;
 	}
@@ -725,7 +731,13 @@ UCHAR  * GetDataModes(int intBW)
 			bytFrameTypesForBWLength = sizeof(DataModes2500FSK);
 			return DataModes2500FSK;
 		}
-	
+
+		else if (UseOFDM)
+		{
+			bytFrameTypesForBWLength = sizeof(DataModes2500OFDM);
+			return DataModes2500OFDM;
+		}
+
 		bytFrameTypesForBWLength = sizeof(DataModes2500);
 		return DataModes2500;
 	}
@@ -873,9 +885,11 @@ VOID Gearshift_2(int intAckNakValue, BOOL blnInit)
 			intShiftUPs++;
 			
 			// Clear OFDM receive flags
+
 			memset(goodReceivedBlocks, 0, sizeof(goodReceivedBlocks)); 
 			memset(goodReceivedBlockLen, 0, sizeof(goodReceivedBlockLen));
 			BytesSenttoHost = 0;
+			OFDMMode = PSK2;
 
 			ModeHasBeenTried[intFrameTypePtr + intShiftUpDn] = 1;
 		}
@@ -1046,7 +1060,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		GetACKHiQLevels(intSessionBW);
  
 		if (fastStart)
-			intFrameTypePtr = 2; //((bytFrameTypesForBWLength - 1) >> 1);	// Start mid way
+			intFrameTypePtr = (bytFrameTypesForBWLength + 1) >> 1;	// Start mid way
 		else
 			intFrameTypePtr = 0;
 
@@ -1095,7 +1109,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 	
 	if ((bytCurrentFrameType & 1) == (bytLastARQDataFrameAcked & 1))
 	{
-		*bytFrameTypeToSend = bytCurrentFrameType ^ 1;  // This insures toggle of  Odd and Even 
+		*bytFrameTypeToSend = bytCurrentFrameType ^ 1;  // This ensures toggle of  Odd and Even 
 		bytLastARQDataFrameSent = *bytFrameTypeToSend;
 	}
 	else
@@ -1121,7 +1135,9 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 
 	if (strMod[0] == 'O')	// OFDM
 	{
-		GetOFDMFrameInfo(&intDataLen, &intRSLen);
+		int Dummy;
+
+		GetOFDMFrameInfo(OFDMMode, &intDataLen, &intRSLen, &Dummy, &Dummy);
 		MaxLen = intDataLen * intNumCar;
 	}
 
@@ -2105,15 +2121,19 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				if (blnLastFrameSentData)
 				{
 					int CarriersAcked;
-#ifdef TEENSY
-					SetLED(PKTLED, TRUE);		// Flash LED
-					PKTLEDTimer = Now + 200;	// for 200 mS
-#endif
+
 					bytLastARQDataFrameAcked = bytLastARQDataFrameSent;
 
 					CarriersAcked = ProcessOFDMAck(OFDMACK);
 
-					if (CarriersAcked)
+					if (CarriersAcked == -1)
+					{
+						// Nothing acked, but we are shifting mode so send new data
+
+						bytLastARQDataFrameAcked = bytLastARQDataFrameSent;	
+						SendData();		 // Send new data from outbound queue and set up repeats
+					}
+					else if (CarriersAcked)
 					{
 #ifdef TEENSY
 						SetLED(PKTLED, TRUE);		// Flash LED

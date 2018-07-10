@@ -37,14 +37,11 @@ extern my_audio_block_t pool[POOLCOUNT];
 extern my_audio_block_t free_q;
 extern my_audio_block_t tohost_q;
 
+
 extern volatile unsigned short dac1_buffer[DAC_SAMPLES_PER_BLOCK * 2];
 
 
-extern int SampleRate;
-
 struct my_audio_block_struct;
 
-volatile unsigned short * SendtoCard(unsigned short buf, int n);
-extern unsigned short * DMABuffer;
 
 

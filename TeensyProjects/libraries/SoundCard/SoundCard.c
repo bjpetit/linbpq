@@ -158,8 +158,8 @@ void  SoundCardBG()
 // we must completely remove it from the receive buffer before returning
 
 // We need to detect start and end of transmission so we can key ptt (could derive from samples but dont see the need)
-// We can alao start/stop DAC (same as for ARDOP etc) at the same time.
-// To provide a bit if buffering don't start TX until we have 10 ms worth of data, but ket ptt immediately
+// We can also start/stop DAC (same as for ARDOP etc) at the same time.
+// To provide a bit if buffering don't start TX until we have 10 ms worth of data, but key ptt immediately
 // At end must delay dropping PTT until buffer is empty (sent > queued)
 
 
@@ -174,7 +174,7 @@ void usb_audio_receive_callback(unsigned int len)
   #endif
   
   // Check for silence. Some programs send silence instead of stopping sending
-  
+  // But there may be low level noise (+= 1)
   int silent = TRUE;
   
   
@@ -233,7 +233,7 @@ void usb_audio_receive_callback(unsigned int len)
  
   if (dacActive == 0)
   {
-	  // Start dac when we've queued enogh to give a bit of buffering
+	  // Start dac when we've queued enough to give a bit of buffering
 	  
 	  if (Number > 960) 	// 20 mS
 	  {
@@ -447,7 +447,7 @@ int q_add(my_audio_block_t * Q, my_audio_block_t * BUFF)
 
 // USB requests a block every millisecond and needs 48 samples (192 bytes, 16 but L/R)
 
-// I think I'll use buffers of 48 samplees, so will need 25 by ADC block
+// I think I'll use buffers of 48 samples, so will need 25 by ADC block
 
 //	I don't know yet how to sync if pc is faster or slower than Teensy Clock.
 //	Can I return a double block or return 0? Will try....
@@ -494,4 +494,77 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		q_add(&tohost_q, buff);
 	}
 }
+
+extern int totSamples;
+int Capturing = 0;
+
+
+#define DCDLED LED0
+#define PKTLED LED3		// flash when packet received
+
+
+ void SampleSink(short Sample)
+  {
+    int work = (short)Sample;
+
+    DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
+
+    if (Number == SendSize)
+    {
+      // send this buffer to sound interface
+
+      //  printtick("Enter SendtoCard");
+      DMABuffer = SendtoCard(DMABuffer, SendSize);
+      //  printtick("Leave SendtoCard");
+      Number = 0;
+    }
+    totSamples++;
+  }
+
+
+  int OKtoAdjustLevel()
+  {
+    // Only auto adjust level when disconnected.
+    // Level is set at end of each received packet when connected
+
+    return 1;
+  }
+
+  void TurnroundLink()
+  {
+  }
+
+  int AddTrailer()
+  {
+    return 0;
+  }
+
+  int displayDCD(int state)
+  {
+    SetLED(DCDLED, state);
+    return 1;
+  }
+
+  void StopCapture()
+  {
+    Capturing = FALSE;
+  }
+
+  void StartCapture()
+  {
+    Capturing = TRUE;
+
+    //	printf("Start Capture\n");
+  }
+  
+  
+  void _getpid()		// Seem to be needed to satifay linker
+  {
+  }
+
+  void _kill()
+  {
+  }
+
+
 

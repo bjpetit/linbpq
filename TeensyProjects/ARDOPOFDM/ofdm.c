@@ -108,6 +108,11 @@ int BytesSent = 0;
 int CarriersACKed;
 int CarriersNAKed;
 
+int lastOFDMRXMode;
+int LastDemodType = 0;
+
+int OFDMLevel; 		// % "compression" 
+
 
 // This is used if we send a partial block. Will normally only happen
 // at end of transmission, but could due to flow control
@@ -115,17 +120,23 @@ int CarriersNAKed;
 // Also used if we want to change mode
 
 int DontSendNewData = 0;	// Dont send new till all acked
+int LimitNewData = 0;		// Repeat unacked several times till all acked
 int NeedShiftDown = 0;		// Shift down once all sent
+int Duplicate = 0;			// Send data twice
+int firstNewCarrier = 0;
 
 UCHAR SentOFDMBlocks[MAXCAR];
-UCHAR SentOFDMBlockLen[MAXCAR];
+UCHAR SentOFDMBlockLen[MAXCAR];	// Must match actual carrier number
+
+UCHAR OFDMBlocks[MAXCAR];		// Build the carrier set in here
+UCHAR OFDMBlockLen[MAXCAR];
 
 
 UCHAR goodReceivedBlocks[128];
 UCHAR goodReceivedBlockLen[128];
 
 
-
+#define MAX_RAW_LENGTH_FSK 43	// 1 + 32 + 8 + 2
 #define MAX_RAW_LENGTH	163     // Len Byte + Data + RS  + CRC I think!
 
 
@@ -142,7 +153,7 @@ extern short intNforGoertzel[MAXCAR];
 extern short intPSKPhase_1[MAXCAR], intPSKPhase_0[MAXCAR];
 extern short intCP[MAXCAR];	  // Cyclic prefix offset 
 extern float dblFreqBin[MAXCAR];
-extern short intFilteredMixedSamples[3000];	// Get Frame Type need 2400 and we may add 1200
+extern short intFilteredMixedSamples[];	// Get Frame Type need 2400 and we may add 1200
 extern int intFilteredMixedSamplesLength;
 extern int MaxFilteredMixedSamplesLength;
 extern short intCarMagThreshold[MAXCAR];
@@ -171,6 +182,8 @@ extern int charIndex;			// Index into received chars
 extern int RepeatedFrame;		// set if this data frame is a repeat
 extern int	intShiftUpDn;
 extern int dttTimeoutTrip;
+extern int LastDataFrameType;			// Last data frame processed (for Memory ARQ, etc)
+
 
 void GoertzelRealImag(short intRealIn[], int intPtr, int N, float m, float * dblReal, float * dblImag);
 int ComputeAng1_Ang2(int intAng1, int intAng2);
@@ -181,6 +194,17 @@ UCHAR GetSym8PSK(int intDataPtr, int k, int intCar, UCHAR * bytEncodedBytes, int
 int Track1CarPSK(int floatCarFreq, int PSKMode, BOOL QAM, BOOL OFDM, float dblUnfilteredPhase, BOOL blnInit);
 void SendLeaderAndSYNC(UCHAR * bytEncodedBytes, int intLeaderLen);
 void Flush();
+BOOL  CheckCRC16(unsigned char * Data, int Length);
+
+void GenCRC16Normal(char * Data, int Length)
+{
+	unsigned int CRC = GenCRC16(Data, Length);
+
+	// Put the two CRC bytes after the stop index
+
+	Data[Length++] = (CRC >> 8);	 // MS 8 bits of Register
+	Data[Length] = (CRC & 0xFF);	 // LS 8 bits of Register
+}
 
 
 void ClearOFDMVariables()
@@ -190,12 +214,13 @@ void ClearOFDMVariables()
 	memset(UnackedOFDMBlockLen, 0, sizeof(UnackedOFDMBlockLen));
 	NextOFDMBlock = 0;
 	BytesSent = 0;
-	DontSendNewData = 0;
+	DontSendNewData = LimitNewData = Duplicate = 0;
 	
 	memset(SentOFDMBlocks, 0, sizeof(SentOFDMBlocks));
 	memset(SentOFDMBlockLen, 0, sizeof(SentOFDMBlockLen));
 
 	CarriersACKed = CarriersNAKed = NeedShiftDown = 0;
+	lastOFDMRXMode = LastDemodType = 0;
 }
 
 void ProcessOFDMNak(int AckType)
@@ -241,9 +266,11 @@ void ProcessOFDMNak(int AckType)
 	
 				// What should we do with OFDM Mode ??
 		
+				OFDMMode = PSK4;		// Start with 4PSK if going down
 				NextOFDMBlock = 0;
 				BytesSent = 0;
-				DontSendNewData = 0;
+				DontSendNewData = LimitNewData = Duplicate = FALSE;
+
 				memset(UnackedOFDMBlocks, 0, sizeof(UnackedOFDMBlocks));
 				memset(UnackedOFDMBlockLen, 0, sizeof(UnackedOFDMBlockLen));
 				
@@ -275,7 +302,14 @@ int ProcessOFDMAck(int AckType)
 		Quality = (ackbits >> 43) << 2;
 	}
 	else
+	{
 		ackbits = 0xffffffffffff;			// DataAck or DataACKHiQ imply all acked
+	
+		if (AckType == DataACK)
+			Quality = 80;
+		else
+			Quality = 90;
+	}
 
 	// Mark off all acked carriers
 
@@ -328,42 +362,88 @@ int ProcessOFDMAck(int AckType)
 			BytesSent -= bytesacked;
 
 			NextOFDMBlock -= index;
-			WriteDebugLog(LOGDEBUG, "OFDM Acked %d Blocks %d Bytes Still outstanding %d", index, bytesacked, BytesSent);
+			WriteDebugLog(LOGDEBUG, "OFDM Acked %d Blocks %d Bytes Still outstanding %d Carriers Acked %d OFDM Acked Percent %d Quality %d", index, bytesacked, BytesSent, Acked, AckedPercent, Quality);
 
 			if (memchr(UnackedOFDMBlocks, 1, 128) == 0)
 			{
 				// All acked
 
 				DontSendNewData = FALSE;
+				LimitNewData = FALSE;
+				Duplicate = FALSE;
+
 				WriteDebugLog(LOGDEBUG, "OFDM All Acked");
 			}
 		}
 		else
-			WriteDebugLog(LOGDEBUG, "OFDM Nothing Acked Bytes Still outstanding %d OFDM Acked Percent %d", BytesSent, AckedPercent);
+			WriteDebugLog(LOGDEBUG, "OFDM Nothing Acked Bytes Still outstanding %d Carriers Acked %d OFDM Acked Percent %d Quality %d", BytesSent, Acked, AckedPercent, Quality);
 
-		// We have unacked data. If Ack % is too low request a shift down. We can only
-		// do it if all is acked. So stop sending new data. If we can't get it through
-		// in current mode when all carriers have repeated data we are stuck.
-	
+		// Actually, I don't think we need to wait for all acked. Both ends know (from
+		// the OFDMAck) what is acked, and the IRS has passed to host. It is still
+		// in the RX list, but will be removed when the next data frame is received.
+		// So, as long as IRS discards any unacked data if the frame type or OFDM type 
+		// changes it should be ok.
+
+
 		if ((AckedPercent < 60) && (CarriersNAKed >= 2 * CarriersSent))
 		{
-			DontSendNewData = TRUE;
-			NeedShiftDown = TRUE;
+			WriteDebugLog(LOGDEBUG, "OFDM Average below 60 - request shift down");
+
+			CarriersACKed = CarriersNAKed = 0;
+			DontSendNewData = 0;
+			NextOFDMBlock = 0;
+			BytesSent = 0;
+			memset(UnackedOFDMBlocks, 0, sizeof(UnackedOFDMBlocks));
+			memset(UnackedOFDMBlockLen, 0, sizeof(UnackedOFDMBlockLen));
+		
+			if (OFDMMode > 0)
+			{
+				OFDMMode--;
+				WriteDebugLog(LOGDEBUG, "OFDM Acked Percent %d. Shift down to Mode %d", AckedPercent, OFDMMode) ;
+				return -1;			// Special value to stop repeats
+			}
+			else
+			{
+				// No lower OFDM modes, shift down frame type
+
+				CarriersACKed = CarriersNAKed = 0;
+				Gearshift_2(-10, False);		// Force shift
+				return -1;			// Special value to stop repeats
+			}
+		}
+
+		WriteDebugLog(LOGDEBUG, "OFDM AckedPercent %d CarriersACKed %d CarriersSent %d", AckedPercent, CarriersACKed, CarriersSent);
+
+		if ((AckedPercent > 80) && (CarriersACKed > CarriersSent))
+		{
+			// We would like to shift up, but can't till all acked. If we always miss
+			// the odd carrier we will never shift up and will be very slow. So repeat missed
+			// carriers to give us a high chance of all acked
+
+			// Make sure there is somewhere to shift to
+
+			if (OFDMMode < QAM16 || intNumCar < 43)
+			{
+				LimitNewData = 2;		// Send outstanding 3 times
+				Duplicate = 1;			// Duplicate New Data
+				WriteDebugLog(LOGDEBUG, "OFDM Wants to shift up - limit new data");
+			}
 		}
 	}
 	else
 	{
 		// All acked - remove data from send buffer
 		
-		WriteDebugLog(LOGDEBUG, "OFDM All Acked %d Bytes removed from queue", BytesSent);
+		WriteDebugLog(LOGDEBUG, "OFDM All Acked %d Bytes removed from queue Quality %d", BytesSent, Quality);
 		RemoveDataFromQueue(BytesSent);
 		NextOFDMBlock = 0;
 		BytesSent = 0;
 		memset(UnackedOFDMBlocks, 0, sizeof(UnackedOFDMBlocks));
 		memset(UnackedOFDMBlockLen, 0, sizeof(UnackedOFDMBlockLen));
 		DontSendNewData = FALSE;
+		Duplicate = LimitNewData = FALSE;
 
-		if ((AckedPercent > 80) && (CarriersACKed >= 2 * CarriersSent))
+		if ((AckedPercent > 80) && (CarriersACKed > CarriersSent))
 		{
 			Gearshift_2(2, False);
 			if (intShiftUpDn)
@@ -384,6 +464,7 @@ int ProcessOFDMAck(int AckType)
 	
 	// If we need a shift down see if we can do it
 	
+/*
 	if (NeedShiftDown && DontSendNewData == FALSE)
 	{
 		NeedShiftDown = FALSE;
@@ -395,16 +476,22 @@ int ProcessOFDMAck(int AckType)
 			WriteDebugLog(LOGDEBUG, "OFDM Acked Percent %d. Shift down to Mode %d", AckedPercent, OFDMMode) ;
 			return Acked;
 		}
-	}
+		else
+		{
+			// No lower OFDM modes, shift down frame type
 
+			CarriersACKed = CarriersNAKed = 0;
+			Gearshift_2(-10, False);		// Force shift
+		}
+	}
+*/
 	return Acked;
 }
 
 
-
-
 int  GetNextOFDMBlockNumber(int * Len)
 {
+	BOOL Looping = 0;
 resend:
 	while (UnAckedBlockPtr >= 0)
 	{
@@ -416,9 +503,19 @@ resend:
 		UnAckedBlockPtr--;
 	}
 
-	if (DontSendNewData)
+	if (LimitNewData)
 	{
-		UnAckedBlockPtr = 127;				// Send unacked again
+		WriteDebugLog(LOGDEBUG, "LimitNewData Set - repeating unacked blocks");
+		UnAckedBlockPtr = 127;		// Send unacked again
+		LimitNewData--;
+		goto resend;
+	}
+
+	if (DontSendNewData && Looping == 0)
+	{
+		WriteDebugLog(LOGDEBUG, "DontSendNewData Set - repeating unacked blocks");
+		UnAckedBlockPtr = 127;		// Send unacked again
+		Looping = 1;				// Protect against loop
 		goto resend;
 	}
 
@@ -434,39 +531,50 @@ UCHAR * GetNextOFDMBlock(int Block, int intDataLen)
 	return  &bytDataToSend[Block * intDataLen];
 }
 
-void GetOFDMFrameInfo(int * intDataLen, int * intRSLen)
+void GetOFDMFrameInfo(int OFDMMode, int * intDataLen, int * intRSLen, int * Mode, int * Symbols)
 {
-
 	switch (OFDMMode)
 	{
 	case PSK2:
 
-		*intDataLen = 12;
-		*intRSLen = 4;
+		*intDataLen = 19;
+		*intRSLen = 6;				// Must be even
+		*Symbols = 8;
+		*Mode = 2;
+
 		break;
 
 	case PSK4:
 
 		*intDataLen = 40;
 		*intRSLen = 10;
+		*Symbols = 4;
+		*Mode = 4;
 		break;
 
 	case PSK8:
 
 		*intDataLen = 57;			// Must be multiple of 3
 		*intRSLen = 18;				// Must be multiple of 3 and even (so multiple of 6)
+		*Symbols = 8;
+		*Mode = 8;
 		break;
 
 	case PSK16:
 
 		*intDataLen = 80;
 		*intRSLen = 20;
+		*Symbols = 8;
+		*Mode = 16;
+
 		break;
 
 	case QAM16:
 
 		*intDataLen = 80;
 		*intRSLen = 20;
+		*Symbols = 2;
+		*Mode = 8;
 		break;
 
 	default:
@@ -499,7 +607,7 @@ int EncodeOFDMData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsign
 	char strMod[16];
 	BOOL blnFrameTypeOK;
 	UCHAR bytQualThresh;
-	int i;
+	int i, j, Dummy;
 	UCHAR * bytToRS = &bytEncodedBytes[2]; 
 	int RepeatIndex = 0;			// used to duplicate data if too short to fill frame
 
@@ -508,7 +616,7 @@ int EncodeOFDMData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsign
 	if (intDataLen == 0 || Length == 0 || !blnFrameTypeOK)
 		return 0;
 
-	GetOFDMFrameInfo(&intDataLen, &intRSLen);
+	GetOFDMFrameInfo(OFDMMode, &intDataLen, &intRSLen, &Dummy, &Dummy);
 
 	//	Generate the 2 bytes for the frame type data:
 
@@ -518,28 +626,65 @@ int EncodeOFDMData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsign
 	bytEncodedBytes[1] = bytFrameType ^ bytSessionID;
 
 	bytDataToSendLengthPtr = 0;
+	firstNewCarrier = -1;
+
 	intEncodedDataPtr = 2;
 
 	UnAckedBlockPtr = 127;		// We send unacked blocks backwards
 
 	Length -= BytesSent;		// New data to send
 
+	WriteDebugLog(LOGDEBUG, "OFDM Bytes to Send %d DontSendNewData %d", Length, DontSendNewData);
+
+	// Often the first carrier is the only one missed, and if we repeat it first it will always
+	// fail. So it would be good if logical block number 0 isn't always sent on carrier 0
+	
+	// The carrier number must match the block number so we can ack it. 
+
+
+
 	for (i = 0; i < intNumCar; i++)		//  across all carriers
 	{
 		int blkLen;
+		int blkNum;
+
 		intCarDataCnt = Length - bytDataToSendLengthPtr;
-			
-		if (intCarDataCnt > intDataLen) // why not > ??
+
+		// If we have no new data to send we would repeat the last sent blocks from
+		// SentOFDMBlocks which is wrong if there is no new data. So in that case just
+		// send outstanding data. 
+
+		if (DontSendNewData && BytesSent)			// Just send outstanding data repeatedly if necessary
+		{	
+			OFDMBlocks[i] = blkNum = GetNextOFDMBlockNumber(&blkLen);
+			OFDMBlockLen[i] = UnackedOFDMBlockLen[blkNum] = blkLen;
+			UnackedOFDMBlocks[blkNum] = 1;
+
+		}
+		else if (Duplicate & (i >= ((intNumCar - firstNewCarrier) /2)))
+			goto repeatblocks;
+
+		else if (intCarDataCnt > intDataLen) // why not > ??
 		{
 			// Won't all fit 
 tryagain:
-			SentOFDMBlocks[i] = bytToRS[1] = GetNextOFDMBlockNumber(&blkLen);
+			OFDMBlocks[i] = blkNum = GetNextOFDMBlockNumber(&blkLen);
 	
 			if (blkLen == -1)
 			{
 				// New Block. Make sure it will fit in window
 
-				if ((NextOFDMBlock + (intNumCar - i)) > 125)
+				int limit;
+
+				if (intNumCar == 9)
+					limit = 24;			// Don't want too many outstanding or shift up will be slow
+				else
+					limit = 125;
+
+				if (firstNewCarrier == -1)
+					firstNewCarrier = i;
+
+				if ((NextOFDMBlock + (intNumCar - i)) > limit)
 				{
 					// no room
 
@@ -548,18 +693,13 @@ tryagain:
 					goto tryagain;
 				}
 
-				bytToRS[0] = intDataLen;
+				blkLen = intDataLen;
 				bytDataToSendLengthPtr += intDataLen;	// Don't reduce bytes to send if repeating
 				BytesSent += intDataLen;
 			}
-			else
-				bytToRS[0] = blkLen;		// Repeated block
 
-			memcpy(&bytToRS[2], GetNextOFDMBlock(bytToRS[1], intDataLen), intDataLen);
-			SentOFDMBlockLen[i] = UnackedOFDMBlockLen[bytToRS[1]] = bytToRS[0];
-			UnackedOFDMBlocks[bytToRS[1]] = 1;
-			WriteDebugLog(LOGDEBUG, "Sending OFDM Carrier %d Block %d Len %d", i,bytToRS[1], bytToRS[0]);
-
+			OFDMBlockLen[i] = UnackedOFDMBlockLen[blkNum] = blkLen;
+			UnackedOFDMBlocks[blkNum] = 1;
 		}
 		else
 		{
@@ -571,40 +711,54 @@ tryagain:
 
 			if (intCarDataCnt > 0)
 			{
-				SentOFDMBlocks[i] = bytToRS[1] = GetNextOFDMBlockNumber(&blkLen);
+				OFDMBlocks[i] = blkNum = GetNextOFDMBlockNumber(&blkLen);
 				if (blkLen == -1)
 				{
-					bytToRS[0] = intCarDataCnt;  // Could be 0 if insuffient data for # of carriers 
+					if (firstNewCarrier == -1)
+						firstNewCarrier = i;
+
+					blkLen = intCarDataCnt;  // Could be 0 if insuffient data for # of carriers 
 					bytDataToSendLengthPtr += intCarDataCnt;	// Don't reduce bytes to send if repeating
 					BytesSent += intCarDataCnt;
 					if (intCarDataCnt < intDataLen)
 						DontSendNewData = TRUE;			// sending a part block so mustnt send more till all acked
 				}
-				else
-					bytToRS[0] = blkLen;
 				
-				memcpy(&bytToRS[2], GetNextOFDMBlock(bytToRS[1], intDataLen), intCarDataCnt);
-				SentOFDMBlockLen[i] = UnackedOFDMBlockLen[bytToRS[1]] = bytToRS[0];
-				UnackedOFDMBlocks[bytToRS[1]] = 1;
-				WriteDebugLog(LOGDEBUG, "Sending OFDM Carrier %d Block %d Len %d", i,bytToRS[1], bytToRS[0]);
+				UnackedOFDMBlockLen[blkNum] = OFDMBlockLen[i] = blkLen;
+				UnackedOFDMBlocks[blkNum] = 1;
 			}
 			else
 			{
 				// No more data to send - duplicate sent carriers. Gives extra redundancy
-
-				bytToRS[0] = SentOFDMBlockLen[RepeatIndex];
-				bytToRS[1] = SentOFDMBlocks[RepeatIndex];
-				SentOFDMBlocks[i] = bytToRS[1];
-				SentOFDMBlockLen[i] = bytToRS[0];
-				UnackedOFDMBlockLen[bytToRS[1]] = bytToRS[0];
-				UnackedOFDMBlocks[bytToRS[1]] = 1;
-				memcpy(&bytToRS[2], GetNextOFDMBlock(bytToRS[1], intDataLen), SentOFDMBlockLen[RepeatIndex++]);
-				// dont add to UnackedBLock list as it is already there
-				WriteDebugLog(LOGDEBUG, "Sending OFDM Carrier %d Block %d Len %d (Dup)", i,bytToRS[1], bytToRS[0]);
+repeatblocks:
+				blkNum = OFDMBlocks[RepeatIndex];
+				blkLen = OFDMBlockLen[RepeatIndex++];
+				OFDMBlocks[i] = blkNum;
+				OFDMBlockLen[i] = blkLen;
+				UnackedOFDMBlockLen[blkNum] = blkLen;
+				UnackedOFDMBlocks[blkNum] = 1;
 			}
 		}
-		
-		GenCRC16FrameType(bytToRS, intDataLen + 2, bytFrameType); // calculate the CRC on the byte count + data bytes
+	}
+
+	// We now have pointers to the logical blocks in OFDMBlocks/Len. We don't
+	// have to modulate in that order, but must update SentOFDMBlocks with the real
+	// Carrier number
+
+	j = rand() % intNumCar;
+
+	for (i = 0; i < intNumCar; i++)
+	{
+		if (j >= intNumCar)
+			j = 0;
+
+		SentOFDMBlockLen[i] = bytToRS[0] = OFDMBlockLen[j];
+		SentOFDMBlocks[i] = bytToRS[1] = OFDMBlocks[j++]; 
+
+		WriteDebugLog(LOGDEBUG, "Sending OFDM Carrier %d Block %d Len %d", i,bytToRS[1], bytToRS[0]);
+		memcpy(&bytToRS[2], GetNextOFDMBlock(bytToRS[1], intDataLen), bytToRS[0]);
+	
+		GenCRC16Normal(bytToRS, intDataLen + 2); // calculate the CRC on the byte count + data bytes
 
 		// Data + RS + 1 byte byteCount + 1 byte blockno + 2 Byte CRC
 		
@@ -612,33 +766,50 @@ tryagain:
 
  		intEncodedDataPtr += intDataLen + 4 + intRSLen;
 
-		bytToRS += intDataLen + 4 + intRSLen;		
+		bytToRS += intDataLen + 4 + intRSLen;
 	}
 
 	return intEncodedDataPtr;
 }
 
 
-// OFDM RX ROutines
+// OFDM RX Routines
+
+extern int NErrors;
 
 BOOL Decode4FSKOFDMACK()
 {
 	BOOL FrameOK;
+	BOOL blnRSOK;
 
-	// 6 Byte payload, 2 CRC 
+	// 6 Byte payload, 2 CRC 4 RS
  
-	if (CheckCRC16FrameType(&bytFrameData[0][0], 6, OFDMACK)) 
+	if (CheckCRC16(&bytFrameData[0][0], 6)) 
 	{
 		WriteDebugLog(LOGDEBUG, "OFDMACK Decode OK");
-		FrameOK = TRUE;
-	}
-	else
-	{
-		WriteDebugLog(LOGDEBUG, "OFDMACK Decode Fail");
-		FrameOK = FALSE;
+		return  TRUE;
 	}
 
-	return FrameOK;
+	// Try RS Correction
+
+
+	FrameOK = RSDecode(&bytFrameData[0][0], 12, 4, &blnRSOK);
+
+	if (FrameOK && blnRSOK == FALSE)
+	{
+		// RS Claims to have corrected it, but check
+
+		WriteDebugLog(LOGDEBUG, "OFDMACK %d Errors Corrected by RS", NErrors);
+
+		if (CheckCRC16(&bytFrameData[0][0], 6)) 
+		{
+			WriteDebugLog(LOGDEBUG, "OFDMACK Corrected by RS OK");
+			return  TRUE;
+		}
+	}
+	WriteDebugLog(LOGDEBUG, "OFDMACK Decode Failed after RS");
+
+	return FALSE;
 }
 
 
@@ -709,10 +880,9 @@ VOID InitDemodOFDM()
 		GoertzelRealImag(intFilteredMixedSamples, intCP[i], intNforGoertzel[i], dblFreqBin[i], &dblReal, &dblImag);
 		dblPhase = atan2f(dblImag, dblReal);
 
-		// Set initial mag from Reference Phase (which should be full power)
+		// Set initial mag from Reference Phase and Mode Bits (which should be full power)
 
 		intCarMagThreshold[i] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
-		intCarMagThreshold[i] *= 0.75f;
 
 		intPSKPhase_1[i] = 1000 * dblPhase;
 
@@ -725,8 +895,7 @@ VOID InitDemodOFDM()
 		modePhase[i][0] = -(ComputeAng1_Ang2(intPSKPhase_0[i], intPSKPhase_1[i]));
 		intPSKPhase_1[i] = intPSKPhase_0[i];
 				
-		intCarMagThreshold[i] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
-		intCarMagThreshold[i] *= 0.75f;
+		intCarMagThreshold[i] += sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
 
 
 		GoertzelRealImag(intFilteredMixedSamples + 480, intCP[i], intNforGoertzel[i], dblFreqBin[i], &dblReal, &dblImag);
@@ -736,8 +905,7 @@ VOID InitDemodOFDM()
 		modePhase[i][1] = -(ComputeAng1_Ang2(intPSKPhase_0[i], intPSKPhase_1[i]));
 		intPSKPhase_1[i] = intPSKPhase_0[i];
 				
-		intCarMagThreshold[i] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
-		intCarMagThreshold[i] *= 0.75f;
+		intCarMagThreshold[i] += sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
 
 		GoertzelRealImag(intFilteredMixedSamples + 720, intCP[i], intNforGoertzel[i], dblFreqBin[i], &dblReal, &dblImag);
 		dblPhase = atan2f(dblImag, dblReal);
@@ -746,8 +914,12 @@ VOID InitDemodOFDM()
 		modePhase[i][2] = -(ComputeAng1_Ang2(intPSKPhase_0[i], intPSKPhase_1[i]));
 		intPSKPhase_1[i] = intPSKPhase_0[i];
 				
-		intCarMagThreshold[i] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
+		intCarMagThreshold[i] += sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
 		intCarMagThreshold[i] *= 0.75f;
+
+		// We have accumulated 4 values so divide by 4
+
+		intCarMagThreshold[i] /= 4.0f;
 
 		if (modePhase[i][0] >= 1572 || modePhase[i][0] <= -1572)
 			 OFDMType[i] |= 1;
@@ -775,41 +947,21 @@ VOID InitDemodOFDM()
 		}
 	}
 
-	if (RXOFDMMode == PSK2)
+	GetOFDMFrameInfo(RXOFDMMode, &intDataLen, &intRSLen, &intPSKMode, &intSymbolsPerByte);
+
+	// if OFDM mode (or frame type) has changed clear any received but unprocessed data
+
+	if (RXOFDMMode != lastOFDMRXMode || (intFrameType & 0xFE) != (LastDemodType & 0xFE))
 	{
-		intSymbolsPerByte = 8;
-		intPSKMode = 2;
-		intDataLen = 12;
-		intRSLen = 4;
+		memset(goodReceivedBlocks, 0, sizeof(goodReceivedBlocks)); 
+		memset(goodReceivedBlockLen, 0, sizeof(goodReceivedBlockLen));
+		BytesSenttoHost = 0;
+
+		lastOFDMRXMode = RXOFDMMode;
+
+		WriteDebugLog(LOGDEBUG, "New OFDM Mode - clear any received data");
 	}
-	else if (RXOFDMMode == PSK4)
-	{
-		intSymbolsPerByte = 4;
-		intPSKMode = 4;
-		intDataLen = 40;
-		intRSLen = 10;
-	}
-	else if (RXOFDMMode == PSK8)
-	{
-		intSymbolsPerByte = 8;
-		intPSKMode = 8;
-		intDataLen = 57;			// Must be multiple of 3
-		intRSLen = 18;				// Must be multiple of 3 and even (so multiple of 6)
-	}
-	else if (RXOFDMMode == PSK16)
-	{
-		intSymbolsPerByte = 2;
-		intPSKMode = 16;
-		intDataLen = 80;
-		intRSLen = 20;
-	}
-	else		//16 OFDM
-	{
-		intSymbolsPerByte = 2;
-		intPSKMode = 8;
-		intDataLen = 80;
-		intRSLen = 20;
-	}
+
 
 	Track1CarPSK(floatCarFreq, intPSKMode, FALSE, TRUE, dblPhase, TRUE);
 
@@ -898,6 +1050,7 @@ BOOL DemodOFDM()
 	int Used = 0;
 	int Start = 0;
 	int i, n, MemARQOk = 0;
+	int skip = rand() % intNumCar;
 
 	// We can't wait for the full frame as we don't have enough RAM, so
 	// we do one DMA Buffer at a time, until we run out or end of frame
@@ -977,88 +1130,93 @@ BOOL DemodOFDM()
 
 			DecodeCompleteTime = Now;
 
+			// prepare for next so we can exit when we have finished decode
 
-		
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
 
-		// prepare for next so we can exit when we have finished decode
-
-		DiscardOldSamples();
-		ClearAllMixedSamples();
-		State = SearchingForLeader;
-
-		// Rick uses the last carrier for Quality
-		// Get quality from middle carrier (?? is this best ??
+			// Rick uses the last carrier for Quality
+			// Get quality from middle carrier (?? is this best ??
 	
-		intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[intNumCar/2][0], &intMags[intNumCar/2][0], intPSKMode, FALSE, TRUE);
+			intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[intNumCar/2][0], &intMags[intNumCar/2][0], intPSKMode, FALSE, TRUE);
 
-		// Decode the phases. Mode was determined from header
+			// Decode the phases. Mode was determined from header
 
-		frameLen = 0;
+			frameLen = 0;
 
-		if (RepeatedFrame)
-		{
-			WriteDebugLog(LOGDEBUG, "Repeated frame - discard");
-	
-			frameLen = BytesSenttoHost;
-			return TRUE;
-		}
-
-		for (i = 0; i < intNumCar; i++)	
-		{
-			UCHAR decodeBuff[82];				// Max length of OFDM block
-			int decodeLen, ofdmBlock;;
-
-			CarrierOk[i] = 0;					// Always reprocess carriers
-
-	//		CorrectPhaseForTuningOffset(&intPhases[i][0], intPhasesLen, 2);
-	
-			if (intSymbolsPerByte == 2)
-				Decode1CarOFDM(i);
-			else
-				Decode1CarPSK(i, TRUE);
-
-			// with OFDM each carrier has a sequence number, as we can do selective repeats if a carrier is missed.
-			// so decode into a separate buffer, and copy into the correct space in the received data buffer. 
-
-	//		if ((i & 3) != 3)			// always miss carrier 3
-	//		if (i != 0)		// always fail 1
-			
-			decodeLen = CorrectRawDataWithRS(&bytFrameData[0][0], decodeBuff , intDataLen + 1, intRSLen, intFrameType, i);
-
-			OFDMCarriersReceived[RXOFDMMode]++;
-
-			if (CarrierOk[i])
+			if (RepeatedFrame)
 			{
-				// copy data to correct place in bytData
+				WriteDebugLog(LOGDEBUG, "Repeated frame - discard");
+	
+				frameLen = BytesSenttoHost;
+				return TRUE;
+			}
 
-				OFDMCarriersDecoded[RXOFDMMode]++;
-				ofdmBlock = decodeBuff[0];
+			for (i = 0; i < intNumCar; i++)	
+//			for (i = 0; i < intNumCar; i+=3)		// Testing	
+			{
+				UCHAR decodeBuff[256];				// 82 doesnt seem to be enough ??Max length of OFDM block
+				int decodeLen, ofdmBlock;;
 
-				if (goodReceivedBlocks[ofdmBlock] == 0)
+				CarrierOk[i] = 0;					// Always reprocess carriers
+
+		//		CorrectPhaseForTuningOffset(&intPhases[i][0], intPhasesLen, 2);
+	
+				if (intSymbolsPerByte == 2)
+					Decode1CarOFDM(i);
+				else
+					Decode1CarPSK(i, TRUE);
+	
+				// with OFDM each carrier has a sequence number, as we can do selective repeats if a carrier is missed.
+				// so decode into a separate buffer, and copy into the correct space in the received data buffer. 
+
+//				if ((i & 3) != 3)			// always miss carrier 3
+//				if (i != 0 && i != 15)		// always fail 1
+//				if (i != skip)
+			
+				decodeLen = CorrectRawDataWithRS(&bytFrameData[0][0], decodeBuff , intDataLen + 1, intRSLen, intFrameType, i);
+
+				OFDMCarriersReceived[RXOFDMMode]++;
+
+				if (CarrierOk[i])
 				{
-					memcpy(&bytData[intDataLen * ofdmBlock], &decodeBuff[1], decodeLen);
-					goodReceivedBlocks[ofdmBlock] = 1;
-					goodReceivedBlockLen[ofdmBlock] = decodeLen;
+					ofdmBlock = decodeBuff[0];
+
+					// CRC check isn't perfect. At least we can check that Block and Length
+					// are reasonable
+
+					if (ofdmBlock < 128 && decodeLen <=  intDataLen)
+					{
+						// copy data to correct place in bytData
+
+						OFDMCarriersDecoded[RXOFDMMode]++;
+
+						if (goodReceivedBlocks[ofdmBlock] == 0)
+						{
+							memcpy(&bytData[intDataLen * ofdmBlock], &decodeBuff[1], decodeLen);
+							goodReceivedBlocks[ofdmBlock] = 1;
+							goodReceivedBlockLen[ofdmBlock] = decodeLen;
+						}
+					}
 				}
 			}
-		}
 
-		// Pass any contiguous blocks starting from 0 to host (may need to reconsider!)
+			// Pass any contiguous blocks starting from 0 to host (may need to reconsider!)
 
-		for (i = 0; i < 128; i++)
-		{
-			n = goodReceivedBlockLen[i];
+			for (i = 0; i < 128; i++)
+			{
+				n = goodReceivedBlockLen[i];
 
-			if (n)
-				frameLen += n;
-			else
-				break;					// exit loop on first missed block.
-		}
+				if (n)
+					frameLen += n;
+				else
+					break;					// exit loop on first missed block.
+			}
 
-		// If this is a repeated frame, we should only send any data that is beyond what we sent at last try
-
+			// If this is a repeated frame, we should only send any data that is beyond what we sent at last try
 		
-		BytesSenttoHost = frameLen;
+			BytesSenttoHost = frameLen;
 		}
 
 		// if all carriers have been decoded we must have passed all data to the host, so clear partial receive info
@@ -1141,6 +1299,8 @@ VOID EncodeAndSendOFDMACK(UCHAR bytSessionID, int LeaderLength)
 
 	// Not sure if best to use CRC or FEC. Could use both, but message gets a bit long.
 	// Lets go with crc for now
+	// Now try CRC and 4 RS. OTT but see if it reduces number
+	// of failed OFDMACKs
 
 	bytEncodedBytes[0] = OFDMACK;
 	bytEncodedBytes[1] = OFDMACK ^ bytSessionID;
@@ -1159,9 +1319,11 @@ VOID EncodeAndSendOFDMACK(UCHAR bytSessionID, int LeaderLength)
 		val >>= 8;
 	}
 
-	GenCRC16FrameType(&bytEncodedBytes[2], 6, OFDMACK);	// calculate the CRC
+	GenCRC16Normal(&bytEncodedBytes[2], 6);	// calculate the CRC
 
-	Mod4FSKDataAndPlay(&bytEncodedBytes[0], 10, LeaderLength);
+	RSEncode(&bytEncodedBytes[2], &bytEncodedBytes[10], 8, 4);  // Generate the RS encoding ...now 14 bytes total
+
+	Mod4FSKDataAndPlay(&bytEncodedBytes[0], 14, LeaderLength);
 
 }
 
@@ -1189,7 +1351,7 @@ void SendOFDM2PSK(int symbol, int intNumCar)
 			else
 				OFDMSamples[p++] += intOFDMTemplate[intCarIndex][0][n]; 
 		}
-				
+
 		// we now have the 216 samples. Copy last 24 to front as CP
 
 		memcpy(OFDMSamples, &OFDMSamples[216], 24 * 2);
@@ -1210,7 +1372,7 @@ void SendOFDM2PSK(int symbol, int intNumCar)
 	for (q = 0; q < 240; q++)
 	{
 		intSample = OFDMFrame[q] / intNumCar;
- 		SampleSink(intSample);		
+ 		SampleSink((intSample * OFDMLevel)/100);		
 	}
 }
 
@@ -1291,9 +1453,15 @@ void ModOFDMDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderL
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s Mode %s", strType, OFDMModes[OFDMMode]);
 
 	if (intNumCar == 9)
+	{
 		initFilter(500,1500);
+		OFDMLevel = 100;	
+	}
 	else
+	{
 		initFilter(2500,1500);
+		OFDMLevel = 125;
+	}
 
 	if (intLeaderLen == 0)
 		intLeaderLenMS = LeaderLength;
@@ -1443,7 +1611,7 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 				for (q = 0; q < 240; q++)
 				{
 					intSample = OFDMFrame[q] / intNumCar;
- 					SampleSink(intSample);
+			 		SampleSink((intSample * OFDMLevel)/100);		
 					OFDMFrame[q] = 0;
 				}
 				
@@ -1499,5 +1667,33 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 	}
 	Flush();
 }
+
+
+
+// Function to compute a 16 bit CRC value and check it against the last 2 bytes of Data (the CRC)
+ 
+unsigned short int compute_crc(unsigned char *buf,int len);
+
+BOOL  CheckCRC16(unsigned char * Data, int Length)
+{
+	// returns TRUE if CRC matches, else FALSE
+    // For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
+    // intSeed is the seed value for the shift register and must be in the range 0-0xFFFF
+
+	unsigned int CRC = GenCRC16(Data, Length);
+	unsigned short CRC2 =  compute_crc(Data, Length);
+	CRC2 ^= 0xffff;
+  
+	// Compare the register with the last two bytes of Data (the CRC) 
+    
+	if ((CRC >> 8) == Data[Length])
+		if ((CRC & 0xFF) == Data[Length + 1])
+			return TRUE;
+
+	return FALSE;
+}
+
+// Subroutine to get intDataLen bytes from outbound queue (bytDataToSend)
+
 
 

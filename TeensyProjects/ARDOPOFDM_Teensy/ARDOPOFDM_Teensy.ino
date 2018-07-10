@@ -55,7 +55,7 @@ extern "C"
 
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
 
-#include "../../ARDOP2/ARDOPC.h"
+#include "../../ARDOPOFDM/ARDOPC.h"
 
 extern unsigned int tmrPollOBQueue;
 

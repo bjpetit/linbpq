@@ -39,6 +39,7 @@ void clearDisplay();
 void updateDisplay();
 VOID L2Routine(UCHAR * Packet, int Length, int FrameQuality, int totalRSErrors, int NumCar, int pktRXMode);
 void RemoveProcessedOFDMData();
+BOOL  CheckCRC16(unsigned char * Data, int Length);
 
 void DrawAxes(int Qual, char * Mode);
 
@@ -59,6 +60,7 @@ extern UCHAR bytLastACKedDataFrameType;
 extern int intARQDefaultDlyMs;
 unsigned int tmrFinalID;
 extern BOOL PKTCONNECTED;
+extern int LastDemodType;
 
 extern int pktRXMode;
 extern int RXOFDMMode;
@@ -73,7 +75,7 @@ short rawSamples[2400];	// Get Frame Type need 2400 and we may add 1200
 int rawSamplesLength = 0;
 int maxrawSamplesLength;
 
-short intFilteredMixedSamples[3000];	// Get Frame Type need 2400 and we may add 1200
+short intFilteredMixedSamples[3500];	// Get Frame Type need 2400 and we may add 1200
 int intFilteredMixedSamplesLength = 0;
 int MaxFilteredMixedSamplesLength = 0;
 
@@ -105,7 +107,7 @@ int intSymbolsPerByte = 4;
 // ARDOP V2 has max 10 carriers and 160 (120 + 40RS) per carrier
 
 #define MAX_RAW_LENGTH	163     // Len Byte + Data + RS  + CRC I think!
-
+#define MAX_RAW_LENGTH_FSK	43	// MAX FSK 32 data + 8 RS
 // OFDM is MAXCAR * 100
 // 10 carrier 16QAM id 10 * 160
 
@@ -131,16 +133,6 @@ int intSymbolsPerByte = 4;
 // Teensy is rather short of RAM, but as we never receive FSK and PSK
 // at the same time we can use same data area (saves about 20K)
 
-// int intToneMags[2][16 * MAX_RAW_LENGTH];	// Need one per carrier
-
-
-int Tones[2][16 * MAX_RAW_LENGTH];
-
-int * Toneptrs[2] = {&Tones[0][0], &Tones[1][0]};
-
-int ** intToneMags = &Toneptrs[0];
-
-
 int intToneMagsIndex[2];
 
 // Same here
@@ -162,8 +154,8 @@ unsigned char goodCarriers = 0;	// Carriers we have already decoded
 
 //short intPhases[MAXCAR][332] = {0};	
 
-short QAMPhases[10][332];
-short OFDMPhases[MAXCAR - 10][212];
+short QAMPhases[10][332];				// 6640 bytes
+short OFDMPhases[MAXCAR - 10][232];		// Need 232 = (PSK2 8 * 29); 15312		
 
 short * Phaseptrs[MAXCAR] = 
 	{&QAMPhases[0][0], &QAMPhases[1][0], &QAMPhases[2][0], &QAMPhases[3][0], &QAMPhases[4][0], 
@@ -193,6 +185,19 @@ short * Magptrs[MAXCAR] =
 	&OFDMMags[30][0], &OFDMMags[31][0], &OFDMMags[32][0]};
 
 short ** intMags = &Magptrs[0];
+
+
+
+//int Tones[2][16 * MAX_RAW_LENGTH_FSK];
+
+int intToneMags[4][16 * MAX_RAW_LENGTH_FSK] = {0};	// Need one per carrier
+
+// We need 5504 bytes for FSK but can overlay on PSK data areas
+
+//int * Toneptrs[2] = {(int *)&Tones[0][0], (int *)&Tones[1][0]};
+
+//int ** intToneMags = &Toneptrs[0];
+
 
 #ifdef MEMORYARQ
 
@@ -293,7 +298,7 @@ float dblPwrSNPower_dBPrior = 0;
 float dblPhaseDiff1_2Avg;  // an initial value of -10 causes initialization in AcquireFrameSyncRSBAvg
 
 
-int	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
+int	intMFSReadPtr = 0;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
 
 int RcvdSamplesLen = 0;				// Samples in RX buffer
 
@@ -324,8 +329,7 @@ int Compute4FSKSN();
 void DemodPSK();
 BOOL DemodQAM();
 BOOL DemodOFDM();
-int Demod1CarOFDMChar(int Start, int Carrier, int intNumOfSymbols);
-
+BOOL Decode4FSKOFDMACK();
 
 
 void PrintCarrierFlags()
@@ -413,7 +417,7 @@ void InitializeMixedSamples()
 	intARQRTmeasuredMs = min(10000, Now - dttStartRTMeasure); //?????? needs work
 	intPriorMixedSamplesLength = 120;  // zero out prior samples in Prior sample buffer
 	intFilteredMixedSamplesLength = 0;	// zero out the FilteredMixedSamples array
-	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
+	intMFSReadPtr = 0;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
 }
 
 //	Subroutine to discard all sampled prior to current intRcvdSamplesRPtr
@@ -533,7 +537,7 @@ void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 	if (intFilteredMixedSamplesLength > MaxFilteredMixedSamplesLength)
 		MaxFilteredMixedSamplesLength = intFilteredMixedSamplesLength;
 
-	if (intFilteredMixedSamplesLength > 3000)
+	if (intFilteredMixedSamplesLength > 3500)
 		WriteDebugLog(LOGCRIT, "Corrupt intFilteredMixedSamplesLength %d", intFilteredMixedSamplesLength);
 
 }
@@ -737,6 +741,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 {
 	BOOL blnRSOK;
 	BOOL FrameOK;
+	BOOL OK;
 
 	//Dim bytNoRS(1 + intDataLen + 2 - 1) As Byte  ' 1 byte byte Count, Data, 2 byte CRC 
 	//Array.Copy(bytRawData, 0, bytNoRS, 0, bytNoRS.Length)
@@ -755,10 +760,15 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		return bytRawData[0];			// don't do it again
 	}
 
-	if (CheckCRC16FrameType(bytRawData, intDataLen + 1, bytFrameType)) // No RS correction needed
+	if (strFrameType[intFrameType][0] == 'O')
+		OK = CheckCRC16(bytRawData, intDataLen + 1);
+	else
+		OK = CheckCRC16FrameType(bytRawData, intDataLen + 1, bytFrameType);
+
+	// As crc can fail also check returned lenght is reasonable
+
+	if (OK && bytRawData[0] <= intDataLen) // No RS correction needed	// return the actual data
 	{
-		// return the actual data
-		
 		memcpy(bytCorrectedData, &bytRawData[1], bytRawData[0] + 1);    
 		if (strFrameType[intFrameType][0] == 'O')
 			WriteDebugLog(LOGDEBUG, "[CorrectRawDataWithRS] Carrier %d OK without RS, Block %d Len = %d", Carrier, bytRawData[1], bytRawData[0]);
@@ -786,40 +796,35 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		goto returnBad;
 	}
 
-    if (FrameOK &&  CheckCRC16FrameType(bytRawData, intDataLen + 1, bytFrameType)) // RS correction successful 
+    if (FrameOK)
 	{
-		int intFailedByteCnt = 0;
-		
-		// need to fix this if we want to use it
-		//  test code just to determine how many corrections were applied  ...later remove
-        //for (j = 0 ; j < intDataLen + 3; j++)
-		//{
-		//	if (bytRawData[j] <> bytCorrectedData[j])
-		//		intFailedByteCnt++;
-		//}
-
 		if (strFrameType[intFrameType][0] == 'O')
-			WriteDebugLog(LOGDEBUG, "[CorrectRawDataWithRS] Carrier %d OK with RS %d corrections, Block %d, Len = %d", Carrier, NErrors, bytRawData[1], bytRawData[0]);
+			OK = CheckCRC16(bytRawData, intDataLen + 1);
 		else
-			WriteDebugLog(LOGDEBUG, "[CorrectRawDataWithRS] Carrier %d OK with RS %d corrections, Len = %d", Carrier, NErrors, bytRawData[0]);
-		totalRSErrors += NErrors;
- 
-		// End of test code
+			OK = CheckCRC16FrameType(bytRawData, intDataLen + 1, bytFrameType);
 
-		memcpy(bytCorrectedData, &bytRawData[1], bytRawData[0] + 1);  
-		CarrierOk[Carrier] = TRUE;
-		return bytRawData[0];
-	}
-	else
+		if (OK && bytRawData[0] <= intDataLen) // Now OK -  return the actual data
+		{
+			int intFailedByteCnt = 0;
+
+			if (strFrameType[intFrameType][0] == 'O')
+				WriteDebugLog(LOGDEBUG, "[CorrectRawDataWithRS] Carrier %d OK with RS %d corrections, Block %d, Len = %d", Carrier, NErrors, bytRawData[1], bytRawData[0]);
+			else
+				WriteDebugLog(LOGDEBUG, "[CorrectRawDataWithRS] Carrier %d OK with RS %d corrections, Len = %d", Carrier, NErrors, bytRawData[0]);
+			
+			totalRSErrors += NErrors;
+ 
+			memcpy(bytCorrectedData, &bytRawData[1], bytRawData[0] + 1);  
+			CarrierOk[Carrier] = TRUE;
+			return bytRawData[0];
+		}
         WriteDebugLog(LOGDEBUG, "[CorrectRawDataWithRS] Carrier %d RS says ok but CRC still bad", Carrier);
-	
+	}
 	// return uncorrected data without byte count or RS Parity
 
 returnBad:
 
 	memcpy(bytCorrectedData, &bytRawData[1], intDataLen + 1);    
-
-	//Array.Copy(bytRawData, 1, bytCorrectedData, 0, bytCorrectedData.Length) 
      
 	CarrierOk[Carrier] = FALSE;
 	return intDataLen;
@@ -850,11 +855,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 //	return;
 
-	if ((CarrierOk[0] && CarrierOk[0] != 1)
-		|| (CarrierOk[1] && CarrierOk[1] != 1)
-		|| (CarrierOk[2] && CarrierOk[2] != 1)
-		|| (CarrierOk[3] && CarrierOk[3] != 1))
-		CarrierOk[0] = CarrierOk[0];
 
 	if (ProtocolState == FECSend)
 		return;
@@ -1145,6 +1145,8 @@ else if (intPhaseError > 2)
 
 			if (IsDataFrame(intFrameType))
 				SymbolsLeft = intDataLen + intRSLen + 3; // Data has crc + length byte
+			else if (intFrameType == OFDMACK)
+				SymbolsLeft = intDataLen + intRSLen + 2;	// CRC but no len
 			else
 				SymbolsLeft = intDataLen + intRSLen;	// No CRC
 
@@ -1249,6 +1251,8 @@ else if (intPhaseError > 2)
 
 
 //		printtick("got whole frame");
+
+		LastDemodType = intFrameType;
 
 		if (strcmp (strMod, "4FSK") == 0)
 			Update4FSKConstellation(&intToneMags[0][0], &intLastRcvdFrameQuality);
@@ -2915,6 +2919,8 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		
 		//non matching indexes
   
+		// this really isn't safe!!!! 
+/*
 		if (dblMinDistance1 < 0.2 && CheckFrameTypeParity(0, intToneMags))
 		{
 			sprintf(strDecodeCapture, "%s MD Decode;10 ID=H%X, Type=H%X:%s, D1= %.2f, D2= %.2f",
@@ -2931,6 +2937,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			WriteDebugLog(LOGDEBUG, "[Frame Type Decode OK  ] %s", strDecodeCapture);
 			return intIatMinDistance2;
 		}
+*/
 	}
 	sprintf(strDecodeCapture, "%s MD Decode;12  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
 		strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, dblMinDistance1, dblMinDistance2);
@@ -3136,18 +3143,43 @@ void Demod1Car4FSKChar(int Start, UCHAR * Decoded, int Carrier)
 	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
     //    ReDim bytData(intNumOfSymbols \ 4 - 1)
 
-	dblSearchFreq = intCenterFreq + (3.0f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
+	if (intBaud == 100)
+		dblSearchFreq = intCenterFreq + (1.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
+	else
+		dblSearchFreq = intCenterFreq + (3.0f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
+
 
 	// Do one symbol
 
 	for (j = 0; j < 4; j++)		// for each 4FSK symbol (2 bits) in a byte
 	{
 		dblMagSum = 0;
+		if (intBaud == 100)
+		{
+		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, dblSearchFreq / intBaud, &dblReal, &dblImag);
+		dblMag[0] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[0];
+
+        GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - intBaud) / intBaud, &dblReal, &dblImag);
+		dblMag[1] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[1];
+
+		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 2 * intBaud) / intBaud, &dblReal, &dblImag);
+		dblMag[2] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[2];
+			
+		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 3 * intBaud) / intBaud, &dblReal,& dblImag);
+		dblMag[3] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[3];
+		}
+		else
+		{
+		dblMagSum = 0;
 		GoertzelRealImagHann120(intFilteredMixedSamples, Start, intSampPerSym, dblSearchFreq / intBaud, &dblReal, &dblImag);
 		dblMag[0] = powf(dblReal,2) + powf(dblImag, 2);
 		dblMagSum += dblMag[0];
 
-        GoertzelRealImagHann120(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 2 * intBaud) / intBaud, &dblReal, &dblImag);
+		GoertzelRealImagHann120(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 2 * intBaud) / intBaud, &dblReal, &dblImag);
 		dblMag[1] = powf(dblReal,2) + powf(dblImag, 2);
 		dblMagSum += dblMag[1];
 
@@ -3158,7 +3190,9 @@ void Demod1Car4FSKChar(int Start, UCHAR * Decoded, int Carrier)
 		GoertzelRealImagHann120(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 6 * intBaud) / intBaud, &dblReal,& dblImag);
 		dblMag[3] = powf(dblReal,2) + powf(dblImag, 2);
 		dblMagSum += dblMag[3];
-
+		
+		}
+		
 		if (dblMag[0] > dblMag[1] && dblMag[0] > dblMag[2] && dblMag[0] > dblMag[3])
 			bytSym = 0;
 		else if (dblMag[1] > dblMag[0] && dblMag[1] > dblMag[2] && dblMag[1] > dblMag[3])

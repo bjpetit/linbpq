@@ -488,32 +488,8 @@ void print_mac()
   readserialno(mac);
   WriteDebugLog(7, "Hardware Serial No %02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3]);
 }
-extern "C"
-{
-  unsigned short * SendtoCard(unsigned short * buf, int n);
-  extern unsigned short * DMABuffer;
-  extern int Number, totSamples;
 
-  void SampleSink(short Sample)
-  {
-    int work = (short)Sample;
-
-    DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
-
-    if (Number == SendSize)
-    {
-      // send this buffer to sound interface
-
-      //  printtick("Enter SendtoCard");
-      DMABuffer = SendtoCard(DMABuffer, SendSize);
-      //  printtick("Leave SendtoCard");
-      Number = 0;
-    }
-    totSamples++;
-  }
-
-
-
+ 
   int OKtoAdjustLevel()
   {
     // Only auto adjust level when disconnected.

@@ -154,7 +154,7 @@ void Mod4FSKDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderL
 
 	if (bytEncodedBytes[0] == PktFrameHeader)
 	{
-		// Meader is 4FSK which needs 500 filter
+		// Leader is 4FSK which needs 500 filter
 
 		if (pktBW[pktMode] < 1000)
 			initFilter(500,1500);
@@ -165,7 +165,7 @@ void Mod4FSKDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderL
 	{
 		 if (ARQBandwidth == XB200)
 			initFilter(200,1500);
-		 else if (ARQBandwidth == XB500)
+		 else if (intNumCar == 1)
 			initFilter(500,1500);
 		 else
 			initFilter(2500,1500);
@@ -212,12 +212,18 @@ Reenter:
 
 				for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
 				{
-					if (intSessionBW == 200 && (bytSymToSend == 0 || bytSymToSend == 3)) 
-						// This scales down the two outer tones in 200 Hz mode to restrict bandwidth slightly
-						intSample = 0.7f * intFSK50bdCarTemplate[4 + bytSymToSend][n]; //4 is offset to center tones 1350, 1450, 1550, 1650Hz
-					else        
-						intSample = intFSK50bdCarTemplate[4 + bytSymToSend][n]; //4 is offset to center tones 1350, 1450, 1550, 1650Hz
-							
+					if (intBaud == 50)
+					{
+						if (intSessionBW == 200 && (bytSymToSend == 0 || bytSymToSend == 3)) 
+							// This scales down the two outer tones in 200 Hz mode to restrict bandwidth slightly
+							intSample = 0.7f * intFSK50bdCarTemplate[4 + bytSymToSend][n]; //4 is offset to center tones 1350, 1450, 1550, 1650Hz
+						else        
+							intSample = intFSK50bdCarTemplate[4 + bytSymToSend][n]; //4 is offset to center tones 1350, 1450, 1550, 1650Hz
+					}
+					else if (intBaud == 100)		// Used for OFDMACK
+					{
+						intSample = intFSK100bdCarTemplate[bytSymToSend][n];
+					}
 					SampleSink(intSample);
 				}
 

@@ -1,14 +1,14 @@
 //	Teensy Soundcard emulator. Presents ADC and DAC to host as a SoundCard.
 
-//	I don't need the overhead of the Audio Library, so I'll copy the interupt routines from
-//	usb_audio.cpp and add my own wrapper
-//	I see two uses for this. One combined with ARDOP (or possibly Packet) so host can run a
-//  Soundcard mode (eg WINMOR) in parallel with ARDOP/
+//	I don't need the overhead of the Audio Library, so I'll copy the interupt
+//  routines from usb_audio.cpp and add my own wrapper
+//	I see two uses for this. One combined with ARDOP (or possibly Packet) so host can
+//  run a Soundcard mode (eg WINMOR) in parallel with ARDOP
 
 //	Or a simple passthough (a "Signalink emulator").
 
 //	Sample rates may be a problem. WINMOR uses 48000, but ARDOP 12000. Will PC tell us what
-//  it wants???
+//  it wants??? Doesn't seem possible so fix at 48000. 
 
 //	What happens if we try to run ARDOP at 48000???
 
@@ -322,11 +322,6 @@ my_audio_block_t * receive(unsigned int index)
 {
   my_audio_block_t *in;
   return in;
-}
-
-extern "C"  int OKtoAdjustLevel()
-{
-  return (TRUE);
 }
 
 extern "C"  void debugprintf(const char * format, ...)

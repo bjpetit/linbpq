@@ -250,37 +250,12 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		goto cmddone;
 	}
+
+
    
 	if (strcmp(strCMD, "AUTOBREAK") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (AutoBreak)
-				sprintf(cmdReply, "AUTOBREAK TRUE");
-			else
-				sprintf(cmdReply, "AUTOBREAK FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			AutoBreak = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			AutoBreak = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-
-		if (AutoBreak)
-			sprintf(cmdReply, "AUTOBREAK now TRUE");
-		else
-			sprintf(cmdReply, "AUTOBREAK now FALSE");
-
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &AutoBreak);
 		goto cmddone;
 	}
 
@@ -382,33 +357,13 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "CODEC") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (blnCodecStarted)
-				sprintf(cmdReply, "CODEC TRUE");
-			else
-				sprintf(cmdReply, "CODEC FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
+		DoTrueFalseCmd(strCMD, ptrParams, &blnCodecStarted);
 		
 		if (strcmp(ptrParams, "TRUE") == 0)
 			StartCodec(strFault);
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
+		else if (strcmp(ptrParams, "FALSE") == 0)
 			StopCodec(strFault);
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (blnCodecStarted)
-			sprintf(cmdReply, "CODEC now TRUE");
-		else
-			sprintf(cmdReply, "CODEC now FALSE");
-
-		SendReplyToHost(cmdReply);
+	
 		goto cmddone;
 	}
 
@@ -1592,6 +1547,11 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
+	if (strcmp(strCMD, "USEOFDM") == 0)
+	{
+		DoTrueFalseCmd(strCMD, ptrParams, &UseOFDM);
+		goto cmddone;
+	}
 	if (strcmp(strCMD, "VERSION") == 0)
 	{
 		sprintf(cmdReply, "VERSION %s_%s", ProductName, ProductVersion);

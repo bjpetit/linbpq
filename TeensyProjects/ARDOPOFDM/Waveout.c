@@ -79,7 +79,7 @@ int PlayBackIndex = -1;
 char CaptureNames[16][MAXPNAMELEN + 2]= {""};
 char PlaybackNames[16][MAXPNAMELEN + 2]= {""};
 
-WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 12000, 12000, 2, 16, 0 };
+WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 12000, 24000, 2, 16, 0 };
 
 HWAVEOUT hWaveOut = 0;
 HWAVEIN hWaveIn = 0;

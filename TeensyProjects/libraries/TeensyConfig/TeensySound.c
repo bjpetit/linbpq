@@ -114,11 +114,22 @@ void PollReceivedSamples()
     Samples += ADC_SAMPLES_PER_BLOCK;
 
     //  printtick("Process Sample Start");
+	
+	#ifdef SOUNDCARDPACKET
+	
+		// Pass samples to both
+		
+		ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+		pktProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
+		
+	#else
+
 	if (ARDOPMode)
 		ProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
 	else
 		pktProcessNewSamples(&ADC_Buffer[inIndex], ADC_SAMPLES_PER_BLOCK);
-
+	
+	#endif
 	
     //  printtick("Process Sample End");
 

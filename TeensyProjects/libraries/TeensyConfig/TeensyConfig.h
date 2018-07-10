@@ -9,6 +9,13 @@
 #define SOUNDCARD
 #endif
 
+#ifdef PROJECT_SoundCardPkt  
+#define SOUNDCARD
+#define PACKET
+#define SOUNDCARDPACKET
+#endif
+
+
 #ifdef PROJECT_ARDOP_Teensy
 #define ARDOP
 #endif
@@ -43,6 +50,9 @@
 #endif
 
 #ifdef SOUNDCARD
+#ifndef PACKET
 #include "TeensyConfigSoundCard.h"
 #endif
+#endif
+
 

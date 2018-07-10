@@ -54,9 +54,9 @@ char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.9 June 2018\r\n"
 
 int VersionNo = 9;		
 
-int Baud = 9600;
-BOOL AFSK = FALSE;
-BOOL FSK = TRUE;
+int Baud = 1200;
+BOOL AFSK = TRUE;
+BOOL FSK = FALSE;
 BOOL PSK = FALSE;
 int samplerate;
 int centreFreq = 1700;
@@ -129,7 +129,23 @@ struct demodulator *demodchain = &afskdemodulator;
 void pktProcessNewSamples(short * buf, int count)
 {
 	if (AFSK)
+	{
+		// downsample to 12000
+
+		if (samplerate != 12000)
+		{
+			int n = samplerate / 12000;
+			int i, j = 0;
+
+			for (i = 0; i < count; i += n)		// use every n samples
+				buf[j++] = buf[i];
+
+			count = j;
+
+		}
 		DemodAFSK(buf, count);
+
+	}
 	else if (FSK)
 		DemodFSK(buf, count);
 /*	else
@@ -211,11 +227,11 @@ int main(int argc, char *argv[])
 	}
 	else if (AFSK)
 	{
-//#ifdef TEENSY
-//		samplerate = 48000;
-//#else
-		samplerate = 12000;
-//#endif
+#ifdef TEENSY
+		samplerate = 48000;
+#else
+		samplerate = 48000;
+#endif
 		P1 = Baud;
 
 		if (Baud == 300)
@@ -291,7 +307,7 @@ int main(int argc, char *argv[])
 	for (chan = state.channels; chan; chan = chan->next)
 	{
 		if (chan->demod)
-			chan->demod->init(chan->demodstate, samplerate, &chan->rxbitrate);
+			chan->demod->init(chan->demodstate, 12000, &chan->rxbitrate);
   
 		if (chan->mod)
 			chan->mod->init(chan->modstate, samplerate);

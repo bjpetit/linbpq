@@ -1658,7 +1658,7 @@ extern "C"
 
 void setupOLED()
 {
-  // Make sure the device is there, or the dsiplay code will hang
+  // Make sure the device is there, or the display code will hang
 
   Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_37_38, I2C_PULLUP_EXT, 2500000);
   Wire1.setDefaultTimeout(10000); // 10ms
@@ -1680,27 +1680,24 @@ void setupOLED()
       break;
   }
   
- 
-
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC);
-  // init done
-
+ 
+ // init done
   // Show image buffer on the display hardware.
-  // Since the buffer is intialized with an Adafruit splashscreen
-  // internally, this will display the splashscreen.
+  // Since the buffer is internalized with an Adafruit splash screen
+  // internally, this will display the splash screen.
 
 //  Serial.printf("Start Display %d\r\n", millis());
   updateDisplay();
 //  Serial.printf("End Display %d\r\n", millis());
   delay(1000);
     
-
   // I can't get the drawline or pixel routines to work from C,
   // so I get the display buffer and update it myself.
 
-  // The displays i have are 128 x 64. As this is primarily for
-  // constellation display, I'll use in potrait mode, with the top
+  // The displays I have are 128 x 64. As this is primarily for
+  // constellation display, I'll use in portrait mode, with the top
   // 64 x 64 used for the constellation and the lower area for short
   // status messages
 

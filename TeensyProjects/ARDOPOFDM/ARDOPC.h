@@ -9,7 +9,7 @@
 #define CONST const	// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "2.0.3.17-BPQ-OFDM"
+#define ProductVersion "2.0.3.27-BPQ-OFDM"
 
 //#define USE_SOUNDMODEM
 
@@ -219,7 +219,7 @@ BOOL DemodDecode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquar
 void DeCompressCallsign(char * bytCallsign, char * returned);
 void DeCompressGridSquare(char * bytGS, char * returned);
 
-int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len);
+int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen);
 BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK);
 
 void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK);
@@ -249,7 +249,7 @@ VOID ProcessDEDModeFrame(UCHAR * rxbuffer, unsigned int Length);
 BOOL CheckForPktMon();
 BOOL CheckForPktData();
 void ModOFDMDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
-void GetOFDMFrameInfo(int * intDataLen, int * intRSLen);
+void GetOFDMFrameInfo(int OFDMMode, int * intDataLen, int * intRSLen, int * Mode, int * Symbols);
 void ClearOFDMVariables();
 VOID EncodeAndSendOFDMACK(UCHAR bytSessionID, int LeaderLength);
 int ProcessOFDMAck(int AckType);
@@ -442,6 +442,7 @@ extern CONST short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol 
 extern CONST short intQAM50bdCarTemplate[11][4][120]; 
 
 extern CONST short intFSK50bdCarTemplate[12][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
+extern CONST short intFSK100bdCarTemplate[4][120];
 
 extern CONST short intOFDMTemplate[MAXCAR][4][216];
 
@@ -470,6 +471,7 @@ extern BOOL RadioControl;
 extern BOOL SlowCPU;
 extern BOOL AccumulateStats;
 extern BOOL Use600Modes;
+extern BOOL UseOFDM;
 extern BOOL FSKOnly;
 extern BOOL fastStart;
 extern BOOL ConsoleLogLevel;
