@@ -3,20 +3,21 @@
 #ifndef ARDOPCHEADERDEFINED
 #define ARDOPCHEADERDEFINED
 
+#define ProductName "ARDOP TNC"
+#define ProductVersion "1.0.4.1b-OFDMBPQ"
+
 #ifdef CONST
 #undef CONST
 #endif
 #define CONST const	// for building sample arrays
 
-#define ProductName "ARDOP TNC"
-#define ProductVersion "2.0.3.30-BPQ-OFDM"
 
 //#define USE_SOUNDMODEM
 
 //	Sound interface buffer size
 
 #define SendSize 1200		// 100 mS for now
-#define ReceiveSize 240	// try 100 mS for now
+#define ReceiveSize 240		// try 50mS 100 mS for now
 #define NumberofinBuffers 4
 
 #define MAXCAR 43			// Max OFDM Carriers
@@ -37,7 +38,7 @@
 #endif
 
 #ifdef WIN32
-
+float round(float x);
 typedef void *HANDLE;
 #else
 #define HANDLE int
@@ -46,11 +47,6 @@ typedef void *HANDLE;
 void txSleep(int mS);
 
 unsigned int getTicks();
-
-#ifdef WIN32
-#define round(x) floorf(x + 0.5f);
-#endif
-
 
 #define Now getTicks()
 
@@ -129,12 +125,14 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 void ClearDataToSend();
 int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes);
 int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes);
-int EncodeOFDMData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes);
-int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn, UCHAR SessionID);
+int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn);
 int EncodeDATAACK(int intQuality, UCHAR bytSessionID, UCHAR * bytreturn);
 int EncodeDATANAK(int intQuality , UCHAR bytSessionID, UCHAR * bytreturn);
 void Mod4FSKDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
-void ModPSKDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
 BOOL IsDataFrame(UCHAR intFrameType);
 BOOL CheckValidCallsignSyntax(char * strTargetCallsign);
 void StartCodec(char * strFault);
@@ -157,7 +155,6 @@ int UpdatePhaseConstellation(short * intPhases, short * intMags, int intPSKPhase
 void SetARDOPProtocolState(int value);
 BOOL BusyDetect3(float * dblMag, int intStart, int intStop);
 void SendLogToHost(char * Msg, int len);
-VOID Gearshift_2(int intAckNakValue, BOOL blnInit);
 
 void displayState(const char * State);
 void displayCall(int dirn, char * call);
@@ -188,7 +185,7 @@ void LogStats();
 int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, BOOL blnInitialize);
 void SendData();
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
-VOID EncodeAndSend4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, int LeaderLength);
+int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
 VOID WriteExceptionLog(const char * format, ...);
 void SaveQueueOnBreak();
 VOID Statsprintf(const char * format, ...);
@@ -219,7 +216,7 @@ BOOL DemodDecode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquar
 void DeCompressCallsign(char * bytCallsign, char * returned);
 void DeCompressGridSquare(char * bytGS, char * returned);
 
-int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen);
+int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len);
 BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK);
 
 void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK);
@@ -248,12 +245,7 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 VOID ProcessDEDModeFrame(UCHAR * rxbuffer, unsigned int Length);
 BOOL CheckForPktMon();
 BOOL CheckForPktData();
-void ModOFDMDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
-void GetOFDMFrameInfo(int OFDMMode, int * intDataLen, int * intRSLen, int * Mode, int * Symbols);
-void ClearOFDMVariables();
-VOID EncodeAndSendOFDMACK(UCHAR bytSessionID, int LeaderLength);
-int ProcessOFDMAck(int AckType);
-void ProcessOFDMNak(int AckType);
+
 
 
 extern char stcLastPingstrSender[10];
@@ -277,13 +269,19 @@ extern enum _ReceiveState State;
 
 enum _ARQBandwidth
 {
-	XB200,
-	XB500,
-	XB2500,
+	B200FORCED,
+	B500FORCED,
+	B1000FORCED,
+	B2000FORCED,
+	B200MAX,
+	B500MAX,
+	B1000MAX,
+	B2000MAX,
 	UNDEFINED
 };
 
 extern enum _ARQBandwidth ARQBandwidth;
+extern enum _ARQBandwidth CallBandwidth;
 extern const char ARQBandwidths[9][12];
 
 enum _ARDOPState
@@ -301,7 +299,6 @@ enum _ARDOPState
 extern enum _ARDOPState ProtocolState;
 
 extern const char ARDOPStates[8][9];
-
 
 
 // Enum of ARQ Substates
@@ -331,8 +328,6 @@ enum _ProtocolMode
 
 extern enum _ProtocolMode ProtocolMode;
 
-extern const char ARDOPModes[3][6];
-
 extern enum _ARQSubStates ARQState;
 
 struct SEM
@@ -345,106 +340,48 @@ struct SEM
 
 extern struct SEM Semaphore;
 
-#define DataNAK		0x00
-#define DataNAKLoQ	0x01
-#define ConRejBusy	0x02
-#define ConRejBW	0x03
-#define ConAck		0x04
-#define DISCFRAME	0x05
-#define BREAK		0x06
-#define END			0x07
-#define IDLEFRAME	0x08
-#define ConReq200	0x09
-#define ConReq500	0x0A
-#define ConReq2500	0x0B
-#define IDFRAME		0x0C
-#define PINGACK		0x0D
-#define PING		0x0E
-#define CQ_de		0x0F
-	
-	//	200 Hz Bandwidth 
-	//	1 Car modes
-	
-#define D4PSK_200_50_E	0x10
-#define D4PSK_200_50_O	0x11
-#define D4PSK_200_100_E	0x12
-#define D4PSK_200_100_O	0x13
-#define D16QAM_200_100_E	0x14
-#define D16QAM_200_100_O	0x15
 
-	//	500 Hz bandwidth Data 
-	//	1 Car 4FSK Data mode 500 Hz, 50 baud tones spaced @ 100 Hz 
+#define BREAK 0x23
+#define IDLEFRAME 0x24
+#define DISCFRAME 0x29
+#define END 0x2C
+#define ConRejBusy 0x2D
+#define ConRejBW 0x2E
 
-#define D4FSK_500_50_E	0x1A
-#define D4FSK_500_50_O	0x1B
-#define D4PSK_500_50_E	0x1C
-#define D4PSK_500_50_O	0x1D
-#define D4PSK_500_100_E	0x1E
-#define D4PSK_500_100_O	0x1F
-	//	2 Car 16QAM Data Modes 100 baud
-#define D16QAMR_500_100_E	0x20
-#define D16QAMR_500_100_O	0x21
-#define D16QAM_500_100_E	0x22
-#define D16QAM_500_100_O	0x23
+#define ConAck200 0x39
+#define ConAck500 0x3A
+#define ConAck1000 0x3B
+#define ConAck2000 0x3C
+#define PINGACK 0x3D
+#define PING 0x3E
+#define PktFrameHeader 0xC0		// Variable length frame Header
+#define PktFrameData 0xC1		// Variable length frame Data (Virtual Frsme Type)
 
 // OFDM modes
 
-#define DOFDM_500_55_E		0x24
-#define DOFDM_500_55_O		0x25
+#define DOFDM_500_55_E	0xC2
+#define DOFDM_500_55_O	0xC3
 
-	//	1 Khz Bandwidth Data Modes 
-	//	2 Car 4FSK Data mode 1000 Hz, 50 baud tones spaced @ 100 Hz 
-#define D4FSK_1000_50_E	0x28
-#define D4FSK_1000_50_O	0x29
+#define DOFDM_2500_55_E	0xC4
+#define DOFDM_2500_55_O	0xC5
 
-	//	2500 bandwidth modes
-	//	10 Car PSK Data Modes 50 baud
+#define OFDMACK	0xC6
 
-#define D4PSKR_2500_50_E 0x2A
-#define D4PSKR_2500_50_O 0x2B
-#define D4PSK_2500_50_E	0x2C
-#define D4PSK_2500_50_O	0x2D
+#define DataACK	256 //	Dummies
+#define DataNAK	257 //	Dummies
 
-	//	10 Car PSK Data Modes 100 baud
+extern const short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (0 ms) of the leader
+extern const short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
 
-#define D4PSK_2500_100_E	0x2E
-#define D4PSK_2500_100_O	0x2F
+extern const short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
+    //   (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the table size from 7680 to 3840 integers
+extern const short intPSK200bdCarTemplate[9][4][72];		// Templates for 200 bd with cyclic prefix
+extern const short intFSK25bdCarTemplate[16][480];		// Template for 16FSK carriers spaced at 25 Hz, 25 baud
+extern const short intFSK50bdCarTemplate[4][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
+extern const short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carriers spaced at 100 Hz, 100 baud
+extern const short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
 
-	//	10 Car 10 Car 16QAMRobust (duplicated carriers) 
-
-#define D16QAMR_2500_100_E	0x30
-#define D16QAMR_2500_100_O	0x31
-
-	//	10 Car 16QAM Data modes 100 baud 
-
-#define D16QAM_2500_100_E	0x32
-#define D16QAM_2500_100_O	0x33
-
-	// OFDM modes
-
-#define DOFDM_2500_55_E	0x34
-#define DOFDM_2500_55_O	0x35
-
-
-#define PktFrameHeader 0x3A		// Variable length frame Header
-#define PktFrameData 0x3B		// Variable length frame Data (Virtual Frsme Type)
-
-#define OFDMACK	0x3D
-#define DataACK	0x3E
-#define DataACKHiQ 0x3F
-
-
-
-extern CONST short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
- 
-//The actual templates over 11 carriers for 16QAM in a 8-8 circular constellation.  First 4 symbols only 
-// (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the template size to 5280 integers
-extern CONST short intQAM50bdCarTemplate[11][4][120]; 
-
-extern CONST short intFSK50bdCarTemplate[12][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
-extern CONST short intFSK100bdCarTemplate[4][120];
-
-extern CONST short intOFDMTemplate[MAXCAR][8][216];
+extern const short intOFDMTemplate[MAXCAR][8][216];
 
 // Config Params
 extern char GridSquare[9];
@@ -471,13 +408,13 @@ extern BOOL RadioControl;
 extern BOOL SlowCPU;
 extern BOOL AccumulateStats;
 extern BOOL Use600Modes;
-extern BOOL UseOFDM;
 extern BOOL FSKOnly;
+extern NegotiateBW;
+extern BOOL UseOFDM;
 extern BOOL fastStart;
 extern BOOL ConsoleLogLevel;
 extern BOOL FileLogLevel;
 extern BOOL EnablePingAck;
-extern BOOL NegotiateBW;
 
 extern int dttLastPINGSent;
 
@@ -522,8 +459,8 @@ extern int dttStartRTMeasure;
 
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
-extern const char strFrameType[64][18];
-extern const char shortFrameType[64][12];
+extern const char strFrameType[256][18];
+extern const char shortFrameType[256][12];
 extern BOOL Capturing;
 extern BOOL SoundIsPlaying;
 extern int blnLastPTT;
@@ -570,10 +507,10 @@ extern const UCHAR bytValidFrameTypesALL[];
 extern const UCHAR bytValidFrameTypesISS[];
 extern const UCHAR * bytValidFrameTypes;
 
-extern const char strAllDataModes[][16];
+extern const char strAllDataModes[][15];
 extern int strAllDataModesLen;
 
-extern const short Rate[64];		// Data Rate (in bits/sec) by Frame Type
+extern const short Rate[256];		// Data Rate (in bits/sec) by Frame Type
 
 
 extern BOOL newStatus;
@@ -598,7 +535,6 @@ extern int intAvgFSKQuality;
 extern int intFrameSyncs;
 extern int intGoodPSKSummationDecodes;
 extern int intGoodFSKSummationDecodes;
-extern int intGoodOFDMSummationDecodes;
 extern float dblLeaderSNAvg;
 extern int intAccumPSKLeaderTracking;
 extern float dblAvgPSKRefErr;
@@ -606,17 +542,11 @@ extern int intPSKTrackAttempts;
 extern int intAccumPSKTracking;
 extern int intQAMTrackAttempts;
 extern int intAccumQAMTracking;
-extern int intOFDMTrackAttempts;
-extern int intAccumOFDMTracking;
 extern int intPSKSymbolCnt;
-extern int intQAMSymbolCnt;
 extern int intOFDMSymbolCnt;
 extern int intGoodPSKFrameDataDecodes;
 extern int intFailedPSKFrameDataDecodes;
 extern int intAvgPSKQuality;
-extern int intGoodOFDMFrameDataDecodes;
-extern int intFailedOFDMFrameDataDecodes;
-extern int intAvgOFDMQuality;
 extern float dblAvgDecodeDistance;
 extern int intDecodeDistanceCount;
 extern int intShiftUPs;
@@ -640,7 +570,6 @@ extern int intFSKSymbolsDecoded;
 extern int intPSKQuality[2];
 extern int intPSKQualityCnts[2];
 extern int intPSKSymbolsDecoded; 
-
 extern int intOFDMQuality[8];
 extern int intOFDMQualityCnts[8];
 extern int intOFDMSymbolsDecoded; 
@@ -649,9 +578,11 @@ extern int intQAMQuality;
 extern int intQAMQualityCnts;
 extern int intQAMSymbolsDecoded;
 extern int intQAMSymbolCnt;
-extern int intOFDMSymbolCnt;
+
 extern int intGoodQAMFrameDataDecodes;
 extern int intFailedQAMFrameDataDecodes;
+extern int intGoodOFDMFrameDataDecodes;
+extern int intFailedOFDMFrameDataDecodes;
 extern int intGoodQAMSummationDecodes;
 
 extern int dttLastBusyOn;
@@ -677,16 +608,13 @@ extern int pktMaxBandwidth;
 extern int pktPacLen;
 extern int initMode;		 // 0 - 4PSK 1 - 8PSK 2 = 16QAM
 
-extern UCHAR UnackedOFDMBlocks[128];
-extern int NextOFDMBlock;
-
-
 
 extern BOOL SerialMode;			// Set if using SCS Mode, Unset ofr TCP Mode
 
 // Has to follow enum defs
 
 BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _ARQBandwidth ARQBandwidth, UCHAR * bytReturn);
+
 
 
 // OFDM Modes

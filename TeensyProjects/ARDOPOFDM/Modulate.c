@@ -19,9 +19,6 @@ extern short Dummy;
 int intSoftClipCnt = 0;
 BOOL SendingHeader200 = 0;		// Set when sending header in 200 Hz Modes
 
-
-extern BOOL OFDMMode;			// OFDM can use various modulation modes and redundancy levels
-
 void Flush();
 
 // Function to soft clip combined waveforms. 
@@ -593,8 +590,6 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 }
 
-UCHAR bytLastSym[43];
-
 
 // Subroutine to add trailer before filtering
 
@@ -877,7 +872,7 @@ void SampleSink(short Sample)
 		int work = (short)(intFilteredSample);
 		DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
 #else
-		DMABuffer[Number++] = (short)Sample;
+		DMABuffer[Number++] = (short)intFilteredSample;
 #endif
 		if (Number == SendSize)
 		{

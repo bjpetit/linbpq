@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="ARDOPOFDM"
+	Name="ARDOP1OFDM"
 	ProjectGUID="{2EDF4140-A927-4DE1-9752-005DF68F6A39}"
-	RootNamespace="ARDOPC"
+	RootNamespace="ARDOP1OFDM"
 	Keyword="Win32Proj"
 	>
 	<Platforms>
@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="c:\DEV\ARDOPOFDM\$(ConfigurationName)"
-			IntermediateDirectory="c:\DEV\ARDOPOFDM\$(ConfigurationName)"
+			OutputDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
+			IntermediateDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -64,7 +64,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib User32.lib $(NoInherit)"
-				OutputFile="c:\devprogs\bpq32\ARDOPOFDM.exe"
+				OutputFile="d:\devprogs\bpq32\ARDOP1OFDM.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
@@ -124,7 +124,6 @@
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
-				AssemblerOutput="2"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
@@ -141,11 +140,11 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
-				OutputFile="d:\devprogs\bpq32\ARDOPOFDM.exe"
+				OutputFile="d:\devprogs\bpq32\ARDOP1OFDM.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
-				MapFileName="$(SolutionDir)ARDOPOFDM.map"
+				MapFileName="ARDOP1OFDM.map"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -210,10 +209,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\CalcTemplates.c"
-				>
-			</File>
-			<File
 				RelativePath="..\Soundmodem\afsk\costab.c"
 				>
 			</File>
@@ -264,16 +259,6 @@
 			<File
 				RelativePath=".\ofdm.c"
 				>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ExpandAttributedSource="true"
-						AssemblerOutput="2"
-						AssemblerListingLocation="d:\dev\ofdm.cod"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\pktARDOP.c"
@@ -297,6 +282,10 @@
 			</File>
 			<File
 				RelativePath=".\TCPHostInterface.c"
+				>
+			</File>
+			<File
+				RelativePath=".\UZ7HOFEC.c"
 				>
 			</File>
 			<File

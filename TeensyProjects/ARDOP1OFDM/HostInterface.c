@@ -8,6 +8,7 @@ extern int intFECFramesSent;
 
 void SendData();
 BOOL CheckForDisconnect();
+int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn);
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
@@ -25,12 +26,12 @@ extern BOOL CQCount;
 extern BOOL NeedCQ;
 extern BOOL PingCount;
 extern char ConnectToCall[16];
-enum _ARQBandwidth;
+extern enum _ARQBandwidth CallBandwidth;
 extern int PORTT1;			// L2 TIMEOUT
 extern int PORTN2;			// RETRIES
 #define L2TICK 10			// Timer called every 1/10 sec
 
-extern char strLastStringPassedToHost[80];
+char strLastStringPassedToHost[80];
 
 
 int SerialMode = 0;
@@ -73,6 +74,7 @@ int _memicmp(unsigned char *a, unsigned char *b, int n)
 #endif
 
 extern int dttTimeoutTrip;
+#define BREAK 0x23
 extern UCHAR bytSessionID;
 
 
@@ -308,6 +310,36 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
+	if (strcmp(strCMD, "CALLBW") == 0)
+	{
+		int i;
+
+		if (ptrParams == 0)
+		{
+			sprintf(cmdReply, "CALLBW %s", ARQBandwidths[CallBandwidth]);
+			SendReplyToHost(cmdReply);
+			goto cmddone;
+		}
+		else
+		{
+			for (i = 0; i < 9; i++)
+			{
+				if (strcmp(ptrParams, ARQBandwidths[i]) == 0)
+					break;
+			}
+
+			if (i == 9)
+				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+			else
+			{
+				CallBandwidth = i;
+				sprintf(cmdReply, "CALLBW now %s", ARQBandwidths[CallBandwidth]);
+				SendReplyToHost(cmdReply);
+			}
+		}
+		goto cmddone;
+	}
+
 	if (strcmp(strCMD, "CAPTURE") == 0)
 	{
 		if (ptrParams == 0)
@@ -389,35 +421,6 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		goto cmddone;
 	}
-
-	if (strcmp(strCMD, "CQ") == 0)
-	{
-		if (ptrParams)
-		{
-			int count = atoi(ptrParams);
-
-			if (count > 0 && count < 15)
-			{
-				if (ProtocolMode != ARQ)
-				{
-					sprintf(strFault, "Not from mode %s",  ARDOPModes[ProtocolMode]);
-					goto cmddone;
-				}
-				else
-				{
-					SendReplyToHost(cmdCopy); // echo command back to host.
-					CQCount = count;
-					NeedCQ = TRUE;			// request ping grom background
-					goto cmddone;
-				}
-			}
-		}
-
-		sprintf(strFault, "Syntax Err: %s", cmdCopy);
-
-		goto cmddone;
-	}
-
 
 
 

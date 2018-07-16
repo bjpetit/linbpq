@@ -406,8 +406,8 @@ VOID Generate16QAMTemplates()
 void GenerateOFDMTemplates()
 {
 
-	// Generate templates of 216 samples (each template = 20 ms) for each of the 17 possible carriers used in OFDM modulation
-	// Amplitude values will have to be scaled based on the number of Active Carriers (2 or 8) initial values should be OK for 1 carrier
+	// Generate templates of 216 samples (each template = 20 ms) for each of the 43 possible carriers used in OFDM modulation
+	// Amplitude values will have to be scaled based on the number of Active Carriers initial values should be OK for 1 carrier
 	// Tone values 
 
 	// Centre Freq 1500 carrier spacing 55.555 (10000 /180);
@@ -419,10 +419,6 @@ void GenerateOFDMTemplates()
 		1277.777832f, 1333.333374f, 1388.888916f, 1444.444458f,
 		1500.000000f, 1555.555664f, 1611.111206f, 1666.666748f,
 		1722.222290f,  1777.777832f, 1833.333374f, 1888.888916f, 1944.444458f};
-
-	// for 1 carrier mode (200 Hz) use index 5 (1500 Hz)
-	// for 2 carrier (500 Hz) modes use indexes 4, 6(1400 and 1600 Hz)
-	// for 10 carrier modes use index 0-4, 6-10  (600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400 Hz) 
 
 	float dblCarPhaseInc[MAXCAR];	// the phase inc per sample based on frequency
 	float dblAngle;				// Angle in radians
@@ -455,16 +451,18 @@ void GenerateOFDMTemplates()
 
 	for (i = 0; i < MAXCAR; i++) // across all tones
 	{
-		for (j = 0; j < 4; j++) //  using only half the phase values (0, 45, 90, 135)  (use sign compliment for the opposit phase) 
+		for (j = 0; j < 8; j++) //  using only half the phase values (0, 45, 90, 135)  (use sign compliment for the opposit phase) 
 		{
-			dblAngle = j * M_PI / 4;
+			dblAngle = j * M_PI / 8;
 
 			for (k = 0; k < 216; k++) // for 120 samples (one 100 baud symbol also used to generate 50 baud using mod 120) 
 			{
 				int x =  intAmp * sinf(dblAngle);  // with no envelope control
 
 				if (intOFDMTemplate[i][j][k] != x)
-					x = x; //intOFDMTemplate[i][j][k] = x;
+					x = x; 
+				
+//				intOFDMTemplate[i][j][k] = x;
 
 				dblAngle += dblCarPhaseInc[i];
 				if (dblAngle >= 2 * M_PI)
@@ -476,7 +474,7 @@ void GenerateOFDMTemplates()
 	
 	fp1 = fopen("d:\\OFDMcoeffs.txt", "wb");
 
-	len = sprintf(msg, "\tCONST short intOFDMTemplate[MAXCAR][4][216] = \r\n");
+	len = sprintf(msg, "\tCONST short intOFDMTemplate[MAXCAR][8][216] = \r\n");
 	fwrite(msg, 1, len, fp1);
 
 	len = sprintf(msg, "\t{{{\r\n");
@@ -484,7 +482,7 @@ void GenerateOFDMTemplates()
 
 	for (i = 0; i < MAXCAR; i++)		// across 43 tones
 	{
-		for (j = 0; j <= 3; j++)
+		for (j = 0; j <= 7; j++)
 		{
 			line = 0;
 
