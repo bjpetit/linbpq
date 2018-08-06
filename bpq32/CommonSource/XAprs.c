@@ -127,7 +127,17 @@ void UpdateTXMessageLine(struct APRSMESSAGE * Message);
 VOID SecTimer();
 void plotLine(int x0, int y0, int x1, int y1, COLORREF rgb);
 void SelectTXMsg (GtkTreeView *tree_view, GtkTreePath *path, GtkTreeViewColumn *column, gpointer user_data);
+int LoadImageFile (void * hwnd, char * pstrPathName,
+                png_byte **ppbImage, int *pxImgSize, int *pyImgSize,
+                int *piChannels, png_color *pBkgColor);
+BOOL PngLoadImage (char * pstrFileName, png_byte **ppbImageData,
+                   png_uint_32 *piWidth, png_uint_32 *piHeight, int *piChannels, png_color *pBkgColor);
 
+BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, BOOL color, int quality);
+int XDestroyImage(XImage *ximage);
+
+int XLookupString(XKeyEvent *event_struct, char *buffer_return, int bytes_buffer, KeySym *keysym_return, void *status_in_out);
+	
 static png_color bkgColor = {127, 127, 127};
 
 struct SEM
@@ -2283,7 +2293,7 @@ void ZoomIn()
 		NeedRefresh = TRUE;	
 	}
 }
-ZoomOut()
+void ZoomOut()
 {
 	if (Zoom > 1)
 	{
@@ -2419,7 +2429,7 @@ gboolean view_onButtonPressed (GtkWidget *treeview, GdkEventButton *event, gpoin
 		struct APRSMESSAGE * ptr = OutstandingMsgs;
 
 		if (ptr == 0)
-			return;
+			return TRUE;
 
 		// Make sure the entry that was clicked is selected
 
@@ -2924,7 +2934,7 @@ int main(int argc, char *argv[])
 	Time lastupevent;
 
 	char text[256];
-	int key;
+	long unsigned int key;
 
 	int LastX, LastY;			// Saved mouse position when button down
 	int MovedX, MovedY;
@@ -3013,7 +3023,7 @@ int main(int argc, char *argv[])
 	if (fd == -1)
 	{
 		printf("Open APRS Shared Memory Failed\n");
-		return;
+		return 0;
 	}
 	else
 	{
@@ -3026,7 +3036,7 @@ int main(int argc, char *argv[])
 		{
 			printf("Extend APRS Shared Memory Failed\n");
 			APRSStationMemory = NULL;
-			return;
+			return 0;
 		}
 	}
 

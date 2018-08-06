@@ -471,7 +471,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	}
 
 
-	if(memcmp(Buffer, "GROUP", 5) == 0)
+	if(_memicmp(Buffer, "GROUP", 5) == 0)
 	{
 		struct NNTPRec * REC = FirstNNTPRec;
 
@@ -543,13 +543,13 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if(memcmp(Buffer, "MODE READER", 11) == 0)
+	if(_memicmp(Buffer, "MODE READER", 11) == 0)
 	{
 		SendSock(sockptr, "200 Hello");
 		return;
 	}
 
-	if(memcmp(Buffer, "LIST",4) == 0)
+	if(_memicmp(Buffer, "LIST",4) == 0)
 	{
 		struct NNTPRec * REC = FirstNNTPRec;
 
@@ -567,7 +567,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	//NEWGROUPS YYMMDD HHMMSS [GMT] [<distributions>]
 	
-	if(memcmp(Buffer, "NEWGROUPS", 9) == 0)
+	if(_memicmp(Buffer, "NEWGROUPS", 9) == 0)
 	{
 		struct NNTPRec * REC = FirstNNTPRec;
 		struct tm rtime;
@@ -601,7 +601,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if(memcmp(Buffer, "HEAD",4) == 0)
+	if(_memicmp(Buffer, "HEAD",4) == 0)
 	{
 		struct NNTPRec * REC = sockptr->NNTPGroup;
 		struct MsgInfo * Msg;
@@ -649,7 +649,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if(memcmp(Buffer, "ARTICLE", 7) == 0)
+	if(_memicmp(Buffer, "ARTICLE", 7) == 0)
 	{
 		struct NNTPRec * REC = sockptr->NNTPGroup;
 		struct MsgInfo * Msg;
@@ -712,7 +712,60 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if(memcmp(Buffer, "XHDR",4) == 0)
+	if(_memicmp(Buffer, "BODY", 4) == 0)
+	{
+		struct NNTPRec * REC = sockptr->NNTPGroup;
+		struct MsgInfo * Msg;
+		int MsgNo = atoi(&Buffer[8]);
+		char * msgbytes;
+		char * Path;
+
+		if (REC == NULL)
+		{
+			SendSock(sockptr,"412 no newsgroup has been selected");
+			return;
+		}
+
+		if (MsgNo == 0)
+		{
+			MsgNo = sockptr->NNTPNum;
+
+			if (MsgNo == 0)
+			{
+				SendSock(sockptr,"420 no current article has been selected");
+				return;
+			}
+		}
+		else
+		{
+			 sockptr->NNTPNum = MsgNo;
+		}
+
+		Msg=MsgnotoMsg[MsgNo];
+
+		if (Msg)
+		{
+			sockprintf(sockptr, "222 %d <%s>", MsgNo, Msg->bid);
+			msgbytes = ReadMessageFile(Msg->number);
+
+			Path = GetPathFromHeaders(msgbytes);
+
+			SendSock(sockptr,msgbytes);
+			SendSock(sockptr,"");
+
+			SendSock(sockptr,".");
+
+			free(msgbytes);
+			free(Path);
+
+			return;
+			
+		}
+		SendSock(sockptr,"423 No such article in this newsgroup");
+		return;
+	}
+
+	if(_memicmp(Buffer, "XHDR",4) == 0)
 	{
 		struct NNTPRec * REC = sockptr->NNTPGroup;
 		struct MsgInfo * Msg;
@@ -781,7 +834,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	}
 
-	if(memcmp(Buffer, "XOVER", 5) == 0)
+	if(_memicmp(Buffer, "XOVER", 5) == 0)
 	{
 		struct NNTPRec * REC = sockptr->NNTPGroup;
 		struct MsgInfo * Msg;
@@ -848,7 +901,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
    440 posting not allowed
    441 posting failed
 */
-	if(memcmp(Buffer, "POST", 4) == 0)
+	if(_memicmp(Buffer, "POST", 4) == 0)
 	{
 		if (sockptr->State != Authenticated)
 		{
@@ -877,7 +930,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 
 
-	if(memcmp(Buffer, "QUIT", 4) == 0)
+	if(_memicmp(Buffer, "QUIT", 4) == 0)
 	{
 		SendSock(sockptr, "205 OK");
 		Sleep(500);
@@ -1003,11 +1056,10 @@ int NNTP_Accept(int SocketId)
 
 	ioctl(sock, FIONBIO, &param);
 	sockptr->socket = sock;
-
-	sockptr->State = WaitingForGreeting;
+	sockptr->State = 0;
 	
 	SendSock(sockptr, "200 BPQMail NNTP Server ready");	
-
+	Logprintf(LOG_TCP, NULL, '|', "Incoming NNTP Connect Socket = %d", sock);
 
 	return 0;
 }

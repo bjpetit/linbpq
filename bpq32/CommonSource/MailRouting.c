@@ -400,25 +400,26 @@ VOID SetupMyHA()
 
 	ptr2 = MyRouteElements + strlen(MyRouteElements) - 1;
 
-	do 
+	if (HRoute[0])
 	{
-		while ((*ptr2 != '.') && (ptr2 > MyRouteElements))
+		do 
 		{
-			ptr2 --;
-		}
+			while ((*ptr2 != '.') && (ptr2 > MyRouteElements))
+				ptr2 --;
 
-		if (ptr2 == MyRouteElements)
-		{
-			// End
+			if (ptr2 == MyRouteElements)
+			{
+				// End
 	
-			MyElements[Elements++] = _strdup(ptr2);
-			break;
-		}
+				MyElements[Elements++] = _strdup(ptr2);
+				break;
+			}
 
-		MyElements[Elements++] = _strdup(ptr2+1);
-		*ptr2 = 0;
+			MyElements[Elements++] = _strdup(ptr2+1);
+			*ptr2 = 0;
 
-	} while(Elements < 20);		// Just in case!
+		} while(Elements < 19);		// Just in case!
+	}
 
 	MyElements[Elements++] = _strdup(BBSName);
 

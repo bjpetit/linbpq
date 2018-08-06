@@ -3303,7 +3303,7 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		return;
 	}
 
-	if (strstr(Context, "CLEAR"))
+	if (pattern && strstr(pattern, "CLEAR"))
 	{
 		memset(MH, 0, MHENTRIES * sizeof(MHSTRUC));
 		Bufferptr += sprintf(Bufferptr, "Heard List for Port %d Cleared\r", Port);
@@ -3362,7 +3362,7 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 				//	MORE TO COME
 	
 				From[ConvFromAX25(ptr + 1, From)] = 0;
-				Output += sprintf(Output, "%s", From);
+				Output += sprintf((char *)Output, "%s", From);
 	
 				ptr += 7;
 				n--;
@@ -4219,14 +4219,19 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 	len = Buffer->LENGTH - 8;
 	ptr1 = &Buffer->L2DATA[0];
 
-	ptr2 = memchr(ptr1, 13, len);
+	ptr2 = memchr(ptr1, ';', len);
 	
 	if (ptr2 == 0)
 	{
-		//	No newline
+		ptr2 = memchr(ptr1, 13, len);
+	
+		if (ptr2 == 0)
+		{
+			//	No newline
 
-		Session->PARTCMDBUFFER = Buffer;
-		return;
+			Session->PARTCMDBUFFER = Buffer;
+			return;
+		}
 	}
 
 	ptr2++;
@@ -4325,7 +4330,7 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 	{
 		c = *(ptr1++) & 0x7f;			// Mask paritu
 		
-		if (c == 13)
+		if (c == 13 || c == ';')
 			break;						// CR
 	
 		*(ptr3++) = c;					// Original Case	
@@ -4589,7 +4594,7 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 {
 	//	DISPLAY AXIP Mheard info
 	
-	int Port = 0, index =0;
+	int Port = 0, index = 0;
 	char * ptr, *Context;
 	struct PORTCONTROL * PORT = NULL;
 	struct AXIPPORTINFO * AXPORT;

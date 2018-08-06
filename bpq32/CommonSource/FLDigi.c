@@ -1368,7 +1368,7 @@ static int ProcessLine(char * buf, int Port)
 			if (_memicmp(ptr, "PATH", 4) == 0)
 			{
 				p_cmd = strtok(NULL, "\n\r");
-				if (p_cmd) TNC->ProgramPath = _strdup(_strupr(p_cmd));
+				if (p_cmd) TNC->ProgramPath = _strdup(p_cmd);
 			}
 		}
 

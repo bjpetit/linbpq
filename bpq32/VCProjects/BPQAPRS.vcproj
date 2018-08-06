@@ -81,7 +81,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib ..\lib\jpeglib.lib wsock32.lib ..\lib\zlibstat.lib Comctl32.lib Winmm.lib WS2_32.Lib"
+				AdditionalDependencies="C:\Dev\Msdev2005\Projects\BPQ32\lib\bpq32.lib ..\lib\jpeglib.lib wsock32.lib ..\lib\zlibstat.lib Comctl32.lib Winmm.lib WS2_32.Lib"
 				OutputFile="c:\Devprogs\bpq32\BPQAPRS.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

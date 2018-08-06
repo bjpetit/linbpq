@@ -18,7 +18,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\LinBPQ\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\Dev\MSDev2005\Projects\BPQ32\lib\libconfig.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot;"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfigd.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot; setupapi.lib"
 				OutputFile="c:\LINBPQ\$(ProjectName).exe"
 				LinkIncremental="2"
 				IgnoreDefaultLibraryNames=""
@@ -99,7 +99,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\LinBPQ\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"
@@ -140,7 +140,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\Dev\MSDev2005\Projects\BPQ32\lib\libconfig.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot;"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\OneDrive\Dev\Source\bpq32\lib\libconfig.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot; Setupapi.lib"
 				OutputFile="c:\linbpq\LinBPQ.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
@@ -214,6 +214,23 @@
 			<File
 				RelativePath="..\CommonSource\BBSUtilities.c"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AssemblerOutput="0"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AssemblerOutput="2"
+						ObjectFile="$(IntDir)\"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="..\CommonSource\bpqaxip.c"
@@ -272,10 +289,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\CommonSource\Dragon.c"
-				>
-			</File>
-			<File
 				RelativePath="..\CommonSource\FBBRoutines.c"
 				>
 			</File>
@@ -293,6 +306,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\HFCommon.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\hid.c"
 				>
 			</File>
 			<File
@@ -432,11 +449,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\utf8Routines.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\UZ7HODrv.c"
 				>
 			</File>
 			<File
 				RelativePath="..\CommonSource\V4.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\VARA.c"
 				>
 			</File>
 			<File

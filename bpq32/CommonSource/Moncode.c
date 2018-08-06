@@ -225,12 +225,12 @@ KC6OAR*>ID:
 	SS = Stamp - MM * 60;
 
 	if (MINI == 0)
-		Output += sprintf(Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
+		Output += sprintf((char *)Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
 
 	From[ConvFromAX25(msg->ORIGIN, From)] = 0;
 	To[ConvFromAX25(msg->DEST, To)] = 0;
 
-	Output += sprintf(Output, "%s>%s", From, To);
+	Output += sprintf((char *)Output, "%s>%s", From, To);
 
 	//	Display any Digi-Peaters   
 
@@ -242,7 +242,7 @@ KC6OAR*>ID:
 		//	MORE TO COME
 
 		From[ConvFromAX25(ptr + 1, From)] = 0;
-		Output += sprintf(Output, ",%s", From);
+		Output += sprintf((char *)Output, ",%s", From);
 	
 		ptr += 7;
 		n--;
@@ -263,7 +263,7 @@ KC6OAR*>ID:
 	}		
 	
 	if (MINI == 0)
-		Output += sprintf(Output, " Port=%d ", Port);
+		Output += sprintf((char *)Output, " Port=%d ", Port);
 
 	// Set up CR and PF
 
@@ -311,13 +311,13 @@ KC6OAR*>ID:
 		Info = 1;
 
 		if (MINI == 0)
-			Output += sprintf(Output, "<I%s%s S%d R%d>", CRCHAR, PFCHAR, NS, NR);
+			Output += sprintf((char *)Output, "<I%s%s S%d R%d>", CRCHAR, PFCHAR, NS, NR);
 	}
 	else if (CTL == 3)
 	{
 		//	Un-numbered Information Frame 
 
-		Output += sprintf(Output, "<UI%s>", CRCHAR);
+		Output += sprintf((char *)Output, "<UI%s>", CRCHAR);
 		Info = 1;
 	}
 	else if (CTL & 2)
@@ -374,9 +374,9 @@ KC6OAR*>ID:
 		}
 
 		if (MINI)
-			Output += sprintf(Output, "<%s>", SUP);
+			Output += sprintf((char *)Output, "<%s>", SUP);
 		else
-			Output += sprintf(Output, "<%s%s%s>", SUP, CRCHAR, PFCHAR);
+			Output += sprintf((char *)Output, "<%s%s%s>", SUP, CRCHAR, PFCHAR);
 	}
 	else
 	{
@@ -407,12 +407,12 @@ KC6OAR*>ID:
 			break;
 		}
 
-		Output += sprintf(Output, "<%s%s%s R%d>", SUP, CRCHAR, PFCHAR, NR);
+		Output += sprintf((char *)Output, "<%s%s%s R%d>", SUP, CRCHAR, PFCHAR, NR);
 
 	}
 
 	if (FRMRFLAG)
-		Output += sprintf(Output, " %02X %02X %02X", ADJBUFFER->PID, ADJBUFFER->L2DATA[0], ADJBUFFER->L2DATA[1]); 
+		Output += sprintf((char *)Output, " %02X %02X %02X", ADJBUFFER->PID, ADJBUFFER->L2DATA[0], ADJBUFFER->L2DATA[1]); 
 
 	if (XIDFLAG)
 	{
@@ -451,17 +451,17 @@ KC6OAR*>ID:
 				case 2:				//Bin fields
 				case 3:
 
-					Output += sprintf(Output, " %d=%x", Type, value);
+					Output += sprintf((char *)Output, " %d=%x", Type, value);
 					break;
 
 				case 6:				//RX Size
 
-					Output += sprintf(Output, " RX Paclen=%d", value / 8);
+					Output += sprintf((char *)Output, " RX Paclen=%d", value / 8);
 					break;
 
 				case 8:				//RX Window
 
-					Output += sprintf(Output, " RX Window=%d", value);
+					Output += sprintf((char *)Output, " RX Window=%d", value);
 					break;
 				}
 			}	
@@ -519,7 +519,7 @@ KC6OAR*>ID:
 
 		case IP_PID:
 
-			Output += sprintf(Output, " <IP>\r");
+			Output += sprintf((char *)Output, " <IP>\r");
 			Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[0], Output, MsgLen);
 			break;
 
@@ -532,7 +532,7 @@ KC6OAR*>ID:
 
 			n = ADJBUFFER->L2DATA[0];	// Frag Count
 
-			Output += sprintf(Output, "<Fragmented IP %02x>\r", n);
+			Output += sprintf((char *)Output, "<Fragmented IP %02x>\r", n);
 
 			if (ADJBUFFER->L2DATA[0] & 0x80)	// First Frag - Display Header
 			{
@@ -544,7 +544,7 @@ KC6OAR*>ID:
 	}
 
 	if (Output[-1] != 13)
-		Output += sprintf(Output, "\r");
+		Output += sprintf((char *)Output, "\r");
 
 	return Output - buffer;
 
@@ -573,7 +573,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 		ptr += 6;
 	
-		Output += sprintf(Output, " NODES broadcast from %s\r", Alias);
+		Output += sprintf((char *)Output, " NODES broadcast from %s\r", Alias);
 
 		MsgLen -= 30;					//Header, mnemonic and signature length
 
@@ -587,7 +587,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 			Node[ConvFromAX25(ptr, Node)] = 0;
 			ptr +=7;
 
-			Output += sprintf(Output, "  %s:%s via %s qlty=%d\r", Alias, Dest, Node, ptr[0]);
+			Output += sprintf((char *)Output, "  %s:%s via %s qlty=%d\r", Alias, Dest, Node, ptr[0]);
 			ptr++;
 			MsgLen -= 21;
 		}
@@ -596,7 +596,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 	//	Display normal NET/ROM transmissions 
 
-	Output += sprintf(Output, " NET/ROM\r  ");
+	Output += sprintf((char *)Output, " NET/ROM\r  ");
 
 	Dest[ConvFromAX25(ptr, Dest)] = 0;
 	ptr +=7;
@@ -612,7 +612,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 	OpCode &= 15;				// Remove Flags
 
-	Output += sprintf(Output, "%s to %s ttl %d cct=%02X%02X ", Dest, Node, TTL, Index, ID );
+	Output += sprintf((char *)Output, "%s to %s ttl %d cct=%02X%02X ", Dest, Node, TTL, Index, ID );
 	MsgLen -= 20;
 
 	switch (OpCode)
@@ -625,12 +625,12 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 		Node[ConvFromAX25(ptr, Node)] = 0;
 		ptr +=7;
 
-		Output += sprintf(Output, "<CON REQ> w=%d %s at %s", Window, Dest, Node);
+		Output += sprintf((char *)Output, "<CON REQ> w=%d %s at %s", Window, Dest, Node);
 
 		if (MsgLen > 38)				// BPQ Extended Params
 		{
 			short Timeout = (SHORT)*ptr;
-			Output += sprintf(Output, " t/o %d", Timeout);
+			Output += sprintf((char *)Output, " t/o %d", Timeout);
 		}
 
 		return Output;
@@ -638,17 +638,17 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 	case L4CACK:
 
 		if (Flags & L4BUSY)				// BUSY RETURNED
-			return Output + sprintf(Output, " <CON NAK> - BUSY");
+			return Output + sprintf((char *)Output, " <CON NAK> - BUSY");
 
-		return Output + sprintf(Output, " <CON ACK> w=%d my cct=%02X%02X", ptr[1], TXNO, RXNO);
+		return Output + sprintf((char *)Output, " <CON ACK> w=%d my cct=%02X%02X", ptr[1], TXNO, RXNO);
 
 	case L4DREQ:
 
-		return Output + sprintf(Output, " <DISC REQ>");
+		return Output + sprintf((char *)Output, " <DISC REQ>");
 
 	case L4DACK:
 
-		return Output + sprintf(Output, " <DISC ACK>");
+		return Output + sprintf((char *)Output, " <DISC ACK>");
 
 	case L4INFO:
 		{
@@ -657,7 +657,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 			UCHAR C;
 			int len;
 			
-			Output += sprintf(Output, " <INFO S%d R%d>", TXNO, RXNO);
+			Output += sprintf((char *)Output, " <INFO S%d R%d>", TXNO, RXNO);
 			
 			if (Flags & L4BUSY)
 				*(Output++) = 'B';
@@ -697,7 +697,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 	case L4IACK:
 
-		Output += sprintf(Output, " <INFO ACK R%d> ", RXNO);
+		Output += sprintf((char *)Output, " <INFO ACK R%d> ", RXNO);
 	
 		if (Flags & L4BUSY)
 			*(Output++) = 'B';
@@ -725,7 +725,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 	
 		if (Index == 0 && ID == 1)			// NRR	
 		{
-			Output += sprintf(Output, " <Record Route>\r");
+			Output += sprintf((char *)Output, " <Record Route>\r");
 
 			MsgLen -= 23;
 
@@ -734,9 +734,9 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 				Dest[ConvFromAX25(ptr, Dest)] = 0;
 
 				if (ptr[7] & 0x80)
-					Output += sprintf(Output, "%s* ", Dest);
+					Output += sprintf((char *)Output, "%s* ", Dest);
 				else
-					Output += sprintf(Output, "%s ", Dest);
+					Output += sprintf((char *)Output, "%s ", Dest);
 
 				ptr +=8;
 				MsgLen -= 8;
@@ -746,7 +746,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 		}
 	}
 
-	Output += sprintf(Output, " <???\?>");
+	Output += sprintf((char *)Output, " <???\?>");
 	return Output;
 }
 
@@ -769,10 +769,10 @@ UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen)
 	USHORT FRAGWORD;
 		
 	ptr = (UCHAR *)&IP->IPSOURCE;
-	Output += sprintf(Output, "%d.%d.%d.%d>", ptr[0], ptr[1], ptr[2], ptr[3]);
+	Output += sprintf((char *)Output, "%d.%d.%d.%d>", ptr[0], ptr[1], ptr[2], ptr[3]);
 
 	ptr = (UCHAR *)&IP->IPDEST;
-	Output += sprintf(Output, "%d.%d.%d.%d LEN:%d ", ptr[0], ptr[1], ptr[2], ptr[3], htons(IP->IPLENGTH));
+	Output += sprintf((char *)Output, "%d.%d.%d.%d LEN:%d ", ptr[0], ptr[1], ptr[2], ptr[3], htons(IP->IPLENGTH));
 
 	FRAGWORD = ntohs(IP->FRAGWORD);
 
@@ -786,16 +786,16 @@ UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen)
 		//Fragment Offset:  13 bits
 
 		if (FRAGWORD & (1 << 14))
-			Output += sprintf(Output, "DF ");
+			Output += sprintf((char *)Output, "DF ");
 
 		if (FRAGWORD & (1 << 13))
-			Output += sprintf(Output, "MF ");
+			Output += sprintf((char *)Output, "MF ");
 
 		FRAGWORD &= 0xfff;
 
 		if (FRAGWORD)
 		{
-			Output += sprintf(Output, "Offset %d ", FRAGWORD * 8);
+			Output += sprintf((char *)Output, "Offset %d ", FRAGWORD * 8);
 			return Output;			// Cant display proto fields
 		}
 	}
@@ -804,7 +804,7 @@ UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen)
 	{
 		PTCPMSG TCP = (PTCPMSG)&IP->Data;
 
-		Output += sprintf(Output, "TCP Src %d Dest %d ", ntohs(TCP->SOURCEPORT), ntohs(TCP->DESTPORT));
+		Output += sprintf((char *)Output, "TCP Src %d Dest %d ", ntohs(TCP->SOURCEPORT), ntohs(TCP->DESTPORT));
 		return Output;
 	}
 
@@ -812,15 +812,15 @@ UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen)
 	{
 		PICMPMSG ICMPptr = (PICMPMSG)&IP->Data;
 
-		Output += sprintf(Output, "ICMP ");
+		Output += sprintf((char *)Output, "ICMP ");
 
 		if (ICMPptr->ICMPTYPE == 8)
-			Output += sprintf(Output, "Echo Request ");
+			Output += sprintf((char *)Output, "Echo Request ");
 		else
 		if (ICMPptr->ICMPTYPE == 0)
-			Output += sprintf(Output, "Echo Reply ");
+			Output += sprintf((char *)Output, "Echo Reply ");
 		else
-			Output += sprintf(Output, "Code %d", ICMPptr->ICMPTYPE);
+			Output += sprintf((char *)Output, "Code %d", ICMPptr->ICMPTYPE);
 
 		return Output;
 	}
@@ -870,14 +870,14 @@ char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output)
 	char Dest[10];
 	
 	if (ptr[7] == 1)		// Request
-		return Output + sprintf(Output, " ARP Request who has %d.%d.%d.%d? Tell %d.%d.%d.%d",
+		return Output + sprintf((char *)Output, " ARP Request who has %d.%d.%d.%d? Tell %d.%d.%d.%d",
 			ptr[26], ptr[27], ptr[28], ptr[29], ptr[15], ptr[16], ptr[17], ptr[18]);
 
 	// Response
 
 	Dest[ConvFromAX25(&ptr[8], Dest)] = 0;
 
-	return Output + sprintf(Output, " ARP Reply %d.%d.%d.%d is at %s Tell %d.%d.%d.%d",
+	return Output + sprintf((char *)Output, " ARP Reply %d.%d.%d.%d is at %s Tell %d.%d.%d.%d",
 			ptr[15], ptr[16], ptr[17], ptr[18], Dest, ptr[26], ptr[27], ptr[28], ptr[29]);
 
 }

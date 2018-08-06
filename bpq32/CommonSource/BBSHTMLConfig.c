@@ -404,62 +404,6 @@ static struct HTTPConnectionInfo * WebSessionList;	// active WebMail sessions
 UCHAR * GetBPQDirectory();
 #endif
 
-
-int WebIsUTF8(unsigned char *ptr, int len)
-{
-	int n; 
-	unsigned char * cpt = ptr;
-
-	// This is simpler than the Term version, as it only handles complete lines of text, so cant get split sequences
-
-	cpt--;
-										
-	for (n = 0; n < len; n++)
-	{
-		cpt++;
-		
-		if (*cpt < 128)
-			continue;
-
-		if ((*cpt & 0xF8) == 0xF0)
-		{ // start of 4-byte sequence
-			if (((*(cpt + 1) & 0xC0) == 0x80)
-		     && ((*(cpt + 2) & 0xC0) == 0x80)
-			 && ((*(cpt + 3) & 0xC0) == 0x80))
-			{
-				cpt += 3;
-				n += 3;
-				continue;
-			}
-			return FALSE;
-	    }
-		else if ((*cpt & 0xF0) == 0xE0)
-		{ // start of 3-byte sequence
-	        if (((*(cpt + 1) & 0xC0) == 0x80)
-		     && ((*(cpt + 2) & 0xC0) == 0x80))
-			{
-				cpt += 2;
-				n += 2;
-				continue;
-			}
-			return FALSE;
-		}
-		else if ((*cpt & 0xE0) == 0xC0)
-		{ // start of 2-byte sequence
-	        if ((*(cpt + 1) & 0xC0) == 0x80)
-			{
-				cpt++;
-				n++;
-				continue;
-			}
-			return FALSE;
-		}
-		return FALSE;
-	}
-
-    return TRUE;
-}
-
 static int compare(const void *arg1, const void *arg2)
 {
    // Compare Calls. Fortunately call is at start of stuct

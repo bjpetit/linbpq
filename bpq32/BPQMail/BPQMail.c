@@ -958,9 +958,15 @@
 // 6.0.17.?? 
 
 //	Add source routing using ! eg sp g8bpq@winlink.org!gm8bpq to send via RMS on gm8bpq
-//	Accept an in internet email address without rms: or smtp: 
+//	Accept an internet email address without rms: or smtp: 
 //	Fix "Forward messages for BBS Call" when TO isn't BBS Call
-
+//	Accept NNTP commands in either case
+//  Add NNTP BODY command
+//	Timeout POP or SMTP TCP connections that are open too long
+//  Add YAPP support
+//  Fix connect script when Node CTEXT contains "} BBS "
+//	Fix handling null H Route
+//	Detect and correct duplicate BBS Numbers
 
 
 #include "BPQMail.h"
@@ -1183,6 +1189,7 @@ VOID BBSSlowTimer();
 VOID CopyConfigFile(char * ConfigName);
 BOOL CreateMulticastConsole();
 char * CheckToAddress(CIRCUIT * conn, char * Addr);
+BOOL CheckifPacket(char * Via);
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -1739,7 +1746,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	SessY = SessRect.top -InitRect.top;
 	SessWidth = SessRect.right - SessRect.left;
 
-   	// Get handles fou updating menu items
+   	// Get handles for updating menu items
 
 	hTopMenu=GetMenu(MainWnd);
 	hActionMenu=GetSubMenu(hTopMenu,0);
@@ -2364,7 +2371,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			{
 				// If looks like a valid email address, treat as such
 
-				int tolen = Vptr - Destcopy;
+				int tolen = (Vptr - Destcopy) - 1;
 
 				if (tolen > 6 || !CheckifPacket(Vptr))
 				{
@@ -2832,6 +2839,8 @@ BOOL Initialise()
 			return FALSE;
 		}
 	}
+
+	initUTF8();
 
 	// Set up file and directory names
 		

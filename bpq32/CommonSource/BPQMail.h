@@ -175,7 +175,7 @@ typedef struct ConnectionInfo_S
 	int paclen;
 	UCHAR Callsign[11];			// Station call including SSID
     BOOL GotHeader;
-	UCHAR InputMode;			// Line by Line or Binary
+	UCHAR InputMode;			// Line by Line or Binary or YAPP
 
     UCHAR * InputBuffer;
     int InputBufferLen;
@@ -267,6 +267,9 @@ typedef struct ConnectionInfo_S
 	char SecureMsg[20];					// CMS Secure Signon Response
 	int MCastListenTime;				// Time to run session for
 
+	int YAPPLen;						// Bytes sent/received of YAPP Message
+	struct ConnectionInfo_S * SysopChatStream;			// Stream sysop is chatting to
+
 } ConnectionInfo, CIRCUIT;
 
 // Flags Equates
@@ -298,6 +301,8 @@ typedef struct ConnectionInfo_S
 #define	NEEDLF 4096						// Add LF to forward script commands (fro Telnet
 #define	MCASTRX 8192					// Stream in Multicast RX Mode
 #define DISCONNECTING 16384				// Disconnect sent to Node
+#define YAPPTX	32768					// Sending YAPP file
+#define SYSOPCHAT 65536					// Chatting to BBS console
 
 struct FBBRestartData
 {
@@ -577,7 +582,8 @@ struct MsgInfo
 	char	emailfrom[41];
 	char	Locked;				//	Set if selected for sending (NTS Pickup)
 	char	Defered;			//	FBB response '=' received
-	char	Spare[62];			// For future use
+	UCHAR	UTF8;				//	Set if Message is in UTF8 (ie from POP/SMTP)
+	char	Spare[61];			//  For future use
 } ;
 
 #define MSGTYPE_B 0
@@ -885,6 +891,7 @@ typedef struct SocketConnectionInfo
 
 	struct NNTPRec * NNTPGroup;	// Currently Selected Group
 	int NNTPNum;				// Currenrly Selected Msg Number
+	int Timeout;				// Used to close a session that is open too long
 
 } SocketConn;
 
@@ -1249,6 +1256,16 @@ int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct BBSForwardingInfo * Fo
 
 VOID ReRouteMessages();
 
+VOID initUTF8();
+int Is8Bit(unsigned char *cpt, int len);
+int IsUTF8(unsigned char *ptr, int len);
+int IsUTF8(unsigned char *ptr, int len);
+int WebIsUTF8(unsigned char *ptr, int len);
+int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int TrytoGuessCode(unsigned char * Char, int Len);
+
 extern int _MYTIMEZONE;
 
 extern HKEY REGTREE;	
@@ -1475,3 +1492,15 @@ extern BOOL MulticastRX;
 extern BOOL FilterWPBulls;
 extern BOOL NoWPGuesses;
 extern char ** SendWPAddrs;					// Replacers WP To and VIA
+
+// YAPP stuff
+
+#define SOH 1
+#define STX 2
+#define ETX 3
+#define EOT 4
+#define ENQ 5
+#define ACK 6
+#define DLE	0x10
+#define NAK 0x15
+#define CAN 0x18

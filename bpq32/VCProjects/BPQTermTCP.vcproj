@@ -62,7 +62,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="wsock32.lib   winmm.lib "
+				AdditionalDependencies="ws2_32.lib   winmm.lib "
 				OutputFile="c:\DevProgs\bpq32\BPQTermTCP.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -137,7 +137,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="wsock32.lib   winmm.lib "
+				AdditionalDependencies="ws2_32.lib   winmm.lib "
 				OutputFile="c:\DevProgs\bpq32\BPQTermTCP.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"

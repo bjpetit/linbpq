@@ -106,6 +106,9 @@ Next:
 			if (_stricmp(WPRec.callsign, "SYSTEM") == 0)
 				goto Next;
 
+			if (_stricmp(WPRec.callsign, "SWITCH") == 0)
+				goto Next;
+
 			if (_stricmp(WPRec.callsign, "SYSOP") == 0)
 				goto Next;
 
@@ -494,6 +497,9 @@ VOID GetWPBBSInfo(char * Rline)
 		return;
 
 	if (_stricmp(Call, "SYSTEM") == 0)
+		return;
+
+	if (_stricmp(Call, "SWITCH") == 0)
 		return;
 
 	if (_stricmp(Call, "SYSOP") == 0)

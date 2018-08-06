@@ -1614,7 +1614,8 @@ copyRest:
 		TypeString = "Traffic";
 
 	B2HddrLen = sprintf(UnCompressed,
-			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
+			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n"
+			"Content-Type: text/plain\r\nContent-Transfer-Encoding: 8bit\r\nBody: %d\r\n\r\n",
 			Msg->bid, Date, TypeString, B2From, B2To, Msg->title, BBSName, MsgLen);
 
 

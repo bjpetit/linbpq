@@ -74,7 +74,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib  winmm.lib DbgHelp.lib comctl32.lib"
+				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib Iphlpapi.lib setupapi.lib"
 				OutputFile="c:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="2"
 				ModuleDefinitionFile="..\CKernel\bpq32.def"
@@ -176,7 +176,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib  winmm.lib DbgHelp.lib comctl32.lib"
+				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib setupapi.lib"
 				OutputFile="C:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="1"
 				ModuleDefinitionFile="..\CKernel\bpq32.def"
@@ -246,10 +246,6 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\ARDOP.c"
-				>
-			</File>
-			<File
-				RelativePath="..\CommonSource\ARDOPAX25.c"
 				>
 			</File>
 			<File
@@ -350,6 +346,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\hid.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\HTTPcode.c"
 				>
 			</File>
@@ -430,11 +430,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\utf8Routines.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\UZ7HODrv.c"
 				>
 			</File>
 			<File
 				RelativePath="..\CommonSource\V4.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\VARA.c"
 				>
 			</File>
 			<File

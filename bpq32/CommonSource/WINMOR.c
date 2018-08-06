@@ -390,6 +390,8 @@ static int ProcessLine(char * buf, int Port)
 						TNC->PTTMode = PTTDTR;
 					else if (_stricmp(ptr, "DTRRTS") == 0)
 						TNC->PTTMode = PTTDTR | PTTRTS;
+					else if (_stricmp(ptr, "CM108") == 0)
+						TNC->PTTMode = PTTCM108;
 
 					ptr = strtok(NULL, " \t\n\r");
 				}
@@ -401,7 +403,7 @@ static int ProcessLine(char * buf, int Port)
 			if (_memicmp(ptr, "PATH", 4) == 0)
 			{
 				p_cmd = strtok(NULL, "\n\r");
-				if (p_cmd) TNC->ProgramPath = _strdup(_strupr(p_cmd));
+				if (p_cmd) TNC->ProgramPath = _strdup(p_cmd);
 			}
 		}
 
@@ -689,7 +691,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			// Restart TNC
 		
-			if (TNC->ProgramPath)
+			if (TNC->ProgramPath && TNC->CONNECTED)
 			{
 				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
 				{

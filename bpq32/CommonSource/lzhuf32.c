@@ -804,7 +804,7 @@ void Decode(CIRCUIT * conn)
 
 #endif
 
-	// Temp fix for duff MACBPQ (Message Length send big-endian)
+	// Temp fix for duff MACBPQ (Message Length sent big-endian)
 
 	if (textsize > 500000)
 	{

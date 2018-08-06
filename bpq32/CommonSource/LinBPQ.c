@@ -405,7 +405,7 @@ VOID MonitorThread(int x)
 
 	do
 	{
-		if (Semaphore.Gets == LastSemGets && Semaphore.Flag)
+		if ((Semaphore.Gets == LastSemGets) && Semaphore.Flag)
 		{
 			// It is stuck - try to release
 
@@ -418,8 +418,10 @@ VOID MonitorThread(int x)
 		LastSemGets = Semaphore.Gets;
 
 		Sleep(30000);
+//		Debugprintf("Monitor Thread Still going %d %d %d %x %d", LastSemGets, Semaphore.Gets, Semaphore.Flag, Semaphore.SemThreadID, SemHeldByAPI);
 
-	} while (TRUE);
+	} 
+	while (TRUE);
 }
 
 
@@ -433,7 +435,7 @@ Dll BOOL APIENTRY Init_APRS();
 VOID APRSClose();
 Dll VOID APIENTRY Poll_APRS();
 VOID HTTPTimer();
-Dll VOID APIENTRY md5 (char *arg, unsigned char * checksum);
+
 
 #define CKernel
 #include "Versions.h"
@@ -486,6 +488,8 @@ char * GetBPQDirectory()
 {
 	return BPQDirectory;
 }
+
+extern int POP3Timer;	
 
 int main(int argc, char * argv[])
 {
@@ -603,9 +607,11 @@ int main(int argc, char * argv[])
 
 	OpenReportingSockets();
 
+	initUTF8();
+
 	InitDone = TRUE;
 
-	_beginthread(MonitorThread, 0, 0);
+	Debugprintf("Monitor Thread ID %x", _beginthread(MonitorThread, 0, 0));
 
 
 #ifdef WIN32
@@ -712,6 +718,7 @@ int main(int argc, char * argv[])
 
 	sprintf(BaseDir, "%s", BPQDirectory);
 
+
 	// Set up file and directory names
 
 	strcpy(UserDatabasePath, BaseDir);
@@ -763,6 +770,7 @@ int main(int argc, char * argv[])
 	SetupNTSAliases(NTSAliasesPath);
 
 	GetWPDatabase();
+
 	GetMessageDatabase();
 	GetUserDatabase();
 	GetBIDDatabase();
@@ -841,7 +849,10 @@ int main(int argc, char * argv[])
 
 	strcpy(pgm, "LINBPQ");
 
+	Debugprintf("POP3 Debug Before Init TCP Timer = %d", POP3Timer);
+
 	InitialiseTCP();
+	Debugprintf("POP3 Debug Before Init NNTP Timer = %d", POP3Timer);
 	InitialiseNNTP();
 
 	SetupListenSet();		// Master set of listening sockets
@@ -895,6 +906,8 @@ int main(int argc, char * argv[])
 
 	}
 	}
+
+	Debugprintf("POP3 Debug After Mail Init Timer = %d", POP3Timer);
 
 	if (NUMBEROFTNCPORTS)
 		InitializeTNCEmulator();

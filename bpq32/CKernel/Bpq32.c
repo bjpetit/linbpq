@@ -843,6 +843,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Change WINMOR Restart after connection to Restart after Failure and add options to ARDOP and VARA
 //	Add Abort Connection to WINMOR and VARA Interfaces
 //	Reinstate accidentally removed CMS Access logging
+//	Fix MH CLEAR 
+
+
 
 #define CKernel
 

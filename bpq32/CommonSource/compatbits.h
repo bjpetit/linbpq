@@ -184,6 +184,18 @@ typedef struct tagRECT
 #ifndef WIN32
 void SetWindowText(HWND hWnd, char * lpString);
 BOOL MySetDlgItemText(HWND hWnd, int item, char * lpString);
+BOOL CopyFile(char * In, char * Out, BOOL Failifexists);
+int GetNumberofPorts();
+int SendMsg(int stream, char * msg, int len);
+int SendRaw(int port, char * msg, int len);
+VOID md5(char *arg, unsigned char * checksum);
+
+//	Send Raw (KISS mode) frame to port (BPQHOST function 10)
+
+int APIENTRY SendRaw(int port, char * msg, int len);
+
+
+
 
 BOOL MySetDlgItemText();
 

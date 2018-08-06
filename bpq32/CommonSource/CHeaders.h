@@ -159,6 +159,16 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
 VOID CloseCOMPort(HANDLE fd);
 
+VOID initUTF8();
+int Is8Bit(unsigned char *cpt, int len);
+int WebIsUTF8(unsigned char *ptr, int len);
+int IsUTF8(unsigned char *ptr, int len);
+int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int TrytoGuessCode(unsigned char * Char, int Len);
+
+
 #define CMD_TO_APPL	1	// PASS COMMAND TO APPLICATION
 #define MSG_TO_USER	2	// SEND 'CONNECTED' TO USER
 #define MSG_TO_APPL	4	//	SEND 'CONECTED' TO APPL

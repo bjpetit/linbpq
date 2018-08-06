@@ -24,6 +24,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "BPQMail.h"
 
 VOID ReleaseSock(SOCKET sock);
+void Base64EncodeAndSend(SocketConn * sockptr, UCHAR * Msg, int Len);
 
 #define MaxSockets 64
 
@@ -297,6 +298,18 @@ VOID TCPFastTimer()
 		
 	while (sockptr)
 	{		
+		sockptr->Timeout++;
+
+		if (sockptr->Timeout > 1200)		// 2 mins
+		{
+			Logprintf(LOG_TCP, NULL, '|', "Timeout on Socket = %d", sockptr->socket);
+			shutdown(sockptr->socket, 0);
+			closesocket(sockptr->socket);
+			ReleaseSock(sockptr->socket);
+
+			return;					// We've messed with chain
+		}
+		
 		if (sockptr->State & Connecting)
 		{
 			// look for complete or failed
@@ -336,6 +349,8 @@ VOID TCPFastTimer()
 			
 				if (FD_ISSET(sock, &readfd))
 				{
+					sockptr->Timeout = 0;
+
 					if (sockptr->Type == NNTPServer)
 					{
 						if (NNTP_Read(sockptr, sock) == 0)
@@ -365,6 +380,9 @@ VOID TCPTimer()
 {
 	POP3Timer+=10;
 
+//	Debugprintf("POP3 Debug Timer = %d Interval = %d Port %d Enabled %d",
+//		POP3Timer, ISPPOP3Interval, ISPPOP3Port, ISP_Gateway_Enabled);
+
 	if (POP3Timer > ISPPOP3Interval)			// 5 mins
 	{
 		POP3Timer=0;
@@ -373,7 +391,10 @@ VOID TCPTimer()
 			SendtoISP();
 		
 		if (ISPPOP3Port  && ISP_Gateway_Enabled)
+		{
+//			Debugprintf("Calling POP3 Connect");
 			POP3Connect(ISPPOP3Name, ISPPOP3Port);
+		}
 
 		if (SMTPMsgs && ISPSMTPPort && ISP_Gateway_Enabled)
 			SendtoISP();
@@ -539,6 +560,7 @@ int Socket_Accept(int SocketId)
 
 	ioctl(sock, FIONBIO, &param);
 
+
 	sockptr->socket = sock;
 
 	if (SocketId == pop3sock)
@@ -546,13 +568,14 @@ int Socket_Accept(int SocketId)
 		sockptr->Type = POP3SLAVE;
 		SendSock(sockptr, "+OK POP3 server ready");
 		sockptr->State = GettingUser;
+		Logprintf(LOG_TCP, NULL, '|', "Incoming POP3 Connect Socket = %d", sock);
 	}	
 	else
 	{
 		sockptr->Type = SMTPServer;
 		sockptr->State = WaitingForGreeting;
-	//	SendSock(sockptr, "200 BPQMail NNTP Server ready");	
 		SendSock(sockptr, "220 BPQMail SMTP Server ready");
+		Logprintf(LOG_TCP, NULL, '|', "Incoming SMTP Connect Socket = %d", sock);
 	}	
 
 	return 0;
@@ -587,6 +610,9 @@ VOID ReleaseSock(SOCKET sock)
 				if (sockptr->Type == SMTPClient)
 					SMTPActive = FALSE;	
 			}
+			else
+				Logprintf(LOG_TCP, NULL, '|', "Socket %d Closed", sock);
+
 
 			free(sockptr);
 			return;
@@ -2433,6 +2459,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		struct UserInfo * FromUser;
 		char TimeString[64];
 		BOOL TOP = FALSE;
+		int Len;
 
 		if (memcmp(Buffer, "TOP", 3) == 0)
 			TOP = TRUE;
@@ -2536,16 +2563,14 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			return;
 		}
 
-		SendSock(sockptr, "");							// Blank line before body
-
 		if (TOP)
 		{
+			// Get first i lines of message
+
 			char * ptr1, * ptr2;
 
 			ptr = strlop(ptr, ' ');			// Get Number of lines
 			i = atoi(ptr);
-
-			// Get first i lines of message
 
 			ptr1 = msgbytes;
 			ptr2 = --ptr1;					// Point both to char before message
@@ -2563,14 +2588,54 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				*(ptr2 + 1) = 0;
 		}
 
-		SendSock(sockptr, msgbytes);
+		// If message has characters above 7F convert to UFT8 if necessary and send as Base64
+
+		Len = strlen(msgbytes);
+
+		if (Is8Bit(msgbytes, Len))
+		{
+			// 8 Bit. Will send as UFT8
+
+			if (WebIsUTF8(msgbytes, Len) == FALSE)
+			{
+				// Must be some other coding
+
+				int code = TrytoGuessCode(msgbytes, Len);
+				UCHAR * UTF = malloc(Len * 3);
+
+				if (code == 437)
+					Len = Convert437toUTF8(msgbytes, Len, UTF);
+				else if (code == 1251)
+					Len = Convert1251toUTF8(msgbytes, Len, UTF);
+				else
+					Len = Convert1252toUTF8(msgbytes, Len, UTF);
+
+				free(msgbytes);
+				msgbytes = UTF;
+			}
+			
+			SendSock(sockptr, "Content-Type: text/plain; charset=\"utf-8\"");
+			SendSock(sockptr, "Content-Transfer-Encoding: base64");
+			SendSock(sockptr, "Content-Disposition: inline");
+
+			SendSock(sockptr, "");							// Blank line before body
+
+			Base64EncodeAndSend(sockptr, msgbytes, Len);
+
+		}
+		else
+		{
+			// send as USASCII
+
+			SendSock(sockptr, "");							// Blank line before body
+			SendSock(sockptr, msgbytes);
+		}
+
 		SendSock(sockptr, "");
 		SendSock(sockptr, ".");
 
 		free(msgbytes);
-
 		return;
-
 	}
 
 
@@ -2963,6 +3028,9 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForDATAResponse)
 	{
+		int Len;
+		UCHAR * UTF;
+		
 		if (memcmp(Buffer, "354 ",4) == 0)
 		{
 			sockprintf(sockptr, "To: %s", sockptr->SMTPMsg->via);
@@ -2985,8 +3053,50 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 				return;
 			}
 
-			SendSock(sockptr, "");
-			SendSock(sockptr, sockptr->MailBuffer);
+			// If message has characters above 7F convert to UFT8 if necessary and send as Base64
+
+
+			Len = strlen(sockptr->MailBuffer);
+
+			if (Is8Bit(sockptr->MailBuffer, Len))
+			{
+				// 8 Bit. Will send as UFT8
+
+				SendSock(sockptr, "Content-Type: text/plain; charset=\"utf-8\"");
+				SendSock(sockptr, "Content-Transfer-Encoding: base64");
+				SendSock(sockptr, "Content-Disposition: inline");
+
+				SendSock(sockptr, "");							// Blank line before body
+
+				if (WebIsUTF8(sockptr->MailBuffer, Len) == FALSE)
+				{
+					// Must be some other coding
+
+					int code = TrytoGuessCode(sockptr->MailBuffer, Len);
+					UTF = malloc(Len * 3);
+
+					if (code == 437)
+						Len = Convert437toUTF8(sockptr->MailBuffer, Len, UTF);
+					else if (code == 1251)
+						Len = Convert1251toUTF8(sockptr->MailBuffer, Len, UTF);
+					else
+						Len = Convert1252toUTF8(sockptr->MailBuffer, Len, UTF);	// Default
+			
+					Base64EncodeAndSend(sockptr, UTF, Len);
+					free(UTF);
+				}
+				else
+					Base64EncodeAndSend(sockptr, sockptr->MailBuffer, Len);
+
+			}
+			else
+			{
+				// send as USASCII
+
+				SendSock(sockptr, "");							// Blank line before body
+				SendSock(sockptr, sockptr->MailBuffer);
+			}
+
 			SendSock(sockptr, ".");
 
 		}

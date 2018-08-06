@@ -1268,7 +1268,7 @@ BEGIN
     POPUP "Options"
     BEGIN
         MENUITEM "Enable Bells",                BPQBELLS
-        MENUITEM "Flash insstead of Beep on Bell", BPQFLASHONBELL
+        MENUITEM "Flash instead of Beep on Bell", BPQFLASHONBELL
         MENUITEM "Strip Linefeeds",             BPQStripLF
         MENUITEM "Wrap Input  ",                IDM_WRAPTEXT
         MENUITEM "Beep if Input too long",      IDM_WARNINPUT
@@ -1279,6 +1279,15 @@ BEGIN
         MENUITEM "Copy Output Window",          BPQCOPYOUT
         MENUITEM "Clear Output Window",         BPQCLEAROUT
     END
+    POPUP "Actions"
+    BEGIN
+	    POPUP "Chat to user"
+			BEGIN
+            MENUITEM ".",                       BBSUSERCHAT
+			END
+		MENUITEM "End user chat",				ENDUSERCHAT
+	END
+
 END
 
 MENU_2 MENU DISCARDABLE 

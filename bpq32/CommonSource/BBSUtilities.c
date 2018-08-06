@@ -40,6 +40,8 @@ RECT ConsoleRect;
 BOOL OpenConsole;
 BOOL OpenMon;
 
+extern struct ConsoleInfo BBSConsole;
+
 //#define BBSIDLETIME 120
 //#define USERIDLETIME 300
 
@@ -84,6 +86,10 @@ VOID MCastTimer();
 VOID MCastConTimer(ConnectionInfo * conn);
 int FindFreeBBSNumber();
 VOID DoSetMsgNo(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+BOOL ProcessYAPPMessage(CIRCUIT * conn);
+void YAPPSendFile(ConnectionInfo * conn, struct UserInfo * user, char * filename);
+void YAPPSendData(ConnectionInfo * conn);
+VOID CheckBBSNumber(int i);
 
 
 config_t cfg;
@@ -645,7 +651,7 @@ Next:
 		goto Next;
 	}
 
-	// Setting up BBS struct has been moved untill all user record
+	// Setting up BBS struct has been moved until all user record
 	//	have been read so we can fix corrupt BBSNUmber
 
 	for (i=1; i <= NumberofUsers; i++)
@@ -666,17 +672,29 @@ Next:
 			{
 				user->BBSNumber = FindFreeBBSNumber();
 				if (user->BBSNumber == 0)
-					user->BBSNumber = NBBBS;			// cant rally do much else
+					user->BBSNumber = NBBBS;			// cant really do much else
 			}
 
 			user->BBSNext = BBSChain;
 			BBSChain = user;
+
+//			Logprintf(LOG_BBS, NULL, '?', "BBS %s BBSNumber %d", user->Call, user->BBSNumber);
 
 			// Save Highest BBS Number
 
 			if (user->BBSNumber > HighestBBSNumber)
 				HighestBBSNumber = user->BBSNumber;
 		}
+	}
+
+	// Check for dulicate BBS numbers
+	
+	for (i=1; i <= NumberofUsers; i++)
+	{
+		user = UserRecPtr[i];
+
+		if (user->flags & F_BBS)
+			CheckBBSNumber(user->BBSNumber);
 	}
 
 	SortBBSChain();
@@ -2154,7 +2172,7 @@ NextMessage:
 
 		if (DecodeSendParams(conn, Context, &From, To, &ATBBS, &BID))
 		{
-			if (CreateMessage(conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID, NULL))
+			if (CreateMessage(conn, From, To, ATBBS, toupper(Cmd[1]), BID, NULL))
 			{
 				Msg = conn->TempMsg;
 
@@ -2368,7 +2386,11 @@ void TrytoSend()
 
 			// if an FLARQ mail has been sent see if queues have cleared
 
-			if (conn->OutputQueue == NULL && (conn->BBSFlags & ARQMAILACK))
+			if (conn->BBSFlags & YAPPTX)
+			{
+				YAPPSendData(conn);
+			}
+			else if (conn->OutputQueue == NULL && (conn->BBSFlags & ARQMAILACK))
 			{
 				int n = TXCount(conn->BPQStream);		// All Sent and Acked?
 	
@@ -3873,7 +3895,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		strcpy(NewTitle, "Re:");
 		strcat(NewTitle, OldTitle);
 
-		return CreateMessage(conn, From, Arg1, ATBBS, 'P', BID, NewTitle);	
+		return CreateMessage(conn, From, To, ATBBS, 'P', BID, NewTitle);	
 
 		return TRUE;
 
@@ -3923,7 +3945,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 		conn->CopyBuffer = ReadMessageFile(msgno);
 
-		return CreateMessage(conn, From, Arg1, ATBBS, 'P', BID, NewTitle);	
+		return CreateMessage(conn, From, To, ATBBS, 'P', BID, NewTitle);	
 	}
 
 
@@ -5646,6 +5668,36 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
 	free(MailBuffer);
 }
 
+VOID CheckBBSNumber(int i)
+{
+	// Make sure number is unique
+
+	int Count = 0;
+	struct UserInfo * user;
+
+	for (user = BBSChain; user; user = user->BBSNext)
+	{	
+		if (user->BBSNumber == i)
+		{
+			Count++;
+
+			if (Count > 1)
+			{
+				// Second with same number - Renumber this one
+
+				user->BBSNumber = FindFreeBBSNumber();
+
+				if (user->BBSNumber == 0)
+					user->BBSNumber = NBBBS;			// cant really do much else
+
+				Logprintf(LOG_BBS, NULL, '?', "Duplicate BBS Number found. BBS %s Old BBSNumber %d New BBS Number %d", user->Call, i, user->BBSNumber);
+
+			}
+		}
+	}
+}
+
+
 int FindFreeBBSNumber()
 {
 	// returns the lowest number not used by any bbs or message.
@@ -7087,6 +7139,13 @@ InBand:
 		{
 			if (_memicmp(ptr, Scripts[ForwardingInfo->ScriptIndex], ptr2-ptr) == 0)	// Reply to last sscript command
 			{
+				if (Scripts[ForwardingInfo->ScriptIndex+1] && _memicmp(Scripts[ForwardingInfo->ScriptIndex+1], "else", 4) == 0)
+				{
+					// stray match or misconfigured
+
+					return TRUE;
+				}
+
 				ForwardingInfo->ScriptIndex++;
 		
 				if (Scripts[ForwardingInfo->ScriptIndex])
@@ -8772,6 +8831,14 @@ int Disconnected (int Stream)
 				}
 			}
 
+			// if sysop was chatting to user clear link
+#ifndef LINBPQ
+			if (conn->BBSFlags & SYSOPCHAT)
+			{
+				SendUnbuffered(-1, "User has disconnected\n", 23);
+				BBSConsole.Console->SysopChatStream = 0;
+			}
+#endif
 			ClearQueue(conn);
 
 			if (conn->PacLinkCalls)
@@ -8881,11 +8948,22 @@ int DoReceivedData(int Stream)
 				
 				GetMsg(Stream, &conn->InputBuffer[conn->InputLen], &InputLen, &count);
 
-				if (InputLen == 0) return 0;
+				if (InputLen == 0 && conn->InputMode != 'Y')
+					return 0;
+
+				conn->InputLen += InputLen;
+
+				if (conn->InputLen == 0) return 0;
 
 				conn->Watchdog = 900;				// 15 Minutes
 
-				conn->InputLen += InputLen;
+				if (conn->InputMode == 'Y')			// YAPP
+				{
+					if (ProcessYAPPMessage(conn))	// Returns TRUE if there could be more to process
+						goto OuterLoop;
+
+					return 0;
+				}
 
 				if (conn->InputMode == 'B')
 				{
@@ -9011,7 +9089,26 @@ int DoReceivedData(int Stream)
 
 					}
 				}
+				else
+				{
+					// Could be a YAPP Header
+
+
+					if (conn->InputLen == 2 && conn->InputBuffer[0] == ENQ  && conn->InputBuffer[1] == 1)		// YAPP Send_Init
+					{
+						UCHAR YAPPRR[2];
+						YAPPRR[0] = ACK;
+						YAPPRR[1] = 1;
+
+						conn->InputMode = 'Y';
+						QueueMsg(conn, YAPPRR, 2);
+
+						conn->InputLen = 0;
+						return 0;
+					}
 				}
+				}
+
 			} while (count > 0);
 
 			return 0;
@@ -9801,6 +9898,14 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	// if chatting to sysop pass message to BBS console
+
+	if (conn->BBSFlags & SYSOPCHAT)
+	{
+		SendUnbuffered(-1, Buffer,len);
+		return;
+	}
+
 	Cmd = strtok_s(Buffer, seps, &Context);
 
 	if (Cmd == NULL)
@@ -9855,7 +9960,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		SendPrompt(conn, user);
 		return;
 	}
-	if (_memicmp(Cmd, "Bye", CmdLen) == 0)
+	if (_memicmp(Cmd, "Bye", CmdLen) == 0 || _stricmp(Cmd, "ELSE") == 0)
 	{
 		ExpandAndSendMessage(conn, SignoffMsg, LOG_BBS);
 		Flush(conn);
@@ -9925,6 +10030,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		SendPrompt(conn, user);
 		return;
 	}
+
+	if (_memicmp(Cmd, "YAPP", 4) == 0)
+	{
+		YAPPSendFile(conn, user, Arg1);
+		return;
+	}
+
 
 	if (_memicmp(Cmd, "UH", 2) == 0 && conn->sysop)
 	{
@@ -10811,4 +10923,412 @@ VOID CreateUserReport()
 
 	fclose(hFile);
 }
+
+BOOL ProcessYAPPMessage(CIRCUIT * conn)
+{
+	int Len = conn->InputLen;
+	UCHAR * Msg = conn->InputBuffer;
+	int pktLen = Msg[1];
+	char Reply[2] = {ACK};
+	int NameLen;
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	char Mess[255];
+	int len;
+
+
+	switch (Msg[0])
+	{
+	case ENQ: // YAPP Send_Init
+
+		// Shouldn't occuer in session. Reset state
+				
+		Mess[0] = ACK;
+		Mess[1] = 1;
+		QueueMsg(conn, Mess, 2);
+		Flush(conn);
+		conn->InputLen = 0;
+		if (conn->MailBuffer)
+		{
+			free(conn->MailBuffer);
+			conn->MailBufferSize=0;
+			conn->MailBuffer=0;
+		}
+		return TRUE;
+
+	case SOH:
+
+		// HD Send_Hdr     SOH  len  (Filename)  NUL  (File Size in ASCII)  NUL (Opt)
+
+		NameLen = strlen(&Msg[2]);
+		strcpy(conn->ARQFilename, &Msg[2]);
+		FileSize = atoi(&Msg[3 + NameLen]);
+
+		// Check Size
+
+		if (FileSize > MaxRXSize)
+		{
+			Mess[0] = NAK;
+			Mess[1] = 0;
+			QueueMsg(conn, Mess, 2);
+			Flush(conn);
+			len = sprintf_s(Mess, sizeof(Mess), "YAPP File %s size %d larger than limit %d\r", conn->ARQFilename, FileSize, MaxRXSize);
+			QueueMsg(conn, Mess, len);
+
+			WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+			conn->InputLen = 0;
+			conn->InputMode = 0;
+
+			return FALSE;
+		}
+		
+		// Make sure file does not exist
+
+	
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/Files/%s", BaseDir, conn->ARQFilename);
+	
+		hFile = fopen(MsgFile, "rb");
+
+		if (hFile)
+		{
+			Mess[0] = NAK;
+			Mess[1] = 0;
+			QueueMsg(conn, Mess, 2);
+			Flush(conn);
+			len = sprintf_s(Mess, sizeof(Mess), "YAPP File %s already exists\r", conn->ARQFilename);
+			QueueMsg(conn, Mess, len);
+
+			WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+			fclose(hFile);
+			conn->InputLen = 0;
+			conn->InputMode = 0;
+
+			return FALSE;
+		}
+
+
+		conn->MailBufferSize = FileSize;
+		conn->MailBuffer=malloc(FileSize);
+		conn->YAPPLen = 0;
+
+		Reply[1] = 2;		//Rcv_File
+		QueueMsg(conn, Reply, 2);
+
+		len = sprintf_s(Mess, sizeof(Mess), "YAPP upload to %s started", conn->ARQFilename);
+		WriteLogLine(conn, '!', Mess, len, LOG_BBS);
+
+		conn->InputLen = 0;
+		return FALSE;
+		
+	case STX:
+
+		// Data Packet
+
+		// Check we have it all
+
+		if (pktLen > (Len - 2))		// -2 for header
+			return FALSE;			// Wait for rest
+
+		// Save data and remove from buffer
+
+		if ((conn->YAPPLen) + pktLen > conn->MailBufferSize)
+		{
+			// Too Big ??
+
+			Mess[0] = NAK;
+			Mess[1] = 0;
+			QueueMsg(conn, Mess, 2);
+			Flush(conn);
+			len = sprintf_s(Mess, sizeof(Mess), "YAPP Too much data receieved\r");
+			QueueMsg(conn, Mess, len);
+			WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+			conn->InputLen = 0;
+			conn->InputMode = 0;
+			return TRUE;
+		}
+
+		memcpy(&conn->MailBuffer[conn->YAPPLen], &Msg[2], pktLen);
+		conn->YAPPLen += pktLen;
+
+		conn->InputLen -= (pktLen + 2);
+		memmove(conn->InputBuffer, &conn->InputBuffer[pktLen + 2], conn->InputLen);
+
+		return TRUE;
+
+	case ETX:
+
+		// End Data
+
+		if (conn->YAPPLen == conn->MailBufferSize)
+		{
+			// All received
+
+			int WriteLen=0;
+	
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/Files/%s", BaseDir, conn->ARQFilename);
+	
+			hFile = fopen(MsgFile, "wb");
+
+			if (hFile)
+			{
+				WriteLen = fwrite(conn->MailBuffer, 1, conn->YAPPLen, hFile);
+				fclose(hFile);
+			}
+
+			free(conn->MailBuffer);
+			conn->MailBufferSize=0;
+			conn->MailBuffer=0;
+
+			if (WriteLen != conn->YAPPLen)
+			{
+				Mess[0] = NAK;
+				Mess[1] = 0;
+				QueueMsg(conn, Mess, 2);
+				Flush(conn);
+				len = sprintf_s(Mess, sizeof(Mess), "Failed to save YAPP File\r");
+				QueueMsg(conn, Mess, len);
+				WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+				conn->InputLen = 0;
+				conn->InputMode = 0;
+			}
+		}
+
+		Reply[1] = 3;		//Ack_EOF
+		QueueMsg(conn, Reply, 2);
+		Flush(conn);	
+		conn->InputLen = 0;
+
+		return TRUE;
+
+	case EOT:
+
+		// End Session
+
+		Reply[1] = 4;		// Ack_EOT
+		QueueMsg(conn, Reply, 2);
+		Flush(conn);
+		conn->InputLen = 0;
+		conn->InputMode = 0;
+	
+		len = sprintf_s(Mess, sizeof(Mess), "YAPP file %s received\r", conn->ARQFilename);
+		WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+		QueueMsg(conn, Mess, len);
+
+		return TRUE;
+
+	case CAN:
+
+		// Abort
+
+		Mess[0] = ACK;
+		Mess[1] = 5;			// CAN Ack
+		QueueMsg(conn, Mess, 2);
+		Flush(conn);
+
+		if (conn->MailBuffer)
+		{
+			free(conn->MailBuffer);
+			conn->MailBufferSize=0;
+			conn->MailBuffer=0;
+		}
+
+		len = sprintf_s(Mess, sizeof(Mess), "YAPP Transfer cancelled by Terminal\r");
+		WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+
+		conn->InputLen = 0;
+		conn->InputMode = 0;
+		conn->BBSFlags &= ~YAPPTX;
+
+		return FALSE;
+
+	case ACK:
+
+		switch (Msg[1])
+		{
+		case 1:					// Rcv_Rdy
+
+			// HD Send_Hdr     SOH  len  (Filename)  NUL  (File Size in ASCII)  NUL (Opt)
+			
+			len = strlen(conn->ARQFilename) + 3;
+		
+			strcpy(&Mess[2], conn->ARQFilename);
+			len += sprintf(&Mess[len], "%d", conn->MailBufferSize);
+			Mess[0] = SOH;
+			Mess[1] = len - 2;
+
+			QueueMsg(conn, Mess, len);
+			Flush(conn);
+			conn->InputLen = 0;
+
+			return FALSE;
+
+		case 2:
+
+			//	Start sending message
+
+			YAPPSendData(conn);
+			conn->InputLen = 0;
+			return FALSE;
+
+		case 3:
+
+			// ACK EOF - Send EOT
+
+			
+			Mess[0] = EOT;
+			Mess[1] = 1;
+			QueueMsg(conn, Mess, 2);
+			Flush(conn);
+
+			conn->InputLen = 0;
+			return FALSE;
+	
+		case 4:
+
+			// ACK EOT
+
+			conn->InputMode = 0;
+			conn->BBSFlags &= ~YAPPTX;
+
+			conn->InputLen = 0;
+			return FALSE;
+
+		default:
+			conn->InputLen = 0;
+			return FALSE;
+
+
+
+		}
+	
+	case NAK:
+
+		// Either Reject or Restart
+
+		// RE Resume       NAK  len  R  NULL  (File size in ASCII)  NULL
+
+		if (Msg[2] == 'R' && Msg[3] == 0)
+		{
+			int posn = atoi(&Msg[4]);
+			
+			conn->YAPPLen += posn;
+			conn->MailBufferSize -= posn;
+
+			YAPPSendData(conn);
+			conn->InputLen = 0;
+			return FALSE;
+
+		}
+
+
+
+
+
+
+
+
+
+
+		}
+
+	conn->InputLen = 0;
+	return FALSE;
+
+}
+
+void YAPPSendFile(ConnectionInfo * conn, struct UserInfo * user, char * filename)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	struct stat STAT;
+
+	if (strstr(filename, "..") || strchr(filename, '/') || strchr(filename, '\\'))
+	{
+		nodeprintf(conn, "Invalid filename\r");
+		return;
+	}
+
+	if (BaseDir[0])
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/Files/%s", BaseDir, filename);
+	else
+		sprintf_s(MsgFile, sizeof(MsgFile), "Files/%s", filename);
+
+	if (stat(MsgFile, &STAT) != -1)
+	{
+		FileSize = STAT.st_size;
+
+		hFile = fopen(MsgFile, "rb");
+
+		if (hFile)
+		{	
+			char Mess[255];
+			int len = strlen(filename) + 3;
+			strcpy(conn->ARQFilename, filename);
+			conn->MailBuffer = malloc(FileSize);
+			conn->MailBufferSize = FileSize;
+			conn->YAPPLen = 0;
+			fread(conn->MailBuffer, 1, FileSize, hFile); 
+			fclose(hFile);
+	
+			Mess[0] = ENQ;
+			Mess[1] = 1;
+
+			QueueMsg(conn, Mess, 2);
+			Flush(conn);
+
+			conn->InputMode = 'Y';
+
+			return;
+		}
+	}
+
+	nodeprintf(conn, "File %s not found\r", filename);
+}
+
+void YAPPSendData(ConnectionInfo * conn)
+{
+	char Mess[258];
+
+	conn->BBSFlags |= YAPPTX;
+
+	while (TXCount(conn->BPQStream) < 15)
+	{
+		int Left = conn->MailBufferSize;
+
+		if (Left == 0)
+		{
+			// Finished - send End Data
+
+			Mess[0] = ETX;
+			Mess[1] = 1;
+			
+			QueueMsg(conn, Mess, 2);
+			Flush(conn);
+
+			conn->BBSFlags &= ~YAPPTX;
+			break;
+		}
+
+		if (Left > conn->paclen)
+			Left = conn->paclen;
+
+		memcpy(&Mess[2], &conn->MailBuffer[conn->YAPPLen], Left);
+		Mess[0] = STX;
+		Mess[1] = Left;
+				
+		QueueMsg(conn, Mess, Left + 2);
+		Flush(conn);
+
+		conn->YAPPLen += Left;
+		conn->MailBufferSize -= Left;
+	}
+}
+
+
+
+
+
+
 

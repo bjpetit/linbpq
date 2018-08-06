@@ -838,7 +838,7 @@ static int ProcessLine(char * buf, int Port)
 			if (_memicmp(ptr, "PATH", 4) == 0)
 			{
 				p_cmd = strtok(NULL, "\n\r");
-				if (p_cmd) TNC->ProgramPath = _strdup(_strupr(p_cmd));
+				if (p_cmd) TNC->ProgramPath = _strdup(p_cmd);
 			}
 		}
 
@@ -888,7 +888,7 @@ static int ConnecttoMPSK(int port)
 	return 0;
 }
 
-static VOID ConnecttoMPSKThread(port)
+static VOID ConnecttoMPSKThread(int port)
 {
 	char Msg[255];
 	int err,i;
@@ -950,7 +950,7 @@ static VOID ConnecttoMPSKThread(port)
 			err=WSAGetLastError();
    			i=sprintf(Msg, "Connect Failed for MPSK socket - error code = %d\n", err);
 			WritetoConsole(Msg);
-			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to TNC failed");
+			MySetWindowText(TNC->xIDC_COMMSSTATE, "Connection to TNC failed");
 
 			TNC->Alerted = TRUE;
 		}
@@ -961,7 +961,7 @@ static VOID ConnecttoMPSKThread(port)
 
 	TNC->LastFreq = 0;			//	so V4 display will be updated
 
-	SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connected to MPSK TNC");
+	MySetWindowText(TNC->xIDC_COMMSSTATE, "Connected to MPSK TNC");
 
 	return;
 

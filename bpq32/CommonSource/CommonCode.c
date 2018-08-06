@@ -1965,12 +1965,9 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 		if (Quiet == 0)
 		{
 			if (pPort < (VOID *)256)
-				sprintf(buf," COM%d could not be opened %d\r\n ", (UINT)pPort, GetLastError());
+				Debugprintf("COM%d could not be opened %d", (UINT)pPort, GetLastError());
 			else
-				sprintf(buf," %s could not be opened %d\r\n ", pPort, GetLastError());
-
-	//		WritetoConsoleLocal(buf);
-			OutputDebugString(buf);
+				Debugprintf("%s could not be opened %d", pPort, GetLastError());
 		}
 		return (FALSE);
 	}

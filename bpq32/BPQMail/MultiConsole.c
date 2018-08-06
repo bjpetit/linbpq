@@ -1,4 +1,4 @@
-// Mail and Chat Server for BPQ32 Packet Switch
+ // Mail and Chat Server for BPQ32 Packet Switch
 //
 //	Console Window Module
 
@@ -19,6 +19,8 @@ struct ConsoleInfo * ConsHeader[2] = {&BBSConsole, &ChatConsole};
 struct ConsoleInfo * InitHeader;
 
 extern struct SEM ChatSemaphore;
+extern int	NumberofStreams;
+extern ConnectionInfo Connections[];
 
 BOOL Bells;
 BOOL FlashOnBell;		// Flash instead of Beep
@@ -31,6 +33,8 @@ BOOL CloseWindowOnBye;
 
 RECT ConsoleRect;
 	
+char chatMsg[] = "Sysop wants to chat to you\r";
+char endChatMsg[] = "Sysop ended chat\r";
 
 //CIRCUIT * Console;
 HWND hConsole;
@@ -82,13 +86,13 @@ VOID DoRefresh(struct ConsoleInfo * Cinfo);
 #define BGCOLOUR RGB(236,233,216)
 
 
-HMENU trayMenu = 0;
+HMENU trayMenu = 0, hBBSUSERCHAT = 0;
 
 BOOL CreateConsole(int Stream)
 {
 	WNDCLASS  wc = {0};
 	HBRUSH bgBrush;
-	HMENU hMenu;
+	HMENU hMenu,hActionMenu;
 	char RTFColours[3000];
 	struct ConsoleInfo * Cinfo;
 	int i, n;
@@ -153,6 +157,10 @@ BOOL CreateConsole(int Stream)
 	CheckMenuItem(hMenu,IDM_WRAPTEXT, (Cinfo->WrapInput) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_Flash, (Cinfo->FlashOnConnect) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_CLOSEWINDOW, (Cinfo->CloseWindowOnBye) ? MF_CHECKED : MF_UNCHECKED);
+
+
+	hActionMenu=GetSubMenu(hMenu,2);
+	hBBSUSERCHAT=GetSubMenu(hActionMenu,0);
 
 	DrawMenuBar(hWnd);	
 
@@ -350,6 +358,8 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	LPRECT lprc;
 	int i;
 	struct ConsoleInfo * Cinfo;
+	ConnectionInfo * conn;
+
     UCHAR tchBuffer[100000];
 	UCHAR * buf = tchBuffer;
     TEXTMETRIC tm; 
@@ -491,7 +501,38 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
+		if (wmId >= BBSUSERCHAT && wmId < BBSUSERCHAT + 63)
+		{
+			// Chat to user
+
+			conn=&Connections[wmId-BBSUSERCHAT];
+		
+			if (conn->Active)
+			{
+				conn->BBSFlags |= SYSOPCHAT;
+				Cinfo->Console->SysopChatStream = conn;
+				SendUnbuffered(conn->BPQStream, chatMsg, strlen(chatMsg));
+
+
+//				Disconnect(conn->BPQStream);
+			}
+		}
+
 		switch (wmId) {
+
+		case ENDUSERCHAT:
+
+			if (Cinfo->Console->SysopChatStream)
+			{
+				SendUnbuffered(Cinfo->Console->SysopChatStream->BPQStream, endChatMsg, strlen(endChatMsg));
+				Cinfo->Console->SysopChatStream->BBSFlags &= ~SYSOPCHAT;
+				SendPrompt(Cinfo->Console->SysopChatStream, Cinfo->Console->SysopChatStream->UserPointer);
+				SendPrompt(Cinfo->Console, Cinfo->Console->UserPointer);
+				Cinfo->Console->SysopChatStream = 0;
+			}
+
+			break;
+
 
 		case 40000:
 		{
@@ -524,10 +565,8 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				GlobalFree(hMem);
 
 			SetFocus(Cinfo->hwndInput);
+			break;
 		}
-
-
-
 
 		case BPQBELLS:
 
@@ -695,6 +734,36 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 			break;
 
+
+			
+	case WM_INITMENUPOPUP:
+
+		if (wParam == (WPARAM)hBBSUSERCHAT)
+		{
+			// Set up Chat Menu
+
+			CIRCUIT * conn;
+			char MenuLine[30];
+			int n;
+
+			for (n = 0; n <= NumberofStreams-1; n++)
+			{
+				conn=&Connections[n];
+
+				RemoveMenu(hBBSUSERCHAT, BBSUSERCHAT + n, MF_BYCOMMAND);
+
+				if (conn->Active)
+				{
+					sprintf_s(MenuLine, 30, "%d %s", conn->BPQStream, conn->Callsign);
+					AppendMenu(hBBSUSERCHAT, MF_STRING, BBSUSERCHAT + n, MenuLine);
+				}
+			}
+			return TRUE;
+		}
+		break;
+
+
+
 		default:
 			return (DefWindowProc(hWnd, message, wParam, lParam));
 
@@ -836,7 +905,11 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			}
 
 			DoRefresh(Cinfo);
-			ProcessLine(Cinfo->Console, user, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
+
+			if (Cinfo->Console->SysopChatStream)
+				SendUnbuffered(Cinfo->Console->SysopChatStream->BPQStream, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
+			else
+				ProcessLine(Cinfo->Console, user, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
 
 			SendMessage(Cinfo->hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
 

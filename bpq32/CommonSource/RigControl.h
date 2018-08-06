@@ -52,6 +52,8 @@ struct RIGINFO
 	
 	int IC735;					// Old ICOM with shorter freq message
 
+	char * CM108Device;			// Device to open for CM108 GPIO PTT
+
 	struct _EXTPORTDATA * PortRecord[32]; // BPQ32 port record(s) for this rig (null terminated list)
 
 	UCHAR RigAddr;
@@ -84,6 +86,7 @@ struct RIGINFO
 	#define PTTRTS		1
 	#define PTTDTR		2
 	#define PTTCI_V		4
+	#define PTTCM108	8
 
 	int PTTTimer;				// PTT Timer watchdog
 

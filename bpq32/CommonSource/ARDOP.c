@@ -102,8 +102,6 @@ int ConfigVirtualKISSPort(struct TNCINFO * TNC, char * Cmd);
 void ProcessKISSBytes(struct TNCINFO * TNC, UCHAR * Data, int Len);
 void ProcessKISSPacket(struct TNCINFO * TNC, UCHAR * KISSBuffer, int Len);
 int ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen);
-int KillTNC(struct TNCINFO * TNC);
-int RestartTNC(struct TNCINFO * TNC);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -428,6 +426,8 @@ static int ProcessLine(char * buf, int Port)
 						TNC->PTTMode = PTTDTR;
 					else if (_stricmp(ptr, "DTRRTS") == 0)
 						TNC->PTTMode = PTTDTR | PTTRTS;
+					else if (_stricmp(ptr, "CM108") == 0)
+						TNC->PTTMode = PTTCM108;
 
 					ptr = strtok(NULL, " \t\n\r");
 				}
@@ -440,7 +440,6 @@ static int ProcessLine(char * buf, int Port)
 			{
 				p_cmd = strtok(NULL, "\n\r");
 				if (p_cmd) TNC->ProgramPath = _strdup(p_cmd);
-//				if (p_cmd) TNC->ProgramPath = _strdup(_strupr(p_cmd));
 			}
 		}
 
@@ -613,13 +612,22 @@ VOID ARDOPSendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue)
 
 	// Command Formst is C:TEXT<CR><CRC>
 
-	int EncLen;
-	UCHAR Encoded[256];
+	int i, EncLen;
+	UCHAR Encoded[260];		// could get 256 byte packet
 
 	if (Buff[0] == 0)		// Terminal Keepalive?
 		return;
 
 	EncLen = sprintf(Encoded, "%s\r", Buff);
+
+	// it is possible for binary data to be dumped into the command
+	// handler if a session disconnects in middle of transfer
+
+	for (i = 0; i < EncLen; i++)
+	{
+		if (Encoded[i] > 0x7f)
+			return;
+	}
 
 	SendToTNC(TNC, 12, Encoded, EncLen); // Use streams 12 aad 13 for Host Mode Schannels 32 and 33
 	return;
@@ -795,7 +803,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 {
 	int datalen;
 	UINT * buffptr;
-	char txbuff[500];
+//	char txbuff[500];
 	unsigned int bytes,txlen=0;
 	int Param;
 	int Stream = 0;
@@ -1077,7 +1085,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			// Restart TNC
 		
-			if (TNC->ProgramPath)
+			if (TNC->ProgramPath && TNC->CONNECTED && 0)
 			{
 				struct tm * tm;
 				char Time[80];
@@ -1318,6 +1326,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (Stream == 0)
 			{
 				bytes=ARDOPSendData(TNC, &buff[8], txlen);
+				TNC->Streams[Stream].BytesOutstanding += bytes;		// So flow control works - will be updated by BUFFER response
 				STREAM->BytesTXed += bytes;
 				WritetoTrace(TNC, &buff[8], txlen);
 			}
@@ -1620,8 +1629,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		else
 			Queued = TNC->Streams[Stream].FramesQueued;
 
- 		if (Queued > 2 || Outstanding > 2000)
-			return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);
+ 		if (TNC->Mode == 'O')		// OFDM version has more buffer space
+		{
+			if (Queued > 4 || Outstanding > 8500)
+				return (1 | (TNC->HostMode | TNC->CONNECTED) << 8 | STREAM->Disconnecting << 15);
+		}
+		else
+		{
+			if (Queued > 4 || Outstanding > 2000)
+				return (1 | (TNC->HostMode | TNC->CONNECTED) << 8 | STREAM->Disconnecting << 15);
+		}
 
 		}
 		if (TNC->Streams[Stream].Attached == 0)
@@ -1848,7 +1865,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 		ARDOPOpenLogFiles(TNC); 
 
 	TNC->ARDOPBuffer = malloc(8192);
-	TNC->ARDOPDataBuffer = malloc(8192);
+	TNC->ARDOPDataBuffer = malloc(16384);
 	TNC->ARDOPAPRS = zalloc(512);
 	TNC->ARDOPAPRSLen = 0;
 
@@ -2129,7 +2146,16 @@ VOID TNCLost(struct TNCINFO * TNC)
 	for (Stream = 0; Stream <= APMaxStreams; Stream++)
 	{
 		STREAM = &TNC->Streams[Stream];
-		
+
+		STREAM->BytesOutstanding = 0;
+
+		if (Stream == 0)
+		{
+			sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %d",
+			STREAM->BytesTXed - STREAM->BytesOutstanding, STREAM->BytesRXed, STREAM->BytesOutstanding);
+			MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+		}
+
 		if (STREAM->Attached)
 		{
 			STREAM->Connected = FALSE;
@@ -2533,6 +2559,18 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 
 				if (InputLen == 0 || InputLen == SOCKET_ERROR)
 				{
+					sprintf(Msg, "ARDOP Connection lost for Port %d\r\n", TNC->Port);
+					WritetoConsole(Msg);
+
+					sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
+					MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+
+					TNC->CONNECTED = FALSE;
+					TNC->Alerted = FALSE;
+
+					if (TNC->PTTMode)
+					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+
 					TNCLost(TNC);
 					return;					
 				}
@@ -2666,7 +2704,7 @@ Lost:
 
 			if (TNC->PID && TNC->WeStartedTNC)
 			{
-				KillTNC(TNC);
+//				KillTNC(TNC);
 			}
 			return;
 		}
@@ -2715,7 +2753,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "RADIOHEX ", 9) == 0)
 	{
-		// Parameter is blockto send to radio, in hex
+		// Parameter is block to send to radio, in hex
 		
 		char c;
 		int val;
@@ -3045,9 +3083,10 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					if (TNC->Streams[0].BPQtoPACTOR_Q)		//Used for CTEXT
 					{
 						UINT * buffptr = Q_REM(&TNC->Streams[0].BPQtoPACTOR_Q);
-						int txlen=buffptr[1];
-						SendARDOPorPacketData(TNC, 0, (UCHAR *)buffptr+2, txlen);
-						ReleaseBuffer(buffptr);
+						UINT * dataint = &buffptr[2];
+						UCHAR * data = (UCHAR *)dataint;
+						int txlen = buffptr[1];
+						SendARDOPorPacketData(TNC, 0, data, txlen);
 					}
 					
 					SendARDOPorPacketData(TNC, 0, Msg, strlen(Msg));
@@ -3343,18 +3382,45 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
+	if (_memicmp(Buffer, "VERSION ", 8) == 0)
+	{
+		// If contains "OFDM" increase data session busy level
+
+		if (strstr(&Buffer[8], "OFDM"))
+			TNC->Mode = 'O';
+		else
+			TNC->Mode = 0;
+	}
+
 	if (_memicmp(Buffer, "PINGACK ", 8) == 0)
 	{
 		WritetoTrace(TNC, Buffer, MsgLen - 1);
 		// Drop through to return touser
 	}
 
+	if (_memicmp(Buffer, "CQ ", 3) == 0 && MsgLen > 10)
+	{
+		char Call[32];
+		char * Loc;
+
+		WritetoTrace(TNC, Buffer, MsgLen - 1);
+
+		// Update MH
+			{
+			memcpy(Call, &Buffer[3], 32);
+			Loc = strlop(Call, ' '); 
+			strlop(Loc, ']');
+			UpdateMHEx(TNC, Call, '!', 'I', &Loc[1]);
+		}
+		// Drop through to go to user if attached but not connected
+
+	}
 	//	Return others to user (if attached but not connected)
 
 	if (TNC->Streams[0].Attached == 0)
 		return;
 
-	if (TNC->Streams[0].Connected)
+	if (TNC->Streams[0].Connected || TNC->Streams[0].Connecting)
 		return;
 
 	if (MsgLen > 200)
@@ -3379,22 +3445,20 @@ static VOID ARDOPProcessReceivedData(struct TNCINFO * TNC)
 	// May get several messages per packet
 	// May get message split over packets
 
-	//	Data starts with d: and has a length field
-	//	“d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data”
+	//	Data  has a length field
+	//	ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data”
 	//	New standard doesnt have d:
 
-	if (TNC->DataInputLen > 8000)	// Shouldnt have packets longer than this
+	if (TNC->DataInputLen > 16000)	// Shouldnt have packets longer than this
 		TNC->DataInputLen=0;
 
-	//	I don't think it likely we will get packets this long, but be aware...
-
-	//	We can get pretty big ones in the faster modes 
+	//	OFDM can return large packets (up to 10160)
 			
 	// in serial mode, data has been put in input buffer by comms code
 
 	if (TNC->ARDOPCommsMode == 'T')
 	{
-		InputLen=recv(TNC->TCPDataSock, &TNC->ARDOPDataBuffer[TNC->DataInputLen], 8192 - TNC->DataInputLen, 0);
+		InputLen=recv(TNC->TCPDataSock, &TNC->ARDOPDataBuffer[TNC->DataInputLen], 16384 - TNC->DataInputLen, 0);
 
 		if (InputLen == 0 || InputLen == SOCKET_ERROR)
 		{
@@ -3751,6 +3815,8 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 	WritetoTrace(TNC, Data, Length);
 
 	// We can get messages of form ARQ [ConReq2000M: GM8BPQ-2 > OE3FQU]
+	// Noe (V2) [ConReq2500 >  G8XXX]
+	
 	// when not connected.
 
 	if (TNC->Streams[0].Connected == FALSE)

@@ -3012,7 +3012,7 @@ VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6)
 
 	if (IPV6 == FALSE)
 	{
-		sprintf(Output, "%d.%d.%d.%d", Addr[0], Addr[1], Addr[2], Addr[3]);
+		sprintf((char *)Output, "%d.%d.%d.%d", Addr[0], Addr[1], Addr[2], Addr[3]);
 		return;
 	}
 
@@ -3024,7 +3024,7 @@ VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6)
 	{
 		if (memcmp(src, zeros, 12) == 0)	// 12 zeros, followed by non-zero
 		{
-			sprintf(Output, "::%d.%d.%d.%d", src[12], src[13], src[14], src[15]);
+			sprintf((char *)Output, "::%d.%d.%d.%d", src[12], src[13], src[14], src[15]);
 			return;
 		}
 	}

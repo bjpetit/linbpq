@@ -40,7 +40,7 @@ void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD
 
 		if (dwParam1 != 0xfe)		// Ignore Keepalives
 		{
-//			printf("wMsg=MIM_DATA, dwInstance=%08x, dwParam1=%08x, dwParam2=%08x\n", dwInstance, dwParam1, dwParam2);
+			printf("wMsg=MIM_DATA, dwInstance=%08x, dwParam1=%08x, dwParam2=%08x\n", dwInstance, dwParam1, dwParam2);
 			P1 = (BYTE)dwParam1 & 255;
 			P2 = (BYTE)(dwParam1 >> 8) & 255;
 //			printf("%d > %d\n", P2, Invert[P2]);
@@ -88,11 +88,11 @@ int main(int argc, CHAR* argv[])
 	for (i = 0; i < 120; i++)
 		Invert[i] = 124 - i;
 
-//	if (argc > 1)
-//		InDevice = atoi(argv[1]);
+	if (argc > 1)
+		InDevice = atoi(argv[1]);
 
-//	if (argc > 2)
-//		OutDevice = atoi(argv[2]);
+	if (argc > 2)
+		OutDevice = atoi(argv[2]);
 
 	inCount = midiInGetNumDevs();
 	outCount = midiOutGetNumDevs();
@@ -102,8 +102,8 @@ int main(int argc, CHAR* argv[])
 	{
 		ret = midiInGetDevCaps(i, &MidiInCaps, sizeof(MidiInCaps));
 
-		if (strstr(MidiInCaps.szPname, "UA"))
-			InDevice = i;
+	//	if (strstr(MidiInCaps.szPname, "UA"))
+	//		InDevice = i;
 
 		if (i == InDevice)
 			printf("*%s\n", &MidiInCaps.szPname);
@@ -117,8 +117,8 @@ int main(int argc, CHAR* argv[])
 	{
 		ret = midiOutGetDevCaps(i, &MidiOutCaps, sizeof(MidiOutCaps));
 
-		if (strstr(MidiOutCaps.szPname, "LoopBe"))
-			OutDevice = i;
+	//	if (strstr(MidiOutCaps.szPname, "LoopBe"))
+	//		OutDevice = i;
 
 		if (i == OutDevice)
 			printf("*%s\n", &MidiOutCaps.szPname);

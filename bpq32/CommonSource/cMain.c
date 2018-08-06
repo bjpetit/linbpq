@@ -1517,6 +1517,8 @@ VOID ReadNodes()
 
 				memcpy(ROUTE->NEIGHBOUR_DIGI1, axcall, 7);
 
+				ROUTE->NEIGHBOUR_FLAG = 1;			// LOCKED ROUTE - Digi'ed routes must be locked
+
 				ptr = strtok_s(NULL, seps, &Context);
 				if (ptr == NULL) continue;
 
@@ -1765,6 +1767,8 @@ VOID TIMERINTERRUPT()
 
 	for (i = 0; i < NUMBEROFPORTS; i++)
 	{	
+		int Sent;
+
 		CURRENTPORT = PORT->PORTNUMBER;		 // PORT NUMBER
 		CURRENTPORTPTR = PORT;
 
@@ -1875,7 +1879,9 @@ VOID TIMERINTERRUPT()
 
 		// End of RX_Q
 
-		while (PORT->PORTTX_Q)
+		Sent = 0;
+
+		while (PORT->PORTTX_Q && Sent < 5)
 		{
 			int ret;
 			UINT PACTORSAVEQ;
@@ -1884,6 +1890,22 @@ VOID TIMERINTERRUPT()
 			Message = (struct _MESSAGE *) Buffer;
 			
 			ret = PORT->PORTTXCHECKCODE(PORT, Message->PORT);
+
+			// Busy but not connected means TNC has gone - clear queue
+
+			if (ret == 1)
+			{
+				MESSAGE * Buffer = Q_REM(&PORT->PORTTX_Q);
+
+				Debugprintf("Busy but not connected - discard message");
+
+				if (Buffer == 0)
+					break;						// WOT!!
+
+				ReleaseBuffer(Buffer);
+				break;
+			}
+	
 			ret = ret & 0xff;			// Only check bottom byte
 
 			if (ret == 0)		// Not busy
@@ -1903,6 +1925,7 @@ VOID TIMERINTERRUPT()
 				OutOctets[PORT->PORTNUMBER] += Buffer->LENGTH - 7;
 
 				PORT->PORTTXROUTINE(PORT, Buffer);
+				Sent++;
 
 				continue;
 			}
@@ -1948,8 +1971,10 @@ PACTORLOOP:
 			OutOctets[PORT->PORTNUMBER] += Message->LENGTH;
 
 			PORT->PORTTXROUTINE(PORT, Buffer);
-	
-			goto PACTORLOOP;			// SEE IF MORE
+			Sent++;
+
+			if (Sent < 5)
+				goto PACTORLOOP;			// SEE IF MORE
 
 ENDOFLIST:
 			//	Move the saved frames back onto Port Q

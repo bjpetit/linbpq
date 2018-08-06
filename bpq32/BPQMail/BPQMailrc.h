@@ -161,7 +161,9 @@
 #define IDC_PRINTMSG                    1088
 #define IDC_EXPORT                      1089
 #define IDM_PROMPTSAVE                  1090
-#define IDC_BBSSAVE                     1100
+#define BBSUSERCHAT						1091
+#define ENDUSERCHAT						1501
+#define IDC_BBSSAVE                     1500
 #define IDM_DISCONNECT                  2000
 #define IDC_ChatAppl                    2001
 #define IDC_ChatNodes                   2002

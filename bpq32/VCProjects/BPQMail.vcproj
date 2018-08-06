@@ -18,8 +18,9 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\msdev2005\Intermed\bpqmailchat\debug"
 			ConfigurationType="1"
+			UseOfMFC="0"
 			CharacterSet="0"
 			>
 			<Tool
@@ -455,10 +456,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\..\Users\Public\Desktop\PlayMemories Home Help.lnk"
-				>
-			</File>
-			<File
 				RelativePath="..\CommonSource\UIRoutines.c"
 				>
 				<FileConfiguration
@@ -479,6 +476,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\CommonSource\utf8Routines.c"
+				>
 			</File>
 			<File
 				RelativePath="..\CommonSource\WPRoutines.c"
@@ -545,6 +546,10 @@
 						PreprocessorDefinitions="MAIL"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\CommonSource\Versions.h"
+				>
 			</File>
 		</Filter>
 	</Files>

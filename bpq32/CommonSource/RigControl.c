@@ -58,6 +58,8 @@ char *fcvt(double number, int ndigits, int *decpt, int *sign);
 #endif
 #include "bpq32.h"
 
+#include "hidapi.h"
+
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 extern char * RigConfigMsg[35];
@@ -99,6 +101,7 @@ VOID COMSetDTR(HANDLE fd);
 VOID COMClearDTR(HANDLE fd);
 VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
+void CM108_set_ptt(struct RIGINFO *RIG, int PTTState);
 
 VOID SetupPortRIGPointers();
 VOID PTTCATThread(struct RIGINFO *RIG);
@@ -288,6 +291,10 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 			COMSetDTR(PORT->hPTTDevice);
 		else
 			COMClearDTR(PORT->hPTTDevice);
+
+	if (RIG->PTTMode & PTTCM108)
+		CM108_set_ptt(RIG, PTTState);
+
 }
 
 struct RIGINFO * Rig_GETPTTREC(int Port)
@@ -1455,8 +1462,9 @@ DllExport BOOL APIENTRY Rig_Init()
 		
 //		CreateDisplay(PORT);
 
-		if (PORT->PTC == 0)		// Not using Rig Port on a PTC
-			OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+		if (_stricmp(PORT->IOBASE, "CM108") != 0)
+			if (PORT->PTC == 0)		// Not using Rig Port on a PTC
+				OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
 
 		if (PORT->PTTIOBASE[0])		// Using separare port for PTT?
 		{
@@ -1642,7 +1650,7 @@ BOOL Rig_Poll()
 			return TRUE;
 		}
 
-		if (PORT->hDevice == 0 && PORT->PTC == 0)	
+		if (PORT->hDevice == 0 && PORT->PTC == 0 && _stricmp(PORT->IOBASE, "CM108") != 0)
 		{
 			// Try to reopen every 15 secs 
 			
@@ -3677,6 +3685,75 @@ VOID AddNMEAChecksum(char * msg)
 	sprintf(++msg, "%02X\r\n", CRC);
 }
 
+char * CM108Device = NULL;
+
+void DecodeCM108(int Port, char * ptr)
+{
+	// Called if Device Name or PTT = Param is CM108
+
+#ifdef WIN32
+
+	// Next Param is VID and PID - 0xd8c:0x8 or Full device name
+	// On Windows device name is very long and difficult to find, so 
+	//	easier to use VID/PID, but allow device in case more than one needed
+
+	char * next;
+	long VID = 0, PID = 0;
+
+	struct hid_device_info *devs, *cur_dev;
+	const char *path_to_open = NULL;
+	hid_device *handle = NULL;
+
+	if (strlen(ptr) > 16)
+		CM108Device = _strdup(ptr);
+	else
+	{
+		VID = strtol(ptr, &next, 0);
+		if (next)
+			PID = strtol(++next, &next, 0);
+
+		// Look for Device
+	
+		devs = hid_enumerate(VID, PID);
+		cur_dev = devs;
+		while (cur_dev)
+		{
+			if (cur_dev->vendor_id == VID && cur_dev->product_id == PID)
+			{
+				path_to_open = cur_dev->path;
+				break;
+			}
+			cur_dev = cur_dev->next;
+		}
+	
+		if (path_to_open)
+		{
+			handle = hid_open_path(path_to_open);
+	
+			if (handle)
+			{
+				hid_close(handle);
+				CM108Device = _strdup(path_to_open);
+			}
+			else
+			{
+				char msg[128];
+				sprintf(msg,"Port %d Unable to open CM108 device %x %x", Port, VID, PID);
+				WritetoConsole(msg);
+			}
+		}
+		hid_free_enumeration(devs);
+	}
+#else
+		
+	// Linux - Next Param HID Device, eg /dev/hidraw0
+
+	CM108Device = _strdup(ptr);
+#endif
+}
+
+
+
 // Called by Port Driver .dll to add/update rig info 
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
@@ -3706,6 +3783,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	BOOL DataPTT = FALSE;
 	int DataPTTOffMode = 1;				// ACC
 
+	CM108Device = NULL;
 	Debugprintf("Processing RIG line %s", buf);
 
 	ptr = strtok_s(&buf[10], " \t\n\r", &Context);
@@ -3781,22 +3859,38 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 PortFound:
 
-	_strupr(Context);
+	ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+	if (ptr == NULL) return (FALSE);
+
+	if (_stricmp(PORT->IOBASE, "CM108") == 0) // HID Addr instead of Speed
+		DecodeCM108(Port, ptr);
+	else	
+		PORT->SPEED = atoi(ptr);
 
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 
 	if (ptr == NULL) return (FALSE);
 
-	PORT->SPEED = atoi(ptr);
-
-	ptr = strtok_s(NULL, " \t\n\r", &Context);
-	if (ptr == NULL) return (FALSE);
-
-	if (memcmp(ptr, "PTTCOM", 6) == 0 || memcmp(ptr, "PTT=", 4) == 0)
+	if (_memicmp(ptr, "PTTCOM", 6) == 0 || _memicmp(ptr, "PTT=", 4) == 0)
 	{
-		strcpy(PORT->PTTIOBASE, ptr);
+		if (_stricmp(ptr, "PTT=CM108") == 0)
+		{
+			// PTT on CM108 GPIO
+
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+			if (ptr == NULL) return (FALSE);
+
+			DecodeCM108(Port, ptr);
+		}
+		else
+		{
+			_strupr(ptr);
+			strcpy(PORT->PTTIOBASE, ptr);
+		}
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		if (ptr == NULL) return (FALSE);
+
 	}
 
 //		if (strcmp(ptr, "ICOM") == 0 || strcmp(ptr, "YAESU") == 0 
@@ -3804,6 +3898,9 @@ PortFound:
 
 			// RADIO IC706 4E 5 14.103/U1 14.112/u1 18.1/U1 10.12/l1
 			// Read RADIO Lines
+
+	_strupr(ptr);
+
 
 	if (strcmp(ptr, "ICOM") == 0)
 		PORT->PortType = ICOM;
@@ -3830,7 +3927,19 @@ PortFound:
 
 	Debugprintf("Port type = %d", PORT->PortType);
 
+	_strupr(Context);
+
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+	if (ptr && strcmp(ptr, "PTTMUX") == 0)
+	{
+		if (PORT->PortType == PTT)
+		{
+			RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
+			strcpy(RIG->RigName, PTTRigName);
+			goto domux;	// PTTONLY with PTTMUX
+		}
+	}
 
 	if (ptr == NULL)
 	{
@@ -3853,7 +3962,7 @@ PortFound:
 		PORT->PortType = FT100;
 	}
 
-	// FT100 seems to be different to most other YAESU types
+	// FT990 seems to be different to most other YAESU types
 
 	if (strcmp(RigName, "FT990") == 0 && PORT->PortType == YAESU)
 	{
@@ -3964,8 +4073,12 @@ PortFound:
 			RIG->TSMenu = 69;
 	}
 
+domux:	
+	
 	RIG->PortNum = Port;
 	RIG->BPQPort |=  (1 << Port);
+
+	RIG->CM108Device = CM108Device;
 
 	while (ptr)
 	{
@@ -4929,7 +5042,7 @@ VOID SetupPortRIGPointers()
 		if (TNC->RIG == NULL)
 			TNC->RIG = Rig_GETPTTREC(port);		// Get from Intelock Port
 
-		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4 || TNC->Hardware == H_ARDOP)
+		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4 || TNC->Hardware == H_ARDOP || TNC->Hardware == H_VARA)
 			if (TNC->RIG && TNC->PTTMode)
 				TNC->RIG->PTTMode = TNC->PTTMode;
 	
@@ -5114,6 +5227,69 @@ WaitAgain:
 */
 #endif
 
+void CM108_set_ptt(struct RIGINFO *RIG, int PTTState)
+{
+	char io[5];
+	hid_device *handle;
+	int n;
+
+	io[0] = 0;
+	io[1] = 0;
+	io[2] = 1 << (3 - 1);
+	io[3] = PTTState << (3 - 1);
+	io[4] = 0;
+
+	if (RIG->CM108Device == NULL)
+		return;
+
+#ifdef WIN32
+	handle = hid_open_path(RIG->CM108Device);
+
+	if (!handle) {
+		printf("unable to open device\n");
+ 		return;
+	}
+
+	n = hid_write(handle, io, 5);
+	if (n < 0)
+	{
+		printf("Unable to write()\n");
+		printf("Error: %ls\n", hid_error(handle));
+	}
+	
+	hid_close(handle);
+
+#else
+
+	int fd;
+
+	fd = open (RIG->CM108Device, O_WRONLY);
+		
+	if (fd == -1)
+	{
+          printf ("Could not open %s for write, errno=%d\n", RIG->CM108Device, errno);
+          return;
+	}
+	
+	io[0] = 0;
+	io[1] = 0;
+	io[2] = 1 << (3 - 1);
+	io[3] = PTTState << (3 - 1);
+	io[4] = 0;
+
+	n = write (fd, io, 5);
+	if (n != 5)
+	{
+		printf ("Write to %s failed, n=%d, errno=%d\n", RIG->CM108Device, n, errno);
+	}
+	
+	close (fd);
+#endif
+	return;
+
+}
+
+
 /*
 int CRow;
 
@@ -5273,4 +5449,8 @@ return TRUE;
 	return (INT_PTR)FALSE;
 }
 
+*/
+
+/*
+\\?\hid#vid_0d8c&pid_0008&mi_03#7&54c70fe&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}
 */
