@@ -1,0 +1,292 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"> 
+<head> 
+
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"/> 
+<title>Packet Network Display</title> 
+
+<script type="text/javascript"
+src="https://maps.googleapis.com/maps/api/js?libraries=geometry&sensor=false&key=AIzaSyA2a_TWSU8xlL-KFUwmVRbi9pBKaxiB5H0">
+</script>
+<script type="text/javascript">
+//<![CDATA[
+
+var Centre = new google.maps.LatLng(-5, -70);
+var Zoom = 2;
+var NodesFile = "Status.txt";
+ 
+var map;
+var baseicon;
+
+var pointx;
+var point2x;
+
+var markers = [];
+
+var mouse_in_polyline = 0;
+var myHtml;
+
+var currentinfo;
+
+function initialize()
+{
+ 	newDiv = document.createElement("div");
+	newDiv.innerHTML = "<h2>Waiting for Data...</h2>";
+	document.body.insertBefore(newDiv, document.getElementById("map"));
+	
+	loadMap();
+	GetData();
+
+}
+
+var mapOptions = {
+    zoom: 2,
+    center: new google.maps.LatLng(-5, -70)
+}
+function loadMap()
+{
+	map = new google.maps.Map(document.getElementById("map"), mapOptions);
+			
+//	map.addControl(new TextControl()); 
+
+	baseicon = new google.maps.Marker();
+	baseicon.image = "greenmarker.png";
+//	baseicon.iconSize = new GSize(15, 20);
+//	baseicon.iconAnchor = new google.maps.Point(7, 20);
+//	baseicon.infoWindowAnchor = new google.maps.Point(9, 2);
+//	baseicon.infoShadowAnchor = new google.maps.Point(18, 25);
+}
+
+var Line = [];
+var Text = [];
+var infowindow = [];
+
+function GetData() {
+
+	var request = new XMLHttpRequest();
+		
+	request.open("GET", NodesFile, true)
+		
+	request.onreadystatechange = function()
+	{
+		if (request.readyState == 4)
+		{
+			var text = request.responseText;
+			var lines = text.split("|");
+			var i = 1;
+			
+			// First line is a timestamp
+				
+			newDiv.innerHTML = "<h2>Last Updated " + lines[0] + "</h2>";
+							
+			while(1)
+			{
+				if (lines[i].length < 5)
+				{
+				   break;
+				}
+				
+				var elements = lines[i].split(",");
+				
+				pointx = new google.maps.LatLng(parseFloat(elements[2]), parseFloat(elements[1]));
+				
+				// Either a Node, or a Line between nodes
+							
+				if (elements[0] == "Line")
+				{
+				    point2x = new google.maps.LatLng(parseFloat(elements[4]), parseFloat(elements[3]));
+					var colour;
+					
+					var LineCoordinates = [
+						point2x,
+						pointx 
+				 	];
+						
+					if (elements[5] == 0)		// Down - Black
+						colour = "#000000";
+					else
+						if (elements[5] == 1) // One end up = yellow
+							colour = "#ffff00";
+						else
+							if (elements[5] == 2) // Both ends up - green
+								colour =  "#00ff00";
+							else   			  // Mismatch - Blue
+								colour = "#0000ff";
+		
+					Line[i] = new google.maps.Polyline({
+						path: LineCoordinates,
+						geodesic: false,
+						strokeColor: colour,
+						strokeOpacity: 1.0,
+						strokeWeight: 2});
+											
+					var dist = google.maps.geometry.spherical.computeDistanceBetween(point2x, pointx, 3996);
+					
+					Text[i] = elements[6] + "<br>Distance " + dist.toFixed(0) + " Miles";
+						
+					SetLinePopup(i)
+
+					Line[i].setMap(map);
+					
+					markers.push(Line[i]);
+				}
+				else
+				{
+				 	// Node. Element 0 is call - not used here
+					
+					var point = new google.maps.LatLng(parseFloat(elements[2]), parseFloat(elements[1]));
+												
+					var marker = new google.maps.Marker({
+						position: point,
+						zIndex: 2,
+						map: map});
+											
+					var image = {
+						url: elements[3],
+						origin: new google.maps.Point(0, 0),
+						anchor: new google.maps.Point(35, 10)};
+
+					SetNodePopup(marker, elements[4], elements[5]);
+					marker.setIcon(image);
+						
+					markers.push(marker);
+					
+					image = {
+						url: "XXXX.down.png",
+						origin: new google.maps.Point(0, 0),
+						anchor: new google.maps.Point(35, 10)};
+												
+					marker = new google.maps.Marker({
+						position: point,
+						zIndex: 1,
+						map: map});
+						
+					marker.setIcon(image);
+				
+					SetNodePopup(marker, elements[4], elements[5]);
+					
+					markers.push(marker);
+				}
+				i=i+1;
+			}
+		}
+	}
+	request.send();
+}
+
+function SetLinePopup(Index)
+{
+	infowindow[Index] = new google.maps.InfoWindow({
+	content: "<div style=\"width:200px; height:200px>\">" + Text[Index] + "</div>"})
+
+	google.maps.event.addListener(Line[Index], 'mouseover', function(event) {
+		infowindow[Index].setPosition(event.latLng);
+		infowindow[Index].open(map);
+		currentinfo = infowindow[Index];});
+						
+	google.maps.event.addListener(Line[Index], 'mouseout', function(event) {
+		infowindow[Index].close();
+		currentinfo = null;});
+}
+
+function SetNodePopup(marker, popuptype, popup)
+{
+	var popuphtml = "<div style=\"width:200px; height:200px>\" id=\"popup\">" + popup + "</div>";
+	
+	var nodeinfowindow = new google.maps.InfoWindow({
+		content: popuphtml});
+
+	if (popuptype == 0)
+	{
+		google.maps.event.addListener(marker, 'mouseover', function(event) {
+			nodeinfowindow.setPosition(event.latLng),
+			nodeinfowindow.open(map)});
+						
+		google.maps.event.addListener(marker, 'mouseout', function(event) {
+			nodeinfowindow.close();});
+	}
+	else
+	{
+		google.maps.event.addListener(marker, 'mouseover', function(event) {
+			nodeinfowindow.setPosition(event.latLng),
+			nodeinfowindow.open(map)});
+	}
+}
+
+// Refresh map every 300 seconds
+
+setInterval ( "Refresh()", 300000 );
+
+function Refresh ( )
+{
+	var object;
+	
+	while(markers[0])
+	{
+		object = markers.pop();
+		object.setMap(null);
+		object = null;
+	}
+	GetData();
+}
+
+//function TextControl() {}
+
+//TextControl.prototype = new GControl();
+//TextControl.prototype.initialize = function(map)
+//{
+ // var container = document.createElement("div");
+  
+//  var zoomInDiv = document.createElement("div");
+//  this.setButtonStyle_(zoomInDiv);
+ // container.appendChild(zoomInDiv);
+//  zoomInDiv.appendChild(document.createTextNode("Refresh"));
+//  google.maps.event.addDomListener(zoomInDiv, "click", function() {
+//    Refresh();
+//  });
+
+ // var zoomOutDiv = document.createElement("div");
+ // this.setButtonStyle_(zoomOutDiv);
+ // container.appendChild(zoomOutDiv);
+ // zoomOutDiv.appendChild(document.createTextNode("Zoom Out"));
+  //google.maps.event.addDomListener(zoomOutDiv, "click", function() {
+  //  map.zoomOut();
+  //});
+
+//  map.getContainer().appendChild(container);
+//  return container;
+//}
+
+// By default, the control will appear in the top left corner of the
+// map with 7 pixels of padding.
+
+
+newDiv = document.createElement("div");
+  newDiv.innerHTML = "<h1>Hi there and greetings!</h1>";
+
+
+//]]>
+</script>
+ 
+
+</head>
+<body onload="initialize()" bgcolor="#0099CC" vlink="#000000" link="#000000" alink="#000000">
+<div id="map" style="width:100%px;height:615px"></div>
+<center>
+
+<font color="#FFFFFF">Key - </font><b><font color="#00FF00"><u>Green</u></font></b><font color="#FFFFFF"> = Link up, reported from both ends. 
+</font><font color="#FFFF00"><u><b>Yellow</b></u> </font><font color="#FFFFFF">= Link up, reported from one end<br>
+</font><u><b>Black</b></u><font color="#FFFFFF"><b> </b>= Link Down, reported from both ends,
+</font><u><b><font color="#000099">Blue</font></b></u><font color="#000099">
+</font><font color="#FFFFFF">= Link Down, reported from one end.<br> A </font>
+<u><b><font color="#000099">Blue</font></b></u><font color="#FFFFFF"> link may indicate either a configuration mismatch, or one end isn't sending any reports.
+</font>
+<p><font color="#FFFF00">&nbsp;<a href="http://www.ve9sc.com"><font color="#FFFF00">VE9SC</font></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </font><font color="#FFFFFF">
+<a href="mailto:ve9sc@ve9sc.com?subject=BPQ BBS/Chat Node"><font color="#FFFF00">Email: ve9sc@ve9sc.com</font></a></font><font color="#FFFF00">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="http://www.cantab.net/users/john.wiseman/Documents/">
+<font color="#FFFF00">G8BPQ&nbsp; BPQ Information Page</font></a></font></p>
+</center>
+
+
+</body>
+</html>

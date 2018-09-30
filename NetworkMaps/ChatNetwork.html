@@ -5,213 +5,134 @@
 <meta http-equiv="content-type" content="text/html; charset=UTF-8"/> 
 <title>Packet Network Display</title> 
 
-<script type="text/javascript"
-src="https://maps.googleapis.com/maps/api/js?libraries=geometry&sensor=false&key=AIzaSyA2a_TWSU8xlL-KFUwmVRbi9pBKaxiB5H0">
-</script>
+
+ <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css" integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA==" crossorigin=""/>
+
+ <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js" integrity="sha512-nMMmRyTVoLYqjP9hrbed9S+FzjZHW5gY1TWCHA5ckwXZBadntCNs8kEqAWdrb9O7rxbCaA4lKTIWjDXZxflOcA==" crossorigin=""></script>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+
 <script type="text/javascript">
+
 //<![CDATA[
 
-var Centre = new google.maps.LatLng(-5, -70);
-var Zoom = 2;
 var NodesFile = "Status.txt";
  
-var map;
-var baseicon;
-
+var mymap;
 var pointx;
 var point2x;
+var layergroup;
+var latlng = L.latLng(40, -40);
+var Zoom = 2;
 
-var markers = [];
-
-var mouse_in_polyline = 0;
-var myHtml;
-
-var currentinfo;
+var mouselatlng;
 
 function initialize()
 {
  	newDiv = document.createElement("div");
 	newDiv.innerHTML = "<h2>Waiting for Data...</h2>";
 	document.body.insertBefore(newDiv, document.getElementById("map"));
-	
+
 	loadMap();
 	GetData();
-
 }
 
-var mapOptions = {
-    zoom: 2,
-    center: new google.maps.LatLng(-5, -70)
-}
 function loadMap()
 {
-	map = new google.maps.Map(document.getElementById("map"), mapOptions);
-			
-//	map.addControl(new TextControl()); 
+	mymap = L.map(document.getElementById("map")).setView(latlng, Zoom);
 
-	baseicon = new google.maps.Marker();
-	baseicon.image = "greenmarker.png";
-//	baseicon.iconSize = new GSize(15, 20);
-//	baseicon.iconAnchor = new google.maps.Point(7, 20);
-//	baseicon.infoWindowAnchor = new google.maps.Point(9, 2);
-//	baseicon.infoShadowAnchor = new google.maps.Point(18, 25);
-}
-
-var Line = [];
-var Text = [];
-var infowindow = [];
-
-function GetData() {
-
-	var request = new XMLHttpRequest();
-		
-	request.open("GET", NodesFile, true)
-		
-	request.onreadystatechange = function()
-	{
-		if (request.readyState == 4)
-		{
-			var text = request.responseText;
-			var lines = text.split("|");
-			var i = 1;
-			
-			// First line is a timestamp
-				
-			newDiv.innerHTML = "<h2>Last Updated " + lines[0] + "</h2>";
-							
-			while(1)
-			{
-				if (lines[i].length < 5)
-				{
-				   break;
-				}
-				
-				var elements = lines[i].split(",");
-				
-				pointx = new google.maps.LatLng(parseFloat(elements[2]), parseFloat(elements[1]));
-				
-				// Either a Node, or a Line between nodes
-							
-				if (elements[0] == "Line")
-				{
-				    point2x = new google.maps.LatLng(parseFloat(elements[4]), parseFloat(elements[3]));
-					var colour;
-					
-					var LineCoordinates = [
-						point2x,
-						pointx 
-				 	];
-						
-					if (elements[5] == 0)		// Down - Black
-						colour = "#000000";
-					else
-						if (elements[5] == 1) // One end up = yellow
-							colour = "#ffff00";
-						else
-							if (elements[5] == 2) // Both ends up - green
-								colour =  "#00ff00";
-							else   			  // Mismatch - Blue
-								colour = "#0000ff";
-		
-					Line[i] = new google.maps.Polyline({
-						path: LineCoordinates,
-						geodesic: false,
-						strokeColor: colour,
-						strokeOpacity: 1.0,
-						strokeWeight: 2});
-											
-					var dist = google.maps.geometry.spherical.computeDistanceBetween(point2x, pointx, 3996);
-					
-					Text[i] = elements[6] + "<br>Distance " + dist.toFixed(0) + " Miles";
-						
-					SetLinePopup(i)
-
-					Line[i].setMap(map);
-					
-					markers.push(Line[i]);
-				}
-				else
-				{
-				 	// Node. Element 0 is call - not used here
-					
-					var point = new google.maps.LatLng(parseFloat(elements[2]), parseFloat(elements[1]));
-												
-					var marker = new google.maps.Marker({
-						position: point,
-						zIndex: 2,
-						map: map});
-											
-					var image = {
-						url: elements[3],
-						origin: new google.maps.Point(0, 0),
-						anchor: new google.maps.Point(35, 10)};
-
-					SetNodePopup(marker, elements[4], elements[5]);
-					marker.setIcon(image);
-						
-					markers.push(marker);
-					
-					image = {
-						url: "XXXX.down.png",
-						origin: new google.maps.Point(0, 0),
-						anchor: new google.maps.Point(35, 10)};
-												
-					marker = new google.maps.Marker({
-						position: point,
-						zIndex: 1,
-						map: map});
-						
-					marker.setIcon(image);
-				
-					SetNodePopup(marker, elements[4], elements[5]);
-					
-					markers.push(marker);
-				}
-				i=i+1;
-			}
-		}
-	}
-	request.send();
-}
-
-function SetLinePopup(Index)
-{
-	infowindow[Index] = new google.maps.InfoWindow({
-	content: "<div style=\"width:200px; height:200px>\">" + Text[Index] + "</div>"})
-
-	google.maps.event.addListener(Line[Index], 'mouseover', function(event) {
-		infowindow[Index].setPosition(event.latLng);
-		infowindow[Index].open(map);
-		currentinfo = infowindow[Index];});
-						
-	google.maps.event.addListener(Line[Index], 'mouseout', function(event) {
-		infowindow[Index].close();
-		currentinfo = null;});
-}
-
-function SetNodePopup(marker, popuptype, popup)
-{
-	var popuphtml = "<div style=\"width:200px; height:200px>\" id=\"popup\">" + popup + "</div>";
+	L.tileLayer('http://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f', {
+		maxZoom: 16,
+		attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+			'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+			'Imagery Â© <a href="http://thunderforest.com/">thunderforest.com</a>',
+		id: 'mapbox.streets'
+	}).addTo(mymap);
 	
-	var nodeinfowindow = new google.maps.InfoWindow({
-		content: popuphtml});
+	layergroup = L.layerGroup().addTo(mymap);
+	mymap.on('mousemove', function (e) {mouselatlng = e.latlng}); 
+}
 
-	if (popuptype == 0)
+
+function GetData()
+{
+	$.ajax({url: "Status.txt", cache: false})
+	.done(function(Nodes){NodeList = Nodes;processData(NodeList);})	
+	.fail(function(jqXHR, textStatus, errorThrown){alert("Failed to load Node data");})
+//	.always(function() {alert( "finished" );})
+	;
+ }
+			
+function processData(text)
+{
+	var lines = text.split("|");
+	var i = 1;
+	var dist;
+	var colour;
+	var html;
+	
+	 layergroup.clearLayers();
+			
+	// First line is a timestamp
+				
+	newDiv.innerHTML = "<h2>Last Updated " + lines[0] + "</h2>";
+							
+	while(1)
 	{
-		google.maps.event.addListener(marker, 'mouseover', function(event) {
-			nodeinfowindow.setPosition(event.latLng),
-			nodeinfowindow.open(map)});
+		if (lines[i].length < 5) break;
+	
+		var elements = lines[i].split(",");
+				
+		pointx = L.latLng(elements[2], elements[1]);
+	
+		// Either a Node, or a Line between nodes
+							
+		if (elements[0] == "Line")
+		{
+			point2x = L.latLng(elements[4], elements[3]);
+					
+			var latlngs = [point2x, pointx];
 						
-		google.maps.event.addListener(marker, 'mouseout', function(event) {
-			nodeinfowindow.close();});
-	}
-	else
-	{
-		google.maps.event.addListener(marker, 'mouseover', function(event) {
-			nodeinfowindow.setPosition(event.latLng),
-			nodeinfowindow.open(map)});
+			if (elements[5] == 0)		// Down - Black
+				colour = "#000000";
+			else
+				if (elements[5] == 1) // One end up = yellow
+					colour = "#ffff00";
+				else
+					if (elements[5] == 2) // Both ends up - green
+						colour =  "#00ff00";
+					else   			  // Mismatch - Blue
+						colour = "#0000ff";
+		
+			dist = pointx.distanceTo(point2x) / 1609.34;
+				
+			L.polyline(latlngs, {color: colour}).addTo(layergroup)
+			.bindPopup(elements[6] + "<br>Distance " + dist.toFixed(0) + " Miles")
+			.on('mouseover', function (e) {this.openPopup(mouselatlng);})
+			.on('mouseout', function (e) {this.closePopup();});
+		}
+		else
+		{
+			// Node.
+			
+			if (elements[3].indexOf(".ok.") > 1)
+				html = '<b style="background-color: lime;">' + elements[0] + '</b>'
+			else
+				html = '<b style="background-color: OrangeRed;">' + elements[0] + '</b>'
+		
+			var myIcon =  L.divIcon({className: 'my-div-icon', iconSize: new L.Point(70, 14), html: html});
+		
+			L.marker([elements[2], elements[1]], {icon: myIcon})
+				.addTo(layergroup).bindPopup(elements[5])
+				.on('mouseover', function (e) {this.openPopup();})
+				.on('mouseout', function (e) {this.closePopup();});
+
+		}
+		i=i+1;
 	}
 }
+
 
 // Refresh map every 300 seconds
 
@@ -219,51 +140,8 @@ setInterval ( "Refresh()", 300000 );
 
 function Refresh ( )
 {
-	var object;
-	
-	while(markers[0])
-	{
-		object = markers.pop();
-		object.setMap(null);
-		object = null;
-	}
 	GetData();
 }
-
-//function TextControl() {}
-
-//TextControl.prototype = new GControl();
-//TextControl.prototype.initialize = function(map)
-//{
- // var container = document.createElement("div");
-  
-//  var zoomInDiv = document.createElement("div");
-//  this.setButtonStyle_(zoomInDiv);
- // container.appendChild(zoomInDiv);
-//  zoomInDiv.appendChild(document.createTextNode("Refresh"));
-//  google.maps.event.addDomListener(zoomInDiv, "click", function() {
-//    Refresh();
-//  });
-
- // var zoomOutDiv = document.createElement("div");
- // this.setButtonStyle_(zoomOutDiv);
- // container.appendChild(zoomOutDiv);
- // zoomOutDiv.appendChild(document.createTextNode("Zoom Out"));
-  //google.maps.event.addDomListener(zoomOutDiv, "click", function() {
-  //  map.zoomOut();
-  //});
-
-//  map.getContainer().appendChild(container);
-//  return container;
-//}
-
-// By default, the control will appear in the top left corner of the
-// map with 7 pixels of padding.
-
-
-newDiv = document.createElement("div");
-  newDiv.innerHTML = "<h1>Hi there and greetings!</h1>";
-
 
 //]]>
 </script>
@@ -286,7 +164,5 @@ newDiv = document.createElement("div");
 <a href="http://www.cantab.net/users/john.wiseman/Documents/">
 <font color="#FFFF00">G8BPQ&nbsp; BPQ Information Page</font></a></font></p>
 </center>
-
-
 </body>
 </html>
