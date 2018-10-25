@@ -55,6 +55,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define MAX_PENDING_CONNECTS 4
 
+extern UCHAR LogDirectory[];
+
 extern char * PortConfig[];
 
 static char ClassName[]="TELNETSERVER";
@@ -2797,6 +2799,8 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 	sock = accept(SocketId, (struct sockaddr *)&sin6, &addrlen);
 
 	send(sock,"No Free Sessions\r\n", 18,0);
+	Debugprintf("No Free Telnet Sessions");
+
 	Sleep (1000);
 	closesocket(sock);
 
@@ -4359,13 +4363,13 @@ int WriteLog(char * msg)
 
 	UCHAR Value[100];
 
-	if (BPQDirectory[0] == 0)
+	if (LogDirectory[0] == 0)
 	{
 		strcpy(Value, "logs/BPQTelnetServer.log");
 	}
 	else
 	{
-		strcpy(Value, BPQDirectory);
+		strcpy(Value, LogDirectory);
 		strcat(Value, "/");
 		strcat(Value, "logs/BPQTelnetServer.log");
 	}
@@ -4417,13 +4421,13 @@ VOID WriteCMSLog(char * msg)
 	T = time(NULL);
 	tm = gmtime(&T);
 
-	if (BPQDirectory[0] == 0)
+	if (LogDirectory[0] == 0)
 	{
 		strcpy(Value, "logs/CMSAccess");
 	}
 	else
 	{
-		strcpy(Value, BPQDirectory);
+		strcpy(Value, LogDirectory);
 		strcat(Value, "/");
 		strcat(Value, "logs/CMSAccess");
 	}

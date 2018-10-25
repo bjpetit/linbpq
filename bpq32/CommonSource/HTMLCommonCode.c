@@ -48,8 +48,6 @@ char * GetTemplateFromFile(int Version, char * FN)
 	}
 
 	hFile = fopen(MsgFile, "rb");
-
-	Debugprintf("%d", GetLastError());
 	
 	if (hFile == 0)
 	{

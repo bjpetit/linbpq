@@ -4250,18 +4250,20 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 			rest--;
 		}
 
-		//	Get a new buffer, and copy extra data to it.
-
-		SaveBuffer = (struct DATAMESSAGE *)GetBuff();
-	
-		if (SaveBuffer)
+		if (rest)					// May only have had LF
 		{
-			SaveBuffer->LENGTH = rest + 8;
-			SaveBuffer->PID = 0xf0;
-			memcpy(&SaveBuffer->L2DATA[0], ptr2, rest);
-			Session->PARTCMDBUFFER = SaveBuffer;
+			//	Get a new buffer, and copy extra data to it.
+
+			SaveBuffer = (struct DATAMESSAGE *)GetBuff();
+	
+			if (SaveBuffer)		//`Just ignore if no buffers
+			{
+				SaveBuffer->LENGTH = rest + 8;
+				SaveBuffer->PID = 0xf0;
+				memcpy(&SaveBuffer->L2DATA[0], ptr2, rest);
+				Session->PARTCMDBUFFER = SaveBuffer;
+			}
 		}
-		//`Just ignore if no buffers
 	}
 
 	//	GET PACLEN FOR THIS CONNECTION

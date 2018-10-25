@@ -96,6 +96,7 @@ int i2c_smbus_read_byte()
 #define NOPARAMS 128			// Don't send SETPARAMS frame
 #define FLDIGI 256				// Support FLDIGI COmmand Frames
 #define TRACKER 512				// SCS Tracker. Need to set KISS Mode 
+#define FASTI2C 1024			// Use BLocked I2C Reads (like ARDOP)
 
 int WritetoConsoleLocal(char * buff);
 VOID INITCOMMON(struct KISSINFO * PORT);
@@ -1583,6 +1584,54 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 
 	if (fd < 0)
 		return 0;
+	
+/*
+	if (PORT->KISSFLAGS & FASTI2C)
+	{
+		unsigned char Buffer[33];
+		BOOL Error;	
+		int gotThisTime = 0, i2clen, Len;
+
+		// FASTI2C mode reads 33 bytes with the first byte holding
+		// the actual data length (i2c library doesn't support returning
+		// less than requested
+
+
+		ptr = &npKISSINFO->RXBUFFER[0];
+	
+		while (Len < 460)
+		{
+			i2clen = ReadCOMBlockEx(fd, Buffer, 33, &Error);
+				
+			if (i2clen < 33 || i2clen == 5)
+				return 0;
+
+			if (Error)
+			{
+				Debugprintf("KISS  Fasti2c returned %d bytes Error %d", i2clen, Error);
+					return 0;
+			}
+		
+			gotThisTime = Buffer[0];
+
+			if (gotThisTime == 0)
+			{
+				if (Len)
+					break;			// Something to process
+
+				return;				// No More
+			}
+
+						memcpy(&TNC->RXBuffer[TNC->RXLen + Len], &Buffer[1], gotThisTime);
+	
+			Len += gotThisTime;
+
+			if (Buffer[0] < 32)
+				break;				// no more
+		}
+		
+
+*/
 
 	retval = i2c_smbus_read_byte(fd);
 	

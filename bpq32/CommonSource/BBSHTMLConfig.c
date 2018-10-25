@@ -115,7 +115,10 @@ struct MsgInfo * GetMsgFromNumber(int msgno);
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP);
 BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg);
 int MulticastStatusHTML(char * Reply);
+void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL LOCAL, char * Method, char * NodeURL, char * input, char * Reply, int * RLen);
+int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Session);
 
+void ReleaseWebMailStruct(WebMailInfo * WebMail);
 
 char UNC[] = "";
 char CHKD[] = "checked=checked ";
@@ -129,6 +132,7 @@ static char PassError[] = "<p align=center>Sorry, User or Password is invalid - 
 
 static char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
 
+extern char WebMailSignon[];
 
 char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
 	"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
@@ -138,16 +142,6 @@ char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><
 	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
 	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
-
-char WebMailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
-	"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
-	"<h3 align=center>Please enter Callsign and Password to access WebMail</h3>"
-	"<form method=post action=/WebMail/Signon>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
-
 
 
 char MailPage[] = "<html><head><title>%s's BBS Web Server</title></head>"
@@ -343,19 +337,6 @@ static char MsgEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-
 "<textarea cols=90 rows=33 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit><input name=Cancel value=Cancel type=submit><br></form>";
 
-static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
-"<title></title></head><body>"
-"<form style=\"font-family: monospace; \"method=post action=EMSave?%s>"
-"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 value=\"%s\" name=To><br>"
-"Subject <input size=60 name=Subj value=\"%s\"><br>"
-"Type &nbsp;&nbsp;&nbsp;<select tabindex=1 size=1 name=Type>"
-"<option value=P>P</option><option value=B>B</option><option value=T>T</option>"
-"</select> BID <input name=BID><br>"
-"<textarea cols=90 rows=33 name=Msg></textarea><br><br>"
-"<div style=\"text-align: center;\"><input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></div><br></form>";
-
-
- 
 static char WPDetail[] = "<form style=\"font-family: monospace;\" method=post action=/Mail/WP?%s>"
 "<br><table style=\"text-align: left; width: 431px;\" border=0 cellpadding=2 cellspacing=2><tbody>"
  
@@ -394,8 +375,6 @@ char * FwdDetailTemplate = NULL;
 char * WebMailTemplate = NULL;
 char * WebMailMsgTemplate = NULL;
 char * jsTemplate = NULL;
-
-
 
 static struct HTTPConnectionInfo * WebSessionList;	// active WebMail sessions
 
@@ -447,7 +426,13 @@ struct HTTPConnectionInfo * AllocateWebMailSession()
 		if (NOW - Session->WebMailLastUsed > 1200)	// 20 Mins
 		{
 			SaveNext = Session->Next;
+			
+			// Release amy malloc'ed resouces
+			
+			ReleaseWebMailStruct(Session->WebMail);
+
 			memset(Session, 0, sizeof(struct HTTPConnectionInfo));
+	
 			Session->Next = SaveNext;
 			goto UseThis;
 		}
@@ -459,12 +444,14 @@ struct HTTPConnectionInfo * AllocateWebMailSession()
 	if (Session == NULL)
 		return NULL;
 
-		if (WebSessionList)
+	if (WebSessionList)
 		Session->Next = WebSessionList;
 
 	WebSessionList = Session;
 
 UseThis:
+
+	Session->WebMail = zalloc(sizeof(WebMailInfo));
 
 	KeyVal = ((rand() % 100) + 1);
 
@@ -508,327 +495,6 @@ void ConvertTitletoUTF8(char * Title, char * UTF8Title)
 
 
 
-int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Session)
-{
- 	struct UserInfo * User = Session->User;
-	char Messages[8192];
-	int m;
-	struct MsgInfo * Msg;
-	char * ptr = Messages;
-	int n = 35;
-	char Via[64];
-	int Count = 0;
-
-	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len To      @       From    Subject\r\n\r\n");
-
-	for (m = LatestMsg; m >= 1; m--)
-	{
-		Msg = GetMsgFromNumber(m);
-		
-		if (Msg && CheckUserMsg(Msg, User->Call, User->flags & F_SYSOP))
-		{
-			char UTF8Title[128];
-			
-			// List if it is the right type and in the page range we want
-
-			if (Session->WebMailTypes[0] && strchr(Session->WebMailTypes, Msg->type) == 0) 
-				continue;
-
-			// All Types or right Type. Check Mine Flag
-
-			if (Session->WebMailMine)
-			{
-				// Only list if to or from me
-
-				if (strcmp(User->Call, Msg->to) != 0 && strcmp(User->Call, Msg->from) != 0)
-					continue;
-			}
-
-			if (Count++ < Session->WebMailSkip)
-				continue;
-
-			strcpy(Via, Msg->via);
-			strlop(Via, '.');
-
-			// make suretitle is UTF 8 encoded
-
-			ConvertTitletoUTF8(Msg->title, UTF8Title);
-			
-			ptr += sprintf(ptr, "<a href=""/WebMail/WM/%d?%s"">%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
-				Msg->number, Key, Msg->number,
-				FormatDateAndTime(Msg->datecreated, TRUE), Msg->type,
-				Msg->status, Msg->length, Msg->to, Via,
-				Msg->from, UTF8Title);
-
-			n--;
-
-			if (n == 0)
-				break;
-		}
-	}
-
-	if (WebMailTemplate == NULL)
-		WebMailTemplate = GetTemplateFromFile(5, "WebMailPage.txt");
-
-	return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Key, Key, Key, Key, Key, Key, Key, Messages);
-}
-
-int SendWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Number)
-{
-	char Message[100000] = "";
-	struct MsgInfo * Msg;
-	char * ptr = Message;
-	char * MsgBytes, * Save;
-	char FullTo[100];
-	char UTF8Title[128];
-	int Index;
-
-	Msg = GetMsgFromNumber(Number);
-
-	if (Msg == NULL)
-	{
-		ptr += sprintf(ptr, "Message %d not found\r\n", Number);
-		return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Key, Key, Key, Key, Key, Key, Key, Message);
-	}
-
-	if (!CheckUserMsg(Msg, User->Call, User->flags & F_SYSOP))
-	{
-		ptr += sprintf(ptr, "Message %d not for you\r", Number);
-		return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Key, Key, Key, Key, Key, Key, Key, Message);
-	}
-
-	if (_stricmp(Msg->to, "RMS") == 0)
-		 sprintf(FullTo, "RMS:%s", Msg->via);
-	else
-	if (Msg->to[0] == 0)
-		sprintf(FullTo, "smtp:%s", Msg->via);
-	else
-		strcpy(FullTo, Msg->to);
-
-	// make sure title is UTF 8 encoded
-
-	ConvertTitletoUTF8(Msg->title, UTF8Title);
-
-	ptr += sprintf(ptr, "From: %s%s\nTo: %s\nType/Status: %c%c\nDate/Time: %s\nBid: %s\nTitle: %s\n\n",
-		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, UTF8Title);
-
-	MsgBytes = Save = ReadMessageFile(Number);
-
-	if (Msg->type == 'P')
-		Index = PMSG;
-	else if (Msg->type == 'B')
-		Index = BMSG;
-	else if (Msg->type == 'T')
-		Index = TMSG;
-
-	if (MsgBytes)
-	{
-		if (Msg->B2Flags)
-		{
-			char * ptr1;
-	
-			// if message has attachments, display them if plain text
-
-			if (Msg->B2Flags & Attachments)
-			{
-				char * FileName[100];
-				int FileLen[100];
-				int Files = 0;
-				int BodyLen, NewLen;
-				int i;
-				char *ptr2;		
-		
-				ptr1 = MsgBytes;
-	
-				ptr += sprintf(ptr, "Message has Attachments\r\n\r\n");
-
-
-				while(*ptr1 != 13)
-				{
-					ptr2 = strchr(ptr1, 10);	// Find CR
-
-					if (memcmp(ptr1, "Body: ", 6) == 0)
-					{
-						BodyLen = atoi(&ptr1[6]);
-					}
-
-					if (memcmp(ptr1, "File: ", 6) == 0)
-					{
-						char * ptr3 = strchr(&ptr1[6], ' ');	// Find Space
-
-						FileLen[Files] = atoi(&ptr1[6]);
-
-						FileName[Files++] = &ptr3[1];
-						*(ptr2 - 1) = 0;
-					}
-				
-					ptr1 = ptr2;
-					ptr1++;
-				}
-
-				ptr1 += 2;			// Over Blank Line and Separator 
-
-				ptr += sprintf(ptr, "%s", ptr1);
-
-				ptr1 += BodyLen + 2;		// to first file
-
-				for (i = 0; i < Files; i++)
-				{
-					int n;
-					char * p = ptr1;
-					char c;
-
-					// Check if message is probably binary
-
-					int BinCount = 0;
-
-					NewLen = RemoveLF(ptr1, FileLen[i]);		// Removes LF agter CR but not on its own
-
-					for (n = 0; n < NewLen; n++)
-					{
-						c = *p;
-						
-						if (c == 10)
-							*p = 13;
-
-						if (c==0 || (c & 128))
-							BinCount++;
-
-						p++;
-
-					}
-
-					if (BinCount > NewLen/10)
-					{
-						// File is probably Binary
-
-						ptr += sprintf(ptr, "\rAttachment %s is a binary file\r", FileName[i]);
-					}
-					else
-					{
-						ptr += sprintf(ptr, "\rAttachment %s\r\r", FileName[i]);
-
-						User->Total.MsgsSent[Index] ++;
-						User->Total.BytesForwardedOut[Index] += NewLen;
-					}
-				
-					ptr1 += FileLen[i];
-					ptr1 +=2;				// Over separator
-				}
-				return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Key, Message);
-			}
-			
-			// Remove B2 Headers (up to the File: Line)
-			
-			ptr1 = strstr(MsgBytes, "Body:");
-
-			if (ptr1)
-				MsgBytes = ptr1;
-		}
-
-		// Remove lf chars
-
-//		Length = RemoveLF(MsgBytes, strlen(MsgBytes));
-
-		User->Total.MsgsSent[Index] ++;
-//		User->Total.BytesForwardedOut[Index] += Length;
-
-		// if body not UTF-8, convert it
-
-	if (WebIsUTF8(MsgBytes, strlen(MsgBytes)) == FALSE)
-	{
-		// With Windows it is simple - convert using current codepage
-		// I think the only reliable way is to convert to unicode and back
-
-		int origlen = strlen(MsgBytes) + 1;
-
-		UCHAR * BufferB = malloc(2 * origlen);
-
-#ifdef WIN32
-
-		WCHAR * BufferW = malloc(2 * origlen);
-		int wlen;
-		int len = origlen;
-
-		wlen = MultiByteToWideChar(CP_ACP, 0, MsgBytes, len, BufferW, origlen * 2); 
-		len = WideCharToMultiByte(CP_UTF8, 0, BufferW, wlen, BufferB, origlen * 2, NULL, NULL); 
-		
-		free(Save);
-		Save = MsgBytes = BufferB;
-		free(BufferW);
-
-#else
-		int left = 2 * strlen(MsgBytes);
-		int len = strlen(MsgBytes);
-		UCHAR * BufferBP = BufferB;
-		iconv_t * icu = NULL;
-
-		if (icu == NULL)
-			icu = iconv_open("UTF-8", "CP1252");
-
-		iconv(icu, NULL, NULL, NULL, NULL);		// Reset State Machine
-		iconv(icu, &MsgBytes, &len, (char ** __restrict__)&BufferBP, &left);
-	
-		free(Save);
-		Save = MsgBytes = BufferB;
-
-#endif
-
-	}
-
-
-		ptr += sprintf(ptr, "%s", MsgBytes);
-		free(Save);
-
-		ptr += sprintf(ptr, "\r\r[End of Message #%d from %s]\r", Number, Msg->from);
-
-		if ((_stricmp(Msg->to, User->Call) == 0) || ((User->flags & F_SYSOP) && (_stricmp(Msg->to, "SYSOP") == 0)))
-		{
-			if ((Msg->status != 'K') && (Msg->status != 'H') && (Msg->status != 'F') && (Msg->status != 'D'))
-			{
-				if (Msg->status != 'Y')
-				{
-					Msg->status = 'Y';
-					Msg->datechanged=time(NULL);
-				}
-			}
-		}
-	}
-	else
-	{
-		ptr += sprintf(ptr, "File for Message %d not found\r", Number);
-	}
-
-	return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Key, Message);
-}
-
-int KillWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Number)
-{
-	struct MsgInfo * Msg;
-	char Message[100] = "";
-
-	Msg = GetMsgFromNumber(Number);
-
-	if (Msg == NULL)
-	{
-		sprintf(Message, "Message %d not found", Number);
-		goto returnit;
-	}
-
-	if (OkToKillMessage(User->flags & F_SYSOP, User->Call, Msg))
-	{
-		FlagAsKilled(Msg);
-		sprintf(Message, "Message #%d Killed\r", Number);
-		goto returnit;
-	}
-
-	sprintf(Message, "Not your message\r");
-
-returnit:
-	return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Key, Message);
-}
-
-
 VOID UndoTransparency(char * ptr)
 {
 	// Undo any % transparency
@@ -863,231 +529,6 @@ VOID UndoTransparency(char * ptr)
 	*(ptr2++) = 0;
 }
 
-
-
-VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
-{
-	int ReplyLen = 0;
-	struct MsgInfo * Msg;
-	char * ptr, *input;
-	int MsgLen;
-	FILE * hFile;
-	char Type;
-
-	char * via = NULL;
-	char BID[32];
-	BIDRec * BIDRec;
-	char * MailBuffer;
-	char MsgFile[MAX_PATH];
-	int WriteLen=0;
-	char * HDest;
-	char * Title;
-	char * Vptr;
-	char * Context;
-	char Prompt[256] = "Message Saved";
-
-	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-
-	if (input == NULL)
-		return;
-	
-	if (strstr(input, "Cancel=Cancel"))
-	{
-		*RLen = sprintf(Reply, "%s", "<html><script>window.close();</script></html>");
-		return;
-	}
-
-	if (!strstr(input, "Send=Send"))
-		return;
-
-	ptr = strtok_s(input + 4, "&", &Context);
-	if (ptr)
-		HDest = &ptr[3];
-
-	ptr = strtok_s(NULL, "&", &Context);
-	if (ptr)
-		Title = &ptr[5];
-
-	ptr = strtok_s(NULL, "&", &Context);
-	if (ptr)
-		Type = ptr[5];
-
-	ptr = strtok_s(NULL, "&", &Context);
-	if (ptr)
-		strcpy(BID, &ptr[4]);
-
-	UndoTransparency(BID);
-	UndoTransparency(HDest);
-	UndoTransparency(Title);
-
-	strlop(BID, ' ');
-	if (strlen(BID) > 12)
-		BID[12] = 0;
-
-	ptr = strtok_s(NULL, "&", &Context);
-
-	if (ptr)
-		ptr+=4;			// to message body
-
-	UndoTransparency(ptr);
-
-	MsgLen = strlen(ptr);
-
-	if (strlen(HDest) == 0)
-	{
-		*RLen = sprintf(Reply, "%s", "<html><script>alert(\"To: Call Missing!\");window.close();</script></html>");
-		return;
-	}
-
-	if (strlen(BID))
-	{		
-		if (LookupBID(BID))
-		{
-			// Duplicate bid
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"Duplicate BID\");window.close();</script></html>");
-			return;
-		}
-	}
-
-	if (Type == 'B')
-	{
-		if (RefuseBulls)
-		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.close();</script></html>");
-			return;
-		}
-
-		if (Session->User->flags & F_NOBULLS)
-		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"You are not allowed to send Bulls\");window.close();</script></html>");
-			return;
-		}
-	}
-	
-	Msg = AllocateMsgRecord();
-		
-	// Set number here so they remain in sequence
-		
-	Msg->number = ++LatestMsg;
-	MsgnotoMsg[Msg->number] = Msg;
-
-	strcpy(Msg->from, Session->User->Call);
-
-	if (_memicmp(HDest, "rms:", 4) == 0 || _memicmp(HDest, "rms/", 4) == 0)
-	{
-		Vptr=&HDest[4];
-		strcpy(Msg->to, "RMS");
-	}
-	else if (_memicmp(HDest, "smtp:", 5) == 0)
-	{
-		if (ISP_Gateway_Enabled)
-		{
-			Vptr=&HDest[5];
-			Msg->to[0] = 0;
-		}
-	}
-	else
-	{
-		Vptr = strlop(HDest, '@');
-		if (strlen(HDest) > 6)
-			HDest[6] = 0;
-		strcpy(Msg->to, _strupr(HDest));
-	}
-
-	if (SendBBStoSYSOPCall)
-		if (_stricmp(HDest, BBSName) == 0)
-			strcpy(Msg->to, SYSOPCall);
-
-
-	if (Vptr)
-	{
-		if (strlen(Vptr) > 40)
-			Vptr[40] = 0;
-
-		strcpy(Msg->via, _strupr(Vptr));
-	}
-	else
-	{
-		// No via. If not local user try to add BBS 
-	
-		struct UserInfo * ToUser = LookupCall(Msg->to);
-
-		if (ToUser)
-		{
-			// Local User. If Home BBS is specified, use it
-
-			if (ToUser->HomeBBS[0])
-			{
-				strcpy(Msg->via, ToUser->HomeBBS);
-				sprintf(Prompt, "%s added from HomeBBS", Msg->via);
-			}
-		}
-		else
-		{
-			// Not local user - Check WP
-			
-			WPRecP WP = LookupWP(Msg->to);
-
-			if (WP)
-			{
-				strcpy(Msg->via, WP->first_homebbs);
-				sprintf(Prompt, "%s added from WP", Msg->via);
-			}
-		}
-	}
-
-	if (strlen(Title) > 60)
-		Title[60] = 0;
-
-	strcpy(Msg->title,Title);
-	Msg->type = Type;
-	Msg->status = 'N';
-
-	if (strlen(BID) == 0)
-		sprintf_s(BID, sizeof(BID), "%d_%s", LatestMsg, BBSName);
-
-	strcpy(Msg->bid, BID);
-
-	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
-
-	BIDRec = AllocateBIDRecord();
-
-	strcpy(BIDRec->BID, Msg->bid);
-	BIDRec->mode = Msg->type;
-	BIDRec->u.msgno = LOWORD(Msg->number);
-	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
-
-	MailBuffer = malloc(MsgLen + 2000);		// Allow for a B2 Header if attachments
-
-	Msg->length = MsgLen;
-
-	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
-	
-	hFile = fopen(MsgFile, "wb");
-	
-	if (hFile)
-	{
-		WriteLen = fwrite(ptr, 1, Msg->length, hFile); 
-		fclose(hFile);
-	}
-
-	MatchMessagetoBBSList(Msg, 0);
-
-	BuildNNTPList(Msg);				// Build NNTP Groups list
-
-	SaveMessageDatabase();
-	SaveBIDDatabase();
-
-	*RLen = sprintf(Reply, "<html><script>alert(\"%s\");window.close();</script></html>", Prompt);
-
-	return;
-}
-
-
-
-
-
-
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen)
 {
 	char * Context = 0, * NodeURL;
@@ -1108,100 +549,15 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 	if (_memicmp(URL, "/WebMail", 8) == 0)
 	{
-		// Webmail doesn't use the normal Mail Key.
+		// Pass All Webmail messages to Webmail
+			
+		ProcessWebMailMessage(Session, Context, LOCAL, Method, NodeURL, input, Reply, RLen);
+		return;
 
-		Key = Context;
-
-		if (Key[0])	
-		{
-			Session = FindWMSession(Key);
-
-			if (Session == NULL)
-			{
-				//	Lost Session
-
-				ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
-				*RLen = ReplyLen;
-				return;
-			}
-		}
 	}
 
 	if (strcmp(Method, "POST") == 0)
 	{	
-		if (_stricmp(NodeURL, "/WebMail/Signon") == 0)
-		{
-			char * msg = strstr(input, "\r\n\r\n");	// End of headers
-			char * user, * password, * Key;
-
-			if (msg)
-			{
-				struct UserInfo * User;
-
-				if (strstr(msg, "Cancel=Cancel"))
-				{
-//					ReplyLen = SetupNodeMenu(Reply);
-//					return ReplyLen;
-				}
-				// Webmail Gets Here with a dummy Session
-
-				Session = AllocateWebMailSession();
-
-				Key = Session->Key;
-		
-				user = strtok_s(&msg[9], "&", &Key);
-				password = strtok_s(NULL, "=", &Key);
-				password = Key;
-
-				Session->User = User = LookupCall(user);
-
-				if (User)
-				{
-					// Check Password
-
-					if (strcmp(User->pass, password) == 0)
-					{
-						// send Message Index
-
-						Session->WebMailLastUsed = time(NULL);
-						Session->WebMailSkip = 0;
-						Session->WebMailMine = FALSE;
-
-						if (WebMailTemplate)
-						{
-							free(WebMailTemplate);
-							WebMailTemplate = NULL;
-						}
-
-						*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 						return;
-					}
-				}
-
-				//	Bad User or Pass
-
-				ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
-				*RLen = ReplyLen;
-				return;
-			}
-		}
-
-		if (_stricmp(NodeURL, "/WebMail/EMSave") == 0)
-		{
-			//	Save New Message
-
-			SaveNewMessage(Session, input, Reply, RLen, Key);
-			return;
-		}
-
-		if (_stricmp(NodeURL, "/WebMail/WM/Reply/EMSave") == 0)
-		{
-			//	Save Reply
-
-			SaveNewMessage(Session, input, Reply, RLen, Key);
-			return;
-		}
-
 		if (_stricmp(NodeURL, "/Mail/Header") == 0)
 		{
 			*RLen = SendHeader(Reply, Session->Key);
@@ -1445,214 +801,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		*RLen = SendHeader(Reply, Session->Key);
  		return;
 	}
-
-	if (_stricmp(NodeURL, "/WebMail/WMLogout") == 0)
-	{
-		Session->Key[0] = 0;
-		Session->WebMailLastUsed = 0;
-		ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
-		*RLen = ReplyLen;
-		return;
-	}
-
-	if ((_stricmp(NodeURL, "/WebMail/MailEntry") == 0) ||
-		(_stricmp(NodeURL, "/WebMail") == 0) ||
-		(_stricmp(NodeURL, "/WebMail/") == 0))
-	{
-		// Entry from Menu if signed in, continue. If not and Localhost 
-		// signin as sysop.
-
-		if (Session->User == NULL)
-		{
-			// Not yet signed in
-
-			if (LOCAL)
-			{
-				// Webmail Gets Here with a dummy Session
-
-				Session = AllocateWebMailSession();
-
-				Key = Session->Key;
-
-				Session->User = LookupCall(BBSName);
 	
-				if (Session->User)
-				{
-					strcpy(NodeURL, "/WebMail/WebMail");
-					Session->WebMailSkip = 0;
-					Session->WebMailLastUsed = time(NULL);
-				}
-			}
-			else
-			{
-				//	Send Login Page
-
-				ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
-				*RLen = ReplyLen;
-				return;
-			}
-		}
-	}
-
-	if (_stricmp(NodeURL, "/WebMail/WebMail") == 0)
-	{
-		if (WebMailTemplate)
-		{
-			free(WebMailTemplate);
-			WebMailTemplate = NULL;
-		}
-
-		Session->WebMailSkip = 0;
-		Session->WebMailMine = FALSE;
-
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-
-	if (_stricmp(NodeURL, "/WebMail/WMAll") == 0)
-	{
-		Session->WebMailSkip = 0;
-		Session->WebMailTypes[0] = 0;
-		Session->WebMailMine = FALSE;
-
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-
-	if (_stricmp(NodeURL, "/WebMail/WMB") == 0)
-	{
-		Session->WebMailSkip = 0;
-		strcpy(Session->WebMailTypes, "B");
-		Session->WebMailMine = FALSE;
-
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-		
-	if (_stricmp(NodeURL, "/WebMail/WMP") == 0)
-	{
-		Session->WebMailSkip = 0;
-		strcpy(Session->WebMailTypes, "P");
-		Session->WebMailMine = FALSE;
-
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-
-	if (_stricmp(NodeURL, "/WebMail/WMT") == 0)
-	{
-		Session->WebMailSkip = 0;
-		strcpy(Session->WebMailTypes, "T");
-		Session->WebMailMine = FALSE;
-
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-
-	if (_stricmp(NodeURL, "/WebMail/WMMine") == 0)
-	{
-		Session->WebMailSkip = 0;
-		Session->WebMailTypes[0] = 0;
-		Session->WebMailMine = TRUE;
-		
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-
-
-	if (_stricmp(NodeURL, "/WebMail/WMSame") == 0)
-	{
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-	if (_stricmp(NodeURL, "/WebMail/WMNext") == 0)
-	{
-		Session->WebMailSkip += 35;
-
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-
-	if (_stricmp(NodeURL, "/WebMail/WMBack") == 0)
-	{
-		Session->WebMailSkip -= 35;
-
-		if (Session->WebMailSkip < 0)
-			Session->WebMailSkip  = 0;
-
-		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 		return;
-	}
-
-	if (memcmp(NodeURL, "/WebMail/WM/Reply/", 18) == 0)
-	{
-		// Reply to Message
-
-		int n = atoi(&NodeURL[18]);
-		struct MsgInfo * Msg;
-		char Message[100] = "";
-		char Title[100];
-
-		Msg = GetMsgFromNumber(n);
-
-		if (Msg == NULL)
-		{
-			sprintf(Message, "Message %d not found", n);
-			*RLen = sprintf(Reply, "%s", Message);
-			return;
-		}
-
-		sprintf(Title, "Re:%s", Msg->title);
-
-		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, Title);
-		return;
-	}
-
-
-
-	if (memcmp(NodeURL, "/WebMail/WM/", 12) == 0)
-	{
-		// Read Message
-
-		int n = atoi(&NodeURL[12]);
-
-		if (WebMailMsgTemplate)
-			free(WebMailMsgTemplate);
-
-		WebMailMsgTemplate = GetTemplateFromFile(2, "WebMailMsg.txt");
-
-		*RLen = SendWebMailMessage(Reply, Session->Key, Session->User, n);
-
- 		return;
-	}
-
-	if (memcmp(NodeURL, "/WebMail/WMDel/", 15) == 0)
-	{
-		// Kill  Message
-
-		int n = atoi(&NodeURL[15]);
-
-		*RLen = KillWebMailMessage(Reply, Session->Key, Session->User, n);
-
- 		return;
-	}
-
-	if (_stricmp(NodeURL, "/WebMail/NewMsg") == 0)
-	{
-		*RLen = sprintf(Reply, MsgInputPage, Key, "", "");
-		return;
-	}
-
-
-
-	if (_stricmp(NodeURL, "/Mail/EMSave") == 0)
-	{
-		//	Save Message Text
-
-		SaveMessageText(Session, input, Reply, RLen, Key);
-		return;
-	}
-
 	if (_stricmp(NodeURL, "/Mail/all.html") == 0)
 	{
 		*RLen = SendHeader(Reply, Session->Key);

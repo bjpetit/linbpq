@@ -2303,6 +2303,8 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 	
+				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar);
+
 				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
 				RigWriteCommBlock(PORT);
 				PORT->Retries = 2;
@@ -2353,7 +2355,9 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		}
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
-	
+
+		_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
+
 		PORT->TXLen = PORT->FreqPtr->Cmd1Len;					// First send the set Freq
 		RigWriteCommBlock(PORT);
 		PORT->Retries = 2;
@@ -3044,6 +3048,8 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 				if (RIG->RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
+				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
+
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 
 				if (PORT->PortType == YAESU)
@@ -3091,6 +3097,8 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 		
 		if (RIG->RIG_DEBUG)
 			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
+
+		_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
@@ -3399,6 +3407,8 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
 
+				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
+
 				RigWriteCommBlock(PORT);
 				PORT->CmdSent = 1;
 				PORT->Retries = 0;	
@@ -3433,6 +3443,8 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
+
+		_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
 
 		memcpy(Poll, &buffptr[30], datalen);
 
@@ -3494,6 +3506,8 @@ VOID DummyPoll(struct RIGPORTINFO * PORT)
 			{
 				if (RIG->RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
+
+				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 				PORT->TXLen = PORT->FreqPtr->Cmd1Len;

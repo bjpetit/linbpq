@@ -197,7 +197,7 @@ BOOL OpenLogfile(int Flags)
 	LT = time(NULL);
 	tm = gmtime(&LT);	
 
-	sprintf(FN,"%s/logs/log_%02d%02d%02d_%s.txt", GetBPQDirectory(), tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
+	sprintf(FN,"%s/logs/log_%02d%02d%02d_%s.txt", GetLogDirectory(), tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
 
 	LogHandle[Flags] = fopen(FN, "ab");
 		
@@ -371,9 +371,9 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf(Mess, format, arglist);
-//#ifndef LINBPQ
+#ifndef LINBPQ
 	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG_X);
-//#endif
+#endif
 	//	#ifdef _DEBUG 
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
@@ -2479,6 +2479,9 @@ void Flush(CIRCUIT * conn)
 	{
 		if (TXCount(conn->BPQStream) > 15)
 			return;						// Busy
+
+		if (conn->BBSFlags & SYSOPCHAT)		// Suspend queued output while sysop chatting
+			return;
 
 		if (conn->Paging && (conn->LinesSent >= conn->PageLen))
 			return;
@@ -5467,7 +5470,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 				// If using B2 forwarding we need the message size and Compressed size for FC proposal
 
-				if (conn->BBSFlags & FBBB2Mode)
+				if (conn->BBSFlags & FBBB2Mode) 
 				{
 					if (CreateB2Message(conn, FBBHeader, RLine) == FALSE)
 					{
@@ -7488,6 +7491,22 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 			break;
 
 		case 'F':			// FBB Blocked Forwarding
+
+			// Ignore unless preceeded by B. We don't support uncompressed blocked FBB
+		{	
+			int i = len;
+			char c;
+
+			while (i > 0)
+			{
+				c = SID[i--];
+				
+				if (c == '-' || c == 'B')
+					break;
+			}
+	
+			if (c == '-')
+				break;
 		
 			if (conn->UserPointer->flags & F_PMS)
 			{
@@ -7510,7 +7529,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 				conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
 			}
 			break;
-
+		}
 		case 'B':
 
 			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
@@ -9685,6 +9704,14 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	// if chatting to sysop pass message to BBS console
+
+	if (conn->BBSFlags & SYSOPCHAT)
+	{
+		SendUnbuffered(-1, Buffer,len);
+		return;
+	}
+
 	if (conn->Flags & GETTINGMESSAGE)
 	{
 		ProcessMsgLine(conn, user, Buffer, len);
@@ -9702,7 +9729,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
-	if (conn->Flags & GETTINGUSER || conn->NewUser)		// Could be new user but dont nned name
+	if (conn->Flags & GETTINGUSER || conn->NewUser)		// Could be new user but dont need name
 	{
 		if (memcmp(Buffer, ";FW:", 4) == 0 || Buffer[0] == '[')
 		{
@@ -9898,14 +9925,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
-	// if chatting to sysop pass message to BBS console
-
-	if (conn->BBSFlags & SYSOPCHAT)
-	{
-		SendUnbuffered(-1, Buffer,len);
-		return;
-	}
-
 	Cmd = strtok_s(Buffer, seps, &Context);
 
 	if (Cmd == NULL)
@@ -10036,7 +10055,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		YAPPSendFile(conn, user, Arg1);
 		return;
 	}
-
 
 	if (_memicmp(Cmd, "UH", 2) == 0 && conn->sysop)
 	{
@@ -10942,7 +10960,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 	{
 	case ENQ: // YAPP Send_Init
 
-		// Shouldn't occuer in session. Reset state
+		// Shouldn't occur in session. Reset state
 				
 		Mess[0] = ACK;
 		Mess[1] = 1;
@@ -11040,7 +11058,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 			Mess[1] = 0;
 			QueueMsg(conn, Mess, 2);
 			Flush(conn);
-			len = sprintf_s(Mess, sizeof(Mess), "YAPP Too much data receieved\r");
+			len = sprintf_s(Mess, sizeof(Mess), "YAPP Too much data received\r");
 			QueueMsg(conn, Mess, len);
 			WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
 			conn->InputLen = 0;
@@ -11243,6 +11261,12 @@ void YAPPSendFile(ConnectionInfo * conn, struct UserInfo * user, char * filename
 	char MsgFile[MAX_PATH];
 	FILE * hFile;
 	struct stat STAT;
+
+	if (filename == NULL)
+	{
+		nodeprintf(conn, "Filename missing\r");
+		return;
+	}
 
 	if (strstr(filename, "..") || strchr(filename, '/') || strchr(filename, '\\'))
 	{

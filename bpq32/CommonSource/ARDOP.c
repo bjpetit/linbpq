@@ -3163,7 +3163,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				return;			// No buffers, so ignore
 			}
 
-			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "ARDOP} Failure with %s\r", TNC->Streams[0].RemoteCall);
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[0].RemoteCall);
 
 			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 

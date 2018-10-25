@@ -645,6 +645,9 @@ VOID CLEARSESSIONENTRY(TRANSPORTENTRY * Session)
 	while (Session->L4RESEQ_Q)
 		ReleaseBuffer(Q_REM(&Session->L4RESEQ_Q));
 
+	if (Session->PARTCMDBUFFER)
+		ReleaseBuffer(Session->PARTCMDBUFFER);
+
 	memset(Session, 0, sizeof(TRANSPORTENTRY));
 }
 

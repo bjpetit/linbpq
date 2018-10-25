@@ -127,6 +127,7 @@ VOID WriteIPRLine(PROUTEENTRY RouteRecord, FILE * file);
 int CountBits(unsigned long in);
 VOID SendARPMsg(PARPDATA ARPptr, BOOL ToTAP);;
 BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR * AXCalls);
+int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
 
 #define ARPTIMEOUT 3600
 
@@ -2751,7 +2752,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 
 					// Save a copy to send on if ARP reply received
 					
-					buffptr = malloc(2048);
+ 					buffptr = malloc(2048);
 					
 					if (buffptr)
 					{
@@ -2761,7 +2762,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 							return TRUE;
 						}
 						memcpy(&buffptr->L2DATA[30], IPptr, ntohs(IPptr->IPLENGTH));
-						C_Q_ADD(&ARPptr->ARP_Q, buffptr);
+						C_Q_ADD_NP(&ARPptr->ARP_Q, buffptr);
 					}
 
 					SendARPMsg(ARPptr, SendtoTAP);

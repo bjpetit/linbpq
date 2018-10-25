@@ -40,7 +40,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #ifndef LINBPQ
 
-#define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
+//#define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 
 #include "commctrl.h"
 #include "Commdlg.h"
@@ -344,6 +344,7 @@ VOID * _GetBuff(char * File, int Line)
 {
 	UINT * Temp = Q_REM(&FREE_Q);
 	MESSAGE * Msg;
+	char * fptr = 0;
 
 //	FindLostBuffers();
 
@@ -358,6 +359,14 @@ VOID * _GetBuff(char * File, int Line)
 			MINBUFFCOUNT = QCOUNT;
 
 		Msg = (MESSAGE *)Temp;
+		fptr = File + strlen(File);
+		while (*fptr != '\\' && *fptr != '/')
+			fptr--;
+		fptr++;
+
+		memset((void *)Msg, 0, 64);		// simplify debugging lost buffers
+		sprintf(&Msg->DEST[1], "%s %d", fptr, Line);
+
 		Msg->Process = (short)GetCurrentProcessId();
 	}
 	else
@@ -3157,6 +3166,7 @@ VOID ResolveUpdateThread()
 
 		Debugprintf("Resolving %s", "update.g8bpq.net");
 		HostEnt1 = gethostbyname ("update.g8bpq.net");
+//		HostEnt1 = gethostbyname ("192.168.1.64");
 
 		if (HostEnt1)
 			memcpy(&reportdest.sin_addr.s_addr,HostEnt1->h_addr,4);

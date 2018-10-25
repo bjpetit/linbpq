@@ -99,7 +99,7 @@ static int RigControlRow = 185;
 #define NARROWMODE 12		// PI/II
 #define WIDEMODE 16			// PIII only
 
-extern UCHAR BPQDirectory[];
+extern UCHAR LogDirectory[];
 
 extern char * PortConfig[33];
 
@@ -159,7 +159,7 @@ static BOOL OpenLogFile(int Flags)
 		T = time(NULL);
 		tm = gmtime(&T);	
 
-		sprintf(FN,"%s/Logs/SCSLog_%02d%02d_%d.txt", BPQDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
+		sprintf(FN,"%s/Logs/SCSLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
 
 		LogHandle[Flags] = fopen(FN, "ab");
 	

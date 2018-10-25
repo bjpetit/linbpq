@@ -50,6 +50,7 @@ char LOC[7] = "";				// Maidenhead Locator for Reporting
 char ReportDest[7];
 
 UCHAR BPQDirectory[260] = ".";
+UCHAR LogDirectory[260] = "";
 UCHAR BPQProgramDirectory[260]="";
 
 UCHAR WINMOR[7] = {'W'+'W','I'+'I','N'+'N','M'+'M','O'+'O','R'+'R'};		// WINMOR IN AX25

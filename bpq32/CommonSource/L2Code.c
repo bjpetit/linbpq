@@ -306,16 +306,6 @@ VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 
 	//	NOT FOR ACTIVE LINK - SEE IF ADDRESSED TO OUR ADDRESSES
 
-	ISNETROMMSG = PORT->PORTL3FLAG;		// Set if L3 only and call to NETROMCALL
-	
-	if (CompareCalls(Buffer->DEST, NETROMCALL))
-		goto FORUS;
-
-	if (PORT->PORTL3FLAG)				// L3 Only Port?
-		goto NOTFORUS;					// If L3ONLY, only accept calls to NETROMCALL
-	
-	ISNETROMMSG = 0;
-
 	//	FIRST TRY PORT ADDR/ALIAS
 
 	if(PORT->PORTBBSFLAG == 1)
@@ -329,6 +319,16 @@ PORTCALLISBBS:
 	//	NODE IS NOT ACTIVE, SO PASS CALLS TO PORTCALL/ALIAS TO BBS
 
 	APPLMASK = 1;
+	
+	if (CompareCalls(Buffer->DEST, NETROMCALL))
+	{
+		ISNETROMMSG = 1;
+		goto FORUS;
+	}
+	if (PORT->PORTL3FLAG)				// L3 Only Port?
+		goto NOTFORUS;					// If L3ONLY, only accept calls to NETROMCALL
+	
+	ISNETROMMSG = 0;
 
 USING_NODE:
 
@@ -1264,8 +1264,12 @@ VOID SETUPNEWL2SESSION(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESS
 	LINK->LINKPORT = PORT;
 
 	if (LINK->LINKTYPE == 0)
-		LINK->LINKTYPE = 1;			// Uplink
-
+	{
+		if (ISNETROMMSG && NODE == 0)	// Only allow crosslink if node = 0
+			LINK->LINKTYPE = 3;			// Crosslink
+		else
+			LINK->LINKTYPE = 1;			// Uplink
+	}
 	LINK->L2TIMER = 0;				// CANCEL TIMER
 
 	LINK->L2SLOTIM = T3;			// SET FRAME SENT RECENTLY

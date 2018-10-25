@@ -445,7 +445,8 @@ struct UserInfo
 	struct MsgStats	Last;
 	
 	char CMSPass[16];			// For Secure Signon
-	char Filler[48];			// So we can add a few fields wirhout another resize
+	int WebSeqNo;
+	char Filler[44];			// So we can add a few fields wirhout another resize
 };
 
 // flags equates
@@ -894,6 +895,34 @@ typedef struct SocketConnectionInfo
 	int Timeout;				// Used to close a session that is open too long
 
 } SocketConn;
+
+typedef struct KEYVALUES
+{
+	char * Key;
+	char * Value;
+} KeyValues;
+
+typedef struct WEBMAILINFO
+{
+	// Info for HTML Forms Processing
+	
+	struct HtmlFormDir * Dir;	// HTML Directory
+	char * txtFileName;		// Template Name for current message
+	char * InputHTMLName;	// Template to input message
+	char * DisplayHTMLName;	// Template to display message
+	char * ReplyHTMLName;	// Template for replying to message
+	char * txtFile;			// Template data
+	char * OrigTo;			// To field when template loaded
+	char * OrigSubject;		// Subject field when template loaded
+	char * OrigBody;		// Msg text when template loaded
+	char * To;
+	char * Subject;
+	char * Body;
+	char * BID;
+	struct MsgInfo * Msg;		// Msg record if replying
+	KeyValues txtKeys[1000];	// Key/Value pairs for txt template. Used when creating or displaying
+	KeyValues XMLKeys[1000];	// Key/Value pairs from XML attachment
+}WebMailInfo;
 
 #define SMTPServer 1
 #define POP3SLAVE 2

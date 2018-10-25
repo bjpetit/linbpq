@@ -2,7 +2,7 @@
 Copyright 2001-2015 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
-
+ 
 LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -63,6 +63,7 @@ VOID SendLocation();
 int ChatPollStreams();
 void ChatTrytoSend();
 VOID BBSSlowTimer();
+int GetHTMLForms();
 
 BOOL IncludesMail = FALSE;
 BOOL IncludesChat = FALSE;
@@ -156,6 +157,7 @@ int _MYTIMEZONE = 0;
 
 
 UCHAR BPQDirectory[260];
+UCHAR LogDirectory[260];
 
 BOOL GetConfig(char * ConfigName);
 VOID DecryptPass(char * Encrypt, unsigned char * Pass, unsigned int len);
@@ -488,7 +490,10 @@ char * GetBPQDirectory()
 {
 	return BPQDirectory;
 }
-
+char * GetLogDirectory()
+{
+	return LogDirectory;
+}
 extern int POP3Timer;	
 
 int main(int argc, char * argv[])
@@ -548,14 +553,26 @@ int main(int argc, char * argv[])
 
 #ifdef WIN32
 	GetCurrentDirectory(256, BPQDirectory);
+	GetCurrentDirectory(256, LogDirectory);
 #else
 	getcwd(BPQDirectory, 256);
+	getcwd(LogDirectory, 256);
 #endif
 	Consoleprintf("Current Directory is %s\n", BPQDirectory);
 
+	for (i = 1; i < argc; i++)
+	{
+		if (_memicmp(argv[i], "logdir=", 7) == 0)
+		{
+			strcpy(LogDirectory, &argv[i][7]);
+			break;
+		}
+	}
+
+
 	// Make sure logs directory exists
 
-	sprintf(LogDir, "%s/logs", BPQDirectory);
+	sprintf(LogDir, "%s/logs", LogDirectory);
 
 #ifdef WIN32
 	CreateDirectory(LogDir, NULL);
@@ -637,12 +654,15 @@ int main(int argc, char * argv[])
 
 #endif
 
-	if (IncludesChat ||
-			(argc > 1 && _stricmp(argv[1], "chat") == 0) ||
-			(argc > 2 && _stricmp(argv[2], "chat") == 0) ||
-			(argc > 3 && _stricmp(argv[3], "chat") == 0))
+	for (i = 1; i < argc; i++)
 	{
-		RunChat = IncludesChat = TRUE;
+		if (_stricmp(argv[i], "chat") == 0)
+			IncludesChat = TRUE;
+	}
+
+	if (IncludesChat) 
+	{
+		RunChat = TRUE;
 
 		printf("Starting Chat\n");
 
@@ -683,12 +703,16 @@ int main(int argc, char * argv[])
 
 	// Start Mail if requested by command line or config
 
-	if (IncludesMail ||
-			(argc > 1 && _stricmp(argv[1], "mail") == 0) ||
-			(argc > 2 && _stricmp(argv[2], "mail") == 0) ||
-			(argc > 3 && _stricmp(argv[3], "mail") == 0))
+	for (i = 1; i < argc; i++)
 	{
-		RunMail = IncludesMail = TRUE;
+		if (_stricmp(argv[i], "mail") == 0)
+			IncludesMail = TRUE;
+	}
+
+
+	if (IncludesMail)
+	{
+		RunMail = TRUE;
 
 		printf("Starting Mail\n");
 
@@ -775,6 +799,7 @@ int main(int argc, char * argv[])
 	GetUserDatabase();
 	GetBIDDatabase();
 	GetBadWordFile();
+	GetHTMLForms();
 
 	// Make sure there is a user record for the BBS, with BBS bit set.
 
@@ -916,46 +941,49 @@ int main(int argc, char * argv[])
 
 #ifndef WIN32
 
-	if ((argc > 1 && stricmp(argv[1], "daemon") == 0) ||
-		(argc > 2 && stricmp(argv[2], "daemon") == 0) ||
-		(argc > 3 && stricmp(argv[3], "daemon") == 0))
+	for (i = 1; i < argc; i++)
 	{
-		// Convert to daemon
+		if (_stricmp(argv[i], "daemon") == 0)
+		{
+	
+			// Convert to daemon
+	
+			pid_t pid, sid;
 
-		pid_t pid, sid;
+		    /* Fork off the parent process */
+			pid = fork();
 
-	    /* Fork off the parent process */
-		pid = fork();
+			if (pid < 0)
+				exit(EXIT_FAILURE);
 
-		if (pid < 0)
-	        exit(EXIT_FAILURE);
+			if (pid > 0)
+				exit(EXIT_SUCCESS);
 
-		if (pid > 0)
-			exit(EXIT_SUCCESS);
+			/* Change the file mode mask */
 
-		/* Change the file mode mask */
+			umask(0);
 
-		umask(0);
+			/* Create a new SID for the child process */
 
-		/* Create a new SID for the child process */
+			sid = setsid();
 
-		sid = setsid();
+			if (sid < 0)
+				exit(EXIT_FAILURE);
 
-		if (sid < 0)
-			exit(EXIT_FAILURE);
+			 /* Change the current working directory */
 
-	    /* Change the current working directory */
+			if ((chdir("/")) < 0)
+				exit(EXIT_FAILURE);
 
-		if ((chdir("/")) < 0)
-			exit(EXIT_FAILURE);
+			/* Close out the standard file descriptors */
 
-		/* Close out the standard file descriptors */
+			printf("Entering daemon mode\n");
 
-		printf("Entering daemon mode\n");
-
-		close(STDIN_FILENO);
-        close(STDOUT_FILENO);
-        close(STDERR_FILENO);
+			close(STDIN_FILENO);
+			close(STDOUT_FILENO);
+			close(STDERR_FILENO);
+			break;
+		}
 	}
 #endif
 

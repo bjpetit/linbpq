@@ -813,7 +813,7 @@ int DeleteLogFiles()
 
 		 if (Age > LogAge)
 		 {
-			 sprintf(File, "%s/logs/%s%c", GetBPQDirectory(), ffd.cFileName, 0);
+			 sprintf(File, "%s/logs/%s%c", GetLogDirectory(), ffd.cFileName, 0);
 			 if (DeletetoRecycleBin)
 				DeletetoRecycle(File);
 			 else

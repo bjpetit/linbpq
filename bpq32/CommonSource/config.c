@@ -128,6 +128,21 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <ctype.h>
 #include <math.h>
 
+// KISS Options Equates
+
+#define CHECKSUM 1
+#define POLLINGKISS	2			// KISSFLAGS BITS
+#define ACKMODE	4				// CAN USE ACK REQURED FRAMES
+#define POLLEDKISS	8			// OTHER END IS POLLING US
+#define D700 16					// D700 Mode (Escape "C" chars
+#define TNCX 32					// TNC-X Mode (Checksum of ACKMODE frames includes ACK bytes
+#define PITNC 64				// PITNC Mode - can reset TNC with FEND 15 2
+#define NOPARAMS 128			// Don't send SETPARAMS frame
+#define FLDIGI 256				// Support FLDIGI COmmand Frames
+#define TRACKER 512				// SCS Tracker. Need to set KISS Mode 
+#define FASTI2C 1024			// Use BLocked I2C Reads (like ARDOP)
+
+
 
 struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
 
@@ -2409,7 +2424,21 @@ char rec[];
 {
 	hw = 255;
 	if (_stricmp(value,"ASYNC") == 0)
-	   hw = 0;
+	{
+		// Set some defaults
+
+		UCHAR * ptr = ConfigBuffer + portoffset;
+
+		struct PORTCONFIG * PORT = (struct PORTCONFIG *)ptr;
+
+		PORT->CHANNEL = 'A';
+		PORT->FRACK = 7000;
+		PORT->RESPTIME = 1000;
+		PORT->MAXFRAME = 4;
+		PORT->RETRIES = 6;
+		hw = 0;
+	}
+
 	if (_stricmp(value,"PC120") == 0)
 	   hw = 2;
 	if (_stricmp(value,"DRSI") == 0)
@@ -2449,7 +2478,20 @@ char rec[];
 	if (_stricmp(value,"PA0HZP") == 0)
 	   hw = 20;
 	if (_stricmp(value,"I2C") == 0)
-	   hw = 22;
+	{
+		UCHAR * ptr = ConfigBuffer + portoffset;
+
+		struct PORTCONFIG * PORT = (struct PORTCONFIG *)ptr;
+	
+		// Set some defaults
+
+		PORT->CHANNEL = 'A';
+		PORT->FRACK = 7000;
+		PORT->RESPTIME = 1000;
+		PORT->MAXFRAME = 4;
+		PORT->RETRIES = 6;
+		hw = 22;
+	}
 
 	bseek(fp2,(long) fileoffset,SEEK_SET);
 
@@ -2729,62 +2771,60 @@ int do_kiss (char * value,char * rec)
 		err=0;
 		kissflags=kissflags | 2;
 	}
-
-	if (_stricmp(value,"CHECKSUM") == 0)
+	else if (_stricmp(value,"CHECKSUM") == 0)
 	{
 		err=0;
 		kissflags=kissflags | 1;
 	}
-
-	if (_stricmp(value,"D700") == 0)
+	else if (_stricmp(value,"D700") == 0)
 	{
 		err=0;
 		kissflags=kissflags | 16;
 	}
-	if (_stricmp(value,"TNCX") == 0)
+	else if (_stricmp(value,"TNCX") == 0)
 	{
 		err=0;
 		kissflags=kissflags | 32;
 	}
-	if (_stricmp(value,"PITNC") == 0)
+	else if (_stricmp(value,"PITNC") == 0)
 	{
 		err=0;
 		kissflags=kissflags | 64;
 	}
-
-	if (_stricmp(value,"TRACKER") == 0)
+	else if (_stricmp(value,"TRACKER") == 0)
 	{
 		err=0;
 		kissflags |= 512;
 	}
-
-
-	if (_stricmp(value,"NOPARAMS") == 0)
+	else if (_stricmp(value,"NOPARAMS") == 0)
 	{
 		err=0;
 		kissflags=kissflags | 128;
 	}
-	if (_stricmp(value,"ACKMODE") == 0)
+	else if (_stricmp(value,"ACKMODE") == 0)
 	{
 		err=0;
 		kissflags=kissflags | 4;
 	}
-
-	if (_stricmp(value,"SLAVE") == 0)
+	else if (_stricmp(value,"SLAVE") == 0)
 	{
 		err=0;
 		kissflags=kissflags | 8;
 	}
-
-	if (_stricmp(value,"FLDIGI") == 0)
+	else if (_stricmp(value,"FLDIGI") == 0)
 	{
 		err=0;
 		kissflags |= 256;
 	}
+	else if (_stricmp(value,"FASTI2C") == 0)
+	{
+		err=0;
+		kissflags |= FASTI2C;
+	}
 
 	if (err == 255)
 	{
-	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE TNCX PITNC NOPARAMS)");
+	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE TNCX PITNC NOPARAMS FASTI2C)");
 	   Consoleprintf("%s\r\n",rec);
 	}
 	return (err);

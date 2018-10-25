@@ -329,6 +329,9 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 			*(ptr2++) = c;
 		}
 	}
+	else
+		ptr1 += 6;
+
 
 	//	UPDATE QUALITY AND OBS COUNT
 
@@ -349,7 +352,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 		ptr1 = saveptr;
 		saveptr += 21;
 
-		// SEE IF OUR and of our CALLs - DONT WANT TO PUT IT IN LIST!
+		// SEE IF OUR CALL - DONT WANT TO PUT IT IN LIST!
 
 		if (CompareCalls(ptr1, MYCALL))
 		{
@@ -396,15 +399,17 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 		while (n--)
 		{
-			if (*(ptr1++) < 0x20)	// Alias
+			if (*(ptr1) < 0x20 || *(ptr1) > 0x7A)
 				continue;
+
+			ptr1++;
 		}
 
 		ptr1 -= 13;					// Back to start
 
 		// CALCULATE ROUTE QUALITY
 
-		// Experimantal Code to adjuct received route qualities based on deduced quality
+		// Experimantal Code to adjust received route qualities based on deduced quality
 		// settings at other end of link.
 
 		// Don't mess with Application Qualities. There are almost always 255, and
@@ -540,18 +545,18 @@ VOID PROCROUTES(struct DEST_LIST * DEST, struct ROUTE * ROUTE, int Qual)
 		// New route is better than second, so move down and add here
 
 		DEST->NRROUTE[2] = DEST->NRROUTE[1];
-		goto UpdatateThisEntry;					// SPARE ENTRY, SO USE IT
+		goto UpdatateThisEntry;
 	}
 
 	Index = 2;
 
 	if (DEST->NRROUTE[2].ROUT_NEIGHBOUR == 0)
-		goto UpdatateThisEntry;					// SPARE ENTRY, SO USE IT
+		goto UpdatateThisEntry;	
 
 	if (DEST->NRROUTE[2].ROUT_QUALITY < Qual)
 	{
 		// New route is better than third, so  add here
-		goto UpdatateThisEntry;					// SPARE ENTRY, SO USE IT
+		goto UpdatateThisEntry;
 	}
 
 	//	THIS ROUTE IS WORSE THAN ANY OF THE CURRENT 3 - IGNORE IT
@@ -565,7 +570,7 @@ UpdatateThisEntry:
 
 	//	I DONT KNOW WHY I DID THIS, BUT IT CAUSES REFLECTED ROUTES
 	//	TO BE SET UP WITH OBS = 0. THIS MAY PREVENT A VALID ALTERNATE
-	//	VIA THE SAME _NODE TO FAIL TO BE FOUND. SO I'LL TAKE OUT THE
+	//	VIA THE SAME NODE TO FAIL TO BE FOUND. SO I'LL TAKE OUT THE
 	//	TEST AND SEE IF ANYTHING NASTY HAPPENS
 	//	IT DID - THIS IS ALSO CALLED BY CHECKL3TABLES. TRY RESETING
 	//	OBS, BUT NOT QUALITY 
@@ -607,7 +612,7 @@ SORTROUTES:
 
 int COUNTNODES(struct ROUTE * ROUTE)
 {
-	//	COUNT NODES WITH ROUTE VIA NEIGHBOUR IN ESI
+	//	COUNT NODES WITH ROUTE VIA NEIGHBOUR
 
 	int count = 0;
 	int n = MAXDESTS;
@@ -725,11 +730,7 @@ VOID SENDNEXTNODESFRAGMENT()
 
 	//	ADD DESTINATION INFO (UNLESS BBS ONLY)
 
-	if (NODE == 0)
-	{
-		CURRENTNODE = 0;			// Finished on this port
-		goto Sendit;
-	}
+	// If NODE = 0 just send application nodes
 
 	Count = PORT->NODESPACLEN;
 	
@@ -758,7 +759,9 @@ VOID SENDNEXTNODESFRAGMENT()
 			goto Sendit;
 		}
 
-		if (DEST->NRROUTE[0].ROUT_QUALITY >= TXMINQUAL && DEST->NRROUTE[0].ROUT_OBSCOUNT >= OBSMIN)
+		if (DEST->NRROUTE[0].ROUT_QUALITY >= TXMINQUAL &&
+			DEST->NRROUTE[0].ROUT_OBSCOUNT >= OBSMIN &&
+			(NODE == 1 || DEST->DEST_STATE & 0x80))			// Only send appl nodes if DEST = 0;
 		{		
 			// Send it
 			

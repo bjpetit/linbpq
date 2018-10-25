@@ -586,6 +586,9 @@ BOOL Start()
 	CURRENTNODE = 0;
 	L3TIMER = 1;						// SEND NODES
 
+	if (cfg->C_NODEALIAS[0] == 0)
+		memset(cfg->C_NODEALIAS, ' ', 10);
+
 	TimeLoaded = time(NULL);
 
 	AUTOSAVE = cfg->C_AUTOSAVE;
@@ -624,6 +627,9 @@ BOOL Start()
 				if (ptr1->ApplCall[0] != ' ')
 				{
 					memcpy(MYNODECALL, &ptr1->ApplCall[0], 10);
+					memcpy(MYALIASTEXT, &ptr1->ApplAlias, 6);
+					memcpy(MYALIASLOPPED, &ptr1->ApplAlias, 10);
+
 					break;
 				}
 				ptr1++;
@@ -1272,8 +1278,8 @@ BOOL Start()
 
 	ConvToAX25(MYALIASTEXT, MYALIAS);
 
-	//	SET UP INITIAL DEST ENTRY FOR APPLICATIONS (IF BOTH _NODE AND _BBS NEEDED)
-
+	//	SET UP INITIAL DEST ENTRY FOR APPLICATIONS (IF BOTH NODE AND BBS NEEDED)
+	// Actually wrong - we need to set up application node entries even if node = 0
 	DEST = DESTS;
 
 	//	If NODECALL isn't same as NETROMCALL, Add Dest Entry for NODECALL
@@ -1290,7 +1296,7 @@ BOOL Start()
 		NUMBEROFNODES++;
 	}
 
-	if (NODE & BBS)
+	if (BBS)
 	{
 		// Add Application Entries
 
