@@ -177,10 +177,10 @@ BEGIN
     POPUP "Actions"
     BEGIN
         MENUITEM "Save Nodes to file BPQNODES.DAT", BPQSAVENODES
-        MENUITEM "Save Nodes, Re-read bpq32.cfg and reconfigure node", 
-                                                BPQRECONFIG
-        MENUITEM "Clear Nodes, Re-read bpq32.cfg and reconfigure node", 
-                                                BPQCLEARRECONFIG
+ //       MENUITEM "Save Nodes, Re-read bpq32.cfg and reconfigure node", 
+ //                                               BPQRECONFIG
+ //       MENUITEM "Clear Nodes, Re-read bpq32.cfg and reconfigure node", 
+ //                                               BPQCLEARRECONFIG
         MENUITEM "Save Registry Configuration", BPQSAVEREG
         MENUITEM "Diagnostic Dump to file BPQDUMP", BPQDUMP
         MENUITEM "Re-read Rigcontrol Config",   SCANRECONFIG

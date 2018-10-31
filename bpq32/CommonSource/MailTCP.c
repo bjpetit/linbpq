@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -3297,13 +3297,13 @@ BOOL POP3Connect(char * Host, int Port)
 
 //   Allocate a Socket entry
 
-	sockptr=malloc(sizeof(SocketConn));
+	sockptr = malloc(sizeof(SocketConn));
 	memset(sockptr, 0, sizeof (SocketConn));
 
-	sockptr->Next=Sockets;
-	Sockets=sockptr;
+	sockptr->Next = Sockets;
+	Sockets = sockptr;
 
-	sockptr->socket=socket(AF_INET,SOCK_STREAM,0);
+	sockptr->socket = socket(AF_INET,SOCK_STREAM,0);
 
 	if (sockptr->socket == INVALID_SOCKET)
 	{

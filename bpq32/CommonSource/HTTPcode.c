@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -44,7 +44,7 @@ extern  TRANSPORTENTRY * L4TABLE;
 extern BPQVECSTRUC BPQHOSTVECTOR[];
 extern BOOL APRSApplConnected;  
 extern char VersionString[];
-VOID FormatTime2(char * Time, time_t cTime);
+VOID FormatTime3(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 VOID SaveUIConfig();
 int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
@@ -141,8 +141,9 @@ char NodeMenuRest[] = "}</script></head>"
 	"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700);>Stream Status</a></td>";
 char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
 
-char MailBit[] = "<td><a href=../Mail/Header>Mail Server Pages</a></td>";
-char ChatBit[] = "<td><a href=../Chat/Header>Chat Server Pages</a></td>";
+char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
+				 "<td><a href=/Webmail>WebMail</a></td>";
+char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
 
 char NodeTail[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>" 
  				  "<td><a href=/Node/EditCfg.html>Edit Config</a></td>"
@@ -1049,7 +1050,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 
 //	ctime = ft.LowPart;
 
-	FormatTime2(TimeString, STAT.st_ctime);
+	FormatTime3(TimeString, STAT.st_ctime);
 
 	// if HTML file, look for ##...## substitutions
 
@@ -1059,8 +1060,8 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 		ctime = time(NULL);
 	}
 
-	FormatTime2(FileTimeString, STAT.st_ctime);
-	FormatTime2(TimeString, time(NULL));
+	FormatTime3(FileTimeString, STAT.st_ctime);
+	FormatTime3(TimeString, time(NULL));
 
 	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
 		"Content-Type: text/html\r\n"
@@ -1358,7 +1359,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char TimeString[64];
 	BOOL LOCAL = FALSE;
 	BOOL COOKIE = FALSE;
-	char Reply[100000];
+	char Reply[250000];
 	int Len;
 
 #ifdef WIN32
@@ -1698,8 +1699,9 @@ doHeader:
 
 	if ((_memicmp(Context, "/MAIL/", 6) == 0) || (_memicmp(Context, "/WebMail", 8) == 0))
 	{
-		char _REPLYBUFFER[100000];
+		char _REPLYBUFFER[250000];
 		struct HTTPConnectionInfo Dummy = {0};
+		int Sent, Loops;
 
 		ReplyLen = 0;
 
@@ -1720,9 +1722,26 @@ doHeader:
 
 		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 		send(sock, Header, HeaderLen, 0);
-		send(sock, _REPLYBUFFER, ReplyLen, 0);
-		send(sock, Tail, strlen(Tail), 0);
 
+		// Send may block
+
+		Sent = send(sock, _REPLYBUFFER, ReplyLen, 0);
+		
+		while (Sent != ReplyLen && Loops++ < 3000)					// 100 secs max
+		{	
+//			Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
+		
+			if (Sent > 0)					// something sent
+			{
+				InputLen -= Sent;
+				memmove(_REPLYBUFFER, &_REPLYBUFFER[Sent], ReplyLen);
+			}
+					
+			Sleep(30);
+			Sent = send(sock, _REPLYBUFFER, ReplyLen, 0);
+		}
+
+		send(sock, Tail, strlen(Tail), 0);
 		return 0;
 
 	}
@@ -1798,7 +1817,7 @@ doHeader:
 
 		
 			ReadFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
-			ReadFile(hPipe, Reply, 100000, &ReplyLen, NULL);
+			ReadFile(hPipe, Reply, 250000, &ReplyLen, NULL);
 			if (ReplyLen <= 0)
 			{
 				InputLen = GetLastError();
@@ -2957,7 +2976,7 @@ END_CMDUXX:
 
 SendResp:
 
-	FormatTime2(TimeString, time(NULL));
+	FormatTime3(TimeString, time(NULL));
 
 	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 		"Date: %s\r\n\r\n", ReplyLen + strlen(Tail), TimeString);
@@ -2987,7 +3006,7 @@ static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", 
 static char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 
-VOID FormatTime2(char * Time, time_t cTime)
+VOID FormatTime3(char * Time, time_t cTime)
 {
 	struct tm * TM;
 	TM = gmtime(&cTime);

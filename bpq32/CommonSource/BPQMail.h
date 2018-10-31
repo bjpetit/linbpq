@@ -916,12 +916,22 @@ typedef struct WEBMAILINFO
 	char * OrigSubject;		// Subject field when template loaded
 	char * OrigBody;		// Msg text when template loaded
 	char * To;
+	char * CC;
 	char * Subject;
 	char * Body;
 	char * BID;
 	struct MsgInfo * Msg;		// Msg record if replying
 	KeyValues txtKeys[1000];	// Key/Value pairs for txt template. Used when creating or displaying
 	KeyValues XMLKeys[1000];	// Key/Value pairs from XML attachment
+	BOOL isReply;
+	char * XMLName;
+	char * XML;					// XML attachment
+	int XMLLen;
+	int Files;
+	char * FileName[100];		// Attachments
+	char * FileBody[100];
+	int FileLen[100];
+
 }WebMailInfo;
 
 #define SMTPServer 1
@@ -1294,6 +1304,9 @@ int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
 int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
 int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
 int TrytoGuessCode(unsigned char * Char, int Len);
+
+
+VOID FreeWebMailMallocs();
 
 extern int _MYTIMEZONE;
 

@@ -840,11 +840,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 // 6.0.17.??
 
-//	Change WINMOR Restart after connection to Restart after Failure and add options to ARDOP and VARA
+//	Change WINMOR Restart after connection to Restart after Failure and add same option to ARDOP and VARA
 //	Add Abort Connection to WINMOR and VARA Interfaces
 //	Reinstate accidentally removed CMS Access logging
 //	Fix MH CLEAR 
-
+//  Fix corruption of NODE table if NODES received from station with null alias
+//	Fix loss of buffer if session closed with something in PARTCMDBUFFER
+//	Fix Spurious GUARD ZONE CORRUPT message in IP Code.
+//	Remove "reread bpq32.cfg and reconfigure" menu options
 
 
 #define CKernel
@@ -1027,6 +1030,16 @@ DllExport int APIENTRY MONCount(int Stream);
 DllExport int APIENTRY GetCallsign(int stream, char * callsign);
 DllExport VOID APIENTRY RelBuff(VOID * Msg);
 
+#define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__);
+int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line);
+
+VOID SetWindowTextSupport(UINT * Buffer);
+int WritetoConsoleSupport(char * buff);
+VOID PMClose();
+VOID MySetWindowText(HWND hWnd, char * Msg);
+BOOL CreateMonitorWindow(char * MonSize);
+
+
 char EXCEPTMSG[80] = "";
 
 char SIGNONMSG[128] = "";
@@ -1096,6 +1109,7 @@ DllExport long  BPQHOSTAPIPTR = (long)&BPQHOSTAPI;
 //DllExport long  MONDECODEPTR = (long)&MONDECODE;
 
 extern UCHAR BPQDirectory[];
+extern UCHAR LogDirectory[];
 extern UCHAR BPQProgramDirectory[];
 
 static char BPQWinMsg[] = "BPQWindowMessage";
@@ -1613,7 +1627,7 @@ VOID TimerProcX()
 	while (WritetoConsoleQ)
 	{
 		UINT * Buffer = Q_REM(&WritetoConsoleQ);
-		WritetoConsoleSupport(&Buffer[2]);
+		WritetoConsoleSupport((char *)&Buffer[2]);
 		RelBuff(Buffer);
 	}
 
@@ -2784,10 +2798,24 @@ if (_winver < 0x0600)
 
 		retCode = RegQueryValueEx(hKey, "BPQ Program Directory",0 , &Type, (UCHAR *)&ValfromReg, &Vallen);
 
+		if (retCode == ERROR_SUCCESS)
+			ExpandEnvironmentStrings(ValfromReg, BPQProgramDirectory, MAX_PATH);
+
+		// And Log Directory
+
+		ValfromReg[0] = 0;
+		Vallen = MAX_PATH;
+
+		retCode = RegQueryValueEx(hKey, "Log Directory",0 , &Type, (UCHAR *)&ValfromReg, &Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			ExpandEnvironmentStrings(ValfromReg, LogDirectory, MAX_PATH);
+
 		RegCloseKey(hKey);
 	}
 
-	ExpandEnvironmentStrings(ValfromReg, BPQProgramDirectory, MAX_PATH);
+	if (LogDirectory[0] == 0)
+		strcpy(LogDirectory, BPQDirectory);
 
 	if (BPQProgramDirectory[0] == 0)
 		strcpy(BPQProgramDirectory, BPQDirectory);
@@ -2830,7 +2858,7 @@ if (_winver < 0x0600)
 
 	// Make sure Logs Directory exists
 					
-	sprintf(LogDir, "%s/Logs", BPQDirectory);
+	sprintf(LogDir, "%s/Logs", LogDirectory);
 	
 	CreateDirectory(LogDir, NULL);
 
@@ -3258,6 +3286,11 @@ DllExport UCHAR * APIENTRY GetBPQDirectory()
 DllExport UCHAR * APIENTRY GetProgramDirectory()
 {
 	return (&BPQProgramDirectory[0]);
+}
+
+DllExport UCHAR * APIENTRY GetLogDirectory()
+{
+	return (&LogDirectory[0]);
 }
 
 // Version for Visual Basic
@@ -4766,7 +4799,6 @@ DllExport int APIENTRY WritetoConsole(char * buff)
 }
 
 DllExport VOID * APIENTRY GetBuff();
-#define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__)
 
 int WritetoConsoleLocal(char * buff)
 {
@@ -5975,7 +6007,7 @@ int GetListeningPortsPID(int Port)
 	MIB_TCPTABLE_OWNER_PID * TcpTable = NULL;
 	PMIB_TCPROW_OWNER_PID Row;
 	int dwSize = 0;
-	int n;
+	DWORD n;
 
 	// Get PID of process for this TCP Port
 

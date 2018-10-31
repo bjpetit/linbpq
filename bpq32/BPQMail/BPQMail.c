@@ -7,7 +7,7 @@
 //	Split Messasge, User and BBS Editing from Main Config.
 //	Add word wrap to Console input and output
 //  Flash Console on chat user connect
-//	Fix procesfing Name response in chat mode
+//	Fix processing Name response in chat mode
 //	Fix processing of *RTL from station not defined as a Chat Node
 //	Fix overlength lines ln List responses
 //  Housekeeping expires BIDs 
@@ -967,7 +967,9 @@
 //  Fix connect script when Node CTEXT contains "} BBS "
 //	Fix handling null H Route
 //	Detect and correct duplicate BBS Numbers
-
+//	Fix problem if BBS requests FBB blocked forwarding without compression (ie SID of F without B)
+//	Fix crash if YAPP entered without filenmame
+//	Add support for Winlink HTML Forms to WebMail interface
 
 #include "BPQMail.h"
 #define MAIL
@@ -1190,6 +1192,7 @@ VOID CopyConfigFile(char * ConfigName);
 BOOL CreateMulticastConsole();
 char * CheckToAddress(CIRCUIT * conn, char * Addr);
 BOOL CheckifPacket(char * Via);
+int GetHTMLForms();
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -1573,6 +1576,14 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	FreeOverrides();
 
+	FreeList(RejFrom);
+	FreeList(RejTo);
+	FreeList(RejAt);
+	FreeList(HoldFrom);
+	FreeList(HoldTo);
+	FreeList(HoldAt);
+	FreeList(SendWPAddrs);
+
 	Free_UI();
 
 	for (n=1; n<20; n++)
@@ -1587,6 +1598,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	free(Prompt);
 	free(NewPrompt);
 	free(ExpertPrompt);
+
+	FreeWebMailMallocs();
+
+	free(CmdLine);
 
 	_CrtDumpMemoryLeaks();
 
@@ -2955,6 +2970,7 @@ BOOL Initialise()
 	GetUserDatabase();
 	GetBIDDatabase();
 	GetBadWordFile();
+	GetHTMLForms();
 
 	UsingingRegConfig = FALSE;
 

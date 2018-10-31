@@ -203,7 +203,7 @@ BEGIN
     EDITTEXT        IDC_SMTPPort,210,220,29,14
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,249,219,91,14
-    DEFPUSHBUTTON   "Save",1100,159,257,50,14,BS_CENTER | BS_VCENTER
+    PUSHBUTTON      "Save",IDC_BBSSAVE,159,257,50,14,BS_CENTER | BS_VCENTER
     CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
                     190,134,12

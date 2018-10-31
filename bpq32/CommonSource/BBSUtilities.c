@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -2325,7 +2325,7 @@ char * ReadMessageFile(int msgno)
 	if (hFile == NULL)
 		return NULL;
 
-	MsgBytes=malloc(FileSize+1);
+	MsgBytes = malloc(FileSize + 100);	// A bit of space for alias substitution on B2
 
 	fread(MsgBytes, 1, FileSize, hFile); 
 
@@ -7941,7 +7941,9 @@ VOID SaveConfig(char * ConfigName)
 	memset(&DummyForwardingInfo, 0, sizeof(struct BBSForwardingInfo));
 
 	//	Get rid of old config before saving
-	
+
+	config_destroy(&cfg);
+
 	memset((void *)&cfg, 0, sizeof(config_t));
 
 	config_init(&cfg);
@@ -8537,6 +8539,8 @@ BOOL GetConfig(char * ConfigName)
 		 LTTO = GetOverrides(group,  "LTTO");
 		 LTAT = GetOverrides(group,  "LTAT");
 	}
+
+
 	 return EXIT_SUCCESS;
 }
 

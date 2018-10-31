@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -55,7 +55,7 @@ int APIENTRY ClearNodes();
 VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value);
 VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return);
 SOCKET OpenWL2KHTTPSock();
-VOID FormatTime2(char * Time, time_t cTime);
+VOID FormatTime3(char * Time, time_t cTime);
 VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
 VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst);
 VOID FindLostBuffers();
@@ -3305,8 +3305,17 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 	if (pattern && strstr(pattern, "CLEAR"))
 	{
-		memset(MH, 0, MHENTRIES * sizeof(MHSTRUC));
-		Bufferptr += sprintf(Bufferptr, "Heard List for Port %d Cleared\r", Port);
+		if (Session->Secure_Session)
+		{
+			memset(MH, 0, MHENTRIES * sizeof(MHSTRUC));
+			Bufferptr += sprintf(Bufferptr, "Heard List for Port %d Cleared\r", Port);
+		}
+		else
+		{
+			Bufferptr += sprintf(Bufferptr, "MH Clear needs SYSOP status\r");
+			SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+			return;
+		}
 	}
 	else
 	{
@@ -4816,7 +4825,7 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 			*(ptr2 - 3) = 0; // remove millisecs
 			LastUpdateSecs = atoi(ptr1);
 
-			FormatTime2(LastUpdated, LastUpdateSecs);
+			FormatTime3(LastUpdated, LastUpdateSecs);
 		}
 	}
 

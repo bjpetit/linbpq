@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -94,10 +94,8 @@ VOID FreeOverride(struct Override ** Hddr)
 			free(Hddr[0]);
 			Hddr++;
 		}
-		
 		free(Save);
 	}
-
 }
 
 VOID FreeOverrides()

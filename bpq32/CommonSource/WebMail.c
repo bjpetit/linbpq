@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -67,6 +67,10 @@ VOID UpdateFormAction(char * Template, char * Key);
 BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
 BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
 void FreeWebMailFields(WebMailInfo * WebMail);
+VOID BuildXMLAttachment(struct HTTPConnectionInfo * Session, char * Keys[1000], char * Values[1000], int NumKeys);
+VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID DownloadAttachments(struct HTTPConnectionInfo * Session, char * Reply, int * RLen, char * Rest);
+VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * RLen, char * Rest);
 
 extern char NodeTail[];
 extern char BBSName[10];
@@ -76,6 +80,8 @@ extern char LTTOString[2048];
 extern char LTATString[2048];
 
 //static UCHAR BPQDirectory[260];
+
+int LineCount = 35;					// Lines per page on message list
 
 // Forms 
 
@@ -102,7 +108,7 @@ struct HtmlFormDir
 };
 
 
-char FormDirList[4][MAX_PATH] = {"Standard_Forms", "Local_Forms"};
+char FormDirList[4][MAX_PATH] = {"Standard_Templates", "Local_Templates"};
 
 static char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
 static char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
@@ -120,9 +126,9 @@ char WebMailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></hea
 
 static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
 	"<title></title><script src='/WebMail/webscript.js'></script></head>"
-	"<body background=/background.jpg onload='initialize(175)' onresize='initialize(175)'>"
+	"<body background=/background.jpg onload='initialize(185)' onresize='initialize(185)'>"
 	"<h3 align=center>Webmail Interface - Message Input Form</h3>"
-	"<form align=center id=myform style=\"font-family: monospace; \"method=post action=/WebMail/EMSave\?%s>"
+	"<form align=center id=myform style=\"font-family: monospace; \" method=post action=/WebMail/EMSave\?%s>"
     "<div style='display: inline-block; text-align: left;'>"
 	"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='To' name='To' value='%s'>%s<br>"
 	"Subject <input size=60 id='Subj' name='Subj' value='%s'>"
@@ -132,14 +138,33 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=ISO
 	"<option value=B>B</option><option value=T>T</option></select>"
 	" BID <input name=BID><br><br>"
 	"</div>"
-	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br><br>"
-	"<input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit><br></form>";
+	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
+	"<span align=center><input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></span></form>";
+
+static char CheckFormMsgPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
+	"<title></title><script src='/WebMail/webscript.js'></script></head>"
+	"<body background=/background.jpg onload='initialize(210)' onresize='initialize(210)'>"
+	"<h3 align=center>Webmail Forms Interface - Check Message</h3>"
+	"<form align=center id=myform style=\"font-family: monospace; \"method=post action=/WebMail/FormMsgSave\?%s>"
+    "<div style='display: inline-block; text-align: left;'>"
+	"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='To' name='To' value='%s'><br>"
+	"CC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='CC' name='CC' value='%s'><br>"
+	"Subject <input size=60 id='Subj' name='Subj' value='%s'>"
+//"<input type='file' name='myFile' multiple>"
+	"<br>Type &nbsp;&nbsp;&nbsp;"
+	"<select tabindex=1 size=1 name=Type><option value=P>P</option>"
+	"<option value=B>B</option><option value=T>T</option></select>"
+	" BID <input name=BID><br><br>"
+	"</div>"
+	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
+	"<span align=center><input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></span></form>";
+
 
 extern char * WebMailTemplate;
 extern char * WebMailMsgTemplate;
 extern char * jsTemplate;
 
-extern char *month[];
+static char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 char *longday[] = {"Sunday", "Monday", "Tusday", "Wednesday", "Thusday", "Friday", "Saturday"};
 
 static struct HTTPConnectionInfo * WebSessionList;	// active WebMail sessions
@@ -147,6 +172,155 @@ static struct HTTPConnectionInfo * WebSessionList;	// active WebMail sessions
 #ifdef LINBPQ
 UCHAR * GetBPQDirectory();
 #endif
+
+void ReleaseWebMailStruct(WebMailInfo * WebMail)
+{
+	// release any malloc'ed resources
+
+	if (WebMail == NULL)
+		return;
+
+	FreeWebMailFields(WebMail);
+
+	free(WebMail);
+	return;
+}
+
+VOID FreeWebMailMallocs()
+{
+	// called when closing. Not really needed, but simplifies tracking down real memory leaks
+
+	struct HTTPConnectionInfo * Session, * SaveNext;
+	int i;
+	Session = WebSessionList;
+
+	while (Session)
+	{
+		SaveNext = Session->Next;
+			
+		// Release amy malloc'ed resouces
+			
+		ReleaseWebMailStruct(Session->WebMail);
+		free(Session);
+		Session = SaveNext;
+	}
+
+	for (i = 0; i < FormDirCount; i++)
+	{
+		struct HtmlFormDir * Dir = HtmlFormDirs[i];
+
+		int j;
+
+		for (j = 0; j < Dir->FormCount; j++)
+		{
+			free(Dir->Forms[j]->FileName);
+			free(Dir->Forms[j]);
+		}
+
+		if (Dir->DirCount)
+		{
+			struct HtmlFormDir * SubDir;
+
+			int k, l;
+
+			for (l = 0; l < Dir->DirCount; l++)
+			{
+				SubDir = Dir->Dirs[l];
+		
+				for (k = 0; k < Dir->Dirs[l]->FormCount; k++)
+				{
+					free(SubDir->Forms[k]->FileName);
+					free(SubDir->Forms[k]);
+				}
+				free(SubDir->DirName);
+				free(SubDir->Forms);
+				free(SubDir->FormSet);
+
+				free(Dir->Dirs[l]);
+			}
+		}
+
+		free(Dir->DirName);
+		free(Dir->Forms);
+		free(Dir->FormSet);
+		free(Dir);
+	}
+
+	free(HtmlFormDirs);
+
+	return;
+
+}
+
+
+struct HTTPConnectionInfo * AllocateWebMailSession()
+{
+	int KeyVal;
+	struct HTTPConnectionInfo * Session, * SaveNext;
+	time_t NOW = time(NULL);
+
+	//	First see if any session records havent been used for a while
+
+	Session = WebSessionList;
+
+	while (Session)
+	{
+		if (NOW - Session->WebMailLastUsed > 1200)	// 20 Mins
+		{
+			SaveNext = Session->Next;
+			
+			// Release amy malloc'ed resouces
+			
+			ReleaseWebMailStruct(Session->WebMail);
+
+			memset(Session, 0, sizeof(struct HTTPConnectionInfo));
+	
+			Session->Next = SaveNext;
+			goto UseThis;
+		}
+		Session = Session->Next;
+	}
+	
+	Session = zalloc(sizeof(struct HTTPConnectionInfo));
+	
+	if (Session == NULL)
+		return NULL;
+
+	if (WebSessionList)
+		Session->Next = WebSessionList;
+
+	WebSessionList = Session;
+
+UseThis:
+
+	Session->WebMail = zalloc(sizeof(WebMailInfo));
+
+	KeyVal = ((rand() % 100) + 1);
+
+	KeyVal *= time(NULL);
+
+	sprintf(Session->Key, "%c%08X", 'W', KeyVal);
+
+	return Session;
+}
+
+struct HTTPConnectionInfo * FindWMSession(char * Key)
+{
+	struct HTTPConnectionInfo * Session = WebSessionList;
+
+	while (Session)
+	{
+		if (strcmp(Session->Key, Key) == 0)
+		{
+			Session->WebMailLastUsed = time(NULL);
+			return Session;
+		}
+		Session = Session->Next;
+	}
+
+	return NULL;
+}
+
 
 // Build list of available forms
 
@@ -400,7 +574,7 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 	int m;
 	struct MsgInfo * Msg;
 	char * ptr = Messages;
-	int n = 35;
+	int n = LineCount;
 	char Via[64];
 	int Count = 0;
 
@@ -444,8 +618,8 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 
 			ConvertTitletoUTF8(Msg->title, UTF8Title);
 			
-			ptr += sprintf(ptr, "<a href=""/WebMail/WM/%d?%s"">%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
-				Msg->number, Key, Msg->number,
+			ptr += sprintf(ptr, "<a href=/WebMail/WM?%s&%d>%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
+				Key, Msg->number, Msg->number,
 				FormatDateAndTime(Msg->datecreated, TRUE), Msg->type,
 				Msg->status, Msg->length, Msg->to, Via,
 				Msg->from, UTF8Title);
@@ -468,6 +642,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	char * Key = Session->Key;
 	struct UserInfo * User = Session->User;
 	WebMailInfo * WebMail = Session->WebMail;
+	char * DisplayStyle;
 
 	char Message[100000] = "";
 	struct MsgInfo * Msg;
@@ -477,6 +652,9 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	char UTF8Title[128];
 	int Index;
 	char * crcrptr;
+	char DownLoad[256] = "";
+
+	DisplayStyle = "textarea";			// Prevents interpretation of html and xml
 
 	Msg = GetMsgFromNumber(Number);
 
@@ -508,8 +686,13 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 	ConvertTitletoUTF8(Msg->title, UTF8Title);
 
-	ptr += sprintf(ptr, "From: %s%s\nTo: %s\nType/Status: %c%c\nDate/Time: %s\nBid: %s\nTitle: %s\n\n",
-		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, UTF8Title);
+	// if a B2 message diplay B2 Header instead of a locally generated one
+
+	if (Msg->B2Flags == 0)
+	{
+		ptr += sprintf(ptr, "From: %s%s\nTo: %s\nType/Status: %c%c\nDate/Time: %s\nBid: %s\nTitle: %s\n\n",
+			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, UTF8Title);
+	}
 
 	MsgBytes = Save = ReadMessageFile(Number);
 
@@ -530,13 +713,14 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 			if (Msg->B2Flags & Attachments)
 			{
-				char * FileName[100];
-				int FileLen[100];
-				int Files = 0;
 				int BodyLen, NewLen;
 				int i;
-				char *ptr2;	
-		
+				char *ptr2, *attptr;	
+
+				sprintf(DownLoad, "<td><a href=/WebMail/DL?%s&%d>Save Attachments</a></td>", Key, Msg->number);
+
+				WebMail->Files = 0;
+			
 				ptr1 = MsgBytes;
 	
 				ptr += sprintf(ptr, "Message has Attachments\r\n\r\n");
@@ -553,11 +737,11 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 					if (memcmp(ptr1, "File: ", 6) == 0)
 					{
 						char * ptr3 = strchr(&ptr1[6], ' ');	// Find Space
-
-						FileLen[Files] = atoi(&ptr1[6]);
-
-						FileName[Files++] = &ptr3[1];
 						*(ptr2 - 1) = 0;
+
+						WebMail->FileLen[WebMail->Files] = atoi(&ptr1[6]);
+						WebMail->FileName[WebMail->Files++] = _strdup(&ptr3[1]);
+					
 					}
 				
 					ptr1 = ptr2;
@@ -576,16 +760,29 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 				ptr1 += BodyLen + 2;		// to first file
 
+				// Save pointers to file
+
+				attptr = ptr1; 
+
+				for (i = 0; i < WebMail->Files; i++)
+				{
+					WebMail->FileBody[i] = malloc(WebMail->FileLen[i]);
+					memcpy(WebMail->FileBody[i], attptr, WebMail->FileLen[i]);
+					attptr += (WebMail->FileLen[i] + 2);
+				}
+
 				// if first (only??) attachment is XML and  filename
 				// starts "RMS_Express_Form" process as HTML Form
 
 				if (DisplayHTML && _memicmp(ptr1, "<?xml", 4) == 0 && 
-					_memicmp(FileName[0], "RMS_Express_Form_", 16) == 0)
+					_memicmp(WebMail->FileName[0], "RMS_Express_Form_", 16) == 0)
 				{
-					return DisplayWebForm(Session, Msg, FileName[0], ptr1, Reply, MsgBytes, BodyLen + 32); // 32 for added "has attachments"
+					int Len = DisplayWebForm(Session, Msg, WebMail->FileName[0], ptr1, Reply, MsgBytes, BodyLen + 32); // 32 for added "has attachments"
+					free(MsgBytes);
+					return Len;
 				}
 
-				for (i = 0; i < Files; i++)
+				for (i = 0; i < WebMail->Files; i++)
 				{
 					int n;
 					char * p = ptr1;
@@ -595,7 +792,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 					int BinCount = 0;
 
-					NewLen = RemoveLF(ptr1, FileLen[i]);		// Removes LF agter CR but not on its own
+					NewLen = RemoveLF(ptr1, WebMail->FileLen[i]);		// Removes LF agter CR but not on its own
 
 					for (n = 0; n < NewLen; n++)
 					{
@@ -615,28 +812,30 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 					{
 						// File is probably Binary
 
-						ptr += sprintf(ptr, "\rAttachment %s is a binary file\r", FileName[i]);
+						ptr += sprintf(ptr, "\rAttachment %s is a binary file\r", WebMail->FileName[i]);
 					}
 					else
 					{
-						ptr += sprintf(ptr, "\rAttachment %s\r\r", FileName[i]);
+						ptr += sprintf(ptr, "\rAttachment %s\r\r", WebMail->FileName[i]);
 
 						User->Total.MsgsSent[Index] ++;
 						User->Total.BytesForwardedOut[Index] += NewLen;
 					}
 				
-					ptr1 += FileLen[i];
+					ptr1 += WebMail->FileLen[i];
 					ptr1 +=2;				// Over separator
 				}
-				return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Key, Message);
+
+				free(Save);
+				return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, DisplayStyle, Message, DisplayStyle);
 			}
 			
 			// Remove B2 Headers (up to the File: Line)
 			
-			ptr1 = strstr(MsgBytes, "Body:");
+	//		ptr1 = strstr(MsgBytes, "Body:");
 
-			if (ptr1)
-				MsgBytes = ptr1;
+	//		if (ptr1)
+	//			MsgBytes = ptr1;
 		}
 
 		// Remove lf chars
@@ -723,7 +922,10 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 		ptr += sprintf(ptr, "File for Message %d not found\r", Number);
 	}
 
-	return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Key, Message);
+	if (DisplayHTML && stristr(Message, "html>"))
+		DisplayStyle = "div";				// Use div so HTML and XML are interpreted
+
+	return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, DisplayStyle, Message, DisplayStyle);
 }
 
 int KillWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Number)
@@ -749,7 +951,7 @@ int KillWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Num
 	sprintf(Message, "Not your message\r");
 
 returnit:
-	return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Key, Message);
+	return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, "", Key, "div", Message, "div");
 }
 
 void freeKeys(KeyValues * Keys)
@@ -765,6 +967,8 @@ void freeKeys(KeyValues * Keys)
 void FreeWebMailFields(WebMailInfo * WebMail)
 {
 	// release any malloc'ed resources
+
+	int i;
 
 	if (WebMail == NULL)
 		return;
@@ -786,10 +990,16 @@ void FreeWebMailFields(WebMailInfo * WebMail)
 
 	if (WebMail->To)
 		free(WebMail->To);
+	if (WebMail->CC)
+		free(WebMail->CC);
 	if (WebMail->Subject)
 		free(WebMail->Subject);
 	if (WebMail->Body)
 		free(WebMail->Body);
+	if (WebMail->XML)
+		free(WebMail->XML);
+	if (WebMail->XMLName)
+		free(WebMail->XMLName);
 
 	if (WebMail->OrigTo)
 		free(WebMail->OrigTo);
@@ -804,31 +1014,20 @@ void FreeWebMailFields(WebMailInfo * WebMail)
 	freeKeys(WebMail->txtKeys);
 	freeKeys(WebMail->XMLKeys);
 
+	for (i = 0; i < WebMail->Files; i++)
+	{
+		free(WebMail->FileBody[i]);
+		free(WebMail->FileName[i]);
+	}
+
 	memset(WebMail, 0, sizeof(WebMailInfo));
-	return;
-}
-
-
-
-
-
-void ReleaseWebMailStruct(WebMailInfo * WebMail)
-{
-	// release any malloc'ed resources
-
-	if (WebMail == NULL)
-		return;
-
-	FreeWebMailFields(WebMail);
-
-	free(WebMail);
 	return;
 }
 
 
 void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL LOCAL, char * Method, char * NodeURL, char * input, char * Reply, int * RLen)
 {
-	char * Context = 0;
+	char * URLParams = strlop(Key, '&');
 	int ReplyLen;
 	char Appl = 'M';
 
@@ -953,22 +1152,6 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			return;
 		}
 
-		if (_stricmp(NodeURL, "/WebMail/GetPage/EMSave") == 0)
-		{
-			//	Save Form Message
-
-			SaveNewMessage(Session, input, Reply, RLen, Key);
-			return;
-		}
-
-		if (_stricmp(NodeURL, "/WebMail/WM/Reply/EMSave") == 0)
-		{
-			//	Save Reply
-
-			SaveNewMessage(Session, input, Reply, RLen, Key);
-			return;
-		}
-
 		if (_stricmp(NodeURL, "/WebMail/Submit") == 0)
 		{
 			// Get the POST data from the page and place in message
@@ -980,6 +1163,14 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 				return;				// Can't proceed if we have no info on form
 
 			ProcessFormInput(Session, input, Reply, RLen);
+			return;
+		}
+
+		if (_stricmp(NodeURL, "/WebMail/FormMsgSave") == 0)
+		{
+			//	Save New Message
+
+			SaveTemplateMessage(Session, input, Reply, RLen, Key);
 			return;
 		}
 
@@ -1108,7 +1299,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 	}
 	if (_stricmp(NodeURL, "/WebMail/WMNext") == 0)
 	{
-		Session->WebMailSkip += 35;
+		Session->WebMailSkip += LineCount;
 
 		*RLen = SendWebMailHeader(Reply, Session->Key, Session);
  		return;
@@ -1116,7 +1307,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 	if (_stricmp(NodeURL, "/WebMail/WMBack") == 0)
 	{
-		Session->WebMailSkip -= 35;
+		Session->WebMailSkip -= LineCount;
 
 		if (Session->WebMailSkip < 0)
 			Session->WebMailSkip  = 0;
@@ -1160,32 +1351,38 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		return;
 	}
 
-	if (memcmp(NodeURL, "/WebMail/WM/", 12) == 0)
+	if (strcmp(NodeURL, "/WebMail/WM") == 0)
 	{
 		// Read Message
 
-		int n = atoi(&NodeURL[12]);
+		int n = 0;
+		
+		if (URLParams)
+			n = atoi(URLParams);
 
 		if (WebMailMsgTemplate)
 			free(WebMailMsgTemplate);
 
-		WebMailMsgTemplate = GetTemplateFromFile(3, "WebMailMsg.txt");
+		WebMailMsgTemplate = GetTemplateFromFile(4, "WebMailMsg.txt");
 
 		*RLen = ViewWebMailMessage(Session, Reply, n, TRUE);
 
  		return;
 	}
 
-	if (memcmp(NodeURL, "/WebMail/DisplayText/", 21) == 0)
+	if (strcmp(NodeURL, "/WebMail/DisplayText") == 0)
 	{
 		// Read Message
 
-		int n = atoi(&NodeURL[21]);
+		int n = 0;
+		
+		if (URLParams)
+			n = atoi(URLParams);
 
 		if (WebMailMsgTemplate)
 			free(WebMailMsgTemplate);
 
-		WebMailMsgTemplate = GetTemplateFromFile(3, "WebMailMsg.txt");
+		WebMailMsgTemplate = GetTemplateFromFile(4, "WebMailMsg.txt");
 
 		*RLen = ViewWebMailMessage(Session, Reply, n, FALSE);
 
@@ -1244,6 +1441,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		char * InputName = NULL;	// HTML to input message
 		char * ReplyName = NULL;
 		char * To = NULL;
+		char * CC = NULL;
 		char * Subject = NULL;
 		char * MsgBody = NULL;
 		char * varptr;
@@ -1292,6 +1490,12 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			if (To[0] == 0 && WebMail->To && WebMail->To[0])
 				To = WebMail->To;
 
+			if (CC == NULL)
+				CC = "";
+
+			if (CC[0] == 0 && WebMail->CC && WebMail->CC[0])
+				CC = WebMail->CC;
+
 			if (Subject == NULL)
 				Subject = "";
 
@@ -1304,7 +1508,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			if (MsgBody[0] == 0 && WebMail->Body && WebMail->Body[0])
 				MsgBody = WebMail->Body;
 
-			*RLen = sprintf(Reply, MsgInputPage, Key, To, "", Subject, MsgBody);
+			*RLen = sprintf(Reply, CheckFormMsgPage, Key, To, CC, Subject, MsgBody);
 			return;
 		}
 
@@ -1397,21 +1601,36 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar,=scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 			"window.open(\"/WebMail/GetPage/\" + x + \"?\" + Key,\"_self\",param);"
 			"}</script>"
-			"Select Required Template from List<br><br>"
+			"<p align=center>"
+			"Select Required Template from %s<br><br>"
 			"<select id=\"mySelect\" onchange=\"myFunction()\">"
-			"<option value=-1>No HTML Form";
-
+			"<option value=-1>No Page Selected";
+			
 		struct HtmlFormDir * Dir;
 		int i;
 
 		SubDir = strlop(&NodeURL[17], ':');
 		DirNo = atoi(&NodeURL[17]);
+
+		if (DirNo == -1)
+		{
+			// User has gone back, then selected "No Folder Selected"
+
+			// For now just stop crash
+
+			DirNo = 0;
+		}
+
+
 		if (SubDir)
 			SubDirNo = atoi(SubDir);
 
 		Dir = HtmlFormDirs[DirNo];
 
-		sprintf(popup, popuphddr, Key);
+		if (SubDir)
+			sprintf(popup, popuphddr, Key, Dir->Dirs[SubDirNo]->DirName);
+		else
+			sprintf(popup, popuphddr, Key, Dir->DirName);
 
 		if (SubDir)
 		{
@@ -1437,9 +1656,21 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 					sprintf(popup, "%s <option value=%d,%d>%s", popup, DirNo, i, Name);
 			}
 		}
-		sprintf(popup, "%s</select>", popup);
+		sprintf(popup, "%s</select></p>", popup);
 
 		*RLen = sprintf(Reply, "%s", popup);
+		return;
+	}
+	
+	if (_stricmp(NodeURL, "/WebMail/DL") == 0)
+	{
+		getAttachmentList(Session, Reply, RLen, URLParams);
+		return;
+	}
+
+	if (_stricmp(NodeURL, "/WebMail/GetDownLoad") == 0)
+	{
+		DownloadAttachments(Session, Reply, RLen, URLParams);
 		return;
 	}
 
@@ -1477,8 +1708,22 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	if (input == NULL)
 		return;
 
-// We get here both when requesting a template and submitting
-// a message. Check if Send or Cancel is set. If not it is a Template request
+	if (WebMail->txtFileName)
+	{
+		// Processing Form Input
+
+		SaveTemplateMessage(Session, MsgPtr, Reply, RLen, Rest);
+	
+		// Prevent re-entry
+		
+		free(WebMail->txtFileName);
+		WebMail->txtFileName = NULL;
+
+		return;
+	}
+
+	// We get here both when requesting a template and submitting
+	// a message. Check if Send or Cancel is set. If not it is a Template request
 
 	if (strstr(input, "Input=Input"))
 		SendMsg = TRUE;
@@ -1486,7 +1731,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		SendReply = TRUE;
 	else if (strstr(input, "Cancel=Cancel"))
 	{
-		*RLen = sprintf(Reply, "%s", "<html><script>window.location.href = '/Webmail/WebMail?%s';</script>", Session->Key);
+		*RLen = sprintf(Reply, "<html><script>window.location.href = '/Webmail/WebMail?%s';</script>", Session->Key);
 		return;
 	}
 
@@ -1529,21 +1774,24 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 			
 			"<html><body align=center background='/background.jpg'>"
 //			"<script>if(window.opener != null) {window.opener.close();}</script>"
-			"<script>function myFunction(val) {var x = document.getElementById(val).value;"
+			"<script>"
+			"function myFunction(val) {var x = document.getElementById(val).value;"
 			"var Key = \"%s\";"
 			"var param = \"toolbar=yes,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 			"window.open(\"/WebMail/GetList/\" + x + \"?\" + Key,\"_self\",param);"
-			"}</script>"
-			" Select Required Template Set from List<br><br>"
-			"<table align=center border=1 cellpadding=2 bgcolor=white>"
+			"}"
+			"</script>"
+			"<p align=center>"
+			" Select Required Template Folder from List<br><br>"
+			"<table border=1 cellpadding=2 bgcolor=white>"
 			"<tr><th>Standard Templates</th><th>Local Templates</th></tr>"
 			"<tr><td width=50%%><select id=\"Sel1\" onchange=\"myFunction('Sel1')\">"
-			"<option value=-1>No HTML Form";
+			"<option value=-1>No Folder Selected";
 
 		char NewGroup [] =
 			"</select></td><td width=50%% align=center>"
 			"<select id=Sel2 onchange=\"myFunction('Sel2')\">"
-			"<option value=-1>No HTML Form";
+			"<option value=-1>No Folder Selected";
 
 		char popup[10000];
 		struct HtmlFormDir * Dir;
@@ -1551,13 +1799,13 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 
 		int i;
 
-		if (!HDest || HDest[0] == 0)
-		{
-			*RLen = sprintf(Reply, "%s", "<html><script>"
-				"alert('Enter To Address before selecting form');"
-				"window.history.back();</script></html>");
-			return;
-		}
+//		if (!HDest || HDest[0] == 0)
+//		{
+//			*RLen = sprintf(Reply, "%s", "<html><script>"
+//				"alert('Enter To Address before selecting form');"
+//				"window.history.back();</script></html>");
+//			return;
+//		}
 	
 		// Getting new template so free any old values
 
@@ -1602,7 +1850,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 				n++;
 			}
 		}
-		sprintf(popup, "%s</select></td></tr></table>", popup);
+		sprintf(popup, "%s</select></td></tr></table></p>", popup);
 
 		*RLen = sprintf(Reply, "%s", popup);
 		return;
@@ -1886,6 +2134,9 @@ int	ReturnRawMessage(struct UserInfo * User, struct MsgInfo * Msg, char * Key, c
 {
 	char * ErrorMsg = malloc(len + 100);
 	char * ptr;
+	char DownLoad[256];
+
+	sprintf(DownLoad, "<td><a href=/WebMail/DL?%s&%d>Save Attachments</a></td>", Key, Msg->number);
 
 	RawMessage[strlen(RawMessage)] = '.'; // We null terminated file name 
 	RawMessage[strlen(RawMessage)] = ' '; // We null terminated file name 	Len = XML - RawMessage; 
@@ -1904,7 +2155,7 @@ int	ReturnRawMessage(struct UserInfo * User, struct MsgInfo * Msg, char * Key, c
 
 	sprintf(ErrorMsg, ErrorString, RawMessage);
 
-	len = sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Key, ErrorMsg);	
+	len = sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, "textarea", ErrorMsg, "textarea");
 	free(ErrorMsg);
 	return len;
 }
@@ -2263,9 +2514,9 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 				"<table align=center border=1 cellpadding=2 bgcolor=white><tr>"
 				"<td><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
 				"<td><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"
-				"<td><a href=/WebMail/DisplayText/%d?%s>Display as Text</a></td>"
+				"<td><a href=/WebMail/DisplayText?%s&%d>Display as Text</a></td>"
 				"<td><a href=/WebMail/WMSame?%s>Back to List</a></td>"
-				"</tr></table>", BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, Msg->number, Key, Key);
+				"</tr></table>", BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key,  Key, Msg->number,Key);
 
 			strcat(temp, ptr);
 
@@ -2279,6 +2530,381 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 
 	return strlen(SaveReply);
 }
+
+char * BuildB2Header(WebMailInfo * WebMail, struct MsgInfo * Msg)
+{
+	// Create B2 Header
+	
+	char * NewMsg = malloc(100000);
+	char * SaveMsg = NewMsg;
+	char DateString[80];
+	struct tm * tm;
+
+	tm = gmtime(&Msg->datecreated);	
+	
+	sprintf(DateString, "%04d%02d%02d%02d%02d%02d",
+		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+	NewMsg += sprintf(NewMsg,
+		"MID: %s\r\n"
+		"Date: %s\r\n"
+		"Type: %s\r\n"
+		"From: %s\r\n"
+		"To: %s\r\n",
+			Msg->bid, DateString, "Private", Msg->from, WebMail->To);
+
+	if (WebMail->CC && WebMail->CC[0])
+		NewMsg += sprintf(NewMsg, "CC: %s\r\n", WebMail->CC);
+
+	NewMsg += sprintf(NewMsg,
+		"Subject: %s\r\n"
+		"Mbo: %s\r\n",
+		Msg->title, BBSName);
+
+	NewMsg += sprintf(NewMsg, "Body: %d\r\n", strlen(WebMail->Body));
+
+//	for (n = 0; n < Files; n++)
+//	{
+//		char * p = FileName[n], * q;
+//
+		// Remove any path
+
+//		q = strchr(p, '\\');
+//					
+//		while (q)
+//		{
+//			if (q)
+//				*q++ = 0;
+//			p = q;
+//			q = strchr(p, '\\');
+//		}
+
+	Msg->B2Flags = B2Msg;
+
+	if (WebMail->XML)
+	{
+		Msg->B2Flags |= Attachments;
+		NewMsg += sprintf(NewMsg, "File: %d %s\r\n",
+			WebMail->XMLLen, WebMail->XMLName);
+	}
+
+	NewMsg += sprintf(NewMsg, "\r\n");		// Blank Line to end header
+
+	return SaveMsg;
+}
+
+
+VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+{
+	int ReplyLen = 0;
+	struct MsgInfo * Msg;
+	char * ptr, *input;
+	int MsgLen;
+	FILE * hFile;
+	char Type;
+	int Template=0;
+	char * via = NULL;
+	char BID[32];
+	BIDRec * BIDRec;
+	char MsgFile[MAX_PATH];
+	int WriteLen=0;
+	char * Body = NULL;
+	char * To = NULL;
+	char * CC = NULL;
+	char * HDest = NULL;
+	char * Title = NULL;
+	char * Vptr = NULL;
+	char * Context;
+	char Prompt[256] = "Message Saved";
+	char OrigTo[256];
+	WebMailInfo * WebMail = Session->WebMail;
+	BOOL SendMsg = FALSE;
+	BOOL SendReply = FALSE;
+	char * B2Header;
+
+	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+
+	if (input == NULL)
+		return;
+	
+	// Prevent re-entry
+
+	free(WebMail->txtFileName);
+	WebMail->txtFileName = NULL;
+
+	if (strstr(input, "Cancel=Cancel"))
+	{
+		*RLen = sprintf(Reply, "<html><script>window.location.href = '/Webmail/WebMail?%s';</script>", Session->Key);
+		return;
+	}
+
+	ptr = strtok_s(input + 4, "&", &Context);
+
+	while (ptr)
+	{
+		char * val = strlop(ptr, '=');
+
+		if (strcmp(ptr, "To") == 0)
+			HDest = To = val;
+		else if (strcmp(ptr, "CC") == 0)
+			CC = val;
+		else if (strcmp(ptr, "Subj") == 0)
+			Title = val;
+		else if (strcmp(ptr, "Type") == 0)
+			Type = val[0];
+		else if (strcmp(ptr, "BID") == 0)
+			strcpy(BID, val);
+		else if (strcmp(ptr, "Msg") == 0)
+			Body = _strdup(val);
+		else if (strcmp(ptr, "Tmpl") == 0)
+			Template = 1;
+
+		ptr = strtok_s(NULL, "&", &Context);
+
+	}
+	strlop(BID, ' ');
+	if (strlen(BID) > 12)
+		BID[12] = 0;
+
+	UndoTransparency(To);
+	UndoTransparency(CC);
+	UndoTransparency(BID);
+	UndoTransparency(HDest);
+	UndoTransparency(Title);
+	UndoTransparency(Body);
+
+	MsgLen = strlen(Body);
+
+	// The user could have changed any of the input fields
+
+	free (WebMail->To);
+	WebMail->To = _strdup(To);
+	if (CC)
+	{
+		free (WebMail->CC);
+		WebMail->CC = _strdup(CC);
+	}
+	free (WebMail->Subject);
+	WebMail->Subject = _strdup(Title);
+	free (WebMail->Body);
+	WebMail->Body = _strdup(Body);
+
+	// We will put the supplied address in the B2 header
+	
+	// We may need to change the HDest to make sure message
+	// is delivered to Internet or Packet as requested
+
+	if (HDest == NULL || HDest[0] == 0)
+	{
+		*RLen = sprintf(Reply, "%s", "<html><script>alert(\"To: Call Missing\");window.history.back();</script></html>");
+		return;
+	}
+
+	if (strlen(HDest) > 255)
+	{
+//		*RLen = sprintf(Reply, "%s", "<html><script>alert(\"To: Call too long!\");window.history.back();</script></html>");
+		return;
+	}
+
+	if (strlen(BID))
+	{		
+		if (LookupBID(BID))
+		{
+			// Duplicate bid
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"Duplicate BID\");window.history.back();</script></html>");
+			return;
+		}
+	}
+
+	if (Type == 'B')
+	{
+		if (RefuseBulls)
+		{
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();script></html>");
+			return;
+		}
+
+		if (Session->User->flags & F_NOBULLS)
+		{
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"You are not allowed to send Bulls\");window.history.back();</script></html>");
+			return;
+		}
+	}
+
+	// Treat plain call as @winlink.org unless "dont add winlink.org" flag set on user record, as
+	// forms are normally used for Winlink
+
+	if ((Session->User->flags & F_NOWINLINK) == 0)
+		if (strchr(HDest, '@') == 0)			// No At
+			strcat(HDest, "@winlink.org");
+
+	Msg = AllocateMsgRecord();
+		
+	// Set number here so they remain in sequence
+		
+	Msg->number = ++LatestMsg;
+	MsgnotoMsg[Msg->number] = Msg;
+
+	strcpy(Msg->from, Session->User->Call);
+
+	if (_memicmp(HDest, "rms:", 4) == 0 || _memicmp(HDest, "rms/", 4) == 0)
+	{
+		Vptr=&HDest[4];
+		strcpy(Msg->to, "RMS");
+	}
+	else if (_memicmp(HDest, "smtp:", 5) == 0)
+	{
+		if (ISP_Gateway_Enabled)
+		{
+			Vptr=&HDest[5];
+			Msg->to[0] = 0;
+		}
+	}
+	else if (strchr(HDest, '@'))
+	{
+		strcpy(OrigTo, HDest);
+
+		Vptr = strlop(HDest, '@');
+
+		if (Vptr)
+		{
+			// If looks like a valid email address, treat as such
+
+			if (strlen(HDest) > 6 || !CheckifPacket(Vptr))
+			{
+				// Assume Email address
+
+				Vptr = OrigTo;
+
+				if (FindRMS() || strchr(Vptr, '!')) // have RMS or source route
+					strcpy(Msg->to, "RMS");
+				else if (ISP_Gateway_Enabled)
+					Msg->to[0] = 0;
+				else
+				{		
+					*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow Sending to Internet Email\");window.close();</script></html>");
+					return;
+		
+				}
+			}
+		}
+	}
+
+	else
+	{	
+		if (strlen(HDest) > 6)
+			HDest[6] = 0;
+		
+		strcpy(Msg->to, _strupr(HDest));
+	}
+
+	if (SendBBStoSYSOPCall)
+		if (_stricmp(HDest, BBSName) == 0)
+			strcpy(Msg->to, SYSOPCall);
+
+	if (Vptr)
+	{
+		if (strlen(Vptr) > 40)
+			Vptr[40] = 0;
+
+		strcpy(Msg->via, _strupr(Vptr));
+	}
+	else
+	{
+		// No via. If not local user try to add BBS 
+	
+		struct UserInfo * ToUser = LookupCall(Msg->to);
+
+		if (ToUser)
+		{
+			// Local User. If Home BBS is specified, use it
+
+			if (ToUser->HomeBBS[0])
+			{
+				strcpy(Msg->via, ToUser->HomeBBS);
+				sprintf(Prompt, "%s added from HomeBBS. Message Saved", Msg->via);
+			}
+		}
+		else
+		{
+			// Not local user - Check WP
+			
+			WPRecP WP = LookupWP(Msg->to);
+
+			if (WP)
+			{
+				strcpy(Msg->via, WP->first_homebbs);
+				sprintf(Prompt, "%s added from WP", Msg->via);
+			}
+		}
+	}
+
+	if (strlen(Title) > 60)
+		Title[60] = 0;
+
+	strcpy(Msg->title,Title);
+	Msg->type = Type;
+	Msg->status = 'N';
+
+	if (strlen(BID) == 0)
+		sprintf_s(BID, sizeof(BID), "%d_%s", LatestMsg, BBSName);
+
+	strcpy(Msg->bid, BID);
+
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	BIDRec = AllocateBIDRecord();
+
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	Msg->length = MsgLen;
+
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
+	
+	// We write a B2 Header, Body and XML attachment if present
+
+
+//	BuildFormMessage(Session, Msg);
+
+	B2Header = BuildB2Header(WebMail, Msg);
+
+	hFile = fopen(MsgFile, "wb");
+	
+	if (hFile)
+	{
+		WriteLen = fwrite(B2Header, 1, strlen(B2Header), hFile); 
+		WriteLen += fwrite(WebMail->Body, 1, Msg->length, hFile); 
+		WriteLen += fwrite("\r\n", 1, 2, hFile); 
+		WriteLen += fwrite(WebMail->XML, 1, WebMail->XMLLen, hFile); 
+		WriteLen += fwrite("\r\n", 1, 2, hFile); 
+		fclose(hFile);
+	}
+
+	free(B2Header);
+
+	Msg->length = WriteLen;
+
+	MatchMessagetoBBSList(Msg, 0);
+
+	BuildNNTPList(Msg);				// Build NNTP Groups list
+
+	SaveMessageDatabase();
+	SaveBIDDatabase();
+
+	*RLen = SendWebMailHeaderEx(Reply, Session->Key, Session, Prompt);
+
+	return;
+}
+
+
+
+
+
+
+
 
 
 
@@ -2516,14 +3142,17 @@ void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * 
 	// If there is no display html defined place data in a normal
 	// input window, else build the Message body and XML attachment and send
 
+	// I now think it is better to put data in a normal input window
+	// even if there is a display form so user can view it before submission
+
 	WebMailInfo * WebMail = Session->WebMail;
 
 	char * info = strstr(input, "\r\n\r\n"); // To end of HTML header
 
-	// look through header for Content-Type line, and it multipart
+	// look through header for Content-Type line, and if multipart
 	// find boundary string.
 
-	char * ptr, * ptr2, * inptr;
+	char * ptr, * saveptr, * ptr1, * ptr2, * inptr;
 	char Boundary[1000];
 	BOOL Multipart = FALSE;
 	int Partlen;
@@ -2531,11 +3160,13 @@ void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * 
 	int i;
 	char * Keys[1000];
 	char * Values[1000];
+	char * saveForfree[1000];
+
 	int NumKeys = 0;
 	char * varptr;
 	char * endptr;
 	int varlen, vallen = 0;
-
+	char *crcrptr;
 
 	ptr = input;
 
@@ -2602,13 +3233,12 @@ void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * 
 
 	// Extract the Key/Value pairs from input data
 
-
-	ptr = FindPart(Body, Boundary, &Partlen);
+	saveptr = ptr = FindPart(Body, Boundary, &Partlen);
 
 	if (ptr == NULL)
 		return;			// Couldn't find separator
 
-	// Now extrract fields
+	// Now extract fields
 
 	while (ptr)
 	{
@@ -2623,39 +3253,88 @@ void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * 
 		// field value
 		// crlf crlf
 
+		// No, is actually
+
+		// ------WebKitFormBoundary7XHZ1i7Jc8tOZJbw
+		// Content-Disposition: form-data; name="State"
+		//
+		// UK
+		// ------WebKitFormBoundary7XHZ1i7Jc8tOZJbw
+
+		// ie Value is terminated by ------WebKitFormBoundary7XHZ1i7Jc8tOZJbw
+		// But FindPart has returned length, so can use that
+		// Be aware that Part and PartLen include the CRLF which is actually part of the Boundary string so should be removed.
+
+
 		ptr = strstr(ptr, "name=");
+	
 		if (ptr)
 		{
-			endptr = strstr(ptr, "\"\r\n\r\n");
+			endptr = strstr(ptr, "\"\r\n\r\n");		// "/r/n/r/n
 			if (endptr)
 			{
 				*endptr = 0;
 				ptr += 6;			// to start of name string
 				val = endptr + 5;
 
-				// now look for value string
+				// val was Null Terminated by FindPart so can just use it. This assumes all fields are text,
+				// which I think is safe enough here.
 
-				endptr = strstr(val, "\r\n");
-				if (endptr)
-				{
-					*endptr = 0;
-				}
+				saveptr[Partlen - 2] = 0;
 
 				// Now have key value pair
 
 				Keys[NumKeys] = ptr;
-				Values[NumKeys++] = val;
+				Values[NumKeys] = val;
+				saveForfree[NumKeys++] = saveptr;		// so we can free() when finisged with it
 			}
+			else
+				free(saveptr);
 		}
-		ptr = FindPart(Body, Boundary, &Partlen);
-	}
+		else
+			free(saveptr);
 
-	// Fill in the template with values from the message
+		saveptr = ptr = FindPart(Body, Boundary, &Partlen);
+	}
 
 	if (info == NULL)
 		return;		// Wot!
 
 	info += 4;
+
+	// It looks like some standard variables can be used in <var subsitutions as well as fields from form. Put on end, 
+	// so fields from form have priority
+
+
+	saveForfree[NumKeys]  = 0;		// flag end of malloced items
+
+	Keys[NumKeys] = "MsgTo";
+	Values[NumKeys++]  = "";
+	Keys[NumKeys] = "MsgCc";
+	Values[NumKeys++] = "";
+	Keys[NumKeys] = "MsgSender";
+	Values[NumKeys++] = Session->User->Call;
+	Keys[NumKeys] = "MsgSubject";
+	Values[NumKeys++] = "";
+	Keys[NumKeys] = "MsgBody";
+//	if (WebMail->OrigBody)
+//		txtKey++->Value = _strdup(WebMail->OrigBody);
+//	else
+		Values[NumKeys++] = "";
+
+	Keys[NumKeys] = _strdup("MsgP2P");
+	Values[NumKeys++] = _strdup("");
+
+	Keys[NumKeys] = _strdup("MsgIsReply");
+	if (WebMail->isReply)
+		Values[NumKeys++] = "True";
+	else
+		Values[NumKeys++] = "True";
+
+	Keys[NumKeys] = "MsgIsForward";
+	Values[NumKeys++] = "False";
+	Keys[NumKeys] = "MsgIsAcknowledgement";
+	Values[NumKeys++] = "False";
 
 
 	// Update Template with variables from the form
@@ -2664,7 +3343,6 @@ void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * 
 	// of making sure all occurances of variables in any order are substituted.
 	// The space allocated to Template is twice the size of the file
 	// to allow for insertions
-
 
 	inptr = WebMail->txtFile;
 
@@ -2703,25 +3381,114 @@ void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * 
 		i++;
 	}
 
+	// We need to look for To:, CC: and Subject lines, and remove any other
+	// Var: lines. Use everything following Msg: as the plain text body
+	
 	// Find start of Message body
 
-	WebMail->Body = stristr(WebMail->txtFile, "Msg:"); 
+	ptr = WebMail->txtFile;
 
-	if (WebMail->Body == NULL)			// No Msg in Template
-		WebMail->Body = "";
+	ptr1 = strchr(ptr, '\r');
+		
+	while (ptr1)
+	{
+		if (_memicmp(ptr, "Msg:", 4) == 0)
+		{
+			// Rest is message body. <var> substitutions have been done
 
-	WebMail->Body = _strdup(WebMail->Body);
+			if (WebMail->Body)
+				free(WebMail->Body);
+
+			WebMail->Body = _strdup(ptr + 4);	// Remove Msg:
+			break;
+		}
+
+		// Can now terminate lines
+
+		*ptr1++ = 0;
+
+		while (*ptr1 == '\r' || *ptr1 == '\n')
+			*ptr1++ = 0;
+
+		if (_memicmp(ptr, "To:", 3) == 0)
+		{
+			if (strlen(ptr) > 5)
+				WebMail->To = _strdup(&ptr[3]);
+		}
+		else if (_memicmp(ptr, "CC:", 3) == 0)
+		{
+			if (strlen(ptr) > 5)
+				WebMail->CC = _strdup(&ptr[3]);
+		}
+		else if (_memicmp(ptr, "Subj:", 5) == 0)
+		{
+			if (ptr[5] == ' ')		// May have space after :
+				ptr++;
+			if (strlen(ptr) > 6)
+				WebMail->Subject = _strdup(&ptr[5]);
+		}
+
+		else if (_memicmp(ptr, "Subject:", 8) == 0)
+		{
+			if (ptr[8] == ' ')
+				ptr++;
+			if (strlen(ptr) > 9)
+				WebMail->Subject = _strdup(&ptr[8]);
+		}
+		ptr = ptr1;
+		ptr1 = strchr(ptr, '\r');
+	}
 
 	if (WebMail->Subject == NULL)
 		 WebMail->Subject = _strdup("");
 
-	BuildMessageFromHTMLInput(Session, Reply, RLen, Keys, Values, NumKeys);
+	if (WebMail->To == NULL)
+		 WebMail->To = _strdup("");
+
+	if (WebMail->CC == NULL)
+		 WebMail->CC = _strdup("");
+
+	// Build XML Attachment if Display Form is defined
+
+	if (WebMail->DisplayHTMLName)
+		BuildXMLAttachment(Session, Keys, Values, NumKeys);
+
+	// if Reply, attach original message to Body;
+
+	if (WebMail->isReply && WebMail->OrigBody)
+	{
+		char * NewBody = malloc(strlen(WebMail->Body) + strlen(WebMail->OrigBody) + 100);
+		sprintf(NewBody, "%s\r\n%s", WebMail->Body, WebMail->OrigBody);
+		free(WebMail->Body);
+		WebMail->Body = NewBody;
+	}
+
+	// Display Message for user to check and send
+
+	// fix any cr cr lf sequence
+	
+	crcrptr = strstr(WebMail->Body, "\r\r");
+
+	while (crcrptr)
+	{
+		*crcrptr = ' ';
+		crcrptr = strstr(crcrptr, "\r\r");
+	}
+
+	*RLen = sprintf(Reply, CheckFormMsgPage, Session->Key, WebMail->To, WebMail->CC, WebMail->Subject, WebMail->Body);
+
+	// Free the part strings 
+
+	i = 0;
+
+	while (saveForfree[i])
+		free(saveForfree[i++]);
 }
 
 // XML Template Stuff
 
 char XMLHeader [] = 
-	"<?xml version=\"1.0\"?>"
+	"<?xml version=\"1.0\"?>\r\n"
 	"<RMS_Express_Form>\r\n"
 	" <form_parameters>\r\n"
 	" <xml_file_version>%s</xml_file_version>\r\n"
@@ -2748,7 +3515,134 @@ char XMLLine[] = " <%s>%s</%s>\r\n";
 
 char XMLTrailer[] = "</variables>\r\n</RMS_Express_Form>\r\n";
 
-char * BuildFormMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, 	char * Keys[1000], char * Values[1000], int NumKeys)
+char * doXMLTransparency(char * string)
+{
+	// Make sure string doesn't contain forbidden XML chars (<>"'&)
+
+	char * newstring = malloc(5 * strlen(string));
+
+	char * in = string;
+	char * out = newstring;
+	char c;
+
+	c = *(in++);
+
+	while (c)
+	{
+		switch (c)
+		{
+		case '<':
+
+			strcpy(out, "&lt;");
+			out += 4;
+			break;
+
+		case '>':
+
+			strcpy(out, "&gt;");
+			out += 4;
+			break;
+
+		case '"':
+
+			strcpy(out, "&quot;");
+			out += 6;
+			break;
+
+		case '\'':
+
+			strcpy(out, "&lt;");
+			out += 6;
+			break;
+
+		case '&':
+
+			strcpy(out, "&amp;");
+			out += 5;
+			break;
+
+		default:
+
+			*(out++) = c;
+		}
+		c = *(in++);
+	}
+
+	*(out++) = 0;
+	return newstring;
+}
+ 
+
+VOID BuildXMLAttachment(struct HTTPConnectionInfo * Session, char * Keys[1000], char * Values[1000], int NumKeys)
+{
+	// Create XML Attachment for form
+
+	WebMailInfo * WebMail = Session->WebMail;
+	char XMLName[MAX_PATH];
+	char * XMLPtr;
+	char DateString[80];
+	struct tm * tm;
+	time_t NOW = time(NULL);
+
+	int n;
+	int TotalFileSize = 0;
+		
+	tm = gmtime(&NOW);	
+	
+	sprintf(DateString, "%04d%02d%02d%02d%02d%02d",
+		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+	strcpy(XMLName, WebMail->DisplayHTMLName);
+	XMLName[strlen(XMLName) - 5] = 0;	// remove .html
+
+	WebMail->XMLName = malloc(MAX_PATH);
+	WebMail->XML = XMLPtr = malloc(100000);
+	WebMail->XMLLen = 0;
+
+	sprintf(WebMail->XMLName, "RMS_Express_Form_%s.xml", XMLName);
+
+	XMLPtr += sprintf(XMLPtr, XMLHeader,
+		"1,0", VersionString,
+		DateString,
+		Session->User->Call,
+		"", //Grid
+		WebMail->DisplayHTMLName,
+		WebMail->ReplyHTMLName,
+		WebMail->To,
+		WebMail->CC,
+		Session->User->Call,
+		WebMail->OrigSubject,
+		"", //	WebMail->OrigBody,
+		"False",			// P2P
+		WebMail->isReply ? "True": "False",
+		"False",			// Forward,
+		"False");			// Ack
+
+	// create XML lines for Key/Value Pairs
+
+	for (n = 0; n < NumKeys; n++)
+	{
+		if (Values[n] == NULL)
+			Values[n] = _strdup("");
+
+		XMLPtr += sprintf(XMLPtr, XMLLine, Keys[n], Values[n], Keys[n]);
+	}
+	if (WebMail->isReply)
+	{
+		if (WebMail->OrigBody)
+		{
+			char * goodXML = doXMLTransparency(WebMail->OrigBody);
+			XMLPtr += sprintf(XMLPtr, XMLLine, "MsgOriginalBody", goodXML, "MsgOriginalBody");
+		}
+		else
+			XMLPtr += sprintf(XMLPtr, XMLLine, "MsgOriginalBody", "", "MsgOriginalBody");
+	}
+		
+	XMLPtr += sprintf(XMLPtr, "%s", XMLTrailer);
+	WebMail->XMLLen = XMLPtr - WebMail->XML;
+}
+
+char * BuildFormMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, char * Keys[1000], char * Values[1000], int NumKeys)
 {
 
 	// Create B2 message with template body and xml attachment
@@ -2812,9 +3706,13 @@ char * BuildFormMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 		// create XML lines for Key/Value Pairs
 
 		for (n = 0; n < NumKeys; n++)
-			XMLPtr += sprintf(XMLPtr, XMLLine, Keys[n], Values[n], Keys[n]);
+		{
+			if (Values[n] == NULL)
+				Values[n] = _strdup("");
 
-		XMLPtr += sprintf(XMLPtr, XMLTrailer);
+			XMLPtr += sprintf(XMLPtr, XMLLine, Keys[n], Values[n], Keys[n]);
+		}
+		XMLPtr += sprintf(XMLPtr, "%s", XMLTrailer);
 
 		FileLen[0] = XMLPtr - FileBody[0];
 
@@ -2970,6 +3868,23 @@ int ReplyToFormsMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 
 	if (Template == NULL)
 		return 0;					// No Template
+
+	WebMail->isReply = TRUE;
+
+	if (WebMail->OrigBody)
+		free(WebMail->OrigBody);
+
+	WebMail->OrigBody = _strdup(WebMail->Body);
+	
+	// Add "Re: " to Subject
+
+	ptr = WebMail->Subject;
+
+	WebMail->Subject = malloc(strlen(Msg->title) + 10);
+	sprintf(WebMail->Subject, "Re: %s", Msg->title);
+	
+	if (ptr)
+		free(ptr);
 
 	WebMail->txtFileName = _strdup(Template);
 
@@ -3222,13 +4137,13 @@ gotFile:
 	txtKey->Key = _strdup("<MsgCc>");
 	txtKey++->Value = _strdup("");
 	txtKey->Key = _strdup("<MsgSender>");
-	txtKey++->Value = _strdup("");
+	txtKey++->Value = _strdup(Session->User->Call);
 	txtKey->Key = _strdup("<MsgSubject>");
 	txtKey++->Value = _strdup("");
 	txtKey->Key = _strdup("<MsgBody>");
-	if (WebMail->OrigBody)
-		txtKey++->Value = _strdup(WebMail->OrigBody);
-	else
+//	if (WebMail->OrigBody)
+//		txtKey++->Value = _strdup(WebMail->OrigBody);
+//	else
 		txtKey++->Value = _strdup("");
 
 	txtKey->Key = _strdup("<MsgP2P>");
@@ -3350,6 +4265,9 @@ gotFile:
 		{
 			// Rest is message body. May need <var> substitutions
 
+			if (WebMail->Body)
+				free(WebMail->Body);
+
 			WebMail->Body = _strdup(ptr + 4);
 			break;
 		}
@@ -3365,11 +4283,18 @@ gotFile:
 		{
 			InputName = &ptr[5];
 	
-			while (*InputName == ' ')
+			while (*InputName == ' ')		// Remove leading spaces
 				InputName++;
 
 			WebMail->InputHTMLName = _strdup(InputName);
-			WebMail->DisplayHTMLName = _strdup(strlop(WebMail->InputHTMLName, ','));
+			WebMail->DisplayHTMLName = strlop(WebMail->InputHTMLName, ',');
+
+			if (WebMail->DisplayHTMLName)
+			{
+				while (*WebMail->DisplayHTMLName == ' ')		// Remove leading spaces
+				WebMail->DisplayHTMLName++;
+				WebMail->DisplayHTMLName = _strdup(WebMail->DisplayHTMLName);
+			}
 		}
 		else if (_memicmp(ptr, "ReplyTemplate:",14) == 0)
 		{
@@ -3419,5 +4344,88 @@ gotFile:
 		ptr1 = strchr(ptr, '\r');
 	}
 
+	if (WebMail->ReplyHTMLName == NULL)
+		WebMail->ReplyHTMLName = _strdup("");
+
+	free(txtFile);
+
 	return TRUE;
+}
+
+VOID FormatTime2(char * Time, time_t cTime)
+{
+	struct tm * TM;
+	TM = gmtime(&cTime);
+
+	sprintf(Time, "%s, %02d %s %3d %02d:%02d:%02d GMT", dat[TM->tm_wday], TM->tm_mday, month[TM->tm_mon],
+		TM->tm_year + 1900, TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+}
+
+VOID DownloadAttachments(struct HTTPConnectionInfo * Session, char * Reply, int * RLen, char * Param)
+{
+	WebMailInfo * WebMail = Session->WebMail;
+	char TimeString[64];
+	char FileTimeString[64];
+	int file = atoi(Param);
+
+	if (file == -1)
+	{
+		// User has gone back, then selected "No file Selected"
+
+		// For now just stop crash
+
+		file = 0;
+	}
+
+	FormatTime2(FileTimeString, time(NULL));
+	FormatTime2(TimeString, time(NULL));
+
+	*RLen =	sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
+		"Content-Type: application/octet-stream\r\n"
+		"Content-Disposition: attachment; filename=\"%s\"\r\n"
+		"Date: %s\r\n"
+		"Last-Modified: %s\r\n" 
+		"\r\n", WebMail->FileLen[file], WebMail->FileName[file], TimeString, FileTimeString);
+
+	memcpy(&Reply[*RLen], WebMail->FileBody[file], WebMail->FileLen[file]); 
+
+	*RLen += WebMail->FileLen[file];
+
+	return;
+}
+
+VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * RLen, char * Rest)
+{
+	char popuphddr[] = 
+			
+		"<html><body align=center background='/background.jpg'>"
+		"<script>"
+		"function myFunction() {var x = document.getElementById('Sel').value;"
+		"var Key = \"%s\";"
+		"var param = \"toolbar=yes,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
+		"window.open(\"/WebMail/GetDownLoad\" + '?' + Key + '&' + x,'_self', param);"
+		"}"
+		"</script>"
+		"Note files over 100K long can't be downloaded<br><br>"
+		"<table align=center border=1 cellpadding=2 bgcolor=white>"
+		"<tr><td><select id='Sel' onchange=myFunction()>"
+		"<option value=-1>Select Attachment";
+
+	char popup[10000];
+	int i;
+	WebMailInfo * WebMail = Session->WebMail;
+
+	sprintf(popup, popuphddr, Session->Key);
+
+	for (i = 0; i < WebMail->Files; i++)
+	{
+		if(WebMail->FileLen[i] < 100000)
+			sprintf(popup, "%s <option value=%d>%s (Len %d)", popup, i, WebMail->FileName[i], WebMail->FileLen[i]);
+	}
+
+	sprintf(popup, "%s</select></td></tr></table><br><div align=center><input onclick=window.history.back() value=Back type=button></div>", popup);
+
+	*RLen = sprintf(Reply, "%s", popup);
+	return;
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -3823,7 +3823,6 @@ MsgLoop:
 						
 							Freq = PORT->WL2KInfo.Freq;
 							Mode = PORT->WL2KInfo.mode;
-		
 						}
 						else
 						{

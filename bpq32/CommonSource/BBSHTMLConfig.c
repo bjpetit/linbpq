@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -376,8 +376,6 @@ char * WebMailTemplate = NULL;
 char * WebMailMsgTemplate = NULL;
 char * jsTemplate = NULL;
 
-static struct HTTPConnectionInfo * WebSessionList;	// active WebMail sessions
-
 
 #ifdef LINBPQ
 UCHAR * GetBPQDirectory();
@@ -395,72 +393,6 @@ int SendHeader(char * Reply, char * Key)
 	return sprintf(Reply, MailPage, BBSName, BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
 }
 
-struct HTTPConnectionInfo * FindWMSession(char * Key)
-{
-	struct HTTPConnectionInfo * Session = WebSessionList;
-
-	while (Session)
-	{
-		if (strcmp(Session->Key, Key) == 0)
-		{
-			Session->WebMailLastUsed = time(NULL);
-			return Session;
-		}
-		Session = Session->Next;
-	}
-
-	return NULL;
-}
-struct HTTPConnectionInfo * AllocateWebMailSession()
-{
-	int KeyVal;
-	struct HTTPConnectionInfo * Session, * SaveNext;
-	time_t NOW = time(NULL);
-
-	//	First see if any session records havent been used for a while
-
-	Session = WebSessionList;
-
-	while (Session)
-	{
-		if (NOW - Session->WebMailLastUsed > 1200)	// 20 Mins
-		{
-			SaveNext = Session->Next;
-			
-			// Release amy malloc'ed resouces
-			
-			ReleaseWebMailStruct(Session->WebMail);
-
-			memset(Session, 0, sizeof(struct HTTPConnectionInfo));
-	
-			Session->Next = SaveNext;
-			goto UseThis;
-		}
-		Session = Session->Next;
-	}
-	
-	Session = zalloc(sizeof(struct HTTPConnectionInfo));
-	
-	if (Session == NULL)
-		return NULL;
-
-	if (WebSessionList)
-		Session->Next = WebSessionList;
-
-	WebSessionList = Session;
-
-UseThis:
-
-	Session->WebMail = zalloc(sizeof(WebMailInfo));
-
-	KeyVal = ((rand() % 100) + 1);
-
-	KeyVal *= time(NULL);
-
-	sprintf(Session->Key, "%c%08X", 'W', KeyVal);
-
-	return Session;
-}
 
 void ConvertTitletoUTF8(char * Title, char * UTF8Title)
 {
@@ -501,6 +433,9 @@ VOID UndoTransparency(char * ptr)
 
 	char * ptr1, * ptr2;
 	char c;
+
+	if (ptr == NULL)
+		return;
 
 	ptr1 = ptr2 = ptr;
 
@@ -2791,7 +2726,7 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
    BOOL fSuccess = FALSE;
    HANDLE hPipe  = NULL;
    char Buffer[100001];
-   char OutBuffer[100000];
+   char OutBuffer[250000];
    char * MsgPtr;
    int InputLen = 0;
    int OutputLen = 0;

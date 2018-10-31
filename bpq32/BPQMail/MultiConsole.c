@@ -33,7 +33,7 @@ BOOL CloseWindowOnBye;
 
 RECT ConsoleRect;
 	
-char chatMsg[] = "Sysop wants to chat to you\r";
+char chatMsg[] = "\rSysop wants to chat to you\r";
 char endChatMsg[] = "Sysop ended chat\r";
 
 //CIRCUIT * Console;
@@ -661,31 +661,41 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		}
 
 
-	case WM_SIZING:
+		case WM_SIZING:
 
-		lprc = (LPRECT) lParam;
+			lprc = (LPRECT) lParam;
 
-		Cinfo->Height = lprc->bottom-lprc->top;
-		Cinfo->Width = lprc->right-lprc->left;
+			Cinfo->Height = lprc->bottom-lprc->top;
+			Cinfo->Width = lprc->right-lprc->left;
 
-		MoveWindows(Cinfo);
+			MoveWindows(Cinfo);
 			
-		return TRUE;
+			return TRUE;
 
-	case WM_SIZE:
-
-		MoveWindows(Cinfo);		
-		return TRUE;
+		case WM_SIZE:
+	
+			MoveWindows(Cinfo);		
+			return TRUE;
 		
-	case WM_CLOSE:
+		case WM_CLOSE:
+
+	
+			if (Cinfo->Console->SysopChatStream)
+			{
+				SendUnbuffered(Cinfo->Console->SysopChatStream->BPQStream, endChatMsg, strlen(endChatMsg));
+				Cinfo->Console->SysopChatStream->BBSFlags &= ~SYSOPCHAT;
+				SendPrompt(Cinfo->Console->SysopChatStream, Cinfo->Console->SysopChatStream->UserPointer);
+				SendPrompt(Cinfo->Console, Cinfo->Console->UserPointer);
+				Cinfo->Console->SysopChatStream = 0;
+			}
 
 			CloseConsoleSupport(Cinfo);
 			
 			return (DefWindowProc(hWnd, message, wParam, lParam));
 
-	case WM_DESTROY:
+		case WM_DESTROY:
 		
-		// Remove the subclass from the edit control. 
+			// Remove the subclass from the edit control. 
 
 			GetWindowRect(hWnd,	&ConsoleRect);	// For save soutine
 	

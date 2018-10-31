@@ -1,5 +1,5 @@
 /*
-Copyright 2001-2015 John Wiseman G8BPQ
+Copyright 2001-2018 John Wiseman G8BPQ
 
 This file is part of LinBPQ/BPQ32.
 
@@ -772,6 +772,75 @@ VOID CheckAndSend(struct MsgInfo * Msg, CIRCUIT * conn, struct UserInfo * bbs)
 		Logprintf(LOG_BBS, conn, '?', "Message matches this BBS and ForwardToMe not set - not queuing message");
 }
 
+VOID UpdateB2Dest(struct MsgInfo * Msg, char * Alias)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	char * MsgBytes;
+	struct stat STAT;
+ 
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
+
+	if (stat(MsgFile, &STAT) == -1)
+		return;
+
+	FileSize = STAT.st_size;
+
+	hFile = fopen(MsgFile, "rb");
+
+	if (hFile == NULL)
+		return;
+
+	MsgBytes=malloc(FileSize + 100);	// A bit of space for alias substitution on B2
+
+	fread(MsgBytes, 1, FileSize, hFile); 
+
+	fclose(hFile);
+
+	if (MsgBytes)
+	{
+		char * To, * AT, * ATEND;
+		To = strstr(MsgBytes, "To:");
+
+		if (To)
+		{
+			ATEND = strchr(To, '\r');
+			if (ATEND)
+			{
+				int i = ATEND - To;
+				AT = memchr(To, '@', i);
+				if (AT)
+				{
+					// Move Message up/down to make room for substitution
+
+					int Diff = (ATEND - AT - 1) - strlen(Alias);
+					int BeforeAT = AT - MsgBytes + 1;
+					int j = 0;
+
+					memmove(AT + 1, AT + Diff + 1, Msg->length - BeforeAT + 10);
+					memcpy(AT + 1, Alias, strlen(Alias));
+
+					j = 1;
+					Msg->length -= Diff;
+
+					// Write Back
+
+					hFile = fopen(MsgFile, "wb");
+
+					if (hFile == NULL)
+						return;
+
+
+					fwrite(MsgBytes, 1, Msg->length, hFile);
+					fclose(hFile);
+				}
+			}
+		}
+	}
+}
+
+
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 {
 	struct UserInfo * bbs;
@@ -843,6 +912,9 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace @%s taken from Alias File", Alias->Alias);
 			strcpy(Msg->via, Alias->Alias);
+			if (Msg->B2Flags)
+				UpdateB2Dest(Msg, Alias->Alias);
+
 			SaveMessageDatabase();
 		}
 
