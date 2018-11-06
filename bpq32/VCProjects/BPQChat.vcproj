@@ -65,7 +65,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="C:\Dev\Msdev2005\Projects\bpq32\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib C:\Dev\Msdev2005\Projects\bpq32\lib\libconfig.lib"
+				AdditionalDependencies="C:\Dev\Msdev2005\Projects\bpq32\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib C:\OneDrive\Dev\Source\bpq32\lib\libconfig.lib"
 				OutputFile="c:\DevProgs\bpq32\BPQChat.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"

@@ -465,6 +465,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\WebMail.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\WINMOR.c"
 				>
 			</File>

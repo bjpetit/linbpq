@@ -253,10 +253,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\CKernel\Baycom.c"
-				>
-			</File>
-			<File
 				RelativePath="..\CKernel\Bpq32.c"
 				>
 				<FileConfiguration
