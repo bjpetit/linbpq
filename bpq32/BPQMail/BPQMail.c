@@ -968,8 +968,9 @@
 //	Fix handling null H Route
 //	Detect and correct duplicate BBS Numbers
 //	Fix problem if BBS requests FBB blocked forwarding without compression (ie SID of F without B)
-//	Fix crash if YAPP entered without filenmame
+//	Fix crash if YAPP entered without filenmame and send BBS prompt after YAPP error messages
 //	Add support for Winlink HTML Forms to WebMail interface
+//	Update B2 header when using NTS alias file with B2 messages
 
 #include "BPQMail.h"
 #define MAIL

@@ -29,7 +29,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "time.h"
@@ -63,6 +62,7 @@ static char ClassName[]="TELNETSERVER";
 static char WindowTitle[] = "Telnet Server";
 static int RigControlRow = 190;
 
+UCHAR * APIENTRY GetLogDirectory();
 static BOOL OpenSockets(struct TNCINFO * TNC);
 static BOOL OpenSockets6(struct TNCINFO * TNC);
 int ProcessHTTPMessage(struct ConnectionInfo * conn);
@@ -167,6 +167,155 @@ VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst);
 VOID ProcessTrimodeCommand(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, char * MsgPtr);
 VOID ProcessTrimodeResponse(struct TNCINFO * TNC, struct STREAMINFO * STREAM, unsigned char * MsgPtr, int Msglen);
 VOID ProcessTriModeDataMessage(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
+
+
+static int LogAge = 14;
+
+#ifdef WIN32
+
+int DeleteTelnetLogFiles()
+{
+   WIN32_FIND_DATA ffd;
+
+   char szDir[MAX_PATH];
+   char File[MAX_PATH];
+   HANDLE hFind = INVALID_HANDLE_VALUE;
+   DWORD dwError=0;
+   LARGE_INTEGER ft;
+   time_t now = time(NULL);
+   int Age;
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   strcpy(szDir, GetLogDirectory());
+   strcat(szDir, "/logs/Telnet*.log");
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+      return dwError;
+
+   // List all the files in the directory with some info about them.
+
+   do
+   {
+      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      {
+         OutputDebugString(ffd.cFileName);
+      }
+      else
+      {
+         ft.HighPart = ffd.ftCreationTime.dwHighDateTime;
+         ft.LowPart = ffd.ftCreationTime.dwLowDateTime;
+
+		 ft.QuadPart -=  116444736000000000;
+		 ft.QuadPart /= 10000000;
+
+		 Age = (now - ft.LowPart) / 86400; 
+
+		 if (Age > LogAge)
+		 {
+			 sprintf(File, "%s/logs/%s%c", GetLogDirectory(), ffd.cFileName, 0);
+			 Debugprintf("Deleting %s", File);
+			 DeleteFile(File);
+		 }
+      }
+   }
+   while (FindNextFile(hFind, &ffd) != 0);
+ 
+   strcpy(szDir, GetLogDirectory());
+   strcat(szDir, "/logs/CMSAccess_*.log");
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+      return dwError;
+
+   // List all the files in the directory with some info about them.
+
+   do
+   {
+      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      {
+         OutputDebugString(ffd.cFileName);
+      }
+      else
+      {
+         ft.HighPart = ffd.ftCreationTime.dwHighDateTime;
+         ft.LowPart = ffd.ftCreationTime.dwLowDateTime;
+
+		 ft.QuadPart -=  116444736000000000;
+		 ft.QuadPart /= 10000000;
+
+		 Age = (now - ft.LowPart) / 86400; 
+
+		 if (Age > LogAge)
+		 {
+			 sprintf(File, "%s/logs/%s%c", GetLogDirectory(), ffd.cFileName, 0);
+			 Debugprintf("Deleting %s", File);
+			 DeleteFile(File);
+		 }
+      }
+   }
+   while (FindNextFile(hFind, &ffd) != 0);
+   dwError = GetLastError();
+
+   FindClose(hFind);
+   return dwError;
+}
+
+#else
+
+#include <dirent.h>
+
+int TelFilter(const struct dirent * dir)
+{
+	return (memcmp(dir->d_name, "CMSAccess", 9) == 0 || memcmp(dir->d_name, "Telnet", 6) == 0) && strstr(dir->d_name, ".log");
+}
+
+int DeleteTelnetLogFiles()
+{
+	struct dirent **namelist;
+    int n;
+	struct stat STAT;
+	time_t now = time(NULL);
+	int Age = 0, res;
+	char FN[256];
+     	
+    n = scandir("logs", &namelist, TelFilter, alphasort);
+
+	if (n < 0) 
+		perror("scandir");
+	else  
+	{ 
+		while(n--)
+		{
+			sprintf(FN, "logs/%s", namelist[n]->d_name);
+			if (stat(FN, &STAT) == 0)
+			{
+				Age = (now - STAT.st_mtime) / 86400;
+				
+				if (Age > LogAge)
+				{
+					Debugprintf("Deleting  %s\n", FN);
+					unlink(FN);
+				}
+			}
+			free(namelist[n]);
+		}
+		free(namelist);
+    }
+	return 0;
+}
+#endif
+
+
+
 
 void BuffertoNode(struct ConnectionInfo * sockptr, char * MsgPtr, int InputLen)
 {
@@ -1145,6 +1294,8 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 	}
 	}
 */
+
+	DeleteTelnetLogFiles();
 
 	initUTF8();
 
@@ -4025,7 +4176,7 @@ MsgLoop:
 			{
 				char Addr[100];
 				Tel_Format_Addr(sockptr, Addr);
-				sprintf(logmsg,"%d %s Call Accepted  Callsign =%s\n",
+				sprintf(logmsg,"%d %s Call Accepted. Callsign=%s\n",
 				sockptr->Number, Addr,sockptr->Callsign);
 
 				WriteLog (logmsg);
@@ -4357,22 +4508,32 @@ int WriteLog(char * msg)
 {
 	FILE *file;
 	char timebuf[128];
-
 	time_t ltime;
 
-	UCHAR Value[100];
+	UCHAR Value[MAX_PATH];
+	time_t T;
+	struct tm * tm;
+	FILE * Handle;
+
+	T = time(NULL);
+	tm = gmtime(&T);
 
 	if (LogDirectory[0] == 0)
 	{
-		strcpy(Value, "logs/BPQTelnetServer.log");
+		strcpy(Value, "logs/Telnet_");
 	}
 	else
 	{
 		strcpy(Value, LogDirectory);
 		strcat(Value, "/");
-		strcat(Value, "logs/BPQTelnetServer.log");
+		strcat(Value, "logs/Telnet_");
 	}
-		
+
+	sprintf(Value, "%s%04d%02d%02d.log", Value,
+				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+
+	Handle = fopen(Value, "ab");
+
 	if ((file = fopen(Value, "a")) == NULL)
 		return FALSE;
 
@@ -4395,11 +4556,8 @@ int WriteLog(char * msg)
 	}
 #endif    
 	fputs(timebuf, file);
-
 	fputs(msg, file);
-
 	fclose(file);
-
 	return 0;
 }
 

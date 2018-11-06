@@ -51,6 +51,7 @@ extern struct ConsoleInfo BBSConsole;
 
 #ifdef LINBPQ
 extern BPQVECSTRUC ** BPQHOSTVECPTR;
+char * GetLogDirectory();
 #else
 __declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
 #endif
@@ -10997,8 +10998,9 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 			Flush(conn);
 			len = sprintf_s(Mess, sizeof(Mess), "YAPP File %s size %d larger than limit %d\r", conn->ARQFilename, FileSize, MaxRXSize);
 			QueueMsg(conn, Mess, len);
-
+			SendPrompt(conn, conn->UserPointer);
 			WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+
 			conn->InputLen = 0;
 			conn->InputMode = 0;
 
@@ -11020,9 +11022,10 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 			Flush(conn);
 			len = sprintf_s(Mess, sizeof(Mess), "YAPP File %s already exists\r", conn->ARQFilename);
 			QueueMsg(conn, Mess, len);
-
+			SendPrompt(conn, conn->UserPointer);
 			WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
 			fclose(hFile);
+
 			conn->InputLen = 0;
 			conn->InputMode = 0;
 
@@ -11136,6 +11139,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 		len = sprintf_s(Mess, sizeof(Mess), "YAPP file %s received\r", conn->ARQFilename);
 		WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
 		QueueMsg(conn, Mess, len);
+		SendPrompt(conn, conn->UserPointer);
 
 		return TRUE;
 
@@ -11269,12 +11273,14 @@ void YAPPSendFile(ConnectionInfo * conn, struct UserInfo * user, char * filename
 	if (filename == NULL)
 	{
 		nodeprintf(conn, "Filename missing\r");
+		SendPrompt(conn, user);
 		return;
 	}
 
 	if (strstr(filename, "..") || strchr(filename, '/') || strchr(filename, '\\'))
 	{
 		nodeprintf(conn, "Invalid filename\r");
+		SendPrompt(conn, user);
 		return;
 	}
 
@@ -11313,6 +11319,7 @@ void YAPPSendFile(ConnectionInfo * conn, struct UserInfo * user, char * filename
 	}
 
 	nodeprintf(conn, "File %s not found\r", filename);
+	SendPrompt(conn, user);
 }
 
 void YAPPSendData(ConnectionInfo * conn)

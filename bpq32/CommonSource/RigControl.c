@@ -3713,6 +3713,7 @@ void DecodeCM108(int Port, char * ptr)
 
 	char * next;
 	long VID = 0, PID = 0;
+	char product[256];
 
 	struct hid_device_info *devs, *cur_dev;
 	const char *path_to_open = NULL;
@@ -3728,10 +3729,12 @@ void DecodeCM108(int Port, char * ptr)
 
 		// Look for Device
 	
-		devs = hid_enumerate(VID, PID);
+		devs = hid_enumerate((USHORT)VID, (USHORT)PID);
 		cur_dev = devs;
 		while (cur_dev)
 		{
+			wcstombs(product, cur_dev->product_string, 255);
+			Debugprintf("HID Device %s VID %X PID %X", product, cur_dev->vendor_id, cur_dev->product_id);
 			if (cur_dev->vendor_id == VID && cur_dev->product_id == PID)
 			{
 				path_to_open = cur_dev->path;

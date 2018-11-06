@@ -181,8 +181,9 @@ UINT _ReleaseBuffer(VOID *pBUFF, char * File, int Line)
 
 	return 0;
 
-
 BOK1:
+
+	n = 0;
 
 	// See if already on free Queue
 
@@ -203,6 +204,13 @@ BOK1:
 			return 0;
 		}
 		pointer = (UINT *)pointer[0];
+		n++;
+
+		if (n > 1000)
+		{
+			Debugprintf("Loop searching free chain");
+			return 0;
+		}
 	}
 
 	pointer = (UINT *)FREE_Q;

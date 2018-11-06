@@ -436,7 +436,7 @@ BOOL OpenLogfile(int Flags)
 	T = time(NULL);
 	tm = gmtime(&T);	
 
-	wsprintf(FN,"%s\\Log_%02d%02d%02d_%s.txt", BaseDir, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
+	sprintf(FN,"%s/logs/log_%02d%02d%02d_%s.txt", GetLogDirectory(), tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
 
 	LogHandle[Flags] = CreateFile(FN,
 					GENERIC_WRITE,

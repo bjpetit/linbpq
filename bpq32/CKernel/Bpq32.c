@@ -848,6 +848,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix loss of buffer if session closed with something in PARTCMDBUFFER
 //	Fix Spurious GUARD ZONE CORRUPT message in IP Code.
 //	Remove "reread bpq32.cfg and reconfigure" menu options
+//	Add support for PTT using CM108 based soundcard interfaces
+//	Datestamp Telnet log files and delete old Telnet and CMSAcces logs
 
 
 #define CKernel
@@ -933,7 +935,7 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT UIARQExtInit(EXTPORTDATA * PortEntry);
-UINT BaycomExtInit(EXTPORTDATA * PortEntry);
+//UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
 UINT VARAExtInit(EXTPORTDATA * PortEntry);
 
@@ -2148,7 +2150,6 @@ Tell_Sessions()
 	return (0);
 }
 
-
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
 	DWORD n;
@@ -2156,6 +2157,14 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 	int i;
 	unsigned int ProcessID;
+
+	OSVERSIONINFO osvi;
+
+	memset(&osvi, 0, sizeof(OSVERSIONINFO));
+	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+
+	GetVersionEx(&osvi);
+
 
 	switch( ul_reason_being_called )
 	{
@@ -3405,8 +3414,8 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "UIARQ"))
 		return (UINT) UIARQExtInit;
 
-	if (strstr(Value, "BAYCOM"))
-		return (UINT) BaycomExtInit;
+//	if (strstr(Value, "BAYCOM"))
+//		return (UINT) BaycomExtInit;
 
 	if (strstr(Value, "VARA"))
 		return (UINT) VARAExtInit;
@@ -5659,12 +5668,12 @@ int DoStatus()
 
 		if (OneBits > 1)
 			sprintf(&NewScreen[(i+1)*54],"%2d%s%3d %3d %3d %03x %3x %10s%-20s",
-			i, flag, RXCount(i), TXCount(i), MONCount(i), Mask, Flags, callsign,
-			BPQHOSTVECTOR[i-1].PgmName, pgm);
+				i, flag, RXCount(i), TXCount(i), MONCount(i), Mask, Flags, callsign,
+				BPQHOSTVECTOR[i-1].PgmName);
 		else
-		sprintf(&NewScreen[(i+1)*54],"%2d%s%3d %3d %3d %3d %3x %10s%-20s",
-			i, flag, RXCount(i), TXCount(i), MONCount(i), AppNumber, Flags, callsign,
-			BPQHOSTVECTOR[i-1].PgmName, pgm);
+			sprintf(&NewScreen[(i+1)*54],"%2d%s%3d %3d %3d %3d %3x %10s%-20s",
+				i, flag, RXCount(i), TXCount(i), MONCount(i), AppNumber, Flags, callsign,
+				BPQHOSTVECTOR[i-1].PgmName);
 
 	}
 	}

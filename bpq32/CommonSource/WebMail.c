@@ -129,7 +129,7 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=ISO
 	"<body background=/background.jpg onload='initialize(185)' onresize='initialize(185)'>"
 	"<h3 align=center>Webmail Interface - Message Input Form</h3>"
 	"<form align=center id=myform style=\"font-family: monospace; \" method=post action=/WebMail/EMSave\?%s>"
-    "<div style='display: inline-block; text-align: left;'>"
+	"<div style='text-align: center;'><div style='display: inline-block;'><span style='display:block; text-align: left;'>"
 	"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='To' name='To' value='%s'>%s<br>"
 	"Subject <input size=60 id='Subj' name='Subj' value='%s'>"
 //"<input type='file' name='myFile' multiple>"
@@ -137,16 +137,17 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=ISO
 	"<select tabindex=1 size=1 name=Type><option value=P>P</option>"
 	"<option value=B>B</option><option value=T>T</option></select>"
 	" BID <input name=BID><br><br>"
-	"</div>"
+	"</span></div>"
 	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
-	"<span align=center><input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></span></form>";
+	"<input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></div></form>";
 
 static char CheckFormMsgPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
 	"<title></title><script src='/WebMail/webscript.js'></script></head>"
 	"<body background=/background.jpg onload='initialize(210)' onresize='initialize(210)'>"
 	"<h3 align=center>Webmail Forms Interface - Check Message</h3>"
 	"<form align=center id=myform style=\"font-family: monospace; \"method=post action=/WebMail/FormMsgSave\?%s>"
-    "<div style='display: inline-block; text-align: left;'>"
+
+	"<div style='text-align: center;'><div style='display: inline-block;'><span style='display:block; text-align: left;'>"
 	"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='To' name='To' value='%s'><br>"
 	"CC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='CC' name='CC' value='%s'><br>"
 	"Subject <input size=60 id='Subj' name='Subj' value='%s'>"
@@ -155,9 +156,10 @@ static char CheckFormMsgPage[] = "<html><head><meta content=\"text/html; charset
 	"<select tabindex=1 size=1 name=Type><option value=P>P</option>"
 	"<option value=B>B</option><option value=T>T</option></select>"
 	" BID <input name=BID><br><br>"
-	"</div>"
+	"</span></div>"
+
 	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
-	"<span align=center><input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></span></form>";
+	"<input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></div></form>";
 
 
 extern char * WebMailTemplate;
@@ -4407,8 +4409,8 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 		"window.open(\"/WebMail/GetDownLoad\" + '?' + Key + '&' + x,'_self', param);"
 		"}"
 		"</script>"
-		"Note files over 100K long can't be downloaded<br><br>"
-		"<table align=center border=1 cellpadding=2 bgcolor=white>"
+		"<div align=center>Note files over 100K long can't be downloaded<br><br>"
+		"<table border=1 cellpadding=2 bgcolor=white>"
 		"<tr><td><select id='Sel' onchange=myFunction()>"
 		"<option value=-1>Select Attachment";
 
@@ -4424,7 +4426,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 			sprintf(popup, "%s <option value=%d>%s (Len %d)", popup, i, WebMail->FileName[i], WebMail->FileLen[i]);
 	}
 
-	sprintf(popup, "%s</select></td></tr></table><br><div align=center><input onclick=window.history.back() value=Back type=button></div>", popup);
+	sprintf(popup, "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button></div>", popup);
 
 	*RLen = sprintf(Reply, "%s", popup);
 	return;

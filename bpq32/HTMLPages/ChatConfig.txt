@@ -23,7 +23,7 @@ function CheckLen()
 {
 var len = Pos.value.length + Poptext.value.length;
 if (len > 245)
-	{alert("Combinded lenght of Location and Popup Text must not exceed 245. Now " + len);}
+	{alert("Combinded length of Location and Popup Text must not exceed 245. Now " + len);}
 }
  </script>
 <title></title>
@@ -43,7 +43,7 @@ onload="initialize()" onresize="initialize()">
 <div style="text-align: center;"><font size="+1"><span
 style="font-family: monospace; font-weight: bold;">Chat Configuration</span></font></div>
 <div id="main"
-style="border: 2px solid ; overflow: auto; text-align: center; position: relative; top: 10px; height: 500px; width: 650px; left: 96.5px;">
+style="border: 2px solid ; overflow: auto; text-align: center; position: relative; top: 10px; height: 550px; width: 700px; left: 96.5px;">
 <form border="1" style="font-family: monospace;" method="post"
 action="/Chat/ChatConfig?%s">
 <h3>&nbsp;Chat Server  Params<span style="font-family: monospace;"></span></h3>

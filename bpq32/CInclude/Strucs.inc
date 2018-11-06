@@ -514,15 +514,15 @@ PFBIT	EQU	10H		; POLL/FINAL BIT IN CONTROL BYTE
 ;
 ;	MH DATA AREA
 ;
-MHSTRUC	STRUC
+;MHSTRUC	STRUC
 
-MHCALL		DB	7 DUP (0)
-MHTIME		DD	0		; ? FROM BIOS	
-MHDIGI		DB	0
-MHFreq		DB  12 DUP (0)
-MHLocator	DB	6 DUP (0)
+;MHCALL		DB	7 DUP (0)
+;MHTIME		DD	0		; ? FROM BIOS	
+;MHDIGI		DB	0
+;MHFreq		DB  12 DUP (0)
+;MHLocator	DB	6 DUP (0)
 
-MHSTRUC	ENDS
+;MHSTRUC	ENDS
 
 ;	Application Calls/Alias Supports multiple L4 application calls
 

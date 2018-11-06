@@ -779,8 +779,8 @@ int DeleteLogFiles()
    // Prepare string for use with FindFile functions.  First, copy the
    // string to a buffer, then append '\*' to the directory name.
 
-   strcpy(szDir, GetBPQDirectory());
-   strcat(szDir, "\\logs\\Log_*.txt");
+   strcpy(szDir, GetLogDirectory());
+   strcat(szDir, "/logs/Log_*.txt");
 
    // Find the first file in the directory.
 

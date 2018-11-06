@@ -243,8 +243,8 @@ int DeleteLogFiles()
    // Prepare string for use with FindFile functions.  First, copy the
    // string to a buffer, then append '\*' to the directory name.
 
-   strcpy(szDir, BaseDir);
-   strcat(szDir, "\\Log_*.txt");
+   strcpy(szDir, GetLogDirectory());
+   strcat(szDir, "\\logs\\Log_*.txt");
 
    // Find the first file in the directory.
 
@@ -275,7 +275,7 @@ int DeleteLogFiles()
 
 		 if (Age > LogAge)
 		 {
-			 wsprintf(File, "%s\\%s%c", BaseDir, ffd.cFileName, 0);
+			 sprintf(File, "%s/logs/%s%c", GetLogDirectory(), ffd.cFileName, 0);
 			DeleteFile(File);
 		 }
       }

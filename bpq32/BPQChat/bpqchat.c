@@ -40,7 +40,6 @@
 //	Recompiled for Web Interface changes in Node
 
 
-
 #include "BPQChat.h"
 
 #define CHAT
