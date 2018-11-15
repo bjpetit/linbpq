@@ -2875,6 +2875,9 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		if (strlen(Alias))
 			strcat(Alias, ":");
 
+		if (Alias[0] == '#' && HIDENODES == 1 && Param != '*')	// Hidden Node and not N * command
+			continue;
+
 		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
 
 		if (Param == 'T')

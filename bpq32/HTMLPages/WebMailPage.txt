@@ -1,4 +1,4 @@
-<!-- Version 5 18/10/2015 -->
+<!-- Version 6 8/11/2018 -->
 <!DOCTYPE html> 
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"> 
 <head> 
@@ -20,9 +20,6 @@ pre {margin-left: 4px;white-space: pre}
 <td><a href=/WebMail/WMT?%s>NTS</a></td>
 <td><a href=/WebMail/WMALL?%s>All Types</a></td>
 <td><a href=/WebMail/WMMine?%s>Mine</a></td>
-<td><a href=/WebMail/WebMail?%s>Top</a></td>
-<td><a href=/WebMail/WMNext?%s>Next</a></td>
-<td><a href=/WebMail/WMBack?%s>Prev</a></td>
 <td><a href="#" onclick="newmsg('%s'); return false;">Send Message</a></td>
 <td><a href=/WebMail/WMLogout?%s>Logout</a></td>
 <td><a href=/>Node Menu</a></td></tr></table>

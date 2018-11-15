@@ -376,6 +376,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (PORT->needip)
 		{
+			char call[7];
+
 			len = recvfrom(PORT->sock,rxbuff,500,0,(struct sockaddr *)&RXaddr.rxaddr,&addrlen);
 
 			if (len == -1)
@@ -418,7 +420,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 //						buff[5]=(len & 0xff);
 //						buff[6]=(len >> 8);
-		
+
+						memcpy(call, &buff[14], 7);
+						call[6] &= 0x7e;		// Mask End of Address bit
+
 						//
 						//	Do MH Proccessing if enabled
 						//
@@ -426,13 +431,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						if (PORT->MHEnabled)
 							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, &buff[14], 'I', 93, 0);
 
+						// Check Exclude
+	
+						if (CheckExcludeList(call) == 0)
+							return 0;
+
+
 						if (PORT->Checkifcanreply)
 						{
-							char call[7];
-
-							memcpy(call, &buff[14], 7);
-							call[6] &= 0x7e;		// Mask End of Address bit
-
 							if (CheckSourceisResolvable(PORT, call, 0, &RXaddr))
 
 								return 1;
@@ -475,6 +481,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		for (i=0;i<PORT->NumberofUDPPorts;i++)
 		{
+			char call[7];
+
 			if (PORT->IPv6[i])
 				len = recvfrom(PORT->udpsock[i],rxbuff,500,0,(struct sockaddr *)&RXaddr.rxaddr, &addrlen6);
 			else
@@ -513,6 +521,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					
 					PutLengthinBuffer(buff, len);
 
+					memcpy(call, &buff[14], 7);
+					call[6] &= 0x7e;		// Mask End of Address bit
+
 					//
 					//	Do MH Proccessing if enabled
 					//
@@ -523,13 +534,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						else
 							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, &buff[14], 'U', PORT->udpport[i], FALSE);	
 
+					// Check Exclude
+
+					if (CheckExcludeList(call) == 0)
+						return 0;
+
 					if (PORT->Checkifcanreply)
 					{
-						char call[7];
- 
-						memcpy(call, &buff[14], 7);
-						call[6] &= 0x7e;		// Mask End of Address bit
-
 						if (CheckSourceisResolvable(PORT, call, htons(RXaddr.rxaddr.sin_port), &RXaddr))
 							return 1;
 						else

@@ -90,7 +90,7 @@ char * strlop(char * buf, char delim);
 VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
 int CompareNode(const void *a, const void *b);
 int CompareAlias(const void *a, const void *b);
-void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
+void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen);
 void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 int SetupNodeMenu(char * Buff);
@@ -228,13 +228,20 @@ char BusyError[] = "<p align=center>Sorry, No sessions available - please try la
 char LostSession[] = "<html><body>Sorry, Session had been lost - refresh page to sign in again";
 char NoSessions[] = "<html><body>Sorry, No Sessions available - refresh page to try again";
 
-char TermPage[] = "<html><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />"
+char TermPage[] = "<html><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
 	"<head><title>BPQ32 Node %s</title></head>"
-	"<body><h3 align=center>BPQ32 Node %s</h3>"
+	"<script>function resize(){"
+	"var w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];"
+	"x=w.innerWidth;"
+	"y=w.innerHeight;"
+	"var txt=document.getElementById('txt');"
+	"txt.style.height = y - 150 + 'px';}</script>"
+	"<body onload='resize()' onresize='resize()'>"
+	"<h3 align=center>BPQ32 Node %s</h3>"
 	"<form method=post action=/Node/TermClose?%s>"
-	"<p align=center><input type=submit value=\"Close and return to Node Page\" /></form>"
-    "<iframe src=OutputScreen.html?%s width=100%% height=80%%></iframe>"
-	"<iframe src=InputLine.html?%s width=100%% height=60></iframe>"
+	"<p align=center><input type=submit value='Close and return to Node Page' /></form>"
+    "<iframe id=txt src=OutputScreen.html?%s width=100%%></iframe>"
+	"<iframe style='display:block;' frameborder=0 marginwidth=0 marginheight=3 src=InputLine.html?%s width=100%% height=45px></iframe>"
 	"</body>";
 
 char TermOutput[] = "<html><head>"
@@ -252,11 +259,26 @@ char TermOutput[] = "<html><head>"
 //char TermOutputTail[] = "</p><script>document.getElementById(\"Text\").scrollTo(0,1500)</script>";
 //char TermOutputTail[] = "</p><script>window.scrollBy(0,500);</script></body></html>";
 char TermOutputTail[] = "</p></script></body></html>";
-
-char InputLine[] = "<html><head></head><body>"
+/*
+char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize()'>"
 	"<form name=inputform method=post action=/TermInput?%s>"
-	"<input type=text size=105 name=input />"
-	"<script>document.inputform.input.focus();</script></form>";
+	"<script>document.inputform.input.focus();"
+	"function resize(){"
+	"var w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];"
+	"x=w.innerWidth;y=w.innerHeight;"
+	"var inp=document.getElementById('inp');"
+	"inp.style.width =  x + 'px';}</script>"
+	"<input id=inp type=text width=100%% name=input /></form>";
+*/
+char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize()'>"
+	"<form name=inputform method=post action=/TermInput?%s>"
+	"<input id=inp type=text text width=100%% name=input />"
+	"<script>document.inputform.input.focus();"
+	"function resize(){"
+	"var w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];"
+	"x=w.innerWidth;y=w.innerHeight;"
+	"var inp=document.getElementById('inp');"
+	"inp.style.width=x-20+'px';}</script></form>";
 
 static char NodeSignon[] = "<html><head><title>BPQ32 Node SYSOP Access</title></head><body background=\"/background.jpg\">"
 	"<h3 align=center>BPQ32 Node %s SYSOP Access</h3>"
@@ -1001,6 +1023,8 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 	__try {
 #endif
 
+	UndoTransparency(FN);
+
 	if (strlen(FN) > 256)
 	{
 		FN[256] = 0;
@@ -1351,7 +1375,8 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char URL[100000];
 	char * ptr;
 	char * Context, * Method, * NodeURL, * Key;
-	char _REPLYBUFFER[100000];
+	char _REPLYBUFFER[250000];
+	char Reply[250000];
 
 	int ReplyLen = 0;
 	char Header[256];
@@ -1359,7 +1384,6 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char TimeString[64];
 	BOOL LOCAL = FALSE;
 	BOOL COOKIE = FALSE;
-	char Reply[250000];
 	int Len;
 
 #ifdef WIN32
@@ -1673,6 +1697,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 	if (Session == NULL)
 	{
+		int Sent, Loops;
 		ReplyLen = sprintf(Reply, MailLostSession, Key);
 		RLen = ReplyLen;
 Returnit:
@@ -1680,13 +1705,47 @@ Returnit:
 		{
 			// Full Header provided by appl - just send it
 			
-			send(sock, Reply, ReplyLen, 0);
+			// Send may block
+
+			Sent = send(sock, Reply, ReplyLen, 0);
+		
+			while (Sent != ReplyLen && Loops++ < 3000)					// 100 secs max
+			{	
+//			Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
+		
+				if (Sent > 0)					// something sent
+				{
+					InputLen -= Sent;
+					memmove(Reply, &Reply[Sent], ReplyLen);
+				}
+					
+				Sleep(30);
+				Sent = send(sock, Reply, ReplyLen, 0);
+			}
+
 			return 0;
 		}
 		
 		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 		send(sock, Header, HeaderLen, 0);
-		send(sock, Reply, ReplyLen, 0);
+		
+		// May block
+
+		Sent = send(sock, Reply, ReplyLen, 0);
+
+		while (Sent != ReplyLen && Loops++ < 3000)					// 100 secs max
+		{	
+//			Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
+		
+			if (Sent > 0)					// something sent
+			{
+				InputLen -= Sent;
+				memmove(Reply, &Reply[Sent], ReplyLen);
+			}
+					
+			Sleep(30);
+			Sent = send(sock, Reply, ReplyLen, 0);
+		}
 		send(sock, Tail, strlen(Tail), 0);
 
 		return 0;
@@ -1708,13 +1767,29 @@ doHeader:
 		if (Session == 0)
 			Session = &Dummy;
 
-		ProcessMailHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
+		ProcessMailHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen, MsgLen);
 
 		if (memcmp(_REPLYBUFFER, "HTTP", 4) == 0)
 		{
 			// Full Header provided by appl - just send it
 			
-			send(sock, _REPLYBUFFER, ReplyLen, 0);
+			// Send may block
+
+			Sent = send(sock, _REPLYBUFFER, ReplyLen, 0);
+		
+			while (Sent != ReplyLen && Loops++ < 3000)					// 100 secs max
+			{	
+//				Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
+		
+				if (Sent > 0)					// something sent
+				{
+					InputLen -= Sent;
+					memmove(_REPLYBUFFER, &_REPLYBUFFER[Sent], ReplyLen);
+				}	
+					
+				Sleep(30);
+				Sent = send(sock, _REPLYBUFFER, ReplyLen, 0);
+			}
 			return 0;
 		}
 		
@@ -2088,7 +2163,9 @@ doHeader:
 	{		
 		// Send if present, else use default
 
-		Bufferlen = SendMessageFile(sock, "/NodeMenu.html", TRUE);		// return -1 if not found
+		char Menu[] = "/NodeMenu.html";
+		
+		Bufferlen = SendMessageFile(sock, Menu, TRUE);		// return -1 if not found
 		
 		if (Bufferlen != -1)
 			return 0;											// We've sent it
@@ -2921,6 +2998,20 @@ END_CMDUXX:
 			{
 				ReplyLen = SetupNodeMenu(_REPLYBUFFER);
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
+			}
+		}
+		else if (LOCAL)
+		{
+			// connected to 127.0.0.1 so sign in using node call
+
+			struct HTTPConnectionInfo * NewSession = AllocateSession(sock, 'T');
+
+			if (NewSession)
+			{
+				ReplyLen = sprintf(_REPLYBUFFER, TermPage, Mycall, Mycall, NewSession->Key, NewSession->Key, NewSession->Key);
+				strcpy(NewSession->HTTPCall, MYNODECALL);
+				ChangeSessionCallsign(NewSession->Stream, MYCALL);
+				BPQHOSTVECTOR[NewSession->Stream -1].HOSTSESSION->Secure_Session = TRUE;
 			}
 		}
 		else

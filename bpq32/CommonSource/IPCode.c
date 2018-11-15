@@ -1567,8 +1567,8 @@ AlreadyThere:
 			memcpy(arpptr->MSGHDDR.DEST, arpptr->MSGHDDR.SOURCE ,6); 
 			memcpy(arpptr->MSGHDDR.SOURCE, ourMACAddr ,6); 
 
-			Debugprintf("Forus ARP Reply for %08x Targ %08x HNAT %08x\n",
-				arpptr->SENDIPADDR, arpptr->TARGETIPADDR, HostNATAddr);
+//			Debugprintf("Forus ARP Reply for %08x Targ %08x HNAT %08x\n",
+//				arpptr->SENDIPADDR, arpptr->TARGETIPADDR, HostNATAddr);
 
 			Send_ETH(arpptr,42, FromTAP);
 
@@ -2655,7 +2655,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 			ptr = sprintf(Msg, "NAT %s to ", FormatIP(IPptr->IPDEST.addr));
 			sprintf(&Msg[ptr], "%s\n", FormatIP(NAT->mappedipaddr));
 
-			Debugprintf("%s", Msg);
+//			Debugprintf("%s", Msg);
 
 			IPptr->IPDEST.addr = NAT->mappedipaddr;
 

@@ -1701,7 +1701,7 @@ VOID TIMERINTERRUPT()
 	if (L2TIMERFLAG >= 3)
 	{
 		L2TIMERFLAG -= 3;
-		L2TimerProc();
+		L2TimerProc();					// 300 mS
 	}
 
 	if (L3TIMERFLAG >= 549)				// 1 PER MIN, but PC Clock is a bit slow

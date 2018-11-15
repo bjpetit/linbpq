@@ -1600,23 +1600,21 @@ int CountMessagesTo(struct UserInfo * user, int * Unread)
 			Msgs++;
 			if (MsgHddrPtr[i]->status == 'N')
 				*Unread = *Unread + 1;
-
 		}
 	}
-	
 	return(Msgs);
 }
 
 
 
-// Costimised message handling routines.
+// Custimised message handling routines.
 /*
 	Variables - a subset of those used by FBB
 
  $C : Number of the next message.
  $I : First name of the connected user.
  $L : Number of the latest message.
- $N : Number of active messages.
+ $N : Number of active messages
  $U : Callsign of the connected user.
  $W : Inserts a carriage return.
  $Z : Last message read by the user (L command).
@@ -1635,7 +1633,6 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 	char CR[] = "\r";
 	char num[20];
 	int Msgs = 0, Unread = 0;
-
 
 	ptr = strchr(OldP, '$');
 
@@ -1663,7 +1660,6 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 			sprintf(num, "%d", NumberofMessages);
 			pptr = num;
 			break;
-
 
 		case 'U': // Callsign of the connected user.
 
@@ -1776,7 +1772,6 @@ BOOL wildcardcompare(char * Target, char * Match)
 		// Must be * at end - compare first Len-1 char
 
 		return (memcmp(Target, Pattern, Len - 1) == 0);
-
 	}
 
 	// No WildCards - straight strcmp
@@ -11360,6 +11355,47 @@ void YAPPSendData(ConnectionInfo * conn)
 		conn->MailBufferSize -= Left;
 	}
 }
+
+char * AddUser(char * Call, char * password, BOOL BBSFlag)
+{
+	struct UserInfo * USER;
+
+	strlop(Call, '-');
+
+	if (strlen(Call) > 6)
+		Call[6] = 0;
+
+	_strupr(Call);
+		
+	if (Call[0] == 0 || LookupCall(Call))
+	{
+		return("User already exists\r\n");
+	}
+
+	USER = AllocateUserRecord(Call);
+	USER->Temp = zalloc(sizeof (struct TempUserInfo));
+
+	if (strlen(password) > 12)
+		password[12] = 0;
+
+	strcpy(USER->pass, password);
+
+	if (BBSFlag)
+	{
+		if(SetupNewBBS(USER))
+			USER->flags |= F_BBS;
+		else
+			printf("Cannot set user to be a BBS - you already have 160 BBS's defined\r\n");
+	}
+
+	SaveUserDatabase();
+	UpdateWPWithUserInfo(USER);
+
+	return("User added\r\n");
+}
+
+
+	
 
 
 

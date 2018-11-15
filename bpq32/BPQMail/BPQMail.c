@@ -3081,7 +3081,7 @@ BOOL Initialise()
 
 		if (LastHouseKeepingTime)
 		{
-			if ((MaintClock - LastHouseKeepingTime) > 86400)
+			if ((now - LastHouseKeepingTime) > 86400)
 			{
 				DoHouseKeeping(FALSE);
 			}

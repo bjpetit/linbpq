@@ -277,6 +277,7 @@ VOID DoHouseKeeping(BOOL Manual)
 		MailHousekeepingResults();
 	
 	LastHouseKeepingTime = NOW = time(NULL);
+	SaveConfig(ConfigName);
 
 #ifndef LINBPQ
 

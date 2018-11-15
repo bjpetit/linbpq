@@ -64,6 +64,7 @@ int ChatPollStreams();
 void ChatTrytoSend();
 VOID BBSSlowTimer();
 int GetHTMLForms();
+char * AddUser(char * Call, char * password, BOOL BBSFlag);
 
 BOOL IncludesMail = FALSE;
 BOOL IncludesChat = FALSE;
@@ -853,6 +854,21 @@ int main(int argc, char * argv[])
 	if (SYSOPCall[0] == 0)
 		strcpy(SYSOPCall, BBSName);
 
+	// See if just want to add user (mainly for setup scripts)
+
+	if (argc == 5 && _stricmp(argv[1], "--adduser") == 0)
+	{
+		BOOL isBBS = FALSE;
+		char * response;
+
+		if (_stricmp(argv[4], "TRUE") == 0)
+			isBBS = TRUE;
+
+		printf("Adding User %s\r\n", argv[2]);
+		response = AddUser(argv[2], argv[3], isBBS);
+		printf("%s", response);
+		exit(0);
+	}
 	// Allocate Streams
 
 	strcpy(pgm, "BBS");
@@ -1246,7 +1262,8 @@ int main(int argc, char * argv[])
 	if (IPActive)
 		IPClose();
 
-	FreeWebMailMallocs();
+	if (RunMail)
+		FreeWebMailMallocs();
 
 	return 0;
 }

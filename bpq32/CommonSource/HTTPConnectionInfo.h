@@ -25,7 +25,7 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	struct UserInfo * User;		// Selected User
 	struct MsgInfo * Msg;		// Selected Message
 	WPRec * WP;					// Selected WP record
-	WebMailInfo * WebMail;	// Webmail Forms Info
+	WebMailInfo * WebMail;		// Webmail Forms Info
 #else
 	VOID * User;				// Selected User
 	VOID * Msg;					// Selected Message

@@ -915,11 +915,14 @@ typedef struct WEBMAILINFO
 	char * OrigTo;			// To field when template loaded
 	char * OrigSubject;		// Subject field when template loaded
 	char * OrigBody;		// Msg text when template loaded
+	char * OrigBID;
+	char OrigType;
 	char * To;
 	char * CC;
 	char * Subject;
 	char * Body;
 	char * BID;
+	char Type;
 	struct MsgInfo * Msg;		// Msg record if replying
 	KeyValues txtKeys[1000];	// Key/Value pairs for txt template. Used when creating or displaying
 	KeyValues XMLKeys[1000];	// Key/Value pairs from XML attachment
@@ -931,6 +934,13 @@ typedef struct WEBMAILINFO
 	char * FileName[100];		// Attachments
 	char * FileBody[100];
 	int FileLen[100];
+
+	char * Reply;				// put in here to save passing lots of parameters 
+	int * RLen;
+
+	BOOL Winlink;
+	BOOL P2P;
+	BOOL Packet;
 
 }WebMailInfo;
 

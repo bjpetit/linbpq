@@ -838,7 +838,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add BeacontoIS parameter to APRSDIGI. Allows you to stop sending beacons to APRS-IS.
 //	Fix sending CTEXT on WINMOR sessions 
 
-// 6.0.17.??
+// 6.0.17.1 November 2018
 
 //	Change WINMOR Restart after connection to Restart after Failure and add same option to ARDOP and VARA
 //	Add Abort Connection to WINMOR and VARA Interfaces
@@ -851,6 +851,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add support for PTT using CM108 based soundcard interfaces
 //	Datestamp Telnet log files and delete old Telnet and CMSAcces logs
 
+// 6.0.18.?
+
+//	Fix validation of NODES broadcasts
+//  Fix HIDENODES
 
 #define CKernel
 

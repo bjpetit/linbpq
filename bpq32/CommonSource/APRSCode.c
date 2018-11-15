@@ -1430,6 +1430,8 @@ static BOOL APRSReadConfigFile()
 
 	Config = PortConfig[34];		// Config fnom bpq32.cfg
 
+	sprintf(StatusMsg, "BPQ32 Igate V %s", VersionString);		// Set Default Status Message
+
 	if (Config)
 	{
 		// Using config from bpq32.cfg
@@ -2140,12 +2142,8 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendStatus, BOOL SendSOGCOG)
 		if (SendSOGCOG | (COG != 0.0))
 			sprintf(SOGCOG, "%03.0f/%03.0f", COG, SOG);
 	
-//		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s %s\r\n", APRSCall, APRSDest,
-//			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
-
-		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s BPQ32 Igate V %s\r\n", APRSCall, APRSDest,
-			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
-
+		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s %s\r\n", APRSCall, APRSDest,
+			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 
 		ISSend(sock, ISMsg, Len, 0);
 		Debugprintf(">%s", ISMsg);
@@ -2186,10 +2184,10 @@ int SendBeaconThread(VOID * BeaconParams[])
 	BeaconCounter = BeaconInterval * 60;
 	
 	if (ISPort && IGateEnabled)
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
 			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 	else
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
 			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 	
 	Msg.PID = 0xf0;
@@ -2239,10 +2237,10 @@ int SendBeaconThread(VOID * BeaconParams[])
 			Debugprintf("Sending APRS Beacon to port %d", Port);
 
 			if (ISPort && IGateEnabled)
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
 			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 			else
-		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (APRSApplConnected) ? '=' : '!',
 			LAT, SYMSET, LON, SYMBOL, SOGCOG, BeaconText);
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;

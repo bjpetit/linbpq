@@ -192,11 +192,9 @@ NOROUTETODEST:
 	return TRUE;
 }
 
-//	PUBLIC _PROCESSUZ7HONODEMESSAGE
-
-//_PROCESSUZ7HONODEMESSAGE:
-
-//	MOV _SAVEPORT,AL
+char Call1[10];
+char Call2[10];
+char Call3[10];
 
 VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 {
@@ -204,6 +202,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 	//	    UPDATE _NEIGHBOURS LIST WITH ORIGINATING CALL, AND
 	//	    DESTINATION LIST WITH ANY PRACTICAL ROUTES
+
 
 	struct DEST_LIST * DEST;
 	struct ROUTE * ROUTE;
@@ -215,7 +214,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 	int Qual;
 	APPLCALLS * APPL;
 	int App;
-
+	
 
 	if (PORT->PORTQUALITY == 0 || PORT->INP3ONLY)
 		return;
@@ -237,7 +236,32 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 	}
 
 	Msg->ORIGIN[6] &= 0x1E;			// MASK OFF LAST ADDR BIT
+/*
+	// validate call	ptr = &Buffer->ORIGIN[0];
+	n = 6;
 
+	while(n--)
+	{
+		// Try a bit harder to detect corruption
+
+		c = *(ptr++);
+
+		if (c & 1)
+		{
+			ReleaseBuffer(Buffer);
+			return;
+		}
+
+		c = c >> 1;
+		
+		if (!isalnum(c) && !(c == '#') && !(c == ' '))
+		{
+			ReleaseBuffer(Buffer);
+			return;
+		}
+	}
+
+*/
 	//	SEE IF ORIGINATING CALL IS IN NEIGHBOUR LIST - IF NOT ADD IT
 
 	if (FindNeighbour(Msg->ORIGIN, Portno, &ROUTE) == 0)
@@ -343,14 +367,13 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 	// ptr1 = start
 
-	saveptr = ptr1;
+	saveptr = ptr1 - 21;
 
 	while (Msglen > 21)		// STILL AT LEAST 1 ENTRY LEFT
 	{
-
 		Msglen -= 21;
-		ptr1 = saveptr;
 		saveptr += 21;
+		ptr1 = saveptr;
 
 		// SEE IF OUR CALL - DONT WANT TO PUT IT IN LIST!
 
@@ -391,7 +414,14 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 		while (n--)
 		{
 			if (*(ptr1++) < 0x40)	// Call
-				continue;
+			{
+				Call1[ConvFromAX25(Msg->ORIGIN, Call1)] = 0;
+				Call2[ConvFromAX25(saveptr, Call2)] = 0;
+				memcpy(Call3, saveptr + 7,6);
+				Call3[6] = 0;
+				Debugprintf("Corrupt Node Entry from %s for %s:%s", Call1, Call2, Call3);
+				goto IgnoreNode;
+			}		
 		}
 		ptr1++;						// skip ssid
 
@@ -399,9 +429,15 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 		while (n--)
 		{
-			if (*(ptr1) < 0x20 || *(ptr1) > 0x7A)
-				continue;
-
+			if (*(ptr1) && ((*(ptr1) < 0x20 || *(ptr1) > 0x7A))	)	// Should we accept zeros or convert to spaces??
+			{
+				Call1[ConvFromAX25(Msg->ORIGIN, Call1)] = 0;
+				Call2[ConvFromAX25(saveptr, Call2)] = 0;
+				memcpy(Call3, saveptr + 7,6);
+				Call3[6] = 0;
+				Debugprintf("Corrupt Node Entry from %s for %s:%s", Call1, Call2, Call3);
+				goto IgnoreNode;
+			}		
 			ptr1++;
 		}
 
@@ -487,6 +523,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 		PROCROUTES(DEST, ROUTE, Qual);
 		ptr1 += 8;
+IgnoreNode:;
 	}
 }
 

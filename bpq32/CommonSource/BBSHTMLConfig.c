@@ -115,7 +115,7 @@ struct MsgInfo * GetMsgFromNumber(int msgno);
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP);
 BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg);
 int MulticastStatusHTML(char * Reply);
-void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL LOCAL, char * Method, char * NodeURL, char * input, char * Reply, int * RLen);
+void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL LOCAL, char * Method, char * NodeURL, char * input, char * Reply, int * RLen, int InputLen);
 int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Session);
 
 void ReleaseWebMailStruct(WebMailInfo * WebMail);
@@ -434,7 +434,7 @@ VOID UndoTransparency(char * ptr)
 	char * ptr1, * ptr2;
 	char c;
 
-	if (ptr == NULL)
+	if (ptr == NULL || *ptr == 0)
 		return;
 
 	ptr1 = ptr2 = ptr;
@@ -464,7 +464,7 @@ VOID UndoTransparency(char * ptr)
 	*(ptr2++) = 0;
 }
 
-void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen)
+void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen)
 {
 	char * Context = 0, * NodeURL;
 	int ReplyLen;
@@ -486,7 +486,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 	{
 		// Pass All Webmail messages to Webmail
 			
-		ProcessWebMailMessage(Session, Context, LOCAL, Method, NodeURL, input, Reply, RLen);
+		ProcessWebMailMessage(Session, Context, LOCAL, Method, NodeURL, input, Reply, RLen, InputLen);
 		return;
 
 	}
@@ -2725,7 +2725,7 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
    DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0; 
    BOOL fSuccess = FALSE;
    HANDLE hPipe  = NULL;
-   char Buffer[100001];
+   char Buffer[250000];
    char OutBuffer[250000];
    char * MsgPtr;
    int InputLen = 0;
@@ -2747,7 +2747,7 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
    // up to BUFSIZE characters in length.
  
    n = ReadFile(hPipe, &Session, sizeof (struct HTTPConnectionInfo), &n, NULL);
-   fSuccess = ReadFile(hPipe, Buffer, 100000, &InputLen, NULL);
+   fSuccess = ReadFile(hPipe, Buffer, 250000, &InputLen, NULL);
 
 	if (!fSuccess || InputLen == 0)
 	{   
@@ -2771,7 +2771,7 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
 
 		Method = strtok_s(URL, " ", &Context);
 
-		ProcessMailHTTPMessage(&Session, Method, Context, MsgPtr, OutBuffer, &OutputLen);
+		ProcessMailHTTPMessage(&Session, Method, Context, MsgPtr, OutBuffer, &OutputLen, InputLen);
 
 		WriteFile(hPipe, &Session, sizeof (struct HTTPConnectionInfo), &n, NULL);
 		WriteFile(hPipe, OutBuffer, OutputLen, &cbWritten, NULL); 

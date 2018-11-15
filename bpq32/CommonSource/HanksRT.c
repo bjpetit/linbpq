@@ -69,9 +69,7 @@ char Position[81] = "";
 char PopupText[260] = "";
 int PopupMode = 0;
 
-
-
-char RtKnown[MAX_PATH];
+char RtKnown[MAX_PATH] = "RTKnown.txt";
 char RtUsr[MAX_PATH] = "STUsers.txt";
 char RtUsrTemp[MAX_PATH] = "STUsers.tmp";
 
@@ -3868,6 +3866,7 @@ VOID CloseChat()
 	SendChatLinkStatus();
 	Sleep(1000);				// A bit of time for links to close
 	SendChatLinkStatus();		// Send again to reduce chance of being missed
+	FreeChatMemory();
 }
 
 VOID SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen)

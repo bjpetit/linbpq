@@ -1456,7 +1456,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 		BodyLen = atoi(&ptr[5]);
 	
-		if (BodyLen <= 0 || BodyLen > MsgLen)
+		if (BodyLen < 0 || BodyLen > MsgLen)
 		{
 			Debugprintf("B2 Message Length from Body: line invalid - Msg len %d From Body %d", MsgLen, BodyLen);
 			return FALSE;
