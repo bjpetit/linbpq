@@ -1,20 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ARDOP_GUIClass</class>
- <widget class="QMainWindow" name="ARDOP_GUIClass">
+ <class>ARDOP_GUI</class>
+ <widget class="QMainWindow" name="ARDOP_GUI">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>549</width>
-    <height>201</height>
+    <width>542</width>
+    <height>153</height>
    </rect>
-  </property>
-  <property name="minimumSize">
-   <size>
-    <width>0</width>
-    <height>0</height>
-   </size>
   </property>
   <property name="windowTitle">
    <string>ARDOP_GUI</string>
@@ -24,21 +18,21 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>30</y>
-      <width>100</width>
-      <height>100</height>
+      <y>18</y>
+      <width>91</width>
+      <height>91</height>
      </rect>
     </property>
     <property name="minimumSize">
      <size>
-      <width>100</width>
-      <height>100</height>
+      <width>91</width>
+      <height>91</height>
      </size>
     </property>
     <property name="maximumSize">
      <size>
-      <width>100</width>
-      <height>100</height>
+      <width>91</width>
+      <height>91</height>
      </size>
     </property>
     <property name="frameShape">
@@ -51,39 +45,141 @@
    <widget class="QLabel" name="Waterfall">
     <property name="geometry">
      <rect>
-      <x>120</x>
-      <y>29</y>
-      <width>200</width>
-      <height>100</height>
+      <x>126</x>
+      <y>38</y>
+      <width>206</width>
+      <height>64</height>
      </rect>
     </property>
     <property name="minimumSize">
      <size>
-      <width>200</width>
-      <height>100</height>
+      <width>206</width>
+      <height>64</height>
      </size>
     </property>
     <property name="maximumSize">
      <size>
-      <width>200</width>
-      <height>100</height>
+      <width>206</width>
+      <height>64</height>
      </size>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+     </font>
     </property>
     <property name="frameShape">
      <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Plain</enum>
     </property>
     <property name="text">
      <string>Waterfall</string>
     </property>
    </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>346</x>
+      <y>32</y>
+      <width>71</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Rcv Frame:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>118</x>
+      <y>108</y>
+      <width>41</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>-1200</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="Frequency">
+    <property name="geometry">
+     <rect>
+      <x>164</x>
+      <y>108</y>
+      <width>120</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
+    </property>
+    <property name="placeholderText">
+     <string>CF: 1.5 KHz</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="State">
+    <property name="geometry">
+     <rect>
+      <x>436</x>
+      <y>10</y>
+      <width>101</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>DejaVu Sans</family>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="frame">
+     <bool>true</bool>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
+    </property>
+    <property name="placeholderText">
+     <string/>
+    </property>
+   </widget>
    <widget class="QLineEdit" name="RXFrame">
     <property name="geometry">
      <rect>
-      <x>340</x>
-      <y>50</y>
+      <x>346</x>
+      <y>48</y>
       <width>191</width>
       <height>20</height>
      </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
     <property name="readOnly">
      <bool>true</bool>
@@ -92,104 +188,142 @@
    <widget class="QLineEdit" name="TXFrame">
     <property name="geometry">
      <rect>
-      <x>340</x>
-      <y>100</y>
+      <x>346</x>
+      <y>84</y>
       <width>191</width>
       <height>20</height>
      </rect>
     </property>
-    <property name="readOnly">
-     <bool>true</bool>
-    </property>
-   </widget>
-   <widget class="QProgressBar" name="InputLevel">
-    <property name="geometry">
-     <rect>
-      <x>120</x>
-      <y>10</y>
-      <width>200</width>
-      <height>10</height>
-     </rect>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>200</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="value">
-     <number>30</number>
-    </property>
-    <property name="textVisible">
-     <bool>false</bool>
-    </property>
-    <property name="orientation">
-     <enum>Qt::Horizontal</enum>
-    </property>
-   </widget>
-   <widget class="QLineEdit" name="Frequency">
-    <property name="geometry">
-     <rect>
-      <x>160</x>
-      <y>132</y>
-      <width>120</width>
-      <height>16</height>
-     </rect>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
     <property name="readOnly">
      <bool>true</bool>
-    </property>
-   </widget>
-   <widget class="QLabel" name="label">
-    <property name="geometry">
-     <rect>
-      <x>120</x>
-      <y>130</y>
-      <width>31</width>
-      <height>16</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>-1200</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="label_2">
-    <property name="geometry">
-     <rect>
-      <x>290</x>
-      <y>130</y>
-      <width>31</width>
-      <height>16</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>+1200</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="label_3">
-    <property name="geometry">
-     <rect>
-      <x>340</x>
-      <y>30</y>
-      <width>61</width>
-      <height>16</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Rcv Frame:</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_4">
     <property name="geometry">
      <rect>
-      <x>340</x>
-      <y>80</y>
-      <width>61</width>
+      <x>346</x>
+      <y>68</y>
+      <width>81</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
      <string>Xmt Frame:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_5">
+    <property name="geometry">
+     <rect>
+      <x>396</x>
+      <y>11</y>
+      <width>37</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>State:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="Quality">
+    <property name="geometry">
+     <rect>
+      <x>3</x>
+      <y>110</y>
+      <width>113</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>DejaVu Sans Condensed</family>
+      <pointsize>8</pointsize>
+      <weight>50</weight>
+      <italic>false</italic>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Quality: 0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_6">
+    <property name="geometry">
+     <rect>
+      <x>308</x>
+      <y>108</y>
+      <width>51</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>+1200</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_7">
+    <property name="geometry">
+     <rect>
+      <x>124</x>
+      <y>14</y>
+      <width>53</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Rcv Level:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="RXLevel">
+    <property name="geometry">
+     <rect>
+      <x>182</x>
+      <y>16</y>
+      <width>150</width>
+      <height>10</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Sunken</enum>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLabel" name="RXLevelRef">
+    <property name="geometry">
+     <rect>
+      <x>182</x>
+      <y>24</y>
+      <width>150</width>
+      <height>10</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Sunken</enum>
+    </property>
+    <property name="text">
+     <string/>
     </property>
    </widget>
   </widget>
@@ -198,24 +332,30 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>549</width>
-     <height>21</height>
+     <width>542</width>
+     <height>19</height>
     </rect>
    </property>
   </widget>
-  <widget class="QToolBar" name="mainToolBar">
-   <attribute name="toolBarArea">
-    <enum>TopToolBarArea</enum>
-   </attribute>
-   <attribute name="toolBarBreak">
-    <bool>false</bool>
-   </attribute>
-  </widget>
-  <widget class="QStatusBar" name="statusBar"/>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
- <resources>
-  <include location="ARDOP_GUI.qrc"/>
- </resources>
+ <resources/>
  <connections/>
+ <designerdata>
+  <property name="gridDeltaX">
+   <number>2</number>
+  </property>
+  <property name="gridDeltaY">
+   <number>2</number>
+  </property>
+  <property name="gridSnapX">
+   <bool>true</bool>
+  </property>
+  <property name="gridSnapY">
+   <bool>true</bool>
+  </property>
+  <property name="gridVisible">
+   <bool>true</bool>
+  </property>
+ </designerdata>
 </ui>
