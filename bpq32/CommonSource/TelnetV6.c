@@ -983,7 +983,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 #endif	
 		int n, i;
 
-		ProcessConfig();
+		if (!ProcessConfig())
+		{
+			Consoleprintf("Failed to reread config file - leaving config unchanged");
+			break;
+		}
+
 		FreeConfig();
 
 		for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
@@ -2630,7 +2635,12 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 		case TELNET_RECONFIG:
 
-			ProcessConfig();
+			if (!ProcessConfig())
+			{ 
+				Consoleprintf("Failed to reread config file - leaving config unchanged");
+				break;
+			}
+
 			FreeConfig();
 
 			for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
@@ -4513,7 +4523,6 @@ int WriteLog(char * msg)
 	UCHAR Value[MAX_PATH];
 	time_t T;
 	struct tm * tm;
-	FILE * Handle;
 
 	T = time(NULL);
 	tm = gmtime(&T);
@@ -4531,8 +4540,6 @@ int WriteLog(char * msg)
 
 	sprintf(Value, "%s%04d%02d%02d.log", Value,
 				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
-
-	Handle = fopen(Value, "ab");
 
 	if ((file = fopen(Value, "a")) == NULL)
 		return FALSE;

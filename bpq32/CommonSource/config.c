@@ -507,7 +507,8 @@ BOOL ProcessConfig()
 
 	if ((fp1 = fopen(inputname,"r")) == NULL)
 	{
-		Consoleprintf("Could not open file %s",inputname);
+		Consoleprintf("Could not open file %s Error code %d", inputname, errno);
+
 		return FALSE;
 	}
 

@@ -185,6 +185,8 @@ extern BPQVECSTRUC BPQHOSTVECTOR[BPQHOSTSTREAMS + 5];
 
 FILE * LogHandle[4] = {NULL, NULL, NULL, NULL};
 
+time_t LastLogTime[4] = {0, 0, 0, 0};
+
 char FilesNames[4][100] = {"", "", "", ""};
 
 char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
@@ -325,11 +327,15 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 		fwrite(&CRLF[1], 1, 1, LogHandle[Flags]);
 	else
 		fwrite(CRLF, 1, 2, LogHandle[Flags]);
-		
-	if (LogHandle[Flags])
-		fclose(LogHandle[Flags]);
 
-	LogHandle[Flags] = NULL;
+	// Don't close/reopen logs every time
+
+	if ((LT - LastLogTime[Flags]) > 60)
+	{
+		LastLogTime[Flags] = LT;
+		fclose(LogHandle[Flags]);
+		LogHandle[Flags] = NULL;
+	}
 	FreeSemaphore(&LogSEM);
 	
 #ifndef LINBPQ

@@ -1648,12 +1648,16 @@ static LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 
 		if (wmId == BPQREREAD)
 		{
-			ProcessConfig();
-			FreeConfig();
+			if (ProcessConfig())
+			{
+				FreeConfig();
 
-			ReadConfigFile();
-			PostMessage(hIPResWnd, WM_TIMER,0,0);
-			InvalidateRect(hWnd,NULL,TRUE);
+				ReadConfigFile();
+				PostMessage(hIPResWnd, WM_TIMER,0,0);
+				InvalidateRect(hWnd,NULL,TRUE);
+			}
+			else 
+				Consoleprintf("Failed to reread config file - leaving config unchanged");
 
 			return 0;
 		}

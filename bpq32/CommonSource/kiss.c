@@ -854,7 +854,7 @@ struct PORTCONTROL * CHECKIOADDR(struct PORTCONTROL * OURPORT)
 		{
 			// Using numbers not names
 
-			if (PORT->IOBASE == OURPORT->IOBASE)
+			if (PORT->IOBASE == OURPORT->IOBASE && memcmp (&PORT->PORTIPADDR, &OURPORT->PORTIPADDR, sizeof(PORT->PORTIPADDR)) == 0)
 				return PORT;			// ANOTHER FOR SAME ADDRESS
 		}
 

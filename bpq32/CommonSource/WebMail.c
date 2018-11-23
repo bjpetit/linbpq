@@ -999,15 +999,12 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 					int BinCount = 0;
 
-					NewLen = RemoveLF(ptr1, WebMail->FileLen[i]);		// Removes LF agter CR but not on its own
+					NewLen = WebMail->FileLen[i];
 
 					for (n = 0; n < NewLen; n++)
 					{
 						c = *p;
 						
-						if (c == 10)
-							*p = 13;
-
 						if (c==0 || (c & 128))
 							BinCount++;
 
@@ -1025,6 +1022,8 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 					{
 						*(ptr1 + NewLen) = 0;
 						ptr += sprintf(ptr, "\rAttachment %s\r\r", WebMail->FileName[i]);
+						RemoveLF(ptr1, WebMail->FileLen[i]);		// Removes LF agter CR but not on its own
+
 						ptr += sprintf(ptr, "%s\r\r", ptr1);
 
 						User->Total.MsgsSent[Index] ++;
@@ -1036,6 +1035,9 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 				}
 
 				free(Save);
+
+				RemoveLF(Message, strlen(Message));		// Removes LF agter CR but not on its own
+
 				return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, DisplayStyle, Message, DisplayStyle);
 			}
 			
@@ -1817,6 +1819,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		// User has selected item from Template <select> field
 
 		ProcessSelectResponse(Session, URLParams);
+
 		return;
 	}
 
@@ -5140,13 +5143,15 @@ VOID DownloadAttachments(struct HTTPConnectionInfo * Session, char * Reply, int 
 	char FileTimeString[64];
 	int file = atoi(Param);
 
+	file--;			// Sent at +1 in case no downloadable attachments
+
 	if (file == -1)
 	{
 		// User has gone back, then selected "No file Selected"
+		// Or no files
 
-		// For now just stop crash
-
-		file = 0;
+		*RLen = sprintf(Reply, "<html><script>window.history.back();</script></html>");
+		return;
 	}
 
 	FormatTime2(FileTimeString, time(NULL));
@@ -5162,7 +5167,6 @@ VOID DownloadAttachments(struct HTTPConnectionInfo * Session, char * Reply, int 
 	memcpy(&Reply[*RLen], WebMail->FileBody[file], WebMail->FileLen[file]); 
 
 	*RLen += WebMail->FileLen[file];
-
 	return;
 }
 
@@ -5191,7 +5195,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 	for (i = 0; i < WebMail->Files; i++)
 	{
 		if(WebMail->FileLen[i] < 100000)
-			sprintf(popup, "%s <option value=%d>%s (Len %d)", popup, i, WebMail->FileName[i], WebMail->FileLen[i]);
+			sprintf(popup, "%s <option value=%d>%s (Len %d)", popup, i + 1, WebMail->FileName[i], WebMail->FileLen[i]);
 	}
 
 	sprintf(popup, "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button></div>", popup);

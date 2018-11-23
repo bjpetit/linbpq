@@ -679,7 +679,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		CloseSockets(PORT);
 
-		ProcessConfig();
+		if (!ProcessConfig())
+		{
+			Consoleprintf("Failed to reread config file - leaving config unchanged");
+			break;
+		}
 		FreeConfig();
 
 		ReadConfigFile(port);
@@ -1139,10 +1143,13 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		{
 			CloseSockets(PORT);
 
-			ProcessConfig();
-			FreeConfig();
-
-			ReadConfigFile(Port);
+			if (ProcessConfig())
+			{
+				FreeConfig();
+				ReadConfigFile(Port);
+			}
+			else 
+				Consoleprintf("Failed to reread config file - leaving config unchanged");
 
 			_beginthread(OpenSockets, 0, PORT);
 
@@ -1565,12 +1572,11 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 				}
 				else
 					PORT->arp_table[PORT->ResolveIndex].error = WSAGetLastError();
-				
-#ifndef LINBPQ
-				InvalidateRect(PORT->hResWnd,NULL,TRUE);
-#endif
 			}
 		}
+#ifndef LINBPQ
+		InvalidateRect(PORT->hResWnd,NULL,TRUE);
+#endif
 		while(ResolveDelay-- > 0)
 		{
 			if (pthread_equal(PORT->ResolveNamesThreadId, GetCurrentThreadId()) == FALSE)
@@ -2989,7 +2995,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 
 				//	Connect failed
 				//
-    			i=sprintf(Msg, "Connect Failed for AX/TCP socket %d  - error code = %d\n", arp->TCPSock, err);
+    			i=sprintf(Msg, "Connect Failed for AX/TCP port %d  - error code = %d\n", htons(arp->destaddr.sin_port), err);
 				WritetoConsole(Msg);
 				OutputDebugString(Msg);
 				closesocket(arp->TCPSock);

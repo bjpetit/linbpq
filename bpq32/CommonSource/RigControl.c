@@ -3902,7 +3902,6 @@ PortFound:
 		}
 		else
 		{
-			_strupr(ptr);
 			strcpy(PORT->PTTIOBASE, ptr);
 		}
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
