@@ -855,6 +855,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 //	Fix validation of NODES broadcasts
 //  Fix HIDENODES
+//  Check for failure to reread ocnfig on axip reconfigure
 
 #define CKernel
 
