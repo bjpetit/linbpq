@@ -34,13 +34,12 @@ extern unsigned int PKTLEDTimer;
 void SendFrametoHost(unsigned char *data, unsigned dlen);
 
 void CheckandAdjustRXLevel(int maxlevel, int minlevel, BOOL Force);
-void mySetPixel(unsigned short x, unsigned short y, unsigned short Colour);
 void clearDisplay();
 void updateDisplay();
 VOID L2Routine(UCHAR * Packet, int Length, int FrameQuality, int totalRSErrors, int NumCar, int pktRXMode);
 
 
-void DrawAxes(int Qual, char * Mode);
+void DrawAxes(int Qual, const char * FrameType, char * Mode);
 
 extern int lastmax, lastmin;		// Sample Levels
 
@@ -59,6 +58,7 @@ extern UCHAR bytLastACKedDataFrameType;
 extern int intARQDefaultDlyMs;
 unsigned int tmrFinalID;
 extern BOOL PKTCONNECTED;
+void DrawDecode(char * Decode);
 
 extern int pktRXMode;
 
@@ -628,12 +628,11 @@ void Filter150Hz(short * intFilterOut)
 void Filter75Hz(short * intFilterOut, BOOL blnInitialise, int intSamplesToFilter)
 {
 	// assumes sample rate of 12000
-	// implements  3 100 Hz wide sections   (~150 Hz wide @ - 30dB centered on 1500 Hz)
-
+    // implements  3 50 Hz wide sections   (~75 Hz wide @ - 30dB centered on 1500 Hz)
 	// FSF (Frequency Selective Filter) variables
 
 	static float dblR = 0.9995f;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-	static int intN = 240;				//Length of filter 12000/50 - delays output 120 samples from input
+	static int intN = 240;				// Length of filter 12000/50 - delays output 120 samples from input
 	static float dblRn;
 	static float dblR2;
 	static float dblCoef[3] = {0.0};			// the coefficients
@@ -850,12 +849,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 //	return;
 
-	if ((CarrierOk[0] && CarrierOk[0] != 1)
-		|| (CarrierOk[1] && CarrierOk[1] != 1)
-		|| (CarrierOk[2] && CarrierOk[2] != 1)
-		|| (CarrierOk[3] && CarrierOk[3] != 1))
-		CarrierOk[0] = CarrierOk[0];
-
 	if (ProtocolState == FECSend)
 		return;
 
@@ -872,13 +865,16 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 	rawSamplesLength = 0;
 
-//	printtick("Start Busy");
-//	if (State == SearchingForLeader)
-		UpdateBusyDetector(Samples);
-//	printtick("Done Busy");
+	if (nSamples < 1024)
+	{
+		memmove(rawSamples, Samples, nSamples * 2);
+		rawSamplesLength = nSamples;
+		return;							// FFT needs 1024 samples
+	}
 
+	UpdateBusyDetector(Samples);
 
-	// it seems that searchforleader runs on unmixed and unfilered samples
+	// searchforleader runs on unmixed and unfilered samples
 
 	// Searching for leader
 
@@ -1069,6 +1065,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				DiscardOldSamples();
 				return;
 			}
+
+			DrawRXFrame(0, Name(intFrameType));
 
 			if (IsShortControlFrame(intFrameType))
 			{
@@ -1295,12 +1293,13 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 ProcessFrame:	
 
+		if (!blnFrameDecodedOK)
+			DrawRXFrame(2, Name(intFrameType));
+
 		if (intFrameType == PktFrameData)
 		{
-#ifdef TEENSY
 			SetLED(PKTLED, TRUE);		// Flash LED
-			PKTLEDTimer = Now + 400;	// For 400 Ms
-#endif	
+			PKTLEDTimer = Now + 400;	// For 400 Ms	
 			return;
 		}
 
@@ -1320,13 +1319,13 @@ ProcessFrame:
 					else	
 						intGoodFSKFrameDataDecodes++;
 
-#ifdef TEENSY
+
 			if (IsDataFrame(intFrameType))
 			{
 				SetLED(PKTLED, TRUE);		// Flash LED
 				PKTLEDTimer = Now + 400;	// For 400 Ms
 			}
-#endif			
+		
 			if (ProtocolMode == FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame
@@ -3223,6 +3222,9 @@ BOOL Decode4FSKPing()
 		return FALSE;
 	}
 
+	DrawRXFrame(1, bytData);
+
+
 	intSNdB = Compute4FSKSN();
 
 	if (ProtocolState == DISC)
@@ -3365,7 +3367,7 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 	if (FrameOK)
 		memcpy(lastGoodID, strCallID, 10);
 
-	return FrameOK;	// Not correctable
+	return FrameOK;	
 }
 
 
@@ -3417,6 +3419,7 @@ void DemodulateFrame(int intFrameType)
 		case PINGACK:
  
 		Demod1Car4FSK();
+
 		break;
 		
 		// 1 Carrier Data frames
@@ -3584,11 +3587,15 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 	if ((intFrameType >= 0 && intFrameType <= 0x1F) || intFrameType >= 0xE0) // DataACK/NAK
 	{
 		blnDecodeOK = DecodeACKNAK(intFrameType, &intRcvdQuality);
+		DrawRXFrame(1, Name(intFrameType));
+	
 		goto returnframe;
 	}
 	else if (IsShortControlFrame(intFrameType)) // Short Control Frames
 	{
 		blnDecodeOK = TRUE;
+		DrawRXFrame(1, Name(intFrameType));
+
 		goto returnframe;
 	}
 
@@ -3611,7 +3618,10 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			blnDecodeOK = Decode4FSKConACK(intFrameType, &intTiming);
 
 			if (blnDecodeOK)
+			{
 				bytData[0] = intTiming / 10;
+				DrawRXFrame(1, Name(intFrameType));
+			}
 
 		break;
 		
@@ -3625,14 +3635,24 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				SendCommandToHost(Reply);
 			}
 
+			if (blnDecodeOK)
+			{
+				sprintf(Reply, "PINGACK %d %d", intSNdB, intQuality);
+				SendCommandToHost(Reply);
+				DrawRXFrame(1, Reply);
+			}
  			break;
     
 
-		case 0x30:		 // ID FrameReply, 
+		case 0x30:		 // ID Frame, 
 						
 			blnDecodeOK = Decode4FSKID(0x30, strIDCallSign, strGridSQ);
 			
 			frameLen = sprintf(bytData, "ID:%s %s:" , strIDCallSign, strGridSQ);
+
+			if (blnDecodeOK)
+				DrawRXFrame(1, bytData);
+
 			break;
 
 		case 0x31:
@@ -3645,6 +3665,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 		case 0x38:
 
 			blnDecodeOK = Decode4FSKConReq();
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
+
 			break;
 
 		case PING:	// 0x3E
@@ -3663,6 +3686,10 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 		case 0x45:
 
 			blnDecodeOK = CarrierOk[0];
+	
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
+
 			break;
 
 		// QAM
@@ -3670,7 +3697,7 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 		case 0x46:
 		case 0x47:
 		case 0x54:
-		case 0xF55:
+		case 0x55:
 		case 0x64:
 		case 0x65:
 		case 0x74:
@@ -3678,6 +3705,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 				blnDecodeOK = TRUE;
+
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
 
 			break;
 
@@ -3692,6 +3722,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
 			blnDecodeOK = CarrierOk[0];
+
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
 			break;
 
 
@@ -3705,7 +3738,10 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 		if (CarrierOk[0] && CarrierOk[1])
 			blnDecodeOK = TRUE;
 
-		break;
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
+
+			break;
 
 		// 1000 Hz Data frames 4 Carrier
 
@@ -3716,6 +3752,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 				blnDecodeOK = TRUE;
+
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
 
 			break;
 	
@@ -3729,6 +3768,8 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 				blnDecodeOK = TRUE;
 
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
 			break;
 
 		case 0x78:
@@ -3745,6 +3786,8 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			if (CarrierOk[0] && CarrierOk[1] && CarrierOk[2] && CarrierOk[3]) 
 				blnDecodeOK = TRUE;
 
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
 
 		case 0x7A:
 		case 0x7B:
@@ -3764,6 +3807,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			if (CarrierOk[0] && CarrierOk[1] && CarrierOk[2]) 
 				blnDecodeOK = TRUE;
 
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
+
 			break;
 
 		case 0x7C:
@@ -3774,6 +3820,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, 0);
 
 			blnDecodeOK = CarrierOk[0];
+
+			if (blnDecodeOK)
+				DrawRXFrame(1, Name(intFrameType));
 
 			break;
 
@@ -3791,6 +3840,8 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 		
 			if (CarrierOk[0])
 			{
+					DrawRXFrame(1, Name(intFrameType));
+
 					pktRXMode = bytFrameData1[1] >> 2;
 					pktNumCar = pktCarriers[pktRXMode];
 
@@ -3869,6 +3920,7 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 			if (memcmp(CarrierOk, Good, intNumCar) == 0)
 			{
 				blnDecodeOK = TRUE;
+				DrawRXFrame(1, Name(intFrameType));
 
 				// Packet Data  - if KISS interface ias active
 				// Pass to Host as KISS frame, else pass to
@@ -3963,13 +4015,13 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 	float dblPi4  = 0.25 * M_PI;
 	float dblDistanceSum = 0;
 	int intRad = 0;
-	int i;
+	int i, x, y;
 
 #ifdef PLOTCONSTELLATION
 
 	int clrPixel;
-	int yCenter = (ConstellationHeight - 2)/ 2;
-	int xCenter = (ConstellationWidth - 2) / 2;
+	int yCenter = (ConstellationHeight)/ 2;
+	int xCenter = (ConstellationWidth) / 2;
 
 	clearDisplay();
 #endif
@@ -3984,21 +4036,9 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 				intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
 
 			dblDistanceSum += (42 - intRad);
-
-#ifdef PLOTCONSTELLATION
-			if (intRad < 15)
-				clrPixel = Tomato;
-			else if (intRad < 30)
-				clrPixel = Gold;
-			else
-				clrPixel = Lime;
-
-			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			mySetPixel(xCenter + intRad, yCenter + 1, clrPixel);
-			mySetPixel(xCenter + intRad, yCenter - 1, clrPixel); // don't plot on top of axis
-			mySetPixel(xCenter + intRad, yCenter + 2, clrPixel);
-			mySetPixel(xCenter + intRad, yCenter - 2, clrPixel);
-#endif
+			intRad = (intRad * PLOTRADIUS) / 50; // rescale for OLED (50 instead of 42 as we rotate constellation 35 degrees 
+			x = xCenter + intRad;
+			y = yCenter + intRad;
 		}
 		else if (intToneMags[i + 1] > intToneMags[i] && intToneMags[i + 1] > intToneMags[i + 2] && intToneMags[i + 1] > intToneMags[i + 3])
 		{
@@ -4006,21 +4046,9 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 				intRad = max(5, 42 - 80 * (intToneMags[i] + intToneMags[i + 2] + intToneMags[i + 3]) / intToneSum);
 
 			dblDistanceSum += (42 - intRad);
-
-#ifdef PLOTCONSTELLATION
-			if (intRad < 15)
-				clrPixel = Tomato;
-			else if (intRad < 30)
-				clrPixel = Gold;
-			else
-				clrPixel = Lime;
-
-			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			mySetPixel(xCenter + 1, yCenter + intRad, clrPixel);
-			mySetPixel(xCenter - 1, yCenter + intRad, clrPixel);
-			mySetPixel(xCenter + 2, yCenter + intRad, clrPixel);
-			mySetPixel(xCenter - 2, yCenter + intRad, clrPixel);
-#endif
+			intRad = (intRad * PLOTRADIUS) / 50; // rescale for OLED (50 instead of 42 as we rotate constellation 35 degrees 
+			x = xCenter + intRad;
+			y = yCenter - intRad;
 		}
 		else if (intToneMags[i + 2] > intToneMags[i] && intToneMags[i + 2] > intToneMags[i + 1] && intToneMags[i + 2] > intToneMags[i + 3]) 
 		{
@@ -4028,43 +4056,31 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 				intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i] + intToneMags[i + 3]) / intToneSum);
 
 			dblDistanceSum += (42 - intRad);
-	
-#ifdef PLOTCONSTELLATION
-			if (intRad < 15)
-				clrPixel = Tomato;
-			else if (intRad < 30)
-				clrPixel = Gold;
-			else
-				clrPixel = Lime;
-
-			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			mySetPixel(xCenter - intRad, yCenter + 1, clrPixel);
-			mySetPixel(xCenter - intRad, yCenter - 1, clrPixel); // don't plot on top of axis
-			mySetPixel(xCenter - intRad, yCenter + 2, clrPixel);
-			mySetPixel(xCenter - intRad, yCenter - 2, clrPixel);
-#endif
+			intRad = (intRad * PLOTRADIUS) / 50; // rescale for OLED (50 instead of 42 as we rotate constellation 35 degrees 
+			x = xCenter - intRad;
+			y = yCenter - intRad;
 		}
 		else if (intToneSum > 0)
 		{
 			intRad = max(5, 42 - 80 * (intToneMags[i + 1] + intToneMags[i + 2] + intToneMags[i]) / intToneSum);	
 
 			dblDistanceSum += (42 - intRad);
+			intRad = (intRad * PLOTRADIUS) / 50; // rescale for OLED (50 instead of 42 as we rotate constellation 35 degrees 
+			x = xCenter - intRad;
+			y = yCenter + intRad;
+		}
 
 #ifdef PLOTCONSTELLATION
-			if (intRad < 15)
-				clrPixel = Tomato;
-			else if (intRad < 30)
-				clrPixel = Gold;
-			else
-				clrPixel = Lime;
+		if (intRad < 15)
+			clrPixel = Tomato;
+		else if (intRad < 30)
+			clrPixel = Gold;
+		else
+			clrPixel = Lime;
 
-			intRad = (intRad * PLOTRADIUS) /42; // rescale for OLED
-			mySetPixel(xCenter + 1, yCenter - intRad, clrPixel);
-			mySetPixel(xCenter - 1, yCenter - intRad, clrPixel);
-			mySetPixel(xCenter + 2, yCenter - intRad, clrPixel);
-			mySetPixel(xCenter - 2, yCenter -	intRad, clrPixel);
+		mySetPixel(x, y, clrPixel);
 #endif
-		}
+
 	}
 
 	*intQuality = 100 - (2.7f * (dblDistanceSum / (intToneMagsLength / 4))); // ' factor 2.7 emperically chosen for calibration (Qual range 25 to 100)
@@ -4081,7 +4097,7 @@ void Update4FSKConstellation(int * intToneMags, int * intQuality)
 	}
 
 #ifdef PLOTCONSTELLATION
-	DrawAxes(*intQuality, shortName(intFrameType));
+	DrawAxes(*intQuality, shortName(intFrameType), strMod);
 #endif
 
 	return;
@@ -4108,7 +4124,6 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 
 #ifdef PLOTCONSTELLATION
 
-	float dblRad;
 	float dblAng;
 	int x, y,clrPixel;
 	int yCenter = (ConstellationHeight - 2)/ 2;
@@ -4164,7 +4179,7 @@ void Update16FSKConstellation(int * intToneMags, int * intQuality)
 		int16FSKQuality += *intQuality;
 	}
 #ifdef PLOTCONSTELLATION
-	DrawAxes(*intQuality, shortName(intFrameType));
+	DrawAxes(*intQuality, shortName(intFrameType), strMod);
 #endif
 }
 
@@ -4238,7 +4253,7 @@ void Update8FSKConstellation(int * intToneMags, int * intQuality)
 		int8FSKQuality += *intQuality;
 	}
 #ifdef PLOTCONSTELLATION
-	DrawAxes(*intQuality, shortName(intFrameType));
+	DrawAxes(*intQuality, shortName(intFrameType), strMod);
 #endif
 	return;
 }
@@ -4276,7 +4291,6 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 	int xCenter = (ConstellationWidth - 2) / 2;
 
 	unsigned short clrPixel = WHITE;
-	unsigned short x, y;
 
 	clearDisplay();
 #endif
@@ -4347,7 +4361,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 		
 		if (intX > 0 && intY > 0)
 			if (intX != xCenter && intY != yCenter)
-				mySetPixel(intX, intY, WHITE); // don't plot on top of axis
+				mySetPixel(intX, intY, Yellow); // don't plot on top of axis
 #endif
 	}
 
@@ -4377,7 +4391,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 		}
 	}	
 #ifdef PLOTCONSTELLATION
-	DrawAxes(intQuality, shortName(intFrameType));
+	DrawAxes(intQuality, shortName(intFrameType), strMod);
 #endif
 	return intQuality;
 

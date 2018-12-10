@@ -93,9 +93,8 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 
 	FreeSemaphore();
 
-#ifdef TEENSY
 	SetLED(TRAFFICLED, TRUE);
-#endif
+
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);
 }
@@ -915,7 +914,9 @@ void ProcessCommandFromHost(char * strCMD)
 			goto cmddone;
 		}
 		if (strcmp(ptrParams, "TRUE") == 0)
-		{				
+		{
+			WriteDebugLog(LOGDEBUG, "FECRepeats %d", FECRepeats);
+
 			StartFEC(NULL, 0, strFECMode, FECRepeats, FECId);
 			SendReplyToHost("FECSEND now TRUE");
 		}

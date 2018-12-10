@@ -36,6 +36,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define strtok_s strtok_r
 #define _strupr strupr
 #define SOCKET int
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #endif
 

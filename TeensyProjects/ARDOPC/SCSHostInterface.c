@@ -207,15 +207,71 @@ void SCSSendReplyToHost(char * Cmd)
 
 void SCSSendCommandToHostQuiet(char * Cmd)		// Higher Debug Level for PTT
 {
-	// if possible convert to equivalent PTC message
-
-	if (memcmp(Cmd, "STATUS CONNECT TO", 20) == 0)
+	if (HostMode & !PTCMode)	// ARDOP Native
 	{
-		change = 1;
-		SCSState = 0;
+		char * ptr = &CommandToHostBuffer[CommandToHostBufferLen];
+		int len = strlen(Cmd);
+
+		WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
+
+		if (CommandToHostBufferLen + len > 500)
+			return;			// ignore if full
+
+		// Add headers and queue for host
+
+		strcpy(ptr, Cmd);
+		ptr += len;
+		*ptr++ = '\r';
+
+		CommandToHostBufferLen += (len + 1);
+
+		if (CommandToHostBufferLen > 512)
+			CommandToHostBufferLen = 0;
+
+		return;
 	}
 
-	WriteDebugLog(LOGDEBUG, "Command to Host %s", Cmd);
+	if (memcmp(Cmd, "STATUS ", 7) == 0)
+	{
+		if (memcmp(&Cmd[7], "CONNECT TO", 10) == 0)
+		{
+			if (HostMode)
+			{
+				memcpy(ReportCall, &Cmd[18], 10);
+				strlop(ReportCall, ' ');
+				change = 1;
+				SCSState = 0;
+			}
+			else
+				PutString("Disconnected\r");
+		}
+	}
+	if (memcmp(Cmd, "CONNECTED ", 10) == 0)
+	{
+		if (HostMode)
+		{
+			memcpy(ReportCall, &Cmd[10], 10);
+			strlop(ReportCall, ' ');
+			change = 1;
+			SCSState = 1;
+		}
+		else
+		{
+			PutString(Cmd);
+			PutString("\r");
+		}
+		}
+
+	if (memcmp(Cmd, "DISCON", 6) == 0)
+	{
+		if (HostMode)
+		{
+			change = 1;
+			SCSState = 0;
+		}
+		else
+			PutString("Disconnected\r");
+	}
 }
 
 

@@ -120,6 +120,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	if (Type == PktFrameHeader)
 	{
@@ -364,6 +365,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	initFilter(200,1500);
 
@@ -439,6 +441,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	initFilter(500,1500);
 
@@ -507,6 +510,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	initFilter(2000,1500);
 
@@ -658,6 +662,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	}
 	
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 /*	// DOnt use PSK Header at the moment
 	if (Type == PktFrameHeader)

@@ -4,14 +4,14 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "1.0.4.1b-BPQ"
+#define ProductVersion "1.0.4.1f-BPQ"
 
 //#define USE_SOUNDMODEM
 
 //	Sound interface buffer size
 
 #define SendSize 1200		// 100 mS for now
-#define ReceiveSize 240		// try 50mS 100 mS for now
+#define ReceiveSize 240	// Must be 1024 for FFT (or we will need torepack frames)
 #define NumberofinBuffers 4
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
@@ -77,6 +77,43 @@ unsigned int getTicks();
 #endif
 #endif
 
+#define UseGUI			// Enable GUI Front End Support
+
+#ifndef TEENSY
+#ifdef UseGUI
+
+// Constellation and Waterfall for GUI interface
+
+#define PLOTCONSTELLATION
+#define PLOTWATERFALL
+#define PLOTSPECTRUM
+#define ConstellationHeight 90
+#define ConstellationWidth 90
+#define WaterfallWidth 205
+#define WaterfallHeight 64
+#define SpectrumWidth 205
+#define SpectrumHeight 64
+
+#define PLOTRADIUS 42
+#define WHITE 0
+#define Tomato 1
+#define Gold 2
+#define Lime 3	
+#define Yellow 4
+#define Orange 5
+#define Khaki 6
+#define Cyan 7
+#define DeepSkyBlue 8
+#define RoyalBlue 9
+#define Navy 10
+#define Black 11 
+#define Goldenrod 12
+#define Fuchsia 13
+
+#endif
+#endif
+
+
 #include "ecc.h"				// RS Constants
 
 typedef int BOOL;
@@ -101,9 +138,10 @@ typedef unsigned char UCHAR;
 #define IRSLED LED1
 #define TRAFFICLED LED2
 #else
-#define ISSLED 0
-#define IRSLED 0
-#define TRAFFICLED 0
+#define ISSLED 1
+#define IRSLED 2
+#define TRAFFICLED 3
+#define PKTLED 4
 #endif
 
 BOOL KeyPTT(BOOL State);
@@ -236,7 +274,15 @@ VOID ProcessDEDModeFrame(UCHAR * rxbuffer, unsigned int Length);
 BOOL CheckForPktMon();
 BOOL CheckForPktData();
 
+int SendtoGUI(char Type, unsigned char * Msg, int Len);	
+void DrawTXFrame(const char * Frame);
+void DrawRXFrame(int State, const char * Frame);
+void mySetPixel(unsigned char x, unsigned char y, unsigned int Colour);
+void clearDisplay();
 
+extern int WaterfallActive;
+extern int SpectrumActive;
+extern unsigned int PKTLEDTimer;
 
 extern char stcLastPingstrSender[10];
 extern char stcLastPingstrTarget[10];
@@ -400,6 +446,7 @@ extern BOOL gotGPIO;
 extern BOOL useGPIO;
 
 extern int pttGPIOPin;
+extern BOOL pttGPIOInvert;
 
 extern HANDLE hCATDevice;		// port for Rig Control
 extern char CATPort[80];

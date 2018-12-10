@@ -206,6 +206,8 @@ const char level[10][5] = {
 
 void displayState(const char * State)
 {
+	char Msg[80];
+
 	if (i2cfile)
 	{
 		locate(i2cfile, 1, 0);
@@ -213,6 +215,9 @@ void displayState(const char * State)
 		locate(i2cfile, 1, 0);
 		print(i2cfile, State);
 	}
+
+	strcpy(Msg, State); 
+	SendtoGUI('S', Msg, strlen(Msg) + 1);		// Protocol State
 }
 
 
