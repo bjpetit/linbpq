@@ -58,7 +58,7 @@ int KillTNC(struct TNCINFO * TNC);
 int RestartTNC(struct TNCINFO * TNC);
 VOID ARDOPAbort(struct TNCINFO * TNC);
 
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
 
 char * GetChallengeResponse(char * Call, char *  ChallengeString);
 

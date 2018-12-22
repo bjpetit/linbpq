@@ -340,7 +340,7 @@ VOID HDLCTX(PHDLCDATA PORTVEC,UCHAR * Buffer)
 
 int HDLCINIT(HDLCDATA * PORTVEC)
 {
-	int WinVer, WinMinor;
+	int WinVer = 0x0602, WinMinor = 0x02;
 
 	WritetoConsole("HDLC\n");
 

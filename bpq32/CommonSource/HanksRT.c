@@ -1824,6 +1824,8 @@ void text_tellu(USER *user, char *text, char *to, int who)
 	}
 }
 
+extern int FlashOnConnect;
+
 void text_tellu_Joined(USER * user)
 {
 	ChatCIRCUIT *circuit;
@@ -1862,7 +1864,7 @@ void text_tellu_Joined(USER * user)
 			if (circuit->BPQStream < 0) // Console
 			{
 #ifndef LINBPQ
-				if (ConsHeader[1]->FlashOnConnect) FlashWindow(ConsHeader[1]->hConsole, TRUE);
+				if (FlashOnConnect) FlashWindow(ConsHeader[1]->hConsole, TRUE);
 #endif
 				nputc(circuit, 7);
 //				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
@@ -3647,7 +3649,7 @@ BOOL GetChatConfig(char * ConfigName)
 	return EXIT_SUCCESS;
 }
 
-VOID SaveChatConfig(char * ConfigName)
+VOID SaveChatConfigFile(char * ConfigName)
 {
 	config_setting_t *root, *group;
 

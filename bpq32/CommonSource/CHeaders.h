@@ -20,7 +20,7 @@ VOID Consoleprintf(const char * format, ...);
 VOID FreeConfig();
 int GetListeningPortsPID(int Port);
 
-UINT InitializeExtDriver(PEXTPORTDATA PORTVEC);
+void * InitializeExtDriver(PEXTPORTDATA PORTVEC);
 
 VOID PutLengthinBuffer(UCHAR * buff, int datalen);			// Neded for arm5 portability
 int GetLengthfromBuffer(UCHAR * buff);	
@@ -30,10 +30,12 @@ int GetLengthfromBuffer(UCHAR * buff);
 #define ReleaseBuffer(s) _ReleaseBuffer(s, __FILE__, __LINE__)
 
 #define Q_REM(s) _Q_REM(s, __FILE__, __LINE__)
+#define Q_REM_NP(s) _Q_REM_NP(s, __FILE__, __LINE__)
 
 #define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__)
 
 VOID * _Q_REM(VOID *Q, char * File, int Line);
+VOID * _Q_REM_NP(VOID *Q, char * File, int Line);
 
 int _C_Q_ADD(VOID *Q, VOID *BUFF, char * File, int Line);
 
@@ -246,7 +248,7 @@ extern UCHAR MYNETROMCALL[];			// NETROM CALLSIGN (ASCII)
 
 extern UCHAR NETROMCALL[];				// NETORM CALL (AX25)
 
-extern UINT	FREE_Q;
+extern UINT FREE_Q;
 
 extern struct PORTCONTROL * PORTTABLE;
 extern int	NUMBEROFPORTS;

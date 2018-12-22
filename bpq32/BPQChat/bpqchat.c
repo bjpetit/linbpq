@@ -45,6 +45,9 @@
 #define CHAT
 #include "Versions.h"
 
+#define LIBCONFIG_STATIC
+#include "..\BPQMail\libconfig.h"
+
 #include "GetVersion.h"
 
 #define MAX_LOADSTRING 100
@@ -154,6 +157,15 @@ extern char Position[81];
 extern char PopupText[260];
 extern int PopupMode;
 
+int Bells, FlashOnBell, StripLF, WarnWrap, WrapInput, FlashOnConnect, CloseWindowOnBye;
+
+char Version[32];
+char ConsoleSize[32];
+char MonitorSize[32];
+char DebugSize[32];
+char WindowSize[32];
+
+extern config_setting_t * group;
 
 int ProgramErrors = 0;
 
@@ -173,6 +185,12 @@ unsigned long _beginthread( void( *start_address )(VOID * DParam),
 VOID SaveWindowConfig();
 void WriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 char * lookupuser(char * call);
+BOOL GetChatConfig(char * ConfigName);
+BOOL SaveChatConfigFile(char * ConfigName);
+BOOL GetConfigFromRegistry();
+VOID SaveStringValue(config_setting_t * group, char * name, char * value);
+VOID SaveIntValue(config_setting_t * group, char * name, int value);
+VOID SaveChatConfig(HWND hDlg);
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -240,9 +258,10 @@ void myInvalidParameterHandler(const wchar_t* expression,
 	}
 }
 
-char IniFileName[MAX_PATH];
+char ChatConfigName[MAX_PATH];
 char Session[20] = "Server 1";
 
+BOOL UsingingRegConfig = FALSE;
 
 // If program gets too many program errors, it will restart itself  and shut down
 
@@ -311,24 +330,7 @@ HKEY OpenReg()
 	return hKey;
 }
 
-
-VOID SaveIntValue(char * Key, int Value)
-{
-	HKEY hKey = OpenReg();
-
-	RegSetValueEx(hKey, Key, 0 , REG_DWORD, (UCHAR *)&Value, 4);
-	RegCloseKey(hKey);
-}
-
-VOID SaveStringValue(char * Key, char * Value)
-{
-	HKEY hKey = OpenReg();
-
-	RegSetValueEx(hKey, Key, 0, REG_SZ, Value, strlen(Value));
-	RegCloseKey(hKey);
-}
-
-int GetIntValue(char * Key, int Default)
+int regGetIntValue(char * Key, int Default)
 {
 	HKEY hKey = OpenReg();
 	int Type, Vallen = 4;
@@ -336,17 +338,22 @@ int GetIntValue(char * Key, int Default)
 
 	RegQueryValueEx(hKey ,Key, 0, &Type, (UCHAR *)&Val, (ULONG *)&Vallen);
 	RegCloseKey(hKey);
- 
+
 	return Val;
 }
 
-VOID GetStringValue(char * Key, char * Value, int Len)
+BOOL regGetStringValue(char * Key, char * Value, int Len)
 {
 	HKEY hKey = OpenReg();
 	int Type, Vallen = Len;
+	int ret;
 
-	RegQueryValueEx(hKey ,Key, 0, &Type, (UCHAR *)Value, (ULONG *)&Vallen);
+	ret = RegQueryValueEx(hKey ,Key, 0, &Type, (UCHAR *)Value, (ULONG *)&Vallen);
+	if (ret != ERROR_SUCCESS)
+		return FALSE;
+
 	RegCloseKey(hKey);
+	return TRUE;
 }
 
 int APIENTRY WinMain(HINSTANCE hInstance,
@@ -505,7 +512,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
 
-	SaveNewFormatConfig("chatconfig.cfg");
+	SaveChatConfigFile(ChatConfigName);
 
 	return (int) msg.wParam;
 }
@@ -575,10 +582,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	HMENU hTopMenu;		// handle of menu 
 	HKEY hKey=0;
 	int retCode;
-	char Size[80];
 	RECT InitRect;
 	RECT SessRect;
 	struct _EXCEPTION_POINTERS exinfo;
+	struct stat STAT;
 
 	REGTREE = GetRegistryKey();
 	REGTREETEXT = GetRegistryKeyText();
@@ -594,10 +601,57 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Debugprintf("Running under WINE");
 	}
 
-	// Get Window Size  From Registry
+	wsprintf(ChatConfigName, "%s/BPQChat%s.cfg", GetBPQDirectory(), Session);
 
-	GetStringValue("WindowSize", Size, 80);		
-	sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+	// Set up file and directory names
+		
+	strcpy(RtUsr, BaseDir);
+	strcat(RtUsr, "/ChatUsers.txt");
+
+	strcpy(RtUsrTemp, BaseDir);
+	strcat(RtUsrTemp, "/ChatUsers.tmp");
+
+	strcpy(RtKnown, BaseDir);
+	strcat(RtKnown, "/RTKnown.txt");
+
+	Debugprintf("Users %s", RtUsr);
+
+	UsingingRegConfig = FALSE;
+
+	//	if config file exists use it else try to get from Registry
+
+	if (stat(ChatConfigName, &STAT) == -1)
+	{
+		UsingingRegConfig = TRUE;
+	
+		if (GetConfigFromRegistry())
+		{
+			SaveChatConfigFile(ChatConfigName);
+		}
+		else
+		{
+			int retCode;
+			char msg[80];
+
+			sprintf(msg, "No configuration found - Dummy Config created");
+
+			retCode = MessageBox(NULL, msg, "BPQChat", MB_OKCANCEL);
+
+			if (retCode == IDCANCEL)
+				return FALSE;
+
+			SaveChatConfigFile(ChatConfigName);
+		}
+	}
+
+	GetChatConfig(ChatConfigName);
+
+	// Get Window Size  From Registry
+	
+	sscanf(WindowSize,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+	sscanf(DebugSize, "%d,%d,%d,%d", &DebugRect.left, &DebugRect.right, &DebugRect.top, &DebugRect.bottom);
+	sscanf(MonitorSize, "%d,%d,%d,%d", &MonitorRect.left, &MonitorRect.right, &MonitorRect.top, &MonitorRect.bottom);
+	sscanf(ConsoleSize, "%d,%d,%d,%d", &ConsoleRect.left, &ConsoleRect.right, &ConsoleRect.top, &ConsoleRect.bottom);
 
 	hInst = hInstance;
 
@@ -944,10 +998,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 
 		GetWindowRect(MainWnd,	&MainRect);	// For save soutine
-		if (ConsHeader[0]->hConsole)
-			GetWindowRect(ConsHeader[0]->hConsole, &ConsHeader[0]->ConsoleRect);	// For save soutine
 		if (ConsHeader[1]->hConsole)
-			GetWindowRect(ConsHeader[1]->hConsole, &ConsHeader[1]->ConsoleRect);	// For save soutine
+			GetWindowRect(ConsHeader[1]->hConsole, &ConsoleRect);	// For save soutine
 		if (hMonitor)
 			GetWindowRect(hMonitor,	&MonitorRect);	// For save soutine
 		if (hDebug)
@@ -1008,10 +1060,6 @@ INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			GetDlgItemText(hDlg, IDC_POPUPTEXT, PopupText, 250);
 		
 			PopupMode = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
-
-			SaveStringValue("MapPosition", Position);
-			SaveStringValue("MapPopup", PopupText);
-			SaveIntValue("PopupMode", PopupMode);
 		
 		case IDCANCEL:
 
@@ -1138,12 +1186,37 @@ PSOCKADDR_IN psin;
 
 SOCKET sock;
 
+
+BOOL GetConfigFromRegistry()
+{
+	ChatApplNum = regGetIntValue("ApplNum", 0);
+	MaxChatStreams = regGetIntValue("MaxStreams", 0);
+	
+	regGetStringValue("MapPosition", Position, 80);
+	regGetStringValue("MapPopup", PopupText, 250);
+	PopupMode = regGetIntValue("PopupMode", 0);
+
+	regGetStringValue("ConsoleSize", ConsoleSize, 32);
+	regGetStringValue("MonitorSize", MonitorSize, 32);
+	regGetStringValue("DebugSize", DebugSize, 32); 
+	regGetStringValue("WindowSize", WindowSize, 32); 
+	regGetStringValue("Version", Version, 32 ); 
+	Bells = regGetIntValue("Bells", 0);
+	FlashOnBell = regGetIntValue("FlashOnBell", 0);
+	StripLF = regGetIntValue("StripLF", 0);
+	WarnWrap = regGetIntValue("WarnWrap", 0);
+	WrapInput = regGetIntValue("WrapInput", 0);
+	FlashOnConnect = regGetIntValue("FlashOnConnect", 0);
+	CloseWindowOnBye = regGetIntValue("CloseWindowOnBye", 0);
+
+	return regGetStringValue("OtherChatNodes", OtherNodesList, 999);		// Return false if not there
+}
+
+
 BOOL Initialise()
 {
-	int i, len;
-
+	int i;
 	ChatCIRCUIT * conn;
-	char * ptr1;
 
 	//	Register message for posting by BPQDLL
 
@@ -1151,49 +1224,7 @@ BOOL Initialise()
 
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
-	wsprintf(BaseDir, "%s", GetBPQDirectory());
-	
-	len = strlen(BaseDir);
-	ptr1 = BaseDir;
-
-	while (*ptr1)
-	{
-		if (*(ptr1) == '/') *(ptr1) = '\\';
-		ptr1++;
-	}
-
-	wsprintf(IniFileName, "%s\\BPQChat.ini", BaseDir);
-
-	Debugprintf("BaseDir %s", BaseDir);
-
-	len = strlen(BaseDir);
-	ptr1 = BaseDir;
-
-	while (*ptr1)
-	{
-		if (*(ptr1) == '/') *(ptr1) = '\\';
-		ptr1++;
-	}
-
-	// Set up file and directory names
-		
-	strcpy(RtUsr, BaseDir);
-	strcat(RtUsr, "\\ChatUsers.txt");
-
-	strcpy(RtUsrTemp, BaseDir);
-	strcat(RtUsrTemp, "\\ChatUsers.tmp");
-
-	strcpy(RtKnown, BaseDir);
-	strcat(RtKnown, "\\RTKnown.txt");
-
-	Debugprintf("Users %s", RtUsr);
-
 Retry:
-
-	ChatApplNum = GetIntValue("ApplNum", 0);
-	MaxChatStreams = GetIntValue("MaxStreams", 0);
-
-	GetStringValue("OtherChatNodes", OtherNodesList, 999);
 
 	if (ChatApplNum)
 	{
@@ -1268,8 +1299,6 @@ Retry:
 
 	sprintf(ChatSignoffMsg, "73 de %s\r", ChatSYSOPCall);
 
-	GetStringValue("ChatWelcomeMsg", ChatWelcomeMsg, 999);
-
 	if (ChatWelcomeMsg[0] == 0)
 		strcpy(ChatWelcomeMsg, "G8BPQ Chat Server.$WType /h for command summary.$WBringing up links to other nodes.$W"
 			"This may take a minute or two.$WThe /p command shows what nodes are linked.$W");
@@ -1279,10 +1308,6 @@ Retry:
 	DeleteLogFiles();
 
 	CreateChatPipeThread();
-
-	GetStringValue("MapPosition", Position, 80);
-	GetStringValue("MapPopup", PopupText, 250);
-	PopupMode = GetIntValue("PopupMode", 0);
 
 	return TRUE;
 }
@@ -1298,31 +1323,14 @@ int	CriticalErrorHandler(char * error)
 
 VOID SaveWindowConfig()
 {
-	char Size[80];
+	wsprintf(MonitorSize,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
+	wsprintf(DebugSize,"%d,%d,%d,%d",DebugRect.left,DebugRect.right,DebugRect.top,DebugRect.bottom);
+	wsprintf(WindowSize,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
 
-		wsprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
-		SaveStringValue("MonitorSize", Size);
+	wsprintf(Version,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
 
-		wsprintf(Size,"%d,%d,%d,%d",DebugRect.left,DebugRect.right,DebugRect.top,DebugRect.bottom);
-		SaveStringValue("DebugSize", Size);
-
-		wsprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
-		SaveStringValue("WindowSize", Size);
-
-//		retCode = RegSetValueEx(hKey,"Log_BBS",0,REG_DWORD,(BYTE *)&LogBBS,4);
-//		retCode = RegSetValueEx(hKey,"Log_TCP",0,REG_DWORD,(BYTE *)&LogTCP,4);
-//		retCode = RegSetValueEx(hKey,"Log_CHAT",0,REG_DWORD,(BYTE *)&LogCHAT,4);
-
-		wsprintf(Size,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
-		SaveStringValue("Version", Size);
-
-		if (ConsHeader[1]->ConsoleRect.right)
-		{
-			wsprintf(Size,"%d,%d,%d,%d",ConsHeader[1]->ConsoleRect.left, ConsHeader[1]->ConsoleRect.right,
-				ConsHeader[1]->ConsoleRect.top, ConsHeader[1]->ConsoleRect.bottom);
-
-			SaveStringValue("ConsoleSize", Size);
-		}
+	if (ConsoleRect.right)
+		wsprintf(ConsoleSize,"%d,%d,%d,%d",ConsoleRect.left, ConsoleRect.right, ConsoleRect.top, ConsoleRect.bottom);
 
 	return;
 }
@@ -1493,14 +1501,15 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 				goto scan2;
 			} 
 
-			SaveStringValue("ChatWelcomeMsg", ChatWelcomeMsg);
-
-			break;
+			SaveChatConfigFile(ChatConfigName);
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
 
 		case SAVENODES:
 			
 			SaveChatConfig(hDlg);
-			return TRUE;
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
 		}
 		break;
 

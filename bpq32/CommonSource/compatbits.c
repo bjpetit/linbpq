@@ -131,7 +131,7 @@ int sprintf_s(char * string, int plen, const char * format, ...)
 
 #include <pthread.h>
 
-unsigned long _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist)
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist)
 {
 	pthread_t thread;
 

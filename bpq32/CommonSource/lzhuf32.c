@@ -23,6 +23,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "BPQMail.h"
 
+struct UserInfo * FindAMPR();
 
 /**************************************************************
         lzhuf.c
@@ -1060,17 +1061,16 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					{
 						// Our Message
 
-						strcpy(Msg->via, ptr3);
-						strlop(FullTo,'@');
+						strcpy(Msg->via, FullTo);
 						BBSMsgs ++;
 						goto BBSMsg;
 					}
 				}
 
-				if (SendAMPRDirect)
+				if (SendAMPRDirect && FindAMPR())
 				{
-					strcpy(Msg->via, ptr3);
-					strlop(FullTo,'@');
+					strcpy(Msg->via, FullTo);
+					strcpy(FullTo,"AMPR");
 					BBSMsgs ++;
 					goto BBSMsg;
 				}

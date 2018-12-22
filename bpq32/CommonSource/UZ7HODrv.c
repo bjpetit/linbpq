@@ -52,7 +52,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
 
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 

@@ -141,7 +141,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 }
 
-UINT VCOMExtInit(struct PORTCONTROL *  PortEntry)
+VOID * VCOMExtInit(struct PORTCONTROL *  PortEntry)
 {
 	char msg[80];
 	

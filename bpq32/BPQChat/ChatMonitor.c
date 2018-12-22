@@ -51,6 +51,8 @@ static void MoveWindows();
 
 #define BGCOLOUR RGB(236,233,216)
 
+extern char MonitorSize[32];
+
 BOOL CreateMonitor()
 {
     WNDCLASS  wc;

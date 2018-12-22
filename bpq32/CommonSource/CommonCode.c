@@ -153,6 +153,35 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 	return (first);
 }
 
+// Non=pool version (for IPGateway)
+
+VOID * _Q_REM_NP(VOID *PQ, char * File, int Line)
+{
+	UINT * Q;
+	UINT * first;
+	UINT next;
+
+	//	PQ may not be word aligned, so copy as bytes (for ARM5)
+
+	Q = (UINT *) PQ;
+
+	if (Semaphore.Flag == 0)
+		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
+
+	if (CheckQHeadder(Q) == 0)
+		return(0);
+
+	first = (UINT *)Q[0];
+
+	if (first == 0) return (0);			// Empty
+
+	next= first[0];						// Address of next buffer
+
+	Q[0] = next;
+
+	return (first);
+}
+
 // Return Buffer to Free Queue
 
 extern VOID * BUFFERPOOL;
@@ -270,17 +299,17 @@ BOK2:
 
 	if (Q[0] == 0)						// Empty
 	{
-		Q[0]=(UINT)BUFF;				// New one on front
+		Q[0]=BUFF;					 	// New one on front
 		return(0);
 	}
 
 	next = (UINT *)Q[0];
 
-	while (next[0]!=0)
+	while (next[0] != 0)
 	{
 		next=(UINT *)next[0];			// Chain to end of queue
 	}
-	next[0]=(UINT)BUFF;					// New one on end
+	next[0] = BUFF;						// New one on end
 
 	return(0);
 }
@@ -2047,8 +2076,13 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	{
 		if (SetDTR)
 			EscapeCommFunction(fd, SETDTR);
+		else
+			EscapeCommFunction(fd, CLRDTR);
+	
 		if (SetRTS)
 			EscapeCommFunction(fd, SETRTS);
+		else
+			EscapeCommFunction(fd, CLRRTS);
 	}
 	else
 	{
@@ -2258,8 +2292,27 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	Debugprintf("LinBPQ Port %s fd %d", Port, fd);
 
+	if (SetDTR)
+	{
+		COMSetDTR(fd);
+	}
+	else
+	{
+		COMClearDTR(fd);
+	}
+
+	if (SetRTS)
+	{
+		COMSetRTS(fd);
+	}
+	else
+	{
+		COMClearRTS(fd);
+	}
 	return fd;
 }
+
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
 
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
 {
@@ -3371,11 +3424,21 @@ VOID UISend_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL
 	MESSAGEX AXMSG;
 	PMESSAGEX AXPTR = &AXMSG;
 	int DataLen = Len;
+	struct PORTCONTROL * PORT = GetPortTableEntryFromSlot(Port);
 
-	// Block includes the Msg Header (7 bytes), Len Does not!
+	// Block includes the Msg Header (7 or 11 bytes), Len Does not!
 
-	memcpy(AXPTR->DEST, HWADDR, 7);
-	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	memcpy(AXPTR->DEST, HWADDR, 7);	
+	
+	// Get BCALL or PORTCALL if set
+
+	if (PORT && PORT->PORTBCALL[0])
+		memcpy(AXPTR->ORIGIN, PORT->PORTBCALL, 7);
+	else if (PORT && PORT->PORTCALL[0])
+		memcpy(AXPTR->ORIGIN, PORT->PORTCALL, 7);
+	else
+		memcpy(AXPTR->ORIGIN, MYCALL, 7);
+
 	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
 	AXPTR->DEST[6] |= 0x80;			// set Command Bit
 

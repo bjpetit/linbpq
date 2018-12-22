@@ -986,6 +986,7 @@ struct StreamInfo
 	BOOL Connected;					// Set if connected to Node
 	int CloseTimer;					// Used to close session after connect failure
 	UCHAR MYCall[30];
+	char OutgoingCall[16];
 };
 
 
@@ -994,8 +995,9 @@ struct TNCDATA
 	struct TNCDATA * Next;
 	unsigned int Mode;				// 0 = TNC2, others may follow
 
-	UCHAR RXBUFFER[TNCBUFFLEN];		// BUFFER TO USER
-	UCHAR TXBUFFER[300];			// BUFFER TO NODE
+	UCHAR TOUSERBUFFER[TNCBUFFLEN];		// BUFFER TO USER
+	UCHAR TONODEBUFFER[300];			// BUFFER TO NODE
+	UCHAR FROMUSERBUFFER[TNCBUFFLEN];
 
 	char PORTNAME[80];				// for Linux Port Names
 	int ComPort;
@@ -1109,6 +1111,8 @@ struct TNCDATA
 
 	// SCS Fields
 
+	int FROMUSERLEN;
+
 	BOOL Term4Mode;			// Used by Airmail
 	BOOL PACMode;			// SCS in Packet Mode
 	BOOL Toggle;				// SCS Sequence Toggle
@@ -1169,7 +1173,7 @@ struct arp_table_entry
 	};
 
 	BOOL TCPState;
-	UINT TCPThreadID;			// Thread ID if TCP Master
+	pthread_t TCPThreadID;		// Thread ID if TCP Master
 	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
 	int SourcePort;				// Used to select socket, hence from port.
 //	SOCKET SourceSocket;

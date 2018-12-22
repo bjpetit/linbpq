@@ -1532,6 +1532,7 @@ VOID SaveBBSConfig()
 	strlop(SYSOPCall, '-');
 
 	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Warning - Program must be restarted for changes to be effective");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -1566,6 +1567,8 @@ VOID SaveISPConfig()
 	EncryptedPassLen = EncryptPass(ISPAccountPass, EncryptedISPAccountPass);
 
 	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
+
 
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);

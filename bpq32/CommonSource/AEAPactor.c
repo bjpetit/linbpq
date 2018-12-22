@@ -354,7 +354,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 }
 
 
-UINT AEAExtInit(EXTPORTDATA *  PortEntry)
+VOID * AEAExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[500];
 	struct TNCINFO * TNC;
@@ -383,7 +383,7 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 		sprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
-		return (int)ExtProc;
+		return ExtProc;
 	}
 
 	TNC->Port = port;
@@ -495,7 +495,7 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	WritetoConsole("\n");
 
-	return ((int)ExtProc);
+	return ExtProc;
 }
 
 static void CheckRX(struct TNCINFO * TNC)
@@ -608,8 +608,6 @@ FENDLoop:
 	return;
 
 }
-
-
 
 static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
@@ -1518,7 +1516,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
-	int i,txptr=0;
+	unsigned int i, txptr = 0;
 	UCHAR c;
 
 	for (i=0; i<len; i++)
@@ -1546,7 +1544,7 @@ static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len)
 
 static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
-	int i, txptr = 0;
+	unsigned int i, txptr = 0;
 	UCHAR c;
 
 	outbuff[0] = SOH;

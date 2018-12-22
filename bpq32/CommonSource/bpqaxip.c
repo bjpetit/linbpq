@@ -677,17 +677,19 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 4:				// reinit
 
-		CloseSockets(PORT);
-
-		if (!ProcessConfig())
+		CloseSockets(PORT);	
+		
+		if (ProcessConfig())
 		{
-			Consoleprintf("Failed to reread config file - leaving config unchanged");
-			break;
+			FreeConfig();
+			ReadConfigFile(port);
 		}
-		FreeConfig();
+		else 
+			Consoleprintf("Failed to reread config file - leaving config unchanged");
 
-		ReadConfigFile(port);
+
 		_beginthread(OpenSockets, 0, PORT );
+
 		ResolveDelay = 2;
 #ifndef LINBPQ
 		InvalidateRect(PORT->hResWnd,NULL,TRUE);
@@ -708,7 +710,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, UCHAR * buff, int txlen)
 {				
-	int txsock, i, SourceSocket;
+	int i;
+	SOCKET txsock, SourceSocket;
 
 	if (arp_table->TCPMode)
 	{
@@ -758,8 +761,11 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 			if (arp_table->destaddr.sin_addr.s_addr)
 				sent = sendto(txsock, buff, txlen, 0, (struct sockaddr *)&arp_table->destaddr, sizeof(arp_table->destaddr));
 	
-//		if (sent != txlen)
+		if (sent != txlen)
+		{
+			int i = GetLastError();
 //			perror("Sendto");
+		}
 
 		// reset Keepalive Timer
 					
@@ -770,7 +776,7 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 unsigned short int compute_crc_ccitt(unsigned char *buf, int len);
 unsigned short CCCITTChecksum(unsigned char* data, unsigned int length);	
 
-UINT AXIPExtInit(struct PORTCONTROL *  PortEntry)
+VOID * AXIPExtInit(struct PORTCONTROL *  PortEntry)
 {
 //	char Msg[10] = {0xD0, 01, 00, 0x11, 00, 0x0B};
 //	unsigned short crc;
@@ -785,7 +791,7 @@ UINT AXIPExtInit(struct PORTCONTROL *  PortEntry)
 
 	WritetoConsole("\n");
 
-	return ((int) ExtProc);
+	return ExtProc;
 }
 
 int InitAXIP(int Port)
@@ -1050,9 +1056,7 @@ void CloseSockets(struct AXIPPORTINFO * PORT)
 			closesocket(arp->TCPListenSock);
 			continue;
 		}
-
 	}
-
 	return ;
 }	
 
@@ -1113,7 +1117,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			// Activate
 
 			RemoveMenu(hBaseMenu, 1, MF_BYPOSITION);
-			AppendMenu(hBaseMenu, MF_STRING + MF_POPUP, (UINT)PORT->hResMenu, "Actions");
+			AppendMenu(hBaseMenu, MF_STRING + MF_POPUP, (UINT_PTR)PORT->hResMenu, "Actions");
 			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM)hBaseMenu, (LPARAM)hWndMenu);
 		}
 		else
@@ -1315,7 +1319,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
 }
 
-int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
+LRESULT FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 {
 	int cmd,id,i;
 	HWND hwndChild;
@@ -1343,7 +1347,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 	{
 	case WM_CTLCOLORDLG:
 	
-		return (LONG)bgBrush;
+		return (LRESULT)bgBrush;
 
 	case WM_COMMAND:	
 
@@ -2486,7 +2490,8 @@ BOOL add_bc_entry(struct AXIPPORTINFO * PORT, unsigned char * call, int len)
 
 int CheckKeepalives(struct AXIPPORTINFO * PORT)
 {
-	int index=0,txsock;
+	int index=0;
+	SOCKET txsock;
 	struct arp_table_entry * arp;
 
 	if (PORT->arp_table_len >= MAX_ENTRIES)

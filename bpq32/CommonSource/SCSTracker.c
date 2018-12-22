@@ -60,7 +60,7 @@ char * strlop(char * buf, char delim);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL OpenConnection(int);
@@ -1049,7 +1049,6 @@ VOID DEDPoll(int Port)
 		TNC->InitPtr = TNC->InitScript;
 		TNC->HOSTSTATE = 0;
 
-		
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
 			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream])		// Connected
@@ -1497,7 +1496,6 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 
 		WriteCommBlock(TNC);
 		return;
-
 	}
 
 	if (TNC->ReinitState == 1)		// Forcing back to Term
@@ -1539,7 +1537,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 	{
 		// No Response to trying to enter term mode - do error recovery
 
-		Debugprintf("TRK - Starting Resync");
+		Debugprintf("TRK - Starting Resync Port %d", TNC->Port);
 
 		TNC->ReinitState = 10;
 		TNC->ReinitCount = 256;
@@ -1564,15 +1562,15 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 			Poll[0] = 1;
 			TNC->TXLen = 1;
 			WriteCommBlock(TNC);
-			TNC->Timeout = 2;				// 1/2 secs
+			TNC->Timeout = 3;				// 0.3 secs
 
 			return;
 		}
 
 		// Try Again
 
-		Debugprintf("TRK Continuing recovery");
-		
+		Debugprintf("TRK Continuing recovery Port %d", TNC->Port);
+	
 		TNC->ReinitState = 1;
 		ExitHost(TNC);
 
@@ -1622,7 +1620,6 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 
 	if (TNC->WRITELOG)
 		WriteDebugLogLine(TNC->Port, 'R', TNC->RXBuffer, TNC->RXLen);
-
 
 	if (TNC->ReinitState == 0)
 	{

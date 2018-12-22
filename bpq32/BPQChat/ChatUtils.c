@@ -8,22 +8,15 @@
 #define _USE_32BIT_TIME_T
 
 #include "BPQChat.h"
-
-#ifdef LINBPQ
-#include "CHeaders.h"
-#endif
-
-
-
-#ifndef LINBPQ
 #include <new.h>
-#endif
-
 
 #define MaxSockets 64
 
 extern ChatCIRCUIT ChatConnections[MaxSockets+1];
 extern int	NumberofChatStreams;
+
+extern char ChatConfigName[MAX_PATH];
+extern char Session[20];
 
 extern struct SEM ChatSemaphore;
 extern struct SEM AllocSemaphore;
@@ -32,6 +25,18 @@ extern struct SEM OutputSEM;
 
 extern char OtherNodesList[1000];
 extern int MaxChatStreams;
+
+extern char Position[81];
+extern char PopupText[260];
+extern int PopupMode;
+extern int Bells, FlashOnBell, StripLF, WarnWrap, WrapInput, FlashOnConnect, CloseWindowOnBye;
+
+extern char Version[32];
+extern char ConsoleSize[32];
+extern char MonitorSize[32];
+extern char DebugSize[32];
+extern char WindowSize[32];
+
 
 INT_PTR CALLBACK InfoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -107,6 +112,9 @@ int Connected(Stream)
 			}
 
 			// See if from a previously known node
+
+			// I'm not sure this is safe. If it really is from a node the *RTL will be rejected
+			// Actually this protects against repeated attempts from a node that isn't configured. Maybe leave as is
 
 			node = knownnode_find(conn->Callsign);
 
@@ -569,6 +577,7 @@ VOID FreeList(char ** Hddr)
 	}
 }
 
+
 #define LIBCONFIG_STATIC
 #include "..\BPQMail\libconfig.h"
 
@@ -578,7 +587,7 @@ config_setting_t * group;
 
 extern char ChatWelcomeMsg[1000];
 
-VOID xSaveIntValue(config_setting_t * group, char * name, int value)
+VOID SaveIntValue(config_setting_t * group, char * name, int value)
 {
 	config_setting_t *setting;
 	
@@ -587,7 +596,7 @@ VOID xSaveIntValue(config_setting_t * group, char * name, int value)
 		config_setting_set_int(setting, value);
 }
 
-VOID xSaveStringValue(config_setting_t * group, char * name, char * value)
+VOID SaveStringValue(config_setting_t * group, char * name, char * value)
 {
 	config_setting_t *setting;
 
@@ -597,19 +606,82 @@ VOID xSaveStringValue(config_setting_t * group, char * name, char * value)
 
 }
 
+int GetIntValue(config_setting_t * group, char * name, int Default)
+{
+	config_setting_t *setting;
 
-VOID SaveNewFormatConfig(char * ConfigName)
+	setting = config_setting_get_member (group, name);
+	if (setting)
+		return config_setting_get_int (setting);
+
+	return Default;
+}
+
+
+BOOL GetStringValue(config_setting_t * group, char * name, char * value)
+{
+	const char * str;
+	config_setting_t *setting;
+
+	setting = config_setting_get_member (group, name);
+	if (setting)
+	{
+		str =  config_setting_get_string (setting);
+		strcpy(value, str);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+BOOL GetChatConfig(char * ConfigName)
+{
+	config_init(&cfg);
+
+	/* Read the file. If there is an error, report it and exit. */
+	
+	if(! config_read_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "%d - %s\n",
+			config_error_line(&cfg), config_error_text(&cfg));
+		config_destroy(&cfg);
+		return(EXIT_FAILURE);
+	}
+
+	group = config_lookup (&cfg, "Chat");
+
+	if (group == NULL)
+		return EXIT_FAILURE;
+
+	ChatApplNum = GetIntValue(group, "ApplNum", 0);
+	MaxChatStreams = GetIntValue(group, "MaxStreams", 0);
+	GetStringValue(group, "OtherChatNodes", OtherNodesList);
+	GetStringValue(group, "ChatWelcomeMsg", ChatWelcomeMsg);
+	GetStringValue(group, "MapPosition", Position);
+	GetStringValue(group, "MapPopup", PopupText);
+	PopupMode = GetIntValue(group, "PopupMode", 0);
+
+	Bells = GetIntValue(group, "Bells", 0);
+	FlashOnBell = GetIntValue(group, "FlashOnBell",0 );
+	StripLF = GetIntValue(group, "StripLF", 0);
+	WarnWrap = GetIntValue(group, "WarnWrap", 0);
+	WrapInput = GetIntValue(group, "WrapInput",0 );
+	FlashOnConnect = GetIntValue(group, "FlashOnConnect", 0);
+	CloseWindowOnBye = GetIntValue(group, "CloseWindowOnBye", 0);
+
+	GetStringValue(group, "ConsoleSize", ConsoleSize);
+	GetStringValue(group, "MonitorSize", MonitorSize);
+	GetStringValue(group, "DebugSize", DebugSize);
+	GetStringValue(group, "WindowSize", WindowSize);
+	GetStringValue(group, "Version", Version);
+
+	return EXIT_SUCCESS;
+}
+
+
+
+VOID SaveChatConfigFile(char * File)
 {
 	config_setting_t *root, *group;
-
-	char Position[81] = "";
-	char PopupText[251] = "";
-	int Click = 0, Hover = 0;
-
-	GetStringValue("MapPosition", Position, 80);
-	GetStringValue("MapPopup", PopupText, 250);
-	Click = GetIntValue("PopupMode", 0);
-
 
 	//	Get rid of old config before saving
 	
@@ -619,16 +691,30 @@ VOID SaveNewFormatConfig(char * ConfigName)
 
 	group = config_setting_add(root, "Chat", CONFIG_TYPE_GROUP);
 
-	xSaveIntValue(group, "ApplNum", ChatApplNum);
-	xSaveIntValue(group, "MaxStreams", MaxChatStreams);
-	xSaveStringValue(group, "OtherChatNodes", OtherNodesList);
-	xSaveStringValue(group, "ChatWelcomeMsg", ChatWelcomeMsg);
+	SaveIntValue(group, "ApplNum", ChatApplNum);
+	SaveIntValue(group, "MaxStreams", MaxChatStreams);
+	SaveStringValue(group, "OtherChatNodes", OtherNodesList);
+	SaveStringValue(group, "ChatWelcomeMsg", ChatWelcomeMsg);
 
-	xSaveStringValue(group, "MapPosition", Position);
-	xSaveStringValue(group, "MapPopup", PopupText);
-	xSaveIntValue(group, "PopupMode", Click);
+	SaveStringValue(group, "MapPosition", Position);
+	SaveStringValue(group, "MapPopup", PopupText);
+	SaveIntValue(group, "PopupMode", PopupMode);
 
-	if(! config_write_file(&cfg, ConfigName))
+	SaveIntValue(group, "Bells", Bells);
+	SaveIntValue(group, "FlashOnBell", FlashOnBell);
+	SaveIntValue(group, "StripLF", StripLF);
+	SaveIntValue(group, "WarnWrap", WarnWrap);
+	SaveIntValue(group, "WrapInput", WrapInput);
+	SaveIntValue(group, "FlashOnConnect", FlashOnConnect);
+	SaveIntValue(group, "CloseWindowOnBye", CloseWindowOnBye);
+
+	SaveStringValue(group, "ConsoleSize", ConsoleSize);
+	SaveStringValue(group, "MonitorSize", MonitorSize);
+	SaveStringValue(group, "DebugSize", DebugSize);
+	SaveStringValue(group, "WindowSize",WindowSize );
+	SaveStringValue(group, "Version",Version );
+
+	if(! config_write_file(&cfg, File))
 	{
 		fprintf(stderr, "Error while writing file.\n");
 		config_destroy(&cfg);
@@ -641,10 +727,6 @@ VOID SaveNewFormatConfig(char * ConfigName)
 
 VOID SaveChatConfig(HWND hDlg)
 {
-#ifdef LINBPQ
-
-#else
-
 	BOOL OK1;
 	HKEY hKey=0;
 	int OldChatAppl;
@@ -667,12 +749,7 @@ VOID SaveChatConfig(HWND hDlg)
 		}
 	}
 
-	SaveIntValue("ApplNum", ChatApplNum);
-	SaveIntValue("MaxStreams", MaxChatStreams);
-
 	GetMultiLineDialog(hDlg, IDC_ChatNodes);
-
-	SaveStringValue("OtherChatNodes", OtherNodesList);
 	
 	// Show dialog box now - gives time for links to close
 	
@@ -683,15 +760,9 @@ VOID SaveChatConfig(HWND hDlg)
 	if (ChatApplNum == OldChatAppl)
 		wsprintf(InfoBoxText, "Configuration Changes Saved and Applied");
 	else
-	{
-		ChatApplNum = OldChatAppl;
 		wsprintf(InfoBoxText, "Warning Program must be restarted to change Chat Appl Num");
-	}
 
-#ifndef LINBPQ
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-#endif
-
 	removelinks();
 	 
 	// Set up other nodes list. rtlink messes with the string so pass copy
@@ -709,6 +780,6 @@ VOID SaveChatConfig(HWND hDlg)
 	if (user_hd)			// Any Users?
 		makelinks();		// Bring up links
 
-#endif
-
+	SaveChatConfigFile(ChatConfigName);				// Commit to file
+	GetChatConfig(ChatConfigName);
 }

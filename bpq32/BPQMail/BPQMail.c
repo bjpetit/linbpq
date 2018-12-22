@@ -955,7 +955,7 @@
 //	Close session if more than 4 Invalid Commmad responses sent
 //	Report TOP in POP3 CAPA list. Allows POP3 to work with Windows Mail client
 
-// 6.0.17.?? 
+// 6.0.17.1 November 2018
 
 //	Add source routing using ! eg sp g8bpq@winlink.org!gm8bpq to send via RMS on gm8bpq
 //	Accept an internet email address without rms: or smtp: 
@@ -971,6 +971,14 @@
 //	Fix crash if YAPP entered without filenmame and send BBS prompt after YAPP error messages
 //	Add support for Winlink HTML Forms to WebMail interface
 //	Update B2 header when using NTS alias file with B2 messages
+
+// 6.0.18.??
+
+//	Ensure callsigns in WP database are upper case.
+//	Various fixes for Webmail
+//	Fix sending direct to ampr.org addresses
+//	Use SYSOP Call as default for Webmail if set.
+
 
 #include "BPQMail.h"
 #define MAIL

@@ -71,7 +71,7 @@ int KANTDisconnected(struct TNCDATA * conn, struct StreamInfo * channel, int Str
 VOID SendKISSData(struct TNCDATA * conn, UCHAR * txbuffer, int Len);
 VOID ProcessSCSPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Length);
 VOID TNCPoll();
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
+uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, void * arglist);
 VOID DisableAppl(struct TNCDATA * TNC);
 int BPQSerialSetPollDelay(HANDLE hDevice, int PollDelay);
 
@@ -1005,8 +1005,8 @@ VOID TNCCONNECT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	//	CONNECT, BUT NOT TO SWITCH - CONNECT TO NODE, THEN PASS TO IT FOR PROCESSING
 
 	TNCNODE(TNC, Tail, CMD);
-	strcat(TNC->TXBUFFER, "\r");
-	TNC->MSGLEN = strlen(TNC->TXBUFFER);
+	strcat(TNC->TONODEBUFFER, "\r");
+	TNC->MSGLEN = strlen(TNC->TONODEBUFFER);
 
 	SENDPACKET(TNC);		// Will now go to node
 
@@ -1047,7 +1047,7 @@ static VOID RESTART(struct TNCDATA * TNC)
 {
 	//	REINITIALISE CHANNEL
 
-	TNC->PUTPTR = TNC->GETPTR = &TNC->RXBUFFER[0];
+	TNC->PUTPTR = TNC->GETPTR = &TNC->TOUSERBUFFER[0];
 	TNC->RXCOUNT = 0;
 		
 	TNC->VLSR = 0x20;
@@ -1062,7 +1062,7 @@ static VOID RESTART(struct TNCDATA * TNC)
 
 	TNC->COMCHAR = 3;
 	TNC->CMDTIME = 10;			// SYSTEM TIMER = 100MS
-	TNC->CURSOR = &TNC->TXBUFFER[0]; // RESET MESSAGE START
+	TNC->CURSOR = &TNC->TONODEBUFFER[0]; // RESET MESSAGE START
 	TNC->MSGLEN = 0;
 
 	SENDREPLY(TNC, SIGNON, 23);
@@ -1174,8 +1174,8 @@ VOID TNC2GetChar(struct TNCDATA * TNC, int * returnedchar, int * moretocome)
 
 	*returnedchar = *(TNC->GETPTR++);
 
-	if (TNC->GETPTR == &TNC->RXBUFFER[TNCBUFFLEN])
-		TNC->GETPTR = &TNC->RXBUFFER[0];
+	if (TNC->GETPTR == &TNC->TOUSERBUFFER[TNCBUFFLEN])
+		TNC->GETPTR = &TNC->TOUSERBUFFER[0];
 	
 	*moretocome = --TNC->RXCOUNT;		//ANY MORE?
 
@@ -1446,9 +1446,9 @@ BOOL InitializeTNCEmulator()
 		{
 			// Set up buffer pointers
 
-			TNC->PUTPTR = TNC->GETPTR = &TNC->RXBUFFER[0];
+			TNC->PUTPTR = TNC->GETPTR = &TNC->TOUSERBUFFER[0];
 			TNC->RXCOUNT = 0;
-			TNC->CURSOR = &TNC->TXBUFFER[0]; // RESET MESSAGE START
+			TNC->CURSOR = &TNC->TONODEBUFFER[0]; // RESET MESSAGE START
 			TNC->MSGLEN = 0;
 		
 			TNC->VLSR = 0x20;
@@ -1743,8 +1743,10 @@ VOID TNCPoll()
 				}
 			}
 
-			if (TNC->Mode == KANTRONICS || TNC->Mode == SCS)
-				resp = BPQSerialGetData(TNC, &TNC->RXBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr, &Read);
+			if (TNC->Mode == KANTRONICS)
+				resp = BPQSerialGetData(TNC, &TNC->TOUSERBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr, &Read);
+			else if (TNC->Mode == SCS)
+				resp = BPQSerialGetData(TNC, &TNC->FROMUSERBUFFER[TNC->FROMUSERLEN], TNCBUFFLEN - TNC->FROMUSERLEN, &Read);
 			else
 				resp = BPQSerialGetData(TNC, rxbuffer, 1000, &Read);
 
@@ -1763,12 +1765,12 @@ VOID TNCPoll()
 				else if (TNC->Mode == KANTRONICS)
 				{
 					TNC->RXBPtr += Read;
-					ProcessPacket(TNC, TNC->RXBUFFER, TNC->RXBPtr);
+					ProcessPacket(TNC, TNC->TOUSERBUFFER, TNC->RXBPtr);
 				}
 				else if (TNC->Mode == SCS)
 				{
-					TNC->RXBPtr += Read;
-					ProcessSCSPacket(TNC, TNC->RXBUFFER, TNC->RXBPtr);
+					TNC->FROMUSERLEN += Read;
+					ProcessSCSPacket(TNC, TNC->FROMUSERBUFFER, TNC->FROMUSERLEN);
 				}
 			}
 			if (TNC->NewVCOM == 0)
@@ -1845,7 +1847,7 @@ VOID TNCPoll()
 			// We can tell if partner has gone on PTY Pair - read returns 5
 
 			if (TNC->Mode == KANTRONICS || TNC->Mode == SCS)
-				Read = TNCReadCOMBlock(TNC->hDevice, &TNC->RXBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr, &err);
+				Read = TNCReadCOMBlock(TNC->hDevice, &TNC->TOUSERBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr, &err);
 			else
 				Read = TNCReadCOMBlock(TNC->hDevice, rxbuffer, 1000, &err);
 
@@ -1863,7 +1865,7 @@ VOID TNCPoll()
 
 #else
 			if (TNC->Mode == KANTRONICS || TNC->Mode == SCS)
-				Read = ReadCOMBlock(TNC->hDevice, &TNC->RXBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr);
+				Read = ReadCOMBlock(TNC->hDevice, &TNC->TOUSERBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr);
 			else
 				Read = ReadCOMBlock(TNC->hDevice, rxbuffer, 1000);
 #endif
@@ -1883,12 +1885,12 @@ VOID TNCPoll()
 				else if (TNC->Mode == KANTRONICS)
 				{
 					TNC->RXBPtr += Read;
-					ProcessPacket(TNC, TNC->RXBUFFER, TNC->RXBPtr);
+					ProcessPacket(TNC, TNC->TOUSERBUFFER, TNC->RXBPtr);
 				}
 				else if (TNC->Mode == SCS)
 				{
 					TNC->RXBPtr += Read;
-					ProcessSCSPacket(TNC, TNC->RXBUFFER, TNC->RXBPtr);
+					ProcessSCSPacket(TNC, TNC->TOUSERBUFFER, TNC->RXBPtr);
 				}
 			}
 
@@ -2126,7 +2128,7 @@ VOID SETCOMM00(struct TNCDATA * TNC)
 
 	SENDREPLY(TNC, CMDMSG, 4);
 
-	TNC->CURSOR = &TNC->TXBUFFER[0]; // RESET MESSAGE START
+	TNC->CURSOR = &TNC->TONODEBUFFER[0]; // RESET MESSAGE START
 	TNC->MSGLEN = 0;
 }
 
@@ -2141,7 +2143,7 @@ VOID SENDPACKET(struct TNCDATA * TNC)
 	if (TNC->MODEFLAG & COMMAND) 
 	{
 		TNCCOMMAND(TNC);				// COMMAND TO TNC
-		TNC->CURSOR = &TNC->TXBUFFER[0];		// RESET MESSAGE START		
+		TNC->CURSOR = &TNC->TONODEBUFFER[0];		// RESET MESSAGE START		
 		TNC->MSGLEN = 0;
 		return;
 	}
@@ -2153,9 +2155,9 @@ VOID SENDPACKET(struct TNCDATA * TNC)
 	if (TNC->VMSR & 0x80)				// CONNECTED?
 		Stream = TNC->BPQPort;
 
-	SendMsg(Stream, TNC->TXBUFFER, TNC->MSGLEN);
+	SendMsg(Stream, TNC->TONODEBUFFER, TNC->MSGLEN);
 	
-	TNC->CURSOR = &TNC->TXBUFFER[0];		// RESET MESSAGE START		
+	TNC->CURSOR = &TNC->TONODEBUFFER[0];		// RESET MESSAGE START		
 	TNC->MSGLEN = 0;
 
 	CHECKCTS(TNC);						// SEE IF NOW BUSY
@@ -2178,10 +2180,10 @@ VOID TNCCOMMAND(struct TNCDATA * TNC)
 
 	*(--TNC->CURSOR) = 0;
 
-	_strupr(TNC->TXBUFFER);
-	strcat(TNC->TXBUFFER, "         "); 
+	_strupr(TNC->TONODEBUFFER);
+	strcat(TNC->TONODEBUFFER, "         "); 
 
-	ptr1 = &TNC->TXBUFFER[0];		//
+	ptr1 = &TNC->TONODEBUFFER[0];		//
 
 	n = 10;
 	
@@ -2513,8 +2515,8 @@ VOID PUTCHARINBUFFER(struct TNCDATA * TNC, int Char)
 	*(TNC->PUTPTR++) = Char;
 	TNC->RXCOUNT++;
 
-	if (TNC->PUTPTR == &TNC->RXBUFFER[TNCBUFFLEN])
-		TNC->PUTPTR = &TNC->RXBUFFER[0];
+	if (TNC->PUTPTR == &TNC->TOUSERBUFFER[TNCBUFFLEN])
+		TNC->PUTPTR = &TNC->TOUSERBUFFER[0];
 
 	if(TNC->RXCOUNT > TNCBUFFLEN-300)	// ALLOW FOR FULL PACKET
 	{			
@@ -2695,8 +2697,8 @@ VOID PUTSTRING(struct TNCDATA * conn, UCHAR * Msg)
 	{
 		*(conn->PUTPTR++) = *(Msg++);
 
-		if (conn->PUTPTR == &conn->RXBUFFER[TNCBUFFLEN])
-			conn->PUTPTR = (UCHAR *)&conn->RXBUFFER;
+		if (conn->PUTPTR == &conn->TOUSERBUFFER[TNCBUFFLEN])
+			conn->PUTPTR = (UCHAR *)&conn->TOUSERBUFFER;
 
 		conn->RXCOUNT++;
 
@@ -2709,8 +2711,8 @@ int PUTCHARx(struct TNCDATA * conn, UCHAR c)
 {
 	*(conn->PUTPTR++) = c;
 
-	if (conn->PUTPTR == &conn->RXBUFFER[TNCBUFFLEN])
-		conn->PUTPTR = (UCHAR *)&conn->RXBUFFER;
+	if (conn->PUTPTR == &conn->TOUSERBUFFER[TNCBUFFLEN])
+		conn->PUTPTR = (UCHAR *)&conn->TOUSERBUFFER;
 
 	conn->RXCOUNT++;
 	
@@ -2810,26 +2812,26 @@ CHARMODE:
 	{
 		//	CANCEL INPUT
  
-		TNC->CURSOR = (UCHAR *)&TNC->TXBUFFER;
+		TNC->CURSOR = (UCHAR *)&TNC->TONODEBUFFER;
 		
 		return(TRUE);
 	}
 
 	*(TNC->CURSOR++) = character;
 
-	if (character == 1 && (TNC->CURSOR > &TNC->TXBUFFER[4]) && *(TNC->CURSOR - 2) == 1 && *(TNC->CURSOR - 3) == 1)
+	if (character == 1 && (TNC->CURSOR > &TNC->TONODEBUFFER[4]) && *(TNC->CURSOR - 2) == 1 && *(TNC->CURSOR - 3) == 1)
 	{
 		// Looks like a resync request - Appl thinks we are in host mode
 
 		TNC->MODE = 1;
-		TNC->CURSOR = (UCHAR *)&TNC->TXBUFFER;
+		TNC->CURSOR = (UCHAR *)&TNC->TONODEBUFFER;
 		EnableAppl(TNC);
 		
 		return(TRUE);
 	}
 
 
-	if (TNC->CURSOR == &TNC->TXBUFFER[300])
+	if (TNC->CURSOR == &TNC->TONODEBUFFER[300])
 		TNC->CURSOR--;
 
 	if (character == 0x0d)
@@ -2899,7 +2901,7 @@ NOTDATA:
 	if (TNC->DEDTXBUFFER[0] == 1)
 		goto DUFFHOSTCMD;
 
-//	sprintf(msg,"DED CMD: Port %d  CMD %c MSGCHANNEL %d\n", TNC->ComPort, TNC->TXBUFFER[0], MSGCHANNEL);
+//	sprintf(msg,"DED CMD: Port %d  CMD %c MSGCHANNEL %d\n", TNC->ComPort, TNC->TONODEBUFFER[0], MSGCHANNEL);
 //	OutputDebugString(msg);
 
 	if (_memicmp(TNC->DEDTXBUFFER, "QRES", 4 == 0))
@@ -3369,8 +3371,8 @@ YCMD:
 
 				TNC->RXCOUNT--;
 
-				if (TNC->PUTPTR == &TNC->RXBUFFER[TNCBUFFLEN])
-					TNC->PUTPTR = (UCHAR *)&TNC->RXBUFFER;
+				if (TNC->PUTPTR == &TNC->TOUSERBUFFER[TNCBUFFLEN])
+					TNC->PUTPTR = (UCHAR *)&TNC->TOUSERBUFFER;
 
 				if (Len > 900) 
 				{
@@ -3413,7 +3415,7 @@ int PROCESSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel)
 
 //	HE'S BEING AWKWARD, AND USING SPECIFIC DATA/STATUS POLL
 
-	 if (TNC->TXBUFFER[1] == '0')
+	 if (TNC->TONODEBUFFER[1] == '0')
 		goto DATAONLY;
 
 	 STATUSPOLL(TNC, Channel);
@@ -4291,14 +4293,14 @@ int DOCOMMAND(struct TNCDATA * conn)
 
 //	PROCESS NORMAL MODE COMMAND
 
-	sprintf(Errbuff, "BPQHOST Port %d Normal Mode CMD %s\n",conn->ComPort, conn->TXBUFFER);  
+	sprintf(Errbuff, "BPQHOST Port %d Normal Mode CMD %s\n",conn->ComPort, conn->TONODEBUFFER);  
 	OutputDebugString(Errbuff);
  
 //	IF ECHO ENABLED, ECHO IT
 
 	if (conn->ECHOFLAG)
 	{
-		UCHAR * ptr = conn->TXBUFFER;
+		UCHAR * ptr = conn->TONODEBUFFER;
 		UCHAR c;
 
 		do 
@@ -4312,17 +4314,17 @@ int DOCOMMAND(struct TNCDATA * conn)
 		} while (c != 13);
 	}
 
-	if (conn->TXBUFFER[0] != 0x1b)
+	if (conn->TONODEBUFFER[0] != 0x1b)
 		goto NOTCOMMAND;		// DATA IN NORMAL MODE - IGNORE
 
-	switch (toupper(conn->TXBUFFER[1]))
+	switch (toupper(conn->TONODEBUFFER[1]))
 	{	
 	case 'J':
 
-		if (conn->TXBUFFER[6] == 0x0d)
+		if (conn->TONODEBUFFER[6] == 0x0d)
 			conn->MODE = 0;
 		else
-			conn->MODE = conn->TXBUFFER[6] & 1;
+			conn->MODE = conn->TONODEBUFFER[6] & 1;
 
 		if (conn->MODE)
 			EnableAppl(conn);
@@ -4336,7 +4338,7 @@ int DOCOMMAND(struct TNCDATA * conn)
 //			PUTCHARx(conn, 0);
 //			PUTCHARx(conn, 0);
 
-			conn->CURSOR = (UCHAR *)&conn->TXBUFFER;
+			conn->CURSOR = (UCHAR *)&conn->TONODEBUFFER;
 			return 0;
 		}
 
@@ -4344,14 +4346,14 @@ int DOCOMMAND(struct TNCDATA * conn)
 
 	case 'E':
 
-		conn->ECHOFLAG = conn->TXBUFFER[2] & 1;
+		conn->ECHOFLAG = conn->TONODEBUFFER[2] & 1;
 		break;
 
 	case 'I':
 	{
 		// Save call 
 
-		char * Call = &conn->TXBUFFER[2];
+		char * Call = &conn->TONODEBUFFER[2];
 		
 		*(conn->CURSOR - 2) = 0;
 
@@ -4366,7 +4368,7 @@ int DOCOMMAND(struct TNCDATA * conn)
 
 //	PARAMS COMMAND - RETURN FIXED STRING
 
-		PARAMPORT = conn->TXBUFFER[2];
+		PARAMPORT = conn->TONODEBUFFER[2];
 
 		for (i=0; i < LPARAMREPLY; i++)
 		{
@@ -4396,7 +4398,7 @@ int DOCOMMAND(struct TNCDATA * conn)
 
 NOTCOMMAND:
 
-	conn->CURSOR = (UCHAR *)&conn->TXBUFFER;
+	conn->CURSOR = (UCHAR *)&conn->TONODEBUFFER;
 
 	return 0;
 
@@ -4618,7 +4620,7 @@ VOID ProcessPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 		// We have a partial Packet - Save it
 
 		conn->RXBPtr = Len;
-		memcpy(&conn->RXBUFFER[0], rxbuffer, Len);
+		memcpy(&conn->TOUSERBUFFER[0], rxbuffer, Len);
 		return;
 	}
 		
@@ -5166,7 +5168,7 @@ UCHAR SCSReply[400];
 int ReplyLen;
 
 
-BOOL CheckStatusChange(struct TNCDATA * conn, int Channel, int BPQStream)
+BOOL CheckStatusChange(struct TNCDATA * conn,  struct StreamInfo * Channel, int HostStream, int BPQStream)
 {
 	int state, change;
 	
@@ -5178,30 +5180,34 @@ BOOL CheckStatusChange(struct TNCDATA * conn, int Channel, int BPQStream)
 		{
 			// Connected
 
-			GetCallsign(BPQStream, CONCALL);
+			char ConnectedCall[16];
 
-			SCSReply[2] = Channel;
+			if (Channel->OutgoingCall[0])
+				strcpy(ConnectedCall, Channel->OutgoingCall);
+			else
+				GetCallsign(BPQStream, ConnectedCall);
+
+			SCSReply[2] = HostStream;
 			SCSReply[3] = 3;
-			ReplyLen  = sprintf(&SCSReply[4], "(%d) CONNECTED to %s", Channel, CONCALL);
+			ReplyLen  = sprintf(&SCSReply[4], "(%d) CONNECTED to %s", Channel, ConnectedCall);
 			ReplyLen += 5;
 			EmCRCStuffAndSend(conn, SCSReply, ReplyLen);
 
+			Channel->Connected = TRUE;
 			return TRUE;
 		}
 		// Disconnected
 		
-		SCSReply[2] = Channel;
+		SCSReply[2] = HostStream;
 		SCSReply[3] = 3;
 		ReplyLen  = sprintf(&SCSReply[4], "(%d) DISCONNECTED fm G8BPQ", Channel);
 		ReplyLen += 5;		// Include Null
 		EmCRCStuffAndSend(conn, SCSReply, ReplyLen);
 
+		Channel->Connected = FALSE;
 		return TRUE;
-
 	}
-
 	return FALSE;
-
 }
 
 BOOL CheckForData(struct TNCDATA * conn,  struct StreamInfo * Channel, int HostStream, int BPQStream)
@@ -5305,14 +5311,29 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 	{
 		// Extended Status Poll
 
+		//TNC->Streams[0].PTCStatus0 = Status;
+		//	TNC->Streams[0].PTCStatus1 = PactorLevel;		// Pactor Level 1-4
+		//	TNC->Streams[0].PTCStatus2 = Msg[7];			// Speed Level
+		//	Offset = Msg[8];
+
 		SCSReply[2] = 254;
 		SCSReply[3] = 7;		// Status
 		SCSReply[4] = 3;		// Len -1
-		SCSReply[5] = 0;
-		SCSReply[6] = 0;
-		SCSReply[7] = 0;
-		SCSReply[8] = 0;
 
+		if (conn->Channels[0]->Connected)
+		{
+			SCSReply[5] = 0x0AA;
+			SCSReply[6] = 3;
+			SCSReply[7] = 5;
+			SCSReply[8] = 128;
+		}
+		else
+		{
+			SCSReply[5] = 0;
+			SCSReply[6] = 0;
+			SCSReply[7] = 0;
+			SCSReply[8] = 0;
+		}
 		ReplyLen = 9;
 		EmCRCStuffAndSend(conn, SCSReply, 9);
 		return;
@@ -5339,7 +5360,7 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 
 	case 'G':				// Specific Poll
 
-		if (CheckStatusChange(conn, Channel, channel->BPQStream))
+		if (CheckStatusChange(conn, channel, Channel, channel->BPQStream))
 			return;						// It has sent reply
 
 		if (CheckForData(conn, channel, Channel, channel->BPQStream))
@@ -5366,10 +5387,18 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 		}
 		Buffer[Length - 2] = 0;
 
-		if (Buffer[5] = '%'	)			// Pacotr long path?
+		// Save call for connected report
+
+		if (Buffer[5] = '%'	)			// Pactor long path?
+		{
 			TXLen = sprintf(TXBuff, "C %s\r", &Buffer[6]);
+			strcpy(channel->OutgoingCall, &Buffer[6]);
+		}
 		else
+		{
 			TXLen = sprintf(TXBuff, "C %s\r", &Buffer[5]);
+			strcpy(channel->OutgoingCall, &Buffer[5]);
+		}
 
 		BPQStream = channel->BPQStream;
 		MYCall = &channel->MYCall[0];
@@ -5451,6 +5480,8 @@ VOID ProcessSCSTextCommand(struct TNCDATA * conn, char * Command, int Len)
 
 	if (Len == 1)
 		goto SendPrompt;		// Just a CR
+
+	Debugprintf("%s", Command);
 
 	if (_memicmp(Command, "JHOST4", 6) == 0)
 	{
@@ -5580,20 +5611,33 @@ Loop:
 
 		if (conn->MODE)
 		{
-			conn->RXBPtr = 0;
+			conn->FROMUSERLEN = 0;
 			return;
 		}
 
 		rxbuffer[Length] = 0;
 
+		if (rxbuffer[0] == 0)
+		{
+			// Just ignore
+
+			conn->FROMUSERLEN--;
+			if (conn->FROMUSERLEN)
+			{
+				memmove(rxbuffer, rxbuffer+1, conn->FROMUSERLEN + 1);
+				Length--;
+				goto Loop;
+			}
+			return;
+		}
 		if (rxbuffer[0] == 0x1b)
 		{
 			// Just ignore (I think!)
 
-			conn->RXBPtr--;
-			if (conn->RXBPtr)
+			conn->FROMUSERLEN--;
+			if (conn->FROMUSERLEN)
 			{
-				memmove(rxbuffer, rxbuffer+1, conn->RXBPtr + 1);
+				memmove(rxbuffer, rxbuffer+1, conn->FROMUSERLEN + 1);
 				Length--;
 				goto Loop;
 			}
@@ -5604,10 +5648,10 @@ Loop:
 		{
 			// Status POLL
 
-			conn->RXBPtr--;
-			if (conn->RXBPtr)
+			conn->FROMUSERLEN--;
+			if (conn->FROMUSERLEN)
 			{
-				memmove(rxbuffer, rxbuffer+1, conn->RXBPtr + 1);
+				memmove(rxbuffer, rxbuffer+1, conn->FROMUSERLEN + 1);
 				Length--;
 				goto Loop;
 			}
@@ -5649,18 +5693,19 @@ Loop:
 
 		// Complete Char Mode Frame
 
-		conn->RXBPtr -= cmdlen;		// Ready for next frame
+		conn->FROMUSERLEN -= cmdlen;		// Ready for next frame
 					
 		ProcessSCSTextCommand(conn, rxbuffer, cmdlen);
 
-		if (conn->RXBPtr)
+		if (conn->FROMUSERLEN)
 		{
-			memmove(rxbuffer, ptr, conn->RXBPtr + 1);
+			memmove(rxbuffer, ptr, conn->FROMUSERLEN + 1);
+
 			if (conn->Mode)
 			{
 				// now in host mode, so pass rest up a level
 				
-				ProcessSCSPacket(conn, conn->RXBUFFER, conn->RXBPtr);
+				ProcessSCSPacket(conn, conn->FROMUSERBUFFER, conn->FROMUSERLEN);
 				return;
 			}
 			goto Loop;
@@ -5690,14 +5735,14 @@ Loop:
 	{
 		// Unstuff returned an errors (170 not followed by 0)
 
-		conn->RXBPtr = 0;
+		conn->FROMUSERLEN = 0;
 		return;				// Ignore for now
 	}
 	crc = compute_crc(&UnstuffBuffer[2], Length);
 
 	if (crc == 0xf0b8)		// Good CRC
 	{
-		conn->RXBPtr = 0;		// Ready for next frame
+		conn->FROMUSERLEN = 0;		// Ready for next frame
 		ProcessSCSHostFrame(conn, &UnstuffBuffer[2], Length);
 		return;
 	}

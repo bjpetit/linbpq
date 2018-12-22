@@ -479,7 +479,6 @@ struct ConsoleInfo
 	HWND hwndInput;
 	HWND hwndOutput;
 	HMENU hMenu;		// handle of menu 
-	RECT ConsoleRect;
 	RECT OutputRect;
 
 	int Height, Width, LastY;
@@ -493,15 +492,6 @@ struct ConsoleInfo
 	char * KbdStack[MAXSTACK];
 
 	int StackIndex;
-
-	BOOL Bells;
-	BOOL FlashOnBell;		// Flash instead of Beep
-	BOOL StripLF;
-
-	BOOL WarnWrap;
-	BOOL FlashOnConnect;
-	BOOL WrapInput;
-	BOOL CloseWindowOnBye;
 
 	unsigned int WrapLen;
 	int WarnLen;
@@ -747,7 +737,7 @@ extern RECT MonitorRect;
 extern RECT DebugRect;
 extern HWND hMonitor;
 //extern HWND hConsole;
-//extern RECT ConsoleRect;
+extern RECT ConsoleRect;
 
 extern BOOL DeletetoRecycleBin;
 extern BOOL SuppressMaintEmail;

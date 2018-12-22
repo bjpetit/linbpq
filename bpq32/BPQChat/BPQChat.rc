@@ -147,7 +147,7 @@ BEGIN
     LTEXT           "Nodes to link to",IDC_STATIC,159,106,53,8
     EDITTEXT        ID_CHATNODES,142,119,87,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL
-    DEFPUSHBUTTON   "Save Nodes",SAVENODES,160,183,50,14,BS_CENTER | 
+    DEFPUSHBUTTON   "Save",SAVENODES,160,183,50,14,BS_CENTER | 
                     BS_VCENTER
     LTEXT           "The Application Number defines which BPQ32 Application gives access to the Chat Server. Note this is the APPLNumber (1-32) not an Application Mask, as uses in many BPQ32 programs.",
                     IDC_STATIC,10,10,353,18

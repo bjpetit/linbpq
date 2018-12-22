@@ -1738,7 +1738,12 @@ int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 	if (PORT->hDevice == 0)
 		return (FALSE);
 
-	if (PORT->PortType != PTT)
+	if (PORT->PortType == PTT)
+	{
+		COMClearRTS(PORT->hDevice);
+		COMClearDTR(PORT->hDevice);
+	}
+	else
 	{
 		COMSetRTS(PORT->hDevice);
 		COMSetDTR(PORT->hDevice);

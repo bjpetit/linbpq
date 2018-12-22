@@ -76,6 +76,16 @@ int ChatIsUTF8(unsigned char *ptr, int len);
 
 #define BGCOLOUR RGB(236,233,216)
 
+extern int Bells, FlashOnBell, StripLF, WarnWrap, WrapInput, FlashOnConnect, CloseWindowOnBye;
+
+char Version[32];
+char ConsoleSize[32];
+char MonitorSize[32];
+char DebugSize[32];
+char WindowSize[32];
+
+RECT ConsoleRect;
+
 
 HMENU trayMenu = 0;
 
@@ -110,18 +120,6 @@ BOOL CreateConsole(int Stream)
 
 	Cinfo->BPQStream = Stream;
 
-	GetStringValue("ConsoleSize", Size, 80);	
-
-		Cinfo->Bells = GetIntValue("Bells", 0);
-		Cinfo->FlashOnBell = GetIntValue("FlashOnBell", 0);	
-		Cinfo->CloseWindowOnBye = GetIntValue("CloseWindowOnBye", 0);	
-		Cinfo->WarnWrap = GetIntValue("WarnWrap", 0);	
-		Cinfo->WrapInput = GetIntValue("WrapInput", 0);	
-		Cinfo->FlashOnConnect = GetIntValue("FlashOnConnect", 0);	
-
-		sscanf(Size,"%d,%d,%d,%d", &Cinfo->ConsoleRect.left, &Cinfo->ConsoleRect.right,
-			&Cinfo->ConsoleRect.top, &Cinfo->ConsoleRect.bottom);
-
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
     wc.style = CS_HREDRAW | CS_VREDRAW; 
@@ -153,13 +151,13 @@ BOOL CreateConsole(int Stream)
 	hMenu=GetMenu(hConsole);
 	Cinfo->hMenu = hMenu;
 
-	CheckMenuItem(hMenu,BPQBELLS, (Cinfo->Bells) ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(hMenu,BPQFLASHONBELL, (Cinfo->FlashOnBell) ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(hMenu,BPQStripLF, (Cinfo->StripLF) ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(hMenu,IDM_WARNINPUT, (Cinfo->WarnWrap) ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(hMenu,IDM_WRAPTEXT, (Cinfo->WrapInput) ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(hMenu,IDM_Flash, (Cinfo->FlashOnConnect) ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(hMenu,IDM_CLOSEWINDOW, (Cinfo->CloseWindowOnBye) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,BPQBELLS, (Bells) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,BPQFLASHONBELL, (FlashOnBell) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,BPQStripLF, (StripLF) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_WARNINPUT, (WarnWrap) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_WRAPTEXT, (WrapInput) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_Flash, (FlashOnConnect) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_CLOSEWINDOW, (CloseWindowOnBye) ? MF_CHECKED : MF_UNCHECKED);
 
 	DrawMenuBar(hWnd);	
 
@@ -228,14 +226,14 @@ BOOL CreateConsole(int Stream)
 
 	ShowWindow(hConsole, SW_SHOWNORMAL);
 
-	if (Cinfo->ConsoleRect.right < 100 || Cinfo->ConsoleRect.bottom < 100)
+	if (ConsoleRect.right < 100 || ConsoleRect.bottom < 100)
 	{
-		GetWindowRect(hConsole,	&Cinfo->ConsoleRect);
+		GetWindowRect(hConsole,	&ConsoleRect);
 	}
 
-	MoveWindow(hConsole, Cinfo->ConsoleRect.left, Cinfo->ConsoleRect.top, 
-		Cinfo->ConsoleRect.right-Cinfo->ConsoleRect.left,
-		Cinfo->ConsoleRect.bottom-Cinfo->ConsoleRect.top, TRUE);
+	MoveWindow(hConsole, ConsoleRect.left, ConsoleRect.top, 
+		ConsoleRect.right-ConsoleRect.left,
+		ConsoleRect.bottom-ConsoleRect.top, TRUE);
 
 	Cinfo->hConsole = hConsole;
 
@@ -318,20 +316,11 @@ VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 	}
 
 
-	if (Cinfo->CloseWindowOnBye)
+	if (CloseWindowOnBye)
 	{
 //		PostMessage(hConsole, WM_DESTROY, 0, 0);
 		DestroyWindow(Cinfo->hConsole);
 	}
-
-	SaveIntValue("Bells",Cinfo->Bells);
-	SaveIntValue("FlashOnBell",Cinfo->FlashOnBell);
-	SaveIntValue("StripLF",Cinfo->StripLF);
-	SaveIntValue("WarnWrap",Cinfo->WarnWrap);
-	SaveIntValue("WrapInput",Cinfo->WrapInput);
-	SaveIntValue("FlashOnConnect",Cinfo->FlashOnConnect);
-	SaveIntValue("CloseWindowOnBye",Cinfo->CloseWindowOnBye);
-
 }
 
 void MoveWindows(struct ConsoleInfo * Cinfo)
@@ -678,38 +667,38 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 		case BPQBELLS:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->Bells, BPQBELLS);
+			ToggleParam(Cinfo->hMenu, hWnd, &Bells, BPQBELLS);
 			break;
 
 		case BPQFLASHONBELL:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->FlashOnBell, BPQFLASHONBELL);
+			ToggleParam(Cinfo->hMenu, hWnd, &FlashOnBell, BPQFLASHONBELL);
 			break;
 
 		case BPQStripLF:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->StripLF, BPQStripLF);
+			ToggleParam(Cinfo->hMenu, hWnd, &StripLF, BPQStripLF);
 			break;
 
 		case IDM_WARNINPUT:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->WarnWrap, IDM_WARNINPUT);
+			ToggleParam(Cinfo->hMenu, hWnd, &WarnWrap, IDM_WARNINPUT);
 			break;
 
 
 		case IDM_WRAPTEXT:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->WrapInput, IDM_WRAPTEXT);
+			ToggleParam(Cinfo->hMenu, hWnd, &WrapInput, IDM_WRAPTEXT);
 			break;
 
 		case IDM_Flash:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->FlashOnConnect, IDM_Flash);
+			ToggleParam(Cinfo->hMenu, hWnd, &FlashOnConnect, IDM_Flash);
 			break;
 
 		case IDM_CLOSEWINDOW:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->CloseWindowOnBye, IDM_CLOSEWINDOW);
+			ToggleParam(Cinfo->hMenu, hWnd, &CloseWindowOnBye, IDM_CLOSEWINDOW);
 			break;
 
 		case BPQCLEAROUT:
@@ -794,7 +783,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		
 		// Remove the subclass from the edit control. 
 
-			GetWindowRect(hWnd,	&Cinfo->ConsoleRect);	// For save soutine
+			GetWindowRect(hWnd,	&ConsoleRect);	// For save soutine
 
             SetWindowLong(Cinfo->hwndInput, GWL_WNDPROC, 
                 (LONG) Cinfo->wpOrigInputProc); 
@@ -916,14 +905,14 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		if (TextLen > INPUTLEN-10) Beep(220, 150);
 		
-		if(Cinfo->WarnWrap || Cinfo->WrapInput)
+		if(WarnWrap || WrapInput)
 		{
 			TextLen = SendMessage(Cinfo->hwndInput,WM_GETTEXTLENGTH, 0, 0);
 
-			if (Cinfo->WarnWrap)
+			if (WarnWrap)
 				if (TextLen == Cinfo->WarnLen) Beep(220, 150);
 
-			if (Cinfo->WrapInput)
+			if (WrapInput)
 				if ((wParam == 0x20) && (TextLen > Cinfo->WrapLen))
 					wParam = 13;		// Replace space with Enter
 
@@ -1061,7 +1050,7 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, WCHAR * Msg, int len
 	ptr1=&Cinfo->readbuff[0];
 	Cinfo->readbuff[len]=0;
 
-	if (Cinfo->Bells)
+	if (Bells)
 	{
 		do {
 
@@ -1071,7 +1060,7 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, WCHAR * Msg, int len
 			{
 				*(ptr2)=32;
 
-				if (Cinfo->FlashOnBell)
+				if (FlashOnBell)
 					FlashWindow(Cinfo->hConsole, TRUE);
 				else
 					Beep(440,250);
@@ -1159,7 +1148,7 @@ lineloop:
 
 		ptr1=ptr2;
 
-		if ((len > 0) && Cinfo->StripLF)
+		if ((len > 0) && StripLF)
 		{
 			if (*ptr1 == 0x0a)					// Line Feed
 			{

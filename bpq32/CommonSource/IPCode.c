@@ -72,6 +72,7 @@ TODo	?Multiple Adapters
 */
 
 
+//int _winver = 0x0600;
 
 #pragma data_seg("_BPQDATA")
 
@@ -1716,7 +1717,7 @@ SendBack:
 
 			while (Arp->ARP_Q)
 			{
-				buffptr = Q_REM(&Arp->ARP_Q);
+				buffptr = Q_REM_NP(&Arp->ARP_Q);
 				IPptr = (PIPMSG)&buffptr->L2DATA[30];
 				RouteIPMsg(IPptr);
 				free(buffptr);

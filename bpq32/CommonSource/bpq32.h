@@ -62,16 +62,16 @@ int APIENTRY GetStreamPID(int Stream);
 
 // Returns Path of BPQDirectroy
 
-UCHAR * APIENTRY GetBPQDirectory();
-UCHAR * APIENTRY GetProgramDirectory();
-UCHAR * APIENTRY GetLogDirectory();
+char * APIENTRY GetBPQDirectory();
+char * APIENTRY GetProgramDirectory();
+char * APIENTRY GetLogDirectory();
 
 HKEY APIENTRY GetRegistryKey();
 char * APIENTRY GetRegistryKeyText();
 
-UCHAR * APIENTRY GetSignOnMsg();
+char * APIENTRY GetSignOnMsg();
 
-UCHAR * APIENTRY GetVersionString();
+char * APIENTRY GetVersionString();
 
 
 // Returns number of prcess attached to BPQ32

@@ -111,8 +111,8 @@ VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key);
 VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
 int rtlink (char * Call);
 UCHAR * APIENTRY GetBPQDirectory();
-VOID SaveChatConfig(char * ConfigName);
-BOOL GetChatConfig(char * ConfigName);
+VOID SaveChatConfigFile(char * Config);
+BOOL GetChatConfig(char * Config);
 char * GetTemplateFromFile(int Version, char * FN);
 
 static char UNC[] = "";
@@ -396,13 +396,9 @@ VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Rep
 			if (len < 256)
 					Send_MON_Datagram(Msg, len);
 
-		}
-
-				
-#ifdef LINBPQ
-		SaveChatConfig(ChatConfigName);
+		}		
+		SaveChatConfigFile(ChatConfigName);
 		GetChatConfig(ChatConfigName);
-#endif
 	}
 	
 	SendChatConfigPage(Reply, RLen, Key);

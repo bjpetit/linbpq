@@ -2679,7 +2679,10 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 	}
 
 	memset(HiddenPass, '*', strlen(User->CMSPass));
-	
+
+	if (!UserDetailTemplate)
+		UserDetailTemplate = GetTemplateFromFile(4, "UserDetail.txt");
+
 	Len = sprintf(Reply, UserDetailTemplate, Key, User->Call,
 		(flags & F_BBS)?CHKD:UNC,
 		(flags & F_EMAIL)?CHKD:UNC,

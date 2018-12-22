@@ -34,6 +34,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #endif
 #endif
 
+#include "time.h"
+
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
 #define ReturntoNode(stream) SessionControl(stream,3,0)
@@ -119,6 +121,7 @@ extern int NUMBEROFTNCPORTS;
 
 extern int EnableUI;
 
+extern FILE * LogHandle[4];
 
 #define MaxSockets 64
 
@@ -546,7 +549,7 @@ int main(int argc, char * argv[])
 	Debugprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
 
 #ifndef MACBPQ
-	_MYTIMEZONE = timezone;
+	_MYTIMEZONE = _timezone;
 #endif
 
 	if (_MYTIMEZONE < -86400 || _MYTIMEZONE > 86400)
@@ -673,7 +676,7 @@ int main(int argc, char * argv[])
 		if (stat(ChatConfigName, &STAT) == -1)
 		{
 			printf("Chat Config File not found - creating a default config\n");
-			SaveChatConfig(ChatConfigName);
+			SaveChatConfigFile(ChatConfigName);
 		}
 
 		if (GetChatConfig(ChatConfigName) == EXIT_FAILURE)
@@ -1265,6 +1268,14 @@ int main(int argc, char * argv[])
 	if (RunMail)
 		FreeWebMailMallocs();
 
+	// Close any open logs
+
+	for (i = 0; i < 4; i++)
+	{
+		if (LogHandle[i])
+			fclose(LogHandle[i]);
+	}
+
 	return 0;
 }
 
@@ -1283,26 +1294,26 @@ UINT SoundModemExtInit(EXTPORTDATA * PortEntry);
 UINT V4ExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 */
-UINT AEAExtInit(struct PORTCONTROL *  PortEntry);
-UINT MPSKExtInit(EXTPORTDATA * PortEntry);
-UINT HALExtInit(struct PORTCONTROL *  PortEntry);
+void * AEAExtInit(struct PORTCONTROL *  PortEntry);
+void * MPSKExtInit(EXTPORTDATA * PortEntry);
+void * HALExtInit(struct PORTCONTROL *  PortEntry);
 
-UINT AGWExtInit(struct PORTCONTROL *  PortEntry);
-UINT KAMExtInit(struct PORTCONTROL *  PortEntry);
-UINT WinmorExtInit(EXTPORTDATA * PortEntry);
-UINT SCSExtInit(struct PORTCONTROL *  PortEntry);
-UINT TrackerExtInit(EXTPORTDATA * PortEntry);
-UINT TrackerMExtInit(EXTPORTDATA * PortEntry);
+void * AGWExtInit(struct PORTCONTROL *  PortEntry);
+void * KAMExtInit(struct PORTCONTROL *  PortEntry);
+void * WinmorExtInit(EXTPORTDATA * PortEntry);
+void * SCSExtInit(struct PORTCONTROL *  PortEntry);
+void * TrackerExtInit(EXTPORTDATA * PortEntry);
+void * TrackerMExtInit(EXTPORTDATA * PortEntry);
 
-UINT TelnetExtInit(EXTPORTDATA * PortEntry);
-UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
-UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
-UINT ETHERExtInit(struct PORTCONTROL *  PortEntry);
-UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
-UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
-UINT VARAExtInit(EXTPORTDATA * PortEntry);
+void * TelnetExtInit(EXTPORTDATA * PortEntry);
+void * UZ7HOExtInit(EXTPORTDATA * PortEntry);
+void * FLDigiExtInit(EXTPORTDATA * PortEntry);
+void * ETHERExtInit(struct PORTCONTROL *  PortEntry);
+void * AXIPExtInit(struct PORTCONTROL *  PortEntry);
+void * ARDOPExtInit(EXTPORTDATA * PortEntry);
+void * VARAExtInit(EXTPORTDATA * PortEntry);
 
-UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
+void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
 	// Only works with built in drivers
 
@@ -1313,19 +1324,19 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	_strupr(Value);
 
 	if (strstr(Value, "BPQETHER"))
-		return (UINT) ETHERExtInit;
+		return ETHERExtInit;
 
 	if (strstr(Value, "BPQAXIP"))
-		return (UINT) AXIPExtInit;
+		return AXIPExtInit;
 
 	if (strstr(Value, "BPQTOAGW"))
-		return (UINT) AGWExtInit;
+		return AGWExtInit;
 
 	if (strstr(Value, "AEAPACTOR"))
-		return (UINT) AEAExtInit;
+		return AEAExtInit;
 
 	if (strstr(Value, "HALDRIVER"))
-		return (UINT) HALExtInit;
+		return HALExtInit;
 /*
 	if (strstr(Value, "BPQVKISS"))
 		return (UINT) VCOMExtInit;
@@ -1341,37 +1352,37 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 		return (UINT) BaycomExtInit;
 */
 	if (strstr(Value, "MULTIPSK"))
-		return (UINT) MPSKExtInit;
+		return MPSKExtInit;
 
 	if (strstr(Value, "KAMPACTOR"))
-		return (UINT) KAMExtInit;
+		return KAMExtInit;
 
 	if (strstr(Value, "WINMOR"))
-		return (UINT) WinmorExtInit;
+		return WinmorExtInit;
 
 	if (strstr(Value, "SCSPACTOR"))
-		return (UINT) SCSExtInit;
+		return SCSExtInit;
 
 	if (strstr(Value, "SCSTRACKER"))
-		return (UINT) TrackerExtInit;
+		return TrackerExtInit;
 
 	if (strstr(Value, "TRKMULTI"))
-		return (UINT) TrackerMExtInit;
+		return TrackerMExtInit;
 
 	if (strstr(Value, "UZ7HO"))
-		return (UINT) UZ7HOExtInit;
+		return UZ7HOExtInit;
 
 	if (strstr(Value, "FLDIGI"))
-		return (UINT) FLDigiExtInit;
+		return FLDigiExtInit;
 
 	if (strstr(Value, "TELNET"))
-		return (UINT) TelnetExtInit;
+		return TelnetExtInit;
 
 	if (strstr(Value, "ARDOP"))
-		return (UINT) ARDOPExtInit;
+		return ARDOPExtInit;
 
 	if (strstr(Value, "VARA"))
-		return (UINT) VARAExtInit;
+		return VARAExtInit;
 
 	return(0);
 }

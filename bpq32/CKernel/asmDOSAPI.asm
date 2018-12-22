@@ -21,7 +21,7 @@ ENDIF
 
 	PAGE    56,132
 ;
- 
+
 .386
 ;
 ;  SEGMENT definitions and order
@@ -128,5 +128,4 @@ _BPQHOSTAPI:
 	ret
 
 _TEXT	ENDS
-
 	END	

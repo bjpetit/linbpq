@@ -93,6 +93,8 @@ Next:
 
 	if (ReadLen == sizeof (WPRec))
 	{
+		_strupr(WPRec.callsign);
+
 		strlop(WPRec.callsign, ' ');
 		
 		if (strlen(WPRec.callsign) > 2)

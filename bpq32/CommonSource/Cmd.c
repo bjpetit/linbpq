@@ -5076,6 +5076,13 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 						return;
 					}
 
+					if (PORT->PORTIPADDR.s_addr || PORT->KISSSLAVE)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not a serial port\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
 					KISS = (struct KISSINFO *) PORT;
 
 					if (KISS->FIRSTPORT != KISS)
@@ -5134,6 +5141,13 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 					if (PORT->PORTTYPE != 0)
 					{
 						Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
+					if (PORT->PORTIPADDR.s_addr || PORT->KISSSLAVE)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not a serial port\r");
 						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 						return;
 					}

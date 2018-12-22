@@ -268,6 +268,7 @@ typedef struct ConnectionInfo_S
 	int MCastListenTime;				// Time to run session for
 
 	int YAPPLen;						// Bytes sent/received of YAPP Message
+	long YAPPDate;						// Date for received file - if set enables YAPPC
 	struct ConnectionInfo_S * SysopChatStream;			// Stream sysop is chatting to
 
 } ConnectionInfo, CIRCUIT;

@@ -442,6 +442,9 @@ HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port)
 	if (npKISSINFO == NULL)
 		return 0;
 
+	if (PortVector->PORTIPADDR.s_addr || PortVector->KISSSLAVE)
+		return 0;
+
 	if (PortVector->SerialPortName)
 		ComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE, 0);
 	else
@@ -530,8 +533,22 @@ VOID KISSCLOSE(struct PORTCONTROL * PortVector)
 	if (PortVector->PORTIPADDR.s_addr)
 		closesocket(Port->sock);
 	else
+	{
+		if (PortVector->KISSFLAGS & TRACKER)
+		{
+			// SCS Tracker - Send Enter KISS (CAN)(ESC)@K(CR)
+
+			struct KISSINFO * KISS = (struct KISSINFO *) PortVector;
+
+			ENCBUFF[0] = 192;
+			ENCBUFF[1] = 255;
+			ENCBUFF[2] = 192;
+			ASYSEND(PortVector, ENCBUFF, 3);
+			Sleep(20);
+		}
 		CloseCOMPort(Port->idComDev);
- 
+	}
+
 	free(Port);
 	KISSInfo[PortVector->PORTNUMBER] = NULL;
 
@@ -546,11 +563,11 @@ VOID CloseKISSPort(struct PORTCONTROL * PortVector)
 	if (Port == NULL)
 		return;
 	
-	if (PortVector->PORTIPADDR.s_addr == 0)
-	{
-		CloseCOMPort(Port->idComDev);
-		Port->idComDev = 0;
-	}
+	if (PortVector->PORTIPADDR.s_addr || PortVector->KISSSLAVE)
+		return;
+
+	CloseCOMPort(Port->idComDev);
+	Port->idComDev = 0;
 }
 
 static void CheckReceivedData(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)

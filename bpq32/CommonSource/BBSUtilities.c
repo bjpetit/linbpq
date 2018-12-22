@@ -24,7 +24,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "BPQMail.h"
 #ifdef WIN32
 #include "Winspool.h"
+#else
+#include <sys/time.h>
 #endif
+
 
 BOOL Bells;
 BOOL FlashOnBell;		// Flash instead of Beep
@@ -71,13 +74,13 @@ VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Con
 VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID TidyPrompts();
 char * ReadMessageFileEx(struct MsgInfo * MsgRec);
-UCHAR * APIENTRY GetBPQDirectory();
+char * APIENTRY GetBPQDirectory();
 BOOL SendARQMail(CIRCUIT * conn);
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 int APIENTRY GetApplNum(int Stream);
 VOID FormatTime(char * Time, time_t cTime);
 BOOL CheckifPacket(char * Via);
-UCHAR * APIENTRY GetVersionString();
+char * APIENTRY GetVersionString();
 void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 int GetCMSHash(char * Challenge, char * Password);
@@ -91,6 +94,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn);
 void YAPPSendFile(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 void YAPPSendData(ConnectionInfo * conn);
 VOID CheckBBSNumber(int i);
+struct UserInfo * FindAMPR();
 
 
 config_t cfg;
@@ -297,7 +301,8 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 
 	GetSemaphore(&LogSEM, 0);
 
-	if (LogHandle[Flags] == NULL) OpenLogfile(Flags);
+	if (LogHandle[Flags] == NULL)
+		OpenLogfile(Flags);
 
 	if (LogHandle[Flags] == NULL) 
 	{
@@ -1323,6 +1328,45 @@ VOID * _zalloc(int len)
 	return ptr;
 }
 
+BOOL isAMPRMsg(char * Addr)
+{
+	// See if message is addressed to ampr.org and is either
+	// for us or we have SendAMPRDirect (ie don't need RMS or SMTP to send it)
+
+	int toLen = strlen(Addr);
+
+	if (_memicmp(&Addr[toLen - 8], "ampr.org", 8) == 0)
+	{
+		// message is for ampr.org
+
+		char toCall[48];
+		char * via;
+
+		strcpy(toCall, _strupr(Addr));
+
+		via = strlop(toCall, '@');
+
+		if (_stricmp(via, AMPRDomain) == 0)
+		{
+			// message is for us.
+			
+			return TRUE;
+		}
+		
+		if (SendAMPRDirect)
+		{
+			// We want to send ampr mail direct to host. Queue to BBS AMPR
+
+			if (FindAMPR())
+			{
+				// We have bbs AMPR
+				
+				return TRUE;
+			}
+		}
+	}
+	return FALSE;
+}
 
 struct UserInfo * FindAMPR()
 {
@@ -4126,6 +4170,8 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char *To, ch
 						sprintf(To, "rms:%s", ToCopy);
 					else if (ISP_Gateway_Enabled)
 						sprintf(To, "smtp:%s", ToCopy);
+					else if (isAMPRMsg(ToCopy))
+						sprintf(To, "rms:%s", ToCopy);
 
 				}
 			}
@@ -7510,7 +7556,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 			if (c == '-')
 				break;
 		
-			if (conn->UserPointer->flags & F_PMS)
+			if ((conn->UserPointer->ForwardingInfo == NULL) && (conn->UserPointer->flags & F_PMS))
 			{
 				// We need to allocate a forwarding structure
 
@@ -7609,6 +7655,22 @@ VOID BBSSlowTimer()
 			}
 		}
 	}
+
+	// Flush logs
+
+	for (n = 0; n < 4; n++)
+	{
+		if (LogHandle[n])
+		{
+			time_t LT = time(NULL);
+			if ((LT - LastLogTime[n]) > 60)
+			{
+				LastLogTime[n] = LT;
+				fclose(LogHandle[n]);
+				LogHandle[n] = NULL;
+			}
+		}
+	}
 }
 
 
@@ -7686,29 +7748,6 @@ VOID FWDTimerProc()
 		}
 	}
 }
-
-// R:090209/0128Z 33040@N4JOA.#WPBFL.FL.USA.NOAM [164113] FBB7.01.35 alpha
-
-
-char * DateAndTimeForHLine(time_t Datim)
-{
-	struct tm *newtime;
-    char * Time;
-	static char Date[]="yymmdd/hhmmZ";
-  
-	newtime = gmtime(&Datim);
-	Time = asctime(newtime);
-	Date[0]=Time[22];
-	Date[1]=Time[23];
-	Date[3]=Time[4];
-	Date[4]=Time[5];
-	Date[5]=Time[6];
-	
-	return Date;
-}
-
-
-
 
 VOID * _zalloc_dbg(int len, int type, char * file, int line)
 {
@@ -10954,13 +10993,13 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 	UCHAR * Msg = conn->InputBuffer;
 	int pktLen = Msg[1];
 	char Reply[2] = {ACK};
-	int NameLen;
+	int NameLen, SizeLen, OptLen;
+	char * ptr;
 	int FileSize;
 	char MsgFile[MAX_PATH];
 	FILE * hFile;
 	char Mess[255];
 	int len;
-
 
 	switch (Msg[0])
 	{
@@ -10983,11 +11022,25 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 
 	case SOH:
 
-		// HD Send_Hdr     SOH  len  (Filename)  NUL  (File Size in ASCII)  NUL (Opt)
+		// HD Send_Hdr     SOH  len  (Filename)  NUL  (File Size in ASCII)  NUL (Opt) 
+
+		// YAPPC has date/time in dos format
 
 		NameLen = strlen(&Msg[2]);
 		strcpy(conn->ARQFilename, &Msg[2]);
-		FileSize = atoi(&Msg[3 + NameLen]);
+		ptr = &Msg[3 + NameLen];
+		SizeLen = strlen(ptr);
+		FileSize = atoi(ptr);
+
+		OptLen = pktLen - (NameLen + SizeLen + 2);
+
+		conn->YAPPDate = 0;
+
+		if (OptLen >= 8)		// We have a Date/Time for YAPPC
+		{
+			ptr = ptr + SizeLen + 1;
+			conn->YAPPDate = strtol(ptr, NULL, 16);
+		}
 
 		// Check Size
 
@@ -11038,7 +11091,11 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 		conn->MailBuffer=malloc(FileSize);
 		conn->YAPPLen = 0;
 
-		Reply[1] = 2;		//Rcv_File
+		if (conn->YAPPDate)			// If present use YAPPC
+			Reply[1] = ACK;			//Receive_TPK
+		else
+			Reply[1] = 2;			//Rcv_File
+
 		QueueMsg(conn, Reply, 2);
 
 		len = sprintf_s(Mess, sizeof(Mess), "YAPP upload to %s started", conn->ARQFilename);
@@ -11058,6 +11115,36 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 
 		// Save data and remove from buffer
 
+		// if YAPPC check checksum
+
+		if (conn->YAPPDate)
+		{
+			UCHAR Sum = 0;
+			int i;
+			UCHAR * uptr = &Msg[2];
+
+			i = pktLen;
+
+			while(i--)
+				Sum += *(uptr++);
+
+			if (Sum != *uptr)
+			{
+				// Checksum Error
+
+				Mess[0] = CAN;
+				Mess[1] = 0;
+				QueueMsg(conn, Mess, 2);
+				Flush(conn);
+				len = sprintf_s(Mess, sizeof(Mess), "YAPPC Checksum Error\r");
+				QueueMsg(conn, Mess, len);
+				WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+				conn->InputLen = 0;
+				conn->InputMode = 0;
+				return TRUE;
+			}
+		}
+
 		if ((conn->YAPPLen) + pktLen > conn->MailBufferSize)
 		{
 			// Too Big ??
@@ -11074,8 +11161,12 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 			return TRUE;
 		}
 
+
 		memcpy(&conn->MailBuffer[conn->YAPPLen], &Msg[2], pktLen);
 		conn->YAPPLen += pktLen;
+
+		if (conn->YAPPDate)
+			++pktLen;				// Add Checksum
 
 		conn->InputLen -= (pktLen + 2);
 		memmove(conn->InputBuffer, &conn->InputBuffer[pktLen + 2], conn->InputLen);
@@ -11086,27 +11177,120 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 
 		// End Data
 
+
+
 		if (conn->YAPPLen == conn->MailBufferSize)
 		{
 			// All received
 
-			int WriteLen=0;
-	
+			int ret;
+			DWORD Written = 0;
+
 			sprintf_s(MsgFile, sizeof(MsgFile), "%s/Files/%s", BaseDir, conn->ARQFilename);
 	
-			hFile = fopen(MsgFile, "wb");
+#ifdef WIN32
+			hFile = CreateFile(MsgFile, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
+			if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
+			{	
+				ret = WriteFile(hFile, conn->MailBuffer, conn->YAPPLen, &Written, NULL);
+ 
+				if (conn->YAPPDate)
+				{
+					FILETIME FileTime;
+					struct tm TM;
+					struct timeval times[2];
+					time_t TT;
+/*			
+					The MS-DOS date. The date is a packed value with the following format.
+
+					cant use DosDateTimeToFileTime on Linux
+		
+					Bits	Description
+					0-4	Day of the month (1–31)
+					5-8	Month (1 = January, 2 = February, and so on)
+					9-15	Year offset from 1980 (add 1980 to get actual year)
+					wFatTime
+					The MS-DOS time. The time is a packed value with the following format.
+					Bits	Description
+					0-4	Second divided by 2
+					5-10	Minute (0–59)
+					11-15	Hour (0–23 on a 24-hour clock)
+*/
+					memset(&TM, 0, sizeof(TM));
+
+					TM.tm_sec = (conn->YAPPDate & 0x1f) << 1;
+					TM.tm_min = ((conn->YAPPDate >> 5) & 0x3f);
+					TM.tm_hour =  ((conn->YAPPDate >> 11) & 0x1f);
+
+					TM.tm_mday =  ((conn->YAPPDate >> 16) & 0x1f);
+					TM.tm_mon =  ((conn->YAPPDate >> 21) & 0xf) - 1;
+					TM.tm_year = ((conn->YAPPDate >> 25) & 0x7f) + 80;
+
+					Debugprintf("%d %d %d %d %d %d", TM.tm_year, TM.tm_mon, TM.tm_mday, TM.tm_hour, TM.tm_min, TM.tm_sec);
+
+					TT = mktime(&TM);
+					times[0].tv_sec = times[1].tv_sec = 
+					times[0].tv_usec = times[1].tv_usec = 0;
+
+					DosDateTimeToFileTime((WORD)(conn->YAPPDate >> 16), (WORD)conn->YAPPDate & 0xFFFF, &FileTime);
+					ret = SetFileTime(hFile, &FileTime, &FileTime, &FileTime);
+					ret = GetLastError();
+
+				}
+				CloseHandle(hFile);
+			}
+#else
+
+			hFile = fopen(MsgFile, "wb");
 			if (hFile)
 			{
-				WriteLen = fwrite(conn->MailBuffer, 1, conn->YAPPLen, hFile);
+				Written = fwrite(conn->MailBuffer, 1, conn->YAPPLen, hFile);
 				fclose(hFile);
+
+				if (conn->YAPPDate)
+				{
+					struct tm TM;
+					struct timeval times[2];
+/*			
+					The MS-DOS date. The date is a packed value with the following format.
+
+					cant use DosDateTimeToFileTime on Linux
+		
+					Bits	Description
+					0-4	Day of the month (1–31)
+					5-8	Month (1 = January, 2 = February, and so on)
+					9-15	Year offset from 1980 (add 1980 to get actual year)
+					wFatTime
+					The MS-DOS time. The time is a packed value with the following format.
+					Bits	Description
+					0-4	Second divided by 2
+					5-10	Minute (0–59)
+					11-15	Hour (0–23 on a 24-hour clock)
+*/
+					memset(&TM, 0, sizeof(TM));
+
+					TM.tm_sec = (conn->YAPPDate & 0x1f) << 1;
+					TM.tm_min = ((conn->YAPPDate >> 5) & 0x3f);
+					TM.tm_hour =  ((conn->YAPPDate >> 11) & 0x1f);
+
+					TM.tm_mday =  ((conn->YAPPDate >> 16) & 0x1f);
+					TM.tm_mon =  ((conn->YAPPDate >> 21) & 0xf) - 1;
+					TM.tm_year = ((conn->YAPPDate >> 25) & 0x7f) + 80;
+
+					Debugprintf("%d %d %d %d %d %d", TM.tm_year, TM.tm_mon, TM.tm_mday, TM.tm_hour, TM.tm_min, TM.tm_sec);
+
+					times[0].tv_sec = times[1].tv_sec = mktime(&TM);
+					times[0].tv_usec = times[1].tv_usec = 0;
+				}
 			}
+#endif
 
 			free(conn->MailBuffer);
 			conn->MailBufferSize=0;
 			conn->MailBuffer=0;
 
-			if (WriteLen != conn->YAPPLen)
+			if (Written != conn->YAPPLen)
 			{
 				Mess[0] = NAK;
 				Mess[1] = 0;
@@ -11181,6 +11365,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 		
 			strcpy(&Mess[2], conn->ARQFilename);
 			len += sprintf(&Mess[len], "%d", conn->MailBufferSize);
+			len++;					// include null
 			Mess[0] = SOH;
 			Mess[1] = len - 2;
 
@@ -11248,16 +11433,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 
 		}
 
-
-
-
-
-
-
-
-
-
-		}
+	}
 
 	conn->InputLen = 0;
 	return FALSE;

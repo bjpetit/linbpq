@@ -128,7 +128,7 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
+uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, void * arglist);
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
@@ -951,7 +951,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			ptr += datalen;
 			*ptr++ = '^';		// delimit fram ewith ^
 
-			ARDOPSendData(TNC, FECMsg, ptr - FECMsg);
+			ARDOPSendData(TNC, FECMsg, (int)(ptr - FECMsg));
 			TNC->FECPending = 1;
 		
 			ReleaseBuffer((UINT *)buffptr);
@@ -1825,7 +1825,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 }
 
 
-UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
+VOID * ARDOPExtInit(EXTPORTDATA * PortEntry)
 {
 	int i, port;
 	char Msg[255];
@@ -1856,7 +1856,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 		sprintf(Msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(Msg);
 
-		return (int) ExtProc;
+		return ExtProc;
 	}
 
 	TNC->Port = port;
@@ -2123,7 +2123,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 
 	time(&TNC->lasttime);			// Get initial time value
 
-	return ((int) ExtProc);
+	return ExtProc;
 }
 
 VOID TNCLost(struct TNCINFO * TNC)
@@ -2523,9 +2523,9 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 		timeout.tv_usec = 0;				// We should get messages more frequently that this
 
 		if (TNC->PacketSock)
-			ret = select(TNC->PacketSock + 1, &readfs, NULL, &errorfs, &timeout);
+			ret = select((int)TNC->PacketSock + 1, &readfs, NULL, &errorfs, &timeout);
 		else		
-			ret = select(TNC->TCPDataSock + 1, &readfs, NULL, &errorfs, &timeout);
+			ret = select((int)TNC->TCPDataSock + 1, &readfs, NULL, &errorfs, &timeout);
 
 		if (ret == SOCKET_ERROR)
 		{
@@ -2785,7 +2785,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
  		
 		*(ptr2) = 0; 
 
-		Len = ptr2 - Buffer;
+		Len = (int)(ptr2 - Buffer);
 
 		buffptr[1] = Len;
 		memcpy(buffptr + 2, Buffer, Len);
@@ -3089,7 +3089,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 						SendARDOPorPacketData(TNC, 0, data, txlen);
 					}
 					
-					SendARDOPorPacketData(TNC, 0, Msg, strlen(Msg));
+					SendARDOPorPacketData(TNC, 0, Msg, (int)strlen(Msg));
 					STREAM->NeedDisc = 100;	// 10 secs
 				}
 			}
@@ -3607,7 +3607,7 @@ loop:
 		// buffer contains more that 1 message
 
 
-		MsgLen = TNC->InputLen - (ptr2-ptr) + 1;	// Include CR 
+		MsgLen = TNC->InputLen - (int)(ptr2-ptr) + 1;	// Include CR 
 
 		memcpy(Buffer, TNC->ARDOPBuffer, MsgLen);
 
@@ -3689,7 +3689,7 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 	
 	if (TNC->FECMode)
 	{	
-		Length = strlen(Data);
+		Length = (int)strlen(Data);
 		if (Data[Length - 1] == 10)
 			Data[Length - 1] = 13;	
 
@@ -3757,7 +3757,7 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 							buffptr = GetBuff();
 							*(ptr3++) = 0;		// Terminate TO call
 		
-							APLen = TNC->ARDOPAPRSLen - (ptr3 - ptr1);
+							APLen = TNC->ARDOPAPRSLen - (int)(ptr3 - ptr1);
 											
 							TNC->ARDOPAPRSLen = 0;	
 
@@ -4310,7 +4310,7 @@ VOID ARDOPProcessTermModeResponse(struct TNCINFO * TNC)
 		if (ptr2 == 0)
 			break;
 
-		len = (ptr2 - ptr1) + 1;
+		len = (int)(ptr2 - ptr1) + 1;
 
 		memcpy(Poll, ptr1, len);
 
@@ -4457,7 +4457,7 @@ tcpHostFrame:
 	{
 		// Ardop Packet Data. Probably Buffer Status
 
-		int Len = strlen(&Msg[4]);
+		int Len = (int)strlen(&Msg[4]);
 
 		if (memcmp(&Msg[4], "Queued ", 7) == 0)
 		{
@@ -4472,7 +4472,7 @@ tcpHostFrame:
 	{
 		if (Msg[3] == 1)	// Null terminated response
 		{
-			int Len = strlen(&Msg[4]) + 1;					
+			int Len = (int)strlen(&Msg[4]) + 1;					
 			ARDOPProcessResponse(TNC, &Msg[4], Len);
 			return Len + 5;
 		}
@@ -4787,7 +4787,7 @@ tcpHostFrame:
 		*(ptr++) = 13;
 		*(ptr) = 0;
 
-		len = ptr - Buffer;
+		len = (int)(ptr - Buffer);
 
 		if (len > 256)
 			return 0;
@@ -4911,7 +4911,7 @@ tcpHostFrame:
 							ReleaseBuffer(buffptr);
 						}
 					
-						SendARDOPorPacketData(TNC, Stream, Msg, strlen(Msg));
+						SendARDOPorPacketData(TNC, Stream, Msg, (int)strlen(Msg));
 						STREAM->NeedDisc = 100;	// 10 secs
 					}
 				}
@@ -5821,7 +5821,7 @@ VOID ARAXTX(struct PORTCONTROL * PORT, UINT * Buffer)
 		{
 			// Queue frame to KISS Channel and get another buffer
 			// can take up to 256, but sometimes add 2 at a time
-			TXMsg[1] = TXPtr - (UCHAR *)&TXMsg[2];
+			TXMsg[1] = (int)(TXPtr - (UCHAR *)&TXMsg[2]);
 		}
 	}
 
@@ -5875,7 +5875,7 @@ VOID AddVirtualKISSPort(struct TNCINFO * TNC, int ARDOPPort, char * buf)
 	struct PORTCONTROL * PORT;
 	int pl = sizeof(struct PORTCONTROL);
 	int mh = MHENTRIES * sizeof(MHSTRUC);
-	int space = &DATAAREA[DATABYTES] - NEXTFREEDATA;
+	int space = (int)(&DATAAREA[DATABYTES] - NEXTFREEDATA);
 	char Msg[64];
 	unsigned char * ptr3;
 	unsigned int3;

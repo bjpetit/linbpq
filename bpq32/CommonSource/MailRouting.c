@@ -859,6 +859,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	struct Country * Country;
 	struct ALIAS * Alias;
 	struct UserInfo * RMS;
+	int toLen;
 
 	if (Msg->status == 'K')
 		return 1;				// No point,  but don't want no route warning
@@ -919,6 +920,69 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		}
 
 		strcpy(RouteElements, Msg->via);		// May have changed
+	}
+
+	// See if AMPR.ORG Mail
+
+	// Note message is probably already queued to SMTP or RMS
+
+	// If for our domain leave here
+
+	toLen = strlen(Msg->via);
+
+	if (_memicmp(&Msg->via[toLen - 8], "ampr.org", 8) == 0)
+	{
+		// message is for ampr.org
+
+		char toCall[48];
+		char * via;
+
+		strcpy(toCall, _strupr(Msg->via));
+
+		via = strlop(toCall, '@');
+
+		if (_stricmp(via, AMPRDomain) == 0)
+		{
+			// message is for us. Leave Here
+
+			if (strlen(toCall) > 6)
+				toCall[6] = 0;
+			
+			strcpy(Msg->to, toCall);
+			strcpy(Msg->via, via);
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace at %s is for us. Leave Here", AMPRDomain);
+			return 1;
+		}
+
+		if (SendAMPRDirect)
+		{
+			// We want to send ampr mail direct to host. Queue to BBS AMPR
+
+			bbs = FindAMPR();
+
+			if (bbs)
+			{
+				// We have bbs AMPR
+				
+				if (_stricmp(Msg->to, "RMS") == 0 || Msg->to[0] == 0)
+				{
+					// Was set to go via RMS or ISP - change it
+
+					strcpy(Msg->to, "AMPR");
+				}		
+
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace to ampr.org Matches BBS AMPR");
+			
+				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+				bbs->ForwardingInfo->MsgCount++;
+				if (bbs->ForwardingInfo->SendNew)
+					bbs->ForwardingInfo->FwdTimer = bbs->ForwardingInfo->FwdInterval;
+
+				return 1;
+			}
+
+			// To AMPR, but don't have a BBS called AMPR - dropthrough in case we are forwarding AMPR to another BBS
+		}
 	}
 
 //	See if sending @ winlink.org
@@ -1016,54 +1080,6 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		return 0;
 	}
 
-	// See if AMPR.ORG Mail
-
-	// If for our domain leave alone
-
-	if (AMPRDomain[0] && SendAMPRDirect && _stricmp(Msg->via, AMPRDomain) != 0)
-	{
-		int toLen = strlen(Msg->via);
-
-		if (_memicmp(&Msg->via[toLen - 8], "ampr.org", 8) == 0)
-		{
-			if (_stricmp(Msg->to, "AMPR") != 0)	// Already set up?
-			{
-		
-				// Put full name in VIA and AMPR in TO
-
-				char Full[80];
-
-				sprintf(Full, "%s@%s", Msg->to, Msg->via);
-
-				if (strlen(Full) > 40)
-					Full[40] = 0;
-
-				strcpy(Msg->via, Full);
-
-				strcpy(Msg->to, "AMPR");
-			}
-		}
-
-	
-		if (_stricmp(Msg->to, "AMPR") == 0)
-		{
-			bbs = FindAMPR();
-
-			if (bbs)
-			{
-				Logprintf(LOG_BBS, conn, '?', "Routing Trace to ampr.org Matches BBS AMPR");
-			
-				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-				bbs->ForwardingInfo->MsgCount++;
-				if (bbs->ForwardingInfo->SendNew)
-					bbs->ForwardingInfo->FwdTimer = bbs->ForwardingInfo->FwdInterval;
-
-				return 1;
-			}
-
-			// To AMPR, but don't have a BBS called AMPR - dropthrough in case we are forwarding AMPR to another BBS
-		}
-	}
 
 	// See if a well-known alias
 

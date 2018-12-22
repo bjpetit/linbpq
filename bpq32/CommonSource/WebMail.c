@@ -78,7 +78,7 @@ VOID ProcessAskResponse(struct HTTPConnectionInfo * Session, char * URLParams);
 char * CheckFile(struct HtmlFormDir * Dir, char * FN);
 VOID GetPage(struct HTTPConnectionInfo * Session, char * NodeURL);
 VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *URLParams, int InputLen);
-
+BOOL isAMPRMsg(char * Addr);
 
 extern char NodeTail[];
 extern char BBSName[10];
@@ -1353,7 +1353,10 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 			Key = Session->Key;
 
-			Session->User = LookupCall(BBSName);
+			if (SYSOPCall[0])
+				Session->User = LookupCall(SYSOPCall);
+			else
+				Session->User = LookupCall(BBSName);
 	
 			if (Session->User)
 			{
@@ -1366,7 +1369,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		{
 			//	Send Login Page unless Signon request
 
-			if (_stricmp(NodeURL, "/WebMail/Signon") != 0)
+			if (_stricmp(NodeURL, "/WebMail/Signon") != 0 || strcmp(Method, "POST") != 0)
 			{
 				ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
 				*RLen = ReplyLen;
@@ -1388,8 +1391,8 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 				if (strstr(msg, "Cancel=Cancel"))
 				{
-//					ReplyLen = SetupNodeMenu(Reply);
-//					return ReplyLen;
+					*RLen = sprintf(Reply, "<html><script>window.location.href = '/';</script>");
+					return;
 				}
 				// Webmail Gets Here with a dummy Session
 
@@ -1479,9 +1482,6 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		// End of POST section
 	}
 
-	Session->WebMail->Reply = Reply;
-	Session->WebMail->RLen = RLen;
-
 	if (_stricmp(NodeURL, "/WebMail/WMLogout") == 0)
 	{
 		Session->Key[0] = 0;
@@ -1512,8 +1512,11 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 				Key = Session->Key;
 
-				Session->User = LookupCall(BBSName);
-	
+				if (SYSOPCall[0])
+					Session->User = LookupCall(SYSOPCall);
+				else
+					Session->User = LookupCall(BBSName);
+
 				if (Session->User)
 				{
 					strcpy(NodeURL, "/WebMail/WebMail");
@@ -2069,7 +2072,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		
 	Msg->number = ++LatestMsg;
 	MsgnotoMsg[Msg->number] = Msg;
-
+ 
 	strcpy(Msg->from, Session->User->Call);
 
 	if (_memicmp(HDest, "rms:", 4) == 0 || _memicmp(HDest, "rms/", 4) == 0)
@@ -2105,6 +2108,8 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 					strcpy(Msg->to, "RMS");
 				else if (ISP_Gateway_Enabled)
 					Msg->to[0] = 0;
+				else if (isAMPRMsg(OrigTo))
+					strcpy(Msg->to, "RMS");		// Routing will redirect it
 				else
 				{		
 					*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow Sending to Internet Email\");window.close();</script></html>");
@@ -2113,13 +2118,18 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		
 				}
 			}
+			else
+				strcpy(Msg->to, _strupr(HDest));
 		}
 	}
-
 	else
-	{	
-		if (strlen(Msg->to) > 6)
-			Msg->to[6] = 0;
+	{
+		// No @
+
+		if (strlen(HDest) > 6)
+			HDest[6] = 0;
+		
+		strcpy(Msg->to, _strupr(HDest));
 	}
 
 	if (SendBBStoSYSOPCall)
@@ -3212,6 +3222,8 @@ VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, cha
 					strcpy(Msg->to, "RMS");
 				else if (ISP_Gateway_Enabled)
 					Msg->to[0] = 0;
+				else if (isAMPRMsg(OrigTo))
+					strcpy(Msg->to, "RMS");		// Routing will redirect it
 				else
 				{		
 					*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow Sending to Internet Email\");window.close();</script></html>");
@@ -3219,6 +3231,8 @@ VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, cha
 		
 				}
 			}
+			else
+				strcpy(Msg->to, _strupr(HDest));
 		}
 	}
 
@@ -3455,6 +3469,8 @@ VOID BuildMessageFromHTMLInput(struct HTTPConnectionInfo * Session, char * Reply
 					strcpy(Msg->to, "RMS");
 				else if (ISP_Gateway_Enabled)
 					Msg->to[0] = 0;
+				else if (isAMPRMsg(OrigTo))
+					strcpy(Msg->to, "RMS");		// Routing will redirect it
 				else
 				{		
 					*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow Sending to Internet Email\");window.close();</script></html>");

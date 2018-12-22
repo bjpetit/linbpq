@@ -855,7 +855,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 //	Fix validation of NODES broadcasts
 //  Fix HIDENODES
-//  Check for failure to reread ocnfig on axip reconfigure
+//  Check for failure to reread config on axip reconfigure
+//	Fix crash if STOPPORT or STARTPORT used on KISS over TCP port
+//	Send Beacons from BCALL or PORTCALL if configured
 
 #define CKernel
 
@@ -898,7 +900,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //#define	RAWTX			  10  //IE KISS TYPE DATA
 #define	GETRAWFRAME		  11
 #define	UPDATESWITCH	  12
-#define	BPQALLOC		  13
+#define	BPQALLOC		  13bpqether
 //#define	SENDNETFRAME	  14
 #define	GETTIME			  15
 
@@ -906,7 +908,7 @@ extern short NUMBEROFPORTS;
 extern long PORTENTRYLEN;
 extern long LINKTABLELEN;
 extern struct PORTCONTROL * PORTTABLE;
-extern UINT FREE_Q;
+extern void * FREE_Q;
 extern UINT APPL_Q;				// Queue of frames for APRS Appl
 
 extern TRANSPORTENTRY * L4TABLE;
@@ -1151,7 +1153,7 @@ HANDLE OpenConfigFile(char * file);
 VOID SetupBPQDirectory();
 VOID SendLocation();
 
-unsigned long _beginthread(void(*start_address)(), unsigned stack_size, int arglist);
+uintptr_t _beginthread(void(*start_address)(), unsigned stack_size, int arglist);
 
 #define TRAY_ICON_ID	      1		    //		ID number for the Notify Icon
 #define MY_TRAY_ICON_MESSAGE  WM_APP	//		the message ID sent to our window
@@ -1210,11 +1212,11 @@ BOOL BPQ32_EXE;					// Set if Process is running BPQ32.exe. Not initialised.
 
 DWORD Our_PID;					// Our Process ID - local variable
 
-InitDone = 0;
+void * InitDone = 0;
 int FirstInitDone = 0;
 int PerlReinit = 0;
-int TimerHandle = 0;
-int SessHandle = 0;
+UINT_PTR TimerHandle = 0;
+UINT_PTR SessHandle = 0;
 
 unsigned int TimerInst = 0xffffffff;
 
@@ -1366,7 +1368,7 @@ BOOL GetProcess(int ProcessID, char * Program)
 	{
 		  // if running on 98, program contains the full path - remove it
 
-		for (p=strlen(pe32.szExeFile); p>=0; p--)
+		for (p = (int)strlen(pe32.szExeFile); p >= 0; p--)
 		{
 			if (pe32.szExeFile[p]=='\\') 
 			{
@@ -1600,7 +1602,7 @@ VOID CALLBACK TimerProc(
 {
  	KillTimer(NULL,TimerHandle);
 	TimerProcX();
-	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
+	TimerHandle = SetTimer(NULL,0,100,lpTimerFunc);
 }
 VOID TimerProcX()
 {
@@ -1967,7 +1969,7 @@ Check_Timer()
 	if (Semaphore.Flag)
 		return 0;
 
-	if (InitDone == -1)
+	if (InitDone == (void *)-1)
 	{
 		GetSemaphore(&Semaphore, 3);
 		Sleep(15000);
@@ -2019,7 +2021,7 @@ Check_Timer()
 			SendMessage(hConsWnd, WM_PAINT, 0, 0);
 			SetForegroundWindow(hConsWnd);
 
-			InitDone = -1;
+			InitDone = (void *)-1;
 			FreeSemaphore(&Semaphore);
 
 			MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
@@ -2337,7 +2339,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				SendMessage(hConsWnd, WM_PAINT, 0, 0);
 				SetForegroundWindow(hConsWnd);
 
-				InitDone = -1;
+				InitDone = (void *)-1;
 				FreeSemaphore(&Semaphore);
 
 				MessageBox(NULL,"Configuration File Error\r\nProgram will close in 15 seconds","BPQ32",MB_ICONSTOP);
@@ -2360,7 +2362,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 				GetUIConfig();
 
-				InitDone=(int) &InitDone;
+				InitDone = &InitDone;
 				BPQMsg = RegisterWindowMessage(BPQWinMsg);
 //				TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 //				TimerInst=GetCurrentProcessId();
@@ -2416,7 +2418,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		}
 		else
 		{
-			if (InitDone != (int) &InitDone)
+			if (InitDone !=  &InitDone)
 			{
 				MessageBox(NULL,"BPQ32 DLL already loaded at another address","BPQ32",MB_ICONSTOP);
 				FreeSemaphore(&Semaphore);
@@ -2647,6 +2649,8 @@ DllExport int APIENTRY CloseBPQ32()
 					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);
 				}
 			}
+			PORTVEC->PORTCONTROL.PORTCLOSECODE(&PORTVEC->PORTCONTROL);
+
 			PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 		}
 
@@ -3340,7 +3344,7 @@ DllExport int APIENTRY BPQSetHandle(int Stream, HWND hWnd)
 
 BPQVECSTRUC * PORTVEC ;
 
-UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
+VOID * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
 	HINSTANCE ExtDriver=0;
 	char msg[128];
@@ -3366,69 +3370,69 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	_strupr(Value);
 
 	if (strstr(Value, "BPQVKISS"))
-		return (UINT) VCOMExtInit;
+		return VCOMExtInit;
 
 	if (strstr(Value, "BPQAXIP"))
-		return (UINT) AXIPExtInit;
+		return AXIPExtInit;
 
 	if (strstr(Value, "BPQETHER"))
-		return (UINT) ETHERExtInit;
+		return ETHERExtInit;
 
 	if (strstr(Value, "BPQTOAGW"))
-		return (UINT) AGWExtInit;
+		return AGWExtInit;
 
 	if (strstr(Value, "AEAPACTOR"))
-		return (UINT) AEAExtInit;
+		return AEAExtInit;
 
 	if (strstr(Value, "HALDRIVER"))
-		return (UINT) HALExtInit;
+		return HALExtInit;
 
 	if (strstr(Value, "KAMPACTOR"))
-		return (UINT) KAMExtInit;
+		return KAMExtInit;
 
 	if (strstr(Value, "SCSPACTOR"))
-		return (UINT) SCSExtInit;
+		return SCSExtInit;
 
 	if (strstr(Value, "WINMOR"))
-		return (UINT) WinmorExtInit;
+		return WinmorExtInit;
 	
 	if (strstr(Value, "V4"))
-		return (UINT) V4ExtInit;
+		return V4ExtInit;
 	
 	if (strstr(Value, "TELNET"))
-		return (UINT) TelnetExtInit;
+		return TelnetExtInit;
 
 	if (strstr(Value, "SOUNDMODEM"))
-		return (UINT) SoundModemExtInit;
+		return SoundModemExtInit;
 
 	if (strstr(Value, "SCSTRACKER"))
-		return (UINT) TrackerExtInit;
+		return TrackerExtInit;
 
 	if (strstr(Value, "TRKMULTI"))
-		return (UINT) TrackerMExtInit;
+		return TrackerMExtInit;
 
 	if (strstr(Value, "UZ7HO"))
-		return (UINT) UZ7HOExtInit;
+		return UZ7HOExtInit;
 
 	if (strstr(Value, "MULTIPSK"))
-		return (UINT) MPSKExtInit;
+		return MPSKExtInit;
 
 	if (strstr(Value, "FLDIGI"))
-		return (UINT) FLDigiExtInit;
+		return FLDigiExtInit;
 
 	if (strstr(Value, "UIARQ"))
-		return (UINT) UIARQExtInit;
+		return UIARQExtInit;
 
 //	if (strstr(Value, "BAYCOM"))
 //		return (UINT) BaycomExtInit;
 
 	if (strstr(Value, "VARA"))
-		return (UINT) VARAExtInit;
+		return VARAExtInit;
 
 	if (strstr(Value, "ARDOP"))
-		return (UINT) ARDOPExtInit;
+		return ARDOPExtInit;
 
-	ExtDriver=LoadLibrary(Value);
+	ExtDriver = LoadLibrary(Value);
 
 	if (ExtDriver == NULL)
 	{
@@ -3444,7 +3448,7 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	PORTVEC->DLLhandle=ExtDriver;
 
-	return (UINT)(GetProcAddress(ExtDriver,"_ExtInit@4"));
+	return (GetProcAddress(ExtDriver,"_ExtInit@4"));
 
 }
 
@@ -4757,7 +4761,7 @@ DllExport BOOL APIENTRY GetMinimizetoTrayFlag()
 		Sleep(1000);
 	}
 
-	if (InitDone == -1)			// Init failed
+	if (InitDone == (VOID *)-1)			// Init failed
 		exit(0);
 	
 	return MinimizetoTray;
@@ -5057,9 +5061,9 @@ DllExport VOID APIENTRY RelBuff(VOID * Msg)
 	
 	pointer = (UINT *)FREE_Q;
 
-	*BUFF=(UINT)pointer;
+	*BUFF = pointer;
 
-	FREE_Q=(UINT)BUFF;
+	FREE_Q = BUFF;
 
 	QCOUNT++;
 

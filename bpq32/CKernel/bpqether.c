@@ -50,11 +50,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 //#include <time.h>
 
-#include "CHeaders.h"
+#include "../CommonSourcex64/CHeaders.h"
 #include <process.h>
 #include "pcap.h"
 
-#include "bpq32.h"
+#include "../CommonSourcex64/bpq32.h"
 
 //#include "packet32.h"
 //#include "ntddndis.h"

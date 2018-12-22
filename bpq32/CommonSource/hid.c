@@ -129,7 +129,7 @@ extern "C" {
 struct hid_device_ {
 		HANDLE device_handle;
 		BOOL blocking;
-		size_t input_report_length;
+		int input_report_length;
 		void *last_error_str;
 		DWORD last_error_num;
 		BOOL read_pending;
@@ -369,7 +369,7 @@ struct hid_device_info HID_API_EXPORT * HID_API_CALL hid_enumerate(unsigned shor
 			BOOLEAN res;
 			NTSTATUS nt_res;
 			wchar_t wstr[WSTR_LEN]; // TODO: Determine Size
-			size_t len;
+			int len;
 
 			/* VID/PID match. Create the record. */
 			tmp = (struct hid_device_info*) calloc(1, sizeof(struct hid_device_info));

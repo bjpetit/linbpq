@@ -76,7 +76,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define VERSION_MAJOR         2
 #define VERSION_MINOR         0
 
-//unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
+//uintptr_t _beginthread(void( *start_address )( int ), unsigned stack_size, int arglist);
 
 //int ResetExtDriver(int num);
 extern char * PortConfig[33];

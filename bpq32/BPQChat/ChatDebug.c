@@ -44,6 +44,8 @@ static void MoveWindows();
 
 #define BGCOLOUR RGB(236,233,216)
 
+extern char DebugSize[32];
+
 BOOL CreateDebugWindow()
 {
     WNDCLASS  wc;

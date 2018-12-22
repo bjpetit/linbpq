@@ -57,7 +57,7 @@ char * strlop(char * buf, char delim);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
 void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen);
 
 static int ProcessLine(char * buf, int Port)
@@ -173,6 +173,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
+	int Param;
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 	int TNCOK;
@@ -182,6 +183,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 	if (TNC->hDevice == 0)
 	{
+		// Clear anything from UI_Q
+
+		while (TNC->PortRecord->UI_Q)
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+		if (fn > 3  && fn < 6)
+			goto ok;
+
 		// Try to reopen every 30 secs
 
 		TNC->ReopenTimer++;
@@ -196,6 +208,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		if (TNC->hDevice == 0)
 			return 0;
 	}
+ok:
 	switch (fn)
 	{
 	case 1:				// poll
@@ -309,6 +322,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 
 	case 4:				// reinit
+
+		ExitHost(TNC);
+		Sleep(50);
+		CloseCOMPort(TNC->hDevice);
+		TNC->hDevice =(HANDLE) -1;
+		TNC->ReopenTimer = 250;
+		TNC->HostMode = FALSE;
 
 		return (0);
 
@@ -456,6 +476,19 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 	CURSOR = &TNC->DEDBuffer[TNC->InputLen];
 
+	if ((TNC->HostMode == 0 || TNC->ReinitState == 10) && Length > 80)
+	{
+		// Probably Signon Message
+
+		if (TNC->WRITELOG)
+			WriteDebugLogLine(TNC->Port, 'R', ptr, Length);
+
+		ptr[Length] = 0;
+		Debugprintf("TRK %s", ptr);
+		TNC->RXLen = 0;
+		return;
+	}
+
 	if (TNC->HostMode == 0)
 	{
 		// If we are just restarting, and TNC is in host mode, we may get "Invalid Channel" Back
@@ -546,7 +579,15 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 					break;
 				}
 
+				if (character > 5 && character < 8)
+				{
 				TNC->HOSTSTATE = 2;						// Get Length
+				break;
+				}
+
+				// Invalid
+
+				Debugprintf("TRK - Invalid MsgType %d %x %x %x", character, *(ptr), *(ptr+1), *(ptr+2));
 				break;
 
 			case 2:		//  Get Length
@@ -554,7 +595,6 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 				TNC->MSGCOUNT = character;
 				TNC->MSGCOUNT++;						// Param is len - 1
 				TNC->MSGLENGTH = TNC->MSGCOUNT;
-
 				CURSOR = &TNC->DEDBuffer[0];
 				TNC->HOSTSTATE = 3;						// Get Data
 
@@ -792,7 +832,7 @@ static VOID DEDPoll(int Port)
 
 				Poll[2] = datalen - 1;
 				memcpy(&Poll[3], buffptr+2, datalen);
-		
+			
 				ReleaseBuffer(buffptr);
 		
 				StuffAndSend(TNC, Poll, datalen + 3);
@@ -1047,6 +1087,8 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 	{
 		// No Response to trying to enter term mode - do error recovery
 
+		Debugprintf("TRK - Starting Resync Port %d", TNC->Port);
+
 		TNC->ReinitState = 10;
 		TNC->ReinitCount = 256;
 		TNC->HostMode = TRUE;			// Must be in Host Mode if we need recovery
@@ -1070,12 +1112,14 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 			Poll[0] = 1;
 			TNC->TXLen = 1;
 			WriteCommBlock(TNC);
-			TNC->Timeout = 5;				// 1/2 secs
+			TNC->Timeout = 3;				// 0.3 secs
 
 			return;
 		}
 
 		// Try Again
+		
+		Debugprintf("TRK Continuing recovery Port %d", TNC->Port);
 		
 		TNC->ReinitState = 1;
 		ExitHost(TNC);
@@ -1125,9 +1169,24 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 
 		TNC->InitPtr = TNC->InitScript;
 		TNC->ReinitState = 2;
-
-		// Send Restart to make sure PTC is in a known state
 	}
+
+	if (TNC->ReinitState == 1)
+	{
+		// trying to set term mode
+
+		// If already in Term Mode, TNC echos command, with control chars replaced with '.'
+
+		if (memcmp(TNC->RXBuffer, "....%R", 6) == 0)
+		{
+			// In term mode, Need to put into Host Mode
+
+			TNC->ReinitState = 2;
+			DoTNCReinit(TNC);
+			return;
+		}
+	}
+
 	if (TNC->ReinitState == 2)
 	{
 		// Sending Init Commands
@@ -1370,7 +1429,6 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		return;
-
 		}
 
 		if (TNC->MSGTYPE == 3)					// Status
@@ -1569,7 +1627,6 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 			DoMonitorHddr(TNC, Msg, framelen, TNC->MSGTYPE);
 			return;
 
-		
 		}
 
 		// 1, 2, 4, 5 - pass to Appl
@@ -1610,6 +1667,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		buffptr[1] = framelen;				// Length
 		TNC->Streams[Stream].BytesRXed += buffptr[1];
 		memcpy(&buffptr[2], Msg, buffptr[1]);
+		
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		return;
