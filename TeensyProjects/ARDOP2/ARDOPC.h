@@ -9,7 +9,7 @@
 #define CONST const	// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "2.0.3.7-BPQ"
+#define ProductVersion "2.0.3.8-BPQ"
 
 //#define USE_SOUNDMODEM
 

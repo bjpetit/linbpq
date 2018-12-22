@@ -6,7 +6,7 @@
 #include "config.h"
 #endif
 
-#include "..\modem.h"
+#include "../modem.h"
 
 static const int16_t costab[512] = {
 	 32767,  32764,  32757,  32744,  32727,  32705,  32678,  32646, 

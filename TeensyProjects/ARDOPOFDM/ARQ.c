@@ -152,6 +152,7 @@ void ProcessCQFrame(char * bytData);
 void LogStats();
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
 BOOL CheckForDisconnect();
+BOOL IsConReqFrame(UCHAR bytType);
 
 // Tuning Stats
 
@@ -1192,7 +1193,7 @@ void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData)
 	char strDisplay[128];
 	int Len;
 
-	if (!(intFrameType >= ConReq200 && intFrameType <= ConReq2500))
+	if (!(IsConReqFrame(intFrameType)))
 		return;
 
 	//" [ConReq2500 >  G8XXX] "
@@ -1259,7 +1260,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
     
 		// Process Connect request to MyCallsign or Aux Call signs  (Handles protocol rule 1.2)
    
-		if (!blnFrameDecodedOK || intFrameType < ConReq200 || intFrameType > ConReq2500)
+		if (!blnFrameDecodedOK || !(IsConReqFrame(intFrameType)))
 			return;			// No decode or not a ConReq
 
 		strlop(bytData, ' ');	 // Now Just Tocall
@@ -1386,7 +1387,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 			// ConReq processing (to handle case of ISS missing initial ConAck from IRS)
 
-			if (intFrameType >= ConReq200 && intFrameType <= ConReq2500) // Process Connect request to MyCallsign or Aux Call signs as for DISC state above (ISS must have missed initial ConACK from ProtocolState.DISC state)
+			if (IsConReqFrame(intFrameType)) // Process Connect request to MyCallsign or Aux Call signs as for DISC state above (ISS must have missed initial ConACK from ProtocolState.DISC state)
 			{
 				if (!blnListen)
 					return;
@@ -2327,7 +2328,21 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if ((ARQBandwidth == XB500) || NegotiateBW && (ARQBandwidth == XB2500))
 		{
 			intSessionBW = 500;
+			UseOFDM = FALSE;
 			return ConAck;
+		}
+		break;
+
+	case OConReq500:
+
+		if ((ARQBandwidth == XB500) || NegotiateBW && (ARQBandwidth == XB2500))
+		{
+			if (EnableOFDM)
+			{
+				UseOFDM = TRUE;
+				intSessionBW = 500;
+				return ConAck;
+			}
 		}
 		break;
 
@@ -2336,11 +2351,25 @@ int IRSNegotiateBW(int intConReqFrameType)
 		if (ARQBandwidth == XB2500)
 		{
 			intSessionBW = 2500;
+			UseOFDM = FALSE;
 			return ConAck;
 		}
 		break;
-	}
+	
 
+	case OConReq2500:
+		
+		if (ARQBandwidth == XB2500)
+		{
+			if (EnableOFDM)
+			{
+				UseOFDM = TRUE;
+				intSessionBW = 2500;
+				return ConAck;
+			}
+		}
+		break;
+	}
 	return ConRejBW;
 }
 

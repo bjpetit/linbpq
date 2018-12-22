@@ -466,6 +466,8 @@ int m_recchannels = 1;
 char SavedCaptureDevice[256];	// Saved so we can reopen
 char SavedPlaybackDevice[256];
 
+int Savedplaychannels = 1;
+
 int SavedCaptureRate;
 int SavedPlaybackRate;
 
@@ -811,7 +813,7 @@ int GetNextInputDevice(char * dest, int max, int n)
 	strcpy(dest, ReadDevices[n]);
 	return strlen(dest);
 }
-int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, char * ErrorMsg)
+int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int m_playchannels, char * ErrorMsg)
 {
 	int err = 0;
 
@@ -869,11 +871,9 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, char * ErrorMsg)
 		return false;
 	}
 
-	m_playchannels = 1;
-	
 	if ((err = snd_pcm_hw_params_set_channels (playhandle, hw_params, 1)) < 0)
 	{
-		fprintf (stderr, "cannot set play channel count to 1 (%s)", snd_strerror(err));
+		fprintf (stderr, "cannot set play channel count to %d (%s)", m_playchannels, snd_strerror(err));
 		m_playchannels = 2;
 
 		if ((err = snd_pcm_hw_params_set_channels (playhandle, hw_params, 2)) < 0)
@@ -895,6 +895,8 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, char * ErrorMsg)
 		fprintf (stderr, "cannot prepare audio interface for use (%s)", snd_strerror(err));
 		return false;
 	}
+
+	Savedplaychannels = m_playchannels;
 
 	MaxAvail = snd_pcm_avail_update(playhandle);
 	Debugprintf("Playback Buffer Size %d", (int)MaxAvail);
@@ -1014,8 +1016,16 @@ int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate,
 {
 	Debugprintf("Opening Playback Device %s Rate %d", PlaybackDevice, p_sampleRate);
 
-	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, ErrorMsg))
+	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, 1, ErrorMsg))
 	{
+		// Close playback device so it can be shared
+		
+		if (playhandle)
+		{
+			snd_pcm_close(playhandle);
+			playhandle = NULL;
+		}
+
 		Debugprintf("Opening Capture Device %s Rate %d", CaptureDevice, c_sampleRate);
 		return OpenSoundCapture(CaptureDevice, c_sampleRate, ErrorMsg);
 	}
@@ -1083,6 +1093,7 @@ int SoundCardWrite(short * input, unsigned int nSamples)
 	{
 		txSleep(100);
 		avail = snd_pcm_avail_update(playhandle);
+//		Debugprintf("After Sleep Tosend %d Avail %d", nSamples, (int)avail);
 	}
 
 	ret = PackSamplesAndSend(input, nSamples);
@@ -1189,7 +1200,7 @@ int SoundCardRead(short * input, unsigned int nSamples)
 
 	if (avail < 0)
 	{
-		Debugprintf("Read Recovering from %d ..", avail);
+		Debugprintf("avail Recovering from %d ..", avail);
 		if (rechandle)
 		{
 			snd_pcm_close(rechandle);
@@ -1199,7 +1210,7 @@ int SoundCardRead(short * input, unsigned int nSamples)
 		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);
 //		snd_pcm_recover(rechandle, avail, 0);
 		avail = snd_pcm_avail_update(rechandle);
-		Debugprintf("Read After recovery %d ..", avail);
+		Debugprintf("After avail recovery %d ..", avail);
 	}
 
 	if (avail < nSamples)
@@ -1212,7 +1223,18 @@ int SoundCardRead(short * input, unsigned int nSamples)
 	if (ret < 0)
 	{
 		Debugprintf("RX Error %d", ret);
-		snd_pcm_recover(rechandle, avail, 0);
+//		snd_pcm_recover(rechandle, avail, 0);
+		if (rechandle)
+		{
+			snd_pcm_close(rechandle);
+			rechandle = NULL;
+		}
+
+		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);
+//		snd_pcm_recover(rechandle, avail, 0);
+		avail = snd_pcm_avail_update(rechandle);
+		Debugprintf("After Read recovery Avail %d ..", avail);
+
 		return 0;
 	}
 
@@ -1322,7 +1344,12 @@ void PollReceivedSamples()
 
 void StopCapture()
 {
+	// Stopcapture is only called when we are about to transmit, so use it to open plaback device. We don't keep
+	// it open all the time to facilitate sharing.
+
 	Capturing = FALSE;
+
+	OpenSoundPlayback(SavedPlaybackDevice, SavedPlaybackRate, Savedplaychannels, NULL);
 //	Debugprintf("Stop Capture");
 }
 
@@ -1466,6 +1493,12 @@ void SoundFlush()
 	}
 	// I think we should turn round the link here. I dont see the point in
 	// waiting for MainPoll
+
+	if (playhandle)
+	{
+		snd_pcm_close(playhandle);
+		playhandle = NULL;
+	}
 
 	SoundIsPlaying = FALSE;
 

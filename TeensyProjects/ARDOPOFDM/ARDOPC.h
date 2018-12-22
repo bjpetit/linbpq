@@ -9,7 +9,7 @@
 #define CONST const	// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "2.0.3.30-BPQ-OFDM"
+#define ProductVersion "2.0.3.31-BPQ-OFDM"
 
 //#define USE_SOUNDMODEM
 
@@ -391,6 +391,9 @@ extern struct SEM Semaphore;
 
 #define DOFDM_500_55_E		0x24
 #define DOFDM_500_55_O		0x25
+#define OConReq500	0x18
+#define OConReq2500	0x19
+
 
 	//	1 Khz Bandwidth Data Modes 
 	//	2 Car 4FSK Data mode 1000 Hz, 50 baud tones spaced @ 100 Hz 
@@ -424,7 +427,6 @@ extern struct SEM Semaphore;
 
 #define DOFDM_2500_55_E	0x34
 #define DOFDM_2500_55_O	0x35
-
 
 #define PktFrameHeader 0x3A		// Variable length frame Header
 #define PktFrameData 0x3B		// Variable length frame Data (Virtual Frsme Type)
@@ -472,6 +474,7 @@ extern BOOL SlowCPU;
 extern BOOL AccumulateStats;
 extern BOOL Use600Modes;
 extern BOOL UseOFDM;
+extern BOOL EnableOFDM;
 extern BOOL FSKOnly;
 extern BOOL fastStart;
 extern BOOL ConsoleLogLevel;

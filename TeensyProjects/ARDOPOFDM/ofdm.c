@@ -199,6 +199,7 @@ int Track1CarPSK(int floatCarFreq, int PSKMode, BOOL QAM, BOOL OFDM, float dblUn
 void SendLeaderAndSYNC(UCHAR * bytEncodedBytes, int intLeaderLen);
 void Flush();
 BOOL  CheckCRC16(unsigned char * Data, int Length);
+void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, int intPSKMode);
 
 void GenCRC16Normal(char * Data, int Length)
 {
@@ -1061,7 +1062,10 @@ VOID InitDemodOFDM()
 
 			lastOFDMRXMode = RXOFDMMode;
 
-			WriteDebugLog(LOGDEBUG, "New OFDM Mode - clear any received data");
+			if ((intFrameType & 0xFE) != (LastDemodType & 0xFE))
+				WriteDebugLog(LOGDEBUG, "New OFDM Mode - clear any received data");
+			else
+				WriteDebugLog(LOGDEBUG, "New Frame Type - clear any received data");
 		}
 	}
 
@@ -1270,7 +1274,7 @@ BOOL DemodOFDM()
 				// with OFDM each carrier has a sequence number, as we can do selective repeats if a carrier is missed.
 				// so decode into a separate buffer, and copy good data into the correct place in the received data buffer. 
 
-				decodeLen = CorrectRawDataWithRS(&bytFrameData[0][0], decodeBuff , intDataLen + 1, intRSLen, intFrameType, i);
+			decodeLen = CorrectRawDataWithRS(&bytFrameData[0][0], decodeBuff , intDataLen + 1, intRSLen, intFrameType, i);
 
 				// if decode fails try with a tuning offset correction 
 
@@ -1354,7 +1358,7 @@ int Demod1CarOFDMChar(int Start, int Carrier, int intNumOfSymbols)
 	int intMiliRadPerSample = floatCarFreq * M_PI / 6;
 	int i;
 	int origStart = Start;
-	int Corrections;
+//	int Corrections;
 
 	// With OFDM we save received data in Receive buffer, so don't keep
 	// the raw frames. So we must always decode

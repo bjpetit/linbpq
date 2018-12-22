@@ -31,9 +31,9 @@
 #include "config.h"
 #endif
 
-#include "..\modem.h"
+#include "../modem.h"
 #include "p3d.h"
-#include "..\mat.h"
+#include "../mat.h"
 
 #include <math.h>
 #include <float.h>

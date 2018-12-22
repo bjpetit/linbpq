@@ -1,10 +1,12 @@
-// Arduino interface code for Soundmodem running on a Teensie 3.1 or 3.6
+// Arduino interface code for Soundmodem running on a Teensy 3.1, 3.2 or 3.6
 
 // So far...
 // 1200 works both ways at 12000K sampling, but RX not at 48k
 // 9600 works at 48K
 // 1200 Ok on Tom's board.
 // 9600 uses about 14% of Teensy 3.2
+
+// Now always runs at 48000 sample rate and downsamples for 1200 AFSK
 
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
@@ -23,11 +25,11 @@ unsigned char RXBUFFER[300];	// Async RX Buffer
 
 extern "C" void xxx_Setup(int bmRequestType);
 
-extern int Baud;		// Modem Speed (1200 or 9600 for noe)
+extern int Baud;		// Modem Speed 300 1200 2400 AFSK 3600 4800 9600 19200 FSK RUH
 extern int AFSK;		// Modem Mode
 extern int FSK;
 extern int PSK;
-extern int centreFreq;
+extern int centreFreq;	// Used for AFSK
 extern int samplerate;
 extern char VersionString[];
 extern int VersionNo;
@@ -74,23 +76,13 @@ extern "C" void SetDefaultKISSParams(unsigned int txdelay, unsigned int ppersist
                                      unsigned int slottime, unsigned int fullduplex, unsigned int txtail);
 
 
-// Default KISS params. Will be overridden from EEPORM if set
+// Default KISS params. Will be overridden from EEPROM if set
 
 unsigned int txdelay = 300;
 unsigned int ppersist = 64;
 unsigned int slottime = 100;
 unsigned int fullduplex = 0;
 unsigned int txtail = 0;
-
-// TNC Params in EEPROM - compatible with pitnc_get/set
-
-#define	TXDELAY		1
-#define PERSIST		2
-#define SLOTTIME	3
-#define TXTAIL		4
-#define FULLDUP		5
-#define	KISSCHANNEL	6
-
 
 void i2csetup();
 void i2cloop();
@@ -287,9 +279,34 @@ void setup()
     AFSK = TRUE;
     FSK = FALSE;
   }
+  else if (value == 36)
+  {
+    Baud = 3600;	// FSK G3RUH
+    AFSK = FALSE;
+    FSK = TRUE;
+  }
+  else if (value == 48)
+  {
+    Baud = 4800;	// FSK G3RUH
+    AFSK = FALSE;
+    FSK = TRUE;
+  }
+  else if (value == 72)
+  {
+    Baud = 7200;	// FSK G3RUH
+    AFSK = FALSE;
+    FSK = TRUE;
+  }
+
   else if (value == 96)
   {
     Baud = 9600;	// FSK G3RUH
+    AFSK = FALSE;
+    FSK = TRUE;
+  }
+  else if (value == 191)		// Cant use 182 in SetParams
+  {
+    Baud = 19200;	// FSK G3RUH
     AFSK = FALSE;
     FSK = TRUE;
   }
@@ -320,7 +337,6 @@ void setup()
 
   for (i = 0; i < 16; i++)
   {
-    // read a byte from the current address of the EEPROM
     int value = EEPROM.read(i);
     WriteDebugLog(7, "%d\t%d", i, value);
   }
@@ -489,15 +505,16 @@ void print_mac()
   WriteDebugLog(7, "Hardware Serial No %02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3]);
 }
 
- 
-  int OKtoAdjustLevel()
-  {
-    // Only auto adjust level when disconnected.
-    // Level is set at end of each received packet when connected
 
-    return true;
-  }
+int OKtoAdjustLevel()
+{
+  // Only auto adjust level when disconnected.
+  // Level is set at end of each received packet when connected
 
+  return true;
+}
+extern "C"
+{
   void TurnroundLink()
   {
   }
@@ -524,10 +541,34 @@ void print_mac()
 
     //	printf("Start Capture\n");
   }
+
+
+  unsigned short * SendtoCard(unsigned short * buf, int n);
+  extern unsigned short * DMABuffer;
+  extern int Number, totSamples;
+
+  void SampleSink(short Sample)
+  {
+    int work = (short)Sample;
+
+    DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
+
+    if (Number == SendSize)
+    {
+      // send this buffer to sound interface
+
+      //  printtick("Enter SendtoCard");
+      DMABuffer = SendtoCard(DMABuffer, SendSize);
+      //  printtick("Leave SendtoCard");
+      Number = 0;
+    }
+    totSamples++;
+  }
+
+
+
+  // Stuff to support Common Code for ARDOP and Packet
+
+  void ProcessNewSamples(short * buf, int count)
+  {}
 }
-
-// Stuff to support Common Code for ARDOP and Packet
-
-void ProcessNewSamples(short * buf, int count)
-{}
-

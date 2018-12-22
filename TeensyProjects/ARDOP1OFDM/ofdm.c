@@ -199,6 +199,8 @@ int Track1CarPSK(int floatCarFreq, int PSKMode, BOOL QAM, BOOL OFDM, float dblUn
 void SendLeaderAndSYNC(UCHAR * bytEncodedBytes, int intLeaderLen);
 void Flush();
 BOOL  CheckCRC16(unsigned char * Data, int Length);
+void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, int intPSKMode);
+BOOL DemodOFDM();
 
 void GenCRC16Normal(char * Data, int Length)
 {
@@ -457,7 +459,7 @@ int ProcessOFDMAck(int AckType)
 
 			// Make sure there is somewhere to shift to
 
-			if (OFDMMode < PSK16 || intNumCar < 43)
+			if (OFDMMode < PSK16 || CarriersSent < 43)
 			{
 				// if next mode isn't working well delay shift up to prevent hunting
 
@@ -1061,7 +1063,10 @@ VOID InitDemodOFDM()
 
 			lastOFDMRXMode = RXOFDMMode;
 
-			WriteDebugLog(LOGDEBUG, "New OFDM Mode - clear any received data");
+			if ((intFrameType & 0xFE) != (LastDemodType & 0xFE))
+				WriteDebugLog(LOGDEBUG, "New OFDM Mode - clear any received data");
+			else
+				WriteDebugLog(LOGDEBUG, "New Frame Type - clear any received data");
 		}
 	}
 
@@ -1255,8 +1260,10 @@ BOOL DemodOFDM()
 				return TRUE;
 			}
 
+			WriteDebugLog(LOGDEBUG, "intDataLen 1 %d", intDataLen);
+
+
 			for (i = 0; i < intNumCar; i++)	
-//			for (i = 0; i < intNumCar; i+=3)		// Testing	
 			{
 				UCHAR decodeBuff[256];				// 82 doesnt seem to be enough ??Max length of OFDM block
 				int decodeLen, ofdmBlock;;
@@ -1268,7 +1275,12 @@ BOOL DemodOFDM()
 				else
 					Decode1CarPSK(i, TRUE);
 
-				decodeLen = CorrectRawDataWithRS(&bytFrameData[0][0], decodeBuff , intDataLen + 1, intRSLen, intFrameType, i);
+				// with OFDM each carrier has a sequence number, as we can do selective repeats if a carrier is missed.
+				// so decode into a separate buffer, and copy good data into the correct place in the received data buffer. 
+
+			decodeLen = CorrectRawDataWithRS(&bytFrameData[0][0], decodeBuff , intDataLen + 1, intRSLen, intFrameType, i);
+
+				// if decode fails try with a tuning offset correction 
 
 				if (CarrierOk[i] == 0)
 				{
@@ -1279,15 +1291,9 @@ BOOL DemodOFDM()
 					else
 						Decode1CarPSK(i, TRUE);
 	
-				// with OFDM each carrier has a sequence number, as we can do selective repeats if a carrier is missed.
-				// so decode into a separate buffer, and copy into the correct space in the received data buffer. 
-
-//				if ((i & 3) != 3)			// always miss carrier 3
-//				if (i != 0 && i != 15)		// always fail 1
-//				if (i != skip)
-			
 					decodeLen = CorrectRawDataWithRS(&bytFrameData[0][0], decodeBuff , intDataLen + 1, intRSLen, intFrameType, i);
 				}
+				
 				OFDMCarriersReceived[RXOFDMMode]++;
 
 				if (CarrierOk[i])
@@ -1352,15 +1358,16 @@ int Demod1CarOFDMChar(int Start, int Carrier, int intNumOfSymbols)
 
 	//	It demodulates one byte's worth of samples (2 or 4)
 
-	float dblReal, dblImag;
+	float dblReal, dblImag, dblPhase;
 	int intMiliRadPerSample = floatCarFreq * M_PI / 6;
 	int i;
-	int origStart = Start;;
+	int origStart = Start;
+//	int Corrections;
 
-	// With OFDM we save received data in RC buffer, so don't keep
+	// With OFDM we save received data in Receive buffer, so don't keep
 	// the raw frames. So we must always decode
 	
-	if (RepeatedFrame)		// We juest repeat previous ack/nak, so don't bother to decode
+	if (RepeatedFrame)		// We just repeat previous ack/nak, so don't bother to decode
 	{
 		intPhasesLen += intNumOfSymbols;
 		return intSampPerSym * intNumOfSymbols;
@@ -1370,14 +1377,16 @@ int Demod1CarOFDMChar(int Start, int Carrier, int intNumOfSymbols)
 	{
 		GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
 		intMags[Carrier][intPhasesLen] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
-		intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+		dblPhase =  atan2f(dblImag, dblReal);
+		intPSKPhase_0[Carrier] = 1000 * dblPhase;
 		intPhases[Carrier][intPhasesLen] = -(ComputeAng1_Ang2(intPSKPhase_0[Carrier], intPSKPhase_1[Carrier]));
 
 
-/*
+		// Should we track each carrier ??
+/*		
 		if (Carrier == 0)
 		{
-			Corrections = Track1CarPSK(floatCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
+			Corrections = Track1CarPSK(floatCarFreq, intPSKMode, FALSE, TRUE, dblPhase, FALSE);
 
 			if (Corrections != 0)
 			{

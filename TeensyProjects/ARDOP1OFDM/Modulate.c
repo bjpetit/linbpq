@@ -123,6 +123,7 @@ void Mod4FSKDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderL
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	if (Type == PktFrameHeader)
 	{
@@ -367,6 +368,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	initFilter(200,1500);
 
@@ -442,6 +444,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	initFilter(500,1500);
 
@@ -510,6 +513,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 		return;
 
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 	initFilter(2000,1500);
 
@@ -661,6 +665,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	}
 	
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s", strType);
+	DrawTXFrame(strType);
 
 /*	// DOnt use PSK Header at the moment
 	if (Type == PktFrameHeader)
@@ -1126,7 +1131,7 @@ void initFilter(int Width, int Centre)
 		last = centreSlot + 10;		// 21 filter sections
 		break;
 
-		case 2500:
+	case 2500:
 		
 		// implements 26 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
 

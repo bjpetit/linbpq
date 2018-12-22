@@ -49,14 +49,14 @@ void DemodAFSKinit(void *state);
 void DemodFSKinit(void *state);
 void mainLoop();
 
-char VersionString[] = "Teensy Packet TNC by G8BPQ Version 0.9 June 2018\r\n"
+char VersionString[] = "Teensy Packet TNC by G8BPQ Version 1.0 October 2018\r\n"
 						"based on Soundmodem by Thomas Sailer";
 
-int VersionNo = 9;		
+int VersionNo = 10;		
 
-int Baud = 1200;
-BOOL AFSK = TRUE;
-BOOL FSK = FALSE;
+int Baud = 9600;
+BOOL AFSK = FALSE;
+BOOL FSK = TRUE;
 BOOL PSK = FALSE;
 int samplerate;
 int centreFreq = 1700;
@@ -182,8 +182,6 @@ void SetDefaultKISSParams(unsigned int txdelay, unsigned int ppersist,
 }
 
 #ifdef TEENSY
-
-
 int SoundModemInit()
 #else
 int main(int argc, char *argv[])
@@ -219,7 +217,7 @@ int main(int argc, char *argv[])
 
 	if (FSK)
 	{
-		P1 = 9600;
+		P1 = Baud;
 		P2 = 0;
 		samplerate = 48000;
 		chan->mod = &fskmodulator;
@@ -307,7 +305,7 @@ int main(int argc, char *argv[])
 	for (chan = state.channels; chan; chan = chan->next)
 	{
 		if (chan->demod)
-			chan->demod->init(chan->demodstate, 12000, &chan->rxbitrate);
+			chan->demod->init(chan->demodstate, 48000, &chan->rxbitrate);
   
 		if (chan->mod)
 			chan->mod->init(chan->modstate, samplerate);

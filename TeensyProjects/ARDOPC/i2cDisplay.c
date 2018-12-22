@@ -243,6 +243,8 @@ void displayLevel(int max)
 
 void displayCall(int dirn, char * Call)
 {
+	char Msg[32];
+
 	if (i2cfile)
 	{
 		char paddedcall[12] = "           ";
@@ -253,6 +255,11 @@ void displayCall(int dirn, char * Call)
 		locate(i2cfile, 0, 0);
 		print(i2cfile, paddedcall);
 	}
+
+	// send to GUI
+
+	sprintf(Msg, "%c%s", dirn, Call);
+	SendtoGUI('I', Msg, strlen(Msg));
 }
 
 int initdisplay()

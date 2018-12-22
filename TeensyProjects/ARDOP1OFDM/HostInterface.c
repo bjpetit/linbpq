@@ -95,11 +95,13 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 	memcpy(&bytDataToSend[bytDataToSendLength], bytNewData, Len);
 	bytDataToSendLength += Len;
 
+	if (bytDataToSendLength > 4096)
+		return;
+
 	FreeSemaphore();
 
-#ifdef TEENSY
 	SetLED(TRAFFICLED, TRUE);
-#endif
+
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
 	QueueCommandToHost(HostCmd);
 }
@@ -138,6 +140,7 @@ void ProcessCommandFromHost(char * strCMD)
 {
 	char * ptrParams;
 	char cmdCopy[80] = "";
+	char strFault[100] = "";
 	char cmdReply[1024];
 
 	strFault[0] = 0;
@@ -648,6 +651,13 @@ void ProcessCommandFromHost(char * strCMD)
 
 #endif
 
+	if (strcmp(strCMD, "ENABLEOFDM") == 0)
+	{
+		DoTrueFalseCmd(strCMD, ptrParams, &EnableOFDM);
+		goto cmddone;
+	}
+
+
 	if (strcmp(strCMD, "ENABLEPINGACK") == 0)
 	{
 		DoTrueFalseCmd(strCMD, ptrParams, &EnablePingAck);
@@ -1139,6 +1149,20 @@ void ProcessCommandFromHost(char * strCMD)
                     strFault = "Syntax Err:" & strCMD
                 End If
 */
+	if (strcmp(strCMD, "RADIOFREQ") == 0)
+	{
+		// Currently only used for setting GUI Freq	 field
+
+		if (ptrParams == NULL)
+		{
+			sprintf(strFault, "RADIOFREQ command string missing");
+			goto cmddone;
+		}
+		
+		SendtoGUI('F', ptrParams, strlen(ptrParams));
+		goto cmddone;
+	}
+
 	if (strcmp(strCMD, "RADIOHEX") == 0)
 	{
 #ifdef TEENSY

@@ -644,8 +644,7 @@ void Filter150Hz(short * intFilterOut)
 void Filter75Hz(short * intFilterOut, BOOL blnInitialise, int intSamplesToFilter)
 {
 	// assumes sample rate of 12000
-	// implements  3 100 Hz wide sections   (~150 Hz wide @ - 30dB centered on 1500 Hz)
-
+    // implements  3 50 Hz wide sections   (~75 Hz wide @ - 30dB centered on 1500 Hz)
 	// FSF (Frequency Selective Filter) variables
 
 	static float dblR = 0.9995f;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)

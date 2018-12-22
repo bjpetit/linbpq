@@ -318,11 +318,6 @@ int FreeRam()
   return __brkval ? &top - __brkval : &top - &__bss_end;
 }
 
-int _gettimeofday()
-{
-  return 0;
-}
-
 // Function to get mac/serial number
 
 uint8_t mac[8];
@@ -385,12 +380,17 @@ void print_mac()
   WriteDebugLog(6, "Hardware Serial No %02X:%02X:%02X:%02X:%02X:%02X",
   		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
+extern "C"
+{
+  // Dummies to satisfy linker
 
-// Stuff to support Common Code for ARDOP and Packet
+  int _gettimeofday()
+  {
+    return 0;
+  }
+  
+  // Stuff to support Common Code for ARDOP and Packet
 
-void pktProcessNewSamples(short * buf, int count)
-{}
-
-
-
-
+  void pktProcessNewSamples(short * buf, int count)
+  {}
+}

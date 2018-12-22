@@ -29,11 +29,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include "..\modem.h"
+#include "../modem.h"
 
 #include <stdio.h>
 
-#include "..\raisedcosine.h"
+#include "../raisedcosine.h"
 
 /* --------------------------------------------------------------------- */
 

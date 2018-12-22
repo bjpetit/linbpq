@@ -171,7 +171,7 @@ short * Phaseptrs[MAXCAR] =
 short ** intPhases = &Phaseptrs[0];
 
 short QAMMags[10][332];
-short OFDMMags[MAXCAR - 10][212];
+short OFDMMags[MAXCAR - 10][232];
 
 short * Magptrs[MAXCAR] = 
 	{&QAMMags[0][0], &QAMMags[1][0], &QAMMags[2][0], &QAMMags[3][0], &QAMMags[4][0], 
@@ -380,7 +380,24 @@ BOOL IsShortControlFrame(UCHAR bytType)
 
 	return FALSE;
 }
+
+BOOL IsConReqFrame(UCHAR bytType)
+{
+	switch (bytType)
+	{
+	case ConReq200:
+	case ConReq500:
+	case ConReq2500:
+	case OConReq500:
+	case OConReq2500:
+
+		return TRUE;
+	}
+	return FALSE;
+}
  
+
+
 //	 Function to determine if it is a data frame (Even OR Odd) 
 
 BOOL IsDataFrame(UCHAR intFrameType)
@@ -1365,7 +1382,7 @@ ProcessFrame:
 					ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);
 				else if (intFrameType == IDFRAME)
 					AddTagToDataAndSendToHost(bytData, "IDF", frameLen);
-				else if (intFrameType >= ConReq200 && intFrameType <= ConReq2500)
+				else if (IsConReqFrame(intFrameType))
 					ProcessUnconnectedConReqFrame(intFrameType, bytData);
 				else if (intFrameType == PING)
 					ProcessPingFrame(bytData);
@@ -1393,7 +1410,7 @@ ProcessFrame:
 				if (ProtocolState == DISC && Monitor)		  // allows ARQ mode to operate like FEC when not connected
 					if (intFrameType == IDFRAME)				
 						AddTagToDataAndSendToHost(bytData, "IDF", frameLen);			
-					else if (intFrameType >= ConReq200 && intFrameType <= ConReq2500)
+					else if (IsConReqFrame(intFrameType))
 						ProcessUnconnectedConReqFrame(intFrameType, bytData);			
 					else if (IsDataFrame(intFrameType)) // check to see if a data frame
 						ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);			
@@ -2238,7 +2255,7 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 	if ((intFilteredMixedSamplesLength - intLocalPtr) < 960)
 		return FALSE;			// not enough
 	
-	intLocalPtr = intMFSReadPtr + EnvelopeCorrelator(); // should position the pointer at the symbol boundary
+	intLocalPtr = intMFSReadPtr + EnvelopeCorrelatorNew(); // should position the pointer at the symbol boundary
 
 	if (intLocalPtr < intMFSReadPtr)
 		return False; // use negative value of EnvelopeCorrelator to indicate insufficient correlation. 
@@ -2320,13 +2337,13 @@ int EnvelopeCorrelator()
 		intEnvelopeCors++;
 	}
  
-	if (dblCorMax > 40 * dblCorMaxProduct)
+//	if (dblCorMax > 40 * dblCorMaxProduct)
 	{
 		WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
 		return intJatMax;
 	}
-	else
-		return -1;
+//	else
+//		return -1;
 }
  
 
@@ -2378,7 +2395,7 @@ int EnvelopeCorrelatorNew()
 		return intJatMax;
 	}
 		
-	WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator failed");
+	WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator failed %d",  dblCorMax / dblCorMaxProduct);
 	
 	return -1;
 }
@@ -2757,7 +2774,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 	
 	if (bytSessionID == 0x3F)		// ' we are in a FEC QSO, monitoring an ARQ session or have not yet reached the ARQ Pending or Connected status 
 	{
-		if (intIatMinDistance1 == ConReq200 || intIatMinDistance1 == ConReq500 || intIatMinDistance1 == ConReq2500)
+		if (IsConReqFrame(intIatMinDistance1))
 		{
 			UCHAR ID2 = GetFrameTypeByte(16, intToneMags) & 0x3F;		// Returns 2nd byte or 0xFF
 
@@ -2832,7 +2849,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 
 		if (ProtocolState == IRS)
 		{
-			if (intIatMinDistance1 == ConReq200 || intIatMinDistance1 == ConReq500 || intIatMinDistance1 == ConReq2500)
+			if (IsConReqFrame(intIatMinDistance1))
 			{
 				if ( CheckFrameTypeParity(0, intToneMags)&& CheckFrameTypeParity(16, intToneMags))
 				{
@@ -2980,7 +2997,7 @@ int Acquire4FSKFrameType()
 	else					// not connected and not pending so use &FF (FEC or ARQ unconnected session ID
 		NewType = MinimalDistanceFrameType(&intToneMags[0][0], 0x3F);
   
-	if (NewType == ConReq200 || NewType ==  ConReq500 || NewType == ConReq2500 || NewType == PING)
+	if (IsConReqFrame(NewType) || NewType == PING)
 		QueueCommandToHost("PENDING");			 // early pending notice to stop scanners
 
 	if (NewType >= 0 &&  IsShortControlFrame(NewType))		// update the constellation if a short frame (no data to follow)
@@ -3566,6 +3583,8 @@ void DemodulateFrame(int intFrameType)
 	case ConReq200:
 	case ConReq500:
 	case ConReq2500:
+	case OConReq500:
+	case OConReq2500:
 	case PING:
 	case IDFRAME:
 	case PINGACK:
@@ -3666,6 +3685,8 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 	case ConReq200:
 	case ConReq500:
 	case ConReq2500:
+	case OConReq500:
+	case OConReq2500:
 
 		blnDecodeOK = Decode4FSKConReq();
 		break;

@@ -72,11 +72,11 @@
 // If using Serial1 or Serial3 also define SERIAL1SIZE or SERIAL3SIZE to
 // increase size of serial port buffers
 
-//#define HOSTPORT Serial1
+#define HOSTPORT Serial1
 #define HOSTSPEED 115200
 #define SERIAL1SIZE 512
 
-#define MONPORT Serial
+//#define MONPORT Serial
 //#define CPULOAD
 
 #define CATPORT Serial5
@@ -224,10 +224,12 @@
 #define ConstellationWidth 64
 #define PLOTRADIUS 30
 #define WHITE 0xffff
-#define Tomato 0xffff
+#define Tomato 0xffff					// Only have black or white
 #define Gold 0xffff
 #define Lime 0xffff
 #define Yellow 0xffff
+#define Goldenrod 0xffff
+#define Fuchsia 0xffff
 #endif
 
 #ifdef KMR_18
@@ -263,7 +265,10 @@
 #define Tomato 0xFD20	// ILI9341_ORANGE
 #define Gold Yellow
 #define Lime 0x07E0 	// ILI9341_GREEN
-#define Yellow 0xFFE0	// ILI9341_YELLOW      
+#define Yellow 0xFFE0	// ILI9341_YELLOW  
+#define Goldenrod 0xffff
+#define Fuchsia 0xffff
+    
 
 #if 0
 #define ILI9341_BLACK       0x0000      /*   0,   0,   0 */

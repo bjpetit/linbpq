@@ -87,6 +87,7 @@ BOOL RadioControl = FALSE;
 BOOL SlowCPU = FALSE;
 BOOL AccumulateStats = TRUE;
 BOOL Use600Modes = FALSE;
+BOOL EnableOFDM = TRUE;
 BOOL UseOFDM = TRUE;
 BOOL FSKOnly = FALSE;
 BOOL fastStart = TRUE;
@@ -225,6 +226,8 @@ const UCHAR bytValidFrameTypesALL[]=
 	ConReq200,
 	ConReq500,
 	ConReq2500,
+	OConReq500,
+	OConReq2500,
 	IDFRAME,
 	PINGACK,
 	PING,	
@@ -368,8 +371,8 @@ const char strFrameType[64][18] =
 	"4PSK.200.100.O",
 	"16QAM.200.100.E",	// 0x14
 	"16QAM.200.100.O",
-	"", "", "", "", // 0x16 to 0x19
-
+	"", "",// 0x16 to 0x17
+	"OConReq500", "OConReq2500", 
 	//	500 Hz bandwidth Data 
 	//	1 Car 4FSK Data mode 500 Hz, 50 baud tones spaced @ 100 Hz 
 
@@ -459,7 +462,8 @@ const char shortFrameType[64][12] =
 	"4PS.200.100",
 	"16Q.200.100",	// 0x14
 	"16Q.200.100",
-	"", "", "", "", // 0x16 to 0x19
+	"", "",// 0x16 to 0x17
+	"OConReq500", "OConReq2500", 
 
 	//	500 Hz bandwidth Data 
 	//	1 Car 4FSK Data mode 500 Hz, 50 baud tones spaced @ 100 Hz 
@@ -784,11 +788,13 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 	case ConReq200:
 	case ConReq500:
 	case ConReq2500:
-	
+	case OConReq500:
+	case OConReq2500:
+
 		*blnOdd = 0;
 		*intNumCar = 1;
 		*intDataLen = 6;
-		*intRSLen = 2;			// changed 0.8.0
+		*intRSLen = 2;
 		strcpy(strMod, "4FSK");
 		*intBaud = 50;
 		break;
@@ -1497,13 +1503,27 @@ BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _A
 			
 			return 0;
 		}
-	}		
+	}
+
+	UseOFDM = EnableOFDM;
+
 	if (ARQBandwidth == XB200)
 		bytReturn[0] = ConReq200;
+
 	else if (ARQBandwidth == XB500)
-		bytReturn[0] = ConReq500;
+	{
+		if (EnableOFDM)
+			bytReturn[0] = OConReq500;
+		else
+			bytReturn[0] = ConReq500;
+	}
 	else if (ARQBandwidth == XB2500)
-		bytReturn[0] = ConReq2500;
+	{
+		if (EnableOFDM)
+			bytReturn[0] = OConReq2500;
+		else
+			bytReturn[0] = ConReq2500;
+	}
 	else
 	{
 		//Logs.Exception("[EncodeModulate.EncodeFSK500_1S] Bandwidth error.  Bandwidth = " & strBandwidth)

@@ -37,8 +37,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _strupr strupr
 #define SOCKET int
 #include <sys/types.h>
+#ifndef TEENSY
 #include <sys/socket.h>
-
+#endif
 #endif
 
 

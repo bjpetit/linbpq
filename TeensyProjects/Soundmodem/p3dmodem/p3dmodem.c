@@ -50,10 +50,10 @@ char *alloca ();
 # endif
 #endif
 
-#include "..\modem.h"
+#include "../modem.h"
 #include "p3d.h"
 #include "p3dtbl.h"
-//#include "..\simd.h"
+//#include "../simd.h"
 
 #include <stdio.h>
 #include <string.h>

@@ -284,8 +284,10 @@ extern "C"
   
    void printtick(char * msg)
   {
-    Serial.printf("%s %i\r\n", msg, Now - LastNow);
+#ifdef MONPORT
+    MONPORT.printf("%s %i\r\n", msg, Now - LastNow);
     LastNow = Now;
+#endif	
   }
 
   int loadCounter = 0;		// for performance monitor
@@ -310,7 +312,7 @@ extern "C"
 #endif
     delay(mS);
   }
-   void PlatformSleep()
+  void PlatformSleep()
   {
     noInterrupts();
     WDOG_REFRESH = 0xA602;
@@ -1591,7 +1593,7 @@ extern "C"
       buffer[offset] &= ~val;
   }
 
-  void DrawAxes(int Qual, char * Mode)
+  void DrawAxes(int Qual, char * Mode, char * Type)
   {
     int y;
   
@@ -1711,7 +1713,7 @@ void setupOLED()
   buffer = display.getDisplay();
   clearDisplay();
   
-  DrawAxes(99, "16Q.200.100");
+  DrawAxes(99, "16Q.200.100", "");
   DrawDecode("PASS");
 //  Serial.printf("Start Display %d\r\n", millis());
   updateDisplay();
@@ -1746,7 +1748,7 @@ extern "C"
 	tft.drawPixel(x + ConsXoffset, y + ConsYoffset, Colour);
   }
 
-  void DrawAxes(int Qual, char * Mode)
+  void DrawAxes(int Qual, char * Mode, char * XX)
   {
     // Draw x and y axes in centre of constallation area
 
@@ -1825,7 +1827,7 @@ void setupKMR_18(void) {
 
  	tft.fillRect(0, 0, 128, 160, ST7735_BLACK);
  
-  	DrawAxes(99, "16Q.200.100");
+  	DrawAxes(99, "16Q.200.100", "");
 	DrawDecode("PASS");
 }
 
@@ -1845,7 +1847,7 @@ extern "C"
 	tft.drawPixel(x + ConsXoffset, y + ConsYoffset, Colour);
   }
 
-  void DrawAxes(int Qual, char * Mode)
+  void DrawAxes(int Qual, char * Mode, char * xx)
   {
     // Draw x and y axes in centre of constallation area
 
@@ -1914,7 +1916,7 @@ void setupWDTTFT()
 	
 	clearDisplay();  
 //	Serial.printf("Start Display %d\r\n", millis());
-  	DrawAxes(99, "16Q.200.100");
+  	DrawAxes(99, "16Q.200.100", "");
 	DrawDecode("PASS");
 //	Serial.printf("End Display %d\r\n", millis());
 }

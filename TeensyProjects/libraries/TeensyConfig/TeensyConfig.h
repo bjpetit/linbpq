@@ -24,9 +24,6 @@
 #define ARDOP
 #endif
 
-#define ARDOP
-#define _OFDM
-
 #ifdef PROJECT_ARDOPOFDM_Teensy
 #define ARDOP
 #define _OFDM

@@ -30,7 +30,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#include "..\mat.h"
+#include "../mat.h"
 
 /* --------------------------------------------------------------------- */
 

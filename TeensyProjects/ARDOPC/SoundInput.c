@@ -1073,6 +1073,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				// Frame has no data so is now complete
 
 				// See if IRStoISS shortcut can be invoked
+
+				DrawRXFrame(1, Name(intFrameType));
 				
 				if (ProtocolState == IRStoISS && intFrameType >= 0xe0)
 				{
@@ -3587,8 +3589,11 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 	if ((intFrameType >= 0 && intFrameType <= 0x1F) || intFrameType >= 0xE0) // DataACK/NAK
 	{
 		blnDecodeOK = DecodeACKNAK(intFrameType, &intRcvdQuality);
-		DrawRXFrame(1, Name(intFrameType));
-	
+		if (blnDecodeOK)
+			DrawRXFrame(1, Name(intFrameType));
+		else
+			DrawRXFrame(2, Name(intFrameType));
+
 		goto returnframe;
 	}
 	else if (IsShortControlFrame(intFrameType)) // Short Control Frames

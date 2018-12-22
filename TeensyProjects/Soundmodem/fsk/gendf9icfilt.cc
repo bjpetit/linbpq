@@ -35,11 +35,11 @@
 
 using namespace std;
 
-#include "..\fft.hh"
-#include "..\mat.hh"
-#include "..\raisedcosine.h"
+#include "../fft.hh"
+#include "../mat.hh"
+#include "../raisedcosine.h"
 
-#include "..\getopt.h"
+#include "../getopt.h"
 
 /* --------------------------------------------------------------------- */
 

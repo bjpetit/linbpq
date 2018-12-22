@@ -46,7 +46,7 @@ char Callsign[10] = "";
 BOOL wantCWID = FALSE;
 BOOL CWOnOff = FALSE;
 BOOL NeedID = FALSE;		// SENDID Command Flag
-BOOL NeedCWID = FALSE;		// SENDID Command Flag
+BOOL NeedCWID = FALSE;		// SENDCWID Command Flag
 BOOL NeedConReq = FALSE;	// ARQCALL Command Flag
 BOOL NeedPing = FALSE;		// PING Command Flag
 BOOL NeedTwoToneTest = FALSE;
@@ -1204,7 +1204,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
  		break;
 
 	default:
-		//'Logs.Exception("[PSKDataInfo] No data for frame type= H" & Format(bytFrameType, "x"))
+		WriteDebugLog(LOGCRIT, "No data for frame type = 0x" ,bytFrameType);
         return FALSE;
 	}
 	}

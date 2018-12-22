@@ -56,7 +56,7 @@ UCHAR bytLastARQDataFrameAcked = 0;  // initialize to an improper data frame
 void ClearTuningStats();
 void ClearQualityStats();
 void updateDisplay();
-void DrawTXMode(char * TXMode);
+void DrawTXMode(const char * TXMode);
 
 int bytQDataInProcessLen = 0;		// Lenght of frame to send/last sent
 
@@ -287,6 +287,7 @@ void SetARDOPProtocolState(int value)
 		ClearDataToSend();
 		SetLED(ISSLED, FALSE);
 		SetLED(IRSLED, FALSE);
+		displayCall(0x20, "");
 
 		break;
 
@@ -1212,10 +1213,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 			intFrameTypePtr = 0;
 
 		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
-#ifdef PLOTCONSTELLATION
+
 		DrawTXMode(shortName(bytCurrentFrameType));
 		updateDisplay();
-#endif
+
 		if(DebugLog) WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.GetNextFrameData] Initial Frame Type: %s", Name(bytCurrentFrameType));
 		*intUpDn = 0;
 		return 0;
@@ -1226,10 +1227,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		{
 			intFrameTypePtr = max(0, intFrameTypePtr + *intUpDn);
 			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
-#ifdef PLOTCONSTELLATION
+
 			DrawTXMode(shortName(bytCurrentFrameType));
 			updateDisplay();
-#endif
+
 			strShift = "Shift Down";
 		}
 		*intUpDn = 0;
@@ -1240,10 +1241,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		{
 			intFrameTypePtr = min(bytFrameTypesForBWLength, intFrameTypePtr + *intUpDn);
 			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
-#ifdef PLOTCONSTELLATION
+
 			DrawTXMode(shortName(bytCurrentFrameType));
 			updateDisplay();
-#endif
+
 			strShift = "Shift Up";
 		}
 		*intUpDn = 0;
@@ -1392,9 +1393,13 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
     
 		// Process Connect request to MyCallsign or Aux Call signs  (Handles protocol rule 1.2)
-   
-		if (!blnFrameDecodedOK || intFrameType < 0x31 || intFrameType > 0x38)
-			return;			// No decode or not a ConReq
+
+		if (!blnFrameDecodedOK)
+				return;				// No decode 
+
+		if (intFrameType < 0x31 || intFrameType > 0x38)		// Not Normal CONREQ
+			if (EnableOFDM == 0 || (intFrameType != OConReq500 && intFrameType != OConReq2500))
+				return;			// No decode or not a ConReq
 
 		strCallsign  = strlop(bytData, ' '); // "fromcall tocall"
 		strcpy(strRemoteCallsign, bytData);
@@ -1452,7 +1457,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				QueueCommandToHost(HostCmd);
 				InitializeConnection();	
 				bytDataToSendLength = 0;
-
+				displayCall('<', strCallsign);
 				blnPending = TRUE;				
 				blnEnbARQRpt = FALSE;
 
@@ -2430,6 +2435,8 @@ int IRSNegotiateBW(int intConReqFrameType)
 	//	returns the correct ConAck frame number to establish the session bandwidth to the ISS or the ConRejBW frame number if incompatible 
     //  if acceptable bandwidth sets stcConnection.intSessionBW
 
+	UseOFDM = FALSE;
+
 	switch (ARQBandwidth)
 	{
 	case B200FORCED:
@@ -2442,6 +2449,14 @@ int IRSNegotiateBW(int intConReqFrameType)
 		break;
 
 	case B500FORCED:
+
+		if (intConReqFrameType == OConReq500)
+		{
+			UseOFDM = TRUE;
+			intSessionBW = 500;
+			return ConAck500;
+		}
+
 		
 		if ((intConReqFrameType >= 0x32 && intConReqFrameType <= 0x34) || intConReqFrameType == 0x36)
 		{
@@ -2460,6 +2475,14 @@ int IRSNegotiateBW(int intConReqFrameType)
 		break;
 
 	case B2000FORCED:
+
+		if (intConReqFrameType == OConReq2500)
+		{
+			UseOFDM = TRUE;
+			intSessionBW = 2000;
+			return ConAck2000;
+		}
+
 		
 		if (intConReqFrameType == 0x34 || intConReqFrameType == 0x38)
 		{
@@ -2478,6 +2501,14 @@ int IRSNegotiateBW(int intConReqFrameType)
 		break;
 
 	case B500MAX:
+
+		if (intConReqFrameType == OConReq500)
+		{
+			UseOFDM = TRUE;
+			intSessionBW = 500;
+			return ConAck500;
+		}
+
 		
 		if (intConReqFrameType == 0x31 || intConReqFrameType == 0x35)
 		{
@@ -2493,6 +2524,13 @@ int IRSNegotiateBW(int intConReqFrameType)
 
 	case B1000MAX:
 		
+		if (intConReqFrameType == OConReq500)
+		{
+			UseOFDM = TRUE;
+			intSessionBW = 500;
+			return ConAck500;
+		}
+
 		if (intConReqFrameType == 0x31 || intConReqFrameType == 0x35)
 		{
 			intSessionBW = 200;
@@ -2510,6 +2548,20 @@ int IRSNegotiateBW(int intConReqFrameType)
 		}
            
 	case B2000MAX:
+				
+		if (intConReqFrameType == OConReq500)
+		{
+			UseOFDM = TRUE;
+			intSessionBW = 500;
+			return ConAck500;
+		}
+
+		if (OConReq2500)
+		{
+			UseOFDM = TRUE;
+			intSessionBW = 2000;
+			return ConAck2000;
+		}
 
 		if (intConReqFrameType == 0x31 || intConReqFrameType == 0x35)
 		{

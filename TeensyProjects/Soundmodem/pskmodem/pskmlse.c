@@ -34,7 +34,7 @@
 #include "config.h"
 #endif
 
-#include "..\modem.h"
+#include "../modem.h"
 #include "psk.h"
 //#include "simd.h"
 

@@ -41,11 +41,11 @@
 // If using Serial1 or Serial3 also define SERIAL1SIZE or SSRIAL3SIZE to
 // increase size of serial port buffers
 
-#define HOSTPORT Serial
+#define HOSTPORT Serial1
 #define SERIAL1SIZE 512
 #define HOSTSPEED 19200
 
-#define MONPORT Serial1
+#define MONPORT Serial
 //#define CPULOAD				//Log CPU load to monitor
 
 // Send Debug output as UI frames on Serial Interface

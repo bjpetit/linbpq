@@ -87,6 +87,43 @@ unsigned int getTicks();
 #endif
 #endif
 
+#define UseGUI			// Enable GUI Front End Support
+
+#ifndef TEENSY
+#ifdef UseGUI
+
+// Constellation and Waterfall for GUI interface
+
+#define PLOTCONSTELLATION
+#define PLOTWATERFALL
+#define PLOTSPECTRUM
+#define ConstellationHeight 90
+#define ConstellationWidth 90
+#define WaterfallWidth 205
+#define WaterfallHeight 64
+#define SpectrumWidth 205
+#define SpectrumHeight 64
+
+#define PLOTRADIUS 42
+#define WHITE 0
+#define Tomato 1
+#define Gold 2
+#define Lime 3	
+#define Yellow 4
+#define Orange 5
+#define Khaki 6
+#define Cyan 7
+#define DeepSkyBlue 8
+#define RoyalBlue 9
+#define Navy 10
+#define Black 11 
+#define Goldenrod 12
+#define Fuchsia 13
+
+#endif
+#endif
+
+
 #include "ecc.h"				// RS Constants
 
 typedef int BOOL;
@@ -111,9 +148,10 @@ typedef unsigned char UCHAR;
 #define IRSLED LED1
 #define TRAFFICLED LED2
 #else
-#define ISSLED 0
-#define IRSLED 0
-#define TRAFFICLED 0
+#define ISSLED 1
+#define IRSLED 2
+#define TRAFFICLED 3
+#define PKTLED 4
 #endif
 
 BOOL KeyPTT(BOOL State);
@@ -151,7 +189,7 @@ void SendCommandToHostQuiet(char * Cmd);
 void TCPSendCommandToHostQuiet(char * Cmd);
 void SCSSendCommandToHostQuiet(char * Cmd);
 void UpdateBusyDetector(short * bytNewSamples);
-int UpdatePhaseConstellation(short * intPhases, short * intMags, int intPSKPhase, BOOL blnQAM, BOOL OFDM);
+int UpdatePhaseConstellation(short * intPhases, short * intMags, int pskPhase, BOOL blnQAM, BOOL OFDM);
 void SetARDOPProtocolState(int value);
 BOOL BusyDetect3(float * dblMag, int intStart, int intStop);
 void SendLogToHost(char * Msg, int len);
@@ -246,7 +284,15 @@ VOID ProcessDEDModeFrame(UCHAR * rxbuffer, unsigned int Length);
 BOOL CheckForPktMon();
 BOOL CheckForPktData();
 
+int SendtoGUI(char Type, unsigned char * Msg, int Len);	
+void DrawTXFrame(const char * Frame);
+void DrawRXFrame(int State, const char * Frame);
+void mySetPixel(unsigned char x, unsigned char y, unsigned int Colour);
+void clearDisplay();
 
+extern int WaterfallActive;
+extern int SpectrumActive;
+extern unsigned int PKTLEDTimer;
 
 extern char stcLastPingstrSender[10];
 extern char stcLastPingstrTarget[10];
@@ -347,6 +393,7 @@ extern struct SEM Semaphore;
 #define END 0x2C
 #define ConRejBusy 0x2D
 #define ConRejBW 0x2E
+#define OConReq500 0x2F
 
 #define ConAck200 0x39
 #define ConAck500 0x3A
@@ -354,6 +401,7 @@ extern struct SEM Semaphore;
 #define ConAck2000 0x3C
 #define PINGACK 0x3D
 #define PING 0x3E
+#define OConReq2500 0x3F
 #define PktFrameHeader 0xC0		// Variable length frame Header
 #define PktFrameData 0xC1		// Variable length frame Data (Virtual Frsme Type)
 
@@ -408,6 +456,8 @@ extern BOOL RadioControl;
 extern BOOL SlowCPU;
 extern BOOL AccumulateStats;
 extern BOOL Use600Modes;
+extern BOOL UseOFDM;
+extern BOOL EnableOFDM;
 extern BOOL FSKOnly;
 extern NegotiateBW;
 extern BOOL UseOFDM;
@@ -426,6 +476,7 @@ extern BOOL gotGPIO;
 extern BOOL useGPIO;
 
 extern int pttGPIOPin;
+extern BOOL pttGPIOInvert;
 
 extern HANDLE hCATDevice;		// port for Rig Control
 extern char CATPort[80];

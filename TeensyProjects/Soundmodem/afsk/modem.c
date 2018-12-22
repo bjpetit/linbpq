@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include "..\modem.h"
+#include "../modem.h"
 #include "costab.h"
 
 #undef M_PI

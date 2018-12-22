@@ -4,4 +4,6 @@ Set Sketchbook location (File/Preferences Menu) to the location of TeensyProject
 
 C:\OneDrive\Dev\Source\TeensyProjects
 
+If you want to compile the Soundcard Emulation sketches see TeensyProjects\libraries\SoundCard\README.txt
+
 

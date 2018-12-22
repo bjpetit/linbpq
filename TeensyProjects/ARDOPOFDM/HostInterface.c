@@ -645,6 +645,12 @@ void ProcessCommandFromHost(char * strCMD)
 
 #endif
 
+	if (strcmp(strCMD, "ENABLEOFDM") == 0)
+	{
+		DoTrueFalseCmd(strCMD, ptrParams, &EnableOFDM);
+		goto cmddone;
+	}
+
 	if (strcmp(strCMD, "ENABLEPINGACK") == 0)
 	{
 		DoTrueFalseCmd(strCMD, ptrParams, &EnablePingAck);
@@ -1544,11 +1550,6 @@ void ProcessCommandFromHost(char * strCMD)
 		goto cmddone;
 	}
 
-	if (strcmp(strCMD, "USEOFDM") == 0)
-	{
-		DoTrueFalseCmd(strCMD, ptrParams, &UseOFDM);
-		goto cmddone;
-	}
 	if (strcmp(strCMD, "VERSION") == 0)
 	{
 		sprintf(cmdReply, "VERSION %s_%s", ProductName, ProductVersion);

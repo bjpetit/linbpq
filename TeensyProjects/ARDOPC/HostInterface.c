@@ -83,6 +83,9 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 	if (Len == 0)
 		return;
 
+//	if ((bytDataToSendLength + Len) >= DATABUFFERSIZE)
+//		return;			// Flow control has failed
+
 	GetSemaphore();
 
 	memcpy(&bytDataToSend[bytDataToSendLength], bytNewData, Len);
@@ -99,6 +102,33 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 	QueueCommandToHost(HostCmd);
 }
 
+char strFault[100] = "";
+
+VOID DoTrueFalseCmd(char * strCMD, char * ptrParams, BOOL * Value)
+{
+	char cmdReply[128];
+
+	if (ptrParams == NULL)
+	{
+		sprintf(cmdReply, "%s %s", strCMD, (*Value) ? "TRUE": "FALSE");
+		SendReplyToHost(cmdReply);
+		return;
+	}
+		
+	if (strcmp(ptrParams, "TRUE") == 0)
+		*Value = TRUE;
+	else if (strcmp(ptrParams, "FALSE") == 0)
+		*Value = FALSE;
+	else
+	{
+		sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
+		return;
+	}
+	sprintf(cmdReply, "%s now %s", strCMD, (*Value) ? "TRUE": "FALSE");
+	SendReplyToHost(cmdReply);
+	return;
+}
+
 
 // Subroutine for processing a command from Host
 
@@ -108,6 +138,10 @@ void ProcessCommandFromHost(char * strCMD)
 	char cmdCopy[80] = "";
 	char strFault[100] = "";
 	char cmdReply[1024];
+
+	strFault[0] = 0;
+
+	strCMD[79] = 0;				// in case cmd handler gets garbage
 
 	memcpy(cmdCopy, strCMD, 79);	// save before we split it up
 
@@ -220,34 +254,7 @@ void ProcessCommandFromHost(char * strCMD)
    
 	if (strcmp(strCMD, "AUTOBREAK") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (AutoBreak)
-				sprintf(cmdReply, "AUTOBREAK TRUE");
-			else
-				sprintf(cmdReply, "AUTOBREAK FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			AutoBreak = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			AutoBreak = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-
-		if (AutoBreak)
-			sprintf(cmdReply, "AUTOBREAK now TRUE");
-		else
-			sprintf(cmdReply, "AUTOBREAK now FALSE");
-
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &AutoBreak);
 		goto cmddone;
 	}
 
@@ -269,36 +276,10 @@ void ProcessCommandFromHost(char * strCMD)
 
 		goto cmddone;
 	}
-			
+
 	if (strcmp(strCMD, "BUSYBLOCK") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (BusyBlock)
-				sprintf(cmdReply, "BUSYBLOCK TRUE");
-			else
-				sprintf(cmdReply, "BUSYBLOCK FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			BusyBlock = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			BusyBlock = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (BusyBlock)
-			sprintf(cmdReply, "BUSYBLOCK now TRUE");
-		else
-			sprintf(cmdReply, "BUSYBLOCK now FALSE");
-		
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &BusyBlock);
 		goto cmddone;
 	}
  
@@ -399,66 +380,19 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "CMDTRACE") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (CommandTrace)
-				sprintf(cmdReply, "CMDTRACE TRUE");
-			else
-				sprintf(cmdReply, "CMDTRACE FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			CommandTrace = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			CommandTrace = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-
-		if (CommandTrace)
-			sprintf(cmdReply, "CMDTRACE now TRUE");
-		else
-			sprintf(cmdReply, "CMDTRACE now FALSE");
-		
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &CommandTrace);
 		goto cmddone;
 	}
 
 	if (strcmp(strCMD, "CODEC") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (blnCodecStarted)
-				sprintf(cmdReply, "CODEC TRUE");
-			else
-				sprintf(cmdReply, "CODEC FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
+		DoTrueFalseCmd(strCMD, ptrParams, &blnCodecStarted);
 		
 		if (strcmp(ptrParams, "TRUE") == 0)
 			StartCodec(strFault);
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
+		else if (strcmp(ptrParams, "FALSE") == 0)
 			StopCodec(strFault);
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (blnCodecStarted)
-			sprintf(cmdReply, "CODEC now TRUE");
-		else
-			sprintf(cmdReply, "CODEC now FALSE");
-
-		SendReplyToHost(cmdReply);
+	
 		goto cmddone;
 	}
 
@@ -604,33 +538,7 @@ void ProcessCommandFromHost(char * strCMD)
   
 	if (strcmp(strCMD, "DEBUGLOG") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (DebugLog)
-				sprintf(cmdReply, "DEBUGLOG TRUE");
-			else
-				sprintf(cmdReply, "DEBUGLOG FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			DebugLog = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			DebugLog = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (DebugLog)
-			sprintf(cmdReply, "DEBUGLOG now TRUE");
-		else
-			sprintf(cmdReply, "DEBUGLOG now FALSE");
-
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &DebugLog);
 		goto cmddone;
 	}
 
@@ -639,28 +547,13 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS || ProtocolState == IRStoISS)
 		{
 			blnARQDisconnect = TRUE;
-//			CheckForDisconnect();
+			SendReplyToHost("DISCONNECT NOW TRUE");
 		}
+		else
+			SendReplyToHost("DISCONNECT IGNORED");
+
 		goto cmddone;
 	}
-/*
-            Case "DISPLAY"
-                If ptrSpace = -1 Then
-                    SendReplyToHost(strCommand & " " & Format(MCB.DisplayFreq, "#.000"))
-                ElseIf IsNumeric(strParameters) Then
-                    MCB.DisplayFreq = Val(strParameters)
-                    Dim stcStatus As Status = Nothing
-                    If Val(strParameters) > 100000 Then
-                        stcStatus.Text = "Dial: " & Format(Val(strParameters) / 1000, "##0.000") & "MHz"
-                    Else
-                        stcStatus.Text = "Dial: " & strParameters & "KHz"
-                    End If
-                    stcStatus.ControlName = "lblCF"
-                    queTNCStatus.Enqueue(stcStatus)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-				*/
 
 	if (strcmp(strCMD, "DRIVELEVEL") == 0)
 	{
@@ -756,101 +649,20 @@ void ProcessCommandFromHost(char * strCMD)
 	
 	if (strcmp(strCMD, "ENABLEPINGACK") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (EnablePingAck)
-				sprintf(cmdReply, "ENABLEPINGACK TRUE");
-			else
-				sprintf(cmdReply, "ENABLEPINGACK FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-		{
-			EnablePingAck = TRUE;
-			ClearBusy();
-		}
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			EnablePingAck = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (EnablePingAck)
-			sprintf(cmdReply, "ENABLEPINGACK now TRUE");
-		else
-			sprintf(cmdReply, "ENABLEPINGACK now FALSE");
-		
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &EnablePingAck);
 		goto cmddone;
 	}
 
+
 	if (strcmp(strCMD, "FECID") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (FECId)
-				sprintf(cmdReply, "FECID TRUE");
-			else
-				sprintf(cmdReply, "FECID FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			FECId = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			FECId = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (FECId)
-			sprintf(cmdReply, "FECID now TRUE");
-		else
-			sprintf(cmdReply, "FECID now FALSE");
-
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &FECId);
 		goto cmddone;
 	}
 
 	if (strcmp(strCMD, "FASTSTART") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (fastStart)
-				sprintf(cmdReply, "FASTSTART TRUE");
-			else
-				sprintf(cmdReply, "FASTSTART FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			fastStart = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			fastStart = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (fastStart)
-			sprintf(cmdReply, "FASTSTART now TRUE");
-		else
-			sprintf(cmdReply, "FASTSTART now FALSE");
-
-		SendReplyToHost(cmdReply);
-
+		DoTrueFalseCmd(strCMD, ptrParams, &fastStart);
 		goto cmddone;
 	}
 
@@ -933,33 +745,7 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "FSKONLY") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (FSKOnly)
-				sprintf(cmdReply, "FSKONLY TRUE");
-			else
-				sprintf(cmdReply, "FSKONLY FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			FSKOnly = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			FSKOnly = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (FSKOnly)
-			sprintf(cmdReply, "FSKONLY now TRUE");
-		else
-			sprintf(cmdReply, "FSKONLY now FALSE");
-
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &FSKOnly);
 		goto cmddone;
 	}
 
@@ -1022,36 +808,11 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "LISTEN") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (blnListen)
-				sprintf(cmdReply, "LISTEN TRUE");
-			else
-				sprintf(cmdReply, "LISTEN FALSE");
+		DoTrueFalseCmd(strCMD, ptrParams, &blnListen);
 
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-		{
-			blnListen = TRUE;
-			ClearBusy();
-		}
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			blnListen = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
 		if (blnListen)
-			sprintf(cmdReply, "LISTEN now TRUE");
-		else
-			sprintf(cmdReply, "LISTEN now FALSE");
-		
-		SendReplyToHost(cmdReply);
+			ClearBusy();
+
 		goto cmddone;
 	}
 
@@ -1082,36 +843,10 @@ void ProcessCommandFromHost(char * strCMD)
 
 	if (strcmp(strCMD, "MONITOR") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (Monitor)
-				sprintf(cmdReply, "MONITOR TRUE");
-			else
-				sprintf(cmdReply, "MONITOR FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			Monitor = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			Monitor = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (Monitor)
-			sprintf(cmdReply, "MONITOR now TRUE");
-		else
-			sprintf(cmdReply, "MONITOR now FALSE");
-		
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &Monitor);
 		goto cmddone;
 	}
-   
+
 	if (strcmp(strCMD, "MYAUX") == 0)
 	{
 		int i, len;
@@ -1175,6 +910,12 @@ void ProcessCommandFromHost(char * strCMD)
 		}
 		goto cmddone;
 	}
+
+//	if (strcmp(strCMD, "NEGOTIATEBW") == 0)
+//	{
+//		DoTrueFalseCmd(strCMD, ptrParams, &NegotiateBW);
+//		goto cmddone;
+//	}
 
 	if (strcmp(strCMD, "PING") == 0)
 	{
@@ -1399,6 +1140,20 @@ void ProcessCommandFromHost(char * strCMD)
                     strFault = "Syntax Err:" & strCMD
                 End If
 */
+	if (strcmp(strCMD, "RADIOFREQ") == 0)
+	{
+		// Currently only used for setting GUI Freq	 field
+
+		if (ptrParams == NULL)
+		{
+			sprintf(strFault, "RADIOFREQ command string missing");
+			goto cmddone;
+		}
+		
+		SendtoGUI('F', ptrParams, strlen(ptrParams));
+		goto cmddone;
+	}
+
 	if (strcmp(strCMD, "RADIOHEX") == 0)
 	{
 #ifdef TEENSY
@@ -1801,36 +1556,9 @@ void ProcessCommandFromHost(char * strCMD)
 #endif
 	}
 
-
 	if (strcmp(strCMD, "USE600MODES") == 0)
 	{
-		if (ptrParams == NULL)
-		{
-			if (Use600Modes)
-				sprintf(cmdReply, "USE600MODES TRUE");
-			else
-				sprintf(cmdReply, "USE600MODES FALSE");
-
-			SendReplyToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			Use600Modes = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			Use600Modes = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		if (Use600Modes)
-			sprintf(cmdReply, "USE600MODES now TRUE");
-		else
-			sprintf(cmdReply, "USE600MODES now FALSE");
-
-		SendReplyToHost(cmdReply);
+		DoTrueFalseCmd(strCMD, ptrParams, &Use600Modes);
 		goto cmddone;
 	}
 

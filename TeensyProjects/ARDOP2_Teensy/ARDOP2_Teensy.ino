@@ -318,7 +318,7 @@ int FreeRam()
   return __brkval ? &top - __brkval : &top - &__bss_end;
 }
 
-int _gettimeofday()
+extern "C" int _gettimeofday()
 {
   return 0;
 }
@@ -388,9 +388,5 @@ void print_mac()
 
 // Stuff to support Common Code for ARDOP and Packet
 
-void pktProcessNewSamples(short * buf, int count)
+extern "C" void pktProcessNewSamples(short * buf, int count)
 {}
-
-
-
-

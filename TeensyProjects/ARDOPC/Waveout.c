@@ -909,7 +909,9 @@ void SetLED(int LED, int State)
 
 void displayCall(int dirn, char * call)
 {
-	// Dummy for i2c display
+	char Msg[32];
+	sprintf(Msg, "%c%s", dirn, call);
+	SendtoGUI('I', Msg, strlen(Msg));
 }
 
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
