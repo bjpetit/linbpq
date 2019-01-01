@@ -2296,7 +2296,7 @@ void SaveQueueOnBreak()
 }
 
 
-extern UCHAR bytEchoData[1280];		// has to be at least max packet size (?1280)
+extern UCHAR bytEchoData[127 * 80];		// has to be at least OFDM Window siz
 
 extern int bytesEchoed;
 

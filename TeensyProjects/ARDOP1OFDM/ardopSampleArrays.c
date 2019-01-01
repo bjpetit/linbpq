@@ -2,7 +2,7 @@
 //	generating samples. They are pre-calculated (by Calctemplates.c)
 //  so they can be stored in ROM on embedded platforms
 
-#include "ardopc.h"
+#include "ARDOPC.h"
 
 const short int50BaudTwoToneLeaderTemplate[240] = {	// holds just 1 symbol (20 ms) of the 50 Baud leader
 

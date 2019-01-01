@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "1.0.4.1b-OFDMBPQ"
+#define ProductVersion "1.0.4.1j-OFDMBPQ"
 
 #ifdef CONST
 #undef CONST
@@ -459,7 +459,7 @@ extern BOOL Use600Modes;
 extern BOOL UseOFDM;
 extern BOOL EnableOFDM;
 extern BOOL FSKOnly;
-extern NegotiateBW;
+extern int NegotiateBW;
 extern BOOL UseOFDM;
 extern BOOL fastStart;
 extern BOOL ConsoleLogLevel;

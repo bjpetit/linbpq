@@ -143,6 +143,15 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 BOOL CheckForDisconnect();
 BOOL Send10MinID();
 void ProcessPingFrame(char * bytData);
+int EncodeOFDMData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes);void ModOFDMDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void GetOFDMFrameInfo(int OFDMMode, int * intDataLen, int * intRSLen, int * Mode, int * Symbols);
+void ClearOFDMVariables();
+BOOL IsConReq(UCHAR intFrameType, BOOL AllowOFDM);
+VOID EncodeAndSendOFDMACK(UCHAR bytSessionID, int LeaderLength);
+void RemoveProcessedOFDMData();
+int ProcessOFDMAck(int AckType);
+void ProcessOFDMNak(int AckType);
+
 
 void LogStats();
 int ComputeInterFrameInterval(int intRequestedIntervalMS);
@@ -1331,15 +1340,11 @@ void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData)
 	char * ToCall = strlop(bytData, ' ');
 	int Len;
 
-	if (!(intFrameType >= 0x31 && intFrameType <= 0x38))
-		return;
-
-	if (ToCall == NULL)		// messed up by COn Req processing
+	if (ToCall == NULL)		// messed up by Con Req processing
 		ToCall = bytData + strlen(bytData) + 1;
  
 	Len = sprintf(strDisplay, " [%s: %s > %s]", Name(intFrameType), bytData, ToCall); 
     AddTagToDataAndSendToHost(strDisplay, "ARQ", Len);
-
 }
 
  
@@ -1391,15 +1396,13 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
             return;
 		}
 
-    
 		// Process Connect request to MyCallsign or Aux Call signs  (Handles protocol rule 1.2)
 
 		if (!blnFrameDecodedOK)
 				return;				// No decode 
 
-		if (intFrameType < 0x31 || intFrameType > 0x38)		// Not Normal CONREQ
-			if (EnableOFDM == 0 || (intFrameType != OConReq500 && intFrameType != OConReq2500))
-				return;			// No decode or not a ConReq
+		if (IsConReq(intFrameType, EnableOFDM)== FALSE)
+				return;				// not a ConReq
 
 		strCallsign  = strlop(bytData, ' '); // "fromcall tocall"
 		strcpy(strRemoteCallsign, bytData);
@@ -1457,7 +1460,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				QueueCommandToHost(HostCmd);
 				InitializeConnection();	
 				bytDataToSendLength = 0;
-				displayCall('<', strCallsign);
+				displayCall('<', bytData);
 				blnPending = TRUE;				
 				blnEnbARQRpt = FALSE;
 
@@ -1522,7 +1525,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 			// ConReq processing (to handle case of ISS missing initial ConAck from IRS)
 
-			if (intFrameType >= 0x31 && intFrameType <= 0x38) // Process Connect request to MyCallsign or Aux Call signs as for DISC state above (ISS must have missed initial ConACK from ProtocolState.DISC state)
+			if (IsConReq(intFrameType, EnableOFDM)) // Process Connect request to MyCallsign or Aux Call signs as for DISC state above (ISS must have missed initial ConACK from ProtocolState.DISC state)
 			{
 				if (!blnListen)
 					return;
@@ -2556,7 +2559,7 @@ int IRSNegotiateBW(int intConReqFrameType)
 			return ConAck500;
 		}
 
-		if (OConReq2500)
+		if (intConReqFrameType == OConReq2500)
 		{
 			UseOFDM = TRUE;
 			intSessionBW = 2000;

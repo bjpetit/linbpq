@@ -1520,7 +1520,8 @@ void ModOFDMDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderL
 	int OFDMFrame[240] = {0};	// accumulated samples for each carrier
 	short OFDMSamples[240];		// 216 data, 24 CP
 	int p, q;					// start at 24, copy CP later
- 
+	char fType[64];
+
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
 
@@ -1572,6 +1573,8 @@ void ModOFDMDataAndPlay(unsigned char * bytEncodedBytes, int Len, int intLeaderL
 	}
 	
 	WriteDebugLog(LOGDEBUG, "Sending Frame Type %s Mode %s", strType, OFDMModes[OFDMMode]);
+	sprintf(fType, "%s/%s", strType, OFDMModes[OFDMMode]); 
+	DrawTXFrame(fType);
 
 	if (intNumCar == 9)
 	{

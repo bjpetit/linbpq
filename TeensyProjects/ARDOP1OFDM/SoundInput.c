@@ -62,6 +62,7 @@ void DrawDecode(char * Decode);
 void RemoveProcessedOFDMData();
 BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN);
 BOOL DemodOFDM();
+BOOL Decode4FSKOFDMACK();
 
 extern int pktRXMode;
 extern int RXOFDMMode;
@@ -114,7 +115,7 @@ const char Good[MAXCAR] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
 const char Bad[MAXCAR] = {0};	// All bad
 
 
-#define MAX_RAW_LENGTH	256     // I think! Max length of an RS block
+#define MAX_RAW_LENGTH 163     // Len Byte + Data + RS  + CRC I think!
 #define MAX_DATA_LENGTH	8 * 128 // I think! 16QAM.2000.100
 
 // intToneMags should be an array with one row per carrier.
@@ -468,6 +469,18 @@ BOOL IsDataFrame(UCHAR intFrameType)
 
 	return FALSE;
 }
+
+BOOL IsConReq(UCHAR intFrameType, BOOL AllowOFDM)
+{
+	if (intFrameType >= 0x31 && intFrameType <= 0x38)
+		return TRUE;
+	if (AllowOFDM && (intFrameType == OConReq2500 || intFrameType == OConReq500))
+		return TRUE;
+
+	return FALSE;
+}
+
+
 
 //    Subroutine to clear all mixed samples 
 
@@ -1231,14 +1244,14 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				return;
 			}
 
-			DrawRXFrame(0, Name(intFrameType));
-
 			if (IsShortControlFrame(intFrameType))
 			{
 				// Frame has no data so is now complete
 
 				// See if IRStoISS shortcut can be invoked
 				
+				DrawRXFrame(1, Name(intFrameType));
+
 				if (ProtocolState == IRStoISS && intFrameType >= 0xe0)
 				{
 					//	In this state transition to ISS if  ACK frame 
@@ -1274,6 +1287,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 				goto ProcessFrame;
 			}
+
+			DrawRXFrame(0, Name(intFrameType));
 
 			if (intBaud == 25)
 				intSampPerSym = 480;
@@ -1523,7 +1538,7 @@ ProcessFrame:
 					ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);
 				else if (intFrameType == 0x30)
 					AddTagToDataAndSendToHost(bytData, "IDF", frameLen);
-				else if (intFrameType >= 0x31 && intFrameType <= 0x38)
+				else if (IsConReq(intFrameType, TRUE))
 					ProcessUnconnectedConReqFrame(intFrameType, bytData);
 				else if (intFrameType == PING)
 					ProcessPingFrame(bytData);
@@ -1552,7 +1567,7 @@ ProcessFrame:
 				if (ProtocolState == DISC && Monitor)		  // allows ARQ mode to operate like FEC when not connected
 					if (intFrameType == 0x30)				
 						AddTagToDataAndSendToHost(bytData, "IDF", frameLen);			
-					else if (intFrameType >= 0x31 && intFrameType <= 0x38)
+					else if (IsConReq(intFrameType, TRUE))
 						ProcessUnconnectedConReqFrame(intFrameType, bytData);			
 					else if (IsDataFrame(intFrameType)) // check to see if a data frame
 						ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);			
@@ -2873,7 +2888,7 @@ int Acquire4FSKFrameType()
 	else					// not connected and not pending so use &FF (FEC or ARQ unconnected session ID
 		NewType = MinimalDistanceFrameType(&intToneMags[0][0], 0xFF);
   
-	if ((NewType > 0x30 && NewType < 0x39) || NewType == PING)
+	if (IsConReq(NewType, EnableOFDM) || NewType == PING)
 		QueueCommandToHost("PENDING");			 // early pending notice to stop scanners
 
 	if (NewType >= 0 &&  IsShortControlFrame(NewType))		// update the constellation if a short frame (no data to follow)
@@ -4384,7 +4399,12 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				return 0;
 		}
 
-					
+		case OFDMACK:
+
+			blnDecodeOK = Decode4FSKOFDMACK();
+			memcpy(bytData, &bytFrameData[0][0], 6);
+			break;
+			
 		case PktFrameData:
 		{
 			if (pktFSK[pktRXMode])
@@ -4438,11 +4458,14 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				blnDecodeOK = TRUE;
 
 			if (blnDecodeOK)
-				DrawRXFrame(1, Name(intFrameType));
+			{
+				char fType[64];
+				
+				sprintf(fType, "%s/%s", Name(intFrameType), OFDMModes[RXOFDMMode]); 
+				DrawRXFrame(1, fType);
+			}
 
 			break;
-
-
 
 
 //                ' Experimental Sounding frame
