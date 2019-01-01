@@ -840,7 +840,6 @@ VOID UpdateB2Dest(struct MsgInfo * Msg, char * Alias)
 	}
 }
 
-
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 {
 	struct UserInfo * bbs;
@@ -940,6 +939,14 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		strcpy(toCall, _strupr(Msg->via));
 
 		via = strlop(toCall, '@');
+
+		if (via == NULL)
+		{
+			// To and VIA already set up. This should only happen if message is for us
+
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace at %s is for us. Leave Here", AMPRDomain);
+			return 1;
+		}
 
 		if (_stricmp(via, AMPRDomain) == 0)
 		{

@@ -3265,7 +3265,8 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	char * ptr, *Context, *pattern;
 	struct PORTCONTROL * PORT = NULL;
 	MHSTRUC * MH;
-	int n = MHENTRIES;
+	int count = MHENTRIES;
+	int n;
 	char Normcall[20];
 	char From[10];
 	char DigiList[100];
@@ -3336,7 +3337,7 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 			else
 				Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
 	}
-	while (n--)
+	while (count--)
 	{
 		if (MH->MHCALL[0] == 0)
 			break;

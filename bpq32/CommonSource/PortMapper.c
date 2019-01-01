@@ -893,6 +893,9 @@ static VOID ProcessICMPMsg(PIPMSG IPptr)
 	{
 		//	ICMP_REPLY:
 
+		// I don't see how Portmapper should be getting ping responses
+
+/*
 		UCHAR * BUFFER = GetBuff();
 		UCHAR * ptr1;
 		struct _MESSAGE * Msg;
@@ -925,7 +928,7 @@ static VOID ProcessICMPMsg(PIPMSG IPptr)
 		C_Q_ADD(&Session->L4TX_Q, (UINT *)BUFFER);
 
 		PostDataAvailable(Session);
-
+*/
 		return;
 	}
 }

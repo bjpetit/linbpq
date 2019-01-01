@@ -579,8 +579,8 @@ struct MsgInfo
 
 	time_t	datecreated ;
 	time_t	datechanged ;
-	char	fbbs[NBMASK] ;
-	char	forw[NBMASK] ;
+	UCHAR	fbbs[NBMASK] ;
+	UCHAR	forw[NBMASK] ;
 	char	emailfrom[41];
 	char	Locked;				//	Set if selected for sending (NTS Pickup)
 	char	Defered;			//	FBB response '=' received
@@ -627,19 +627,6 @@ typedef struct {
 } BIDRec, *BIDRecP;
 
 
-/* Structures fichiers WP */
-
-typedef struct WPREC {	/* 108 bytes */
-	long last;
-	short  local;
-	char source;
-	char callsign[7];
-	char homebbs[41];
-	char zip[9];
-	char name[13];
-	char qth[31];
-} WPMsgRec, * WPMsgRecP;
-
 typedef struct WPDBASE{	/* 194 bytes */
 	char callsign[7];
 	char name[13];
@@ -655,7 +642,6 @@ typedef struct WPDBASE{	/* 194 bytes */
 	char first_qth[31];
 	char secnd_qth[31];
 } WPRec, * WPRecP;
-
 
 #pragma pack()
 

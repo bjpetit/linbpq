@@ -95,7 +95,9 @@ void YAPPSendFile(ConnectionInfo * conn, struct UserInfo * user, char * filename
 void YAPPSendData(ConnectionInfo * conn);
 VOID CheckBBSNumber(int i);
 struct UserInfo * FindAMPR();
-
+VOID SaveInt64Value(config_setting_t * group, char * name, long long value);
+VOID SaveIntValue(config_setting_t * group, char * name, int value);
+VOID SaveStringValue(config_setting_t * group, char * name, char * value);
 
 config_t cfg;
 config_setting_t * group;
@@ -996,6 +998,14 @@ VOID SaveMessageDatabase()
 	FILE * Handle;
 	int WriteLen;
 	int i;
+	config_setting_t *root, *group;
+	config_t cfg;
+	char Key[16];
+	struct MsgInfo *Msg;
+	char CfgName[MAX_PATH];
+	long long val;
+	char HEXString[64];
+	int n;
 
 	Handle = fopen(MsgDatabasePath, "wb");
 
@@ -1022,6 +1032,70 @@ VOID SaveMessageDatabase()
 
 	if (fclose(Handle) != 0)
 		CriticalErrorHandler("Failed to close message database");
+
+	memset((void *)&cfg, 0, sizeof(config_t));
+
+	config_init(&cfg);
+
+	root = config_root_setting(&cfg);
+
+	for (i = 0; i <= NumberofMessages; i++)
+	{
+		Msg = MsgHddrPtr[i];
+		sprintf(Key, "R%d", i); 
+
+		group = config_setting_add(root, Key, CONFIG_TYPE_GROUP);
+
+		SaveIntValue(group, "type", Msg->type);
+		SaveIntValue(group, "status", Msg->status);
+		SaveIntValue(group, "number", Msg->number);
+		SaveIntValue(group, "length", Msg->length);
+		SaveIntValue(group, "Type", Msg->type);
+		val = Msg->datereceived;
+		SaveInt64Value(group, "rx", val);
+		SaveStringValue(group, "bbsfrom", &Msg->bbsfrom[0]);
+		SaveStringValue(group, "via", &Msg->via[0]);
+		SaveStringValue(group, "from", &Msg->from[0]);
+		SaveStringValue(group, "to", &Msg->to[0]);
+		SaveStringValue(group, "bid", &Msg->bid[0]);
+		SaveStringValue(group, "title", &Msg->title[0]);
+		SaveIntValue(group, "nntpnum", Msg->nntpnum);
+		SaveIntValue(group, "B2Flags", Msg->B2Flags);
+		val = Msg->datecreated;
+		SaveInt64Value(group, "cr", val);
+		val = Msg->datechanged;
+		SaveInt64Value(group, "ch", val);
+
+		for (n = 0; n < NBMASK; n++)
+			sprintf(&HEXString[n * 2], "%02X", Msg->fbbs[n]);
+
+		n = 39;
+		while (n >=0 && HEXString[n] == '0')
+			HEXString[n--] = 0;
+
+		SaveStringValue(group, "fbbs", HEXString);
+
+		for (n = 0; n < NBMASK; n++)
+			sprintf(&HEXString[n * 2], "%02X", Msg->forw[n]);
+
+		n = 39;
+		while (n >= 0 && HEXString[n] == '0')
+			HEXString[n--] = 0;
+
+		SaveStringValue(group, "forw", HEXString);
+	
+		SaveStringValue(group, "emailfrom", &Msg->emailfrom[0]);
+		SaveIntValue(group, "Locked", Msg->Locked);
+		SaveIntValue(group, "Defered", Msg->Defered);
+		SaveIntValue(group, "UTF8", Msg->UTF8);
+	}
+
+	strcpy(CfgName, MsgDatabasePath);
+	strlop(CfgName, '.');
+	strcat(CfgName, ".cfg");
+	
+	config_write_file(&cfg, CfgName);
+	config_destroy(&cfg);
 
 	return;
 }
@@ -7899,6 +7973,15 @@ VOID SaveIntValue(config_setting_t * group, char * name, int value)
 	setting = config_setting_add(group, name, CONFIG_TYPE_INT);
 	if(setting)
 		config_setting_set_int(setting, value);
+}
+
+VOID SaveInt64Value(config_setting_t * group, char * name, long long value)
+{
+	config_setting_t *setting;
+	
+	setting = config_setting_add(group, name, CONFIG_TYPE_INT64);
+	if(setting)
+		config_setting_set_int64(setting, value);
 }
 
 VOID SaveStringValue(config_setting_t * group, char * name, char * value)

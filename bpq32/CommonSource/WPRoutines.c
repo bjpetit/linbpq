@@ -31,6 +31,9 @@ time_t LASTWPSendTime;
 
 VOID DoWPUpdate(WPRec *WP, char Type, char * Name, char * HA, char * QTH, char * ZIP, time_t WPDate);
 VOID Do_Save_WPRec(HWND hDlg);
+VOID SaveInt64Value(config_setting_t * group, char * name, long long value);
+VOID SaveIntValue(config_setting_t * group, char * name, int value);
+VOID SaveStringValue(config_setting_t * group, char * name, char * value);
 
 WPRec * AllocateWPRecord()
 {
@@ -154,6 +157,12 @@ VOID SaveWPDatabase()
 	FILE * Handle;
 	int WriteLen;
 	int i;
+	config_setting_t *root, *group;
+	config_t cfg;
+	char Key[16];
+	WPRec * WP;
+	char CfgName[MAX_PATH];
+	long long val;
 
 	Handle = fopen(WPDatabasePath, "wb");
 
@@ -166,8 +175,45 @@ VOID SaveWPDatabase()
 
 	fclose(Handle);
 
-	return;
+	memset((void *)&cfg, 0, sizeof(config_t));
+
+	config_init(&cfg);
+
+	root = config_root_setting(&cfg);
+
+	for (i = 0; i <= NumberofWPrecs; i++)
+	{
+		WP = WPRecPtr[i];
+		sprintf(Key, "R%d", i); 
+
+		group = config_setting_add(root, Key, CONFIG_TYPE_GROUP);
+
+		SaveStringValue(group, "c", &WP->callsign[0]);
+		SaveStringValue(group, "n", &WP->name[0]);
+		SaveIntValue(group, "T", WP->Type);
+		SaveIntValue(group, "ch", WP->changed);
+		SaveIntValue(group, "s", WP->seen);
+		SaveStringValue(group, "h", &WP->first_homebbs[0]);
+		SaveStringValue(group, "sh", &WP->secnd_homebbs[0]);
+		SaveStringValue(group, "z", &WP->first_zip[0]);
+		SaveStringValue(group, "sz", &WP->secnd_zip[0]);
+		SaveStringValue(group, "q", &WP->first_qth[0]);
+		SaveStringValue(group, "sq", &WP->secnd_qth[0]);
+		val = WP->last_modif;
+		SaveInt64Value(group, "m", val);
+		val = WP->last_seen;
+		SaveInt64Value(group, "s", val);
+	}
+
+	strcpy(CfgName, WPDatabasePath);
+	strlop(CfgName, '.');
+	strcat(CfgName, ".cfg");
+	
+	config_write_file(&cfg, CfgName);
+	config_destroy(&cfg);
 }
+
+			
 
 WPRec * LookupWP(char * Call)
 {
@@ -293,7 +339,6 @@ VOID Do_Delete_WPRec(HWND hDlg)
 	WPRec * WP;
 	int n;
 
-
 	if (CurrentWPIndex == -1)
 	{
 		sprintf(InfoBoxText, "Please select a WP Record to delete");
@@ -329,6 +374,8 @@ VOID Do_Delete_WPRec(HWND hDlg)
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 	free(WP);
+
+	SaveWPDatabase();
 
 	return;
 

@@ -1517,9 +1517,6 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			
 			TidyString(sockptr->MailFrom);
 			
-			strlop(sockptr->MailFrom, '@');
-			if (strlen(sockptr->MailFrom) > 6) sockptr->MailFrom[6]=0;
-
 			// Examine Message to look for html formatting and attachments.
 
 			B2Flag = CheckforMIME(sockptr, sockptr->MailBuffer, &ptr2, &MsgLen);	// Will reformat message if necessary. 
@@ -1602,6 +1599,8 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				Msg->type = 'P';
 				Msg->status = 'N';
 				strcpy(Msg->to, "RMS");
+				strlop(sockptr->MailFrom, '@');
+				if (strlen(sockptr->MailFrom) > 6) sockptr->MailFrom[6]=0;
 				strcpy(Msg->from, sockptr->MailFrom);
 				strcpy(Msg->title, Msgtitle);
 
@@ -2004,8 +2003,8 @@ int CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date,
 
 				if (SendAMPRDirect)
 				{
-//					sprintf(Msg->via,"%s@%s", To, via);
-//					strcpy(To, "AMPR");
+					sprintf(Msg->via,"%s@%s", To, via);
+					strcpy(To, "AMPR");
 				}
 				else
 				{
@@ -2027,9 +2026,18 @@ int CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date,
 		}
 	}
 
-	if (strlen(To) > 6) To[6]=0;
+ 	if (strlen(To) > 6) To[6]=0;
 
 	strcpy(Msg->to, To);
+
+	if (strchr(sockptr->MailFrom, '@'))
+	{
+		char * FromHA = strlop(sockptr->MailFrom, '@');
+		Msg->emailfrom[0] = '@';
+		strcpy(&Msg->emailfrom[1], FromHA);
+	}
+					
+	if (strlen(sockptr->MailFrom) > 6) sockptr->MailFrom[6]=0;
 
 	strcpy(Msg->from, sockptr->MailFrom);
 

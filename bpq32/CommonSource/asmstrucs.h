@@ -48,10 +48,7 @@ extern struct _DATABASE * DataBase;
 
 extern int MAXDESTS;
 
-extern VOID * GETBUFF();
-extern VOID SETUPNODEHEADER();
 extern VOID POSTDATAAVAIL();
-
 
 extern int DATABASE;
 extern int ENDOFDATA;
