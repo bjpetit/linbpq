@@ -67,6 +67,7 @@ void ChatTrytoSend();
 VOID BBSSlowTimer();
 int GetHTMLForms();
 char * AddUser(char * Call, char * password, BOOL BBSFlag);
+VOID SaveChatConfigFile(char * ConfigName);
 
 BOOL IncludesMail = FALSE;
 BOOL IncludesChat = FALSE;

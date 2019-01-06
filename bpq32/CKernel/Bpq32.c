@@ -851,13 +851,17 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add support for PTT using CM108 based soundcard interfaces
 //	Datestamp Telnet log files and delete old Telnet and CMSAcces logs
 
-// 6.0.18.?
+// 6.0.18.1 January 2019
 
 //	Fix validation of NODES broadcasts
 //  Fix HIDENODES
 //  Check for failure to reread config on axip reconfigure
 //	Fix crash if STOPPORT or STARTPORT used on KISS over TCP port
 //	Send Beacons from BCALL or PORTCALL if configured
+//  Fix possible corruption of last entry in MH display
+//	Ensure RTS/DTR is down when opening PTT Port
+//	Remove RECONFIG command
+//	Preparations for 64 bit version
 
 #define CKernel
 
@@ -3572,7 +3576,7 @@ int APIENTRY Reboot()
 
 	return CreateProcess(NULL, Cmd, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 }
-
+/*
 int APIENTRY Reconfig()
 {
 	if (!ProcessConfig())
@@ -3585,7 +3589,7 @@ int APIENTRY Reconfig()
 	WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
 	return 1;
 }
-
+*/
 // Code to support minimizing all BPQ Apps to a single Tray ICON
 
 // As we can't minimize the console window to the tray, I'll use an ordinary

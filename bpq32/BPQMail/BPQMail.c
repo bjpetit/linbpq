@@ -972,12 +972,13 @@
 //	Add support for Winlink HTML Forms to WebMail interface
 //	Update B2 header when using NTS alias file with B2 messages
 
-// 6.0.18.??
+// 6.0.18.1 January 2019
 
 //	Ensure callsigns in WP database are upper case.
 //	Various fixes for Webmail
 //	Fix sending direct to ampr.org addresses
-//	Use SYSOP Call as default for Webmail if set.
+//	Use SYSOP Call as default for Webmail if set
+//	Preparations for 64 bit version
 
 
 #include "BPQMail.h"

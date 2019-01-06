@@ -17,6 +17,12 @@ You should have received a copy of the GNU General Public License
 along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
+// Version 0.0.3.1 July 2016
+//	Switch to Thunderforest tile server
+
+// Version 0.0.4.1 January 2019
+//	Add option to set IS filter to map view automatically
+
 
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
@@ -121,6 +127,11 @@ int sfd;
 struct sockaddr_un my_addr, peer_addr;
 socklen_t peer_addr_size;
 int maxfd;
+
+int AutoFilterTimer = 0;
+
+#define AUTOFILTERDELAY 20		// 20 secs
+
 
 VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
 void UpdateTXMessageLine(struct APRSMESSAGE * Message);
@@ -245,6 +256,9 @@ BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
 BOOL LocalTime = TRUE;
 BOOL KM = FALSE;
+BOOL AddViewToFilter = FALSE;
+
+char ISFilter[1000] = "m/50 u/APBPQ*"; 
 
 int SlowTimer = 0;
 
@@ -510,7 +524,6 @@ char * strupr(char* s)
   return s;
 }
 
-
 // Return coorinates in tiles.
 
 double long2x(double lon, int z) 
@@ -534,6 +547,21 @@ double tiley2lat(double y, int z)
 	return 180.0 / M_PI * atan(0.5 * (exp(n) - exp(-n)));
 }
 
+void GetCornerLatLon(double * TLLat, double * TLLon, double * BRLat, double * BRLon)
+{
+	int X = ScrollX;
+	int Y = ScrollY;
+
+	*TLLat = tiley2lat(SetBaseY + (Y / 256.0), Zoom);
+	*TLLon = tilex2long(SetBaseX + (X / 256.0), Zoom);
+
+	X = ScrollX + cxWinSize;
+	Y = ScrollY + cyWinSize;
+
+	*BRLat = tiley2lat(SetBaseY + (Y / 256.0), Zoom);
+	*BRLon = tilex2long(SetBaseX + (X / 256.0), Zoom);
+}
+
 
 void GetMouseLatLon(double * Lat, double * Lon)
 {
@@ -543,7 +571,6 @@ void GetMouseLatLon(double * Lat, double * Lon)
 	*Lat = tiley2lat(SetBaseY + (Y / 256.0), Zoom);
 	*Lon = tilex2long(SetBaseX + (X / 256.0), Zoom);
 }
-
 
 BOOL GetLocPixels(double Lat, double Lon, int * X, int * Y)
 {
@@ -650,7 +677,9 @@ BOOL CentrePositionToMouse(double Lat, double Lon)
 		SetBaseY++;
 		ScrollY -= 256;
 	}
-	
+		
+	AutoFilterTimer = AUTOFILTERDELAY;		// Update filter if no change for 30 secs
+
 	return TRUE;
 }
 
@@ -2875,6 +2904,9 @@ void SaveConfig()
 
 	SaveIntValue(group, "LocalTime", LocalTime);
 	SaveIntValue(group, "KM", KM);
+	SaveIntValue(group, "AddViewToFilter", AddViewToFilter);
+	SaveStringValue(group, "ISFilter", ISFilter);
+
 
 	SaveIntValue(group, "CreateJPEG", CreateJPEG);
 	SaveIntValue(group, "JPEGInterval", JPEGInterval);
@@ -2952,7 +2984,7 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.3.1\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.4.1\n");
   	printf("Copyright © 2004-2017 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
@@ -3000,9 +3032,13 @@ int main(int argc, char *argv[])
 			LocalTime = GetIntValue(group, "LocalTime", 0);
 			KM = GetIntValue(group, "KM", 0);
 
+			AddViewToFilter = GetIntValue(group, "AddViewToFilter", 0);
+
 			CreateJPEG = GetIntValue(group, "CreateJPEG", 1);
 			JPEGInterval = GetIntValue(group, "JPEGInterval", 300);
 			GetStringValue(group, "JPEGFileName", JPEGFileName);
+			GetStringValue(group, "ISFilter", ISFilter);
+
 		}
 	}
 
@@ -3321,6 +3357,8 @@ int main(int argc, char *argv[])
 	_beginthread(GTKThread, 0, NULL);
 	_beginthread(SecTimer, 0, NULL);
 
+	AutoFilterTimer = AUTOFILTERDELAY;		// Update filter if no change for 30 secs
+
 	while(Running)
 	{
 		unsigned char Msg[256];
@@ -3588,6 +3626,8 @@ int main(int argc, char *argv[])
 				}
 
 				NeedRefresh = TRUE;
+				AutoFilterTimer = AUTOFILTERDELAY;		// Update filter if no change for 30 secs
+
 				break;
 			}
 			break;
@@ -3624,6 +3664,19 @@ void PutAPRSMessage(char * Frame, int Len)
 {
 	if (sendto(sfd, Frame, Len, 0, (struct sockaddr *) &peer_addr, sizeof(struct sockaddr_un)) != Len)
 		perror("sendto");
+}
+
+VOID SendFilterCommand(char * Filter)
+{
+	char Msg[2000];
+	int n;
+
+	n = sprintf(Msg, ":%-9s:filter %s{1", "SERVER", Filter);
+
+	PutAPRSMessage(Msg, n);
+
+	n = sprintf(Msg, ":%-9s:filter?{1", "SERVER");
+	PutAPRSMessage(Msg, n);
 }
 
 
@@ -3819,7 +3872,7 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 	}
 
 	if (OnlyMine == FALSE)		// Want All
-		if (OnlySeq == FALSE || ptr->Seq[0] != 0)
+		if (OnlySeq == FALSE || (ptr && ptr->Seq[0] != 0))
 			goto wantit;
 			
 	// ignore
@@ -4064,6 +4117,26 @@ VOID SecTimer()
 		n++;
 
 	};
+
+	if (AutoFilterTimer)
+	{
+		AutoFilterTimer--;
+
+		if (AutoFilterTimer == 0 && AddViewToFilter)
+		{
+			// send filter to IS
+
+			double TLLat, TLLon, BRLat, BRLon;
+			char Filter[256];
+
+			GetCornerLatLon(&TLLat, &TLLon, &BRLat, &BRLon);
+			sprintf(Filter, "%s a/%.3f/%.3f/%.3f/%.3f", ISFilter, TLLat, TLLon, BRLat, BRLon);
+
+			SendFilterCommand(Filter);
+		}
+	}
+
+
 
 	Sleep(1000);
 	}

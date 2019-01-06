@@ -79,6 +79,7 @@
 #define IDC_CHECK1                      1085
 #define IDC_KM                          1085
 #define IDC_CHECK2                      1086
+#define IDC_ADDVIEWTOFILTER             1087
 #define IDC_STATUS                      9990
 #define IDD_CHATCOLCONFIG               30008
 #define IDC_CHATCOLOURS                 30009
@@ -87,7 +88,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        123
+#define _APS_NEXT_RESOURCE_VALUE        128
 #define _APS_NEXT_COMMAND_VALUE         40001
 #define _APS_NEXT_CONTROL_VALUE         1087
 #define _APS_NEXT_SYMED_VALUE           101

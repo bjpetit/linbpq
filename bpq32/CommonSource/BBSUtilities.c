@@ -998,14 +998,16 @@ VOID SaveMessageDatabase()
 	FILE * Handle;
 	int WriteLen;
 	int i;
-	config_setting_t *root, *group;
-	config_t cfg;
 	char Key[16];
 	struct MsgInfo *Msg;
 	char CfgName[MAX_PATH];
 	long long val;
 	char HEXString[64];
 	int n;
+	char * CfgBuffer;
+	char * Cfg;
+	int CfgLen = 0;
+	FILE * hFile;
 
 	Handle = fopen(MsgDatabasePath, "wb");
 
@@ -1032,39 +1034,31 @@ VOID SaveMessageDatabase()
 
 	if (fclose(Handle) != 0)
 		CriticalErrorHandler("Failed to close message database");
-
-	memset((void *)&cfg, 0, sizeof(config_t));
-
-	config_init(&cfg);
-
-	root = config_root_setting(&cfg);
+/*
+	CfgBuffer = Cfg = malloc(5000000);
+	CfgLen = 5000000;
 
 	for (i = 0; i <= NumberofMessages; i++)
 	{
 		Msg = MsgHddrPtr[i];
-		sprintf(Key, "R%d", i); 
+		Cfg += sprintf(Cfg, "R%d:\r\n", i); 
 
-		group = config_setting_add(root, Key, CONFIG_TYPE_GROUP);
-
-		SaveIntValue(group, "type", Msg->type);
-		SaveIntValue(group, "status", Msg->status);
-		SaveIntValue(group, "number", Msg->number);
-		SaveIntValue(group, "length", Msg->length);
-		SaveIntValue(group, "Type", Msg->type);
-		val = Msg->datereceived;
-		SaveInt64Value(group, "rx", val);
-		SaveStringValue(group, "bbsfrom", &Msg->bbsfrom[0]);
-		SaveStringValue(group, "via", &Msg->via[0]);
-		SaveStringValue(group, "from", &Msg->from[0]);
-		SaveStringValue(group, "to", &Msg->to[0]);
-		SaveStringValue(group, "bid", &Msg->bid[0]);
-		SaveStringValue(group, "title", &Msg->title[0]);
-		SaveIntValue(group, "nntpnum", Msg->nntpnum);
-		SaveIntValue(group, "B2Flags", Msg->B2Flags);
-		val = Msg->datecreated;
-		SaveInt64Value(group, "cr", val);
-		val = Msg->datechanged;
-		SaveInt64Value(group, "ch", val);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "type", Msg->type); 
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "status", Msg->status);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "number", Msg->number);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "length", Msg->length);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "Type", Msg->type);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "rx", Msg->datereceived);
+		Cfg += sprintf(Cfg, "%s=%s\r\n", "bbsfrom", &Msg->bbsfrom[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "via", &Msg->via[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "from", &Msg->from[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "to", &Msg->to[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "bid", &Msg->bid[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "title", &Msg->title[0]);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "nntpnum", Msg->nntpnum);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "B2Flags", Msg->B2Flags);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "cr", Msg->datecreated);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "ch", Msg->datechanged);
 
 		for (n = 0; n < NBMASK; n++)
 			sprintf(&HEXString[n * 2], "%02X", Msg->fbbs[n]);
@@ -1073,7 +1067,7 @@ VOID SaveMessageDatabase()
 		while (n >=0 && HEXString[n] == '0')
 			HEXString[n--] = 0;
 
-		SaveStringValue(group, "fbbs", HEXString);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "fbbs", HEXString);
 
 		for (n = 0; n < NBMASK; n++)
 			sprintf(&HEXString[n * 2], "%02X", Msg->forw[n]);
@@ -1082,21 +1076,74 @@ VOID SaveMessageDatabase()
 		while (n >= 0 && HEXString[n] == '0')
 			HEXString[n--] = 0;
 
-		SaveStringValue(group, "forw", HEXString);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "forw", HEXString);
 	
-		SaveStringValue(group, "emailfrom", &Msg->emailfrom[0]);
-		SaveIntValue(group, "Locked", Msg->Locked);
-		SaveIntValue(group, "Defered", Msg->Defered);
-		SaveIntValue(group, "UTF8", Msg->UTF8);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "emailfrom", &Msg->emailfrom[0]);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "Locked", Msg->Locked);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "Defered", Msg->Defered);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "UTF8", Msg->UTF8);
 	}
+
+	for (i = 0; i <= 10000; i++)
+	{
+		Msg = MsgHddrPtr[0];
+		Cfg += sprintf(Cfg, "R%d:\r\n", i); 
+
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "type", Msg->type); 
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "status", Msg->status);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "number", Msg->number);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "length", Msg->length);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "Type", Msg->type);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "rx", Msg->datereceived);
+		Cfg += sprintf(Cfg, "%s=%s\r\n", "bbsfrom", &Msg->bbsfrom[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "via", &Msg->via[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "from", &Msg->from[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "to", &Msg->to[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "bid", &Msg->bid[0]);
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "title", &Msg->title[0]);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "nntpnum", Msg->nntpnum);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "B2Flags", Msg->B2Flags);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "cr", Msg->datecreated);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "ch", Msg->datechanged);
+
+		for (n = 0; n < NBMASK; n++)
+			sprintf(&HEXString[n * 2], "%02X", Msg->fbbs[n]);
+
+		n = 39;
+		while (n >=0 && HEXString[n] == '0')
+			HEXString[n--] = 0;
+
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "fbbs", HEXString);
+
+		for (n = 0; n < NBMASK; n++)
+			sprintf(&HEXString[n * 2], "%02X", Msg->forw[n]);
+
+		n = 39;
+		while (n >= 0 && HEXString[n] == '0')
+			HEXString[n--] = 0;
+
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "forw", HEXString);
+	
+		Cfg += sprintf(Cfg, "%s='%s'\r\n", "emailfrom", &Msg->emailfrom[0]);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "Locked", Msg->Locked);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "Defered", Msg->Defered);
+		Cfg += sprintf(Cfg, "%s=%d\r\n", "UTF8", Msg->UTF8);
+	}
+
 
 	strcpy(CfgName, MsgDatabasePath);
 	strlop(CfgName, '.');
 	strcat(CfgName, ".cfg");
-	
-	config_write_file(&cfg, CfgName);
-	config_destroy(&cfg);
 
+	hFile = fopen(CfgName, "wb");
+	if (hFile)
+	{
+		int	Written = fwrite(CfgBuffer, 1, Cfg - CfgBuffer, hFile);
+		fclose(hFile);
+	}
+	
+	free(CfgBuffer);
+*/
 	return;
 }
 

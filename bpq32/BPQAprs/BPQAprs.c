@@ -70,6 +70,9 @@
 // February 2018 1.1.12.1
 // Add option to show distances in KM
 
+//	Jan 2019 1.1.13.1
+//	Add option to set IS filter to map view automatically
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 #define _WIN32_WINNT 0x0501	
@@ -125,9 +128,14 @@ int RetryTimer = 45;
 int ExpireTime = 120;
 int TrackExpireTime = 1440;
 BOOL SuppressNullPosn = FALSE;
+BOOL AddViewToFilter = FALSE;
 BOOL DefaultNoTracks = FALSE;
 BOOL LocalTime = TRUE;
 BOOL KM = FALSE;
+
+int AutoFilterTimer = 0;
+
+#define AUTOFILTERDELAY 20		// 20 secs
 
 char WXFileName[MAX_PATH];
 char WXComment[80];
@@ -364,7 +372,7 @@ WNDPROC wpOrigInputProc;
 BOOL MsgMinimized;
 
 char szAppName[] = "BPQAPRS";
-char szTitle[80]   = "BPQAPRS Map" ; // The title bar text
+char szTitle[80];
 
 BOOL APRSISOpen = FALSE;
 
@@ -729,7 +737,9 @@ BOOL CentrePositionToMouse(double Lat, double Lon)
 		}
 
 		ReloadMaps = TRUE;
-	}
+	}	
+	
+	AutoFilterTimer = AUTOFILTERDELAY;		// Update filter if no change for 30 secs
 	return TRUE;
 }
 
@@ -790,6 +800,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	if (!InitInstance(hInstance, nCmdShow))
 		return (FALSE);
+
+	AutoFilterTimer = AUTOFILTERDELAY;		// Update filter if no change for 30 secs
 
 	// Main message loop:
 
@@ -1155,7 +1167,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey, "SuppressNullPosn", 0, &Type,(UCHAR *)&SuppressNullPosn, &Vallen);
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "DefaultNoTracks", 0, &Type,(UCHAR *)&DefaultNoTracks, &Vallen);
-
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "AddViewToFilter", 0, &Type,(UCHAR *)&AddViewToFilter, &Vallen);
 		Vallen=250;
 		retCode = RegQueryValueEx(hKey, "WXFile", 0, &Type, WXFileName, &Vallen);
 		Vallen=79;
@@ -1197,6 +1210,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	}
 
 	hInst = hInstance; // Store instance handle in our global variable
+
+	sprintf(szTitle, "BPQAPRS Version %s Map", VersionString);
 
 	hMapWnd = hWnd = CreateWindow(szAppName, szTitle,
 		WS_OVERLAPPEDWINDOW,
@@ -1405,6 +1420,8 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 
 		CheckDlgButton(hDlg, IDC_SUPZERO, SuppressNullPosn);
 		CheckDlgButton(hDlg, IDC_NOTRACKS, DefaultNoTracks);
+		CheckDlgButton(hDlg, IDC_ADDVIEWTOFILTER, AddViewToFilter);
+
 		CheckDlgButton(hDlg, IDC_LOCALTIME, LocalTime);	
 		CheckDlgButton(hDlg, IDC_KM, KM);	
 					
@@ -1482,6 +1499,11 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			SuppressNullPosn = IsDlgButtonChecked(hDlg, IDC_SUPZERO);
 			break;
 
+		case IDC_ADDVIEWTOFILTER:
+
+			AddViewToFilter = IsDlgButtonChecked(hDlg, IDC_ADDVIEWTOFILTER);
+			break;
+
 		case IDC_LOCALTIME:
 	
 			LocalTime = IsDlgButtonChecked(hDlg, IDC_LOCALTIME);
@@ -1530,6 +1552,8 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			retCode = RegSetValueEx(hKey, "WXEnabled", 0, REG_DWORD, (BYTE *)&SendWX, 4);
 			retCode = RegSetValueEx(hKey, "SuppressNullPosn", 0, REG_DWORD, (BYTE *)&SuppressNullPosn, 4);
 			retCode = RegSetValueEx(hKey, "DefaultNoTracks", 0, REG_DWORD, (BYTE *)&DefaultNoTracks, 4);
+			retCode = RegSetValueEx(hKey, "AddViewToFilter", 0, REG_DWORD, (BYTE *)&AddViewToFilter, 4);
+
 			retCode = RegSetValueEx(hKey, "LocalTime", 0, REG_DWORD, (BYTE *)&LocalTime, 4);
 			retCode = RegSetValueEx(hKey, "KM", 0, REG_DWORD, (BYTE *)&KM, 4);
 			retCode = RegSetValueEx(hKey, "CreateJPEG", 0, REG_DWORD, (BYTE *)&CreateJPEG, 4);
@@ -1833,7 +1857,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			Zoom = NewZoom;
 
-			CentrePositionToMouse(MouseLat, MouseLon);	
+			CentrePositionToMouse(MouseLat, MouseLon);
 
 			ReloadMaps = TRUE;
 
@@ -2045,6 +2069,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				DownX = MouseX;
 				DownY = MouseY;
+
+				AutoFilterTimer = AUTOFILTERDELAY;		// Update filter if no change for 30 secs
 
 				break;
 			}
@@ -2299,8 +2325,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				double TLLat, TLLon, BRLat, BRLon;
 				char Filter[256];
 
+				AutoFilterTimer = 0;		// Cancel Update filter
+				
 				GetCornerLatLon(&TLLat, &TLLon, &BRLat, &BRLon);
-				//a/50/-130/20/-70 
 				sprintf(Filter, "%s a/%.3f/%.3f/%.3f/%.3f", ISFilter, TLLat, TLLon, BRLat, BRLon);
 
 				APRSConnect(APRSCall, Filter);			// Will resend Filter
@@ -5014,7 +5041,7 @@ struct APRSMESSAGE * ptr = Messages;
 			}
 
 			if (OnlyMine == FALSE)		// Want All
-				if (OnlySeq == FALSE || ptr->Seq[0] != 0)
+				if (OnlySeq == FALSE || (ptr && ptr->Seq[0] != 0))
 					goto wantit;
 			
 			// ignore
@@ -5704,6 +5731,24 @@ VOID SecTimer()
 	}
 	if (SendWX)
 		SendWeatherBeacon();
+
+	if (AutoFilterTimer)
+	{
+		AutoFilterTimer--;
+
+		if (AutoFilterTimer == 0 && AddViewToFilter)
+		{
+			// send filter to IS
+
+			double TLLat, TLLon, BRLat, BRLon;
+			char Filter[256];
+
+			GetCornerLatLon(&TLLat, &TLLon, &BRLat, &BRLon);
+			sprintf(Filter, "%s a/%.3f/%.3f/%.3f/%.3f", ISFilter, TLLat, TLLon, BRLat, BRLon);
+
+			APRSConnect(APRSCall, Filter);			// Will resend Filter
+		}
+	}
 
 	// If any changes to image redraw it
 

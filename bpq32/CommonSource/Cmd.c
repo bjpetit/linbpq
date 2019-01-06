@@ -192,7 +192,7 @@ VOID DUMPCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 						
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
-
+/*
 VOID RECONFIG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	if (Reconfig())
@@ -208,7 +208,7 @@ VOID RECONFIG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
-
+*/
 VOID REBOOT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	if (Reboot())
@@ -3934,7 +3934,7 @@ CMDX COMMANDS[] =
 {
 	"SAVENODES   ",8, SAVENODES, 0,
 	"REBOOT      ",6, REBOOT, 0,
-	"RECONFIG    ",8 , RECONFIG, 0,
+//	"RECONFIG    ",8 , RECONFIG, 0,
 	"RESTART     ",7,RESTART,0,
 	"SENDNODES   ",8,SENDNODES,0,
 	"EXTRESTART  ",10, EXTPORTVAL,&DP.EXTRESTART,
