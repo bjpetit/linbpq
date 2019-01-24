@@ -165,8 +165,8 @@ struct STREAMINFO
 {
 //	TRANSPORTENTRY * AttachedSession;
 
-	UINT PACTORtoBPQ_Q;			// Frames for BPQ
-	UINT BPQtoPACTOR_Q;			// Frames for PACTOR
+	void * PACTORtoBPQ_Q;		// Frames for BPQ
+	void * BPQtoPACTOR_Q;		// Frames for PACTOR
 	int	FramesOutstanding;		// Frames Queued - used for flow control
 	int	FramesQueued;			// Frames Queued - used for flow control
 	BOOL InternalCmd;			// Last Command was generated internally
@@ -234,6 +234,20 @@ typedef struct AGWINFO
 	int MaxSessions;
 	int ConnTimeOut;
 	int PollDelay;
+
+#ifdef WIN32
+
+	// For selecting UZ7HO Mode and Freq
+
+	COMBOBOXINFO cbinfo;		// UZ7HO Modem Combo Box info
+	HWND hFreq;					// UZ7HO Frequency Box
+	HWND hSpin;					// UZ7HO Spin Button
+
+#endif
+
+	int CenterFreq;
+	int Modem;					// Modem number in list 
+
 } *PAGWINFO;
 
 typedef struct ARQINFO
@@ -358,8 +372,8 @@ typedef struct TNCINFO
 
 	BOOL Minimized;				// Start Minimized flag
 
-	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
-	int BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
+	void * WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
+	void * BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
 
 	SOCKET TCPSock;				// Control Socket
 	SOCKET TCPDataSock;			// Data Socket
@@ -436,6 +450,7 @@ typedef struct TNCINFO
 
 	int PID;						// Process ID for Software TNC
 	HWND hWnd;						// Main window handle for Software TNC
+
 	char * CaptureDevices;
 	char * PlaybackDevices;
 	char * ProgramPath;
@@ -525,9 +540,9 @@ typedef struct TNCINFO
 	int OKToChangeFreq;				// 1 = SCS Says OK to change, -1 = Dont Change zero = still waiting
 	BOOL DontWantToChangeFreq;		// Change done - ok to  SCS
 	BOOL DontReleasePermission;		// Hold Permission to prevent calls on this frequency
-	int TimeEnteredSYNCMode;		// To detect scan lock when using applcalls on PTC
+	time_t TimeEnteredSYNCMode;		// To detect scan lock when using applcalls on PTC
 	BOOL SyncSupported;				// TNC reports sync
-	int TimeScanLocked;				// ditto for TNCs that don't report SYNC
+	time_t TimeScanLocked;				// ditto for TNCs that don't report SYNC
 	int PTCStatus;					// Sync, Idle, Traffic, etc
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly

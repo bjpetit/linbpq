@@ -36,7 +36,7 @@ int RFOnly = 0;
 int MAXRTT = 9000;			// 90 secs
 int MaxHops = 4;
 
-int RTTInterval = 24;			// 4 Minutes
+int RTTInterval = 24;		// 4 Minutes
 
 BOOL IPRequired = FALSE;
 BOOL PMRequired = FALSE;
@@ -45,7 +45,7 @@ char HFCTEXT[81] = "";
 int HFCTEXTLEN = 0;
 
 char LOCATOR[80] = "";			// Locator for Reporting - may be Maidenhead or LAT:LON
-char MAPCOMMENT[250] = "";		// Locator for Reporting - may be Maidenhead or LAT:LON
+char MAPCOMMENT[250] = "";
 char LOC[7] = "";				// Maidenhead Locator for Reporting
 char ReportDest[7];
 

@@ -64,7 +64,7 @@ VOID CreateUserReport();
 
 int LastHouseKeepingTime;
 
-int LastTrafficTime;
+time_t LastTrafficTime;
 
 void DeletetoRecycle(char * FN)
 {

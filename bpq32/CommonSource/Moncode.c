@@ -24,7 +24,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define _USE_32BIT_TIME_T
 
 #include <stdlib.h>
 #include <string.h>
@@ -224,8 +223,13 @@ KC6OAR*>ID:
 
 	SS = Stamp - MM * 60;
 
+	// Add Port: if MINI mode and monitoring more than one port
+
 	if (MINI == 0)
 		Output += sprintf((char *)Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
+	else
+		if (CountBits(Mask) > 1)
+			Output += sprintf((char *)Output, "%d:", Port);
 
 	From[ConvFromAX25(msg->ORIGIN, From)] = 0;
 	To[ConvFromAX25(msg->DEST, To)] = 0;

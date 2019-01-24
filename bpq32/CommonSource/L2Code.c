@@ -23,7 +23,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define Kernel
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define _USE_32BIT_TIME_T
 
 #pragma data_seg("_BPQDATA")
 
@@ -100,6 +99,7 @@ BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg);
 VOID L2SENDINVALIDCTRL(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL);
 UCHAR * SETUPADDRESSES(struct _LINKTABLE * LINK, PMESSAGE Msg);
 VOID ProcessXIDCommand(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL, UCHAR MSGFLAG);
+int CountBits(unsigned long in);
 
 extern int REALTIMETICKS;
 
@@ -3503,7 +3503,7 @@ BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg)
 
 	while (i--)
 	{
-		if ((Msg->PORT & 0x7f) == L4->LISTEN)
+		if ((CountBits(L4->LISTEN) == 1) && ((1 << ((Msg->PORT & 0x7f) - 1) && L4->LISTEN)))
 		{
 			// See if he is calling our call
 

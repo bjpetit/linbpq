@@ -17,7 +17,6 @@
 
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
@@ -357,7 +356,7 @@ struct OldUserInfo
 //	indicat relai[8];			/* 64 Digis path */
 	int		lastmsg;			/* 4  Last L number */
 	int		ConnectsIn;				/* 4  Number of connexions in*/
-	time_t	TimeLastConnected;  //Last connexion date */
+	int		TimeLastConnected;  //Last connexion date */
 //	long	lastyap __a2__  ;	/* 4  Last YN date */
 	ULONG	flags    ;	/* 4  Flags */
 
@@ -422,7 +421,7 @@ struct UserInfo
 	int		Length;				// To make subsequent format changes easier
 
 	int		lastmsg;			/* 4  Last L number */
-	time_t	TimeLastConnected;  //Last connexion date */
+	int		xTimeLastConnected;  //Last connexion date */
 	ULONG	flags    ;	/* 4  Flags */
 
 	UCHAR	PageLen;			// Lines Per Page
@@ -447,7 +446,10 @@ struct UserInfo
 	
 	char CMSPass[16];			// For Secure Signon
 	int WebSeqNo;
-	char Filler[44];			// So we can add a few fields wirhout another resize
+	
+	long long TimeLastConnected;  //Last connexion date */
+
+	char Filler[44 - 8];			// So we can add a few fields wirhout another resize
 };
 
 // flags equates
@@ -560,7 +562,7 @@ struct MsgInfo
 	char	status ;
 	int		number ;
 	int		length ;
-	time_t	datereceived;
+	int		xdatereceived;
 	char	bbsfrom[7] ;			// ? BBS we got it from ?
 	char	via[41] ;
 	char	from[7] ;
@@ -577,15 +579,23 @@ struct MsgInfo
 	#define FromRMS 8
 	#define FromRMSExpress 16 
 
-	time_t	datecreated ;
-	time_t	datechanged ;
-	UCHAR	fbbs[NBMASK] ;
-	UCHAR	forw[NBMASK] ;
+	int		xdatecreated;
+	int		xdatechanged;
+	UCHAR	fbbs[NBMASK];
+	UCHAR	forw[NBMASK];
 	char	emailfrom[41];
 	char	Locked;				//	Set if selected for sending (NTS Pickup)
 	char	Defered;			//	FBB response '=' received
 	UCHAR	UTF8;				//	Set if Message is in UTF8 (ie from POP/SMTP)
-	char	Spare[61];			//  For future use
+
+// For 64 bit time_t compatibility define as long long 
+// (so struct is same with 32 or 64 bit time_t)
+	
+	long long datereceived;
+	long long datecreated;
+	long long datechanged;
+
+	char	Spare[61 - 24];			//  For future use
 } ;
 
 #define MSGTYPE_B 0
@@ -1509,7 +1519,7 @@ extern struct Override ** LTTO;
 extern struct Override ** LTAT;
 
 extern int LastHouseKeepingTime;
-extern int LastTrafficTime;
+extern time_t LastTrafficTime;
 
 extern char * MyElements[];
 extern char ** AliasText;

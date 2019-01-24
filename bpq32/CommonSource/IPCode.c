@@ -77,7 +77,6 @@ TODo	?Multiple Adapters
 #pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include <stdio.h>
 #include <time.h>
@@ -1291,9 +1290,6 @@ VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 	}
 	return;
 }
-
-#define MAXDATA BUFFLEN-16
-
 
 static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port)
 {

@@ -18,7 +18,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
+
 
 #include "CHeaders.h"
 #include "BPQMail.h"
@@ -825,7 +825,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 			strcpy(FullTo, Msg->to);
 
 		sprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
-			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 		if (Msg->B2Flags)
 		{
@@ -1174,9 +1174,9 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 	{
 		char EmailFromLine[256] = "";
 
-		strcpy(D1, FormatDateAndTime(Msg->datecreated, FALSE));
-		strcpy(D2, FormatDateAndTime(Msg->datereceived, FALSE));
-		strcpy(D3, FormatDateAndTime(Msg->datechanged, FALSE));
+		strcpy(D1, FormatDateAndTime((time_t)Msg->datecreated, FALSE));
+		strcpy(D2, FormatDateAndTime((time_t)Msg->datereceived, FALSE));
+		strcpy(D3, FormatDateAndTime((time_t)Msg->datechanged, FALSE));
 
 		if (Msg->emailfrom[0])
 			sprintf(EmailFromLine, "Email From <input style=\"width:320px;\" name=EFROM value=%s><br>", Msg->emailfrom);
@@ -2701,7 +2701,7 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 
 		ConnectsIn, MsgsReceived, MsgsRejectedIn,
 		ConnectsOut, MsgsSent, MsgsRejectedOut,
-		BytesForwardedIn, FormatDateAndTime(User->TimeLastConnected, FALSE), 
+		BytesForwardedIn, FormatDateAndTime((time_t)User->TimeLastConnected, FALSE), 
 		BytesForwardedOut, User->lastmsg,
 		User->Name,
 		User->pass,

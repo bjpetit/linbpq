@@ -199,7 +199,10 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				{
 					// Kill Messages sent to paclink/RMS Express unless BBS FWD bit set
 
-					if (check_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber) == 0)
+					// What if WLE retrieves P message that is queued to differnet BBS?
+					// if we dont kill it will be offered again
+
+					if (FBBHeader->FwdMsg->type == 'P' || (check_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber) == 0))
 						FlagAsKilled(FBBHeader->FwdMsg);
 				}
 				
@@ -208,7 +211,11 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 				FBBHeader->FwdMsg->Locked = 0;	// Unlock
 
-				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+				// Shouldn't we set P messages as Forwarded
+				// (or will check above have killed it if it is P with other FWD bits set)
+				// Maybe better to be safe !!
+
+				if (FBBHeader->FwdMsg->type == 'P' || memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
 				{
 					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
 					FBBHeader->FwdMsg->datechanged=time(NULL);
@@ -1544,7 +1551,7 @@ copyRest:
 //		FwdMsg->datechanged=time(NULL);
 //	}
 
-	tm = gmtime(&Msg->datechanged);	
+	tm = gmtime((time_t *)&Msg->datechanged);	
 	
 	sprintf(Date, "%04d/%02d/%02d %02d:%02d",
 		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);

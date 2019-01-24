@@ -24,7 +24,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +33,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "CHeaders.h"
 #include "tncinfo.h"
+#include "configstructs.h"
+
+extern struct CONFIGTABLE xxcfg;
 
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
@@ -46,8 +48,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "Commdlg.h"
 
 #endif
-
-#define MAXDATA BUFFLEN-16
 
 extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
@@ -67,32 +67,22 @@ VOID COMClearRTS(HANDLE fd);
 VOID WriteMiniDump();
 void printStack(void);
 
+
 //	Read/Write length field in a buffer header
 
 //	Needed for Big/LittleEndian and ARM5 (unaligned operation problem) portability
 
 
-VOID PutLengthinBuffer(UCHAR * buff, int datalen)		// Neded for arm5 portability
+VOID PutLengthinBuffer(PDATAMESSAGE buff, int datalen)		// Needed for arm5 portability
 {
-#ifdef __BIG_ENDIAN__
-	short * sp;					// MAC POWERPC etc
-	sp = (short *)&buff[5];
-	*sp = datalen;
-#else
-	buff[5]=(datalen & 0xff);	// 
-	buff[6]=(datalen >> 8);
-#endif
+	memcpy(&buff->LENGTH, &datalen, 2);	
 }
 
-int GetLengthfromBuffer(UCHAR * buff)				// Needed for arm5 portability
+int GetLengthfromBuffer(PDATAMESSAGE buff)				// Needed for arm5 portability
 {
-#ifdef __BIG_ENDIAN__
-//	short * sp;					// MAC POWERPC etc
-//	return sp = (short *)&buff[5];
-	return (buff[5]<<8) + buff[6];	
-#else
-	return (buff[6]<<8) + buff[5];	
-#endif
+	USHORT Length;
+	memcpy(&Length, &buff->LENGTH, 2);
+	return Length;
 }
 
 
@@ -144,11 +134,11 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 
 	// Make sure guard zone is zeros
 
-	if (*(first + BUFFLEN/4) != 0)
-	{
-		Debugprintf("Q_REM %X GUARD ZONE CORRUPT %x Called from %s Line %d", first, *(first + BUFFLEN/4), File, Line);
-		printStack();
-	}
+//	if (*(first + BUFFLEN/4) != 0)
+//	{
+//		Debugprintf("Q_REM %X GUARD ZONE CORRUPT %x Called from %s Line %d", first, *(first + BUFFLEN/4), File, Line);
+//		printStack();
+//	}
 
 	return (first);
 }
@@ -272,13 +262,13 @@ int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 
 	// Make sure guard zone is zeros
 
-	if (*(BUFF + BUFFLEN/4) != 0)
-	{
-		Debugprintf("C_Q_ADD %X GUARD ZONE CORRUPT %x Called from %s Line %d", BUFF, *(BUFF + BUFFLEN/4), File, Line);
-		printStack();
+//	if (*(BUFF + BUFFLEN/4) != 0)
+//	{
+//		Debugprintf("C_Q_ADD %X GUARD ZONE CORRUPT %x Called from %s Line %d", BUFF, *(BUFF + BUFFLEN/4), File, Line);
+//		printStack();
 
-		return 0;
-	}
+//		return 0;
+//	}
 
 	// Make sure address is within pool
 
@@ -721,7 +711,7 @@ VOID SetApplPorts()
 
 	int i, n;
 
-	App = (struct APPLCONFIG *)&ConfigBuffer[ApplOffset];
+	App = &xxcfg.C_APPL[0];
 
 	for (i=0; i < NumberofAppls; i++)
 	{

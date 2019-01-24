@@ -22,8 +22,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define _CRT_SECURE_NO_DEPRECATE
 
-#define _USE_32BIT_TIME_T
-
 #define DllImport
 
 #include "CHeaders.h"
@@ -603,7 +601,7 @@ VOID HTTPTimer()
 
 struct HTTPConnectionInfo * AllocateSession(SOCKET sock, char Mode)
 {
-	int KeyVal;
+	time_t KeyVal;
 	struct HTTPConnectionInfo * Session = zalloc(sizeof(struct HTTPConnectionInfo));
 	int i;
 	

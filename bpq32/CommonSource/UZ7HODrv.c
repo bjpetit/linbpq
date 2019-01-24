@@ -23,11 +23,16 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Uses BPQ EXTERNAL interface
 //
 
+// Interlock and scanning with UZ7HO driver.
+
+// A UZ7HO port can be used in much the same way as any other HF port, so that it only allows one connect at
+// a time and takes part in Interlock and Scan Control proessing. But it can also be used as a multisession
+// driver so it does need special treatment.
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include <stdio.h>
 #include <time.h>
@@ -47,8 +52,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define TIMESTAMP 352
 
 #define CONTIMEOUT 1200
-
-
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
@@ -77,6 +80,8 @@ static VOID SendData(struct TNCINFO * TNC, char * key, char * Msg, int MsgLen);
 static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCHAR * Msg);
 VOID SendRPBeacon(struct TNCINFO * TNC);
 VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
+VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
+VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 
 extern UCHAR BPQDirectory[];
 
@@ -89,10 +94,11 @@ extern UCHAR BPQDirectory[];
 
 static int UZ7HOChannel[MAXBPQPORTS+1];			// BPQ Port to UZ7HO Port
 static int BPQPort[MAXUZ7HOPORTS][MAXBPQPORTS+1];	// UZ7HO Port and Connection to BPQ Port
-static int UZ7HOtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
-static int BPQtoUZ7HO_Q[MAXBPQPORTS+1];			// Frames for UZ7HO. indexed by UZ7HO port. Only used it TCP session is blocked
+static void * UZ7HOtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
+static void * BPQtoUZ7HO_Q[MAXBPQPORTS+1];			// Frames for UZ7HO. indexed by UZ7HO port. Only used it TCP session is blocked
 
 static int MasterPort[MAXBPQPORTS+1];			// Pointer to first BPQ port for a specific UZ7HO host
+static struct TNCINFO * SlaveTNC[MAXBPQPORTS+1];// TNC Record Slave if present
 
 //	Each port may be on a different machine. We only open one connection to each UZ7HO instance
 
@@ -149,8 +155,6 @@ unsigned int reverse(unsigned int val)
 
 #ifndef LINBPQ
 
-
-
 static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 {
 	char wtext[100];
@@ -164,7 +168,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 
 	GetWindowText(hwnd,wtext,99);
 
-	if (memcmp(wtext,"Soundmodem", 10) == 0)
+	if (strstr(wtext,"SoundModem"))
 	{
 		GetWindowThreadProcessId(hwnd, &ProcessId);
 
@@ -198,7 +202,71 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 }
 #endif
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+
+
+void RegisterAPPLCalls(struct TNCINFO * TNC, BOOL Unregister)
+{
+	// Register/Deregister Nodecall and all applcalls
+
+	struct AGWINFO * AGW;
+	APPLCALLS * APPL;
+	char * ApplPtr = APPLS;
+	int App;
+	char Appl[10];
+	char * ptr;
+
+	char NodeCall[11];
+
+	memcpy(NodeCall, MYNODECALL, 10);
+	strlop(NodeCall, ' ');
+
+	AGW = TNC->AGWInfo;
+
+	if (Unregister)
+		AGW->TXHeader.DataKind = 'x';		// UnRegister
+	else
+		AGW->TXHeader.DataKind = 'X';		// Register
+
+	memset(AGW->TXHeader.callfrom, 0, 10);
+	strcpy(AGW->TXHeader.callfrom, TNC->NodeCall);
+	send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+					
+	memset(AGW->TXHeader.callfrom, 0, 10);
+	strcpy(AGW->TXHeader.callfrom, NodeCall);
+	send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+
+	for (App = 0; App < 32; App++)
+	{
+		APPL=&APPLCALLTABLE[App];
+		memcpy(Appl, APPL->APPLCALL_TEXT, 10);
+		ptr=strchr(Appl, ' ');
+
+		if (ptr)
+			*ptr = 0;
+
+		if (Appl[0])
+		{
+			memset(AGW->TXHeader.callfrom, 0, 10);
+			strcpy(AGW->TXHeader.callfrom, Appl);
+			send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+		}
+	}
+}
+
+
+VOID UZ7HOSuspendPort(struct TNCINFO * TNC)
+{
+	TNC->PortRecord->PORTCONTROL.PortStopped = TRUE;
+	RegisterAPPLCalls(TNC, TRUE);
+}
+
+VOID UZ7HOReleasePort(struct TNCINFO * TNC)
+{
+	TNC->PortRecord->PORTCONTROL.PortStopped = FALSE;
+	RegisterAPPLCalls(TNC, FALSE);
+}
+
+static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
 	UINT * buffptr;
 	char txbuff[500];
@@ -238,6 +306,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			sprintf(Cmd, "%d SCANSTOP", TNC->Port);
 			Rig_Command(-1, Cmd);
+
+			SuspendOtherPorts(TNC);			// Prevent connects on other ports in same scan gruop
 
 		}
 	}
@@ -435,7 +505,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (STREAM->ReportDISC)
 			{
 				STREAM->ReportDISC = FALSE;
-				buff[4] = Stream;
+				buff->PORT = Stream;
 
 				return -1;
 			}
@@ -481,9 +551,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				datalen=buffptr[1];
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
+				buff->PORT = Stream;
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA[0],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
 				PutLengthinBuffer(buff, datalen);
@@ -506,6 +576,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			char * Buffer;
 			SOCKET Sock;	
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+
+			if (TNC->PortRecord->PORTCONTROL.PortStopped == TRUE)		// Interlock Disabled Port
+			{
+				ReleaseBuffer((UINT *)buffptr);
+				return (0);
+			}
 
 			Sock = TNCInfo[MasterPort[port]]->TCPSock;
 		
@@ -535,10 +611,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 
 	case 2:				// send
-	
+
+		if (TNC->PortRecord->PORTCONTROL.PortStopped == TRUE)		// Interlock Disabled Port
+			return 0;
+
 		if (!TNCInfo[MasterPort[port]]->CONNECTED) return 0;		// Don't try if not connected to TNC
 
-		Stream = buff[4];
+		Stream = buff->PORT;
 		
 		STREAM = &TNC->Streams[Stream]; 
 		AGW = TNC->AGWInfo;
@@ -549,14 +628,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			
 		if (STREAM->Connected)
 		{
-			SendData(TNC, &STREAM->AGWKey[0], &buff[8], txlen);
+			SendData(TNC, &STREAM->AGWKey[0], &buff->L2DATA[0], txlen);
 			STREAM->FramesOutstanding++;
 		}
 		else
 		{
-			if (_memicmp(&buff[8], "D\r", 2) == 0)
+			if (_memicmp(&buff->L2DATA[0], "D\r", 2) == 0)
 			{
-				TidyClose(TNC, buff[4]);
+				TidyClose(TNC, buff->PORT);
 				STREAM->ReportDISC = TRUE;		// Tell Node
 				return 0;
 			}
@@ -566,30 +645,30 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// See if Local command (eg RADIO)
 
-			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
+			if (_memicmp(&buff->L2DATA[0], "RADIO ", 6) == 0)
 			{
-				sprintf(&buff[8], "%d %s", TNC->Port, &buff[14]);
+				sprintf(&buff->L2DATA[0], "%d %s", TNC->Port, &buff->L2DATA[6]);
 
-				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff[8]))
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff->L2DATA[0]))
 				{
 				}
 				else
 				{
-					UINT * buffptr = GetBuff();
+					PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 
 					if (buffptr == 0) return 1;			// No buffers, so ignore
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &buff[8]);
+					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "%s", &buff->L2DATA[0]);
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "INUSE?", 6) == 0)
+			if (_memicmp(&buff->L2DATA[0], "INUSE?", 6) == 0)
 			{
 				// Return Error if in use, OK if not
 
-				UINT * buffptr = GetBuff();
+				PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 				int s = 0;
 
 				while(s <= TNC->AGWInfo->MaxSessions)
@@ -598,22 +677,102 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					{		
 						if (TNC->PortRecord->ATTACHEDSESSIONS[s])
 						{
-							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "UZ7HO} Error - In use\r");
+							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Error - In use\r");
 							C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 							return 1;							// Busy
 						}
 					}
 					s++;
 				}
-				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "UZ7HO} Ok - Not in use\r");
-				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
-			
+				if (buffptr)
+				{
+					buffptr->Len= sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Ok - Not in use\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+				}
 				return 1;
 			}
 
+			if (_memicmp(&buff->L2DATA[0], "FREQ ", 5) == 0)
+			{
+				PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
+
+#ifdef WIN32
+
+				AGW->CenterFreq = atoi(&buff->L2DATA[5]);
+
+				if (AGW->CenterFreq && AGW->hFreq)
+				{
+					// Set it
+
+					char Freq[16];
+					sprintf(Freq, "%d", AGW->CenterFreq - 1);
+	
+					SendMessage(AGW->hFreq, WM_SETTEXT, 0, (LPARAM)Freq);
+					SendMessage(AGW->hSpin, WM_LBUTTONDOWN, 1, 1);
+					SendMessage(AGW->hSpin, WM_LBUTTONUP, 0, 1);
+				}
+
+				if (buffptr)
+				{
+					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem Freq Set Ok\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+				}
+
+#else
+
+				if (buffptr)
+				{
+					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Sorry Setting UZ7HO params not supported on LinBPQ\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+				}
+
+#endif
+
+				return 1;
+			}
+
+			if (_memicmp(&buff->L2DATA[0], "MODEM ", 6) == 0)
+			{
+				PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
+
+#ifdef WIN32
+
+				AGW->Modem = atoi(&buff->L2DATA[6]);
+
+				if (AGW->cbinfo.cbSize && AGW->cbinfo.hwndCombo)
+				{
+					// Set it
+
+					int ret = SendMessage(AGW->cbinfo.hwndCombo,CB_SETCURSEL, AGW->Modem, 0);
+					int pos = 13 * AGW->Modem + 7;
+															
+					ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONDOWN, 1, 1);
+					ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONUP, 0, 1);
+					ret = SendMessage(AGW->cbinfo.hwndList, WM_LBUTTONDOWN, 1, pos << 16);
+					ret = SendMessage(AGW->cbinfo.hwndList, WM_LBUTTONUP, 0, pos << 16);
+					ret = 0;
+
+				}
+
+				if (buffptr)
+				{
+					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem Set Ok\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+				}
+#else
+
+				if (buffptr)
+				{
+					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Sorry Setting UZ7HO params not supported on LinBPQ\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+				}
+
+#endif
+				return 1;
+			}
 			// See if a Connect Command.
 
-			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
+			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
 				struct AGWINFO * AGW = TNC->AGWInfo;
 				char ViaList[82] = "";
@@ -625,14 +784,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				struct STREAMINFO * TSTREAM;
 				char Key[21];
 
-				_strupr(&buff[8]);
-				buff[8 + txlen] = 0;
+				_strupr(&buff->L2DATA[0]);
+				buff->L2DATA[txlen] = 0;
 
 				memset(STREAM->RemoteCall, 0, 10);
 
 				// See if any digis - accept V VIA or nothing, seps space or comma
 
-				ptr = strtok_s(&buff[10], " ,\r", &context);
+				ptr = strtok_s(&buff->L2DATA[2], " ,\r", &context);
 				strcpy(STREAM->RemoteCall, ptr);
 	
 				Key[0] = UZ7HOChannel[port] + '1';
@@ -652,12 +811,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					{
 						// Found it;
 
-						UINT * buffptr = GetBuff();
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2],
-							"UZ7HO} Sorry - Session between %s and %s already Exists\r",
-							STREAM->MyCall, STREAM->RemoteCall);
+						PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 
-						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+						if (buffptr)
+						{
+							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0],
+								"UZ7HO} Sorry - Session between %s and %s already Exists\r", STREAM->MyCall, STREAM->RemoteCall);
+
+							C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+						}
 						STREAM->DiscWhenAllSent = 10;
 			
 						return 0;
@@ -878,6 +1040,10 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 
 	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
+	TNC->SuspendPortProc = UZ7HOSuspendPort;
+	TNC->ReleasePortProc = UZ7HOReleasePort;
+
+
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.UICAPABLE = 1;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
@@ -912,6 +1078,7 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 			 _stricmp(TNCInfo[i]->HostName, TNC->HostName) == 0)
 		{
 			MasterPort[port] = i;
+			SlaveTNC[i] = TNC;
 			break;
 		}
 	}
@@ -1057,6 +1224,18 @@ static int ProcessLine(char * buf, int Port)
 			if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
 				TNC->RPBEACON = TRUE;
 			else
+			if (_memicmp(buf, "WINDOW", 6) == 0)
+				TNC->Window = atoi(&buf[7]);
+			else
+			if (_memicmp(buf, "ARQMODE", 7) == 0)
+				TNC->FLInfo->KISSMODE = FALSE;
+			else
+			if (_memicmp(buf, "DEFAULTMODEM", 12) == 0) 
+				TNC->AGWInfo->Modem = atoi(&buf[13]);
+			else
+			if (_memicmp(buf, "MODEMCENTER", 11) == 0 || _memicmp(buf, "MODEMCENTRE", 11) == 0)
+				TNC->AGWInfo->CenterFreq = atoi(&buf[12]);
+			else
 				
 //			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 //				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
@@ -1069,9 +1248,160 @@ static int ProcessLine(char * buf, int Port)
 	return (TRUE);	
 }
 
+#ifdef WIN32
+
+typedef struct hINFO
+{
+	HWND Freq1;
+	HWND Freq2;
+	HWND Spin1;
+	HWND Spin2;
+	COMBOBOXINFO cinfo1;
+	COMBOBOXINFO cinfo2;
+};
+
+
+BOOL CALLBACK EnumChildProc(HWND handle, LPARAM lParam)
+{
+	char classname[100];
+	struct hINFO * hInfo = (struct hINFO *)lParam;
+
+	// We collect the handles for the two modem and freq boxs here and set into correct TNC record later
+
+	GetClassName(handle, classname, 99);
+
+	if (strcmp(classname, "TComboBox") == 0)
+	{
+		// Get the Combo Box Info
+		
+		if (hInfo->cinfo1.cbSize == 0)
+		{
+			hInfo->cinfo1.cbSize = sizeof(COMBOBOXINFO);
+			GetComboBoxInfo(handle, &hInfo->cinfo1);
+		}
+		else 
+		{
+			hInfo->cinfo2.cbSize = sizeof(COMBOBOXINFO);
+			GetComboBoxInfo(handle, &hInfo->cinfo2);
+		}
+	}
+
+	if (strcmp(classname, "TSpinEdit") == 0)
+	{
+		if (hInfo->Freq1 == 0)
+			hInfo->Freq1 = handle;
+		else 
+			hInfo->Freq2 = handle;
+	}
+
+	if (strcmp(classname, "TSpinButton") == 0)
+	{
+		if (hInfo->Spin1 == 0)
+			hInfo->Spin1 = handle;
+		else 
+			hInfo->Spin2 = handle;
+	}
+	return TRUE;
+}
+
+BOOL CALLBACK uz_enum_windows_callback(HWND handle, LPARAM lParam)
+{
+	char wtext[100];
+	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
+	struct AGWINFO * AGW = TNC->AGWInfo;
+	char Freq[16];
+
+	UINT ProcessId;
+
+	GetWindowText(handle, wtext, 99);
+
+	GetWindowThreadProcessId(handle, &ProcessId);
+
+	if (TNC->PID == ProcessId)
+	{
+		if (strstr(wtext,"SoundModem "))
+		{
+			// Our Process
+
+			// Enumerate Child Windows
+
+			struct hINFO hInfo; 
+
+			memset(&hInfo, 0, sizeof(hInfo));
+
+			EnumChildWindows(handle, EnumChildProc,  (LPARAM)&hInfo);
+
+			// Set handles
+
+			if (TNC->PortRecord->PORTCONTROL.CHANNELNUM == 'A')
+			{
+				AGW->hFreq = hInfo.Freq1;
+				AGW->hSpin = hInfo.Spin1;
+				memcpy(&AGW->cbinfo, &hInfo.cinfo1, sizeof(COMBOBOXINFO));
+			}
+			else
+			{
+				AGW->hFreq = hInfo.Freq2;
+				AGW->hSpin = hInfo.Spin2;
+				memcpy(&AGW->cbinfo, &hInfo.cinfo2, sizeof(COMBOBOXINFO));
+			}
+
+			if (AGW->CenterFreq && AGW->hFreq)
+			{
+				// Set it
+
+				sprintf(Freq, "%d", AGW->CenterFreq - 1);
+
+				SendMessage(AGW->hFreq, WM_SETTEXT, 0, (LPARAM)Freq);
+				SendMessage(AGW->hSpin, WM_LBUTTONDOWN, 0, 1);
+				SendMessage(AGW->hSpin, WM_LBUTTONUP, 0, 1);
+			}
+
+			// Set slave port
+
+			TNC = SlaveTNC[TNC->Port];
+
+			if (TNC)
+			{
+				AGW = TNC->AGWInfo;
+
+				if (TNC->PortRecord->PORTCONTROL.CHANNELNUM == 'A')
+				{
+					AGW->hFreq = hInfo.Freq1;
+					AGW->hSpin = hInfo.Spin1;
+					memcpy(&AGW->cbinfo, &hInfo.cinfo1, sizeof(COMBOBOXINFO));
+				}
+				else
+				{
+					AGW->hFreq = hInfo.Freq2;
+					AGW->hSpin = hInfo.Spin2;
+					memcpy(&AGW->cbinfo, &hInfo.cinfo2, sizeof(COMBOBOXINFO));
+				}
+
+				if (AGW->CenterFreq && AGW->hFreq)
+				{
+					// Set it
+
+					sprintf(Freq, "%d", AGW->CenterFreq - 1);
+
+					SendMessage(AGW->hFreq, WM_SETTEXT, 0, (LPARAM)Freq);
+					SendMessage(AGW->hSpin, WM_LBUTTONDOWN, 0, 1);
+					SendMessage(AGW->hSpin, WM_LBUTTONUP, 0, 1);
+				}
+
+			}
+
+ 			return FALSE;
+		}
+	}
+	
+	return (TRUE);
+}
+
+#endif
+
 int ConnecttoUZ7HO(int port)
 {
-
 	_beginthread(ConnecttoUZ7HOThread,0,port);
 	return 0;
 }
@@ -1084,12 +1414,17 @@ VOID ConnecttoUZ7HOThread(int port)
 	BOOL bcopt=TRUE;
 	struct hostent * HostEnt;
 	struct TNCINFO * TNC = TNCInfo[port];
+	struct AGWINFO * AGW = TNC->AGWInfo;
 
 	TNC->CONNECTING = TRUE;
 
 	Sleep(3000);		// Allow init to complete 
 
 #ifdef WIN32
+
+	AGW->hFreq = AGW->hSpin = 0;
+	AGW->cbinfo.cbSize = 0;
+
 	if (strcmp(TNC->HostName, "127.0.0.1") == 0)
 	{
 		// can only check if running on local host
@@ -1100,6 +1435,10 @@ VOID ConnecttoUZ7HOThread(int port)
 			TNC->CONNECTING = FALSE;
 			return;						// Not listening so no point trying to connect
 		}
+
+		// Get Window Handles so we can change centre freq and modem
+
+		EnumWindows(uz_enum_windows_callback, (LPARAM)TNC);
 	}
 #endif
 
@@ -1389,7 +1728,7 @@ UZ7HO d GM8BPQ GM8BPQ-2 *** DISCONNECTED From Station GM8BPQ-0
 
 New Disconnect Port 7 Q 0
 */
-
+/*
 #pragma pack(1) 
 
 typedef struct _MESSAGEY
@@ -1410,29 +1749,29 @@ typedef struct _MESSAGEY
 	UCHAR	PID; 
 
 	union 
-	{                   /*  array named screen */
+	{                  
 		UCHAR L2DATA[256];
 		struct _L3MESSAGE L3MSG;
 
 	};
 
-		
-	UCHAR Padding[BUFFLEN - sizeof(time_t) - sizeof(VOID *) - 256 - 7 - 16];
+	UCHAR Padding[BUFFLEN - (sizeof(time_t) + (2 * sizeof(unsigned short)) + sizeof(VOID *) + 256 + MSGHDDRLEN + 16)]; // 16 = Addrs CTL PID
 
 	time_t Timestamp;
-	VOID * Linkptr;		// For ACKMODE processing
-
+	struct _LINKTABLE * Linkptr;		// For ACKMODE processing
+	unsigned short Process;				// Process that got buffer
+	unsigned short GuardZone;			// Should always be zero
 
 }MESSAGEY;
 
 #pragma pack() 
-
+*/
 extern VOID PROCESSUZ7HONODEMESSAGE();
 
 VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 {
 	UINT * buffptr;
-	MESSAGEY Monframe;
+	MESSAGE Monframe;
 
  	struct AGWINFO * AGW = TNC->AGWInfo;
 	struct AGWHEADER * RXHeader = &AGW->RXHeader;
@@ -1587,6 +1926,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 			STREAM->Connected = TRUE;
 			STREAM->ConnectTime = time(NULL); 
 			STREAM->BytesRXed = STREAM->BytesTXed = 0;
+
+			SuspendOtherPorts(TNC);
 
 			ProcessIncommingConnect(TNC, RXHeader->callfrom, Stream, FALSE);
 
@@ -1752,6 +2093,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 		return;
 
 	case 'K':				// raw data	
+
+		memset(&Monframe, 0, sizeof(Monframe));
 
 		Monframe.PORT = BPQPort[RXHeader->Port][TNC->Port];
 
@@ -1958,15 +2301,16 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		s++;
 	}
 
+	ReleaseOtherPorts(TNC);
+
 	sprintf(Status, "%d SCANSTART 15", TNC->Port);
 	Rig_Command(-1, Status);
 }
 
-static MESSAGEY Monframe;		// I frames come in two parts.
+static MESSAGE Monframe;		// I frames come in two parts.
 
-#define TIMESTAMP 352
 
-MESSAGEY * AdjMsg;		// Adjusted fir digis
+MESSAGE * AdjMsg;		// Adjusted fir digis
 
 
 static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCHAR * Msg)
@@ -1985,7 +2329,7 @@ static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCH
 
 //	OutputDebugString(Msg);
 
-	Monframe.LENGTH = 23;				// Control Frame
+	Monframe.LENGTH = MSGHDDRLEN + 16;				// Control Frame
 	Monframe.PORT = BPQPort[RXHeader->Port][TNC->Port];
 
 	if (RXHeader->DataKind == 'T')		// Transmitted
@@ -2027,7 +2371,7 @@ DigiLoop:
 
 		temp = (char *)AdjMsg;
 		temp += 7;
-		AdjMsg = (MESSAGEY *)temp;
+		AdjMsg = (MESSAGE *)temp;
 
 		Monframe.LENGTH += 7;
 

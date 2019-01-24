@@ -27,7 +27,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,10 +66,10 @@ static BOOL OpenSockets(struct TNCINFO * TNC);
 static BOOL OpenSockets6(struct TNCINFO * TNC);
 int ProcessHTTPMessage(struct ConnectionInfo * conn);
 static VOID SetupListenSet(struct TNCINFO * TNC);
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
-BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr);
+BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr);
 int GetCMSHash(char * Challenge, char * Password);
 int IsUTF8(unsigned char *cpt, int len);
 int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
@@ -136,8 +135,8 @@ int DoStateChange(int Stream);
 int Connected(int Stream);
 int Disconnected(int Stream);
 //int DeleteConnection(con);
-static int Socket_Accept(struct TNCINFO * TNC, int SocketId);
-static int Socket_Data(struct TNCINFO * TNC, int SocketId,int error, int eventcode);
+static int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId);
+static int Socket_Data(struct TNCINFO * TNC, SOCKET SocketId,int error, int eventcode);
 static int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
 int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
 int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
@@ -214,7 +213,7 @@ int DeleteTelnetLogFiles()
 		 ft.QuadPart -=  116444736000000000;
 		 ft.QuadPart /= 10000000;
 
-		 Age = (now - ft.LowPart) / 86400; 
+		 Age = (int)((now - ft.LowPart) / 86400); 
 
 		 if (Age > LogAge)
 		 {
@@ -252,7 +251,7 @@ int DeleteTelnetLogFiles()
 		 ft.QuadPart -=  116444736000000000;
 		 ft.QuadPart /= 10000000;
 
-		 Age = (now - ft.LowPart) / 86400; 
+		 Age = (int)((now - ft.LowPart) / 86400); 
 
 		 if (Age > LogAge)
 		 {
@@ -392,7 +391,7 @@ VOID SendPortsForMonitor(SOCKET sock)
 
 		ptr += sprintf(ptr,"%d %s|", PORT->PORTNUMBER, ID);
 	}
-	send(sock, PortInfo, ptr - PortInfo, 0);
+	send(sock, PortInfo, (int)(ptr - PortInfo), 0);
 }
 
 int ProcessLine(char * buf, int Port)
@@ -408,7 +407,7 @@ int ProcessLine(char * buf, int Port)
 	char * param;
 	char * value;
 	char *User, *Pwd, *UserCall, *Secure, * Appl;
-	int End = strlen(buf) -1;
+	int End = (int)strlen(buf) -1;
 	struct TNCINFO * TNC;
 	struct TCPINFO * TCP;
 
@@ -594,7 +593,7 @@ int ProcessLine(char * buf, int Port)
 		else
 		if (_stricmp(param,"CTEXT") == 0 )
 		{
-			int len = strlen (value);
+			int len = (int)strlen (value);
 
 			if (value[len -1] == ' ')
 				value[len -1] = 0;
@@ -665,9 +664,9 @@ int ProcessLine(char * buf, int Port)
 			_strupr(UserCall);
 
 			if (TCP->NumberofUsers == 0)
-				TCP->UserRecPtr = malloc(4);
+				TCP->UserRecPtr = malloc(sizeof(void *));
 			else
-				TCP->UserRecPtr = realloc(TCP->UserRecPtr, (TCP->NumberofUsers+1)*4);
+				TCP->UserRecPtr = realloc(TCP->UserRecPtr, (TCP->NumberofUsers+1) * sizeof(void *));
 
 			USER = zalloc(sizeof(struct UserRec));
 
@@ -739,7 +738,7 @@ lineloop:
 		if (ptr2)
 		{
 			ptr2++;
-			LineLen = ptr2 - ptr1;
+			LineLen = (int)(ptr2 - ptr1);
 			Len -= LineLen;
 
 			if (LineLen > 900)
@@ -797,10 +796,10 @@ lineloop:
 	}
 }
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static int ExtProc(int fn, int port , PDATAMESSAGE buff)
 {
 	int txlen = 0, n;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct TCPINFO * TCP;
 
@@ -903,7 +902,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (STREAM->ReportDISC)
 			{
 				STREAM->ReportDISC = FALSE;
-				buff[4] = Stream;
+				buff->PORT = Stream;
 
 				return -1;
 			}
@@ -919,14 +918,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				int datalen;
 			
-				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
+				buffptr = Q_REM(&STREAM->PACTORtoBPQ_Q);
 
-				datalen=buffptr[1];
+				datalen = (int)buffptr->Len;
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
+				buff->PORT = Stream;
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+				datalen += sizeof(void *) + 4;
 
 				PutLengthinBuffer(buff, datalen);
 
@@ -946,13 +945,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		// Find TNC Record
 
-		Stream = buff[4];
+		Stream = buff->PORT;
 		STREAM = &TNC->Streams[Stream];
 
-		txlen = GetLengthfromBuffer(buff) - 8;	
+		txlen = GetLengthfromBuffer(buff) - (sizeof(void *) + 4);	
 
-		buffptr[1] = txlen;
-		memcpy(buffptr+2, &buff[8], txlen);
+		buffptr->Len = txlen;
+		memcpy(&buffptr->Data, &buff->L2DATA, txlen);
 		
 		C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 		STREAM->FramesQueued++;
@@ -1222,7 +1221,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 
 
 
-UINT TelnetExtInit(EXTPORTDATA * PortEntry)
+void * TelnetExtInit(EXTPORTDATA * PortEntry)
 {
 	char msg[500];
 	struct TNCINFO * TNC;
@@ -1318,7 +1317,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 		// Not defined in Config file
 
 		WritetoConsoleLocal("\n");
-		return (int)ExtProc;
+		return ExtProc;
 	}
 
 	TCP = TNC->TCPInfo;
@@ -1438,7 +1437,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	ShowConnections(TNC);
 
-	return ((int)ExtProc);
+	return ExtProc;
 }
 
 SOCKET OpenSocket4(struct TNCINFO * xTNC, int port)
@@ -1976,14 +1975,15 @@ nosocks:
 
 	while (TELNETMONVECPTR->HOSTTRACEQ)
 	{
-		int stamp, len;
+		int len;
+		time_t stamp;
 		BOOL MonitorNODES = FALSE;
 		MESSAGE * monbuff;
 		UCHAR * monchars;
 
 		unsigned char buffer[1024] = "\xff\x1b\xb";
 
-		monbuff = Q_REM((UINT *)&TELNETMONVECPTR->HOSTTRACEQ);
+		monbuff = Q_REM((void **)&TELNETMONVECPTR->HOSTTRACEQ);
 		monchars = (UCHAR *)monbuff;
 
 		stamp = monbuff->Timestamp;
@@ -2003,6 +2003,9 @@ nosocks:
 
 				if (sockptr->BPQTermMode)
 				{
+					if (sizeof(void *) > 4)
+						monchars += 4;
+
 					if (!sockptr->MonitorNODES && monchars[21] == 3 && monchars[22] == 0xcf && monchars[23] == 0xff)
 					{
 						len = 0;
@@ -2058,7 +2061,7 @@ nosocks:
 			struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 			SOCKET sock = sockptr->socket;
 			char Msg[80];	
-			UINT * buffptr;
+			PMSGWITHLEN buffptr;
 
 			STREAM->Attached = FALSE;
 			STREAM->Connected = FALSE;
@@ -2067,7 +2070,7 @@ nosocks:
 
 			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
 			{
-				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+				buffptr = (PMSGWITHLEN)Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 				if (TelSendPacket(Stream, &TNC->Streams[Stream], buffptr) == FALSE)
 				{
 					//	Send failed, and has saved packet
@@ -2095,7 +2098,7 @@ nosocks:
             if (!sockptr->FBBMode)
 			{
 				sprintf(Msg,"*** Disconnected from Stream %d\r\n",Stream);
-				send(sock, Msg, strlen(Msg),0);
+				send(sock, Msg, (int)strlen(Msg),0);
 			}
 
 			if (sockptr->UserPointer == &TriModeUser)
@@ -2164,7 +2167,7 @@ nosocks:
 				else
 				{
 					char DisfromNodeMsg[] = "Disconnected from Node - Telnet Session kept\r\n";
-					send(sockptr->socket, DisfromNodeMsg, strlen(DisfromNodeMsg),0);
+					send(sockptr->socket, DisfromNodeMsg, (int)strlen(DisfromNodeMsg),0);
 				}
 			}
 		}
@@ -2207,7 +2210,7 @@ nosocks:
 		while (STREAM->BPQtoPACTOR_Q)
 		{
 			int datalen;
-			UINT * buffptr;
+			PMSGWITHLEN buffptr;
 			UCHAR * MsgPtr;
 
 			// Make sure there is space. Linux TCP buffer is quite small
@@ -2221,10 +2224,10 @@ nosocks:
 			if (value > 1500)
 				break;
 #endif
-			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+			buffptr = (PMSGWITHLEN)Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 			STREAM->FramesQueued--;
-			datalen=buffptr[1];
-			MsgPtr = (UCHAR *)&buffptr[2];
+			datalen = (int)(buffptr->Len);
+			MsgPtr = &buffptr->Data[0];
 
 			if (STREAM->ConnectionInfo->TriMode)
 			{
@@ -2254,7 +2257,7 @@ nosocks:
 				if (_stricmp(MsgPtr, "NoFallback") == 0)
 				{
 					TNC->Streams[Stream].NoCMSFallback = TRUE;
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Ok\r");
+					buffptr->Len = sprintf(&buffptr->Data[0], "Ok\r");
 					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 					return;
 				}
@@ -2291,7 +2294,7 @@ nosocks:
 
 						if (Port > 33 || TCP->CMDPort[Port] == 0)
 						{
-							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid HOST Port\r");
+							buffptr->Len = sprintf(&buffptr->Data[0], "Error - Invalid HOST Port\r");
 							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 							STREAM->NeedDisc = 10;
 							return;
@@ -2334,7 +2337,7 @@ nosocks:
 								return;
 							}
 					
-							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - CMS Not Available\r");
+							buffptr->Len = sprintf(&buffptr->Data[0], "Error - CMS Not Available\r");
 							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 							STREAM->NeedDisc = 10;
 							CheckCMS(TNC);
@@ -2404,7 +2407,7 @@ nosocks:
 					}
 				}
 	
-				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid Command\r");
+				buffptr->Len = sprintf(&buffptr->Data[0], "Error - Invalid Command\r");
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 				STREAM->NeedDisc = 10;
 				return;
@@ -2581,7 +2584,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			{
 				sock=sockptr->socket;
 
-				send(sock,disMsg, strlen(disMsg),0);
+				send(sock,disMsg, (int)strlen(disMsg),0);
 
 				Sleep (1000);
     
@@ -2829,7 +2832,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 #endif
 
-int Socket_Accept(struct TNCINFO * TNC, int SocketId)
+int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId)
 {
 	int n, addrlen = sizeof(struct sockaddr_in6);
 	struct sockaddr_in6 sin6;  
@@ -2940,7 +2943,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			if (sockptr->FBBMode == FALSE)
 			{
 				send(sock, Negotiate, 6, 0);
-				send(sock, TCP->LoginMsg, strlen(TCP->LoginMsg), 0);
+				send(sock, TCP->LoginMsg, (int)strlen(TCP->LoginMsg), 0);
 			}
 
 			if (sockptr->FromHostBuffer == 0)
@@ -3036,7 +3039,7 @@ int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 
 VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 {
-	UINT * buffptr = GetBuff();
+	PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 
 	if (buffptr == NULL) 
 		return;			// No buffers, so ignore
@@ -3057,9 +3060,9 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 	}
 			
-	buffptr[1] = MsgLen;				// Length
+	buffptr->Len= MsgLen;				// Length
 	
-	memcpy(&buffptr[2], Msg, MsgLen);
+	memcpy(&buffptr->Data, Msg, MsgLen);
 	
 	C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 }
@@ -3115,7 +3118,7 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 
 		int n;
 		
-		charsAfter = len-(BSptr-&sockptr->InputBuffer[sockptr->InputLen])-1;
+		charsAfter = len - (int)((BSptr-&sockptr->InputBuffer[sockptr->InputLen])) - 1;
 
 		if (charsAfter == 0)
 		{
@@ -3143,7 +3146,7 @@ BSCheck:
 			goto IACLoop;
 
 		n = sockptr->InputLen;
-		charsAfter = sockptr->InputLen-(BSptr-&sockptr->InputBuffer[0])-1;
+		charsAfter = sockptr->InputLen - (int)((BSptr-&sockptr->InputBuffer[0])) - 1;
 
 		if (charsAfter == 0)
 		{
@@ -3170,7 +3173,7 @@ IACLoop:
 
 	if (IACptr)
 	{
-		wait = ProcessTelnetCommand(sockptr, IACptr, sockptr->InputLen+IACptr-&sockptr->InputBuffer[0]);
+		wait = ProcessTelnetCommand(sockptr, IACptr, sockptr->InputLen + (int)(IACptr-&sockptr->InputBuffer[0]));
 
 		if (wait) return 0;				// need more chars
 
@@ -3328,7 +3331,7 @@ MsgLoop:
 
 	// Process data up to the cr
 
-	MsgLen=LFPtr-MsgPtr;	// Include the CR but not LF
+	MsgLen = (int)(LFPtr-MsgPtr);	// Include the CR but not LF
 
 	switch (sockptr->LoginState)
 	{
@@ -3414,7 +3417,7 @@ MsgLoop:
 			else
 				continue;
                 
-			send(sock, TCP->PasswordMsg, strlen(TCP->PasswordMsg),0);
+			send(sock, TCP->PasswordMsg, (int)strlen(TCP->PasswordMsg),0);
                 
 			sockptr->Retries = 0;
                 
@@ -3440,7 +3443,7 @@ MsgLoop:
 		}
 		else
 		{        
-            send(sock, TCP->LoginMsg, strlen(TCP->LoginMsg), 0);
+            send(sock, TCP->LoginMsg, (int)strlen(TCP->LoginMsg), 0);
             sockptr->InputLen=0;
 
 		}
@@ -3473,7 +3476,7 @@ MsgLoop:
 		if (strcmp(MsgPtr, sockptr->UserPointer->Password) == 0)		{
 			char * ct = TCP->cfgCTEXT;
 			char * Appl;
-			int ctlen = strlen(ct);
+			int ctlen = (int)strlen(ct);
 
 			if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == FALSE)
 			{
@@ -3502,7 +3505,7 @@ MsgLoop:
 			Appl = sockptr->UserPointer->Appl;
 			
 			if (Appl[0])
-				SendtoNode(TNC, sockptr->Number, Appl, strlen(Appl));
+				SendtoNode(TNC, sockptr->Number, Appl, (int)strlen(Appl));
 
 			ShowConnections(TNC);
 
@@ -3513,13 +3516,13 @@ MsgLoop:
         
         if (sockptr->Retries++ == 4)
 		{
-			send(sock,AttemptsMsg, strlen(AttemptsMsg),0);
+			send(sock,AttemptsMsg, (int)strlen(AttemptsMsg),0);
             Sleep (1000);
             DataSocket_Disconnect (TNC, sockptr);      //' Tidy up
 		}
 		else
 		{
-			send(sock, TCP->PasswordMsg, strlen(TCP->PasswordMsg), 0);
+			send(sock, TCP->PasswordMsg, (int)strlen(TCP->PasswordMsg), 0);
 			sockptr->InputLen=0;
 		}
 
@@ -3632,7 +3635,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 	// Process data up to the cr
 
-	MsgLen=LFPtr-MsgPtr;
+	MsgLen = (int)(LFPtr-MsgPtr);
 
 	switch (sockptr->LoginState)
 	{
@@ -3702,7 +3705,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 			return 0;
 		}
 
-		send(sock, RelayMsg, strlen(RelayMsg), 0);
+		send(sock, RelayMsg, (int)strlen(RelayMsg), 0);
 
 		sockptr->LoginState = 2;
 
@@ -3726,7 +3729,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 		// Connect to the BBS
 
-		SendtoNode(TNC, sockptr->Number, TCP->RelayAPPL, strlen(TCP->RelayAPPL));
+		SendtoNode(TNC, sockptr->Number, TCP->RelayAPPL, (int)strlen(TCP->RelayAPPL));
 
 		ShowConnections(TNC);;
 	
@@ -3882,7 +3885,7 @@ MsgLoop:
 
 	// Process data up to the cr
 
-	MsgLen = CRPtr - MsgPtr;
+	MsgLen = (int)(CRPtr - MsgPtr);
 
 	if (MsgLen == 0)						// Just CR
 	{
@@ -4141,7 +4144,7 @@ MsgLoop:
 		}
 		else
 		{        
-            send(sock, TCP->LoginMsg, strlen(TCP->LoginMsg), 0);
+            send(sock, TCP->LoginMsg, (int)strlen(TCP->LoginMsg), 0);
             sockptr->InputLen=0;
 
 		}
@@ -4259,7 +4262,7 @@ MsgLoop:
 			Appl = sockptr->UserPointer->Appl;
 			
 			if (Appl[0])
-				SendtoNode(TNC, sockptr->Number, Appl, strlen(Appl));
+				SendtoNode(TNC, sockptr->Number, Appl, (int)strlen(Appl));
 
 			return 0;
 	
@@ -4269,13 +4272,13 @@ MsgLoop:
         
         if (sockptr->Retries++ == 4)
 		{
-			send(sock,AttemptsMsg, strlen(AttemptsMsg),0);
+			send(sock,AttemptsMsg, (int)strlen(AttemptsMsg),0);
             Sleep (1000);
             DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
 		}
 		else
 		{
-			send(sock, TCP->PasswordMsg, strlen(TCP->PasswordMsg), 0);
+			send(sock, TCP->PasswordMsg, (int)strlen(TCP->PasswordMsg), 0);
 			sockptr->InputLen=0;
 		}
 
@@ -4334,7 +4337,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 	if (LenPtr)
 	{
 		ContentLen = atoi(LenPtr + 15);
-		BodyLen = InputLen - (CRLFCRLF + 4 - MsgPtr);
+		BodyLen = InputLen - (int)((CRLFCRLF + 4 - MsgPtr));
 
 		if (BodyLen < ContentLen)
 			return 0;
@@ -4554,12 +4557,10 @@ int WriteLog(char * msg)
 	}
 #else
 	{
-	    struct tm today;
+	    struct tm * today;
 
-		_localtime32_s( &today, &ltime);
-
-		strftime( timebuf, 128,
-			"%d/%m/%Y %H:%M:%S ", &today);
+		today = localtime(&ltime);
+		strftime(timebuf, 128, "%d/%m/%Y %H:%M:%S ", today);
 	}
 #endif    
 	fputs(timebuf, file);
@@ -4634,12 +4635,12 @@ VOID WriteCMSLog(char * msg)
 int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Error)
 {
 	struct TCPINFO * TCP = TNC->TCPInfo;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	int Stream = sockptr->Number;
 	char Signon[80];
 	int errlen = 4;
 
-	buffptr = GetBuff();
+	buffptr = (PMSGWITHLEN)GetBuff();
 	if (buffptr == 0) return 0;			// No buffers, so ignore
 				
 #ifndef WIN32
@@ -4677,7 +4678,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 
 			getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&err, &errlen);
 
-			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "*** Failed to Connect\r");
+			buffptr->Len = sprintf(&buffptr->Data[0], "*** Failed to Connect\r");
 					
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 				
@@ -4715,7 +4716,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 			WriteCMSLog (logmsg);
 		}
 		
-		buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** %s Connected to CMS\r", TNC->Streams[Stream].MyCall);;
+		buffptr->Len  = sprintf(&buffptr->Data[0], "*** %s Connected to CMS\r", TNC->Streams[Stream].MyCall);;
 	}
 	else
 	{
@@ -4728,12 +4729,12 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 
 		if (sockptr->Signon[0])
 		{
-			buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to Server\r");
-			send(sockptr->socket, sockptr->Signon, strlen(sockptr->Signon), 0);
+			buffptr->Len  = sprintf(&buffptr->Data[0], "*** Connected to Server\r");
+			send(sockptr->socket, sockptr->Signon, (int)strlen(sockptr->Signon), 0);
 		}
 		else
 		{
-			buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Connected to %s\r", 
+			buffptr->Len = sprintf(&buffptr->Data[0], "Connected to %s\r",
 				TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4CROSSLINK->APPL);
 			
 			send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
@@ -4766,24 +4767,24 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 
 VOID ReportError(struct STREAMINFO * STREAM, char * Msg)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 
-	buffptr = GetBuff();
+	buffptr = (PMSGWITHLEN)GetBuff();
 	if (buffptr == 0) return;			// No buffers, so ignore
 				
-	buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Error - %s\r", Msg);
+	buffptr->Len  = sprintf(&buffptr->Data[0], "Error - %s\r", Msg);
 					
 	C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 }
 
 VOID Report(struct STREAMINFO * STREAM, char * Msg)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 
-	buffptr = GetBuff();
+	buffptr = (PMSGWITHLEN)GetBuff();
 	if (buffptr == 0) return;			// No buffers, so ignore
 				
-	buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "%s\r", Msg);
+	buffptr->Len  = sprintf(&buffptr->Data[0], "%s\r", Msg);
 					
 	C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 }
@@ -5382,7 +5383,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 		sprintf(Info,"%d %d.%d.%d.%d", time(NULL),
 					work[0], work[1], work[2], work[3]);
 
-		retCode = RegSetValueEx(hKey, TCP->CMSName[CMSNo], 0, REG_SZ, (BYTE *)&Info, strlen(Info));
+		retCode = RegSetValueEx(hKey, TCP->CMSName[CMSNo], 0, REG_SZ, (BYTE *)&Info, (int)strlen(Info));
 		RegCloseKey(hKey);
 	}
 #endif
@@ -5613,15 +5614,15 @@ VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 	*ptr++ = '\0';	
 }
 
-BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
+BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr)
 {
 	int datalen;
 	UCHAR * MsgPtr;
 	SOCKET sock;
 	struct ConnectionInfo * sockptr = STREAM->ConnectionInfo;
 
-	datalen = buffptr[1];
-	MsgPtr = (UCHAR *)&buffptr[2];
+	datalen = (int)buffptr->Len;
+	MsgPtr = &buffptr->Data[0];
 
 	STREAM->BytesTXed += datalen;
 
@@ -5718,7 +5719,7 @@ BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 		}
 
 		ReleaseBuffer(buffptr);
-		return SendAndCheck(sockptr, Out, ptr2 - Out, 0);
+		return SendAndCheck(sockptr, Out, (int)(ptr2 - Out), 0);
 	}
 }
 

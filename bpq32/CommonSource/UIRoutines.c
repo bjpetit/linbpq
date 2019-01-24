@@ -183,7 +183,7 @@ VOID SendMsgUI(struct MsgInfo * Msg)
 
 	//12345 B 2053 TEST@ALL F6FBB 920325 This is the subject
 
-	struct tm *tm = gmtime(&Msg->datecreated);	
+	struct tm *tm = gmtime((time_t *)&Msg->datecreated);	
 	
 	len = sprintf_s(msg, sizeof(msg),"%-6d %c %6d %-13s %-6s %02d%02d%02d %s\r",
 		Msg->number, Msg->type, Msg->length, Msg->to,
@@ -221,7 +221,7 @@ VOID SendHeaders(int Number, int Port)
 				len=0;
 			}
 
-			tm = gmtime(&Msg->datecreated);	
+			tm = gmtime((time_t *)&Msg->datecreated);	
 	
 			len += sprintf(&msg[len], "%-6d %c %6d %-13s %-6s %02d%02d%02d %s\r",
 				Msg->number, Msg->type, Msg->length, Msg->to,

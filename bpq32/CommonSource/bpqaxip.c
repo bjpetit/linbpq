@@ -140,7 +140,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //		Add IPv6 support
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
 #ifndef WIN32
@@ -171,13 +170,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define MAXGETHOSTSTRUCT        1024
 #endif
 
-#define BUFFLEN	360	
 
 //	BUFFLEN-4 = L2 POINTER (FOR CLEARING TIMEOUT WHEN ACKMODE USED)
 //	BUFFLEN-8 = TIMESTAMP
 //	BUFFLEN-12 = BUFFER ALLOCATED FLAG (ADDR OF ALLOCATING ROUTINE)
 	
-#define MAXDATA	BUFFLEN-16
 
 
 #define	FEND	0xC0	// KISS CONTROL CODES 

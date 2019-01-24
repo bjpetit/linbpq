@@ -23,7 +23,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define Kernel
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define _USE_32BIT_TIME_T
 
 #pragma data_seg("_BPQDATA")
 
@@ -37,12 +36,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "kernelresource.h"
 #include "CHeaders.h"
 
-VOID L2Routine(struct PORTCONTROL * PORT, UINT * Buffer);
-VOID ProcessIframe(struct _LINKTABLE * LINK, UINT * Buffer);
+VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer);
+VOID ProcessIframe(struct _LINKTABLE * LINK, PDATAMESSAGE Buffer);
 VOID FindLostBuffers();
 
 
 #include "configstructs.h"
+
+extern struct CONFIGTABLE xxcfg;
 
 struct PORTCONFIG * PortRec;
 
@@ -179,7 +180,7 @@ VOID * ADJBUFFER = NULL;			// BASE ADJUSED FOR DIGIS
 
 UCHAR TEMPFIELD[7] = "";			// ADDRESS WORK FILED
 
-UINT TRACE_Q	= 0;				// TRANSMITTED FRAMES TO BE TRACED
+void * TRACE_Q = 0;					// TRANSMITTED FRAMES TO BE TRACED
 
 int RANDOM = 0;						// 'RANDOM' NUMBER FOR PERSISTENCE CALCS
  
@@ -248,7 +249,7 @@ extern int NUMBEROFTNCPORTS;
 
 extern APPLCALLS APPLCALLTABLE[];
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MINI);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MINI);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 
 //	LOOPBACK PORT ROUTINES
@@ -258,19 +259,19 @@ VOID LINKINIT(PEXTPORTDATA PORTVEC)
 	WritetoConsoleLocal("Loopback\n");
 }
 
-VOID LINKTX(PEXTPORTDATA PORTVEC, UINT * Buffer)
+VOID LINKTX(PEXTPORTDATA PORTVEC, PMESSAGE Buffer)
 {
 	//	LOOP BACK TO SWITCH
 	struct _LINKTABLE * LINK;
 	
-	LINK = (struct _LINKTABLE *)Buffer[(BUFFLEN-4)/4];
+	LINK = Buffer->Linkptr;
 
 	if (LINK)
 	{
 		if (LINK->L2TIMER)
 			LINK->L2TIMER = LINK->L2TIME;
 
-		Buffer[(BUFFLEN-4)/4] = 0;	// CLEAR FLAG FROM BUFFER
+		Buffer->Linkptr = 0;	// CLEAR FLAG FROM BUFFER
 	}
 
 	C_Q_ADD(&PORTVEC->PORTCONTROL.PORTRX_Q, Buffer);
@@ -305,7 +306,7 @@ BOOL LINKTXCHECK()
 	return 0;
 }
 
-int Dummy()				// Dummy for missing EXT Driver
+void * Dummy()				// Dummy for missing EXT Driver
 {
 	return 0;
 }
@@ -318,7 +319,7 @@ VOID EXTINIT(PEXTPORTDATA PORTVEC)
 
 	PORTVEC->PORT_EXT_ADDR = Dummy;
 
-	Routine = (VOID *)InitializeExtDriver(PORTVEC);
+	Routine = InitializeExtDriver(PORTVEC);
 	
 	if (Routine == 0)
 	{
@@ -390,7 +391,7 @@ Loop:
 	if (Message == NULL)
 		return;
 
-	Len = PORTVEC->PORT_EXT_ADDR(1, PORT->PORTNUMBER, Message);
+	Len = (int)(void *)PORTVEC->PORT_EXT_ADDR(1, PORT->PORTNUMBER, Message);
 	
 	if (Len == 0)
 	{
@@ -444,7 +445,7 @@ VOID EXTTIMER(PEXTPORTDATA PORTVEC)
 
 int EXTTXCHECK(PEXTPORTDATA PORTVEC, int Chan)
 {
-	return PORTVEC->PORT_EXT_ADDR(3, PORTVEC->PORTCONTROL.PORTNUMBER, Chan);
+	return (int)(void *)PORTVEC->PORT_EXT_ADDR(3, PORTVEC->PORTCONTROL.PORTNUMBER, Chan);
 }
 
 VOID PostDataAvailable(TRANSPORTENTRY * Session)
@@ -549,10 +550,11 @@ extern int L3BG();
 extern int TNCTimerProc();
 extern int PROCESSIFRAME();
 
+int xxxxx = MAXDATA;
 
 BOOL Start()
 {
-	struct CONFIGTABLE * cfg = (struct CONFIGTABLE * )ConfigBuffer;
+	struct CONFIGTABLE * cfg = &xxcfg;
 	struct APPLCONFIG * ptr1;
 	struct PORTCONTROL * PORT;
 	struct FULLPORTDATA * FULLPORT;		// Including HW Data
@@ -566,7 +568,9 @@ BOOL Start()
 
 	unsigned char * ptr2, * ptr3, * ptr4;
 	USHORT * CWPTR;
-	int i, n, int3;
+	int i, n;
+	unsigned long long int3;
+	struct ROUTECONFIG * Rcfg;
 
 	NEXTFREEDATA = &DATAAREA[0];			// For Reinit
 	
@@ -619,9 +623,8 @@ BOOL Start()
 		}
 		else
 		{
-			ptr2 = ConfigBuffer + ApplOffset;
-			ptr1 = (struct APPLCONFIG *)ptr2;
-
+			ptr1 = &cfg->C_APPL[0];
+	
 			for (i = 0; i < NumberofAppls; i++)
 			{
 				if (ptr1->ApplCall[0] != ' ')
@@ -756,8 +759,7 @@ BOOL Start()
 
 	memset(&CMDALIAS[0][0], ' ', NumberofAppls * ALIASLEN );
 
-	ptr2 = ConfigBuffer + ApplOffset;
-	ptr1 = (struct APPLCONFIG *)ptr2;
+	ptr1 = (struct APPLCONFIG *)&xxcfg.C_APPL[0];
 	ptr3 = &CMDALIAS[0][0];
 
 	for (i = 0; i < NumberofAppls; i++)
@@ -793,11 +795,9 @@ BOOL Start()
 
 	memcpy(ExcludeList, cfg->C_EXCLUDE, 71);
 
-
 	//	SET UP PORT TABLE
 
-	ptr2 = ConfigBuffer + C_PORTS;
-	PortRec = (struct PORTCONFIG *)ptr2;
+	PortRec = &cfg->C_PORT[0];// (struct PORTCONFIG *)ptr2;
 
 	PORTTABLE = (VOID *)NEXTFREEDATA;
 	FULLPORT = (struct FULLPORTDATA *)PORTTABLE;
@@ -835,7 +835,7 @@ BOOL Start()
 			if (PORT->IOBASE > 0 && PORT->IOBASE < 256)
 			{
 				char Name[80];
-#ifdef LINBPQ
+#ifndef WIN32
 				sprintf(Name, "com%d", PORT->IOBASE);
 #else
 				sprintf(Name, "COM%d", PORT->IOBASE);
@@ -1007,9 +1007,9 @@ BOOL Start()
 
 			//	Round to word boundary (for ARM5 etc)
 
-			int3 = (int)ptr3;
-			int3 += 3;
-			int3 &= 0xfffffffc;
+			int3 = (unsigned long long)ptr3;
+			int3 += 7;
+			int3 &= 0xfffffffffffffff8;
 			ptr3 = (UCHAR *)int3;
 
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
@@ -1042,9 +1042,9 @@ BOOL Start()
 
 			//	Round to word boundsaty (for ARM5 etc)
 
-			int3 = (int)ptr3;
-			int3 += 3;
-			int3 &= 0xfffffffc;
+			int3 = (unsigned long long)ptr3;
+			int3 += 7;
+			int3 &= 0xfffffffffffffff8;
 			ptr3 = (UCHAR *)int3;
  
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
@@ -1063,9 +1063,9 @@ BOOL Start()
 	
 			//	Round to word boundsaty (for ARM5 etc)
 
-			int3 = (int)ptr3;
-			int3 += 3;
-			int3 &= 0xfffffffc;
+			int3 = (unsigned long long)ptr3;
+			int3 += 7;
+			int3 &= 0xfffffffffffffff8;
 			ptr3 = (UCHAR *)int3;
 
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
@@ -1084,8 +1084,7 @@ BOOL Start()
 
 	APPL = &APPLCALLTABLE[0]; 
 
-	ptr2 = ConfigBuffer + ApplOffset;
-	ptr1 = (struct APPLCONFIG *)ptr2;
+	ptr1 = (struct APPLCONFIG *)&xxcfg.C_APPL[0];
 
 	i = NumberofAppls;
 	
@@ -1133,54 +1132,53 @@ BOOL Start()
 	NEXTFREEDATA += MAXNEIGHBOURS * sizeof(struct ROUTE);
 
 	L4TABLE = (VOID *)NEXTFREEDATA;
+
 	NEXTFREEDATA += MAXCIRCUITS * sizeof(TRANSPORTENTRY);
 
 	//	SET UP DEFAULT ROUTES LIST
 
-	ptr2 = ConfigBuffer + C_ROUTES;
+	Rcfg = &cfg->C_ROUTE[0];
 
 	ROUTE = NEIGHBOURS;
 
-	while (*(ptr2))
+	while (Rcfg->call[0])
 	{
 		int FRACK;
 		
-		ConvToAX25(ptr2, ROUTE->NEIGHBOUR_CALL);
-		ROUTE->NEIGHBOUR_QUAL = ptr2[10];
-		ROUTE->NEIGHBOUR_PORT = ptr2[11];
+		ConvToAX25(Rcfg->call, ROUTE->NEIGHBOUR_CALL);
+		ROUTE->NEIGHBOUR_QUAL = Rcfg->quality;
+		ROUTE->NEIGHBOUR_PORT = Rcfg->port;
 		
 		PORT = GetPortTableEntryFromPortNum(ROUTE->NEIGHBOUR_PORT);
 
-		if (ptr2[12] & 0x40)
+		if (Rcfg->pwind & 0x40)
 			ROUTE->NoKeepAlive = 1;
 		else
 			if (PORT != NULL)
 				ROUTE->NoKeepAlive = PORT->PortNoKeepAlive;
 
-		if (ptr2[12] & 0x80 || (PORT && PORT->INP3ONLY))
+		if (Rcfg->pwind & 0x80 || (PORT && PORT->INP3ONLY))
 		{
 			ROUTE->INP3Node = 1;
 			ROUTE->NoKeepAlive = 0;			// Cant have INP3 and NOKEEPALIVES
 		}
 
-		ROUTE->NBOUR_MAXFRAME = ptr2[12] & 0x3f;
+		ROUTE->NBOUR_MAXFRAME = Rcfg->pwind & 0x3f;
 
-		FRACK = ptr2[13] | ptr2[14] << 8;
+		FRACK = Rcfg->pfrack;
 		ROUTE->NBOUR_FRACK = FRACK / 333; 
-
-		ROUTE->NBOUR_PACLEN = ptr2[15];
-
-		ROUTE->OtherendsRouteQual = ROUTE->OtherendLocked = ptr2[16];
+		ROUTE->NBOUR_PACLEN = Rcfg->ppacl;
+		ROUTE->OtherendsRouteQual = ROUTE->OtherendLocked = Rcfg->farQual;
 
 		ROUTE->NEIGHBOUR_FLAG = 1;			// Locked
 		
-		ptr2 += 17;
+		Rcfg++;
 		ROUTE++;
 	}
 
 	//	SET UP INFO MESSAGE
 
-	ptr2 = ConfigBuffer + C_INFOMSG;
+	ptr2 = &cfg->C_INFOMSG[0];
 	ptr3 = NEXTFREEDATA;
 
 	INFOMSG = ptr3;
@@ -1190,13 +1188,13 @@ BOOL Start()
 		*(ptr3++) = *(ptr2++);
 	}
 
-	INFOLEN = ptr3 - (unsigned char *)INFOMSG;
+	INFOLEN = (int)(ptr3 - (unsigned char *)INFOMSG);
 
 	NEXTFREEDATA = ptr3;
 
 	//	SET UP CTEXT MESSAGE
 
-	ptr2 = ConfigBuffer + C_CTEXT;
+	ptr2 = &cfg->C_CTEXT[0];
 	ptr3 = NEXTFREEDATA;
 
 	CTEXTMSG = ptr3;
@@ -1206,7 +1204,7 @@ BOOL Start()
 		*(ptr3++) = *(ptr2++);
 	}
 
-	CTEXTLEN = ptr3 - (unsigned char *)CTEXTMSG;
+	CTEXTLEN = (int)(ptr3 - (unsigned char *)CTEXTMSG);
 
 	NEXTFREEDATA = ptr3;
 
@@ -1223,7 +1221,7 @@ BOOL Start()
 	IDHDDR.CTL = 3;
 	IDHDDR.PID = 0xf0;
 
-	ptr2 = ConfigBuffer + C_IDMSG;
+	ptr2 = &cfg->C_IDMSG[0];
 	ptr3 = &IDHDDR.L2DATA[0];
 
 	while ((*ptr2))
@@ -1231,31 +1229,31 @@ BOOL Start()
 		*(ptr3++) = *(ptr2++);
 	}
 
-	IDHDDR.LENGTH = ptr3 - (unsigned char *)&IDHDDR;
+	IDHDDR.LENGTH = (int)(ptr3 - (unsigned char *)&IDHDDR);
 
-	{
-		UINT X = (UINT)NEXTFREEDATA;
-		X = (X + 3)& 0x0FFFFFFFC;	// MASK TO DWORD
-		NEXTFREEDATA = (UCHAR *)X;
-	}
+	int3 = (unsigned long long)NEXTFREEDATA;
+	int3 += 7;
+	int3 &= 0xfffffffffffffff8;
+	NEXTFREEDATA = (UCHAR *)int3;
+
 	BUFFERPOOL = NEXTFREEDATA;
 
-	Consoleprintf("PORTS %x LINKS %x DESTS %x ROUTES %x L4 %x BUFFERS %x\n",
+	Consoleprintf("PORTS %p LINKS %p DESTS %p ROUTES %p L4 %p BUFFERS %p\n",
 		PORTTABLE, LINKS, DESTS, NEIGHBOURS, L4TABLE, BUFFERPOOL);
 
-	Debugprintf("PORTS %x LINKS %x DESTS %x ROUTES %x L4 %x BUFFERS %x ",
+	Debugprintf("PORTS %p LINKS %p DESTS %p ROUTES %p L4 %p BUFFERS %p ",
 		PORTTABLE, LINKS, DESTS, NEIGHBOURS, L4TABLE, BUFFERPOOL);
 
 	i = NUMBEROFBUFFERS;
 
 	NUMBEROFBUFFERS = 0;
 
-	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - (400 + 8192)))	// 400 was BUFFLEN. Keep 8K free for anything that needs shared memory
+	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - (BUFFLEN + 8192)))	// Keep 8K free for anything that needs shared memory
 	{
-		Bufferlist[NUMBEROFBUFFERS] = (UINT *)NEXTFREEDATA;
+		Bufferlist[NUMBEROFBUFFERS] = (void **)NEXTFREEDATA;
 
 		ReleaseBuffer((UINT *)NEXTFREEDATA);
-		NEXTFREEDATA += 400;			// was BUFFLEN
+		NEXTFREEDATA += BUFFLEN;			// was BUFFLEN
 
 		NUMBEROFBUFFERS++;
 		MAXBUFFS++;
@@ -1263,7 +1261,7 @@ BOOL Start()
 
 	//	Copy Bridge Map
 
-	memcpy(BridgeMap, &ConfigBuffer[BridgeMapOffset], sizeof(BridgeMap));
+	memcpy(BridgeMap, &cfg->CfgBridgeMap, sizeof(BridgeMap));
 
 //	MOV	EAX,_NEXTFREEDATA
 //	CALL	HEXOUT
@@ -1605,7 +1603,7 @@ VOID ReadNodes()
 				if (ALIAS == NULL)
 					continue;
 
-				memcpy(FULLALIAS, ALIAS, strlen(ALIAS));
+				memcpy(FULLALIAS, ALIAS, (int)strlen(ALIAS));
 			}
 
 			ptr = strtok_s(NULL, seps, &Context);
@@ -1676,7 +1674,7 @@ VOID TIMERINTERRUPT()
 
 	int i;
 	struct PORTCONTROL * PORT = PORTTABLE;
-	UINT * Buffer;
+	PMESSAGE Buffer;
 	struct _LINKTABLE * LINK;
 	struct _MESSAGE * Message;
 	int toPort;
@@ -1748,14 +1746,14 @@ VOID TIMERINTERRUPT()
 	{
 		//	IF BUFFER HAS A LINK TABLE ENTRY ON END, RESET TIMEOUT
 
-		LINK = (struct _LINKTABLE *)Buffer[(BUFFLEN-4)/4];
+		LINK = Buffer->Linkptr;
 
 		if (LINK)
 		{
 			if (LINK->L2TIMER)
 				LINK->L2TIMER = LINK->L2TIME;
 
-			Buffer[(BUFFLEN-4)/4] = 0;	// CLEAR FLAG FROM BUFFER
+			Buffer->Linkptr = 0;	// CLEAR FLAG FROM BUFFER
 		}
 
 		Message = (struct _MESSAGE *)Buffer;
@@ -2013,7 +2011,7 @@ ENDOFLIST:
 
 			while (Buffer)
 			{
-				ProcessIframe(LINK, Buffer);
+				ProcessIframe(LINK, (PDATAMESSAGE)Buffer);
 	
 				Buffer = Q_REM(&LINK->RX_Q);
 			}
@@ -2058,9 +2056,9 @@ VOID DoListenMonitor(TRANSPORTENTRY * L4, MESSAGE * Msg)
 	if (monchars[21] == 3 && monchars[22] == 0xcf && monchars[23] == 0xff) // Netrom Nodes
 		return;
 
-	SetTraceOptionsEx(0x7fffffff, 1, 0, 0);
+	SetTraceOptionsEx(L4->LISTEN, 1, 0, 0);
 	
-	len = IntDecodeFrame(Msg, MonBuffer, Msg->Timestamp, -1, FALSE, TRUE);
+	len = IntDecodeFrame(Msg, MonBuffer, Msg->Timestamp, L4->LISTEN, FALSE, TRUE);
 	
 	SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
@@ -2079,9 +2077,9 @@ VOID DoListenMonitor(TRANSPORTENTRY * L4, MESSAGE * Msg)
 
 		memcpy(ptr, MonBuffer, len);
 
-		Buffer->LENGTH = len + 8;
+		Buffer->LENGTH = len + 4 + sizeof(void *);
 
-		C_Q_ADD(&L4->L4TX_Q, (UINT *)Buffer);
+		C_Q_ADD(&L4->L4TX_Q, Buffer);
 
 		PostDataAvailable(L4);
 	}
@@ -2094,7 +2092,7 @@ int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 	
 	TRANSPORTENTRY * L4 = L4TABLE;
 
-	UINT * Buffer;
+	MESSAGE * Buffer;
 	int i = BPQHOSTSTREAMS + 2;		// Include Telnet and AGW Stream
 
 	if (TOAPRS)
@@ -2107,12 +2105,12 @@ int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 		if (QCOUNT < 100)
 			return FALSE;
 
-		if (BPQHOSTVECTOR[i].HOSTAPPLFLAGS & 0x80)		// Trace ENabled?
+		if (BPQHOSTVECTOR[i].HOSTAPPLFLAGS & 0x80)		// Trace Enabled?
 		{
-			Buffer = (UINT *)GetBuff();
+			Buffer = GetBuff();
 			if (Buffer)
 			{
-				memcpy(&Buffer[1], &Msg->PORT, BUFFLEN - 8);	// Dont copy chain word
+				memcpy(&Buffer->PORT, &Msg->PORT, BUFFLEN - sizeof(void *));	// Dont copy chain word
 				C_Q_ADD(&BPQHOSTVECTOR[i].HOSTTRACEQ, Buffer);
 
 #ifndef LINBPQ
@@ -2133,12 +2131,11 @@ int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 
 	while (i--)
 	{
-		if ((Msg->PORT & 0x7f) == L4->LISTEN)
-			if (L4->LISTEN)
+		if (L4->LISTEN)
+			if (((1 << ((Msg->PORT & 0x7f) - 1)) & L4->LISTEN))
+			//	if ((Msg->PORT & 0x7f) == L4->LISTEN)	
 				DoListenMonitor(L4, Msg);
-			else
-				return FALSE;		// Zero Port???
-
+			
 		L4++;
 	}
 
@@ -2288,6 +2285,6 @@ VOID FindLostBuffers()
 	for (i = 0; i < NUMBEROFBUFFERS; i++)
 	{
 		Bufferlist[n++] = Buff;
-		Buff += 100;			// was (BUFFLEN / 4);
+		Buff += (BUFFLEN / 4);
 	}
 }

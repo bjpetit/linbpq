@@ -55,7 +55,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //		Add option to get config from BPQ32.cfg
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
 #ifndef WIN32
@@ -128,8 +127,8 @@ static struct AGWHEADER RXHeader;
 
 static int AGWChannel[MAXBPQPORTS+1];			// BPQ Port to AGW Port
 static int BPQPort[MAXAGWPORTS][MAXBPQPORTS+1];	// AGW Port and Connection to BPQ Port
-static int AGWtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
-static int BPQtoAGW_Q[MAXBPQPORTS+1];			// Frames for AGW. indexed by AGW port. Only used it TCP session is blocked
+static void * AGWtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
+static void * BPQtoAGW_Q[MAXBPQPORTS+1];			// Frames for AGW. indexed by AGW port. Only used it TCP session is blocked
 
 //	Each port may be on a different machine. We only open one connection to each AGW instance
 

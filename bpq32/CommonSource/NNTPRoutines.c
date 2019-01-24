@@ -118,7 +118,7 @@ VOID BuildNNTPList(struct MsgInfo * Msg)
 DoneIt:
 		strcpy(REC->NewsGroup, FullGroup);
 		REC->FirstMsg = Msg->number;
-		REC->DateCreated = Msg->datecreated;
+		REC->DateCreated = (time_t)Msg->datecreated;
 
 		FreeSemaphore(&AllocSemaphore);
 	}
@@ -635,7 +635,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			sockprintf(sockptr, "221 %d <%s>", MsgNo, Msg->bid);
 
 			sockprintf(sockptr, "From: %s", Msg->from);
-			sockprintf(sockptr, "Date: %s", FormatNNTPDateAndTime(Msg->datecreated));
+			sockprintf(sockptr, "Date: %s", FormatNNTPDateAndTime((time_t)Msg->datecreated));
 			sockprintf(sockptr, "Newsgroups: %s.s", Msg->to, Msg->via);
 			sockprintf(sockptr, "Subject: %s", Msg->title);
 			sockprintf(sockptr, "Message-ID: <%s>", Msg->bid);
@@ -688,7 +688,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			Path = GetPathFromHeaders(msgbytes);
 
 			sockprintf(sockptr, "From: %s", Msg->from);
-			sockprintf(sockptr, "Date: %s", FormatNNTPDateAndTime(Msg->datecreated));
+			sockprintf(sockptr, "Date: %s", FormatNNTPDateAndTime((time_t)Msg->datecreated));
 			sockprintf(sockptr, "Newsgroups: %s.%s", Msg->to, Msg->via);
 			sockprintf(sockptr, "Subject: %s", Msg->title);
 			sockprintf(sockptr, "Message-ID: <%s>", Msg->bid);
@@ -820,7 +820,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 					else if (_stricmp(Header, "from") == 0)
 						sockprintf(sockptr, "%d From: %s", MsgNo, Msg->from);
 					else if (_stricmp(Header, "date") == 0)
-						sockprintf(sockptr, "%d Date: %s", MsgNo, FormatNNTPDateAndTime(Msg->datecreated));
+						sockprintf(sockptr, "%d Date: %s", MsgNo, FormatNNTPDateAndTime((time_t)Msg->datecreated));
 					else if (_stricmp(Header, "message-id") == 0)
 						sockprintf(sockptr, "%d Message-ID: <%s>",  MsgNo, Msg->bid);
 					else if (_stricmp(Header, "lines") == 0)
@@ -883,7 +883,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				{
 					 // subject, author, date, message-id, references, byte count, and line count. 
 					sockprintf(sockptr, "%d\t%s\t%s\t%s\t%s\t%s\t%d\t%d",
-						MsgNo, Msg->title, Msg->from, FormatNNTPDateAndTime(Msg->datecreated), Msg->bid,
+						MsgNo, Msg->title, Msg->from, FormatNNTPDateAndTime((time_t)Msg->datecreated), Msg->bid,
 						"", Msg->length, Msg->length);
 				}
 			}

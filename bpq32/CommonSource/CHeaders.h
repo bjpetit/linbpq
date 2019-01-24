@@ -22,8 +22,8 @@ int GetListeningPortsPID(int Port);
 
 void * InitializeExtDriver(PEXTPORTDATA PORTVEC);
 
-VOID PutLengthinBuffer(UCHAR * buff, int datalen);			// Neded for arm5 portability
-int GetLengthfromBuffer(UCHAR * buff);	
+VOID PutLengthinBuffer(PDATAMESSAGE buff, int datalen);			// Neded for arm5 portability
+int GetLengthfromBuffer(PDATAMESSAGE buff);	
 
 
 #define GetBuff() _GetBuff(__FILE__, __LINE__)
@@ -303,7 +303,7 @@ extern int CTEXTLEN;
 extern UCHAR MYALIAS[7];				// ALIAS IN AX25 FORM
 extern UCHAR BBSALIAS[7];
 
-extern UINT TRACE_Q;				// TRANSMITTED FRAMES TO BE TRACED
+extern void * TRACE_Q;				// TRANSMITTED FRAMES TO BE TRACED
 
 extern char HEADERCHAR;				// CHAR FOR _NODE HEADER MSGS
 

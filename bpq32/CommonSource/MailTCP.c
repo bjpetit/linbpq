@@ -2499,7 +2499,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 //Received: from [69.147.65.148] by n15.bullet.sp1.yahoo.com with NNFMP; 16 May 2009 02:30:47 -0000
 //Received: from [69.147.108.192] by t11.bullet.mail.sp1.yahoo.com with NNFMP; 16 May 2009 02:30:47 -0000
 
-		FormatTime(TimeString, Msg->datecreated);
+		FormatTime(TimeString, (time_t)Msg->datecreated);
 
 		sprintf_s(Header, sizeof(Header), "Date: %s", TimeString);
 		SendSock(sockptr, Header);

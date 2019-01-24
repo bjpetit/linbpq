@@ -23,7 +23,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
+
 
 #pragma data_seg("_BPQDATA")
 

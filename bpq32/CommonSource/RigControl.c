@@ -42,7 +42,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 
 #include <stdio.h>
@@ -2061,7 +2060,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 		// TNC has been asked for permission, and we are waiting respoonse
 		// Only SCS pactor returns WaitingForPrmission, so check shouldn't be called on others
 		
-		RIG->OKtoChange = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
+		RIG->OKtoChange = (int)RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
 	
 		if (RIG->OKtoChange == 1)
 		{
@@ -2099,7 +2098,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 		// not waiting for permission, so must be first call of a cycle
 
 		if (RIG->PortRecord[0]->PORT_EXT_ADDR)
-			RIG->WaitingForPermission = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
+			RIG->WaitingForPermission = (int)RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 		// If it returns zero there is no need to wait.
 		// Normally SCS Returns True for first call, but returns 0 if Link not running

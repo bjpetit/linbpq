@@ -39,7 +39,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include "time.h"
 
@@ -273,7 +272,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
-				PutLengthinBuffer(buff, datalen);
+				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -305,7 +304,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		txlen = GetLengthfromBuffer(buff) - 8;
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
 
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);

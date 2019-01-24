@@ -46,7 +46,6 @@ WPRec * AllocateWPRecord()
 
 	FreeSemaphore(&AllocSemaphore);
 
-
 	return WP;
 }
 VOID GetWPDatabase()
@@ -55,6 +54,114 @@ VOID GetWPDatabase()
 	FILE * Handle;
 	int ReadLen;
 	WPRecP WP;
+	char CfgName[MAX_PATH];
+	long long val;
+	config_t wpcfg;
+	config_setting_t * wpgroup;
+	int i = 1;
+
+	// If text format exists use it
+
+	strcpy(CfgName, WPDatabasePath);
+	strlop(CfgName, '.');
+	strcat(CfgName, ".cfg");
+
+	config_init(&wpcfg);
+	
+	if(!config_read_file(&wpcfg, CfgName))
+	{
+		char Msg[256];
+		sprintf(Msg, "Config File Line %d - %s\n",
+			config_error_line(&wpcfg), config_error_text(&wpcfg));
+
+		printf("%s", Msg);
+		config_destroy(&wpcfg);
+		goto tryOld;
+	}
+
+	// Set up control record
+
+	WPRecPtr=malloc(4);
+	WPRecPtr[0]= zalloc(sizeof (WPRec));
+	NumberofWPrecs = 0;
+
+	while (1)
+	{
+		char Key[16];
+		sprintf(Key, "R%d", i++);
+
+		wpgroup = config_lookup (&wpcfg, Key);
+
+		if (wpgroup == NULL)			// End of List
+		{
+			config_destroy(&wpcfg);
+			return;
+		}
+
+		memset(&WPRec, 0, sizeof (WPRec));
+
+		GetStringValue(wpgroup, "c", WPRec.callsign);
+		GetStringValue(wpgroup, "n", WPRec.name);
+
+		WPRec.Type = GetIntValue(wpgroup, "T");
+		WPRec.changed = GetIntValue(wpgroup, "ch");
+		WPRec.seen = GetIntValue(wpgroup, "s");
+
+		GetStringValue(wpgroup, "h", WPRec.first_homebbs);
+		GetStringValue(wpgroup, "sh", WPRec.secnd_homebbs);
+		GetStringValue(wpgroup, "z", WPRec.first_zip);
+		GetStringValue(wpgroup, "sz", WPRec.secnd_zip);
+		GetStringValue(wpgroup, "q", WPRec.first_qth);
+		GetStringValue(wpgroup, "sq", WPRec.secnd_qth);
+
+		val = GetIntValue(wpgroup, "m"); 
+		WPRec.last_modif = val;
+		val = GetIntValue(wpgroup, "ls"); 
+		WPRec.last_seen = val;
+
+		_strupr(WPRec.callsign);
+
+		strlop(WPRec.callsign, ' ');
+		
+		if (strlen(WPRec.callsign) > 2)
+		{
+			if (strchr(WPRec.callsign, ':'))
+				continue;
+
+			if (_stricmp(WPRec.callsign, "RMS") == 0)
+				continue;
+
+			if (_stricmp(WPRec.callsign, "SYSTEM") == 0)
+				continue;
+
+			if (_stricmp(WPRec.callsign, "SWITCH") == 0)
+				continue;
+
+			if (_stricmp(WPRec.callsign, "SYSOP") == 0)
+				continue;
+
+			if (_stricmp(WPRec.callsign, "SMTP") == 0)
+				continue;
+
+			if (_stricmp(WPRec.callsign, "AMPR") == 0)
+				continue;
+
+			if (_stricmp(WPRec.callsign, "FILE") == 0)
+				continue;
+
+			if (_memicmp(WPRec.callsign, "MCAST", 5) == 0)
+				continue;
+
+			WP = LookupWP(WPRec.callsign);
+
+			if (WP == NULL)
+				WP = AllocateWPRecord();
+
+			memcpy(WP, &WPRec,  sizeof (WPRec));
+		}
+	}
+	
+tryOld:
 
 	Handle = fopen(WPDatabasePath, "rb");
 
@@ -202,7 +309,7 @@ VOID SaveWPDatabase()
 		val = WP->last_modif;
 		SaveInt64Value(group, "m", val);
 		val = WP->last_seen;
-		SaveInt64Value(group, "s", val);
+		SaveInt64Value(group, "ls", val);
 	}
 
 	strcpy(CfgName, WPDatabasePath);

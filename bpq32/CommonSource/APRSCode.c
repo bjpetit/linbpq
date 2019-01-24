@@ -26,7 +26,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 
 #include <stdio.h>
 #include "CHeaders.h"
@@ -877,7 +876,7 @@ Dll VOID APIENTRY Poll_APRS()
 	{
 		int stamp, len;
 		BOOL MonitorNODES = FALSE;
-		UINT * monbuff;
+		PMESSAGE monbuff;
 		UCHAR * monchars;
 		MESSAGE * Orig;
 		int Digis = 0;
@@ -923,7 +922,7 @@ Dll VOID APIENTRY Poll_APRS()
 			continue;
 		}
 
-		stamp = monbuff[88];
+		stamp = monbuff->Timestamp;
 
 		if ((UCHAR)monchars[4] & 0x80)		// TX
 		{
@@ -1096,7 +1095,8 @@ Dll VOID APIENTRY Poll_APRS()
 				// No digis actioned - remove them all
 
 				ptr4 = strchr(ptr1, ',');		// End of Dest
-				*ptr4 = 0;
+				if (ptr4)
+					*ptr4 = 0;
 			}
 		}
 

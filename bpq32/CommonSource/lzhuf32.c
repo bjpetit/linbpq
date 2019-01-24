@@ -952,7 +952,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			memcpy(FullFrom, ptr1, linelen);
 			FullFrom[linelen] = 0;
 
-			if (conn->Paclink)
+			if (conn->Paclink || (conn->RMSExpress && (conn->UserPointer->flags & F_NOWINLINK) == 0))
 			{
 				// Messages just have the call - need to add @winlink.org
 

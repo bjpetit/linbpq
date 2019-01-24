@@ -645,6 +645,9 @@ Next:
 		if (UserRec.Call[0] < '0')
 			goto Next;					// Blank record
 
+		if (UserRec.TimeLastConnected == 0)
+			UserRec.TimeLastConnected = UserRec.xTimeLastConnected;
+
 		if ((UserRec.flags & F_BBS) == 0)		// Not BBS - Check Age
 			if (UserLifetime)					// if limit set
 				if (UserRec.TimeLastConnected)	// Dont delete manually added Users that havent yet connected
@@ -938,6 +941,17 @@ Next:
 
 		strlop(Msg->from, '@');
 
+		// Move Dates if first run with new format
+
+		if (Msg->datecreated == 0)
+			Msg->datecreated = Msg->xdatecreated;
+
+		if (Msg->datereceived == 0)
+			Msg->datereceived = Msg->xdatereceived;
+
+		if (Msg->datechanged == 0)
+			Msg->datechanged = Msg->xdatechanged;
+
 		BuildNNTPList(Msg);				// Build NNTP Groups list
 
 		Msg->Locked = 0;				// In case left locked
@@ -998,16 +1012,16 @@ VOID SaveMessageDatabase()
 	FILE * Handle;
 	int WriteLen;
 	int i;
-	char Key[16];
-	struct MsgInfo *Msg;
-	char CfgName[MAX_PATH];
-	long long val;
-	char HEXString[64];
-	int n;
-	char * CfgBuffer;
-	char * Cfg;
-	int CfgLen = 0;
-	FILE * hFile;
+//	char Key[16];
+//	struct MsgInfo *Msg;
+//	char CfgName[MAX_PATH];
+//	long long val;
+//	char HEXString[64];
+//	int n;
+//	char * CfgBuffer;
+//	char * Cfg;
+//	int CfgLen = 0;
+//	FILE * hFile;
 
 	Handle = fopen(MsgDatabasePath, "wb");
 
@@ -1034,9 +1048,9 @@ VOID SaveMessageDatabase()
 
 	if (fclose(Handle) != 0)
 		CriticalErrorHandler("Failed to close message database");
+
 /*
-	CfgBuffer = Cfg = malloc(5000000);
-	CfgLen = 5000000;
+	CfgBuffer = Cfg = malloc(50000000);
 
 	for (i = 0; i <= NumberofMessages; i++)
 	{
@@ -1084,9 +1098,9 @@ VOID SaveMessageDatabase()
 		Cfg += sprintf(Cfg, "%s=%d\r\n", "UTF8", Msg->UTF8);
 	}
 
-	for (i = 0; i <= 10000; i++)
+	for (i = 0; i <= 100000; i++)
 	{
-		Msg = MsgHddrPtr[0];
+		Msg = MsgHddrPtr[1];
 		Cfg += sprintf(Cfg, "R%d:\r\n", i); 
 
 		Cfg += sprintf(Cfg, "%s=%d\r\n", "type", Msg->type); 
@@ -2113,7 +2127,7 @@ PrintMessage(HDC hDC, struct MsgInfo * Msg)
 
 
 		sprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
-			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 
 		if (Msg->B2Flags)
@@ -3037,7 +3051,7 @@ BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 	{
 		sprintf(FullTo, "RMS:%s", Msg->via);
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
+				Msg->number, FormatDateAndTime((time_t)Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
 	}
 	else
 
@@ -3045,7 +3059,7 @@ BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 	{
 		sprintf(FullTo, "smtp:%s", Msg->via);
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
+				Msg->number, FormatDateAndTime((time_t)Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
 	}
 
 	else
@@ -3055,11 +3069,11 @@ BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 			strcpy(Via, Msg->via);
 			strlop(Via, '.');			// Only show first part of via
 			nodeprintf(conn, "%-6d %s %c%c   %5d %-7s@%-6s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, FullFrom, Msg->title);
+				Msg->number, FormatDateAndTime((time_t)Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, FullFrom, Msg->title);
 		}
 		else
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
+				Msg->number, FormatDateAndTime((time_t)Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
 	
 	//	if paging, stop two before page lengh. This lets us send the continue prompt, save status
 	//	and exit without triggering the system paging code. We can then read a message then resume listing
@@ -3715,7 +3729,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 
 	nodeprintf(conn, "From: %s%s\rTo: %s\rType/Status: %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
-		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 	MsgBytes = Save = ReadMessageFile(msgno);
 
@@ -5451,7 +5465,20 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	__try {
 #endif
 
-	if ((user->flags & F_Temp_B2_BBS) || conn->RMSExpress)
+	// This is a hack so Winpack or WLE users can use forwarding
+	// protocols to get their messages without being defined as a BBS
+
+	// !!IMPORTANT Getting this wrong can see message repeatedly proposed !!
+	// !! Anything sent using this must be killed if sent or rejected.
+
+	// I'm not sure about this. I think I only need the PacLinkCalls
+	// if from RMS Express, and it always sends an FW; line
+	// Ah, no. What about WinPack ??
+	// If from RMS Express must have Temp_B2 or BBS set or SID will
+	// be rejected. So maybe just Temp_B2 && BBS = 0??
+	// No, someone may Temp_B2 set and not be using WLE ?? So what ??
+
+	if ((user->flags & F_Temp_B2_BBS) && ((user->flags & F_BBS) == 0) || conn->RMSExpress)
 	{
 		if (conn->PacLinkCalls == NULL)
 		{
@@ -5554,7 +5581,8 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 			}
 		}
 
-		// If forwarding to Paclink or RMS Express, look for any message matching the requested call list with statis 'N'
+		// If forwarding to Paclink or RMS Express, look for any message matching the
+		// requested call list with status 'N' (maybe should also be 'P' ??)
 
 		if (conn->PacLinkCalls)
 		{
@@ -10752,7 +10780,7 @@ BOOL SendARQMail(CIRCUIT * conn)
 		Msg = conn->FwdMsg;
 		WholeMessage = malloc(Msg->length + 512);
 
-		FormatTime(TimeString, Msg->datecreated);
+		FormatTime(TimeString, (time_t)Msg->datecreated);
 
 /*
 ARQ:FILE::flarqmail-1.eml
@@ -11100,7 +11128,7 @@ VOID CreateUserReport()
 		len = sprintf(Line, "%s,%d,%s,%x,%s,\"%s\",%x,%s,%s,%s\r\n",
 			User->Call,
 			User->lastmsg,
-			FormatDateAndTime(User->TimeLastConnected, FALSE),
+			FormatDateAndTime((time_t)User->TimeLastConnected, FALSE),
 			User->flags,
 			User->Name,
 			User->Address,

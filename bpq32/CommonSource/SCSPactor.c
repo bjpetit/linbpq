@@ -67,7 +67,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 
 #include <stdio.h>
@@ -465,7 +464,7 @@ ok:
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
-				PutLengthinBuffer(buff, datalen);
+				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
 
 	//			buff[5]=(datalen & 0xff);
 	//			buff[6]=(datalen >> 8);
@@ -498,7 +497,7 @@ ok:
 			return 0;
 		}
 
-		txlen = GetLengthfromBuffer(buff) - 8;
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
 
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
@@ -596,7 +595,7 @@ ok:
 					}
 					else if (TNC->TimeScanLocked)
 					{
-						int timeLocked = time(NULL) - TNC->TimeScanLocked;
+						time_t timeLocked = time(NULL) - TNC->TimeScanLocked;
 						if (timeLocked > 4)
 						{
 							Debugprintf("SCS Scan - Scan Locked for %d Secs - allow change regardless", timeLocked);

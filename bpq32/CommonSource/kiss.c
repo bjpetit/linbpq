@@ -102,7 +102,7 @@ int WritetoConsoleLocal(char * buff);
 VOID INITCOMMON(struct KISSINFO * PORT);
 struct PORTCONTROL * CHECKIOADDR(struct PORTCONTROL * OURPORT);
 VOID INITCOM(struct KISSINFO * PORTVEC);
-VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer);
+VOID SENDFRAME(struct KISSINFO * KISS, PMESSAGE Buffer);
 int ConnecttoTCP(NPASYINFO ASY);
 int KISSGetTCPMessage(NPASYINFO ASY);
 VOID CloseKISSPort(struct PORTCONTROL * PortVector);
@@ -110,7 +110,7 @@ int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
 
 extern struct PORTCONTROL * PORTTABLE;
 extern int	NUMBEROFPORTS;
-extern UINT TRACE_Q;
+extern void * TRACE_Q;
 
 #define TICKS 10	// Ticks per sec
 
@@ -180,7 +180,7 @@ VOID EnableFLDIGIReports(struct PORTCONTROL * PORT)
 //	ptr += sprintf(ptr, "%s", "TNC");
 	*(ptr++) = FEND;
 	
-	ASYSEND(PORT, Buffer, ptr - &Buffer[0]);
+	ASYSEND(PORT, Buffer, (int)(ptr - &Buffer[0]));
 }
 
 
@@ -903,7 +903,7 @@ VOID INITCOMMON(struct KISSINFO * KISS)
 
 }
 
-VOID KISSTX(struct KISSINFO * KISS, UINT * Buffer)
+VOID KISSTX(struct KISSINFO * KISS, PMESSAGE Buffer)
 {
 	struct PORTCONTROL * PORT = (struct PORTCONTROL *)KISS;
 
@@ -972,7 +972,7 @@ DONTCHECKDCD:
 	SENDFRAME(KISS, Buffer);
 }
 
-VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
+VOID SENDFRAME(struct KISSINFO * KISS, PMESSAGE Buffer)
 {
 	PPORTCONTROL PORT = (struct PORTCONTROL *)KISS;
 	struct _MESSAGE * Message = (struct _MESSAGE *)Buffer;
@@ -1023,7 +1023,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
 		(*ptr2++) = ETX;		// NETROM has CRC after ETX
 		(*ptr2++) = TXCCC;
 
-		ASYSEND(PORT, ENCBUFF, ptr2 - (char *)ENCBUFF);
+		ASYSEND(PORT, ENCBUFF, (int)(ptr2 - (char *)ENCBUFF));
 //		Debugprintf("NETROM TX Len %d CRC %d", ptr2 - (char *)ENCBUFF, TXCCC); 
 
 		C_Q_ADD(&TRACE_Q, Buffer);
@@ -1046,7 +1046,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
 	//	Encode frame
 
 	ptr1 = &Message->DEST[0];
-	Len = Message->LENGTH - 7;
+	Len = Message->LENGTH - (3 + sizeof(void *));
 	ENCBUFF[0] = FEND;
 	ENCBUFF[1] = KISS->OURCTRL;
 	ptr2 = &ENCBUFF[2];
@@ -1057,18 +1057,16 @@ VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
 	
 	if (PORT->KISSFLAGS & ACKMODE)
 	{
-		UINT ACKWORD = Buffer[(BUFFLEN-4)/4];
-
-		if (ACKWORD)					// Frame Needs ACK
+		if (Buffer->Linkptr)					// Frame Needs ACK
 		{
+			UINT ACKWORD = (UINT)(Buffer->Linkptr - LINKS);
 			ENCBUFF[1] |= 0x0c;			// ACK OPCODE 
-			ACKWORD -= (UINT)LINKS;		// Con only send 16 bits, so use offset into LINKS
 			ENCBUFF[2] = ACKWORD & 0xff;
 			ENCBUFF[3] = (ACKWORD >> 8) &0xff;
 
 			// have to reset flag so trace doesnt clear it
 
-			Buffer[(BUFFLEN-4)/4] = 0;
+			Buffer->Linkptr = 0;
 
 			if (PORT->KISSFLAGS & TNCX)
 			{
@@ -1154,7 +1152,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
 
 	(*ptr2++) = FEND;
 
-	ASYSEND(PORT, ENCBUFF, ptr2 - (char *)ENCBUFF);
+	ASYSEND(PORT, ENCBUFF, (int)(ptr2 - (char *)ENCBUFF));
 
 	// Pass buffer to trace routines
 
@@ -1165,7 +1163,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
 VOID KISSTIMER(struct KISSINFO * KISS)
 {
 	struct PORTCONTROL * PORT = (struct PORTCONTROL *)KISS;
-	UINT * Buffer;
+	PMESSAGE Buffer;
 
 	//	SEE IF TIME TO REFRESH KISS PARAMS
 
@@ -1208,7 +1206,7 @@ VOID KISSTIMER(struct KISSINFO * KISS)
 	
 				PORT = (struct PORTCONTROL *)KISS->FIRSTPORT;			// ALL FRAMES GO ON SAME Q
 
-				ASYSEND(PORT, ENCBUFF, ptr - &ENCBUFF[0]);
+				ASYSEND(PORT, ENCBUFF, (int)(ptr - &ENCBUFF[0]));
 			}
 			KISS->PORT.PARAMTIMER = TICKS*60*5;		// 5 MINS
 		}
@@ -1333,7 +1331,7 @@ VOID KISSTIMER(struct KISSINFO * KISS)
 int KISSRX(struct KISSINFO * KISS)
 {
 	struct PORTCONTROL * PORT = (struct PORTCONTROL *)KISS;
-	UCHAR * Buffer;
+	PMESSAGE Buffer;
 	int len;
 	NPASYINFO Port = KISSInfo[PORT->PORTNUMBER];
 	struct KISSINFO * SAVEKISS = KISS;		// Save so we can restore at SeeifMode
@@ -1356,7 +1354,7 @@ SeeifMore:
 
 	// Have a KISS frame
 	
-	len = Port->RXMPTR - &Port->RXMSG[0];
+	len = (int)(Port->RXMPTR - &Port->RXMSG[0]);
 
 	// reset pointers
 
@@ -1396,16 +1394,14 @@ SeeifMore:
 			return 0;
 		}
 
-		Buffer = (UCHAR *)GetBuff();
+		Buffer = GetBuff();
 
 		if (Buffer)
 		{
-			memcpy(&Buffer[7], &Port->RXMSG[0], len);
-			len += 7;
+			memcpy(&Buffer->DEST, &Port->RXMSG[0], len);
+			len += (3 + sizeof(void *));
 
-			PutLengthinBuffer(Buffer, len);
-//			Buffer[5] = (len & 0xff);
-//			Buffer[6] = (len >> 8);
+			PutLengthinBuffer((PDATAMESSAGE)Buffer, len);
 
 			C_Q_ADD(&PORT->PORTRX_Q, (UINT *)Buffer);
 		}
@@ -1497,8 +1493,7 @@ SeeifMore:
 		struct _LINKTABLE * LINK;
 		UINT ACKWORD = Port->RXMSG[1] | Port->RXMSG[2] << 8;
 
-		ACKWORD += (UINT)LINKS;
-		LINK = (struct _LINKTABLE *)ACKWORD;
+		LINK = LINKS + ACKWORD;
 
 		if (LINK->L2TIMER)
 			LINK->L2TIMER = LINK->L2TIME;
@@ -1506,7 +1501,7 @@ SeeifMore:
 		return 0;
 	}
 
-	if (Port->RXMSG[0] & 0x0f)		// Not Dats 
+	if (Port->RXMSG[0] & 0x0f)		// Not Data
 	{
 		Port->RXMSG[len] = 0;
 /*
@@ -1558,7 +1553,7 @@ SeeifMore:
 	
 	//	ok, KISS now points to our port
 
-	Buffer = (UCHAR *)GetBuff();
+	Buffer = GetBuff();
 		
 	// we dont need the control byte
 	
@@ -1566,13 +1561,10 @@ SeeifMore:
 	
 	if (Buffer)
 	{
-		memcpy(&Buffer[7], &Port->RXMSG[1], len);
-		len += 7;
+		memcpy(&Buffer->DEST, &Port->RXMSG[1], len);
+		len += (3 + sizeof(void *));
 
-//		Buffer[5] = (len & 0xff);
-//		Buffer[6] = (len >> 8);
-
-		PutLengthinBuffer(Buffer, len);		// Needed for arm5 portability
+		PutLengthinBuffer((PDATAMESSAGE)Buffer, len);		// Needed for arm5 portability
 
 /*
 		// Randomly drop packets

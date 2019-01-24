@@ -22,7 +22,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
 
@@ -838,7 +837,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (Outstanding < 0)
 				Outstanding += 64;
 
-			TNC->PortRecord->FramesQueued = Outstanding + TNC->Streams[0].BPQtoPACTOR_Q;		// Save for Appl Level Queued Frames
+			TNC->PortRecord->FramesQueued = Outstanding + C_Q_COUNT(&TNC->Streams[0].BPQtoPACTOR_Q);		// Save for Appl Level Queued Frames
 
 			if (Outstanding > ARQ->TXWindow)
 				return (1 | TNCOK << 8 | STREAM->Disconnecting << 15); // 3rd Nibble is frames unacked
@@ -3243,7 +3242,7 @@ VOID ARQTimer(struct TNCINFO * TNC)
 			if (Outstanding < 0)
 				Outstanding += 64;
 
-			TNC->PortRecord->FramesQueued = Outstanding + STREAM->BPQtoPACTOR_Q;		// Save for Appl Level Queued Frames
+			TNC->PortRecord->FramesQueued = Outstanding + C_Q_COUNT(&STREAM->BPQtoPACTOR_Q);		// Save for Appl Level Queued Frames
 
 			if (Outstanding > ARQ->TXWindow)
 				break;
@@ -3296,7 +3295,7 @@ VOID ARQTimer(struct TNCINFO * TNC)
 			if (Outstanding < 0)
 				Outstanding += 64;
 
-			TNC->PortRecord->FramesQueued = Outstanding + STREAM->BPQtoPACTOR_Q + 1; // Make sure busy is reported to BBS
+			TNC->PortRecord->FramesQueued = Outstanding + C_Q_COUNT(&STREAM->BPQtoPACTOR_Q) + 1; // Make sure busy is reported to BBS
 
 			if (Outstanding > ARQ->TXWindow)
 				break;
@@ -3461,7 +3460,7 @@ VOID ProcessARQStatus(struct TNCINFO * TNC, struct ARQINFO * ARQ, char * Input)
 	if (Outstanding < 0)
 		Outstanding += 64;
 
-	TNC->PortRecord->FramesQueued = Outstanding + STREAM->BPQtoPACTOR_Q;		// Save for Appl Level Queued Frames
+	TNC->PortRecord->FramesQueued = Outstanding + C_Q_COUNT(&STREAM->BPQtoPACTOR_Q);		// Save for Appl Level Queued Frames
 
 	if (FirstUnAcked == ARQ->TXSeq)
 	{

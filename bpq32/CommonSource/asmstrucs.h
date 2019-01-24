@@ -7,7 +7,6 @@
 
 #ifdef WIN32
 
-#define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 #include "winsock2.h"
 #include "ws2tcpip.h"
 
@@ -15,12 +14,14 @@
 
 #define BPQICON 2
 
-#define BUFFLEN	360
+#define BUFFLEN	400
 
 //#define ApplStringLen 48	// Length of each config entry
 #define NumberofAppls 32	// Max APPLICATIONS= values
 #define ALIASLEN 48
 #define MHENTRIES 30		// Entries in MH List
+
+#define MaxLockedRoutes 100
 
 typedef int (FAR *FARPROCY)();
 
@@ -48,26 +49,14 @@ extern struct _DATABASE * DataBase;
 
 extern int MAXDESTS;
 
+//extern VOID * GETBUFF();
+//extern VOID SETUPNODEHEADER();
 extern VOID POSTDATAAVAIL();
 
 extern int DATABASE;
 extern int ENDOFDATA;
 extern int L3LIVES;
 extern int NUMBEROFNODES;
-
-// Length of config Buffer = 100000
-
-#define BridgeMapOffset 70000
-#define ApplOffset 80000			// Applications offset in config buffer
-#define InfoOffset 85000			// Infomsg offset in  buffer
-#define InfoMax	2000				// Max Info
-#define HFCTextOffset 88000;		// HF modes CTEXT
-
-#define C_IDMSG	512 
-#define C_ROUTES 90000				// Allow 2500
-#define C_CTEXT	2048
-#define C_PORTS	2560
-#define C_INFOMSG 85000
 
 typedef struct _CMDX
 {
@@ -171,8 +160,8 @@ typedef struct _TRANSPORTENTRY
 	int UAddrLen;				//
 	char UADDRESS[64];			// Unproto Address String - Dest + Digis
 
-	int LISTEN;					// Port if in Listen Mode
-
+	UINT LISTEN;				// Port Mask if in Listen Mode
+	
 	char APPL[16];				// Set if session initiated by an APPL
 	int L4LIMIT;				// Idle time for this Session
 
@@ -293,7 +282,7 @@ typedef struct _L3MESSAGE
 
 } L3MESSAGE, *PL3MESSAGE;
 
-#define MSGHDDRLEN 7 //sizeof(VOID *) + sizeof(UCHAR) + sizeof(USHORT)
+#define MSGHDDRLEN (USHORT)(sizeof(VOID *) + sizeof(UCHAR) + sizeof(USHORT))
 
 typedef struct _MESSAGE
 {
@@ -311,20 +300,23 @@ typedef struct _MESSAGE
 
 	UCHAR	CTL;
 	UCHAR	PID; 
-
+	
 	union 
 	{                   /*  array named screen */
 		UCHAR L2DATA[256];
 		struct _L3MESSAGE L3MSG;
 	};
 		
-	UCHAR Padding[BUFFLEN - sizeof(time_t) - sizeof(unsigned short) - sizeof(VOID *) - 256 - MSGHDDRLEN - 16];
+	UCHAR Padding[BUFFLEN - (sizeof(time_t) + (2 * sizeof(unsigned short)) + sizeof(VOID *) + 256 + MSGHDDRLEN + 16)]; // 16 = Addrs CTL PID
 
-	unsigned short Process;
 	time_t Timestamp;
-	VOID * Linkptr;		// For ACKMODE processing
+	struct _LINKTABLE * Linkptr;		// For ACKMODE processing
+	unsigned short Process;				// Process that got buffer
+	unsigned short GuardZone;			// Should always be zero
 
 }MESSAGE, *PMESSAGE;
+
+#define MAXDATA	BUFFLEN - (sizeof(time_t) + (2 * sizeof(unsigned short)) + sizeof(VOID *) + MSGHDDRLEN + 16) // 16 = Addrs CTL PID
 
 
 typedef struct HDDRWITHDIGIS
@@ -368,6 +360,15 @@ typedef struct DATAMESSAGE
 
 } *PDATAMESSAGE;
 
+typedef struct MSGWITHLEN
+{
+	//	BASIC LINK LEVEL MESSAGE HEADERLAYOUT
+
+	struct MSGWITHLEN * Next;
+	size_t Len;
+	UCHAR Data[256];
+
+} *PMSGWITHLEN;
 //
 //	BPQHOST MODE VECTOR STRUC
 //
@@ -520,11 +521,12 @@ typedef struct PORTCONTROL
 					//; 6 = HDLC, 8 = L2
 
 	struct PORTCONTROL * PORTPOINTER; // NEXT IN CHAIN
+	PMESSAGE XXX;
+	PMESSAGE YYY;
 
-	UCHAR PORTQUALITY;		// 'STANDARD' QUALITY FOR THIS PORT
-	UINT PORTRX_Q;			// FRAMES RECEIVED ON THIS PORT
-	UINT PORTTX_Q;			// FRAMES TO BE SENT ON THIS PORT
-
+	PMESSAGE PORTRX_Q;			// FRAMES RECEIVED ON THIS PORT
+	PMESSAGE PORTTX_Q;			// FRAMES TO BE SENT ON THIS PORT
+	
 	void (FAR * PORTTXROUTINE)();	// POINTER TO TRANSMIT ROUTINE FOR THIS PORT
 	void (FAR * PORTRXROUTINE)();	// POINTER TO RECEIVE ROUTINE FOR THIS PORT
 	void (FAR * PORTINITCODE)();		// INITIALISATION ROUTINE
@@ -532,7 +534,9 @@ typedef struct PORTCONTROL
 	void (FAR * PORTCLOSECODE)();	// CLOSE ROUTINE
 	int (FAR * PORTTXCHECKCODE)();	// OK to TX Check
 
-	char PORTDESCRIPTION[30];// TEXT DESCRIPTION OF FREQ/SPEED ETC
+	char PORTDESCRIPTION[31];// TEXT DESCRIPTION OF FREQ/SPEED ETC (31 so null terminated)
+
+	UCHAR PORTQUALITY;		// 'STANDARD' QUALITY FOR THIS PORT
 
 	char PORTBBSFLAG;		// NZ MEANS PORT CALL/ALIAS ARE FOR BBS
 	char PORTL3FLAG;			// NZ RESTRICTS OUTGOING L2 CONNECTS
@@ -646,7 +650,7 @@ typedef struct PORTCONTROL
 typedef struct FULLPORTDATA
 {
 	struct PORTCONTROL PORTCONTROL;	
-	UCHAR HARDWAREDATA[200];			// WORK AREA FOR HARDWARE DRIVERS
+	UCHAR HARDWAREDATA[300];			// WORK AREA FOR HARDWARE DRIVERS
 } *PFULLPORTDATA;
 
 // KISS Mapping of HARDWAREDATA
@@ -691,7 +695,7 @@ typedef struct _EXTPORTDATA
 {
 	struct PORTCONTROL PORTCONTROL	;	// REMAP HARDWARE INFO
 
-	int (FAR * PORT_EXT_ADDR) ();		// ADDR OF RESIDENT ROUTINE
+	void * (* PORT_EXT_ADDR) ();		// ADDR OF RESIDENT ROUTINE
 	char PORT_DLL_NAME[16];	
 	UCHAR EXTRESTART;					// FLAG FOR DRIVER REINIT
 	HINSTANCE DLLhandle;

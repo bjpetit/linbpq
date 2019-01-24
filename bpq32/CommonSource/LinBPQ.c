@@ -128,7 +128,7 @@ extern FILE * LogHandle[4];
 
 extern ConnectionInfo Connections[MaxSockets+1];
 
-int LastTrafficTime;
+time_t LastTrafficTime;
 extern int MaintTime;
 
 #define LOG_BBS 0

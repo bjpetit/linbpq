@@ -22,7 +22,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
 
@@ -1505,7 +1504,7 @@ static VOID ARQTimer(struct TNCINFO * TNC)
 			if (Outstanding < 0)
 				Outstanding += 64;
 
-			TNC->PortRecord->FramesQueued = Outstanding + STREAM->BPQtoPACTOR_Q;		// Save for Appl Level Queued Frames
+			TNC->PortRecord->FramesQueued = Outstanding + C_Q_COUNT(STREAM->BPQtoPACTOR_Q);		// Save for Appl Level Queued Frames
 
 			if (Outstanding >= ARQ->TXWindow)
 				break;
@@ -1558,7 +1557,7 @@ static VOID ARQTimer(struct TNCINFO * TNC)
 			if (Outstanding < 0)
 				Outstanding += 64;
 
-			TNC->PortRecord->FramesQueued = Outstanding + STREAM->BPQtoPACTOR_Q + 1; // Make sure busy is reported to BBS
+			TNC->PortRecord->FramesQueued = Outstanding + C_Q_COUNT(&STREAM->BPQtoPACTOR_Q) + 1; // Make sure busy is reported to BBS
 
 			if (Outstanding >= ARQ->TXWindow)
 				break;
@@ -1728,7 +1727,7 @@ static VOID ProcessARQStatus(struct TNCINFO * TNC, int Stream, struct ARQINFO * 
 	if (Outstanding < 0)
 		Outstanding += 64;
 
-	TNC->PortRecord->FramesQueued = Outstanding + STREAM->BPQtoPACTOR_Q;		// Save for Appl Level Queued Frames
+	TNC->PortRecord->FramesQueued = Outstanding + C_Q_COUNT(&STREAM->BPQtoPACTOR_Q);		// Save for Appl Level Queued Frames
 
 	if (FirstUnAcked == ARQ->TXSeq)
 	{

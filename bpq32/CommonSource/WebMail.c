@@ -17,8 +17,7 @@ You should have received a copy of the GNU General Public License
 along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
-#define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
+#define _CRT_SECURE_NO_DEPRECATE 
 
 #include "CHeaders.h"
 #include "BPQMail.h"
@@ -793,6 +792,9 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 			break;						// protect buffer
 
 		Msg = GetMsgFromNumber(m);
+
+		if (Msg == 0 || Msg->type == 0 || Msg->status == 0)
+			continue;					// Protect against corrupt messages
 		
 		if (Msg && CheckUserMsg(Msg, User->Call, User->flags & F_SYSOP))
 		{
@@ -825,7 +827,7 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 			
 			ptr += sprintf(ptr, "<a href=/WebMail/WM?%s&%d>%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
 				Key, Msg->number, Msg->number,
-				FormatDateAndTime(Msg->datecreated, TRUE), Msg->type,
+				FormatDateAndTime((time_t)Msg->datecreated, TRUE), Msg->type,
 				Msg->status, Msg->length, Msg->to, Via,
 				Msg->from, UTF8Title);
 
@@ -896,7 +898,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	if (Msg->B2Flags == 0)
 	{
 		ptr += sprintf(ptr, "From: %s%s\nTo: %s\nType/Status: %c%c\nDate/Time: %s\nBid: %s\nTitle: %s\n\n",
-			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, UTF8Title);
+			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, UTF8Title);
 	}
 
 	MsgBytes = Save = ReadMessageFile(Number);
@@ -1746,7 +1748,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"}</script>"
 			"<p align=center>"
 			"Select Required Template from %s<br><br>"
-			"<select size=5 id=\"mySelect\" onclick=\"myFunction()\">"
+			"<select size=15 id=\"mySelect\" onclick=\"myFunction()\">"
 			"<option value=-1>No Page Selected";
 			
 		struct HtmlFormDir * Dir;
@@ -1851,11 +1853,11 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 		" Select Required Template Folder from List<br><br>"
 		"<table border=1 cellpadding=2 bgcolor=white>"
 		"<tr><th>Standard Templates</th><th>Local Templates</th></tr>"
-		"<tr><td width=50%%><select size=5 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
+		"<tr><td width=50%%><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
 
 	char NewGroup [] =
 		"</select></td><td width=50%% align=center>"
-		"<select size=5 id=Sel2 onclick=\"myFunction('Sel2')\">";
+		"<select size=15 id=Sel2 onclick=\"myFunction('Sel2')\">";
 
 	char popup[10000];
 	struct HtmlFormDir * Dir;
@@ -2272,7 +2274,7 @@ char * GetHTMLViewerTemplate(char * FN)
 		{
 			if (strcmp(FN, Dir->Forms[j]->FileName) == 0)
 			{
-				return ReadTemplate(Dir->FormSet, Dir->DirName, FN);
+				return CheckFile(Dir, FN);
 			}
 		}
 
@@ -2284,7 +2286,7 @@ char * GetHTMLViewerTemplate(char * FN)
 				{
 					if (strcmp(FN, Dir->Dirs[l]->Forms[k]->FileName) == 0)
 					{
-						return ReadTemplate(Dir->FormSet, Dir->DirName, Dir->Dirs[l]->Forms[k]->FileName);
+						return CheckFile(Dir, Dir->Dirs[l]->Forms[k]->FileName);
 					}
 				}
 			}
@@ -2460,7 +2462,7 @@ reEnter:
 		return;
 	}
 
-		Template = ReadTemplate(Dir->FormSet, Dir->DirName, WebMail->InputHTMLName);
+		Template = CheckFile(Dir, WebMail->InputHTMLName);
 
 		if (Template == NULL)
 		{
@@ -2533,7 +2535,7 @@ reEnter:
 
 
 
-char * ReadTemplate(char * FormSet, char * DirName, char *FileName)
+char * xxReadTemplate(char * FormSet, char * DirName, char *FileName)
 {
 	int FileSize;
 	char * MsgBytes;
@@ -2542,7 +2544,41 @@ char * ReadTemplate(char * FormSet, char * DirName, char *FileName)
 	struct stat STAT;
 	FILE * hFile;
 
+#ifndef WIN32
+
+	// Need to do case insensitive file search
+
+	DIR *dir;
+	struct dirent *entry;
+	char name[256];
+
+	sprintf(name, "%s/%s/%s", BPQDirectory, FormSet, DirName);
+
+	if (!(dir = opendir(name)))
+	{
+		Debugprintf("cant open forms dir %s %d %d", name, errno, dir);
+        return 0;
+	}
+
+    while ((entry = readdir(dir)) != NULL)
+	{
+        if (entry->d_type == DT_DIR)
+                continue;
+	
+		if (stristr(entry->d_name, FileName))
+		{
+			sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), FormSet, DirName, entry->d_name);
+		    closedir(dir);
+			break;
+		}
+	}
+    closedir(dir);
+
+#else
+
 	sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), FormSet, DirName, FileName);
+
+#endif
 
 	if (stat(MsgFile, &STAT) != -1)
 	{
@@ -2977,7 +3013,7 @@ char * BuildB2Header(WebMailInfo * WebMail, struct MsgInfo * Msg)
 	struct tm * tm;
 	int n;
 
-	tm = gmtime(&Msg->datecreated);	
+	tm = gmtime((time_t *)&Msg->datecreated);	
 	
 	sprintf(DateString, "%04d%02d%02d%02d%02d%02d",
 		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
@@ -3938,6 +3974,9 @@ void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * 
 		crcrptr = strstr(crcrptr, "\r\r");
 	}
 
+	if (WebMail->BID == NULL)
+		WebMail->BID = _strdup("");
+
 	*RLen = sprintf(Reply, CheckFormMsgPage, Session->Key, WebMail->To, WebMail->CC, WebMail->Subject, "Selected", "", "", WebMail->BID, WebMail->Body);
 
 	// Free the part strings 
@@ -4127,7 +4166,7 @@ char * BuildFormMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 
 	// Create a B2 Message
 
-	tm = gmtime(&Msg->datecreated);	
+	tm = gmtime((time_t *)&Msg->datecreated);	
 	
 	sprintf(DateString, "%04d%02d%02d%02d%02d%02d",
 		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
@@ -4363,7 +4402,8 @@ int ReplyToFormsMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 
 	char * Template = FindXMLVariable(WebMail, "reply_template");
 
-	if (Template == NULL)
+	if (Template == NULL || Template[0] == 0)
+
 		return 0;					// No Template
 
 	if (Reenter)
@@ -4382,6 +4422,17 @@ int ReplyToFormsMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 
 	WebMail->Subject = malloc(strlen(Msg->title) + 10);
 	sprintf(WebMail->Subject, "Re: %s", Msg->title);
+
+	// Set To: from From:
+
+	WebMail->To = malloc(80);
+
+	if (Msg->emailfrom[0])
+		sprintf(WebMail->To, "%s%s", Msg->from, Msg->emailfrom);
+	else
+		sprintf(WebMail->To, "%s", Msg->from, Msg->emailfrom);
+
+
 	
 	if (ptr)
 		free(ptr);
@@ -4417,6 +4468,14 @@ int ReplyToFormsMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 			n++;
 		}
 	}
+
+	// Template Not Found
+
+	// Missing template
+
+		*WebMail->RLen = sprintf(WebMail->Reply, "<html><script>alert(\"Reply Template %s missing. Display as Text then Reply\");;window.history.back();</script></html>", WebMail->txtFileName);
+		return *WebMail->RLen;
+
 
 gotFile:
 	WebMail->Dir = Dir;
@@ -4459,10 +4518,15 @@ reEnter:
 		return *WebMail->RLen;
 	}
 
-	Template = ReadTemplate(WebMail->Dir->FormSet, WebMail->Dir->DirName, WebMail->InputHTMLName);
+	Template = CheckFile(WebMail->Dir, WebMail->InputHTMLName);
 
 	if (Template == NULL)
-		return 0;
+	{
+			// Missing HTML
+
+		*WebMail->RLen = sprintf(WebMail->Reply, "<html><script>alert(\"Reply HTML %s missing. Display as Text then Reply\");;window.history.back();</script></html>", WebMail->InputHTMLName);
+		return *WebMail->RLen;
+	}
 
 	// I've going to update the template in situ, as I can't see a better way
 	// of making sure all occurances of variables in any order are substituted.
@@ -4517,7 +4581,6 @@ reEnter:
 	return Len;
 }
 
-
 char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 {
 	struct stat STAT;
@@ -4527,7 +4590,40 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 	int ReadLen;
 	int FileSize;
 
+#ifndef WIN32
+
+	// Need to do case insensitive file search
+
+	DIR *dir;
+	struct dirent *entry;
+	char name[256];
+
+	sprintf(name, "%s/%s/%s", BPQDirectory, Dir->FormSet, Dir->DirName);
+
+	if (!(dir = opendir(name)))
+	{
+		Debugprintf("cant open forms dir %s %s %d", Dir->DirName, name, errno);
+        return 0;
+	}
+
+    while ((entry = readdir(dir)) != NULL)
+	{
+        if (entry->d_type == DT_DIR)
+                continue;
+	
+		if (stricmp(entry->d_name, FN) == 0)
+		{
+			sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), Dir->FormSet, Dir->DirName, entry->d_name);
+			break;
+		}
+	}
+    closedir(dir);
+
+#else
+
 	sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), Dir->FormSet, Dir->DirName, FN);
+
+#endif
 
 	if (stat(MsgFile, &STAT) != -1)
 	{
@@ -4911,7 +5007,7 @@ BOOL ParsetxtTemplate(struct HTTPConnectionInfo * Session, struct HtmlFormDir * 
 
 		// Get Timestamp from Message
 
-		tm = gmtime(&WebMail->Msg->datecreated);				
+		tm = gmtime((time_t *)&WebMail->Msg->datecreated);				
 
 		sprintf(Date, "%02d-%02d-%02d",
 			tm->tm_year - 100,tm->tm_mon + 1, tm->tm_mday);
@@ -4920,7 +5016,7 @@ BOOL ParsetxtTemplate(struct HTTPConnectionInfo * Session, struct HtmlFormDir * 
 			tm->tm_year - 100,tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 	
 		strcpy(Day, longday[tm->tm_wday]);
-			tm = gmtime(&WebMail->Msg->datecreated);				
+			tm = gmtime((time_t *)&WebMail->Msg->datecreated);				
 
 		sprintf(UDate, "%02d-%02d-%02dZ",
 			tm->tm_year - 100,tm->tm_mon + 1, tm->tm_mday);
