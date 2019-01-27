@@ -1157,6 +1157,8 @@ VOID SaveWP(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, in
 		WP->Type = 'U';
 		WP->changed = 1;
 
+		SaveWPDatabase();
+
 		*RLen = SendWPDetails(WP, Reply, Key);
 	}
 }

@@ -23,7 +23,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Called via an assmbler glue that puts registers into C variables.
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define _USE_32BIT_TIME_T
 
 #pragma data_seg("_BPQDATA")
 

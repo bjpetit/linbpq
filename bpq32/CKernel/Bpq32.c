@@ -863,12 +863,15 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Remove RECONFIG command
 //	Preparations for 64 bit version
 
+// 6.0.19
+//	Fix UZ7HO interlock
+//	Add commands to set Centre Frequency and Modem with UZ7HO Soundmodem
+
 #define CKernel
 
 #include "Versions.h"
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define _USE_32BIT_TIME_T
 
 #pragma data_seg("_BPQDATA")
 

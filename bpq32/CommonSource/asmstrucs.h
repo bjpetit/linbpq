@@ -53,6 +53,7 @@ extern int MAXDESTS;
 //extern VOID SETUPNODEHEADER();
 extern VOID POSTDATAAVAIL();
 
+
 extern int DATABASE;
 extern int ENDOFDATA;
 extern int L3LIVES;
@@ -336,7 +337,7 @@ typedef struct HDDRWITHDIGIS
 	UCHAR	PID; 
 
 	union 
-	{                   /*  array named screen */
+	{
 		UCHAR L2DATA[256];
 		struct _L3MESSAGE L3MSG;
 
@@ -453,7 +454,7 @@ typedef struct DEST_LIST
 
 	struct DEST_ROUTE_ENTRY ROUTE[3];	// Best 3 INP neighbours for this dest
 
-	long DEST_Q;				// QUEUE OF FRAMES FOR THIS DESTINATION
+	void * DEST_Q;				// QUEUE OF FRAMES FOR THIS DESTINATION
 
 	int DEST_RTT;				// SMOOTHED ROUND TRIP TIMER
 	int DEST_COUNT;				//  FRAMES SENT
@@ -662,8 +663,8 @@ typedef struct KISSINFO
 	int LINKSTS;			// CURRENT STATE
 	UINT * CURALP;			// CURRENT BUFFER
 	UINT * NEXTCHR;			// 	
-	UINT ASYNCMSG_Q;		//  RECEIVED MESSAGES
-	UINT KISSTX_Q	;		// MESSAGES TO SEND
+	void * ASYNCMSG_Q;		//  RECEIVED MESSAGES
+	void * KISSTX_Q	;		// MESSAGES TO SEND
 	int ESCFLAG	;			// 		; SET IF LAST RX CHAR WAS DLE
 	int ESCTXCHAR;			// 	; CHAR TO SEND FOLLOWING DLE IF NZ
 
@@ -707,7 +708,7 @@ typedef struct _EXTPORTDATA
 #define SIMPLE 1
 #define CONLOCK 2
 
-	UINT UI_Q;						// Unproto Frames for Session Mode Drivers (TRK, etc)
+	void * UI_Q;						// Unproto Frames for Session Mode Drivers (TRK, etc)
 	int	FramesQueued;				// TX Frames queued in Driver
 
 } EXTPORTDATA, *PEXTPORTDATA;
@@ -748,8 +749,8 @@ typedef struct _HDLCDATA
 
 	UCHAR SDFLAGS;				// GENERAL FLAGS
 
-	UINT * PCTX_Q;				// HDLC HOLDING QUEUE
-	UINT * RXMSG_Q;				// RX INTERRUPT TO SDLC BG
+	void * PCTX_Q;				// HDLC HOLDING QUEUE
+	void * RXMSG_Q;				// RX INTERRUPT TO SDLC BG
 
 
 //;SOFTDCD		DB	0		; RX ACTIVE FLAG FOR 'SOFT DC

@@ -258,7 +258,7 @@ BOOL CreateConsole(int Stream)
 		user->Temp = zalloc(sizeof (struct TempUserInfo));
 	}
 
-	time(&user->TimeLastConnected);
+	time((time_t *)&user->TimeLastConnected);
 	user->Total.ConnectsIn++;
 
 	Cinfo->Console->UserPointer = user;

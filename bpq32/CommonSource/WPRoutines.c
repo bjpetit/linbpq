@@ -71,7 +71,7 @@ VOID GetWPDatabase()
 	if(!config_read_file(&wpcfg, CfgName))
 	{
 		char Msg[256];
-		sprintf(Msg, "Config File Line %d - %s\n",
+		sprintf(Msg, "Config File %s Line %d - %s\n", CfgName,
 			config_error_line(&wpcfg), config_error_text(&wpcfg));
 
 		printf("%s", Msg);
@@ -247,22 +247,34 @@ Next:
 	}
 
 	fclose(Handle);
+	SaveWPDatabase();
+
 }
 
 VOID CopyWPDatabase()
 {
 	char Backup[MAX_PATH];
+	char Orig[MAX_PATH];
 
 	strcpy(Backup, WPDatabasePath);
 	strcat(Backup, ".bak");
 
 	CopyFile(WPDatabasePath, Backup, FALSE);
+
+	strcpy(Backup, WPDatabasePath);
+	strlop(Backup, '.');
+	strcat(Backup, ".cfg.bak");
+
+	strcpy(Orig, WPDatabasePath);
+	strlop(Orig, '.');
+	strcat(Orig, ".cfg");
+	CopyFile(Orig, Backup, FALSE);
 }
 
 VOID SaveWPDatabase()
 {
-	FILE * Handle;
-	int WriteLen;
+//	FILE * Handle;
+//	int WriteLen;
 	int i;
 	config_setting_t *root, *group;
 	config_t cfg;
@@ -271,16 +283,16 @@ VOID SaveWPDatabase()
 	char CfgName[MAX_PATH];
 	long long val;
 
-	Handle = fopen(WPDatabasePath, "wb");
+//	Handle = fopen(WPDatabasePath, "wb");
 
-//	WPRecPtr[0]-> = NumberofWPrecs;			// First Record has file size
+////	WPRecPtr[0]-> = NumberofWPrecs;			// First Record has file size
 
-	for (i=0; i <= NumberofWPrecs; i++)
-	{
-		WriteLen = fwrite(WPRecPtr[i], 1, sizeof (WPRec), Handle);
-	}
+//	for (i=0; i <= NumberofWPrecs; i++)
+//	{
+//		WriteLen = fwrite(WPRecPtr[i], 1, sizeof (WPRec), Handle);
+//	}
 
-	fclose(Handle);
+//	fclose(Handle);
 
 	memset((void *)&cfg, 0, sizeof(config_t));
 
@@ -315,6 +327,8 @@ VOID SaveWPDatabase()
 	strcpy(CfgName, WPDatabasePath);
 	strlop(CfgName, '.');
 	strcat(CfgName, ".cfg");
+
+	Debugprintf("Saving WP Database to %s\n", CfgName);
 	
 	config_write_file(&cfg, CfgName);
 	config_destroy(&cfg);

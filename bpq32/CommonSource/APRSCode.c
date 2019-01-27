@@ -124,7 +124,7 @@ static int MinTimer = 60;
 BOOL APRSApplConnected = FALSE;  
 BOOL APRSWeb = FALSE;  
 
-UINT APPL_Q = 0;				// Queue of frames for APRS Appl
+void * APPL_Q = 0;				// Queue of frames for APRS Appl
 UINT APPLTX_Q = 0;				// Queue of frames from APRS Appl
 UINT APRSPortMask = 0;
 

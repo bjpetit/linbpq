@@ -34,7 +34,7 @@ int GetLengthfromBuffer(PDATAMESSAGE buff);
 
 #define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__)
 
-VOID * _Q_REM(VOID *Q, char * File, int Line);
+VOID * _Q_REM(VOID **Q, char * File, int Line);
 VOID * _Q_REM_NP(VOID *Q, char * File, int Line);
 
 int _C_Q_ADD(VOID *Q, VOID *BUFF, char * File, int Line);
@@ -248,7 +248,7 @@ extern UCHAR MYNETROMCALL[];			// NETROM CALLSIGN (ASCII)
 
 extern UCHAR NETROMCALL[];				// NETORM CALL (AX25)
 
-extern UINT FREE_Q;
+extern VOID * FREE_Q;
 
 extern struct PORTCONTROL * PORTTABLE;
 extern int	NUMBEROFPORTS;
@@ -303,7 +303,7 @@ extern int CTEXTLEN;
 extern UCHAR MYALIAS[7];				// ALIAS IN AX25 FORM
 extern UCHAR BBSALIAS[7];
 
-extern void * TRACE_Q;				// TRANSMITTED FRAMES TO BE TRACED
+extern VOID * TRACE_Q;				// TRANSMITTED FRAMES TO BE TRACED
 
 extern char HEADERCHAR;				// CHAR FOR _NODE HEADER MSGS
 

@@ -3536,46 +3536,12 @@ int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length)
    return 0;
 
 }
-#pragma pack(1) 
 
-typedef struct _MESSAGEY
-{
-//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
-
-	struct _MESSAGEY * CHAIN;
-
-	UCHAR	PORT;
-	USHORT	LENGTH;
-
-	UCHAR	DEST[7];
-	UCHAR	ORIGIN[7];
-
-//	 MAY BE UP TO 56 BYTES OF DIGIS
-
-	UCHAR	CTL;
-	UCHAR	PID; 
-
-	union 
-	{                   /*  array named screen */
-		UCHAR L2DATA[256];
-		struct _L3MESSAGE L3MSG;
-
-	};
-
-	UCHAR Padding[BUFFLEN - sizeof(time_t) - sizeof(VOID *) - 256 - 7 - 16];
-
-	time_t Timestamp;
-	VOID * Linkptr;		// For ACKMODE processing
-
-}MESSAGEY;
-
-#pragma pack() 
-
-static MESSAGEY Monframe;		// I frames come in two parts.
+static MESSAGE Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
-MESSAGEY * AdjMsg = &Monframe;				// Adjusted for digis
+MESSAGE * AdjMsg = &Monframe;				// Adjusted for digis
 
 static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
@@ -3597,7 +3563,8 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		return;
 	}
 
-	Monframe.LENGTH = 23;				// Control Frame
+	Monframe.LENGTH = MSGHDDRLEN + 16;			// Control Frame
+
 	Monframe.PORT = TNC->Port;
 	
 	AdjMsg = &Monframe;					// Adjusted for digis
@@ -3627,7 +3594,7 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 DigiLoop:
 		fiddle = (char *)AdjMsg;
 		fiddle += 7;
-		AdjMsg = (MESSAGEY *)fiddle;
+		AdjMsg = (MESSAGE *)fiddle;
 
 		Monframe.LENGTH += 7;
 

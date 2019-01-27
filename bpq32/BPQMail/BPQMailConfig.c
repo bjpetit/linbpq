@@ -1020,7 +1020,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 				}
 			}
 
-			tm = gmtime(&user->TimeLastConnected);	
+			tm = gmtime((time_t *)&user->TimeLastConnected);	
 			Dateptr = asctime(tm);
 			strcpy(Date, Dateptr);
 
@@ -1315,9 +1315,9 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, 6005, Msg->title);
 			sprintf(Size, "%d", Msg->length);
 
-			SetDlgItemText(hDlg, 6018, FormatDateAndTime(Msg->datecreated, FALSE));
-			SetDlgItemText(hDlg, 6019, FormatDateAndTime(Msg->datereceived, FALSE));
-			SetDlgItemText(hDlg, 6021, FormatDateAndTime(Msg->datechanged, FALSE));
+			SetDlgItemText(hDlg, 6018, FormatDateAndTime((time_t)Msg->datecreated, FALSE));
+			SetDlgItemText(hDlg, 6019, FormatDateAndTime((time_t)Msg->datereceived, FALSE));
+			SetDlgItemText(hDlg, 6021, FormatDateAndTime((time_t)Msg->datechanged, FALSE));
 			SetDlgItemText(hDlg, 6020, Size);
 
 			if (Msg->type  == 'B')
@@ -2717,7 +2717,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 				strcpy(FullTo, Msg->to);
 
 			sprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
-				Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+				Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 			if (Msg->B2Flags)
 			{

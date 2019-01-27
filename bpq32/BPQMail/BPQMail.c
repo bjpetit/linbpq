@@ -981,6 +981,14 @@
 //	Preparations for 64 bit version
 
 
+// 6.0.19.xx
+
+//	Trap missing HTML reply Template or HTML files
+//	Fix case problems in HTML Templates
+//	Fix setting To call on reply to HTML messages
+//  More preparations for 64 bit including saving WP info as a text file.
+
+
 #include "BPQMail.h"
 #define MAIL
 #include "Versions.h"
@@ -2457,7 +2465,7 @@ gotAddr:
 
 				NewMsg = MailBuffer + 1000;
 
-				tm = gmtime(&Msg->datecreated);	
+				tm = gmtime((time_t *)&Msg->datecreated);	
 	
 				sprintf(DateString, "%04d/%02d/%02d %02d:%02d",
 					tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
@@ -2984,6 +2992,11 @@ BOOL Initialise()
 
 	UsingingRegConfig = FALSE;
 
+	// Make sure SYSOPCALL is set
+
+	if (SYSOPCall[0] == 0)
+		strcpy(SYSOPCall, BBSName);
+
 	// Make sure there is a user record for the BBS, with BBS bit set.
 
 	user = LookupCall(BBSName);
@@ -3086,7 +3099,7 @@ BOOL Initialise()
 		if (MaintClock < now)
 			MaintClock += 86400;
 
-		Debugprintf("Maint Clock %d NOW %d Time to HouseKeeping %d", MaintClock, now, MaintClock - now);
+		Debugprintf("Maint Clock %lld NOW %lld Time to HouseKeeping %lld", (long long)MaintClock, (long long)now, (long long)(MaintClock - now));
 
 		if (LastHouseKeepingTime)
 		{

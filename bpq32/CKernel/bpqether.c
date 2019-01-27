@@ -50,7 +50,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 //#include <time.h>
 
-#include "../CommonSourcex64/CHeaders.h"
+#include "CHeaders.h"
 #include <process.h>
 #include "pcap.h"
 

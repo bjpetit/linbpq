@@ -1291,6 +1291,7 @@ VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 	return;
 }
 
+
 static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port)
 {
 //	ATTACH FRAME TO OUTBOUND L3 QUEUES (ONLY USED FOR IP ROUTER)
@@ -5158,7 +5159,7 @@ VOID ProcessSNMPMessage(PIPMSG IPptr)
 		else if (memcmp(OID, sysUpTime, sysUpTimeLen) == 0)
 		{
 			int ValOffset = 10;
-			ValLen = ASNPutInt(Value, ValOffset, (time(NULL) - TimeLoaded) * 100, TimeTicks);
+			ValLen = ASNPutInt(Value, ValOffset, (int)(time(NULL) - TimeLoaded) * 100, TimeTicks);
 			ValOffset -= ValLen;
 
 			PDULen = BuildReply(Reply, Offset, sysUpTime, sysUpTimeLen, &Value[ValOffset], ReqID);

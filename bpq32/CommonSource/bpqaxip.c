@@ -171,12 +171,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #endif
 
 
-//	BUFFLEN-4 = L2 POINTER (FOR CLEARING TIMEOUT WHEN ACKMODE USED)
-//	BUFFLEN-8 = TIMESTAMP
-//	BUFFLEN-12 = BUFFER ALLOCATED FLAG (ADDR OF ALLOCATING ROUTINE)
-	
-
-
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
 #define	TFEND	0xDC
@@ -309,6 +303,8 @@ int addrlen = sizeof(struct sockaddr_in);
 extern unsigned short CRCTAB[];
 unsigned int AXIPInst = 0;
 
+char CantReplyList[512] = "";		// To suppress duplicate "Can't Reply" messages
+
 DWORD n;
 
 struct AXIPPORTINFO * Portlist[33];
@@ -341,7 +337,7 @@ VOID SaveAXIPWindowPos(int port)
 }
 
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static int ExtProc(int fn, int port, PMESSAGE buff)
 {
 	struct iphdr * iphdrptr;
 	int len,txlen=0,err,index,digiptr,i;
@@ -410,13 +406,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 							return 0;
 						}
 
-						memcpy(&buff[7],&rxbuff[20],len);
-						len+=7;
+						memcpy(&buff->DEST, &rxbuff[20],len);
+						len += (3 + sizeof(void *));
 		
-						PutLengthinBuffer(buff, len);		// Neded for arm5 portability
-
-//						buff[5]=(len & 0xff);
-//						buff[6]=(len >> 8);
+						PutLengthinBuffer((PDATAMESSAGE)buff, len);		// Needed for arm5 portability
 
 						memcpy(call, &buff[14], 7);
 						call[6] &= 0x7e;		// Mask End of Address bit
@@ -426,7 +419,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						//
 
 						if (PORT->MHEnabled)
-							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, &buff[14], 'I', 93, 0);
+							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, &buff->ORIGIN[0], 'I', 93, 0);
 
 						// Check Exclude
 	
@@ -444,14 +437,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 								// Can't reply. If AutoConfig is set, add to table and accept, else reject
 
 								if (PORT->AutoAddARP)
-
 									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, 0, inet_ntoa(RXaddr.rxaddr.sin_addr), 0, PORT->AutoAddBC, TRUE, 0, 0, FALSE);
-
 								else
 								{
-									char From[10];
-									From[ConvFromAX25(call, From)] = 0;
-									Debugprintf("AXIP Packet from %s dropped - can't reply", From);
+									char From[11] = "|";
+									From[ConvFromAX25(call, &From[1]) + 1] = 0;
+									if (strstr(CantReplyList, From) == 0)
+									{
+										if (strlen(CantReplyList) < 500);
+											strcat(CantReplyList, From);
+										Debugprintf("AXIP Packet from %s dropped - can't reply", &From[1]);
+									}
 									return 0;
 								}
 						}
@@ -513,12 +509,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						return 0;
 					}
 
-					memcpy(&buff[7],&rxbuff[0],len);
-					len+=7;
+					memcpy(&buff->DEST, &rxbuff[0],len);
 					
-					PutLengthinBuffer(buff, len);
+					len += (3 + sizeof(void *));
+					
+					PutLengthinBuffer((PDATAMESSAGE)buff, len);
 
-					memcpy(call, &buff[14], 7);
+					memcpy(call, &buff->ORIGIN, 7);
+
 					call[6] &= 0x7e;		// Mask End of Address bit
 
 					//
@@ -527,9 +525,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 					if (PORT->MHEnabled)
 						if (PORT->IPv6[i])
-							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr6.sin6_addr, &buff[14], 'U', PORT->udpport[i], TRUE);	
+							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr6.sin6_addr, &buff->ORIGIN[0], 'U', PORT->udpport[i], TRUE);	
 						else
-							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, &buff[14], 'U', PORT->udpport[i], FALSE);	
+							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, &buff->ORIGIN[0], 'U', PORT->udpport[i], FALSE);
 
 					// Check Exclude
 
@@ -555,9 +553,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, htons(RXaddr.rxaddr.sin_port), inet_ntoa(RXaddr.rxaddr.sin_addr), 0, PORT->AutoAddBC, TRUE, 0, PORT->udpport[i], FALSE);		
 							else
 							{
-								char From[10];
-								From[ConvFromAX25(call, From)] = 0;
-								Debugprintf("AXUDP Packet from %s dropped - can't reply", From);
+								char From[11] = "|";
+								From[ConvFromAX25(call, &From[1]) + 1] = 0;
+								if (strstr(CantReplyList, From) == 0)
+								{
+									if (strlen(CantReplyList) < 500);
+										strcat(CantReplyList, From);
+									Debugprintf("AXIP Packet from %s dropped - can't reply", &From[1]);
+								}
 								return 0;
 							}
 						}
@@ -589,13 +592,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				len = KissDecode(rxbuff, len-1);		// Len includes FEND
 				len -= 2;	// Ignore Cheksum
 
-				memcpy(&buff[7],&rxbuff[0],len);
-				len+=7;
+				memcpy(&buff->DEST, &rxbuff[0], len);
+				len += (3 + sizeof(void *));
 
-				PutLengthinBuffer(buff, len);		// fix big endian issue
-
-//				buff[5]=(len & 0xff);
-//				buff[6]=(len >> 8);
+				PutLengthinBuffer((PDATAMESSAGE)buff, len);		// fix big endian issue
 
 				return 1;
 			}
@@ -607,25 +607,25 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 //		txlen=(buff[6]<<8) + buff[5] - 5;			// Len includes buffer header (7) but we add crc
 
-		txlen = GetLengthfromBuffer(buff) - 5;
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - (1 + sizeof(void *));
 
-		crc=compute_crc(&buff[7], txlen - 2);
+		crc=compute_crc(&buff->DEST[0], txlen - 2);
 		crc ^= 0xffff;
 
-		buff[txlen+5]=(crc&0xff);
-		buff[txlen+6]=(crc>>8);
+		buff->DEST[txlen - 2] = (crc & 0xff);
+		buff->DEST[txlen - 1] = (crc >> 8);
 
- 		memcpy(axcall, &buff[7], 7);	// Set to send to dest addr
+ 		memcpy(axcall, &buff->DEST, 7);	// Set to send to dest addr
 
 		// if digis are present, scan down list for first non-used call
 
-		if  ((buff[20] & 1) == 0)
+		if  (buff->ORIGIN[6] == 0)
 		{
 			// end of addr bit not set, so scan digis
 
-			digiptr=21;							// start of first digi
+			digiptr = 13;							// start of first digi
 
-			while (((buff[digiptr+6] & 0x80) == 0x80) && ((buff[digiptr+6] & 0x1) == 0))
+			while (((buff->ORIGIN[digiptr] & 0x80) == 0x80) && ((buff->ORIGIN[digiptr] & 0x1) == 0))
 			{
 				// This digi has been used, and it is not the last
 
@@ -634,8 +634,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// if this has not been used, use it
 
-			if ((buff[digiptr+6] & 0x80) == 0)
-				memcpy(axcall,&buff[digiptr],7);  // get next call
+			if ((buff->ORIGIN[digiptr] & 0x80) == 0)
+				memcpy(axcall,&buff->ORIGIN[digiptr - 6], 7);  // get next call
 		}
 
 		axcall[6] &= 0x7e;
@@ -648,7 +648,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				for (index = 0; index < PORT->arp_table_len; index++)
 				{
-					if (PORT->arp_table[index].BCFlag) SendFrame(PORT, &PORT->arp_table[index], &buff[7], txlen);
+					if (PORT->arp_table[index].BCFlag)
+						SendFrame(PORT, &PORT->arp_table[index], &buff->DEST[0], txlen);
 				}
 				return 0;
 			}
@@ -662,7 +663,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			if (memcmp(PORT->arp_table[index].callsign,axcall,PORT->arp_table[index].len) == 0)
 			{
-				SendFrame(PORT, &PORT->arp_table[index], &buff[7], txlen);
+				SendFrame(PORT, &PORT->arp_table[index],&buff->DEST[0], txlen);
 			}
 			index++;
 		}
@@ -683,7 +684,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		}
 		else 
 			Consoleprintf("Failed to reread config file - leaving config unchanged");
-
 
 		_beginthread(OpenSockets, 0, PORT );
 
@@ -2849,7 +2849,7 @@ int GetMessageFromBuffer(struct AXIPPORTINFO * PORT, char * Buffer)
 				{
 					// buffer contains more that 1 message
 
-					MsgLen = sockptr->InputLen - (ptr2-ptr);
+					MsgLen = sockptr->InputLen - (int)((ptr2-ptr));
 					memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
 
 					memmove(sockptr->TCPBuffer, ptr, sockptr->InputLen-MsgLen);

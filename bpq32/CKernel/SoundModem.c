@@ -8,7 +8,6 @@
 #pragma data_seg("_BPQDATA")
 
 #define WIN32_LEAN_AND_MEAN
-#define _USE_32BIT_TIME_T
 #define _CRT_SECURE_NO_DEPRECATE 
 
 //#include <process.h>

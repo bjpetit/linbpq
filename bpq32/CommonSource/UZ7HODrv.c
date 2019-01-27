@@ -1728,44 +1728,7 @@ UZ7HO d GM8BPQ GM8BPQ-2 *** DISCONNECTED From Station GM8BPQ-0
 
 New Disconnect Port 7 Q 0
 */
-/*
-#pragma pack(1) 
 
-typedef struct _MESSAGEY
-{
-//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
-
-	struct _MESSAGEY * CHAIN;
-
-	UCHAR	PORT;
-	USHORT	LENGTH;
-
-	UCHAR	DEST[7];
-	UCHAR	ORIGIN[7];
-
-//	 MAY BE UP TO 56 BYTES OF DIGIS
-
-	UCHAR	CTL;
-	UCHAR	PID; 
-
-	union 
-	{                  
-		UCHAR L2DATA[256];
-		struct _L3MESSAGE L3MSG;
-
-	};
-
-	UCHAR Padding[BUFFLEN - (sizeof(time_t) + (2 * sizeof(unsigned short)) + sizeof(VOID *) + 256 + MSGHDDRLEN + 16)]; // 16 = Addrs CTL PID
-
-	time_t Timestamp;
-	struct _LINKTABLE * Linkptr;		// For ACKMODE processing
-	unsigned short Process;				// Process that got buffer
-	unsigned short GuardZone;			// Should always be zero
-
-}MESSAGEY;
-
-#pragma pack() 
-*/
 extern VOID PROCESSUZ7HONODEMESSAGE();
 
 VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)

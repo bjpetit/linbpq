@@ -163,7 +163,7 @@ VOID * VCOMExtInit(struct PORTCONTROL *  PortEntry)
 
 	WritetoConsole("\n");
 
-	return ((UINT) ExtProc);
+	return ExtProc;
 }
 
 static int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)

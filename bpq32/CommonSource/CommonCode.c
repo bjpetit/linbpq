@@ -97,7 +97,7 @@ BOOL CheckQHeadder(UINT * Q)
 	}
 	__except(EXCEPTION_EXECUTE_HANDLER)
 	{
-		Debugprintf("Invalid Q Header %X", Q);
+		Debugprintf("Invalid Q Header %p", Q);
 		printStack();
 		return FALSE;
 	}
@@ -108,86 +108,99 @@ BOOL CheckQHeadder(UINT * Q)
 // Get buffer from Queue
 
 
-VOID * _Q_REM(VOID *PQ, char * File, int Line)
+VOID * _Q_REM(VOID **PQ, char * File, int Line)
 {
-	UINT * Q;
-	UINT * first;
-	UINT next;
+	void ** Q;
+	void ** first;
+	VOID * next;
+	PMESSAGE Test;
 
 	//	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-	Q = (UINT *) PQ;
+	Q = PQ;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
 
-	if (CheckQHeadder(Q) == 0)
+	if (CheckQHeadder((UINT *) Q) == 0)
 		return(0);
 
-	first = (UINT *)Q[0];
+	first = Q[0];
 
-	if (first == 0) return (0);			// Empty
+	if (first == 0)
+		return (0);			// Empty
 
-	next= first[0];						// Address of next buffer
+	next = first[0];			// Address of next buffer
 
 	Q[0] = next;
 
 	// Make sure guard zone is zeros
 
-//	if (*(first + BUFFLEN/4) != 0)
-//	{
-//		Debugprintf("Q_REM %X GUARD ZONE CORRUPT %x Called from %s Line %d", first, *(first + BUFFLEN/4), File, Line);
-//		printStack();
-//	}
+	Test = (PMESSAGE)first;
 
-	return (first);
+	if (Test->GuardZone != 0)
+	{
+		Debugprintf("Q_REM %p GUARD ZONE CORRUPT %x Called from %s Line %d", first, Test->GuardZone, File, Line);
+		printStack();
+	}
+
+	return first;
 }
 
 // Non=pool version (for IPGateway)
 
 VOID * _Q_REM_NP(VOID *PQ, char * File, int Line)
 {
-	UINT * Q;
-	UINT * first;
-	UINT next;
+	void ** Q;
+	void ** first;
+	void * next;
 
 	//	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-	Q = (UINT *) PQ;
+	Q = PQ;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
 
-	if (CheckQHeadder(Q) == 0)
+	if (CheckQHeadder((UINT *)Q) == 0)
 		return(0);
 
-	first = (UINT *)Q[0];
+	first = Q[0];
 
 	if (first == 0) return (0);			// Empty
 
-	next= first[0];						// Address of next buffer
+	next = first[0];			// Address of next buffer
 
 	Q[0] = next;
 
-	return (first);
+	return first;
 }
 
 // Return Buffer to Free Queue
 
 extern VOID * BUFFERPOOL;
-extern UINT * Bufferlist[1000];
+extern void ** Bufferlist[1000];
 void printStack(void);
 
 
 UINT _ReleaseBuffer(VOID *pBUFF, char * File, int Line)
 {
-	UINT * pointer, * BUFF = pBUFF;
+	void ** pointer, ** BUFF = pBUFF;
 	int n = 0;
+	void ** debug;
+	PMESSAGE Test;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("ReleaseBuffer called without semaphore from %s Line %d", File, Line);
 
 	// Make sure address is within pool
+
+	Test = (PMESSAGE)pBUFF;
+
+	if (Test->GuardZone != 0)
+	{
+		Debugprintf("_ReleaseBuffer %p GUARD ZONE CORRUPT %x Called from %s Line %d", pBUFF, Test->GuardZone, File, Line);
+	}
 
 	while (n <= NUMBEROFBUFFERS)
 	{
@@ -206,7 +219,7 @@ BOK1:
 
 	// See if already on free Queue
 
-	pointer = (UINT *)FREE_Q;
+	pointer = FREE_Q;
 
 	while (pointer)
 	{
@@ -217,12 +230,13 @@ BOK1:
 
 			return 0;
 		}
-		if (pointer == (UINT *)pointer[0])
+		if (pointer == pointer[0])
 		{
 			Debugprintf("Buffer chained to itself");
 			return 0;
 		}
-		pointer = (UINT *)pointer[0];
+		debug = pointer;
+		pointer = pointer[0];
 		n++;
 
 		if (n > 1000)
@@ -232,11 +246,11 @@ BOK1:
 		}
 	}
 
-	pointer = (UINT *)FREE_Q;
+	pointer = FREE_Q;
 
-	*BUFF=(UINT)pointer;
+	*BUFF=pointer;
 
-	FREE_Q=(UINT)BUFF;
+	FREE_Q=BUFF;
 
 	QCOUNT++;
 
@@ -245,30 +259,36 @@ BOK1:
 
 int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 {
-	UINT * Q;
-	UINT * BUFF = (UINT *)PBUFF;
-	UINT * next;
+	void ** Q;
+	void ** BUFF = PBUFF;
+	void ** next;
+	PMESSAGE Test;
+
+
 	int n = 0;
 
 //	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-	Q = (UINT *) PQ;
+	Q = PQ;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("C_Q_ADD called without semaphore from %s Line %d", File, Line);
 
-	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
+	if (CheckQHeadder((UINT *)Q) == 0)			// Make sure Q header is readable
 		return(0);
 
 	// Make sure guard zone is zeros
 
-//	if (*(BUFF + BUFFLEN/4) != 0)
-//	{
-//		Debugprintf("C_Q_ADD %X GUARD ZONE CORRUPT %x Called from %s Line %d", BUFF, *(BUFF + BUFFLEN/4), File, Line);
-//		printStack();
+	Test = (PMESSAGE)PBUFF;
 
-//		return 0;
-//	}
+	if (Test->GuardZone != 0)
+	{
+		Debugprintf("C_Q_ADD %p GUARD ZONE CORRUPT %x Called from %s Line %d", PBUFF, Test->GuardZone, File, Line);
+	}
+
+	Test = (PMESSAGE)Q;
+
+
 
 	// Make sure address is within pool
 
@@ -285,21 +305,21 @@ int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 
 BOK2:
 
-	BUFF[0]=0;							// Clear chain in new buffer
+	BUFF[0] = 0;						// Clear chain in new buffer
 
 	if (Q[0] == 0)						// Empty
 	{
-		Q[0]=BUFF;					 	// New one on front
+		Q[0]=BUFF;				// New one on front
 		return(0);
 	}
 
-	next = (UINT *)Q[0];
+	next = Q[0];
 
 	while (next[0] != 0)
 	{
-		next=(UINT *)next[0];			// Chain to end of queue
+		next = next[0];			// Chain to end of queue
 	}
-	next[0] = BUFF;						// New one on end
+	next[0] = BUFF;					// New one on end
 
 	return(0);
 }
@@ -308,32 +328,32 @@ BOK2:
 
 int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
 {
-	UINT * Q;
-	UINT * BUFF = (UINT *)PBUFF;
-	UINT * next;
+	void ** Q;
+	void ** BUFF = PBUFF;
+	void ** next;
 	int n = 0;
 
 //	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-	Q = (UINT *) PQ;
+	Q = PQ;
 
-	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
+	if (CheckQHeadder((UINT *)Q) == 0)			// Make sure Q header is readable
 		return(0);
 
 	BUFF[0]=0;							// Clear chain in new buffer
 
 	if (Q[0] == 0)						// Empty
 	{
-//		Q[0]=(UINT)BUFF;				// New one on front
-		memcpy(PQ, &BUFF, 4);
+		Q[0]=BUFF;				// New one on front
+//		memcpy(PQ, &BUFF, 4);
 		return 0;
 	}
-	next = (UINT *)Q[0];
+	next = Q[0];
 
-	while (next[0]!=0)
-		next=(UINT *)next[0];			// Chain to end of queue
+	while (next[0] != 0)
+		next=next[0];				// Chain to end of queue
 
-	next[0]=(UINT)BUFF;					// New one on end
+	next[0] = BUFF;					// New one on end
 
 	return(0);
 }
@@ -341,14 +361,14 @@ int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
 
 int C_Q_COUNT(VOID *PQ)
 {
-	UINT * Q;
+	void ** Q;
 	int count = 0;
 
 //	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-	Q = (UINT *) PQ;
+	Q = PQ;
 
-	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
+	if (CheckQHeadder((UINT *)Q) == 0)			// Make sure Q header is readable
 		return(0);
 
 	//	SEE HOW MANY BUFFERS ATTACHED TO Q HEADER
@@ -361,7 +381,7 @@ int C_Q_COUNT(VOID *PQ)
 			Debugprintf("C_Q_COUNT Detected corrupt Q %p len %d", PQ, count);
 			return count;
 		}
-		Q = (UINT *)*Q;
+		Q = *Q;
 	}
 
 	return count;
@@ -369,9 +389,11 @@ int C_Q_COUNT(VOID *PQ)
 
 VOID * _GetBuff(char * File, int Line)
 {
-	UINT * Temp = Q_REM(&FREE_Q);
+	UINT * Temp;
 	MESSAGE * Msg;
 	char * fptr = 0;
+
+	Temp = Q_REM(&FREE_Q);
 
 //	FindLostBuffers();
 
@@ -386,7 +408,7 @@ VOID * _GetBuff(char * File, int Line)
 			MINBUFFCOUNT = QCOUNT;
 
 		Msg = (MESSAGE *)Temp;
-		fptr = File + strlen(File);
+		fptr = File + (int)strlen(File);
 		while (*fptr != '\\' && *fptr != '/')
 			fptr--;
 		fptr++;
@@ -506,7 +528,7 @@ VOID DISPLAYCIRCUIT(TRANSPORTENTRY * L4, char * Buffer)
 			Normcall[ConvFromAX25(L4->L4USER, Normcall)] = 0;
 
 		VEC = L4->L4TARGET.HOST;
-		sprintf(Buffer, "%s%02d(%s)", "Host", (VEC - BPQHOSTVECTOR) + 1, Normcall);
+		sprintf(Buffer, "%s%02d(%s)", "Host", (int)(VEC - BPQHOSTVECTOR) + 1, Normcall);
 		return;
 
 	case SESSION + DOWNLINK:
@@ -535,7 +557,7 @@ VOID DISPLAYCIRCUIT(TRANSPORTENTRY * L4, char * Buffer)
 VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM,
 			VOID TidyCloseProc(), VOID ForcedCloseProc(), VOID CloseComplete())
 {
-	UINT * buffptr;
+	void ** buffptr;
 
 	if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
 	{
@@ -739,7 +761,7 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 {
 	TRANSPORTENTRY * Session;
 	int Index = 0;
-	UINT * buffptr;
+	void  ** buffptr;
 
 	// Stop Scanner
 
@@ -898,52 +920,25 @@ VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg)
 	{
 		if (Mask & 1)
 		{
-			// Block includes the Msg Header (7 bytes), Len Does not!
+			// Block includes the Msg Header (7/11 bytes), Len Does not!
 
 			Msg->PORT = i;
-			Send_AX((UCHAR *)&Msg, Msg->LENGTH - 7, i);
+			Send_AX((UCHAR *)&Msg, Msg->LENGTH - MSGHDDRLEN, i);
 			Mask>>=1;
 		}
 	}
 }
 
-int CompareAlias( void *a, void *b)
+int CompareAlias(struct DEST_LIST ** a, struct DEST_LIST ** b)
 {
-	struct DEST_LIST * x;
-	struct DEST_LIST * y;
-	UINT * c;
-
-	c = a;
-	c = (UINT *)*c;
-	x = (struct DEST_LIST *)c;
-
-	c = b;
-	c = (UINT *)*c;
-	y = (struct DEST_LIST *)c;
-
-	return memcmp(x->DEST_ALIAS, y->DEST_ALIAS, 6);
-	/* strcmp functions works exactly as expected from
-	comparison function */
+	return memcmp(a[0]->DEST_ALIAS, b[0]->DEST_ALIAS, 6); 
+	/* strcmp functions works exactly as expected from comparison function */
 }
 
 
-int CompareNode(void *a, void *b)
+int CompareNode(struct DEST_LIST ** a, struct DEST_LIST ** b)
 {
-	struct DEST_LIST * x;
-	struct DEST_LIST * y;
-	UINT * c;
-
-	c = a;
-	c = (UINT *)*c;
-	x = (struct DEST_LIST *)c;
-
-	c = b;
-	c = (UINT *)*c;
-	y = (struct DEST_LIST *)c;
-
-	return memcmp(x->DEST_CALL, y->DEST_CALL, 7);
-	/* strcmp functions works exactly as expected from
-	comparison function */
+	return memcmp(a[0]->DEST_CALL, b[0]->DEST_CALL, 7);
 }
 
 DllExport int APIENTRY CountFramesQueuedOnStream(int Stream)
@@ -1294,7 +1289,7 @@ DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 		MSG->PID = 0xF0;				// Normal Data PID
 
 		memcpy(&MSG->L2DATA[0], msg, len);
-		MSG->LENGTH = len + MSGHDDRLEN + 1;
+		MSG->LENGTH = (len + MSGHDDRLEN + 1);
 
 		SENDUIMESSAGE(MSG);
 		ReleaseBuffer(MSG);
@@ -1940,10 +1935,10 @@ int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 	if (_memicmp(Port, "COM", 3) == 0)
 	{
 		PortNum = atoi(&Port[3]);
-		conn->hDevice = OpenCOMPort((VOID *)PortNum, Speed, TRUE, TRUE, Quiet, 0);
+		conn->hDevice = OpenCOMPort((char *)PortNum, Speed, TRUE, TRUE, Quiet, 0);
 	}
 	else
-		conn->hDevice = OpenCOMPort((VOID *)Port, Speed, TRUE, TRUE, Quiet, 0);
+		conn->hDevice = OpenCOMPort(Port, Speed, TRUE, TRUE, Quiet, 0);
 
 	if (conn->hDevice == 0)
 	{
@@ -1963,7 +1958,7 @@ int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 
 #ifdef WIN32
 
-HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
+HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
 {
 	char szPort[80];
 	BOOL fRetVal ;
@@ -1975,8 +1970,8 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	// if Port Name starts COM, convert to \\.\COM or ports above 10 wont work
 
-	if ((UINT)pPort < 256)			// just a com port number
-		sprintf( szPort, "\\\\.\\COM%d", pPort);
+	if (pPort < (char *)256)			// just a com port number
+		sprintf( szPort, "\\\\.\\COM%d", (int)pPort);
 
 	else if (_memicmp(pPort, "COM", 3) == 0)
 	{
@@ -2000,7 +1995,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	{
 		if (Quiet == 0)
 		{
-			if (pPort < (VOID *)256)
+			if (pPort < (char *)256)
 				Debugprintf("COM%d could not be opened %d", (UINT)pPort, GetLastError());
 			else
 				Debugprintf("%s could not be opened %d", pPort, GetLastError());
@@ -2076,8 +2071,8 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	}
 	else
 	{
-		if ((UINT)pPort < 256)
-			sprintf(buf,"COM%d Setup Failed %d ", pPort, GetLastError());
+		if (pPort < (char *)256)
+			sprintf(buf,"COM%d Setup Failed %d ", (char *)pPort, GetLastError());
 		else
 			sprintf(buf,"%s Setup Failed %d ", pPort, GetLastError());
 
@@ -2936,7 +2931,7 @@ VOID SendReportMsg(char * buff, int txlen)
 }
 VOID SendLocation()
 {
-	MESSAGE AXMSG;
+	MESSAGE AXMSG = {0};
 	PMESSAGE AXPTR = &AXMSG;
 	char Msg[512];
 	int Len;
@@ -3028,7 +3023,7 @@ char * GetApplCallFromName(char * App)
 	int i;
 	char PaddedAppl[13] = "            ";
 
-	memcpy(PaddedAppl, App, strlen(App));
+	memcpy(PaddedAppl, App, (int)strlen(App));
 
 	for (i = 0; i < NumberofAppls; i++)
 	{
@@ -3108,15 +3103,9 @@ loop1:
 
 #ifdef WIN32
 
-	_asm{
-
-	mov	eax,1
-	mov ebx, Semaphore
-	xchg [ebx],eax		// this instruction is locked
-
-	cmp	eax,0
-	jne loop1			// someone else got it - try again
-
+	{
+		if (InterlockedExchange(&Semaphore->Flag, 1) != 0) // Failed to get it
+			goto loop1;		// try again;;
 	}
 
 #else
@@ -3187,7 +3176,7 @@ void printStack(void)
      {
          SymFromAddr( process, ( DWORD64 )( stack[ i ] ), 0, symbol );
 
-         Debugprintf( "%i: %s - 0x%0X\n", frames - i - 1, symbol->Name, symbol->Address );
+         Debugprintf( "%i: %s - %p", frames - i - 1, symbol->Name, symbol->Address );
      }
 
      free(symbol);
@@ -3403,7 +3392,7 @@ int UIRemoveLF(char * Message, int len)
 		ptr2++;
 	}
 
-	return (ptr2 - Message);
+	return (int)(ptr2 - Message);
 }
 
 
@@ -3418,8 +3407,8 @@ VOID UISend_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL
 
 	// Block includes the Msg Header (7 or 11 bytes), Len Does not!
 
-	memcpy(AXPTR->DEST, HWADDR, 7);	
-	
+	memcpy(AXPTR->DEST, HWADDR, 7);
+
 	// Get BCALL or PORTCALL if set
 
 	if (PORT && PORT->PORTBCALL[0])
@@ -3467,7 +3456,7 @@ VOID UISend_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL
 VOID SendUIBeacon(int Port)
 {
 	char UIMessage[1024];
-	int Len = strlen(Message[Port]);
+	int Len = (int)strlen(Message[Port]);
 	int Index = 0;
 
 	if (SendFromFile[Port])
@@ -3479,7 +3468,7 @@ VOID SendUIBeacon(int Port)
 		if (hFile == 0)
 			return;
 
-		Len = fread(UIMessage, 1, 1024, hFile); 
+		Len = (int)fread(UIMessage, 1, 1024, hFile); 
 		
 		fclose(hFile);
 
@@ -3567,7 +3556,7 @@ VOID SetupUI(int Port)
 
 			if (DigiLeft)
 			{
-				memmove(DigiString, DigiLeft, strlen(DigiLeft) + 1);
+				memmove(DigiString, DigiLeft, (int)strlen(DigiLeft) + 1);
 				DigiLeft = strlop(DigiString,',');
 			}
 			else
@@ -3666,7 +3655,7 @@ VOID GetUIConfig()
 	struct stat STAT;
 
 	config_t cfg;
-	config_setting_t *root, *group;
+	config_setting_t *group;
 	int Port, MaxPort = GetNumberofPorts();
 
 	memset((void *)&cfg, 0, sizeof(config_t));
@@ -3915,12 +3904,12 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 	
 			if (retCode == ERROR_SUCCESS)
 			{
-				retCode = RegSetValueEx(hKey, "UIDEST", 0, REG_SZ,(BYTE *)&UIUIDEST[Port][0], strlen(&UIUIDEST[Port][0]));
-				retCode = RegSetValueEx(hKey, "FileName", 0, REG_SZ,(BYTE *)&FN[Port][0], strlen(&FN[Port][0]));
-				retCode = RegSetValueEx(hKey, "Message", 0, REG_SZ,(BYTE *)&Message[Port][0], strlen(&Message[Port][0]));
+				retCode = RegSetValueEx(hKey, "UIDEST", 0, REG_SZ,(BYTE *)&UIUIDEST[Port][0], (int)strlen(&UIUIDEST[Port][0]));
+				retCode = RegSetValueEx(hKey, "FileName", 0, REG_SZ,(BYTE *)&FN[Port][0], (int)strlen(&FN[Port][0]));
+				retCode = RegSetValueEx(hKey, "Message", 0, REG_SZ,(BYTE *)&Message[Port][0], (int)strlen(&Message[Port][0]));
 				retCode = RegSetValueEx(hKey, "Interval", 0, REG_DWORD,(BYTE *)&Interval[Port], 4);
 				retCode = RegSetValueEx(hKey, "SendFromFile", 0, REG_DWORD,(BYTE *)&SendFromFile[Port], 4);
-				retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ, Digis, strlen(Digis));
+				retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ, Digis, (int)strlen(Digis));
 
 				RegCloseKey(hKey);
 			}

@@ -2282,46 +2282,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	}
 }
 
-#pragma pack(1) 
 
-typedef struct _MESSAGEY
-{
-//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+static MESSAGE Monframe;		// I frames come in two parts.
 
-	struct _MESSAGEY * CHAIN;
-
-	UCHAR	PORT;
-	USHORT	LENGTH;
-
-	UCHAR	DEST[7];
-	UCHAR	ORIGIN[7];
-
-//	 MAY BE UP TO 56 BYTES OF DIGIS
-
-	UCHAR	CTL;
-	UCHAR	PID; 
-
-	union 
-	{                   /*  array named screen */
-		UCHAR L2DATA[256];
-		struct _L3MESSAGE L3MSG;
-
-	};
-		
-	UCHAR Padding[BUFFLEN - sizeof(time_t) - sizeof(VOID *) - 256 - 7 - 16];
-
-	time_t Timestamp;
-	VOID * Linkptr;		// For ACKMODE processing
-
-}MESSAGEY;
-
-#pragma pack() 
-
-static MESSAGEY Monframe;		// I frames come in two parts.
-
-#define TIMESTAMP 352
-
-MESSAGEY * AdjMsg;		// Adjusted for digis
+MESSAGE * AdjMsg;		// Adjusted for digis
 
 
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
@@ -2334,7 +2298,7 @@ VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
 	char * context;
 	char MHCall[11];
 
-	Monframe.LENGTH = 23;				// Control Frame
+	Monframe.LENGTH = MSGHDDRLEN + 16;	// Control Frame
 	Monframe.PORT = TNC->Port;
 	
 	AdjMsg = &Monframe;					// Adjusted fir digis
@@ -2365,7 +2329,7 @@ DigiLoop:
 
 		fiddle = (char *)AdjMsg;
 		fiddle += 7;
-		AdjMsg = (MESSAGEY *)fiddle;
+		AdjMsg = (MESSAGE *)fiddle;
 
 		Monframe.LENGTH += 7;
 

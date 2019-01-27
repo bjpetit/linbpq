@@ -140,6 +140,9 @@ int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 		memcpy(lastblock, buffer, count);
 		lastcount = count;
 
+//		Debugprintf ("i2c Send %d\r", count);
+
+
 		KISS->TXACTIVE = TRUE;
 		
 		while (i--)
@@ -153,6 +156,8 @@ int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 			}		
 			ptr++;
 		}
+
+//		Debugprintf ("i2c Send Complete\r");
 
 #endif
 		return 0;
@@ -270,17 +275,20 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 
 		npKISSINFO->idComDev = fd;
 
-		// Reset the TNC and wait for completion
+		if (PortVector->KISSFLAGS & PITNC)
+		{
+
+			// Reset the TNC and wait for completion
 	
-		retval = i2c_smbus_write_byte(fd, FEND);		
-		retval = i2c_smbus_write_byte(fd, 15);
-		retval = i2c_smbus_write_byte(fd, 2);
-		
-		if (retval == -1)
-			printf("\ni2c write error - check device ");
+			retval = i2c_smbus_write_byte(fd, FEND);		
+			retval = i2c_smbus_write_byte(fd, 15);
+			retval = i2c_smbus_write_byte(fd, 2);
+				
+			if (retval == -1)
+				printf("\ni2c write error - check device ");
 
-		sleep(2);
-
+			sleep(2);
+		}
 #endif
 #endif
 

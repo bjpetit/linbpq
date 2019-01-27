@@ -357,7 +357,7 @@ static void * poffset[] =
 &xxp.TXTAIL, &xxp.ALIAS_IS_BBS, &xxp.L3ONLY, &xxp.KISSOPTIONS, &xxp.INTERLOCK, &xxp.NODESPACLEN,
 &xxp.TXPORT, &xxp.MHEARD, &xxp.CWIDTYPE, &xxp.MINQUAL, &xxp.MAXDIGIS, &xxp.PORTALIAS2, &xxp.DLLNAME,
 &xxp.BCALL, &xxp.DIGIMASK, &xxp.DefaultNoKeepAlives, &xxp.IOADDR, &xxp.DLLNAME, &xxp.WL2K, &xxp.UIONLY,
-&xxp.IOADDR, &xxp.IPADDR, &xxp.IOADDR, &xxp.I2CAddr, &xxp.IOADDR, &xxp.ListenPort, &xxp.NoNormalize,
+&xxp.IOADDR, &xxp.IPADDR, &xxp.INTLEVEL, &xxp.IOADDR, &xxp.IOADDR, &xxp.ListenPort, &xxp.NoNormalize,
 &xxp.IGNOREUNLOCKED, &xxp.INP3ONLY, &xxp.TCPPORT };	/* offset for corresponding data in config file */
 
 static int proutine[] = 

@@ -82,7 +82,7 @@ APPLCALLS APPLCALLTABLE[NumberofAppls] = {0};
 UCHAR	MYNODECALL[10] = "";				// NODE CALLSIGN (ASCII)
 UCHAR	MYNETROMCALL[10] = "";				// NETROM CALLSIGN (ASCII)
 
-UINT	FREE_Q = 0;
+VOID * FREE_Q = NULL;
 
 time_t TimeLoaded = 0;
 
@@ -129,7 +129,7 @@ BOOL LogL4Connects = FALSE;
 //NUMBEROFSTREAMS	DD	0
 
 extern VOID * ENDPOOL;
-extern UINT APPL_Q;				// Queue of frames for APRS Appl
+extern void * APPL_Q;				// Queue of frames for APRS Appl
 
 extern BOOL APRSActive;
 
@@ -180,7 +180,7 @@ VOID * ADJBUFFER = NULL;			// BASE ADJUSED FOR DIGIS
 
 UCHAR TEMPFIELD[7] = "";			// ADDRESS WORK FILED
 
-void * TRACE_Q = 0;					// TRANSMITTED FRAMES TO BE TRACED
+void * TRACE_Q	= NULL;				// TRANSMITTED FRAMES TO BE TRACED
 
 int RANDOM = 0;						// 'RANDOM' NUMBER FOR PERSISTENCE CALCS
  
@@ -230,11 +230,11 @@ char BridgeMap[33][33] = {0};
 
 // Keep Buffers at end
 	
-#define DATABYTES 400000		// WAS 320000
+#define DATABYTES 500000	// WAS 320000
 
 UCHAR DATAAREA[DATABYTES] = "";
 
-UINT * Bufferlist[1000] = {0};
+void ** Bufferlist[1000] = {0};
 
 extern BOOL IPRequired;
 extern BOOL PMRequired;
@@ -1875,6 +1875,9 @@ VOID TIMERINTERRUPT()
 				}
 			}
 
+			PORT->XXX = PORT->YYY;
+
+
 			L2Routine(PORT, Buffer);
 
 			Buffer = Q_REM(&PORT->PORTRX_Q);
@@ -1888,9 +1891,9 @@ VOID TIMERINTERRUPT()
 		while (PORT->PORTTX_Q && Sent < 5)
 		{
 			int ret;
-			UINT PACTORSAVEQ;
+			void * PACTORSAVEQ;
 
-			Buffer = (UINT *)PORT->PORTTX_Q;
+			Buffer = PORT->PORTTX_Q;
 			Message = (struct _MESSAGE *) Buffer;
 			
 			ret = PORT->PORTTXCHECKCODE(PORT, Message->PORT);
@@ -1945,7 +1948,7 @@ VOID TIMERINTERRUPT()
 
 PACTORLOOP:
 
-			Buffer = (UINT *)PORT->PORTTX_Q;
+			Buffer = PORT->PORTTX_Q;
 
 			if (Buffer == NULL)
 				goto ENDOFLIST;
@@ -2159,7 +2162,7 @@ VOID INITIALISEPORTS()
 
 VOID FindLostBuffers()
 {
-	UINT * Buff;
+	void ** Buff;
 	int n, i;
 	unsigned int rev;
 
@@ -2230,10 +2233,10 @@ VOID FindLostBuffers()
 	for (i = 0; i < NUMBEROFBUFFERS; i++)
 	{
 		Bufferlist[n++] = Buff;
-		Buff += 100;		// was (BUFFLEN / 4);
+		Buff += (BUFFLEN / 4);
 	}
 
-	Buff = (UINT *)FREE_Q;
+	Buff = FREE_Q;
 
 	while (Buff)
 	{
@@ -2247,7 +2250,7 @@ VOID FindLostBuffers()
 				break;
 			}
 		}
-		Buff = (UINT *)*Buff;
+		Buff = *Buff;
 	}
 	n = NUMBEROFBUFFERS;
 
