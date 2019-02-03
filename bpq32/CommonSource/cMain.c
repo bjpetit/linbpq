@@ -39,6 +39,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer);
 VOID ProcessIframe(struct _LINKTABLE * LINK, PDATAMESSAGE Buffer);
 VOID FindLostBuffers();
+VOID ReadMH();
 
 
 #include "configstructs.h"
@@ -124,6 +125,7 @@ int NODE = 1;					// INCLUDE SWITCH SUPPORT
 int FULL_CTEXT = 1;				// CTEXT ON ALL CONNECTS IF NZ
 
 BOOL LogL4Connects = FALSE;
+BOOL AUTOSAVEMH = TRUE;
 
 //TNCTABLE	DD	0
 //NUMBEROFSTREAMS	DD	0
@@ -730,7 +732,8 @@ BOOL Start()
 	MAXCIRCUITS = cfg->C_MAXCIRCUITS;
 	HIDENODES = cfg->C_HIDENODES;
 
-	LogL4Connects = cfg->LogL4Connects;
+	LogL4Connects = cfg->C_LogL4Connects;
+	AUTOSAVEMH = cfg->C_SaveMH;
 
 	// Get pointers to PASSWORD and APPL1 commands
 
@@ -1319,9 +1322,12 @@ BOOL Start()
 		}
 	}
 
-	// Read Node Recovery FIle
+	// Read Node and MH Recovery Files
 
 	ReadNodes();
+
+	if (AUTOSAVEMH)
+		ReadMH();			// Only if AutoSave configured
 
 	//	set up stream number in BPQHOSTVECTOR
 
@@ -1425,6 +1431,168 @@ BOOL FindDestination(UCHAR * Call, struct DEST_LIST ** REQDEST)
 extern UCHAR BPQDirectory[];
 
 #define LINE_MAX 256
+
+
+// Reload saved MH file
+
+VOID ReadMH()
+{
+	char FN[260];
+	FILE *fp;
+	char line[LINE_MAX];
+	UCHAR axcall[7];
+	char * ptr, *digi, *locptr, *locend;
+	char * Context, * Context2;
+	char seps[] = " \n";
+	int Port;
+	struct PORTCONTROL * PORT = NULL;
+	MHSTRUC * MH;
+	int count = MHENTRIES;
+	char * Digiptr;
+	BOOL Digiused;
+	char * HasStar;
+
+	// Set up pointer to BPQNODES file
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(FN,"MHSave.txt");
+	}
+	else
+	{
+		strcpy(FN,BPQDirectory);
+		strcat(FN,"/");
+		strcat(FN,"MHSave.txt");
+	}
+
+	if ((fp = fopen(FN, "r")) == NULL)
+	{
+		return;
+	}
+
+	while (fgets(line, LINE_MAX, fp) != NULL)
+	{
+		if (memcmp(line, "Port:", 5) == 0)
+		{
+			Port = atoi(&line[5]);
+			PORT = GetPortTableEntryFromPortNum(Port);
+			if (PORT)				
+				MH = PORT->PORTMHEARD;
+			else
+				MH = NULL;
+			
+			continue;
+		}
+
+		// 1548777630 N9LYA-8    Jan 29 16:00:30 	
+		
+		if (MH)
+		{
+			ptr = strtok_s(line, seps, &Context);
+
+			if (ptr == NULL)
+				continue;
+			
+			MH->MHTIME = atoi(ptr);
+			
+			ptr = strtok_s(NULL, seps, &Context);
+
+			if (ptr == NULL)
+				continue;
+			
+			MH->MHCOUNT = atoi(ptr);
+
+			// Get LOC and Freq First before strtok messes with line
+
+			locptr = strchr(Context, '|'); 
+
+			if (locptr == NULL)
+				continue;
+
+			locend = strchr(++locptr, '|');
+
+			if (locend == NULL)
+				continue;
+
+			if ((locend - locptr) == 6)
+					
+				memcpy(MH->MHLocator, locptr, 6);
+
+			locend++;
+
+			strlop(locend, '\n');
+
+			if (strlen(locend) < 12)
+					
+				strcpy(MH->MHFreq, locend);
+
+			ptr = strtok_s(NULL, "|\n", &Context);
+
+			if (ptr == NULL)
+				continue;
+		
+			if (ConvToAX25(ptr, axcall) == FALSE)
+				continue;				// Duff
+
+			memcpy(MH->MHCALL, axcall, 7);	
+
+			if (ptr[10] != ' ')
+				MH->MHDIGI = ptr[10];
+			
+			//	SEE IF ANY DIGIS
+
+			digi = strstr(ptr, " via ");
+			
+			if (digi)
+			{
+				digi = digi + 5;
+				Digiptr = &MH->MHDIGIS;
+
+				if (strchr(ptr, '*'))
+					Digiused = 1;		// At least one digi used
+				else
+					Digiused = 0;
+				
+				digi = strtok_s(digi, ",\n", &Context2);
+				
+				while(digi)
+				{
+					HasStar = strlop(digi, '*');
+					
+					if (ConvToAX25(digi, axcall) == FALSE)
+						break;
+
+					memcpy(Digiptr, axcall, 7);
+
+					if (Digiused)
+						Digiptr[6] |= 0x80;		// Set used
+					
+					if (HasStar)
+						Digiused = 0;			// Only last used has *
+
+					Digiptr += 7;
+
+					digi = strtok_s(NULL, ",/n", &Context2);
+				}
+
+				*(--Digiptr) |= 1;		// Set end of address on last
+
+			}
+			else
+			{
+				// No Digis
+			
+				MH->MHCALL[6] |= 1;		// Set end of address
+			}
+
+			MH++;
+		}
+	}
+
+	fclose(fp);
+	return;
+}
+
 
 VOID ReadNodes()
 {

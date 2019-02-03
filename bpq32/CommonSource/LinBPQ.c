@@ -67,6 +67,7 @@ VOID BBSSlowTimer();
 int GetHTMLForms();
 char * AddUser(char * Call, char * password, BOOL BBSFlag);
 VOID SaveChatConfigFile(char * ConfigName);
+VOID SaveMH();
 
 BOOL IncludesMail = FALSE;
 BOOL IncludesChat = FALSE;
@@ -120,6 +121,8 @@ extern int ChatApplNum;
 extern int NUMBEROFTNCPORTS;
 
 extern int EnableUI;
+
+extern  BOOL AUTOSAVEMH;
 
 extern FILE * LogHandle[4];
 
@@ -1261,6 +1264,9 @@ int main(int argc, char * argv[])
 
 	if (AUTOSAVE)
 		SaveNodes();
+
+	if (AUTOSAVEMH)
+		SaveMH();
 
 	if (IPActive)
 		IPClose();

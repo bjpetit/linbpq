@@ -66,7 +66,7 @@ VOID COMClearRTS(HANDLE fd);
 
 VOID WriteMiniDump();
 void printStack(void);
-
+char * FormatMH(PMHSTRUC MH, char Format);
 
 //	Read/Write length field in a buffer header
 
@@ -2583,6 +2583,143 @@ int DoNodes()
 	}
 	return (0);
 }
+
+void SaveMH()
+{
+	char FN[250];
+	struct PORTCONTROL * PORT = PORTTABLE;
+	FILE *file;
+	
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(FN, "MHSave.txt");
+	}
+	else
+	{
+		strcpy(FN,BPQDirectory);
+		strcat(FN,"/");
+		strcat(FN,"MHSave.txt");
+	}
+
+	if ((file = fopen(FN, "w")) == NULL)
+		return;
+
+	while (PORT)
+	{	
+		int Port = 0;
+		char * ptr;
+	
+		MHSTRUC * MH = PORT->PORTMHEARD;
+
+		int count = MHENTRIES;
+		int n;
+		char Normcall[20];
+		char From[10];
+		char DigiList[100];
+		char * Output;
+		int len;
+		char Digi = 0;
+
+
+		// Note that the MHDIGIS field may contain rubbish. You have to check End of Address bit to find
+		// how many digis there are
+	
+		if (MH == NULL)
+			continue;
+		
+		fprintf(file, "Port:%d\n", PORT->PORTNUMBER);
+	
+		while (count--)
+		{
+			if (MH->MHCALL[0] == 0)
+				break;
+
+			Digi = 0;
+		
+			len = ConvFromAX25(MH->MHCALL, Normcall);
+			Normcall[len] = 0;
+
+			n = 8;					// Max number of digi-peaters
+
+			ptr = &MH->MHCALL[6];	// End of Address bit
+
+			Output = &DigiList[0];
+
+			if ((*ptr & 1) == 0)
+			{
+				// at least one digi
+
+				strcpy(Output, "via ");
+				Output += 4;
+		
+				while ((*ptr & 1) == 0)
+				{
+					//	MORE TO COME
+	
+					From[ConvFromAX25(ptr + 1, From)] = 0;
+					Output += sprintf((char *)Output, "%s", From);
+	
+					ptr += 7;
+					n--;
+
+					if (n == 0)
+						break;
+
+					// See if digi actioned - put a * on last actioned
+
+					if (*ptr & 0x80)
+					{
+						if (*ptr & 1)						// if last address, must need *
+						{
+							*(Output++) = '*';
+							Digi = '*';
+						}
+
+						else
+							if ((ptr[7] & 0x80) == 0)		// Repeased by next?
+							{
+								*(Output++) = '*';			// No, so need *
+								Digi = '*';
+							}
+					
+
+					}
+					*(Output++) = ',';
+				}		
+				*(--Output) = 0;							// remove last comma
+			}
+			else 
+				*(Output) = 0;
+
+			// if we used a digi set * on call and display via string
+
+
+			if (Digi)
+				Normcall[len++] = Digi;
+			else
+				DigiList[0] = 0;	// Dont show list if not used
+
+			Normcall[len++] = 0;
+
+			ptr = FormatMH(MH, 'U');
+
+			ptr[15] = 0;
+		
+			if (MH->MHDIGI)
+				fprintf(file, "%d %6d %-10s%c %s %s|%s|%s\n", MH->MHTIME, MH->MHCOUNT, Normcall, MH->MHDIGI, ptr, DigiList, MH->MHLocator, MH->MHFreq);
+			else
+				fprintf(file, "%d %6d %-10s%c %s %s|%s|%s\n", MH->MHTIME, MH->MHCOUNT, Normcall, ' ', ptr, DigiList, MH->MHLocator, MH->MHFreq);
+
+			MH++;
+		}
+		PORT = PORT->PORTPOINTER;
+	}
+
+	fclose(file);
+
+	return;
+}
+
 
 int APIENTRY SaveNodes ()
 {

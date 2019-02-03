@@ -128,8 +128,8 @@ struct CONFIGTABLE
 	UCHAR C_MAXRTT;				// 113
 	UCHAR C_MAXHOPS;			// 114
 	UCHAR C_PM;					// 115 Poermapper Enabled
-	UCHAR LogL4Connects;		// 116
-	UCHAR Spare;				// 117 NOW SPARE
+	UCHAR C_LogL4Connects;		// 116
+	UCHAR C_SaveMH;				// 117
 	short C_BBSQUAL;			// 118
 	UCHAR C_WASUNPROTO;
 	UCHAR C_BTEXT[120];			// 121

@@ -3697,6 +3697,64 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 			WriteLog (logmsg);
 		}
 
+		if (strchr(MsgPtr, '$'))
+		{
+			// Special format Password for PAT Gateway Mode
+
+			char * Port = strlop(MsgPtr, '$');
+			char * Call;
+			int PortNo;
+			char ConMsg[80];
+
+			if (Port)
+			{
+				Call = strlop(Port, '$');
+
+				if (Call)
+				{
+					struct PORTCONTROL * PORT;
+
+					PortNo = atoi(Port);
+					PORT = GetPortTableEntryFromPortNum(PortNo);
+
+					if (PORT == NULL || PORT->PROTOCOL < 10)
+						sprintf(ConMsg, "C %s %s", Port, Call);
+					else
+						sprintf(ConMsg, "ATT %s %s", Port, Call);
+
+				}
+
+				if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == 0)
+				{
+					DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
+					return 0;
+				}
+
+				sockptr->LoginState = 2;
+
+				sockptr->InputLen = 0;
+
+				if (LogEnabled)
+				{
+					unsigned char work[4];
+					memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
+					sprintf(logmsg,"%d %d.%d.%d.%d Gateway Connect Call=%s Command=%s\n",
+					sockptr->Number,
+					work[0], work[1], work[2], work[3],
+					sockptr->Callsign,ConMsg);
+
+					WriteLog (logmsg);
+				}
+
+				// Send Command to Node
+
+				strcat(ConMsg, "\r");
+				SendtoNode(TNC, sockptr->Number, ConMsg, (int)strlen(ConMsg));
+			}
+
+			return 0;
+		}
+
 		sockptr->UserPointer  = &RelayUser;
 
 		if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == 0)

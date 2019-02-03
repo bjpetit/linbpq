@@ -987,8 +987,8 @@
 //	Fix case problems in HTML Templates
 //	Fix setting To call on reply to HTML messages
 //  More preparations for 64 bit including saving WP info as a text file.
-
-
+//	Set "RMS Express User" when a new user connects using PAT
+ 
 #include "BPQMail.h"
 #define MAIL
 #include "Versions.h"

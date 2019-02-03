@@ -98,7 +98,7 @@ struct UserInfo * FindAMPR();
 VOID SaveInt64Value(config_setting_t * group, char * name, long long value);
 VOID SaveIntValue(config_setting_t * group, char * name, int value);
 VOID SaveStringValue(config_setting_t * group, char * name, char * value);
-
+char *stristr (char *ch1, char *ch2);
 config_t cfg;
 config_setting_t * group;
 
@@ -5476,9 +5476,9 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	// Ah, no. What about WinPack ??
 	// If from RMS Express must have Temp_B2 or BBS set or SID will
 	// be rejected. So maybe just Temp_B2 && BBS = 0??
-	// No, someone may Temp_B2 set and not be using WLE ?? So what ??
+	// No, someone may have Temp_B2 set and not be using WLE ?? So what ??
 
-	if ((user->flags & F_Temp_B2_BBS) && ((user->flags & F_BBS) == 0) || conn->RMSExpress)
+	if ((user->flags & F_Temp_B2_BBS) && ((user->flags & F_BBS) == 0) || conn->RMSExpress || conn->PAT)
 	{
 		if (conn->PacLinkCalls == NULL)
 		{
@@ -7638,10 +7638,11 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 		return;
 	}
 
-	if (strstr(SID, "RMS Ex") || (strstr(SID, "Winlink Ex")))
+	if (strstr(SID, "RMS Ex") || strstr(SID, "Winlink Ex"))
 	{
 		conn->RMSExpress = TRUE;
 		conn->Paclink = FALSE;
+		conn->PAT = FALSE;
 
 		// Set new RMS Users as RMS User
 
@@ -7649,6 +7650,17 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 			conn->UserPointer->flags |= F_Temp_B2_BBS;
 	}
 
+	if (stristr(SID, "PAT"))
+	{
+		// Set new PAT Users as RMS User
+
+		conn->RMSExpress = FALSE;
+		conn->Paclink = FALSE;
+		conn->PAT = TRUE;
+
+		if (conn->NewUser)
+			conn->UserPointer->flags |= F_Temp_B2_BBS;
+	}
 	if (strstr(SID, "Paclink"))
 	{
 		conn->RMSExpress = FALSE;

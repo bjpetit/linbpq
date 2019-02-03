@@ -480,6 +480,8 @@ DoMove:
 	MHBASE->MHDIGI = DIGI;
 	MHBASE->MHTIME = time(NULL);
 	MHBASE->MHCOUNT = ++OldCount;
+	MHBASE->MHFreq[0] = 0;
+	MHBASE->MHLocator[0] = 0;
 
 	return;
 }

@@ -285,7 +285,7 @@ static char *keywords[] =
 "APPL1QUAL", "APPL2QUAL", "APPL3QUAL", "APPL4QUAL",
 "APPL5QUAL", "APPL6QUAL", "APPL7QUAL", "APPL8QUAL",
 "BTEXT:", "NETROMCALL", "C_IS_CHAT", "MAXRTT", "MAXHOPS",		// IPGATEWAY= no longer allowed
-"LogL4Connects"
+"LogL4Connects", "SAVEMH"
 };           /* parameter keywords */
 
 static void * offset[] =
@@ -305,7 +305,7 @@ static void * offset[] =
 &xxcfg.C_APPL[0].ApplQual, &xxcfg.C_APPL[1].ApplQual, &xxcfg.C_APPL[2].ApplQual, &xxcfg.C_APPL[3].ApplQual,
 &xxcfg.C_APPL[4].ApplQual, &xxcfg.C_APPL[5].ApplQual, &xxcfg.C_APPL[6].ApplQual, &xxcfg.C_APPL[7].ApplQual,
 &xxcfg.C_BTEXT, &xxcfg.C_NETROMCALL, &xxcfg.C_C, &xxcfg.C_MAXRTT, &xxcfg.C_MAXHOPS,		// IPGATEWAY= no longer allowed
-&xxcfg.LogL4Connects};		/* offset for corresponding data in config file */
+&xxcfg.C_LogL4Connects, &xxcfg.C_SaveMH};		/* offset for corresponding data in config file */
 
 static int routine[] = 
 {
@@ -324,7 +324,7 @@ static int routine[] =
 14, 14, 14, 14,
 14, 14 ,14, 14,
 15, 0, 2, 9, 9,
-2} ;			// Routine to process param
+2, 2} ;			// Routine to process param
 
 int PARAMLIM = sizeof(routine)/sizeof(int);
 //int NUMBEROFKEYWORDS = sizeof(routine)/sizeof(int);
@@ -494,6 +494,8 @@ BOOL ProcessConfig()
 		App++;
 	}
 
+//	xxcfg.SaveMH = TRUE;		// Default to save
+
 	GetNextLine(rec);
 
 	while (rec[0])
@@ -558,6 +560,7 @@ BOOL ProcessConfig()
 	paramok[72]=1;			// MAXRTT optional
 	paramok[73]=1;			// MAXHOPS optional
 	paramok[74]=1;			// LogL4Connects optional
+	paramok[75]=1;			// SAVEMH optional
 
 	for (i=0; i < PARAMLIM; i++)
 	{
@@ -2478,6 +2481,7 @@ int simple(int i)
 	// Set up the basic config header
 
 	xxcfg.C_AUTOSAVE = 1;
+	xxcfg.C_SaveMH = 1;
 	xxcfg.C_BBS = 1;
 	xxcfg.C_BTINTERVAL = 60;
 	xxcfg.C_BUFFERS = 999;

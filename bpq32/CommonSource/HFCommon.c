@@ -951,20 +951,20 @@ BadLine:
 	return 0;
 }
 
-VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc);
+VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc, BOOL Report);
 
 
-VOID UpdateMHEx(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * LOC)
+VOID UpdateMHEx(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * LOC, BOOL Report)
 {
-	UpdateMHSupport(TNC, Call, Mode, Direction, LOC);
+	UpdateMHSupport(TNC, Call, Mode, Direction, LOC, Report);
 }
 
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 {
-	UpdateMHSupport(TNC, Call, Mode, Direction, NULL);
+	UpdateMHSupport(TNC, Call, Mode, Direction, NULL, TRUE);
 }
 
-VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc)
+VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc, BOOL Report)
 {
 	PMHSTRUC MH = TNC->PortRecord->PORTCONTROL.PORTMHEARD;
 	PMHSTRUC MHBASE = MH;
@@ -986,7 +986,29 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 //	if (Mode != ' ' && TNC->RIG->Valchar[0])
 	if (TNC->RIG->Valchar[0])
 	{
-		Freq = atof(TNC->RIG->Valchar) + 0.0015;
+#ifdef WIN32
+		if (TNC->Hardware == H_UZ7HO)	
+		{
+
+
+			// See if we have Center Freq Info
+
+			if (TNC->AGWInfo->hFreq)
+			{
+				char Centre[16];
+				double ModemFreq;
+
+				SendMessage(TNC->AGWInfo->hFreq, WM_GETTEXT, 15, (LPARAM)Centre);
+
+				ModemFreq = atof(Centre);
+
+				Freq = atof(TNC->RIG->Valchar) + (ModemFreq / 1000000);
+			}
+		}
+		else
+#endif
+			Freq = atof(TNC->RIG->Valchar) + 0.0015;
+
 		_gcvt(Freq, 9, ReportFreq);
 	}
 
@@ -1079,6 +1101,9 @@ DoMove:
 	strcpy(MHBASE->MHFreq, ReportFreq);
 
 	// Report to NodeMap
+
+	if (Report == FALSE)
+		return;
 
 	if (Mode == '*')
 		return;							// Digi'ed Packet

@@ -60,6 +60,7 @@ VOID FindLostBuffers();
 BOOL CheckCMS(struct TNCINFO * TNC);
 VOID L2SENDXID(struct _LINKTABLE * LINK);
 int CountBits(unsigned long in);
+VOID SaveMH();
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 char OrigCmdBuffer[81] = "";		// Command Hander input buffer
@@ -165,6 +166,16 @@ VOID SENDNODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 {
 	SENDNODESMSG();
 
+	strcpy(Bufferptr, OKMSG);
+	Bufferptr += (int)strlen(OKMSG);
+						
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+}
+
+VOID SAVEMHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	SaveMH();
+							
 	strcpy(Bufferptr, OKMSG);
 	Bufferptr += (int)strlen(OKMSG);
 						
@@ -3454,8 +3465,8 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		ptr = FormatMH(MH, CMD->String[2]);
 		
 		if (CMD->String[2] == 'V')		// MHV
-			Bufferptr += sprintf(Bufferptr, "%-10s %-10s %-10d %-30s %s\r",
-				Normcall, ptr, MH->MHCOUNT, DigiList, MH->MHFreq);
+			Bufferptr += sprintf(Bufferptr, "%-10s %-10s %-10d %-30s\r",
+				Normcall, ptr, MH->MHCOUNT, DigiList);
 		else
 			Bufferptr += sprintf(Bufferptr, "%-10s %s %s\r", Normcall, ptr, DigiList);
 
@@ -3969,6 +3980,7 @@ checkattachandcall:
 CMDX COMMANDS[] =
 {
 	"SAVENODES   ",8, SAVENODES, 0,
+	"SAVEMH      ",6, SAVEMHCMD, 0,
 	"REBOOT      ",6, REBOOT, 0,
 //	"RECONFIG    ",8 , RECONFIG, 0,
 	"RESTART     ",7,RESTART,0,

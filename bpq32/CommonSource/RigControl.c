@@ -671,6 +671,11 @@ portok:
 
 			// String is in Hex
 
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = RIG->RigAddr;
+			*(CmdPtr++) = 0xE0;
+
 			while (c = *(ptr1++))
 			{
 				if (c == ' ') continue;		// Allow space between pairs
@@ -683,6 +688,9 @@ portok:
 				val |= c;
 				*(CmdPtr++) = val;
 			}
+
+			*(CmdPtr++) = 0xFD;
+
  		
 			*(CmdPtr) = 0; 
 

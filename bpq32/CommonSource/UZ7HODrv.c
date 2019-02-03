@@ -1248,7 +1248,7 @@ static int ProcessLine(char * buf, int Port)
 	return (TRUE);	
 }
 
-#ifdef WIN32
+#ifndef LINBPQ
 
 typedef struct hINFO
 {
@@ -1420,7 +1420,7 @@ VOID ConnecttoUZ7HOThread(int port)
 
 	Sleep(3000);		// Allow init to complete 
 
-#ifdef WIN32
+#ifndef LINBPQ
 
 	AGW->hFreq = AGW->hSpin = 0;
 	AGW->cbinfo.cbSize = 0;
@@ -1742,6 +1742,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 	int Stream;
 	struct STREAMINFO * STREAM;
 	UCHAR AGWPort;
+	UCHAR MHCall[10] = "";
 
 #ifdef __BIG_ENDIAN__
 	RXHeader->DataLength = reverse(RXHeader->DataLength);
@@ -2101,7 +2102,10 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 		// Pass to Monitor
 
 		time(&Monframe.Timestamp);
-		MHPROC(&TNC->PortRecord->PORTCONTROL, (MESSAGE *)&Monframe);
+
+		MHCall[ConvFromAX25((MESSAGE *)&Monframe.ORIGIN, MHCall)] = 0;
+
+		UpdateMHEx(TNC, MHCall, ' ', 0, NULL, FALSE);
 		BPQTRACE((MESSAGE *)&Monframe, TRUE);
 
 		return;
@@ -2392,7 +2396,7 @@ DigiLoop:
 					char Call[10], Loc[10] = "";
 					sscanf(&ptr1[4], "%s %s", &Call[0], &Loc[0]);
 
-					UpdateMHEx(TNC, MHCall, ' ', 0, Loc);
+					UpdateMHEx(TNC, MHCall, ' ', 0, Loc, TRUE);
 				}
 			}
 		}

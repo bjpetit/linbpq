@@ -3396,7 +3396,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			memcpy(Call, &Buffer[3], 32);
 			Loc = strlop(Call, ' '); 
 			strlop(Loc, ']');
-			UpdateMHEx(TNC, Call, '!', 'I', &Loc[1]);
+			UpdateMHEx(TNC, Call, '!', 'I', &Loc[1], TRUE);
 		}
 		// Drop through to go to user if attached but not connected
 
@@ -3658,7 +3658,7 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 			memcpy(Call, &Data[3], 20);
 			Loc = strlop(Call, ' '); 
 			strlop(Loc, ']');
-			UpdateMHEx(TNC, Call, '!', 'I', &Loc[1]);
+			UpdateMHEx(TNC, Call, '!', 'I', &Loc[1], TRUE);
 		}
 		return;
 	}

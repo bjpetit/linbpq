@@ -195,7 +195,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				
 				// Zap the entry
 
-				if (conn->Paclink || conn->RMSExpress)			// Not using Bit Masks
+				if (conn->Paclink || conn->RMSExpress || conn->PAT)			// Not using Bit Masks
 				{
 					// Kill Messages sent to paclink/RMS Express unless BBS FWD bit set
 
@@ -316,9 +316,9 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		conn->FBBChecksum = 0;
 
 
-		if (AllRejected && conn->RMSExpress)
+		if (AllRejected && (conn->RMSExpress || conn->PAT))
 		{
-			// RMS Express doesn't send FF or proposal after rejecting all messages
+			// RMS Express and PAT don't send FF or proposal after rejecting all messages
 
 			FBBputs(conn, "FF\r");
 		}
@@ -727,7 +727,7 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 				
 		if (FBBHeader && FBBHeader->MsgType)				// Not a zapped entry
 		{
-			if ((conn->Paclink || conn->RMSExpress) &&
+			if ((conn->Paclink || conn->RMSExpress || conn->PAT) &&
 //				((conn->UserPointer->flags & F_NTSMPS) == 0) &&
 				(FBBHeader->FwdMsg->type == 'P'))
 			{
@@ -1666,7 +1666,7 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 	Compressed = Compressedptr = FBBHeader->CompressedMsg;
 
-	Output = Outputptr = zalloc(FBBHeader->CSize + 1000);
+	Output = Outputptr = zalloc(FBBHeader->CSize + 10000);
 
 	*Outputptr++ = 1;
 	*Outputptr++ = strlen(FBBHeader->FwdMsg->title) + 8;

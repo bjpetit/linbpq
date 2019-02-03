@@ -242,6 +242,7 @@ typedef struct ConnectionInfo_S
 	BOOL Paclink;						// Set if receiving messages from Paclink
 	BOOL RMSExpress;					// Set if receiving messages from RMS Express
 	BOOL WL2K;							// Set if communicating with a CMS
+	BOOL PAT;							// Set if communicating with PAT
 	char ** PacLinkCalls;				// Calls we are getting messages for
 	BOOL SkipPrompt;					// Set if a remote node sends a > at the end of his CTEXT
 	BOOL SkipConn;						// Node sends "connected" in its CTEXT

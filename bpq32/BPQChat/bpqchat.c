@@ -36,8 +36,15 @@
 // July 2017 1.0.8.1
 //	Fix Keepalives in Linux version
 
-// ??
+// November 2018 1.0.9.1
 //	Recompiled for Web Interface changes in Node
+
+// January 2019 1.0.10.1
+//	Move Config from Registry to File BPQChatServer 1.cfg
+
+// January 2019 1.0.10.2
+//	Fix errors in chat config file names and locations
+
 
 
 #include "BPQChat.h"
@@ -601,9 +608,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Debugprintf("Running under WINE");
 	}
 
-	wsprintf(ChatConfigName, "%s/BPQChat%s.cfg", GetBPQDirectory(), Session);
+	if (Session[7] == '1')
+		sprintf(ChatConfigName, "%s/chatconfig.cfg", GetBPQDirectory());
+	else
+		sprintf(ChatConfigName, "%s/chatconfig%s.cfg", GetBPQDirectory(), Session);
 
 	// Set up file and directory names
+
+	strcpy(BaseDir, GetBPQDirectory());
 		
 	strcpy(RtUsr, BaseDir);
 	strcat(RtUsr, "/ChatUsers.txt");
@@ -614,7 +626,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	strcpy(RtKnown, BaseDir);
 	strcat(RtKnown, "/RTKnown.txt");
 
-	Debugprintf("Users %s", RtUsr);
+//	Debugprintf("Users %s", RtUsr);
 
 	UsingingRegConfig = FALSE;
 
@@ -646,7 +658,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetChatConfig(ChatConfigName);
 
-	// Get Window Size  From Registry
+	// Get Window Sizes 
 	
 	sscanf(WindowSize,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
 	sscanf(DebugSize, "%d,%d,%d,%d", &DebugRect.left, &DebugRect.right, &DebugRect.top, &DebugRect.bottom);

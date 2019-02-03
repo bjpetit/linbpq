@@ -720,7 +720,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
-VOID UpdateMHEx(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * LOC);
+VOID UpdateMHEx(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * LOC, BOOL Report);
 VOID SaveWindowPos(int port);
 VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT);

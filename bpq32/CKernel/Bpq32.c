@@ -865,7 +865,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 // 6.0.19
 //	Fix UZ7HO interlock
-//	Add commands to set Centre Frequency and Modem with UZ7HO Soundmodem
+//	Add commands to set Centre Frequency and Modem with UZ7HO Soundmodem (on Windows only)
+//	Add option to save and restore MH lists and SAVEMH command
+//	Add Frequency (if known) to UZ7HO MH lists
+//	Add Gateway option to Telnet for PAT
 
 #define CKernel
 
@@ -965,6 +968,7 @@ char UIClassName[]="UIMAINWINDOW";					// the main window class name
 HWND UIhWnd;
 
 extern char AUTOSAVE;
+extern char AUTOSAVEMH;
 
 extern char MYNODECALL;	// 10 chars,not null terminated
 
@@ -1045,6 +1049,7 @@ DllExport int APIENTRY TXCount(int Stream);
 DllExport int APIENTRY MONCount(int Stream);
 DllExport int APIENTRY GetCallsign(int stream, char * callsign);
 DllExport VOID APIENTRY RelBuff(VOID * Msg);
+void SaveMH();
 
 #define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__);
 int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line);
@@ -2588,8 +2593,13 @@ SkipInit:
 			}
 		}
 
-		if (AUTOSAVE == 1 && AttachedProcesses < 2) SaveNodes();	// Soundmo	
-
+		if (AttachedProcesses < 2)
+		{
+			if (AUTOSAVE == 1)
+				SaveNodes();	// Soundmo	
+			if (AUTOSAVEMH)
+				SaveMH();
+		}
 		if (AttachedProcesses == 0)
 		{
 			Closing  = TRUE;
