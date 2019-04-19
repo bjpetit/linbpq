@@ -205,7 +205,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 				
-				PutLengthinBuffer(buff, datalen);
+				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -249,7 +249,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 //		txlen=(buff[6]<<8) + buff[5] - 8;	
 
-		txlen = GetLengthfromBuffer(buff) - 8;
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
 				
 		if (STREAM->Connected)
 		{

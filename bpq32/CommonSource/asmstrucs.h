@@ -798,19 +798,6 @@ NUMBEROFSTREAMS	DW	0
 ENDDESTLIST	DD	0		; NODE LIST+1
 */
 
-
-typedef struct _APRSSTATIONRECORD
-{
-	UCHAR MHCALL[10];				// Stored with space padding
-	time_t MHTIME;					// Time last heard
- 	time_t LASTMSG;					// Time last message sent from this station (via IS)
-	int Port;						// Port last heard on (zero for APRS-IS)
-	BOOL IGate;						// Set if station is an IGate;
-//	BYTE MHDIGI[56];				// Not sure if we need this
-	struct STATIONRECORD * Station;	// Info previously held by APRS Application
-
-} APRSSTATIONRECORD, *PAPRSSTATIONRECORD;
-
 typedef struct _LINKTABLE
 {
 //;

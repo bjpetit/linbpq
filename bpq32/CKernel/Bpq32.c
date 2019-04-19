@@ -869,6 +869,15 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add option to save and restore MH lists and SAVEMH command
 //	Add Frequency (if known) to UZ7HO MH lists
 //	Add Gateway option to Telnet for PAT
+//	Try to fix SCS Tracker recovery
+//	Ensure RTS/DTR is down on CAT port if using that line for PTT
+//	Experimental APRS Messaging in Kernel
+//	Add Rigcontrol on remoted PC's using WinmorControl
+//	ADD VARAFM and VARAFM96 WL2KREPORT modes
+//	Fix WL2K sysop update for new Winlink API
+//	Fix APRS when using PORTNUM higher than the number of ports
+
+
 
 #define CKernel
 
@@ -961,6 +970,9 @@ VOID REMOVENODE(dest_list * DEST);
 DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
 DllExport int ConvToAX25(unsigned char * incall,unsigned char * outcall);
 VOID GetUIConfig();
+VOID ADIFWriteFreqList();
+
+extern BOOL ADIFLogEnabled;
 
 
 char UIClassName[]="UIMAINWINDOW";					// the main window class name
@@ -1037,6 +1049,7 @@ VOID WriteMiniDump();
 VOID FindLostBuffers();
 BOOL InitializeTNCEmulator();
 VOID TNCTimer();
+char * strlop(char * buf, char delim);
 
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 DllExport int APIENTRY GetStreamPID(int Stream);
@@ -1108,7 +1121,7 @@ VOID Poll_AGW();
 BOOL AGWAPIInit();
 int AGWAPITerminate();
 
-int Flag = (int) &Flag;			//	 for Dump Analysis
+int * Flag = (int *)&Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
 int MINORVERSION=9;
 
@@ -1126,7 +1139,7 @@ UINT Sem_edi = 0;
 void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 
-DllExport long  BPQHOSTAPIPTR = (long)&BPQHOSTAPI;
+DllExport void * BPQHOSTAPIPTR = &BPQHOSTAPI;
 //DllExport long  MONDECODEPTR = (long)&MONDECODE;
 
 extern UCHAR BPQDirectory[];
@@ -1967,6 +1980,11 @@ FirstInit()
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 	TimerInst=GetCurrentProcessId();
 	SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
+
+	// If ARIF reporting is enabled write a Trimode Like ini for RMS Analyser
+
+	if (ADIFLogEnabled)
+		ADIFWriteFreqList();
 
 	OutputDebugString("BPQ32 Port Initialisation Complete\n");
 
@@ -2862,6 +2880,13 @@ if (_winver < 0x0600)
 #pragma warning(push)
 #pragma warning(disable : 4996)
 
+#if _MSC_VER >= 1400
+
+#define _winmajor 6
+#define _winminor 0
+
+#endif
+
 	i=sprintf(msg,"Windows Ver %d.%d, Using Registry Key %s\n" ,_winmajor,  _winminor, REGTREETEXT);
 
 #pragma warning(pop)
@@ -2939,6 +2964,14 @@ HANDLE OpenConfigFile(char *fn)
 
 	return(handle);
 }
+
+#ifdef _WIN64
+int BPQHOSTAPI()
+{
+	return 0;
+}
+#endif
+
 
 DllExport int APIENTRY GETBPQAPI()
 {
@@ -3665,6 +3698,9 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 			GetJSONValue(_REPLYBUFFER, "\"SysopName\":", Value);	
 			SetDlgItemText(hDlg, NAME, Value);
 
+			GetJSONValue(_REPLYBUFFER, "\"GridSquare\":", Value);	
+			SetDlgItemText(hDlg, Locator, Value);
+
 			GetJSONValue(_REPLYBUFFER, "\"StreetAddress1\":", Value);	
 			SetDlgItemText(hDlg, ADDR1, Value);
 
@@ -3707,6 +3743,8 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 		case ID_SAVE:
 		{
 			char Name[100];
+			char PasswordText[100];
+			char LocatorText[100];
 			char Addr1[100];
 			char Addr2[100];
 			char City[100];
@@ -3722,8 +3760,12 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 			
 			int Len;
 			char Message[2048];
+			char Reply[2048] = "";
+
 
 			GetDlgItemText(hDlg, NAME, Name, 99);
+			GetDlgItemText(hDlg, Password, PasswordText, 99);
+			GetDlgItemText(hDlg, Locator, LocatorText, 99);
 			GetDlgItemText(hDlg, ADDR1, Addr1, 99);
 			GetDlgItemText(hDlg, ADDR2, Addr2, 99);
 			GetDlgItemText(hDlg, CITY, City, 99);
@@ -3743,6 +3785,7 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 
 			Len = sprintf(Message,
 				"\"Callsign\":\"%s\","
+				"\"Password\":\"%s\","
 				"\"GridSquare\":\"%s\","
 				"\"SysopName\":\"%s\","
 				"\"StreetAddress1\":\"%s\","
@@ -3754,18 +3797,37 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 				"\"Email\":\"%s\","
 				"\"Phones\":\"%s\","
 				"\"Website\":\"%s\","
-				"\"Comments\":\"%s\",",
+				"\"Comments\":\"%s\"",
 
-				WL2KCall, WL2KLoc, Name, Addr1, Addr2, City, State, Country, PostCode, Email, Phone, Website, Data);
+				WL2KCall, PasswordText, LocatorText, Name, Addr1, Addr2, City, State, Country, PostCode, Email, Phone, Website, Data);
 		
 				Debugprintf("Sending %s", Message);
 
 				sock = OpenWL2KHTTPSock();
 
 				if (sock)
-					SendHTTPRequest(sock, "server.winlink.org", 8085, 
-						"/sysop/add", Message, Len, NULL);
+				{
+					char * ptr;
+					
+					SendHTTPRequest(sock, "api.winlink.org", 80, 
+						"/sysop/add", Message, Len, Reply);
 
+					ptr = strstr(Reply, "\"ErrorCode\":");
+
+					if (ptr)
+					{
+						ptr = strstr(ptr, "Message");
+						if (ptr)
+						{
+							ptr += 10;
+							strlop(ptr, '"');
+							MessageBox(NULL ,ptr, "Error", MB_OK);
+						}
+					}
+					else
+						MessageBox(NULL, "Sysop Record Updated", "BPQ32", MB_OK);
+
+				}
 				closesocket(sock);
 		}
 
@@ -4919,12 +4981,15 @@ DllExport int APIENTRY  DumpSystem()
 					FILE_ATTRIBUTE_NORMAL,
 					NULL);
 
+#ifndef _WIN64
+
 	_asm {
 
 	mov	stack,esp
 	}
 
 	WriteFile(handle,stack,128,&cnt,NULL);
+#endif
 
 //	WriteFile(handle,Screen,MAXLINELEN*MAXSCREENLEN,&cnt,NULL);
 
@@ -5076,9 +5141,9 @@ DllExport VOID APIENTRY RelBuff(VOID * Msg)
 	if (Semaphore.Flag == 0)
 		Debugprintf("ReleaseBuffer called without semaphore");
 	
-	pointer = (UINT *)FREE_Q;
+	pointer = FREE_Q;
 
-	*BUFF = pointer;
+	*BUFF =(UINT)pointer;
 
 	FREE_Q = BUFF;
 

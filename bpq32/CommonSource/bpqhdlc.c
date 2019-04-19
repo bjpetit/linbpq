@@ -347,8 +347,12 @@ int HDLCINIT(HDLCDATA * PORTVEC)
 #pragma warning(push)
 #pragma warning(disable : 4996)
 
-	_get_winmajor(&WinVer);
-	_get_winminor(&WinMinor);
+#ifndef _winver
+
+#define _winmajor 6
+#define _winminor 0
+
+#endif
 
 #pragma warning(pop)
 	

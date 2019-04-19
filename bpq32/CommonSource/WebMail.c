@@ -51,7 +51,6 @@ void ConvertTitletoUTF8(char * Title, char * UTF8Title);
 char *stristr (char *ch1, char *ch2);
 char * ReadTemplate(char * FormSet, char * DirName, char * FileName);
 VOID DoStandardTemplateSubsitutions(struct HTTPConnectionInfo * Session, char * txtFile);
-VOID UndoTransparency(char * ptr);
 BOOL CheckifPacket(char * Via);
 int GetHTMLFormSet(char * FormSet);
 void ProcessFormInput(struct HTTPConnectionInfo * Session, char * input, char * Reply, int * RLen, int InputLen);
@@ -182,6 +181,52 @@ static struct HTTPConnectionInfo * WebSessionList = NULL;	// active WebMail sess
 
 #ifdef LINBPQ
 UCHAR * GetBPQDirectory();
+#endif
+
+void UndoTransparency(char * input);
+
+#ifndef LINBPQ
+
+void UndoTransparency(char * input)
+{
+	char * ptr1, * ptr2;
+	char c;
+	int hex;
+
+	ptr1 = ptr2 = input;
+
+	// Convert any %xx constructs
+
+	while (1)
+	{
+		c = *(ptr1++);
+
+		if (c == 0)
+			break;
+
+		if (c == '%')
+		{
+			c = *(ptr1++);
+			if(isdigit(c))
+				hex = (c - '0') << 4;
+			else
+				hex = (tolower(c) - 'a' + 10) << 4;
+
+			c = *(ptr1++);
+			if(isdigit(c))
+				hex += (c - '0');
+			else
+				hex += (tolower(c) - 'a' + 10);
+
+			*(ptr2++) = hex;
+		}
+		else if (c == '+')
+			*(ptr2++) = 32;
+		else
+			*(ptr2++) = c;
+	}
+	*ptr2 = 0;
+}
 #endif
 
 void ReleaseWebMailStruct(WebMailInfo * WebMail)
@@ -577,7 +622,7 @@ VOID ProcessFormDir(char * FormSet, char * DirName, struct HtmlFormDir *** xxx, 
 
 			// Recurse in subdir
 
-			wsprintf(Dir, "%s/%s", DirName, ffd.cFileName);
+			sprintf(Dir, "%s/%s", DirName, ffd.cFileName);
 
 			ProcessFormDir(FormSet, Dir, &FormDir->Dirs, &FormDir->DirCount);
 

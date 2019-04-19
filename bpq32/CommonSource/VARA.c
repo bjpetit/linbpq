@@ -784,33 +784,42 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 6:				// Scan Stop Interface
 
 		Param = (int)buff;
+
+		if (Param == 2)		// Check  Permission (shouldn't happen)
+		{
+			Debugprintf("Scan Check Permission called on VARA");
+			return 1;		// OK to change
+		}
+
+		if (!TNC->CONNECTED)
+			return 0;					// No connection so no interlock
 	
 		if (Param == 1)		// Request Permission
 		{
+			if (TNC->ConnectPending == 0 && TNC->PTTState == 0)
+			{
+				VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
+				TNC->GavePermission = TRUE;
+				return 0;	// OK to Change
+			}
+
 			if (TNC->ConnectPending)
 				TNC->ConnectPending--;		// Time out if set too long
 
 			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
-			VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
-
 			return TRUE;
-		}
-
-		if (Param == 2)		// Check  Permission
-		{
-			if (TNC->ConnectPending)
-			{
-				TNC->ConnectPending--;
-				return -1;	// Skip Interval
-			}
-			return 1;		// OK to change
 		}
 
 		if (Param == 3)		// Release  Permission
 		{
-			VARASendCommand(TNC, "LISTEN ON\r", TRUE);
+			if (TNC->GavePermission)
+			{
+				TNC->GavePermission = FALSE;
+				if (TNC->ARDOPCurrentMode[0] != 'S')	// Skip
+					VARASendCommand(TNC, "LISTEN ON\r", TRUE);
+			}
 			return 0;
 		}
 
@@ -818,22 +827,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		Scan = (struct ScanEntry *)buff;
 
-		if (strcmp(Scan->ARDOPMode, TNC->ARDOPCurrentMode) != 0)
+		if (strcmp(Scan->VARAMode, TNC->ARDOPCurrentMode) != 0)
 		{
 			// Mode changed
-
-			char CMD[32];
 			
-
-			strcpy(TNC->ARDOPCurrentMode, Scan->ARDOPMode); 
-
-			
-			if (Scan->ARDOPMode[0] == 'S') // SKIP - Dont Allow Connects
+			if (Scan->VARAMode[0] == 'S') // SKIP - Dont Allow Connects
 			{
-				if (TNC->ARDOPCurrentMode[0] != 0)
+				if (TNC->ARDOPCurrentMode[0] != 'S')
 				{
 					VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
-					TNC->ARDOPCurrentMode[0] = 0;
+					TNC->ARDOPCurrentMode[0] = 'S';
 				}
 
 				TNC->WL2KMode = 0;
@@ -841,15 +844,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 			else
 			{
-				if (TNC->ARDOPCurrentMode[0] == 0)
+				if (TNC->ARDOPCurrentMode[0] == 'S')
 					VARASendCommand(TNC, "LISTEN ON\r", TRUE);
 			}
 
-			if (strchr(Scan->ARDOPMode, 'F'))
-				sprintf(CMD, "ARQBW %sORCED", Scan->ARDOPMode);
-			else
-				sprintf(CMD, "ARQBW %sAX", Scan->ARDOPMode);
-	
+			strcpy(TNC->ARDOPCurrentMode, Scan->VARAMode); 
+
 			return 0;
 		}
 		return 0;
@@ -1608,8 +1608,6 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		}
 	}
 
-
-
 	if (_memicmp(Buffer, "BUFFER", 6) == 0)
 	{
 		Debugprintf(Buffer);
@@ -1664,6 +1662,11 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		STREAM->ConnectTime = time(NULL); 
 		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
 
+		if (TNC->WL2K && TNC->WL2K->mode)
+			TNC->WL2KMode = TNC->WL2K->mode;
+		else
+			TNC->WL2KMode = 50;
+
 		memcpy(Call, &Buffer[10], 10);
 
 		ptr = strchr(Call, ' ');	
@@ -1692,13 +1695,24 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			ProcessIncommingConnectEx(TNC, Call, 0, TRUE, TRUE);
 				
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
-			
+
+			SESS->Mode = TNC->WL2KMode;
+
 			TNC->ConnectPending = FALSE;
 
 			if (TNC->RIG && TNC->RIG != &TNC->DummyRig && strcmp(TNC->RIG->RigName, "PTT"))
 			{
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
 				SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+				if (SESS->Frequency == 1500)
+				{
+					// try to get from WL2K record
+
+					if (WL2K)
+					{
+						SESS->Frequency = WL2K->Freq;
+					}
+				}
 				SESS->Mode = TNC->WL2KMode;
 			}
 			else

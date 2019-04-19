@@ -222,6 +222,10 @@ void RegisterAPPLCalls(struct TNCINFO * TNC, BOOL Unregister)
 
 	AGW = TNC->AGWInfo;
 
+	
+	AGW->TXHeader.Port=0;
+	AGW->TXHeader.DataLength=0;
+
 	if (Unregister)
 		AGW->TXHeader.DataKind = 'x';		// UnRegister
 	else
@@ -783,6 +787,7 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 				int S;
 				struct STREAMINFO * TSTREAM;
 				char Key[21];
+				int sent = 0;
 
 				_strupr(&buff->L2DATA[0]);
 				buff->L2DATA[txlen] = 0;
@@ -866,7 +871,7 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 					ViaList[0] = Digis;
 				}
 
-				send(TNCInfo[MasterPort[port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+				sent = send(TNCInfo[MasterPort[port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 				if (Digis)
 					send(TNCInfo[MasterPort[port]]->TCPSock, ViaList, Digis * 10 + 1, 0);
 
@@ -1161,16 +1166,19 @@ static int ProcessLine(char * buf, int Port)
 	TNC->InitScript = malloc(1000);
 	TNC->InitScript[0] = 0;
 	
-		if (p_ipad == NULL)
-			p_ipad = strtok(NULL, " \t\n\r");
+	if (p_ipad == NULL)
+		p_ipad = strtok(NULL, " \t\n\r");
 
-		if (p_ipad == NULL) return (FALSE);
+	if (p_ipad == NULL) return (FALSE);
 	
-		p_port = strtok(NULL, " \t\n\r");
+	p_port = strtok(NULL, " \t\n\r");
 			
-		if (p_port == NULL) return (FALSE);
+	if (p_port == NULL) return (FALSE);
 
-		TNC->TCPPort = atoi(p_port);
+	TNC->TCPPort = atoi(p_port);
+
+	if (TNC->TCPPort == 0)
+		TNC->TCPPort = 8000;
 
 		TNC->destaddr.sin_family = AF_INET;
 		TNC->destaddr.sin_port = htons(TNC->TCPPort);
@@ -2103,7 +2111,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 		time(&Monframe.Timestamp);
 
-		MHCall[ConvFromAX25((MESSAGE *)&Monframe.ORIGIN, MHCall)] = 0;
+		MHCall[ConvFromAX25(&Monframe.ORIGIN[0], MHCall)] = 0;
 
 		UpdateMHEx(TNC, MHCall, ' ', 0, NULL, FALSE);
 		BPQTRACE((MESSAGE *)&Monframe, TRUE);

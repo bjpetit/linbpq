@@ -109,7 +109,6 @@ int cCOUNT_AT_L2(struct _LINKTABLE * LINK);
 void * zalloc(int len);
 BOOL FindDestination(UCHAR * Call, struct DEST_LIST ** REQDEST);
 
-char * FormatAPRSMH(APRSSTATIONRECORD * MH);
 BOOL ProcessConfig();
 
 VOID PUT_ON_PORT_Q(struct PORTCONTROL * PORT, MESSAGE * Buffer);
@@ -342,7 +341,6 @@ extern char VersionString[];
 
 extern int MAXHEARDENTRIES;
 extern int MHLEN;
-extern APRSSTATIONRECORD * MHDATA;
 
 extern int APPL1;
 extern int PASSCMD;

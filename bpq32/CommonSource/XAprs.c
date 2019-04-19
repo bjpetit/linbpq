@@ -128,13 +128,15 @@ struct sockaddr_un my_addr, peer_addr;
 socklen_t peer_addr_size;
 int maxfd;
 
+struct SharedMem * SMEM;
+
+UCHAR * Shared;					// Start of Shared Mememy
+UCHAR * StnRecordBase;			// Start of Station Records
+
 int AutoFilterTimer = 0;
 
 #define AUTOFILTERDELAY 20		// 20 secs
 
-
-VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
-void UpdateTXMessageLine(struct APRSMESSAGE * Message);
 VOID SecTimer();
 void plotLine(int x0, int y0, int x1, int y1, COLORREF rgb);
 void SelectTXMsg (GtkTreeView *tree_view, GtkTreePath *path, GtkTreeViewColumn *column, gpointer user_data);
@@ -149,6 +151,8 @@ int XDestroyImage(XImage *ximage);
 
 int XLookupString(XKeyEvent *event_struct, char *buffer_return, int bytes_buffer, KeySym *keysym_return, void *status_in_out);
 	
+void RefreshTXList();
+
 static png_color bkgColor = {127, 127, 127};
 
 struct SEM
@@ -311,11 +315,8 @@ char OSMDir[256] = "BPQAPRS/OSMTiles";
 struct STATIONRECORD ** StationRecords = NULL;
 struct STATIONRECORD * ControlRecord;
 
-int MaxStations = 5000;
 int StationCount;
 
-struct APRSMESSAGE * Messages = NULL;
-struct APRSMESSAGE * OutstandingMsgs = NULL;
 
 UCHAR NextSeq = 1;
 
@@ -694,6 +695,9 @@ unsigned int ipaddr = 0;
 
 char Host[] = "tile.thunderforest.com";
 
+char mapStyle[64] =	"outdoors"; //"neighbourhood mobile-atlas
+
+
 char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 
 
@@ -792,7 +796,7 @@ VOID OSMThread()
 //		wsprintf(Tile, "/tiles/1.0.0/sat/%02d/%d/%d.jpg", Zoom, x, y);
 //		sprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
 
-		sprintf(Tile, "/mobile-atlas/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", Zoom, x, y);
+		sprintf(Tile, "/%s/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", mapStyle, Zoom, x, y);
 
 		sprintf(FN, "%s/%02d/%d/%d.png", OSMDir, Zoom, x, y);
 
@@ -2401,10 +2405,12 @@ enum
 
 void CancelMessageSend (GtkWidget *menuitem, struct APRSMESSAGE * userdata)
 {
-    userdata->Retries = 0;
+/*
+	userdata->Retries = 0;
 	userdata->RetryTimer = 0;
 	userdata->Cancelled = TRUE;
 	UpdateTXMessageLine(userdata);
+*/
 }
 
 
@@ -2455,7 +2461,7 @@ gboolean view_onButtonPressed (GtkWidget *treeview, GdkEventButton *event, gpoin
 		GtkTreeModel     *model;
 		GtkTreeIter       iter;
 		GtkTreePath *path;
-		struct APRSMESSAGE * ptr = OutstandingMsgs;
+		struct APRSMESSAGE * ptr = SMEM->OutstandingMsgs;
 
 		if (ptr == 0)
 			return TRUE;
@@ -2688,7 +2694,7 @@ void SelectTXMsg (GtkTreeView *tree_view, GtkTreePath *path, GtkTreeViewColumn *
 {
 	GtkTreeIter iter;
     GtkTreeModel *model;
-	struct APRSMESSAGE * ptr = OutstandingMsgs;
+	struct APRSMESSAGE * ptr = SMEM->OutstandingMsgs;
 
 	if (ptr == 0)
 		return;
@@ -2746,7 +2752,7 @@ BOOL AllSSID = FALSE;
 void check_callback(GtkButton *button, gpointer user_data)
 {
 	GtkTreeIter iter;
-	struct APRSMESSAGE * ptr = Messages;
+	struct APRSMESSAGE * ptr = SMEM->Messages;
 	int n = 0;
 	
 	char BaseFrom[10];
@@ -2816,33 +2822,7 @@ void check_callback(GtkButton *button, gpointer user_data)
 
 void button_callback(GtkButton *button, gpointer user_data)
 {
-	// Clear Messages
-
-	struct APRSMESSAGE * ptr = Messages;
-	struct APRSMESSAGE * last = Messages;
-
-	while (ptr)
-	{
-		last = ptr;
-		ptr = ptr->Next;
-		free(last);
-	}
-
-	Messages = NULL;
-
-/*
-	while (ptr)
-	{
-		last = ptr;
-		ptr = ptr->Next;
-		free(last);
-	}
-
-	OutstandingMsgs = NULL;
-*/
-	// Use Checkbox event to rewrite display
-
-	check_callback((GtkButton *)check1, "1");
+	SMEM->ClearRX = 1;
 }
 
 
@@ -2850,13 +2830,7 @@ void button2_callback(GtkButton *button, gpointer user_data)
 {
 	// Clear Sent Messages
 
-	GtkTreeIter iter;
-
-	if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(sentitems), &iter, NULL, 0))
-	{
-		while (gtk_list_store_remove(sentitems, &iter))
-		{}
-	}
+	SMEM->ClearTX = 1;
 }
 
 
@@ -2948,6 +2922,8 @@ int main(int argc, char *argv[])
 	time_t TimeLoaded = time(NULL);
 	struct stat STAT;
 
+	int SharedSize;
+
     double vals[10];	
 	int screen_number, depth, bitmap_pad, status;
 	unsigned long white;
@@ -2984,7 +2960,7 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.4.1\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.4.2\n");
   	printf("Copyright © 2004-2017 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
@@ -3038,7 +3014,6 @@ int main(int argc, char *argv[])
 			JPEGInterval = GetIntValue(group, "JPEGInterval", 300);
 			GetStringValue(group, "JPEGFileName", JPEGFileName);
 			GetStringValue(group, "ISFilter", ISFilter);
-
 		}
 	}
 
@@ -3065,46 +3040,50 @@ int main(int argc, char *argv[])
 	{
 		// Map shared memory object
 
-		APRSStationMemory = mmap((void *)0x43000000, sizeof(struct STATIONRECORD) * 2,
+		Shared = mmap((void *)APRSSHAREDMEMORYBASE, sizeof(struct STATIONRECORD) * 2,
 		     PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
 
-		if (APRSStationMemory == MAP_FAILED)
+		if (Shared == MAP_FAILED)
 		{
-			printf("Extend APRS Shared Memory Failed\n");
+			printf("Map APRS Shared Memory Failed\n");
 			APRSStationMemory = NULL;
 			return 0;
 		}
 	}
 
-	StationRecords = (struct STATIONRECORD**)APRSStationMemory;
-	ControlRecord = (struct STATIONRECORD*)APRSStationMemory;
+	SMEM = (struct SharedMem *)Shared;
 
-	MaxStations = ControlRecord->LastPort;
+	SharedSize = SMEM->SharedMemLen;
+	StnRecordBase = Shared + 32;
+	StationRecords = (struct STATIONRECORD**)StnRecordBase;
+
+	ControlRecord = (struct STATIONRECORD*)StnRecordBase;
+
 	memset(APRSCall, 0x20, 9);
 	memcpy(APRSCall, ControlRecord->Callsign, strlen(ControlRecord->Callsign));
 
-	printf("LinBPQ Configured with MaxStations %d APRSCall %s\n", MaxStations, APRSCall);
+	printf("LinBPQ Configured with MaxStations %d APRSCall %s\n", 
+		ControlRecord->LastPort, APRSCall);
 	
 	memcpy(BaseCall, APRSCall, 10);		// Get call less SSID
 	strlop(BaseCall, ' ');
 	strlop(BaseCall, '-');
 
-
-	if (MaxStations == 0)
-		MaxStations = 1500;			// for old LinBPQ
-
 	//	Remap with Server's view of MaxStations
 	
 	munmap(APRSStationMemory, sizeof(struct STATIONRECORD) * 2);
 
-	APRSStationMemory = mmap((void *)0x43000000, sizeof(struct STATIONRECORD) * (MaxStations + 1),
+	Shared = mmap((void *)APRSSHAREDMEMORYBASE, SharedSize,
 		PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
 
-	if (APRSStationMemory == MAP_FAILED)
+	if (Shared == MAP_FAILED)
 	{
 		printf("Extend APRS Shared Memory Failed\n");
 		APRSStationMemory = NULL;
+		return 0;
 	}
+
+	SMEM->NeedRefresh = 1;		// Initial Load of messages
 
 	maxfd = sfd = socket(AF_UNIX, SOCK_DGRAM, 0);
 
@@ -3368,11 +3347,9 @@ int main(int argc, char *argv[])
 		FD_ZERO(&in_fds);
 		FD_SET(x11_fd, &in_fds);
 		FD_SET(sfd, &in_fds);
-
-	   // Set our timer.  One second sounds good.
-
-	   tv.tv_usec = 0;
-	   tv.tv_sec = 3;
+		
+		tv.tv_usec = 0;
+		tv.tv_sec = 1;
 
 	   // Wait for X Event, Message from LinBPQ or a Timer
 	   
@@ -3381,12 +3358,6 @@ int main(int argc, char *argv[])
 		   if (FD_ISSET(sfd, &in_fds))
 		   {
 				numBytes = recvfrom(sfd, Msg, 256, 0, NULL, NULL);
-
-				if (numBytes > 0)
-				{
-					memcpy(&Station, Msg, 4);
-					ProcessMessage(&Msg[4], Station);
-				}
 		   }
 
 		   // may be X event, but pick up later
@@ -3394,6 +3365,16 @@ int main(int argc, char *argv[])
 	   else
 	   {
 			// Handle timer here
+
+		   	if (SMEM->NeedRefresh)
+			{
+				SMEM->NeedRefresh  = FALSE;
+
+			   	// Use Checkbox event to rewrite display
+
+				check_callback((GtkButton *)check1, "1");
+				RefreshTXList();
+			}
 
 	//		NeedRedraw += RefreshStationMap(FALSE);			// Draw new or moved stations
 
@@ -3671,342 +3652,67 @@ VOID SendFilterCommand(char * Filter)
 	char Msg[2000];
 	int n;
 
-	n = sprintf(Msg, ":%-9s:filter %s{1", "SERVER", Filter);
+	strcpy(Msg, "SERVER");
+	strcpy(&Msg[10], Filter);
 
-	PutAPRSMessage(Msg, n);
+	PutAPRSMessage(Msg, strlen(&Msg[10]) + 11);
 
-	n = sprintf(Msg, ":%-9s:filter?{1", "SERVER");
-	PutAPRSMessage(Msg, n);
+	strcpy(&Msg[10], "filter?");
+	PutAPRSMessage(Msg, strlen(&Msg[10]) + 11);
 }
 
-
-VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
+void RefreshTXList()
 {
-	char MsgDest[10];
-	struct APRSMESSAGE * Message;
-	struct APRSMESSAGE * ptr = Messages;
-	char * TextPtr = &Payload[11];
-	char * SeqPtr;
+	struct APRSMESSAGE * Message = SMEM->OutstandingMsgs;
 	int n = 0;
-	char FromCall[10] = "         ";
-	struct tm * TM;
-	time_t NOW;
+
 	GtkTreeIter iter;
-
-	memcpy(FromCall, Station->Callsign, strlen(Station->Callsign));
-	memcpy(MsgDest, &Payload[1], 9);
-	MsgDest[9] = 0;
-
-	SeqPtr = strchr(TextPtr, '{');
-
-	if (SeqPtr)
-	{
-		*(SeqPtr++) = 0;
-		if(strlen(SeqPtr) > 6)
-			SeqPtr[7] = 0;	
-	}
-
-	if (_memicmp(TextPtr, "ack", 3) == 0)
-	{
-		// Message Ack. See if for one of our messages
-
-		ptr = OutstandingMsgs;
-
-		if (ptr == 0)
-			return;
-
-		do
-		{
-			if (strcmp(ptr->FromCall, MsgDest) == 0
-				&& strcmp(ptr->ToCall, FromCall) == 0
-				&& strcmp(ptr->Seq, &TextPtr[3]) == 0)
-			{
-				// Message is acked
-
-				ptr->Retries = 0;
-				ptr->Acked = TRUE;
-//				if (hMsgsOut)
-				UpdateTXMessageLine(ptr);
-
-				return;
-			}
-			ptr = ptr->Next;
-			n++;
-
-		} while (ptr);
-	
-		return;
-	}
-
-	Message = malloc(sizeof(struct APRSMESSAGE));
-	memset(Message, 0, sizeof(struct APRSMESSAGE));
-	strcpy(Message->FromCall, Station->Callsign);
-	strcpy(Message->ToCall, MsgDest);
-
-	if (SeqPtr)
-	{
-		strcpy(Message->Seq, SeqPtr);
-
-		// If a REPLY-ACK Seg, copy to LastRXSeq, and see if it acks a message
-
-		if (SeqPtr[2] == '}')
-		{
-			struct APRSMESSAGE * ptr1;
-			int nn = 0;
-
-			strcpy(Station->LastRXSeq, SeqPtr);
-
-			ptr1 = OutstandingMsgs;
-
-			while (ptr1)
-			{
-				if (strcmp(ptr1->FromCall, MsgDest) == 0
-					&& strcmp(ptr1->ToCall, FromCall) == 0
-					&& memcmp(&ptr1->Seq, &SeqPtr[3], 2) == 0)
-				{
-					// Message is acked
-
-					ptr1->Acked = TRUE;
-					ptr1->Retries = 0;
-//					if (hMsgsOut)
-						UpdateTXMessageLine(ptr1);
-					
-					break;
-				}
-				ptr1 = ptr1->Next;
-				nn++;
-			}
-		}
-		else
-		{
-			// Station is not using reply-ack - set to send simple numeric sequence (workround for bug in APRS Messanges
-		
-			Station->SimpleNumericSeq = TRUE;
-		}
-	}
-
-	if (strlen(TextPtr) > 100)
-		TextPtr[100] = 0;
-
-	strcpy(Message->Text, TextPtr);
-		
-	NOW = time(NULL);
-
-	if (LocalTime)
-		TM = localtime(&NOW);
-	else
-		TM = gmtime(&NOW);
-					
-	sprintf(Message->Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
-
-	if (_stricmp(MsgDest, APRSCall) == 0 && SeqPtr)	// ack it if it has a sequence
-	{
-		// For us - send an Ack
-
-		char ack[30];
-		int n = sprintf(ack, ":%-9s:ack%s", Message->FromCall, Message->Seq);
-		PutAPRSMessage(ack, n);
-	}
-
-	if (ptr == NULL)
-	{
-		Messages = Message;
-	}
-	else
-	{
-		n++;
-		while(ptr->Next)
-		{
-			ptr = ptr->Next;
-			n++;
-		}
-		ptr->Next = Message;
-	}
-
-	// Add to Window
-
-	if (memcmp(MsgDest, "BLN", 3) == 0)
-		if (ShowBulls == TRUE)
-			goto wantit;
-
-	if (strcmp(MsgDest, APRSCall) == 0)			// to me?
-	{		
-		char Key[32];
-		char LoppedCall[10];
-		int n = 8;
-
-		gtk_window_present((GtkWindow *)window);
-
-		memcpy(LoppedCall, Message->FromCall, 9);
-		
-		while (n && LoppedCall[n] == ' ')
-		{
-			n--;
-		}
-	
-		if (n)
-			LoppedCall[n + 1] = 0;
-
-		sprintf(Key, "|%s|", LoppedCall);
-	
-		// if new call add to combo box
-
-		if (strstr(ToCalls, Key) == 0)
-		{
-			if (strlen(ToCalls) < 1000)
-				strcat(ToCalls, Key);		
-
-			gtk_combo_box_text_prepend_text ((GtkComboBoxText *)combo, LoppedCall);
-		}
-	}
-	
-	if (AllSSID)
-	{
-		char BaseTo[10];
-		memcpy(BaseTo, MsgDest, 10);
-		strlop(BaseTo, ' ');
-		strlop(BaseTo, '-');
-
-		if (strcmp(BaseTo, BaseCall) == 0)
-			goto wantit;
-	}
-
-	if (OnlyMine == FALSE)		// Want All
-		if (OnlySeq == FALSE || (ptr && ptr->Seq[0] != 0))
-			goto wantit;
-			
-	// ignore
-
-	return;
-
-wantit:
-
-	gtk_list_store_insert_with_values(
-			receiveditems, &iter, -1,
-			COL_FROM, Message->FromCall,
-			COL_TO, Message->ToCall,
-			COL_SEQ, Message->Seq,
-			COL_TIME, Message->Time,
-			COL_RECEIVED, Message->Text, -1);
-
-	gtk_tree_view_scroll_to_cell ((GtkTreeView *)view2,
-                              gtk_tree_model_get_path (GTK_TREE_MODEL(receiveditems), &iter),
-                              NULL,
-                              FALSE, 0, 0);
-                              
-
-}
-
-void UpdateTXMessageLine(struct APRSMESSAGE * Message)
-{
-	GtkTreeIter iter;
-	int n = 0;
 	gchar *seq;
-	
 	char status[10];
 
-	if (Message->Acked)
-		strcpy(status, "A");
-	else if (Message->Cancelled)
-		strcpy(status, "C");
-	else if (Message->Retries == 0)
-		strcpy(status, "F");
-	else
-		sprintf(status, "%d", Message->Retries);
-
-	//	look for line with correct sequence
-
-	while (TRUE)
+	// Clear old list
+	
+	if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(sentitems), &iter, NULL, 0))
 	{
-		if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(sentitems), &iter, NULL, n++))
-		{
-			gtk_tree_model_get((GtkTreeModel *)sentitems, &iter, 1, &seq, -1);
-
-			if (strcmp(Message->Seq, seq) == 0)
-			{
-				gtk_list_store_set (sentitems, &iter, 2, status, -1);
-				g_free(seq);
-				break;
-			}
-			g_free(seq);
-		}
+		while (gtk_list_store_remove(sentitems, &iter))
+		{}
+	}
+	while (Message)
+	{
+		if (Message->Acked)
+			strcpy(status, "A");
+		else if (Message->Cancelled)
+			strcpy(status, "C");
+		else if (Message->Retries == 0)
+			strcpy(status, "F");
 		else
-		{
-			gtk_list_store_insert_with_values(
+			sprintf(status, "%d", Message->Retries);
+
+		gtk_list_store_insert_with_values(
 				sentitems, &iter, -1,
 				0, Message->ToCall,
 				1, Message->Seq,
 				2, status,
 				3, Message->Time,
 				4, Message->Text, -1);
+		n++;
 
-			break;
-		}
+		Message = Message->Next;
 	}
-	gtk_tree_view_scroll_to_cell ((GtkTreeView *)view,
-		gtk_tree_model_get_path (GTK_TREE_MODEL(sentitems), &iter), NULL, FALSE, 0, 0);
+
+	if (n)
+		gtk_tree_view_scroll_to_cell ((GtkTreeView *)view,
+			gtk_tree_model_get_path (GTK_TREE_MODEL(sentitems), &iter), NULL, FALSE, 0, 0);
 }
 
 VOID SendAPRSMessage(const char * Text, char * ToCall)
 {
-	struct APRSMESSAGE * Message;
-	struct APRSMESSAGE * ptr = OutstandingMsgs;
-	int n = 0;
 	char Msg[255];
-	struct tm * TM;
-	time_t NOW;
 
-	Message = malloc(sizeof(struct APRSMESSAGE));
-	memset(Message, 0, sizeof(struct APRSMESSAGE));
-	strcpy(Message->FromCall, APRSCall);
-	memset(Message->ToCall, ' ', 9);
-	memcpy(Message->ToCall, ToCall, strlen(ToCall));
+	strcpy(Msg, ToCall);
+	strcpy(&Msg[10], Text);
 
-	Message->ToStation = FindStation(ToCall, FALSE);
-
-	// Tostation may not yet exist - will be created by linbpq
-
-	if (Message->ToStation && Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
-		sprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
-	else
-	{
-		if (Message->ToStation && Message->ToStation->SimpleNumericSeq)
-			sprintf(Message->Seq, "%d", NextSeq++);
-		else
-			sprintf(Message->Seq, "%02X}", NextSeq++);	// Don't know, so assume message-ack capable
-	}
-	strcpy(Message->Text, Text);
-	Message->Retries = RetryCount;
-	Message->RetryTimer = RetryIntervals[RetryCount];
-
-	NOW = time(NULL);
-
-	if (LocalTime)
-		TM = localtime(&NOW);
-	else
-		TM = gmtime(&NOW);
-					
-	sprintf(Message->Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
-
-	if (ptr == NULL)
-	{
-		OutstandingMsgs = Message;
-	}
-	else
-	{
-		n++;
-		while(ptr->Next)
-		{
-			ptr = ptr->Next;
-			n++;
-		}
-		ptr->Next = Message;
-	}
-
-	UpdateTXMessageLine(Message);
-
-	n = sprintf(Msg, ":%-9s:%s{%s", ToCall, Text, Message->Seq);
-	PutAPRSMessage(Msg, n);
+	PutAPRSMessage(Msg, strlen(&Msg[10]) + 11);
 
 	return;
 }
@@ -4016,7 +3722,6 @@ VOID SecTimer()
 	while (TRUE)
 	{
 	struct STATIONRECORD * sptr = *StationRecords;
-	struct APRSMESSAGE * ptr = OutstandingMsgs;
 	int n = 0;
 	char Msg[20];
 
@@ -4084,40 +3789,6 @@ VOID SecTimer()
 	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
 */
 
-	// Check Message Retries
-
-	while (ptr)
-	{				
-		if (ptr->Acked == FALSE)
-		{
-			if (ptr->Retries)
-			{
-				ptr->RetryTimer--;
-				
-				if (ptr->RetryTimer == 0)
-				{
-					ptr->Retries--;
-
-					if (ptr->Retries)
-					{
-						// Send Again
-						
-						char Msg[255];
-						int l = sprintf(Msg, ":%-9s:%s{%s", ptr->ToCall, ptr->Text, ptr->Seq);
-						PutAPRSMessage(Msg, l);
-						ptr->RetryTimer = RetryIntervals[ptr->Retries];
-					}
-
-					UpdateTXMessageLine(ptr);
-				}
-			}
-		}
-
-		ptr = ptr->Next;
-		n++;
-
-	};
-
 	if (AutoFilterTimer)
 	{
 		AutoFilterTimer--;
@@ -4135,8 +3806,6 @@ VOID SecTimer()
 			SendFilterCommand(Filter);
 		}
 	}
-
-
 
 	Sleep(1000);
 	}

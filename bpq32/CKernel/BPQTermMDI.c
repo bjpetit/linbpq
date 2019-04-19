@@ -2137,6 +2137,8 @@ LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		// Close session and release stream
 
+#define GWL_WNDPROC         (-4)
+
 		SetWindowLong(Cinfo->hwndInput, GWL_WNDPROC, (LONG) Cinfo->wpOrigInputProc); 
 		
 		SessionControl(Cinfo->BPQStream, 2, 0);

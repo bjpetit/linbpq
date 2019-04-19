@@ -126,6 +126,7 @@ int FULL_CTEXT = 1;				// CTEXT ON ALL CONNECTS IF NZ
 
 BOOL LogL4Connects = FALSE;
 BOOL AUTOSAVEMH = TRUE;
+extern BOOL ADIFLogEnabled;
 
 //TNCTABLE	DD	0
 //NUMBEROFSTREAMS	DD	0
@@ -734,6 +735,7 @@ BOOL Start()
 
 	LogL4Connects = cfg->C_LogL4Connects;
 	AUTOSAVEMH = cfg->C_SaveMH;
+	ADIFLogEnabled = cfg->C_ADIF;
 
 	// Get pointers to PASSWORD and APPL1 commands
 
@@ -1147,8 +1149,36 @@ BOOL Start()
 	while (Rcfg->call[0])
 	{
 		int FRACK;
+		char * VIA;
+		char axcall[8];
 		
 		ConvToAX25(Rcfg->call, ROUTE->NEIGHBOUR_CALL);
+
+		// if VIA convert digis
+
+		VIA = strstr(Rcfg->call, "VIA");
+
+		if (VIA)
+		{
+			VIA += 4;
+
+			if (ConvToAX25(VIA, axcall))
+			{
+				memcpy(ROUTE->NEIGHBOUR_DIGI1, axcall, 7);
+
+				VIA = strchr(VIA, ' ');
+	
+				if (VIA)
+				{
+					VIA++;
+
+					if (ConvToAX25(VIA, axcall))
+						memcpy(ROUTE->NEIGHBOUR_DIGI2, axcall, 7);
+
+				}
+			}
+		}
+		
 		ROUTE->NEIGHBOUR_QUAL = Rcfg->quality;
 		ROUTE->NEIGHBOUR_PORT = Rcfg->port;
 		
@@ -1546,7 +1576,7 @@ VOID ReadMH()
 			if (digi)
 			{
 				digi = digi + 5;
-				Digiptr = &MH->MHDIGIS;
+				Digiptr = &MH->MHDIGIS[0][0];
 
 				if (strchr(ptr, '*'))
 					Digiused = 1;		// At least one digi used
@@ -1670,12 +1700,14 @@ VOID ReadNodes()
 
 			// I don't thinlk we should load locked flag from save file - only from config
 
-//			if (ptr[0] == '!')
-//			{
+			// But need to parse it until I stop saving it
+
+			if (ptr[0] == '!')
+			{
 //				ROUTE->NEIGHBOUR_FLAG = 1;			// LOCKED ROUTE
-//				ptr = strtok_s(NULL, seps, &Context);
-//				if (ptr == NULL) continue;
-//			}
+				ptr = strtok_s(NULL, seps, &Context);
+				if (ptr == NULL) continue;
+			}
 
 			//	SEE IF ANY DIGIS
 

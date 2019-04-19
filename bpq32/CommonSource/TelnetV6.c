@@ -49,6 +49,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define SIOCOUTQ        TIOCOUTQ        /* output queue size (not sent + not acked) */
 #endif
 
+#include "adif.h"
 #include "telnetserver.h"
 
 #define MAX_PENDING_CONNECTS 4
@@ -56,7 +57,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 extern UCHAR LogDirectory[];
 
 extern char * PortConfig[];
-
+  
 static char ClassName[]="TELNETSERVER";
 static char WindowTitle[] = "Telnet Server";
 static int RigControlRow = 190;
@@ -69,7 +70,7 @@ static VOID SetupListenSet(struct TNCINFO * TNC);
 int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
-BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr);
+BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr, struct ADIF * ADIF);
 int GetCMSHash(char * Challenge, char * Password);
 int IsUTF8(unsigned char *cpt, int len);
 int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
@@ -78,8 +79,6 @@ int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
 VOID initUTF8();
 int TrytoGuessCode(unsigned char * Char, int Len);
 DllExport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
-
-
 extern BPQVECSTRUC * TELNETMONVECPTR;
 
 
@@ -717,7 +716,7 @@ VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 
 
-static VOID WritetoTrace(int Stream, char * Msg, int Len)
+static VOID WritetoTrace(int Stream, char * Msg, int Len, struct ADIF * ADIF, char Dirn)
 {
 	int index = 0;
 	UCHAR * ptr1 = Msg, * ptr2;
@@ -770,6 +769,7 @@ lineloop:
 			{
 				sprintf(logmsg,"%d %s\r\n", Stream, Line);
 				WriteCMSLog(logmsg);
+				UpdateADIFRecord(ADIF, Line, Dirn);
 			}
 
 		Skip:
@@ -791,6 +791,7 @@ lineloop:
 			{
 				sprintf(logmsg,"%d %s\r\n", Stream, ptr1);
 				WriteCMSLog(logmsg);
+				UpdateADIFRecord(ADIF, ptr1, Dirn);
 			}
 		}
 	}
@@ -1574,7 +1575,7 @@ BOOL OpenSocket6(struct TNCINFO * TNC, int port)
 
 	if (bind(sock, (struct sockaddr FAR *)psin, sizeof(local_sin)) == SOCKET_ERROR)
 	{
-		sprintf(szBuff, "IPV6 bind(sock) failed Error %d\n", WSAGetLastError());
+        sprintf(szBuff, "IPV6 bind(sock) failed Port %d Error %d", port, WSAGetLastError());
 		WritetoConsoleLocal(szBuff);
 	    closesocket( sock );
 
@@ -2071,7 +2072,7 @@ nosocks:
 			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
 			{
 				buffptr = (PMSGWITHLEN)Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				if (TelSendPacket(Stream, &TNC->Streams[Stream], buffptr) == FALSE)
+				if (TelSendPacket(Stream, &TNC->Streams[Stream], buffptr, sockptr->ADIF) == FALSE)
 				{
 					//	Send failed, and has saved packet
 					//	free saved and discard any more on queue
@@ -2119,6 +2120,14 @@ nosocks:
 
 					WriteCMSLog (logmsg);
 				}
+				
+				WriteADIFRecord(sockptr->ADIF);
+				
+				if (sockptr->ADIF)
+					free(sockptr->ADIF);
+				
+				sockptr->ADIF = NULL;
+					
 				// Always Disconnect CMS Socket
 
 				DataSocket_Disconnect(TNC, sockptr);	
@@ -2239,7 +2248,7 @@ nosocks:
 
 			if (TNC->Streams[Stream].Connected)
 			{
-				if (TelSendPacket(Stream, STREAM, buffptr) == FALSE)
+				if (TelSendPacket(Stream, STREAM, buffptr, sockptr->ADIF) == FALSE)
 				{
 					//	Send failed, and has requeued packet
 					//	Dont send any more
@@ -2897,6 +2906,11 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId)
 			sockptr->RelayMode = FALSE;
 			sockptr->ClientSession = FALSE;
 			sockptr->NeedLF = FALSE;
+
+			if (sockptr->ADIF == NULL)
+				sockptr->ADIF = malloc(sizeof(struct ADIF));
+
+			memset(sockptr->ADIF, 0, sizeof(struct ADIF));
 
 			if (SocketId == TCP->HTTPsock || SocketId == TCP->HTTPsock6)
 				sockptr->HTTPMode = TRUE;
@@ -3662,7 +3676,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 			WriteLog (logmsg);
 		}
 
-		strcpy(sockptr->Callsign, MsgPtr);
+		strcpy(sockptr->Callsign, _strupr(MsgPtr));
 
 		// Save callsign  for *** linked
                                             
@@ -3896,7 +3910,9 @@ MsgLoop:
 		}
 
 		if (sockptr->UserPointer == &CMSUser)
-			WritetoTrace(Stream, MsgPtr, InputLen);
+		{
+			WritetoTrace(Stream, MsgPtr, InputLen, sockptr->ADIF, 'R');
+		}
 
 		if (InputLen == 8 && memcmp(MsgPtr, ";;;;;;\r\n", 8) == 0)
 		{
@@ -4000,7 +4016,15 @@ MsgLoop:
 			if (TCP->SecureCMSPassword[0] && sockptr->RelaySession == 0)
 				Len = sprintf(Msg, "%s %s\r", TNC->Streams[sockptr->Number].MyCall, TCP->GatewayCall);			
 			else
-				Len = sprintf(Msg, "%s\r", TNC->Streams[sockptr->Number].MyCall);			
+				Len = sprintf(Msg, "%s\r", TNC->Streams[sockptr->Number].MyCall);	
+
+			if (sockptr->ADIF == NULL)
+			{
+				sockptr->ADIF = malloc(sizeof(struct ADIF));
+				memset(sockptr->ADIF, 0, sizeof(struct ADIF));
+			}
+
+			strcpy(sockptr->ADIF->CMSCall, TCP->GatewayCall);
 			
 			send(sock, Msg, Len, 0);
 			sprintf(logmsg,"%d %s", Stream, Msg);
@@ -4020,6 +4044,10 @@ MsgLoop:
 			char RespString[12];
 			int Freq = 0;
 			int Mode = 0;
+			ADIF * ADIF = sockptr->ADIF;
+
+			strcat(MsgPtr,"<cr>");
+			UpdateADIFRecord(ADIF, MsgPtr, 'R');
 
 			if (Sess1)
 			{
@@ -4031,8 +4059,8 @@ MsgLoop:
 
 					if (Sess2->Mode)
 					{
-						Freq = Sess2->Frequency;
-						Mode = Sess2->Mode;
+						ADIF->Freq = Freq = Sess2->Frequency;
+						ADIF->Mode = Mode = Sess2->Mode;
 					}
 					else
 					{
@@ -4043,21 +4071,20 @@ MsgLoop:
 							LINKTABLE * LINK = Sess2->L4TARGET.LINK;
 							PORTCONTROLX * PORT = LINK->LINKPORT;
 						
-							Freq = PORT->WL2KInfo.Freq;
-							Mode = PORT->WL2KInfo.mode;
+							ADIF->Freq = Freq = PORT->WL2KInfo.Freq;
+							ADIF->Mode = Mode = PORT->WL2KInfo.mode;
 						}
 						else
 						{
 							if (Sess2->RMSCall[0])
 							{
-								Freq = Sess2->Frequency;
-								Mode = Sess2->Mode;
+								ADIF->Freq = Freq = Sess2->Frequency;
+								ADIF->Mode = Mode = Sess2->Mode;
 							}
 						}
 					}
 				}
 			}
-
 
 			sprintf(RespString, "%010d", Response);
 
@@ -4066,6 +4093,10 @@ MsgLoop:
 			send(sock, Msg, Len,0);
 			sprintf(logmsg,"%d %s", Stream, Msg);
 			WriteCMSLog (logmsg);
+
+			strcat(Msg,"<cr>");
+			UpdateADIFRecord(ADIF, Msg, 'S');
+
 			sockptr->InputLen=0;
 			sockptr->LoginState = 2;		// Data
 			sockptr->LogonSent = FALSE;
@@ -4081,6 +4112,8 @@ MsgLoop:
 			TRANSPORTENTRY * Sess2 = NULL;
 			char Passline[80] = "CMSTELNET\r";
 			int len = 10;
+			ADIF * ADIF = sockptr->ADIF;
+
 
 			if (Sess1)
 			{
@@ -4096,14 +4129,19 @@ MsgLoop:
 						PORTCONTROLX * PORT = LINK->LINKPORT;
 						
 						if (PORT->WL2KInfo.Freq)
+						{
 							len = sprintf(Passline, "CMSTELNET %s %d %d\r", PORT->WL2KInfo.RMSCall, PORT->WL2KInfo.Freq, PORT->WL2KInfo.mode);
-
+							ADIF->Freq = PORT->WL2KInfo.Freq;
+							ADIF->Mode = PORT->WL2KInfo.mode;
+					}
 					}
 					else
 					{
 						if (Sess2->RMSCall[0])
 						{
 							len = sprintf(Passline, "CMSTELNET %s %d %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
+							ADIF->Mode = Sess2->Frequency;
+							ADIF->Mode = Sess2->Mode;
 						}
 					}
 				}
@@ -4682,6 +4720,7 @@ VOID WriteCMSLog(char * msg)
 	}
 
 #endif
+
 	return;
 }
 
@@ -4808,6 +4847,14 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	sockptr->ConnectTime = time(NULL);
 	TNC->Streams[Stream].Connecting = FALSE;
 	TNC->Streams[Stream].Connected = TRUE;
+
+	if (sockptr->ADIF == NULL)
+		sockptr->ADIF = malloc(sizeof(struct ADIF));
+
+	memset(sockptr->ADIF, 0, sizeof(struct ADIF));
+
+	strcpy(sockptr->ADIF->Call, TNC->Streams[Stream].MyCall);
+
 	ShowConnections(TNC);
 
 	if (sockptr->FromHostBuffer == 0)
@@ -5248,6 +5295,11 @@ int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 		return FALSE;
 	}
 
+	if (sockptr->ADIF == NULL)
+		sockptr->ADIF = malloc(sizeof(struct ADIF));
+
+	memset(sockptr->ADIF, 0, sizeof(struct ADIF));
+
 	sockptr->SocketActive = TRUE;
 	sockptr->InputLen = 0;
 	sockptr->LoginState = 2;
@@ -5257,6 +5309,11 @@ int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 
 	sockptr->FBBMode = TRUE;		// Raw Data
 	sockptr->NeedLF = FALSE;
+
+	if (sockptr->ADIF == NULL)
+		sockptr->ADIF = malloc(sizeof(struct ADIF));
+
+	memset(sockptr->ADIF, 0, sizeof(struct ADIF));
 
 	destaddr.sin_family = AF_INET; 
 	destaddr.sin_port = htons(8772);
@@ -5477,6 +5534,12 @@ int TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 	sockptr->DoEcho = FALSE;
 
 	sockptr->FBBMode = FBB;		// Raw Data
+
+	if (sockptr->ADIF == NULL)
+		sockptr->ADIF = malloc(sizeof(struct ADIF));
+
+	memset(sockptr->ADIF, 0, sizeof(struct ADIF));
+
 	
 	// Resolve Name if needed
 
@@ -5672,7 +5735,7 @@ VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 	*ptr++ = '\0';	
 }
 
-BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr)
+BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr, struct ADIF * ADIF)
 {
 	int datalen;
 	UCHAR * MsgPtr;
@@ -5687,7 +5750,9 @@ BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr)
 	sock = sockptr->socket;
 
 	if (sockptr->UserPointer  == &CMSUser)
-		WritetoTrace(Stream, MsgPtr, datalen);
+	{
+		WritetoTrace(Stream, MsgPtr, datalen, ADIF, 'S');
+	}
 
 	if (sockptr->UTF8)
 	{

@@ -325,12 +325,12 @@ void RefreshMCLine(struct MSESSION * MSession)
 //	else
 		TM = gmtime(&Age);
 
-	wsprintf(Agestring, "%.2d:%.2d",
+	sprintf(Agestring, "%.2d:%.2d",
 			TM->tm_hour, TM->tm_min);
 
 	TM = gmtime(&MSession->Created);
 
-	wsprintf(Time, "%.2d:%.2d",
+	sprintf(Time, "%.2d:%.2d",
 			TM->tm_hour, TM->tm_min);
 
 

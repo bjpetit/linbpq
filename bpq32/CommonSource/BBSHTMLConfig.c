@@ -19,7 +19,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define _CRT_SECURE_NO_DEPRECATE
 
-
 #include "CHeaders.h"
 #include "BPQMail.h"
 
@@ -53,8 +52,6 @@ extern int MaxChatStreams;
 extern char Position[81];
 extern char PopupText[251];
 extern int PopupMode;
-
-
 
 #define MaxCMS	10				// Numbr of addresses we can keep - currently 4 are used.
 
@@ -425,44 +422,7 @@ void ConvertTitletoUTF8(char * Title, char * UTF8Title)
 		strcpy(UTF8Title, Title);
 }
 
-
-
-VOID UndoTransparency(char * ptr)
-{
-	// Undo any % transparency
-
-	char * ptr1, * ptr2;
-	char c;
-
-	if (ptr == NULL || *ptr == 0)
-		return;
-
-	ptr1 = ptr2 = ptr;
-
-	c = *(ptr1++);
-
-	while (c)
-	{
-		if (c == '%')
-		{
-			int n;
-			int m = *(ptr1++) - '0';
-			if (m > 9) m = m - 7;
-			n = *(ptr1++) - '0';
-			if (n > 9) n = n - 7;
-
-			*(ptr2++) = m * 16 + n;
-		}
-		else if (c == '+')
-			*(ptr2++) = ' ';
-		else
-			*(ptr2++) = c;
-
-		c = *(ptr1++);
-	}
-
-	*(ptr2++) = 0;
-}
+BOOL GotFirstMessage = 0;
 
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen)
 {
@@ -491,6 +451,23 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 	}
 
+	// There is a problem if Mail is reloaded without reloading the node
+
+	if (GotFirstMessage == 0)
+	{
+		if (_stricmp(NodeURL, "/Mail/Header") ==  0 || _stricmp(NodeURL, "/Mail/Lost") == 0)
+		{
+			*RLen = SendHeader(Reply, Session->Key);
+		}
+		else
+		{
+			*RLen = sprintf(Reply, "<html><script>window.location.href = '/Mail/Header?%s';</script>", Session->Key);
+		}
+		
+		GotFirstMessage = 1;
+		return;
+	}
+	
 	if (strcmp(Method, "POST") == 0)
 	{	
 		if (_stricmp(NodeURL, "/Mail/Header") == 0)
@@ -1249,7 +1226,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 
 char ** GetMultiStringInput(char * input, char * key)
 {
-	char MultiString[10000] = "";
+	char MultiString[16384] = "";
 
 	GetParam(input, key, MultiString);
 
@@ -1322,7 +1299,7 @@ char **	SeparateMultiString(char * MultiString, BOOL NoToUpper)
 
 VOID GetMallocedParam(char * input, char * key, char ** value)
 {
-	char Param[2048] = "";
+	char Param[32768] = "";
 
 	GetParam(input, key, Param);
 
@@ -1336,7 +1313,7 @@ VOID GetMallocedParam(char * input, char * key, char ** value)
 VOID GetParam(char * input, char * key, char * value)
 {
 	char * ptr = strstr(input, key);
-	char Param[2048];
+	char Param[32768];
 	char * ptr1, * ptr2;
 	char c;
 
@@ -1757,7 +1734,7 @@ VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Re
 
 	if (input)
 	{
-
+		int n;
 		GetParam(input, "MaxTX=", Temp);
 		MaxTXSize = atoi(Temp);
 		GetParam(input, "MaxRX=", Temp);
@@ -1766,8 +1743,33 @@ VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Re
 		MaxAge = atoi(Temp);
 		GetCheckBox(input, "WarnNoRoute=", &WarnNoRoute);
 		GetCheckBox(input, "LocalTime=", &Localtime);
+
+		// Reinitialise Aliases
+
+		n = 0;
+
+		if (Aliases)
+		{
+			while(Aliases[n])
+			{
+				free(Aliases[n]->Dest);
+				free(Aliases[n]);
+				n++;
+			}
+
+			free(Aliases);
+			Aliases = NULL;
+			FreeList(AliasText);
+		}
+	
 		AliasText = GetMultiStringInput(input, "Aliases=");
+		_strupr(AliasText[0]);
+		SetupFwdAliases();
 	}
+	
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
+
 	SendFwdMainPage(Reply, RLen, Session->Key);
 }
 
@@ -2446,7 +2448,7 @@ VOID SendWelcomePage(char * Reply, int * ReplyLen, char * Key)
 
 VOID SendFwdMainPage(char * Reply, int * RLen, char * Key)
 {
-	char ALIASES[2048];
+	char ALIASES[16384];
 
 	SetMultiStringValue(AliasText, ALIASES);
 

@@ -820,11 +820,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 6:				// Scan Stop Interface
 
-		_asm 
-		{
-			MOV	EAX,buff
-			mov Param,eax
-		}
+		Param = (size_t)buff;
 
 		if (Param == 1)		// Request Permission
 		{

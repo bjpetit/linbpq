@@ -22,8 +22,11 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #include <crtdbg.h>
+#ifdef _WIN64
+#include "stdint.h"
+#else
 #include "winstdint.h"
-
+#endif
 
 #include "winsock2.h"
 #include "WS2tcpip.h"

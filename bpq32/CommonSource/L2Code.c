@@ -1,6 +1,5 @@
 /*
 Copyright 2001-2018 John Wiseman G8BPQ
-
 This file is part of LinBPQ/BPQ32.
 
 LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
@@ -2006,7 +2005,12 @@ CheckNSLoop:
 
 		//	SET ACK REQUIRED TIMER - REJ WILL BE SENT WHEN IT EXPIRES
 
-		LINK->L2ACKREQ = THREESECS;		// EXTRA LONG RESPTIME, AS SENDING TOO MANY REJ'S IS SERIOUS
+		// if configured RESPTIME is longer than 3 secs use it (may be longer on HF)
+
+		if (PORT->PORTT2 > THREESECS)
+			LINK->L2ACKREQ = PORT->PORTT2;
+		else
+			LINK->L2ACKREQ = THREESECS;		// EXTRA LONG RESPTIME, AS SENDING TOO MANY REJ'S IS SERIOUS
 
 		if (LINK->RXFRAMES[NS])
 		{

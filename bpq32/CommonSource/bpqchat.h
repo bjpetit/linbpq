@@ -294,6 +294,8 @@ typedef struct node_t
 	char *call;
 	char * Version;
 	int refcnt;
+	time_t timeconnected;
+
 } CHATNODE;
 
 
@@ -439,6 +441,8 @@ typedef struct user_t
 	time_t	lastmsgtime;	// Time of last input from user including keepalives
 	time_t	lastrealmsgtime;// Time of last input from user
 	time_t	lastsendtime;	// Time of last output to user
+	time_t	timeconnected;
+
 	int Colour;				// For Console Display
 #ifndef WIN32
 	char Codepage[80];		// For Converting UTF8 to local char set for non-utf-8 terminals

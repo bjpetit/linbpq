@@ -10,6 +10,10 @@
 // Updated to support running programs with command line parameters
 // Add option to KILL by program name 
 
+// Version 1. 0. 3. 1 April 2019
+
+//	Add remote rigcontrol feature
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -25,6 +29,7 @@
 
 WSADATA WsaData;            // receives data from WSAStartup
 
+#define WSA_READ WM_USER + 1
 
 HINSTANCE hInst; 
 char AppName[] = "WinmorControl";
@@ -37,19 +42,21 @@ BOOL InitApplication(HINSTANCE);
 BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
+VOID WINAPI CompletedReadRoutine(DWORD dwErr, DWORD cbBytesRead, LPOVERLAPPED lpOverLap);
+VOID WINAPI txCompletedReadRoutine(DWORD dwErr, DWORD cbBytesRead, LPOVERLAPPED lpOverLap);
+VOID CATThread();
 
 int TimerHandle = 0;
 
 LOGFONT LFTTYFONT ;
 
-HFONT hFont ;
+HFONT hFont;
 
 struct sockaddr_in sinx; 
 struct sockaddr rx;
 SOCKET sock;
 int udpport = 8500;
 int addrlen = sizeof(struct sockaddr_in);
-
 
 BOOL MinimizetoTray=FALSE;
 
@@ -162,11 +169,25 @@ RestartTNC(char * Path)
 	else
 		Debugprintf("Restart TNC Failed %d ", GetLastError());
 }
+char * RigPort = NULL;
+char * RigSpeed = NULL;
+HANDLE RigHandle = 0;
+int RigType = 0;			// Flag for possible RTS/DTR
 
+#define RTS 1
+#define DTR 2
 
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	MSG msg;
+
+	if (lpCmdLine[0])
+	{
+		// Port Name and Speed for Remote CAT
+
+		RigPort = _strdup(lpCmdLine);
+		RigSpeed = strlop(RigPort, ':');
+	}
 
 	if (!InitApplication(hInstance)) 
 		return (FALSE);
@@ -271,9 +292,243 @@ HFONT FAR PASCAL MyCreateFont( void )
  
     hfont = CreateFontIndirect(cf.lpLogFont); 
     return (hfont); 
-} 
+}
+
+VOID COMSetDTR(HANDLE fd)
+{
+	EscapeCommFunction(fd, SETDTR);
+}
+
+VOID COMClearDTR(HANDLE fd)
+{
+	EscapeCommFunction(fd, CLRDTR);
+}
+
+VOID COMSetRTS(HANDLE fd)
+{
+	EscapeCommFunction(fd, SETRTS);
+}
+
+VOID COMClearRTS(HANDLE fd)
+{
+	EscapeCommFunction(fd, CLRRTS);
+}
 
 
+
+
+
+OVERLAPPED txOverlapped;
+
+HANDLE txEvent;
+
+char RXBuffer[1024];
+int RXLen;
+
+int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
+{
+	BOOL       fReadStat ;
+	COMSTAT    ComStat ;
+	DWORD      dwErrorFlags;
+	DWORD      dwLength;
+	BOOL	ret;
+
+	// only try to read number of bytes in queue
+
+	ret = ClearCommError(fd, &dwErrorFlags, &ComStat);
+
+	if (ret == 0)
+	{
+		int Err = GetLastError();
+		return 0;
+	}
+
+
+	dwLength = min((DWORD) MaxLength, ComStat.cbInQue);
+
+	if (dwLength > 0)
+	{
+		fReadStat = ReadFile(fd, Block, dwLength, &dwLength, NULL) ;
+
+		if (!fReadStat)
+		{
+		    dwLength = 0 ;
+			ClearCommError(fd, &dwErrorFlags, &ComStat ) ;
+		}
+	}
+
+   return dwLength;
+}
+
+
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
+{
+	BOOL        fWriteStat;
+	DWORD       BytesWritten;
+	DWORD       ErrorFlags;
+	COMSTAT     ComStat;
+	int Err, txLength;
+
+	Err = WaitForSingleObject(txEvent, 1000);
+
+	if (Err == WAIT_TIMEOUT)
+	{
+		Debugprintf("TX Event Wait Timout");
+	}
+	else
+	{
+		ResetEvent(txEvent);
+		Err =  GetOverlappedResult(RigHandle, &txOverlapped, &txLength, FALSE);
+	}
+		
+	memset(&txOverlapped, 0, sizeof(OVERLAPPED));
+	txOverlapped.hEvent = txEvent;
+
+	fWriteStat = WriteFile(fd, Block, BytesToWrite,
+	               &BytesWritten, &txOverlapped);
+
+	if (!fWriteStat)
+	{
+		Err = GetLastError();
+
+		if (Err != ERROR_IO_PENDING)
+		{
+			ClearCommError(fd, &ErrorFlags, &ComStat);
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+
+HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
+{
+	char szPort[80];
+	BOOL fRetVal ;
+	COMMTIMEOUTS  CommTimeOuts ;
+	char buf[100];
+	HANDLE fd;
+	DCB dcb;
+
+	sprintf( szPort, "\\\\.\\%s", pPort);
+	
+	// open COMM device
+
+	fd = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                  NULL );
+
+	if (fd == (HANDLE) -1)
+	{
+		char Msg[80];
+		
+		sprintf(Msg, "%s could not be opened - Error %d", pPort, GetLastError());
+		MessageBox(NULL, Msg, "WinmorControl", MB_OK);
+
+		return FALSE;
+	}
+
+	// setup device buffers
+
+	SetupComm(fd, 4096, 4096);
+
+	// purge any information in the buffer
+
+	PurgeComm(fd, PURGE_TXABORT | PURGE_RXABORT |
+                                      PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+
+	// set up for overlapped I/O
+
+	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
+	CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
+	CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
+	CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
+//     CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
+	CommTimeOuts.WriteTotalTimeoutConstant = 500 ;
+
+	SetCommTimeouts(fd, &CommTimeOuts);
+
+   dcb.DCBlength = sizeof(DCB);
+
+   GetCommState(fd, &dcb);
+
+   dcb.BaudRate = speed;
+   dcb.ByteSize = 8;
+   dcb.Parity = 0;
+   dcb.StopBits = TWOSTOPBITS;
+   dcb.StopBits = Stopbits;
+
+	// setup hardware flow control
+
+	dcb.fOutxDsrFlow = 0;
+	dcb.fDtrControl = DTR_CONTROL_DISABLE ;
+
+	dcb.fOutxCtsFlow = 0;
+	dcb.fRtsControl = RTS_CONTROL_DISABLE ;
+
+	// setup software flow control
+
+   dcb.fInX = dcb.fOutX = 0;
+   dcb.XonChar = 0;
+   dcb.XoffChar = 0;
+   dcb.XonLim = 100 ;
+   dcb.XoffLim = 100 ;
+
+   // other various settings
+
+   dcb.fBinary = TRUE ;
+   dcb.fParity = FALSE;
+
+	fRetVal = SetCommState(fd, &dcb);
+
+	if (fRetVal)
+	{
+		if (SetDTR)
+			EscapeCommFunction(fd, SETDTR);
+		else
+			EscapeCommFunction(fd, CLRDTR);
+	
+		if (SetRTS)
+			EscapeCommFunction(fd, SETRTS);
+		else
+			EscapeCommFunction(fd, CLRRTS);
+	}
+	else
+	{
+		sprintf(buf,"%s Setup Failed %d ", pPort, GetLastError());
+		OutputDebugString(buf);
+		CloseHandle(fd);
+		return 0;
+	}
+
+	txEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+	// Start Read Thread
+
+	_beginthread(CATThread, 0, 0);
+
+	return fd;
+}
+
+
+
+VOID CloseCOMPort(HANDLE fd)
+{
+	SetCommMask(fd, 0);
+
+	// drop DTR
+
+	COMClearDTR(fd);
+
+	// purge any outstanding reads/writes and close device handle
+
+	PurgeComm(fd, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+
+	CloseHandle(fd);
+}
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -326,11 +581,23 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	{
 		err = WSAGetLastError();
 		sprintf(Msg, "Failed to create UDP socket - error code = %d", err);
-		MessageBox(NULL, Msg, "WinmorCOntrol", MB_OK);
+		MessageBox(NULL, Msg, "WinmorControl", MB_OK);
 		return FALSE; 
 	}
+	
+	if (WSAAsyncSelect(sock, hWnd, WSA_READ, FD_READ) > 0)
+	{
+		wsprintf(Msg, TEXT("WSAAsyncSelect failed Error %d"), WSAGetLastError());
 
-	ioctlsocket (sock, FIONBIO, &param);
+		MessageBox(hWnd, Msg, TEXT("WinmorControl"), MB_OK);
+
+		closesocket(sock);
+		
+		return FALSE;
+
+	}
+
+//	ioctlsocket (sock, FIONBIO, &param);
  
 	setsockopt (sock,SOL_SOCKET,SO_BROADCAST,(const char FAR *)&bcopt,4);
 
@@ -347,37 +614,39 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 		err = WSAGetLastError();
 		sprintf(Msg, "Bind Failed for UDP socket - error code = %d", err);
-		MessageBox(NULL, Msg, "WinmorCOntrol", MB_OK);
+		MessageBox(NULL, Msg, "WinmorControl", MB_OK);
 
 		return FALSE;
 	}
 
-	TimerHandle = SetTimer(hWnd, 1, 500, NULL);		// Slow Timer
+	if (RigPort)
+	{
+		int Speed = 9600;
 
-	return (TRUE);
-}
+		if (RigSpeed)
+			Speed = atoi(RigSpeed);
 
-VOID Poll()
-{
-	char Msg[256];
-	int len;
+		RigHandle = OpenCOMPort(RigPort, Speed, FALSE, FALSE, FALSE, TWOSTOPBITS);
 
-	len = recvfrom(sock, Msg, 256, 0, &rx, &addrlen);
+		if (RigHandle)
+		{
+			if (RigType == RTS)
+				COMClearRTS(RigHandle);
+			else
+				COMSetRTS(RigHandle);
 
-	if (len <= 0)
-		return;
+			if (RigType == DTR)
+				COMClearDTR(RigHandle);
+			else
+				COMSetDTR(RigHandle);
+		}
+		else
+			return FALSE;			// Open Failed
+	}
 
-	Msg[len] = 0;
+	TimerHandle = SetTimer(hWnd, 1, 100, NULL);
 
-	if (_memicmp(Msg, "REMOTE:", 7) == 0)
-		RestartTNC(&Msg[7]);
-	else
-	if (_memicmp(Msg, "KILL ", 5) == 0)
-		KillTNC(atoi(&Msg[5]));
-	else
-	if (_memicmp(Msg, "KILLBYNAME ", 11) == 0)
-		KillOldTNC(&Msg[11]);
-
+	return TRUE;
 }
 	
 //
@@ -390,15 +659,36 @@ VOID Poll()
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
+	char Msg[256];
+	int len;
 
-	switch (message) { 
+	switch (message) 
+	{ 
+		case WSA_READ: // Notification on data socket
+	
+			len = recvfrom(sock, Msg, 256, 0, &rx, &addrlen);
 
-		case WM_TIMER:
+			if (len <= 0)
+				return 0;
 
-			Poll();
+			Msg[len] = 0;
 
-			return 0;
+			if (_memicmp(Msg, "REMOTE:", 7) == 0)
+				RestartTNC(&Msg[7]);
+			else
+			if (_memicmp(Msg, "KILL ", 5) == 0)
+				KillTNC(atoi(&Msg[5]));
+			else 
+			if (_memicmp(Msg, "KILLBYNAME ", 11) == 0)
+				KillOldTNC(&Msg[11]);
+			else
+			{
+				// Anything else is Rig Control
+	
+				len = WriteCOMBlock(RigHandle, Msg, len);
+			}
 
+			break;
 
 		case WM_SYSCOMMAND:
 
@@ -440,3 +730,57 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	return (0);
 }
+
+BOOL EndCATThread = FALSE;
+
+VOID CATThread()
+{
+	DWORD dwLength = 0;
+	int Length, ret;
+	HANDLE Event;
+	OVERLAPPED Overlapped;
+	
+	EndCATThread = FALSE;
+
+	Event = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+	memset(&Overlapped, 0, sizeof(OVERLAPPED));
+	Overlapped.hEvent = Event;
+
+	ReadFile(RigHandle, RXBuffer, 1024, &RXLen, &Overlapped);
+		
+	while (EndCATThread == FALSE)
+	{
+		ret = WaitForSingleObject(Event, 1000);
+
+		if (ret == WAIT_TIMEOUT)
+		{
+			if (EndCATThread)
+			{
+				CancelIo(RigHandle);
+				CloseHandle(RigHandle);
+				RigHandle = INVALID_HANDLE_VALUE;	
+				CloseHandle(Event);
+				EndCATThread = FALSE;
+				return;
+			}
+			continue;	
+		}
+		ResetEvent(Event);
+
+		ret =  GetOverlappedResult(RigHandle, &Overlapped, &Length, FALSE);
+
+		if (ret)
+		{
+			// got something so send to BPQ
+
+			sendto(sock, RXBuffer, Length,  0, &rx, sizeof(struct sockaddr));
+		}
+		
+		memset(&Overlapped, 0, sizeof(OVERLAPPED));
+		Overlapped.hEvent = Event;
+
+		ReadFile(RigHandle, RXBuffer, 1024, &RXLen, &Overlapped);
+	}
+}
+

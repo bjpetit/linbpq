@@ -27,6 +27,7 @@ struct ScanEntry
 	char Antenna;
 //	char Supress;		// Dont report this one to WL2K
 	char ARDOPMode[6];
+	char VARAMode[6];
 	char * Cmd1;
 	int Cmd1Len;
 	char * Cmd2;
@@ -170,6 +171,8 @@ struct RIGPORTINFO
 	HANDLE hDevice;					// COM device Handle
 	int ReopenDelay;
 	struct TNCINFO * PTC;			// Set to TNC record address if using an SCS PTC Radio Port
+	SOCKET remoteSock;				// Socket for use with WINMORCONROL
+	struct sockaddr remoteDest;		// Dest for above
 	HANDLE hPTTDevice;				// May use a different port for PTT
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent

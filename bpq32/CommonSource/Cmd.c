@@ -36,6 +36,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //#include "SHELLAPI.H"
 
 #include "CHeaders.h"
+#include "BPQAPRS.h"
 
 #pragma pack()
 
@@ -161,6 +162,8 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD);
 void ListExcludedCalls(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+
 
 VOID SENDNODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
@@ -3475,92 +3478,6 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
-	
-VOID APRSMHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
-{
-	//	DISPLAY APRES HEARD LIST
-
-	// APRS [Port] [Pattern] 
-
-	APRSSTATIONRECORD * MH = MHDATA;
-	int n = MAXHEARDENTRIES;
-	int len;
-	char * ptr;
-	char * Pattern, * context;
-	int Port = -1;
-	char dummypattern[] ="";
-
-	Pattern = strtok_s(CmdTail, " \r", &context);
-
-	if (Pattern && (int)strlen(Pattern) < 3)
-	{
-		// could be port number
-
-		if (isdigit(Pattern[0]) && (Pattern[1] == 0 || isdigit(Pattern[1])))
-		{
-			Port = atoi(Pattern);
-			Pattern = strtok_s(NULL, " \r", &context);
-		}
-	}
-
-	// Param is a pattern to match
-
-	if (Pattern == NULL)
-		Pattern = dummypattern;
-
-	if (Pattern[0] == ' ')
-	{
-		// Prepare Pattern
-
-		char * ptr1 = Pattern + 1;
-		char * ptr2 = Pattern;
-		char c;
-		
-		do
-		{
-			c = *ptr1++;
-			*(ptr2++) = c;
-		}
-		while (c != ' ');
-
-		*(--ptr2) = 0;
-	}
-
-	strlop(Pattern, ' ');
-	_strupr(Pattern);
-
-	*(Bufferptr++) = 13;
-
-	while (n--)
-	{
-		if (MH->MHCALL[0] == 0)
-			break;
-
-		if ((Port > -1) && Port != MH->Port)
-		{
-			MH++;
-			continue;
-		}
-
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);
-	
-		ptr = FormatAPRSMH(MH);
-
-		MH++;
-		
-		if (ptr)
-		{
-			if (Pattern[0] && strstr(ptr, Pattern) == 0)
-				continue;
-
-			len = (int)strlen(ptr);
-			memcpy(Bufferptr, ptr, len);
-			Bufferptr += len;
-		}
-	}
-
-	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-}
 
 int Rig_Command(int Session, char * Command);
 
@@ -3980,6 +3897,7 @@ checkattachandcall:
 CMDX COMMANDS[] =
 {
 	"SAVENODES   ",8, SAVENODES, 0,
+//	"TELNETRECON ",7, RECONFIGTELNET, 0,
 	"SAVEMH      ",6, SAVEMHCMD, 0,
 	"REBOOT      ",6, REBOOT, 0,
 //	"RECONFIG    ",8 , RECONFIG, 0,
@@ -4094,7 +4012,7 @@ CMDX COMMANDS[] =
 	"MHL         ",3,MHCMD,0,		// Local Times
 	"MHV         ",3,MHCMD,0,
 	"MHEARD      ",1,MHCMD,0,
-	"APRSMH      ",2,APRSMHCMD,0,
+	"APRS        ",2,APRSCMD,0,
 	"ATTACH      ",1,ATTACHCMD,0,
 	"RADIO       ",3,RADIOCMD,0,
 	"AXRESOLVER  ",3,AXRESOLVER,0,
@@ -4922,7 +4840,7 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		sock = OpenWL2KHTTPSock();
 
 		if (sock)
-			SendHTTPRequest(sock, "server.winlink.org", 8085, 
+			SendHTTPRequest(sock, "api.winlink.org", 80, 
 				"/sysop/add", Message, Len, NULL);
 	
 		closesocket(sock);
@@ -5399,6 +5317,21 @@ DISPLIST:
 	*(Bufferptr++) = '\r';
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
+
+BOOL isSYSOP(TRANSPORTENTRY * Session, char * Bufferptr)
+{
+	if (Session->PASSWORD  != 0xFFFF)
+	{
+		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+
 
 
 

@@ -7581,6 +7581,17 @@ CheckForSID:
 			strcat(FWLine, "\r");	
 
 			nodeprintf(conn, FWLine);
+
+			// Also send a Location Comment Line
+
+			//; GM8BPQ-10 DE G8BPQ (IO92KX)<cr>
+			//; WL2K DE GM8BPQ ()<cr>			(PAT)
+
+			user = LookupCall(BBSName);
+
+			if (user)
+				nodeprintf(conn, "; WL2K DE %s (%s)\r", BBSName, user->ZIP);
+
 		}
 
 		// Only declare B1 and B2 if other end did, and we are configued for it
@@ -10058,44 +10069,52 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 		return;
 	}
-
-	if (memcmp(Buffer, ";FW:", 4) == 0)
+	if (Buffer[0] == ';')			// WL2K Comment
 	{
-		// Paclink User Select (poll for list)
-		
-		char * ptr1,* ptr2, * ptr3;
-		int index=0;
-
-		// Convert string to Multistring
-
-		Buffer[len-1] = 0;
-
-		conn->PacLinkCalls = zalloc(len*3);
-
-		ptr1 = &Buffer[5];
-		ptr2 = (char *)conn->PacLinkCalls;
-		ptr2 += (len * 2);
-		strcpy(ptr2, ptr1);
-
-		while (ptr2)
+		if (memcmp(Buffer, ";FW:", 4) == 0)
 		{
-			ptr3 = strlop(ptr2, ' ');
-
-			if (strlen(ptr2))
-				conn->PacLinkCalls[index++] = ptr2;
+			// Paclink User Select (poll for list)
 		
-			ptr2 = ptr3;
-		}
-	
-		return;	
-	}
+			char * ptr1,* ptr2, * ptr3;
+			int index=0;
 
-	if (memcmp(Buffer, ";FR:", 4) == 0)
-	{
-		// New Message from TriMode - Just igonre till I know what to do with it
+			// Convert string to Multistring
+		
+			Buffer[len-1] = 0;
+
+			conn->PacLinkCalls = zalloc(len*3);
+
+			ptr1 = &Buffer[5];
+			ptr2 = (char *)conn->PacLinkCalls;
+			ptr2 += (len * 2);
+			strcpy(ptr2, ptr1);
+
+			while (ptr2)
+			{
+				ptr3 = strlop(ptr2, ' ');
+
+				if (strlen(ptr2))
+					conn->PacLinkCalls[index++] = ptr2;
+		
+				ptr2 = ptr3;
+			}
+	
+			return;	
+		}
+
+		if (memcmp(Buffer, ";FR:", 4) == 0)
+		{
+			// New Message from TriMode - Just igonre till I know what to do with it
+
+			return;
+		}
+
+		// Ignore other ';' message
 
 		return;
 	}
+
+
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
@@ -10957,6 +10976,12 @@ void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 	char MsgFile[MAX_PATH];
 	FILE * hFile;
 	struct stat STAT;
+
+	if (filename == NULL)
+	{
+		nodeprintf(conn, "Missing Filename\r");
+		return;
+	}
 
 	if (strstr(filename, "..") || strchr(filename, '/') || strchr(filename, '\\'))
 	{

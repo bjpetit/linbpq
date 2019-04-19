@@ -748,7 +748,7 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 		
 	if (arp_table->error == 0)
 	{
-		int sent;
+		int sent = 0;
 		
 		if (arp_table->port == 0) txsock = PORT->sock; else txsock = SourceSocket;
 
@@ -993,7 +993,7 @@ int OpenListeningSocket(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp
 
 	if (bind(arp->TCPListenSock , (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 	{
-		sprintf(Msg, "bind(sock) failed Error %d", WSAGetLastError());
+        sprintf(Msg, "bind(sock) failed Port %d Error %d", arp->port, WSAGetLastError());
 		Debugprintf(Msg);
 		closesocket(arp->TCPListenSock);
 

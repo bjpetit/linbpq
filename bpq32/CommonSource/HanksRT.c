@@ -269,9 +269,14 @@ int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len)
 
 	if (conn->OutputQueueLength + len > 9999)
 	{
-		Debugprintf("Corrupt Output Queue Len %d", conn->OutputQueueLength);
-		conn->OutputQueueLength = 0;
-		conn->OutputGetPointer = 0;
+		Debugprintf("Output Queue Overflow %d", conn->OutputQueueLength);
+
+		// Shouldn't clear buffer as this will corrupt any partly recevied message - just drop it
+
+//		conn->OutputQueueLength = 0;
+//		conn->OutputGetPointer = 0;
+		FreeSemaphore(&OutputSEM);
+		return 0;							// or we will send a partial message
 	}
 
 	memcpy(&conn->OutputQueue[conn->OutputQueueLength], msg, len);
@@ -560,9 +565,8 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 			}
 			else
 			{
-				// Connection refused
+				// Connection refused. rtlogin1 has sent error message and closed link				
 			
-				Disconnect(conn->BPQStream);
 				return;
 			}
 		}
@@ -573,6 +577,8 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 		nprintf(conn, "Unexpected Message on Chat Node-Node Link - Disconnecting\r");
 		ChatFlush(conn);
 		Sleep(500);
+		conn->rtcflags = p_nil;
+
 		Disconnect(conn->BPQStream);
 		return;
 	}
@@ -1052,8 +1058,25 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 	ChatCIRCUIT *ckt_to;
 	USER    *user, *su;
 	char    *ncall, *ucall, *f1, *f2, *buf;
+	int i;
 
 	if (Buffer[FORMAT_O] != FORMAT) return; // Not a control message.
+
+	// Check for corruption
+
+	for (i = 1; i < (Len - 1); i++)
+	{
+		if (Buffer[i] < 32)
+		{
+			if (Buffer[i] == 9)
+			{
+				Buffer[i] = 32;
+				continue;
+			}
+			Debugprintf("Corrupt Chat Link Messages %s", Buffer);
+			return;
+		}
+	}
 
 	buf = _strdup(Buffer + DATA_O);
 
@@ -1067,6 +1090,7 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 // Node leave (id_unlink) has no F1.
 
 	f1 = strlop(ucall, ' ');
+	strlop(ucall, 9);			// some have tabs ??
 
 // If the frame came from an unknown node ignore it.
 // If the frame came from us ignore it (loop breaking).
@@ -1130,16 +1154,21 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 			{
 				// Already Here
 
-				ReportBadJoin(ncall, ucall);
+				// If last join was less the 5 secs ago don't report - probably a "Join/Leave Storm"
+
+				if (time(NULL) - user->timeconnected > 5)
+					ReportBadJoin(ncall, ucall);
 
 				//if (strcmp(user->node->call, OurNode) == 0)
 				//{
 					// Locally connected, and at another node
 				//}
-		
+
+				user->timeconnected = time(NULL);
 				break;				// We have this user as an active Node
 			}
 
+			// update join time
 
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			f2 = strlop(f1, ' ');
@@ -1166,6 +1195,12 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 				break;
 			}
 
+			// if connected for for less than 3 seconds ignore. May give stuck nodes but should stop "Join/Leave Storm"
+			// we can't just silently leave as next join will propagate
+
+			if (time(NULL) - user->timeconnected < 3)
+				break;
+
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 
 			f2 = strlop(f1, ' ');
@@ -1191,8 +1226,15 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 			// ?? This could possibly cause stuck nodes
 
 			ln = node_find(ucall);
+
+			// if connected for for less than 3 seconds ignore. May give stuck nodes but should stop "Join/Leave Storm"
+			// we can't just silently leave as next join will propagate
+
 			if (ln)
 			{
+				if (time(NULL) - ln->timeconnected < 3)
+					break;
+	
 				// is it on this circuit?
 
 				if (cn_find(ckt_from, ln))
@@ -1220,6 +1262,7 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 		case id_link :
 
 			ln = node_find(ucall);
+
 			if (!ln && !matchi(ncall, OurNode))
 			{
 				f2 = strlop(f1, ' ');
@@ -1228,7 +1271,14 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 			}
 			else
 			{
-				Debugprintf("MAILCHAT: node %s link for %s when already on list", ncall, ucall);
+				// If last join was less the 5 secs ago don't report - probably a "Join/Leave Storm"
+
+				if (time(NULL) - ln->timeconnected > 5)		
+					Debugprintf("MAILCHAT: node %s link for %s when already on list", ncall, ucall);
+
+				// update join time
+
+				ln->timeconnected = time(NULL);
 				break;
 			}
 
@@ -1396,6 +1446,8 @@ static CHATNODE *node_inc(char *call, char *alias, char * Version)
 		node->alias = _strdup(alias);
 		if (Version)
 			node->Version = _strdup(Version);
+
+		node->timeconnected = time(NULL);
 
 //		Debugprintf("New Node Rec Created at %x for %s %s", node, node->call, node->alias);
 	}
@@ -2069,7 +2121,7 @@ static USER *user_join(ChatCIRCUIT *circuit, char *ucall, char *ncall, char *nal
 	if (circuit->rtcflags & p_user)
 		circuit->u.user = user;
 
-	user->lastrealmsgtime = user->lastmsgtime = time(NULL);
+	user->timeconnected = user->lastrealmsgtime = user->lastmsgtime = time(NULL);
 
 	user->topic   = topic_join(circuit, deftopic);
 	return user;
@@ -2267,11 +2319,17 @@ ChatCIRCUIT *circuit_new(ChatCIRCUIT *circuit, int flags)
 
 int rtloginl (ChatCIRCUIT *conn, char * call)
 {
-	LINK    *link;
+	LINK * link;
 
 	if (node_find(call))
 	{
-		Logprintf(LOG_CHAT, conn, '|', "Refusing link with %s to prevent a loop", conn->Callsign);
+		Logprintf(LOG_CHAT, conn, '|', "Refusing link from %s to %s to prevent a loop", conn->Callsign, OurNode);
+				
+		nprintf(conn, "Refusing link from %s to %s to prevent a loop.\n", conn->Callsign, OurNode);
+		ChatFlush(conn);
+		Sleep(500);
+		conn->rtcflags = p_nil;
+		Disconnect(conn->BPQStream);
 		return FALSE; // Already linked.
 	}
 
@@ -2281,7 +2339,18 @@ int rtloginl (ChatCIRCUIT *conn, char * call)
 			break;
 	}
 
-	if (!link) return FALSE;           // We don't link with this system.
+	if (!link)
+	{
+		// We don't link with this system. Shouldn't happen, as we checked earlier
+
+		nprintf(conn, "Node %s does not have %s defined as a node to link to - closing.\r",
+					OurNode, conn->Callsign);
+		ChatFlush(conn);
+		Sleep(500);
+		conn->rtcflags = p_nil;
+		Disconnect(conn->BPQStream);
+		return FALSE; 
+	}
 
 	if (link->flags & (p_linked | p_linkini))
 	{
@@ -2481,7 +2550,7 @@ static void show_nodes(ChatCIRCUIT *circuit)
 
 #define xxx "\r        "
 
-static void show_circuits(ChatCIRCUIT *conn)
+static void show_circuits(ChatCIRCUIT *conn, char Flag)
 {
 	ChatCIRCUIT *circuit;
 	CHATNODE    *node;
@@ -2500,11 +2569,18 @@ static void show_circuits(ChatCIRCUIT *conn)
 	}
 
 	nprintf(conn, "%d Node(s)\r", i);
-	sprintf(line, "Here %-6.6s <-", OurAlias);
+
+	if (Flag == 'c')
+		sprintf(line, "Here %-6.6s <-", OurNode);
+	else
+		sprintf(line, "Here %-6.6s <-", OurAlias);
 
 	for (node = node_hd; node; node = node->next) if (node->refcnt)
 	{
-		len = sprintf(line, "%s %s", line, node->alias);
+		if (Flag == 'c')
+			len = sprintf(line, "%s %s", line, node->call);
+		else
+			len = sprintf(line, "%s %s", line, node->alias);
 		if (len > 80)
 		{
 			nprintf(conn, "%s\r", line);
@@ -2518,7 +2594,10 @@ static void show_circuits(ChatCIRCUIT *conn)
 	{
 		if (circuit->rtcflags & p_linked)
 		{
-			len = sprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
+			if (Flag == 'c')
+				len = sprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->call, circuit->refcnt);		
+			else
+				len = sprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
 		
 #ifndef LINBPQ
 			__try{
@@ -2528,7 +2607,10 @@ static void show_circuits(ChatCIRCUIT *conn)
 					{
 						__try
 						{
-							len = sprintf(line, "%s %s", line, cn->node->alias);
+							if (Flag == 'c')
+								len = sprintf(line, "%s %s", line, cn->node->call);
+							else
+								len = sprintf(line, "%s %s", line, cn->node->alias);
 							if (len > 80)
 							{
 								nprintf(conn, "%s\r", line);
@@ -2549,7 +2631,10 @@ static void show_circuits(ChatCIRCUIT *conn)
 			{
 				if (cn->node && cn->node->alias)
 				{
-					len = sprintf(line, "%s %s", line, cn->node->alias);
+					if (Flag == 'c')
+						len = sprintf(line, "%s %s", line, cn->node->call);
+					else
+						len = sprintf(line, "%s %s", line, cn->node->alias);
 					if (len > 80)
 					{
 						nprintf(conn, "%s\r", line);
@@ -2568,7 +2653,12 @@ static void show_circuits(ChatCIRCUIT *conn)
 		else if (circuit->rtcflags & p_linkini)
 		{
 			if (circuit->u.link)
-				nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
+			{	if (Flag == 'c')
+					nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->call);
+				else	
+					nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
+
+			}
 			else
 				nprintf(conn, "Link ?? (setup)\r");
 		}
@@ -2718,7 +2808,7 @@ int rt_cmd(ChatCIRCUIT *circuit, char * Buffer)
 			user_tell(user, id_user);
 			return TRUE;
 
-		case 'p' : show_circuits(circuit); return TRUE;
+		case 'p' : show_circuits(circuit, Buffer[3]); return TRUE;
 
 		case 'q' :
 
@@ -3420,6 +3510,7 @@ int ChatConnected(int Stream)
 				ChatFlush(conn);
 
 				Sleep(500);
+				conn->rtcflags = p_nil;
 
 				Disconnect(conn->BPQStream);
 

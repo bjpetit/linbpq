@@ -70,7 +70,7 @@ struct PORTCONFIG
 
 struct ROUTECONFIG
 {
-	char call[10];
+	char call[80];		// May have VIA
 	int quality;
 	int port;
 	int pwind;
@@ -134,7 +134,8 @@ struct CONFIGTABLE
 	UCHAR C_WASUNPROTO;
 	UCHAR C_BTEXT[120];			// 121
 	char C_VERSTRING[10];		// 241 Version String from Config File
-	UCHAR Spare4[4];			// 251 - 4
+	UCHAR C_ADIF;
+	UCHAR Spare3[3];			// 252 - 4
 	UCHAR C_VERSION;			// CONFIG PROG VERSION
 //	Reuse C_APPLICATIONS - no longer used
 	char C_NETROMCALL[10];

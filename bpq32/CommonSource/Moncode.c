@@ -101,9 +101,9 @@ DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, 
 	return 0;
 }
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 
-int APRSDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask)
+int APRSDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask)
 {
 	return IntDecodeFrame(msg, buffer, Stamp, Mask, TRUE, FALSE);
 }
@@ -112,7 +112,7 @@ DllExport int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, int Stamp)
 	return IntDecodeFrame(msg, buffer, Stamp, MMASK, FALSE, FALSE);
 }
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MINI)
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MINI)
 {
 	UCHAR * ptr;
 	int n;
@@ -485,7 +485,7 @@ KC6OAR*>ID:
 			UCHAR C;
 			int len;
 
-			MsgLen = MsgLen - 23;
+			MsgLen = MsgLen - (19 + sizeof(void *));
 
 			if (MsgLen < 0 || MsgLen > 257)
 				return 0;				// Duff
@@ -672,7 +672,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 			if (Flags & L4MORE)
 				*(Output++) = 'M';
 	
-			MsgLen = MsgLen - 23;
+			MsgLen = MsgLen - (19 + sizeof(void *));
 
 			if (MsgLen < 0 || MsgLen > 257)
 				return Output;				// Duff

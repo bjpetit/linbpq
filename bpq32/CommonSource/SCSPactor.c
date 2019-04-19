@@ -542,7 +542,7 @@ ok:
 		ExitHost(TNC);
 		Sleep(50);
 		CloseCOMPort(TNC->hDevice);
-		TNC->hDevice =(HANDLE) -1;
+		TNC->hDevice =(HANDLE)0;
 		TNC->ReopenTimer = 250;
 		TNC->HostMode = FALSE;
 

@@ -56,8 +56,24 @@ struct STATIONRECORD
 	BOOL SimpleNumericSeq;			// Station treats seq as a number, not a text field
 	struct STATIONRECORD * Object;	// Set if last record from station was an object
     time_t TimeLastTracked;			// Time of last trackpoint
+	int NextSeq;
 
 } StationRecord;
+
+
+typedef struct _APRSHEARDRECORD
+{
+	UCHAR MHCALL[10];				// Stored with space padding
+	time_t MHTIME;					// Time last heard
+ 	time_t LASTMSG;					// Time last message sent from this station (via IS)
+	int Port;						// Port last heard on (zero for APRS-IS)
+	BOOL IGate;						// Set if station is an IGate;
+//	BYTE MHDIGI[56];				// Not sure if we need this
+	struct STATIONRECORD * Station;	// Info previously held by APRS Application
+
+} APRSHEARDRECORD, *PAPRSHEARDRECORD;
+
+
 
 struct OSMQUEUE
 {
@@ -85,11 +101,26 @@ struct APRSMESSAGE
 
 struct APRSConnectionInfo			// Used for Web Server for thread-specific stuff
 {
-	struct STATIONRECORD * SelCall;	// Station Record for individual statond display
+	struct STATIONRECORD * SelCall;	// Station Record for individual staton display
 	HANDLE hPipe;
 	SOCKET sock;
 	char Callsign[12];
 	int WindDirn, WindSpeed, WindGust, Temp, RainLastHour, RainLastDay, RainToday, Humidity, Pressure; //WX Fields
+};
+
+// This defines the layout of the first few bytes of shared memory to simplify access
+// from both node and gui application
+
+struct SharedMem
+{
+	UCHAR Version;				// For compatibility check
+	UCHAR NeedRefresh;			// Messages Have Changed
+	UCHAR ClearRX;
+	UCHAR ClearTX;
+	int SharedMemLen;			// So Client knows size to map
+
+	struct APRSMESSAGE * Messages;
+	struct APRSMESSAGE * OutstandingMsgs;
 };
 
 #define BPQBASE     WM_USER
@@ -99,3 +130,8 @@ struct APRSConnectionInfo			// Used for Web Server for thread-specific stuff
 #define BPQMTX	      BPQBASE+40
 #define BPQMCOM	      BPQBASE+41
 //#define BPQCOPY       BPQBASE+42
+
+#define APRSSHAREDMEMORYBASE 0x43000000		// Base of shared memory segment
+
+#define MAXSTATIONS 5000
+#define MAXMESSAGES 1000 

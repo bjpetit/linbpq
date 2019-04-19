@@ -391,7 +391,7 @@ ok:
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
-				PutLengthinBuffer(buff, datalen);
+				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
 
 	//			buff[5]=(datalen & 0xff);
 	//			buff[6]=(datalen >> 8);
@@ -425,7 +425,7 @@ ok:
 			return 0;
 		}
 
-		txlen = GetLengthfromBuffer(buff) - 8;
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
 
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
@@ -463,7 +463,7 @@ ok:
 		ExitHost(TNC);
 		Sleep(50);
 		CloseCOMPort(TNC->hDevice);
-		TNC->hDevice =(HANDLE) -1;
+		TNC->hDevice =(HANDLE)0;
 		TNC->ReopenTimer = 250;
 		TNC->HostMode = FALSE;
 
@@ -1045,6 +1045,9 @@ VOID DEDPoll(int Port)
 		TNC->HostMode = 0;
 		TNC->ReinitState = 0;
 
+		CloseCOMPort(TNC->hDevice);
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+
 		TNC->InitPtr = TNC->InitScript;
 		TNC->HOSTSTATE = 0;
 
@@ -1493,7 +1496,11 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 		memcpy(&TNC->TXBuffer[0], "\x18\x1b\r", 2);
 		TNC->TXLen = 2;
 
-		WriteCommBlock(TNC);
+		if (WriteCommBlock(TNC) == FALSE)
+		{
+			CloseCOMPort(TNC->hDevice);
+			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		}
 		return;
 	}
 
@@ -1570,8 +1577,16 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 
 		Debugprintf("TRK Continuing recovery Port %d", TNC->Port);
 	
-		TNC->ReinitState = 1;
+		TNC->ReinitState = 0;
+
+		// Close and re-open TNC
+
 		ExitHost(TNC);
+		Sleep(50);
+		CloseCOMPort(TNC->hDevice);
+		TNC->hDevice =(HANDLE)0;
+		TNC->ReopenTimer = 290;
+		TNC->HostMode = FALSE;
 
 		return;
 	}

@@ -692,7 +692,8 @@ Dll BOOL APIENTRY Init_IP()
 					WritetoConsoleLocal("Route to 44/8 found\n");
 				else
 				{
-					
+#ifndef _winver		
+#define _winver 0x0600
 #pragma warning(push)
 #pragma warning(disable : 4996)
 					if (_winver >= 0x0600)
@@ -700,7 +701,9 @@ Dll BOOL APIENTRY Init_IP()
 						Setup44Route(Interface, "0.0.0.0");
 					else
 						Setup44Route(Interface, EncapAddrText);
-					
+#else
+					Setup44Route(Interface, "0.0.0.0");
+#endif
 					Sleep(2000);
 					if (Check44Route(Interface))	
 						WritetoConsoleLocal("Route to 44/8 added\n");
@@ -3139,6 +3142,7 @@ Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 	
 	ARPFlag = index;
 #ifndef LINBPQ 
+#ifndef _WIN64
 	_asm {
 		
 		mov esi, ARPRecs
@@ -3147,6 +3151,7 @@ Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 		mov esi, IPStatsParam
 		mov DWORD PTR[ESI], offset IPStats 
 	}
+#endif
 #endif
 	return ARPFlag;
 }

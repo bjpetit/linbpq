@@ -56,10 +56,10 @@ VOID DOCONMODECHANGE(struct TNCDATA * TNC);
 VOID SEND_CONNECTED(struct TNCDATA * TNC);
 VOID READCHANGE(int Stream);
 VOID DOMONITORING(int NeedTrace);
-int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, int Stamp);
+int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp);
 time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
 BOOL TfPut(struct TNCDATA * TNC, UCHAR character);
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 int DATAPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 int STATUSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 int PROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC);
@@ -827,7 +827,7 @@ VOID SETMYCALL(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	else
 	{
 		strlop(Tail,' ');;
-		memcpy(Call, Tail, strlen(Tail) + 1);
+		memcpy(Call, Tail, (int)strlen(Tail) + 1);
 		len = sprintf(Response, "MYCALL was %s\r", TNC->MYCALL);
 		memcpy(TNC->MYCALL, Call, 10);
 	}
@@ -1005,7 +1005,7 @@ VOID TNCCONNECT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 
 	TNCNODE(TNC, Tail, CMD);
 	strcat(TNC->TONODEBUFFER, "\r");
-	TNC->MSGLEN = strlen(TNC->TONODEBUFFER);
+	TNC->MSGLEN = (int)strlen(TNC->TONODEBUFFER);
 
 	SENDPACKET(TNC);		// Will now go to node
 
@@ -1942,14 +1942,14 @@ VOID DOMONITORING(int NeedTrace)
 	if (len == 0)
 		return;
 
-	len = DecodeFrame(&MONITORDATA, MONBUFFER, (int)Stamp);
+	len = DecodeFrame(&MONITORDATA, MONBUFFER, Stamp);
 	
 	while (TNC)
 	{
 		if (TNC->Mode == TNC2 && TNC->TRACEFLAG)
 		{
 			SetTraceOptionsEx(TNC->MMASK, TNC->MTX, TNC->MCOM, 0);
-			len = IntDecodeFrame(&MONITORDATA, MONBUFFER, (UINT)Stamp, TNC->MMASK, FALSE, FALSE);
+			len = IntDecodeFrame(&MONITORDATA, MONBUFFER, Stamp, TNC->MMASK, FALSE, FALSE);
 //			printf("%d %d %d %d %d\n", len, MMASK, MTX, MCOM, MUIONLY);
 			SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
@@ -2690,7 +2690,7 @@ int PROCESSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 
 VOID PUTSTRING(struct TNCDATA * conn, UCHAR * Msg)
 {
-	int len = strlen(Msg);
+	int len = (int)strlen(Msg);
 
 	while (len)
 	{
@@ -3033,7 +3033,7 @@ ICMD:
 		_strupr(Call);
 
 		memset(Channel->MYCall, ' ', 10);
-		memcpy(Channel->MYCall, Call, strlen(Call));
+		memcpy(Channel->MYCall, Call, (int)strlen(Call));
 
 		Debugprintf("DED Host I chan %d call %s", TNC->MSGCHANNEL, Call);
 
@@ -4501,7 +4501,7 @@ NOMONITOR:
 			unsigned char Decoded[1000];
 
 			SetTraceOptionsEx(TNC->MMASK, TNC->MTX, TNC->MCOM, 0);
-			Len = IntDecodeFrame(&MONITORDATA, Decoded, (UINT)stamp, TNC->MMASK, FALSE, FALSE);
+			Len = IntDecodeFrame(&MONITORDATA, Decoded, stamp, TNC->MMASK, FALSE, FALSE);
 			SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
 			if (Len)	
@@ -4706,7 +4706,7 @@ VOID ProcessKNormCommand(struct TNCDATA * conn, UCHAR * rxbuffer)
 
 	if (conn->Channels[1]->Connected)
 	{
-		Len = strlen(rxbuffer);
+		Len = (int)strlen(rxbuffer);
 		rxbuffer[Len] = 0x0d;
 		SendMsg(conn->Channels[1]->BPQStream, rxbuffer, Len+1);
 		return;
@@ -4841,7 +4841,7 @@ static VOID ProcessKHOSTPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 		Arg1 = strtok_s(NULL, seps, &Context);
 		Arg2 = strtok_s(NULL, seps, &Context);
 		Arg3 = strtok_s(NULL, seps, &Context);
-		CmdLen = strlen(Cmd);
+		CmdLen = (int)strlen(Cmd);
 
 		if (_stricmp(Cmd, "S") == 0)
 		{
@@ -4898,7 +4898,7 @@ static VOID ProcessKHOSTPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 
 			if (Arg2 && Arg3)	
 			{
-				if (_memicmp(Arg2, "via", strlen(Arg2)) == 0)
+				if (_memicmp(Arg2, "via", (int)strlen(Arg2)) == 0)
 				{
 					// Have a via string as 2nd param 
 

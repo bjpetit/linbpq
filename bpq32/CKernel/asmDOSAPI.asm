@@ -17,10 +17,12 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
-ENDIF	
+ENDIF
+
+IFNDEF BPQ64
 
 	PAGE    56,132
-;
+; 
 
 .386
 ;
@@ -128,4 +130,7 @@ _BPQHOSTAPI:
 	ret
 
 _TEXT	ENDS
-	END	
+ENDIF
+
+END
+	

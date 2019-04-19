@@ -193,7 +193,7 @@ VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg)
 	struct _MESSAGE * Buffer;
 	char * ptr1, * ptr2;
 
-	Msg->LENGTH -= 7;	// Remove Header
+	Msg->LENGTH -= MSGHDDRLEN;	// Remove Header
 
 	while (PORT)
 	{
@@ -253,7 +253,7 @@ VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg)
 
 Dll VOID APIENTRY Send_AX(UCHAR * Block, DWORD Len, UCHAR Port)
 {
-	// Block included the 7 byte header, Len does not
+	// Block included the 7/11 byte header, Len does not
 
 	struct PORTCONTROL * PORT;
 	PMESSAGE Copy;
@@ -274,9 +274,9 @@ Dll VOID APIENTRY Send_AX(UCHAR * Block, DWORD Len, UCHAR Port)
 	if (Copy == 0)
 		return;
 
-	memcpy(&Copy->DEST[0], &Block[7], Len);
+	memcpy(&Copy->DEST[0], &Block[MSGHDDRLEN], Len);
 
-	Copy->LENGTH = (USHORT)Len + 7;
+	Copy->LENGTH = (USHORT)Len + MSGHDDRLEN;
 
 	if (PORT->PROTOCOL == 10)
 	{

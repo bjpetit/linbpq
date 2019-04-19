@@ -150,6 +150,8 @@ VOID DeleteINP3Routes(struct ROUTE * Route)
 		if (Dest->DEST_CALL[0] == 0)
 			continue;										// Spare Entry
 
+		if (Dest->NRROUTE[0].ROUT_OBSCOUNT >= 128)	 // Not if locked
+			continue;
 
 		if (Dest->ROUTE[0].ROUT_NEIGHBOUR == Route)
 		{

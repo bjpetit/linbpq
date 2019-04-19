@@ -2423,7 +2423,6 @@ FILE *file;
 int DoRoutes()
 {
 	char digis[30] = "";
-	char locked[3]; 
 	int count, len;
 	char Normcall[10], Portcall[10];
 	char line[80];
@@ -2434,13 +2433,6 @@ int DoRoutes()
 		{
 			len=ConvFromAX25(Routes->NEIGHBOUR_CALL,Normcall);
 			Normcall[len]=0;
-
-			if ((Routes->NEIGHBOUR_FLAG & 1) == 1)
-
-				strcpy(locked," !");
-			else
-				strcpy(locked," ");
-
 
 			if (Routes->NEIGHBOUR_DIGI1[0] != 0)
 			{
@@ -2462,10 +2454,10 @@ int DoRoutes()
 				digis[0] = 0;
 
 			len=sprintf(line,
-					"ROUTE ADD %s %d %d%s%s %d %d %d %d %d\n",
+					"ROUTE ADD %s %d %d %s %d %d %d %d %d\n",
 					Normcall,
 					Routes->NEIGHBOUR_PORT,
-					Routes->NEIGHBOUR_QUAL,	locked, digis,
+					Routes->NEIGHBOUR_QUAL, digis,
 					Routes->NBOUR_MAXFRAME,
 					Routes->NBOUR_FRACK,
 					Routes->NBOUR_PACLEN,
@@ -4094,6 +4086,8 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	hwndDlg = hDlg;			// Save Window Handle
 
 	// Save a pointer to the DLGHDR structure.
+
+#define GWL_USERDATA        (-21)
 
 	SetWindowLong(hwndDlg, GWL_USERDATA, (LONG) pHdr);
 

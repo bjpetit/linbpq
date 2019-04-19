@@ -1478,15 +1478,20 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				// From a client - Create one copy with all RMS recipients, and one for each packet recipient	
 
-			// Merge all RMS To: lines 
+				// Merge all RMS To: lines 
+
+				// If don't add Winlink.org or no RMS BBS keep separate
 
 			ToLen = 0;
 			ToString[0] = 0;
 
 			for (i = 0; i < Recipients; i++)
 			{
-				if (LocalMsg[i])
+				if (LocalMsg[i] || (conn->UserPointer->flags & F_NOWINLINK) || FindRMS()== NULL)
+				{
+					LocalMsg[i] = TRUE;				// Make sure local copy is created
 					continue;						// For a local RMS user
+				}
 
 				// ?? Should a Bang Path override this ?? - I think so!
 

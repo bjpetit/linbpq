@@ -1659,11 +1659,17 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		Param = (size_t)buff;
 	
+		if (Param == 2)		// Check  Permission (Shouldn't happen)
+		{
+			Debugprintf("Scan Check Permission called on ARDOP");
+			return 1;		// OK to change
+		}
+
 		if (Param == 1)		// Request Permission
 		{
 			if (TNC->ARDOPCommsMode == 'T')		// TCP Mode
 			{
-				if (!TNC->TCPSock)
+				if (!TNC->CONNECTED)
 					return 0;					// No connection so no interlock
 			}
 			else
@@ -1688,18 +1694,13 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 			return TRUE;
 		}
 
-		if (Param == 2)		// Check  Permission
-		{
-			Debugprintf("Scan Check Permission called on ARDOP");
-			return 1;		// OK to change
-		}
-
 		if (Param == 3)		// Release  Permission
 		{
 			if (TNC->GavePermission)
 			{
 				TNC->GavePermission = FALSE;
-				ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+				if (TNC->ARDOPCurrentMode[0] != 'S')	// Skip
+					ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 			}
 			return 0;
 		}
@@ -1708,14 +1709,21 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		Scan = (struct ScanEntry *)buff;
 
+		if (Scan->ARDOPMode[0] == 0)
+		{
+			// Not specified, so no change from previous
+
+			return 0;
+		}
+
 		if (strcmp(Scan->ARDOPMode, TNC->ARDOPCurrentMode) != 0)
 		{
 			// Mode changed
 
 			char CMD[32];
 			
-			if (TNC->ARDOPCurrentMode[0] == 0)
-					ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+			if (TNC->ARDOPCurrentMode[0] == 'S')	// Skip
+				ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 
 			Debugprintf("ARDOPMODE %s", Scan->ARDOPMode);
 			
@@ -1723,10 +1731,10 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 			
 			if (Scan->ARDOPMode[0] == 'S') // SKIP - Dont Allow Connects
 			{
-				if (TNC->ARDOPCurrentMode[0] != 0)
+				if (TNC->ARDOPCurrentMode[0] != 'S')
 				{
 					ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
-					TNC->ARDOPCurrentMode[0] = 0;
+					TNC->ARDOPCurrentMode[0] = 'S';
 				}
 
 				TNC->WL2KMode = 0;
@@ -1735,9 +1743,11 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (strchr(Scan->ARDOPMode, 'F'))
 				sprintf(CMD, "ARQBW %sORCED", Scan->ARDOPMode);
-			else
+			else if (strchr(Scan->ARDOPMode, 'M'))
 				sprintf(CMD, "ARQBW %sAX", Scan->ARDOPMode);
-	
+			else 
+				return 0;		// Illegal but don't generate error message
+
 			ARDOPSendCommand(TNC, CMD, TRUE);
 
 			return 0;
@@ -2813,7 +2823,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	}
 
 
-	if (_memicmp(Buffer, "STATE ", 6) == 0)
+ 	if (_memicmp(Buffer, "STATE ", 6) == 0)
 	{	
 		if (_memicmp(&Buffer[6], "OFFLINE", 7) == 0)
 		{
@@ -5502,7 +5512,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 
 }
 
-// ARDOP Serial over TCP ROutines
+// ARDOP Serial over TCP Routines
 
 // Probably only for Teensy with ESP01. Runs SCS Emulator over a TCP Link
 

@@ -95,21 +95,20 @@ int SetupNodeMenu(char * Buff);
 int StatusProc(char * Buff);
 int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail);
 int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
-VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr);
+VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr, BOOL LOCAL, BOOL COOKIE);
 
 
 static struct HTTPConnectionInfo * SessionList;	// active term mode sessions
 
 char Mycall[10];
 
-char APRSPipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
 char MAILPipeFileName[] = "\\\\.\\pipe\\BPQMAILWebPipe";
 char CHATPipeFileName[] = "\\\\.\\pipe\\BPQCHATWebPipe";
 
 char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P align=center>"
 	"<table border=2 cellpadding=2 cellspacing=2 bgcolor=white>"
 	"<tr><td align=center><a href=/Node/NodeMenu.html>Node Pages</a></td>"
-	"<td align=center><a href=/aprs/all.html>APRS Pages</a></td></tr></table></body></html>";
+	"<td align=center><a href=/aprs>APRS Pages</a></td></tr></table></body></html>";
 
 char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
 	"<html><head></head><body></body></html>";
@@ -137,7 +136,7 @@ char NodeMenuRest[] = "}</script></head>"
 	"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s";
 	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
 	"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700);>Stream Status</a></td>";
-char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
+char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
 
 char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
 				 "<td><a href=/Webmail>WebMail</a></td>";
@@ -323,7 +322,7 @@ static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=I
 static char EXCEPTMSG[80] = "";
 
 
-static void UndoTransparency(char * input)
+void UndoTransparency(char * input)
 {
 	char * ptr1, * ptr2;
 	char c;
@@ -1437,75 +1436,11 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	strlop(Mycall, ' ');
 
 
+	// APRS process internally
 
-	// Pass APRS Messages Page request to BPQAPRS/XAPRS via Pipe
-
-	if (_memicmp(Context, "/APRS/MSGS/", 10) == 0)
+	if (_memicmp(Context, "/APRS/", 6) == 0 || _stricmp(Context, "/APRS") == 0)
 	{
-#ifdef WIN32
-
-		hPipe = CreateFile(APRSPipeFileName, GENERIC_READ | GENERIC_WRITE,
-                  0,                    // exclusive access
-                  NULL,                 // no security attrs
-                  OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
-                  NULL );
-
-		if (hPipe == (HANDLE)-1)
-		{
-			InputLen = sprintf(_REPLYBUFFER, "HTTP/1.1 404 Not Found\r\nContent-Length: 28\r\n\r\nAPRS Data is not available\r\n");
-			send(sock, _REPLYBUFFER, InputLen, 0);
-		}
-		else
-		{
-			int Sent;
-			int Loops = 0;
-			WriteFile(hPipe, MsgPtr, MsgLen, &InputLen, NULL);
-
-			while(TRUE)
-			{
-				ReadFile(hPipe, _REPLYBUFFER, 8192, &InputLen, NULL);
-				if (InputLen <= 0)
-				{
-					InputLen = GetLastError();
-					break;
-				}
-				Sent = send(sock, _REPLYBUFFER, InputLen, 0);
-		
-				while (Sent != InputLen && Loops++ < 3000)					// 100 secs max
-				{	
-//					Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
-				
-					if (Sent > 0)					// something sent
-					{
-						InputLen -= Sent;
-						memmove(_REPLYBUFFER, &_REPLYBUFFER[Sent], InputLen);
-					}
-					
-					Sleep(30);
-					Sent = send(sock, _REPLYBUFFER, InputLen, 0);
-				}
-			}
-			CloseHandle(hPipe);
-		}
-#else
-		// Linux
-
-			InputLen = sprintf(_REPLYBUFFER, "HTTP/1.1 404 Not Found\r\nContent-Length: 33\r\n\r\nAPRS Messages are not available\r\n");
-			send(sock, _REPLYBUFFER, InputLen, 0);
-
-
-#endif
-		return 0;
-	}
-
-
-
-	// other APRS process internally
-
-	if (_memicmp(Context, "/APRS/", 6) == 0)
-	{
-		APRSProcessHTTPMessage(sock, MsgPtr);
+		APRSProcessHTTPMessage(sock, MsgPtr, LOCAL, COOKIE);
 		return 0;
 	}
 	
@@ -2427,12 +2362,14 @@ doHeader:
 			else if (Port->PORTTYPE == 0)
 				strcpy(DLL, "ASYNC");
 
+			else if (Port->PORTTYPE == 22)
+				strcpy(DLL, "I2C");
+
 			else if (Port->PORTTYPE == 14)
 				strcpy(DLL, "INTERNAL");
 	
 			else if (Port->PORTTYPE > 0 && Port->PORTTYPE < 14)
 				strcpy(DLL, "HDLC");
-
 
 
 		if (Port->PORTTYPE == 16 && Port->PROTOCOL == 10 && Port->UICAPABLE == 0)		// EXTERNAL, Pactor/WINMO

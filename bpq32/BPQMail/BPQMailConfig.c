@@ -1829,15 +1829,15 @@ VOID SaveFilters(HWND hDlg)
 
 VOID * GetMultiLineDialogParam(HWND hDialog, int DLGItem)
 {
-	char Text[10000];
-	char Val[10000];
+	char Text[32768];
+	char Val[32768];
 	char * ptr1, * ptr2;
 	char * MultiString = NULL;
 	const char * ptr;
 	int Count = 0;
 	char ** Value;
 
-	GetDlgItemText(hDialog, DLGItem, Text, 10000);
+	int Len = GetDlgItemText(hDialog, DLGItem, Text, 10000);
 
 	// replace crlf with '|'
 

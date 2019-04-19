@@ -13,6 +13,8 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 	DWORD Stack[16];
 	DWORD CodeDump[16];
 
+#ifndef BPQ64
+
 	eip = exinfo.ContextRecord->Eip;	
 	SPPtr = exinfo.ContextRecord->Esp;	
 
@@ -37,6 +39,8 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 	Debugprintf("EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x ESP %x",
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi, SPVal);
+
+#endif
 		
 	Debugprintf("Stack:");
 

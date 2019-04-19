@@ -311,7 +311,7 @@ BOOL AGWAPIInit()
 
     if (bind(agwsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 	{
-        sprintf(szBuff, "bind(sock) failed Error %d", WSAGetLastError());
+        sprintf(szBuff, "bind(sock) failed Port %d Error %d", AGWPort, WSAGetLastError());
 		WritetoConsole(szBuff);
         closesocket(agwsock);
 

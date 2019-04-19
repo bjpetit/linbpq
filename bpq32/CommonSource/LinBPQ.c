@@ -454,7 +454,8 @@ extern struct SEM Semaphore;
 int SemHeldByAPI = 0;
 BOOL IGateEnabled = TRUE;
 BOOL APRSActive = FALSE;
-BOOL ReconfigFlag;
+BOOL ReconfigFlag = FALSE;
+BOOL APRSReconfigFlag = FALSE;
 
 BOOL IPActive = FALSE;
 extern BOOL IPRequired;

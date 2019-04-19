@@ -21,7 +21,7 @@ struct ConnectionInfo
     int BPQStream;
     char Callsign[10];
     BOOL GotHeader;
-    byte InputBuffer[InputBufferLen];
+    unsigned char InputBuffer[InputBufferLen];
     int InputLen;
 	struct UserRec * UserPointer;
     int Retries;
@@ -62,6 +62,8 @@ struct ConnectionInfo
 	time_t LastSendTime;
 	UCHAR * ResendBuffer;		// Used if send() returns EWOULDBLOCK
 	int	ResendLen;				// Len to resend
+
+	struct ADIF * ADIF;				// ADIF Logging info
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

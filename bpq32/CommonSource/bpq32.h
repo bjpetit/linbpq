@@ -147,7 +147,7 @@ int APIENTRY GetRaw(int stream, char * msg, int * len, int * count );
 //	This is not an API function. It is a utility to decode a received
 //	monitor frame into ascii text.
 
-int APIENTRY DecodeFrame(char * msg, char * buffer, int Stamp);
+int APIENTRY DecodeFrame(char * msg, char * buffer, time_t Stamp);
 
 
 
@@ -537,7 +537,7 @@ BOOL GetAPI()
 	GetMsg = (int (__stdcall *)(int stream, char * msg, int * len, int * count ))GetProcAddress(ExtDriver,"_GetMsg@16");
 	GetMsgPerl = (int (__stdcall *)(int stream, char * msg))GetProcAddress(ExtDriver,"_GetMsgPerl@8");
 	GetRaw = (int (__stdcall *)(int stream, char * msg, int * len, int * count))GetProcAddress(ExtDriver,"_GetRaw@16");
-	DecodeFrame = (int (__stdcall *)(char * msg, char * buffer, int Stamp))GetProcAddress(ExtDriver,"_DecodeFrame@12");
+	DecodeFrame = (int (__stdcall *)(char * msg, char * buffer, time_t Stamp))GetProcAddress(ExtDriver,"_DecodeFrame@12");
 	SetTraceOptions = (int (__stdcall *)(long mask, int mtxparam, int mcomparam))GetProcAddress(ExtDriver,"_SetTraceOptions@12");
 	FindFreeStream = (int (__stdcall *)())GetProcAddress(ExtDriver,"_FindFreeStream@0");
 	AllocateStream=  (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_AllocateStream@4");

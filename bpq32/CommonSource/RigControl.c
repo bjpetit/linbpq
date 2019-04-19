@@ -1657,7 +1657,7 @@ BOOL Rig_Poll()
 			return TRUE;
 		}
 
-		if (PORT->hDevice == 0 && PORT->PTC == 0 && _stricmp(PORT->IOBASE, "CM108") != 0)
+		if (PORT->hDevice == 0 && PORT->PTC == 0 && _stricmp(PORT->IOBASE, "CM108") != 0 && _stricmp(PORT->IOBASE, "REMOTE") != 0)
 		{
 			// Try to reopen every 15 secs 
 			
@@ -1669,7 +1669,7 @@ BOOL Rig_Poll()
 				OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
 			}
 		}
-		if (PORT == NULL || (PORT->hDevice == 0 && PORT->PTC == 0))
+		if (PORT == NULL || (PORT->hDevice == 0 && PORT->PTC == 0 && PORT->remoteSock == 0))
 			continue;
 
 		// Check PTT Timers
@@ -1735,6 +1735,9 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 
 int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 {
+	if (PORT->remoteSock)		// Using WINMORCONTROL
+		return TRUE;
+
 	if (PORT->PortType == FT2000 || strcmp(PORT->Rigs[0].RigName, "FT847") == 0)		// FT2000 and similar seem to need two stop bits
 		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, TWOSTOPBITS);
 	else if (PORT->PortType == NMEA)
@@ -1745,16 +1748,15 @@ int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 	if (PORT->hDevice == 0)
 		return (FALSE);
 
-	if (PORT->PortType == PTT)
-	{
+	if (PORT->PortType == PTT || (PORT->Rigs[0].PTTMode & PTTRTS))
 		COMClearRTS(PORT->hDevice);
-		COMClearDTR(PORT->hDevice);
-	}
 	else
-	{
 		COMSetRTS(PORT->hDevice);
+
+	if (PORT->PortType == PTT || (PORT->Rigs[0].PTTMode & PTTDTR))
+		COMClearDTR(PORT->hDevice);
+	else
 		COMSetDTR(PORT->hDevice);
-	}
 
 	if (strcmp(PORT->Rigs[0].RigName, "FT847") == 0)
 	{
@@ -1792,6 +1794,15 @@ void CheckRX(struct RIGPORTINFO * PORT)
 	if (PORT->PTC)
 	{
 		Length = GetPTCRadioCommand(PORT->PTC, &PORT->RXBuffer[PORT->RXLen]);
+	}
+	else if (PORT->remoteSock)
+	{
+		struct sockaddr_in rxaddr;
+		int addrlen = sizeof(struct sockaddr_in);
+
+		Length = recvfrom(PORT->remoteSock, PORT->RXBuffer, 500, 0, (struct sockaddr *)&rxaddr, &addrlen);
+		if (Length == -1)
+			Length = 0;
 	}
 	else
 	{
@@ -1967,7 +1978,7 @@ VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len)
 	UCHAR * FendPtr;
 	int NewLen;
 
-	//	Split into Packets. By far the most likely is a single KISS frame
+	//	Split into Packets. By far the most likely is a single frame
 	//	so treat as special case
 	
 	FendPtr = memchr(rxbuffer, 0xfd, Len);
@@ -1991,13 +2002,16 @@ VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len)
 }
 
 
-
 BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 {
 	// if using a PTC radio interface send to the SCSPactor Driver, else send to COM port
 
+	int ret;
+
 	if (PORT->PTC)
 		SendPTCRadioCommand(PORT->PTC, PORT->TXBuffer, PORT->TXLen);
+	else if (PORT->remoteSock)
+		ret = sendto(PORT->remoteSock, PORT->TXBuffer, PORT->TXLen,  0, &PORT->remoteDest, sizeof(struct sockaddr));
 	else
 	{
 		BOOL        fWriteStat;
@@ -2025,6 +2039,8 @@ BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 			}
 		}
 	}
+
+	ret = GetLastError();
 
 	PORT->Timeout = 100;		// 2 secs
 	return TRUE;  
@@ -3580,7 +3596,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				   char * PMinLevel, char * PMaxLevel, char * PacketMode,
 				   char * RPacketMode, char * Split, char * Data, char * WinmorMode,
 				   char * Antenna, BOOL * Supress, char * Filter, char * Appl,
-				   char * MemoryBank, int * MemoryNumber, char * ARDOPMode)
+				   char * MemoryBank, int * MemoryNumber, char * ARDOPMode, char * VARAMode)
 {
 	char * Context;
 	char * ptr;
@@ -3591,6 +3607,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	*MemoryNumber = 0;
 	*Mode = 0;
 	*ARDOPMode = 0;
+	*VARAMode = 0;
 	
 	ptr = strtok_s(Param, ",", &Context);
 
@@ -3646,6 +3663,9 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 		if (memcmp(ptr, "APPL=", 5) == 0)
 			strcpy(Appl, ptr + 5);
 
+		else if (ptr[0] == 'A' && (ptr[1] == 'S' || ptr[1] == '0') && strlen(ptr) < 7)
+			strcpy(ARDOPMode, "S");
+
 		else if (ptr[0] == 'A' && strlen(ptr) > 2 && strlen(ptr) < 7)
 			strcpy(ARDOPMode, &ptr[1]);
 
@@ -3680,6 +3700,9 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				*WinmorMode = 'W';
 		}
 
+		else if (ptr[0] == 'V'  && (ptr[1] == 'S' || ptr[1] == '0') && strlen(ptr) < 7)
+			strcpy(VARAMode, "S");
+
 		else if (ptr[0] == '+')
 			*Split = '+';
 		else if (ptr[0] == '-')
@@ -3710,6 +3733,49 @@ VOID AddNMEAChecksum(char * msg)
 
 	sprintf(++msg, "%02X\r\n", CRC);
 }
+
+void DecodeRemote(struct RIGPORTINFO * PORT, char * ptr)
+{
+	// Param is IPHOST:PORT for use with WINMORCONTROL
+	
+	struct sockaddr_in * destaddr = (SOCKADDR_IN * )&PORT->remoteDest;
+	u_long param = 1;
+	char Msg[80];
+	int Len;
+	char * port = strlop(ptr, ':');
+
+	PORT->remoteSock = socket(AF_INET,SOCK_DGRAM,0);
+
+	if (PORT->remoteSock == INVALID_SOCKET)
+		return;
+
+	setsockopt (PORT->remoteSock, SOL_SOCKET, SO_BROADCAST, &param, 4);
+
+
+	if (port == NULL)
+		return;
+
+	ioctl (PORT->remoteSock, FIONBIO, &param);
+
+	destaddr->sin_family = AF_INET;
+	destaddr->sin_addr.s_addr = inet_addr(ptr);
+	destaddr->sin_port = htons(atoi(port));
+
+	if (destaddr->sin_addr.s_addr == INADDR_NONE)
+	{
+		//	Resolve name to address
+
+		struct hostent * HostEnt = gethostbyname(ptr);
+		 
+		if (!HostEnt)
+			return;			// Resolve failed
+
+		memcpy(&destaddr->sin_addr.s_addr,HostEnt->h_addr,4);
+	}
+
+	return;
+}
+
 
 char * CM108Device = NULL;
 
@@ -3894,6 +3960,8 @@ PortFound:
 
 	if (_stricmp(PORT->IOBASE, "CM108") == 0) // HID Addr instead of Speed
 		DecodeCM108(Port, ptr);
+	if (_stricmp(PORT->IOBASE, "REMOTE") == 0) // IP Addr/Port
+		DecodeRemote(PORT, ptr);
 	else	
 		PORT->SPEED = atoi(ptr);
 
@@ -4393,6 +4461,7 @@ CheckScan:
 		char Mode[10] = "";
 		char WinmorMode, Antenna;
 		char ARDOPMode[6] = "";
+		char VARAMode[6] = "";
 		char Appl[13];
 		char * ApplCall;
 
@@ -4405,6 +4474,7 @@ CheckScan:
 		MemoryBank = 0;
 		Appl[0] = 0;
 		ARDOPMode[0] = 0;
+		VARAMode[0] = 0;
 		Dwell = 0.0;
 
 		if (strchr(ptr, ':'))
@@ -4433,7 +4503,7 @@ CheckScan:
 		{
 			DecodeModePtr(ptr, &Dwell, &Freq, Mode, &PMinLevel, &PMaxLevel, &PacketMode,
 				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter, &Appl[0],
-				&MemoryBank, &MemoryNumber, ARDOPMode);
+				&MemoryBank, &MemoryNumber, ARDOPMode, VARAMode);
 		}
 		else
 		{
@@ -4693,6 +4763,7 @@ CheckScan:
 		FreqPtr[0]->PMinLevel = PMinLevel;
 		FreqPtr[0]->Antenna = Antenna;
 		strcpy(FreqPtr[0]->ARDOPMode, ARDOPMode);
+		strcpy(FreqPtr[0]->VARAMode, VARAMode);
 
 		strcpy(FreqPtr[0]->APPL, Appl);
 

@@ -1179,6 +1179,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		Param = (int)buff;
 	
+		if (Param == 2)		// Check  Permission (shouldn't happen)
+		{
+			Debugprintf("Scan Check Permission called on WINMOR");
+			return 1;		// OK to change
+		}
+
+		if (!TNC->TCPSock)
+			return 0;					// No connection so no interlock
+	
 		if (Param == 1)		// Request Permission
 		{
 			if (TNC->ConnectPending)
@@ -1190,12 +1199,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				send(TNC->TCPSock, "LISTEN FALSE\r\n", 14, 0);
 			}
 			return FALSE;
-		}
-
-		if (Param == 2)		// Check  Permission
-		{
-			Debugprintf("Scan Check Permission called on WINMOR");
-			return 1;		// OK to change
 		}
 
 		if (Param == 3)		// Release  Permission
@@ -1214,6 +1217,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		// Param is Address of a struct ScanEntry
 
 		Scan = (struct ScanEntry *)buff;
+
 
 		if (Scan->Bandwidth == 'W')		// Set Wide Mode
 		{

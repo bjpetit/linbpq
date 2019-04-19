@@ -739,7 +739,7 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	//06'<callsign>', '<base callsign>', '<grid square>', <frequency>, <mode>, <baud>, <power>,
 	// <antenna height>, <antenna gain>, <antenna direction>, '<hours>', <group reference>, '<service code>'
 
-	 // WL2KREPORT  service, www.winlink.org, 8778, GM8BPQ, IO68VL, 00-23, 144800000, PKT1200, 10, 20, 5, 0, BPQTEST
+	 // WL2KREPORT  service, api.winlink.org, 80, GM8BPQ, IO68VL, 00-23, 144800000, PKT1200, 10, 20, 5, 0, BPQTEST
 	
 	char * Context;
 	char * p_cmd;
@@ -921,6 +921,12 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 		WL2KReport->mode = 20;
 	else if (_stricmp(param, "VARA") == 0)
 		WL2KReport->mode = 50;
+	else if (_stricmp(param, "VARAFM") == 0)
+		WL2KReport->mode = 51;
+	else if (_stricmp(param, "VARAFM12") == 0)
+		WL2KReport->mode = 51;
+	else if (_stricmp(param, "VARAFM96") == 0)
+		WL2KReport->mode = 52;
 	else
 		goto BadLine;
 	
@@ -1268,17 +1274,17 @@ SOCKET OpenWL2KHTTPSock()
 	BOOL bcopt=TRUE;
 		
 	destaddr.sin_family = AF_INET; 
-	destaddr.sin_port = htons(8085);
+	destaddr.sin_port = htons(80);
 
 	//	Resolve name to address
 
-	HostEnt = gethostbyname ("server.winlink.org");
+	HostEnt = gethostbyname ("api.winlink.org");
 		 
 	if (!HostEnt)
 	{
 		err = WSAGetLastError();
 
-		Debugprintf("Resolve Failed for %s %d %x", "server.winlink.org", err, err);
+		Debugprintf("Resolve Failed for %s %d %x", "api.winlink.org", err, err);
 		return 0 ;			// Resolve failed
 	}
 	
@@ -1325,7 +1331,7 @@ BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER)
 			
 	Len = sprintf(Message, "\"Callsign\":\"%s\"", Call);
 		
-	SendHTTPRequest(sock, "server.winlink.org", 8085, 
+	SendHTTPRequest(sock, "api.winlink.org", 80, 
 				"/sysop/get", Message, Len, _REPLYBUFFER);
 
 	closesocket(sock);
@@ -1335,7 +1341,6 @@ BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER)
 
 BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
 {
-
 	SOCKET sock = 0;
 	struct sockaddr_in destaddr;
 	struct sockaddr_in sinx; 
@@ -1349,24 +1354,20 @@ BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
 	char SendBuffer[1000];
 		
 	destaddr.sin_family = AF_INET; 
-	destaddr.sin_addr.s_addr = inet_addr("statusreport.winlink.org");
-	destaddr.sin_port = htons(8775);
+	destaddr.sin_addr.s_addr = inet_addr("api.winlink.org");
+	destaddr.sin_port = htons(80);
 
-	if (destaddr.sin_addr.s_addr == INADDR_NONE)
-	{
-		//	Resolve name to address
-		HostEnt = gethostbyname ("www.winlink.org");
+	HostEnt = gethostbyname ("api.winlink.org");
 		 
-		if (!HostEnt)
-		{
-			err = WSAGetLastError();
+	if (!HostEnt)
+	{
+		err = WSAGetLastError();
 
-			Debugprintf("Resolve Failed for %s %d %x", "halifax.winlink.org", err, err);
-			return 0 ;			// Resolve failed
-		}
-	
-		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+		Debugprintf("Resolve Failed for %s %d %x", "api.winlink.org", err, err);
+		return 0 ;			// Resolve failed
 	}
+	
+	memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
 
 	//   Allocate a Socket entry
 

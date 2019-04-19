@@ -213,6 +213,13 @@ int	ASYINIT(int comport, int speed, int bpqport, BOOL Report)
 #pragma warning( push )
 #pragma warning( disable : 4996 )
 
+#ifndef _winver
+
+#define _winver 0x0600
+
+#endif
+
+
    if (HIBYTE(_winver) < 5)
 		Win98 = TRUE;
 

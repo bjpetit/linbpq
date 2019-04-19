@@ -24,6 +24,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define _CRT_SECURE_NO_DEPRECATE 
 
+
 #pragma data_seg("_BPQDATA")
 
 #include "time.h"
@@ -272,7 +273,13 @@ VOID SENDL4MESSAGE(TRANSPORTENTRY * L4, struct DATAMESSAGE * Msg)
 	int FRAGFLAG = 0;
 	int Len;
 
-	if (Msg->LENGTH == 8)
+	// These make it simpler to understand code
+
+#define NullPKTLen  4 + sizeof(void *)			// 4 is Port, Len, PID
+#define MaxL4Len  236 + 4 + sizeof(void *)		// Max NETROM Size
+
+
+	if (Msg->LENGTH == NullPKTLen)
 	{
 		//	NO DATA - DISCARD IT
 
@@ -333,21 +340,21 @@ VOID SENDL4MESSAGE(TRANSPORTENTRY * L4, struct DATAMESSAGE * Msg)
 
 	Len = Msg->LENGTH;
 
-	if (Len > 244)							// 236 DATA + 8 HEADER
+	if (Len > MaxL4Len)							// 236 DATA + 8 HEADER
 	{
 		//	MUST FRAGMENT MESSAGE
 
 		L3MSG->L4FLAGS |= L4MORE;
 		FRAGFLAG = 1;
 
-		Len = 244;
+		Len = MaxL4Len;
 	}
 	
 	Len += 20;								// L3/4 Header
 
 	L3MSG->LENGTH = Len;
 
-	Len -= 28;
+	Len -= (20 + NullPKTLen);				// Actual Data
 
 	memcpy(L3MSG->L4DATA, Msg->L2DATA, Len);
 
@@ -369,7 +376,7 @@ VOID SENDL4MESSAGE(TRANSPORTENTRY * L4, struct DATAMESSAGE * Msg)
 	//	(bug in .asm code)
 
 	if (FRAGFLAG)
-		Copy->LENGTH = 244;
+		Copy->LENGTH = MaxL4Len;
 
 	C_Q_ADD(&L4->L4HOLD_Q, Copy);
 
@@ -385,7 +392,7 @@ VOID SENDL4MESSAGE(TRANSPORTENTRY * L4, struct DATAMESSAGE * Msg)
 
 		Msg->LENGTH -= 236;
 
-		memmove(Msg->L2DATA, &Msg->L2DATA[236], Msg->LENGTH - 8);
+		memmove(Msg->L2DATA, &Msg->L2DATA[236], Msg->LENGTH - NullPKTLen);
 	
 		SENDL4MESSAGE(L4, Msg);
 	}
@@ -455,7 +462,7 @@ VOID SENDL4CONNECT(TRANSPORTENTRY * Session)
 	Session->L4TIMER = Session->SESSIONT1;				// START TIMER
 	memcpy(&MSG->L4DATA[15], &Session->SESSIONT1, 2);	// AND PUT IN MSG
 
-	MSG->LENGTH = &MSG->L4DATA[17] - (UCHAR *)MSG;
+	MSG->LENGTH = (int)(&MSG->L4DATA[17] - (UCHAR *)MSG);
 
 	if (Session->SPYFLAG)
 	{
@@ -478,7 +485,7 @@ void RETURNEDTONODE(TRANSPORTENTRY * Session)
 
 		Nodename[DecodeNodeName(MYCALLWITHALIAS, Nodename)] = 0;		// null terminate
 
-		Msg->LENGTH = sprintf(&Msg->L2DATA[0], "Returned to Node %s\r", Nodename) + 8 ;
+		Msg->LENGTH = (USHORT)sprintf(&Msg->L2DATA[0], "Returned to Node %s\r", Nodename) + 4 + sizeof(void *);
 		C_Q_ADD(&Session->L4TX_Q, (UINT *)Msg);
 		PostDataAvailable(Session);
 	}
@@ -999,7 +1006,7 @@ VOID L4CONNECTFAILED(TRANSPORTENTRY * L4)
 
 	ptr1 += sprintf(ptr1, "Failure with %s\r", Nodename);
 
-	Msg->LENGTH = ptr1 - (UCHAR *)Msg;
+	Msg->LENGTH = (int)(ptr1 - (UCHAR *)Msg);
 
 	C_Q_ADD(&Partner->L4TX_Q, Msg);
 
@@ -1185,7 +1192,7 @@ VOID SENDL4DISC(TRANSPORTENTRY * Session)
 	MSG->L4TXNO = 0;
 	MSG->L4FLAGS = L4DREQ;
 
-	MSG->LENGTH = &MSG->L4DATA[0] - (UCHAR *)MSG;
+	MSG->LENGTH = (int)(&MSG->L4DATA[0] - (UCHAR *)MSG);
 
 	C_Q_ADD(&DEST->DEST_Q, (UINT *)MSG);
 }
@@ -1742,7 +1749,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask,
 
 		ptr1 += sprintf(ptr1, "%s %s\r", ReplyText, Nodename);
 
-		Msg->LENGTH = ptr1 - (UCHAR *)Msg;
+		Msg->LENGTH = (int)(ptr1 - (UCHAR *)Msg);
 
 		C_Q_ADD(&Partner->L4TX_Q, Msg);
 
@@ -1865,7 +1872,7 @@ L4INFO_OK:
 
 		L3MSG->LENGTH -= 20;				// L3/L4 Header
 
-		if (L3MSG->LENGTH < 8)				// No PID
+		if (L3MSG->LENGTH < (4 + sizeof(void *)))	// No PID
 		{					
 			ReleaseBuffer(L3MSG);
 			return;
@@ -1873,7 +1880,7 @@ L4INFO_OK:
 
 		L3MSG->L3PID = 0xF0;				// Normal Data PID
 
-		memmove(L3MSG->L3SRCE, L3MSG->L4DATA, L3MSG->LENGTH - 8);
+		memmove(L3MSG->L3SRCE, L3MSG->L4DATA, L3MSG->LENGTH - (4 + sizeof(void *)));
 
 		REFRESHROUTE(L4);
 

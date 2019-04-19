@@ -988,7 +988,10 @@
 //	Fix setting To call on reply to HTML messages
 //  More preparations for 64 bit including saving WP info as a text file.
 //	Set "RMS Express User" when a new user connects using PAT
- 
+//	Increace maximum length on Forwarding Alias string in Web interface
+//	Expand multiaddress messages from Winlink Express if "Don't add @Winlink.org" set or no RMS BBS
+//	Fix program error if READ used without a filename
+
 #include "BPQMail.h"
 #define MAIL
 #include "Versions.h"
