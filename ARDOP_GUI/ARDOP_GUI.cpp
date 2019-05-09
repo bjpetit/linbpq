@@ -2,11 +2,12 @@
 #include "ui_ardop_gui.h"
 #include "TabDialog.h"
 
-#include "QtNetwork/QUdpSocket"
+#include <QtNetwork/QUdpSocket>
 #include "QTimer"
 #include "QSettings"
 
 int Keepalive = 0;
+int GUIActive = 0;			// Set when messages being received
 
 QRgb white = qRgb(255, 255, 255);
 QRgb black = qRgb(0, 0, 0);
@@ -39,13 +40,16 @@ QRgb vbColours[16] = { qRgb(255, 255, 255), qRgb(255, 99, 71), qRgb(255, 215, 0)
 unsigned char  WaterfallLines[64][220] = {0};
 int NextWaterfallLine = 0;
 
+unsigned int LastLevel = 255;
+unsigned int LastBusy = 255;
+
 char Host[256]= "";
 char Port[16] = "";
 int PortNum = 0;
 
 ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GUI)
 {
-    char errMsg[80];
+    char Msg[80];
     QByteArray qb;
     char * ptr;
 	int i;
@@ -84,12 +88,15 @@ ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GU
 	sendMenu = ui->menuBar->addMenu(tr("Send"));
 	actSendID = new QAction(tr("Send ID"), this);
 	sendMenu->addAction(actSendID);
+
 	actTwoToneTest = new QAction(tr("Send Two Tone Test"), this);
 	sendMenu->addAction(actTwoToneTest);
 	actSendCWID = new QAction(tr("Send CWID"), this);
 	sendMenu->addAction(actSendCWID);
 
 	abortMenu = ui->menuBar->addMenu(tr("Abort"));
+	actABORT = new QAction(tr("ABORT"), this);
+	abortMenu->addAction(actABORT);
 
 	Busy = new QLabel(this);
 	Busy->setFixedHeight(20);
@@ -99,12 +106,13 @@ ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GU
 
 	ui->menuBar->setCornerWidget(Busy);
 
-//	Busy->setVisible(false);
+	Busy->setVisible(false);
 
 	connect(actConfigure, &QAction::triggered, this, &ARDOP_GUI::Configure);
 	connect(actWaterfall, &QAction::triggered, this, &ARDOP_GUI::setWaterfall);
 	connect(actSpectrum, &QAction::triggered, this, &ARDOP_GUI::setSpectrum);
 	connect(actDisabled, &QAction::triggered, this, &ARDOP_GUI::setDisabled);
+	connect(actABORT, &QAction::triggered, this, &ARDOP_GUI::setABORT);
 	connect(actSendID, &QAction::triggered, this, &ARDOP_GUI::setSendID);
 	connect(actSendCWID, &QAction::triggered, this, &ARDOP_GUI::setSendCWID);
 	connect(actTwoToneTest, &QAction::triggered, this, &ARDOP_GUI::setSend2ToneTest);
@@ -113,8 +121,8 @@ ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GU
     {
         // Request Config
 
-        TabDialog tabdialog(0);
-        tabdialog.exec();
+       TabDialog tabdialog(0);
+       tabdialog.exec();
     }
 
     PortNum = atoi(Port);
@@ -123,9 +131,6 @@ ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GU
     udpSocket->bind(QHostAddress("0.0.0.0"), PortNum + 1);		// We send from Port + 1
 
     connect(udpSocket, SIGNAL(readyRead()), this, SLOT(readPendingDatagrams()));
-
-    sprintf(errMsg, "%d %s", udpSocket->state(), udpSocket->errorString().toLocal8Bit().constData());
-    qDebug() << errMsg;
 
     udpSocket->writeDatagram("ARDOP_GUI Running", 17, QHostAddress(Host), PortNum);
 
@@ -142,23 +147,40 @@ ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GU
 
     Constellation->fill(black);
 
-    RefreshLevel(40);
+    RefreshLevel(0);
 
     ui->Constellation->setPixmap(QPixmap::fromImage(*Constellation));
     ui->Waterfall->setPixmap(QPixmap::fromImage(*Waterfall));
     ui->RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
 
+	ui->PTT->setStyleSheet("QLabel { background-color : rgb(255, 0, 0); color : black; }");
+	ui->ISS->setStyleSheet("QLabel { background-color : rgb(0, 255, 0); color : black; }");
+	ui->IRS->setStyleSheet("QLabel { background-color : rgb(0, 255, 0); color : black; }");
+	ui->TRAFFIC->setStyleSheet("QLabel { background-color : rgb(255, 255, 0); color : black; }");
+	ui->ACK->setStyleSheet("QLabel { background-color : rgb(0, 255, 0); color : black; }");
+	ui->PTT->setVisible(false);
+	ui->ISS->setVisible(false);
+	ui->IRS->setVisible(false);
+	ui->TRAFFIC->setVisible(false);
+	ui->ACK->setVisible(false);
+
+	sprintf(Msg, "ARDOP_GUI %s:%s Waiting...", Host, Port);
+	this->setWindowTitle(Msg);
+
     QTimer *timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
-    timer->start(30);
+    timer->start(1000);
 
-	QCoreApplication::sendPostedEvents();
+	rxtimer = new QTimer(this);
+	connect(rxtimer, SIGNAL(timeout()), this, SLOT(rxTimerSlot()));
+
+//	QCoreApplication::sendPostedEvents();
 }
 
 void ARDOP_GUI::Configure()
 {
- TabDialog tabdialog(0);
-    tabdialog.exec();
+	TabDialog tabdialog(0);
+	tabdialog.exec();
 }
 
 void ARDOP_GUI::setWaterfall()
@@ -181,6 +203,11 @@ void ARDOP_GUI::setSendID()
 	udpSocket->writeDatagram("SENDID", 6, QHostAddress(Host), PortNum);
 }
 
+void ARDOP_GUI::setABORT()
+{
+	udpSocket->writeDatagram("ABORT", 5, QHostAddress(Host), PortNum);
+}
+
 void ARDOP_GUI::setSendCWID()
 {
 	udpSocket->writeDatagram("SENDCWID", 8, QHostAddress(Host), PortNum);
@@ -191,15 +218,37 @@ void ARDOP_GUI::setSend2ToneTest()
 	udpSocket->writeDatagram("TWOTONETEST", 11, QHostAddress(Host), PortNum);
 }
 
+void ARDOP_GUI::rxTimerSlot()
+{
+	QPalette palette = ui->RXFrame->palette();
+	palette.setColor(QPalette::Base, Qt::white);
+	ui->RXFrame->setPalette(palette);
+	ui->RXFrame->setText("");		// Clear RX Frame
+}
+
 void ARDOP_GUI::MyTimerSlot()
 {
-    Keepalive++;
+    // Runs every second
 
-    if (Keepalive > 333)
+	char Msg[80];
+	
+	Keepalive++;
+
+    if (Keepalive > 10)
     {
         Keepalive = 0;
         udpSocket->writeDatagram("ARDOP_GUI Running", 17, QHostAddress(Host), PortNum);
     }
+
+	if (GUIActive)
+	{
+		GUIActive--;
+		if (GUIActive == 0)
+		{
+			sprintf(Msg, "ARDOP_GUI %s:%s", Host, Port);
+			this->setWindowTitle(Msg);
+		}
+	}
 }
 
 void ARDOP_GUI::readPendingDatagrams()
@@ -207,21 +256,28 @@ void ARDOP_GUI::readPendingDatagrams()
 	while (udpSocket->hasPendingDatagrams())
 	{
 		QHostAddress Addr;
-		quint16 Port;
-		unsigned char ucopy[1500];
-		char copy[1500];
+		quint16 rxPort;
+		unsigned char ucopy[1501];
+		char copy[1501];
 
-		int Len = udpSocket->readDatagram(copy, 1500, &Addr, &Port);
+		int Len = udpSocket->readDatagram(copy, 1500, &Addr, &rxPort);
 
 		//		QNetworkDatagram datagram = udpSocket->receiveDatagram();
 		//		QByteArray * ba = &datagram.data();
 		//		unsigned char copy[1500];
 		//     unsigned char * ptr = &copy[1];
 
-		char Msg[80] = "";
+		char Msg[1600] = "";
 
 		if (Len > 1500 || Len < 0)
 			return;					// ignore it too big
+
+		if (GUIActive == 0)
+		{
+			sprintf(Msg, "ARDOP_GUI %s:%s Connected", Host, Port);
+			this->setWindowTitle(Msg);
+		}
+		GUIActive = 15;					// Time out after 15 seconds
 
 		copy[Len] = 0;
 
@@ -234,40 +290,57 @@ void ARDOP_GUI::readPendingDatagrams()
 			sprintf(Msg, "%d %c %d", Len, copy[0], ucopy[1]);
 			break;
 
+		case 'D':					// LEDS
+
+			SetLEDS(&ucopy[1]);
+			break;
+
 		case 'C':					//Constellation Data
 			RefreshConstellation(&ucopy[1], (Len - 1) / 3);		// 3 bytes per pixel x, y, colour
 			return;
 
 		case 'X':					// Spectrum display
-			RefreshSpectrum(&ucopy[1], (Len - 1));
+			RefreshSpectrum(&ucopy[1]);
 			return;
 
 		case 'W':					//Waterfall Data
-			RefreshWaterfall(&ucopy[1], (Len - 1));
+			RefreshWaterfall(&ucopy[1]);
 			return;
 
 		case 'S':					// Protocol State
-			sprintf(Msg, "%d %c %s", Len, copy[0], &copy[1]);
 			ui->State->setText(&copy[1]);
 			break;
 
+		case 'B':					// Busy state (Sent if no Waterfall or Spectrum)
+
+			if (copy[1] != LastBusy)
+			{
+				LastBusy = copy[1];
+				Busy->setVisible(LastBusy);
+			}
+			break;
+
 		case 'T':					// TX Frame Type
-			sprintf(Msg, "%d %c %s", Len, copy[0], &copy[1]);
 			ui->TXFrame->setText(&copy[1]);
 			break;
 
-		case 'Q':					// TX Frame Type
-			sprintf(Msg, "%d %c %s", Len, copy[0], &copy[1]);
+		case 'Q':					// Quality
 			ui->Quality->setText(&copy[1]);
 			break;
 
-		case 'R':					// RX Frame Type
+		case 'F':					// Frequency
+			ui->Frequency->setText(&copy[1]);
+			break;
 
+		case 'I':					// Callsign
+			ui->Callsign->setText(&copy[1]);
+			break;
+
+		case 'R':					// RX Frame Type
+		{
 			// First Byte is 0/1/2 - Pending/Good/Bad
 
 			int colour = copy[1];
-
-			sprintf(Msg, "%d %c %s", Len, copy[0], &copy[2]);
 
 			QPalette palette = ui->RXFrame->palette();
 
@@ -275,18 +348,24 @@ void ARDOP_GUI::readPendingDatagrams()
 			{
 			case 0:
 				palette.setColor(QPalette::Base, Qt::yellow);
+				rxtimer->start(5000);
 				break;
 			case 1:
 				palette.setColor(QPalette::Base, Qt::green);
+				rxtimer->start(2000);
 				break;
 			case 2:
 				palette.setColor(QPalette::Base, Qt::red);
+				rxtimer->start(2000);
 			}
 			ui->RXFrame->setPalette(palette);
 			ui->RXFrame->setText(&copy[2]);
 			break;
 		}
-		qDebug() << Msg;
+		default:
+			sprintf(Msg, "%d %c %d", Len, copy[0], ucopy[1]);
+			qDebug() << Msg;
+		}
 	}
 }
 
@@ -297,12 +376,6 @@ void  ARDOP_GUI::socketError()
 //	qDebug() << errMsg;
 //	QMessageBox::question(NULL, "ARDOP GUI", errMsg, QMessageBox::Yes | QMessageBox::No);
 }
-
-
-
-unsigned int LastLevel = 255;
-unsigned int LastBusy = 255;
-
 
 void ARDOP_GUI::RefreshLevel(unsigned int Level)
 {
@@ -344,7 +417,21 @@ void ARDOP_GUI::RefreshConstellation(unsigned char * Data, int Count)
     ui->Constellation->setPixmap(QPixmap::fromImage(*Constellation));
 }
 
-void ARDOP_GUI::RefreshSpectrum(unsigned char * Data, int Count)
+void ARDOP_GUI::SetLEDS(unsigned char * Data)
+{
+	if (ui->PTT->isVisible() && Data[0] == 0)
+	{
+		ui->TXFrame->setText("");			// Clear TX frame when PTT drops
+//		ui->RXFrame->setText("");			// ARDOP_WIN does this as well
+	}
+
+	ui->PTT->setVisible(Data[0]);
+	ui->ISS->setVisible(Data[1]);
+	ui->IRS->setVisible(Data[2]);
+	ui->TRAFFIC->setVisible(Data[3]);
+	ui->ACK->setVisible(Data[4]);
+}
+void ARDOP_GUI::RefreshSpectrum(unsigned char * Data)
 {
 	int i;
 
@@ -392,7 +479,7 @@ void ARDOP_GUI::RefreshSpectrum(unsigned char * Data, int Count)
 
 }
 
-void ARDOP_GUI::RefreshWaterfall(unsigned char * Data, int Count)
+void ARDOP_GUI::RefreshWaterfall(unsigned char * Data)
 {
     int j;
     unsigned char * Line;
@@ -401,7 +488,9 @@ void ARDOP_GUI::RefreshWaterfall(unsigned char * Data, int Count)
 
     // Write line to cyclic buffer then draw starting with the line just written
 
-    memcpy(&WaterfallLines[NextWaterfallLine++][0], Data, Count - 2);
+	// Length is 208 bytes, including Level and Busy flags
+
+    memcpy(&WaterfallLines[NextWaterfallLine++][0], Data, 206);
     if (NextWaterfallLine > 63)
         NextWaterfallLine = 0;
 

@@ -21,10 +21,12 @@ private slots:
 	void readPendingDatagrams();
 	void socketError();
 	void MyTimerSlot();
+	void rxTimerSlot();
 	void Configure();
 	void setWaterfall();
 	void setSpectrum();
 	void setDisabled();
+	void setABORT();
 	void setSendID();
 	void setSendCWID();
 	void setSend2ToneTest();
@@ -44,16 +46,20 @@ private:
 	QAction *actWaterfall;
 	QAction *actSpectrum;
 	QAction *actDisabled;
+	QAction *actABORT;
 	QAction *actSendID;
 	QAction *actTwoToneTest;
 	QAction *actSendCWID;
 	QDialog *Config;
 	QLabel *Busy;
+	QTimer *rxtimer;
 
 	void RefreshLevel(unsigned int Level);
 	void RefreshConstellation(unsigned char * Data, int Count);
-	void RefreshWaterfall(unsigned char * Data, int Count);
-	void RefreshSpectrum(unsigned char * Data, int Count);
+	void RefreshWaterfall(unsigned char * Data);
+	void RefreshSpectrum(unsigned char * Data);
+	void SetLEDS(unsigned char * Data);
+
 };
 
 #endif // ARDOP_GUI_H
