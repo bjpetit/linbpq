@@ -60,7 +60,7 @@
 #endif // AUDIO_INTERFACE
 
 #if AUDIO_TX_SIZE != 196
-#error ("usb_desc.h has not been updated. See libraries/SoundCard/README.txt
+#error ("usb_desc.h has not been updated. See libraries/SoundCard/README.txt")
 #endif
 
 
@@ -167,7 +167,7 @@ void AudioInputbegin(void)
 
 void update(void)
 {
-  my_audio_block_t *left, *right;
+  my_audio_block_t *left = NULL, *right = NULL;
 
   __disable_irq();
   uint16_t c = incoming_count;
@@ -320,7 +320,7 @@ void transmit(my_audio_block_t *block, unsigned char index)
 
 my_audio_block_t * receive(unsigned int index)
 {
-  my_audio_block_t *in;
+  my_audio_block_t *in = NULL;
   return in;
 }
 
@@ -328,10 +328,9 @@ extern "C"  void debugprintf(const char * format, ...)
 {
   char Mess[256];
   va_list(arglist);
-  int len;
-
+ 
   va_start(arglist, format);
-  len = vsnprintf(Mess, sizeof(Mess), format, arglist);
+  vsnprintf(Mess, sizeof(Mess), format, arglist);
   strcat(Mess, "\r\n");
   vsnprintf(Mess, sizeof(Mess), format, arglist);
   MONPORT.println(Mess);
@@ -342,6 +341,3 @@ extern "C"  void debugprintf(const char * format, ...)
 // Stuff to support Common Code for ARDOP and Packet
 
 extern "C" void pktProcessNewSamples(short * buf, int count) {}
-
-
-

@@ -375,7 +375,7 @@ void InitSound(int SampleRate, BOOL Report)
 	{
 		ret = waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
 		if (Report)
-			printf("Opened WaveOut Device %s\r\n", pwoc.szPname);
+			printf("Opened WaveOut Device %s Sample Rate %d\r\n", pwoc.szPname, SampleRate);
 	}
 
 	if (strlen(CaptureDevice) <= 2)

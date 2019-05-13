@@ -269,6 +269,7 @@ void SetARDOPProtocolState(int value)
 		ClearDataToSend();
 		SetLED(ISSLED, FALSE);
 		SetLED(IRSLED, FALSE);
+		displayCall(0x20, "");
 
 		break;
 
@@ -1383,7 +1384,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				QueueCommandToHost(HostCmd);
 				InitializeConnection();	
 				bytDataToSendLength = 0;
-
+ 				displayCall('<', bytData);
 				blnPending = TRUE;				
 				blnEnbARQRpt = FALSE;
 
@@ -1463,7 +1464,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
             
 					intReply = IRSNegotiateBW(intFrameType); // NegotiateBandwidth
 
-					if (intReply != 0x2E)	// If not ConRejBW the bandwidth is compatible so answer with correct ConAck frame
+					if (intReply != ConRejBW)	// If not ConRejBW the bandwidth is compatible so answer with correct ConAck frame
 					{
 						// Note: CONNECTION and STATUS notices were already sent from  Case ProtocolState.DISC above...no need to duplicate
 

@@ -394,6 +394,7 @@ class ILI9341_t3 : public Print
 // To avoid conflict when also using Adafruit_GFX or any Adafruit library
 // which depends on Adafruit_GFX, #include the Adafruit library *BEFORE*
 // you #include ILI9341_t3.h.
+/*
 #ifndef _ADAFRUIT_GFX_H
 class Adafruit_GFX_Button {
 public:
@@ -421,7 +422,7 @@ private:
 	boolean currstate, laststate;
 };
 #endif
-
+*/
 #endif // __cplusplus
 
 

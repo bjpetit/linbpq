@@ -61,7 +61,7 @@ UCHAR bytDataToSend[4096];
 
 char ReportCall[10];
 
-UCHAR bytDataforHost[2048];		// has to be at least max packet size (8 * 159)
+UCHAR bytDataforHost[MAXCARRIERLEN * WINDOW];		// has to be at least max packet size (8 * 159)
 int bytesforHost = 0;
 
 UCHAR bytEchoData[1280];		// has to be at least max packet size (?1272)

@@ -1066,8 +1066,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				return;
 			}
 
-			DrawRXFrame(0, Name(intFrameType));
-
 			if (IsShortControlFrame(intFrameType))
 			{
 				// Frame has no data so is now complete
@@ -1111,6 +1109,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 				goto ProcessFrame;
 			}
+
+			DrawRXFrame(0, Name(intFrameType));
 
 			if (intBaud == 25)
 				intSampPerSym = 480;

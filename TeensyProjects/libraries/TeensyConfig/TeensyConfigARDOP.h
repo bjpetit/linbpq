@@ -76,7 +76,7 @@
 #define HOSTSPEED 115200
 #define SERIAL1SIZE 512
 
-//#define MONPORT Serial
+#define MONPORT Serial
 //#define CPULOAD
 
 #define CATPORT Serial5
@@ -158,9 +158,12 @@
 #define HOSTPORT Serial
 #define HOSTSPEED 115200
 #define MONPORT Serial1
+#define SERIAL1SIZE 512
 #define CATPORT Serial4
 #define CATSPEED 19200
 #define BTPORT Serial5
+
+// You can log to both a serial port and the host by defining both MONPORT and LOGTOHOST
 
 //#ifndef MONPORT
 #define LOGTOHOST

@@ -3,19 +3,24 @@
 #ifndef ARDOPCHEADERDEFINED
 #define ARDOPCHEADERDEFINED
 
-//#define XCONST const	
-#define XCONST			// for building sample arrays
+#define XCONST const	
+//#define XCONST			// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "3.0.0.2-BPQ"
+#define ProductVersion "3.0.1.18a-BPQ"
 
 //#define USE_SOUNDMODEM
 
 //	Sound interface buffer size
 
 #define SendSize 1200		// 100 mS for now
+#ifdef WIN32
 #define ReceiveSize 240		// try 50mS 100 mS for now
 #define NumberofinBuffers 4
+#else
+#define ReceiveSize 1200		// try 50mS 100 mS for now
+#define NumberofinBuffers 2
+#endif
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
@@ -650,13 +655,9 @@ extern int intEnvelopeCors;
 extern float dblAvgCorMaxToMaxProduct;
 extern int intConReqQuality;
 
-extern int int4FSKQuality;
-extern int int4FSKQualityCnts;
-extern int int8FSKQuality;
-extern int int8FSKQualityCnts;
-extern int int16FSKQuality;
-extern int int16FSKQualityCnts;
-extern int intFSKSymbolsDecoded;
+extern int BytesSent;
+extern int BytesReceived;
+
 extern int intPSKQuality[2];
 extern int intPSKQualityCnts[2];
 extern int intPSKSymbolsDecoded; 

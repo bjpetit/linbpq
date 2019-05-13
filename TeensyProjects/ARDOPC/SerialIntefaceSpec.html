@@ -21,7 +21,7 @@ pre {font-family: monospace; margin-left: 5%;white-space: pre}
 
 <h2>Overview.</h2>
 <p>
- The Host to TNC protocol used over Serisl and Bluetooth links operates in two modes, Text or Hostmode. 
+ The Host to TNC protocol used over Serial and Bluetooth links operates in two modes, Text or Hostmode. 
  Text mode is primarily used for initialisation and testing, but can be used for simple interative
  QSO's using a standard ASCII terminal program. There is no error checking on the text interface.
  Hostmode is used for automatic operation, and provides error detection and recovery over the 
@@ -30,9 +30,7 @@ pre {font-family: monospace; margin-left: 5%;white-space: pre}
  
 <h2>Operating Modes.</h2>
 <p>
- Either Protocol Mode can be used on one of two Operating Modes. ARDOP Native or PTC Emulation.
- The former supports the full ARDOP functionality, the latter enables ARDOP to be used with programs
- that support an SCS Pactor controllet, but don't have native ARDOP support.
+ Either Protocol Mode can be used on one of two Operating Modes. ARDOP Native or PTC Emulation. The former supports the full ARDOP functionality, the latter enables ARDOP to be used with programs that support an SCS Pactor controller, but don't have native ARDOP support. The TNC Command "ARDOP" places the TNC in Native Mode and "RESTART" puts TNC into PTC Emulation Mode. This should be sent in Text Mode (ie before entering HostMode).
 
 <h3>ARDOP Native Mode.</h3> 
 <p>
@@ -59,7 +57,7 @@ to equivalent Pactor values.
  General Poll message. The slave will respond with a list (possibly empty) of channels with data available. The master then polls each channel in the list.
  <br><br>
  If the master doesn't receive a valid response from the slave in a resonable time, it will repeat its last transmission. It it doesn't get a reponse after a reasonable number of retries it will report a link failure to 
- the higher lovel software, which will abort any transmission n progess, then try to reestablish the link.
+ the higher lovel software, which will abort any transmission in progess, then try to reestablish the link.
  <br>
  <br>
  If the master receives an out of sequence response following a timeout and retry it will assume a delayed response 
@@ -72,7 +70,7 @@ to equivalent Pactor values.
 
  <h2>Packet Formats</h2>
  
-  <pre>
+ <pre>
  
  All packets have a two byte header of 0xAAAA and a two byte CRC-16 checksum on end
  The top bit of the Opcode field is a sequence toggle.
@@ -92,8 +90,8 @@ to equivalent Pactor values.
  
  From Host to TNC
  
- Opcode 0 - Data
- Opcode 1 - Command
+ Opcode 0 - Data, preceeded by (length-1)
+ Opcode 1 - Command, preceeded by (length-1)
  
  From TNC to Host
  
@@ -109,11 +107,11 @@ to equivalent Pactor values.
  
  General Poll
  
- ----------------------------------
- |Header|Chan|Opcode|Payload| CRC |
- ----------------------------------
- |AA AA | FF |  01  | 00 47 |XX XX|
- ----------------------------------
+ ----------------------------------------
+ |Header|Chan|Opcode|Len-1|Payload| CRC |
+ ----------------------------------------
+ |AA AA | FF |  01  | 00  |47     |XX XX|
+ ----------------------------------------
  
  Response is a null terminated list of channels with available data. Value is Channel plus 1
  
@@ -123,37 +121,36 @@ to equivalent Pactor values.
   
  Poll to TNC Command Channel
  
- ----------------------------------
- |Header|Chan|Opcode|Payload| CRC |
- ----------------------------------
- |AA AA | 20 |  01  | 00 47 |XX XX|
- ----------------------------------
+ ----------------------------------------
+ |Header|Chan|Opcode|Len-1|Payload| CRC |
+ ----------------------------------------
+ |AA AA | 20 |  01  | 00  |47     |XX XX|
+ ----------------------------------------
  
  Response is an async ARDOP response message
  
- --------------------------------------------------
- |Header|Chan|Opcode| Payload               | CRC |
- --------------------------------------------------
- |AA AA | 20 |  07  |<0F>c:NEWSTATE ISS <0D>|XX XX|
- --------------------------------------------------
+ -------------------------------------------------
+ |Header|Chan|Opcode|Len-1|Payload         | CRC |
+ -------------------------------------------------
+ |AA AA | 20 |  07  | 0C  |NEWSTATE ISS<0D>|XX XX|
+ -------------------------------------------------
  
-
  ARDOP Command to TNC
- -----------------------------------------------------
- |Header|Chan|Opcode| Payload                  | CRC |
- -----------------------------------------------------
- |AA AA | 20 |  00  |C:MYCALL G8BPQ <00>       |XX XX|
- ----------------------------------------------------
+ -------------------------------------------------
+ |Header|Chan|Opcode|Len-1|Payload         | CRC |
+ -------------------------------------------------
+ |AA AA | 20 |  00  |  0C |MYCALL G8BPQ<0D>|XX XX|
+ -------------------------------------------------
  response
  -----------------------------------------------------
- |AA AA | 20 |  01  |c:MYCALL now G8BPQ <00>   |XX XX|
+ |AA AA | 20 |  01  |MYCALL now G8BPQ<00>|XX XX|
  -----------------------------------------------------
  
  Data to be transmitted
  -----------------------------------------------------
- |Header|Chan|Opcode| Payload                  | CRC |
+ |Header|Chan|Opcode|Len-1|Payload            | CRC |
  -----------------------------------------------------
- |AA AA | 21 |  00  |<12>D:(Len)Message to Send|XX XX|
+ |AA AA | 21 |  00  | 10  |(Len)Message to Send|XX XX|
  -----------------------------------------------------
  response
  -----------------------------------------------------
@@ -162,17 +159,21 @@ to equivalent Pactor values.
  
  Received Data from TNC
  
- Data to be transmitted
+ Received Data 
  -----------------------------------------------------
- |Header|Chan|Opcode| Payload                  | CRC |
+ |Header|Chan|Opcode|Len-1|Payload             | CRC |
  -----------------------------------------------------
- |AA AA | 21 |  07  |<13>d:(Len)ARQMsg Received|XX XX|
+ |AA AA | 21 |  07  | 10  |(Len)ARQMsg Received|XX XX|
  -----------------------------------------------------
+ 
+ (ARQ is the type tag and "Msg Received" the actual received data)
+ 
  This is no response to inbound frames, apart from the implied ACK of the
  next host frame having an inverted toggle.
  
- 
  </pre>
+ <p>
+ Note that like with the TCP interface, Inbound data frames have a two byte little-endian length on front of data (shown as (Len) above. Outbound data doesn't
  
 <h2>Appendix</h2> 
 <p>

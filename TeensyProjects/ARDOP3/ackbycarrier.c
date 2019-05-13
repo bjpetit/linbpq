@@ -19,6 +19,10 @@ int SqLawCompressor(float Sample);
 VOID Encode4PSKFrameType(UCHAR bytFrameCode, UCHAR bytSessionID, UCHAR * bytReturn);
 int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDataLen, int intRSLen, int bytFrameType, int Carrier);
 VOID Decode1CarPSK(int Carrier);
+void DrawTXFrame(const char * Frame);
+VOID Gearshift(int AckPercent, BOOL SomeAcked);
+void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * strMod);
+UCHAR GenCRC6(int Value);
 
 
 
@@ -43,7 +47,7 @@ extern short intPhases[10][1000];	// We will decode as soon as we have 4 or 8 de
 extern int intPhasesLen;
 extern int intPSKMode;
 
-extern UCHAR bytData[MAXCARRIERLEN * MAXCAR];
+extern UCHAR bytData[MAXCARRIERLEN * WINDOW];
 extern int frameLen;
 extern int intNumCar;
 
@@ -124,7 +128,7 @@ VOID ResetRXState()
 
 VOID ResetTXState()
 {
-	// New frame type. Reset RX fields
+	// New frame type. Reset TX fields
 
 	int i;
 
@@ -143,7 +147,6 @@ VOID ResetTXState()
 
 	// Reset Gear Shift Stuff
 
-	CarrierAcks = CarrierNaks = TotalCarriersSent = 0;
 	RollingAverage = 50;
 }
 
@@ -153,6 +156,8 @@ VOID ResetPSNState()
 
 	ResetTXState();
 	ResetRXState();
+
+	CarrierAcks = CarrierNaks = TotalCarriersSent = 0;
 }
 
 int GetNextFreePSN()
@@ -303,6 +308,7 @@ repeatblocks:
 			bytToRS[1] = intDataLen;
 			memcpy(&bytToRS[2], Data, intDataLen);
 			unackedByteCount += intDataLen;
+			BytesSent += intDataLen;
 		}
 		else
 		{
@@ -313,6 +319,7 @@ repeatblocks:
 			memset(&bytToRS[2], 0, intDataLen);
 			memcpy(&bytToRS[2], Data, Length);
 			unackedByteCount += Length;
+			BytesSent += Length;
 		}
 
 		// Data + RS + 1 byte byteCount + 1 byte blockno + 2 Byte CRC
@@ -332,11 +339,6 @@ repeatblocks:
 	//	Data points to the next byte to send
 
 	RemoveDataFromQueue(Data - bytDataToSend);
-
-//	memcpy(bytDataToSend, Data, Length);
-//	bytDataToSendLength = Length;
-
-
 
 	//	We now have list of PSN's to send in SentPSNList
 	
@@ -413,11 +415,11 @@ void ModCarrierSet(int intLeaderLen)
 
 		if (intNumCar == 1)
 			dblEx = 1.0f;
-		if (intNumCar == 1)
-			dblEx = 0.707f;  // Change compression on 10 Car 16APSK
-		if (intNumCar == 4)
-			dblEx = 0.6f;  // Change compression on 10 Car 16APSK
-		if (intNumCar == 10)
+		else if (intNumCar == 2)
+			dblEx = 0.707f;  // Change compression on 2 Car 16APSK
+		else if (intNumCar == 4)
+			dblEx = 0.6f;  // Change compression on 4 Car 16APSK
+		else if (intNumCar == 10)
 			dblEx = 0.6f;  // Change compression on 10 Car 16APSK
 	}
 
@@ -498,18 +500,18 @@ void ModCarrierSet(int intLeaderLen)
 			// Differential phase encocoding (add to last symbol sent Mod 4)  statement below confirmed 1/29/19
 
 			bytSymToSend = (bytLastSym[0] + ((Frameheader[j / 4] & bytMask) >> (2 * (3 - (j % 4))))) % 4; // Horrible!!
-		}
+		}		
+
 		for (n = 0; n < 240; n++)  // all the samples of a symbols 
 		{		
 			if (bytSymToSend < 2)   // This uses only 90 degree values in the 16APSK table and the symmetry of the symbols to reduce the table size by a factor of 2
-				intSample = min(intAmp, 1.2f * int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * bytSymToSend][n % 120]); // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+				intSample =  int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * bytSymToSend][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
 			else	// for Sym values 2, 3
-				intSample = -min(intAmp, 1.2f * int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * (bytSymToSend - 2)][n % 120]); // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+				intSample = -int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * (bytSymToSend - 2)][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
 	
-//			intSample = SoftClip(intSample * 0.5 * dblCarScalingFactor);
 			SampleSink(intSample);
 		}
-		
+
 		bytLastSym[0] = bytSymToSend;
 		bytMask = bytMask >> 2;
 	}
@@ -528,8 +530,6 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 	if (strcmp(strMod, "4PSKC") == 0 || strcmp(strMod, "4PSKCR") == 0)
 		prefixOffset = 48;
-
-
 
 	intCarIndex = intCarStartIndex; // initialize the carrrier index
 
@@ -587,6 +587,8 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 				encstates[i] = encstate;
 			}
+
+			// Send the Viterbi encoded symbols
 
 			for (k = 0; k < ViterbiSymbols; k += 2)
 			{
@@ -763,17 +765,75 @@ VOID AckCarrier(int Carrier)
 BOOL ProcessMultiACK(UCHAR * Msg)
 {
 	int i, Acks = 0, PSN;
-	int bitmask = Msg[0] | Msg[1] << 8;
+	int bitmask = Msg[1] | Msg[0] << 8;
+	UCHAR CRC = bitmask & 0x3F;			// bottom 6 bits;
+
+	bitmask = bitmask >> 6;
+
+	if (CRC != GenCRC6(bitmask))
+	{
+		WriteDebugLog(LOGDEBUG, "MultiACK CRC Error");
+		DrawRXFrame(2, "AckByCar");
+
+		return FALSE;
+	}
+
+	switch(CarriersSent)
+	{
+	case 1:
+
+		if ((bitmask & 0x1FF))
+		{
+			WriteDebugLog(LOGDEBUG, "Invalid MultiACK %x with CarriersSent = %d", bitmask, CarriersSent);
+			DrawRXFrame(2, "AckByCar");
+			return FALSE;
+		}
+		break;
+
+	case 2:
+
+		if ((bitmask & 0xFF))
+		{
+			WriteDebugLog(LOGDEBUG, "Invalid MultiACK %x with CarriersSent = %d", bitmask, CarriersSent);
+			DrawRXFrame(2, "AckByCar");
+			return FALSE;
+		}
+		break;
+
+	case 4:
+
+		if ((bitmask & 0x3F))
+		{
+			WriteDebugLog(LOGDEBUG, "Invalid MultiACK %x with CarriersSent = %d", bitmask, CarriersSent);
+			DrawRXFrame(2, "AckByCar");
+			return FALSE;
+		}
+		break;
+
+	case 10:
+		break;
+
+	default:
+		
+		WriteDebugLog(LOGDEBUG, "Invalid MultiACK %x with CarriersSent = %d", bitmask, CarriersSent);
+		DrawRXFrame(2, "AckByCar");
+		return FALSE;
+	} 
+
+	DrawRXFrame(1, "AckByCar");
 
 	for (i = 0; i < CarriersSent; i++)
 	{
-		if (bitmask & 1)
+		if (bitmask & 0x200)
 		{
 			AckCarrier(i);
 			Acks++;
+			CarrierAcks++;
 		}
+		else
+			CarrierNaks++;
 
-		bitmask >>= 1;
+		bitmask <<= 1;
 	}
 
 	PSN = LastPSNAcked;
@@ -822,16 +882,16 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 
 VOID RequeueData()
 {
-	// Requeue data that has been send and not acked. Used
+	// Requeue data that has been send and not passed to host. Used
 	// on mode shift
 
 	// To make reasonably quick with small memory requirement
-	// Get total length to requeue, move data back down buffer
+	// get total length to requeue, move data back down buffer
 	// them fill in from front
 
 	int totalBytes = 0;
 	UCHAR * ptr = bytDataToSend;
-	int PSN = NextPSN;     // is this right - loopthrough all not acked;
+	int PSN = NextPSN;     // is this right - loopthrough all not passed to host;
 
 	PSN++;				// First Unacked
 
@@ -890,7 +950,7 @@ VOID RequeueData()
 
 BOOL CheckAndCorrectCarrier(char * bytFrameData, int intDataLen, int intRSLen, int intFrameType, int Carrier)
 {
-	int PSN;
+	unsigned char PSN;
 
 	// Data is corrected im situe, so no need to copy
 	int decodeLen = CorrectRawDataWithRS(bytFrameData, NULL , intDataLen, intRSLen, intFrameType, Carrier);
@@ -911,10 +971,18 @@ BOOL CheckAndCorrectCarrier(char * bytFrameData, int intDataLen, int intRSLen, i
 
 	PSN = bytFrameData[0];
 
+	// Rick uses PSN's above 128 for FEC
+
+	if (PSN > 128 && (ProtocolMode == FEC || ((ProtocolState == DISC) && Monitor)))
+	{
+		PSN &= 0x7F;
+	}
+
+
 	// CRC check isn't perfect. At least we can check that PSN and Length
 	// are reasonable
 
-	if (PSN && PSN < WINDOW && decodeLen <=  intDataLen)
+	if (PSN > 0 && PSN < WINDOW && decodeLen <=  intDataLen)
 	{
 		// copy data to correct place is RX PSN list
 
@@ -931,7 +999,9 @@ BOOL CheckAndCorrectCarrier(char * bytFrameData, int intDataLen, int intRSLen, i
 	return FALSE;
 }
 
-VOID PassGoodDataToHost()
+int LastFECPSN = 1;
+
+VOID PassGoodDataToHost(UCHAR Type)
 {
 	// Pass data to host till we find a missing PSN
 
@@ -947,28 +1017,32 @@ VOID PassGoodDataToHost()
 	
 	if (bytSessionID == 0x3F)		// FEC
 	{
-		if (memcmp(CarrierOk, Good, intNumCar) == 0)
+		// Rick starts an FEC sequence at 1 and ends with OVER.
+
+		if (Type == OVER || IsDataFrame(Type))
 		{
-			// Need to know which PSN's are in this frame
-			// first PSN will always be a multiple of intNumCar
+			// Either a new type or end of block
 
-			int First = LastPSN / intNumCar;
-			int Last;
-			First *= intNumCar;
-			Last = First + intNumCar;
+			// Pass everything received to host
 
-			if (Last == WINDOW)
-				Last = 1;
+			int First = 1;
+			int Last = MAXCAR;
 
 			while (First != Last)
 			{
 				len = ReceivedPSNList[First][1];
-				memcpy(ptr, &ReceivedPSNList[First++][2], len);
-				frameLen += len;
 
-				if (First == WINDOW)
-					First = 1;
+				if (len)
+				{
+					memcpy(ptr, &ReceivedPSNList[First][2], len);
+					ReceivedPSNList[First][1] = 0;		// Processed
+					frameLen += len;
+					ptr += len;
+				}
+				First++;
 			}
+
+			AddTagToDataAndSendToHost(bytData, "FEC", frameLen); // only correct data in proper squence passed to host   
 		}
 		return;
 	}
@@ -983,6 +1057,7 @@ VOID PassGoodDataToHost()
 		memcpy(ptr, &ReceivedPSNList[NextPSNToHost][2], len);
 		ptr += len;
 		frameLen += len;
+		BytesReceived += len;
 
 		ReceivedPSNList[NextPSNToHost][1] = 0;			// Clear length on old frame
 
@@ -1002,36 +1077,87 @@ VOID PassGoodDataToHost()
 	}
 }
 
+// Compute a 6 bit CRC value  (Used in AckByCar to generate and check)
+
+UCHAR GenCRC6(int Value)
+{
+	// Status April 29, 2019  Checked and confirmed OK on AckByCar at S:N of -9 dB without any failures.
+	// For  CRC-t-ITU =    x^6 + x +1
+	// Data is a 32 bit integer only the 10 LSBs are used
+	// Returns the CRC6 value as the lower 6 bits in byte
+
+	int intPoly = 0x21;		//  This implements the CRC polynomial  x^6 + x + 1
+	int intRegister = 0x3F;
+	int i;
+        
+	Value &= 0x3FF;			// Mask to 10 bits
+
+	for (i = 9; i >= 0; i--)		//  for each bit processing MS bit first
+	{
+		int Bit = Value & 0x200;		// Top Bit
+
+		if (intRegister & 0x20) // the MSB of the register is set
+		{
+			// Shift left, place data bit as LSB, then divide
+			// Register := shiftRegister left shift 1
+			// Register := shiftRegister xor polynomial
+
+			if (Bit)
+				intRegister = ((intRegister << 1) | 1) & 0x3f;
+			else
+				intRegister = ((intRegister << 1)) & 0x3f;
+
+			intRegister = intRegister ^ intPoly;
+		}
+		else // the MSB is not set
+		{
+			// Register is not divisible by polynomial yet.
+			//  Just shift left and bring current data bit onto LSB of shiftRegister
+  			if (Bit)
+				intRegister = ((intRegister << 1) | 1) & 0x3f;
+			else
+				intRegister = ((intRegister << 1)) & 0x3f;
+		}
+		Value <<= 1;
+	}
+
+	return intRegister;
+}
+
 VOID EncodeAndSendMulticarrierACK(UCHAR bytSessionID, int LeaderLength)
 {
 	int i;
 	char Frame[16];
 	unsigned int val = 0;
+	unsigned int CRC;
 
-	// Rick uses 6 bit CRC but don't know format yet
+	// Rick uses 6 bit CRC in bottom 6 bits
+	// Top bit for carrier 0
 
 	//	Generate the 2 bytes for the frame type data
 
 	Encode4PSKFrameType(MultiACK, bytSessionID, Frame);
 
-	for (i = MAXCAR - 1; i >= 0; i--)
+	for (i = 0; i < MAXCAR; i++)
 	{
 		val <<= 1;
 
 		if (CarrierOk[i])
-			val |= 1;
+			val |= 1;	
 	}
-
-	Frame[2] = val;
-	Frame[3] = val >> 8;
 
 	if (val)
-	{
-		ModeHasWorked[intFrameTypePtr]++;
 		dttTimeoutTrip = Now;					// Kick watchdog if we have any valid data
-	}
 	else
-		ModeNAKS [intFrameTypePtr]++;
+		ModeNAKS[intFrameTypePtr]++;
+
+	CRC = GenCRC6(val);
+
+	val = CRC | val << 6;			// to upper 6 bits
+
+	Frame[2] = val >> 8;
+	Frame[3] = val;
+
 
 	Mod1Car50Bd4PSK(Frame, 4, LeaderLength);		// only returns when all sent
                

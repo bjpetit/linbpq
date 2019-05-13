@@ -137,12 +137,15 @@ int PTTMode = PTTRTS;				// PTT Control Flags.
 
 //    Public Structure QualityStats
   
-int int4FSKQuality;
-int int4FSKQualityCnts;
-int int8FSKQuality;
-int int8FSKQualityCnts;
-int int16FSKQuality;
-int int16FSKQualityCnts;
+//int int4FSKQuality;
+//int int4FSKQualityCnts;
+//int int8FSKQuality;
+//int int8FSKQualityCnts;
+//int int16FSKQuality;
+//int int16FSKQualityCnts;
+
+int BytesSent;
+int BytesReceived;
 int intFSKSymbolsDecoded;
 int intPSKQuality[2];
 int intPSKQualityCnts[2];
@@ -280,8 +283,8 @@ const UCHAR bytValidFrameTypesALL[]=
 	D4PSKCR_2500_200_E,
 	D4PSKCR_2500_200_O,
 
-	PktFrameHeader,	// Variable length frame Header
-	PktFrameData,	// Variable length frame Data (Virtual Frsme Type)
+//	PktFrameHeader,	// Variable length frame Header
+//	PktFrameData,	// Variable length frame Data (Virtual Frsme Type)
 
 	ACK
 };
@@ -296,8 +299,8 @@ const UCHAR bytValidFrameTypesISS[]=		// ACKs, NAKs, END, DISC, BREAK
 	BREAK,
 	END,
 	IDFRAME,
-	PktFrameHeader,	// Variable length frame Header
-	PktFrameData,	// Variable length frame Data (Virtual Frsme Type)
+//	PktFrameHeader,	// Variable length frame Header
+//	PktFrameData,	// Variable length frame Data (Virtual Frsme Type)
 	AckByCar,
 	ACK
 };
@@ -1539,8 +1542,7 @@ int EncodePingAck(int bytFrameType, int intSN, int intQuality, UCHAR * bytreturn
 {
 	// Encodes a Ping ACK with one byte of S:N and Quality info ( info repeated 2 times for redundancy) 
 
-	bytreturn[0] = bytFrameType;
-	bytreturn[1] = bytFrameType ^ 0xff;
+	Encode4PSKFrameType(bytFrameType, 0x3F, bytreturn);
 
 	if (intSN >= 21)
 		bytreturn[2] = 0xf8;	// set to MAX level indicating >= 21dB
@@ -2845,6 +2847,9 @@ unsigned short int compute_crc(unsigned char *buf,int len)
 	return fcs;
 }
 
+extern BOOL UseLeft;
+extern BOOL UseRight;
+
 static struct option long_options[] =
 {
 	{"ptt",  required_argument, 0 , 'p'},
@@ -2871,6 +2876,8 @@ char HelpScreen[] =
 	"-p device or --ptt device         Device to use for PTT control using RTS\n"
 	"-k string or --keystring string   String (In HEX) to send to the radio to key PTT\n"
 	"-u string or --unkeystring string String (In HEX) to send to the radio to unkeykey PTT\n"
+	"-L use Left Channel of Soundcard in stereo mode\n"
+	"-R use Right Channel of Soundcard in stereo mode\n"
 	"\n"
 	" CAT and RTS PTT can share the same port.\n"
 	" See the ardop documentation for more information on cat and ptt options\n"
@@ -2887,7 +2894,7 @@ VOID processargs(int argc, char * argv[])
 	{		
 		int option_index = 0;
 
-		c = getopt_long(argc, argv, "c:p:g::k:u:h", long_options, &option_index);
+		c = getopt_long(argc, argv, "c:p:g::k:u:hLR", long_options, &option_index);
 
 		// Check for end of operation or error
 		if (c == -1)
@@ -2971,6 +2978,16 @@ VOID processargs(int argc, char * argv[])
 
 		case 'c':
 			strcpy(CATPort, optarg);
+			break;
+
+		case 'L':
+			UseLeft = 1;
+			UseRight = 0;
+			break;
+
+		case 'R':
+			UseLeft = 0;
+			UseRight = 1;
 			break;
 
 		case '?':

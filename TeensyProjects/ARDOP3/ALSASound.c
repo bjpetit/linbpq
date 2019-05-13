@@ -18,8 +18,6 @@
 
 #include "ARDOPC.h"
 
-#define SHARECAPTURE		// if defined capture device is opened and closed for each transission
-
 #define HANDLE int
 
 void gpioSetMode(unsigned gpio, unsigned mode);
@@ -72,6 +70,9 @@ char * CaptureDevices = CaptureDevice;
 char * PlaybackDevices = CaptureDevice;
 
 void InitSound();
+
+BOOL SharePlayBack = 0;			// Open/Close playback device to facilitate sharing
+BOOL StopCaptureWhilePlaying = 0;
 
 int Ticks;
 
@@ -462,18 +463,30 @@ void txSleep(int mS)
 	// called while waiting for next TX buffer or to delay response.
 	// Run background processes
 
-	if (SerialMode)
-		SerialHostPoll();
-	else
-		TCPHostPoll();
+	UCHAR Buffer[2400];
 
-	Sleep(mS);
+	while (mS > 50)
+	{
+		SoundCardRead(Buffer, 1200);		// Read input to avoid overrun
+
+		if (SerialMode)
+			SerialHostPoll();
+		else
+			TCPHostPoll();
+
+		Sleep(50);
+		mS -= 50;
+	}
+
+	SoundCardRead(Buffer, 1200);		// Read input to avoid overrun
 
 	if (PKTLEDTimer && Now > PKTLEDTimer)
     {
       PKTLEDTimer = 0;
       SetLED(PKTLED, 0);				// turn off packet rxed led
     }
+
+	Sleep(mS);
 }
 
 // ALSA Code 
@@ -828,6 +841,8 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, cha
 	char buf1[100];
 	char * ptr;
 
+	printtick("Enter Open Playback");
+
 	if (playhandle)
 	{
 		snd_pcm_close(playhandle);
@@ -916,6 +931,9 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, cha
 	MaxAvail = snd_pcm_avail_update(playhandle);
 //	Debugprintf("Playback Buffer Size %d", (int)MaxAvail);
 
+	printtick("Leave Open Playback");
+
+
 	return true;
 }
 
@@ -926,6 +944,8 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	char buf1[100];
 	char * ptr;
 	snd_pcm_hw_params_t *hw_params;
+
+	printtick("Enter Open Capture");
 
 	if (rechandle)
 	{
@@ -1021,7 +1041,7 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	int i;
 	short buf[256];
 
-	for (i = 0; i < 10; ++i)
+//	for (i = 0; i < 10; ++i)
 	{
 		if ((err = snd_pcm_readi (rechandle, buf, 128)) != 128)
 		{
@@ -1031,6 +1051,7 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	}
 
 //	Debugprintf("Read got %d", err);
+	printtick("Leave Open Capture");
 
  	return TRUE;
 }
@@ -1052,16 +1073,20 @@ int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate,
 
 	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, Channels, ErrorMsg))
 	{
-#ifdef SHARECAPTURE
+		int MaxAvail = snd_pcm_avail_update(playhandle);
+		Debugprintf("Playback Buffer Size %d", (int)MaxAvail);
 
-		// Close playback device so it can be shared
-		
-		if (playhandle)
+		if (SharePlayBack)
 		{
-			snd_pcm_close(playhandle);
-			playhandle = NULL;
+			// Close playback device so it can be shared
+		
+			if (playhandle)
+			{
+				snd_pcm_close(playhandle);
+				playhandle = NULL;
+			}
 		}
-#endif
+
 		Debugprintf("Opening Capture Device %s Rate %d", CaptureDevice, c_sampleRate);
 		return OpenSoundCapture(CaptureDevice, c_sampleRate, ErrorMsg);
 	}
@@ -1100,10 +1125,13 @@ int SoundCardWrite(short * input, unsigned int nSamples)
 
 	//	Stop Capture
 
-	if (rechandle)
+	if (StopCaptureWhilePlaying)
 	{
-		snd_pcm_close(rechandle);
-		rechandle = NULL;
+		if (rechandle)
+		{
+			snd_pcm_close(rechandle);
+			rechandle = NULL;
+		}
 	}
 
 	avail = snd_pcm_avail_update(playhandle);
@@ -1124,6 +1152,8 @@ int SoundCardWrite(short * input, unsigned int nSamples)
 	maxavail = avail;
 
 //	Debugprintf("Tosend %d Avail %d", nSamples, (int)avail);
+
+	txSleep(10)			; // to force read
 
 	while (avail < nSamples)
 	{
@@ -1245,7 +1275,7 @@ int SoundCardRead(short * input, unsigned int nSamples)
 
 	if (avail < 0)
 	{
-		Debugprintf("avail Recovering from %d ..", avail);
+		WriteDebugLog(LOGDEBUG, "avail Recovering from %d ..", avail);
 		if (rechandle)
 		{
 			snd_pcm_close(rechandle);
@@ -1255,19 +1285,26 @@ int SoundCardRead(short * input, unsigned int nSamples)
 		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);
 //		snd_pcm_recover(rechandle, avail, 0);
 		avail = snd_pcm_avail_update(rechandle);
-		Debugprintf("After avail recovery %d ..", avail);
+		WriteDebugLog(LOGDEBUG, "After avail recovery %d ..", avail);
+	}
+
+	if (avail == 0)
+	{
+		// is this an error ??
+
+		WriteDebugLog(LOGDEBUG, "ALSARead Avail Zero");
 	}
 
 	if (avail < nSamples)
 		return 0;
 
-//	Debugprintf("ALSARead available %d", avail);
+//	WriteDebugLog(LOGDEBUG, "ALSARead available %d", avail);
 
 	ret = snd_pcm_readi(rechandle, samples, nSamples);
 
 	if (ret < 0)
 	{
-		Debugprintf("RX Error %d", ret);
+		WriteDebugLog(LOGDEBUG, "RX Error %d", ret);
 //		snd_pcm_recover(rechandle, avail, 0);
 		if (rechandle)
 		{
@@ -1278,7 +1315,7 @@ int SoundCardRead(short * input, unsigned int nSamples)
 		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);
 //		snd_pcm_recover(rechandle, avail, 0);
 		avail = snd_pcm_avail_update(rechandle);
-		Debugprintf("After Read recovery Avail %d ..", avail);
+		WriteDebugLog(LOGDEBUG, "After Read recovery Avail %d ..", avail);
 
 		return 0;
 	}
@@ -1325,7 +1362,8 @@ short * SendtoCard(short * buf, int n)
 		ProcessNewSamples(buf, 1200);		// signed
 	}
 
-	SoundCardWrite(&buffer[Index][0], n);
+	if (playhandle)
+		SoundCardWrite(&buffer[Index][0], n);
 
 //	txSleep(10);				// Run buckground while waiting 
 
@@ -1406,13 +1444,13 @@ void StopCapture()
 {
 	Capturing = FALSE;
 
-#ifdef SHARECAPTURE
+	if (SharePlayBack)
+	{
+		// Stopcapture is only called when we are about to transmit, so use it to open plaback device. We don't keep
+		// it open all the time to facilitate sharing.
 
-	// Stopcapture is only called when we are about to transmit, so use it to open plaback device. We don't keep
-	// it open all the time to facilitate sharing.
-
-	OpenSoundPlayback(SavedPlaybackDevice, SavedPlaybackRate, Savedplaychannels, NULL);
-#endif
+		OpenSoundPlayback(SavedPlaybackDevice, SavedPlaybackRate, Savedplaychannels, NULL);
+	}
 }
 
 void StartCodec(char * strFault)
@@ -1525,7 +1563,7 @@ void SoundFlush()
 
 	// Wait for tx to complete
 
-	while (1)
+	while (1 && playhandle)
 	{
 //		snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
 
@@ -1548,21 +1586,25 @@ void SoundFlush()
 		{
 			// Send complete - Restart Capture
 
-			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, strFault);	
+			if (StopCaptureWhilePlaying)
+				OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, strFault);	
 			break;
 		}
-		usleep(50000);
+		txSleep(10);
+//		usleep(50000);
 	}
 	// I think we should turn round the link here. I dont see the point in
 	// waiting for MainPoll
 
-#ifdef SHARECAPTURE
-	if (playhandle)
+	if (SharePlayBack)
 	{
-		snd_pcm_close(playhandle);
-		playhandle = NULL;
+		if (playhandle)
+		{
+			snd_pcm_close(playhandle);
+			playhandle = NULL;
+		}
 	}
-#endif
+
 	SoundIsPlaying = FALSE;
 
 	if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated

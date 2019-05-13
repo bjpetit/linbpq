@@ -52,10 +52,11 @@ extern "C"
   void PlatformSleep();
   void AdjustTXLevel(int Level);
   void KISSInit();
+  void GenerateMetrics(int intAmp, float dblSNdb, float dblBias, int intScale);
 
   void ProcessSCSPacket(unsigned char * rxbuffer, int Length);
 
-#include "../../ARDOP2/ARDOPC.h"
+#include "../../ARDOP3/ARDOPC.h"
 
 extern unsigned int tmrPollOBQueue;
 
@@ -173,6 +174,8 @@ void setup()
   WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d FreeRAM %d", ProductVersion, F_CPU, F_BUS, FreeRam());
   blnTimeoutTriggered = FALSE;
   SetARDOPProtocolState(DISC);
+
+  GenerateMetrics(100, 5.0f, 0.0f, 4);			// Set up Viterbi Metrics
 
   InitSound();
   HostInit();

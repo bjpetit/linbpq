@@ -33,7 +33,7 @@ unsigned char encstate = 0;
 
  
 //   ' 8-bit parity lookup table
-UCHAR Partab[] =
+static UCHAR Partab[] =
 {
  0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
  1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
@@ -82,18 +82,20 @@ int ViterbiEncode(unsigned char * data, unsigned char *symbols, int count)
 {
 	int i;
 	int j;
+	unsigned char * save = symbols;
 
 	for (j = 0; j < count; j++)
 	{
 		for(i = 7; i >= 0; i--)
 		{
-			encstate = (encstate << 1) | ((*data >> i) & 1);
+			encstate = (encstate << 1) | (((*data) >> i) & 1);
+
 			*symbols++ = Partab[encstate & POLYA];	
 			*symbols++ = Partab[encstate & POLYB];
 		}
 
 		symbols -= 16;
-	
+
 		for (i = 0; i < 16; i++)
 			symbols[i] = (intOffset - intAmplitude) + 2 * intAmplitude * symbols[i];
 
@@ -103,7 +105,9 @@ int ViterbiEncode(unsigned char * data, unsigned char *symbols, int count)
 
 	// We now have 16 * count symbols. Puncture them.
 
-	return Puncture(symbols - (count * 16), (count * 16));
+	i = Puncture(save, (count * 16));
+
+	return i;
 }
 
 
@@ -271,6 +275,7 @@ void GenerateMetrics(int intAmp, float dblSNdb, float dblBias, int intScale)
 	float dblMetrics[2][255];
 
 	intAmplitude = intAmp;
+
 	dblSQRT2 = sqrtf(2);
 
 	dblErf2 = Erf(2);
@@ -444,237 +449,7 @@ BOOL DecodeFromSymbolBits(int Carrier, UCHAR * symbols)
 	RawData[ptrOutput++] = stcState[ptrCurrent][0].path;
 
 	return TRUE;
-
 }
-
-#if 0
-    ' C Source code
-    '	return 0;
-    '}
-
-    '      viterbi(ref metric, output, symbolBits, (uint)symbolBits.Length, mettab);
-
-    '      return output;
-    '  }
-    '      /* Viterbi decoder for K=7 rate=1/2 convolutional code
-    ' * Copyright 1995 Phil Karn, KA9Q
-    ' */
-
-    '#include "viterbi.h"
-
-    '/* The basic Viterbi decoder operation, called a "butterfly"
-    ' * operation because of the way it looks on a trellis diagram. Each
-    ' * butterfly involves an Add-Compare-Select (ACS) operation on the two nodes
-    ' * where the 0 and 1 paths from the current node merge at the next step of
-    ' * the trellis.
-    ' *
-    ' * The code polynomials are assumed to have 1's on both ends. Given a
-    ' * function encode_state() that returns the two symbols for a given
-    ' * encoder state in the low two bits, such a code will have the following
-    ' * identities for even 'n' < 64:
-    ' *
-    ' * 	encode_state(n) = encode_state(n+65)
-    ' *	encode_state(n+1) = encode_state(n+64) = (3 ^ encode_state(n))
-    ' *
-    ' * Any convolutional code you would actually want to use will have
-    ' * these properties, so these assumptions aren't too limiting.
-    ' *
-    ' * Doing this as a macro lets the compiler evaluate at compile time the
-    ' * many expressions that depend on the loop index and encoder state and
-    ' * emit them as immediate arguments.
-    ' * This makes an enormous difference on register-starved machines such
-    ' * as the Intel x86 family where evaluating these expressions at runtime
-    ' * would spill over into memory.
-    ' */
-    '#define	BUTTERFLY(i,sym) { \
-    '	int m0,m1;\
-    '\
-    '	/* ACS for 0 branch */\
-    '	m0 = state[i].metric + mets[sym];	/* 2*i */\
-    '	m1 = state[i+32].metric + mets[3^sym];	/* 2*i + 64 */\
-    '	if(m0 > m1){\
-    '		next[2*i].metric = m0;\
-    '		next[2*i].path = state[i].path << 1;\
-    '	} else {\
-    '		next[2*i].metric = m1;\
-    '		next[2*i].path = (state[i+32].path << 1)|1;\
-    '	}\
-    '	/* ACS for 1 branch */\
-    '	m0 = state[i].metric + mets[3^sym];	/* 2*i + 1 */\
-    '	m1 = state[i+32].metric + mets[sym];	/* 2*i + 65 */\
-    '	if(m0 > m1){\
-    '		next[2*i+1].metric = m0;\
-    '		next[2*i+1].path = state[i].path << 1;\
-    '	} else {\
-    '		next[2*i+1].metric = m1;\
-    '		next[2*i+1].path = (state[i+32].path << 1)|1;\
-    '	}\
-    '}
-
-    'extern unsigned char Partab[];	/* Parity lookup table */
-
-    '/* The path memory for each state is 32 bits. This is slightly shorter
-    ' * than we'd like for K=7, especially since we chain back every 8 bits.
-    ' * But it fits so nicely into a 32-bit machine word...
-    ' */
-    'struct state {
-    '	unsigned long path;	/* Decoded path to this state */
-    '	long metric;		/* Cumulative metric to this state */
-    '};
-
-
-
-    'static int gEncState=0;
-    'static int gBitIndex=7;
-
-    'VITERBIKERNAL_API void reset()
-    '{
-    '	gEncState = 0;
-    '	gBitIndex = 7;
-    '}
-
-    '/* Convolutionally encode a single byte into a 2 bit symbol */
-    'VITERBIKERNAL_API unsigned char encodeBit(
-    '	unsigned char data)
-    '{
-    '	int bit0;
-    '	int bit1;
-
-    '                  If (gBitIndex < 0) Then
-    '		gBitIndex = 7;
-
-    '	gEncState = (gEncState << 1) | ((data >> gBitIndex) & 1);
-    '	bit0 = Partab[gEncState & POLYA];
-    '	bit1 = Partab[gEncState & POLYB];
-    '	gBitIndex --;
-
-    '	if (bit0 == 0 && bit1 == 0)
-    '		return 0;
-    '	else if ( bit0  == 0 && bit1 == 1 )
-    '		return 1;
-    '	else if ( bit0 == 1 && bit1 == 1 )
-    '		return 2;
-    '	else //  if ( bit == 1 && bit == 0 )
-    '		return 3;
-
-    '	return 0;
-    '}
-
-    '/* Viterbi decoder */
-    '                        VITERBIKERNAL_API(Int)
-    'viterbi(
-    'unsigned long *metric,	/* Final path metric (returned value) */
-    'unsigned char *data,	/* Decoded output data */
-    'unsigned char *symbols,	/* Raw deinterleaved input symbols */
-    'unsigned int nbits,	/* Number of output bits */
-    'int mettab[2][256]	/* Metric table, [sent sym][rx symbol] */
-    '){
-    '	unsigned int bitcnt = 0;
-    '	int mets[4];
-    '	long bestmetric;
-    '	int beststate,i;
-    '	struct state state0[64],state1[64],*state,*next;
-
-    '	state = state0;
-    '	next = state1;
-
-    '	/* Initialize starting metrics to prefer 0 state */
-    '	state[0].metric = 0;
-    '	for(i=1;i<64;i++)
-    '		state[i].metric = -999999;
-    '	state[0].path = 0;
-
-    '	for(bitcnt = 0;bitcnt < nbits;bitcnt++){
-    '		/* Read input symbol pair and compute all possible branch
-    '		 * metrics
-    '		 */
-    '		mets[0] = mettab[0][symbols[0]] + mettab[0][symbols[1]];
-    '		mets[1] = mettab[0][symbols[0]] + mettab[1][symbols[1]];
-    '		mets[2] = mettab[1][symbols[0]] + mettab[0][symbols[1]];
-    '		mets[3] = mettab[1][symbols[0]] + mettab[1][symbols[1]];
-    '		symbols += 2;
-
-    '		/* These macro calls were generated by genbut.c */
-    '		BUTTERFLY(0,0);
-    '		BUTTERFLY(1,1);
-    '		BUTTERFLY(2,3);
-    '		BUTTERFLY(3,2);
-    '		BUTTERFLY(4,3);
-    '		BUTTERFLY(5,2);
-    '		BUTTERFLY(6,0);
-    '		BUTTERFLY(7,1);
-    '		BUTTERFLY(8,0);
-    '		BUTTERFLY(9,1);
-    '		BUTTERFLY(10,3);
-    '		BUTTERFLY(11,2);
-    '		BUTTERFLY(12,3);
-    '		BUTTERFLY(13,2);
-    '		BUTTERFLY(14,0);
-    '		BUTTERFLY(15,1);
-    '		BUTTERFLY(16,2);
-    '		BUTTERFLY(17,3);
-    '		BUTTERFLY(18,1);
-    '		BUTTERFLY(19,0);
-    '		BUTTERFLY(20,1);
-    '		BUTTERFLY(21,0);
-    '		BUTTERFLY(22,2);
-    '		BUTTERFLY(23,3);
-    '		BUTTERFLY(24,2);
-    '		BUTTERFLY(25,3);
-    '		BUTTERFLY(26,1);
-    '		BUTTERFLY(27,0);
-    '		BUTTERFLY(28,1);
-    '		BUTTERFLY(29,0);
-    '		BUTTERFLY(30,2);
-    '		BUTTERFLY(31,3);
-
-    '		/* Swap current and next states */
-    '		if(bitcnt & 1){
-    '			state = state0;
-    '			next = state1;
-    '		} else {
-    '			state = state1;
-    '			next = state0;
-    '		}
-    '		if(bitcnt > nbits-7){
-    '			/* In tail, poison non-zero nodes */
-    '			for(i=1;i<64;i += 2)
-    '				state[i].metric = -9999999;
-    '		}
-    '		/* Produce output every 8 bits once path memory is full */
-    '		if((bitcnt % 8) == 5 && bitcnt > 32){
-    '			/* Find current best path */
-    '			bestmetric = state[0].metric;
-    '			beststate = 0;
-    '			for(i=1;i<64;i++){
-    '				if(state[i].metric > bestmetric){
-    '					bestmetric = state[i].metric;
-    '					beststate = i;
-    '				}
-    '			}
-    '#ifdef	notdef
-    '			printf("metrics[%d] = %d state = %lx\n",beststate,
-    '			   state[beststate].metric,state[beststate].path);
-    '#End If
-    '			*data++ = state[beststate].path >> 24;
-    '		}
-
-    '	}
-    '	/* Output remaining bits from 0 state */
-    '	if((i = bitcnt % 8) != 6)
-    '		state[0].path <<= 6-i;
-
-    '	*data++ = state[0].path >> 24;
-    '	*data++ = state[0].path >> 16;
-    '	*data++ = state[0].path >> 8;
-    '	*data = state[0].path;
-
-    '	*metric = state[0].metric;
-    '	return 0;
-    '}
-#endif
-
-
 
 	
 UCHAR bytPuncVect[16] = {1, 1, 0, 1, 1, 0};  // default for no puncturing (This is a vecorized version of the puncturing matrix)

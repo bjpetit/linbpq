@@ -1468,7 +1468,7 @@ Loop:
 		if (strlen(rxbuffer) < Length)
 		{
 			RXBPtr = 0;
-			WriteDebugLog(LOGDEBUG, "cancelling input %d %d", strlen(rxbuffer), Length);
+			WriteDebugLog(LOGDEBUG, "cancelling input %d %d %s ", strlen(rxbuffer), Length, rxbuffer);
 			return;
 		}
 		ptr = strchr(rxbuffer, 13);

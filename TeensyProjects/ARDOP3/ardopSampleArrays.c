@@ -1,5 +1,5 @@
 
-#define XCONST		// for building sample arrays
+#define XCONST const	// for building sample arrays
 
 //	These Templates are used to save lots of calculations when
 //	generating samples. They are pre-calculated (by Calctemplates.c)

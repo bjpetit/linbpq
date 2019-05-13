@@ -7,6 +7,7 @@
 // 9600 uses about 14% of Teensy 3.2
 
 // Now always runs at 48000 sample rate and downsamples for 1200 AFSK
+// Not sure downsample works - back to 12000 for 1200 AFSK
 
 #include "TeensyConfig.h"
 #include "TeensyCommon.h"
@@ -74,7 +75,7 @@ extern "C" void SetLED(int Pin, int State);
 extern "C" void RunPSKReceive();
 extern "C" void SetDefaultKISSParams(unsigned int txdelay, unsigned int ppersist,
                                      unsigned int slottime, unsigned int fullduplex, unsigned int txtail);
-
+ 
 
 // Default KISS params. Will be overridden from EEPROM if set
 

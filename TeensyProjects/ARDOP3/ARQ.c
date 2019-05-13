@@ -669,7 +669,7 @@ ModeToSpeed() = {
 // Function to get base (even) data modes by bandwidth for ARQ sessions
 
 // 220 to 947 bytes/min
-static UCHAR DataModes200[] = {D4PSK_200_50_E, D4PSKR_200_100_E, D4PSK_200_100_E, D16APSK_200_100_E};
+static UCHAR DataModes200[] = {D4PSK_200_50_E, D4PSK_200_100_E, D4PSKR_200_100_E, D16APSK_200_100_E};
  
 // 220 to 1895 bytes/min
 static UCHAR DataModes500[] = {D4PSK_200_50_E, D4PSK_500_50_E, D4PSK_500_100_E, D4PSKR_500_100_E, D16APSK_500_100_E};
@@ -1415,10 +1415,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				// But beware of 10 Minute ID, which shouldnt be acked
 
-				if ((Now - dttLastFECIDSent) > 300000)		// 5 mins - if connection takes that long something is wrong!
+				if ((Now - dttStartSession) > 300000)		// 5 mins - if connection takes that long something is wrong!
 					return;
-
-				      
+      
 				dttTimeoutTrip = Now;
 
 				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
@@ -1486,9 +1485,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				blnEnbARQRpt = FALSE; /// setup for no repeats
 
-				// Send ACK
+				// Send OVER
 
-				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
+				EncodeAndSend4FSKControl(OVER, bytSessionID, LeaderLength);
 				dttTimeoutTrip = Now;
 				return;
 			}
@@ -1505,7 +1504,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					if ((AutoBreak && bytDataToSendLength > 0) || blnBREAKCmd)
 					{
 						// keep BREAK Repeats fairly short (preliminary value 1 - 3 seconds)
-						intFrameRepeatInterval = ComputeInterFrameInterval(1000 + rand() % 2000);
+						intFrameRepeatInterval = 2000; //ComputeInterFrameInterval(1000 + rand() % 2000);
 
 						SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
 						SendCommandToHost("STATUS QUEUE BREAK new Protocol State IRStoISS");
@@ -1650,7 +1649,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				dttTimeoutTrip = Now;
 				blnEnbARQRpt = FALSE;
-				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
+				EncodeAndSend4FSKControl(OVER, bytSessionID, LeaderLength);
 
 				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from IDLE, Go to IRS, Substate IRSfromISS");
                 SendCommandToHost("STATUS BREAK received from Protocol State IDLE, new state IRS");
@@ -1821,7 +1820,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 					// Send ACK
 
-					EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
+					EncodeAndSend4FSKControl(OVER, bytSessionID, LeaderLength);
 					dttTimeoutTrip = Now;
 					SetARDOPProtocolState(IRS);
 					ARQState = IRSfromISS;  // Substate IRSfromISS allows processing of Rule 3.5 later
@@ -1948,9 +1947,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				intNAKctr = 0;
 				SendCommandToHost("STATUS BREAK received from Protocol State ISS, new state IRS");
 
-				// Send ACK
+				// Send OVER
 
-				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
+				EncodeAndSend4FSKControl(OVER, bytSessionID, LeaderLength);
 
 				dttTimeoutTrip = Now;
 				SetARDOPProtocolState(IRS);
@@ -2239,6 +2238,8 @@ void ClearTuningStats()
     intShiftDNs = 0;
     intShiftUPs = 0;
     dttStartSession = Now;
+	dttLastFECIDSent = Now;
+
     intLinkTurnovers = 0;
     intEnvelopeCors = 0;
     dblAvgCorMaxToMaxProduct = 0;
@@ -2249,29 +2250,28 @@ void ClearTuningStats()
 
 void ClearQualityStats()
 {
-	int4FSKQuality = 0;
-    int4FSKQualityCnts = 0;
-    int8FSKQuality = 0;
-    int8FSKQualityCnts = 0;
-    int16FSKQuality = 0;
-    int16FSKQualityCnts = 0;
 	intPSKQuality[0] = 0;
 	intPSKQuality[1] = 0;
 	intPSKQualityCnts[0] = 0;
 	intPSKQualityCnts[1] = 0;	// Counts for 4PSK, 8PSK modulation modes 
-    intFSKSymbolsDecoded = 0;
     intPSKSymbolsDecoded = 0;
 
 	intQAMQuality = 0;
 	intQAMQualityCnts = 0;
     intQAMSymbolsDecoded = 0;
+
+	BytesSent = BytesReceived = 0;
 }
 
 // Sub to Write Tuning Stats to the Debug Log 
 
+extern int CarrierAcks;
+extern int CarrierNaks;
+extern int TotalCarriersSent;
+
+
 void LogStats()
 {
-	int intTotFSKDecodes = intGoodFSKFrameDataDecodes + intFailedFSKFrameDataDecodes;
 	int intTotPSKDecodes = intGoodPSKFrameDataDecodes + intFailedPSKFrameDataDecodes;
 	int i;
 
@@ -2280,14 +2280,10 @@ void LogStats()
 	Statsprintf("     AvgCorrelationMax:MaxProd= %f over %d  correlations", dblAvgCorMaxToMaxProduct, intEnvelopeCors);
 	Statsprintf("     FrameSyncs=%d  Good Frame Type Decodes=%d  Failed Frame Type Decodes =%d Timeouts =%d", intFrameSyncs, intGoodFSKFrameTypes, intFailedFSKFrameTypes, intTimeouts);
 	Statsprintf("     Avg Frame Type decode distance= %f over %d decodes", dblAvgDecodeDistance, intDecodeDistanceCount);
+	Statsprintf(" ");
+	Statsprintf("Bytes Sent %5d Bytes Received %5d", BytesSent,BytesReceived);
 
-	if (intGoodFSKFrameDataDecodes + intFailedFSKFrameDataDecodes + intGoodFSKSummationDecodes > 0)
-	{
-		Statsprintf(" ");
-		Statsprintf("  FSK:");
-       	Statsprintf("     Good FSK Data Frame Decodes= %d  RecoveredFSKCarriers with Summation=%d  Failed FSK Data Frame Decodes=%d", intGoodFSKFrameDataDecodes, intGoodFSKSummationDecodes, intFailedFSKFrameDataDecodes);
-		Statsprintf("     AccumFSKTracking= %d   over %d symbols   Good Data Frame Decodes= %d   Failed Data Frame Decodes=%d", intAccumFSKTracking, intFSKSymbolCnt, intGoodFSKFrameDataDecodes, intFailedFSKFrameDataDecodes);
-	}
+
 	if (intGoodPSKFrameDataDecodes + intFailedPSKFrameDataDecodes + intGoodPSKSummationDecodes > 0)
 	{
 		Statsprintf(" ");
@@ -2297,29 +2293,11 @@ void LogStats()
 	
 		Statsprintf(" ");
 	}
-	if (intGoodQAMFrameDataDecodes + intFailedQAMFrameDataDecodes + intGoodQAMSummationDecodes > 0)
-	{
-		Statsprintf(" ");
-		Statsprintf("  QAM:");
-		Statsprintf("     Good QAM Data Frame Decodes=%d  RecoveredQAMCarriers with Summation=%d  Failed QAM Data Frame Decodes=%d", intGoodQAMFrameDataDecodes, intGoodQAMSummationDecodes, intFailedQAMFrameDataDecodes);
-		Statsprintf("     AccumQAMTracking=%d  %d attempts over %d total QAM Symbols",	intAccumQAMTracking, intQAMTrackAttempts, intQAMSymbolCnt);
-	
-		Statsprintf(" ");
-	}
    
 	Statsprintf("  Squelch= %d BusyDet= %d Mode Shift UPs= %d   Mode Shift DOWNs= %d  Link Turnovers= %d",
 		Squelch, BusyDet, intShiftUPs, intShiftDNs, intLinkTurnovers);
 	Statsprintf(" ");
 	Statsprintf("  Received Frame Quality:");
-
-	if (int4FSKQualityCnts > 0)
-		Statsprintf("     Avg 4FSK Quality=%d on %d frame(s)",  int4FSKQuality / int4FSKQualityCnts, int4FSKQualityCnts);
-
-	if (int8FSKQualityCnts > 0)
-		Statsprintf("     Avg 8FSK Quality=%d on %d frame(s)",  int8FSKQuality / int8FSKQualityCnts, int8FSKQualityCnts);
-
-	if (int16FSKQualityCnts > 0)
-		Statsprintf("     Avg 16FSK Quality=%d on %d frame(s)",  int16FSKQuality / int16FSKQualityCnts, int16FSKQualityCnts);
 
 	if (intPSKQualityCnts[0] > 0)
 		Statsprintf("     Avg 4PSK Quality=%d on %d frame(s)",  intPSKQuality[0] / intPSKQualityCnts[0], intPSKQualityCnts[0]);
@@ -2327,10 +2305,6 @@ void LogStats()
 	if (intPSKQualityCnts[1] > 0)
 		Statsprintf("     Avg 8PSK Quality=%d on %d frame(s)",  intPSKQuality[1] / intPSKQualityCnts[1], intPSKQualityCnts[1]);
 
-	if (intQAMQualityCnts > 0)
-		Statsprintf("     Avg QAM Quality=%d on %d frame(s)",  intQAMQuality / intQAMQualityCnts, intQAMQualityCnts);
-
-	// Experimental logging of Frame Type ACK and NAK counts
 
 	Statsprintf("");
 	Statsprintf("Type               ACKS  NAKS");
@@ -2340,6 +2314,7 @@ void LogStats()
 		Statsprintf("%-17s %5d %5d", Name(bytFrameTypesForBW[i]), ModeHasWorked[i], ModeNAKS[i]);
 	}
 
+	Statsprintf("Total Carriers Sent %5d Acked %5d Naked %5d", TotalCarriersSent, CarrierAcks, CarrierNaks);
 
 	Statsprintf("************************************************************************************************");
 

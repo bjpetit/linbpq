@@ -3040,6 +3040,9 @@ unsigned short int compute_crc(unsigned char *buf,int len)
 	return fcs;
 }
 
+extern BOOL UseLeft;
+extern BOOL UseRight;
+
 static struct option long_options[] =
 {
 	{"ptt",  required_argument, 0 , 'p'},
@@ -3066,6 +3069,8 @@ char HelpScreen[] =
 	"-p device or --ptt device         Device to use for PTT control using RTS\n"
 	"-k string or --keystring string   String (In HEX) to send to the radio to key PTT\n"
 	"-u string or --unkeystring string String (In HEX) to send to the radio to unkeykey PTT\n"
+	"-L use Left Channel of Soundcard in stereo mode\n"
+	"-R use Right Channel of Soundcard in stereo mode\n"
 	"\n"
 	" CAT and RTS PTT can share the same port.\n"
 	" See the ardop documentation for more information on cat and ptt options\n"
@@ -3082,7 +3087,7 @@ VOID processargs(int argc, char * argv[])
 	{		
 		int option_index = 0;
 
-		c = getopt_long(argc, argv, "c:p:g::k:u:h", long_options, &option_index);
+		c = getopt_long(argc, argv, "c:p:g::k:u:hLR", long_options, &option_index);
 
 		// Check for end of operation or error
 		if (c == -1)
@@ -3166,6 +3171,16 @@ VOID processargs(int argc, char * argv[])
 
 		case 'c':
 			strcpy(CATPort, optarg);
+			break;
+
+		case 'L':
+			UseLeft = 1;
+			UseRight = 0;
+			break;
+
+		case 'R':
+			UseLeft = 0;
+			UseRight = 1;
 			break;
 
 		case '?':

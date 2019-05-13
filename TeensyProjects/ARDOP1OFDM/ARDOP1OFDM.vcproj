@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
-			IntermediateDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
+			OutputDirectory="D:\DEV\ARDOP1OFDM\$(ConfigurationName)"
+			IntermediateDirectory="D:\DEV\ARDOP1OFDM\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>

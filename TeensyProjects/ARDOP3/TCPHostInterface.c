@@ -1078,6 +1078,9 @@ int SendtoGUI(char Type, unsigned char * Msg, int Len)
 	if (GUIActive == FALSE)
 		return 0;
 
+	if (Len > 4998)
+		return 0;
+
 	GUIMsg[0] = Type;
 	memcpy(GUIMsg + 1, Msg, Len);
  

@@ -30,12 +30,6 @@ extern "C"  void debugprintf(const char * format, ...);
 #include "serial3.c"
 #endif
 
-#ifdef SERIAL5SIZE
-#define SERIAL5_TX_BUFFER_SIZE	SERIAL5SIZE // number of outgoing bytes to buffer
-#define SERIAL5_RX_BUFFER_SIZE	SERIAL5SIZE
-#include "serial5.c"
-#endif
-
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
@@ -1044,10 +1038,10 @@ void i2cloop()
       // New message
 
 #ifdef MONPORT
-		MONPORT.printf("Slave received: ");
-		for (i = 0; i < Len; i++)
-			MONPORT.printf("%x ", i2cMessage[i]);
-		MONPORT.printf("\r\n");
+//		MONPORT.printf("Slave received: ");
+//		for (i = 0; i < Len; i++)
+//			MONPORT.printf("%x ", i2cMessage[i]);
+//		MONPORT.printf("\r\n");
 #endif
       if (i2cMessage[0] == 15)
       {
@@ -1129,7 +1123,7 @@ void i2cloop()
 
       // Data Frame
 	  
-	  WriteDebugLog(7,"I2CKiss Data Frame Opcode %d len %d", i2cMessage[0], Len);
+//	  WriteDebugLog(7,"I2CKiss Data Frame Opcode %d len %d", i2cMessage[0], Len);
 
 	  ProcessKISSMessage(i2cMessage, Len);
       continue;

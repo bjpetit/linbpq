@@ -1,5 +1,12 @@
 //	ARDOP Modem Decode Sound Samples
 
+#define _CRT_SECURE_NO_DEPRECATE
+#define _USE_32BIT_TIME_T
+
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 #include "ARDOPC.h"
 
 #pragma warning(disable : 4244)		// Code does lots of float to int
@@ -136,7 +143,7 @@ int intPhasesLen;
 
 // Received Frame
 
-UCHAR bytData[MAXCARRIERLEN * 10];
+UCHAR bytData[MAXCARRIERLEN * WINDOW];
 int frameLen;
 
 int totalRSErrors;
@@ -257,6 +264,11 @@ void DrawDecode(char * Decode);
 BOOL IsShortControlFrame(UCHAR bytType);
 BOOL IsDataFrame(UCHAR bytType);
 UCHAR GenCRC8(UCHAR * Data, int Len);
+VOID PassGoodDataToHost(UCHAR bytType);
+VOID ResetRXState();
+VOID ResetTXState();
+BOOL ProcessMultiACK(UCHAR * Msg);
+BOOL CheckAndCorrectCarrier(char * bytFrameData, int intDataLen, int intRSLen, int intFrameType, int Carrier);
 
 float dblEx = 2.0f;
 int PeakFromHeader = 30000;
@@ -472,10 +484,21 @@ void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 
 	// Initialise Expander
 
-	if (intNumCar == 10 && strcmp(strMod, "16APSK") == 0)
-		dblEx = 1.0f / 0.7f;		//  Change compression on 10 Car 16APSK
-	else
-		dblEx = 2.0f;
+	dblEx = 2.0f;			// constant amplitude modes up 0.5 compress
+
+	if (strcmp(strMod, "16APSK") == 0)
+	{  
+		// Change compression on 16APSK
+	
+		if (intNumCar == 1)
+			dblEx = 1.0f / 1.0f;
+		if (intNumCar == 2)
+			dblEx = 1.0f / 0.707f;
+		if (intNumCar == 4)
+			dblEx = 1.0f / 0.6f;
+		if (intNumCar == 10)
+			dblEx = 1.0f / 0.6f;
+	}
 
 	dblRn = powf(xdblR, xintN);
 
@@ -529,13 +552,23 @@ void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 
 		// We should only expand once we have frame type, so need to do later
 
-//		if (State == AcquireFrame)
-//			intFilteredMixedSamples[intFilteredMixedSamplesLength++] = SqLawExpander(intFilteredSample);
-//		else
+		if (State == AcquireFrame)
+			intFilteredMixedSamples[intFilteredMixedSamplesLength++] = SqLawExpander(intFilteredSample);
+		else
+		{
 			intFilteredMixedSamples[intFilteredMixedSamplesLength++] = intFilteredSample;
+
+			// and look for peak sample
+			
+			if (intFilteredSample > PeakFromHeader)
+					PeakFromHeader = intFilteredSample;
+		}
 	}
 	
 	// update the prior intPriorMixedSamples array for the next filter call 
+
+//	if (State != AcquireFrame)
+//		WriteDebugLog(LOGDEBUG, "Peak Sample in Type %d", PeakFromHeader);
    
 	memmove(intPriorMixedSamples, &intMixedSamples[intMixedSamplesLength - xintN], intPriorMixedSamplesLength * 2);		 
 
@@ -900,13 +933,13 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 				PeakFromHeader = 0;
 
-				for (i = 0; i < 480; i++)
+				for (i = 0; i < nSamples; i++)
 				{
 					if (Samples[i] > PeakFromHeader)
 						PeakFromHeader = Samples[i];
 				}
 
-				WriteDebugLog(LOGDEBUG, "Peak Sammple in Header %d", PeakFromHeader);
+				WriteDebugLog(LOGDEBUG, "Peak Sample in Header %d", PeakFromHeader);
 
 				nSamples -= 480;
 				Samples += 480;		// !!!! needs attention !!!
@@ -1095,13 +1128,13 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 				DrawRXFrame(1, Name(intFrameType));
 		
-				PassGoodDataToHost();
+				PassGoodDataToHost(intFrameType);
 
-				if (ProtocolState == IRStoISS && intFrameType == ACK)
+				if (ProtocolState == IRStoISS && intFrameType == OVER)
 				{
-					//	In this state transition to ISS if  ACK frame 
+					//	In this state transition to ISS if  OVER frame 
 				
-//					txSleep(250);
+					Sleep(250);
 
 					WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessNewSamples] ProtocolState=IRStoISS, substate = %s ACK received. Cease BREAKS, NewProtocolState=ISS, substate ISSData", ARQSubStates[ARQState]);
 					blnEnbARQRpt = FALSE;	// stop the BREAK repeats
@@ -1213,7 +1246,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				// If a new data type ISS has discarded any acked out of sequence data so we must do the same
 				// We also reset PSN to 1
 				
-				PassGoodDataToHost();
+				PassGoodDataToHost(intFrameType);
 
 				if (IsDataFrame(intFrameType) && (LastDataFrameType & 0xFE) != (intFrameType & 0xFE))
 					ResetRXState();
@@ -1294,7 +1327,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			goto skipDecode;
 		}						
 		
-		if (ProtocolState == IRStoISS && intFrameType == ACK)
+		if (ProtocolState == IRStoISS && (intFrameType == ACK || intFrameType == OVER))
 		{
 			//	In this state transition to ISS if  ACK frame 
 		
@@ -1307,6 +1340,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessNewSamples, ProtocolState=IRStoISS, Initializing GetNextFrameData");
    				GetNextFrameData(&intShiftUpDn, 0, "", TRUE); // just sets the initial data, frame type, and sets intShiftUpDn= 0
 			}
+
+			Sleep(250);
 
 			SetARDOPProtocolState(ISS);
 			intLinkTurnovers += 1;
@@ -2763,7 +2798,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 	float dblDistance1, dblDistance2, dblDistance3;
 	int i;
 
-	int intThresh = 2000 - (Squelch - 5) * 500;  // This adjusts the threshold based on MCB.Squelch (nominal = 5)
+	int intThresh = 1500 - (Squelch - 5) * 500;  // This adjusts the threshold based on MCB.Squelch (nominal = 5)
 
 	strDecodeCapture[0] = 0;
 
@@ -2875,7 +2910,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		
 		// no risk of damage to an existing ARQConnection with END, BREAK, DISC, or ACK frames so loosen decoding threshold 
 
-		if (intIatMinDistance1 == intIatMinDistance2 && dblMinDistance1 < (intThresh / 2) || (dblMinDistance2 < intThresh / 2))
+		if (intIatMinDistance1 == intIatMinDistance2 && (dblMinDistance1 < (intThresh / 2) || (dblMinDistance2 < intThresh / 2)))
 		{
 			WriteDebugLog(LOGDEBUG, "[Frame Type OK]2 %s,D1= %.2f, D2= %.2f %s",
 				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
@@ -2894,7 +2929,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		if ((dblMinDistance2 < intThresh)  && IsDataFrame(intIatMinDistance2))  // this would handle the case of monitoring an FEC transmission that failed above when the session ID is = 03F
  		{
 			WriteDebugLog(LOGDEBUG, "[Frame Type OK]4 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
+				 Name(intIatMinDistance2), dblMinDistance1, dblMinDistance2, strDecodeCapture);
 
 			return intIatMinDistance2;
 		}
@@ -2944,7 +2979,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		if ((dblMinDistance2 < dblDistance1) && dblMinDistance2 < intThresh / 2) // non matching indexes 
 		{
 			WriteDebugLog(LOGDEBUG, "[Frame Type OK]5 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance2, dblMinDistance2, strDecodeCapture);
+				 Name(intIatMinDistance2), dblMinDistance1, dblMinDistance2, strDecodeCapture);
 			return intIatMinDistance2;
 		}
 		else
@@ -2962,7 +2997,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		if (intIatMinDistance1 == intIatMinDistance2 && !IsDataFrame(intIatMinDistance1) && (dblMinDistance1 < intThresh || dblMinDistance2 < intThresh) ) // control frame so check distance
 		{
 			WriteDebugLog(LOGDEBUG, "[Frame Type OK]9 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance2, dblMinDistance2, strDecodeCapture);
+				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
 
 			return intIatMinDistance1;
 		}
@@ -2970,7 +3005,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		if (intIatMinDistance1 == intIatMinDistance2 && IsDataFrame(intIatMinDistance1)) // data frame so dont check distance
 		{
 			WriteDebugLog(LOGDEBUG, "[Frame Type OK]9A %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance2, dblMinDistance2, strDecodeCapture);
+				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
 
 			return intIatMinDistance1;
 		}
@@ -2980,7 +3015,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		if (dblMinDistance1 < (intThresh / 2) && dblDistance1 < dblDistance2)
 		{
 			WriteDebugLog(LOGDEBUG, "[Frame Type OK]10 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance2, dblMinDistance2, strDecodeCapture);
+				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
 
 			return intIatMinDistance1;
 
@@ -2988,7 +3023,7 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		if (dblMinDistance2 < (intThresh / 2) && dblDistance2 < dblDistance1)
 		{
 			WriteDebugLog(LOGDEBUG, "[Frame Type OK]11 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance2), dblMinDistance2, dblMinDistance2, strDecodeCapture);
+				 Name(intIatMinDistance2), dblMinDistance1, dblMinDistance2, strDecodeCapture);
 				
 			return intIatMinDistance2;
 		}
@@ -5050,13 +5085,18 @@ int Demod1CarViterbi16APSK_8_8(int Start, int Carrier)
 		
 		intPhases[Carrier][intPhasesLen] = 1000 * dblPhaseSymbol; //????
  
-				
+		
+		// Need to work on magnitude ref tracking
+
 		if (intMag >= dblMagRef)
 			dblMagRef = (1 - dblAlpha) * dblMagRef + dblAlpha * (dblMagDecisionThreshold * intMag); // Exponential averager (TODO optimize alpha for averager) 
 		else
 			dblMagRef = (1 - dblAlpha) * dblMagRef + (dblAlpha * (dblMagDecisionThreshold * intMag / dbl16APSK_8_8_CarRatio)); //TODO  Optimize alpha value 
 	
+	
 		// Now MagToIQ_8_8 generate soft IQ amplitude values for bytSoftIQ based on inner to outer Gray scale decoding
+
+
 		// Positive dblPhaseSymbols inner and outer rings
 
 		if (0 <= dblPhaseSymbol && dblPhaseSymbol < dblPi_4)
@@ -5127,9 +5167,9 @@ int Demod1CarViterbi16APSK_8_8(int Start, int Carrier)
 			bytSoftIQ[Carrier][4 * intPhasesLen + 2] = 28;
 			bytSoftIQ[Carrier][4 * intPhasesLen + 3] = 228 - (200 * (dblPhaseSymbol + dblPi_2) / dblPi_4);
 		}
-		else if (-dblPi_4 <= dblPhaseSymbol && dblPhaseSymbol <= -M_PI)
+		else 
 		{
-			// Sym -Pi/4 to -Pi
+			// Sym -Pi/4 to 0
 
 			bytSoftIQ[Carrier][4 * intPhasesLen] = MagToIQ_8_8(intMag, dblMagRef);   // 228
 			bytSoftIQ[Carrier][4 * intPhasesLen + 1] = 228 - 200 * (dblPhaseSymbol + dblPi_4) / dblPi_4;
@@ -5144,6 +5184,8 @@ int Demod1CarViterbi16APSK_8_8(int Start, int Carrier)
 	}
 	if (AccumulateStats)
 		intPSKSymbolCnt += intNumOfSymbols;
+
+	intCarMagThreshold[Carrier] = dblMagRef;
 
 	return (Start - origStart);	// Symbols we've consumed
 }

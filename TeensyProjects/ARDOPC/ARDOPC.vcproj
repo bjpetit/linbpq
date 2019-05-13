@@ -98,8 +98,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
-			IntermediateDirectory="D:\DEV\ARDOP\$(ConfigurationName)"
+			OutputDirectory="D:\DEV\ARDOPC\$(ConfigurationName)"
+			IntermediateDirectory="D:\DEV\ARDOPC\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"

@@ -350,7 +350,7 @@ short * SendtoCard(unsigned short * buf, int n)
 
 	while (!(header[!Index].dwFlags & WHDR_DONE))
 	{
-		txSleep(10);				// Run buckground while waiting 
+		txSleep(10);				// Run background while waiting 
 	}
 
 	waveOutUnprepareHeader(hWaveOut, &header[!Index], sizeof(WAVEHDR));
@@ -493,7 +493,7 @@ void PollReceivedSamples()
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
 
-	// For level display we want a fairly rapir level average but only want to report 
+	// For level display we want a fairly rapid level average but only want to report 
 	// to log every 10 secs or so
 
 	if (inheader[inIndex].dwFlags & WHDR_DONE)
