@@ -7,7 +7,7 @@
 //#define XCONST			// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "3.0.1.18a-BPQ"
+#define ProductVersion "3.0.1.18e-BPQ"
 
 //#define USE_SOUNDMODEM
 
@@ -473,7 +473,10 @@ extern struct SEM Semaphore;
    
 #define PktFrameHeader 0x31		// Variable length frame Header
 #define PktFrameData 0x32		// Variable length frame Data (Virtual Frsme Type)
-      
+
+#define D4PSK_500_100S_E	0x34
+#define D4PSK_500_100S_O	0x35
+
 extern XCONST short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol (20 ms) of the leader
  
 //The actual templates over 11 carriers for 16QAM in a 8-8 circular constellation.  First 4 symbols only 

@@ -14,6 +14,8 @@
 
 #include "ARDOPC.h"
 
+int Puncture(UCHAR * bytViterbiSymbols, int count);
+
 
 // I think max symbols is 1000, but code adds 16 on end for flush. I and Q for each, so * 2
 // ot sure at the moment if we need to accumulate all, but so harm for now

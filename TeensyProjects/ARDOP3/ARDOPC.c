@@ -257,6 +257,8 @@ const UCHAR bytValidFrameTypesALL[]=
 	
 	D4PSK_500_50_E,
 	D4PSK_500_50_O,
+	D4PSK_500_100S_E,
+	D4PSK_500_100S_O,
 	D4PSK_500_100_E,
 	D4PSK_500_100_O,
 	D4PSKR_500_100_E,
@@ -334,9 +336,9 @@ int intLastRcvdFrameQuality;
 
 int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
-const char strAllDataModes[16][16] =
+const char strAllDataModes[17][16] =
 {
-	"4PSK.200.50",	"4PSK.200.100",	"4PSKR.200.100","16APSK.200.100",
+	"4PSK.500.100S",	"4PSK.200.50",	"4PSK.200.100",	"4PSKR.200.100", "16APSK.200.100",
 	"4PSK.500.50",	"4PSK.500.100",	"4PSKR.500.100","16APSK.500.100",
 	"4PSK.1000.100", "4PSKR.1000.100", "4PSK.2500.100", "4PSKR.2500.100",
 	"16APSK.2500.100", "4PSK.2500.200", "4PSKC.2500.200", "4PSKCR.2500.200"
@@ -435,6 +437,9 @@ const char strFrameType[64][18] =
 
 	"PktFrameHeader",		//31	
 	"PktFrameData",
+	"",
+	"4PSK.500.100S.E",	// 0x34
+	"4PSK.500.100S.O",
 };
 
 const char shortFrameType[64][12] =
@@ -510,6 +515,9 @@ const char shortFrameType[64][12] =
 
 	"PktHeader",	//3A	
 	"PktData",
+	"",
+	"4P.500.100S",	// 0x34
+	"4P.500.100S",
 };
 
 
@@ -735,7 +743,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 	//Used to "lookup" all parameters by frame Type. 
 	// returns TRUE if all fields updated otherwise FALSE (improper bytFrameType)
 
-	// 1 Carrier 4FSK control frames 
+	// 1 Carrier 4PSK control frames 
 
 	switch(bytFrameType)
 	{
@@ -892,6 +900,17 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 			break;
 
 
+		case D4PSK_500_100S_E:
+
+			*blnOdd = (1 & bytFrameType) != 0;
+			*intNumCar = 2;
+			*intDataLen = 6;
+			*intRSLen = 2;
+			strcpy(strMod, "4PSK");
+			*intBaud = 100;
+			*totSymbols = (8 + 5) * 8;
+			break;
+
 		case D4PSK_500_50_E:
 
 			*blnOdd = (1 & bytFrameType) != 0;
@@ -902,6 +921,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 			*intBaud = 50;
 			*totSymbols = (30 + 5) * 8;
 			break;
+
 
 		case D4PSK_500_100_E:
 

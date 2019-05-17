@@ -5,6 +5,8 @@
 
 #ifdef WIN32
 #include <windows.h>
+#else
+void Sleep(int mS);
 #endif
 
 #include "ARDOPC.h"
@@ -1244,7 +1246,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 				// If this is just a change of toggle or a control frame pass any good data to host
 				// If a new data type ISS has discarded any acked out of sequence data so we must do the same
-				// We also reset PSN to 1
+				// after passing acked stuff to host. We also reset PSN to 1
 				
 				PassGoodDataToHost(intFrameType);
 
@@ -1425,9 +1427,9 @@ ProcessFrame:
 					if (intFrameType == IDFRAME)				
 						AddTagToDataAndSendToHost(bytData, "IDF", frameLen);			
 					else if (intFrameType >= ConReq200 && intFrameType <= ConReq2500)
-						ProcessUnconnectedConReqFrame(intFrameType, bytData);			
-					else if (IsDataFrame(intFrameType)) // check to see if a data frame
-						ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);			
+						ProcessUnconnectedConReqFrame(intFrameType, bytData);
+
+				// Data has already been passed to host by PassGoodDataToHost
 			}
 			else
 			{
@@ -3435,32 +3437,18 @@ void DemodulateFrame(int intFrameType)
 		return;
 	}
 
-	switch (intFrameType & 0xFE)		// Others are even/odd data frames
-	{
-		case D4PSK_200_50_E:
-		case D4PSK_200_100_E:
-		case D4PSK_500_50_E:
-		case D4PSK_500_100_E:
-		case D4PSK_2500_100_E:
 
-			DemodViterbiPSK();
-			break;
-
-		default:
-
-			DemodViterbiPSK();			// Are all data modes Viterbi ??
-			break;
+	DemodViterbiPSK();			// Are all data modes Viterbi ??
+	return;
 
 
-	//		WriteDebugLog(LOGDEBUG, "Unsupported frame type %x", intFrameType);
-	//		DiscardOldSamples();
-	//		ClearAllMixedSamples();
-	//		State = SearchingForLeader;
-
+	WriteDebugLog(LOGDEBUG, "Unsupported frame type %x", intFrameType);
+	DiscardOldSamples();
+	ClearAllMixedSamples();
+	State = SearchingForLeader;
 
 	//		intFilteredMixedSamplesLength = 0;	// Testing
 
-	}
 }
 
 

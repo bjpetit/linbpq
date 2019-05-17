@@ -31,6 +31,7 @@ BOOL SendingHeader200 = 0;		// Set when sending header in 200 Hz Modes
 void Flush();
 int Get4PSKSym(UCHAR * bytSymbols28_228);
 int Get16APSKSym_8_8(UCHAR * Sym, float * dblMag);
+void DrawTXFrame(const char * Frame);
 
 // Square Law compressor used on modulated samples to reduce PAPR
 int SqLawCompressor(float Sample)
@@ -625,6 +626,8 @@ void AddTrailer()
 	int intAddedSymbols = 1 + TrailerLength / 10; // add 1 symbol + 1 per each 10 ms of MCB.Trailer
 	int i, k;
 
+	return;		// testing
+
 	for (i = 1; i <= intAddedSymbols; i++)
 	{
 		for (k = 0; k < 120; k++)
@@ -638,21 +641,9 @@ void AddTrailer()
 
 void RemodulateLastFrame()
 {	
-	int intNumCar, intBaud, intDataLen, intRSLen, totSymbols;
-	BOOL blnOdd;
-
-	char strType[18] = "";
-    char strMod[16] = "";
-
 	if (IsDataFrame(LastSentFrameType))
 	{
 		ModCarrierSet(intCalcLeader);
-		return;
-	}
-
-	if (strcmp(strMod, "4FSK") == 0)
-	{
-		Mod1Car50Bd4PSK(bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		return;
 	}
 

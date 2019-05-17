@@ -194,7 +194,7 @@ void TCPAddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 	// I think largest apcet is about 1360 bytes
 
 	UCHAR * bytToSend;
-	UCHAR buff[10000];
+	UCHAR buff[1500];
 
 	int ret;
 
@@ -892,13 +892,6 @@ PktLost:
 				if (ProtocolState == DISC)
 					NeedCWID = TRUE;			// Send from background
 			}
-			else if (strcmp(GUIMsg, "ABORT") == 0)
-			{
-				Abort();
-			}
-
-	//			WriteDebugLog(DEBUG, "GUI Msg %s", GUIMsg);
-
 		}
 		else
 		{
@@ -1076,9 +1069,6 @@ int SendtoGUI(char Type, unsigned char * Msg, int Len)
 	unsigned char GUIMsg[5000];
 
 	if (GUIActive == FALSE)
-		return 0;
-
-	if (Len > 4998)
 		return 0;
 
 	GUIMsg[0] = Type;

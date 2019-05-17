@@ -20,7 +20,7 @@ VOID Encode4PSKFrameType(UCHAR bytFrameCode, UCHAR bytSessionID, UCHAR * bytRetu
 int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDataLen, int intRSLen, int bytFrameType, int Carrier);
 VOID Decode1CarPSK(int Carrier);
 void DrawTXFrame(const char * Frame);
-VOID Gearshift(int AckPercent, BOOL SomeAcked);
+VOID Gearshift(float AckPercent, BOOL SomeAcked);
 void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * strMod);
 UCHAR GenCRC6(int Value);
 
@@ -57,6 +57,14 @@ extern unsigned short  ModeNAKS[16];
 extern int intFrameTypePtr;
 extern int modmaxSample;
 
+extern UCHAR * bytFrameTypesForBW;		// Holds the byte array for Data modes for a session bandwidth.  First is most robust, last is fastest
+extern int * bytFrameLengthsForBW;	// Holds the byte count for Data modes for a session bandwidth.
+
+extern int intRptInterval;		// Puncturing 2 for R=1/2 or 6 for R=3/4
+
+extern int TempMode;			// Used to shift to more robust mode for short frames
+
+int lastTXPtr = 0;
 
 int NextPSN = 1;				// Next PSN to be allocated
 int LastPSNAcked = WINDOW - 1;
@@ -68,7 +76,7 @@ int CarrierAcks = 0;
 int CarrierNaks = 0;
 int TotalCarriersSent = 0;
 
-int RollingAverage = 0;
+float RollingAverage = 0.0f;
 
 
 // List of PSN's with unacked data
@@ -105,6 +113,11 @@ int CarriersSent = 0;			// Carriers in TX'd frame - used in ACK processing
 
 // All packets go in here but only Packets received out of sequence
 // remain - others are passed to host
+
+// I don't think we ever need ReceivedPSNList and UnackedPSNList at
+// the same time so could overlay to save RAM (4400) on Teensy
+
+//#define ReceivedPSNList UnackedPSNList
 
 UCHAR ReceivedPSNList[WINDOW][MAXCARRIERLEN];
 
@@ -158,6 +171,8 @@ VOID ResetPSNState()
 	ResetRXState();
 
 	CarrierAcks = CarrierNaks = TotalCarriersSent = 0;
+
+	RollingAverage = 50.0f;
 }
 
 int GetNextFreePSN()
@@ -237,6 +252,9 @@ BOOL EncodeData(UCHAR bytFrameType)
 	if (intDataLen == 0 || (Length == 0 && unackedByteCount == 0) || !blnFrameTypeOK)
 		return 0;
 
+	lastTXPtr = intFrameTypePtr;
+
+
 	CarriersSent = intNumCar;
 	TotalCarriersSent += intNumCar;
 	
@@ -299,6 +317,10 @@ repeatblocks:
 		// Build Frame
 
 		bytToRS = &UnackedPSNList[PSN][0];
+
+		if (bytSessionID == 0x3F)			// FEC, so set top bit of PSN
+			PSN |= 0x80;
+
 		bytToRS[0] = PSN;
 
 		if (Length > intDataLen)
@@ -576,6 +598,21 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 			// and the same for each carrier, so if we are puncturing we must work in multiples of
 			// 3 bytes (48 symbols) , which will puncture to 32 symbols (remove every 3d byte).
 			
+			// but beware of sending one or two xtra bytes which will
+			// mess up response timing
+
+			int actualSymbols = 48;
+
+			if (intRptInterval == 6)	// Puncturing
+				actualSymbols = 32;
+
+			if ((j + 3) > intDataBytesPerCar)
+			{
+				if (intRptInterval == 6)	// Puncturing
+					actualSymbols = (intDataBytesPerCar - j) * 11;
+				else
+					actualSymbols = (intDataBytesPerCar - j) * 16;
+			}				
 
 			for (i = 0; i < intNumCar; i++)
 			{
@@ -590,7 +627,7 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 			// Send the Viterbi encoded symbols
 
-			for (k = 0; k < ViterbiSymbols; k += 2)
+			for (k = 0; k < actualSymbols; k += 2)
 			{
 				for (n = 0; n < intSampPerSym; n++)
 				{
@@ -643,6 +680,11 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 			// and the same for each carrier, so if we are puncturing we must work in multiples of
 			// 3 bytes (48 symbols) , which will puncture to 32 symbols (remove every 3d byte).
 
+			int actualSymbols = 48;
+
+			if ((j + 3) > intDataBytesPerCar)
+				actualSymbols = (intDataBytesPerCar - j) * 16;
+
 			for (i = 0; i < intNumCar; i++)
 			{
 				encstate = encstates[i];
@@ -654,7 +696,7 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 				encstates[i] = encstate;
 			}
 
-			for (k = 0; k < ViterbiSymbols; k += 4)
+			for (k = 0; k < actualSymbols; k += 4)
 			{
 				for (n = 0; n < intSampPerSym; n++)
 				{
@@ -762,6 +804,8 @@ VOID AckCarrier(int Carrier)
 	WriteDebugLog(LOGDEBUG, "Acking Carrier %d PSN %d", Carrier, PSN);
 }
 
+#define Alpha 75.0f		// % for smoothed average
+
 BOOL ProcessMultiACK(UCHAR * Msg)
 {
 	int i, Acks = 0, PSN;
@@ -836,6 +880,8 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 		bitmask <<= 1;
 	}
 
+	// Mark of any sequential acked frames - IRS will pass these to host on next new frame
+
 	PSN = LastPSNAcked;
 	PSN++;
 
@@ -867,13 +913,19 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 			break;					// All in sequence removed
 	}
 			
-	// Mark of any sequential acked frames - IRS will pass these to host on next new frame
-
 	// Calculate rolling average
 
-	RollingAverage = (RollingAverage * 50) / 100;
+	if (TempMode != -1)
+		return TRUE;		// Don't include short frames in Gearshift
+
+	RollingAverage = (RollingAverage * Alpha) / 100.0f;
 	
-	RollingAverage += (Acks * 50) / CarriersSent;
+	RollingAverage += (Acks * (100.0f - Alpha)) / CarriersSent;
+
+	if (Acks)
+		ModeHasWorked[lastTXPtr]++;	// Used to stop hunting to impossible mode
+	else
+		ModeNAKS[lastTXPtr]++;
 
 	Gearshift(RollingAverage, Acks);
 
@@ -1042,14 +1094,18 @@ VOID PassGoodDataToHost(UCHAR Type)
 				First++;
 			}
 
-			AddTagToDataAndSendToHost(bytData, "FEC", frameLen); // only correct data in proper squence passed to host   
+			if (frameLen)
+				AddTagToDataAndSendToHost(bytData, "FEC", frameLen); // only correct data in proper squence passed to host   
 		}
 		return;
 	}
 			
 	// ARQ
-	
+
+
 	len = ReceivedPSNList[NextPSNToHost][1];
+
+	WriteDebugLog(LOGDEBUG, "PassGoodDataToHost - NextPSNToHost %d Len %d", NextPSNToHost, len);
 
 	while (len)				// Len nonzero
 	{

@@ -196,8 +196,13 @@ BOOL GetNextFECFrame()
 	
 	if (bytDataToSendLength == 0 && FECRepeatsSent >= FECRepeats && ProtocolState == FECSend)
 	{
-		WriteDebugLog(LOGDEBUG, "[GetNextFECFrame] All data and repeats sent.  Going to DISC state");
-            
+		// All sent. Send Over
+
+		WriteDebugLog(LOGDEBUG, "[GetNextFECFrame] All data and repeats sent.  Send Over and go to DISC state");
+         
+		txSleep(400);
+		EncodeAndSend4FSKControl(OVER, 0x3F, LeaderLength);
+
 		SetARDOPProtocolState(DISC);
 		blnEnbARQRpt = FALSE;
 		KeyPTT(FALSE); // insurance for PTT of
@@ -225,7 +230,7 @@ BOOL GetNextFECFrame()
 
 	if (intFECFramesSent == 0)
 	{
-		// Initialize the first FEC Data frame (even) from the queue and compute the Filtered samples and filename
+		// Initialize the first FEC Data frame (even) from the queue
 
 		char FullType[18];
 
@@ -233,11 +238,6 @@ BOOL GetNextFECFrame()
 		strcat(FullType, ".E");
 
 		bytFrameType = FrameCode(FullType);
-
- //           If bytFrameType = bytLastFECDataFrameSent Then ' Added 0.3.4.1 
- //               bytFrameType = bytFrameType Xor 0x1 ' insures a new start is on a different frame type. 
- //           End If
-
  
 		FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen,  &totSymbols);
 
@@ -270,7 +270,7 @@ sendit:
 		while (intNumCar)
 			AckCarrier(--intNumCar);
 
-		NextPSN = 0;
+		NextPSN = 1;
 
 		return TRUE;
 	}

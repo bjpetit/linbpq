@@ -27,6 +27,8 @@ int _memicmp(unsigned char *a, unsigned char *b, int n);
 int stricmp(const unsigned char * pStr1, const unsigned char *pStr2);
 int gpioInitialise(void);
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
+int SoundCardRead(short * input, unsigned int nSamples);
+
 
 VOID COMSetDTR(HANDLE fd);
 VOID COMClearDTR(HANDLE fd);
@@ -308,6 +310,8 @@ void main(int argc, char * argv[])
 
 //	Sleep(1000);	// Give LinBPQ time to complete init if exec'ed by linbpq
 
+	setlinebuf(stdout);				// So we can redirect output to file and tail
+
 	processargs(argc, argv);
 
 	Debugprintf("ARDOPC Version %s", ProductVersion);
@@ -463,7 +467,7 @@ void txSleep(int mS)
 	// called while waiting for next TX buffer or to delay response.
 	// Run background processes
 
-	UCHAR Buffer[2400];
+	short Buffer[2400];
 
 	while (mS > 50)
 	{

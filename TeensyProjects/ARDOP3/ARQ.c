@@ -45,6 +45,8 @@ int intTrackingQuality = -1;
 UCHAR bytLastARQDataFrameSent = 0;  // initialize to an improper data frame
 UCHAR bytLastARQDataFrameAcked = 0;  // initialize to an improper data frame
 void ClearTuningStats();
+
+
 void ClearQualityStats();
 void updateDisplay();
 void DrawTXMode(const char * TXMode);
@@ -98,8 +100,12 @@ UCHAR bytSessionID = 0x3f;
 BOOL blnARQConnected;
 
 UCHAR bytCurrentFrameType = 0;	// The current frame type used for sending
-UCHAR * bytFrameTypesForBW;		// Holds the byte array for Data modes for a session bandwidth. First are most robust, last are fastest
+UCHAR * bytFrameTypesForBW;		// Holds the byte array for Data modes for a session bandwidth.  First is most robust, last is fastest
+int * bytFrameLengthsForBW;	// Holds the byte count for Data modes for a session bandwidth.
 int bytFrameTypesForBWLength = 0;
+
+int TempMode = -1;			// Used to shift to more robust mode for short frames
+int SavedMode = -1;
 
 UCHAR * bytShiftUpThresholds;
 int bytShiftUpThresholdsLength;
@@ -127,7 +133,6 @@ int	intTotalSymbols = 0;		// To compute the sample rate error
 
 extern int bytDataToSendLength;
 int intFrameRepeatInterval;
-
 
 extern int intLeaderRcvdMs;	
 
@@ -192,7 +197,6 @@ int intConReqQuality;
 int intTimeouts;
 
 char strLastStringPassedToHost[80] = "";	// Used to suppress duplicate CON Req reports
-
 
 VOID GetNAKLoQLevels(int intBW)
 {
@@ -376,7 +380,7 @@ void SetARDOPProtocolState(int value)
 	case ISS:
 	case IDLE:
 
-		blnFramePending = FALSE;	//  Added 0.6.4 to insure any prior repeating frame is cancelled before new data. 
+		blnFramePending = FALSE;	//  Added 0.6.4 to ensure any prior repeating frame is cancelled before new data. 
 		blnEnbARQRpt = FALSE;
 		SetLED(ISSLED, TRUE);
 		SetLED(IRSLED, FALSE);
@@ -671,12 +675,15 @@ ModeToSpeed() = {
 // 220 to 947 bytes/min
 static UCHAR DataModes200[] = {D4PSK_200_50_E, D4PSK_200_100_E, D4PSKR_200_100_E, D16APSK_200_100_E};
  
+static int DataLengths200[] = {24, 48, 72, 96};
 // 220 to 1895 bytes/min
-static UCHAR DataModes500[] = {D4PSK_200_50_E, D4PSK_500_50_E, D4PSK_500_100_E, D4PSKR_500_100_E, D16APSK_500_100_E};
+static UCHAR DataModes500[] = {D4PSK_500_100S_E, D4PSK_200_50_E, D4PSK_500_50_E, D4PSK_500_100_E, D4PSKR_500_100_E, D16APSK_500_100_E};
+static int DataLengths500[] = {12, 24, 48, 96, 144, 192};
 
 // 439 to 9921 bytes/min
-static UCHAR DataModes2500[] = {D4PSK_500_50_E, D4PSK_500_100_E, D4PSK_1000_100_E,
+static UCHAR DataModes2500[] = {D4PSK_500_100S_E, D4PSK_500_50_E, D4PSK_500_100_E, D4PSK_1000_100_E,
 								D4PSK_2500_100_E, D4PSKC_2500_200_E, D4PSKCR_2500_200_E};
+static int DataLengths2500[] = {12, 48, 96, 192, 480, 800, 1100};
 
 static UCHAR NoDataModes[1] = {0};
 
@@ -689,17 +696,20 @@ UCHAR  * GetDataModes(int intBW)
 	if (intBW == 200)
 	{
 		bytFrameTypesForBWLength = sizeof(DataModes200);
+		bytFrameLengthsForBW = DataLengths200;
 		return DataModes200;
 	}
 	if (intBW == 500) 
 	{
 		bytFrameTypesForBWLength = sizeof(DataModes500);
+		bytFrameLengthsForBW = DataLengths500;
 		return DataModes500;
 	}
 
 	if (intBW == 2500) 
 	{	
 		bytFrameTypesForBWLength = sizeof(DataModes2500);
+		bytFrameLengthsForBW = DataLengths2500;
 		return DataModes2500;
 	}
 	bytFrameTypesForBWLength = 0;
@@ -717,10 +727,10 @@ int downThreshold = 40;
 
 int delayShiftUp = 0;
 
-extern int RollingAverage;
+extern float RollingAverage;
 
 
-VOID Gearshift(int AckPercent, BOOL SomeAcked)
+VOID Gearshift(float AckPercent, BOOL SomeAcked)
 {
 	char strOldMode[18] = "";
 	char strNewMode[18] = "";
@@ -729,10 +739,10 @@ VOID Gearshift(int AckPercent, BOOL SomeAcked)
 
 	intShiftUpDn = 0;
 
-	if (SomeAcked)
-		ModeHasWorked[intFrameTypePtr]++;	// Used to stop hunting to impossible mode
-	else
-		ModeNAKS[intFrameTypePtr]++;
+	// At start of session shift or down up quicker
+
+	if (AckPercent >= 60.0 && ModeHasBeenTried[intFrameTypePtr + 1] == 0)		// First pass
+		AckPercent =  80.0f;
 
 	if (AckPercent > upThreshold)
 	{		
@@ -743,8 +753,10 @@ VOID Gearshift(int AckPercent, BOOL SomeAcked)
 		{
 			delayShiftUp ++;
 			if (delayShiftUp < 3)
+			{
+				WriteDebugLog(LOGINFO, "[Gearshift]  Delaying Shift to unsuccessful mode: AckPercent = %f", AckPercent);
 				return;
-
+			}
 			// ok to try to shift up again
 		}
 
@@ -756,7 +768,7 @@ VOID Gearshift(int AckPercent, BOOL SomeAcked)
 			strOldMode[strlen(strOldMode) - 2] = 0;
 			strcpy(strNewMode, Name(bytFrameTypesForBW[intFrameTypePtr + 1]));
 			strNewMode[strlen(strNewMode) - 2] = 0;
-			WriteDebugLog(LOGINFO, "[ARDOPprotocol.Gearshift]  Shift Up: Ack Percent = %d Shift up from Frame type %s New Mode: %s", AckPercent, strOldMode, strNewMode);
+			WriteDebugLog(LOGINFO, "[Gearshift]  Shift Up: AckPercent = %f Shift up from Frame type %s New Mode: %s", AckPercent, strOldMode, strNewMode);
 			intShiftUpDn = 1;
 			RollingAverage = 50;		// preset to nominal middle on shift
 			intShiftUPs++;
@@ -769,8 +781,8 @@ VOID Gearshift(int AckPercent, BOOL SomeAcked)
 			// Hi quality, but no more modes.
 			// Limit Quality, so we can go back down without excessive retries
 
-			RollingAverage = 75;
-			WriteDebugLog(LOGINFO, "[Gearshift]  No Change possible: AckPercent = %d", AckPercent);
+			RollingAverage = 75.0f;
+			WriteDebugLog(LOGINFO, "[Gearshift]  No Change possible: AckPercent = %f", AckPercent);
 		}
 
 		return;
@@ -787,10 +799,10 @@ VOID Gearshift(int AckPercent, BOOL SomeAcked)
 			strcpy(strNewMode, Name(bytFrameTypesForBW[intFrameTypePtr - 1]));
 			strNewMode[strlen(strNewMode) - 2] = 0;
 	
-			WriteDebugLog(LOGINFO, "[Gearshift]  Shift Down: AckPercent = %d Shift down from Frame type %s New Mode: %s", AckPercent, strOldMode, strNewMode);
+			WriteDebugLog(LOGINFO, "[Gearshift]  Shift Down: AckPercent = %f Shift down from Frame type %s New Mode: %s", AckPercent, strOldMode, strNewMode);
 			intShiftUpDn = -1;
 			intShiftDNs++;
-			RollingAverage = 50;		// preset to nominal middle on shift
+			RollingAverage = 50.0f;		// preset to nominal middle on shift
 			ModeHasBeenTried[intFrameTypePtr + intShiftUpDn] = 1;
 		}
 		else
@@ -798,14 +810,14 @@ VOID Gearshift(int AckPercent, BOOL SomeAcked)
 			// Low quality, but no more modes.
 			// Limit Quality, so we can go back up without excessive retries
 
-			RollingAverage = 40;
-			WriteDebugLog(LOGINFO, "[Gearshift]  No Change possible: AckPercent = %d", AckPercent);
+			RollingAverage = 40.0f;
+			WriteDebugLog(LOGINFO, "[Gearshift]  No Change possible: AckPercent = %f", AckPercent);
 		}
 		return;
 	}
 	// No Shift
 		
-	WriteDebugLog(LOGINFO, "[Gearshift]  No Change: AckPercent = %d", AckPercent);
+	WriteDebugLog(LOGINFO, "[Gearshift]  No Change: AckPercent = %f", AckPercent);
 }
 
 int GetNumCarriers(UCHAR bytFrameType)
@@ -874,7 +886,7 @@ void SendData()
 				intFrameRepeatInterval = ComputeInterFrameInterval(1900); // fairly conservative based on measured leader from remote end 
 				break;
 			
-			case 8:
+			case 10:
                 intFrameRepeatInterval = ComputeInterFrameInterval(2100); // fairly conservative based on measured leader from remote end 
                 break;
 
@@ -888,9 +900,6 @@ void SendData()
 
 			EncodeData(bytCurrentFrameType);
 			ModCarrierSet(intCalcLeader);
-
-//			EncLen = EncodePSKData(bytCurrentFrameType, bytDataToSend, Len, bytEncodedBytes);
-//			ModPSKDataAndPlay(bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 	
 			return;
 		}
@@ -898,7 +907,6 @@ void SendData()
 		{
 			// Nothing to send - set IDLE
 
-			//ReDim bytQDataInProcess(-1) ' added 0.3.1.3
 			SetARDOPProtocolState(IDLE);
 
 			blnEnbARQRpt = TRUE;
@@ -907,6 +915,8 @@ void SendData()
 			blnLastFrameSentData = FALSE;
 
 			intFrameRepeatInterval = ComputeInterFrameInterval(2000);  // keep IDLE repeats at 2 sec 
+//			intFrameRepeatInterval = ComputeInterFrameInterval(500);  // keep IDLE repeats at 2 sec 
+
 			ClearDataToSend(); // ' 0.6.4.2 This insures new OUTOUND queue is updated (to value = 0)
 	
 			WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.SendData]  Send IDLE with Repeat, Set ProtocolState=IDLE ");
@@ -932,7 +942,8 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 
 	BOOL blnOdd;
 	int intNumCar, intBaud, intDataLen, intRSLen;
-    char * strShift = NULL;
+    char * strShift = "No shift";
+
 	int MaxLen, totSymbols;
 
 	if (blnInitialize)	//' Get the array of supported frame types in order of Most robust to least robust
@@ -950,7 +961,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 
 		ResetTXState();
-
+		TempMode = -1;
 		ModeHasBeenTried[intFrameTypePtr] = 1;
 
 #ifdef PLOTCONSTELLATION
@@ -963,6 +974,22 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		*intUpDn = 0;
 		return 0;
 	}
+
+	if (TempMode != -1)
+	{
+		// Shift back to original mode
+
+		intFrameTypePtr = SavedMode;
+		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
+		RequeueData();
+		ResetTXState(0);
+#ifdef PLOTCONSTELLATION
+		DrawTXMode(shortName(bytCurrentFrameType));
+		updateDisplay();
+#endif
+		strShift = "Shift back after temp shift down";
+	}
+
 	if (*intUpDn < 0)		// go to a more robust mode
 	{
 		if (intFrameTypePtr > 0)
@@ -995,10 +1022,44 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		}
 		*intUpDn = 0;
 	}
-        //If Not objFrameInfo.IsDataFrame(bytCurrentFrameType) Then
-        //    Logs.Exception("[ARDOPprotocol.GetNextFrameData] Frame Type " & Format(bytCurrentFrameType, "X") & " not a data type.")
-        //    Return Noth
-	
+
+	// If no data is outstanding and remaining data can be sent in a more
+	// robust mode, temporarily shift to it
+
+	TempMode = -1;
+
+	if (unackedByteCount == 0)
+	{
+		int i = 0;
+
+		while (i < intFrameTypePtr)		// All modes slower than current
+		{
+			if (bytDataToSendLength <= bytFrameLengthsForBW[i])
+			{
+				TempMode = i;	
+				break;
+			}
+			i++;
+		}
+	}
+
+	if (TempMode != -1)
+	{
+		// Shift to it
+
+			SavedMode =	intFrameTypePtr;
+
+			intFrameTypePtr = TempMode;
+			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
+			// no need for RequeueData() as only called if none outstanding;
+			ResetTXState(0);
+#ifdef PLOTCONSTELLATION
+			DrawTXMode(shortName(bytCurrentFrameType));
+			updateDisplay();
+#endif
+			strShift = "Temporary Shift Down";
+	}
+
 	if ((bytCurrentFrameType & 1) == (bytLastARQDataFrameAcked & 1))
 	{
 		*bytFrameTypeToSend = bytCurrentFrameType ^ 1;  // This insures toggle of  Odd and Even 
@@ -1012,10 +1073,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 	
 	if (DebugLog)
 	{
-		if (strShift == 0)
-			WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.GetNextFrameData] No shift, Frame Type: %s", Name(bytCurrentFrameType));
-		else
-			WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.GetNextFrameData] %s, Frame Type: %s", strShift, Name(bytCurrentFrameType));
+		WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.GetNextFrameData] %s, Frame Type: %s", strShift, Name(bytCurrentFrameType));
 	}
 
 	FrameInfo(bytCurrentFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &totSymbols);
@@ -1097,8 +1155,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 	WriteDebugLog(LOGDEBUG, "Time since received = %d", timeSinceDecoded);
 
-	if (timeSinceDecoded < 250)
-		txSleep(250 - timeSinceDecoded);
+	if (timeSinceDecoded < 350)
+		txSleep(350 - timeSinceDecoded);
 
 	// Note this is called as part of the RX sample poll routine
 
@@ -1276,6 +1334,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				{
 					//WriteDebugLog(LOGDEBUG, "[ProcessRcvdARQFrame]1 strCallsigns(0)=" & strCallsigns(0) & "  strCallsigns(1)=" & strCallsigns(1) & "  bytPendingSessionID=" & Format(bytPendingSessionID, "X"))
             
+					InitializeConnection();
 					intReply = IRSNegotiateBW(intFrameType); // NegotiateBandwidth
 
 					if (intReply != ConRejBW)	// If not ConRejBW the bandwidth is compatible so answer with correct ConAck frame
@@ -1290,7 +1349,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 						LastDataFrameType = -1;
   
 						intReceivedLeaderLen = intLeaderRcvdMs;		 // capture the received leader from the remote ISS's ConReq (used for timing optimization)
-						InitializeConnection();
 						bytDataToSendLength = 0;
 
 						dttTimeoutTrip = Now;
@@ -1463,7 +1521,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				ClearDataToSend();
 
 				SetARDOPProtocolState(DISC);
-				InitializeConnection();
 				blnEnbARQRpt = FALSE;
 
 				if (CheckValidCallsignSyntax(strLocalCallsign))
@@ -1472,6 +1529,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					EncLen = EncodePSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes, 0x3F);
 					Mod1Car50Bd4PSK(&bytEncodedBytes[0], EncLen, 0);		// only returns when all sent
 				}
+
+				InitializeConnection();
 				
 
 				return;
@@ -1631,14 +1690,31 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			if (!blnFrameDecodedOK)
 				return; // No decode so continue to wait
 
-			if (intFrameType == ACK && bytDataToSendLength > 0)	 // If ACK and Data to send
+			// I don't think IDLE should just repeat as I want
+			// to have different timout and repeat intervals.
+			// So on ACK cancel and repeat and resend IDLE if nothing
+			// to send else send data
+
+			if (intFrameType == ACK)
 			{
-				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessedRcvdARQFrame] Protocol state IDLE, ACK Received with Data to send. Go to ISS Data state.");
+				if (bytDataToSendLength > 0)	 // If ACK and Data to send
+				{
+					WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessedRcvdARQFrame] Protocol state IDLE, ACK Received with Data to send. Go to ISS Data state.");
 					
-				SetARDOPProtocolState(ISS);
-				ARQState = ISSData;
-				SendData(FALSE);
-				return;
+					SetARDOPProtocolState(ISS);
+					ARQState = ISSData;
+					SendData(FALSE);
+					return;
+				}
+				else
+				{
+					// ACK with no data.
+
+					SetARDOPProtocolState(IDLE);
+					ARQState = ISSData;
+					SendData(FALSE);		// Will send IDLE as no data
+					return;
+				}
 			}
 
 			// process BREAK here Send ID if over 10 min. 
@@ -1658,7 +1734,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				ARQState = IRSfromISS; 
 				
 				intLinkTurnovers += 1;
-				intLastARQDataFrameToHost = -1;  // precondition to an illegal frame type (insures the new IRS does not reject a frame)
+				intLastARQDataFrameToHost = -1;  // precondition to an illegal frame type (ensures the new IRS does not reject a frame)
 				memset(CarrierOk, 0, sizeof(CarrierOk));	// CLear MEM ARQ Stuff
 				LastDataFrameType = -1;
 				return;

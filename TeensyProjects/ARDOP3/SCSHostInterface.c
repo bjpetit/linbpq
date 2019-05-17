@@ -55,16 +55,16 @@ int LogToHostBufferLen = 0;
 
 int bytDataToSendLength = 0;
 
-UCHAR bytDataToSend[4096];
+UCHAR bytDataToSend[6144];		// May need a full window + a bit for flow control
 
 // Outbound data buffer 
 
 char ReportCall[10];
 
-UCHAR bytDataforHost[MAXCARRIERLEN * WINDOW];		// has to be at least max packet size (8 * 159)
+UCHAR bytDataforHost[MAXCARRIERLEN * WINDOW];	// has to be Window Size
 int bytesforHost = 0;
 
-UCHAR bytEchoData[1280];		// has to be at least max packet size (?1272)
+UCHAR bytEchoData[MAXCARRIERLEN * WINDOW];		// has to be Window Size
 int bytesEchoed = 0;
 
 UCHAR DelayedEcho = 0;
