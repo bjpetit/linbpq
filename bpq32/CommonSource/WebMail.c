@@ -193,6 +193,9 @@ void UndoTransparency(char * input)
 	char c;
 	int hex;
 
+	if (input == NULL)
+		return;
+
 	ptr1 = ptr2 = input;
 
 	// Convert any %xx constructs
@@ -940,7 +943,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 	// if a B2 message diplay B2 Header instead of a locally generated one
 
-	if (Msg->B2Flags == 0)
+	if ((Msg->B2Flags & B2Msg) == 0)
 	{
 		ptr += sprintf(ptr, "From: %s%s\nTo: %s\nType/Status: %c%c\nDate/Time: %s\nBid: %s\nTitle: %s\n\n",
 			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, UTF8Title);
@@ -957,7 +960,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 	if (MsgBytes)
 	{
-		if (Msg->B2Flags)
+		if (Msg->B2Flags & B2Msg)
 		{
 			char * ptr1;
 	
@@ -1069,8 +1072,8 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 					{
 						*(ptr1 + NewLen) = 0;
 						ptr += sprintf(ptr, "\rAttachment %s\r\r", WebMail->FileName[i]);
-						RemoveLF(ptr1, WebMail->FileLen[i]);		// Removes LF agter CR but not on its own
-
+						RemoveLF(ptr1, NewLen + 1);		// Removes LF after CR but not on its own
+				
 						ptr += sprintf(ptr, "%s\r\r", ptr1);
 
 						User->Total.MsgsSent[Index] ++;
@@ -1083,7 +1086,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 				free(Save);
 
-				RemoveLF(Message, strlen(Message));		// Removes LF agter CR but not on its own
+				RemoveLF(Message, strlen(Message) + 1);		// Removes LF agter CR but not on its own
 
 				return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, DisplayStyle, Message, DisplayStyle);
 			}
@@ -1897,7 +1900,10 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 		"<p align=center>"
 		" Select Required Template Folder from List<br><br>"
 		"<table border=1 cellpadding=2 bgcolor=white>"
-		"<tr><th>Standard Templates</th><th>Local Templates</th></tr>"
+		"<tr>"
+		"<th>Standard Templates</th>"
+		"<th>Local Templates</th>"
+		"</tr>"
 		"<tr><td width=50%%><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
 
 	char NewGroup [] =
@@ -4681,7 +4687,7 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 		}
 
 		FileSize = STAT.st_size;
-		MsgBytes = malloc(FileSize * 2);		// Allow plenty of room for template substitution
+		MsgBytes = malloc(FileSize * 10);		// Allow plenty of room for template substitution
 		ReadLen = fread(MsgBytes, 1, FileSize, hFile); 
 		MsgBytes[FileSize] = 0;
 		fclose(hFile);

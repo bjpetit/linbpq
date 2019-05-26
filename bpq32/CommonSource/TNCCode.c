@@ -89,7 +89,7 @@ VOID TNCTimerProc()
 				int Count = C_Q_COUNT(&HOSTSESS->HOSTTRACEQ);
 
 				if (Count > 100)
-						ReleaseBuffer(Q_REM(&HOSTSESS->HOSTTRACEQ));
+						ReleaseBuffer((void *)Q_REM((void *)&HOSTSESS->HOSTTRACEQ));
 			}
 		}
 		HOSTSESS++;

@@ -3771,7 +3771,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 		sockptr->UserPointer  = &RelayUser;
 
-		if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == 0)
+		if (ProcessIncommingConnectEx(TNC, sockptr->Callsign, sockptr->Number, FALSE, TRUE) == 0)
 		{
 			DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
 			return 0;
@@ -4286,7 +4286,7 @@ MsgLoop:
 				char Addr[100];
 				Tel_Format_Addr(sockptr, Addr);
 				sprintf(logmsg,"%d %s Call Accepted. Callsign=%s\n",
-				sockptr->Number, Addr,sockptr->Callsign);
+					sockptr->Number, Addr,sockptr->Callsign);
 
 				WriteLog (logmsg);
 			}

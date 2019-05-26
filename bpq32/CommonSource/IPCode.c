@@ -95,6 +95,8 @@ TODo	?Multiple Adapters
 #include "pcap.h"
 //#endif
 
+int pcap_sendpacket(pcap_t *p, u_char *buf, int size);
+
 #ifndef LINBPQ
 #include "kernelresource.h"
 LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -128,6 +130,7 @@ int CountBits(unsigned long in);
 VOID SendARPMsg(PARPDATA ARPptr, BOOL ToTAP);;
 BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR * AXCalls);
 int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
+int CountBits(unsigned long in);
 
 #define ARPTIMEOUT 3600
 
@@ -3105,7 +3108,7 @@ VOID RemoveARP(PARPDATA Arp)
 	int i;
 
 	while (Arp->ARP_Q)
-		free(Q_REM(&Arp->ARP_Q));
+		free(Q_REM((void *)&Arp->ARP_Q));
 
 	for (i=0; i < NumberofARPEntries; i++)
 	{

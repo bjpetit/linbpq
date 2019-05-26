@@ -162,11 +162,11 @@ typedef struct ConnectionInfo_S
 {
 	struct ConnectionInfo_S *next;
 	PROC *proc;
-	UCHAR rtcflags;             // p_linked or p_user.
-	int s;                 // Socket.
-//	char buf[ln_ibuf];      // Line of incoming text.
+	UCHAR RadioOnlyMode;	// T or R flag for Radio Only mode.
+	int s;					// Socket.
+//	char buf[ln_ibuf];		// Line of incoming text.
 
-	int Number;					// Number of record - for Connections display
+	int Number;				// Number of record - for Connections display
 //    SOCKET socket;
 //	SOCKADDR_IN sin;  
 	BOOL Active;
@@ -540,12 +540,6 @@ struct OldMsgInfo
 
 	UCHAR	B2Flags;
 
-	#define B2Msg 1				// Set if Message File is a formatted B2 message
-	#define Attachments 2		// Set if B2 message has attachments
-	#define FromPaclink 4
-	#define FromRMS 8
-	#define FromRMSExpress 16 
-
 	char	free[4];
 	unsigned short	nblu;
 	int		theme  ;
@@ -577,8 +571,10 @@ struct MsgInfo
 	#define B2Msg 1				// Set if Message File is a formatted B2 message
 	#define Attachments 2		// Set if B2 message has attachments
 	#define FromPaclink 4
-	#define FromRMS 8
+	#define FromCMS 8
 	#define FromRMSExpress 16 
+	#define RadioOnlyMsg 32		// Received using call-T
+	#define RadioOnlyFwd 64		// Received using call-R
 
 	int		xdatecreated;
 	int		xdatechanged;
@@ -1127,6 +1123,7 @@ VOID Do_Save_Msg();
 VOID Do_Add_User(HWND hDlg);
 VOID Do_Delete_User(HWND hDlg);
 VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user);
+VOID HoldSentMessages(CIRCUIT * conn, struct UserInfo * user);
 VOID Do_Save_User(HWND hDlg, BOOL ShowBox);
 VOID DeleteBBS();
 VOID AddBBS();

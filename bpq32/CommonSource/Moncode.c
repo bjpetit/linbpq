@@ -65,7 +65,7 @@ UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen);
 char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen);
 UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen);
 char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output);
-
+int CountBits(unsigned long in);
 
 DllExport int APIENTRY SetTraceOptions(int mask, int mtxparam, int mcomparam)
 {

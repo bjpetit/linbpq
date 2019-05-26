@@ -1134,7 +1134,7 @@ static int ProcessLine(char * buf, int Port)
 	unsigned short WINMORport = 0;
 	int BPQport;
 	int len=510;
-	struct TNCINFO * TNC;
+	struct TNCINFO * TNC = TNCInfo[Port];
 	struct AGWINFO * AGW;
 
 	char errbuf[256];

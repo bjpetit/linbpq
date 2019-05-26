@@ -124,6 +124,14 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 	if (Buffer[0] != 'F')
 	{
+		if (strstr(Buffer, "*** Profanity detected") || strstr(Buffer, "*** Unknown message sender"))
+		{
+			// Winlink Check - hold message
+
+			if (conn->FBBMsgsSent)
+				HoldSentMessages(conn, user);
+		}
+
 		if (conn->BBSFlags & DISCONNECTING)
 			return;				// Ignore if disconnect aleady started
 
@@ -712,6 +720,37 @@ ok2:
 
 	return;
 }
+
+VOID HoldSentMessages(CIRCUIT * conn, struct UserInfo * user)
+{
+	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
+	int i;
+
+	conn->FBBMsgsSent = FALSE;
+
+	for (i=0; i < 5; i++)
+	{
+		FBBHeader = &conn->FBBHeaders[i];
+				
+		if (FBBHeader && FBBHeader->MsgType)				// Not a zapped entry
+		{
+			int Length=0;
+			char * MailBuffer = malloc(100);
+			char Title[100];
+
+			Length += sprintf(MailBuffer, "Message %d Held\r\n", FBBHeader->FwdMsg->number);
+			sprintf(Title, "Message %d Held - Rejected by Winlink", FBBHeader->FwdMsg->number);
+			SendMessageToSYSOP(Title, MailBuffer, Length);
+
+			FBBHeader->FwdMsg->status = 'H';				// Mark as Held
+		}
+	}
+	memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
+	SaveMessageDatabase();
+}
+
+
+
 VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 {
 	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
@@ -1208,7 +1247,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	// If a B2 Message, Remove B2 Header
 
-	if (FwdMsg->B2Flags)
+	if (FwdMsg->B2Flags & B2Msg)
 	{
 		char * ptr;
 		int BodyLen = OrigLen;				

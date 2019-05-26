@@ -1621,6 +1621,11 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (Queued > 4 || Outstanding > 8500)
 				return (1 | (TNC->HostMode | TNC->CONNECTED) << 8 | STREAM->Disconnecting << 15);
 		}
+		else if (TNC->Mode == '3')	// ARDOP3 has a bit more buffer space
+		{
+			if (Queued > 4 || Outstanding > 4000)
+				return (1 | (TNC->HostMode | TNC->CONNECTED) << 8 | STREAM->Disconnecting << 15);
+		}
 		else
 		{
 			if (Queued > 4 || Outstanding > 2000)
@@ -3380,10 +3385,12 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "VERSION ", 8) == 0)
 	{
-		// If contains "OFDM" increase data session busy level
+		// If contains "OFDM" or "ARDOP3" increase data session busy level
 
 		if (strstr(&Buffer[8], "OFDM"))
 			TNC->Mode = 'O';
+		else if (strstr(&Buffer[8], "TNC_3"))
+			TNC->Mode = '3';
 		else
 			TNC->Mode = 0;
 	}
@@ -4384,6 +4391,8 @@ VOID ARDOPProcessTermModeResponse(struct TNCINFO * TNC)
 
 		TNC->TXLen = len;
 		ARDOPWriteCommBlock(TNC);
+
+		Sleep(50);
 
 		TNC->Timeout = 60;				// 6 secs
 

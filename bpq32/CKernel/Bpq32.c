@@ -943,27 +943,27 @@ extern struct WL2KInfo * WL2KReports;
 extern int NUMBEROFTNCPORTS;
 
 
-UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
-UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
-UINT SCSExtInit(struct PORTCONTROL *  PortEntry);
-UINT AEAExtInit(struct PORTCONTROL *  PortEntry);
-UINT KAMExtInit(struct PORTCONTROL *  PortEntry);
-UINT HALExtInit(struct PORTCONTROL *  PortEntry);
-UINT ETHERExtInit(struct PORTCONTROL *  PortEntry);
-UINT AGWExtInit(struct PORTCONTROL *  PortEntry);
-UINT WinmorExtInit(EXTPORTDATA * PortEntry);
-UINT TelnetExtInit(EXTPORTDATA * PortEntry);
-UINT SoundModemExtInit(EXTPORTDATA * PortEntry);
-UINT TrackerExtInit(EXTPORTDATA * PortEntry);
-UINT TrackerMExtInit(EXTPORTDATA * PortEntry);
-UINT V4ExtInit(EXTPORTDATA * PortEntry);
-UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
-UINT MPSKExtInit(EXTPORTDATA * PortEntry);
-UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
-UINT UIARQExtInit(EXTPORTDATA * PortEntry);
-//UINT BaycomExtInit(EXTPORTDATA * PortEntry);
-UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
-UINT VARAExtInit(EXTPORTDATA * PortEntry);
+void * VCOMExtInit(struct PORTCONTROL *  PortEntry);
+void * AXIPExtInit(struct PORTCONTROL *  PortEntry);
+void * SCSExtInit(struct PORTCONTROL *  PortEntry);
+void * AEAExtInit(struct PORTCONTROL *  PortEntry);
+void * KAMExtInit(struct PORTCONTROL *  PortEntry);
+void * HALExtInit(struct PORTCONTROL *  PortEntry);
+void * ETHERExtInit(struct PORTCONTROL *  PortEntry);
+void * AGWExtInit(struct PORTCONTROL *  PortEntry);
+void * WinmorExtInit(EXTPORTDATA * PortEntry);
+void * TelnetExtInit(EXTPORTDATA * PortEntry);
+void * SoundModemExtInit(EXTPORTDATA * PortEntry);
+void * TrackerExtInit(EXTPORTDATA * PortEntry);
+void * TrackerMExtInit(EXTPORTDATA * PortEntry);
+void * V4ExtInit(EXTPORTDATA * PortEntry);
+void * UZ7HOExtInit(EXTPORTDATA * PortEntry);
+void * MPSKExtInit(EXTPORTDATA * PortEntry);
+void * FLDigiExtInit(EXTPORTDATA * PortEntry);
+void * UIARQExtInit(EXTPORTDATA * PortEntry);
+void * SerialExtInit(EXTPORTDATA * PortEntry);
+void * ARDOPExtInit(EXTPORTDATA * PortEntry);
+void * VARAExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -3481,6 +3481,9 @@ VOID * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "ARDOP"))
 		return ARDOPExtInit;
+	
+	if (strstr(Value, "SERIAL"))
+		return SerialExtInit;
 
 	ExtDriver = LoadLibrary(Value);
 

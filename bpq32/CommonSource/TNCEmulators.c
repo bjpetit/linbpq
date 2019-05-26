@@ -2495,6 +2495,15 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 		len = sprintf(Response, "%s%s\r", CONMSG, Call);
 
 	SENDREPLY(TNC, Response, len);
+
+	// if CHECK_FOR_ESC set in applflags send "^d to disconnect msg
+
+	if (TNC->APPLFLAGS & CHECK_FOR_ESC)
+	{
+		char Msg[] = "Send ^D to disconnect\r";
+	
+		SendMsg(TNC->BPQPort, Msg, strlen(Msg));
+	}
 }
 
 VOID PUTCHARINBUFFER(struct TNCDATA * TNC, int Char)
@@ -2639,6 +2648,23 @@ VOID GETDATA(struct TNCDATA * TNC)
 
 	if (InputLen == 0)
 		return;
+
+	// if CHECK_FOR_ESC set in APPLFLAGS looks for Disconnect Escape
+
+	if (TNC->APPLFLAGS & CHECK_FOR_ESC)
+	{
+		// look for ^D (or ^d)
+
+		if (InputLen == 3)
+		{
+			if (_memicmp(InputBuffer, "^D\r", 3) == 0)
+			{
+				Disconnect(TNC->BPQPort);
+			}
+		}
+	}
+
+
 
 	for (n = 0; n < InputLen; n++)
 	{

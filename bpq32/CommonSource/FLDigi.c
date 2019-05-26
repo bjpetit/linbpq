@@ -117,8 +117,8 @@ extern UCHAR BPQDirectory[];
 
 static int MPSKChannel[MAXBPQPORTS+1];			// BPQ Port to MPSK Port
 static int BPQPort[MAXMPSKPORTS][MAXBPQPORTS+1];	// MPSK Port and Connection to BPQ Port
-static int MPSKtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
-static int BPQtoMPSK_Q[MAXBPQPORTS+1];			// Frames for MPSK. indexed by MPSK port. Only used it TCP session is blocked
+//static int MPSKtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
+//static int BPQtoMPSK_Q[MAXBPQPORTS+1];			// Frames for MPSK. indexed by MPSK port. Only used it TCP session is blocked
 
 //	Each port may be on a different machine. We only open one connection to each MPSK instance
 
@@ -369,40 +369,21 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				if (FD_ISSET(TNC->TCPDataSock,&writefs))
 				{
-					if (BPQtoMPSK_Q[port] == 0)
-					{
-						//	Connect success
+					//	Connect success
 
-						TNC->CONNECTED = TRUE;
-						TNC->CONNECTING = FALSE;
+					TNC->CONNECTED = TRUE;
+					TNC->CONNECTING = FALSE;
 
-						sprintf(TNC->WEB_COMMSSTATE, "Connected to FLDIGI");
-						SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+					sprintf(TNC->WEB_COMMSSTATE, "Connected to FLDIGI");
+					SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
-						// If required, send signon
+					// If required, send signon
 				
-//						SendPacket(TNC->TCPDataSock,"\x1a", 1, 0);
-//						SendPacket(TNC->TCPDataSock,"DIGITAL MODE ?", 14, 0);
-//						SendPacket(TNC->TCPDataSock,"\x1b", 1, 0);
+//					SendPacket(TNC->TCPDataSock,"\x1a", 1, 0);
+//					SendPacket(TNC->TCPDataSock,"DIGITAL MODE ?", 14, 0);
+//					SendPacket(TNC->TCPDataSock,"\x1b", 1, 0);
 
-//						EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
-					}
-					else
-					{
-						// Write block has cleared. Send rest of packet
-
-						buffptr=Q_REM(&BPQtoMPSK_Q[port]);
-
-						txlen=buffptr[1];
-
-						memcpy(txbuff,buffptr+2,txlen);
-
-						SendPacket(TNC, &txbuff[0], txlen);
-					
-						ReleaseBuffer(buffptr);
-
-					}
-
+//					EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 				}
 					
 				if (FD_ISSET(TNC->TCPDataSock,&errorfs) || FD_ISSET(TNC->TCPSock,&errorfs))

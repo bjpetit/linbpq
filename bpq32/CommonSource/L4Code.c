@@ -417,7 +417,7 @@ VOID Q_IP_MSG(PDATAMESSAGE Buffer)
 		//	CHECK WE ARENT USING TOO MANY BUFFERS
 		
 		if (C_Q_COUNT(&IPHOSTVECTOR.HOSTTRACEQ) > 20)
-			ReleaseBuffer(Q_REM(&IPHOSTVECTOR.HOSTTRACEQ));
+			ReleaseBuffer(Q_REM((void *)&IPHOSTVECTOR.HOSTTRACEQ));
 
 		C_Q_ADD(&IPHOSTVECTOR.HOSTTRACEQ, Buffer);
 		return;
@@ -565,7 +565,7 @@ VOID L4BG()
 			if(L4->L4CROSSLINK)
 				L4->L4CROSSLINK->L4KILLTIMER = 0;
 
-			Msg = Q_REM(&L4->L4TX_Q);
+			Msg = Q_REM((void *)&L4->L4TX_Q);
 
 			if (L4->L4CIRCUITTYPE & PACTOR)
 			{
@@ -610,7 +610,7 @@ VOID L4BG()
 
 		while(L4->L4RX_Q)
 		{
-			Msg = Q_REM(&L4->L4RX_Q);
+			Msg = Q_REM((void *)&L4->L4RX_Q);
 
 			IFRM150(L4, Msg);
 
@@ -634,13 +634,13 @@ VOID CLEARSESSIONENTRY(TRANSPORTENTRY * Session)
 	//	RETURN ANY QUEUED BUFFERS TO FREE QUEUE
 
 	while (Session->L4TX_Q)
-		ReleaseBuffer(Q_REM(&Session->L4TX_Q));
+		ReleaseBuffer(Q_REM((void *)&Session->L4TX_Q));
 
 	while (Session->L4RX_Q)
-		ReleaseBuffer(Q_REM(&Session->L4RX_Q));
+		ReleaseBuffer(Q_REM((void *)&Session->L4RX_Q));
 
 	while (Session->L4HOLD_Q)
-		ReleaseBuffer(Q_REM(&Session->L4HOLD_Q));
+		ReleaseBuffer(Q_REM((void *)&Session->L4HOLD_Q));
 
 	if (C_Q_COUNT(&Session->L4RESEQ_Q) > Session->L4WINDOW)
 	{
@@ -649,7 +649,7 @@ VOID CLEARSESSIONENTRY(TRANSPORTENTRY * Session)
 	}
 
 	while (Session->L4RESEQ_Q)
-		ReleaseBuffer(Q_REM(&Session->L4RESEQ_Q));
+		ReleaseBuffer(Q_REM((void *)&Session->L4RESEQ_Q));
 
 	if (Session->PARTCMDBUFFER)
 		ReleaseBuffer(Session->PARTCMDBUFFER);
@@ -715,7 +715,7 @@ VOID CLOSECURRENTSESSION(TRANSPORTENTRY * Session)
 		
 		while (Session->L4TX_Q)
 		{
-			Buffer = Q_REM(&Session->L4TX_Q);
+			Buffer = Q_REM((void *)&Session->L4TX_Q);
 			EXTPORT->PORTCONTROL.PORTTXROUTINE(EXTPORT, Buffer);
 		}
 
@@ -753,7 +753,7 @@ VOID CLOSECURRENTSESSION(TRANSPORTENTRY * Session)
 
 	while (Session->L4TX_Q)
 	{
-		Buffer = Q_REM(&Session->L4TX_Q);
+		Buffer = Q_REM((void *)&Session->L4TX_Q);
 		C_Q_ADD(&LINK->TX_Q, Buffer);
 	}
 
@@ -1963,7 +1963,7 @@ VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR)
 
 		//	FRAME L4WS HAS BEED ACKED - IT SHOULD BE FIRST ON HOLD QUEUE
 
-		Saved = Q_REM(&L4->L4HOLD_Q);
+		Saved = Q_REM((void *)&L4->L4HOLD_Q);
 
 		if (Saved)
 			ReleaseBuffer(Saved);

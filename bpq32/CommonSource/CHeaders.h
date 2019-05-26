@@ -173,6 +173,7 @@ int TrytoGuessCode(unsigned char * Char, int Len);
 #define CMD_TO_APPL	1	// PASS COMMAND TO APPLICATION
 #define MSG_TO_USER	2	// SEND 'CONNECTED' TO USER
 #define MSG_TO_APPL	4	//	SEND 'CONECTED' TO APPL
+#define CHECK_FOR_ESC 8	// Look for ^d (^D) to disconnect session)
 
 #define	UI	3
 #define	SABM 0x2F

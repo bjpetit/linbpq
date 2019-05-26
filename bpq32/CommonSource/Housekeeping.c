@@ -78,6 +78,8 @@ void DeletetoRecycle(char * FN)
 	FileOp.pTo = NULL;
 
 	SHFileOperation(&FileOp);
+#else
+	DeleteFile(FN);
 #endif
 }
 

@@ -694,7 +694,7 @@ int AGWDoMonitorData()
 
 		GetSemaphore(&Semaphore, 99);
 		
-		monbuff = Q_REM((UINT *)&AGWMONVECPTR->HOSTTRACEQ);
+		monbuff = Q_REM((void *)&AGWMONVECPTR->HOSTTRACEQ);
 
 		RawLen = monbuff->LENGTH;
 

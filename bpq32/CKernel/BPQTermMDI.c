@@ -268,7 +268,7 @@ char readbuff[100000];				// for stupid bbs programs
 
 int ptr=0;
 
-int Stream, Stream2;
+int Stream, Stream2;				// Stream2 for SYSOP Chat session
 int len,count;
 
 
@@ -2873,7 +2873,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			if (!Cinfo->CONNECTED)
 			{
 				if (Cinfo->Incoming)		// Incoming call window
-					MessageBox(NULL, "Session is for Incomming Calls", "BPQTerm", MB_OK);
+					MessageBox(NULL, "Session is for Incoming Calls", "BPQTerm", MB_OK);
 				else
 					SessionControl(Cinfo->BPQStream, 1, 0);
 			}
@@ -3140,8 +3140,8 @@ DoStateChange(int Stream)
 		
 				Cinfo = CreateChildWindow(Stream, FALSE);
 				Cinfo->Incoming = TRUE;
+				Cinfo->Minimized = FALSE;
 				SendMessage(ClientWnd, WM_MDIACTIVATE, (WPARAM)Cinfo->hConsole, 0);
-			
 			}
 
 			Cinfo->CONNECTED = TRUE;
@@ -3153,6 +3153,10 @@ DoStateChange(int Stream)
 
 			if (Cinfo->Incoming == TRUE)
 			{
+				char conMsg[] = "Send ^D to disconnect\r";
+	
+				SendMsg(Stream, conMsg, strlen(conMsg));
+
 				len = sprintf(Msg, "*** Incoming Call from %s\r", callsign);
 				WritetoOutputWindow(Cinfo, Msg, len, TRUE);
 
@@ -3219,10 +3223,20 @@ DoReceivedData(int Stream)
 			if (len == 1 && Msg[0] == 0)
 				continue;
 
+			if (GetApplNum(Cinfo->BPQStream) == 32)			// Host Appl
+			{
+				// Check for ^D to disconnect
+
+				if (_memicmp(Msg, "^d\r", 3) == 0)
+				{
+					SessionControl(Cinfo->BPQStream, 2, 0);
+				}
+			}
+
 			WritetoOutputWindow(Cinfo, Msg, len, FALSE);
 	
 			Cinfo->SlowTimer = 0;
-
+		
 			if (Cinfo->Active == FALSE)
 				FlashWindow(Cinfo->hConsole, TRUE);
 //				Beep(440,250);

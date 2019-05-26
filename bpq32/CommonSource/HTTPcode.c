@@ -328,6 +328,9 @@ void UndoTransparency(char * input)
 	char c;
 	int hex;
 
+	if (input == NULL)
+		return;
+
 	ptr1 = ptr2 = input;
 
 	// Convert any %xx constructs
@@ -1988,6 +1991,7 @@ doHeader:
 #ifdef LINBPQ
 			SaveUIConfig();
 #else
+			SaveUIConfig();
 			
 			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil\\UIPort%d", Port);
 

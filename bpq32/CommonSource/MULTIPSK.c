@@ -89,8 +89,6 @@ extern UCHAR BPQDirectory[];
 
 static int MPSKChannel[MAXBPQPORTS+1];			// BPQ Port to MPSK Port
 static int BPQPort[MAXMPSKPORTS][MAXBPQPORTS+1];	// MPSK Port and Connection to BPQ Port
-static int MPSKtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
-static int BPQtoMPSK_Q[MAXBPQPORTS+1];			// Frames for MPSK. indexed by MPSK port. Only used it TCP session is blocked
 
 static int MasterPort[MAXBPQPORTS+1];			// Pointer to first BPQ port for a specific MPSK host
 
@@ -159,8 +157,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
 	UINT * buffptr;
-	char txbuff[500];
-	unsigned int bytes,txlen=0;
+	unsigned int txlen=0;
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
@@ -254,39 +251,20 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				if (FD_ISSET(TNC->TCPSock,&writefs))
 				{
-					if (BPQtoMPSK_Q[port] == 0)
-					{
-						//	Connect success
+					//	Connect success
 
-						TNC->CONNECTED = TRUE;
-						TNC->CONNECTING = FALSE;
+					TNC->CONNECTED = TRUE;
+					TNC->CONNECTING = FALSE;
 
-						// If required, send signon
+					// If required, send signon
 				
-						send(TNC->TCPSock,"\x1a", 1, 0);
-						send(TNC->TCPSock,"DIGITAL MODE ?", 14, 0);
-						send(TNC->TCPSock,"\x1b", 1, 0);
+					send(TNC->TCPSock,"\x1a", 1, 0);
+					send(TNC->TCPSock,"DIGITAL MODE ?", 14, 0);
+					send(TNC->TCPSock,"\x1b", 1, 0);
 
-//						EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
-					}
-					else
-					{
-						// Write block has cleared. Send rest of packet
-
-						buffptr=Q_REM(&BPQtoMPSK_Q[port]);
-
-						txlen=buffptr[1];
-
-						memcpy(txbuff,buffptr+2,txlen);
-
-						bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
-					
-						ReleaseBuffer(buffptr);
-
-					}
-
+//					EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 				}
-					
+								
 				if (FD_ISSET(TNC->TCPSock,&errorfs))
 				{
 

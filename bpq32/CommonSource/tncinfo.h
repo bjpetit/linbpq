@@ -364,6 +364,7 @@ typedef struct TNCINFO
 #define H_UIARQ 12
 #define H_ARDOP 13
 #define H_VARA 14
+#define H_SERIAL 15
 
 
 	int Port;					// BPQ Port Number
@@ -727,7 +728,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT, BOOL AllowTR);
 VOID ShowTraffic(struct TNCINFO * TNC);
 int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet);
-VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode);
+VOID SendMH(struct TNCINFO * TNC, char * call, char * freq, char * LOC, char * Mode);
 VOID MoveWindows(struct TNCINFO * TNC);
 
 static VOID TidyClose(struct TNCINFO * TNC, int Stream);

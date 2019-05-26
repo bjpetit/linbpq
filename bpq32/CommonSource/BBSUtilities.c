@@ -2130,7 +2130,7 @@ PrintMessage(HDC hDC, struct MsgInfo * Msg)
 			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 
-		if (Msg->B2Flags)
+		if (Msg->B2Flags & B2Msg)
 		{
 			// Remove B2 Headers (up to the File: Line)
 			
@@ -3744,7 +3744,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 	{
 		int Length;
 
-		if (Msg->B2Flags)
+		if (Msg->B2Flags & B2Msg)
 		{
 			char * ptr;
 	
@@ -6552,7 +6552,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 
 		// If a B2 Message, remove B2 Header
 
-		if (conn->FwdMsg->B2Flags)
+		if (conn->FwdMsg->B2Flags & B2Msg)
 		{		
 			// Remove all B2 Headers, and all but the first part.
 					
@@ -6722,7 +6722,7 @@ BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
 
 	// If a B2 Message, remove B2 Header
 
-	if (Msg->B2Flags)
+	if (Msg->B2Flags & B2Msg)
 	{		
 		// Remove all B2 Headers, and all but the first part.
 					
@@ -7835,7 +7835,7 @@ VOID BBSSlowTimer()
 		if (LogHandle[n])
 		{
 			time_t LT = time(NULL);
-			if ((LT - LastLogTime[n]) > 60)
+			if ((LT - LastLogTime[n]) > 30)
 			{
 				LastLogTime[n] = LT;
 				fclose(LogHandle[n]);
@@ -8826,6 +8826,13 @@ int Connected(int Stream)
 
 			strlop(callsign, ' ');		// Remove trailing spaces
 
+			if (strcmp(&callsign[strlen(callsign) - 2], "-T") == 0)
+				conn->RadioOnlyMode = 'T';
+			else if (strcmp(&callsign[strlen(callsign) - 2], "-R") == 0)
+				conn->RadioOnlyMode = 'R';
+			else
+				conn->RadioOnlyMode = 0;
+
 			memcpy(conn->Callsign, callsign, 10);
 
 			strlop(callsign, '-');		// Remove any SSID
@@ -9788,7 +9795,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 
 		// If a B2 Message, remove B2 Header
 
-		if (conn->FwdMsg->B2Flags)
+		if (conn->FwdMsg->B2Flags & B2Msg)
 		{		
 			// Remove all B2 Headers, and all but the first part.
 					

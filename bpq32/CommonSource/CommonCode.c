@@ -761,7 +761,7 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 {
 	TRANSPORTENTRY * Session;
 	int Index = 0;
-	void  ** buffptr;
+	PMSGWITHLEN buffptr;
 
 	// Stop Scanner
 
@@ -821,11 +821,11 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 
 	if (HFCTEXTLEN > 1 && SENDCTEXT)
 	{
-		buffptr = GetBuff();
+		buffptr = (PMSGWITHLEN)GetBuff();
 		if (buffptr == 0) return TRUE;			// No buffers
 
-		buffptr[1] = HFCTEXTLEN;
-		memcpy(&buffptr[2], HFCTEXT, HFCTEXTLEN);
+		buffptr->Len = HFCTEXTLEN;
+		memcpy(&buffptr->Data[0], HFCTEXT, HFCTEXTLEN);
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 	}
 	return TRUE;
@@ -3098,7 +3098,7 @@ VOID SendLocation()
 
 
 
-VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
+VOID SendMH(struct TNCINFO * TNC, char * call, char * freq, char * LOC, char * Mode)
 {
 	MESSAGE AXMSG;
 	PMESSAGE AXPTR = &AXMSG;
@@ -3113,7 +3113,10 @@ VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
 	// Block includes the Msg Header (7 bytes), Len Does not!
 
 	memcpy(AXPTR->DEST, ReportDest, 7);
-	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	if (TNC->PortRecord->PORTCONTROL.PORTCALL[0])
+		memcpy(AXPTR->ORIGIN, TNC->PortRecord->PORTCONTROL.PORTCALL, 7);
+	else
+		memcpy(AXPTR->ORIGIN, MYCALL, 7);
 	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
 	AXPTR->DEST[6] |= 0x80;			// set Command Bit
 
@@ -3493,6 +3496,7 @@ VOID UIThread()
 				{
 					MinCounter[Port] = Interval[Port];
 					SendUIBeacon(Port);
+					break;					// Only one per interval
 				}
 			}
 		}
@@ -3694,7 +3698,7 @@ VOID SetupUI(int Port)
 	}
 }
 
-/*
+#ifndef LINBPQ
 
 VOID SaveIntValue(config_setting_t * group, char * name, int value)
 {
@@ -3714,9 +3718,8 @@ VOID SaveStringValue(config_setting_t * group, char * name, char * value)
 		config_setting_set_string(setting, value);
 
 }
-*/
 
-#ifdef LINBPQ
+#endif
 
 config_t cfg;
 
@@ -3772,7 +3775,6 @@ VOID SaveUIConfig()
 
 	config_destroy(&cfg);
 }
-#endif
 
 VOID GetUIConfig()
 {
@@ -3917,6 +3919,9 @@ VOID GetUIConfig()
 			RegCloseKey(hKey);
 		}
 	}
+
+	SaveUIConfig();
+
 #endif
 
 	_beginthread(UIThread,0,(int)0);
@@ -4044,6 +4049,8 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			}
 
 			SetupUI(Port);
+
+			SaveUIConfig();
 
 			return (INT_PTR)TRUE;
 

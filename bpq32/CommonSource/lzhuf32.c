@@ -939,7 +939,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 */
 		if (_stricmp(conn->Callsign, "RMS") == 0)
-			Msg->B2Flags |= FromRMS;
+			Msg->B2Flags |= FromCMS;
+
+		if (conn->RadioOnlyMode == 'T')
+			Msg->B2Flags |= RadioOnlyMsg;
+		else if (conn->RadioOnlyMode == 'R')
+			Msg->B2Flags |= RadioOnlyFwd;
 
 		ptr1 = outfile;
 	Loop:
@@ -1001,10 +1006,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				if (ptr3) *ptr3 = 0;
 			}
 
-			// If from RMS, and no @ in message, append @winlink.org to the B2 Header.
+			// If from a CMS, and no @ in message, append @winlink.org to the B2 Header.
 			// so messages passed via B2 know it is from Winlink
 
-			if ((Msg->B2Flags & FromRMS) && strchr(FullFrom, '@') == NULL)
+			if ((Msg->B2Flags & FromCMS) && strchr(FullFrom, '@') == NULL)
 			{
 				// Move Message down buffer - ptr2 is the insertion point
 
@@ -1144,7 +1149,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 				else
 				{
-					if ((conn->UserPointer->flags & F_NOWINLINK) == 0)	// treat as Packet Address?
+					if (conn->RadioOnlyMode == 0 && (conn->UserPointer->flags & F_NOWINLINK) == 0)	// treat as Packet Address?
 					{
 						strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
 						RMSMsgs ++;
@@ -1191,7 +1196,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 				else
 				{
-					if ((conn->UserPointer->flags & F_NOWINLINK) == 0)	//  Dont default to winlink.org
+					if (conn->RadioOnlyMode == 0 && (conn->UserPointer->flags & F_NOWINLINK) == 0)	//  Dont default to winlink.org
 					{
 						strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
 						RMSMsgs ++;
@@ -1422,7 +1427,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			// If from WL2K, create one message for each to: or cc: that is a local user
 
-			if (Msg->B2Flags & FromRMS)
+			if (Msg->B2Flags & FromCMS)
 			{
 				struct UserInfo * user;
 				char Call[10];
@@ -1487,7 +1492,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			for (i = 0; i < Recipients; i++)
 			{
-				if (LocalMsg[i] || (conn->UserPointer->flags & F_NOWINLINK) || FindRMS()== NULL)
+				if (conn->RadioOnlyMode || LocalMsg[i] || (conn->UserPointer->flags & F_NOWINLINK) || FindRMS()== NULL)
 				{
 					LocalMsg[i] = TRUE;				// Make sure local copy is created
 					continue;						// For a local RMS user

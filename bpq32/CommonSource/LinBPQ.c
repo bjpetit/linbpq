@@ -534,6 +534,7 @@ int main(int argc, char * argv[])
 	}
 
 #else
+	setlinebuf(stdout);
 	struct sigaction act;
  	openlog("LINBPQ", LOG_PID, LOG_DAEMON);
 #ifndef MACBPQ
@@ -1293,7 +1294,7 @@ int APIENTRY WritetoConsole(char * buff)
 
 int WritetoConsoleLocal(char * buff)
 {
-	return printf("%s", buff);
+	printf("%s", buff);
 }
 /*
 UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
@@ -1319,6 +1320,7 @@ void * ETHERExtInit(struct PORTCONTROL *  PortEntry);
 void * AXIPExtInit(struct PORTCONTROL *  PortEntry);
 void * ARDOPExtInit(EXTPORTDATA * PortEntry);
 void * VARAExtInit(EXTPORTDATA * PortEntry);
+void * SerialExtInit(EXTPORTDATA * PortEntry);
 
 void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
@@ -1390,6 +1392,9 @@ void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "VARA"))
 		return VARAExtInit;
+
+	if (strstr(Value, "SERIAL"))
+		return SerialExtInit;
 
 	return(0);
 }

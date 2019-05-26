@@ -912,7 +912,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace @%s taken from Alias File", Alias->Alias);
 			strcpy(Msg->via, Alias->Alias);
-			if (Msg->B2Flags)
+			if (Msg->B2Flags & B2Msg)
 				UpdateB2Dest(Msg, Alias->Alias);
 
 			SaveMessageDatabase();

@@ -217,7 +217,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		// If a B2 Message, remove B2 Header
 
-		if (conn->FwdMsg->B2Flags)
+		if (conn->FwdMsg->B2Flags & B2Msg)
 		{		
 			// Remove all B2 Headers, and all but the first part.
 					

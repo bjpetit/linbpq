@@ -55,7 +55,6 @@ extern int Ver[];
 
 int KillTNC(struct TNCINFO * TNC);
 int RestartTNC(struct TNCINFO * TNC);
-VOID ARDOPAbort(struct TNCINFO * TNC);
 
 uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
 
@@ -1131,7 +1130,7 @@ DoMove:
 	ReportMode[3] = Direction;
 	ReportMode[4] = 0;
 
- 	SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
+ 	SendMH(TNC, Call, ReportFreq, LOC, ReportMode);
 
 	return;
 }
