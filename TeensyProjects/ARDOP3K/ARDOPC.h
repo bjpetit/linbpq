@@ -7,7 +7,13 @@
 //#define XCONST			// for building sample arrays
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "3.0.1.18fh-BPQ"
+#define ProductVersion "3.0.1.18fk-BPQ"
+
+// i revert 2500 levels add check for two tones
+// j maintain AcquireFrameSyncRSBAvg state over samplee buffers
+
+// Suspect tuning isn't accurate enough for psk frame type
+// k add CorrectPhaseForTuningOffset for all types, including frame type
 
 //#define USE_SOUNDMODEM
 
@@ -15,8 +21,8 @@
 
 #define SendSize 1200		// 100 mS for now
 #ifdef WIN32
-#define ReceiveSize 240		// try 50mS 100 mS for now
-#define NumberofinBuffers 4
+#define ReceiveSize 240	// try 50mS 100 mS for now
+#define NumberofinBuffers 2
 #else
 #define ReceiveSize 1200		// try 50mS 100 mS for now
 #define NumberofinBuffers 2

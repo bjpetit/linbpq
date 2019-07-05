@@ -925,7 +925,8 @@ void SampleSink(short Sample)
 
 	if (SampleNo >= intFilLen)
 	{
-		intFilteredSample = intFilteredSample * ScaleFactor; //  rescales for gain of filter
+		intFilteredSample = intFilteredSample * 0.00833333333f; //  rescales for gain of filter
+//		intFilteredSample = intFilteredSample * ScaleFactor; //  rescales for gain of filter
 		largest = max(largest, intFilteredSample);	
 		smallest = min(smallest, intFilteredSample);
 		
