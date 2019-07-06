@@ -2306,7 +2306,7 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 					dblLeaderSNAvg = ((dblLeaderSNAvg * intLeaderDetects) + dblPwrSNdB) / (1 + intLeaderDetects);
 					intLeaderDetects += 1;
 				}
-				*dblOffsetHz = 2.0f; //dblOffset;
+				*dblOffsetHz = dblOffset;
 				dblNCOFreq = 3000 + *dblOffsetHz;	// Set the NCO frequency and phase inc for mixing 
 				dblNCOPhaseInc = dbl2Pi * dblNCOFreq / 12000;
 				// don't advance the pointer here

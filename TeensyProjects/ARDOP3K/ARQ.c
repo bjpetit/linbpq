@@ -878,7 +878,7 @@ void SendData()
 		blnEnbARQRpt = TRUE;			
 		blnLastFrameSentData = FALSE;
 
-		intFrameRepeatInterval = ComputeInterFrameInterval(3000);  // keep IDLE repeats at 2 sec 
+		intFrameRepeatInterval = ComputeInterFrameInterval(2000);  // keep IDLE repeats at 2 sec 
 	
 		WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.SendData]  Continue sending  IDLE");
 	
@@ -957,7 +957,7 @@ void SendData()
 			
 			blnLastFrameSentData = FALSE;
 
-			intFrameRepeatInterval = ComputeInterFrameInterval(3000);  // keep IDLE repeats at 2 sec 
+			intFrameRepeatInterval = ComputeInterFrameInterval(2000);  // keep IDLE repeats at 2 sec 
 
 			ClearDataToSend(); // ' 0.6.4.2 This insures new OUTOUND queue is updated (to value = 0)
 	
@@ -1531,6 +1531,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				sprintf(Msg, "CONNECTED %s %d [%s]", strRemoteCallsign, intSessionBW, strGridSquare);
 				SendCommandToHost(Msg);
 
+				
 				sprintf(Msg, "STATUS ARQ CONNECTION ESTABLISHED WITH %s,BW=%d,GS=%s", strRemoteCallsign, intSessionBW, strGridSquare);
 				SendCommandToHost(Msg);
 				ProtocolState = IRS;
@@ -1542,9 +1543,13 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				bytSessionID = bytPendingSessionID; // This sets the session ID now 
 				bytSessionID = GenerateSessionID(strRemoteCallsign, strLocalCallsign);
 
-				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
+//				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
+				SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
+				EncodeAndSend4FSKControl(BREAK, bytSessionID, LeaderLength);
 
-				 return;
+				return;
+				
+
 			}
 			// ConAck processing from ISS
 /*                

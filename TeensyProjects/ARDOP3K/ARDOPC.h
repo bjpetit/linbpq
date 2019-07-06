@@ -6,14 +6,8 @@
 #define XCONST const	
 //#define XCONST			// for building sample arrays
 
-#define ProductName "ARDOP TNC"
-#define ProductVersion "3.0.1.18fk-BPQ"
 
-// i revert 2500 levels add check for two tones
-// j maintain AcquireFrameSyncRSBAvg state over samplee buffers
-
-// Suspect tuning isn't accurate enough for psk frame type
-// k add CorrectPhaseForTuningOffset for all types, including frame type
+#include "Version.h"
 
 //#define USE_SOUNDMODEM
 
