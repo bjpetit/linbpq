@@ -13,6 +13,7 @@ UCHAR bytFrameType;
 BOOL blnSendIDFrame;
 extern BOOL NeedID;		// SENDID Command Flag
 extern int intRepeatCount;
+extern int unackedByteCount;
 
 extern int intLastFrameIDToHost;
 int bytFailedDataLength; 
@@ -108,9 +109,6 @@ BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL
 		return FALSE;
 	}
         
-	//While objMain.SoundIsPlaying
-       //    Thread.Sleep(100)
-        //End While
 
 	blnAbort = FALSE;
 
@@ -224,7 +222,6 @@ BOOL GetNextFECFrame()
         return FALSE;
 	}
 
-	
 	if (ProtocolState != FECSend)
 		return FALSE;
 
@@ -270,6 +267,8 @@ sendit:
 		while (intNumCar)
 			AckCarrier(--intNumCar);
 
+		unackedByteCount = 0;
+
 		NextPSN = 1;
 
 		return TRUE;
@@ -314,6 +313,9 @@ sendit:
 	FECRepeatsSent++;
 	intFECFramesSent++;
 
+	if (FECRepeatsSent >= FECRepeats)
+		blnEnbARQRpt = FALSE;				// Stop repeats
+
 	return TRUE;
 }
 
@@ -324,6 +326,8 @@ extern int frameLen;
 void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK)
 {
 	// Determine if this frame should be passed to Host.
+
+	return;			// I think data has to be forwarded in PassGoodDataToHost
 
 	if (blnFrameDecodedOK)
 	{

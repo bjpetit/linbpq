@@ -314,13 +314,25 @@ void txSleep(int mS)
 {
 	// called while waiting for next TX buffer. Run background processes
 
+/*	while (mS > 50)
+	{
+		PollReceivedSamples();			// discard any received samples
+		if (SerialMode)
+			SerialHostPoll();
+		else
+			TCPHostPoll();
+
+		Sleep(mS);
+		mS -= 50;
+	}
+*/
+	Sleep(mS);
+
 	PollReceivedSamples();			// discard any received samples
 	if (SerialMode)
 		SerialHostPoll();
 	else
 		TCPHostPoll();
-
-	Sleep(mS);
 
 	if (PKTLEDTimer && Now > PKTLEDTimer)
     {
@@ -765,8 +777,6 @@ void SoundFlush()
 
 	if (blnEnbARQRpt > 0 || blnDISCRepeating)	// Start Repeat Timer if frame should be repeated
 		dttNextPlay = Now + intFrameRepeatInterval;
-
-//	WriteDebugLog(LOGDEBUG, "Now %d Now - dttNextPlay 1  = %d", Now, Now - dttNextPlay);
 
 	KeyPTT(FALSE);		 // Unkey the Transmitter
 

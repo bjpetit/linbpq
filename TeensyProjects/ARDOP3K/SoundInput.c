@@ -922,7 +922,10 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			if (ProtocolState == FECSend)
 					return;
 		}
-		while (State == SearchingForLeader && nSamples >= 1200)
+
+		// We need 960 (80 mS) samples to do 12.5 Hz bins 
+
+		while (State == SearchingForLeader && nSamples >= 960)
 		{
 			int intSN;
 			
@@ -949,6 +952,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 				WriteDebugLog(LOGDEBUG, "Peak Sample in Header %d", PeakFromHeader);
 
+				// ?? Why do we advance 480 (40 ms) ??
+			
 				nSamples -= 480;
 				Samples += 480;		// !!!! needs attention !!!
 
@@ -957,18 +962,11 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			}
 			else
 			{
-				if (SlowCPU)
-				{
-					nSamples -= 480;
-					Samples += 480;		 // advance pointer 2 symbols (40 ms) ' reduce CPU loading
-				}
-				else
-				{
-					nSamples -= 240;
-					Samples += 240;		// !!!! needs attention !!!
-				}
+				nSamples -= 240;
+				Samples += 240;		// !!!! needs attention !!!
 			}
 		}
+
 		if (State == SearchingForLeader)
 		{
 			// Save unused samples
@@ -1384,10 +1382,10 @@ ProcessFrame:
 #endif
 			if (AccumulateStats)
 				if (IsDataFrame(intFrameType))
-					if (strstr (strMod, "PSK"))
-						intGoodPSKFrameDataDecodes++;
-					else if (strstr (strMod, "QAM"))
+					if (strstr (strMod, "APSK"))
 						intGoodQAMFrameDataDecodes++;
+					else if (strstr (strMod, "PSK"))
+						intGoodPSKFrameDataDecodes++;
 					else	
 						intGoodFSKFrameDataDecodes++;
 
@@ -1450,10 +1448,10 @@ ProcessFrame:
 
             if (AccumulateStats)
 				if (IsDataFrame(intFrameType))
-					if (strstr (strMod, "PSK"))
-						intFailedPSKFrameDataDecodes++;
-					else if (strstr (strMod, "QAM"))
+					if (strstr (strMod, "APSK"))
 						intFailedQAMFrameDataDecodes++;
+					else if (strstr (strMod, "PSK"))
+						intFailedPSKFrameDataDecodes++;
 					else
 						intFailedFSKFrameDataDecodes++;
 
@@ -1489,8 +1487,9 @@ ProcessFrame:
 		}
 		if (ProtocolMode == FEC && ProtocolState != FECSend)
 		{
+			// ?? Why ??
 			SetARDOPProtocolState(DISC);
-			InitializeConnection();
+			//InitializeConnection();
 		}
 skipDecode:			
 		State = SearchingForLeader;
@@ -3479,18 +3478,7 @@ void DemodulateFrame(int intFrameType)
 }
 
 
-// Function to Strip quality from ACK/NAK frame types
-
-BOOL DecodeACKNAK(int intFrameType, int *  intQuality)
-{
-	*intQuality = 38 + (2 * (intFrameType & 0x1F));  //mask off lower 5 bits ' Range of 38 to 100 in steps of 2
-     // strRcvFrameTag = "_Q" & intQuality.ToString
-	return TRUE;
-}
-
-
 int intSNdB = 0, intQuality = 0;
-
 
 BOOL DecodeFrame(int xxx, UCHAR * bytData)
 {
@@ -4169,7 +4157,6 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 	int intAccOffsetCnt = 0, intAccOffsetCntBeginning = 0, intAccOffsetCntEnd = 0;
 	int	intAccOffsetBeginning = 0, intAccOffsetEnd = 0, intAccOffset = 0;
     int intPSKMode;
-
 
 	if (strcmp(strMod, "8PSK") == 0 || strcmp(strMod, "16QAM") == 0)
 		intPSKMode = 8;

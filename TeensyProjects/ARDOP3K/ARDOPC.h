@@ -6,8 +6,8 @@
 #define XCONST const	
 //#define XCONST			// for building sample arrays
 
-
-#include "Version.h"
+extern const char ProductName[];
+extern const char ProductVersion[];
 
 //#define USE_SOUNDMODEM
 

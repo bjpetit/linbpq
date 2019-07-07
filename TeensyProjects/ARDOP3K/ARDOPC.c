@@ -15,6 +15,7 @@
 #define closesocket close
 #endif
 
+#include "Version.h"
 #include "ARDOPC.h"
 #include "getopt.h"
 
@@ -335,6 +336,8 @@ extern UCHAR bytSessionID;
 int intLastRcvdFrameQuality;
 
 int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
+
+// This is the list of modes used by FEC
 
 const char strAllDataModes[17][16] =
 {
@@ -2021,9 +2024,8 @@ void ClearDataToSend()
 	bytDataToSendLength = 0;
 	FreeSemaphore();
 
-#ifdef TEENSY
 	SetLED(TRAFFICLED, FALSE);
-#endif
+
 	QueueCommandToHost("BUFFER 0");
 }
 
@@ -2071,10 +2073,8 @@ void RemoveDataFromQueue(int Len)
 
 	FreeSemaphore();
 
-#ifdef TEENSY
 	if (bytDataToSendLength == 0)
-		SetLED(TRAFFICLED, FALSE);
-#endif		
+		SetLED(TRAFFICLED, FALSE);	
 
 	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength + unackedByteCount);
 	QueueCommandToHost(HostCmd);
@@ -2098,8 +2098,18 @@ void CheckTimers()
 
 			//	Repeat mechanism for normal repeated FEC or ARQ frames
       
-			WriteDebugLog(LOGDEBUG, "Repeating Last Frame");
-			RemodulateLastFrame();
+			// ?? Should we repeat is we aren't in SearchingForLeader ??
+
+			if (State == SearchingForLeader)
+			{
+				WriteDebugLog(LOGDEBUG, "Repeating Last Frame");
+				RemodulateLastFrame();
+			}
+			else
+			{
+				WriteDebugLog(LOGDEBUG, "Repeat needed but receiving frame - wait");
+				dttNextPlay = Now + intFrameRepeatInterval;
+			}
 		}
 		else
 			// I think this means we have exceeded retries or had an abort

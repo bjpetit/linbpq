@@ -878,7 +878,9 @@ void SendData()
 		blnEnbARQRpt = TRUE;			
 		blnLastFrameSentData = FALSE;
 
-		intFrameRepeatInterval = ComputeInterFrameInterval(2000);  // keep IDLE repeats at 2 sec 
+		// This is the repeat after timeout time, not the normal interval after an ack
+
+		intFrameRepeatInterval = ComputeInterFrameInterval(3000);  // keep IDLE repeats at 2 sec 
 	
 		WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.SendData]  Continue sending  IDLE");
 	
@@ -897,6 +899,10 @@ void SendData()
 			return;
 		
 		Send10MinID();  // Send ID if 10 minutes since last
+
+		// Drop through
+
+	case IRStoISS:
 
 		if (unackedByteCount > 0 || bytDataToSendLength > 0)
 		{
@@ -956,6 +962,8 @@ void SendData()
 			dttTimeoutTrip = Now;
 			
 			blnLastFrameSentData = FALSE;
+
+			// This is the repeat after timeout time, not the normal interval after an ack
 
 			intFrameRepeatInterval = ComputeInterFrameInterval(2000);  // keep IDLE repeats at 2 sec 
 
@@ -1382,9 +1390,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				QueueCommandToHost(HostCmd);
 
 				bytDataToSendLength = 0;		// Clear queue
-#ifdef TEENSY
+
 				SetLED(TRAFFICLED, FALSE);
-#endif
+
 				blnPending = TRUE;				
 				blnEnbARQRpt = FALSE;
 
@@ -1434,6 +1442,129 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 		}
 		blnEnbARQRpt = FALSE;
 		return;
+
+		// IDLE must be just before IRS as we may need to drop through
+
+		case IDLE:			// The state where the ISS has no data to send and is looking for a BREAK from the IRS
+ 
+			if (!blnFrameDecodedOK)
+				return; // No decode so continue to wait
+
+			// I don't think IDLE should just repeat as I want
+			// to have different timout and repeat intervals.
+			// So on ACK cancel and repeat and resend IDLE if nothing
+			// to send else send data
+
+			if (intFrameType == ACK)
+			{
+				if (bytDataToSendLength > 0)	 // If ACK and Data to send
+				{
+					WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessedRcvdARQFrame] Protocol state IDLE, ACK Received with Data to send. Go to ISS Data state.");
+					
+					SetARDOPProtocolState(ISS);
+					ARQState = ISSData;
+					SendData(FALSE);
+					return;
+				}
+				else
+				{
+					// ACK with no data.
+
+					SetARDOPProtocolState(IDLE);
+					ARQState = ISSData;
+					SendData(FALSE);		// Will send IDLE as no data
+					return;
+				}
+			}
+
+			// process BREAK here Send ID if over 10 min. 
+
+			if (intFrameType == BREAK)
+			{
+				// Initiate the transisiton to IRS
+
+				dttTimeoutTrip = Now;
+				blnEnbARQRpt = FALSE;
+				EncodeAndSend4FSKControl(OVER, bytSessionID, LeaderLength);
+
+				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from IDLE, Go to IRS, Substate IRSfromISS");
+                SendCommandToHost("STATUS BREAK received from Protocol State IDLE, new state IRS");
+				SetARDOPProtocolState(IRS);
+				//Substate IRSfromISS enables processing Rule 3.5 later
+				ARQState = IRSfromISS; 
+				
+				intLinkTurnovers += 1;
+				intLastARQDataFrameToHost = -1;  // precondition to an illegal frame type (ensures the new IRS does not reject a frame)
+				memset(CarrierOk, 0, sizeof(CarrierOk));	// CLear MEM ARQ Stuff
+				LastDataFrameType = -1;
+				return;
+			}
+			if (intFrameType == DISCFRAME) //  IF DISC received from IRS Handles protocol rule 1.5
+			{
+				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame]  DISC frame received Send END...go to DISC state");
+                
+				if (AccumulateStats) LogStats();
+					
+				QueueCommandToHost("DISCONNECTED");
+				sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s ", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				tmrFinalID = Now + 3000;
+				blnDISCRepeating = FALSE;
+				EncodeAndSend4FSKControl(END, bytSessionID, LeaderLength);
+                bytLastARQSessionID = bytSessionID; // capture this session ID to allow answering DISC from DISC state
+                ClearDataToSend();
+                SetARDOPProtocolState(DISC);
+				blnEnbARQRpt = FALSE;
+				return;
+			}
+			if (intFrameType == END)
+			{
+				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame]  END received ... going to DISC state");
+				if (AccumulateStats) LogStats();
+				QueueCommandToHost("DISCONNECTED");	
+				sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s ", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				ClearDataToSend();
+
+				if (CheckValidCallsignSyntax(strLocalCallsign))
+				{
+					dttLastFECIDSent = Now;
+					EncLen = EncodePSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes, 0x3F);
+					Mod1Car50Bd4PSK(&bytEncodedBytes[0], EncLen, 0);		// only returns when all sent
+				}     
+				SetARDOPProtocolState(DISC); 
+				blnEnbARQRpt = FALSE;
+				blnDISCRepeating = FALSE;
+				return;
+			}
+			
+			if (IsDataFrame(intFrameType))
+			{
+				// Transition to IRS and drop through to process
+
+				dttTimeoutTrip = Now;
+				blnEnbARQRpt = FALSE;
+
+				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame] Data Rcvd from IDLE, Go to IRS, Substate IRSfromISS");
+                SendCommandToHost("STATUS BREAK received from Protocol State IDLE, new state IRS");
+				SetARDOPProtocolState(IRS);
+				//Substate IRSfromISS enables processing Rule 3.5 later
+				ARQState = IRSfromISS; 
+				
+				intLinkTurnovers += 1;
+
+				// We already have the first frame. so mustn't reset LastDataFrameType.
+				// We haven't passed anything to host so can set intLastARQDataFrameToHost
+
+				intLastARQDataFrameToHost = -1;  // precondition to an illegal frame type (ensures the new IRS does not reject a frame)
+//				LastDataFrameType = -1;
+			}
+			else
+
+				// Shouldn'r get here ??
+  				return;
+		
+
 	
 
 	case IRS:
@@ -1543,63 +1674,21 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				bytSessionID = bytPendingSessionID; // This sets the session ID now 
 				bytSessionID = GenerateSessionID(strRemoteCallsign, strLocalCallsign);
 
-//				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
-				SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
-				EncodeAndSend4FSKControl(BREAK, bytSessionID, LeaderLength);
+				// As we now send data in response to IDLE do we need to BREAK??
 
-				return;
-				
+//				SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
+//				EncodeAndSend4FSKControl(BREAK, bytSessionID, LeaderLength);
+
+				EncodeAndSend4FSKControl(ACK, bytSessionID, LeaderLength);
+
+				return;		
 
 			}
-			// ConAck processing from ISS
-/*                
-			if (intFrameType == ConAck)	// Process ConACK frames from ISS confirming Bandwidth and providing ISS's received leader info.
-			{
-				// WriteDebugLog(LOGDEBUG, ("[ARDOPprotocol.ProcessRcvdARQFrame] IRS Measured RoundTrip = " & intARQRTmeasuredMs.ToString & " ms")
-                      				
-				CalculateOptimumLeader(10 * bytData[0], LeaderLength);
 
-				bytSessionID = bytPendingSessionID; // This sets the session ID now 
-               
-				blnARQConnected = TRUE;
-				blnPending = FALSE;
-				tmrIRSPendingTimeout = 0;
-
-				dttTimeoutTrip = Now;
-				ARQState = IRSData;
-				intLastARQDataFrameToHost = -1;
-				intTrackingQuality = -1;
-				intNAKctr = 0;
-				dttLastFECIDSent = Now;
-
-				blnEnbARQRpt = FALSE;
-				sprintf(HostCmd, "CONNECTED %s %d", strRemoteCallsign, intSessionBW);
-				QueueCommandToHost(HostCmd);
- 
-				sprintf(HostCmd, "STATUS ARQ CONNECTION FROM %s: SESSION BW = %d HZ", strRemoteCallsign, intSessionBW);
-				QueueCommandToHost(HostCmd);
-
-				EncodeAndSend4FSKControl(DataACK, bytSessionID, LeaderLength);
-
-				// Initialize the frame type and pointer based on bandwidth (added 0.3.1.3)
-				
-				GetNextFrameData(&intShiftUpDn, 0, NULL, TRUE);		//' just sets the initial data, frame type, and sets intShiftUpDn= 0
-          
-				//       ' Update the main form menu status lable 
-                //        Dim stcStatus As Status = Nothing
-                //        stcStatus.ControlName = "mnuBusy"
-                //       stcStatus.Text = "Connected " & .strRemoteCallsign
-                 //       queTNCStatus.Enqueue(stcStatus)
-
-				return;
-			}
-*/
 		}
 
 		if (ARQState == IRSData || ARQState == IRSfromISS)  // Process Data or ConAck if ISS failed to receive ACK confirming bandwidth so ISS repeated ConAck
 		{
-			// ConAck processing from ISS
-
 			if (blnFrameDecodedOK && intFrameType == IDFRAME)
 			{
 				//  Process ID frames (ISS failed to receive prior ACK)
@@ -1684,6 +1773,17 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				return;
 			}
 
+			// Try replying to IDLE with Data if something to send.
+
+			// Can't transition straight to ISS as ISS may miss frame.
+			// So stay in pending till AckByChar received.
+
+			// ISS will send either AckByChar or another IDLE
+
+			// ?? How do we handle missed AckByChar - old ISS won't repleat.
+			// So treat same as sending BREAK and repeat. Try to set a different repeat
+			// interval to reduce risk of repeated collisions
+
 			if (blnFrameDecodedOK && intFrameType == IDLEFRAME) //  IF IDLE received from ISS 
 			{
 				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame]  IDLE received in ProtocolState %s substate %s", ARDOPStates[ProtocolState], ARQSubStates[ARQState]);
@@ -1693,15 +1793,32 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					if (CheckForDisconnect())
 						return;
 
+	//				txSleep(250);		// Give chance to collect data from host
+
 					if ((AutoBreak && bytDataToSendLength > 0) || blnBREAKCmd)
 					{
 						// keep BREAK Repeats fairly short (preliminary value 1 - 3 seconds)
+		
 						intFrameRepeatInterval = 2000; //ComputeInterFrameInterval(1000 + rand() % 2000);
 
 						SetARDOPProtocolState(IRStoISS); // (ONLY IRS State where repeats are used)
 						SendCommandToHost("STATUS QUEUE BREAK new Protocol State IRStoISS");
 						blnEnbARQRpt = TRUE;  // setup for repeats until changeover
- 						EncodeAndSend4FSKControl(BREAK, bytSessionID, LeaderLength);
+ //						EncodeAndSend4FSKControl(BREAK, bytSessionID, LeaderLength);
+		
+						WriteDebugLog(LOGDEBUG, "[ProcessRcvdARQFrame] IDLE with data to send. Send Data and enter IRStoISS");
+						intLastARQDataFrameToHost = -1; // initialize to illegal value to capture first new ISS frame and pass to host
+
+						if (bytCurrentFrameType == 0) //  hasn't been initialized yet
+						{
+							WriteDebugLog(LOGDEBUG, "[ProcessNewSamples, ProtocolState=IRStoISS, Initializing GetNextFrameData");
+		   					GetNextFrameData(&intShiftUpDn, 0, "", TRUE); // just sets the initial data, frame type, and sets intShiftUpDn= 0
+						}
+	
+						ResetTXState();
+	
+						SendData();				 //       Send new data from outbound queue and set up repeats
+						return;
 					}
 					else
 					{
@@ -1807,113 +1924,29 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				return;
 			}
+		}
 
-			break;
+		break;
 
 
-			// IRStoISS State **************************************************************************************************
-
+		// IRStoISS State **************************************************************************************************
+		// Must be just before ISS so we can drop through
 	
-		case IRStoISS: // In this state answer any data frame with a BREAK. If ACK received go to Protocol State ISS
-
-			break;
- 
-		case IDLE:			// The state where the ISS has no data to send and is looking for a BREAK from the IRS
- 
-			if (!blnFrameDecodedOK)
-				return; // No decode so continue to wait
-
-			// I don't think IDLE should just repeat as I want
-			// to have different timout and repeat intervals.
-			// So on ACK cancel and repeat and resend IDLE if nothing
-			// to send else send data
-
-			if (intFrameType == ACK)
+		case IRStoISS: 
+			
+			// If we get an AckByCar we can switch to ISS
+			
+			if (blnFrameDecodedOK && intFrameType == AckByCar)
 			{
-				if (bytDataToSendLength > 0)	 // If ACK and Data to send
-				{
-					WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessedRcvdARQFrame] Protocol state IDLE, ACK Received with Data to send. Go to ISS Data state.");
-					
-					SetARDOPProtocolState(ISS);
-					ARQState = ISSData;
-					SendData(FALSE);
-					return;
-				}
-				else
-				{
-					// ACK with no data.
-
-					SetARDOPProtocolState(IDLE);
-					ARQState = ISSData;
-					SendData(FALSE);		// Will send IDLE as no data
-					return;
-				}
-			}
-
-			// process BREAK here Send ID if over 10 min. 
-
-			if (intFrameType == BREAK)
-			{
-				// Initiate the transisiton to IRS
-
-				dttTimeoutTrip = Now;
-				blnEnbARQRpt = FALSE;
-				EncodeAndSend4FSKControl(OVER, bytSessionID, LeaderLength);
-
-				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from IDLE, Go to IRS, Substate IRSfromISS");
-                SendCommandToHost("STATUS BREAK received from Protocol State IDLE, new state IRS");
-				SetARDOPProtocolState(IRS);
-				//Substate IRSfromISS enables processing Rule 3.5 later
-				ARQState = IRSfromISS; 
-				
+				SetARDOPProtocolState(ISS);
 				intLinkTurnovers += 1;
-				intLastARQDataFrameToHost = -1;  // precondition to an illegal frame type (ensures the new IRS does not reject a frame)
-				memset(CarrierOk, 0, sizeof(CarrierOk));	// CLear MEM ARQ Stuff
-				LastDataFrameType = -1;
-				return;
-			}
-			if (intFrameType == DISCFRAME) //  IF DISC received from IRS Handles protocol rule 1.5
-			{
-				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame]  DISC frame received Send END...go to DISC state");
-                
-				if (AccumulateStats) LogStats();
-					
-				QueueCommandToHost("DISCONNECTED");
-				sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s ", strRemoteCallsign);
-				QueueCommandToHost(HostCmd);
-				tmrFinalID = Now + 3000;
-				blnDISCRepeating = FALSE;
-				EncodeAndSend4FSKControl(END, bytSessionID, LeaderLength);
-                bytLastARQSessionID = bytSessionID; // capture this session ID to allow answering DISC from DISC state
-                ClearDataToSend();
-                SetARDOPProtocolState(DISC);
-				blnEnbARQRpt = FALSE;
-				return;
-			}
-			if (intFrameType == END)
-			{
-				WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.ProcessRcvdARQFrame]  END received ... going to DISC state");
-				if (AccumulateStats) LogStats();
-				QueueCommandToHost("DISCONNECTED");	
-				sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s ", strRemoteCallsign);
-				QueueCommandToHost(HostCmd);
-				ClearDataToSend();
+				ARQState = ISSData;
 
-				if (CheckValidCallsignSyntax(strLocalCallsign))
-				{
-					dttLastFECIDSent = Now;
-					EncLen = EncodePSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes, 0x3F);
-					Mod1Car50Bd4PSK(&bytEncodedBytes[0], EncLen, 0);		// only returns when all sent
-				}     
-				SetARDOPProtocolState(DISC); 
-				blnEnbARQRpt = FALSE;
-				blnDISCRepeating = FALSE;
-				return;
+				// Drop through to process AckByCat
 			}
+			else
+				break;
 
-			// Shouldn'r get here ??
-  			return;
-		}             
 
 
 	// ISS state **************************************************************************************
@@ -2283,9 +2316,7 @@ BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall)
 	bytDataToSendLength = 0;
 	FreeSemaphore();
 
-#ifdef TEENSY
 	SetLED(TRAFFICLED, FALSE);
-#endif
 
 	GetNAKLoQLevels(atoi(ARQBandwidths[ARQBandwidth]));
 	GetACKHiQLevels(atoi(ARQBandwidths[ARQBandwidth]));
@@ -2533,3 +2564,22 @@ void LogStats()
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
