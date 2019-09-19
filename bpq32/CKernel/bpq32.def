@@ -12,3 +12,11 @@ FULL_CTEXT DATA
 BPQMsg DATA
 BPQTRACE
 PortConfig DATA
+ext_PTT_info
+ext_PTT_settings
+ext_PTT_OFF
+ext_PTT_ON
+ext_PTT_close
+ext_PTT_open
+
+

@@ -742,12 +742,12 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (FwdTemplate)
 			free(FwdTemplate);
 
-		FwdTemplate = GetTemplateFromFile(2, "FwdPage.txt");
+		FwdTemplate = GetTemplateFromFile(3, "FwdPage.txt");
 
 		if (FwdDetailTemplate)
 			free(FwdDetailTemplate);
 
-		FwdDetailTemplate = GetTemplateFromFile(1, "FwdDetail.txt");
+		FwdDetailTemplate = GetTemplateFromFile(2, "FwdDetail.txt");
 
 		SendFwdMainPage(Reply, RLen, Key);
 		return;
@@ -1249,9 +1249,7 @@ char **	SeparateMultiString(char * MultiString, BOOL NoToUpper)
 	ptr2 = zalloc(strlen(MultiString) + 1);
 	DecodedString = ptr2;
 
-	// Input has crlf or lf - replace with 
-
-
+	// Input has crlf or lf - replace with |
 
 	while (*ptr1)
 	{
@@ -1763,7 +1761,15 @@ VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Re
 		}
 	
 		AliasText = GetMultiStringInput(input, "Aliases=");
-		_strupr(AliasText[0]);
+
+		n = 0;
+
+		while (AliasText[n])
+		{
+			_strupr(AliasText[n]);
+			n++;
+		}
+
 		SetupFwdAliases();
 	}
 	
@@ -1845,6 +1851,9 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 
 		ptr1 = GetNextParam(&ptr2);		// No Wait
 		if (strcmp(ptr1, "true") == 0) FWDInfo->SendNew = TRUE; else FWDInfo->SendNew = FALSE;
+
+		ptr1 = GetNextParam(&ptr2);		// Blocked
+		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowBlocked = TRUE; else FWDInfo->AllowBlocked = FALSE;
 
 		ptr1 = GetNextParam(&ptr2);		// FBB Block
 		FWDInfo->MaxFBBBlockSize = atoi(ptr1);
@@ -2318,6 +2327,7 @@ VOID SendFwdDetails(struct HTTPConnectionInfo * Session, char * Reply, int * Rep
 		(FWDInfo->ReverseFlag) ? CHKD  : UNC,
 		FWDInfo->RevFwdInterval, 
 		(FWDInfo->SendNew) ? CHKD  : UNC,
+		(FWDInfo->AllowBlocked) ? CHKD  : UNC,
 		FWDInfo->MaxFBBBlockSize,
 		(FWDInfo->PersonalOnly) ? CHKD  : UNC,
 		(FWDInfo->AllowCompressed) ? CHKD  : UNC,

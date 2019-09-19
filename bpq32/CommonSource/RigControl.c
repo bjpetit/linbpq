@@ -148,6 +148,8 @@ BOOL EndPTTCATThread = FALSE;
 
 struct RIGPORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
 
+struct RIGINFO * DLLRIG = NULL;			// Rig record for dll PTT interface (currently only for UZ7HO);
+
 
 struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
 {
@@ -3740,8 +3742,6 @@ void DecodeRemote(struct RIGPORTINFO * PORT, char * ptr)
 	
 	struct sockaddr_in * destaddr = (SOCKADDR_IN * )&PORT->remoteDest;
 	u_long param = 1;
-	char Msg[80];
-	int Len;
 	char * port = strlop(ptr, ':');
 
 	PORT->remoteSock = socket(AF_INET,SOCK_DGRAM,0);
@@ -3750,7 +3750,6 @@ void DecodeRemote(struct RIGPORTINFO * PORT, char * ptr)
 		return;
 
 	setsockopt (PORT->remoteSock, SOL_SOCKET, SO_BROADCAST, &param, 4);
-
 
 	if (port == NULL)
 		return;

@@ -7,7 +7,7 @@
 
 #define IDI_ICON2                       123
 
-unsigned long _beginthread( void *, unsigned stack_size, void * arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 #pragma pack(1) 
 

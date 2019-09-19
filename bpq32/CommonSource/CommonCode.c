@@ -1187,7 +1187,7 @@ DllExport int APIENTRY DeallocateStream(int stream)
 
 	while (PORTVEC->HOSTTRACEQ)
 	{
-		monbuff = Q_REM(&PORTVEC->HOSTTRACEQ);
+		monbuff = Q_REM((void *)&PORTVEC->HOSTTRACEQ);
 		ReleaseBuffer(monbuff);
 	}
 
@@ -1447,7 +1447,7 @@ DllExport time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count)
 		return 0;
 	}
 
-	MSG = Q_REM(&SESS->HOSTTRACEQ);
+	MSG = Q_REM((void *)&SESS->HOSTTRACEQ);
 
 	Msglen = MSG->LENGTH;
 
@@ -1513,7 +1513,7 @@ DllExport int APIENTRY GetMsg(int stream, char * msg, int * len, int * count )
 	if(L4->L4CROSSLINK)
 		L4->L4CROSSLINK->L4KILLTIMER = 0;
 
-	MSG = Q_REM(&L4->L4TX_Q);
+	MSG = Q_REM((void *)&L4->L4TX_Q);
 
 	Msglen = MSG->LENGTH - (MSGHDDRLEN + 1);	// Dont want PID
 

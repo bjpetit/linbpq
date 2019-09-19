@@ -50,8 +50,8 @@ PMESSAGEX DG_Q;					// Queue of messages to be sent to node
 struct SEM DGSemaphore = {0, 0}; // For locking access to DG_Q;
 
 VOID UnQueueRaw(UINT Param);
-unsigned long _beginthread(void(*start_address),
-				unsigned stack_size, int Param);
+
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 static VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue);
 
@@ -101,7 +101,7 @@ VOID SetupUIInterface()
 		}
 	}
 
-	_beginthread(UnQueueRaw, 0, 0);
+	_beginthread(UnQueueRaw, 0, NULL);
 
 	if (EnableUI)
 #ifdef LINBPQ

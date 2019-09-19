@@ -75,7 +75,7 @@ int i2c_smbus_read_byte()
 #include "CHeaders.h"
 #include "kiss.h"
 
-
+int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO);
 
 #define FEND 0xC0 
 #define FESC 0xDB
@@ -163,10 +163,15 @@ int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 		return 0;
 	}
 	else if (PortVector->PORTIPADDR.s_addr || PortVector->KISSSLAVE)		// KISS over UDP/TCP
+	{
 		if (PortVector->KISSTCP)
-			send(Port->sock, buffer, count, 0);
+		{
+			if (Port->Connected)
+				send(Port->sock, buffer, count, 0);
+		}
 		else
 			sendto(Port->sock, buffer, count, 0, (struct sockaddr *)&Port->destaddr, sizeof(Port->destaddr));
+	}
 	else
 		WriteCommBlock(Port, buffer, count);
 	

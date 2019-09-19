@@ -342,9 +342,13 @@ HMENU hPopMenu1;
 int RXMode = AUTO; //CP1252;
 int TXMode = CP_UTF8;
 
+int APRSWriteLog(char * msg);
+
 VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 {
 	char Line[300];
+	char Copy[300];
+
 	int Len;
 	struct tm * TM;
 	time_t NOW;
@@ -358,9 +362,12 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 	NOW = _time32(NULL);
 	TM = gmtime(&NOW);
 
-	Msg[MsgLen] = 0;
+	// Mustn't change Msg
 
-	Len = sprintf_s(Line, 299, "%02d:%02d:%02d%c %s", TM->tm_hour, TM->tm_min, TM->tm_sec, (TX)? 'T': 'R', Msg);
+	memcpy(Copy, Msg, MsgLen);
+	Copy[MsgLen] = 0;
+
+	Len = sprintf_s(Line, 299, "%02d:%02d:%02d%c %s", TM->tm_hour, TM->tm_min, TM->tm_sec, (TX)? 'T': 'R', Copy);
 
 	if (TX)
 		MonWindow.CurrentColour = 0;
@@ -369,6 +376,8 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 
 	WritetoOutputWindow(&MonWindow, Line, Len, FALSE);
 	MonWindow.NeedRefresh = TRUE;
+
+	APRSWriteLog(Line);
 
 }
 

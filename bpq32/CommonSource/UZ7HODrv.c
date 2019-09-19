@@ -55,7 +55,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 
@@ -1410,7 +1410,7 @@ BOOL CALLBACK uz_enum_windows_callback(HWND handle, LPARAM lParam)
 
 int ConnecttoUZ7HO(int port)
 {
-	_beginthread(ConnecttoUZ7HOThread,0,port);
+	_beginthread(ConnecttoUZ7HOThread, 0, (void *)port);
 	return 0;
 }
 

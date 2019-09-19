@@ -23,6 +23,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "BPQMail.h"
 
+long Encode(char * in, char * out, long inlen, BOOL B1Protocol, int Compress);
+
+
 int MaxRXSize = 99999;
 int MaxTXSize = 99999;
 
@@ -237,7 +240,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				continue;
 			}
 
-			if ((*Respptr == '=') || (*Respptr == 'L'))				// Defer
+			if ((*Respptr == '=') || (*Respptr == 'H'))				// Defer
 			{
 				// Remove entry from forwarding block
 
@@ -268,7 +271,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				*(--Respptr) = '+';  // So can drop through
 			}
 
-			if ((*Respptr == '+') || (*Respptr == 'Y') || (*Respptr == 'H'))				// Need it
+			if ((*Respptr == '+') || (*Respptr == 'Y'))			// Need it
 			{
 				struct tm * tm;
 				time_t now;
@@ -277,7 +280,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				conn->FBBMsgsSent = TRUE;		// Messages to flag as complete when next command received
 				AllRejected = FALSE;
 
-				if (conn->BBSFlags & FBBCompressed)
+				if (conn->BBSFlags & FBBForwarding)
 				{
 					if (conn->BBSFlags & FBBB2Mode)
 						SendCompressedB2(conn, FBBHeader);
@@ -706,7 +709,7 @@ ok2:
 		}
 		else
 		{
-			if (conn->BBSFlags & FBBCompressed)	
+			if (conn->BBSFlags & FBBForwarding)	
 			{	
 				conn->InputMode = 'B';
 			}
@@ -825,7 +828,7 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 	}
 	else
 	{
-		if (conn->BBSFlags & FBBCompressed)
+		if (conn->BBSFlags & FBBForwarding)
 			conn->InputMode = 'B';
 
 		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID, NULL);
@@ -1282,7 +1285,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 		memcpy(&UnCompressed[RLineLen], MsgBytes, OrigLen);
 	}
 
-	CompLen = Encode(UnCompressed, Compressed, MsgLen, conn->BBSFlags & FBBB1Mode);
+	CompLen = Encode(UnCompressed, Compressed, MsgLen, conn->BBSFlags & FBBB1Mode, conn->BBSFlags & FBBCompressed);
 
 	conn->FBBChecksum = 0;
 
@@ -1561,7 +1564,7 @@ copyRest:
 #ifndef LINBPQ
 		__try {
 #endif
-		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
+		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE, conn->BBSFlags & FBBCompressed);
 
 		FBBHeader->CompressedMsg = Compressed;
 		FBBHeader->CSize = CompLen;
@@ -1674,7 +1677,7 @@ copyRest:
 
 	Compressed = zalloc(2 * MsgLen + 200);
 
-	CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
+	CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE, conn->BBSFlags & FBBCompressed);
 
 	FBBHeader->CompressedMsg = Compressed;
 	FBBHeader->CSize = CompLen;

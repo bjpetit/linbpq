@@ -605,7 +605,7 @@ static int ProcessLine(char * buf, int Port, BOOL CheckPort)
 	
 int ConnecttoAGW(int port)
 {
-	_beginthread(ConnecttoAGWThread,0,port);
+	_beginthread(ConnecttoAGWThread, 0,(void *)port);
 
 	return 0;
 }

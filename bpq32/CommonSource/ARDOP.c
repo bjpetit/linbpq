@@ -127,9 +127,7 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, void * arglist);
-
-// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 int GenCRC16(unsigned char * Data, unsigned short length)
 {
@@ -476,6 +474,9 @@ static int ProcessLine(char * buf, int Port)
 */
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 				TNC->WL2K = DecodeWL2KReportLine(buf);
+			else
+			if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
+				TNC->SessionTimeLimit = atoi(&buf[16]) * 60;
 			else
 			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)	// Packet Channels
 				TNC->PacketChannels = atoi(&buf[14]);
@@ -830,7 +831,18 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 	{
 		case 7:			
 
-		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
+		// approx 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
+
+		// Check session limit timer
+
+		if ((STREAM->Connecting || STREAM->Connected) && !STREAM->Disconnecting)
+		{
+			if (TNC->SessionTimeLimit && STREAM->ConnectTime && time(NULL) > (TNC->SessionTimeLimit + STREAM->ConnectTime))
+			{
+				ARDOPSendCommand(TNC, "DISCONNECT", TRUE);
+				STREAM->Disconnecting = TRUE;
+			}
+		}
 
 		if (TNC->ARDOPCommsMode != 'T') // S I or E
 		{
@@ -1623,7 +1635,7 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 		}
 		else if (TNC->Mode == '3')	// ARDOP3 has a bit more buffer space
 		{
-			if (Queued > 4 || Outstanding > 4000)
+			if (Queued > 4 || Outstanding > 5000)
 				return (1 | (TNC->HostMode | TNC->CONNECTED) << 8 | STREAM->Disconnecting << 15);
 		}
 		else
@@ -2170,7 +2182,7 @@ VOID TNCLost(struct TNCINFO * TNC)
 
 int ConnecttoARDOP(struct TNCINFO * TNC)
 {
-	_beginthread(ARDOPThread, 0, TNC);
+	_beginthread(ARDOPThread, 0, (void *)TNC);
 
 	return 0;
 }
@@ -5481,6 +5493,11 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 		}
 	}
 
+//0x04421CB0  aa aa 21 00 07 00 06 48 65 6c 6c 6f 0d c8 3e 38 42 50 51 2d 32 20 35 0d 4a 8a 4d 38 42 50 51  ªª!....Hello.È>8BPQ-2 5.JŠM8BPQ
+//0x04421CCF  2d 31 30 2c 47 4d 38 42 50 51 2d 35 2c 47 4d 38 42 50 51 2c 47 4d 38 42 50 51 2d 31 35 0d 00  -10,GM8BPQ-5,GM8BPQ,GM8BPQ-15..
+//0x04421CEE  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ...............................
+
+
 	if (TNC->TNCOK && TNC->KISSTX_Q)
 	{
 		int datalen;
@@ -5530,7 +5547,7 @@ VOID SerialConnecttoTCPThread(struct TNCINFO * TNC);
 
 int SerialConnecttoTCP(struct TNCINFO * TNC)
 {
-	_beginthread(SerialConnecttoTCPThread, 0, TNC);
+	_beginthread(SerialConnecttoTCPThread, 0, (void *)TNC);
 
 	return 0;
 }

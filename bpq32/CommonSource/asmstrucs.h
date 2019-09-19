@@ -1225,6 +1225,8 @@ struct AXIPPORTINFO
 	int udpport[MAXUDPPORTS+2];
 	BOOL IPv6[MAXUDPPORTS+2];
 
+	BOOL PortIPv6;				// Set if any MAPS for IPv6
+
 	int NumberofUDPPorts;
 
 	BOOL needip;

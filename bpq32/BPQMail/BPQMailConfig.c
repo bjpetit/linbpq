@@ -694,7 +694,6 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 	case WPUPDATE:
 
-	
 		if (SendWPAddrs)
 		{
 			char ** Calls = SendWPAddrs;
@@ -721,11 +720,9 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		CheckDlgButton(hwndDisplay, IDC_FILTERWPB, FilterWPBulls);
 
 		break;
-
 	}
 
 	ShowWindow(pHdr->hwndDisplay, SW_SHOWNORMAL);
-
 }
 
 //The following function processes the WM_INITDIALOG message for each of the child dialog boxes. You cannot specify the position of a dialog box created using the CreateDialogIndirect function. This function uses the SetWindowPos function to position the child dialog within the tab control's display area.
@@ -860,6 +857,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
+			CheckDlgButton(hDlg, IDC_BLOCKED, ForwardingInfo->AllowBlocked);
 			CheckDlgButton(hDlg, IDC_ALLOWCOMP, ForwardingInfo->AllowCompressed);
 			CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
@@ -1628,6 +1626,7 @@ VOID SaveFWDConfig(HWND hDlg)
 		ForwardingInfo->SendNew = IsDlgButtonChecked(hDlg, IDC_SENDNEW);
 		ForwardingInfo->AllowB1 = IsDlgButtonChecked(hDlg, IDC_USEB1);
 		ForwardingInfo->SendCTRLZ = IsDlgButtonChecked(hDlg, IDC_CTRLZ);
+		ForwardingInfo->AllowBlocked = IsDlgButtonChecked(hDlg, IDC_BLOCKED);
 		ForwardingInfo->AllowCompressed = IsDlgButtonChecked(hDlg, IDC_ALLOWCOMP);
 		ForwardingInfo->FwdInterval = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
 		ForwardingInfo->RevFwdInterval = GetDlgItemInt(hDlg, IDC_REVFWDINT, &OK, FALSE);
@@ -2719,7 +2718,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			sprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
 				Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime((time_t)Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
-			if (Msg->B2Flags)
+			if (Msg->B2Flags & B2Msg)
 			{
 			// Remove B2 Headers (up to the File: Line)
 			

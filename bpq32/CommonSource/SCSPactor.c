@@ -111,7 +111,8 @@ VOID __cdecl Debugprintf(const char * format, ...);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
+
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
@@ -284,6 +285,9 @@ ConfigLine:
 		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			TNC->WL2K = DecodeWL2KReportLine(buf);
 		else
+		if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
+			TNC->SessionTimeLimit = atoi(&buf[16]) * 60;
+		else
 		if (_memicmp(buf, "DATE", 4) == 0)
 		{
 			char Cmd[32];
@@ -356,7 +360,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Param;
 	int Stream = 0;
-	struct STREAMINFO * STREAM;
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
 	char PLevel;
 	struct ScanEntry * Scan;
 
@@ -434,6 +438,18 @@ ok:
 		return 0;
 
 	case 1:				// poll
+
+		// Check session limit timer
+
+		if ((STREAM->Connecting || STREAM->Connected) && !STREAM->Disconnecting)
+		{
+			if (TNC->SessionTimeLimit && STREAM->ConnectTime && time(NULL) > (TNC->SessionTimeLimit + STREAM->ConnectTime))
+			{
+				STREAM->CmdSet = STREAM->CmdSave = malloc(100);
+				sprintf(STREAM->CmdSet, "D\r");	
+				STREAM->Disconnecting = TRUE;
+			}
+		}
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{

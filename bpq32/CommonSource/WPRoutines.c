@@ -140,7 +140,7 @@ VOID GetWPDatabase()
 			if (_stricmp(WPRec.callsign, "SYSOP") == 0)
 				continue;
 
-			if (_stricmp(WPRec.callsign, "SMTP") == 0)
+			if (_memicmp(WPRec.callsign, "SMTP", 4) == 0)
 				continue;
 
 			if (_stricmp(WPRec.callsign, "AMPR") == 0)
@@ -224,7 +224,7 @@ Next:
 			if (_stricmp(WPRec.callsign, "SYSOP") == 0)
 				goto Next;
 
-			if (_stricmp(WPRec.callsign, "SMTP") == 0)
+			if (_memicmp(WPRec.callsign, "SMTP", 4) == 0)
 				goto Next;
 
 			if (_stricmp(WPRec.callsign, "AMPR") == 0)
@@ -675,7 +675,7 @@ VOID GetWPBBSInfo(char * Rline)
 	if (_stricmp(Call, "SYSOP") == 0)
 		return;
 
-	if (_stricmp(Call, "SMTP") == 0)
+	if (_memicmp(Call, "SMTP", 4) == 0)
 		return;
 
 	if (_stricmp(Call, "AMPR") == 0)
@@ -931,6 +931,9 @@ it will not be replaced. This flag will be used in case the WP update messages a
 					else
 						Type = 'G';
 
+					if (strchr(Call, ':'))
+						break;
+
 					if (_stricmp(Call, "RMS") == 0)
 						break;
 
@@ -940,7 +943,7 @@ it will not be replaced. This flag will be used in case the WP update messages a
 					if (_stricmp(Call, "SYSOP") == 0)
 						break;
 
-					if (_stricmp(Call, "SMTP") == 0)
+					if (_memicmp(Call, "SMTP", 4) == 0)
 						break;
 		
 					if (_stricmp(Call, "AMPR") == 0)
@@ -1090,6 +1093,9 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 {
 	WPRec * WP = LookupWP(user->Call);
 
+	if (strchr(user->Call, ':'))
+		return;
+
 	if (_stricmp(user->Call, "RMS") == 0)
 		return;
 
@@ -1099,7 +1105,7 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 	if (_stricmp(user->Call, "SYSOP") == 0)
 		return;
 
-	if (_stricmp(user->Call, "SMTP") == 0)
+	if (_memicmp(user->Call, "SMTP", 4) == 0)
 		return;
 
 	if (_stricmp(user->Call, "AMPR") == 0)

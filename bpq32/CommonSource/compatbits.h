@@ -145,6 +145,10 @@ int stricmp(const unsigned char * pStr1, const unsigned char *pStr2);
 char * strupr(char* s);
 char * strlwr(char* s);
 
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
+
+
+
 #define WSAGetLastError() errno
 #define GetLastError() errno 
 #define closesocket close

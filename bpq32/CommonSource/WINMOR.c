@@ -125,7 +125,7 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
@@ -440,6 +440,9 @@ static int ProcessLine(char * buf, int Port)
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 				TNC->WL2K = DecodeWL2KReportLine(buf);
 			else
+			if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
+				TNC->SessionTimeLimit = atoi(&buf[16]) * 60;
+			else
 			if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
 				TNC->BusyHold = atoi(&buf[8]);
 
@@ -538,6 +541,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	switch (fn)
 	{
 	case 1:				// poll
+
+		// Check session limit timer
+
+		if ((STREAM->Connecting || STREAM->Connected) && !STREAM->Disconnecting)
+		{
+			if (TNC->SessionTimeLimit && STREAM->ConnectTime && time(NULL) > (TNC->SessionTimeLimit + STREAM->ConnectTime))
+			{
+				send(TNC->TCPSock,"DISCONNECT\r\n", 12, 0);
+				STREAM->Disconnecting = TRUE;
+			}
+		}
 
 		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
 		{
@@ -1621,7 +1635,7 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 
 int ConnecttoWINMOR(int port)
 {
-	_beginthread(WINMORThread,0,port);
+	_beginthread(WINMORThread, 0, (void *)port);
 
 	return 0;
 }

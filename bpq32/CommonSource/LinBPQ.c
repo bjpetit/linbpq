@@ -192,6 +192,8 @@ BOOL LogBBS = TRUE;
 BOOL LogCHAT = TRUE;
 BOOL LogTCP = TRUE;
 
+extern BOOL LogAPRSIS;
+
 BOOL UIEnabled[33];
 BOOL UINull[33];
 char * UIDigi[33];
@@ -1294,7 +1296,7 @@ int APIENTRY WritetoConsole(char * buff)
 
 int WritetoConsoleLocal(char * buff)
 {
-	printf("%s", buff);
+	return printf("%s", buff);
 }
 /*
 UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
@@ -1475,8 +1477,34 @@ int APIENTRY Reconfig()
 	return 1;
 }
 
+int APRSWriteLog(char * msg);
+
 VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 {
+	char Line[300];
+	char Copy[300];
+	int Len;
+	struct tm * TM;
+	time_t NOW;
+
+	if (LogAPRSIS == 0)
+		return;
+
+	if (MsgLen > 250)
+		return;
+
+	// Mustn't change Msg
+
+	memcpy(Copy, Msg, MsgLen);
+	Copy[MsgLen] = 0;
+
+	NOW = time(NULL);
+	TM = gmtime(&NOW);
+
+	Len = sprintf_s(Line, 299, "%02d:%02d:%02d%c %s", TM->tm_hour, TM->tm_min, TM->tm_sec, (TX)? 'T': 'R', Copy);
+
+	APRSWriteLog(Line);
+
 }
 
 struct TNCINFO * TNC;

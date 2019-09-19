@@ -489,18 +489,25 @@ VOID PostStateChange(TRANSPORTENTRY * Session)
 
 #ifdef LINBPQ
 
-#define HDLCTX LINKTX
-#define HDLCRX LINKRX
-#define HDLCTIMER LINKTIMER
-#define HDLCCLOSE LINKCLOSE
-#define HDLCTXCHECK LINKTXCHECK
+#define HDLCTX KHDLCTX
+#define HDLCRX KHDLCRX
+#define HDLCTIMER KHDLCTIMER
+#define HDLCCLOSE KHDLCCLOSE
+#define HDLCTXCHECK KHDLCTXCHECK
 
-#define PC120INIT LINKINIT
-#define DRSIINIT LINKINIT
-#define TOSHINIT LINKINIT
-#define RLC100INIT LINKINIT
-#define BAYCOMINIT LINKINIT
-#define PA0INIT LINKINIT
+#define PC120INIT KHDLCINIT
+#define DRSIINIT KHDLCINIT
+#define TOSHINIT KHDLCINIT
+#define RLC100INIT KHDLCINIT
+#define BAYCOMINIT KHDLCINIT
+#define PA0INIT KHDLCINIT
+
+int KHDLCINIT(PHDLCDATA PORTVEC);
+void KHDLCTX(struct KISSINFO * KISS, PMESSAGE Buffer);
+int KHDLCRX(PHDLCDATA PORTVEC);
+void KHDLCTIMER(PHDLCDATA PORTVEC);
+void KHDLCCLOSE(PHDLCDATA PORTVEC);
+BOOL KHDLCTXCHECK();
 
 #else
 
@@ -572,7 +579,7 @@ BOOL Start()
 	unsigned char * ptr2, * ptr3, * ptr4;
 	USHORT * CWPTR;
 	int i, n;
-	unsigned long long int3;
+
 	struct ROUTECONFIG * Rcfg;
 
 	NEXTFREEDATA = &DATAAREA[0];			// For Reinit
@@ -1012,10 +1019,9 @@ BOOL Start()
 
 			//	Round to word boundary (for ARM5 etc)
 
-			int3 = (unsigned long long)ptr3;
-			int3 += 7;
-			int3 &= 0xfffffffffffffff8;
-			ptr3 = (UCHAR *)int3;
+			ptr3 += 7;
+			while ((unsigned int)ptr3 & 7)
+				ptr3--;
 
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
@@ -1047,10 +1053,9 @@ BOOL Start()
 
 			//	Round to word boundsaty (for ARM5 etc)
 
-			int3 = (unsigned long long)ptr3;
-			int3 += 7;
-			int3 &= 0xfffffffffffffff8;
-			ptr3 = (UCHAR *)int3;
+			ptr3 += 7;
+			while ((unsigned int)ptr3 & 7)
+				ptr3--;
  
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
@@ -1068,10 +1073,9 @@ BOOL Start()
 	
 			//	Round to word boundsaty (for ARM5 etc)
 
-			int3 = (unsigned long long)ptr3;
-			int3 += 7;
-			int3 &= 0xfffffffffffffff8;
-			ptr3 = (UCHAR *)int3;
+			ptr3 += 7;
+			while ((unsigned int)ptr3 & 7)
+				ptr3--;
 
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
@@ -1264,10 +1268,9 @@ BOOL Start()
 
 	IDHDDR.LENGTH = (int)(ptr3 - (unsigned char *)&IDHDDR);
 
-	int3 = (unsigned long long)NEXTFREEDATA;
-	int3 += 7;
-	int3 &= 0xfffffffffffffff8;
-	NEXTFREEDATA = (UCHAR *)int3;
+	ptr3 += 7;
+	while ((unsigned int)ptr3 & 7)
+		ptr3--;
 
 	BUFFERPOOL = NEXTFREEDATA;
 
@@ -1976,7 +1979,7 @@ VOID TIMERINTERRUPT()
 		CURRENTPORT = PORT->PORTNUMBER;		 // PORT NUMBER
 		CURRENTPORTPTR = PORT;
 
-		Buffer = Q_REM(&PORT->PORTRX_Q);
+		Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTRX_Q);
 
 		while (Buffer)
 		{
@@ -2001,7 +2004,7 @@ VOID TIMERINTERRUPT()
 					//	TNC not attached - discard
 
 					ReleaseBuffer(Buffer);
-					Buffer = Q_REM(&PORT->PORTRX_Q);
+					Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTRX_Q);
 					continue;
 				}
 			
@@ -2043,7 +2046,7 @@ VOID TIMERINTERRUPT()
 
 				C_Q_ADD(&Partner->L4TX_Q, Buffer);
 				PostDataAvailable(Partner);
-				Buffer = Q_REM(&PORT->PORTRX_Q);
+				Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTRX_Q);
 				continue;
 			}
 
@@ -2080,7 +2083,7 @@ VOID TIMERINTERRUPT()
 
 			L2Routine(PORT, Buffer);
 
-			Buffer = Q_REM(&PORT->PORTRX_Q);
+			Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTRX_Q);
 			continue;
 		}
 
@@ -2102,7 +2105,7 @@ VOID TIMERINTERRUPT()
 
 			if (ret == 1)
 			{
-				MESSAGE * Buffer = Q_REM(&PORT->PORTTX_Q);
+				MESSAGE * Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTTX_Q);
 
 				Debugprintf("Busy but not connected - discard message");
 
@@ -2117,7 +2120,7 @@ VOID TIMERINTERRUPT()
 
 			if (ret == 0)		// Not busy
 			{
-				MESSAGE * Buffer = Q_REM(&PORT->PORTTX_Q);
+				MESSAGE * Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTTX_Q);
 
 				if (Buffer == 0)
 					break;						// WOT!!
@@ -2161,12 +2164,12 @@ PACTORLOOP:
 			{
 				//	Save it
 				
-				Buffer = Q_REM(&PORT->PORTTX_Q);
+				Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTTX_Q);
 				C_Q_ADD(&PACTORSAVEQ, Buffer);
 				goto PACTORLOOP;
 			}
 
-			Buffer = Q_REM(&PORT->PORTTX_Q);
+			Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTTX_Q);
 
 			if (PORT->PORTDISABLED)
 			{
@@ -2216,7 +2219,7 @@ ENDOFLIST:
 			{
 				ProcessIframe(LINK, (PDATAMESSAGE)Buffer);
 	
-				Buffer = Q_REM(&LINK->RX_Q);
+				Buffer =(PMESSAGE)Q_REM((void *)&LINK->RX_Q);
 			}
 		
 			//	CHECK FOR OUTGOING MSGS

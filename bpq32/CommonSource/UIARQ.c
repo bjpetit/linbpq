@@ -54,7 +54,7 @@ int (WINAPI FAR *EnumProcessesPtr)();
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 

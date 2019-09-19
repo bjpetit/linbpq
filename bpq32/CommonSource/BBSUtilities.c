@@ -99,6 +99,8 @@ VOID SaveInt64Value(config_setting_t * group, char * name, long long value);
 VOID SaveIntValue(config_setting_t * group, char * name, int value);
 VOID SaveStringValue(config_setting_t * group, char * name, char * value);
 char *stristr (char *ch1, char *ch2);
+BOOL CheckforMessagetoServer(struct MsgInfo * Msg);
+
 config_t cfg;
 config_setting_t * group;
 
@@ -5047,41 +5049,41 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	}
 	
 	// Allocate a message Record slot
+	
+	Msg = AllocateMsgRecord();
+	memcpy(Msg, conn->TempMsg, sizeof(struct MsgInfo));
 
-		Msg = AllocateMsgRecord();
-		memcpy(Msg, conn->TempMsg, sizeof(struct MsgInfo));
+	free(conn->TempMsg);
 
-		free(conn->TempMsg);
-
-		// Set number here so they remain in sequence
+	// Set number here so they remain in sequence
 		
-		GetSemaphore(&MsgNoSemaphore, 0);
-		Msg->number = ++LatestMsg;
-		FreeSemaphore(&MsgNoSemaphore);
-		MsgnotoMsg[Msg->number] = Msg;
+	GetSemaphore(&MsgNoSemaphore, 0);
+	Msg->number = ++LatestMsg;
+	FreeSemaphore(&MsgNoSemaphore);
+	MsgnotoMsg[Msg->number] = Msg;
 
-		// Create BID if non supplied
+	// Create BID if non supplied
 
-		if (Msg->bid[0] == 0)
-			sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+	if (Msg->bid[0] == 0)
+		sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
 
-		// if message body had R: lines, get date created from last (not very accurate, but best we can do)
+	// if message body had R: lines, get date created from last (not very accurate, but best we can do)
 
-		// Also check if we have had message before to detect loops
+	// Also check if we have had message before to detect loops
 
-		ptr1 = conn->MailBuffer;
-		OurCount = 0;
+	ptr1 = conn->MailBuffer;
+	OurCount = 0;
 
-		// If it is a B2 Message, Must Skip B2 Header
+	// If it is a B2 Message, Must Skip B2 Header
 
-		if (Msg->B2Flags & B2Msg)
-		{
-			ptr1 = strstr(ptr1, "\r\n\r\n");
-			if (ptr1)
-				ptr1 += 4;
-			else
-				ptr1 = conn->MailBuffer;
-		}
+	if (Msg->B2Flags & B2Msg)
+	{
+		ptr1 = strstr(ptr1, "\r\n\r\n");
+		if (ptr1)
+			ptr1 += 4;
+		else
+			ptr1 = conn->MailBuffer;
+	}
 
 nextline:
 
@@ -5246,6 +5248,27 @@ nextline:
 				nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
 		}
 
+		// Check for message to internal server
+
+		if (Msg->via[0] == 0 
+				|| _stricmp(Msg->via, BBSName) == 0		// our BBS a
+				|| _stricmp(Msg->via, AMPRDomain) == 0)	// our AMPR Address
+		{
+			if (CheckforMessagetoServer(Msg))
+			{
+				// Flag as killed and send prompt
+
+				FlagAsKilled(Msg);
+
+				if (!(conn->BBSFlags & BBS))
+				{
+					nodeprintf(conn, "Message %d to Server Processed and Killed.\r", Msg->number);
+					SendPrompt(conn, conn->UserPointer);
+				}
+				return;				// no need to process further
+			}
+		}
+
 		if (Msg->to[0])
 			FWDCount = MatchMessagetoBBSList(Msg, conn);
 		else
@@ -5351,22 +5374,23 @@ nextline:
 			SendMessageToSYSOP(Title, MailBuffer, Length);
 		}
 
-		BuildNNTPList(Msg);				// Build NNTP Groups list
+	BuildNNTPList(Msg);				// Build NNTP Groups list
 
-		SaveMessageDatabase();
-		SaveBIDDatabase();
+	SaveMessageDatabase();
+	SaveBIDDatabase();
 
-		if (EnableUI)
+	if (EnableUI)
 #ifdef LINBPQ
-			SendMsgUI(Msg);	
+		SendMsgUI(Msg);	
 #else
-		__try
-		{
-			SendMsgUI(Msg);
-		}
-		My__except_Routine("SendMsgUI");
+	__try
+	{
+		SendMsgUI(Msg);
+	}
+	My__except_Routine("SendMsgUI");
 #endif
-		return;
+
+	return;
 }
 
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
@@ -6020,6 +6044,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 
 			ForwardingInfo->Enabled = GetIntValue(group, "Enabled");
 			ForwardingInfo->ReverseFlag = GetIntValue(group, "RequestReverse");
+			ForwardingInfo->AllowBlocked = GetIntValue(group, "AllowBlocked");
 			ForwardingInfo->AllowCompressed = GetIntValue(group, "AllowCompressed");
 			ForwardingInfo->AllowB1 = GetIntValue(group, "UseB1Protocol");
 			ForwardingInfo->AllowB2 = GetIntValue(group, "UseB2Protocol");
@@ -6027,6 +6052,9 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 
 			if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
 				ForwardingInfo->AllowCompressed = TRUE;
+
+			if (ForwardingInfo->AllowCompressed)
+				ForwardingInfo->AllowBlocked = TRUE;
 
 			ForwardingInfo->PersonalOnly = GetIntValue(group, "FWDPersonalsOnly");
 			ForwardingInfo->SendNew = GetIntValue(group, "FWDNewImmediately");
@@ -7712,22 +7740,8 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 		case 'F':			// FBB Blocked Forwarding
 
-			// Ignore unless preceeded by B. We don't support uncompressed blocked FBB
-		{	
-			int i = len;
-			char c;
+			// We now support blocked uncompressed. Not necessarily compatible with FBB		
 
-			while (i > 0)
-			{
-				c = SID[i--];
-				
-				if (c == '-' || c == 'B')
-					break;
-			}
-	
-			if (c == '-')
-				break;
-		
 			if ((conn->UserPointer->ForwardingInfo == NULL) && (conn->UserPointer->flags & F_PMS))
 			{
 				// We need to allocate a forwarding structure
@@ -7737,29 +7751,34 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 					conn->UserPointer->BBSNumber = NBBBS;
 			}
 
-			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
+			if (conn->UserPointer->ForwardingInfo->AllowBlocked)
 			{
 				conn->BBSFlags |= FBBForwarding | BBS;
 				conn->BBSFlags &= ~MBLFORWARDING;
 		
 				conn->Paging = FALSE;
 
+				if ((conn->UserPointer->ForwardingInfo == NULL) && (conn->UserPointer->flags & F_PMS))
+				{
+					// We need to allocate a forwarding structure
+
+						conn->UserPointer->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+						conn->UserPointer->ForwardingInfo->AllowCompressed = TRUE;
+						conn->UserPointer->BBSNumber = NBBBS;
+				}
+			
 				// Allocate a Header Block
 
 				conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
 			}
 			break;
-		}
+	
 		case 'B':
 
 			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
 			{
 				conn->BBSFlags |= FBBCompressed;
-				conn->DontSaveRestartData = FALSE;		// Alow restarts
-
-//				if (conn->UserPointer->ForwardingInfo->AllowB1) // !!!!! Testing !!!!
-//					conn->BBSFlags |= FBBB1Mode;
-
+				conn->DontSaveRestartData = FALSE;		// Allow restarts
 				
 				// Look for 1 or 2 or 12 as next 2 chars
 
@@ -7791,6 +7810,17 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 			break;
 		}
 	}
+
+	// Only allow blocked non-binary to other BPQ Nodes
+
+	if ((conn->BBSFlags & FBBForwarding) && ((conn->BBSFlags & FBBCompressed) == 0) && (conn->BPQBBS == 0))
+	{
+		// Switch back to MBL
+
+		conn->BBSFlags |= MBLFORWARDING;
+		conn->BBSFlags &= ~FBBForwarding;	// Turn off FBB Blocked
+	}
+
 	return;
 }
 
@@ -8203,9 +8233,6 @@ VOID SaveConfig(char * ConfigName)
 
 	SaveIntValue(group, "AuthenticateSMTP", SMTPAuthNeeded);
 
-	SaveIntValue(group, "Log_BBS", LogBBS);
-	SaveIntValue(group, "Log_TCP", LogTCP);
-
 	SaveIntValue(group, "MulticastRX", MulticastRX);
 
 	SaveIntValue(group, "SMTPGatewayEnabled", ISP_Gateway_Enabled);
@@ -8329,6 +8356,7 @@ VOID SaveConfig(char * ConfigName)
 	
 		SaveIntValue(group, "Enabled", ForwardingInfo->Enabled);
 		SaveIntValue(group, "RequestReverse", ForwardingInfo->ReverseFlag);
+		SaveIntValue(group, "AllowBlocked", ForwardingInfo->AllowBlocked);
 		SaveIntValue(group, "AllowCompressed", ForwardingInfo->AllowCompressed);
 		SaveIntValue(group, "UseB1Protocol", ForwardingInfo->AllowB1);
 		SaveIntValue(group, "UseB2Protocol", ForwardingInfo->AllowB2);
@@ -8572,7 +8600,7 @@ BOOL GetConfig(char * ConfigName)
 	FlashOnConnect = GetIntValue(group, "FlashOnConnect");			
 	
 	GetStringValue(group, "ConsoleSize", Size);
-	sscanf(Size,"%d,%d,%d,%d", &ConsoleRect.left, &ConsoleRect.right,
+	sscanf(Size,"%d,%d,%d,%d,%d", &ConsoleRect.left, &ConsoleRect.right,
 			&ConsoleRect.top, &ConsoleRect.bottom,&OpenConsole);
 
 #endif
@@ -8953,7 +8981,7 @@ int Connected(int Stream)
 			conn->SIDResponseTimer =  12;				// Allow a couple of minutes for response to SID
 
 			{
-				BOOL B1 = FALSE, B2 = FALSE, BIN = FALSE;
+				BOOL B1 = FALSE, B2 = FALSE, BIN = FALSE, BLOCKED = FALSE;
 				struct	BBSForwardingInfo * ForwardingInfo;
 
 				conn->PageLen = user->PageLen;				// No paging for chat
@@ -8983,22 +9011,27 @@ int Connected(int Stream)
 
 				if (conn->NewUser)
 				{
+					BLOCKED = TRUE;
 					BIN = TRUE;
 					B2 = TRUE;
 				}
 
 				if (user->ForwardingInfo)
 				{
-					BIN = user->ForwardingInfo->AllowCompressed;
-					B1 = user->ForwardingInfo->AllowB1;
-					B2 = user->ForwardingInfo->AllowB2;
+					BLOCKED = user->ForwardingInfo->AllowBlocked;
+					if (BLOCKED)
+					{
+						BIN = user->ForwardingInfo->AllowCompressed;
+						B1 = user->ForwardingInfo->AllowB1;
+						B2 = user->ForwardingInfo->AllowB2;
+					}
 				}
 
 				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
 
 				nodeprintf(conn, BBSSID, "BPQ-",
 					Ver[0], Ver[1], Ver[2], Ver[3],
-					BIN ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", BIN ? "FW": "");
+					BIN ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", BLOCKED ? "FW": "");
 
 //				 if (user->flags & F_Temp_B2_BBS)
 //					 nodeprintf(conn,";PQ: 66427529\r");
@@ -11202,6 +11235,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 	FILE * hFile;
 	char Mess[255];
 	int len;
+	char * FN = &Msg[2];
 
 	switch (Msg[0])
 	{
@@ -11228,11 +11262,30 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 
 		// YAPPC has date/time in dos format
 
-		NameLen = strlen(&Msg[2]);
-		strcpy(conn->ARQFilename, &Msg[2]);
+		NameLen = strlen(FN);
+		strcpy(conn->ARQFilename, FN);
 		ptr = &Msg[3 + NameLen];
 		SizeLen = strlen(ptr);
 		FileSize = atoi(ptr);
+
+		// Check file name for unsafe characters (.. / \)
+
+		if (strstr(FN, "..") || strchr(FN, '/') || strchr(FN, '\\'))
+		{
+			Mess[0] = NAK;
+			Mess[1] = 0;
+			QueueMsg(conn, Mess, 2);
+			Flush(conn);
+			len = sprintf_s(Mess, sizeof(Mess), "YAPP File Name %s invalid\r", FN);
+			QueueMsg(conn, Mess, len);
+			SendPrompt(conn, conn->UserPointer);
+			WriteLogLine(conn, '!', Mess, len - 1, LOG_BBS);
+
+			conn->InputLen = 0;
+			conn->InputMode = 0;
+
+			return FALSE;
+		}
 
 		OptLen = pktLen - (NameLen + SizeLen + 2);
 
@@ -11777,6 +11830,314 @@ char * AddUser(char * Call, char * password, BOOL BBSFlag)
 
 	return("User added\r\n");
 }
+
+// Server Support Code
+
+// For the moment only internal REQDIR and REQFIL.
+
+// May add WPSERV and user implemented servers
+/*
+F6FBB BBS >
+ SP REQDIR @ F6ABJ.FRA.EU
+ Title of message :
+ YAPP\*.ZIP @ F6FBB.FMLR.FRA.EU
+ Text of message :
+ /EX
+
+ F6FBB BBS >
+ SP REQFIL @ F6ABJ.FRA.EU
+ Title of message :
+ DEMOS\ESSAI.TXT @ F6FBB.FMLR.FRA.EU
+ Text of message :
+ /EX
+
+ Note Text not used.
+
+*/
+
+VOID SendServerReply(char * Title, char * MailBuffer, int Length, char * To);
+
+BOOL ProcessReqDir(struct MsgInfo * Msg)
+{
+	char * Buffer;
+	int Len = 0;
+	char * ptr;
+
+	// Parse title - gives directory and return address
+
+	// YAPP\*.ZIP @ F6FBB.FMLR.FRA.EU
+
+	// At the moment we don't allow subdirectories but no harm handling here
+
+	char Pattern[64];
+	char * Address;
+	char * filename = NULL; // ?? Pattern Match ??
+
+#ifdef WIN32
+
+   WIN32_FIND_DATA ffd;
+
+   char szDir[MAX_PATH];
+   HANDLE hFind = INVALID_HANDLE_VALUE;
+
+#else
+
+	#include <dirent.h>
+
+	struct dirent **namelist;
+    int n, i;
+	struct stat STAT;
+	int res;
+	char FN[256];
+     	
+#endif
+
+	strcpy(Pattern, Msg->title);
+
+	ptr = strchr(Pattern, '@');
+
+	if (ptr == NULL)
+
+		// if we don't have return address no point
+		// but could we default to sender??
+
+		return FALSE;
+
+	*ptr++ = 0;			// Terminate Path
+
+	strlop(Pattern, ' ');
+
+	while (*ptr == ' ')
+		ptr++;			// accept with or without spaces round @
+
+	Address = ptr;
+
+	ptr = Buffer = malloc(MaxTXSize);
+
+#ifdef WIN32
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   strcpy(szDir, GetBPQDirectory());
+   strcat(szDir, "\\BPQMailChat\\Files\\");
+   strcat(szDir, Pattern);
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+   {
+      Len = sprintf(Buffer, "No Files\r");
+   } 
+   else
+   {
+		do
+		{
+			if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			{}
+			else	
+			{
+				if (filename == NULL || stristr(ffd.cFileName, filename))
+					Len += sprintf(&Buffer[Len], "%s %d\r", ffd.cFileName, ffd.nFileSizeLow);
+			}
+		}
+		while (FindNextFile(hFind, &ffd) != 0);
+	
+		FindClose(hFind);
+	}
+
+#else
+
+    n = scandir("Files", &namelist, NULL, alphasort);
+
+	if (n < 0) 
+		perror("scandir");
+	else  
+	{ 
+		for (i = 0; i < n; i++)
+		{
+			sprintf(FN, "Files/%s", namelist[i]->d_name);
+
+			if (filename == NULL || stristr(namelist[i]->d_name, filename))
+				if (FN[6] != '.' && stat(FN, &STAT) == 0)
+					Len += sprintf(&Buffer[Len], "%s %d\r", namelist[i]->d_name, STAT.st_size);
+			
+			free(namelist[i]);
+		}
+		free(namelist);
+    }
+
+#endif
+
+	// Build Message
+
+	SendServerReply("REQDIR Reply", Buffer, Len, _strupr(Address));
+	return TRUE;
+}
+
+BOOL ProcessReqFile(struct MsgInfo * Msg)
+{
+	char FN[128];
+	char * Buffer;
+	int Len = 0;
+	char * ptr;
+	struct stat STAT;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	int FileSize;
+	char * MsgBytes;
+
+	// Parse title - gives file and return address
+
+	// DEMOS\ESSAI.TXT @ F6FBB.FMLR.FRA.EU
+
+	// At the moment we don't allow subdirectories but no harm handling here
+
+	char * Address;
+	char * filename = NULL; // ?? Pattern Match ??
+
+	strcpy(FN, Msg->title);
+
+	ptr = strchr(FN, '@');
+
+	if (ptr == NULL)
+
+		// if we don't have return address no point
+		// but could we default to sender??
+
+		return FALSE;
+
+	*ptr++ = 0;			// Terminate Path
+
+	strlop(FN, ' ');
+
+	while (*ptr == ' ')
+		ptr++;			// accept with or without spaces round @
+
+	Address = ptr;
+
+	ptr = Buffer = malloc(MaxTXSize + 1);	// Allow terminating Null
+
+	// Build Message
+
+	if (FN == NULL)
+	{
+		Len = sprintf(Buffer, "Missing Filename\r");
+	}
+	else if (strstr(FN, "..") || strchr(FN, '/') || strchr(FN, '\\'))
+	{
+		Len = sprintf(Buffer,"Invalid filename %s\r", FN);
+	}
+	else
+	{
+		if (BaseDir[0])
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/Files/%s", BaseDir, FN);
+		else
+			sprintf_s(MsgFile, sizeof(MsgFile), "Files/%s", FN);
+
+		if (stat(MsgFile, &STAT) != -1)
+		{
+			FileSize = STAT.st_size;
+
+			hFile = fopen(MsgFile, "rb");
+
+			if (hFile)
+			{
+				int Length;
+
+				if (FileSize > MaxTXSize)
+					FileSize = MaxTXSize;		// Truncate to max size
+	
+				MsgBytes=malloc(FileSize+1);
+				fread(MsgBytes, 1, FileSize, hFile); 
+				fclose(hFile);
+
+				MsgBytes[FileSize]=0;
+
+				// Remove lf chars
+
+				Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+				Len = sprintf(Buffer, "%s", MsgBytes);
+				free(MsgBytes);
+			}
+		}
+		else
+			Len = sprintf(Buffer, "File %s not found\r", FN);
+	}
+
+	SendServerReply("REQFIL Reply", Buffer, Len, _strupr(Address));
+	return TRUE;
+}
+
+BOOL CheckforMessagetoServer(struct MsgInfo * Msg)
+{
+	if (_stricmp(Msg->to, "REQDIR") == 0)
+		return ProcessReqDir(Msg);
+
+	if (_stricmp(Msg->to, "REQFIL") == 0)
+		return ProcessReqFile(Msg);
+
+	return FALSE;
+}
+
+VOID SendServerReply(char * Title, char * MailBuffer, int Length, char * To)
+{
+	struct MsgInfo * Msg = AllocateMsgRecord();
+	BIDRec * BIDRec;
+	char * Via;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	int WriteLen=0;
+
+	Msg->length = Length;
+
+	GetSemaphore(&MsgNoSemaphore, 0);
+	Msg->number = ++LatestMsg;
+	MsgnotoMsg[Msg->number] = Msg;
+
+	FreeSemaphore(&MsgNoSemaphore);
+ 
+	strcpy(Msg->from, BBSName);
+	Via = strlop(To, '@');
+
+	if (Via)
+		strcpy(Msg->via, Via);
+
+	strcpy(Msg->to, To);
+	strcpy(Msg->title, Title);
+
+	Msg->type = 'P';
+	Msg->status = 'N';
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+
+	BIDRec = AllocateBIDRecord();
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
+	
+	hFile = fopen(MsgFile, "wb");
+
+	if (hFile)
+	{
+		WriteLen = fwrite(MailBuffer, 1, Msg->length, hFile);
+		fclose(hFile);
+	}
+
+	MatchMessagetoBBSList(Msg, NULL);
+	free(MailBuffer);
+}
+
+
+
+	
 
 
 	

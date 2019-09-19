@@ -76,7 +76,7 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 

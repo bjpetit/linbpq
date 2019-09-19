@@ -459,8 +459,11 @@ BOOL unpackPart(char * Boundary, char ** Input, char ** Name, char ** Value, int
 	return FALSE;
 }
 
-VOID SaveInputValue(WebMailInfo * WebMail, char * Name, char * Value, int ValLength)
+int SaveInputValue(WebMailInfo * WebMail, char * Name, char * Value, int ValLength)
 {
+	if (strcmp(Name, "Cancel") == 0)
+		return FALSE;
+	
 	if (strcmp(Name, "To") == 0)
 		WebMail->To = _strdup(Value);
 	else if (strcmp(Name, "CC") == 0)
@@ -498,7 +501,8 @@ VOID SaveInputValue(WebMailInfo * WebMail, char * Name, char * Value, int ValLen
 				}
 			}
 		}
-	}	
+	}
+	return TRUE;
 }
 
 
@@ -899,7 +903,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	WebMailInfo * WebMail = Session->WebMail;
 	char * DisplayStyle;
 
-	char Message[100000] = "";
+	char Message[200000] = "";
 	struct MsgInfo * Msg;
 	char * ptr = Message;
 	char * MsgBytes, * Save;
@@ -2042,7 +2046,11 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 			free(Boundary);
 			return;
 		}
-		SaveInputValue(WebMail, Name, Value, ValLen);
+		if (SaveInputValue(WebMail, Name, Value, ValLen) == FALSE)
+		{
+			*RLen = sprintf(Reply, "<html><script>window.location.href = '/Webmail/WebMail?%s';</script>", Session->Key);
+			return;
+		}
 	}
 
 
@@ -4481,7 +4489,7 @@ int ReplyToFormsMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 	if (Msg->emailfrom[0])
 		sprintf(WebMail->To, "%s%s", Msg->from, Msg->emailfrom);
 	else
-		sprintf(WebMail->To, "%s", Msg->from, Msg->emailfrom);
+		sprintf(WebMail->To, "%s", Msg->from);
 
 
 	

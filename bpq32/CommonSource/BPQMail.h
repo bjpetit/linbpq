@@ -683,7 +683,8 @@ struct BBSForwardingInfo
 	BOOL ReverseFlag;				// Set if BBS wants to poll for reverse forwarding
 	BOOL Forwarding;				// Forward in progress
 	int MaxFBBBlockSize;
-	BOOL AllowCompressed;			// Allow FBB COmpressed
+	BOOL AllowBlocked;				// Allow FBB Blocked
+	BOOL AllowCompressed;			// Allow FBB Compressed
 	BOOL AllowB1;					// Enable B1
 	BOOL AllowB2;					// Enable B2 
 	BOOL SendCTRLZ;					// Send Ctrl/z instead of /ex

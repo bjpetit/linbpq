@@ -872,12 +872,17 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Try to fix SCS Tracker recovery
 //	Ensure RTS/DTR is down on CAT port if using that line for PTT
 //	Experimental APRS Messaging in Kernel
-//	Add Rigcontrol on remoted PC's using WinmorControl
+//	Add Rigcontrol on remote PC's using WinmorControl
 //	ADD VARAFM and VARAFM96 WL2KREPORT modes
 //	Fix WL2K sysop update for new Winlink API
 //	Fix APRS when using PORTNUM higher than the number of ports
-
-
+//	Add Serial Port Type
+//	Add option to linbpq to log APRS-IS messages.
+//	Send WL2K Session Reports
+//	Drop Tunneled Packets from 44.192 - 44.255 
+//	Log incoming Telnet Connects
+//	Add IPV4: and IPV6: overrides on AXIP Resolver.
+//	Add SessionTimeLimit to HF sessions (ARDOP, SCSPactor, WINMOR, VARA)
 
 #define CKernel
 
@@ -6136,5 +6141,56 @@ int GetListeningPortsPID(int Port)
 		}
 	}
 	return 0;			// Not found
+}
+
+// UZ7HO Dll PTT interface
+
+// 1 ext_PTT_info
+// 2 ext_PTT_settings
+// 3 ext_PTT_OFF
+// 4 ext_PTT_ON
+// 5 ext_PTT_close
+// 6 ext_PTT_open
+
+extern struct RIGINFO * DLLRIG;			// Rig record for dll PTT interface (currently only for UZ7HO);
+
+VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState);
+
+int WINAPI ext_PTT_info()
+{
+	return 0;
+}
+
+int WINAPI ext_PTT_settings()
+{
+	return 0;
+}
+
+int WINAPI ext_PTT_OFF(int Port)
+{
+	if (DLLRIG)
+		Rig_PTT(DLLRIG, 0);
+
+	return 0;
+}
+
+int WINAPI ext_PTT_ON(int Port)
+{
+	if (DLLRIG)
+		Rig_PTT(DLLRIG, 1);
+
+	return 0;
+}
+int WINAPI ext_PTT_close()
+{
+	if (DLLRIG)
+		Rig_PTT(DLLRIG, 0);
+
+	return 0;
+}
+
+DllExport INT WINAPI ext_PTT_open()
+{
+	return 1;
 }
 

@@ -128,8 +128,11 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 
 	int Len;
 
-	if (ADIFLogEnabled == FALSE)
-		return TRUE;
+	// Always keep info so we can sent as Winlink Session Record
+	// even if ADIF logging is disabled.
+
+//	if (ADIFLogEnabled == FALSE)
+//		return TRUE;
 
 	if (ADIF == NULL)
 		return TRUE;

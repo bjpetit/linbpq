@@ -55,8 +55,7 @@ VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
 
 char NodeCall[11];		// Nodecall, Null Terminated
-
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen);
 
 static int ProcessLine(char * buf, int Port)

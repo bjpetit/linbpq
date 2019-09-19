@@ -37,6 +37,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #endif
 //#include <stdlib.h>
 #include "bpq32.h"
+#include "adif.h"
+
 extern char * PortConfig[33];
 
 HANDLE hInstance;
@@ -56,11 +58,12 @@ extern int Ver[];
 int KillTNC(struct TNCINFO * TNC);
 int RestartTNC(struct TNCINFO * TNC);
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 char * GetChallengeResponse(char * Call, char *  ChallengeString);
 
 VOID __cdecl Debugprintf(const char * format, ...);
+VOID FromLOC(char * Locator, double * pLat, double * pLon);
 
 static RECT Rect;
 
@@ -491,6 +494,136 @@ VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value)
 	}
 
 	return;
+}
+
+
+// Send Winlink Session Record
+
+extern char LOC[7];
+extern char TextVerstring[50];
+
+double Distance(double laa, double loa, double lah, double loh, BOOL KM);
+double Bearing(double lat2, double lon2, double lat1, double lon1);
+VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return);
+SOCKET OpenWL2KHTTPSock();
+
+static char Modes [53][18] = {
+	"PKT12", "PKT24", "PKT48", "PKT96", "PKT", "PKT", "PKT", "", "", "", "",
+	"", "Pactor 1", "", "", "Pactor 2", "", "Pactor 3", "", "", "Pactor 4", // 10 - 20
+	"WINMOR5", "WINMOR16", "", "", "", "", "", "", "",				// 21 - 29
+	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
+	"ARDOP2", "ARDOP5", "ARDOP10", "ARDOP20", "ARDOP20", "", "", "", "", "",	// 40 - 49
+	"Vara", "VaraFM", "VaraFM96"};
+
+
+BOOL SendWL2KSessionRecord(ADIF * ADIF, int BytesSent, int BytesReceived)
+{
+/*
+The API is /session/add https://api.winlink.org/json/metadata?op=SessionAdd
+
+The important parameters are (others can be omitted):
+
+Application (gateway program name)
+Server (gateway callsign)
+ServerGrid
+Client (client callsign)
+ClientGrid
+Mode (Pactor, winmor, vara, etc)
+Frequency
+MessagesSent
+MessagesReceived
+BytesSent 
+BytesReceived 
+HoldingSeconds (duration of connection)
+IdTag (random alphanumeric, 12 chars)
+
+"Application":"RMS Trimode",
+"Version":"1.3.25.0",
+"Cms":"CMS-A",
+"Server":"AB4NX",
+"ServerGrid":"EM73WT",
+"Client":"VE2SCA","ClientGrid":"",
+"Sid":"","Mode":"WINMOR16",
+"Frequency":10145000,
+"Kilometers":0,
+"Degrees":0,
+"LastCommand":"&gt;",
+"MessagesSent":0,
+"MessagesReceived":0,
+"BytesSent":179,
+"BytesReceived":0,
+"HoldingSeconds":126,
+"IdTag":"ATK9S3QGL2E1"}
+*/
+	time_t T;
+
+	char Message[4096] = "";
+	int MessageLen;
+	int Dist = 0;
+	int intBearing = 0;
+
+	double Lat, Lon;
+	double myLat, myLon;
+
+	char Tag[32];
+
+	SOCKET sock;
+
+	if (ADIF == NULL)
+		return TRUE;
+
+	if (ADIF->StartTime == 0 || ADIF->ServerSID[0] == 0)
+		return TRUE;
+
+	T = time(NULL);
+
+	// Extract Info we need
+
+	// Distance and Bearing
+
+	if (LOC[0] && ADIF->LOC[0])
+	{
+		FromLOC(LOC, &myLat, &myLon);
+		FromLOC(ADIF->LOC, &Lat, &Lon);
+
+		Dist = Distance(myLat, myLon, Lat, Lon, TRUE);
+		intBearing = Bearing(Lat, Lon, myLat, myLon);
+	}
+
+	MessageLen = sprintf(Message, "\"Application\":\"%s\",", "BPQ32");
+	MessageLen += sprintf(&Message[MessageLen], "\"Version\":\"%s\",", TextVerstring);
+	MessageLen += sprintf(&Message[MessageLen], "\"Cms\":\"%s\",", "CMS");
+	MessageLen += sprintf(&Message[MessageLen], "\"Server\":\"%s\",", ADIF->CMSCall);
+	MessageLen += sprintf(&Message[MessageLen], "\"ServerGrid\":\"%s\",", LOC);
+	MessageLen += sprintf(&Message[MessageLen], "\"Client\":\"%s\",", ADIF->Call);
+	MessageLen += sprintf(&Message[MessageLen], "\"ClientGrid\":\"%s\",", ADIF->LOC);
+	MessageLen += sprintf(&Message[MessageLen], "\"Sid\":\"%s\",", ADIF->UserSID);
+	MessageLen += sprintf(&Message[MessageLen], "\"Mode\":\"%s\",", Modes[ADIF->Mode]);
+	MessageLen += sprintf(&Message[MessageLen], "\"Frequency\":%d,", ADIF->Freq);
+	MessageLen += sprintf(&Message[MessageLen], "\"Kilometers\":%d,", Dist);
+	MessageLen += sprintf(&Message[MessageLen], "\"Degrees\":%d,", intBearing);
+	MessageLen += sprintf(&Message[MessageLen], "\"LastCommand\":\"%s\",", ADIF->Termination);
+	MessageLen += sprintf(&Message[MessageLen], "\"MessagesSent\":%d,", ADIF->Sent);
+	MessageLen += sprintf(&Message[MessageLen], "\"MessagesReceived\":%d,", ADIF->Received);
+	MessageLen += sprintf(&Message[MessageLen], "\"BytesSent\":%d,", BytesSent);
+	MessageLen += sprintf(&Message[MessageLen], "\"BytesReceived\":%d,", BytesReceived);
+	MessageLen += sprintf(&Message[MessageLen], "\"HoldingSeconds\":%d,", T - ADIF->StartTime);
+	sprintf(Tag, "%012X", T * (rand() + 1));
+	MessageLen += sprintf(&Message[MessageLen], "\"IdTag\":\"%s\"", Tag);
+
+	Debugprintf("Sending %s", Message);
+
+	sock = OpenWL2KHTTPSock();
+
+	if (sock)
+	{
+		SendHTTPRequest(sock, "api.winlink.org", 80, 
+				"/session/add", Message, MessageLen, NULL);
+	
+		closesocket(sock);
+	}
+
+	return TRUE;
 }
 
 char APIKey[] = ",\"Key\":\"0D0C7AD6B38C45A7A9534E67111C38A7\"";

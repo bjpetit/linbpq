@@ -161,9 +161,9 @@
 #define IDC_PRINTMSG                    1088
 #define IDC_EXPORT                      1089
 #define IDM_PROMPTSAVE                  1090
-#define BBSUSERCHAT						1091
-#define ENDUSERCHAT						1501
+#define BBSUSERCHAT                     1091
 #define IDC_BBSSAVE                     1500
+#define ENDUSERCHAT                     1501
 #define IDM_DISCONNECT                  2000
 #define IDC_ChatAppl                    2001
 #define IDC_ChatNodes                   2002
@@ -264,6 +264,7 @@
 #define IDC_READDRESSLOCAL              9877
 #define IDC_READDRESSRXED               9878
 #define IDC_ALLOWCOMP                   9879
+#define IDC_BLOCKED                     9880
 #define IDC_WARNNOROUTE                 9881
 #define IDD_MAINTRESULTS                30001
 #define IDD_EDITWP                      30002

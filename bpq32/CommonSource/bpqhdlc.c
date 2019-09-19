@@ -37,6 +37,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 extern VOID * TRACE_Q;
 
+#ifdef WIN32
+
 _CRT_OBSOLETE(GetVersionEx) errno_t __cdecl _get_winmajor(__out unsigned int * _Value);
 _CRT_OBSOLETE(GetVersionEx) errno_t __cdecl _get_winminor(__out unsigned int * _Value);
 
@@ -1138,3 +1140,32 @@ int INITPORT(PHDLCDATA PORTVEC)
 
 	return FALSE;
 }
+#endif
+
+// Linux HDLC Kernel Module Support
+
+int KHDLCINIT(PHDLCDATA PORTVEC)
+{
+	return 0;
+}
+
+void KHDLCTX(struct KISSINFO * KISS, PMESSAGE Buffer)
+{}
+
+int KHDLCRX(PHDLCDATA PORTVEC)
+{
+	return 0;
+}
+
+void KHDLCTIMER(PHDLCDATA PORTVEC)
+{}
+
+void KHDLCCLOSE(PHDLCDATA PORTVEC)
+{}
+
+BOOL KHDLCTXCHECK()
+{
+	return 0;
+}
+
+

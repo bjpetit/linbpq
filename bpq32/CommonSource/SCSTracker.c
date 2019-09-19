@@ -59,7 +59,7 @@ char * strlop(char * buf, char delim);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL OpenConnection(int);

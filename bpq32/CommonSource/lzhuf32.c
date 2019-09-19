@@ -604,105 +604,131 @@ static int DecodePosition(void)
 
 /* compression */
 
-long Encode(char * in, char * out, long inlen, BOOL B1Protocol)
+long Encode(char * in, char * out, long inlen, BOOL B1Protocol, int Compress)
 {
-		int  i, c, len, r, s, last_match_length;
-		unsigned char *ptr;
+	int  i, c, len, r, s, last_match_length;
+	unsigned char *ptr;
 
-		putbuf = 0;
-		putlen = 0;
-		textsize = 0;
-		codesize = 0;
+	putbuf = 0;
+	putlen = 0;
+	textsize = 0;
+	codesize = 0;
 
-		crc = 0;
-		outfile = out;
+	crc = 0;
+	outfile = out;
 
-		if (B1Protocol)
-		{
-			outfile+=2;				// Space for CRC
-		}
+	if (B1Protocol)
+		outfile+=2;				// Space for CRC
 
-//		infile = &conn->MailBuffer[2];
+//	infile = &conn->MailBuffer[2];
 
-		textsize = inlen;
+	textsize = inlen;
 
-		ptr = (char *)&textsize;
+	ptr = (char *)&textsize;
 
 #ifdef __BIG_ENDIAN__
-		
-		crc_fputc(*(ptr+3));
-		crc_fputc(*(ptr+2));
-		crc_fputc(*(ptr+1));
-		crc_fputc(*(ptr));
+	crc_fputc(*(ptr+3));
+	crc_fputc(*(ptr+2));
+	crc_fputc(*(ptr+1));
+	crc_fputc(*(ptr));
 #else
-		crc_fputc(*(ptr++));
-		crc_fputc(*(ptr++));
-		crc_fputc(*(ptr++));
-		crc_fputc(*(ptr++));	
+	crc_fputc(*(ptr++));
+	crc_fputc(*(ptr++));
+	crc_fputc(*(ptr++));
+	crc_fputc(*(ptr++));	
 #endif
 
-		if (textsize == 0)
-			return 0;
+	if (textsize == 0)
+		return 0;
 
-		infile = in;
-		endinfile = infile + inlen;
-		textsize = 0;                   /* rewind and re-read */
+	infile = in;
+	endinfile = infile + inlen;
+	textsize = 0;                   /* rewind and re-read */
+
+	// if using uncompressed just copy in to out
+	// may not be optimum but is simple!
+
+	if (Compress)
+	{
 		StartHuff();
 		InitTree();
 		s = 0;
 		r = N - F;
 		for (i = s; i < r; i++)
-				text_buf[i] = 0x20;
+			text_buf[i] = 0x20;
 		for (len = 0; len < F && (c = Get()) != EOF; len++)
-				text_buf[r + len] = (unsigned char)c;
+			text_buf[r + len] = (unsigned char)c;
 		textsize = len;
 		for (i = 1; i <= F; i++)
-				InsertNode(r - i);
+			InsertNode(r - i);
 		InsertNode(r);
-		do {
-				if (match_length > len)
-						match_length = len;
-				if (match_length <= THRESHOLD) {
-						match_length = 1;
-						EncodeChar(text_buf[r]);
-				} else {
-						EncodeChar(255 - THRESHOLD + match_length);
-						EncodePosition(match_position);
-				}
-				last_match_length = match_length;
-				for (i = 0; i < last_match_length &&
-								(c = Get()) != EOF; i++) {
-						DeleteNode(s);
-            text_buf[s] = (unsigned char)c;
-						if (s < F - 1)
-                text_buf[s + N] = (unsigned char)c;
-						s = (s + 1) & (N - 1);
-						r = (r + 1) & (N - 1);
-						InsertNode(r);
-				}
-
-				while (i++ < last_match_length) {
-						DeleteNode(s);
-						s = (s + 1) & (N - 1);
-						r = (r + 1) & (N - 1);
-						if (--len) InsertNode(r);
-				}
-		} while (len > 0);
-		EncodeEnd();
-
-		if (B1Protocol)
+	
+		do
 		{
-			out[0] = crc & 0xff;
-			out[1]= crc >> 8;
-			codesize+=2;
+			if (match_length > len)
+				match_length = len;
+			if (match_length <= THRESHOLD)
+			{
+				match_length = 1;
+				EncodeChar(text_buf[r]);
+			}
+			else
+			{
+				EncodeChar(255 - THRESHOLD + match_length);
+				EncodePosition(match_position);
+			}
+			last_match_length = match_length;
+		
+			for (i = 0; i < last_match_length && (c = Get()) != EOF; i++)
+			{
+				DeleteNode(s);
+			    text_buf[s] = (unsigned char)c;
+
+				if (s < F - 1)
+					text_buf[s + N] = (unsigned char)c;
+				s = (s + 1) & (N - 1);
+				r = (r + 1) & (N - 1);
+				InsertNode(r);
+			}
+
+			while (i++ < last_match_length)
+			{
+				DeleteNode(s);
+				s = (s + 1) & (N - 1);
+				r = (r + 1) & (N - 1);
+				if (--len) InsertNode(r);
+			}
 		}
+		while (len > 0);
 
-		 codesize += 4;
+		EncodeEnd();
+	}
+	else
+	{
+		long n = inlen;
+		while (n--)
+			crc_fputc(*(infile++));
+	
+		codesize += inlen;
+	}
 
+	if (B1Protocol)
+	{
+		out[0] = crc & 0xff;
+		out[1]= crc >> 8;
+		codesize+=2;
+	}
+
+	codesize += 4;
+
+	if (Compress)
 		Logprintf(LOG_BBS, NULL, '|', "Compressed Message Comp Len %d Msg Len %d CRC %x", 
-				codesize, inlen, crc);
+			codesize, inlen, crc);
+	else
+		Logprintf(LOG_BBS, NULL, '|', "Uncompressed Message Sent Len %d Msg Len %d CRC %x", 
+			codesize, inlen, crc);
 
-		return codesize;
+	return codesize;
 }
 
 BOOL CheckifPacket(char * Via)
@@ -840,39 +866,48 @@ void Decode(CIRCUIT * conn)
 	if (textsize == 0)
 		return;
 
-	StartHuff();
-	
-	for (i = 0; i < N - F; i++)
-		text_buf[i] = 0x20;
+	// If compressed, decompress
 
-	r = N - F;
-
-	for (count = 0; count < textsize; )
+	if (conn->BBSFlags & FBBCompressed)
 	{
-		c = DecodeChar();
-		if (c < 256)
+		StartHuff();
+	
+		for (i = 0; i < N - F; i++)
+			text_buf[i] = 0x20;
+
+		r = N - F;
+
+		for (count = 0; count < textsize; )
 		{
-			*(outfile++) = (unsigned char)c;
-			text_buf[r++] = (unsigned char)c;
-			r &= (N - 1);
-			count++;
-		} 
-		else
-		{
-			i = (r - DecodePosition() - 1) & (N - 1);
-			j = c - 255 + THRESHOLD;
-			for (k = 0; k < j; k++)
+			c = DecodeChar();
+			if (c < 256)
 			{
-				c = text_buf[(i + k) & (N - 1)];
 				*(outfile++) = (unsigned char)c;
-                text_buf[r++] = (unsigned char)c;
+				text_buf[r++] = (unsigned char)c;
 				r &= (N - 1);
 				count++;
+			} 
+			else
+			{
+				i = (r - DecodePosition() - 1) & (N - 1);
+				j = c - 255 + THRESHOLD;
+				for (k = 0; k < j; k++)
+				{
+					c = text_buf[(i + k) & (N - 1)];
+					*(outfile++) = (unsigned char)c;
+				  text_buf[r++] = (unsigned char)c;
+					r &= (N - 1);
+					count++;
+				}
 			}
 		}
+		outfile -=count;
 	}
-
-	outfile -=count;
+	else
+	{
+		count = textsize;
+		memcpy(outfile, infile, textsize);
+	}
 
 	free(conn->MailBuffer);
 	conn->MailBuffer = outfile;

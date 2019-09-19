@@ -80,6 +80,7 @@ VOID initUTF8();
 int TrytoGuessCode(unsigned char * Char, int Len);
 DllExport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 extern BPQVECSTRUC * TELNETMONVECPTR;
+BOOL SendWL2KSessionRecord(ADIF * ADIF, int BytesSent, int BytesReceived);
 
 
 #ifndef LINBPQ
@@ -123,7 +124,7 @@ static int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
 
-uintptr_t _beginthread( void( *start_address )(), unsigned stack_size, struct TNCINFO * arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 #ifndef LINBPQ
 LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -134,7 +135,7 @@ int DoStateChange(int Stream);
 int Connected(int Stream);
 int Disconnected(int Stream);
 //int DeleteConnection(con);
-static int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId);
+static int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port);
 static int Socket_Data(struct TNCINFO * TNC, SOCKET SocketId,int error, int eventcode);
 static int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
 int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
@@ -847,14 +848,28 @@ static int ExtProc(int fn, int port , PDATAMESSAGE buff)
 		{
 			sockptr = TNC->Streams[n].ConnectionInfo;
 
-			if (sockptr->SocketActive && sockptr->HTTPMode && sockptr->LastSendTime)
+			if (sockptr->SocketActive)
 			{
-				if ((REALTIMETICKS -sockptr->LastSendTime) > 1500)	// ~ 2.5 mins
+				if (sockptr->HTTPMode)
 				{
-					closesocket(sockptr->socket);
-					sockptr->SocketActive = FALSE;
-					ShowConnections(TNC);
+					if (sockptr->LastSendTime && (REALTIMETICKS - sockptr->LastSendTime) > 1500)	// ~ 2.5 mins
+					{
+						closesocket(sockptr->socket);
+						sockptr->SocketActive = FALSE;
+						ShowConnections(TNC);
+					}
 				}
+				else
+				{
+					// Time out Login
+
+					if (sockptr->LoginState < 2 && (time(NULL) - sockptr->ConnectTime) > 30)
+					{
+						closesocket(sockptr->socket);
+						sockptr->SocketActive = FALSE;
+						ShowConnections(TNC);
+					}
+				}	
 			}
 		}
 
@@ -1785,73 +1800,76 @@ VOID TelnetPoll(int Port)
 		n = 0;
 		while (TCP->FBBsock[n])
 		{
-			sock = TCP->FBBsock[n++];
+			sock = TCP->FBBsock[n];
 			if (FD_ISSET(sock, &readfd))
-				Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock, TCP->FBBPort[n]);
+
+			n++;
 		}
 
 		sock = TCP->TCPSock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-				Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock, TCP->TCPPort);
 		}
 		
 		sock = TCP->TriModeSock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-				Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock, TCP->TriModePort);
 		}
 		sock = TCP->TriModeDataSock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-				Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock, TCP->TriModePort + 1);
 		}
 	
 		sock = TCP->Relaysock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-				Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock, TCP->RelayPort);
 		}
 		
 		sock = TCP->HTTPsock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-				Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock, TCP->HTTPPort);
 		}
 
 		n = 0;
 		
 		while (TCP->FBBsock6[n])
 		{
-			sock = TCP->FBBsock6[n++];
+			sock = TCP->FBBsock6[n];
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+			Socket_Accept(TNC, sock, TCP->FBBPort[n]);
+			n++;
 		}
 
 		sock = TCP->sock6;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock, TCP->TCPPort);
 		}
 		
 		sock = TCP->Relaysock6;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+			Socket_Accept(TNC, sock, TCP->RelayPort);
 		}
 		
 		sock = TCP->HTTPsock6;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+			Socket_Accept(TNC, sock, TCP->HTTPPort);
 		}
 		
 		}
@@ -2120,6 +2138,8 @@ nosocks:
 
 					WriteCMSLog (logmsg);
 				}
+
+				SendWL2KSessionRecord(sockptr->ADIF, STREAM->BytesTXed, STREAM->BytesRXed);
 				
 				WriteADIFRecord(sockptr->ADIF);
 				
@@ -2841,7 +2861,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 #endif
 
-int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId)
+int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 {
 	int n, addrlen = sizeof(struct sockaddr_in6);
 	struct sockaddr_in6 sin6;  
@@ -2881,6 +2901,21 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId)
 				Debugprintf("BPQ32 Telnet accept() failed Error %d", WSAGetLastError());
 				return FALSE;
 			}
+
+			// Log, including port
+
+			if (LogEnabled)
+			{
+				char Addr[256];
+				char logmsg[512];
+	
+				Tel_Format_Addr(sockptr, Addr);
+						
+				sprintf(logmsg,"%d %s Incoming Connect on Port %d\n", sockptr->Number, Addr, Port);
+				WriteLog (logmsg);
+			}
+
+
 				
 //			Debugprintf("BPQ32 Telnet accept() Sock %d", sock);
 
@@ -4637,8 +4672,8 @@ int WriteLog(char * msg)
 		strcat(Value, "logs/Telnet_");
 	}
 
-	sprintf(Value, "%s%04d%02d%02d.log", Value,
-				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+	sprintf(Value, "%s%02d%02d%02d.log", Value,
+				tm->tm_year - 100, tm->tm_mon+1, tm->tm_mday);
 
 	if ((file = fopen(Value, "a")) == NULL)
 		return FALSE;

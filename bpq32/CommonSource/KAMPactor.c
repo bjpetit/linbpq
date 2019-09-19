@@ -70,7 +70,8 @@ static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
+
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 int ProcessLine(char * buf, int Port)

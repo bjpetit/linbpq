@@ -2176,7 +2176,7 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 	ptr += 20;						// Skip IPIP Header
 	IPptr = (PIPMSG) ptr;
 
-	//	If we are relaying it from a DMZ host there will be antoher header
+	//	If we are relaying it from a DMZ host there will be another header
 
 	if (IPptr->IPPROTOCOL == 4)		// IPIP
 	{
@@ -2201,56 +2201,15 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 	}
 
 	// for now drop anything not from a 44 address. 
+	// now also need to drop 44.192/10 as it has been sold to Amazon
 
 	if (IPptr->IPSOURCE.S_un_b.s_b1 != 44)
-	{
-		// Reply to a ping - pretty safe!
-
-		if (IPptr->IPPROTOCOL == 1)
-		{
-			int Len;
-
-			int addrlen = sizeof(struct sockaddr_in);
-
-			PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
-
-			Len = ntohs(IPptr->IPLENGTH);
-			Len-=20;
-
-			Check_Checksum(ICMPptr, Len);
-
-			if (ICMPptr->ICMPTYPE == 8)
-			{
-				//	ICMP_ECHO
-
-				ULONG Temp;
-				
-				ICMPptr->ICMPTYPE = 0;		// Convert to Reply
-
-				ICMPptr->ICMPCHECKSUM = 0;
-
-				// CHECKSUM IT
-	
-				ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, Len);
-
-				// Swap Dest to Origin
-
-				Temp = IPptr->IPDEST.addr;
-				IPptr->IPDEST = IPptr->IPSOURCE;
-				IPptr->IPSOURCE.addr = Temp;
-				IPptr->IPTTL = IPTTL;
-
-				IPptr->IPCHECKSUM = 0;
-				IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
-
-	//			SendIPtoEncap(IPptr, Outer->IPSOURCE.addr);
-
-			}
-			return;
-		}
-
 		return;
-	}
+
+	// Drop 44.192 - 44.255
+
+	if (IPptr->IPSOURCE.S_un_b.s_b2 >= 192)
+		return;
 
 	//	See if for us
 

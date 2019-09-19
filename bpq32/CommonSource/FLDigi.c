@@ -59,7 +59,7 @@ int (WINAPI FAR *EnumProcessesPtr)();
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
-uintptr_t _beginthread(void( *start_address )(), unsigned stack_size, int arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 
@@ -1407,7 +1407,7 @@ static int ProcessLine(char * buf, int Port)
 
 static int ConnecttoFLDigi(int port)
 {
-	_beginthread(ConnecttoFLDigiThread,0,port);
+	_beginthread(ConnecttoFLDigiThread, 0, (void *)port);
 
 	
 	return 0;

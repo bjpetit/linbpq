@@ -61,7 +61,7 @@ static VOID DoMinTimer();
 static int APRSProcessLine(char * buf);
 static BOOL APRSReadConfigFile();
 VOID APRSISThread(BOOL Report);
-uintptr_t _beginthread(void( *start_address )(BOOL Report), unsigned stack_size, void * arglist);
+pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Consoleprintf(const char * format, ...);
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
@@ -101,6 +101,8 @@ extern int SemHeldByAPI;
 extern int APRSMONDECODE();
 extern struct ConsoleInfo MonWindow;
 extern char VersionString[];
+
+BOOL LogAPRSIS = FALSE;
 
 // All data should be initialised to force into shared segment
 
@@ -401,6 +403,155 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX);
 
 HANDLE hMapFile;
 
+// Logging
+
+static int LogAge = 14;
+
+#ifdef WIN32
+
+int DeleteAPRSLogFiles()
+{
+   WIN32_FIND_DATA ffd;
+
+   char szDir[MAX_PATH];
+   char File[MAX_PATH];
+   HANDLE hFind = INVALID_HANDLE_VALUE;
+   DWORD dwError=0;
+   LARGE_INTEGER ft;
+   time_t now = time(NULL);
+   int Age;
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   strcpy(szDir, GetLogDirectory());
+   strcat(szDir, "/logs/APRS*.log");
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+      return dwError;
+
+   // Walk directory
+
+   do
+   {
+      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      {
+         OutputDebugString(ffd.cFileName);
+      }
+      else
+      {
+         ft.HighPart = ffd.ftCreationTime.dwHighDateTime;
+         ft.LowPart = ffd.ftCreationTime.dwLowDateTime;
+
+		 ft.QuadPart -=  116444736000000000;
+		 ft.QuadPart /= 10000000;
+
+		 Age = (int)((now - ft.LowPart) / 86400); 
+
+		 if (Age > LogAge)
+		 {
+			 sprintf(File, "%s/logs/%s%c", GetLogDirectory(), ffd.cFileName, 0);
+			 Debugprintf("Deleting %s", File);
+			 DeleteFile(File);
+		 }
+      }
+   }
+   while (FindNextFile(hFind, &ffd) != 0);
+ 
+   FindClose(hFind);
+   return dwError;
+}
+
+#else
+
+#include <dirent.h>
+
+int APRSFilter(const struct dirent * dir)
+{
+	return (memcmp(dir->d_name, "APRS", 4) == 0  && strstr(dir->d_name, ".log"));
+}
+
+int DeleteAPRSLogFiles()
+{
+	struct dirent **namelist;
+    int n;
+	struct stat STAT;
+	time_t now = time(NULL);
+	int Age = 0, res;
+	char FN[256];
+     	
+    n = scandir("logs", &namelist, APRSFilter, alphasort);
+
+	if (n < 0) 
+		perror("scandir");
+	else  
+	{ 
+		while(n--)
+		{
+			sprintf(FN, "logs/%s", namelist[n]->d_name);
+			if (stat(FN, &STAT) == 0)
+			{
+				Age = (now - STAT.st_mtime) / 86400;
+				
+				if (Age > LogAge)
+				{
+					Debugprintf("Deleting  %s\n", FN);
+					unlink(FN);
+				}
+			}
+			free(namelist[n]);
+		}
+		free(namelist);
+    }
+	return 0;
+}
+#endif
+
+int APRSWriteLog(char * msg)
+{
+	FILE *file;
+	time_t ltime;
+
+	UCHAR Value[MAX_PATH];
+	time_t T;
+	struct tm * tm;
+
+	if (LogAPRSIS == 0)
+		return 0;
+
+	if (strchr(msg, '\n') == 0)
+		strcat(msg, "\r\n");
+
+	T = time(NULL);
+	tm = gmtime(&T);
+
+	if (GetLogDirectory()[0] == 0)
+	{
+		strcpy(Value, "logs/APRS_");
+	}
+	else
+	{
+		strcpy(Value, GetLogDirectory());
+		strcat(Value, "/");
+		strcat(Value, "logs/APRS_");
+	}
+
+	sprintf(Value, "%s%02d%02d%02d.log", Value,
+				tm->tm_year - 100, tm->tm_mon+1, tm->tm_mday);
+
+	if ((file = fopen(Value, "ab")) == NULL)
+		return FALSE;
+
+	fputs(msg, file);
+	fclose(file);
+	return 0;
+}
+
+
 int ISSend(SOCKET sock, char * Msg, int Len, int flags)
 {
 	int Loops = 0;
@@ -453,6 +604,10 @@ Dll BOOL APIENTRY Init_APRS()
 	StationCount = 0;
 	HEARDENTRIES = 0;
 	MAXHEARDENTRIES = 0;
+	MobileBeaconInterval = 0;
+	BeaconInterval = 0;
+
+	DeleteAPRSLogFiles();
 
 	memset(MHTABLE, 0, sizeof(MHTABLE));
 
@@ -1703,9 +1858,16 @@ static int APRSProcessLine(char * buf)
 		DefaultDistKM = TRUE;
 		return TRUE;
 	}
+
 	if (_stricmp(ptr, "LOCALTIME") == 0)
 	{
 		DefaultLocalTime = TRUE;
+		return TRUE;
+	}
+
+	if (_stricmp(ptr, "LOGAPRSIS") == 0)
+	{
+		LogAPRSIS = TRUE;
 		return TRUE;
 	}
 
@@ -5325,7 +5487,8 @@ VOID APRSSecTimer()
 							SendAPRSMessage(Msg, STN->Port);
 						else
 						{
-							SendAPRSMessage(Msg, -1);			// All RF ports
+							if (memcmp(ptr->ToCall, "SERVER   ", 9))
+								SendAPRSMessage(Msg, -1);		// All RF ports unless to SERVER
 							SendAPRSMessage(Msg, 0);			// IS
 						}
 						ptr->RetryTimer = RetryTimer;

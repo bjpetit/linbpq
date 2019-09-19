@@ -212,7 +212,7 @@ int bin_switch(char * val, char *value, char *rec);
 int dec_switch(char * val, char *value, char *rec);
 int applstrings(int i,char *value, char *rec);
 int dotext(char * val, char *key_word, int max);
-
+int dolinked(int i, char * value, char * rec);
 int routes(int i);
 int ports(int i);
 int tncports(int i);

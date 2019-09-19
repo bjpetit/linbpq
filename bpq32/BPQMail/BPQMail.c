@@ -991,6 +991,14 @@
 //	Increace maximum length on Forwarding Alias string in Web interface
 //	Expand multiaddress messages from Winlink Express if "Don't add @Winlink.org" set or no RMS BBS
 //	Fix program error if READ used without a filename
+//	Trap reject messages from Winlink CMS
+//	Fix "delete to recycle bin" on Linux
+//	Handle Radio Only Messages (-T or -R suffix on calling station)
+//	Fix program error on saving empty Alias list on Web Forwarding page
+//	Add REQDIR and REQFIL
+//	Experimental Blocked Uncompressed forwarding
+//	Security fix for YAPP
+//	Fix WebMail Cancel Send Message
 
 #include "BPQMail.h"
 #define MAIL

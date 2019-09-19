@@ -205,7 +205,7 @@ int Update_MH_KeepAlive(struct AXIPPORTINFO * PORT, struct in_addr ipad, char pr
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
 BOOL add_arp_entry(struct AXIPPORTINFO * PORT, unsigned char * call, UCHAR * ip, int len, int port,unsigned char * name,
-		int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort, BOOL IPv6);
+int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort, BOOL IPv6);
 BOOL add_bc_entry(struct AXIPPORTINFO * PORT, unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 static BOOL ReadConfigFile(int Port);
@@ -1530,24 +1530,36 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 				struct addrinfo hints, *res = 0;
 				int n;
 				BOOL UseV6 = FALSE;
+				BOOL ForceV4 = FALSE;
 
 				if (_memicmp(arp->hostname, "ipv6:", 5) == 0)
 					UseV6 = TRUE;
+				else if (_memicmp(arp->hostname, "ipv4:", 5) == 0)
+					ForceV4 = TRUE;
 
 				memset(&hints, 0, sizeof hints);
 				hints.ai_socktype = SOCK_DGRAM;
 			
 				if (UseV6)
 				{
-					hints.ai_family = AF_INET6;  // use IPv6
+					hints.ai_family = AF_INET6;		  // use IPv6
 					n = getaddrinfo(&arp->hostname[5], NULL, &hints, &res);
+				}
+				else if (ForceV4)
+				{
+					hints.ai_family = AF_INET;		 // use IPv4
+					n = getaddrinfo(&arp->hostname[5], NULL, &hints, &res);
+				}
+				else if (PORT->PortIPv6)			// Can use IPv6
+				{
+					hints.ai_family = AF_UNSPEC;	// use IPv4 or IPv6, whichever
+					n = getaddrinfo(arp->hostname, NULL, &hints, &res);
 				}
 				else
 				{
-					hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+					hints.ai_family = AF_INET;		// use IPv4 only
 					n = getaddrinfo(arp->hostname, NULL, &hints, &res);
 				}
-
 				if (res)
 				{
 					arp->error = 0;
@@ -2132,9 +2144,11 @@ static int ProcessLine(char * buf, struct AXIPPORTINFO * PORT)
 
 		ptr = strtok(NULL, " \t\n\r");
 
-		if (ptr)
-			if (_stricmp(ptr, "ipv6") == 0)
-				PORT->IPv6[PORT->NumberofUDPPorts] = TRUE;
+		if (ptr && _stricmp(ptr, "ipv6") == 0)
+		{
+			PORT->PortIPv6 = TRUE;
+			PORT->IPv6[PORT->NumberofUDPPorts] = TRUE;
+		}
 
 		PORT->NumberofUDPPorts++;
 

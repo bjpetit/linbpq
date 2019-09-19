@@ -339,13 +339,14 @@ typedef struct TNCINFO
 	HWND hDlg;						// Status Window Handle
 	int (FAR * WebWindowProc)(struct TNCINFO * TNC, char * Buff, BOOL LOCAL);	// Routine to build web status window
 	int WebWinX;
-	int WebWinY;					// Size of window
-	char * WebBuffer;				// Buffer for logs
-	int RigControlRow;				// Rig Control Line in Dialog
+	int WebWinY;				// Size of window
+	char * WebBuffer;			// Buffer for logs
+	int RigControlRow;			// Rig Control Line in Dialog
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 	struct RIGINFO * RIG;		// Pointer to Rig Control RIG record 
 	char * InitScript;			// Initialisation Commands
 	int InitScriptLen;			// Length
+	time_t SessionTimeLimit;	// Optional limit to total session time
 
 	int Hardware;				// Hardware Type
 
