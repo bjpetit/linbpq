@@ -7013,7 +7013,7 @@ InBand:
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
 		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - ") ||
 		strstr(Buffer, "UNABLE TO CONNECT") ||  strstr(Buffer, "DISCONNECTED") ||
-		strstr(Buffer, "FAILED TO CONNECT"))
+		strstr(Buffer, "FAILED TO CONNECT") ||	strstr(Buffer, "REJECTED"))
 	{
 		// Connect Failed
 

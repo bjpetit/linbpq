@@ -80,6 +80,11 @@
 
 //	Add Chat Terminal Mode
 
+//	Version 2.2.5.1	Sep 2019
+
+//	Recompile for change to Port Struct
+
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 

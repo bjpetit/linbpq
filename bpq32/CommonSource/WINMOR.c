@@ -142,6 +142,9 @@ VOID WritetoTraceSupport(struct TNCINFO * TNC, char * Msg, int Len)
 	UCHAR Line[1000];
 	int LineLen, i;
 
+	if (Len < 0)
+		return;
+
 	Msg[Len] = 0;
 
 #ifndef LINBPQ
@@ -277,6 +280,7 @@ VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
 	//	It seems writing from multiple threads can cause problems in Windows
 	//	Queue and process in main thread
 
+	
 #ifndef WIN32
 
 	WritetoTraceSupport(TNC, Msg, Len);
@@ -286,6 +290,9 @@ VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
 
 	UINT * buffptr;
 	BOOL Sem = FALSE;
+
+	if (Len < 0)
+		return;
 
 	if (Semaphore.Flag == 0)
 	{

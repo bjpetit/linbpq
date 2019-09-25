@@ -1929,6 +1929,9 @@ int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 	if (conn->WEB_COMMSSTATE == NULL)
 		conn->WEB_COMMSSTATE = zalloc(100);
 
+	if (conn->xIDC_COMMSSTATE == NULL)
+		conn->xIDC_COMMSSTATE = zalloc(100);
+
 	if (Port == NULL)
 		return (FALSE);
 

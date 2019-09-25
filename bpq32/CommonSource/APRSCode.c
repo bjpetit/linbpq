@@ -7571,6 +7571,9 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		char * Text = strtok_s(NULL, " \r", &context);
 		int len = 0;
 		
+		if (isSYSOP(Session, Bufferptr) == FALSE)
+			return;
+
 		if (Call)
 			len = strlen(Call);
 

@@ -883,6 +883,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Log incoming Telnet Connects
 //	Add IPV4: and IPV6: overrides on AXIP Resolver.
 //	Add SessionTimeLimit to HF sessions (ARDOP, SCSPactor, WINMOR, VARA)
+//	Add RADIO FREQ command to display current frequency
 
 #define CKernel
 

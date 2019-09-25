@@ -461,7 +461,7 @@ ok:
 			if (buffptr == 0) return (0);			// No buffers, so ignore
 
 			buffptr->Len = 36;
-			memcpy(&buffptr->Data[0], "No Connection to ARDOP TNC\r", 36);
+			memcpy(&buffptr->Data[0], "No Connection to TNC\r", 36);
 
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 			
@@ -720,9 +720,6 @@ VOID SerialReleaseTNC(struct TNCINFO * TNC)
 
 	SerialChangeMYC(TNC, TNC->NodeCall);
 
-	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
-
 	//	Start Scanner
 				
 	sprintf(TXMsg, "%d SCANSTART 15", TNC->Port);
@@ -741,37 +738,6 @@ VOID SerialSuspendPort(struct TNCINFO * TNC)
 VOID SerialReleasePort(struct TNCINFO * TNC)
 {
 	SerialSendCommand(TNC, "CONOK ON\r");
-}
-
-
-static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
-{
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>ARDOP Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
-		"'width=440,height=150');\" action=ARDOPAbort?%d>ARDOP Status"
-		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
-		TNC->Port);
-
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
-
-	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
-	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
-	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
-	Len += sprintf(&Buff[Len], "<tr><td>Channel State</td><td>%s &nbsp; %s</td></tr>", TNC->WEB_CHANSTATE, TNC->WEB_LEVELS);
-	Len += sprintf(&Buff[Len], "<tr><td>Proto State</td><td>%s</td></tr>", TNC->WEB_PROTOSTATE);
-	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
-//	Len += sprintf(&Buff[Len], "<tr><td>TNC Restarts</td><td></td></tr>", TNC->WEB_RESTARTS);
-	Len += sprintf(&Buff[Len], "</table>");
-
-	Len += sprintf(&Buff[Len], "<textarea rows=10 style=\"width:500px; height:250px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
-	Len = DoScanLine(TNC, Buff, Len);
-
-	return Len;
 }
 
 
@@ -872,70 +838,6 @@ VOID * SerialExtInit(EXTPORTDATA * PortEntry)
 	if (TNC->WL2K == NULL)
 		if (PortEntry->PORTCONTROL.WL2KInfo.RMSCall[0])			// Alrerady decoded
 			TNC->WL2K = &PortEntry->PORTCONTROL.WL2KInfo;
-
-	TNC->WebWindowProc = WebProc;
-	TNC->WebWinX = 520;
-	TNC->WebWinY = 500;
-	TNC->WebBuffer = zalloc(5000);
-
-	TNC->WEB_COMMSSTATE = zalloc(100);
-	TNC->WEB_TNCSTATE = zalloc(100);
-	TNC->WEB_CHANSTATE = zalloc(100);
-	TNC->WEB_BUFFERS = zalloc(100);
-	TNC->WEB_PROTOSTATE = zalloc(100);
-	TNC->WEB_RESTARTTIME = zalloc(100);
-	TNC->WEB_RESTARTS = zalloc(100);
-
-	TNC->WEB_MODE = zalloc(20);
-	TNC->WEB_TRAFFIC = zalloc(100);
-	TNC->WEB_LEVELS =zalloc(32);
-
-#ifndef LINBPQ
-
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
-
-	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
-	
-	CreateWindowEx(0, "STATIC", "TNC State", WS_CHILD | WS_VISIBLE, 10,28,106,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_TNCSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,28,520,20, TNC->hDlg, NULL, hInstance, NULL);
-
-	CreateWindowEx(0, "STATIC", "Mode", WS_CHILD | WS_VISIBLE, 10,50,80,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_MODE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,50,200,20, TNC->hDlg, NULL, hInstance, NULL);
- 
-	CreateWindowEx(0, "STATIC", "Channel State", WS_CHILD | WS_VISIBLE, 10,72,110,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_CHANSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,72,82,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_LEVELS = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 200,72,200,20, TNC->hDlg, NULL, hInstance, NULL);
- 
- 	CreateWindowEx(0, "STATIC", "Proto State", WS_CHILD | WS_VISIBLE,10,94,80,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_PROTOSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE,120,94,374,20 , TNC->hDlg, NULL, hInstance, NULL);
- 
-	CreateWindowEx(0, "STATIC", "Traffic", WS_CHILD | WS_VISIBLE,10,116,80,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_TRAFFIC = CreateWindowEx(0, "STATIC", "0 0 0 0", WS_CHILD | WS_VISIBLE,120,116,374,20 , TNC->hDlg, NULL, hInstance, NULL);
-
-	CreateWindowEx(0, "STATIC", "TNC Restarts", WS_CHILD | WS_VISIBLE,10,138,100,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_RESTARTS = CreateWindowEx(0, "STATIC", "0", WS_CHILD | WS_VISIBLE,120,138,40,20 , TNC->hDlg, NULL, hInstance, NULL);
-	CreateWindowEx(0, "STATIC", "Last Restart", WS_CHILD | WS_VISIBLE,140,138,100,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_RESTARTTIME = CreateWindowEx(0, "STATIC", "Never", WS_CHILD | WS_VISIBLE,250,138,200,20, TNC->hDlg, NULL, hInstance, NULL);
-
-	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
-            LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
-			0,170,250,300, TNC->hDlg, NULL, hInstance, NULL);
-
-	TNC->ClientHeight = 450;
-	TNC->ClientWidth = 500;
-
-	TNC->hMenu = CreatePopupMenu();
-
-	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_KILL, "Kill ARDOP TNC");
-	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart ARDOP TNC");
-	AppendMenu(TNC->hMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after failed Connection");
-	AppendMenu(TNC->hMenu, MF_STRING, ARDOP_ABORT, "Abort Current Session");
-	
-	CheckMenuItem(TNC->hMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
-
-	MoveWindows(TNC);
-#endif
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 

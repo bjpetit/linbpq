@@ -415,6 +415,16 @@ portok:
 		return FALSE;
 	}
 
+	if (n == 2 && _stricmp(FreqString, "FREQ") == 0)
+	{
+		if (RIG->Valchar[0])
+			sprintf(Command, "Frequency is %s MHz\r", RIG->Valchar);
+		else
+			sprintf(Command, "Frequency not known\r");
+
+		return FALSE;
+	}
+
 	if (n > 1)
 	{
 		if (_stricmp(FreqString, "SCANSTART") == 0)

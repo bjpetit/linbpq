@@ -73,6 +73,10 @@
 //	Jan 2019 1.1.13.1
 //	Add option to set IS filter to map view automatically
 
+//	Sept 2019 1.1.14.1
+
+//	Move support for APRS messaging in Node
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 #define _WIN32_WINNT 0x0501	
@@ -381,49 +385,21 @@ int StationCount = 0;
 UCHAR NextSeq = 1;
 
 BOOL ImageChanged;
-BOOL NeedRefresh = FALSE;
 time_t LastRefresh = 0;
 
 HANDLE hMapFile;
 
 struct STATIONRECORD ** StationRecords = NULL;
-struct APRSMESSAGE * Messages = NULL;
-struct APRSMESSAGE * OutstandingMsgs = NULL;
 
 struct OSMQUEUE OSMQueue = {NULL,0,0,0};
 
 int OSMQueueCount;
 
-// Web stuff
-
-char WebHeader[] = "<HTML><HEAD><meta http-equiv=\"expires\" content=\"-1\">"
-	"<meta http-equiv=\"pragma\" content=\"no-cache\">"
-	"<TITLE>%s's Messages</TITLE></HEAD>"
-	"<BODY alink=\"#008000\" bgcolor=\"#F5F5DC\" link=\"#0000FF\" vlink=\"#000080\">"
-	"<center><h1>%s's messages</h1><TABLE BORDER=\"3\" CELLSPACING=\"2\" CELLPADDING=\"1\">"
-	"<tr><td>from</td><td>to</td><td>time</td><td>&nbsp;</td><td>message</td></tr>";
-
-char WebLine[] = "<tr bgcolor=\"#ffcccc\"><td>%s </td><td> %s </td><td> %s</td><td>"
-	"<a href=\"entermsg?fromcall=%s&tocall=%s\">Reply</a></td><td> %s</td></tr>";
-
-char WebTrailer[] = "</table></BODY></HTML>";
-
-
-char SendMsgPage[] = "<html><head><title>BPQ32 APRS Messaging</title></head><body background=\"/background.jpg\">"
-	"<center><h2>APRS Message Input</h1>"
-	"<form method=post action=/APRS/Msgs/SendMsg>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>To</td><td><input type=text name=call tabindex=1 size=10 maxlength=12 value=\"%s\"/></td></tr>" 
-	"<tr><td>Message</td><td><input type=text name=message tabindex=2 size=80 maxlength=100 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
-
 DllImport VOID APIENTRY APRSSetStatus(char * Status);
 Dll char * APIENTRY APRSGetStatusMsgPtr();
 DllImport VOID APIENTRY APRSConnect(char * Call, char * Filter);
 DllImport VOID APIENTRY APRSDisconnect();
-DllImport BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call);
 DllImport BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
-DllImport BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 DllImport BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
 DllImport BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
 DllImport VOID APIENTRY APISendBeacon();
@@ -463,15 +439,13 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 BOOL CreateStationWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU);
 VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-VOID SendAPRSMessage(char * Text, char * ToCall);
+DllImport BOOL APIENTRY APISendAPRSMessage(char * Text, char * ToCall);
 VOID SecTimer();
 int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort);
 double Distance(double laa, double loa);
 double Bearing(double laa, double loa);
 VOID CreateStationPopup(struct STATIONRECORD * ptr, int MouseX, int MouseY);
 INT_PTR CALLBACK ColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-
-BOOL CreatePipeThread();
 
 BYTE * JpegFileToRGB(char * fileName, UINT *width, UINT *height);
 
@@ -486,6 +460,8 @@ SOCKADDR_IN destaddr = {0};
 unsigned int ipaddr = 0;
 
 char Host[] = "tile.thunderforest.com";
+
+char mapStyle[64] =	"outdoors"; //"neighbourhood mobile-atlas
 
 //char Host[] = "oatile1.mqcdn.com";		//SAT
 //char Host[] = "192.168.1.124";
@@ -523,6 +499,51 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	return;
 }
+
+void UndoTransparency(char * input)
+{
+	char * ptr1, * ptr2;
+	char c;
+	int hex;
+
+	ptr1 = ptr2 = input;
+
+	// Convert any %xx constructs
+
+	while (1)
+	{
+		c = *(ptr1++);
+
+		if (c == 0)
+			break;
+
+		if (c == '%')
+		{
+			c = *(ptr1++);
+			if(isdigit(c))
+				hex = (c - '0') << 4;
+			else
+				hex = (tolower(c) - 'a' + 10) << 4;
+
+			c = *(ptr1++);
+			if(isdigit(c))
+				hex += (c - '0');
+			else
+				hex += (tolower(c) - 'a' + 10);
+
+			*(ptr2++) = hex;
+		}
+		else if (c == '+')
+			*(ptr2++) = 32;
+		else
+			*(ptr2++) = c;
+	}
+	*ptr2 = 0;
+}
+
+
+
+
 
 VOID CreateIconFile()
 {
@@ -968,7 +989,11 @@ VOID GetStringVal(HKEY hKey, char * Key, char ** Val)
 	}
 }
 
-int MaxStations = 5000;
+struct SharedMem * SMEM;
+
+UCHAR * Shared;
+UCHAR * StnRecordBase;
+
 	
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -979,6 +1004,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	HWND hWnd;
 	char * ptr;
 	char Error[80];
+	int SharedSize;
+	int Retries = 5;			// Attempts to get shared memory
+
 
 	BOOL bcopt=TRUE;
 	u_long param=1;
@@ -987,34 +1015,96 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	png_color bgColor;
 	UCHAR * BPQDirectory = GetBPQDirectory();
 
-	UCHAR * APRSStationMemory;
+	//	Get pointer to Shared Memory in BPQ32.dll
+	//	Contains Station list and messages
+	//  May need delay if BPQ32 started by BPQAPRS
 
-	//	Get pointer to Station Table in BPQ32.dll
+	while (Retries--)
+	{
+		Sleep(2000);
+
+		hMapFile = CreateFileMapping(
+                 INVALID_HANDLE_VALUE, // use paging file
+                 NULL,				   // default security
+                 PAGE_READWRITE,       // read/write access
+                 0,                    // maximum object size (high-order DWORD)
+                 1024,				   // maximum object size (low-order DWORD)
+                 "BPQAPRSStationsMappingObject"); // name of mapping object
+
+		if (hMapFile == NULL)
+		{
+			sprintf(Error, "Could not create file mapping object (%d).\n", GetLastError());
+			MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
+			return FALSE;
+		}
+
+		Shared = (LPTSTR) MapViewOfFileEx(hMapFile,   // handle to map object
+                        FILE_MAP_ALL_ACCESS, // read/write permission
+                        0,				// Offset Hi
+                        0,				// Offset Lo
+                        0,				// Map All
+						(LPVOID)APRSSHAREDMEMORYBASE);
+
+		if (Shared == NULL)
+		{
+			sprintf(Error, "Could not map view of file (%d).\n", GetLastError());
+			MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
+			CloseHandle(hMapFile);
+			return FALSE;
+		}
+
+		// Get size then remap
+
+		SMEM = (struct SharedMem *)Shared;
+
+		SharedSize = SMEM->SharedMemLen;
+
+		if (SharedSize > 0)
+			break;				// Not intialised yet - wait
+
+		UnmapViewOfFile(Shared);
+		CloseHandle(hMapFile);
+
+		// Try again
+	}
+
+	if (SharedSize == 0)
+	{
+		sprintf(Error, "Could not get size of Mapping object\n");
+		MessageBox(NULL, Error, "BPQAPRS", MB_ICONERROR);
+		return FALSE;
+	}
+
+	UnmapViewOfFile(Shared);
+	CloseHandle(hMapFile);
+
+	// Reopen
 
 	hMapFile = CreateFileMapping(
                  INVALID_HANDLE_VALUE,    // use paging file
                  NULL,                    // default security
                  PAGE_READWRITE,          // read/write access
                  0,                       // maximum object size (high-order DWORD)
-                 sizeof(struct STATIONRECORD) * (MaxStations + 1), // maximum object size (low-order DWORD)
-                 "BPQAPRSStationsMappingObject");                 // name of mapping object
+                 SharedSize,			 // maximum object size (low-order DWORD)
+                 "BPQAPRSStationsMappingObject"); // name of mapping object
 
 	if (hMapFile == NULL)
 	{
 		sprintf(Error, "Could not create file mapping object (%d).\n", GetLastError());
-		MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
+		MessageBox(NULL, Error, "BPQAPRS", MB_ICONERROR);
 
 		return FALSE;
 	
 	}
-	APRSStationMemory = (LPTSTR) MapViewOfFileEx(hMapFile,   // handle to map object
+
+	Shared = (LPTSTR) MapViewOfFileEx(hMapFile,   // handle to map object
                         FILE_MAP_ALL_ACCESS, // read/write permission
                         0,
                         0,
-                        0,//sizeof(struct STATIONRECORD) * MaxStations,
-						(LPVOID)0x43000000);
+                        0,
+						(LPVOID)APRSSHAREDMEMORYBASE);
 
-	if (APRSStationMemory == NULL)
+	if (Shared == NULL)
 	{
 		sprintf(Error, "Could not map view of file (%d).\n", GetLastError());
 		MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
@@ -1022,7 +1112,27 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
-	StationRecords = (struct STATIONRECORD**)APRSStationMemory;
+	if (Shared != APRSSHAREDMEMORYBASE)
+	{
+		sprintf(Error, "File is mapped in Wrong Place %x %x.\n", Shared, APRSSHAREDMEMORYBASE);
+		MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
+		UnmapViewOfFile(Shared);
+		CloseHandle(hMapFile);
+		return FALSE;
+	}
+	
+	if (SMEM->Version != 1)
+	{
+		sprintf(Error, "Version Mismatch with bpq32.dll");
+		MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
+		UnmapViewOfFile(Shared);
+		CloseHandle(hMapFile);
+		return FALSE;
+	}
+
+	StnRecordBase = Shared + 32;
+
+	StationRecords = (struct STATIONRECORD**)StnRecordBase;
 
 	REGTREE = GetRegistryKey();
 	MinimizetoTray = GetMinimizetoTrayFlag();
@@ -1336,8 +1446,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	trayMenu2 = CreatePopupMenu();
 	AppendMenu(trayMenu2,MF_STRING,40000,"Copy");
-
-	CreatePipeThread();		// Open HTTP server pipe if defined
 
 	return (TRUE);
 }
@@ -2874,37 +2982,13 @@ subitem and return CDRF_NEWFONT.*/
 
 		case IDC_CLEARRX:
 		{
-			struct APRSMESSAGE * ptr = Messages;
-			struct APRSMESSAGE * last = Messages;
-
-			while (ptr)
-			{
-				last = ptr;
-				ptr = ptr->Next;
-				free(last);
-			}
-
-			Messages = NULL;
-
-			RefreshMessages();
+			SMEM->ClearRX = 1;
 			break;
 		}
 			
 		case IDC_CLEARTX:
 		{
-			struct APRSMESSAGE * ptr = OutstandingMsgs;
-			struct APRSMESSAGE * last;
-
-			while (ptr)
-			{
-				last = ptr;
-				ptr = ptr->Next;
-				free(last);
-			}
-			OutstandingMsgs = NULL;
-			SendMessage(hMsgsOut, LVM_DELETEALLITEMS, (WPARAM)0, (LPARAM) 0);
-
-			RefreshMessages();
+			SMEM->ClearTX = 1;
 			break;
 		}
 		}
@@ -3173,7 +3257,7 @@ VOID OSMThread()
 
 		free(OSMRec);
 
-		wsprintf(Tile, "/mobile-atlas/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", Zoom, x, y);
+		wsprintf(Tile, "/%s/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", mapStyle, Zoom, x, y);
 //		wsprintf(Tile, "/tiles/1.0.0/sat/%02d/%d/%d.jpg", Zoom, x, y);
 //		wsprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
 
@@ -4481,7 +4565,6 @@ void RefreshStationMap()
 		ptr = ptr->Next;
 	}
 
-	NeedRefresh = FALSE;
 	LastRefresh = time(NULL);
 
 //	if (RecsDeleted)
@@ -4907,21 +4990,13 @@ VOID WINAPI OnChildDialogInit(HWND hwndDlg)
 */
 VOID APRSPoll()
 {
-	char APRSMsg[400];
-	char Call[12];
-	struct STATIONRECORD * Station;
-
-	CheckTimer();
-
-	while (GetAPRSFrame(APRSMsg, Call))
+	if (SMEM->NeedRefresh)
 	{
-		Station = FindStation(Call, Call, FALSE);
-
-		if (Station)
-			ProcessMessage(APRSMsg, Station);
-		
+		SMEM->NeedRefresh  = FALSE;
+		RefreshMessages();
 	}
 
+	CheckTimer();
 }
 void UpdateTXMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
 {
@@ -4988,7 +5063,7 @@ void UpdateMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
 }
 VOID RefreshMessages()
 {
-struct APRSMESSAGE * ptr = Messages;
+	struct APRSMESSAGE * ptr = SMEM->Messages;
 	int n = 0;
 	BOOL OnlyMine = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGS);
 	BOOL AllSSID = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGSDSSID);
@@ -5006,11 +5081,8 @@ struct APRSMESSAGE * ptr = Messages;
 
 	SendMessage(hMsgsIn, LVM_DELETEALLITEMS, (WPARAM)0, (LPARAM) 0);
 
-	if (ptr)
+	while (ptr)
 	{
-		do
-		{
-
 			char ToLopped[11] = "";
 			memcpy(ToLopped, ptr->ToCall, 10);
 			strlop(ToLopped, ' ');
@@ -5055,23 +5127,19 @@ struct APRSMESSAGE * ptr = Messages;
 			n++;
 			ptr = ptr->Next;
 	
-		} while (ptr);
 	}
 
-	ptr = OutstandingMsgs;
+	ptr = SMEM->OutstandingMsgs;
 	n = 0;
 
-	if (ptr == 0)
-		return;
+	SendMessage(hMsgsOut, LVM_DELETEALLITEMS, (WPARAM)0, (LPARAM) 0);
 
-	do
+	while (ptr)
 	{				
 		UpdateTXMessageLine(hMsgsOut, n, ptr);
 		ptr = ptr->Next;
 		n++;
-
-	} while (ptr);
-	
+	}
 }
 
 
@@ -5387,256 +5455,6 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 	return TRUE;
 }
 
-VOID SendAPRSMessage(char * Text, char * ToCall)
-{
-	struct APRSMESSAGE * Message;
-	struct APRSMESSAGE * ptr = OutstandingMsgs;
-	int n = 0;
-	char Msg[255];
-
-	Message = malloc(sizeof(struct APRSMESSAGE));
-	memset(Message, 0, sizeof(struct APRSMESSAGE));
-	strcpy(Message->FromCall, APRSCall);
-	memset(Message->ToCall, ' ', 9);
-	memcpy(Message->ToCall, ToCall, strlen(ToCall));
-	Message->ToStation = APPLFindStation(ToCall, TRUE);
-
-	if (Message->ToStation == NULL)
-		return;
-
-	if (Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
-		wsprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
-	else
-	{
-		if (Message->ToStation->SimpleNumericSeq)
-			wsprintf(Message->Seq, "%d", NextSeq++);
-		else
-			wsprintf(Message->Seq, "%02X}", NextSeq++);	// Don't know, so assume message-ack capable
-	}
-	strcpy(Message->Text, Text);
-	Message->Retries = RetryCount;
-	Message->RetryTimer = RetryTimer;
-
-	if (ptr == NULL)
-	{
-		OutstandingMsgs = Message;
-	}
-	else
-	{
-		n++;
-		while(ptr->Next)
-		{
-			ptr = ptr->Next;
-			n++;
-		}
-		ptr->Next = Message;
-	}
-
-	UpdateTXMessageLine(hMsgsOut, n, Message);
-
-	n = wsprintf(Msg, ":%-9s:%s{%s", ToCall, Text, Message->Seq);
-
-	PutAPRSMessage(Msg, n);
-	return;
-}
-
-
-VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
-{
-	char MsgDest[10];
-	struct APRSMESSAGE * Message;
-	struct APRSMESSAGE * ptr = Messages;
-	struct APRSMESSAGE * Prev = NULL;
-
-	char * TextPtr = &Payload[11];
-	char * SeqPtr;
-	int n = 0;
-	char FromCall[10] = "         ";
-	struct tm * TM;
-	time_t NOW;
-
-	memcpy(FromCall, Station->Callsign, strlen(Station->Callsign));
-	memcpy(MsgDest, &Payload[1], 9);
-	MsgDest[9] = 0;
-
-	SeqPtr = strchr(TextPtr, '{');
-
-	if (SeqPtr)
-	{
-		*(SeqPtr++) = 0;
-		if(strlen(SeqPtr) > 6)
-			SeqPtr[7] = 0;		
-	}
-
-	if (_memicmp(TextPtr, "ack", 3) == 0)
-	{
-		// Message Ack. See if for one of our messages
-
-		ptr = OutstandingMsgs;
-
-		if (ptr == 0)
-			return;
-
-		do
-		{
-			if (strcmp(ptr->FromCall, MsgDest) == 0
-				&& strcmp(ptr->ToCall, FromCall) == 0
-				&& strcmp(ptr->Seq, &TextPtr[3]) == 0)
-			{
-				// Message is acked
-
-				ptr->Retries = 0;
-				ptr->Acked = TRUE;
-				if (hMsgsOut)
-					UpdateTXMessageLine(hMsgsOut, n, ptr);
-
-				return;
-			}
-			ptr = ptr->Next;
-			n++;
-
-		} while (ptr);
-	
-		return;
-	}
-
-	// if From To, Seq and Message are the same as one we already have,
-	// remove old message
-
-
-	while (ptr)
-	{
-		if (strcmp(ptr->Text, TextPtr) == 0
-			&& strcmp(ptr->FromCall, Station->Callsign) == 0
-			&& strcmp(ptr->ToCall, MsgDest) == 0)
-		{
-			if ((SeqPtr == 0 && ptr->Seq[0] == 0)	// both null
-				|| strcmp(ptr->Seq, SeqPtr) == 0)
-			{
-				// remove it
-
-				if (Prev)
-					Prev->Next = ptr->Next;
-				else
-					Messages = ptr->Next;
-
-				free(ptr);
-
-				break;
-			}
-		}
-		Prev = ptr;
-		ptr = ptr->Next;
-	}
-
-	ptr = Messages;
-
-	Message = malloc(sizeof(struct APRSMESSAGE));
-	memset(Message, 0, sizeof(struct APRSMESSAGE));
-	strcpy(Message->FromCall, Station->Callsign);
-	strcpy(Message->ToCall, MsgDest);
-
-	if (SeqPtr)
-	{
-		strcpy(Message->Seq, SeqPtr);
-
-		// If a REPLY-ACK Seg, copy to LastRXSeq, and see if it acks a message
-
-		if (SeqPtr[2] == '}')
-		{
-			struct APRSMESSAGE * ptr1;
-			int nn = 0;
-
-			strcpy(Station->LastRXSeq, SeqPtr);
-
-			ptr1 = OutstandingMsgs;
-
-			while (ptr1)
-			{
-				if (strcmp(ptr1->FromCall, MsgDest) == 0
-					&& strcmp(ptr1->ToCall, FromCall) == 0
-					&& memcmp(&ptr1->Seq, &SeqPtr[3], 2) == 0)
-				{
-					// Message is acked
-
-					ptr1->Acked = TRUE;
-					ptr1->Retries = 0;
-					if (hMsgsOut)
-						UpdateTXMessageLine(hMsgsOut, nn, ptr);
-					
-					break;
-				}
-				ptr1 = ptr1->Next;
-				nn++;
-			}
-		}
-		else
-		{
-			// Station is not using reply-ack - set to send simple numeric sequence (workround for bug in APRS Messanges
-		
-			Station->SimpleNumericSeq = TRUE;
-		}
-	}
-
-	if (strlen(TextPtr) > 100)
-		TextPtr[100] = 0;
-
-	strcpy(Message->Text, TextPtr);
-		
-	NOW = time(NULL);
-
-	if (LocalTime)
-		TM = localtime(&NOW);
-	else
-		TM = gmtime(&NOW);
-					
-	wsprintf(Message->Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
-
-	if (_stricmp(MsgDest, APRSCall) == 0 && SeqPtr)	// ack it if it has a sequence
-	{
-		// For us - send an Ack
-
-		char ack[30];
-
-		int n = wsprintf(ack, ":%-9s:ack%s", Message->FromCall, Message->Seq);
-		PutAPRSMessage(ack, n);
-	}
-
-	if (ptr == NULL)
-	{
-		Messages = Message;
-	}
-	else
-	{
-		n++;
-		while(ptr->Next)
-		{
-			ptr = ptr->Next;
-			n++;
-		}
-		ptr->Next = Message;
-	}
-
-	if (hMsgsIn)
-	{
-		BOOL OnlyMine = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGS);
-		RefreshMessages();
-	}
-
-	if (strcmp(MsgDest, APRSCall) == 0)			// to me?
-	{
-		if (IsDlgButtonChecked(hMsgDlg, IDC_MSGBEEP))
-		{
-			PlaySound("SystemDefault", NULL, SND_ALIAS);
-			FlashWindow(hMsgDlg, TRUE);
-		}
-//			PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
-		else
-			CreateMessageWindow("APRSMSGS", "APRS Messages", MsgWndProc, NULL); // Will activate if running
-	}
-}
-
-
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
 	if (uMsg == WM_CHAR) 
@@ -5658,7 +5476,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				return 0;
 			}
 
-			// If call not in Listboax, add it
+			// If call not in Listbox, add it
 
 			i = SendMessage(hToCall, CB_FINDSTRINGEXACT, -1, (LPARAM)(LPCTSTR)&ToCall);
 
@@ -5667,7 +5485,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			SendMessage(hInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
 
-			SendAPRSMessage(kbbuf, ToCall);
+			APISendAPRSMessage(kbbuf, ToCall);
 
 			return 0; 
 		}
@@ -5693,7 +5511,6 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 VOID SecTimer()
 {
 	struct STATIONRECORD * sptr = *StationRecords;
-	struct APRSMESSAGE * ptr = OutstandingMsgs;
 	int n = 0;
 	char Msg[20];
 
@@ -5777,41 +5594,6 @@ VOID SecTimer()
 
 	wsprintf(Msg, "%d", Zoom);
 	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
-
-
-	if (ptr == 0)
-		return;
-
-	do
-	{				
-		if (ptr->Acked == FALSE)
-		{
-			if (ptr->Retries)
-			{
-				ptr->RetryTimer--;
-				
-				if (ptr->RetryTimer == 0)
-				{
-					ptr->Retries--;
-
-					if (ptr->Retries)
-					{
-						// Send Again
-						
-						char Msg[255];
-						int n = wsprintf(Msg, ":%-9s:%s{%s", ptr->ToCall, ptr->Text, ptr->Seq);
-						PutAPRSMessage(Msg, n);
-						ptr->RetryTimer = RetryTimer;
-					}
-					UpdateTXMessageLine(hMsgsOut, n, ptr);
-				}
-			}
-		}
-
-		ptr = ptr->Next;
-		n++;
-
-	} while (ptr);
 }
 
 double radians(double Degrees)
@@ -7400,372 +7182,3 @@ VOID SendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	FlushFileBuffers(sockptr->hPipe); 
 	free (MsgBytes);
 }
-
-char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
-
-DWORD WINAPI InstanceThread(LPVOID lpvParam)
-
-// This routine is a thread processing function to read from and reply to a client
-// via the open pipe connection passed from the main loop. Note this allows
-// the main loop to continue executing, potentially creating more threads of
-// of this procedure to run concurrently, depending on the number of incoming
-// client connections.
-{ 
-	DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0; 
-	BOOL fSuccess = FALSE;
-	HANDLE hPipe  = NULL;
-	char Buffer[4096];
-	char OutBuffer[100000];
-	char * MsgPtr;
-	int InputLen = 0;
-	int OutputLen = 0;
-   	char * URL;
-	char * ptr;
-	struct APRSConnectionInfo CI;
-	struct APRSConnectionInfo * sockptr = &CI;
-	char * To;
-
-	int HeaderLen;
-	char Header[256];
-
-	__try
-	{
-//	Debugprintf("InstanceThread created, receiving and processing messages.");
-
-// The thread's parameter is a handle to a pipe object instance. 
- 
-   sockptr->hPipe = hPipe = (HANDLE) lpvParam; 
-
-   // Read client requests from the pipe. This simplistic code only allows messages
-   // up to BUFSIZE characters in length.
- 
-   fSuccess = ReadFile( 
-         hPipe,        // handle to pipe 
-         Buffer,    // buffer to receive data 
-         4096, // size of buffer 
-         &InputLen, // number of bytes read 
-         NULL);        // not overlapped I/O 
-
-	if (!fSuccess || InputLen == 0)
-	{   
-		if (GetLastError() == ERROR_BROKEN_PIPE)
-			Debugprintf("InstanceThread: client disconnected.", GetLastError()); 
-		else
-			Debugprintf("InstanceThread ReadFile failed, GLE=%d.", GetLastError()); 
-	}
-	else
-	{
-		Buffer[InputLen] = 0;
-
-		MsgPtr = &Buffer[0];
-
-		if (memcmp(MsgPtr, "POST" , 3) == 0)
-		{
-			char * To;
-			char * Msg = "";
-
-			URL = &MsgPtr[5];
-
-			ptr = strstr(URL, "\r\n\r\n");
-
-			if (ptr)
-			{
-				char * param, * context;
-
-				param = strtok_s(ptr + 4, "&", &context);
-
-				while (param)
-				{
-					char * val = strlop(param, '=');
-
-					if (val)
-					{
-						if (_stricmp(param, "call") == 0)
-							To = _strupr(val);
-						else if (_stricmp(param, "message") == 0)
-						{
-							// Undo any % transparency
-							
-							char * ptr2 = val;
-							char c;
-
-							Msg = val;
-
-							c = *(val++);
-
-							while (c)
-							{
-								if (c == '%')
-								{
-									int n;
-									int m = *(val++) - '0';
-									if (m > 9) m = m - 7;
-									n = *(val++) - '0';
-									if (n > 9) n = n - 7;
-
-									c  = m * 16 + n;
-								}
-								else if (c == '+')
-									c = ' ';
-
-								*(ptr2++) = c;
-								c = *(val++);
-							}
-
-							*(ptr2++) = 0;
-						}
-					}
-					
-					param = strtok_s(NULL,"&", &context);
-				}
-
-				// Send APRS Messsage
-
-				if (strlen(Msg) > 100)
-					Msg[100] = 0;
-
-				SendAPRSMessage(Msg, _strupr(To));
-
-				HeaderLen = sprintf(Header, "HTTP/1.0 200 Ok\r\nContent-Length: 13\r\n\r\nMessage Sent\r\n");
-				WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
-				Sleep(2000);
-				DisconnectNamedPipe(hPipe); 
-				CloseHandle(hPipe); 
-				return 1;
-
-			}
-
-		}
-
-		URL = &MsgPtr[4];
-
-		ptr = strstr(URL, "\r\n\r\n");
-
-		if (ptr)
-
-			*ptr = 0;
-
-//		Debugprintf("Processing %s", URL);
-
-		if (_memicmp(URL, "/aprs/msgs/entermsg", 19) == 0)
-		{
-			To = strchr(URL, '=');
-
-			if (To)
-			{
-				To++;
-				strlop(To, '&');
-			}
-			else
-				To = "";
-
-			OutputLen = sprintf(OutBuffer, SendMsgPage, To);
-			HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
-			WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
-			WriteFile(sockptr->hPipe, OutBuffer, OutputLen, &cbWritten, NULL);
-			Sleep(2000);
-		}
-		else if (_memicmp(URL, "/aprs/msgs", 10) == 0)
-		{
-			// Return Messages Page
-
-			struct APRSMESSAGE * ptr = Messages;
-			int n = 0;
-			char BaseCall[10];
-			char BaseFrom[10];
-			char * MsgCall = LoppedAPRSCall;
-			BOOL OnlyMine = TRUE;
-			BOOL AllSSID = TRUE;
-			BOOL OnlySeq = FALSE;
-			BOOL ShowBulls = TRUE;
-
-			// Parse parameters
-
-			// ?call=g8bpq&bulls=true&seqonly=true&onlymine=true
-
-			char * params = strchr(URL, '?');
-
-			if (params)
-			{
-				char * param, * context;
-
-				param = strtok_s(++params, "&", &context);
-
-				while (param)
-				{
-					char * val = strlop(param, '=');
-
-					if (val)
-					{
-						strlop(val, ' ');
-						if (_stricmp(param, "call") == 0)
-							MsgCall = _strupr(val);
-						else if (_stricmp(param, "bulls") == 0)
-							ShowBulls = !_stricmp(val, "true");
-						else if (_stricmp(param, "onlyseq") == 0)
-							OnlySeq = !_stricmp(val, "true");
-						else if (_stricmp(param, "onlymine") == 0)
-							OnlyMine = !_stricmp(val, "true");
-						else if (_stricmp(param, "AllSSID") == 0)
-							AllSSID = !_stricmp(val, "true");
-					}
-					param = strtok_s(NULL,"&", &context);
-				}
-			}
-			if (AllSSID)
-			{
-				memcpy(BaseCall, MsgCall, 10);
-				strlop(BaseCall, '-');
-			}
-
-			OutputLen = sprintf(OutBuffer, WebHeader, MsgCall, MsgCall);
-
-			if (ptr)
-			{
-				do
-				{
-					char ToLopped[11] = "";
-					memcpy(ToLopped, ptr->ToCall, 10);
-					strlop(ToLopped, ' ');
-
-					if (memcmp(ToLopped, "BLN", 3) == 0)
-						if (ShowBulls == TRUE)
-							goto wantit;
-
-					if (strcmp(ToLopped, MsgCall) == 0)			//  to me?
-						goto wantit;
-
-					if (strcmp(ptr->FromCall, MsgCall) == 0)			//  to me?
-						goto wantit;
-
-					if (AllSSID)
-					{
-						memcpy(BaseFrom, ToLopped, 10);
-						strlop(BaseFrom, '-');
-
-						if (strcmp(BaseFrom, BaseCall) == 0)
-							goto wantit;
-
-						memcpy(BaseFrom, ptr->FromCall, 10);
-						strlop(BaseFrom, '-');
-
-						if (strcmp(BaseFrom, BaseCall) == 0)
-							goto wantit;
-
-					}
-
-					if (OnlyMine == FALSE)		// Want All
-						if (OnlySeq == FALSE || ptr->Seq[0] != 0)
-							goto wantit;
-			
-					// ignore
-
-					ptr = ptr->Next;
-					continue;
-	wantit:
-					OutputLen += sprintf(&OutBuffer[OutputLen], WebLine,
-						ptr->FromCall, ptr->ToCall, ptr->Time,ptr->FromCall, ptr->ToCall, ptr->Text);
-					ptr = ptr->Next;
-
-					if (OutputLen > 99000)
-						break;
-
-				} while (ptr);
-			}
-
-			OutputLen += sprintf(&OutBuffer[OutputLen], WebTrailer);
-
-			HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
-			WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
-			WriteFile(sockptr->hPipe, OutBuffer, OutputLen, &cbWritten, NULL);
-			Sleep(5000);
-		}
-		else
-		{
-			HeaderLen = sprintf(Header, "HTTP/1.0 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
-			WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
-		}
-	}
-	}
-	__except (EXCEPTION_EXECUTE_HANDLER)
-	{
-		Debugprintf("Program Error processing request");
-	}
-
-	DisconnectNamedPipe(hPipe); 
-	CloseHandle(hPipe); 
-	return 1;
-}
-
-DWORD WINAPI PipeThreadProc(LPVOID lpvParam)
-{
-	BOOL   fConnected = FALSE; 
-	DWORD  dwThreadId = 0; 
-	HANDLE hPipe = INVALID_HANDLE_VALUE, hThread = NULL; 
- 
-// The main loop creates an instance of the named pipe and 
-// then waits for a client to connect to it. When the client 
-// connects, a thread is created to handle communications 
-// with that client, and this loop is free to wait for the
-// next client connect request. It is an infinite loop.
- 
-	for (;;) 
-	{ 
-      hPipe = CreateNamedPipe( 
-          PipeFileName,             // pipe name 
-          PIPE_ACCESS_DUPLEX,       // read/write access 
-          PIPE_TYPE_BYTE |       // message type pipe 
-          PIPE_WAIT,                // blocking mode 
-          PIPE_UNLIMITED_INSTANCES, // max. instances  
-          4096,                  // output buffer size 
-          4096,                  // input buffer size 
-          0,                        // client time-out 
-          NULL);                    // default security attribute 
-
-      if (hPipe == INVALID_HANDLE_VALUE) 
-      {
-          Debugprintf("CreateNamedPipe failed, GLE=%d.\n", GetLastError()); 
-          return -1;
-      }
- 
-      // Wait for the client to connect; if it succeeds, 
-      // the function returns a nonzero value. If the function
-      // returns zero, GetLastError returns ERROR_PIPE_CONNECTED. 
- 
-      fConnected = ConnectNamedPipe(hPipe, NULL) ? 
-         TRUE : (GetLastError() == ERROR_PIPE_CONNECTED); 
- 
-      if (fConnected) 
-	  {
-         // Create a thread for this client. 
-   
-		 hThread = CreateThread( 
-            NULL,              // no security attribute 
-            0,                 // default stack size 
-            InstanceThread,    // thread proc
-            (LPVOID) hPipe,    // thread parameter 
-            0,                 // not suspended 
-            &dwThreadId);      // returns thread ID 
-
-         if (hThread == NULL) 
-         {
-            Debugprintf("CreateThread failed, GLE=%d.\n", GetLastError()); 
-            return -1;
-         }
-         else CloseHandle(hThread); 
-       } 
-      else 
-        // The client could not connect, so close the pipe. 
-         CloseHandle(hPipe); 
-   } 
-
-   return 0; 
-} 
-
-BOOL CreatePipeThread()
-{
-	DWORD ThreadId;
-	CreateThread(NULL, 0, PipeThreadProc, 0, 0, &ThreadId);
-	return TRUE;
-}
-

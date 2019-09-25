@@ -5,7 +5,6 @@
 
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define _USE_32BIT_TIME_T
 
 #include "BPQChat.h"
 #include <new.h>
@@ -129,9 +128,8 @@ int Connected(Stream)
 					OurNode, conn->Callsign);
 
 				ChatFlush(conn);
-
 				Sleep(500);
-
+				conn->rtcflags = p_nil;
 				Disconnect(conn->BPQStream);
 
 				return 0;
@@ -345,6 +343,12 @@ int DoReceivedData(int Stream)
 						goto loop;
 
 					}
+				}
+				else
+				{
+					// no cr - testing.. 
+
+//					Debugprintf("Test");
 				}
 				}
 			} while (count > 0);
