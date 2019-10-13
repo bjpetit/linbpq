@@ -2921,6 +2921,7 @@ int main(int argc, char *argv[])
 	int x, y;
 	time_t TimeLoaded = time(NULL);
 	struct stat STAT;
+	char * Env;
 
 	int SharedSize;
 
@@ -2960,8 +2961,8 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.4.2\n");
-  	printf("Copyright © 2004-2017 John Wiseman G8BPQ\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.4.3\n");
+  	printf("Copyright © 2004-2019 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
@@ -3022,11 +3023,19 @@ int main(int argc, char *argv[])
 
 	HEIGHT = HEIGHTTILES * 256;
 	WIDTH = WIDTHTILES * 256;
-		
-	printf("DISPLAY is set to %s\n", getenv("DISPLAY"));
 	
-	if (strstr(getenv("DISPLAY"), "localhost:1"))
-		printf("!!! WARNING !!! X session seems to be tunneled over an SSH session\nThis progam will run much faster if you set DISPLAY to the Host running your X Server\n");
+	Env = getenv("DISPLAY");
+	
+	if (Env == NULL)
+	{
+		printf("DISPLAY is not set - can't run without X\n", Env);
+		return 0;
+	}
+
+	printf("DISPLAY is set to %s\n", Env);
+	
+	if (strstr(Env, "localhost:1"))
+		printf("!!! WARNING !!! X session seems to be tunneled over an SSH session\nThis program will run much faster if you set DISPLAY to the Host running your X Server\n");
 
 	// Get shared memory
 
@@ -3052,8 +3061,10 @@ int main(int argc, char *argv[])
 	}
 
 	SMEM = (struct SharedMem *)Shared;
-
 	SharedSize = SMEM->SharedMemLen;
+	
+	printf("Shared Memory Size %d\n", SharedSize);
+	
 	StnRecordBase = Shared + 32;
 	StationRecords = (struct STATIONRECORD**)StnRecordBase;
 
