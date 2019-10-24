@@ -170,8 +170,12 @@ void setup()
 
   CommonSetup();
 
+#if defined(__IMXRT1062__)
+  WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d FreeRAM %d", ProductVersion, F_CPU_ACTUAL, F_BUS_ACTUAL, FreeRam());
+#else
   WriteDebugLog(LOGALERT, "ARDOPC Version %s CPU %d Bus %d FreeRAM %d", ProductVersion, F_CPU, F_BUS, FreeRam());
-  blnTimeoutTriggered = FALSE;
+#endif
+blnTimeoutTriggered = FALSE;
   SetARDOPProtocolState(DISC);
 
   InitSound();
@@ -187,8 +191,11 @@ void setup()
   // leaves the ADC in a state that's mostly ready to use
 
   analogReadRes(16);
-  //analogReference(INTERNAL); // range 0 to 1.2 volts
+
+#if defined(__IMXRT1062__)
+#else
   analogReference(DEFAULT); // range 0 to 3.3 volts
+#endif
   //analogReadAveraging(8);
   // Actually, do many normal reads, to start with a nice DC level
 
@@ -331,6 +338,9 @@ void readserialno(uint8_t *mac)
   // With 3.6 have to read a block of 8 bytes at zero
   // With 3.1 two blocks of 4 at e and f
 
+#if defined(__IMXRT1062__)
+#else
+
   FTFL_FCCOB0 = 0x41;             // Selects the READONCE command
 #if defined(__MK64FX512__) || defined(__MK66FX1M0__)
   FTFL_FCCOB1 = 0;             // read the given word of read once area
@@ -369,6 +379,7 @@ void readserialno(uint8_t *mac)
 
 
 #endif
+#endif
 
   interrupts();
 }
@@ -397,9 +408,6 @@ extern "C"
   // Dummies for ARDOP GUI
 
   void DrawTXFrame(const char * Frame)
-  {}
-
-  void DrawRXFrame(int State, const char * Frame)
   {}
 
   int SendtoGUI(char Type, unsigned char * Msg, int Len)

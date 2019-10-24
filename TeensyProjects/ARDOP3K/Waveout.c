@@ -55,7 +55,7 @@ int LogToHostBufferLen;
 // Currently use 1200 samples for TX but 480 for RX to reduce latency
 
 short buffer[2][SendSize];		// Two Transfer/DMA buffers of 0.1 Sec
-short inbuffer[5][ReceiveSize];	// Input Transfer/ buffers of 0.1 Sec
+short inbuffer[NumberofinBuffers][ReceiveSize];	// Input Transfer/ buffers of 0.1 Sec
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -65,6 +65,15 @@ char PlaybackDevice[80] = "0"; //"1";
 
 BOOL UseLeft = 1;
 BOOL UseRight = 1;
+char LogDir[256] = "";
+
+FILE *logfile[3] = {NULL, NULL, NULL};
+char LogName[3][256] = {"ARDOPDebug", "ARDOPException", "ARDOPSession"};
+
+#define DEBUGLOG 0
+#define EXCEPTLOG 1
+#define SESSIONLOG 2
+
 
 char * CaptureDevices = NULL;
 char * PlaybackDevices = NULL;
@@ -90,14 +99,7 @@ WAVEHDR header[2] =
 	{(char *)buffer[1], 0, 0, 0, 0, 0, 0, 0}
 };
 
-WAVEHDR inheader[5] =
-{
-	{(char *)inbuffer[0], 0, 0, 0, 0, 0, 0, 0},
-	{(char *)inbuffer[1], 0, 0, 0, 0, 0, 0, 0},
-	{(char *)inbuffer[2], 0, 0, 0, 0, 0, 0, 0},
-	{(char *)inbuffer[3], 0, 0, 0, 0, 0, 0, 0},
-	{(char *)inbuffer[4], 0, 0, 0, 0, 0, 0, 0}
-};
+WAVEHDR inheader[NumberofinBuffers] = {0};
 
 WAVEOUTCAPS pwoc;
 WAVEINCAPS pwic;
@@ -208,6 +210,13 @@ void main(int argc, char * argv[])
 
 	processargs(argc, argv);
 
+	if (LogDir[0])
+	{
+		sprintf(&LogName[0][0], "%s/%s", LogDir, "ARDOPDebug");
+		sprintf(&LogName[1][0], "%s/%s", LogDir, "ARDOPException");
+		sprintf(&LogName[2][0], "%s/%s", LogDir, "ARDOPSession");
+	}
+
 	WriteDebugLog(LOGALERT, "ARDOPC Version %s", ProductVersion);
 
 	if (HostPort[0])
@@ -288,7 +297,7 @@ void main(int argc, char * argv[])
 
 	GetSoundDevices();
 	
-	if(!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS))
+	if(!SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS))
 		printf("Failed to set High Priority (%d)\n"), GetLastError();
 
 
@@ -314,7 +323,7 @@ void txSleep(int mS)
 {
 	// called while waiting for next TX buffer. Run background processes
 
-/*	while (mS > 50)
+	while (mS > 50)
 	{
 		PollReceivedSamples();			// discard any received samples
 		if (SerialMode)
@@ -322,10 +331,10 @@ void txSleep(int mS)
 		else
 			TCPHostPoll();
 
-		Sleep(mS);
+		Sleep(50);
 		mS -= 50;
 	}
-*/
+
 	Sleep(mS);
 
 	PollReceivedSamples();			// discard any received samples
@@ -426,6 +435,11 @@ void GetSoundDevices()
 void InitSound(BOOL Report)
 {
 	int i, ret;
+
+	// Set up input pointers
+
+	for (i = 0; i < NumberofinBuffers; i++)
+		inheader[i].lpData = &inbuffer[i];
 
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
@@ -586,14 +600,13 @@ void CloseSound()
 
 #include <stdarg.h>
 
-FILE *logfile = NULL;
-
 VOID CloseDebugLog()
 {	
-	if(logfile)
-		fclose(logfile);
-	logfile = NULL;
+	if(logfile[0])
+		fclose(logfile[0]);
+	logfile[0] = NULL;
 }
+
 
 VOID WriteDebugLog(int LogLevel, const char * format, ...)
 {
@@ -626,66 +639,29 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 
 	GetSystemTime(&st);
 	
-	if (logfile == NULL)
+	if (logfile[0] == NULL)
 	{
 		if (HostPort[0])
 			sprintf(Value, "%s%s_%04d%02d%02d.log",
-				"ARDOPDebug", HostPort, st.wYear, st.wMonth, st.wDay);
+				&LogName[0], HostPort, st.wYear, st.wMonth, st.wDay);
 		else
 			sprintf(Value, "%s%d_%04d%02d%02d.log",
-				"ARDOPDebug", port, st.wYear, st.wMonth, st.wDay);
+				&LogName[0], port, st.wYear, st.wMonth, st.wDay);
 		
-		if ((logfile = fopen(Value, "ab")) == NULL)
+		if ((logfile[0] = fopen(Value, "ab")) == NULL)
 			return;
 	}
 	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
 		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 
-	fputs(timebuf, logfile);
+	fputs(timebuf, logfile[0]);
 
-	fputs(Mess, logfile);
+	fputs(Mess, logfile[0]);
 #endif
 
 	return;
 }
 
-VOID WriteExceptionLog(const char * format, ...)
-{
-	char Mess[10000];
-	va_list(arglist);
-	char timebuf[32];
-	UCHAR Value[100];
-	FILE *logfile = NULL;
-	SYSTEMTIME st;
-	
-	va_start(arglist, format);
-	vsnprintf(Mess, sizeof(Mess), format, arglist);
-	strcat(Mess, "\r\n");
-
-	printf(Mess);
-
-	GetSystemTime(&st);
-
-	if (HostPort[0])
-		sprintf(Value, "%s%s_%04d%02d%02d.log",
-				"ARDOPException", HostPort, st.wYear, st.wMonth, st.wDay);
-	else	
-		sprintf(Value, "%s%d_%04d%02d%02d.log",
-				"ARDOPException", port, st.wYear, st.wMonth, st.wDay);
-	
-	if ((logfile = fopen(Value, "ab")) == NULL)
-		return;
-
-	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
-		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
-
-	fputs(timebuf, logfile);
-
-	fputs(Mess, logfile);
-	fclose(logfile);
-
-	return;
-}
 
 FILE *statslogfile = NULL;
 
@@ -712,10 +688,10 @@ VOID Statsprintf(const char * format, ...)
 		GetSystemTime(&st);
 		if (HostPort[0])
 			sprintf(Value, "%s%s_%04d%02d%02d.log",
-				"ARDOPSession", HostPort, st.wYear, st.wMonth, st.wDay);
+				&LogName[2], HostPort, st.wYear, st.wMonth, st.wDay);
 		else
 			sprintf(Value, "%s%d_%04d%02d%02d.log",
-				"ARDOPSession", port, st.wYear, st.wMonth, st.wDay);
+				&LogName[2], port, st.wYear, st.wMonth, st.wDay);
 
 		if ((statslogfile = fopen(Value, "ab")) == NULL)
 			return;
@@ -750,6 +726,8 @@ extern int Number;				// Number of samples waiting to be sent
 
 void SoundFlush()
 {
+	int i = NumberofinBuffers;
+
 	// Append Trailer then wait for TX to complete
 
 	AddTrailer();			// add the trailer.
@@ -785,6 +763,9 @@ void SoundFlush()
 
 //	memset(&buffer[0], 0, 2400);
 //	memset(&buffer[1], 0, 2400);
+
+	while (i--)
+		PollReceivedSamples();		// Make sure rx buffer is cleared
 
 	StartCapture();
 

@@ -55,16 +55,18 @@ int LogToHostBufferLen = 0;
 
 int bytDataToSendLength = 0;
 
-UCHAR bytDataToSend[6144];		// May need a full window + a bit for flow control
+UCHAR bytDataToSend[SENDBUFFERSIZE];		// May need a full window + a bit for flow control
 
 // Outbound data buffer 
 
 char ReportCall[10];
 
-UCHAR bytDataforHost[MAXCARRIERLEN * WINDOW];	// has to be Window Size
+UCHAR bytDataforHost[MAXDATALEN * WINDOW];	// has to be Window Size
 int bytesforHost = 0;
 
-UCHAR bytEchoData[MAXCARRIERLEN * WINDOW];		// has to be Window Size
+// I think this only has to by max TX length, so MAXCARRIERLEN * MAXCAR
+
+UCHAR bytEchoData[MAXDATALEN * MAXCAR];
 int bytesEchoed = 0;
 
 UCHAR DelayedEcho = 0;
@@ -772,7 +774,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			SCSReply[2] = Channel;
 			SCSReply[3] = 1;
 			strcpy(&SCSReply[4], CMDReplyBuffer);
-			ReplyLen = strlen(CMDReplyBuffer) + 7;
+			ReplyLen = strlen(CMDReplyBuffer) + 5;
 			EmCRCStuffAndSend(SCSReply, ReplyLen);
 			WriteDebugLog(LOGDEBUG, "Sending CMD Reply %s", CMDReplyBuffer);
 			return;

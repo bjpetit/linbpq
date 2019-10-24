@@ -3042,9 +3042,11 @@ unsigned short int compute_crc(unsigned char *buf,int len)
 
 extern BOOL UseLeft;
 extern BOOL UseRight;
+extern char LogDir[256];
 
 static struct option long_options[] =
 {
+	{"logdir",  required_argument, 0 , 'l'},
 	{"ptt",  required_argument, 0 , 'p'},
 	{"cat",  required_argument, 0 , 'c'},
 	{"keystring",  required_argument, 0 , 'k'},
@@ -3065,6 +3067,7 @@ char HelpScreen[] =
 	"  On Linux the program will create a pty and symlink it to the specified name.\n"
 	"\n"
 	"Optional Paramters\n"
+	"-l path or --logdir path          Path for log files\n"
 	"-c device or --cat device         Device to use for CAT Control\n"
 	"-p device or --ptt device         Device to use for PTT control using RTS\n"
 	"-k string or --keystring string   String (In HEX) to send to the radio to key PTT\n"
@@ -3087,7 +3090,7 @@ VOID processargs(int argc, char * argv[])
 	{		
 		int option_index = 0;
 
-		c = getopt_long(argc, argv, "c:p:g::k:u:hLR", long_options, &option_index);
+		c = getopt_long(argc, argv, "l:c:p:g::k:u:hLR", long_options, &option_index);
 
 		// Check for end of operation or error
 		if (c == -1)
@@ -3101,6 +3104,11 @@ VOID processargs(int argc, char * argv[])
 			printf("ARDOPC Version %s\n", ProductVersion);
 			printf ("%s", HelpScreen);
 			exit(0);
+
+		case 'l':
+			strcpy(LogDir, optarg);
+			break;
+
 			
 		case 'g':
 			if (optarg)

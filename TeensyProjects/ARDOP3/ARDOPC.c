@@ -2033,7 +2033,7 @@ void SaveQueueOnBreak()
 }
 
 
-extern UCHAR bytEchoData[1280];		// has to be at least max packet size (?1280)
+extern UCHAR bytEchoData[MAXDATALEN * MAXCAR];
 
 extern int bytesEchoed;
 
@@ -2541,6 +2541,7 @@ float dblMaxScale = 0.0f;
 extern UCHAR Pixels[4096];
 extern UCHAR * pixelPointer;
 #endif
+
 void UpdateBusyDetector(short * bytNewSamples)
 {
 	float dblReF[1024];
@@ -2894,6 +2895,8 @@ char HelpScreen[] =
 	"Optional Paramters\n"
 	"-c device or --cat device         Device to use for CAT Control\n"
 	"-p device or --ptt device         Device to use for PTT control using RTS\n"
+	"-g [Pin]                          GPIO pin to use for PTT (ARM Only)\n"
+	"                                  Default 17. use -Pin to invert PTT state\n"
 	"-k string or --keystring string   String (In HEX) to send to the radio to key PTT\n"
 	"-u string or --unkeystring string String (In HEX) to send to the radio to unkeykey PTT\n"
 	"-L use Left Channel of Soundcard in stereo mode\n"

@@ -235,6 +235,7 @@ void displayLevel(int max)
 		}
 	}
 }
+#ifdef I2CDISPLAY
 
 void displayCall(int dirn, char * Call)
 {
@@ -249,6 +250,19 @@ void displayCall(int dirn, char * Call)
 		print(i2cfile, paddedcall);
 	}
 }
+
+#else
+
+void displayCall(int dirn, char * call)
+{
+	char Msg[32];
+	sprintf(Msg, "%c%s", dirn, call);
+	SendtoGUI('I', Msg, strlen(Msg));
+}
+
+
+#endif
+
 
 int initdisplay()
 {

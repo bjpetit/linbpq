@@ -102,6 +102,9 @@ BOOL blnARQConnected;
 UCHAR bytCurrentFrameType = 0;	// The current frame type used for sending
 UCHAR * bytFrameTypesForBW;		// Holds the byte array for Data modes for a session bandwidth.  First is most robust, last is fastest
 int * bytFrameLengthsForBW;	// Holds the byte count for Data modes for a session bandwidth.
+int * upThresholds;			// Gear shift up %
+int * downThresholds;		// Gear shift down %
+
 int bytFrameTypesForBWLength = 0;
 
 int TempMode = -1;			// Used to shift to more robust mode for short frames
@@ -673,17 +676,32 @@ ModeToSpeed() = {
 // Function to get base (even) data modes by bandwidth for ARQ sessions
 
 // 220 to 947 bytes/min
-static UCHAR DataModes200[] = {D4PSK_200_50_E, D4PSK_200_100_E, D4PSKR_200_100_E, D16APSK_200_100_E};
+
+// Note lowest mode isn't normally used - it is a special short frame for short messages
+// Most intervals are about 2x, but top is less, so shift down at higher average acks
+
+static UCHAR DataModes200[] = {D4PSK_200_50_E, D4PSK_200_50_E, D4PSK_200_100_E, D4PSKR_200_100_E, D16APSK_200_100_E};
  
-static int DataLengths200[] = {24, 48, 72, 96};
+static int DataLengths200[] = {24, 24, 48, 72, 96};
+
+static int upThresholds200[] = {75, 75, 75, 75, 75};
+static int downThresholds200[] = {40, 40, 40, 40, 55};	// may need tuning
+
 // 220 to 1895 bytes/min
 static UCHAR DataModes500[] = {D4PSK_500_100S_E, D4PSK_200_50_E, D4PSK_500_50_E, D4PSK_500_100_E, D4PSKR_500_100_E, D16APSK_500_100_E};
+
 static int DataLengths500[] = {12, 24, 48, 96, 144, 192};
+
+static int upThresholds500[] = {75, 75, 75, 75, 75, 75};
+static int downThresholds500[] = {40, 40, 40, 40, 40, 55};
 
 // 439 to 9921 bytes/min
 static UCHAR DataModes2500[] = {D4PSK_500_100S_E, D4PSK_500_50_E, D4PSK_500_100_E, D4PSK_1000_100_E,
 								D4PSK_2500_100_E, D4PSKC_2500_200_E, D4PSKCR_2500_200_E};
 static int DataLengths2500[] = {12, 48, 96, 192, 480, 800, 1100};
+
+static int upThresholds2500[] = {75, 75, 75, 75, 75, 75, 75};
+static int downThresholds2500[] = {40, 40, 40, 40, 40, 40, 55};
 
 static UCHAR NoDataModes[1] = {0};
 
@@ -697,12 +715,16 @@ UCHAR  * GetDataModes(int intBW)
 	{
 		bytFrameTypesForBWLength = sizeof(DataModes200);
 		bytFrameLengthsForBW = DataLengths200;
+		upThresholds = upThresholds200;
+		downThresholds = downThresholds200;
 		return DataModes200;
 	}
 	if (intBW == 500) 
 	{
 		bytFrameTypesForBWLength = sizeof(DataModes500);
 		bytFrameLengthsForBW = DataLengths500;
+		upThresholds = upThresholds500;
+		downThresholds = downThresholds500;
 		return DataModes500;
 	}
 
@@ -710,6 +732,8 @@ UCHAR  * GetDataModes(int intBW)
 	{	
 		bytFrameTypesForBWLength = sizeof(DataModes2500);
 		bytFrameLengthsForBW = DataLengths2500;
+		upThresholds = upThresholds2500;
+		downThresholds = downThresholds2500;
 		return DataModes2500;
 	}
 	bytFrameTypesForBWLength = 0;
@@ -719,16 +743,14 @@ UCHAR  * GetDataModes(int intBW)
 unsigned short  ModeHasWorked[16] = {0};		// used to attempt to make gear shift more stable.
 unsigned short  ModeHasBeenTried[16] = {0};
 unsigned short  ModeNAKS[16] = {0};
+unsigned short  CarrierACKS[16] = {0};
+unsigned short  CarrierNAKS[16] = {0};
 
 //  Subroutine to shift up to the next higher throughput or down to the next more robust data modes based on average reported quality 
-
-int upThreshold = 75;			// May need to tune or change for different bandwidths
-int downThreshold = 40;
 
 int delayShiftUp = 0;
 
 extern float RollingAverage;
-
 
 VOID Gearshift(float AckPercent, BOOL SomeAcked)
 {
@@ -736,6 +758,9 @@ VOID Gearshift(float AckPercent, BOOL SomeAcked)
 	char strNewMode[18] = "";
 
 	int intBytesRemaining = bytDataToSendLength;
+
+	int upThreshold = upThresholds[intFrameTypePtr];
+	int downThreshold = downThresholds[intFrameTypePtr];
 
 	intShiftUpDn = 0;
 
@@ -790,7 +815,7 @@ VOID Gearshift(float AckPercent, BOOL SomeAcked)
 
 	if (AckPercent <= downThreshold) 
 	{
-		if (intFrameTypePtr > 0)
+		if (intFrameTypePtr > 1)		// zero not used
 		{
 			// Can shift down
 
@@ -845,10 +870,26 @@ void SendData()
 	
 	switch (ProtocolState)
 	{
+
+	// I now actively repeat IDLE instead of using timeout to resend
+
 	case IDLE:
 
-		WriteDebugLog(LOGDEBUG, "[ARDOPProtocol.SendData] Sending Data from IDLE state! Exit SendData");
-		return;
+		blnEnbARQRpt = TRUE;			
+		blnLastFrameSentData = FALSE;
+
+		intFrameRepeatInterval = ComputeInterFrameInterval(2000);  // keep IDLE repeats at 2 sec 
+	
+		WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.SendData]  Continue sending  IDLE");
+	
+		// Initial Idle repeat interval is short to speed up turnround
+		// Start delaying when we repeat.
+
+		txSleep(1000);
+
+		EncodeAndSend4FSKControl(IDLEFRAME, bytSessionID, LeaderLength); // only returns when all sent
+  		return;
+
 
 	case ISS:
 			
@@ -915,11 +956,10 @@ void SendData()
 			blnLastFrameSentData = FALSE;
 
 			intFrameRepeatInterval = ComputeInterFrameInterval(2000);  // keep IDLE repeats at 2 sec 
-//			intFrameRepeatInterval = ComputeInterFrameInterval(500);  // keep IDLE repeats at 2 sec 
 
 			ClearDataToSend(); // ' 0.6.4.2 This insures new OUTOUND queue is updated (to value = 0)
 	
-			WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.SendData]  Send IDLE with Repeat, Set ProtocolState=IDLE ");
+			WriteDebugLog(LOGDEBUG, "[ARDOPprotocol.SendData]  Send IDLE, Set ProtocolState=IDLE ");
 	
 			EncodeAndSend4FSKControl(IDLEFRAME, bytSessionID, LeaderLength); // only returns when all sent
   			return;
@@ -956,7 +996,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		if (fastStart)
 			intFrameTypePtr = ((bytFrameTypesForBWLength - 1) >> 1);	// Start mid way
 		else
-			intFrameTypePtr = 0;
+			intFrameTypePtr = 1;	// zero not used
 
 		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 
@@ -982,7 +1022,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 		intFrameTypePtr = SavedMode;
 		bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 		RequeueData();
-		ResetTXState(0);
+
 #ifdef PLOTCONSTELLATION
 		DrawTXMode(shortName(bytCurrentFrameType));
 		updateDisplay();
@@ -994,10 +1034,10 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 	{
 		if (intFrameTypePtr > 0)
 		{
-			intFrameTypePtr = max(0, intFrameTypePtr + *intUpDn);
+			intFrameTypePtr = max(1, intFrameTypePtr + *intUpDn);
 			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 			RequeueData();
-			ResetTXState(0);
+
 #ifdef PLOTCONSTELLATION
 			DrawTXMode(shortName(bytCurrentFrameType));
 			updateDisplay();
@@ -1013,7 +1053,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 			intFrameTypePtr = min(bytFrameTypesForBWLength, intFrameTypePtr + *intUpDn);
 			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 			RequeueData();
-			ResetTXState(0);
+
 #ifdef PLOTCONSTELLATION
 			DrawTXMode(shortName(bytCurrentFrameType));
 			updateDisplay();
@@ -1052,7 +1092,7 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 			intFrameTypePtr = TempMode;
 			bytCurrentFrameType = bytFrameTypesForBW[intFrameTypePtr];
 			// no need for RequeueData() as only called if none outstanding;
-			ResetTXState(0);
+
 #ifdef PLOTCONSTELLATION
 			DrawTXMode(shortName(bytCurrentFrameType));
 			updateDisplay();
@@ -1060,9 +1100,16 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 			strShift = "Temporary Shift Down";
 	}
 
+	// if Type has changed, reset TX PSN
+		
+	if ((bytCurrentFrameType & 0xfe) != (bytLastARQDataFrameAcked & 0xfe))
+		ResetTXState(0);
+
+	// Make sure Toggle is maintained on type change
+
 	if ((bytCurrentFrameType & 1) == (bytLastARQDataFrameAcked & 1))
 	{
-		*bytFrameTypeToSend = bytCurrentFrameType ^ 1;  // This insures toggle of  Odd and Even 
+		*bytFrameTypeToSend = bytCurrentFrameType ^ 1;  // This ensures toggle of  Odd and Even 
 		bytLastARQDataFrameSent = *bytFrameTypeToSend;
 	}
 	else
@@ -1115,6 +1162,8 @@ void InitializeConnection()
 	memset(ModeHasWorked, 0, sizeof(ModeHasWorked));
 	memset(ModeHasBeenTried, 0, sizeof(ModeHasBeenTried));
 	memset(ModeNAKS, 0, sizeof(ModeNAKS));
+	memset(CarrierACKS, 0, sizeof(CarrierACKS));
+	memset(CarrierNAKS, 0, sizeof(CarrierNAKS));
 
 	ResetPSNState();
 }
@@ -2383,11 +2432,12 @@ void LogStats()
 
 
 	Statsprintf("");
-	Statsprintf("Type               ACKS  NAKS");
+	Statsprintf("Type               ACKS  NAKS CACKS CNAKS");
 
 	for (i = 0; i < bytFrameTypesForBWLength; i++)
 	{
-		Statsprintf("%-17s %5d %5d", Name(bytFrameTypesForBW[i]), ModeHasWorked[i], ModeNAKS[i]);
+		Statsprintf("%-17s %5d %5d %5d %5d", Name(bytFrameTypesForBW[i]),
+			ModeHasWorked[i], ModeNAKS[i], CarrierACKS[i], CarrierNAKS[i]);
 	}
 
 	Statsprintf("Total Carriers Sent %5d Acked %5d Naked %5d", TotalCarriersSent, CarrierAcks, CarrierNaks);

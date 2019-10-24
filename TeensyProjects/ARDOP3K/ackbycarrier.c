@@ -522,7 +522,7 @@ void ModCarrierSet(int intLeaderLen)
 	else if (intNumCar == 2)
 		initFilter(500,1500);
 	else if (intNumCar == 4)
-		initFilter(1000,1500);
+		initFilter(2500,1500);			// 1000 Hz filter suspect
 	else
 		initFilter(2500,1500);
 
@@ -1184,7 +1184,7 @@ VOID PassGoodDataToHost(UCHAR Type)
 
 	while (len)				// Len nonzero
 	{
-		WriteDebugLog(LOGDEBUG, "Sending to Host PSN %d Len %d", NextPSNToHost, len);
+//		WriteDebugLog(LOGDEBUG, "Sending to Host PSN %d Len %d", NextPSNToHost, len);
 		memcpy(ptr, &ReceivedPSNList[NextPSNToHost][2], len);
 		ptr += len;
 		frameLen += len;
@@ -1202,7 +1202,7 @@ VOID PassGoodDataToHost(UCHAR Type)
 	if (frameLen)
 	{
 		bytData[frameLen] = 0;
-		WriteDebugLog(LOGDEBUG, "Sending to Host %s", bytData);
+//		WriteDebugLog(LOGDEBUG, "Sending to Host %s", bytData);
 
 		AddTagToDataAndSendToHost(bytData, "ARQ", frameLen); // only correct data in proper squence passed to host   
 	}

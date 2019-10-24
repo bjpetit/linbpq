@@ -12,8 +12,7 @@
 #define CPU_RESTART_VAL 0x5FA0004
 #define CPU_RESTART (*CPU_RESTART_ADDR = CPU_RESTART_VAL);
 
-unsigned char RXBUFFER[500];	// Async RX Buffer. Enough for Stuffed Host Mode Frame
-
+unsigned char RXBUFFER[500];
 extern volatile int RXBPtr;
 volatile int flag = 0;
 volatile int flag2 = 0;
@@ -58,9 +57,9 @@ extern "C"
 
 #include "../../ARDOP3/ARDOPC.h"
 
-extern unsigned int tmrPollOBQueue;
+  extern unsigned int tmrPollOBQueue;
 
-extern int UseKISS;
+  extern int UseKISS;
 
 #define Now getTicks()
 
@@ -92,16 +91,16 @@ extern int UseKISS;
     i2cloop();					// I2C but not for Host
 #endif
 
-		// To simplify switching USB / Serial / Bluetooth / ESP we poll all defined ports,
-		// and switch to using whichever provides input
+    // To simplify switching USB / Serial / Bluetooth / ESP we poll all defined ports,
+    // and switch to using whichever provides input
 
-		// Both boards could use USB(Serail) or Serial1
-		// PIBoard has ESP on Serail3
-		// WDT Board has BT on Serial5
+    // Both boards could use USB(Serail) or Serial1
+    // PIBoard has ESP on Serail3
+    // WDT Board has BT on Serial5
 
     int Avail = HOSTPORT.available();
     int Count;
-    
+
     if (Avail)
     {
       if (Avail > (499 - RXBPtr))
@@ -111,50 +110,50 @@ extern int UseKISS;
       RXBPtr += Count;
       if (ActivePort != 1)
       {
-      	ActivePort = 1;
-      	WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+        ActivePort = 1;
+        WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
       }
-      	
+
       ProcessSCSPacket(RXBUFFER, RXBPtr);
     }
 #ifdef HOSTPORT2
-		else
+    else
     {
-    	Avail = HOSTPORT2.available();
-    	if (Avail)
-    	{
-    	  if (Avail > (499 - RXBPtr))
-      	  Avail = 499 - RXBPtr;
+      Avail = HOSTPORT2.available();
+      if (Avail)
+      {
+        if (Avail > (499 - RXBPtr))
+          Avail = 499 - RXBPtr;
 
-      	Count = HOSTPORT2.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
-      	RXBPtr += Count;
- 	      if (ActivePort != 2)
-  	    {
-    	  	ActivePort = 2;
-      		WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
-      	}
-      	ProcessSCSPacket(RXBUFFER, RXBPtr);
-    	}
+        Count = HOSTPORT2.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
+        RXBPtr += Count;
+        if (ActivePort != 2)
+        {
+          ActivePort = 2;
+          WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+        }
+        ProcessSCSPacket(RXBUFFER, RXBPtr);
+      }
     }
 #endif
 #ifdef HOSTPORT3
-		else
-		{
-			Avail = HOSTPORT3.available();
-			if (Avail)
-			{
-				if (Avail > (499 - RXBPtr))
-					Avail = 499 - RXBPtr;
+    else
+    {
+      Avail = HOSTPORT3.available();
+      if (Avail)
+      {
+        if (Avail > (499 - RXBPtr))
+          Avail = 499 - RXBPtr;
 
-				Count = HOSTPORT3.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
-				RXBPtr += Count;
-				if (ActivePort != 3)
-     	 {
-    	  	ActivePort = 3;
-    	  	WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
-				}
-      	ProcessSCSPacket(RXBUFFER, RXBPtr);
-    	}
+        Count = HOSTPORT3.readBytes((char *)&RXBUFFER[RXBPtr], Avail);
+        RXBPtr += Count;
+        if (ActivePort != 3)
+        {
+          ActivePort = 3;
+          WriteDebugLog(LOGINFO, "Input is on Port %d", ActivePort);
+        }
+        ProcessSCSPacket(RXBUFFER, RXBPtr);
+      }
     }
 #endif
 #endif		// I2CHOST
@@ -183,10 +182,10 @@ void setup()
   ProtocolMode = ARQ;
 
   if (UseKISS)
-			KISSInit();
+    KISSInit();
 
   // Configure the ADC and run at least one software-triggered
-  // conversion.  This completes the self calibration stuff and
+  // converssion.  This completes the self calibration stuff and
   // leaves the ADC in a state that's mostly ready to use
 
   analogReadRes(16);
@@ -207,7 +206,7 @@ void setup()
   setupADC(16);
   StartADC();
 
-  #ifdef PIBOARD
+#ifdef PIBOARD
 
   // PI Baord can read Analog out which allows u to Read Vref
 
@@ -224,8 +223,8 @@ void setup()
   VRef /= 100;
   analogRead(16);		// Set ADC back to A0
 
-  #endif
-  
+#endif
+
   WriteDebugLog(0, "VREF %d offset %d", VRef, VRef - 32768);
 
   AdjustTXLevel(TXLevel);
@@ -242,7 +241,6 @@ void setup()
 #ifdef KMR_18
   setupKMR_18();
 #endif
-
 #endif
 
 }
@@ -354,20 +352,20 @@ void readserialno(uint8_t *mac)
 #if defined(__MK64FX512__) || defined(__MK66FX1M0__)
 
   // Top 3 bytes (Manufacture ID in bits 8-31
-  
+
   *(mac++) = FTFL_FCCOB5;
   *(mac++) = FTFL_FCCOB6;
   *(mac++) = FTFL_FCCOB7;
 
-	// Serial No in bits 8-31
-	
+  // Serial No in bits 8-31
+
   *(mac++) = FTFL_FCCOB9;
   *(mac++) = FTFL_FCCOBA;
   *(mac++) = FTFL_FCCOBB;
 #else
 
   // Could read Manufacture ID from page E but no point as fixed (04:E9:E5)
- 
+
   *(mac++) = 0x04;
   *(mac++) = 0xE9;
   *(mac++) = 0xE5;
@@ -375,7 +373,7 @@ void readserialno(uint8_t *mac)
   *(mac++) = FTFL_FCCOB6;
   *(mac++) = FTFL_FCCOB7;
 
-  
+
 #endif
 
   interrupts();
@@ -386,7 +384,7 @@ void print_mac()
 {
   readserialno(mac);
   WriteDebugLog(6, "Hardware Serial No %02X:%02X:%02X:%02X:%02X:%02X",
-  		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
 // Stuff to support Common Code for ARDOP and Packet
@@ -395,13 +393,11 @@ extern "C" {
   void pktProcessNewSamples(short * buf, int count)
   {}
 
- // Dummies for ARDOP GUI
+  // Dummies for ARDOP GUI
 
   void DrawTXFrame(const char * Frame)
   {}
 
-  void DrawRXFrame(int State, const char * Frame)
-  {}
 
   int SendtoGUI(char Type, unsigned char * Msg, int Len)
   {

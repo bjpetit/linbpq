@@ -22,7 +22,7 @@
 
 // This file is for ARDOP
 
-#define PIBOARD
+//#define PIBOARD
 //#define WDTBOARD
 
 #ifndef PIBOARD
@@ -53,6 +53,11 @@
 //#define WDTTFT
 //#define KMR_18
 
+// if using KMR_18 display with Black or Green TAB uncomment relevant line
+// for Red Tab leave both out
+
+//#define KMR_BLACKTAB
+//#define KMR_GREENTAB
 
 #ifdef PIBOARD
 
@@ -237,7 +242,7 @@
 
 #ifdef KMR_18
 
-//	Using the display on the WDT board (ILI9341)
+//	Using KMR-1.8 128 * 160 TFT
 
 #define ConstellationHeight 91
 #define ConstellationWidth 91
@@ -250,7 +255,13 @@
 #define Gold Yellow
 #define Lime 0x07E0 	// ILI9341_GREEN
 #define Yellow 0xFFE0	// ILI9341_YELLOW 
-#define BLACK 0     
+#define BLACK 0 
+#define Goldenrod Yellow
+#define Fuchsia 0xFD20
+    
+#define Green 0x07E0 
+#define Red 0xF800 
+
 
 #endif
 

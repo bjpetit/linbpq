@@ -34,7 +34,7 @@ recipe.S.o.pattern="{compiler.path}{build.toolchain}{build.command.gcc}" -c {bui
 recipe.ar.pattern="{compiler.path}{build.toolchain}{build.command.ar}" rcs "{archive_file_path}" "{object_file}"
 
 ## Link
-recipe.c.combine.pattern="{compiler.path}{build.toolchain}{build.command.gcc}" {build.flags.optimize} {build.flags.ld} {build.flags.ldspecs} {build.flags.cpu} -o "{build.path}/{build.project_name}.elf" {object_files} "{build.path}/{archive_file}" "-L{build.path}" {build.flags.libs}
+recipe.c.combine.pattern="{compiler.path}{build.toolchain}{build.command.linker}" {build.flags.optimize} {build.flags.ld} {build.flags.ldspecs} {build.flags.cpu} -o "{build.path}/{build.project_name}.elf" {object_files} "{build.path}/{archive_file}" "-L{build.path}" {build.flags.libs}
 
 ## Patch ELF - TODO: not supported by Arduino 1.6.6 builder
 recipe.elfpatch.pattern="{compiler.path}/hardware/tools/{build.elfpatch}" -mmcu={build.mcu} "{build.path}/{build.project_name}.elf" "{sketch_path}/disk"
@@ -52,10 +52,15 @@ recipe.hooks.postbuild.3.pattern="{compiler.path}teensy_post_compile" "-file={bu
 
 ## Compute size
 recipe.size.pattern="{compiler.path}{build.toolchain}{build.command.size}" -A "{build.path}/{build.project_name}.elf"
-recipe.size.regex=^(?:\.text|\.data|\.bootloader)\s+([0-9]+).*
-recipe.size.regex.data=^(?:\.usbdescriptortable|\.dmabuffers|\.usbbuffers|\.data|\.bss|\.noinit)\s+([0-9]+).*
+recipe.size.regex=^(?:\.text|\.text\.progmem|\.text\.itcm|\.data)\s+([0-9]+).*
+recipe.size.regex.data=^(?:\.usbdescriptortable|\.dmabuffers|\.usbbuffers|\.data|\.bss|\.bss\.dma|\.noinit|\.text\.itcm)\s+([0-9]+).*
 recipe.size.regex.eeprom=^(?:\.eeprom)\s+([0-9]+).*
 
+## Teensy Ports Discovery (Arduino 1.8.9 with pathPrefs patch)
+discovery.teensy.pattern="{runtime.hardware.path}/../tools/teensy_ports" -J2
+
+## Teensy Ports Discovery (Arduino 1.8.9)
+#discovery.teensy.pattern="{runtime.ide.path}/hardware/tools/teensy_ports" -J2
 
 ## Teensy Loader
 tools.teensyloader.cmd.path={runtime.hardware.path}/../tools
@@ -73,4 +78,4 @@ recipe.output.save_file2={build.project_name}.elf
 
 
 # documentation on this file's format
-# https://github.com/arduino/Arduino/wiki/Arduino-IDE-1.5---3rd-party-Hardware-specification
+# https://github.com/arduino/Arduino/wiki/Arduino-IDE-1.5-3rd-party-Hardware-specification

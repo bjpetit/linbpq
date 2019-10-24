@@ -81,8 +81,7 @@ void GetTwoToneLeaderWithSync(int intSymLen)
            if (i != (intSymLen - 1)) 
 			   intSample = intSign * int50BaudTwoToneLeaderTemplate[j];
 		   else
-			   intSample = -intSign * int50BaudTwoToneLeaderTemplate[j];
-   
+			   intSample = -intSign * int50BaudTwoToneLeaderTemplate[j];	// This reverses phase of last symbol
 		   SampleSink(intSample);
 		}
 		intSign = -intSign;
@@ -141,8 +140,8 @@ VOID Mod1Car50Bd4PSK(UCHAR * bytEncodedData, int Len, int LeaderLen)
 	int intSample;
 	UCHAR bytLastSym, bytMask = 0xC0, bytSymToSend;
 	int intMask = 0;
-	int j, n;
-	int intPeakAmp;
+	int j, k, n;
+	int intPeakAmp = 0;
 	int intCarIndex = 5;		 // 1500 Hz
 	BOOL QAM = 0;
 	
@@ -150,7 +149,7 @@ VOID Mod1Car50Bd4PSK(UCHAR * bytEncodedData, int Len, int LeaderLen)
 	DrawTXFrame(Name(Type));
 
 //	initFilter(200,1500);
-	initFilter(1000,1500);
+	initFilter(500,1500);
 	
 	intSoftClipCnt = 0;
 	
@@ -159,39 +158,119 @@ VOID Mod1Car50Bd4PSK(UCHAR * bytEncodedData, int Len, int LeaderLen)
 	SendLeaderAndSYNC(bytEncodedData, LeaderLength);
 	SendingHeader200 = FALSE;
 
-	intPeakAmp = 0;
+	// Experimental code to add option to send frame type
+	// in FSK.
 
-	intDataPtr = 2;  // initialize pointer to start of data.
-	bytLastSym = 0;
+	bytLastSym = 0;			// Always start with zero reference byte
 
-	for (j = -1; j <  4 * Len; j++) // 4PSK so 4 symbols per byte + reference
+	if (UseFSKFrameType)
 	{
-		if (j == -1)
-			bytSymToSend = 0;	// Reference symbol 
-		else
-		{
-			if (j % 4 == 0)
-				bytMask = 0xC0;
+		//Create the 8 symbols (16 bit) 50 baud 4FSK frame type with Implied SessionID
 
-			// Differential phase encocoding (add to last symbol sent Mod 4)  statement below confirmed 1/29/19
-
-			bytSymToSend = (bytLastSym + ((bytEncodedData[j / 4] & bytMask) >> (2 * (3 - (j % 4))))) % 4; // Horrible!!
+		for(j = 0; j < 2; j++)		 // for the 2 bytes of the frame type
+		{  
+			UCHAR symbol = bytEncodedData[j];
+		
+			for(k = 0; k < 4; k++)	 // for 4 symbols per byte (3 data + 1 parity)
+			{
+				bytSymToSend = (symbol & 0xc0) >> 6;		// for compatibility send top 2 bits first
+				
+				for(n = 0; n < 240; n++)
+				{
+					intSample = intFSK50bdCarTemplate[bytSymToSend + 4][n];
+					SampleSink(intSample);	
+				}
+				symbol <<= 2;
+			}
 		}
+
+		// Need to create reference symbol for psk message that follows
+	
+		// Always send zero for reference
+	
 		for (n = 0; n < 240; n++)  // all the samples of a symbols 
 		{		
-			if (bytSymToSend < 2)   // This uses only 90 degree values in the 16APSK table and the symmetry of the symbols to reduce the table size by a factor of 2
-				intSample =  int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * bytSymToSend][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
-			else	// for Sym values 2, 3
-				intSample = -int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * (bytSymToSend - 2)][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+			intSample =  int16APSK_8_8_50bdCarTemplate[intCarIndex][0][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
 	
 			if (intSample > intPeakAmp)
 				intPeakAmp = intSample;
 
 			SampleSink(intSample);
 		}
+	}
+	else
+	{
+		// Send Reference
+
+		for (n = 0; n < 240; n++)  // all the samples of a symbols 
+		{		
+			intSample =  int16APSK_8_8_50bdCarTemplate[intCarIndex][0][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+	
+			if (intSample > intPeakAmp)
+				intPeakAmp = intSample;
+
+			SampleSink(intSample);
+		}
+	
+		// Send frame type
+
+		for (j = 0; j < 2; j++)		 // for the 2 bytes of the frame type
+		{  
+			UCHAR symbol = bytEncodedData[j];
 		
-		bytLastSym = bytSymToSend;
-		bytMask = bytMask >> 2;
+			for(k = 0; k < 4; k++)	 // for 4 symbols per byte (3 data + 1 parity)
+			{		
+				// Differential phase encocoding (add to last symbol sent Mod 4)  statement below confirmed 1/29/19
+
+				bytSymToSend = (bytLastSym + ((symbol & 0xc0) >> 6)) & 3;		// High order bits first
+
+				for (n = 0; n < 240; n++)  // all the samples of a symbols 
+				{		
+					if (bytSymToSend < 2)   // This uses only 90 degree values in the 16APSK table and the symmetry of the symbols to reduce the table size by a factor of 2
+						intSample =  int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * bytSymToSend][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+					else	// for Sym values 2, 3
+						intSample = -int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * (bytSymToSend - 2)][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+	
+					if (intSample > intPeakAmp)
+						intPeakAmp = intSample;
+
+					SampleSink(intSample);
+				}
+		
+				bytLastSym = bytSymToSend;
+				symbol <<= 2;
+			}
+		}
+	}
+
+	// Now send the actual frame (Len - 2 Bytes
+			
+	for (j = 2; j < Len; j++)		 // for the 2 bytes of the frame type
+	{  
+		UCHAR symbol = bytEncodedData[j];
+		
+		for(k = 0; k < 4; k++)	 // for 4 symbols per byte (3 data + 1 parity)
+		{
+			// Differential phase encocoding (add to last symbol sent Mod 4)  statement below confirmed 1/29/19
+
+			bytSymToSend = (bytLastSym + ((symbol & 0xc0) >> 6)) & 3;		// High order bits first
+
+			for (n = 0; n < 240; n++)  // all the samples of a symbols 
+			{		
+				if (bytSymToSend < 2)   // This uses only 90 degree values in the 16APSK table and the symmetry of the symbols to reduce the table size by a factor of 2
+					intSample =  int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * bytSymToSend][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+				else	// for Sym values 2, 3
+					intSample = -int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * (bytSymToSend - 2)][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
+	
+				if (intSample > intPeakAmp)
+					intPeakAmp = intSample;
+
+				SampleSink(intSample);
+			}
+		
+			bytLastSym = bytSymToSend;
+			symbol <<= 2;
+		}
 	}
 	Flush();
 }

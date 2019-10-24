@@ -6,8 +6,7 @@
 #define XCONST const	
 //#define XCONST			// for building sample arrays
 
-#define ProductName "ARDOP TNC"
-#define ProductVersion "3.0.1.18e-BPQ"
+#include "Version.h"
 
 //#define USE_SOUNDMODEM
 
@@ -123,8 +122,15 @@ unsigned int getTicks();
 
 #define WINDOW 40			// Max outstanding packets
 #define MAXCARRIERLEN 155	// Actually 154 I think 1 PSN 1 Len 110 Data 2 CRC 40 RS 
+#define MAXDATALEN 110		// 4PSKCR.2500.200
 #define MAXCAR 10			// Max 10 carriers
 
+// Host to ARDOP buffer size
+// We may have a full window outstanding and want to be able to 
+// send a full frame when it is acked, so (WINDOW + MAXCAR) * MAXDATALEN = 5500
+// plus a bit for flow control 
+
+#define SENDBUFFERSIZE 6144
 
 #include "ecc.h"				// RS Constants
 

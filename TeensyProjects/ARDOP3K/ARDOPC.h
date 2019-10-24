@@ -15,8 +15,8 @@ extern const char ProductVersion[];
 
 #define SendSize 1200		// 100 mS for now
 #ifdef WIN32
-#define ReceiveSize 240	// try 50mS 100 mS for now
-#define NumberofinBuffers 2
+#define ReceiveSize 240
+#define NumberofinBuffers 4
 #else
 #define ReceiveSize 1200		// try 50mS 100 mS for now
 #define NumberofinBuffers 2
@@ -490,7 +490,7 @@ extern XCONST short int50BaudTwoToneLeaderTemplate[240];  // holds just 1 symbol
 // (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the template size to 5280 integers
 extern XCONST short int16APSK_8_8_50bdCarTemplate[11][4][120]; 
 
-//extern XCONST short intFSK50bdCarTemplate[12][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
+extern XCONST short intFSK50bdCarTemplate[12][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
 
 // Config Params
 extern char GridSquare[9];
@@ -676,9 +676,9 @@ extern int intQAMQuality;
 extern int intQAMQualityCnts;
 extern int intQAMSymbolsDecoded;
 extern int intQAMSymbolCnt;
-extern int intGoodQAMFrameDataDecodes;
-extern int intFailedQAMFrameDataDecodes;
-extern int intGoodQAMSummationDecodes;
+extern int intGoodAPSKFrameDataDecodes;
+extern int intFailedAPSKFrameDataDecodes;
+extern int intGoodAPSKSummationDecodes;
 
 extern int dttLastBusyOn;
 extern int dttLastBusyOff;
@@ -703,8 +703,9 @@ extern int pktMaxBandwidth;
 extern int pktPacLen;
 extern int initMode;		 // 0 - 4PSK 1 - 8PSK 2 = 16QAM
 
-
 extern BOOL SerialMode;			// Set if using SCS Mode, Unset ofr TCP Mode
+
+extern BOOL UseFSKFrameType;
 
 // Has to follow enum defs
 

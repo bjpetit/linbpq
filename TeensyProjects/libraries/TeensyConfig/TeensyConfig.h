@@ -5,6 +5,7 @@
 // These tests assume a modified platform.txt
 // If you haven't done that you will need to define ARDOP PACKET or SOUNDCARD yourself
 
+
 #ifdef PROJECT_SoundCard  
 #define SOUNDCARD
 #endif
@@ -25,6 +26,10 @@
 #endif
 
 #ifdef PROJECT_ARDOP3_Teensy
+#define ARDOP
+#endif
+
+#ifdef PROJECT_ARDOP3K_Teensy
 #define ARDOP
 #endif
 
@@ -49,7 +54,13 @@
 
 // Standard definitions
 
+
 #define TEENSY
+
+// Define to use i2s input or output, eg for Teensy 4
+
+#define Usei2sOut			// Needed for T4, may be better for T3
+#define Usei2sIn			// T4 has ADC but i2c may be better
 
 #ifdef ARDOP
 #include "TeensyConfigARDOP.h"

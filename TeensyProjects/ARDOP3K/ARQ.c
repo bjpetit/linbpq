@@ -172,7 +172,7 @@ int intAvgFSKQuality;
 int intFrameSyncs;
 int intGoodPSKSummationDecodes;
 int intGoodFSKSummationDecodes;
-int intGoodQAMSummationDecodes;
+int intGoodAPSKSummationDecodes;
 float dblLeaderSNAvg;
 int intAccumPSKLeaderTracking;
 float dblAvgPSKRefErr;
@@ -184,8 +184,8 @@ int intPSKSymbolCnt;
 int intQAMSymbolCnt;
 int intGoodPSKFrameDataDecodes;
 int intFailedPSKFrameDataDecodes;
-int intGoodQAMFrameDataDecodes;
-int intFailedQAMFrameDataDecodes;
+int intGoodAPSKFrameDataDecodes;
+int intFailedAPSKFrameDataDecodes;
 int intAvgPSKQuality;
 float dblAvgDecodeDistance;
 int intDecodeDistanceCount;
@@ -590,10 +590,11 @@ UCHAR GenerateSessionID(char * strCallingCallSign, char *strTargetCallsign)
 }
 
 // Function to compute the optimum leader based on the Leader sent and the reported Received leader
+//	A3 doesn't report Received Leader, so can't do this
 
-void CalculateOptimumLeader(int intReportedReceivedLeaderMS,int  intLeaderSentMS)
+void xCalculateOptimumLeader(int intReportedReceivedLeaderMS,int  intLeaderSentMS)
 {
-	intCalcLeader = max(200, 120 + intLeaderSentMS - intReportedReceivedLeaderMS);  //  This appears to work well on HF sim tests May 31, 2015
+	// intCalcLeader = max(200, 120 + intLeaderSentMS - intReportedReceivedLeaderMS);  //  This appears to work well on HF sim tests May 31, 2015
     //    WriteDebugLog(LOGDEBUG, ("[ARDOPprotocol.CalcualteOptimumLeader] Leader Sent=" & intLeaderSentMS.ToString & "  ReportedReceived=" & intReportedReceivedLeaderMS.ToString & "  Calculated=" & stcConnection.intCalcLeader.ToString)
 }
 
@@ -1289,8 +1290,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 	WriteDebugLog(LOGDEBUG, "Time since received = %d", timeSinceDecoded);
 
-	if (timeSinceDecoded < 350)
-		txSleep(350 - timeSinceDecoded);
+	if (timeSinceDecoded < 550)
+		txSleep(550 - timeSinceDecoded);
 
 	// Note this is called as part of the RX sample poll routine
 
@@ -1417,7 +1418,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				intReceivedLeaderLen = intLeaderRcvdMs;		 // capture the received leader from the remote ISS's ConReq (used for timing optimization)
 				dttLastFECIDSent = Now;
-				EncodeAndSend4FSKControl(ConAck, bytPendingSessionID, 200);
+//				EncodeAndSend4FSKControl(ConAck, bytPendingSessionID, 200);
+				EncodeAndSend4FSKControl(ConAck, bytPendingSessionID, LeaderLength);
 			}
 			else
 			{
@@ -1970,7 +1972,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				intSessionBW = atoi(ARQBandwidths[ARQBandwidth]);
     			
-				CalculateOptimumLeader(10 * bytData[0], LeaderLength);
+//				CalculateOptimumLeader(10 * bytData[0], LeaderLength);
 	
 				// Initialize the frame type based on bandwidth
 			
@@ -2143,10 +2145,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			if (intFrameType == MultiACK)	// if ACK
 			{
 				dttTimeoutTrip = Now;
-#ifdef TEENSY
 				SetLED(PKTLED, TRUE);		// Flash LED
 				PKTLEDTimer = Now + 200;	// for 200 mS
-#endif									
 				bytLastARQDataFrameAcked = bytLastARQDataFrameSent;		// Update toggle
 
 				SendData();		 // Send new data from outbound queue and set up repeats
@@ -2463,9 +2463,9 @@ void ClearTuningStats()
     intGoodPSKFrameDataDecodes = 0;
     intGoodPSKSummationDecodes = 0;
     intFailedPSKFrameDataDecodes = 0;
-    intGoodQAMFrameDataDecodes = 0;
-    intGoodQAMSummationDecodes = 0;
-    intFailedQAMFrameDataDecodes = 0;
+    intGoodAPSKFrameDataDecodes = 0;
+    intGoodAPSKSummationDecodes = 0;
+    intFailedAPSKFrameDataDecodes = 0;
     intAvgFSKQuality = 0;
     intAvgPSKQuality = 0;
     dblFSKTuningSNAvg = 0;
@@ -2529,11 +2529,21 @@ void LogStats()
 		Statsprintf(" ");
 		Statsprintf("  PSK:");
 		Statsprintf("     Good PSK Data Frame Decodes=%d  RecoveredPSKCarriers with Summation=%d  Failed PSK Data Frame Decodes=%d", intGoodPSKFrameDataDecodes, intGoodPSKSummationDecodes, intFailedPSKFrameDataDecodes);
-		Statsprintf("     AccumPSKTracking=%d  %d attempts over %d total PSK Symbols",	intAccumPSKTracking, intPSKTrackAttempts, intPSKSymbolCnt);
+//		Statsprintf("     AccumPSKTracking=%d  %d attempts over %d total PSK Symbols",	intAccumPSKTracking, intPSKTrackAttempts, intPSKSymbolCnt);
 	
 		Statsprintf(" ");
 	}
    
+	if (intGoodAPSKFrameDataDecodes + intFailedAPSKFrameDataDecodes + intGoodAPSKSummationDecodes > 0)
+	{
+		Statsprintf(" ");
+		Statsprintf("  APSK:");
+		Statsprintf("     Good APSK Data Frame Decodes=%d  RecoveredAPSKCarriers with Summation=%d  Failed APSK Data Frame Decodes=%d", intGoodPSKFrameDataDecodes, intGoodPSKSummationDecodes, intFailedPSKFrameDataDecodes);
+//		Statsprintf("     AccumPSKTracking=%d  %d attempts over %d total PSK Symbols",	intAccumPSKTracking, intPSKTrackAttempts, intPSKSymbolCnt);
+	
+		Statsprintf(" ");
+	}
+
 	Statsprintf("  Squelch= %d BusyDet= %d Mode Shift UPs= %d   Mode Shift DOWNs= %d  Link Turnovers= %d",
 		Squelch, BusyDet, intShiftUPs, intShiftDNs, intLinkTurnovers);
 	Statsprintf(" ");

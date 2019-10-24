@@ -85,13 +85,16 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 	if (Len == 0)
 		return;
 
+	if ((bytDataToSendLength + Len) > SENDBUFFERSIZE)
+	{
+		WriteDebugLog(LOGERROR, "Host Flow Control failed - trying to queue %d bytes max %d", bytDataToSendLength + Len, SENDBUFFERSIZE);
+		return;
+	}
+
 	GetSemaphore();
 
 	memcpy(&bytDataToSend[bytDataToSendLength], bytNewData, Len);
 	bytDataToSendLength += Len;
-
-	if (bytDataToSendLength > 4096)
-		return;
 
 	FreeSemaphore();
 

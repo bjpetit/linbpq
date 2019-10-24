@@ -145,7 +145,7 @@ int intPhasesLen;
 
 // Received Frame
 
-UCHAR bytData[MAXCARRIERLEN * WINDOW];
+UCHAR bytData[MAXDATALEN * WINDOW];
 int frameLen;
 
 int totalRSErrors;
@@ -160,7 +160,7 @@ char Bad[10] = {0};							// For comparing with CarrierOK
 
 // If we still have 600 baud modes may need a lot more for first
 
-UCHAR bytFrameData[10][MAXCARRIERLEN];		// Received chars
+UCHAR bytFrameData[MAXCAR][MAXCARRIERLEN];		// Received chars
 
 char CarrierOk[10];			// RS OK Flags per carrier
 
@@ -277,6 +277,7 @@ int PeakFromHeader = 30000;
 extern int max;
 
 float peaksample = 0;
+float peakx = 0;
 
 
 void PrintCarrierFlags()
@@ -363,6 +364,10 @@ float SqLawExpander(float Sample)
 	if (x > 30000)
 		return x;
 
+	if (x > peakx)
+		peakx = x;
+
+
 	return x;
 }
 
@@ -447,24 +452,24 @@ void DiscardOldSamples()
 */
 }
 
-//	Subroutine to apply 2000 Hz filter to mixed samples 
+//	Subroutine to apply 2500 Hz filter to mixed samples 
 
 float xdblZin_1 = 0, xdblZin_2 = 0, xdblZComb= 0;  // Used in the comb generator
 
 	// The resonators 
       
-float xdblZout_0[29] = {0.0f};	// resonator outputs
-float xdblZout_1[29] = {0.0f};	// resonator outputs delayed one sample
-float xdblZout_2[29] = {0.0f};	// resonator outputs delayed two samples
-float xdblCoef[29] = {0.0};		// the coefficients
-float xdblR = 0.9995f;			// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-int xintN = 120;				//Length of filter 12000/100
+float xdblZout_0[15] = {0.0f};	// resonator outputs
+float xdblZout_1[15] = {0.0f};	// resonator outputs delayed one sample
+float xdblZout_2[15] = {0.0f};	// resonator outputs delayed two samples
+float xdblCoef[15] = {0.0};		// the coefficients
+float xdblR = 0.9995f;			// ensures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
+int xintN = 60;					// Length of filter 12000/200
 
 
 void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 {
 	// assumes sample rate of 12000
-	// implements  27 100 Hz wide sections   (~2500 Hz wide @ - 30dB centered on 1500 Hz)
+	// implements  14 200Hz wide sections   (~2500 Hz wide @ - 30dB centered on 1500 Hz)
 
 	// FSF (Frequency Selective Filter) variables
 
@@ -506,11 +511,11 @@ void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 
 	dblR2 = powf(xdblR, 2);
 
-	// Initialize the coefficients
+	// Initialize the coefficients if first time
     
-	if (xdblCoef[28] == 0)
+	if (xdblCoef[14] == 0)
 	{
-		for (i = 2; i <= 28; i++)
+		for (i = 1; i <= 14; i++)
 		{
 			xdblCoef[i] = 2 * xdblR * cosf(2 * M_PI * i / xintN);  // For Frequency = bin i
 		}
@@ -532,7 +537,7 @@ void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 		xdblZin_1 = dblZin;
 
 		// Now the resonators
-		for (j = 2; j <= 28; j++)	   // calculate output for 3 resonators 
+		for (j = 1; j <= 14; j++)	   // calculate output for 3 resonators 
 		{
 			xdblZout_0[j] = xdblZComb + xdblCoef[j] * xdblZout_1[j] - dblR2 * xdblZout_2[j];
 			xdblZout_2[j] = xdblZout_1[j];
@@ -542,17 +547,23 @@ void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 			//' Resonators 2 and 13 scaled by .389 get best shape and side lobe supression 
 			//' Scaling also accomodates for the filter "gain" of approx 60. 
  
-			if (j == 2 || j == 28)
-				intFilteredSample += 0.389f * xdblZout_0[j];
+			if (j == 1)
+				intFilteredSample -= 0.098108f * xdblZout_0[j];
+			else if (j == 14)
+				intFilteredSample += 0.098108f * xdblZout_0[j];
+			else if (j == 2)
+				intFilteredSample += 0.572724f * xdblZout_0[j];
+			else if (j == 13)
+				intFilteredSample -= 0.572724f * xdblZout_0[j];	
 			else if ((j & 1) == 0)
 				intFilteredSample += xdblZout_0[j];
 			else
 				intFilteredSample -= xdblZout_0[j];
 		}
 
-		intFilteredSample = intFilteredSample * 0.00833333333f;
+		intFilteredSample = intFilteredSample * 0.015f; //0.00833333333f;
 
-		// We should only expand once we have frame type, so need to do later
+		// We should only expand once we have frame type
 
 		if (State == AcquireFrame)
 			intFilteredMixedSamples[intFilteredMixedSamplesLength++] = SqLawExpander(intFilteredSample);
@@ -563,7 +574,7 @@ void FSMixFilter2500Hz(short * intMixedSamples, int intMixedSamplesLength)
 			// and look for peak sample
 			
 			if (intFilteredSample > PeakFromHeader)
-					PeakFromHeader = intFilteredSample;
+				PeakFromHeader = intFilteredSample;
 		}
 	}
 	
@@ -787,11 +798,11 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		return bytRawData[1];			// don't do it again
 	}
 
-	if (Carrier == 2 || Carrier == 7)		// Testing
-	{
+//	if (rand() > ((32767 * 9)/10))		// Testing  Drop 10%
+//	{
 //		WriteDebugLog(LOGDEBUG, "[CorrectRawDataWithRS] Deliberatly failing Carrier %d", Carrier);
 //		goto returnBad;
-	}
+//	}
 
 	if (CheckCRC16FrameType(bytRawData, intDataLen + 2, bytFrameType)) // No RS correction needed
 	{
@@ -2285,7 +2296,7 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 		if (dblCarPh > M_PI / 2)
 			dblAbsPhErr = M_PI - dblCarPh;
 		else
-		dblAbsPhErr = dblCarPh;
+			dblAbsPhErr = dblCarPh;
 
 		if (dblAbsPhErr < dblMinAbsPhErr)
 		{
@@ -2334,7 +2345,7 @@ int EnvelopeCorrelatorOld()
 		dblCorSum = 0;
 		for (i = 0; i < 240; i++)	 // over 1 50 baud symbol (may be able to reduce to 1 symbol)
 		{
-			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomdates filter delay of 120 samples
+			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomodates filter delay of 120 samples
 			dblCorSum += dblCorProduct;
             if (fabsf(dblCorProduct) > dblCorMaxProduct)
 				dblCorMaxProduct = fabsf(dblCorProduct);
@@ -2770,9 +2781,6 @@ float ComputePSKDecodeDistance(int intPhasePtr, short * intPhases, UCHAR bytFram
 	int intDistance = 0;		// distance in milliradians
     short intTargetPhase[8];
 	int i, intSum = 0;
-
-	if (bytFrameType == IDFRAME)
-		i = 0;
 	
 	Get4PSKPhaseTargets(bytFrameType, bytID, &intTargetPhase[0]);
 
@@ -2845,149 +2853,105 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 		}
 	}
 
-//Debug.WriteLine("MinDist4PSK Frame type " & objFrameInfo.Name(intIatMinDistance1) & " Dist1= " & intMinDistance1.ToString & " Dist2= " & intMinDistance2.ToString & " Sum= " & (intMinDistance1 + intMinDistance2).ToString)
-
-
 	WriteDebugLog(LOGDEBUG, "Frame Decode type %x %x %x Dist %.2f %.2f %.2f Sess %x pend %d conn %d lastsess %d",
 		intIatMinDistance1, intIatMinDistance2, intIatMinDistance3, 
 		dblMinDistance1, dblMinDistance2, dblMinDistance3, 
 		bytSessionID, blnPending, blnARQConnected, bytLastARQSessionID); 
 	
-	if (bytSessionID == 0x3F)		// ' we are in a FEC QSO, monitoring an ARQ session or have not yet reached the ARQ Pending or Connected status 
+	if (bytSessionID == 0x3F || blnPending)	
 	{
+		// 'we are in a FEC QSO, monitoring an ARQ session or have not yet reached the ARQ Pending or Connected status 
+
 		if (intIatMinDistance1 == ConReq200 || intIatMinDistance1 == ConReq500 || intIatMinDistance1 == ConReq2500)
 		{
 			if (dblMinDistance1 < intThresh)
 			{
-				// Need to decode second byte to get Session ID
-				
-				int k, bytRawData = 0, pskStart = 4;
-				
-				for (k = 0; k < 4; k++)
-				{
-					bytRawData <<= 2;
-				
-					if (intPhases[pskStart] < 786 && intPhases[pskStart] > -786)
-					{
-					}		// Zero so no need to do anything
-					else if (intPhases[pskStart] >= 786 && intPhases[pskStart] < 2356)
-						bytRawData += 1;
-					else if (intPhases[pskStart] >= 2356 || intPhases[pskStart] <= -2356)
-						bytRawData += 2;
-					else
-						bytRawData += 3;
-
-					pskStart++;
-				}
-			
-				// bytRawData is second byte, the xor of Type and Session ID
-
-				k = ComputeTypeParity(bytRawData);
-
-				bytRawData = (bytRawData >> 2) ^ intIatMinDistance1;
-
-				WriteDebugLog(LOGDEBUG, "[Frame Type OK]1 %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
+				WriteDebugLog(LOGDEBUG, "[Frame Type OK]4 %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
 				return intIatMinDistance1;
 			}
 			else
 				return -1;
 		}
    
-
-		// This handles the special case of a DISC command received from the prior session (where the station sending DISC did not receive an END). 
-
- //     ElseIf intIatMinDistance1 = objFrameInfo.FrameCode("DISC") Or intIatMinDistance3 = objFrameInfo.FrameCode("DISC") Then
- //      If MCB.DebugLog Then Logs.WriteDebug("[Frame Type OK]1 " & objFrameInfo.Name(intIatMinDistance1) & ", D1=" & Format(intMinDistance1, "#") & ", D3=" & Format(intMinDistance3, "#") & "  " & strDecodeCapture)
- //     Return intIatMinDistance1
-
-   		if (intIatMinDistance1 == DISCFRAME && intIatMinDistance3 == DISCFRAME)
+		if (intIatMinDistance2 == ConReq200 || intIatMinDistance2 == ConReq500 || intIatMinDistance2 == ConReq2500)
 		{
-			sprintf(strDecodeCapture, "%s MD Decode;1 ID=H%X, Type=DISCFRAME: %s, D1= %.2f, D3= %.2f",
-				 strDecodeCapture, bytLastARQSessionID, Name(intIatMinDistance1), dblMinDistance1, dblMinDistance3);
-			
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]1 %s", strDecodeCapture);
-
-			return intIatMinDistance1;
-		}
-		
-		// no risk of damage to an existing ARQConnection with END, BREAK, DISC, or ACK frames so loosen decoding threshold 
-
-		if (intIatMinDistance1 == intIatMinDistance2 && (dblMinDistance1 < (intThresh / 2) || (dblMinDistance2 < intThresh / 2)))
-		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]2 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-
-			return intIatMinDistance1;
-		}
-  
-		if ((dblMinDistance1 < intThresh) && IsDataFrame(intIatMinDistance1) )	//  this would handle the case of monitoring an ARQ connection where the SessionID is not 0x3F
-		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]3 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-		
-			return intIatMinDistance1;
-		}
-
-		if ((dblMinDistance2 < intThresh)  && IsDataFrame(intIatMinDistance2))  // this would handle the case of monitoring an FEC transmission that failed above when the session ID is = 03F
- 		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]4 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance2), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-
-			return intIatMinDistance2;
-		}
-
-		return -1;		// indicates poor quality decode so  don't use
-
-	}
-
-	if (blnPending)		 // We have a Pending ARQ connection 
-	{
-		// this should be a Con Ack from the ISS if we are Pending
-
-		if (intIatMinDistance1 == ConReq200 || intIatMinDistance1 == ConReq500 || intIatMinDistance1 == ConReq2500)
-		{
-			if (dblMinDistance1 < intThresh)
+			if (dblMinDistance2 < intThresh)
 			{
-				WriteDebugLog(LOGDEBUG, "[Frame Type OK]1A  %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
-				return intIatMinDistance1;
+				WriteDebugLog(LOGDEBUG, "[Frame Type OK]5 %s, D2= %d", Name(intIatMinDistance2), dblMinDistance2);
+				return intIatMinDistance2;
 			}
 			else
-			{
 				return -1;
-			}
 		}
 
-		if (intIatMinDistance1 == intIatMinDistance2)  // matching indexes at minimal distances so high probablity of correct decode.
+		if (dblMinDistance1 < intThresh && intIatMinDistance1 == ConAck)
 		{
-			if ((dblMinDistance1 < intThresh) || (dblMinDistance2 < intThresh))
-			{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]5 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-				return intIatMinDistance1;
-			}
-			else
-			{
-				return -1;		 // indicates poor quality decode so  don't use
-			}
-		}
-		
-		if ((dblMinDistance1 < dblDistance2) && dblMinDistance1 < intThresh / 2) // non matching indexes 
-		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]7 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-				return intIatMinDistance1;
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]6 %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
+			return intIatMinDistance1;
 		}
 
-		if ((dblMinDistance2 < dblDistance1) && dblMinDistance2 < intThresh / 2) // non matching indexes 
+		if (blnPending && dblMinDistance2 < intThresh && intIatMinDistance2 == ConAck)
 		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]5 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance2), dblMinDistance1, dblMinDistance2, strDecodeCapture);
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]7 %s, D2= %d", Name(intIatMinDistance2), dblMinDistance2);
 			return intIatMinDistance2;
 		}
-		else
-           return -1;
+ 
+		if (dblMinDistance1 < intThresh && intIatMinDistance1 == IDFRAME)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]8 %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
+			return intIatMinDistance1;
+		}
+
+		if (dblMinDistance2 < intThresh && intIatMinDistance2 == IDFRAME)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]9 %s, D2= %d", Name(intIatMinDistance2), dblMinDistance2);
+			return intIatMinDistance2;
+		}
+ 
+		if (dblMinDistance1 < intThresh && intIatMinDistance1 == ACK)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]10 %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
+			return intIatMinDistance1;
+		}
+
+		if (dblMinDistance2 < intThresh && intIatMinDistance2 == ACK)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]11 %s, D2= %d", Name(intIatMinDistance2), dblMinDistance2);
+			return intIatMinDistance2;
+		}
+
+		if (dblMinDistance1 < intThresh && intIatMinDistance1 == DISCFRAME)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]12 %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
+			return intIatMinDistance1;
+		}
+
+		if (dblMinDistance3 < intThresh && intIatMinDistance3 == DISCFRAME)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]13 %s, D3= %d", Name(intIatMinDistance3), dblMinDistance3);
+			return intIatMinDistance3;
+		}
+
+		// this would handle the case of monitoring an ARQ connection where the SessionID is not &H3F 
+
+		if (dblMinDistance1 < intThresh)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]14 %s, D1= %d", Name(intIatMinDistance1), dblMinDistance1);
+			return intIatMinDistance1;
+		}
+
+		// this would handle the case of monitoring an FEC transmission that failed above when the session ID is = &H3F 
+
+		if (dblMinDistance2 < intThresh)
+		{
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]15 %s, D2= %d", Name(intIatMinDistance2), dblMinDistance2);
+			return intIatMinDistance2;
+		}
+
+		WriteDebugLog(LOGDEBUG, "[Frame Type Fail]16");	
+		return -1;
 	}
-	
+
 	if (blnARQConnected)		// ' we have an ARQ connected session.
 	{
 		if (AccumulateStats)
@@ -2995,42 +2959,17 @@ int MinimalDistance4PSKFrameType(short * intPhases, UCHAR bytSessionID)
 			dblAvgDecodeDistance = (dblAvgDecodeDistance * intDecodeDistanceCount + 0.5f * (dblMinDistance1 + dblMinDistance2)) / (intDecodeDistanceCount + 1);
 			intDecodeDistanceCount++;
 		}
+		// require matching index and at least one < threshold
 		
-		if (intIatMinDistance1 == intIatMinDistance2 && !IsDataFrame(intIatMinDistance1) && (dblMinDistance1 < intThresh || dblMinDistance2 < intThresh) ) // control frame so check distance
+		if (intIatMinDistance1 == intIatMinDistance2 && (dblMinDistance1 < intThresh || dblMinDistance2 < intThresh)) 		
 		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]9 %s,D1= %.2f, D2= %.2f %s",
+			WriteDebugLog(LOGDEBUG, "[Frame Type OK]17 %s,D1= %.2f, D2= %.2f %s",
 				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
 
 			return intIatMinDistance1;
-		}
-
-		if (intIatMinDistance1 == intIatMinDistance2 && IsDataFrame(intIatMinDistance1)) // data frame so dont check distance
-		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]9A %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-
-			return intIatMinDistance1;
-		}
-
-		//non matching indexes
-  
-		if (dblMinDistance1 < (intThresh / 2) && dblDistance1 < dblDistance2)
-		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]10 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-
-			return intIatMinDistance1;
-
-		}
-		if (dblMinDistance2 < (intThresh / 2) && dblDistance2 < dblDistance1)
-		{
-			WriteDebugLog(LOGDEBUG, "[Frame Type OK]11 %s,D1= %.2f, D2= %.2f %s",
-				 Name(intIatMinDistance2), dblMinDistance1, dblMinDistance2, strDecodeCapture);
-				
-			return intIatMinDistance2;
 		}
 	}
-	sprintf(strDecodeCapture, "%s MD Decode;12  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
+	sprintf(strDecodeCapture, "%s MD Decode;18  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
 		strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, dblMinDistance1, dblMinDistance2);
 	WriteDebugLog(LOGDEBUG, "[Frame Type Decode Fail] %s", strDecodeCapture);
 	return -1; // indicates poor quality decode so  don't use
@@ -3120,25 +3059,22 @@ extern int intBW;
 
 BOOL Decode4PSKConReq()
 {
-	UCHAR strTarget [10];
+	UCHAR strTarget [32];
 	UCHAR bytCall[6];
-	BOOL FrameOK;
+	BOOL FrameOK = FALSE;
 
 	// Modified May 24, 2015 to use RS encoding vs CRC (similar to ID Frame)
  
 	if (GenCRC8(&bytFrameData[0][0], 6) == bytFrameData[0][6])
+	{
 		FrameOK = TRUE;
 
-	memcpy(bytCall, bytFrameData, 6);
-	DeCompressCallsign(bytCall, strTarget);
-
-//	printtick(strCaller);
-//	printtick(strTarget);
+		memcpy(bytCall, bytFrameData, 6);
+		DeCompressCallsign(bytCall, strTarget);
 	
-	sprintf(strRcvFrameTag, "_ > %s", strTarget);
-	sprintf(bytData, "%s", strTarget);
-
-	// Recheck the returned data by reencoding
+		sprintf(strRcvFrameTag, "_ > %s", strTarget);
+		sprintf(bytData, "%s", strTarget);
+	}
 	
 	if (intFrameType == ConReq200)
 		intBW = 200;
@@ -3783,7 +3719,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 			intMagMax = max(intMagMax, intMag[j]); // find the max magnitude to auto scale
 		}
 
-		for (k = 1; k < intPhasesLen; k++)
+		for (k = 4; k < intPhasesLen; k++)
 		{
 			if (intMag[k] < 0.75f * intMagMax)
 			{
@@ -3803,7 +3739,7 @@ int UpdatePhaseConstellation(short * intPhases, short * intMag, char * strMod, B
 	else
 	{
 		dbPhaseStep  = 2 * M_PI / intPSKPhase;
-		for (j = 1; j < intPhasesLen; j++)   // skip the magnitude of the reference in calculation
+		for (j = 4; j < intPhasesLen; j++)   // skip the magnitude of the reference in calculation
 		{
 			intMagMax = max(intMagMax, intMag[j]); // find the max magnitude to auto scale
             dblAvgRad += intMag[j];	

@@ -21,13 +21,15 @@ extern "C"  void debugprintf(const char * format, ...);
 #ifdef SERIAL1SIZE
 #define SERIAL1_TX_BUFFER_SIZE	SERIAL1SIZE // number of outgoing bytes to buffer
 #define SERIAL1_RX_BUFFER_SIZE	SERIAL1SIZE
-#include "serial1.c"
+//#include "serial1.c"
+#include "HardwareSerial1.cpp"
 #endif
 
 #ifdef SERIAL3SIZE
 #define SERIAL3_TX_BUFFER_SIZE	SERIAL3SIZE // number of outgoing bytes to buffer
 #define SERIAL3_RX_BUFFER_SIZE	SERIAL3SIZE
-#include "serial3.c"
+//#include "serial3.c"
+#include "HardwareSerial3.cpp"
 #endif
 
 #define CPU_RESTART_ADDR (uint32_t *)0xE000ED0C
@@ -540,7 +542,7 @@ extern "C" int GetEEPROM(int Reg)
   return EEPROM.read(Reg);
 }
 
-// DAC/ADC Code
+// Teensy 3.x DAC/ADC Code
 
 // We use two buffers, but DMA treats as one long one, and we process as
 // two halves
@@ -581,6 +583,197 @@ void isr(void)
 	dma1.clearInterrupt();
 }
 
+// i2s code based on Teensy Audio Library
+
+/* Audio Library for Teensy 3.X
+ * Copyright (c) 2014, Paul Stoffregen, paul@pjrc.com
+ *
+ * Development of this audio library was funded by PJRC.COM, LLC by sales of
+ * Teensy and Audio Adaptor boards.  Please support PJRC's efforts to develop
+ * open source software by purchasing Teensy or other PJRC products.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice, development funding notice, and this permission
+ * notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+//	Need to recalculate for 12000
+
+// i2c clock is a bit clock, and I think we need 16 bit stereo samples, so 12000 * 16 * 2 = 384k
+
+// With Clock at 60 MHz I think we need 250 (-1)
+
+// But input may be cpu clock (180 MHz on 3.6) so need 750
+
+#define MCLK_SRC  0		// system clock
+#define MCLK_MULT 1	
+#define MCLK_DIV  750
+
+// 1088 = 48M / 44.1 K 
+// 4000 = 48M / 12K
+
+// I think we send 16 bit samples, with /4 that gives / 128, so 4000 / 128 = 31.25  ???????????
+
+/*
+// MCLK needs to be 48e6 / 1088 * 256 = 11.29411765 MHz -> 44.117647 kHz sample rate
+// why???? - Seems to have 32 bit samples (so 64 bits stereo) and divide clk by 4, giving 256 above
+
+#if F_CPU == 96000000 || F_CPU == 48000000 || F_CPU == 24000000
+  // PLL is at 96 MHz in these modes
+  #define MCLK_MULT 2
+  #define MCLK_DIV  17
+#elif F_CPU == 72000000
+  #define MCLK_MULT 8
+  #define MCLK_DIV  51
+#elif F_CPU == 120000000
+  #define MCLK_MULT 8
+  #define MCLK_DIV  85
+#elif F_CPU == 144000000
+  #define MCLK_MULT 4
+  #define MCLK_DIV  51
+#elif F_CPU == 168000000
+  #define MCLK_MULT 8
+  #define MCLK_DIV  119
+#elif F_CPU == 180000000
+  #define MCLK_MULT 16
+  #define MCLK_DIV  255
+  #define MCLK_SRC  0
+#elif F_CPU == 192000000
+  #define MCLK_MULT 1
+  #define MCLK_DIV  17
+#elif F_CPU == 216000000
+  #define MCLK_MULT 8
+  #define MCLK_DIV  153
+  #define MCLK_SRC  0
+#elif F_CPU == 240000000
+  #define MCLK_MULT 4
+  #define MCLK_DIV  85
+#elif F_CPU == 16000000
+  #define MCLK_MULT 12
+  #define MCLK_DIV  17
+#else
+  #error "This CPU Clock Speed is not supported by the Audio library";
+#endif
+
+
+#ifndef MCLK_SRC
+#if F_CPU >= 20000000
+  #define MCLK_SRC  3  // the PLL
+#else
+  #define MCLK_SRC  0  // system clock
+#endif
+#endif
+*/
+	
+void config_i2s(void)
+{
+	SIM_SCGC6 |= SIM_SCGC6_I2S;
+	SIM_SCGC7 |= SIM_SCGC7_DMA;
+	SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
+
+	// if either transmitter or receiver is enabled, do nothing
+	if (I2S0_TCSR & I2S_TCSR_TE) return;
+	if (I2S0_RCSR & I2S_RCSR_RE) return;
+
+	// enable MCLK output
+	I2S0_MCR = I2S_MCR_MICS(MCLK_SRC) | I2S_MCR_MOE;
+	while (I2S0_MCR & I2S_MCR_DUF) ;
+	I2S0_MDR = I2S_MDR_FRACT((MCLK_MULT-1)) | I2S_MDR_DIVIDE((MCLK_DIV-1));
+
+	// configure transmitter
+	I2S0_TMR = 0;
+	I2S0_TCR1 = I2S_TCR1_TFW(1);  // watermark at half fifo size
+	I2S0_TCR2 = I2S_TCR2_SYNC(0) | I2S_TCR2_BCP | I2S_TCR2_MSEL(1)
+		| I2S_TCR2_BCD | I2S_TCR2_DIV(1);									// /4 ?? (DIV + 1) * 2
+	I2S0_TCR3 = I2S_TCR3_TCE;
+	I2S0_TCR4 = I2S_TCR4_FRSZ(1) | I2S_TCR4_SYWD(31) | I2S_TCR4_MF
+		| I2S_TCR4_FSE | I2S_TCR4_FSP | I2S_TCR4_FSD;
+	I2S0_TCR5 = I2S_TCR5_WNW(31) | I2S_TCR5_W0W(31) | I2S_TCR5_FBT(31);		// 32 bits per word
+
+	// configure receiver (sync'd to transmitter clocks)
+	I2S0_RMR = 0;
+	I2S0_RCR1 = I2S_RCR1_RFW(1);
+	I2S0_RCR2 = I2S_RCR2_SYNC(1) | I2S_TCR2_BCP | I2S_RCR2_MSEL(1)
+		| I2S_RCR2_BCD | I2S_RCR2_DIV(1);
+	I2S0_RCR3 = I2S_RCR3_RCE;
+	I2S0_RCR4 = I2S_RCR4_FRSZ(1) | I2S_RCR4_SYWD(31) | I2S_RCR4_MF
+		| I2S_RCR4_FSE | I2S_RCR4_FSP | I2S_RCR4_FSD;
+	I2S0_RCR5 = I2S_RCR5_WNW(31) | I2S_RCR5_W0W(31) | I2S_RCR5_FBT(31);
+
+	// configure pin mux for 3 clock signals
+	CORE_PIN23_CONFIG = PORT_PCR_MUX(6); // pin 23, PTC2, I2S0_TX_FS (LRCLK)
+	CORE_PIN9_CONFIG  = PORT_PCR_MUX(6); // pin  9, PTC3, I2S0_TX_BCLK
+	CORE_PIN11_CONFIG = PORT_PCR_MUX(6); // pin 11, PTC6, I2S0_MCLK
+}
+
+
+ 
+void setupi2sDAC()
+{
+	// Configure to use external i2s interface instead of internal DAC. Eg for Teensy4 
+	
+	// I think once configured i2s will run continuously under DMA,
+	
+	// I want to use 12000 but could use 48000 if necessary
+	
+	// Should we also allow i2s input??
+	
+	// Copied from 
+	
+	dma1.begin(true); // Allocate the DMA channel first
+
+//	block_left_1st = NULL;
+//	block_right_1st = NULL;
+
+	// TODO: should we set & clear the I2S_TCSR_SR bit here?
+
+	config_i2s();
+
+	CORE_PIN22_CONFIG = PORT_PCR_MUX(6); // pin 22, PTC1, I2S0_TXD0
+
+#if defined(KINETISK)
+	dma1.TCD->SADDR = dac1_buffer;
+	dma1.TCD->SOFF = 2;
+	dma1.TCD->ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
+	dma1.TCD->NBYTES_MLNO = 2;
+	dma1.TCD->SLAST = -sizeof(dac1_buffer);
+	dma1.TCD->DADDR = (void *)((uint32_t)&I2S0_TDR0 + 2);
+	dma1.TCD->DOFF = 0;
+	dma1.TCD->CITER_ELINKNO = sizeof(dac1_buffer) / 2;
+	dma1.TCD->DLASTSGA = 0;
+	dma1.TCD->BITER_ELINKNO = sizeof(dac1_buffer) / 2;
+	dma1.TCD->CSR = DMA_TCD_CSR_INTHALF | DMA_TCD_CSR_INTMAJOR;
+#endif
+	dma1.triggerAtHardwareEvent(DMAMUX_SOURCE_I2S0_TX);
+
+	dma1.enable();
+
+	I2S0_TCSR = I2S_TCSR_SR;
+	I2S0_TCSR = I2S_TCSR_TE | I2S_TCSR_BCE | I2S_TCSR_FRDE;
+	dma1.attachInterrupt(isr);
+}
+
+extern "C" void Starti2sDAC()
+{
+}
+
+extern "C" void Stopi2sDAC()
+{
+}
 
 void setupDAC()
 {
@@ -1517,6 +1710,8 @@ volatile unsigned short * SendtoCard(unsigned short buf, int n)
   return &dac1_buffer[Index * DAC_SAMPLES_PER_BLOCK];
 }
 }
+
+
 #ifdef OLED
 
 #include <i2c_t3.h>
@@ -1656,7 +1851,7 @@ void setupOLED()
 {
   // Make sure the device is there, or the display code will hang
 
-  Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_37_38, I2C_PULLUP_EXT, 2500000);
+  Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_37_38, I2C_PULLUP_EXT, 400000);
   Wire1.setDefaultTimeout(10000); // 10ms
 
   Wire1.beginTransmission(0x3C);  // slave addr
@@ -1710,7 +1905,7 @@ void setupOLED()
   DrawAxes(99, "16Q.200.100", "");
   DrawDecode("PASS");
 //  Serial.printf("Start Display %d\r\n", millis());
-  updateDisplay();
+//  updateDisplay();
 //  Serial.printf("End Display %d\r\n", millis());
 }
 
@@ -1721,17 +1916,30 @@ void setupOLED()
 // This Teensy3 native optimized version requires specific pins
 //
 #define sclk 13  // SCLK can also use pin 14
-#define mosi 11  // MOSI can also use pin 7
+//#define mosi 11  // MOSI can also use pin 7
 #define cs   15  // CS & DC can use pins 2, 6, 9, 10, 15, 20, 21, 22, 23
 #define dc   14   //  but certain pairs must NOT be used: 2+10, 6+9, 20+23, 21+22
 #define rst  23  // RST can use any pin
 //#define sdcs 4   // CS for SD card, can use any pin
 
+#define TFT_SCLK 13  // SCLK can also use pin 14
+#define TFT_MOSI 11  // MOSI can also use pin 7
+#define TFT_CS   15  // CS & DC can use pins 2, 6, 9, 10, 15, 20, 21, 22, 23
+#define TFT_DC    14  //  but certain pairs must NOT be used: 2+10, 6+9, 20+23, 21+22
+#define TFT_RST   23  // RST can use any pin
+
 #include <Adafruit_GFX.h>    // Core graphics library
+//#include <ST7735_t3.h> // Hardware-specific library
 #include <Adafruit_ST7735.h> // Hardware-specific library
+
+
 #include <SPI.h>
 
 Adafruit_ST7735 tft = Adafruit_ST7735(cs, dc, rst);
+
+//ST7735_t3 tft = ST7735_t3(cs, dc, rst);
+
+//ST7735 tft = ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
 char * TXType = "TX:";		// Save last transmitted type
 
@@ -1813,11 +2021,15 @@ void setupKMR_18(void) {
   // If you are seeing red and green color inversion, use Black Tab
 
   // If your TFT's plastic wrap has a Black Tab, use the following:
- // tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
-  // If your TFT's plastic wrap has a Red Tab, use the following:
+#ifdef KMR_BLACKTAB
+ tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
+#else
+#ifdef KMR_GREENTAB
+  tft.initR(INITR_GREENTAB); // initialize a ST7735R chip, green tab
+#else
   tft.initR(INITR_REDTAB);   // initialize a ST7735R chip, red tab
-  // If your TFT's plastic wrap has a Green Tab, use the following:
-  //tft.initR(INITR_GREENTAB); // initialize a ST7735R chip, green tab
+#endif
+#endif
 
  	tft.fillRect(0, 0, 128, 160, ST7735_BLACK);
  
@@ -1915,10 +2127,25 @@ void setupWDTTFT()
 //	Serial.printf("End Display %d\r\n", millis());
 }
 
+#endif //WDTTFT
+
+
+extern "C" void DrawRXFrame(int State, char * Frame)
+{
+#ifdef KMR_18
+    if (State == 0)
+		tft.setTextColor(Yellow, BLACK);
+    else if (State == 1)
+		tft.setTextColor(Green, BLACK);
+    else if (State == 2)
+		tft.setTextColor(Red, BLACK);
+
+    tft.setCursor(0, 110);
+    tft.print("Rx:                       ");	//Clear old mode
+    tft.setCursor(20, 110);
+    tft.print(Frame);
 #endif
-
-
-
+}
 
 
 

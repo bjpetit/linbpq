@@ -2373,6 +2373,7 @@ int Acquire4FSKFrameType()
 	// Else returns frame type 0-255
 
 	int NewType = 0;
+	char Offset[32];
 
 	if ((intFilteredMixedSamplesLength - intMFSReadPtr) < (240 * 10))
 		return -2;		//  Check for 12 available 4FSK Symbols (but only 10 are used)  
@@ -2397,6 +2398,9 @@ int Acquire4FSKFrameType()
   
 	if ((NewType > 0x30 && NewType < 0x39) || NewType == PING)
 		QueueCommandToHost("PENDING");			 // early pending notice to stop scanners
+
+	sprintf(Offset, "Offset %5.1f", dblOffsetHz);
+	SendtoGUI('O', Offset, strlen(Offset));
 
 	if (NewType >= 0 &&  IsShortControlFrame(NewType))		// update the constellation if a short frame (no data to follow)
 		Update4FSKConstellation(&intToneMags[0][0], &intLastRcvdFrameQuality);

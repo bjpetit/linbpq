@@ -47,13 +47,15 @@ extern short intPhases[10][1000];	// We will decode as soon as we have 4 or 8 de
 extern int intPhasesLen;
 extern int intPSKMode;
 
-extern UCHAR bytData[MAXCARRIERLEN * WINDOW];
+extern UCHAR bytData[MAXDATALEN * WINDOW];
 extern int frameLen;
 extern int intNumCar;
 
 extern unsigned short  ModeHasWorked[16];		// used to attempt to make gear shift more stable.
 extern unsigned short  ModeHasBeenTried[16];
 extern unsigned short  ModeNAKS[16];
+extern unsigned short  CarrierACKS[16];
+extern unsigned short  CarrierNAKS[16];
 extern int intFrameTypePtr;
 extern int modmaxSample;
 
@@ -252,8 +254,17 @@ BOOL EncodeData(UCHAR bytFrameType)
 	if (intDataLen == 0 || (Length == 0 && unackedByteCount == 0) || !blnFrameTypeOK)
 		return 0;
 
-	lastTXPtr = intFrameTypePtr;
+	//	Try not to let unacked count get too high when average ack count
+	//	is getting near shift down threshold
 
+	// this needs more real world data to optimise
+
+//	if (RollingAverage < 65 && unackedByteCount > intDataLen * intNumCar)
+//		DontSendNewData = 1;
+//	else
+//		DontSendNewData = 0;
+
+	lastTXPtr = intFrameTypePtr;
 
 	CarriersSent = intNumCar;
 	TotalCarriersSent += intNumCar;
@@ -287,6 +298,16 @@ repeatblocks:
 			{
 				SentPSNList[i] = PSN;
 				UnAckedBlockPtr = PSN - 1;
+
+				// As toggle could have changed must redo CRC and RS
+
+				bytToRS = &UnackedPSNList[PSN][0];
+
+				// Data + RS + 1 byte byteCount + 1 byte blockno + 2 Byte CRC
+
+				GenCRC16FrameType(bytToRS, intDataLen + 2, bytFrameType); // calculate the CRC on the PRN + byte count + data bytes	
+				RSEncode(bytToRS, bytToRS + intDataLen + 4, intDataLen + 4, intRSLen);  // Generate the RS encoding
+
 				continue;			// Do next carrier
 			}
 			MoretoResend = 0;
@@ -408,6 +429,7 @@ void ModCarrierSet(int intLeaderLen)
 	int i, j, k, l = 4, n;
 	int intCarStartIndex;
 	int intPeakAmp;
+	float prefilterMax = 0;
 	float dblMag;
 	int intCarIndex = 5;
 
@@ -461,7 +483,7 @@ void ModCarrierSet(int intLeaderLen)
 		PeakValue = 30000 * 4;
 		break;
 	case 10:
-		PeakValue = 30000 * 10;
+		PeakValue = 250000;
 		intCarStartIndex = 0;
 	} 
 	
@@ -618,6 +640,19 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 			{
 				encstate = encstates[i];
 
+
+				// Try to track down corruption on retry
+
+				if (j == 0)
+				{
+					if (!CheckCRC16FrameType(&UnackedPSNList[SentPSNListByCarrier[i]][0], intDataLen + 2, Type >> 2))
+						WriteDebugLog(LOGDEBUG, "Sending Carrier %d PSN %d Bad CRC", i, UnackedPSNList[SentPSNListByCarrier[i]][0]);
+
+//					WriteDebugLog(LOGDEBUG, "Sending PSN %d\n%s", 
+//						UnackedPSNList[SentPSNListByCarrier[i]][j],
+//						&UnackedPSNList[SentPSNListByCarrier[i]][2]);
+				}
+
 				ViterbiSymbols = ViterbiEncode(
 					&UnackedPSNList[SentPSNListByCarrier[i]][j],
 					&bytViterbiSymbols[i][0], 3);
@@ -657,8 +692,11 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 
 					Sample = SqLawCompressor(intSample);
 
-					if (Sample > maxSample)
-						maxSample = Sample;
+					if (intSample > maxSample)
+						maxSample = intSample;
+
+					if (Sample > prefilterMax)
+						prefilterMax = Sample;
 
 					SampleSink(Sample);
 
@@ -734,6 +772,9 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 					if (intSample > maxSample)
 						maxSample = intSample;
 
+					if (Sample > prefilterMax)
+						prefilterMax = Sample;
+
 					SampleSink(Sample);
 
 				}	// Samples
@@ -788,7 +829,7 @@ PktLoopBack:		// Reenter here to send rest of variable length packet frame
 	}
 	Flush();
 
-	WriteDebugLog(LOGDEBUG, "ModMax Sample %d ", modmaxSample);
+	WriteDebugLog(LOGDEBUG, "Max Sample %f prefilterMax = %f ModMax Sample %d ", maxSample, prefilterMax, modmaxSample);
 }
 
 VOID AckCarrier(int Carrier)
@@ -811,6 +852,7 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 	int i, Acks = 0, PSN;
 	int bitmask = Msg[1] | Msg[0] << 8;
 	UCHAR CRC = bitmask & 0x3F;			// bottom 6 bits;
+	char Display[32] = "AckByCar ";
 
 	bitmask = bitmask >> 6;
 
@@ -864,8 +906,6 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 		return FALSE;
 	} 
 
-	DrawRXFrame(1, "AckByCar");
-
 	for (i = 0; i < CarriersSent; i++)
 	{
 		if (bitmask & 0x200)
@@ -873,12 +913,21 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 			AckCarrier(i);
 			Acks++;
 			CarrierAcks++;
+			strcat(Display, "1");
+			CarrierACKS[lastTXPtr]++;
 		}
 		else
+		{
 			CarrierNaks++;
+			strcat(Display, "0");	
+			CarrierNAKS[lastTXPtr]++;
+		}
 
 		bitmask <<= 1;
 	}
+
+	DrawRXFrame(1, Display);
+
 
 	// Mark of any sequential acked frames - IRS will pass these to host on next new frame
 
@@ -912,7 +961,12 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 		else
 			break;					// All in sequence removed
 	}
-			
+
+	if (Acks)
+		ModeHasWorked[lastTXPtr]++;	// Used to stop hunting to impossible mode
+	else
+		ModeNAKS[lastTXPtr]++;
+
 	// Calculate rolling average
 
 	if (TempMode != -1)
@@ -922,27 +976,14 @@ BOOL ProcessMultiACK(UCHAR * Msg)
 	
 	RollingAverage += (Acks * (100.0f - Alpha)) / CarriersSent;
 
-	if (Acks)
-		ModeHasWorked[lastTXPtr]++;	// Used to stop hunting to impossible mode
-	else
-		ModeNAKS[lastTXPtr]++;
-
 	Gearshift(RollingAverage, Acks);
 
  	return TRUE;
 }
 
-VOID RequeueData()
+int GetUnackedDataCount()
 {
-	// Requeue data that has been send and not passed to host. Used
-	// on mode shift
-
-	// To make reasonably quick with small memory requirement
-	// get total length to requeue, move data back down buffer
-	// them fill in from front
-
 	int totalBytes = 0;
-	UCHAR * ptr = bytDataToSend;
 	int PSN = NextPSN;     // is this right - loopthrough all not passed to host;
 
 	PSN++;				// First Unacked
@@ -957,7 +998,23 @@ VOID RequeueData()
 		if (PSN == WINDOW)
 			PSN = 1;
 	}
+	
+	return totalBytes;
+}
 
+VOID RequeueData()
+{
+	// Requeue data that has been send and not passed to host. Used
+	// on mode shift
+
+	// To make reasonably quick with small memory requirement
+	// get total length to requeue, move data back down buffer
+	// them fill in from front
+
+	int totalBytes =  GetUnackedDataCount();
+	UCHAR * ptr = bytDataToSend;
+	int PSN;
+	
 	if (totalBytes == 0)
 		return;				// nothing doing
 
@@ -1005,18 +1062,8 @@ BOOL CheckAndCorrectCarrier(char * bytFrameData, int intDataLen, int intRSLen, i
 	unsigned char PSN;
 
 	// Data is corrected im situe, so no need to copy
+
 	int decodeLen = CorrectRawDataWithRS(bytFrameData, NULL , intDataLen, intRSLen, intFrameType, Carrier);
-
-	// if decode fails try with a tuning offset correction 
-
-	if (CarrierOk[Carrier] == 0)
-	{
-		CorrectPhaseForTuningOffset(&intPhases[Carrier][0], intPhasesLen, strMod);
-	
-		Decode1CarPSK(Carrier);
-	
-		decodeLen = CorrectRawDataWithRS(bytFrameData, NULL , intDataLen + 1, intRSLen, intFrameType, Carrier);
-	}
 
 	if (CarrierOk[Carrier] == 0)
 		return FALSE;				//Still bad
@@ -1025,10 +1072,19 @@ BOOL CheckAndCorrectCarrier(char * bytFrameData, int intDataLen, int intRSLen, i
 
 	// Rick uses PSN's above 128 for FEC
 
+	// I don't think it is safe at the moment to pass monitored
+	// ARQ Data to host ?? crashes Pi
+
+	if (PSN < 129 && bytSessionID == 0x3F)		// FEC decode of ARQ Data
+		return FALSE;
+
 	if (PSN > 128 && (ProtocolMode == FEC || ((ProtocolState == DISC) && Monitor)))
 	{
 		PSN &= 0x7F;
 	}
+
+	// I don't think it is safe at the moment to pass monitored
+	// ARQ Data to host
 
 
 	// CRC check isn't perfect. At least we can check that PSN and Length
@@ -1080,7 +1136,7 @@ VOID PassGoodDataToHost(UCHAR Type)
 			int First = 1;
 			int Last = MAXCAR;
 
-			while (First != Last)
+			while (First <= Last)
 			{
 				len = ReceivedPSNList[First][1];
 
@@ -1204,8 +1260,8 @@ VOID EncodeAndSendMulticarrierACK(UCHAR bytSessionID, int LeaderLength)
 
 	if (val)
 		dttTimeoutTrip = Now;					// Kick watchdog if we have any valid data
-	else
-		ModeNAKS[intFrameTypePtr]++;
+// ??	else
+// ??	ModeNAKS[intFrameTypePtr]++;
 
 	CRC = GenCRC6(val);
 

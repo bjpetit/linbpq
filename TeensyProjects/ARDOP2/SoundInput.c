@@ -2144,7 +2144,7 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 			
 			dblOffset = 12.5 * (intIatMaxPeak + dblBinAdj1475 * dblLeftMag / (dblLeftMag + dblRightMag) + dblBinAdj1525 * dblRightMag / (dblLeftMag + dblRightMag) - 118);  // compute the Coarse tuning offset in Hz
 				
-			if (fabsf(dblOffset) > 7)		// should always be < .5 bin or 6.25 Hz
+			if (fabsf(dblOffset) > (TuningRange + 7))		// Was 7 caused tuning problems
 			{
 				dblPwrSNPower_dBPrior = dblPwrSNdB;
 				return False;

@@ -96,6 +96,7 @@ int DataInputLen = 0;
 
 UCHAR bytDataToSend[100000];
 
+extern char LogDir[256];
 
 /*UINT FREE_Q = 0;
 
@@ -183,6 +184,43 @@ void TCPSendReplyToHost(char * strText)
 
 	SendCommandToHost(strText);
 }
+
+// Experimental logging of FEC Packets
+
+FILE *FEClogfile = NULL;
+
+BOOL LogFEC = TRUE;
+
+void WriteFECLog(UCHAR * Msg, int Len)
+{
+#ifdef WIN32
+
+	SYSTEMTIME st;
+	char Value[128];
+
+	GetSystemTime(&st);
+	
+	if (FEClogfile == NULL)
+	{
+	if (LogDir[0])
+		sprintf(Value, "%s/%s_%04d%02d%02d.log",
+				LogDir, "ARDOPFECLog", st.wYear, st.wMonth, st.wDay);
+	else		
+		sprintf(Value, "%s_%04d%02d%02d.log",
+				"ARDOPFECLog", st.wYear, st.wMonth, st.wDay);
+		
+	if ((FEClogfile = fopen(Value, "ab")) == NULL)
+			return;
+
+	}
+	fwrite (Msg, 1, Len, FEClogfile);
+
+	fclose(FEClogfile);
+	FEClogfile = NULL;
+
+#endif
+}
+
 //  Subroutine to add a short 3 byte tag (ARQ, FEC, ERR, or IDF) to data and send to the host 
 
 void TCPAddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
@@ -216,7 +254,12 @@ void TCPAddTagToDataAndSendToHost(UCHAR * bytData, char * strTag, int Len)
 	Len +=2;				//  len
 
 	ret = send(TCPDataSock, bytToSend, Len, 0);
-	ret = WSAGetLastError();
+
+	if (strcmp(strTag, "FEC") == 0)
+		if (LogFEC)
+			WriteFECLog(bytToSend, Len);
+
+
 
 	return;
 }

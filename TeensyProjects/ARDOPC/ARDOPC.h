@@ -4,7 +4,7 @@
 #define ARDOPCHEADERDEFINED
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "1.0.4.1i-BPQ"
+#define ProductVersion "1.0.4.1j-BPQ"
 
 //#define USE_SOUNDMODEM
 
@@ -13,6 +13,11 @@
 #define SendSize 1200		// 100 mS for now
 #define ReceiveSize 240	// Must be 1024 for FFT (or we will need torepack frames)
 #define NumberofinBuffers 4
+
+// Host to TNC Buffer Size
+
+#define DATABUFFERSIZE 4096
+
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.

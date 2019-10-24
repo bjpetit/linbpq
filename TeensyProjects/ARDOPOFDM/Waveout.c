@@ -66,6 +66,13 @@ BOOL Loopback = FALSE;
 char CaptureDevice[80] = "0"; //"2";
 char PlaybackDevice[80] = "0"; //"1";
 
+BOOL UseLeft = 1;
+BOOL UseRight = 1;
+char LogDir[256] = "";
+
+FILE *logfile[3] = {NULL, NULL, NULL};
+char LogName[3][256] = {"ARDOPDebug", "ARDOPException", "ARDOPSession"};
+
 char * CaptureDevices = NULL;
 char * PlaybackDevices = NULL;
 
@@ -478,8 +485,75 @@ void InitSound(BOOL Report)
 	ret = waveInStart(hWaveIn);
 }
 
-int min = 0, max = 0, leveltimer = 0;
+int min = 0, max = 0, lastlevelGUI = 0, lastlevelreport = 0;
 
+UCHAR CurrentLevel = 0;		// Peak from current samples
+
+void PollReceivedSamples()
+{
+	// Process any captured samples
+	// Ideally call at least every 100 mS, more than 200 will loose data
+
+	// For level display we want a fairly rapid level average but only want to report 
+	// to log every 10 secs or so
+
+	if (inheader[inIndex].dwFlags & WHDR_DONE)
+	{
+		short * ptr = &inbuffer[inIndex][0];
+		int i;
+
+		for (i = 0; i < ReceiveSize; i++)
+		{
+			if (*(ptr) < min)
+				min = *ptr;
+			else if (*(ptr) > max)
+				max = *ptr;
+			ptr++;
+		}
+
+		CurrentLevel = ((max - min) * 75) /32768;	// Scale to 150 max
+
+		if ((Now - lastlevelGUI) > 2000)	// 2 Secs
+		{
+			if (WaterfallActive == 0 && SpectrumActive == 0)				// Don't need to send as included in Waterfall Line
+				SendtoGUI('L', &CurrentLevel, 1);	// Signal Level
+			
+			lastlevelGUI = Now;
+
+			if ((Now - lastlevelreport) > 10000)	// 10 Secs
+			{
+				char HostCmd[64];
+				lastlevelreport = Now;
+
+				sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
+				WriteDebugLog(LOGDEBUG, "Input peaks = %d, %d", min, max);
+				SendCommandToHostQuiet(HostCmd);
+
+			}
+			min = max = 0;
+		}
+
+//		WriteDebugLog(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
+		if (Capturing && Loopback == FALSE)
+			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
+
+		waveInUnprepareHeader(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
+		inheader[inIndex].dwFlags = 0;
+		waveInPrepareHeader(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
+		waveInAddBuffer(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
+
+		inIndex++;
+		
+		if (inIndex == NumberofinBuffers)
+			inIndex = 0;
+	}
+}
+
+
+
+/*
+
+// Pre GUI Version
 void PollReceivedSamples()
 {
 	// Process any captured samples
@@ -526,7 +600,7 @@ void PollReceivedSamples()
 			inIndex = 0;
 	}
 }
-
+*/
 
 void StopCapture()
 {
@@ -553,14 +627,13 @@ void CloseSound()
 
 #include <stdarg.h>
 
-FILE *logfile = NULL;
-
 VOID CloseDebugLog()
 {	
-	if(logfile)
-		fclose(logfile);
-	logfile = NULL;
+	if(logfile[0])
+		fclose(logfile[0]);
+	logfile[0] = NULL;
 }
+
 
 VOID WriteDebugLog(int LogLevel, const char * format, ...)
 {
@@ -593,66 +666,29 @@ VOID WriteDebugLog(int LogLevel, const char * format, ...)
 
 	GetSystemTime(&st);
 	
-	if (logfile == NULL)
+	if (logfile[0] == NULL)
 	{
 		if (HostPort[0])
 			sprintf(Value, "%s%s_%04d%02d%02d.log",
-				"ARDOPDebug", HostPort, st.wYear, st.wMonth, st.wDay);
+				&LogName[0], HostPort, st.wYear, st.wMonth, st.wDay);
 		else
 			sprintf(Value, "%s%d_%04d%02d%02d.log",
-				"ARDOPDebug", port, st.wYear, st.wMonth, st.wDay);
+				&LogName[0], port, st.wYear, st.wMonth, st.wDay);
 		
-		if ((logfile = fopen(Value, "ab")) == NULL)
+		if ((logfile[0] = fopen(Value, "ab")) == NULL)
 			return;
 	}
 	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
 		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 
-	fputs(timebuf, logfile);
+	fputs(timebuf, logfile[0]);
 
-	fputs(Mess, logfile);
+	fputs(Mess, logfile[0]);
 #endif
 
 	return;
 }
 
-VOID WriteExceptionLog(const char * format, ...)
-{
-	char Mess[10000];
-	va_list(arglist);
-	char timebuf[32];
-	UCHAR Value[100];
-	FILE *logfile = NULL;
-	SYSTEMTIME st;
-	
-	va_start(arglist, format);
-	vsnprintf(Mess, sizeof(Mess), format, arglist);
-	strcat(Mess, "\r\n");
-
-	printf(Mess);
-
-	GetSystemTime(&st);
-
-	if (HostPort[0])
-		sprintf(Value, "%s%s_%04d%02d%02d.log",
-				"ARDOPException", HostPort, st.wYear, st.wMonth, st.wDay);
-	else	
-		sprintf(Value, "%s%d_%04d%02d%02d.log",
-				"ARDOPException", port, st.wYear, st.wMonth, st.wDay);
-	
-	if ((logfile = fopen(Value, "ab")) == NULL)
-		return;
-
-	sprintf(timebuf, "%02d:%02d:%02d.%03d ",
-		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
-
-	fputs(timebuf, logfile);
-
-	fputs(Mess, logfile);
-	fclose(logfile);
-
-	return;
-}
 
 FILE *statslogfile = NULL;
 
@@ -679,10 +715,10 @@ VOID Statsprintf(const char * format, ...)
 		GetSystemTime(&st);
 		if (HostPort[0])
 			sprintf(Value, "%s%s_%04d%02d%02d.log",
-				"ARDOPSession", HostPort, st.wYear, st.wMonth, st.wDay);
+				&LogName[2], HostPort, st.wYear, st.wMonth, st.wDay);
 		else
 			sprintf(Value, "%s%d_%04d%02d%02d.log",
-				"ARDOPSession", port, st.wYear, st.wMonth, st.wDay);
+				&LogName[2], port, st.wYear, st.wMonth, st.wDay);
 
 		if ((statslogfile = fopen(Value, "ab")) == NULL)
 			return;
@@ -827,6 +863,9 @@ BOOL KeyPTT(BOOL blnPTT)
 	WriteDebugLog(LOGDEBUG, "[Main.KeyPTT]  PTT-%s", BoolString[blnPTT]);
 
 	blnLastPTT = blnPTT;
+
+	SetLED(0, blnPTT);
+
 	return TRUE;
 }
 
@@ -839,16 +878,55 @@ void PlatformSleep()
 
 void displayState(const char * State)
 {
-	// Dummy for i2c display
+	char Msg[80];
+
+	strcpy(Msg, State); 
+	SendtoGUI('S', Msg, strlen(Msg) + 1);		// Protocol State
 }
+
+void DrawTXMode(const char * Mode)
+{
+	char Msg[80];
+
+	strcpy(Msg, Mode); 
+	SendtoGUI('T', Msg, strlen(Msg) + 1);		// TX Frame
+}
+
+void DrawRXFrame(int State, const char * Frame)
+{
+	unsigned char Msg[64];
+
+	Msg[0] = State;				// Pending/Good/Bad
+	strcpy(&Msg[1], Frame);
+	SendtoGUI('R', Msg, strlen(Frame) + 2);	// RX Frame
+}
+
+void DrawTXFrame(const char * Frame)
+{
+	char Msg[80];
+
+	strcpy(Msg, Frame); 
+	SendtoGUI('T', Msg, strlen(Msg) + 1);		// TX Frame
+}
+
+
+
+char Leds[8]= {0};
+unsigned int PKTLEDTimer = 0;
 
 void SetLED(int LED, int State)
 {
+	// If GUI active send state
+
+	Leds[LED] = State;	
+	SendtoGUI('D', Leds, 8);
 }
 
 void displayCall(int dirn, char * call)
 {
-	// Dummy for i2c display
+	char Msg[32];
+	sprintf(Msg, "%c%s", dirn, call);
+	SendtoGUI('I', Msg, strlen(Msg));
 }
 
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
@@ -1075,14 +1153,42 @@ int RadioPoll()
 	return CatRXLen;
 }
 
-void mySetPixel(unsigned short x, unsigned short y, unsigned short Colour)
-{}
+
+UCHAR Pixels[4096];
+UCHAR * pixelPointer = Pixels;
+
+
+void mySetPixel(unsigned char x, unsigned char y, unsigned int Colour)
+{
+	// Used on Windows for constellation. Save points and send to GUI at end
+	
+	*(pixelPointer++) = x;
+	*(pixelPointer++) = y;
+	*(pixelPointer++) = Colour;
+}
 void clearDisplay()
-{}
+{
+	// Reset pixel pointer
+
+	pixelPointer = Pixels;
+
+}
 void updateDisplay()
-{}
-void DrawAxes(int Qual, char * Mode)
-{}
+{
+//	 SendtoGUI('C', Pixels, pixelPointer - Pixels);	
+}
+void DrawAxes(int Qual, const char * Frametype, char * Mode)
+{
+	UCHAR Msg[80];
+
+	// Teensy used Frame Type, GUI Mode
+	
+	SendtoGUI('C', Pixels, pixelPointer - Pixels);	
+	pixelPointer = Pixels;
+
+	sprintf(Msg, "%s Quality: %d", Mode, Qual);
+	SendtoGUI('Q', Msg, strlen(Msg) + 1);	
+}
 void DrawDecode(char * Decode)
 {}
 

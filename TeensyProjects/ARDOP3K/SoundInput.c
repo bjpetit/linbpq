@@ -79,7 +79,7 @@ int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
 // While searching for leader we must save unprocessed samples
 // We may have up to 720 left, so need 1920 
 
-short rawSamples[2400];	// Get Frame Type need 2400 and we may add 1200
+short rawSamples[3600];	// Get Frame Type need 2400 and we may add 1200
 int rawSamplesLength = 0;
 
 short intFilteredMixedSamples[10000];	// Get Frame Type need 2400 and we may add 1200
@@ -223,12 +223,9 @@ float dblNCOPhaseInc = 2 * M_PI * 3000 / 12000;  // was dblNCOFreq
 float dblPwrSNPower_dBPrior = 0;
 float dblPhaseDiff1_2Avg;  // an initial value of -10 causes initialization in AcquireFrameSyncRSBAvg
 
-
 int	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
 
 int RcvdSamplesLen = 0;				// Samples in RX buffer
-
-float dblPhaseDiff1_2Avg;
 int intPhaseError = 0;
 
 
@@ -427,9 +424,9 @@ void InitializeMixedSamples()
 	// Measure the time from release of PTT to leader detection of reply.
 
 	intARQRTmeasuredMs = min(10000, Now - dttStartRTMeasure); //?????? needs work
-	intPriorMixedSamplesLength = 120;  // zero out prior samples in Prior sample buffer
-	intFilteredMixedSamplesLength = 0;	// zero out the FilteredMixedSamples array
-	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
+	memset(intPriorMixedSamples, 0, 240); // zero out prior samples in Prior sample buffer
+	intFilteredMixedSamplesLength = 0;	  // zero out the FilteredMixedSamples array
+	intMFSReadPtr = 30;					  // reset the MFSReadPtr offset 30 to accomodate the filter delay
 }
 
 //	Subroutine to discard all sampled prior to current intRcvdSamplesRPtr
@@ -742,7 +739,7 @@ void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
 	// Correct the dimension of intPriorMixedSamples if needed (should only happen after a bandwidth setting change). 
 
 	int i;
-	short intMixedSamples[2400];	// All we need at once ( I hope!)		// may need to be int
+	short intMixedSamples[4800];	// All we need at once ( I hope!)		// may need to be int
 	int	intMixedSamplesLength ;		//size of intMixedSamples
 
 	if (Length == 0)
@@ -894,12 +891,16 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 		nSamples = rawSamplesLength;
 		Samples = rawSamples;
+
+		if (nSamples > 3600)
+			nSamples = nSamples;
 	}
 
 	rawSamplesLength = 0;
 
 //	printtick("Start Busy");
-	UpdateBusyDetector(Samples);
+	if (nSamples >= 1200)
+		UpdateBusyDetector(Samples);
 //	printtick("Done Busy");
 
 	// it seems that searchforleader runs on unmixed and unfilered samples
@@ -910,22 +911,12 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	{
 		// Search for leader as long as 960 samples (8  symbols) available
 
-//		printtick("Start Leader Search");
-
-		if (nSamples >= 1200)
-		{
-			//	printtick("Start Busy");
-//			if (State == SearchingForLeader)
-//				UpdateBusyDetector(Samples);
-			//	printtick("Done Busy");
-		
-			if (ProtocolState == FECSend)
-					return;
-		}
-
 		// We need 960 (80 mS) samples to do 12.5 Hz bins 
+		// No we need 960 + 240 as we look for 3 successive tests
 
-		while (State == SearchingForLeader && nSamples >= 960)
+		// Rick wants 1410 (??why??)
+
+		while (State == SearchingForLeader && nSamples >= 1410)
 		{
 			int intSN;
 			
@@ -953,6 +944,10 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				WriteDebugLog(LOGDEBUG, "Peak Sample in Header %d", PeakFromHeader);
 
 				// ?? Why do we advance 480 (40 ms) ??
+				// Maybe to make sure we are into the leader
+				// - 960 samples could be mainly noise with leader on end
+
+				// Dont think Rick does any more
 			
 				nSamples -= 480;
 				Samples += 480;		// !!!! needs attention !!!
@@ -998,7 +993,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
     if (State == AcquireSymbolSync)
 	{
-		if ((intFilteredMixedSamplesLength - intMFSReadPtr) > 960)
+		if ((intFilteredMixedSamplesLength - intMFSReadPtr) > 1080)
 		{
 			blnSymbolSyncFound = Acquire2ToneLeaderSymbolFraming();  // adjust the pointer to the nominal symbol start based on phase
 			if (blnSymbolSyncFound)
@@ -1063,7 +1058,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			DiscardOldSamples();
 			ClearAllMixedSamples();
 			State = SearchingForLeader;
-			printtick("frame sync timeout");
+//			printtick("frame sync timeout");
 		}
 //		else
 //			printtick("no frame sync");
@@ -1383,7 +1378,7 @@ ProcessFrame:
 			if (AccumulateStats)
 				if (IsDataFrame(intFrameType))
 					if (strstr (strMod, "APSK"))
-						intGoodQAMFrameDataDecodes++;
+						intGoodAPSKFrameDataDecodes++;
 					else if (strstr (strMod, "PSK"))
 						intGoodPSKFrameDataDecodes++;
 					else	
@@ -1449,7 +1444,7 @@ ProcessFrame:
             if (AccumulateStats)
 				if (IsDataFrame(intFrameType))
 					if (strstr (strMod, "APSK"))
-						intFailedQAMFrameDataDecodes++;
+						intFailedAPSKFrameDataDecodes++;
 					else if (strstr (strMod, "PSK"))
 						intFailedPSKFrameDataDecodes++;
 					else
@@ -2146,12 +2141,14 @@ BOOL SearchFor2ToneLeader3(short * intNewSamples, int Length, float * dblOffsetH
 }	
 
 
+/* A3 version temporarily replaced with A2OFDM version to help diagnose sync problems
+
 BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN)
 {
     // This version uses 12.5 Hz bin spacing. Hann960 window on Goertzel, and simple spectral peak interpolator optimized for Hann
     // Hann window selected for best compromise between adjacent tone rejection and sensitivity.
 	// search through the samples looking for the telltail 50 baud 2 tone pattern (nominal tones 1475, 1525 Hz)
-	// Find the offset in Hz (due to missmatch in transmitter - receiver tuning
+	// Find the offset in Hz (due to mismatch in transmitter - receiver tuning
 	// Finds the S:N (power ratio of the tones 1475 and 1525 ratioed to "noise" averaged from bins at 1425, 1450, 1550, and 1575Hz)
  
 	float dblGoertzelReal[45];
@@ -2166,7 +2163,6 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 	float dblFilteredMaxPeak = 0;
 	int intStartBin, intStopBin;
 	int i;
-	int Ptr = 0;
 	float dblAvgNoisePerBin, dblBinAdj1475, dblBinAdj1525, dblCoarseOffset = 1000;
 	float dblOffset = 1000; //  initialize to impossible value
 	float Left, Right;
@@ -2187,25 +2183,18 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 	// Generate the Power magnitudes for up to 44 12.5 Hz bins (a function of MCB.TuningRange) 
   
 	// Bin width is samping freq / N = 12000 / 960 = 12.5 Hz
-
 	// Actually 44 12.5 Hz bins == 550 ??
-
 	// 100 Hz = 8 to 36 = 106 to 134 = 1325 to 1675
-
 	// zero gives 16 to 28.We add 98, so 114 to 126 = 1425 to 1575
-
 	// centre bin is 120 (1500 /12.5)
-
 	// we look for bins 4 apart = 50 Hz
-
-
 
 	for (i = intStartBin; i <= intStopBin; i++)
 	{
 		// note Blackman window reduced end effect but looses sensitivity so sticking with Hann window
 		// Test of 4/22/2018 indicated accurate Hann window (960) gives about 1-2 dB more sensitivity than Blackman window
 		
-		GoertzelRealImagHamming960(intNewSamples, Ptr, 960, i + 98, &dblGoertzelReal[i], &dblGoertzelImag[i]);
+		GoertzelRealImagHamming960(intNewSamples, 0, 960, i + 98, &dblGoertzelReal[i], &dblGoertzelImag[i]);
 		dblMag[i] = powf(dblGoertzelReal[i], 2) + powf(dblGoertzelImag[i], 2); // dblMag(i) in units of power (V^2)
 		dblMagWindow += dblMag[i];
 	}
@@ -2234,11 +2223,10 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 		}
 	}
 
-
 	dblMaxPeakSN = (dblMag[intIatMaxPeak - 98] + dblMag[intIatMaxPeak - 94]) / dblAvgNoisePerBinAtPeak;
 	dblPwrSNdB = 10.0f * log10f(dblMaxPeakSN);
  
-	// Check quelch
+	// Check squelch
 
 	if ((dblPwrSNdB > (2 * Squelch)) && dblPwrSNPower_dBPrior > (2 * Squelch))
 	{
@@ -2266,7 +2254,19 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 			// Weight the offset calculation by the magnitude of the dblLeftMag and dblRightMag carriers 
 			
 			dblOffset = 12.5 * (intIatMaxPeak + dblBinAdj1475 * dblLeftMag / (dblLeftMag + dblRightMag) + dblBinAdj1525 * dblRightMag / (dblLeftMag + dblRightMag) - 118);  // compute the Coarse tuning offset in Hz
-				
+
+			// Make sure we have two tones. 
+	
+			WriteDebugLog(LOGDEBUG, "Tone Ratio Left %1.1f Right %1.1f Ratio %1.3f SNdB %1.1f Prior %1.1f  Offset %1.3f",
+				Left, Right, Left / Right, dblPwrSNdB, dblPwrSNPower_dBPrior, dblOffset);
+	
+	       if (Left < Right / 4 || Right < Left /4)
+		   {
+			   	WriteDebugLog(LOGDEBUG, "SearchforLeader Tone Ratio Too High");
+				dblPwrSNPower_dBPrior = dblPwrSNdB;
+	            return FALSE;
+		   }
+
 			if (fabsf(dblOffset) > (TuningRange + 7))		// should always be < .5 bin or 6.25 Hz
 			{
 				dblPwrSNPower_dBPrior = dblPwrSNdB;
@@ -2289,8 +2289,9 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 			dblMaxPeakSN += (powf(dblRealL, 2) + powf(dblImagL, 2) + powf(dblRealR, 2) + powf(dblImagR, 2)) / dblAvgNoisePerBinAtPeak;
  
 			dblMaxPeakSN = dblMaxPeakSN / 3;  // average the dblMaxPeakSN over the three calculations
-	// ???? Calc Twice ????
- 			dblMaxPeakSN = (powf(dblRealL, 2) + powf(dblImagL, 2) + powf(dblRealR, 2) + powf(dblImagR, 2)) / dblAvgNoisePerBinAtPeak;
+			// ???? Calc Twice ????
+ 			// This uses last instead of average
+			dblMaxPeakSN = (powf(dblRealL, 2) + powf(dblImagL, 2) + powf(dblRealR, 2) + powf(dblImagR, 2)) / dblAvgNoisePerBinAtPeak;
       
 			
 			dblPwrSNdB = 10 * log10f(dblMaxPeakSN);
@@ -2317,6 +2318,7 @@ BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetH
 			}
 			else
 			{
+				WriteDebugLog(LOGDEBUG, "SearchforLeader Recomputed S/N too low %f", dblPwrSNdB);
 				return False;
 			}
 		}
@@ -2348,7 +2350,7 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 
 	// Use Phase of 1500 Hz leader  to establish symbol framing. Nominal phase is 0 or 180 degrees
 
-	if ((intFilteredMixedSamplesLength - intLocalPtr) < 960)
+	if ((intFilteredMixedSamplesLength - intLocalPtr) < 1080)
 		return FALSE;			// not enough
 	
 	intLocalPtr = intMFSReadPtr + EnvelopeCorrelator(); // should position the pointer at the symbol boundary
@@ -2365,12 +2367,11 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 		// using the full symbol seemed to work best on weak Signals (0 to -5 dB S/N) June 15, 2015
 	
 		GoertzelRealImagHann120(intFilteredMixedSamples, intLocalPtr + i, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning 
+		dblCarPh = fabsf(atan2f(dblImag, dblReal));
 
-		dblCarPh = atan2f(dblImag, dblReal);
-
-		if (dblCarPh > M_PI / 2)
-			dblAbsPhErr = M_PI - dblCarPh;
-		else
+//		if (dblCarPh > M_PI / 2)
+//			dblAbsPhErr = M_PI - dblCarPh;
+//		else
 		dblAbsPhErr = dblCarPh;
 
 		if (dblAbsPhErr < dblMinAbsPhErr)
@@ -2381,8 +2382,9 @@ BOOL Acquire2ToneLeaderSymbolFraming()
 		}     
 	}
 
+
 	intMFSReadPtr = intLocalPtr + intIatMinErr;
-	WriteDebugLog(LOGDEBUG, "[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d", intIatMinErr);
+	WriteDebugLog(LOGDEBUG, "[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d, dblMinAbsPhErr %f intLocalPtr %d", intIatMinErr, dblMinAbsPhErr, intLocalPtr);
 	State = AcquireFrameSync;
 	AFSFirstTime = TRUE;		// iinitialise AcquireFrame Sync
 
@@ -2460,19 +2462,21 @@ int EnvelopeCorrelator()
 	int intJatMax = 0, intJatMin = 0;
 	float dblCorSum, dblCorProduct, dblCorMaxProduct = 0.0;
 	int i,j;
-	short int75HzFiltered[960];
+	short int75HzFiltered[1080];
 
-	if (intFilteredMixedSamplesLength < intMFSReadPtr + 960)
+	if (intFilteredMixedSamplesLength < intMFSReadPtr + 1080)
 		return -1;
 	
-	Filter75Hz(int75HzFiltered, TRUE, 960); // This filter appears to help reduce avg decode distance (10 frames) by about 14%-19% at WGN-5 May 3, 2015
+	Filter75Hz(int75HzFiltered, TRUE, 1080); // This filter appears to help reduce avg decode distance (10 frames) by about 14%-19% at WGN-5 May 3, 2015
 	
-	for (j = 360; j < 600; j++)		// Over 2 symbols
+//	for (j = 360; j < 600; j++)		// Over 1 symbols
+	for (j = 360; j < 720; j++)		// Over 1.5 symbols
 	{
 		dblCorSum = 0;
 		for (i = 0; i < 240; i++)	 // over 1 50 baud symbol (may be able to reduce to 1 symbol)
 		{
 			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomdates filter delay of 120 samples
+//			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[i + j]; // why ? starting at 360 already more than compensates for filter delay
 			dblCorSum += dblCorProduct;
             if (fabsf(dblCorProduct) > dblCorMaxProduct)
 				dblCorMaxProduct = fabsf(dblCorProduct);
@@ -2614,8 +2618,8 @@ int AcquireFrameSyncRSBAvg()
 	{
 		// get first two reference symbols
 
-		if (intAvailableSamples < 480)
-			return FALSE;				// must have at least 360 samples to search
+		if (intAvailableSamples < 510)	// Need extra 30 
+			return FALSE;				// must have at least 480 samples to search
 
 		// Calculate the Phase for the First symbol 
 	
@@ -2629,11 +2633,19 @@ int AcquireFrameSyncRSBAvg()
 		AFSFirstTime = FALSE;
 		intLeaderRcvdMs = 40;			// 480 samples
 		intAvailableSamples -= 480;
+
+		dblPhaseDiff12 = dblPhaseSym1 - dblPhaseSym2;
+
+		if (dblPhaseDiff12 > M_PI)		// bound phase diff to +/- Pi
+			dblPhaseDiff12 -= dbl2Pi;
+		else if (dblPhaseDiff12 < -M_PI)
+			dblPhaseDiff12 += dbl2Pi;
+		WriteDebugLog(LOGDEBUG, "Starting Frame Sync. Phase1>2=%f", dblPhaseDiff12);
 	}
 	
 	// on subsequent entries just compute 3rd value
 
-	while (intAvailableSamples >= 240)
+	while (intAvailableSamples >= 270)
 	{
  		intAvailableSamples -= 240;
 		
@@ -2660,20 +2672,23 @@ int AcquireFrameSyncRSBAvg()
 		else if (dblPhaseDiff23 < -M_PI)
 			dblPhaseDiff23 += dbl2Pi;
 			
+//		WriteDebugLog(LOGDEBUG, "Getting Frame Sync. Remote Leader %d Phase1>2=%f Phase2>3=%f ", intLeaderRcvdMs, dblPhaseDiff12, dblPhaseDiff23);
+
 		intLeaderRcvdMs += 20;			// 240 samples
              
 		if (fabsf(dblPhaseDiff1_2Avg ) > (0.75 * M_PI) && fabsf(dblPhaseDiff23) < (0.25f * M_PI))  // Margin ~30 deg and 45 degrees
 		{
 			intMFSReadPtr += 240;		 // Position read pointer to start of the symbol following reference symbol 
 		
-			if (AccumulateStats)
-				intFrameSyncs += 1;		 // accumulate tuning stats
+			intFrameSyncs++;			 // accumulate tuning stats
 	
 			//strDecodeCapture &= "Sync; Phase1>2=" & Format(dblPhaseDiff12, "0.00") & " Phase2>3=" & Format(dblPhaseDiff23, "0.00") & ": "
         //            If MCB.DebugLog Then Logs.WriteDebug("[AcquireFrameSyncRSBAvg] Phase1>2Avg=" & Format(dblPhaseDiff1_2Avg, "#.00") & " Phase2>3=" & Format(dblPhaseDiff2_3, "#.00"))
 
-
 // not used			dttLastLeaderSync = Now;
+
+			WriteDebugLog(LOGDEBUG, "Got Frame Sync. Remote Leader %d Phase1>2=%f Phase2>3=%f ", intLeaderRcvdMs, dblPhaseDiff12, dblPhaseDiff23);
+
 			dblPwrSNPower_dBPrior = -1000;  // Reset the prior Leader power to small value to insure minimum of two symbol passes on next leader detect. 
 			return TRUE;	 // pointer is pointing to first 4FSK data symbol. (first symbol of frame type)
 		}
@@ -2690,6 +2705,10 @@ int AcquireFrameSyncRSBAvg()
 			if (intPhaseError > 2) // This bailout mechanism for sync failure is superior and doesn't make any assumptions about leader length
 			{
 				State = SearchingForLeader;
+				WriteDebugLog(LOGDEBUG, "Frame Sync Failed. Remote Leader %d Phase1>2=%f Phase2>3=%f ", intLeaderRcvdMs, dblPhaseDiff12, dblPhaseDiff23);
+	
+				dblPwrSNPower_dBPrior = -1000;  // Reset the prior Leader power to small value to insure minimum of two symbol passes on next leader detect. 
+
 				return False;
 			}
 		}
@@ -2705,6 +2724,530 @@ int AcquireFrameSyncRSBAvg()
 
  	return FALSE;
 }
+
+*/
+
+// A2OFDM Versions
+
+
+
+BOOL SearchFor2ToneLeader4(short * intNewSamples, int Length, float * dblOffsetHz, int * intSN)
+{
+    // This version uses 12.5 Hz bin spacing. Blackman window on Goertzel, and simple spectral peak interpolator optimized for Blackman
+    // Blackman selected for maximum rejection (about 60 dB) of the other two-tone bin 50 Hz (4 x 12.5 Hz bins) away. 
+	// search through the samples looking for the telltail 50 baud 2 tone pattern (nominal tones 1475, 1525 Hz)
+	// Find the offset in Hz (due to missmatch in transmitter - receiver tuning
+	// Finds the S:N (power ratio of the tones 1475 and 1525 ratioed to "noise" averaged from bins at 1425, 1450, 1550, and 1575Hz)
+ 
+	float dblGoertzelReal[45];
+	float dblGoertzelImag[45];
+	float dblMag[45];
+	float dblPower, dblPwrSNdB, dblLeftMag, dblRightMag, dblAvgNoisePerBinAtPeak;
+	float dblRealL, dblRealR, dblImagL, dblImagR;
+	float dblMaxPeak = 0.0, dblMaxPeakSN = 0.0, dblMagWindow;
+	int intInterpCnt = 0;  // the count 0 to 3 of the interpolations that were < +/- .5 bin
+	int  intIatMaxPeak = 0;
+	float dblAlpha = 0.3f;  // Works well possibly some room for optimization Changed from .5 to .3 on Rev 0.1.5.3
+	float dblInterpretThreshold= 1.0f; // Good results June 6, 2014 (was .4)  ' Works well possibly some room for optimization
+	float dblFilteredMaxPeak = 0;
+	int intStartBin, intStopBin;
+	int i;
+	int Ptr = 0;
+	float dblAvgNoisePerBin, dblBinAdj1475, dblBinAdj1525, dblCoarseOffset = 1000;
+	float dblOffset = 1000; //  initialize to impossible value
+
+	// This should allow tunning from nominal bins at 1425Hz to 1575Hz +/- 200 Hz tuning range
+
+	if ((Length) < 1200)
+		return FALSE;		// ensure there are at least 1200 samples (5 symbols of 240 samples)
+
+//	if ((Now - dttLastGoodFrameTypeDecode > 20000) && TuningRange > 0)
+//	{
+//		// this is the full search over the full tuning range selected.  Uses more CPU time and with possibly larger deviation once connected. 
+		
+	intStartBin = ((200 - TuningRange) / 12.5);
+	intStopBin = 44 - intStartBin;
+
+	dblMaxPeak = 0;
+	dblMagWindow = 0;
+	dblMaxPeakSN = -100;
+    
+	// Generate the Power magnitudes for up to 56 10 Hz bins (a function of MCB.TuningRange) 
+  
+	for (i = intStartBin; i <= intStopBin; i++)
+	{
+		// note Blackman window reduced end effect but looses sensitivity so sticking with Hann window
+		// Test of 4/22/2018 indicated accurate Hann window (960) gives about 1-2 dB more sensitivity than Blackman window
+		
+		GoertzelRealImagHann960(intNewSamples, Ptr, 960, i + 98, &dblGoertzelReal[i], &dblGoertzelImag[i]);
+		dblMag[i] = powf(dblGoertzelReal[i], 2) + powf(dblGoertzelImag[i], 2); // dblMag(i) in units of power (V^2)
+		dblMagWindow += dblMag[i];
+	}
+
+	// Search the bins to locate the max S:N in the two tone signal/avg noise.  
+
+ 	for (i = intStartBin + 4; i <= intStopBin - 8; i++)	// ' +/- MCB.TuningRange from nominal 
+	{
+		dblPower = sqrtf(dblMag[i] * dblMag[i + 4]); // using the product to minimize sensitivity to one strong carrier vs the two tone
+		// sqrt converts back to units of power from Power ^2
+		// don't use center 7 noise bins as too easily corrupted by adjacent two-tone carriers
+       
+		dblAvgNoisePerBin = (dblMagWindow - (dblMag[i - 1] + dblMag[i] + dblMag[i + 1] + dblMag[i + 2] + dblMag[i + 3] + dblMag[i + 4] + dblMag[i + 5])) / (intStopBin - (intStartBin + 7));
+		dblMaxPeak = dblPower / dblAvgNoisePerBin;
+
+		if (dblMaxPeak > dblMaxPeakSN)
+		{
+			dblMaxPeakSN = dblMaxPeak;
+			dblAvgNoisePerBinAtPeak = max(dblAvgNoisePerBin, 1000.0f);
+			intIatMaxPeak = i + 98;
+		}
+	}
+		
+	dblMaxPeakSN = (dblMag[intIatMaxPeak - 98] + dblMag[intIatMaxPeak - 94]) / dblAvgNoisePerBinAtPeak;
+	dblPwrSNdB = 10.0f * log10f(dblMaxPeakSN);
+ 
+	// Check aquelch
+
+	if ((dblPwrSNdB > (3 * Squelch)) && dblPwrSNPower_dBPrior > (3 * Squelch))
+	{
+
+		// Do the interpolation based on the two carriers at nominal 1475 and 1525Hz
+
+		if (((intIatMaxPeak - 99) >= intStartBin) && ((intIatMaxPeak - 103) <= intStopBin)) // check to ensure no index errors
+		{
+			// Interpolate the adjacent bins using QuinnSpectralPeakLocator
+
+			dblBinAdj1475 = SpectralPeakLocator(
+				dblGoertzelReal[intIatMaxPeak - 99], dblGoertzelImag[intIatMaxPeak - 99],
+				dblGoertzelReal[intIatMaxPeak - 98], dblGoertzelImag[intIatMaxPeak - 98], 
+				dblGoertzelReal[intIatMaxPeak - 97], dblGoertzelImag[intIatMaxPeak - 97], &dblLeftMag, "Hann");
+
+			dblBinAdj1525 = SpectralPeakLocator(
+				dblGoertzelReal[intIatMaxPeak - 95], dblGoertzelImag[intIatMaxPeak - 95], 
+				dblGoertzelReal[intIatMaxPeak - 94], dblGoertzelImag[intIatMaxPeak - 94], 
+				dblGoertzelReal[intIatMaxPeak - 93], dblGoertzelImag[intIatMaxPeak - 93], &dblRightMag, "Hann");
+
+			// Weight the offset calculation by the magnitude of the dblLeftMag and dblRightMag carriers 
+			
+			dblOffset = 12.5 * (intIatMaxPeak + dblBinAdj1475 * dblLeftMag / (dblLeftMag + dblRightMag) + dblBinAdj1525 * dblRightMag / (dblLeftMag + dblRightMag) - 118);  // compute the Coarse tuning offset in Hz
+				
+			if (fabsf(dblOffset) > (TuningRange + 7))		// Was 7 caused tuning problems
+			{
+				dblPwrSNPower_dBPrior = dblPwrSNdB;
+				return False;
+			}
+			
+			// recompute the S:N based on the interpolated bins and average with computation 1 and 2 symbols in the future 
+			//  Use of Hann window increases sensitivity slightly (1-2 dB)
+
+			GoertzelRealImagHann120(intNewSamples, 0, 960, intIatMaxPeak + dblOffset / 12.5, &dblRealL, &dblImagL);
+			GoertzelRealImagHann120(intNewSamples, 0, 960, intIatMaxPeak + 4 + dblOffset / 12.5, &dblRealR, &dblImagR);
+			dblMaxPeakSN = (powf(dblRealL, 2) + powf(dblImagL, 2) + powf(dblRealR, 2) + powf(dblImagR, 2)) / dblAvgNoisePerBinAtPeak;
+			// now compute for 120 samples later
+			GoertzelRealImagHann120(intNewSamples, 120, 960, intIatMaxPeak + dblOffset / 12.5, &dblRealL, &dblImagL);
+			GoertzelRealImagHann120(intNewSamples, 120, 960, intIatMaxPeak + 4 + dblOffset / 12.5, &dblRealR, &dblImagR);
+			dblMaxPeakSN += (powf(dblRealL, 2) + powf(dblImagL, 2) + powf(dblRealR, 2) + powf(dblImagR, 2)) / dblAvgNoisePerBinAtPeak;
+			//  and a third 240 samples later
+			GoertzelRealImagHann120(intNewSamples, 240, 960, intIatMaxPeak + dblOffset / 12.5, &dblRealL, &dblImagL);
+			GoertzelRealImagHann120(intNewSamples, 240, 960, intIatMaxPeak + 4 + dblOffset / 12.5, &dblRealR, &dblImagR);
+			dblMaxPeakSN += (powf(dblRealL, 2) + powf(dblImagL, 2) + powf(dblRealR, 2) + powf(dblImagR, 2)) / dblAvgNoisePerBinAtPeak;
+ 
+			dblMaxPeakSN = dblMaxPeakSN / 3;  // average the dblMaxPeakSN over the three calculations
+	// ???? Calc Twice ????
+ 			dblMaxPeakSN = (powf(dblRealL, 2) + powf(dblImagL, 2) + powf(dblRealR, 2) + powf(dblImagR, 2)) / dblAvgNoisePerBinAtPeak;
+      
+			
+			dblPwrSNdB = 10 * log10f(dblMaxPeakSN);
+			
+			if (dblPwrSNdB > 3 * Squelch)	// This average power now includes two samples from symbols +120 and + 240 samples 
+			{
+				//strDecodeCapture = "Ldr; S:N(3KHz) Prior=" & Format(dblPwrSNPower_dBPrior, "#.0") & "dB, Current=" & Format(dblPwrSNdB, "#.0") & "dB, Offset=" & Format(dblOffset, "##0.00") & "Hz "
+  				WriteDebugLog(LOGDEBUG, "Ldr; S:N(3KHz) Avg= %f dB, Offset== %f Hz", dblPwrSNdB, dblOffset);
+				dttStartRmtLeaderMeasure = Now;
+				if (AccumulateStats)
+				{
+					dblLeaderSNAvg = ((dblLeaderSNAvg * intLeaderDetects) + dblPwrSNdB) / (1 + intLeaderDetects);
+					intLeaderDetects += 1;
+				}
+				*dblOffsetHz = dblOffset;
+				dblNCOFreq = 3000 + *dblOffsetHz;	// Set the NCO frequency and phase inc for mixing 
+				dblNCOPhaseInc = dbl2Pi * dblNCOFreq / 12000;
+				// don't advance the pointer here
+				State = AcquireSymbolSync;
+				dttLastLeaderDetect = Now;
+				dblPhaseDiff1_2Avg = 10; //  initialize to 10 to cause initialization of exponential averager in AcquireFrameSyncRSBAvg 
+				*intSN = round(dblPwrSNdB - 20.8); // 20.8dB accomodates ratio of 3Kz BW: (effective Blackman Window bandwidth  of ~25 Hz) 
+				return True;
+			}
+			else
+			{
+				return False;
+			}
+		}
+	}
+	
+	dblPwrSNPower_dBPrior = dblPwrSNdB;
+
+	return FALSE;
+}	
+
+
+
+
+//	Function to look at the 2 tone leader and establishes the Symbol framing using envelope search and minimal phase error. 
+
+BOOL Acquire2ToneLeaderSymbolFraming()
+{
+	float dblCarPh;
+	float dblReal, dblImag;
+	int intLocalPtr = intMFSReadPtr;  // try advancing one symbol to minimize initial startup errors 
+	float dblAbsPhErr;
+	float dblMinAbsPhErr = 5000;	 // initialize to an excessive value
+	int intIatMinErr;
+	float dblPhaseAtMinErr;
+	int intAbsPeak = 0;
+	int intJatPeak = 0;
+	int i;
+
+	// Use Phase of 1500 Hz leader  to establish symbol framing. Nominal phase is 0 or 180 degrees
+
+	if ((intFilteredMixedSamplesLength - intLocalPtr) < 960)
+		return FALSE;			// not enough
+	
+	intLocalPtr = intMFSReadPtr + EnvelopeCorrelatorNew(); // should position the pointer at the symbol boundary
+
+	if (intLocalPtr < intMFSReadPtr)
+		return False; // use negative value of EnvelopeCorrelator to indicate insufficient correlation. 
+
+
+	// Check 2 samples either side of the intLocalPtr for minimum phase error.(closest to Pi or -Pi) 
+	// Could be as much as .4 Radians (~70 degrees) depending on sampling positions.
+   
+	for (i = -2; i <= 2; i++)	 // 0 To 0 '  -2 To 2 ' for just 5 samples
+	{
+		// using the full symbol seemed to work best on weak Signals (0 to -5 dB S/N) June 15, 2015
+	
+		GoertzelRealImagHann120(intFilteredMixedSamples, intLocalPtr + i, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning 
+		dblCarPh = atan2f(dblImag, dblReal);
+		dblAbsPhErr = fabsf(dblCarPh - (ceil(dblCarPh / M_PI) * M_PI));
+		if (dblAbsPhErr < dblMinAbsPhErr)
+		{
+			dblMinAbsPhErr = dblAbsPhErr;
+			intIatMinErr = i;
+			dblPhaseAtMinErr = dblCarPh;
+		}     
+	}
+
+	intMFSReadPtr = intLocalPtr + intIatMinErr;
+	WriteDebugLog(LOGDEBUG, "[Acquire2ToneLeaderSymbolFraming] intIatMinError= %d, Leader Length %d mS", intIatMinErr, Now - dttLastLeaderDetect);
+	State = AcquireFrameSync;
+
+	if (AccumulateStats)
+		intLeaderSyncs++;
+
+	//Debug.WriteLine("   [Acquire2ToneLeaderSymbolSync] iAtMinError = " & intIatMinErr.ToString & "   Ptr = " & intMFSReadPtr.ToString & "  MinAbsPhErr = " & Format(dblMinAbsPhErr, "#.00"))
+	//Debug.WriteLine("   [Acquire2ToneLeaderSymbolSync]      Ph1500 @ MinErr = " & Format(dblPhaseAtMinErr, "#.000"))
+        
+	//strDecodeCapture &= "Framing; iAtMinErr=" & intIatMinErr.ToString & ", Ptr=" & intMFSReadPtr.ToString & ", MinAbsPhErr=" & Format(dblMinAbsPhErr, "#.00") & ": "
+     intPhaseError = 0;
+	return TRUE;
+}
+
+// Function to establish symbol sync 
+int EnvelopeCorrelator()
+{
+	// Compute the two symbol correlation with the Two tone leader template.
+	// slide the correlation one sample and repeat up to 240 steps 
+	// keep the point of maximum or minimum correlation...and use this to identify the the symbol start. 
+
+	float dblCorMax  = -1000000.0f;		//  Preset to excessive values
+	float dblCorMin  = 1000000.0f;
+	int intJatMax = 0, intJatMin = 0;
+	float dblCorSum, dblCorProduct, dblCorMaxProduct = 0.0;
+	int i,j;
+	short int75HzFiltered[720];
+
+	if (intFilteredMixedSamplesLength < intMFSReadPtr + 720)
+		return -1;
+	
+	Filter75Hz(int75HzFiltered, TRUE, 720); // This filter appears to help reduce avg decode distance (10 frames) by about 14%-19% at WGN-5 May 3, 2015
+	
+	for (j = 0; j < 360; j++)		// Over 1.5 symbols
+	{
+		dblCorSum = 0;
+		for (i = 0; i < 240; i++)	 // over 1 50 baud symbol (may be able to reduce to 1 symbol)
+		{
+			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomdates filter delay of 120 samples
+			dblCorSum += dblCorProduct;
+            if (fabsf(dblCorProduct) > dblCorMaxProduct)
+				dblCorMaxProduct = fabsf(dblCorProduct);
+		}
+
+		if (fabsf(dblCorSum) > dblCorMax)
+		{
+			dblCorMax = fabsf(dblCorSum);
+			intJatMax = j;
+		}		
+	}
+	
+	if (AccumulateStats)
+	{
+		dblAvgCorMaxToMaxProduct = (dblAvgCorMaxToMaxProduct * intEnvelopeCors + (dblCorMax / dblCorMaxProduct)) / (intEnvelopeCors + 1);
+		intEnvelopeCors++;
+	}
+ 
+//	if (dblCorMax > 40 * dblCorMaxProduct)
+	{
+		WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
+		return intJatMax;
+	}
+//	else
+//		return -1;
+}
+ 
+
+int EnvelopeCorrelatorNew()
+{
+	// Compute the two symbol correlation with the Two tone leader template.
+	// slide the correlation one sample and repeat up to 240 steps 
+	// keep the point of maximum or minimum correlation...and use this to identify the the symbol start. 
+
+	float dblCorMax  = -1000000.0f;		//  Preset to excessive values
+	float dblCorMin  = 1000000.0f;
+	int intJatMax = 0, intJatMin = 0;
+	float dblCorSum, dblCorProduct, dblCorMaxProduct = 0.0;
+	int i,j;
+	short int75HzFiltered[960];
+
+	if (intFilteredMixedSamplesLength < intMFSReadPtr + 960)
+		return -1;
+	
+	Filter75Hz(int75HzFiltered, TRUE, 960); // This filter appears to help reduce avg decode distance (10 frames) by about 14%-19% at WGN-5 May 3, 2015
+	
+	for (j = 360; j < 600; j++)		// Over 2 symbols
+	{
+		dblCorSum = 0;
+		for (i = 0; i < 240; i++)	 // over 1 50 baud symbol (may be able to reduce to 1 symbol)
+		{
+			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomdates filter delay of 120 samples
+			dblCorSum += dblCorProduct;
+            if (fabsf(dblCorProduct) > dblCorMaxProduct)
+				dblCorMaxProduct = fabsf(dblCorProduct);
+		}
+
+		if (fabsf(dblCorSum) > dblCorMax)
+		{
+			dblCorMax = fabsf(dblCorSum);
+			intJatMax = j;
+		}		
+	}
+	
+	if (AccumulateStats)
+	{
+		dblAvgCorMaxToMaxProduct = (dblAvgCorMaxToMaxProduct * intEnvelopeCors + (dblCorMax / dblCorMaxProduct)) / (intEnvelopeCors + 1);
+		intEnvelopeCors++;
+	}
+ 
+	if (dblCorMax > 40 * dblCorMaxProduct)
+	{
+		WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
+		return intJatMax;
+	}
+		
+	WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator failed %d",  dblCorMax / dblCorMaxProduct);
+	
+	return -1;
+}
+ 
+
+//	Function to acquire the Frame Sync for all Frames 
+
+BOOL AcquireFrameSyncRSB()
+{
+	// Two improvements could be incorporated into this function:
+	//    1) Provide symbol tracking until the frame sync is found (small corrections should be less than 1 sample per 4 symbols ~2000 ppm)
+	//    2) Ability to more accurately locate the symbol center (could be handled by symbol tracking 1) above. 
+
+	//  This is for acquiring FSKFrameSync After Mixing Tones Mirrored around 1500 Hz. e.g. Reversed Sideband
+	//  Frequency offset should be near 0 (normally within +/- 1 Hz)  
+	//  Locate the sync Symbol which has no phase change from the prior symbol (BPSK leader @ 1500 Hz)   
+
+	int intLocalPtr = intMFSReadPtr;
+	int intAvailableSymbols = (intFilteredMixedSamplesLength - intMFSReadPtr) / 240;
+	float dblPhaseSym1;	//' phase of the first symbol 
+	float dblPhaseSym2;	//' phase of the second symbol 
+	float dblPhaseSym3;	//' phase of the third symbol
+
+	float dblReal, dblImag;
+	float dblPhaseDiff12, dblPhaseDiff23;
+
+	int i;
+
+	if (intAvailableSymbols < 3)
+		return FALSE;				// must have at least 360 samples to search
+ 
+	// Calculate the Phase for the First symbol 
+	
+	GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+	dblPhaseSym1 = atan2f(dblImag, dblReal);
+	intLocalPtr += 240;	// advance one symbol
+	GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+	dblPhaseSym2 = atan2f(dblImag, dblReal);
+	intLocalPtr += 240;		// advance one symbol
+
+	for (i = 0; i <=  intAvailableSymbols - 3; i++)
+	{
+		// Compute the phase of the next symbol  
+	
+		GoertzelRealImag(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+		dblPhaseSym3 = atan2f(dblImag, dblReal);
+		// Compute the phase differences between sym1-sym2, sym2-sym3
+		dblPhaseDiff12 = dblPhaseSym1 - dblPhaseSym2;
+		if (dblPhaseDiff12 > M_PI)		// bound phase diff to +/- Pi
+			dblPhaseDiff12 -= dbl2Pi;
+		else if (dblPhaseDiff12 < -M_PI)
+			dblPhaseDiff12 += dbl2Pi;
+
+		dblPhaseDiff23 = dblPhaseSym2 - dblPhaseSym3;
+		if (dblPhaseDiff23 > M_PI)		//  bound phase diff to +/- Pi
+			dblPhaseDiff23 -= dbl2Pi;
+		else if (dblPhaseDiff23 < -M_PI)
+			dblPhaseDiff23 += dbl2Pi;
+
+		if (fabsf(dblPhaseDiff12) > 0.6667f * M_PI && fabsf(dblPhaseDiff23) < 0.3333f * M_PI)  // Tighten the margin to 60 degrees
+		{
+//			intPSKRefPhase = (short)dblPhaseSym3 * 1000;
+
+			intLeaderRcvdMs = (int)ceil((intLocalPtr - 30) / 12);	 // 30 is to accomodate offset of inital pointer for filter length. 
+			intMFSReadPtr = intLocalPtr + 240;		 // Position read pointer to start of the symbol following reference symbol 
+		
+			if (AccumulateStats)
+				intFrameSyncs += 1;		 // accumulate tuning stats
+	
+			//strDecodeCapture &= "Sync; Phase1>2=" & Format(dblPhaseDiff12, "0.00") & " Phase2>3=" & Format(dblPhaseDiff23, "0.00") & ": "
+	
+			return TRUE;	 // pointer is pointing to first 4FSK data symbol. (first symbol of frame type)
+		}
+		else
+		{
+			dblPhaseSym1 = dblPhaseSym2;           
+			dblPhaseSym2 = dblPhaseSym3;
+			intLocalPtr += 240;			// advance one symbol 
+		}
+	}
+
+	intMFSReadPtr = intLocalPtr - 480;		 // back up 2 symbols for next attempt (Current Sym2 will become new Sym1)
+	return FALSE;	
+}
+
+
+
+// Function to acquire the Frame Sync for all Frames using exponential averaging 
+int AcquireFrameSyncRSBAvg()
+{
+	//	This new routine uses exponential averaging on the ptr reference leader phases to minimize noise contribution
+	//	Needs optimization of filter values and decision thresholds with actual simulator at low S:N and multipath. 
+
+	//	This is for acquiring FSKFrameSync After Mixing Tones Mirrored around 1500 Hz. e.g. Reversed Sideband
+	//	Frequency offset should be near 0 (normally within +/- 1 Hz)  
+	//	Locate the sync Symbol which has no phase change from the prior symbol (50 baud BPSK leader @ 1500 Hz)   
+
+	int intLocalPtr = intMFSReadPtr;
+	int intAvailableSymbols = (intFilteredMixedSamplesLength - intMFSReadPtr) / 240;
+	float dblPhaseSym1;	//' phase of the first symbol 
+	float dblPhaseSym2;	//' phase of the second symbol 
+	float dblPhaseSym3;	//' phase of the third symbol
+
+	float dblReal, dblImag;
+	float dblPhaseDiff12, dblPhaseDiff23;
+
+	int i;
+
+	if (intAvailableSymbols < 3)
+		return FALSE;				// must have at least 360 samples to search
+
+	// Calculate the Phase for the First symbol 
+	
+	GoertzelRealImagHann120(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+	dblPhaseSym1 = atan2f(dblImag, dblReal);
+	intLocalPtr += 240;	// advance one symbol
+	GoertzelRealImagHann120(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+	dblPhaseSym2 = atan2f(dblImag, dblReal);
+	intLocalPtr += 240;		// advance one symbol
+
+ 	for (i = 0; i <=  intAvailableSymbols - 3; i++)
+	{
+ 		// Compute the phase of the next symbol  
+	
+		GoertzelRealImagHann120(intFilteredMixedSamples, intLocalPtr, 240, 30, &dblReal, &dblImag); // Carrier at 1500 Hz nominal Positioning with no cyclic prefix
+		dblPhaseSym3 = atan2f(dblImag, dblReal);
+		// Compute the phase differences between sym1-sym2, sym2-sym3
+		dblPhaseDiff12 = dblPhaseSym1 - dblPhaseSym2;
+		if (dblPhaseDiff12 > M_PI)		// bound phase diff to +/- Pi
+			dblPhaseDiff12 -= dbl2Pi;
+		else if (dblPhaseDiff12 < -M_PI)
+			dblPhaseDiff12 += dbl2Pi;
+
+		if (dblPhaseDiff1_2Avg > 9)
+			dblPhaseDiff1_2Avg = fabsf(dblPhaseDiff12); // initialize the difference average after a prior detect
+		else
+			dblPhaseDiff1_2Avg = 0.75 * dblPhaseDiff1_2Avg + 0.25 * fabsf(dblPhaseDiff12);  // exponential average 
+    
+ 		
+		dblPhaseDiff23 = dblPhaseSym2 - dblPhaseSym3;
+		if (dblPhaseDiff23 > M_PI)		//  bound phase diff to +/- Pi
+			dblPhaseDiff23 -= dbl2Pi;
+		else if (dblPhaseDiff23 < -M_PI)
+			dblPhaseDiff23 += dbl2Pi;
+			
+             
+
+		if (fabsf(dblPhaseDiff1_2Avg ) > (0.83333 * M_PI) && fabsf(dblPhaseDiff23) < (0.25f * M_PI))  // Margin ~30 deg and 45 degrees
+		{
+			intLeaderRcvdMs = (int)ceil((intLocalPtr - 30) / 12);	 // 30 is to accomodate offset of inital pointer for filter length. 
+			intMFSReadPtr = intLocalPtr + 240;		 // Position read pointer to start of the symbol following reference symbol 
+		
+			if (AccumulateStats)
+				intFrameSyncs += 1;		 // accumulate tuning stats
+	
+			//strDecodeCapture &= "Sync; Phase1>2=" & Format(dblPhaseDiff12, "0.00") & " Phase2>3=" & Format(dblPhaseDiff23, "0.00") & ": "
+//			dttLastLeaderSync = Now;
+			dblPwrSNPower_dBPrior = -1000;  // Reset the prior Leader power to small value to insure minimum of two symbol passes on next leader detect. 
+			return TRUE;	 // pointer is pointing to first 4FSK data symbol. (first symbol of frame type)
+		}
+		//	The following looks for phase errors (which should nomimally be Pi or 180 deg) and counts errors 
+		//	abandoning search on the second error, Then advancing the main intMFSReadPtr one symbol (240 samples) and returning to SearchingForLeader state.
+		    
+		if (fabsf(dblPhaseDiff1_2Avg) < (0.6667 * M_PI) || fabsf(dblPhaseDiff23) < (0.6667 * M_PI)) // Margin 60 deg 
+		{
+			intPhaseError += 1;
+			dblPhaseSym1 = dblPhaseSym2;           
+			dblPhaseSym2 = dblPhaseSym3;
+			intLocalPtr += 240;			// advance one symbol 
+	 
+//			if (intPhaseError > 1) // This bailout mechanism for sync failure is superior and doesn't make any assumptions about leader length
+//			{
+//				intMFSReadPtr += 240; // advance the MFSReadPointer one symbol and try to search for leader again. 
+//				State = SearchingForLeader;
+//				return False;
+//			}
+		}
+		else
+		{
+			//	keep searching available samples
+
+			dblPhaseSym1 = dblPhaseSym2;           
+			dblPhaseSym2 = dblPhaseSym3;
+			intLocalPtr += 240;			// advance one symbol 
+		}
+	}
+ 
+	intMFSReadPtr = intLocalPtr - 480;		 // back up 2 symbols for next attempt (Current Sym2 will become new Sym1)
+	return FALSE;
+
+}
+//	 Function to Demod FrameType4FSK
+
 //	 Function to Demod FrameType4FSK
 
 // Function to compute the "distance" from a specific bytFrame Xored by bytID using 1 symbol parity 
@@ -3096,8 +3639,6 @@ int Acquire4PSKFrameType()
 	Start += Demod1CarPSKChar(Start, 0);
 
 	CarrierOk[0] = Save;
-
-	intRmtLeaderMeasure = (Now - dttStartRmtLeaderMeasure);
 
 	CorrectPhaseForTuningOffset(&intPhases[0][0], intPhasesLen, "4PSK");
 

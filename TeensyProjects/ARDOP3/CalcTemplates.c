@@ -17,8 +17,7 @@
 
 #pragma warning(disable : 4244)		// Code does lots of int float to int
 
-
-static int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
+static int intAmp = 30000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
 void Generate50BaudTwoToneLeaderTemplate()
 {
@@ -31,15 +30,12 @@ void Generate50BaudTwoToneLeaderTemplate()
 	char msg[80];
 	int len;
 
-	fp1 = fopen("s:\\leadercoeffs.txt", "wb");
+	fp1 = fopen("d:\\leadercoeffs.txt", "wb");
 
 	for (i = 0; i < 240; i++)
 	{
-		y = (sin(((1500.0 - 25) / 1500) * (i / 8.0 * 2 * M_PI)));
-		z = (sin(((1500.0 + 25) / 1500) * (i / 8.0 * 2 * M_PI)));
-
-		x = intAmp * 0.55 * (y - z);
-		int50BaudTwoToneLeaderTemplate[i] = (short)x + 0.5;
+		x = 
+		int50BaudTwoToneLeaderTemplate[i] = intAmp * 0.5 * ((sin(((1500.0 - 25) / 1500) * (i / 8.0 * 2 * M_PI))) - (sin(((1500.0 + 25) / 1500) * (i / 8.0 * 2 * M_PI))));
 
 		if ((i - line) == 9)
 		{
@@ -65,115 +61,10 @@ void Generate50BaudTwoToneLeaderTemplate()
 	fclose(fp1);
 }
 
-// Subroutine to create the FSK symbol templates
-
-void GenerateFSKTemplates()
-{
-	// Generate templates of 240 samples (each symbol template = 20 ms) for each of the 19 possible carriers used in 500 Hz and 2000 Hz BW 50 Baud 4FSK
-
-	// Total of 4 groups of 4 carriers/group (each group represents 2 bits using 4FSK modulation)
-	// Groups 1, 2, 4, 5 are used for 2000 Hz 4Carrier 4FSK modes
-	// Group 3 is used for 500 Hz 4FSK Data mode and 4FSK modulation of frame types
-
-
-	float dblCarFreq[] = {1100, 1200, 1300, 1400, 1350, 1450, 1550, 1650, 1600, 1700, 1800, 1900};
-	float dblAngle;		// Angle in radians
-	float dblCarPhaseInc[20]; 
-	int i, k;
-
-	char msg[256];
-	int len;
-	int line = 0;
-	FILE * fp1;
-
-	// Compute the phase inc per sample
-
-    for (i = 0; i < 12; i++) 
-	{
-		dblCarPhaseInc[i] = 2 * M_PI * dblCarFreq[i] / 12000;
-	}
-	
-	// Now compute the templates: (4800 16 bit values total) 
-	
-	for (i = 0; i < 12; i++)			// across the 4 tones for 50 baud frequencies
-	{
-		dblAngle = 0;
-		// 50 baud template
-
-		line = 0;
-
-		for (k = 0; k < 240; k++)	// for 240 samples (one 50 baud symbol)
-		{
-			intFSK50bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle);  // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
-		
-			dblAngle += dblCarPhaseInc[i];
-
-			if (dblAngle >= 2 * M_PI)
-				dblAngle -= 2 * M_PI;
-
-		}
-	}
-
-
-	fp1 = fopen("d:\\fskcoeffs100.txt", "wb");
-
-	len = sprintf(msg, "CONST short intFSK50bdCarTemplate[12][240] = {\r\n");
-	fwrite(msg, 1, len, fp1);
-
-	len = sprintf(msg, "\t{{\r\n");
-	fwrite(msg, 1, len, fp1);
-
-	for (i = 0; i < 12; i++)		// across 9 tones
-	{
-			line = 0;
-
-			for (k = 0; k <= 239; k++) // for 120 samples (one 100 baud symbol, 200 baud modes will just use half of the data)
-			{
-				if ((k - line) == 9)
-				{
-					// print 10 to line
-
-					len = sprintf(msg, "\t%d, %d, %d, %d, %d, %d, %d, %d, %d, %d,\n",
-					intFSK50bdCarTemplate[i][line],
-					intFSK50bdCarTemplate[i][line + 1],
-					intFSK50bdCarTemplate[i][line + 2],
-					intFSK50bdCarTemplate[i][line + 3],
-					intFSK50bdCarTemplate[i][line + 4],
-					intFSK50bdCarTemplate[i][line + 5],
-					intFSK50bdCarTemplate[i][line + 6],
-					intFSK50bdCarTemplate[i][line + 7],
-					intFSK50bdCarTemplate[i][line + 8],
-					intFSK50bdCarTemplate[i][line + 9]);
-
-
-					line = k + 1;
-
-					if (k == 239)
-					{
-						len += sprintf(&msg[len-2], "},\r\n\r\n\t{");
-						len -=2;
-					}
-					fwrite(msg, 1, len, fp1);
-				}
-	
-		}
-	}
-
-	len = sprintf(msg, "\t}};\r\n");
-	fwrite(msg, 1, len, fp1);
-
-	fclose(fp1);
-
-
-}
-
-//	 Subroutine to initialize valid frame types 
-
-
 //	Subroutine to create the PSK symbol templates for 8 tones and 8 phases at 200 baud
 float round(float x);
 
-VOID Generate16QAMTemplates()
+VOID Generate16APSK_8_8Templates()
 {
 
 	// Generate templates of 120 samples (each template = 20 ms) for each of the 11 possible carriers used in 16QAM modulation in a 12,4 circle. 

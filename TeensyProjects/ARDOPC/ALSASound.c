@@ -48,6 +48,10 @@ int initdisplay();
 extern BOOL blnDISCRepeating;
 extern BOOL UseKISS;			// Enable Packet (KISS) interface
 
+BOOL UseLeft = TRUE;
+BOOL UseRight = TRUE;
+char LogDir[256] = "";
+
 
 void Sleep(int mS)
 {
@@ -84,7 +88,7 @@ snd_pcm_sframes_t MaxAvail;
 #include <stdarg.h>
 
 FILE *logfile[3] = {NULL, NULL, NULL};
-char LogName[3][20] = {"ARDOPDebug", "ARDOPException", "ARDOPSession"};
+char LogName[3][256] = {"ARDOPDebug", "ARDOPException", "ARDOPSession"};
 
 #define DEBUGLOG 0
 #define EXCEPTLOG 1
@@ -309,6 +313,15 @@ void main(int argc, char * argv[])
 
 	processargs(argc, argv);
 
+	if (LogDir[0])
+	{
+		sprintf(&LogName[0][0], "%s/%s", LogDir, "ARDOPDebug");
+		sprintf(&LogName[1][0], "%s/%s", LogDir, "ARDOPException");
+		sprintf(&LogName[2][0], "%s/%s", LogDir, "ARDOPSession");
+	}
+
+	setlinebuf(stdout);				// So we can redirect output to file and tail
+
 	Debugprintf("ARDOPC Version %s", ProductVersion);
 
 	if (HostPort[0])
@@ -487,8 +500,6 @@ snd_pcm_t *	rechandle = NULL;
 int m_playchannels = 1;
 int m_recchannels = 1;
 
-BOOL UseLeft = TRUE;
-BOOL UseRight = TRUE;
 
 char SavedCaptureDevice[256];	// Saved so we can reopen
 char SavedPlaybackDevice[256];
@@ -1448,7 +1459,7 @@ int WriteLog(char * msg, int Log)
 	char timebuf[128];
 	struct timespec tp;
 
-	UCHAR Value[100];
+	UCHAR Value[256];
 	
 	int hh;
 	int mm;

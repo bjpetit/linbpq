@@ -55,7 +55,8 @@ int LogToHostBufferLen = 0;
 
 int bytDataToSendLength = 0;
 
-UCHAR bytDataToSend[4096];
+
+UCHAR bytDataToSend[DATABUFFERSIZE];
 
 // Outbound data buffer 
 
@@ -828,7 +829,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			SCSReply[2] = Channel;
 			SCSReply[3] = 1;
 			strcpy(&SCSReply[4], CMDReplyBuffer);
-			ReplyLen = strlen(CMDReplyBuffer) + 7;
+			ReplyLen = strlen(CMDReplyBuffer) + 5;
 			EmCRCStuffAndSend(SCSReply, ReplyLen);
 			WriteDebugLog(LOGDEBUG, "Sending CMD Reply %s", CMDReplyBuffer);
 			return;

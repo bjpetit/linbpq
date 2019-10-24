@@ -83,15 +83,15 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len)
 	if (Len == 0)
 		return;
 
-//	if ((bytDataToSendLength + Len) >= DATABUFFERSIZE)
-//		return;			// Flow control has failed
+	if ((bytDataToSendLength + Len) >= DATABUFFERSIZE)
+		return;			// Flow control has failed
 
 	GetSemaphore();
 
 	memcpy(&bytDataToSend[bytDataToSendLength], bytNewData, Len);
 	bytDataToSendLength += Len;
 
-	if (bytDataToSendLength > 4096)
+	if (bytDataToSendLength > DATABUFFERSIZE)
 		return;
 
 	FreeSemaphore();

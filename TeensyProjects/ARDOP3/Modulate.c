@@ -184,6 +184,9 @@ VOID Mod1Car50Bd4PSK(UCHAR * bytEncodedData, int Len, int LeaderLen)
 			else	// for Sym values 2, 3
 				intSample = -int16APSK_8_8_50bdCarTemplate[intCarIndex][2 * (bytSymToSend - 2)][n % 120]; // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
 	
+			if (intSample > intPeakAmp)
+				intPeakAmp = intSample;
+
 			SampleSink(intSample);
 		}
 		
@@ -694,6 +697,8 @@ unsigned short * SoundInit();
 
 int modmaxSample;
 
+float ScaleFactor;
+
 void initFilter(int Width, int Centre)
 {
 	int i, j;
@@ -734,6 +739,7 @@ void initFilter(int Width, int Centre)
 //		centreSlot = Centre / 50;
 		first = centreSlot - 2;
 		last = centreSlot + 2;		// 7 filter sections
+		ScaleFactor = 0.00833333333f;
 		break;
 
 	case 500:
@@ -743,6 +749,7 @@ void initFilter(int Width, int Centre)
 		intN = 120;
 		first = centreSlot - 3;
 		last = centreSlot + 3;		// 7 filter sections
+		ScaleFactor = 0.00833333333f;
 		break;
 
 	case 1000:
@@ -752,6 +759,7 @@ void initFilter(int Width, int Centre)
 		intN = 120;
 		first = centreSlot - 5;
 		last = centreSlot + 5;		// 7 filter sections
+		ScaleFactor = 0.00833333333f;
 		break;
 
 	case 2500:
@@ -764,8 +772,9 @@ void initFilter(int Width, int Centre)
 		// Can't really move centre of 2500 filter
 
 		first = 1;
-		last = 14;		// 27 filter sections
+		last = 14;		// 14 filter sections
 
+		ScaleFactor = 0.015f;	// Not sure why, but Rick's value gives very low mod	
 		break;
 	
 	default:
@@ -916,7 +925,7 @@ void SampleSink(short Sample)
 
 	if (SampleNo >= intFilLen)
 	{
-		intFilteredSample = intFilteredSample * 0.00833333333f; //  rescales for gain of filter
+		intFilteredSample = intFilteredSample * ScaleFactor; //  rescales for gain of filter
 		largest = max(largest, intFilteredSample);	
 		smallest = min(smallest, intFilteredSample);
 		
