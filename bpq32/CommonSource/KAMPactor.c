@@ -70,8 +70,6 @@ static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 int ProcessLine(char * buf, int Port)
@@ -241,7 +239,7 @@ VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 static int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 static int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-int KAMExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port, unsigned char * buff)
 {
 	int txlen = 0;
 	UINT * buffptr;
@@ -424,7 +422,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 }
 
 
-UINT KAMExtInit(EXTPORTDATA * PortEntry)
+void * KAMExtInit(EXTPORTDATA * PortEntry)
 {
 	char msg[500];
 	struct TNCINFO * TNC;
@@ -455,7 +453,7 @@ UINT KAMExtInit(EXTPORTDATA * PortEntry)
 		sprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
-		return (int)KAMExtProc;
+		return ExtProc;
 	}
 	TNC->Port = port;
 
@@ -590,7 +588,7 @@ UINT KAMExtInit(EXTPORTDATA * PortEntry)
 
 	WritetoConsole("\n");
 
-	return ((int)KAMExtProc);
+	return ExtProc;
 }
 
 

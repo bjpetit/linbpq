@@ -43,9 +43,11 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #define ioctl ioctlsocket
 
-#define pthread_t DWORD
+#define pthread_t uintptr_t
 
 int pthread_equal(pthread_t T1, pthread_t T2);
+
+uintptr_t _beginthread(void(__cdecl *start_address)(void *), unsigned stack_size, void *arglist);
 
 #else
 
@@ -75,6 +77,7 @@ int GetTickCount();
 #include <fcntl.h>
 #include <syslog.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #define BOOL int
 #define VOID void

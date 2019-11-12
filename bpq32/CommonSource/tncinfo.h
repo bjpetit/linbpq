@@ -151,7 +151,7 @@ struct TCPINFO
 	SOCKET HTTPsock6;
 
 	fd_set ListenSet;
-	int maxsock;
+	SOCKET maxsock;
 
 	HMENU hActionMenu;
 	HMENU hLogMenu;

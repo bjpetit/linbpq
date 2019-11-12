@@ -381,7 +381,7 @@ VOID EXTTX(PEXTPORTDATA PORTVEC, MESSAGE * Buffer)
 VOID EXTRX(PEXTPORTDATA PORTVEC)
 {
 	struct _MESSAGE * Message;
-	int Len;
+	size_t Len;
 	struct PORTCONTROL * PORT = (struct PORTCONTROL *)PORTVEC;
 
 Loop:
@@ -394,7 +394,7 @@ Loop:
 	if (Message == NULL)
 		return;
 
-	Len = (int)(void *)PORTVEC->PORT_EXT_ADDR(1, PORT->PORTNUMBER, Message);
+	Len = (size_t)PORTVEC->PORT_EXT_ADDR(1, PORT->PORTNUMBER, Message);
 	
 	if (Len == 0)
 	{
@@ -446,9 +446,9 @@ VOID EXTTIMER(PEXTPORTDATA PORTVEC)
 	PORTVEC->PORT_EXT_ADDR(7, PORTVEC->PORTCONTROL.PORTNUMBER, 0);		// Timer Routine
 }
 
-int EXTTXCHECK(PEXTPORTDATA PORTVEC, int Chan)
+size_t EXTTXCHECK(PEXTPORTDATA PORTVEC, int Chan)
 {
-	return (int)(void *)PORTVEC->PORT_EXT_ADDR(3, PORTVEC->PORTCONTROL.PORTNUMBER, Chan);
+	return (size_t)PORTVEC->PORT_EXT_ADDR(3, PORTVEC->PORTCONTROL.PORTNUMBER, Chan);
 }
 
 VOID PostDataAvailable(TRANSPORTENTRY * Session)
@@ -575,8 +575,9 @@ BOOL Start()
 	struct DEST_LIST * DEST;
 	CMDX * CMD;
 	int PortSlot = 1;
+	uintptr_t int3;
 
-	unsigned char * ptr2, * ptr3, * ptr4;
+	unsigned char * ptr2 = 0, * ptr3, * ptr4;
 	USHORT * CWPTR;
 	int i, n;
 
@@ -621,9 +622,10 @@ BOOL Start()
 	if (cfg->C_MAXRTT)
 		MAXRTT = cfg->C_MAXRTT * 100;
 
-	if (cfg->C_NODE == 0)
+	if (cfg->C_NODE == 0 && cfg->C_BBS)
 	{
 		//	USE BBS CALL FOR NODE if Set, otherwise find first APPLCALL
+		//	Unless BBS also = 0
 
 		if (cfg->C_BBSCALL[0])
 		{
@@ -1019,9 +1021,10 @@ BOOL Start()
 
 			//	Round to word boundary (for ARM5 etc)
 
-			ptr3 += 7;
-			while ((unsigned int)ptr3 & 7)
-				ptr3--;
+			int3 = (uintptr_t)ptr3;
+			int3 += 7;
+			int3 &= 0xfffffffffffffff8;
+			ptr3 = (UCHAR *)int3;
 
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
@@ -1053,9 +1056,10 @@ BOOL Start()
 
 			//	Round to word boundsaty (for ARM5 etc)
 
-			ptr3 += 7;
-			while ((unsigned int)ptr3 & 7)
-				ptr3--;
+			int3 = (uintptr_t)ptr3;
+			int3 += 7;
+			int3 &= 0xfffffffffffffff8;
+			ptr3 = (UCHAR *)int3;
  
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
@@ -1073,9 +1077,10 @@ BOOL Start()
 	
 			//	Round to word boundsaty (for ARM5 etc)
 
-			ptr3 += 7;
-			while ((unsigned int)ptr3 & 7)
-				ptr3--;
+			int3 = (uintptr_t)ptr3;
+			int3 += 7;
+			int3 &= 0xfffffffffffffff8;
+			ptr3 = (UCHAR *)int3;
 
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
@@ -1268,9 +1273,10 @@ BOOL Start()
 
 	IDHDDR.LENGTH = (int)(ptr3 - (unsigned char *)&IDHDDR);
 
-	ptr3 += 7;
-	while ((unsigned int)ptr3 & 7)
-		ptr3--;
+	int3 = (uintptr_t)NEXTFREEDATA;
+	int3 += 7;
+	int3 &= 0xfffffffffffffff8;
+	NEXTFREEDATA = (UCHAR *)int3;
 
 	BUFFERPOOL = NEXTFREEDATA;
 
@@ -2283,7 +2289,7 @@ VOID DoListenMonitor(TRANSPORTENTRY * L4, MESSAGE * Msg)
 
 		memcpy(ptr, MonBuffer, len);
 
-		Buffer->LENGTH = len + 4 + sizeof(void *);
+		Buffer->LENGTH = (USHORT)len + 4 + sizeof(void *);
 
 		C_Q_ADD(&L4->L4TX_Q, Buffer);
 

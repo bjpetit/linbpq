@@ -103,20 +103,23 @@ DWORD n;
 struct tagMSG Msg;
 static HINSTANCE PcapDriver=0;
 
-typedef int (FAR *FARPROCX)();
+typedef void * (FAR *FARPROCX)();
+typedef int (FAR *FARPROCI)();			// Return int
 
 int (FAR * pcap_sendpacketx)();
 
 FARPROCX pcap_compilex;
 FARPROCX pcap_setfilterx;
-FARPROCX pcap_datalinkx;
-FARPROCX pcap_next_exx;
+FARPROCI pcap_datalinkx;
+FARPROCI pcap_next_exx;
 FARPROCX pcap_geterrx;
 pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
 
 static char Dllname[6]="wpcap";
 
 static FARPROCX GetAddress(char * Proc);
+static FARPROCI GetAddressI(char * Proc);
+
 #else
 
 #define pcap_compilex pcap_compile
@@ -136,7 +139,7 @@ static int ProcessLine(char * buf,int Port, BOOL CheckPort);
 static int OpenPCAP(int IOBASE, int PORTNUMBER);
 
 
-int ExtProc(int fn, int port,unsigned char * buff)
+size_t ExtProc(int fn, int port,unsigned char * buff)
 {
 	int len,txlen=0,res;
 	char txbuff[500];
@@ -248,7 +251,7 @@ int ExtProc(int fn, int port,unsigned char * buff)
 		if (pcap_sendpacketx(PCAPInfo[port].adhandle, txbuff, txlen) != 0)
 		{
 			char buf[256];
-			n=sprintf(buf,"\nError sending the packet: \n", pcap_geterrx(PCAPInfo[port].adhandle));		
+			n=sprintf(buf,"\nError sending the packet: %s\n", (char *)pcap_geterrx(PCAPInfo[port].adhandle));		
 			Debugprintf(buf);
 			
 			return 3;
@@ -275,7 +278,7 @@ int ExtProc(int fn, int port,unsigned char * buff)
 }
 
 
-UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
+void * ETHERExtInit(struct PORTCONTROL *  PortEntry)
 {
 	//	Can have multiple ports, each mapping to a different Ethernet Adapter
 	
@@ -285,7 +288,7 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
 	if (InitPCAP())
 		OpenPCAP(PortEntry->IOBASE, PortEntry->PORTNUMBER);
 	
-	return ((int) ExtProc);
+	return ExtProc;
 }
 
 
@@ -317,20 +320,20 @@ InitPCAP()
 		return(FALSE);
 	}
 
-	if ((pcap_sendpacketx=GetAddress("pcap_sendpacket")) == 0 ) return FALSE;
+	if ((pcap_sendpacketx=GetAddressI("pcap_sendpacket")) == 0 ) return FALSE;
 
-	if ((pcap_datalinkx=GetAddress("pcap_datalink")) == 0 ) return FALSE;
+	if ((pcap_datalinkx=GetAddressI("pcap_datalink")) == 0 ) return FALSE;
 
 	if ((pcap_compilex=GetAddress("pcap_compile")) == 0 ) return FALSE;
 
 	if ((pcap_setfilterx=GetAddress("pcap_setfilter")) == 0 ) return FALSE;
 	
-	if ((pcap_open_livex = (pcap_t * (__cdecl *)())
+	if ((pcap_open_livex = (pcap_t * (__cdecl *)(const char *, int, int, int, char *))
 		GetProcAddress(PcapDriver,"pcap_open_live")) == 0 ) return FALSE;
 
 	if ((pcap_geterrx=GetAddress("pcap_geterr")) == 0 ) return FALSE;
 
-	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
+	if ((pcap_next_exx=GetAddressI("pcap_next_ex")) == 0 ) return FALSE;
 	
 	return (TRUE);
 #endif
@@ -355,6 +358,29 @@ FARPROCX GetAddress(char * Proc)
 		n=sprintf(buf,"Error finding %s - %d\n", Proc,err);
 		WritetoConsole(buf);
 	
+		return(0);
+	}
+
+	return ProcAddr;
+}
+
+FARPROCI GetAddressI(char * Proc)
+{
+	FARPROCI ProcAddr;
+	int err = 0;
+	char buf[256];
+	int n;
+
+
+	ProcAddr = (FARPROCI)GetProcAddress(PcapDriver, Proc);
+
+	if (ProcAddr == 0)
+	{
+		err = GetLastError();
+
+		n = sprintf(buf, "Error finding %s - %d", Proc, err);
+		WritetoConsoleLocal(buf);
+
 		return(0);
 	}
 
@@ -403,7 +429,7 @@ int OpenPCAP(int IOBASE, int port)
 	}
 	
 	/* Check the link layer. We support only Ethernet for simplicity. */
-	if(pcap_datalinkx(PCAPInfo[port].adhandle) != DLT_EN10MB)
+	if (pcap_datalinkx(PCAPInfo[port].adhandle) != DLT_EN10MB)
 	{
 		n=sprintf(buf,"This program works only on Ethernet networks.\n");
 		WritetoConsole(buf);

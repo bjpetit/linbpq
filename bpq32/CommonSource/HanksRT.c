@@ -198,7 +198,7 @@ VOID * _zalloc_dbg(int len, int type, char * file, int line)
 }
 
 
-VOID * _zalloc(int len)
+VOID * _zalloc(time_t len)
 {
 	// ?? malloc and clear
 
@@ -246,12 +246,12 @@ static VOID nputs(ChatCIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
-	ChatQueueMsg(conn, buf, strlen(buf));
+	ChatQueueMsg(conn, buf, (int)strlen(buf));
 
 	if (*buf == 0x1b)
 		buf += 2;				// Colour Escape
 	
-	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
+	WriteLogLine(conn, '>',buf, (int)strlen(buf), LOG_CHAT);
 }
 
 int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len)
@@ -316,7 +316,7 @@ VOID ChatExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG)
 
 	while (ptr)
 	{
-		len = ptr - OldP;		// Chars before $
+		len = (int)(ptr - OldP);		// Chars before $
 		memcpy(NewP, OldP, len);
 		NewP += len;
 
@@ -345,7 +345,7 @@ VOID ChatExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG)
 			pptr = Dollar;		// Just Copy $
 		}
 
-		len = strlen(pptr);
+		len = (int)strlen(pptr);
 		memcpy(NewP, pptr, len);
 		NewP += len;
 
@@ -355,7 +355,7 @@ VOID ChatExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG)
 
 	strcpy(NewP, OldP);
 
-	len = RemoveLF(NewMessage, strlen(NewMessage));
+	len = RemoveLF(NewMessage, (int)strlen(NewMessage));
 
 	WriteLogLine(conn, '>', NewMessage,  len, LOG);
 	ChatQueueMsg(conn, NewMessage, len);
@@ -479,7 +479,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 		OrigBuffer[40] = 0;
 		sprintf(&OrigBuffer[40],"/t %s\r", topic);
 		strcpy(OrigBuffer, &OrigBuffer[40]);
-		len = strlen(OrigBuffer);
+		len = (int)strlen(OrigBuffer);
 	}
 	else
 	{ 
@@ -641,7 +641,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 
 		if (_memicmp(&Buffer[1], "Bye", 1) == 0)
 		{
-			SendUnbuffered(conn->BPQStream, ChatSignoffMsg, strlen(ChatSignoffMsg));
+			SendUnbuffered(conn->BPQStream, ChatSignoffMsg, (int)strlen(ChatSignoffMsg));
 			
 			if (conn->BPQStream < 0)
 			{
@@ -658,7 +658,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 
 		if (_memicmp(&Buffer[1], "Quit", 4) == 0)
 		{
-			SendUnbuffered(conn->BPQStream, ChatSignoffMsg, strlen(ChatSignoffMsg));
+			SendUnbuffered(conn->BPQStream, ChatSignoffMsg, (int)strlen(ChatSignoffMsg));
 
 			if (conn->BPQStream < 0)
 			{
@@ -859,7 +859,7 @@ void upduser(USER *user)
 		}
 	}
 
-#ifdef LINBPQ
+#ifndef WIN32
 	fprintf(out, "%s %d %s %s¬%d¬%s\n", user->call, user->rtflags, user->name, user->qth, user->Colour, user->Codepage);
 #else
 	fprintf(out, "%s %d %s %s¬%d¬%d\n", user->call, user->rtflags, user->name, user->qth, user->Colour, user->Codepage);
@@ -1767,7 +1767,7 @@ void put_text(ChatCIRCUIT * circuit, USER * user, UCHAR * buf)
 		BOOL DefaultUsed = FALSE;
 		char Subst = '?';
 
-		wlen = MultiByteToWideChar(CP_UTF8, 0, buf, strlen(buf) + 1, BufferW, 4096); 
+		wlen = MultiByteToWideChar(CP_UTF8, 0, buf, (int)strlen(buf) + 1, BufferW, 4096);
 		blen = WideCharToMultiByte(circuit->u.user->Codepage, 0, BufferW, wlen, BufferB + 2, 4096, &Subst, &DefaultUsed); 
 
 		if (blen == 0)				// Probably means invalid code page
@@ -3643,7 +3643,7 @@ loop:
 		{
 			// buffer contains more that 1 message
 
-			MsgLen = conn->InputLen - (ptr2-ptr);
+			MsgLen = conn->InputLen - (int)(ptr2-ptr);
 
 			memcpy(Buffer, conn->InputBuffer, MsgLen);
 						
@@ -3875,7 +3875,7 @@ void ChatFlush(ChatCIRCUIT * conn)
 	}
 	tosend = conn->OutputQueueLength - conn->OutputGetPointer;
 
-	sent=0;
+	sent = 0;
 
 	while (tosend > 0)
 	{
@@ -3883,20 +3883,19 @@ void ChatFlush(ChatCIRCUIT * conn)
 			return;						// Busy
 
 		if (tosend <= conn->paclen)
-			len=tosend;
+			len = tosend;
 		else
 			len=conn->paclen;
 
 		GetSemaphore(&OutputSEM, 0);
 
-
 		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
 
-		conn->OutputGetPointer+=len;
+		conn->OutputGetPointer += len;
 
 		FreeSemaphore(&OutputSEM);
 
-		tosend-=len;	
+		tosend -= len;	
 		sent++;
 
 		if (sent > 4)
@@ -3915,8 +3914,8 @@ VOID ChatClearQueue(ChatCIRCUIT * conn)
 
 	GetSemaphore(&OutputSEM, 0);
 	
-	conn->OutputGetPointer=0;
-	conn->OutputQueueLength=0;
+	conn->OutputGetPointer = 0;
+	conn->OutputQueueLength = 0;
 
 	FreeSemaphore(&OutputSEM);
 }

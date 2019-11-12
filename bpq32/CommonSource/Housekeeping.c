@@ -61,8 +61,9 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Forwarded, int Age);
 int CreateWPMessage();
 int DeleteRedundantMessages();
 VOID CreateUserReport();
+UCHAR * APIENTRY GetLogDirectory();
 
-int LastHouseKeepingTime;
+time_t LastHouseKeepingTime;
 
 time_t LastTrafficTime;
 
@@ -118,7 +119,7 @@ VOID * GetOverrides(config_setting_t * group, char * ValueName)
 
 	config_setting_t *setting;
 
-	Value = zalloc(4);				// always NULL entry on end even if no values
+	Value = zalloc(sizeof(void *));				// always NULL entry on end even if no values
 	Value[0] = NULL;
 
 	setting = config_setting_get_member (group, ValueName);
@@ -134,7 +135,7 @@ VOID * GetOverrides(config_setting_t * group, char * ValueName)
 			if (ptr1)
 				*(ptr1++) = 0;
 
-			Value = realloc(Value, (Count+2)*4);
+			Value = realloc(Value, (Count+2) * sizeof(void *));
 			Value[Count] = zalloc(sizeof(struct Override));
 			Val = strlop(ptr, ',');
 			if (Val == NULL)
@@ -163,7 +164,7 @@ VOID * RegGetOverrides(HKEY hKey, char * ValueName)
 	char * Val;
 
 
-	Value = zalloc(4);				// always NULL entry on end even if no values
+	Value = zalloc(sizeof(void *));				// always NULL entry on end even if no values
 
 	Value[0] = NULL;
 
@@ -185,7 +186,7 @@ VOID * RegGetOverrides(HKEY hKey, char * ValueName)
 	{
 		len=strlen(&MultiString[ptr]);
 
-		Value = realloc(Value, (Count+2)*4);
+		Value = realloc(Value, (Count+2) * sizeof(void *));
 		Value[Count] = zalloc(sizeof(struct Override));
 		Val = strlop(&MultiString[ptr], ',');
 		if (Val == NULL)
@@ -299,21 +300,21 @@ VOID ExpireMessages()
 {
 	struct MsgInfo * Msg;
 	int n;
-	int PRLimit;
-	int PURLimit;
-	int PFLimit;
-	int PNFLimit;
-	int BFLimit;
-	int BNFLimit;
-	int BLimit;
-	int NTSDLimit;
-	int NTSULimit;
-	int NTSFLimit;
+	time_t PRLimit;
+	time_t PURLimit;
+	time_t PFLimit;
+	time_t PNFLimit;
+	time_t BFLimit;
+	time_t BNFLimit;
+	time_t BLimit;
+	time_t NTSDLimit;
+	time_t NTSULimit;
+	time_t NTSFLimit;
 
 	struct Override ** Calls;
 
-	int now=time(NULL);
-	int Future = now + (7 * 86400);
+	time_t now = time(NULL);
+	time_t Future = now + (7 * 86400);
 
 	Killed = 0;
 
@@ -540,7 +541,7 @@ BOOL RemoveKilledMessages()
 
 	FirstMessageIndextoForward = 0;
 
-	NewMsgHddrPtr = zalloc((NumberofMessages+1) * 4);
+	NewMsgHddrPtr = zalloc((NumberofMessages+1) * sizeof(void *));
 	NewMsgHddrPtr[0] = MsgHddrPtr[0];		// Copy Control Record
 
 	i = 0;
@@ -721,7 +722,7 @@ BOOL ExpireBIDs()
 
 	int i, n;
 
-	NewBIDRecPtr = zalloc((NumberofBIDs+1) * 4);
+	NewBIDRecPtr = zalloc((NumberofBIDs+1) * sizeof(BIDRec));
 	NewBIDRecPtr[0] = BIDRecPtr[0];		// Copy Control Record
 
 	i = 0;
@@ -768,6 +769,8 @@ VOID MailHousekeepingResults()
 
 #ifdef WIN32
 
+extern UCHAR LogDirectory[260];
+
 int DeleteLogFiles()
 {
    WIN32_FIND_DATA ffd;
@@ -779,11 +782,15 @@ int DeleteLogFiles()
    LARGE_INTEGER ft;
    time_t now = time(NULL);
    int Age;
+   UCHAR * ptr;
 
    // Prepare string for use with FindFile functions.  First, copy the
    // string to a buffer, then append '\*' to the directory name.
 
-   strcpy(szDir, GetLogDirectory());
+
+	ptr = GetLogDirectory();
+
+	strcpy(szDir, ptr);
    strcat(szDir, "/logs/Log_*.txt");
 
    // Find the first file in the directory.
@@ -811,7 +818,7 @@ int DeleteLogFiles()
 		 ft.QuadPart -=  116444736000000000;
 		 ft.QuadPart /= 10000000;
 
-		 Age = (now - ft.LowPart) / 86400; 
+		 Age = (int)((now - ft.LowPart) / 86400); 
 
 		 if (Age > LogAge)
 		 {

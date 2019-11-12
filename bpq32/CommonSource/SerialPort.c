@@ -75,8 +75,6 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 
 static int ProcessLine(char * buf, int Port)
@@ -192,8 +190,6 @@ static time_t ltime;
 
 static VOID SendToTNC(struct TNCINFO * TNC, int Stream, UCHAR * Encoded, int EncLen)
 {
-	int SentLen;
-
 	if (TNC->hDevice)
 	{
 		// Serial mode. Queue to Hostmode driver
@@ -227,7 +223,7 @@ VOID SerialChangeMYC(struct TNCINFO * TNC, char * Call)
 	SerialSendCommand(TNC, TXMsg);
 }
 
-static int ExtProc(int fn, int port, PDATAMESSAGE buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
 	int datalen;
 	PMSGWITHLEN buffptr;
@@ -320,12 +316,9 @@ ok:
 
 		while (TNC->PortRecord->UI_Q)
 		{
-			int datalen;
-			char * Buffer;
 			char FECMsg[512];
 			char Call[12] = "           ";		
 			struct _MESSAGE * buffptr;
-			int CallLen;
 			char * ptr = FECMsg;
 
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
@@ -476,7 +469,7 @@ ok:
 			return 0;
 		}
 
-		txlen = GetLengthfromBuffer(buff) - (sizeof(void *) + 4);
+		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);		// 1 as no PID
 		TXMsg = &buff->L2DATA[0];
 		TXMsg[txlen] = 0;
 
@@ -1052,7 +1045,7 @@ int SerialSendData(struct TNCINFO * TNC, UCHAR * data, int txlen)
 int SerialSendCommand(struct TNCINFO * TNC, UCHAR * data)
 {
 	if (TNC->hDevice)
-		return WriteCOMBlock(TNC->hDevice, data, strlen(data));
+		return WriteCOMBlock(TNC->hDevice, data, (int)strlen(data));
 
 	return 0;
 }
@@ -1065,7 +1058,7 @@ int ProcessEscape(UCHAR * TXMsg)
 	UCHAR * ptr3 = strchr(TXMsg, '^');
 
 	BOOL HexEscape = FALSE;
-	int HexDigit, Hex, NewLen;
+	int NewLen;
 
 	// Now using ^C for ctrl/c, etc
 	// Still use \\d
@@ -1119,7 +1112,7 @@ int ProcessEscape(UCHAR * TXMsg)
 		ptr2 = strchr(ptr2, '^');
 	}
 	
-	NewLen = strlen(Orig);
+	NewLen = (int)strlen(Orig);
 
 	if (HexEscape)
 	{

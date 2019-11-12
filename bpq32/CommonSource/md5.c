@@ -325,7 +325,7 @@ DllExport VOID APIENTRY md5 (char *arg, unsigned char * checksum)
 	struct cvs_MD5Context context;
 
 	cvs_MD5Init (&context);
-	cvs_MD5Update (&context, arg, strlen (arg));
+	cvs_MD5Update (&context, arg, (int)strlen (arg));
 	cvs_MD5Final (checksum, &context);
 	
 	return;

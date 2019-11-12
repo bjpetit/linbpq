@@ -828,7 +828,7 @@ int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT)
 		if (ptr)
 			*ptr = 0;
 
-		AliasLen = strlen(AliasCopy);
+		AliasLen = (int)strlen(AliasCopy);
 
 		RIF[10] = AliasLen+2;
 		RIF[11] = 0;

@@ -2961,8 +2961,8 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.4.3\n");
-  	printf("Copyright © 2004-2019 John Wiseman G8BPQ\n");
+	printf("G8BPQ APRS Client for Linux Version 1.1.14.4\n");
+  	printf("Copyright(c) 2004-2019 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
@@ -3049,7 +3049,7 @@ int main(int argc, char *argv[])
 	{
 		// Map shared memory object
 
-		Shared = mmap((void *)APRSSHAREDMEMORYBASE, sizeof(struct STATIONRECORD) * 2,
+		Shared = mmap((void *)APRSSHAREDMEMORYBASE, 8192 * 4096,
 		     PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
 
 		if (Shared == MAP_FAILED)
@@ -3059,11 +3059,26 @@ int main(int argc, char *argv[])
 			return 0;
 		}
 	}
+	
+	if (Shared != (void *)APRSSHAREDMEMORYBASE)
+	{
+		printf("Map APRS Shared Memory Allocated at wrong address %x Should be 0x43000000\n", Shared);
+		return 0;
+	}
+	
+	printf("Map APRS Shared Memory Allocated at %x\n", Shared);
+
 
 	SMEM = (struct SharedMem *)Shared;
 	SharedSize = SMEM->SharedMemLen;
 	
-	printf("Shared Memory Size %d\n", SharedSize);
+	printf("Shared Memory Size %d Max %d\n", SharedSize, 8192 * 4096);
+	
+	if (SharedSize > 8192 * 4096)
+	{
+		printf("MAXSTATIONS too high\n");
+		return 0;
+	}
 	
 	StnRecordBase = Shared + 32;
 	StationRecords = (struct STATIONRECORD**)StnRecordBase;
@@ -3082,10 +3097,14 @@ int main(int argc, char *argv[])
 
 	//	Remap with Server's view of MaxStations
 	
-	munmap(APRSStationMemory, sizeof(struct STATIONRECORD) * 2);
+//	munmap(APRSStationMemory, 4096 * 4096);
+	
+//	perror("munmap");
 
-	Shared = mmap((void *)APRSSHAREDMEMORYBASE, SharedSize,
-		PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
+//	Shared = mmap((void *)APRSSHAREDMEMORYBASE, SharedSize,
+//		PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+//	printf("Map APRS Shared Memory Allocated at %x\n", Shared);
 
 	if (Shared == MAP_FAILED)
 	{

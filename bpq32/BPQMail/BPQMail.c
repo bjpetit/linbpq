@@ -981,7 +981,7 @@
 //	Preparations for 64 bit version
 
 
-// 6.0.19.xx
+// 6.0.19.1 September 2019
 
 //	Trap missing HTML reply Template or HTML files
 //	Fix case problems in HTML Templates
@@ -999,6 +999,14 @@
 //	Experimental Blocked Uncompressed forwarding
 //	Security fix for YAPP
 //	Fix WebMail Cancel Send Message
+//	Fix processing Hold Message response from Winlink Express
+
+// 6.0.20.xx
+
+//	Improvments to YAPP
+//	Add Copy forwarding config
+//	Add Next and Previous buttons to Webmail message read screen
+//	Start moving templates from HTMLPages to inline code.
 
 #include "BPQMail.h"
 #define MAIL

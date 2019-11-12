@@ -70,6 +70,7 @@ VOID SaveWPConfig(HWND hDlg);
 PrintMessage(struct MsgInfo * Msg);
 BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle);
 VOID TidyPrompts();
+struct UserInfo * FindBBS(char * Name);
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -739,6 +740,127 @@ VOID WINAPI OnChildDialogInit(HWND hwndDlg)
 	SetWindowPos(hwndDlg, HWND_TOP, pHdr->rcDisplay.left, pHdr->rcDisplay.top, 0, 0, SWP_NOSIZE);
 }
 
+void SetForwardingPage(HWND hDlg, struct UserInfo * user)
+{
+
+	struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
+	char ** Calls;
+	char Text[10000]="";
+
+	Calls = ForwardingInfo->TOCalls;
+
+	if (Calls)
+	{
+		while(Calls[0])
+		{
+			strcat(Text, Calls[0]);
+			strcat(Text, "\r\n");
+			Calls++;
+		}
+	}
+	SetDlgItemText(hDlg, IDC_TOCALLS, Text);
+
+	Text[0] = 0;
+
+	Calls = ForwardingInfo->ATCalls;
+
+	if (Calls)
+	{
+		while(Calls[0])
+		{
+			strcat(Text, Calls[0]);
+			strcat(Text, "\r\n");
+			Calls++;
+		}
+	}
+
+	SetDlgItemText(hDlg, IDC_ATCALLS, Text);
+
+	Text[0] = 0;
+	Calls = ForwardingInfo->Haddresses;
+
+	if (Calls)
+	{
+		while(Calls[0])
+		{
+			strcat(Text, Calls[0]);
+			strcat(Text, "\r\n");
+			Calls++;
+		}
+			
+	}
+
+	SetDlgItemText(hDlg, IDC_HROUTES, Text);
+
+	Text[0] = 0;
+	Calls = ForwardingInfo->HaddressesP;
+
+	if (Calls)
+	{
+		while(Calls[0])
+		{
+			strcat(Text, Calls[0]);
+			strcat(Text, "\r\n");
+			Calls++;
+		}
+			
+	}
+
+	SetDlgItemText(hDlg, IDC_HROUTESP, Text);
+
+	Text[0] = 0;
+
+	Calls = ForwardingInfo->FWDTimes;
+
+	if (Calls)
+	{
+		while(Calls[0])
+		{
+			strcat(Text, Calls[0]);
+			strcat(Text, "\r\n");
+			Calls++;
+		}
+	}
+
+	SetDlgItemText(hDlg, IDC_FWDTIMES, Text);
+
+	Text[0] = 0;
+	Calls = ForwardingInfo->ConnectScript;
+
+	if (Calls)
+	{
+		while(Calls[0])
+		{
+			strcat(Text, Calls[0]);
+			strcat(Text, "\r\n");
+			Calls++;
+		}
+			
+	}
+
+	SetDlgItemText(hDlg, IDC_CALL, Text);
+
+	if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
+		ForwardingInfo->AllowCompressed = TRUE;
+
+	CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
+	CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
+	CheckDlgButton(hDlg, IDC_BLOCKED, ForwardingInfo->AllowBlocked);
+	CheckDlgButton(hDlg, IDC_ALLOWCOMP, ForwardingInfo->AllowCompressed);
+	CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
+	CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
+	CheckDlgButton(hDlg, IDC_CTRLZ, ForwardingInfo->SendCTRLZ);
+	CheckDlgButton(hDlg, IDC_PERSONALONLY, ForwardingInfo->PersonalOnly);
+	CheckDlgButton(hDlg, IDC_SENDNEW, ForwardingInfo->SendNew);
+	SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
+	SetDlgItemInt(hDlg, IDC_REVFWDINT, ForwardingInfo->RevFwdInterval, FALSE);
+	SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
+	SetDlgItemText(hDlg, IDC_BBSHA, ForwardingInfo->BBSHA);
+
+	SetFocus(GetDlgItem(hDlg, IDC_TOCALLS)); 
+	return;
+}
+
 int Do_BBS_Sel_Changed(HWND hDlg)
 {
 	// Update BBS display with newly selected BBS
@@ -753,129 +875,10 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 	{
 		if (strcmp(user->Call, CurrentConfigCall) == 0)
 		{
-			struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
-			char ** Calls;
-			char Text[10000]="";
-
-			CurrentBBS = user;					// Save User Pointer
-			Calls = ForwardingInfo->TOCalls;
-
-			if (Calls)
-			{
-				while(Calls[0])
-				{
-					strcat(Text, Calls[0]);
-					strcat(Text, "\r\n");
-					Calls++;
-				}
-			}
-			SetDlgItemText(hDlg, IDC_TOCALLS, Text);
-
-			Text[0] = 0;
-
-			Calls = ForwardingInfo->ATCalls;
-
-			if (Calls)
-			{
-				while(Calls[0])
-				{
-					strcat(Text, Calls[0]);
-					strcat(Text, "\r\n");
-					Calls++;
-				}
-			}
-
-			SetDlgItemText(hDlg, IDC_ATCALLS, Text);
-
-			Text[0] = 0;
-			Calls = ForwardingInfo->Haddresses;
-
-			if (Calls)
-			{
-				while(Calls[0])
-				{
-					strcat(Text, Calls[0]);
-					strcat(Text, "\r\n");
-					Calls++;
-				}
-			
-			}
-
-			SetDlgItemText(hDlg, IDC_HROUTES, Text);
-
-
-			Text[0] = 0;
-			Calls = ForwardingInfo->HaddressesP;
-
-			if (Calls)
-			{
-				while(Calls[0])
-				{
-					strcat(Text, Calls[0]);
-					strcat(Text, "\r\n");
-					Calls++;
-				}
-			
-			}
-
-			SetDlgItemText(hDlg, IDC_HROUTESP, Text);
-
-			Text[0] = 0;
-
-			Calls = ForwardingInfo->FWDTimes;
-
-			if (Calls)
-			{
-				while(Calls[0])
-				{
-					strcat(Text, Calls[0]);
-					strcat(Text, "\r\n");
-					Calls++;
-				}
-			}
-
-			SetDlgItemText(hDlg, IDC_FWDTIMES, Text);
-
-			Text[0] = 0;
-			Calls = ForwardingInfo->ConnectScript;
-
-			if (Calls)
-			{
-				while(Calls[0])
-				{
-					strcat(Text, Calls[0]);
-					strcat(Text, "\r\n");
-					Calls++;
-				}
-			
-			}
-
-			SetDlgItemText(hDlg, IDC_CALL, Text);
-
-			if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
-				ForwardingInfo->AllowCompressed = TRUE;
-
-			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
-			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
-			CheckDlgButton(hDlg, IDC_BLOCKED, ForwardingInfo->AllowBlocked);
-			CheckDlgButton(hDlg, IDC_ALLOWCOMP, ForwardingInfo->AllowCompressed);
-			CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
-			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
-			CheckDlgButton(hDlg, IDC_CTRLZ, ForwardingInfo->SendCTRLZ);
-			CheckDlgButton(hDlg, IDC_PERSONALONLY, ForwardingInfo->PersonalOnly);
-			CheckDlgButton(hDlg, IDC_SENDNEW, ForwardingInfo->SendNew);
-			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
-			SetDlgItemInt(hDlg, IDC_REVFWDINT, ForwardingInfo->RevFwdInterval, FALSE);
-			SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
-			SetDlgItemText(hDlg, IDC_BBSHA, ForwardingInfo->BBSHA);
-
-			SetFocus(GetDlgItem(hDlg, IDC_TOCALLS)); 
-			return 0;
+			CurrentBBS = user;
+			SetForwardingPage(hDlg, user);			// moved to separate routine as also called from copy config
 		}
-
 	}
-
-
 	return 0;
 
 }
@@ -1648,6 +1651,41 @@ VOID SaveFWDConfig(HWND hDlg)
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
+
+VOID CopyFwdConfig(HWND hDlg)
+{
+	char FromBBS[11] = "";
+	struct UserInfo * OldBBS;
+
+	if (CurrentBBS == NULL)
+	{
+		sprintf(InfoBoxText, "Please select a BBS to copy to");
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+		return;
+	}
+
+	// Get call to copy from 
+
+	GetDlgItemText(hDlg, COPYFROMCALL, FromBBS, 10);
+
+	OldBBS = FindBBS(FromBBS);
+
+	if (OldBBS == NULL)
+	{
+		sprintf(InfoBoxText, "BBS %s not found", FromBBS);
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+		return;
+	}
+
+	// Set current info from OldBBS
+
+	SetForwardingPage(hDlg, OldBBS);			// moved to separate routine as also called from copy config
+
+//	sprintf(InfoBoxText, "Forwarding information saved");
+//	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+
+}
+
 
 VOID SaveMAINTConfigFromDialog()
 {
@@ -2964,6 +3002,12 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			
 			SaveFWDConfig(hDlg);
 			return TRUE;
+
+		case COPYCONFIG:
+			
+			CopyFwdConfig(hDlg);
+			return TRUE;
+
 
 		}
 		break;

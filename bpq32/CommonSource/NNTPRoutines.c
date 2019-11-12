@@ -281,7 +281,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				return;
 			}
 
-			linelen = ptr2 - ptr1;
+			linelen = (int)(ptr2 - ptr1);
 
 			// From: "John Wiseman" <john.wiseman@ntlworld.com>
 			// To: <G8BPQ@g8bpq.org.uk>
@@ -378,7 +378,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			ptr1 = sockptr->MailBuffer;
 
-			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
+			MsgLen = sockptr->MailSize - (int)(ptr2 - ptr1);
 
 			ptr1 = strchr(MsgFrom, '<');
 			
@@ -1002,7 +1002,7 @@ loop:
 		{
 			// buffer contains more that 1 message
 
-			MsgLen = sockptr->InputLen - (ptr2-ptr);
+			MsgLen = sockptr->InputLen - (int)(ptr2-ptr);
 
 			memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
 
@@ -1020,7 +1020,7 @@ loop:
 }
 
 
-int NNTP_Accept(int SocketId)
+int NNTP_Accept(SOCKET SocketId)
 {
 	int addrlen;
 	SocketConn * sockptr;

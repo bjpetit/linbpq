@@ -155,7 +155,7 @@ struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
 {
 	struct TimeScan * Band = malloc(sizeof (struct TimeScan));
 	
-	RIG->TimeBands = realloc(RIG->TimeBands, (++RIG->NumberofBands+2)*4);
+	RIG->TimeBands = realloc(RIG->TimeBands, (++RIG->NumberofBands+2) * sizeof(void *));
 	RIG->TimeBands[RIG->NumberofBands] = Band;
 	RIG->TimeBands[RIG->NumberofBands+1] = NULL;
 
@@ -706,7 +706,7 @@ portok:
  		
 			*(CmdPtr) = 0; 
 
-			Len = CmdPtr - (char *)&buffptr[30];
+			Len = (int)(CmdPtr - (char *)&buffptr[30]);
 			break;
 
 		case KENWOOD:
@@ -1961,7 +1961,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		while (ptr != NULL)
 		{
 			ptr++;									// include lf
-			len = ptr - &PORT->RXBuffer[0];	
+			len = (int)(ptr - &PORT->RXBuffer[0]);	
 			
 			memcpy(NMEAMsg, PORT->RXBuffer, len);	
 
@@ -2003,7 +2003,7 @@ VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len)
 		
 	// Process the first Packet in the buffer
 
-	NewLen =  FendPtr - rxbuffer +1;
+	NewLen =  (int)(FendPtr - rxbuffer + 1);
 
 	ProcessFrame(PORT, rxbuffer, NewLen);
 	
@@ -2096,7 +2096,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 		// TNC has been asked for permission, and we are waiting respoonse
 		// Only SCS pactor returns WaitingForPrmission, so check shouldn't be called on others
 		
-		RIG->OKtoChange = (int)RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
+		RIG->OKtoChange = (int)(intptr_t)RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
 	
 		if (RIG->OKtoChange == 1)
 		{
@@ -2134,7 +2134,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 		// not waiting for permission, so must be first call of a cycle
 
 		if (RIG->PortRecord[0]->PORT_EXT_ADDR)
-			RIG->WaitingForPermission = (int)RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
+			RIG->WaitingForPermission = (int)(intptr_t)RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 		// If it returns zero there is no need to wait.
 		// Normally SCS Returns True for first call, but returns 0 if Link not running
@@ -3317,7 +3317,7 @@ Loop:
 	}
 
 	ptr = strchr(Msg, ';');
-	CmdLen = ptr - Msg +1;
+	CmdLen = (int)(ptr - Msg + 1);
 
 	if (Msg[0] == 'F' && Msg[1] == 'A' && CmdLen > 9)
 	{
@@ -3385,7 +3385,7 @@ Loop:
 		// Another Message in Buffer
 
 		ptr++;
-		Length -= (ptr - Msg);
+		Length -= (int)(ptr - Msg);
 
 		if (Length <= 0)
 			return;
@@ -3751,7 +3751,9 @@ void DecodeRemote(struct RIGPORTINFO * PORT, char * ptr)
 	// Param is IPHOST:PORT for use with WINMORCONTROL
 	
 	struct sockaddr_in * destaddr = (SOCKADDR_IN * )&PORT->remoteDest;
-	u_long param = 1;
+	UCHAR param = 1;
+	u_long ioparam = 1;
+
 	char * port = strlop(ptr, ':');
 
 	PORT->remoteSock = socket(AF_INET,SOCK_DGRAM,0);
@@ -3759,12 +3761,12 @@ void DecodeRemote(struct RIGPORTINFO * PORT, char * ptr)
 	if (PORT->remoteSock == INVALID_SOCKET)
 		return;
 
-	setsockopt (PORT->remoteSock, SOL_SOCKET, SO_BROADCAST, &param, 4);
+	setsockopt (PORT->remoteSock, SOL_SOCKET, SO_BROADCAST, &param, 1);
 
 	if (port == NULL)
 		return;
 
-	ioctl (PORT->remoteSock, FIONBIO, &param);
+	ioctl (PORT->remoteSock, FIONBIO, &ioparam);
 
 	destaddr->sin_family = AF_INET;
 	destaddr->sin_addr.s_addr = inet_addr(ptr);
@@ -4304,7 +4306,7 @@ domux:
 		*(Poll++) = 1;			// ON
 		*(Poll++) = 0xFD;
 
-		RIG->PTTOnLen = Poll - &RIG->PTTOn[0];
+		RIG->PTTOnLen = (int)(Poll - &RIG->PTTOn[0]);
 
 		Poll = &RIG->PTTOff[0];
 
@@ -4352,7 +4354,7 @@ domux:
 			*(Poll++) = 0xFD;
 		}
 
-		RIG->PTTOffLen = Poll - &RIG->PTTOff[0];
+		RIG->PTTOffLen = (int)(Poll - &RIG->PTTOff[0]);
 
 	}
 	else if	(PORT->PortType == KENWOOD)
@@ -4375,8 +4377,8 @@ domux:
 				strcpy(RIG->PTTOn, "TX;");
 		}
 
-		RIG->PTTOnLen = strlen(RIG->PTTOn);
-		RIG->PTTOffLen = strlen(RIG->PTTOff);
+		RIG->PTTOnLen = (int)strlen(RIG->PTTOn);
+		RIG->PTTOffLen = (int)strlen(RIG->PTTOff);
 
 	}
 	else if	(PORT->PortType == FLEX)

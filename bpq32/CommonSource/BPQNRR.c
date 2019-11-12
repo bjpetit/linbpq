@@ -109,7 +109,7 @@ VOID NRRecordRoute(char * Buff, int Len)
 
 		*ptr1++ = 0x0d;			// CR
 
-		Len = ptr1 - BUFFER;
+		Len = (int)(ptr1 - BUFFER);
 
 		Msg = (struct _MESSAGE *)BUFFER;
 		

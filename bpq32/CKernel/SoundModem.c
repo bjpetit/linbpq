@@ -111,7 +111,7 @@ L1FRAME * rxf;
 
 
 VOID __cdecl Debugprintf(const char * format, ...);
-HANDLE _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+
 static int ExtProc(int fn, int port, unsigned char * buff);
 VOID * zalloc(int len);
 KillSoundTNC(struct SOUNDTNCINFO * TNC);

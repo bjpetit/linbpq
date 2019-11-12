@@ -206,7 +206,8 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 	struct DEST_LIST * DEST;
 	struct ROUTE * ROUTE;
 	int Portno = PORT->PORTNUMBER;
-	UINT Stamp, HH, MM;
+	time_t Stamp;
+	int HH, MM;
 	int Msglen = Msg->LENGTH;
 	int n;
 	UCHAR * ptr1, * ptr2, * saveptr;
@@ -305,10 +306,10 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 	time((time_t *)&Stamp);
 
 	Stamp = Stamp % 86400;			// Secs into day
-	HH = Stamp / 3600;
+	HH = (int)(Stamp / 3600);
 
 	Stamp -= HH * 3600;
-	MM = Stamp  / 60;
+	MM = (int)(Stamp / 60);
 
 	ROUTE->NEIGHBOUR_TIME = 256 * HH + MM;
 
@@ -360,7 +361,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 	PROCROUTES(DEST, ROUTE, Qual);
 
-	Msglen -= 23;				// LEVEL 2 HEADER FLAG and NODE MNEMONIC
+	Msglen -= (MSGHDDRLEN + 23);				// LEVEL 2 HEADER FLAG and NODE MNEMONIC
 
 	//	PROCESS DESTINATIONS from message
 
@@ -368,7 +369,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 	saveptr = ptr1 - 21;
 
-	while (Msglen > 21)		// STILL AT LEAST 1 ENTRY LEFT
+	while (Msglen >= 21)		// STILL AT LEAST 1 ENTRY LEFT
 	{
 		Msglen -= 21;
 		saveptr += 21;
@@ -839,7 +840,7 @@ VOID SENDNEXTNODESFRAGMENT()
 
 Sendit:
 
-	Buffer->LENGTH = ptr1 - (UCHAR *)Buffer;
+	Buffer->LENGTH = (int)(ptr1 - (UCHAR *)Buffer);
 
 	PUT_ON_PORT_Q(PORT, Buffer);
 
@@ -1208,7 +1209,7 @@ VOID REMOVENODE(dest_list * DEST)
 							ptr1 = SetupNodeHeader(Msg);
 							ptr1 += sprintf(ptr1, "Error - Node %s has disappeared\r", Nodename);
 
-							Msg->LENGTH = ptr1 - (UCHAR *)Msg;
+							Msg->LENGTH = (int)(ptr1 - (UCHAR *)Msg);
 							C_Q_ADD(&Partner->L4TX_Q, Msg);
 							PostDataAvailable(Partner);
 						}

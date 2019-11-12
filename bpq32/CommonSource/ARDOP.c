@@ -127,8 +127,6 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 int GenCRC16(unsigned char * Data, unsigned short length)
 {
 	// For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
@@ -797,7 +795,7 @@ VOID ARDOPChangeMYC(struct TNCINFO * TNC, char * Call)
 //	ARDOPSendCommand(TNC, "MYCALL", TRUE);
 }
 
-static int ExtProc(int fn, int port, PDATAMESSAGE buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
 	int datalen;
 	PMSGWITHLEN buffptr;
@@ -3009,7 +3007,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			if (TNC->RIG && TNC->RIG != &TNC->DummyRig && strcmp(TNC->RIG->RigName, "PTT"))
 			{
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
-				SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+				SESS->Frequency = (int)(atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
 			}
 			else
 			{

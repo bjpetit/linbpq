@@ -583,7 +583,7 @@ char * strlop(char * buf, char delim);
 int rt_cmd(ChatCIRCUIT *circuit, char * Buffer);
 ChatCIRCUIT *circuit_new(ChatCIRCUIT *circuit, int flags);
 void makelinks(void);
-VOID * _zalloc(int len);
+VOID * _zalloc(size_t len);
 VOID FreeChatMemory();
 VOID ChatTimer();
 char * lookupuser(char * call);

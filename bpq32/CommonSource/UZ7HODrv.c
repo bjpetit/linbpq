@@ -55,8 +55,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 
 //int ResetExtDriver(int num);
@@ -64,7 +62,7 @@ extern char * PortConfig[33];
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-void ConnecttoUZ7HOThread(int port);
+void ConnecttoUZ7HOThread(void * portptr);
 
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);
@@ -270,9 +268,9 @@ VOID UZ7HOReleasePort(struct TNCINFO * TNC)
 	RegisterAPPLCalls(TNC, FALSE);
 }
 
-static int ExtProc(int fn, int port, PDATAMESSAGE buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	char txbuff[500];
 	unsigned int bytes,txlen=0;
 	struct TNCINFO * TNC = TNCInfo[port];
@@ -435,11 +433,11 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 					{
 						// Write block has cleared. Send rest of packet
 
-						buffptr=Q_REM(&BPQtoUZ7HO_Q[port]);
+						buffptr = Q_REM(&BPQtoUZ7HO_Q[port]);
 
-						txlen=buffptr[1];
+						txlen = (int)buffptr->Len;
 
-						memcpy(txbuff,buffptr+2,txlen);
+						memcpy(txbuff, buffptr->Data, txlen);
 
 						bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
 					
@@ -490,7 +488,7 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 					if (buffptr)
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "UZ7HO} Failure with %s\r", STREAM->RemoteCall);
+						buffptr->Len = sprintf(buffptr->Data, "UZ7HO} Failure with %s\r", STREAM->RemoteCall);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
 	
@@ -553,18 +551,16 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 			
 				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
 
-				datalen=buffptr[1];
+				datalen = (int)buffptr->Len;
 
-				buff->PORT = Stream;
+				buff->PORT = Stream;						// Compatibility with Kam Driver
 				buff->PID = 0xf0;
-				memcpy(&buff->L2DATA[0],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+				datalen += sizeof(void *) + 4;
 
 				PutLengthinBuffer(buff, datalen);
 
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
-				
+
 				ReleaseBuffer(buffptr);
 	
 				return (1);
@@ -626,10 +622,7 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 		STREAM = &TNC->Streams[Stream]; 
 		AGW = TNC->AGWInfo;
 
-//		txlen=(buff[6]<<8) + buff[5] - 8;	
-
-		txlen = GetLengthfromBuffer(buff) - 8;
-			
+		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);		// 1 as no PID
 		if (STREAM->Connected)
 		{
 			SendData(TNC, &STREAM->AGWKey[0], &buff->L2DATA[0], txlen);
@@ -747,7 +740,7 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 				{
 					// Set it
 
-					int ret = SendMessage(AGW->cbinfo.hwndCombo,CB_SETCURSEL, AGW->Modem, 0);
+					LRESULT ret = SendMessage(AGW->cbinfo.hwndCombo,CB_SETCURSEL, AGW->Modem, 0);
 					int pos = 13 * AGW->Modem + 7;
 															
 					ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONDOWN, 1, 1);
@@ -789,8 +782,8 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 				char Key[21];
 				int sent = 0;
 
-				_strupr(&buff->L2DATA[0]);
 				buff->L2DATA[txlen] = 0;
+				_strupr(&buff->L2DATA[0]);
 
 				memset(STREAM->RemoteCall, 0, 10);
 
@@ -957,8 +950,8 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 	case 3:	
 
-		Stream = (int)buff;
-	
+		Stream = (int)(size_t)buff;
+
 		TNCOK = TNCInfo[MasterPort[port]]->CONNECTED;
 
 		STREAM = &TNC->Streams[Stream];
@@ -1004,7 +997,7 @@ static int ExtProc(int fn, int port, PDATAMESSAGE buff)
 	return 0;
 }
 
-UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
+void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 {
 	int i, port;
 	char Msg[255];
@@ -1031,7 +1024,7 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 		sprintf(Msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(Msg);
 
-		return (int) ExtProc;
+		return ExtProc;
 	}
 
 	TNC->Port = port;
@@ -1105,7 +1098,7 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 
 	time(&lasttime[port]);			// Get initial time value
 	
-	return ((int) ExtProc);
+	return ExtProc;
 
 }
 
@@ -1410,12 +1403,13 @@ BOOL CALLBACK uz_enum_windows_callback(HWND handle, LPARAM lParam)
 
 int ConnecttoUZ7HO(int port)
 {
-	_beginthread(ConnecttoUZ7HOThread, 0, (void *)port);
+	_beginthread(ConnecttoUZ7HOThread, 0, (void *)(size_t)port);
 	return 0;
 }
 
-VOID ConnecttoUZ7HOThread(int port)
+VOID ConnecttoUZ7HOThread(void * portptr)
 {
+	int port = (int)(size_t)portptr;
 	char Msg[255];
 	int err,i;
 	u_long param=1;
@@ -1741,7 +1735,7 @@ extern VOID PROCESSUZ7HONODEMESSAGE();
 
 VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	MESSAGE Monframe;
 
  	struct AGWINFO * AGW = TNC->AGWInfo;
@@ -1780,8 +1774,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1]  = RXHeader->DataLength;
-				memcpy(&buffptr[2], Message, RXHeader->DataLength);
+				buffptr->Len  = RXHeader->DataLength;
+				memcpy(buffptr->Data, Message, RXHeader->DataLength);
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				return;
@@ -1825,7 +1819,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 					if (buffptr == 0) return;			// No buffers, so ignore
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "UZ7HO} Failure with %s\r", STREAM->RemoteCall);
+					buffptr->Len = sprintf(buffptr->Data, "UZ7HO} Failure with %s\r", STREAM->RemoteCall);
 
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					STREAM->DiscWhenAllSent = 10;
@@ -1963,8 +1957,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 						if (buffptr == 0) return;			// No buffers, so ignore
 
-						buffptr[1] = MsgLen;
-						memcpy(buffptr+2, Buffer, MsgLen);
+						buffptr->Len = MsgLen;
+						memcpy(buffptr->Data, Buffer, MsgLen);
 
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 						TNC->SwallowSignon = TRUE;
@@ -1975,7 +1969,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 					
 						// Send a Message, then a disconenct
 					
-						SendData(TNC, Key, Msg, strlen(Msg));
+						SendData(TNC, Key, Msg, (int)strlen(Msg));
 
 						STREAM->DiscWhenAllSent = 100;	// 10 secs
 					}
@@ -2011,7 +2005,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 					buffptr = GetBuff();
 					if (buffptr == 0) return;			// No buffers, so ignore
 
-					buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", RXHeader->callfrom);
+					buffptr->Len  = sprintf(buffptr->Data, "*** Connected to %s\r", RXHeader->callfrom);
 
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 

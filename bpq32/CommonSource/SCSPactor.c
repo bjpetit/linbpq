@@ -111,8 +111,6 @@ VOID __cdecl Debugprintf(const char * format, ...);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
@@ -123,6 +121,7 @@ VOID PTCReleasePort(struct TNCINFO * TNC);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int CheckMode(struct TNCINFO * TNC);
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
+void SCSTryToSendDATA(struct TNCINFO * TNC, int Stream);
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
@@ -130,7 +129,6 @@ VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 #define	TFESC	0xDD
 
 static FILE * LogHandle[32] = {0};
-
 
 //char * Logs[4] = {"1", "2", "3", "4"};
 
@@ -353,12 +351,12 @@ char PactorLevelText[5][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR
 char PleveltoMode[5] = {30, 11, 12, 16, 19};	// WL2K Reporting Modes - RP, P1, P2, P3, P4
 
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
 	int txlen = 0;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
-	int Param;
+	size_t Param;
 	int Stream = 0;
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 	char PLevel;
@@ -456,7 +454,7 @@ ok:
 			if (TNC->Streams[Stream].ReportDISC)
 			{
 				TNC->Streams[Stream].ReportDISC = FALSE;
-				buff[4] = Stream;
+				buff->PORT = Stream;
 
 				return -1;
 			}
@@ -471,19 +469,15 @@ ok:
 			{
 				int datalen;
 			
-				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
+				buffptr = Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
+				datalen = (int)buffptr->Len;
 
-				datalen=buffptr[1];
+				buff->PORT = Stream;						// Compatibility with Kam Driver
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+				datalen += sizeof(void *) + 4;
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
-
-				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
-
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
+				PutLengthinBuffer(buff, datalen);
 				
 				ReleaseBuffer(buffptr);
 	
@@ -497,43 +491,55 @@ ok:
 
 		buffptr = GetBuff();
 
-		if (buffptr == 0) return (0);			// No buffers, so ignore
+		if (buffptr == 0) return 0;			// No buffers, so ignore
 
-		Stream = buff[4];
+		Stream = buff->PORT;
 
 		if (!TNC->TNCOK)
 		{
 			// Send Error Response
 
-			buffptr[1] = 36;
-			memcpy(buffptr+2, "No Connection to PACTOR TNC\r", 36);
+			buffptr->Len = 36;
+			memcpy(buffptr->Data, "No Connection to PACTOR TNC\r", 36);
 
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 			
 			return 0;
 		}
 
-		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
+		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);		// 1 as no PID
 
-		buffptr[1] = txlen;
-		memcpy(buffptr+2, &buff[8], txlen);
+		buffptr->Len = txlen;
+		memcpy(buffptr->Data, buff->L2DATA, txlen);
 		
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 
 		TNC->Streams[Stream].FramesOutstanding++;
 		
-		return (0);
+		// See if possible to send immediately
+
+		SCSTryToSendDATA(TNC, Stream);
+
+		return 0;
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 
-		Stream = (int)buff;
-	
+		Stream = (int)(size_t)buff;
+
 		STREAM = &TNC->Streams[Stream];
 
 		if (Stream == 0)
 		{
-			if (STREAM->FramesOutstanding  > 10)
-				return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);
+			if (TNC->Dragon)
+			{
+				if (STREAM->FramesOutstanding  > 25)
+					return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);
+			}
+			else
+			{
+				if (STREAM->FramesOutstanding  > 10)
+					return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);
+			}
 		}
 		else
 		{
@@ -587,7 +593,7 @@ ok:
 
 	case 6:				// Scan Interface
 
-		Param = (int)buff;
+		Param = (size_t)buff;
 
 		switch (Param)
 		{
@@ -602,7 +608,7 @@ ok:
 				{
 					if (TNC->PTCStatus == 6)	// Sync
 					{
-						int insync = time(NULL) - TNC->TimeEnteredSYNCMode;
+						int insync = (int)(time(NULL) - TNC->TimeEnteredSYNCMode);
 						if (insync > 4)
 						{
 							Debugprintf("SCS Scan - in SYNC for %d Secs - allow change regardless", insync);
@@ -749,7 +755,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	return Len;
 }
 
-UINT SCSExtInit(EXTPORTDATA *  PortEntry)
+void * SCSExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[500];
 	struct TNCINFO * TNC;
@@ -779,7 +785,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 		sprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
-		return (int) ExtProc;
+		return ExtProc;
 	}
 	
 	TNC->Port = port;
@@ -943,6 +949,10 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 	TNC->ClientHeight = 500;
 	TNC->ClientWidth = 500;
 
+	sprintf(TNC->WEB_BUFFERS, "%05d Queued %05d", TNC->Buffers, TNC->Streams[0].FramesOutstanding);
+	SetWindowText(TNC->xIDC_BUFFERS, TNC->WEB_BUFFERS);
+
+
 	MoveWindows(TNC);
 #endif
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
@@ -983,7 +993,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	WritetoConsole("\n");
 
-	return ((int)ExtProc);
+	return ExtProc;
 }
 
 void SCSCheckRX(struct TNCINFO * TNC)
@@ -1041,7 +1051,7 @@ void SCSCheckRX(struct TNCINFO * TNC)
 		// Complete Char Mode Frame
 
 		OpenLogFile(TNC->Port);
-		WriteLogLine(TNC->Port, TNC->RXBuffer, strlen(TNC->RXBuffer));
+		WriteLogLine(TNC->Port, TNC->RXBuffer, (int)strlen(TNC->RXBuffer));
 		CloseLogFile(TNC->Port);
 
 		TNC->RXLen = 0;		// Ready for next frame
@@ -1181,7 +1191,7 @@ VOID SCSPoll(int Port)
 
 			if (STREAM->Connected)
 			{
-				UINT * buffptr;
+				PMSGWITHLEN buffptr;
 
 				Debugprintf("Required Min Level not reached - disconnecting");
 
@@ -1195,7 +1205,7 @@ VOID SCSPoll(int Port)
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1] = sprintf((char *)&buffptr[2],
+				buffptr->Len = sprintf(buffptr->Data,
 					"This port only allows Pactor Level %d or above - Disconnecting\r\n", TNC->MinLevel);
 
 				C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
@@ -1361,12 +1371,12 @@ VOID SCSPoll(int Port)
 			{
 				// Timed out - Send Error Response
 
-				UINT * buffptr = GetBuff();
+				PMSGWITHLEN buffptr = GetBuff();
 
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1]=39;
-				memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
+				buffptr->Len = 39;
+				memcpy(buffptr->Data,"Sorry, Can't Connect - Channel is busy\r", 39);
 
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 
@@ -1441,7 +1451,7 @@ VOID SCSPoll(int Port)
 			else
 			{
 				end = strchr(start, 13);
-				len = ++end - start -1;	// exclude cr
+				len = (int)(++end - start - 1);	// exclude cr
 				TNC->Streams[Stream].CmdSet = end;
 
 				if (*(start) == 1)
@@ -1537,17 +1547,17 @@ VOID SCSPoll(int Port)
 	if (TNC->TNCOK && TNC->BPQtoRadio_Q)
 	{
 		int datalen;
-		UINT * buffptr;
+		PMSGWITHLEN buffptr;
 			
-		buffptr=Q_REM(&TNC->BPQtoRadio_Q);
+		buffptr = Q_REM(&TNC->BPQtoRadio_Q);
 
-		datalen=buffptr[1];
+		datalen = (int)buffptr->Len;
 
 		Poll[2] = 253;		// Radio Channel
 		Poll[3] = 0;		// Data?
 		Poll[4] = datalen - 1;
 	
-		memcpy(&Poll[5], buffptr+2, datalen);
+		memcpy(&Poll[5], buffptr->Data, datalen);
 		
 		ReleaseBuffer(buffptr);
 		
@@ -1632,7 +1642,7 @@ VOID SCSPoll(int Port)
 		// We also need to set Chan 0 Mycall so digi'ing can work, and put
 		// it back after so incoming calls will work
 
-		// But we cant digipeated bit in call, so if we find one, skip message
+		// But we cant set digipeated bit in call, so if we find one, skip message
 
 		ConvFromAX25(Buffer + 7, ICall);		// Origin
 		strlop(ICall, ' ');
@@ -1665,7 +1675,7 @@ VOID SCSPoll(int Port)
 
 			Poll[2] = 0;				// UI Channel
 			Poll[3] = 1;				// CMD
-			Poll[4] = strlen(CCMD) - 1;
+			Poll[4] = (int)strlen(CCMD) - 1;
 			strcpy(&Poll[5], CCMD);
 			CRCStuffAndSend(TNC, Poll, Poll[4] + 6);	// Set Dest and Path
 
@@ -1744,12 +1754,13 @@ VOID SCSPoll(int Port)
 	{
 		Stream = TNC->LastStream++;
 
-		if (TNC->LastStream > MaxStreams) TNC->LastStream = 0;
+		if (TNC->LastStream > MaxStreams)
+			TNC->LastStream = 0;
 
 		if (TNC->TNCOK && TNC->Streams[Stream].BPQtoPACTOR_Q)
 		{
 			int datalen;
-			UINT * buffptr;
+			PMSGWITHLEN buffptr;
 			char * Buffer;
 
 			// Dont send to Pactor if waiting for Min Level to be reached
@@ -1757,10 +1768,10 @@ VOID SCSPoll(int Port)
 			if (TNC->MinLevelTimer && Stream == 0)
 				continue;
 			
-			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+			buffptr = Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 
-			datalen=buffptr[1];
-			Buffer = (char *)&buffptr[2];	// Data portion of frame
+			datalen = (int)buffptr->Len;
+			Buffer = buffptr->Data;	// Data portion of frame
 
 			Poll[2] = TNC->Streams[Stream].DEDStream;		// Channel
 
@@ -1780,7 +1791,7 @@ VOID SCSPoll(int Port)
 				TNC->Streams[Stream].BytesTXed += datalen;
 
 				Poll[4] = datalen - 1;
-				memcpy(&Poll[5], buffptr+2, datalen);
+				memcpy(&Poll[5], Buffer, datalen);
 				
 				WritetoTrace(TNC, Buffer, datalen);
 	
@@ -1848,7 +1859,7 @@ VOID SCSPoll(int Port)
 					}
 					else
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &Buffer[40]);
+						buffptr->Len = sprintf(buffptr->Data, "%s", &Buffer[40]);
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 					}
 					return;
@@ -1859,7 +1870,7 @@ VOID SCSPoll(int Port)
 					Switchmode(TNC, Buffer[8] - '0');
 					TNC->Bandwidth = Buffer[8]; // so scanner knows where we are
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Ok\r");		
+					buffptr->Len = sprintf(buffptr->Data, "Ok\r");		
 					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 					return;
@@ -1869,7 +1880,7 @@ VOID SCSPoll(int Port)
 				{
 					CheckMode(TNC);
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", &TNC->RXBuffer[2]);		
+					buffptr->Len = sprintf(buffptr->Data, "%s\r", &TNC->RXBuffer[2]);		
 					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 					return;
@@ -1879,7 +1890,7 @@ VOID SCSPoll(int Port)
 				{
 					TNC->OverrideBusy = TRUE;
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "SCS} OK\r");
+					buffptr->Len = sprintf(buffptr->Data, "SCS} OK\r");
 					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 					return;
@@ -1888,7 +1899,7 @@ VOID SCSPoll(int Port)
 				if ((Stream == 0) && memcmp(Buffer, "RPACKET", 7) == 0)
 				{
 					TNC->HFPacket = TRUE;
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "SCS} OK\r");
+					buffptr->Len = sprintf(buffptr->Data, "SCS} OK\r");
 					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 					return;
 				}
@@ -1896,7 +1907,7 @@ VOID SCSPoll(int Port)
 				if ((Stream == 0) && memcmp(Buffer, "PACTOR", 6) == 0)
 				{
 					TNC->HFPacket = FALSE;
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "SCS} OK\r");
+					buffptr->Len = sprintf(buffptr->Data, "SCS} OK\r");
 					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 					return;
 				}
@@ -1935,13 +1946,13 @@ VOID SCSPoll(int Port)
 						TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
 
 						if (TNC->Dragon)
-							sprintf(TNC->Streams[0].CmdSet, "I%s\r%s\r", TNC->Streams[0].MyCall, (char *)buffptr+8);
+							sprintf(TNC->Streams[0].CmdSet, "I%s\r%s\r", TNC->Streams[0].MyCall, buffptr->Data);
 						else
 						{
 							if (TNC->Streams[0].DEDStream == 31)
-								sprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r%s\r", TNC->Streams[0].MyCall, (char *)buffptr+8);
+								sprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r%s\r", TNC->Streams[0].MyCall, buffptr->Data);
 							else
-								sprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r%s\r", TNC->Streams[0].MyCall, (char *)buffptr+8);
+								sprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r%s\r", TNC->Streams[0].MyCall, buffptr->Data);
 						}
 
 						ReleaseBuffer(buffptr);
@@ -1983,7 +1994,7 @@ VOID SCSPoll(int Port)
 				}
 
 			Poll[4] = datalen - 1;
-			memcpy(&Poll[5], buffptr+2, datalen);
+			memcpy(&Poll[5], buffptr->Data, datalen);
 		
 			ReleaseBuffer(buffptr);
 		
@@ -2038,6 +2049,73 @@ VOID SCSPoll(int Port)
 	return;
 
 }
+
+void SCSTryToSendDATA(struct TNCINFO * TNC, int Stream)
+{
+	// Used after queuing data to see if it can be sent immediately
+
+	struct STREAMINFO * STREAM = &TNC->Streams[Stream];
+	int datalen;
+	PMSGWITHLEN buffptr;
+	char * Buffer;
+	UCHAR * Poll = TNC->TXBuffer;
+
+	if (TNC->TNCOK == 0 || STREAM->BPQtoPACTOR_Q == 0 || STREAM->Connected == 0)
+		return;
+
+
+	// Dont send to Pactor if waiting for Min Level to be reached
+
+	if (TNC->MinLevelTimer && Stream == 0)
+		return;;
+
+	Sleep(10);				// Give TNC time to respond
+	
+	SCSCheckRX(TNC);		// See if anything received
+
+	if (TNC->Timeout)
+		return;				// Link busy
+			
+	buffptr = Q_REM(&STREAM->BPQtoPACTOR_Q);
+
+	datalen = (int)buffptr->Len;
+	Buffer = buffptr->Data;	// Data portion of frame
+
+	Poll[2] = STREAM->DEDStream;		// Channel
+
+	if (TNC->SwallowSignon && Stream == 0)
+	{
+		TNC->SwallowSignon = FALSE;	
+	
+		if (strstr(Buffer, "Connected"))	// Discard *** connected
+		{
+			ReleaseBuffer(buffptr);
+			return;
+		}
+	}
+
+	Poll[3] = 0;			// Data
+	STREAM->BytesTXed += datalen;
+
+	Poll[4] = datalen - 1;
+	memcpy(&Poll[5], Buffer, datalen);
+				
+	WritetoTrace(TNC, Buffer, datalen);
+	
+	ReleaseBuffer(buffptr);
+	OpenLogFile(TNC->Port);
+	
+	WriteLogLine(TNC->Port, &Poll[5], datalen);
+	CloseLogFile(TNC->Port);
+		
+	CRCStuffAndSend(TNC, Poll, datalen + 5);
+
+	if (STREAM->Disconnecting && STREAM->BPQtoPACTOR_Q == 0)
+		TidyClose(TNC, Stream);
+
+	return;
+}
+			
 
 VOID DoTNCReinit(struct TNCINFO * TNC)
 {
@@ -2100,7 +2178,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 		}
 		
 		end = strchr(start, 13);
-		len = ++end - start;
+		len = (int)(++end - start);
 		TNC->InitPtr = end;
 		memcpy(Poll, start, len);
 
@@ -2542,7 +2620,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	struct WL2KInfo * WL2K = TNC->WL2K;
 	UCHAR * ptr;
 	UCHAR Buffer[80];	
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	BOOL PactorCall = FALSE;
 	
 	char * Call = STREAM->RemoteCall;
@@ -2598,9 +2676,9 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1] = MsgLen;
+				buffptr->Len = MsgLen;
 
-				memcpy(buffptr+2, Buffer, MsgLen);
+				memcpy(buffptr->Data, Buffer, MsgLen);
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				TNC->SwallowSignon = TRUE;
@@ -2615,8 +2693,8 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1] = strlen(Msg);
-				memcpy(&buffptr[2], Msg, strlen(Msg));
+				buffptr->Len = (int)strlen(Msg);
+				memcpy(buffptr->Data, Msg, strlen(Msg));
 				C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 
 				STREAM->NeedDisc = 100;	// 10 secs
@@ -2636,8 +2714,8 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1] = CTPaclen;
-				memcpy(&buffptr[2], &CTEXTMSG[Next], CTPaclen);
+				buffptr->Len = CTPaclen;
+				memcpy(buffptr->Data, &CTEXTMSG[Next], CTPaclen);
 				C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 
 				Next += CTPaclen;
@@ -2647,8 +2725,8 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 			buffptr = GetBuff();
 			if (buffptr == 0) return;			// No buffers, so ignore
 
-			buffptr[1] = Len;
-			memcpy(&buffptr[2], &CTEXTMSG[Next], Len);
+			buffptr->Len = Len;
+			memcpy(buffptr->Data, &CTEXTMSG[Next], Len);
 			C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 		}
 		return;
@@ -2662,7 +2740,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
 	{
 		sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
-		SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+		SESS->Frequency = (int)(atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
 
 		// If Scan Entry has a Appl, save it
 
@@ -2731,8 +2809,8 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1] = MsgLen;
-				memcpy(buffptr+2, Buffer, MsgLen);
+				buffptr->Len = MsgLen;
+				memcpy(buffptr->Data, Buffer, MsgLen);
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				TNC->SwallowSignon = TRUE;
@@ -2746,8 +2824,8 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1] = strlen(Msg);
-				memcpy(&buffptr[2], Msg, strlen(Msg));
+				buffptr->Len = strlen(Msg);
+				memcpy(buffptr->Data, Msg, strlen(Msg));
 				C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 
 				STREAM->NeedDisc = 100;	// 10 secs
@@ -2772,7 +2850,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 		Debugprintf("Using Freq Specific Appl %s", FreqAppl);
 
-		buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", FreqAppl);
+		buffptr->Len = sprintf(buffptr->Data, "%s\r", FreqAppl);
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 		TNC->SwallowSignon = TRUE;
 		return;
@@ -2785,7 +2863,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 		Debugprintf("Using Default Appl %s", TNC->ApplCmd);
 
-		buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
+		buffptr->Len = sprintf(buffptr->Data, "%s\r", TNC->ApplCmd);
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 		TNC->SwallowSignon = TRUE;
 		return;
@@ -2803,8 +2881,8 @@ DontUseAPPLCmd:
 			buffptr = GetBuff();
 			if (buffptr == 0) return;			// No buffers, so ignore
 
-			buffptr[1] = CTPaclen;
-			memcpy(&buffptr[2], &CTEXTMSG[Next], CTPaclen);
+			buffptr->Len = CTPaclen;
+			memcpy(buffptr->Data, &CTEXTMSG[Next], CTPaclen);
 			C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 
 			Next += CTPaclen;
@@ -2814,15 +2892,15 @@ DontUseAPPLCmd:
 		buffptr = GetBuff();
 		if (buffptr == 0) return;			// No buffers, so ignore
 
-		buffptr[1] = Len;
-		memcpy(&buffptr[2], &CTEXTMSG[Next], Len);
+		buffptr->Len = Len;
+		memcpy(buffptr->Data, &CTEXTMSG[Next], Len);
 		C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 	}
 }
 
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	UCHAR * Buffer;				// Data portion of frame
 	char Status[80];
 	unsigned int Stream = 0, RealStream;
@@ -2912,10 +2990,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 
-		buffptr[1] = sprintf((UCHAR *)&buffptr[2],"Pactor} Ok\r");
+		buffptr->Len = sprintf(buffptr->Data,"Pactor} Ok\r");
 
 		OpenLogFile(TNC->Port);
-		WriteLogLine(TNC->Port, (UCHAR *)&buffptr[2], buffptr[1]);
+		WriteLogLine(TNC->Port, buffptr->Data, (int)buffptr->Len);
 		CloseLogFile(TNC->Port);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -2977,7 +3055,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		*(ptr++) = 13;
 		*(ptr) = 0;
 
-		len = ptr - Buffer;
+		len = (int)(ptr - Buffer);
 
 		if (len > 256)
 			return;
@@ -3020,6 +3098,12 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					num = sscanf(Buffer, "%d %d %d %d %d %d", &s1, &s2, &s3, &s4, &s5, &s6);
 			
 					TNC->Streams[Stream].FramesOutstanding = s3;
+	
+					// flow control debug
+
+					sprintf(TNC->WEB_BUFFERS, "%d Q %d", TNC->Buffers, 	TNC->Streams[0].FramesOutstanding);
+					SetWindowText(TNC->xIDC_BUFFERS, TNC->WEB_BUFFERS);
+
 					return;
 				}
 
@@ -3028,8 +3112,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					if (TNC->TXBuffer[6]== 'B')	// Buffer Status
 					{
 						TNC->Buffers = atoi(Buffer);
-						SetWindowText(TNC->xIDC_BUFFERS, Buffer);
-						strcpy(TNC->WEB_BUFFERS, Buffer);
+						sprintf(TNC->WEB_BUFFERS, "%d Q %d", TNC->Buffers, 	TNC->Streams[0].FramesOutstanding);
+						SetWindowText(TNC->xIDC_BUFFERS, TNC->WEB_BUFFERS);
 						return;
 					}
 				}
@@ -3078,7 +3162,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					buffptr = GetBuff();
 					if (buffptr == 0) return;			// No buffers, so ignore
 
-					buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
+					buffptr->Len  = sprintf(buffptr->Data, "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
 
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 	
@@ -3215,7 +3299,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					buffptr = GetBuff();
 					if (buffptr == 0) return;			// No buffers, so ignore
 
-					buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", Call);;
+					buffptr->Len  = sprintf(buffptr->Data, "*** Connected to %s\r", Call);;
 
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
@@ -3323,10 +3407,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 
-		buffptr[1] = sprintf((UCHAR *)&buffptr[2],"Pactor} %s", &Msg[4]);
+		buffptr->Len = sprintf(buffptr->Data,"Pactor} %s", &Msg[4]);
 
 		OpenLogFile(TNC->Port);
-		WriteLogLine(TNC->Port, &Msg[4], strlen(&Msg[4]));
+		WriteLogLine(TNC->Port, &Msg[4], (int)strlen(&Msg[4]));
 		CloseLogFile(TNC->Port);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -3462,7 +3546,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			// Queue for Rig Control Driver
 			
 			int datalen = Msg[4] + 1;
-			UINT * buffptr;
+			PMSGWITHLEN buffptr;
 
 			// if not configured to use PTC Rig Control, Ignore
 
@@ -3473,8 +3557,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 			if (buffptr)
 			{
-				buffptr[1] = datalen;
-				memcpy(buffptr + 2, &Msg[5], datalen);
+				buffptr->Len = datalen;
+				memcpy(buffptr->Data, &Msg[5], datalen);
 				C_Q_ADD(&TNC->RadiotoBPQ_Q, buffptr);
 				if (TNC->RIG->RIG_DEBUG)
 				{
@@ -3494,11 +3578,11 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 			
-		buffptr[1] = Msg[4] + 1;				// Length
-		TNC->Streams[Stream].BytesRXed += buffptr[1];
-		memcpy(&buffptr[2], &Msg[5], buffptr[1]);
+		buffptr->Len = Msg[4] + 1;				// Length
+		TNC->Streams[Stream].BytesRXed += (int)buffptr->Len;
+		memcpy(buffptr->Data, &Msg[5], buffptr->Len);
 
-		WritetoTrace(TNC, &Msg[5], buffptr[1]);
+		WritetoTrace(TNC, &Msg[5], (int)buffptr->Len);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
@@ -3508,7 +3592,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 int GetPTCRadioCommand(struct TNCINFO * TNC, char * Block)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	int Length;
 
 	if (TNC->RadiotoBPQ_Q == 0)
@@ -3516,9 +3600,9 @@ int GetPTCRadioCommand(struct TNCINFO * TNC, char * Block)
 
 	buffptr = Q_REM(&TNC->RadiotoBPQ_Q);
 
-	Length = buffptr[1];
+	Length = (int)buffptr->Len;
 		
-	memcpy(Block, buffptr + 2, Length);
+	memcpy(Block, buffptr->Data, Length);
 		
 	ReleaseBuffer(buffptr);
 
@@ -3529,7 +3613,7 @@ int GetPTCRadioCommand(struct TNCINFO * TNC, char * Block)
 
 int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 
 	if (TNC->TNCOK || (TNC->Hardware == H_ARDOP && TNC->ARDOPCommsMode == 'T'))
 	{
@@ -3543,9 +3627,9 @@ int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length)
 
 	if (buffptr == 0) return (0);			// No buffers, so ignore
 
-	buffptr[1] = Length;
+	buffptr->Len = Length;
 		
-	memcpy(buffptr+2, Block, Length);
+	memcpy(buffptr->Data, Block, Length);
 		
 	C_Q_ADD(&TNC->BPQtoRadio_Q, buffptr);
 

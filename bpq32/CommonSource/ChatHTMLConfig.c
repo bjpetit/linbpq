@@ -606,7 +606,7 @@ static struct HTTPConnectionInfo * AllocateSession(char Appl)
 	if (Session == NULL)
 		return NULL;
 
-	KeyVal = time(NULL);
+	KeyVal = (int)time(NULL);
 
 	sprintf(Session->Key, "%c%012X", Appl, KeyVal);
 

@@ -1,5 +1,5 @@
 //{{NO_DEPENDENCIES}}
-// Microsoft Developer Studio generated include file.
+// Microsoft Visual C++ generated include file.
 // Used by BPQMail.rc
 //
 #define IDC_MYICON                      2
@@ -37,10 +37,12 @@
 #define IDC_SMTP                        510
 #define IDC_REVFWDINT                   510
 #define IDC_MAXAGE                      511
+#define IDC_FWDINT2                     512
 #define IDC_USERS2                      513
 #define IDC_MSGSEM                      514
 #define IDC_ALLOCSEM                    515
 #define IDC_CONSEM                      517
+#define COPYFROMCALL                    518
 #define IDC_BBSCall                     1001
 #define IDC_BaseDir                     1002
 #define IDC_BBSAppl                     1003
@@ -191,6 +193,7 @@
 #define IDC_FWDTIMES                    4008
 #define IDC_FWDSAVE                     4100
 #define IDC_HRHELP                      4101
+#define COPYCONFIG                      4102
 #define IDC_WP                          5000
 #define IDC_USER                        5000
 #define IDC_WPNAME                      5001

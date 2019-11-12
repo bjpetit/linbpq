@@ -4,6 +4,8 @@
 
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)
 {
+#ifndef BPQ64
+
 	unsigned __int32 SPPtr;
 	unsigned __int32 SPVal;
 	unsigned __int32 eip;
@@ -13,7 +15,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 	DWORD Stack[16];
 	DWORD CodeDump[16];
 
-#ifndef BPQ64
+
 
 	eip = exinfo.ContextRecord->Eip;	
 	SPPtr = exinfo.ContextRecord->Esp;	
@@ -40,7 +42,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi, SPVal);
 
-#endif
+
 		
 	Debugprintf("Stack:");
 
@@ -67,6 +69,10 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 
 	Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
 		eip+32, CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15]);
+
+#else
+	Debugprintf("Win64 Exception - no logging");
+#endif
 
 	// Note - no closing } so additional code may be run in the __except block
 

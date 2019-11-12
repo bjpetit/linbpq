@@ -80,7 +80,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //int ResetExtDriver(int num);
 extern char * PortConfig[33];
 
-void ConnecttoAGWThread(int port);
+void ConnecttoAGWThread(void * portptr);
 
 VOID __cdecl Consoleprintf(const char * format, ...);
 
@@ -175,7 +175,7 @@ static fd_set errorfs;
 static struct timeval timeout;
 
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
 	int i,winerr;
 	int datalen;
@@ -219,7 +219,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 			if (CONNECTED[port]) FD_SET(sock,&errorfs);
 
-			if (select(sock+1, &readfs, &writefs, &errorfs, &timeout) > 0)
+			if (select((int)sock+1, &readfs, &writefs, &errorfs, &timeout) > 0)
 			{
 				//	See what happened
 
@@ -399,7 +399,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	return 0;
 }
 
-UINT AGWExtInit(struct PORTCONTROL *  PortEntry)
+void * AGWExtInit(struct PORTCONTROL *  PortEntry)
 
 {
 	int i, port;
@@ -463,7 +463,7 @@ UINT AGWExtInit(struct PORTCONTROL *  PortEntry)
 	time(&lasttime[port]);			// Get initial time value
 
 	
-	return ((int) ExtProc);
+	return ExtProc;
 
 }
 
@@ -605,13 +605,14 @@ static int ProcessLine(char * buf, int Port, BOOL CheckPort)
 	
 int ConnecttoAGW(int port)
 {
-	_beginthread(ConnecttoAGWThread, 0,(void *)port);
+	_beginthread(ConnecttoAGWThread, 0, (void *)(size_t)port);
 
 	return 0;
 }
 
-VOID ConnecttoAGWThread(int port)
+VOID ConnecttoAGWThread(void * portptr)
 {
+	int port = (int)(size_t)portptr;
 	char Msg[255];
 	int err,i;
 	u_long param=1;

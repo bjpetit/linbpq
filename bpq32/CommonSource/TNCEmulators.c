@@ -70,7 +70,6 @@ int KANTDisconnected(struct TNCDATA * conn, struct StreamInfo * channel, int Str
 VOID SendKISSData(struct TNCDATA * conn, UCHAR * txbuffer, int Len);
 VOID ProcessSCSPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Length);
 VOID TNCPoll();
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 VOID DisableAppl(struct TNCDATA * TNC);
 int BPQSerialSetPollDelay(HANDLE hDevice, int PollDelay);
 
@@ -333,14 +332,14 @@ HANDLE BPQOpenSerialPort(struct TNCDATA * TNC, DWORD * lasterror)
 			// If In Use(5) ok, else fail
 
 			if (GetLastError() == 5)
-				return (HANDLE)(port<<16);			// Port Number is a pseudohandle to the device
+				return (HANDLE)(ptrdiff_t)(port<<16);			// Port Number is a pseudohandle to the device
 
-			return (HANDLE) -1;
+			return (HANDLE)(ptrdiff_t) - 1;
 		}
 
 		CloseHandle(hDevice);
 
-		return (HANDLE)(port<<16);			// Port Number is a pseudohandle to the device
+		return (HANDLE)(ptrdiff_t)(port<<16);			// Port Number is a pseudohandle to the device
 	}
 
 	// Try New Style VCOM firsrt
@@ -399,7 +398,7 @@ int BPQSerialSetCTS(HANDLE hDevice)
 	ULONG bytesReturned;
 
 	if (Win98)
-		return DeviceIoControl(hControl,(UINT)(UINT)hDevice | W98_SERIAL_SET_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
+		return DeviceIoControl(hControl,(DWORD)hDevice | W98_SERIAL_SET_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
 	else
 		return DeviceIoControl(hDevice,IOCTL_SERIAL_SET_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
 
@@ -752,17 +751,20 @@ VOID ONOFF(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
 	//	PROCESS COMMANDS WITH ON/OFF PARAM
 
-	char Param = *Tail;
-	UINT offset, DPBASE;
+	char Param;
+	intptr_t offset, DPBASE;
 	UCHAR * valueptr;
 	UCHAR oldvalue, newvalue = 0xff;
 
 	char Response[80];
 	int len;
 
+	_strupr(Tail);
+	Param = *Tail;
+
 	valueptr = (UCHAR *)TNC;
-	offset = (UINT)CMD->CMDFLAG;
-	DPBASE = (UINT)&TDP;
+	offset = (intptr_t)CMD->CMDFLAG;
+	DPBASE = (intptr_t)&TDP;
 	offset -= DPBASE;
 	valueptr += offset;
 	oldvalue = (UCHAR)*valueptr;
@@ -818,6 +820,8 @@ VOID SETMYCALL(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	int len;
 	char Call[10] = "         ";
 
+	_strupr(Tail);
+
 	if (*Tail == ' ')
 	{
 		// REQUEST FOR CURRENT STATE
@@ -834,6 +838,34 @@ VOID SETMYCALL(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 
 	SENDREPLY(TNC, Response, len);
 }
+VOID CTEXTCMD(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
+{
+	char Response[256];
+	int len, n;
+
+	if (*Tail == ' ')
+	{
+		// REQUEST FOR CURRENT STATE
+
+		len = sprintf(Response, "CTEXT %s\r", TNC->CTEXT);
+	}
+	else
+	{
+		Tail[TNC->MSGLEN] = 0;
+		n = strlen(Tail) - 1;
+		while(n > 0 && Tail[n] == ' ')
+			Tail[n--] = 0;
+
+		if (strlen(Tail) > 119)
+			Tail[119] = 0;
+
+		len = sprintf(Response, "CTEXT was %s\r", TNC->CTEXT);
+		strcpy(TNC->CTEXT, Tail);
+	}
+
+	SENDREPLY(TNC, Response, len);
+}
+
 VOID BTEXT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
 }
@@ -842,7 +874,7 @@ VOID VALUE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	//	PROCESS COMMANDS WITH decimal value
 
 	char Param = *Tail;
-	UINT offset, DPBASE;
+	intptr_t offset, DPBASE;
 	UCHAR * valueptr;
 	int oldvalue, newvalue;
 
@@ -850,8 +882,8 @@ VOID VALUE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	int len;
 
 	valueptr = (UCHAR *)TNC;
-	offset = (UINT)CMD->CMDFLAG;
-	DPBASE = (UINT)&TDP;
+	offset = (intptr_t)CMD->CMDFLAG;
+	DPBASE = (intptr_t)&TDP;
 	offset -= DPBASE;
 	valueptr += offset;
 	oldvalue = *valueptr;
@@ -876,7 +908,7 @@ VOID VALHEX(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	//	PROCESS COMMANDS WITH decimal value
 
 	char Param = *Tail;
-	UINT offset, DPBASE;
+	intptr_t offset, DPBASE;
 
 	UCHAR * valueptr;
 	UINT * intvalueptr;
@@ -886,8 +918,8 @@ VOID VALHEX(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	int len;
 
 	valueptr = (UCHAR *)TNC;
-	offset = (UINT)CMD->CMDFLAG;
-	DPBASE = (UINT)&TDP;
+	offset = (intptr_t)CMD->CMDFLAG;
+	DPBASE = (intptr_t)&TDP;
 	offset -= DPBASE;
 	valueptr += offset;
 	intvalueptr = (UINT *)valueptr;
@@ -978,6 +1010,8 @@ VOID TNCCONNECT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	char Response[80];
 	int len;
 	char Call[10] = "";
+
+	_strupr(Tail);
 
 	if (*Tail == ' ')
 	{
@@ -1077,17 +1111,19 @@ static VOID UNPROTOCMD(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 
 CMDX COMMANDLIST[] =
 {
-	"AUTOLF   ",2, ONOFF, &TDP.AUTOLF,
-	"BBSMON   ",6, ONOFF, &TDP.BBSMON,
-	"BTEXT",2,BTEXT,0,
+	"AUTOLF  ",2, ONOFF, &TDP.AUTOLF,
+	"BBSMON  ",6, ONOFF, &TDP.BBSMON,
+	"BTEXT   ",2,BTEXT,0,
 	"CONOK   ",4,ONOFF_CONOK,&TDP.CONOK,
 	"C SWITCH",8,CSWITCH,0,
 	"CBELL   ",2,ONOFF,&TDP.CBELL,
 	"CMDTIME ",2,VALHEX,&TDP.CMDTIME,
+	"CMSG    ",4,ONOFF,&TDP.CMSG,
 	"COMMAND ",3,VALHEX,&TDP.COMCHAR,
 	"CONMODE ",4,CONMODE,0,
 	"CPACTIME",2,ONOFF,&TDP.CPACTIME,
 	"CR      ",2,ONOFF,&TDP.CRFLAG,
+	"CTEXT   ",2,CTEXTCMD,0,
 	"APPLFLAG",5,APPL_VALHEX,&TDP.APPLFLAGS,
 	"APPL    ",4,APPL_VALHEX,&TDP.APPLICATION,
 	"CONVERS ",4,TNCCONV,0,
@@ -1111,6 +1147,7 @@ CMDX COMMANDLIST[] =
 	"NOMODE  ",2,ONOFF,&TDP.NOMODE,
 	"SENDPAC ",2,VALHEX,&TDP.SENDPAC,
 	"PACLEN  ",1,VALUE,&TDP.TPACLEN,
+	"PASS    ",3,VALHEX,&TDP.PASSCHAR,
 	"RELEASE ",3,TNCRELEASE,0,
 	"RESTART ",7,RESTART,0,
 	"TRANS   ",1,TNCTRANS,0,
@@ -1199,7 +1236,7 @@ BOOL TNC2GetVMSR(struct TNCDATA * TNC,int * returnedchar)
 
 BOOL TNCRUNNING;;
 
-VOID TNCBGThread()
+VOID TNCBGThread(void * unused)
 {
 	TNCRUNNING = TRUE;
 
@@ -1293,6 +1330,7 @@ BOOL InitializeTNCEmulator()
 
 			TNC->COMCHAR = 3;
 			TNC->CMDTIME = 10;			// SYSTEM TIMER = 100MS
+			TNC->PASSCHAR = 0x16;		// CTRL-V
 
 			break;
 
@@ -1390,7 +1428,6 @@ BOOL InitializeTNCEmulator()
 			
 		if (_memicmp(TNC->PORTNAME, "COM", 3) == 0)
 		{
-			TNC->ComPort = atoi(&TNC->PORTNAME[3]);
 			TNC->VCOM = FALSE;
 		}
 		else
@@ -1402,10 +1439,7 @@ BOOL InitializeTNCEmulator()
 		{
 			// Real port
 
-			if (TNC->ComPort)
-				TNC->hDevice = OpenCOMPort((VOID *)TNC->ComPort, TNC->Speed, TRUE, TRUE, FALSE, 0);
-			else
-				TNC->hDevice = OpenCOMPort(TNC->PORTNAME, TNC->Speed, TRUE, TRUE, FALSE, 0);
+			TNC->hDevice = OpenCOMPort(TNC->PORTNAME, TNC->Speed, TRUE, TRUE, FALSE, 0);
 
 			TNC->PortEnabled = 1;   
 
@@ -2033,7 +2067,22 @@ KEYB06:
 NOTSENDPAC:
 KEYB06C:
 
-//	COMMAND OR CONV MODE
+	//	COMMAND OR CONV MODE
+
+	// Check for Escaped
+
+	if (TNC->InEscape)
+	{
+		TNC->InEscape = 0;
+		KBNORM(TNC, Char);					// Process as normal chars
+		return;
+	}
+
+	if (Char == TNC->PASSCHAR)
+	{
+		TNC->InEscape = 1;
+		return;
+	}
 
 	if (Char < 32)			//  control
 	{
@@ -2173,14 +2222,28 @@ VOID TNCCOMMAND(struct TNCDATA * TNC)
 {
 	//	PROCESS COMMAND TO TNC CODE
 	
-	char * ptr1, * ptr2;
+	char * ptr, * ptr1, * ptr2;
 	int n;
 	CMDX * CMD;
 
 	*(--TNC->CURSOR) = 0;
 
-	_strupr(TNC->TONODEBUFFER);
+
 	strcat(TNC->TONODEBUFFER, "         "); 
+
+	ptr = strchr(TNC->TONODEBUFFER, ' ');
+
+	if (ptr)
+	{
+		// convert command to upper case, leave tail
+
+		*ptr = 0;
+		_strupr(TNC->TONODEBUFFER);
+		*ptr = ' ';
+	}
+
+	if (_memicmp(ptr, " switch", 7) == 0)
+		_strupr(ptr);					// Special Case
 
 	ptr1 = &TNC->TONODEBUFFER[0];		//
 
@@ -2478,6 +2541,10 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 	char Response[128];
 	char Call[11] = "";
 	int paclen, dummy;
+	BPQVECSTRUC * SESS;
+	TRANSPORTENTRY * L4 = NULL;
+	int stream;
+
 
 	GetConnectionInfo(TNC->BPQPort, Call, &dummy, &dummy, &paclen, &dummy, &dummy);
 	
@@ -2496,13 +2563,39 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 
 	SENDREPLY(TNC, Response, len);
 
-	// if CHECK_FOR_ESC set in applflags send "^d to disconnect msg
+	// If incoming session  Send CTEXT if set
 
-	if (TNC->APPLFLAGS & CHECK_FOR_ESC)
+	stream = TNC->BPQPort;
+	stream--;						// API uses 1 - 64
+
+	if (stream < 0 || stream > 63)
+		return;
+
+	SESS = &BPQHOSTVECTOR[stream];
+
+	if (SESS && SESS->HOSTSESSION)
+		L4 = SESS->HOSTSESSION;
+
+	if (L4 && (L4->L4CIRCUITTYPE & DOWNLINK))
 	{
-		char Msg[] = "Send ^D to disconnect\r";
+		if (TNC->CMSG && TNC->CTEXT[0])
+		{
+			// Add CTEXT
+			int n;
+			char Msg[256];
+
+			n = sprintf(Msg, "%s\r", TNC->CTEXT);
+			SendMsg(TNC->BPQPort, Msg, n);
+		}
 	
-		SendMsg(TNC->BPQPort, Msg, strlen(Msg));
+		// if CHECK_FOR_ESC set in applflags send "^d to disconnect msg
+
+		if ((TNC->APPLFLAGS & CHECK_FOR_ESC))	// If incoming session 
+		{
+			char Msg[] = "Send ^D to disconnect\r";
+	
+			SendMsg(TNC->BPQPort, Msg, (int)strlen(Msg));
+		}
 	}
 }
 
@@ -2883,7 +2976,7 @@ int PROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC)
 
 	TXBUFFERPTR = &TNC->DEDTXBUFFER[0];
 
-	if ((UINT)Channel->Chan_TXQ == 0xffffffff)
+	if (Channel->Chan_TXQ == (UCHAR *)(ptrdiff_t) -1)
 	{
 		Channel->Chan_TXQ = 0;
 	}
@@ -3591,7 +3684,7 @@ and then the very next poll to channel 0 will get:
 			if (iptr)
 			{
 				iptr += 2;					// Skip colon and cr
-				MonLen = Len - (iptr - Decoded);
+				MonLen = Len - (int)(iptr - Decoded);
 				if (MonLen > 256)
 					MonLen = 256;
 		
@@ -3637,7 +3730,7 @@ and then the very next poll to channel 0 will get:
 		{
 			// UI
 
-			int MonLen;;
+			size_t MonLen;;
 
 			MONHEADER[0] = 5;					// Data to follow
 			sprintf(rest, "UI pid %X", pid);
@@ -3673,8 +3766,8 @@ and then the very next poll to channel 0 will get:
 			}
 			else
 			{
-				TNC->MONLENGTH = MonLen + 2;
-				TNC->MONBUFFER[1] = (MonLen - 1);
+				TNC->MONLENGTH = (int)MonLen + 2;
+				TNC->MONBUFFER[1] = (int)(MonLen - 1);
 			}
 			break;
 		}
@@ -3690,7 +3783,7 @@ and then the very next poll to channel 0 will get:
 
 	*MONCURSOR++ = 0;				// NULL TERMINATOR
 
-	SENDCMDREPLY(TNC, MONHEADER, MONCURSOR - &MONHEADER[0]);
+	SENDCMDREPLY(TNC, MONHEADER, (int)(MONCURSOR - &MONHEADER[0]));
 	return 1;
 }
 
@@ -4607,7 +4700,7 @@ static int DoReceivedData(struct TNCDATA * conn, struct StreamInfo * channel);
 VOID ProcessPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 {
 	UCHAR * FendPtr;
-	int NewLen;
+	size_t NewLen;
 
 	if (!conn->MODE)
 	{
@@ -4652,11 +4745,11 @@ VOID ProcessPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 	// Process the first Packet in the buffer
 
 	NewLen =  FendPtr - rxbuffer -1;
-	ProcessKHOSTPacket(conn, &rxbuffer[1], NewLen );
+	ProcessKHOSTPacket(conn, &rxbuffer[1], (int)NewLen );
 	
 	// Loop Back
 
-	ProcessPacket(conn, FendPtr+1, Len - NewLen -2);
+	ProcessPacket(conn, FendPtr+1, Len - (int)NewLen -2);
 	return;
 
 }
@@ -5214,7 +5307,7 @@ BOOL CheckStatusChange(struct TNCDATA * conn,  struct StreamInfo * Channel, int 
 
 			SCSReply[2] = HostStream;
 			SCSReply[3] = 3;
-			ReplyLen  = sprintf(&SCSReply[4], "(%d) CONNECTED to %s", Channel, ConnectedCall);
+			ReplyLen  = sprintf(&SCSReply[4], "(%d) CONNECTED to %s", Channel->BPQStream, ConnectedCall);
 			ReplyLen += 5;
 			EmCRCStuffAndSend(conn, SCSReply, ReplyLen);
 
@@ -5225,7 +5318,7 @@ BOOL CheckStatusChange(struct TNCDATA * conn,  struct StreamInfo * Channel, int 
 		
 		SCSReply[2] = HostStream;
 		SCSReply[3] = 3;
-		ReplyLen  = sprintf(&SCSReply[4], "(%d) DISCONNECTED fm G8BPQ", Channel);
+		ReplyLen  = sprintf(&SCSReply[4], "(%d) DISCONNECTED fm G8BPQ", Channel->BPQStream);
 		ReplyLen += 5;		// Include Null
 		EmCRCStuffAndSend(conn, SCSReply, ReplyLen);
 
@@ -5326,7 +5419,7 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 		SCSReply[2] = 255;
 		SCSReply[3] = 1;
 
-		ReplyLen = NextChan - &SCSReply[0];
+		ReplyLen = (int)(NextChan - &SCSReply[0]);
 
 		EmCRCStuffAndSend(conn, SCSReply, ReplyLen);
 		return;
@@ -5714,7 +5807,7 @@ Loop:
 
 		ptr++;
 
-		cmdlen = ptr - rxbuffer;
+		cmdlen = (int)(ptr - rxbuffer);
 
 		// Complete Char Mode Frame
 

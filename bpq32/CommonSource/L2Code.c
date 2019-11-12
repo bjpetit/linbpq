@@ -1,5 +1,6 @@
 /*
 Copyright 2001-2018 John Wiseman G8BPQ
+
 This file is part of LinBPQ/BPQ32.
 
 LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
@@ -22,6 +23,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define Kernel
 
 #define _CRT_SECURE_NO_DEPRECATE 
+
 
 #pragma data_seg("_BPQDATA")
 
@@ -126,7 +128,7 @@ UCHAR QSTCALL[7] = {'Q'+'Q','S'+'S','T'+'T',0x40,0x40,0x40,0xe0};	// QST IN AX25
 UCHAR NODECALL[7] = {0x9C, 0x9E, 0x88, 0x8A, 0xA6, 0x40, 0xE0};		// 'NODES' IN AX25 FORMAT
 
 
-VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
+VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
 {
 	//	LEVEL 2 PROCESSING
 
@@ -136,12 +138,12 @@ VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 	UCHAR * ptr;
 	int n;
 	UCHAR CTL;
-	UINT Work;
+	uintptr_t Work;
 	UCHAR c;
 
 	//	Check for invalid length (< 22 7Header + 7Addr + 7Addr + CTL
 
-	if (Buffer->LENGTH < 22)
+	if (Buffer->LENGTH < (18 + sizeof(void *)))
 	{
 		Debugprintf("BPQ32 Bad L2 Msg Port %d Len %d", PORT->PORTNUMBER, Buffer->LENGTH);
 		ReleaseBuffer(Buffer);
@@ -266,10 +268,10 @@ VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 
 	// Reached End of digis, and all actioned, so can process it
 
-	Work = (UINT)&Buffer->ORIGIN[6];
+	Work = (uintptr_t)&Buffer->ORIGIN[6];
 	ptr -= 	Work;							// ptr is now length of digis
 
-	Work = (UINT)Buffer;
+	Work = (uintptr_t)Buffer;
 	ptr += Work;
 
 	ADJBUFFER = (MESSAGE * )ptr;			// ADJBUFFER points to CTL, etc. allowing for digis
@@ -653,6 +655,13 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 	}
 
 	// Exclude and limit tests are done for XID and SABM
+
+	if (NODE == 0 && BBS == 0)			// Don't want any calls
+	{
+		ReleaseBuffer(Buffer);
+		return;
+	}
+
 #ifdef	EXCLUDEBITS
 
 	//	CHECK ExcludeList
@@ -1306,7 +1315,7 @@ VOID L2SENDRESP(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER
 
 	ADJBUFFER->CTL = CTL | PFBIT;
 
- 	Buffer->LENGTH = (UCHAR *)ADJBUFFER - (UCHAR *)Buffer + MSGHDDRLEN + 15;	// SET UP BYTE COUNT
+ 	Buffer->LENGTH = (int)((UCHAR *)ADJBUFFER - (UCHAR *)Buffer) + MSGHDDRLEN + 15;	// SET UP BYTE COUNT
 
 	L2SWAPADDRESSES(Buffer);			// SWAP ADDRESSES AND SET RESP BITS
 
@@ -1334,7 +1343,7 @@ VOID L2SENDINVALIDCTRL(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * AD
 	*(ptr++) = 0;
 	*(ptr++) = SDINVC;			// MOVE REJECT FLAGS
 
- 	Buffer->LENGTH = (UCHAR *)ADJBUFFER - (UCHAR *)Buffer + MSGHDDRLEN + 18;	// SET UP BYTE COUNT
+ 	Buffer->LENGTH = (int)((UCHAR *)ADJBUFFER - (UCHAR *)Buffer) + MSGHDDRLEN + 18;	// SET UP BYTE COUNT
 
 	L2SWAPADDRESSES(Buffer);			// SWAP ADDRESSES AND SET RESP BITS
 
@@ -1835,7 +1844,7 @@ VOID SFRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, UCHAR CTL, UCHA
 
 				Buffer->DEST[6] |= 0x80;		// SET COMMAND
 
-				Buffer->LENGTH = ptr2 + count - (UCHAR *)Buffer;		// SET NEW LENGTH
+				Buffer->LENGTH = (int)(ptr2  - (UCHAR *)Buffer) + count;		// SET NEW LENGTH
 
 				LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
 
@@ -2111,7 +2120,7 @@ VOID PROC_I_FRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 
 	// Copy data down the buffer so PID comes after Header (DATAMESSAGE format)
 
-	Length = Buffer->LENGTH - MSGHDDRLEN - 15;	// Buffer Header + addrs + CTL
+	Length = Buffer->LENGTH - (MSGHDDRLEN + 15);	// Buffer Header + addrs + CTL
 	Info  = &Buffer->PID;
 
 	// Adjust for DIGIS
@@ -2137,7 +2146,7 @@ VOID PROC_I_FRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 		if (n < 8)			// If digis, move data back down buffer
 		{
 			memmove(&Buffer->PID, &EOA[2], Length);
-			Buffer->LENGTH -= (&EOA[2] - &Buffer->PID);
+			Buffer->LENGTH -= (int)(&EOA[2] - &Buffer->PID);
 		}
 
 		Q_IP_MSG( Buffer);
@@ -2150,7 +2159,7 @@ VOID PROC_I_FRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 		if (n < 8)			// If digis, move data back down buffer
 		{
 			memmove(&Buffer->PID, &EOA[2], Length);
-			Buffer->LENGTH -= (&EOA[2] - &Buffer->PID);
+			Buffer->LENGTH -= (int)(&EOA[2] - &Buffer->PID);
 		}
 
 		C_Q_ADD(&LINK->L2FRAG_Q, Buffer);
@@ -2483,7 +2492,7 @@ VOID SDETX(struct _LINKTABLE * LINK)
 
 		Buffer->DEST[6] |= 0x80;		// SET COMMAND
 
-		Buffer->LENGTH = ptr2 + count - (UCHAR *)Buffer;		// SET NEW LENGTH
+		Buffer->LENGTH = (int)(ptr2 - (UCHAR *)Buffer) + count;		// SET NEW LENGTH
 
 		LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
 
@@ -2966,7 +2975,7 @@ VOID L2SENDXID(struct _LINKTABLE * LINK)
 	*ptr++ = 0x01;			// Len
 	*ptr++ = 0x07;			// 7
 
-	Buffer->LENGTH = ptr - (UCHAR *)Buffer;		// SET LENGTH
+	Buffer->LENGTH = (int)(ptr - (UCHAR *)Buffer);		// SET LENGTH
 
 	LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
 
@@ -3095,7 +3104,7 @@ MESSAGE * SETUPL2MESSAGE(struct _LINKTABLE * LINK, UCHAR CMD)
 
 	*(ptr)++ = CMD;
 
-	Buffer->LENGTH = ptr  - (UCHAR *)Buffer;		// SET LENGTH
+	Buffer->LENGTH = (int)(ptr  - (UCHAR *)Buffer);		// SET LENGTH
 
 	return Buffer;
 }
@@ -3263,7 +3272,7 @@ VOID ConnectFailedOrRefused(struct _LINKTABLE * LINK, char * Msg)
 
 	ptr1 += sprintf(ptr1, "%s %s\r", Msg, Normcall);
 
-	Buffer->LENGTH = ptr1 - (UCHAR *)Buffer;
+	Buffer->LENGTH = (int)(ptr1 - (UCHAR *)Buffer);
 
 	Session = LINK->CIRCUITPOINTER;			// GET CIRCUIT TABLE ENTRY
 	InSession = Session->L4CROSSLINK;		// TO INCOMMONG SESSION
@@ -3313,7 +3322,7 @@ VOID SENDCONNECTREPLY(struct _LINKTABLE * LINK)
 
 	ptr1 += sprintf(ptr1, "Connected to %s\r", Normcall);
 
-	Buffer->LENGTH = ptr1 - (UCHAR *)Buffer;
+	Buffer->LENGTH = (int)(ptr1 - (UCHAR *)Buffer);
 
 	Session = LINK->CIRCUITPOINTER;			// GET CIRCUIT TABLE ENTRY
 	Session->L4STATE = 5;
@@ -3614,7 +3623,7 @@ BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg)
 
 						ptr += sprintf(ptr, "Incoming call from %s\r", Normcall);
 
-						Buffer->LENGTH = ptr - (UCHAR *)Buffer;
+						Buffer->LENGTH = (int)(ptr - (UCHAR *)Buffer);
 
 						C_Q_ADD(&L4->L4TX_Q, Buffer);
 						PostDataAvailable(L4);

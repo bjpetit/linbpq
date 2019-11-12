@@ -985,7 +985,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 	Loop:
 		ptr2 = strchr(ptr1, '\r');
 
-		linelen = ptr2 - ptr1;
+		linelen = (int)(ptr2 - ptr1);
 
 		if (_memicmp(ptr1, "From:", 5) == 0)
 		{
@@ -1063,7 +1063,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		{
 			int toLen;
 			
-			HddrTo=realloc(HddrTo, (Recipients+1)*4);
+			HddrTo=realloc(HddrTo, (Recipients+1) * sizeof(void *));
 			HddrTo[Recipients] = zalloc(100);
 
 			memset(FullTo, 0, 99);
@@ -1074,13 +1074,13 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			Logprintf(LOG_BBS, conn, '?', "B2 Msg To: %s", FullTo);
 
-			conn->TempMsg->length -= strlen(HddrTo[Recipients]);
+			conn->TempMsg->length -= (int)strlen(HddrTo[Recipients]);
 
-			B2To = ptr1 - outfile;
+			B2To = (int)(ptr1 - outfile);
 
 			// if ending in AMPR.ORG send via ISP if we have enabled forwarding AMPR
 
-			toLen = strlen(FullTo);
+			toLen = (int)strlen(FullTo);
 
 			if (_memicmp(&FullTo[toLen - 8], "ampr.org", 8) == 0)
 			{
@@ -1377,10 +1377,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			}
 
-			RecpTo=realloc(RecpTo, (Recipients+1)*4);
+			RecpTo=realloc(RecpTo, (Recipients+1) * sizeof(void *));
 			RecpTo[Recipients] = zalloc(10);
 
-			Via=realloc(Via, (Recipients+1)*4);
+			Via=realloc(Via, (Recipients+1) * sizeof(void *));
 			Via[Recipients] = zalloc(50);
 
 			strcpy(Via[Recipients], Msg->via);
@@ -1494,7 +1494,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 					// Add our To: 
 		
-					ToLen = strlen(HddrTo[i]);
+					ToLen = (int)strlen(HddrTo[i]);
 
 					if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
 						memcpy(HddrTo[i], "To", 2);
@@ -1544,7 +1544,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					if (ToLen == 0)					// First Addr
 						memcpy(HddrTo[i], "To", 2);	// In Case CC
 
-					ToLen += strlen(HddrTo[i]);
+					ToLen += (int)strlen(HddrTo[i]);
 					strcat(ToString, HddrTo[i]);
 				}
 			}
@@ -1622,7 +1622,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					*(bang) = 0;					// remove it;
 				}
 
-				ToLen = strlen(ptr);
+				ToLen = (int)strlen(ptr);
 
 	//			if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
 					memcpy(HddrTo[i], "To", 2);

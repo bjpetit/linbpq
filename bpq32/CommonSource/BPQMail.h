@@ -128,7 +128,7 @@ VOID * _malloc_dbg_trace(int len, int type, char * file, int line);
 
 #endif
 
-VOID * _zalloc_dbg(int len, int type, char * file, int line);
+VOID * _zalloc_dbg(size_t len, int type, char * file, int line);
 
 #define LOG_BBS 0
 #define LOG_CHAT 1
@@ -828,7 +828,7 @@ CIRCUIT *circuit_new(CIRCUIT *circuit, int flags);
 VOID BBSputs(CIRCUIT * conn, char * buf);
 VOID FBBputs(CIRCUIT * conn, char * buf);
 void makelinks(void);
-VOID * _zalloc(int len);
+VOID * _zalloc(size_t len);
 VOID FreeChatMemory();
 VOID ChatTimer();
 VOID nputs(CIRCUIT * conn, char * buf);
@@ -936,6 +936,8 @@ typedef struct WEBMAILINFO
 	BOOL Winlink;
 	BOOL P2P;
 	BOOL Packet;
+
+	int CurrentMessageIndex;	// Index of message currently displayed (for Prev and Next)
 
 }WebMailInfo;
 
@@ -1219,7 +1221,7 @@ VOID SetupListenSet();
 VOID TCPTimer();
 VOID TCPFastTimer();
 int Socket_Data(int sock, int error, int eventcode);
-int Socket_Accept(int SocketId);
+static int Socket_Accept(SOCKET SocketId);
 int Socket_Connect(SOCKET sock, int Error);
 VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len);
 int CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int Msglen, BOOL B2Flag);
@@ -1248,7 +1250,7 @@ BOOL SendtoISP();
 VOID InitialiseNNTP();
 VOID BuildNNTPList(struct MsgInfo * Msg);
 int NNTP_Data(int sock, int error, int eventcode);
-int NNTP_Accept(int SocketId);
+int NNTP_Accept(SOCKET SocketId);
 
 VOID * GetOverrides(config_setting_t * group, char * ValueName);
 VOID * RegGetOverrides(HKEY hKey, char * ValueName);
@@ -1517,7 +1519,7 @@ extern struct Override ** LTFROM;
 extern struct Override ** LTTO;
 extern struct Override ** LTAT;
 
-extern int LastHouseKeepingTime;
+extern time_t LastHouseKeepingTime;
 extern time_t LastTrafficTime;
 
 extern char * MyElements[];

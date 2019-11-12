@@ -117,7 +117,7 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL A
 	UCHAR * ptr;
 	int n;
 	MESSAGE * ADJBUFFER;
-	UINT Work;
+	ptrdiff_t Work;
 	UCHAR CTL;
 	BOOL PF = 0;
 	char CRCHAR[3] = "  ";
@@ -133,7 +133,7 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL A
 	BOOL XIDFLAG = 0;
 	BOOL TESTFLAG = 0;
 
-	int MsgLen = msg->LENGTH;
+	size_t MsgLen = msg->LENGTH;
 
 	// MINI mode is for Node Listen (remote monitor) Mode. Keep info to minimum
 /*
@@ -167,15 +167,11 @@ KC6OAR*>ID:
 
 	// Reached End of digis
 
-	Work = (UINT)&msg->ORIGIN[6];
-	ptr -= 	Work;							// ptr is now length of digis
+	Work = ptr - &msg->ORIGIN[6];			// Work is length of digis
 
-	MsgLen -= (UINT)ptr;
+	MsgLen -= Work;
 
-	Work = (UINT)msg;
-	ptr += Work;
-
-	ADJBUFFER = (MESSAGE * )ptr;			// ADJBUFFER points to CTL, etc. allowing for digis
+	ADJBUFFER = (MESSAGE *)((UCHAR *)msg + Work);			// ADJBUFFER points to CTL, etc. allowing for digis
 
 	CTL = ADJBUFFER->CTL;
 
@@ -216,12 +212,12 @@ KC6OAR*>ID:
 	
 
 	Stamp = Stamp % 86400;		// Secs
-	HH = Stamp / 3600;
+	HH = (int)(Stamp / 3600);
 
 	Stamp -= HH * 3600;
-	MM = Stamp  / 60;
+	MM = (int)(Stamp  / 60);
 
-	SS = Stamp - MM * 60;
+	SS = (int)(Stamp - MM * 60);
 
 	// Add Port: if MINI mode and monitoring more than one port
 
@@ -483,7 +479,7 @@ KC6OAR*>ID:
 			char * ptr1 = Infofield;
 			char * ptr2 = ADJBUFFER->L2DATA;
 			UCHAR C;
-			int len;
+			size_t len;
 
 			MsgLen = MsgLen - (19 + sizeof(void *));
 
@@ -518,13 +514,13 @@ KC6OAR*>ID:
 		}
 		case NETROM_PID:
 			
-			Output = DISPLAY_NETROM(ADJBUFFER, Output, MsgLen);
+			Output = DISPLAY_NETROM(ADJBUFFER, Output, (int)MsgLen);
 			break;
 
 		case IP_PID:
 
 			Output += sprintf((char *)Output, " <IP>\r");
-			Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[0], Output, MsgLen);
+			Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[0], Output, (int)MsgLen);
 			break;
 
 		case ARP_PID:
@@ -540,7 +536,7 @@ KC6OAR*>ID:
 
 			if (ADJBUFFER->L2DATA[0] & 0x80)	// First Frag - Display Header
 			{
-				Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[2], Output, MsgLen - 1);
+				Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[2], Output, (int)MsgLen - 1);
 			}
 
 			break;	
@@ -550,7 +546,7 @@ KC6OAR*>ID:
 	if (Output[-1] != 13)
 		Output += sprintf((char *)Output, "\r");
 
-	return Output - buffer;
+	return (int)(Output - buffer);
 
 }
 //      Display NET/ROM data                                                 
@@ -659,7 +655,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 			char Infofield[257];
 			char * ptr1 = Infofield;
 			UCHAR C;
-			int len;
+			size_t len;
 			
 			Output += sprintf((char *)Output, " <INFO S%d R%d>", TXNO, RXNO);
 			

@@ -505,6 +505,7 @@ VOID L4BG()
 	struct DATAMESSAGE * Msg;
 	struct PORTCONTROL * PORT;
 	struct _LINKTABLE * LINK;
+	int Msglen, Paclen;
 
 	while (n--)
 	{
@@ -590,8 +591,50 @@ VOID L4BG()
 				ReleaseBuffer(Msg);
 				break;
 			}
-	
+
 			LINK = L4->L4TARGET.LINK;
+
+			// If we want to enforce PACLEN this may be a good place to do it
+
+			Msglen = Msg->LENGTH - (MSGHDDRLEN + 1); //Dont include PID
+			Paclen = L4->SESSPACLEN;
+
+			if (Paclen == 0)
+				Paclen = 256;
+
+			if (Msglen > Paclen)
+			{
+				// Fragment it. 
+				// Is it best to send Paclen packets then short or equal length?
+				// I think equal length;
+
+				int Fragments = (Msglen + Paclen - 1) / Paclen;
+				int Fraglen = Msglen / Fragments;
+
+				while (Msglen > Fraglen)
+				{
+					PDATAMESSAGE Fragment = GetBuff();
+
+					if (Fragment == NULL)
+						break;				// Cant do much else
+
+					Fragment->PORT = Msg->PORT;
+					Fragment->PID = Msg->PID;
+					Fragment->LENGTH = Fraglen + (MSGHDDRLEN + 1);
+
+					memcpy(Fragment->L2DATA, Msg->L2DATA, Fraglen);
+
+					C_Q_ADD(&LINK->TX_Q, Fragment);
+
+					memcpy(Msg->L2DATA, &Msg->L2DATA[Fraglen], Msglen - Fraglen);
+					Msglen -= Fraglen;
+					Msg->LENGTH -= Fraglen;
+				}
+
+				// Drop through to send last bit
+
+			}
+	
 			C_Q_ADD(&LINK->TX_Q, Msg);
 		}
 

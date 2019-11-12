@@ -337,7 +337,7 @@ VOID SaveAXIPWindowPos(int port)
 }
 
 
-static int ExtProc(int fn, int port, PMESSAGE buff)
+static size_t ExtProc(int fn, int port, PMESSAGE buff)
 {
 	struct iphdr * iphdrptr;
 	int len,txlen=0,err,index,digiptr,i;
@@ -607,7 +607,7 @@ static int ExtProc(int fn, int port, PMESSAGE buff)
 
 //		txlen=(buff[6]<<8) + buff[5] - 5;			// Len includes buffer header (7) but we add crc
 
-		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - (1 + sizeof(void *));
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - (MSGHDDRLEN - 2); // 2 for CRC
 
 		crc=compute_crc(&buff->DEST[0], txlen - 2);
 		crc ^= 0xffff;
@@ -993,7 +993,7 @@ int OpenListeningSocket(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp
 
 	if (bind(arp->TCPListenSock , (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 	{
-        sprintf(Msg, "bind(sock) failed Port %d Error %d", arp->port, WSAGetLastError());
+        sprintf(Msg, "bind(sock) failed Port %d Error %d\n", arp->port, WSAGetLastError());
 		Debugprintf(Msg);
 		closesocket(arp->TCPListenSock);
 

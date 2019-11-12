@@ -4197,6 +4197,18 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 	len = Buffer->LENGTH - (sizeof(void *) + 4);
 	ptr1 = &Buffer->L2DATA[0];
 
+	// Check for sending YAPP to Node
+
+	if (len == 2 && ptr1[0] == 5 && ptr1[1] == 1)
+	{
+		ptr1[0] = 0x15;				// NAK
+		
+		C_Q_ADD(&Session->L4TX_Q, (UINT *)Buffer);
+		PostDataAvailable(Session);
+		return;
+	}
+
+
 	ptr2 = memchr(ptr1, ';', len);
 	
 	if (ptr2 == 0)

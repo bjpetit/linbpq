@@ -29,15 +29,57 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "CHeaders.h"
 
+#include "TemplateDefs.c"				// Inline definitions from HTLMPages
+
+
 char * GetTemplateFromFile(int Version, char * FN)
 {
 	int FileSize;
 	char * MsgBytes;
 	char MsgFile[265];
 	FILE * hFile;
-	int ReadLen;
+	size_t ReadLen;
 	BOOL Special = FALSE;
 	struct stat STAT;
+
+	if (strcmp(FN, "WebMailMsg.txt") == 0)
+		return WebMailMsgtxt();
+
+	if (strcmp(FN, "FwdPage.txt") == 0)
+		return FwdPagetxt();
+
+	if (strcmp(FN, "FwdDetail.txt") == 0)
+		return FwdDetailtxt();
+
+	if (strcmp(FN, "webscript.js") == 0)
+		return webscriptjs();
+
+	if (strcmp(FN, "WebMailPage.txt") == 0)
+		return WebMailPagetxt();
+
+	if (strcmp(FN, "MainConfig.txt") == 0)
+		return MainConfigtxt();
+
+	if (strcmp(FN, "MsgPage.txt") == 0)
+		return 	MsgPagetxt();
+
+	if (strcmp(FN, "UserDetail.txt") == 0)
+		return 	UserDetailtxt();
+
+	if (strcmp(FN, "UserPage.txt") == 0)
+		return UserPagetxt();
+
+	if (strcmp(FN, "Housekeeping.txt") == 0)
+		return Housekeepingtxt();
+
+	if (strcmp(FN, "WP.txt") == 0)
+		return WPtxt();
+
+	if (strcmp(FN, "ChatConfig.txt") == 0)
+		return ChatConfigtxt();
+
+	if (strcmp(FN, "ChatStatus.txt") == 0)
+		return ChatStatustxt();
 
 	sprintf(MsgFile, "%s/HTML/%s", BPQDirectory, FN);
 

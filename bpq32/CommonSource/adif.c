@@ -126,7 +126,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 
 	// To get transfer stats we have to monitor the B2 protocol messages, tracking proposals, accept/reject and completion
 
-	int Len;
+	size_t Len;
 
 	// Always keep info so we can sent as Winlink Session Record
 	// even if ADIF logging is disabled.
@@ -419,15 +419,15 @@ BOOL WriteADIFRecord(ADIF * ADIF)
 		FromLOC(LOC, &myLat, &myLon);
 		FromLOC(ADIF->LOC, &Lat, &Lon);
 
-		Dist = Distance(myLat, myLon, Lat, Lon, 0);
-		intBearing = Bearing(Lat, Lon, myLat, myLon);
+		Dist = (int)Distance(myLat, myLon, Lat, Lon, 0);
+		intBearing = (int)Bearing(Lat, Lon, myLat, myLon);
 	}
 
 	starttm = gmtime(&ADIF->StartTime);
 
 	//<call:6>VA2ROR
 
-	fprintf(Handle, "<call:%d>%s", strlen(ADIF->Call), ADIF->Call);
+	fprintf(Handle, "<call:%d>%s", (int)strlen(ADIF->Call), ADIF->Call);
 
 	//<qso_date:8>20190201
 	//<time_on:6>140801
@@ -450,14 +450,14 @@ BOOL WriteADIFRecord(ADIF * ADIF)
 		strcpy(Mode, ADIFModes[ADIF->Mode]);
 		SubMode = strlop(Mode, '/');
 
-		fprintf(Handle, "<mode:%d>%s", strlen(Mode), Mode);
+		fprintf(Handle, "<mode:%d>%s", (int)strlen(Mode), Mode);
 		if (SubMode)
-			fprintf(Handle, "<submode:%d>%s", strlen(SubMode), SubMode);
+			fprintf(Handle, "<submode:%d>%s", (int)strlen(SubMode), SubMode);
 
 	}
 	//<gridsquare:6>JG28DK. Doc wants it even if empty
 
-	fprintf(Handle, "<gridsquare:%d>%s", strlen(ADIF->LOC), ADIF->LOC);
+	fprintf(Handle, "<gridsquare:%d>%s", (int)strlen(ADIF->LOC), ADIF->LOC);
 	
 
 	//<band:3>20M
@@ -479,8 +479,8 @@ BOOL WriteADIFRecord(ADIF * ADIF)
 		}
 
 		sprintf(Freqstr, "%.6f", ADIF->Freq / 1000000.0);
-		fprintf(Handle, "<band:%d>%s", strlen(Band->Name), Band->Name);
-		fprintf(Handle, "<freq:%d>%s", strlen(Freqstr), Freqstr);
+		fprintf(Handle, "<band:%d>%s", (int)strlen(Band->Name), Band->Name);
+		fprintf(Handle, "<freq:%d>%s", (int)strlen(Freqstr), Freqstr);
 	}
 	else
 		fprintf(Handle, "<band:0><freq:0>");
@@ -514,7 +514,7 @@ BOOL WriteADIFRecord(ADIF * ADIF)
 		ADIF->Received,
 		ADIF->BytesSent,
 		ADIF->BytesReceived,
-		T - ADIF->StartTime,
+		(int)(T - ADIF->StartTime),
 		ADIF->LOC,
 		LOC);
 		

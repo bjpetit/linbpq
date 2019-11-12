@@ -89,10 +89,11 @@ static const char cd64[]="|$$$}rstuvwxyz{$$$$$$$>?@ABCDEFGHIJKLMNOPQRSTUVW$$$$$$
 
 void decodeblock( unsigned char in[4], unsigned char out[3] );
 VOID FormatTime(char * Time, time_t cTime);
+static int Socket_Accept(SOCKET SocketId);
 
 int SendSock(SocketConn * sockptr, char * msg)
 {
-	int len = strlen(msg), sent;
+	int len = (int)strlen(msg), sent;
 	char * newmsg = malloc(len+10);
 
  	WriteLogLine(NULL, '>',msg,  len, LOG_TCP);
@@ -260,7 +261,7 @@ VOID TCPFastTimer()
 	{	
 		memcpy(&readfd, &ListenSet, sizeof(fd_set));
 
-		retval = select(ListenMax + 1, &readfd, NULL, NULL, &timeout);
+		retval = select((int)ListenMax + 1, &readfd, NULL, NULL, &timeout);
 
 		if (retval == -1)
 		{
@@ -331,7 +332,7 @@ VOID TCPFastTimer()
 	if (Active == 0)
 		return;
 
-	retval = select(maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
+	retval = select((int)maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
 
 	if (retval == -1)
 		perror("select");
@@ -528,7 +529,7 @@ SOCKET CreateListeningSocket(int Port)
 	return sock;
 }
 
-int Socket_Accept(int SocketId)
+static int Socket_Accept(SOCKET SocketId)
 {
 	int addrlen;
 	SocketConn * sockptr;
@@ -752,7 +753,7 @@ loop:
 		{
 			// buffer contains more that 1 message
 
-			MsgLen = sockptr->InputLen - (ptr2-ptr);
+			MsgLen = sockptr->InputLen - (int)(ptr2-ptr);
 
 			memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
 
@@ -785,7 +786,7 @@ char * FindPart(char ** Msg, char * Boundary, int * PartLen)
 {
 	char * ptr = *Msg, * ptr2;
 	char * Msgptr = *Msg;
-	int BLen = strlen(Boundary);
+	int BLen = (int)strlen(Boundary);
 	char * Part;
 
 	while(*ptr)				// Just in case we run off end
@@ -800,7 +801,7 @@ char * FindPart(char ** Msg, char * Boundary, int * PartLen)
 			{
 				// Found Boundary
 
-				int Partlen = ptr - Msgptr;
+				int Partlen = (int)(ptr - Msgptr);
 				Part = malloc(Partlen + 1);
 				memcpy(Part, Msgptr, Partlen);
 				Part[Partlen] = 0;
@@ -940,7 +941,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			*ptr2 = 0;
 
 			ptr = *Body;
-			Len = ptr2 - ptr -1;
+			Len = (int)(ptr2 - ptr - 1);
 
 			ptr2 = ptr;
 
@@ -952,7 +953,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 				Len -= 4;
 			}
 
-			NewLen = ptr2 - *Body;
+			NewLen = (int)(ptr2 - *Body);
 
 			if (*(ptr-1) == '=')
 				NewLen--;
@@ -1006,7 +1007,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			}
 			*ptr2 = 0;
 
-			*MsgLen = ptr2 - *Body;
+			*MsgLen = (int)(ptr2 - *Body);
 
 		}
 
@@ -1063,7 +1064,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 
 		if (Base64)
 		{
-			int i = 0, Len = strlen(ptr), NewLen;
+			int i = 0, Len = (int)strlen(ptr), NewLen;
 			char * ptr2;
 			char * End;
 			char * Save = ptr;
@@ -1082,7 +1083,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			*ptr2 = 0;
 
 			ptr = Save;
-			Len = ptr2 - ptr -1;
+			Len = (int)(ptr2 - ptr - 1);
 
 			ptr2 = *Body;
 
@@ -1094,7 +1095,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 				Len -= 4;
 			}
 
-			NewLen = ptr2 - *Body;
+			NewLen = (int)(ptr2 - *Body);
 
 			if (*(ptr-1) == '=')
 				NewLen--;
@@ -1106,7 +1107,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 		}
 		else if (QuotedP)
 		{
-			int i = 0, Len = strlen(ptr);
+			int i = 0, Len = (int)strlen(ptr);
 			char * ptr2;
 			char * End;
 			char * Save = ptr;
@@ -1149,12 +1150,12 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			}
 			*ptr2 = 0;
 
-			*MsgLen = ptr2 - *Body;
+			*MsgLen = (int)(ptr2 - *Body);
 		}
 		else
 		{
 			strcpy(*Body, ptr);
-			*MsgLen = strlen(ptr);
+			*MsgLen = (int)strlen(ptr);
 		}
 		free(Save);
 	
@@ -1255,7 +1256,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 		// Should now have file or plain text. If file is Base64 encoded, decode it.
 
 		FileBody[Files] = ptr;
-		FileLen[Files] = Partlen -2 - (ptr - MallocSave[Files]);
+		FileLen[Files] = (int)(Partlen - 2 - (ptr - MallocSave[Files]));
 
 		if (Base64)
 		{
@@ -1275,7 +1276,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			*ptr2 = 0;
 
 			ptr = FileBody[Files];
-			Len = ptr2 - ptr -1;
+			Len = (int)(ptr2 - ptr - 1);
 
 			ptr2 = ptr;
 
@@ -1287,7 +1288,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 				Len -= 4;
 			}
 
-			NewLen = ptr2 - FileBody[Files];
+			NewLen = (int)(ptr2 - FileBody[Files]);
 
 			if (*(ptr-1) == '=')
 				NewLen--;
@@ -1339,7 +1340,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			}
 			*ptr2 = 0;
 
-			NewLen = ptr2 - FileBody[Files];
+			NewLen = (int)(ptr2 - FileBody[Files]);
 
 			FileLen[Files] = NewLen;
 		}
@@ -1389,7 +1390,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 		NewMsg += sprintf(NewMsg, "\r\n");
 	}
 
-	*MsgLen = NewMsg - (sockptr->MailBuffer + 1000);
+	*MsgLen = (int)(NewMsg - (sockptr->MailBuffer + 1000));
 	*Body = sockptr->MailBuffer + 1000;
 
 	return TRUE;		// B2 Message
@@ -1430,7 +1431,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				return;
 			}
 
-			linelen = ptr2 - ptr1;
+			linelen = (int)(ptr2 - ptr1);
 
 			if (_memicmp(ptr1, "Subject:", 8) == 0)
 			{
@@ -1511,7 +1512,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			ptr2 = ptr1;
 			ptr1 = sockptr->MailBuffer;
 
-			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
+			MsgLen = (int)(sockptr->MailSize - (ptr2 - ptr1));
 
 			// We Just want the from call, not the full address.
 			
@@ -1834,7 +1835,7 @@ ZvVx9G1hcg==
 			}
 		}
 
-		sockptr->RecpTo=realloc(sockptr->RecpTo, (sockptr->Recipients+1)*4);
+		sockptr->RecpTo=realloc(sockptr->RecpTo, (sockptr->Recipients+1) * sizeof(void *));
 		sockptr->RecpTo[sockptr->Recipients] = zalloc(Len);
 
 		memcpy(sockptr->RecpTo[sockptr->Recipients++], &Buffer[8], Len-10);
@@ -1984,7 +1985,7 @@ int CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date,
 
 		// if ending in AMPR.ORG send via ISP if we have enabled forwarding AMPR
 
-		toLen = strlen(via);
+		toLen = (int)strlen(via);
 
 		if (_memicmp(&via[toLen - 8], "ampr.org", 8) == 0)
 		{
@@ -2146,7 +2147,7 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 	
 	if (hFile)
 	{
-		WriteLen = fwrite(Message, 1, Msg->length, hFile); 
+		WriteLen = (int)fwrite(Message, 1, Msg->length, hFile);
 		fclose(hFile);
 	}
 
@@ -2173,7 +2174,7 @@ int TidyString(char * Address)
 	// From: "John Wiseman" <john.wiseman@ntlworld.com>
 
 	char * ptr1, * ptr2;
-	int len;
+	size_t len;
 
 	_strupr(Address);
 
@@ -2183,7 +2184,7 @@ int TidyString(char * Address)
 	{
 		ptr1++;
 		ptr2 = strlop(ptr1, '>');
-		len = strlen(ptr1);
+		len = (int)strlen(ptr1);
 		memmove(Address, ptr1, len);
 		Address[len] = 0;
 
@@ -2191,7 +2192,7 @@ int TidyString(char * Address)
 	
 		if (Address[0] == '"')
 		{
-			int len = strlen(Address) - 1;
+			int len = (int)strlen(Address) - 1;
 		
 			if (Address[len] == '"')
 			{
@@ -2343,7 +2344,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 					{
 						if (Msg->status != 'K' && Msg->status != 'H')
 						{
-							sockptr->POP3Msgs = realloc(sockptr->POP3Msgs, (sockptr->POP3MsgCount+1)*4);
+							sockptr->POP3Msgs = realloc(sockptr->POP3Msgs, (sockptr->POP3MsgCount+1) * sizeof(void *));
 							sockptr->POP3Msgs[sockptr->POP3MsgCount++] = MsgHddrPtr[i];
 						}
 					}
@@ -2598,7 +2599,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		// If message has characters above 7F convert to UFT8 if necessary and send as Base64
 
-		Len = strlen(msgbytes);
+		Len = (int)strlen(msgbytes);
 
 		if (Is8Bit(msgbytes, Len))
 		{
@@ -2758,9 +2759,9 @@ void decodeblock( unsigned char in[4], unsigned char out[3] )
 **/
 char *str_base64_encode(char *str)
 {
-    unsigned int i = 0, j = 0, len = strlen(str);
+    unsigned int i = 0, j = 0, len = (int)strlen(str);
 	char *tmp = str;
-	char *result = (char *)zalloc((len+1)*4);
+	char *result = (char *)zalloc((len+1) * sizeof(void *));
 	
 	if (!result)
 		return NULL;
@@ -3064,7 +3065,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			// If message has characters above 7F convert to UFT8 if necessary and send as Base64
 
 
-			Len = strlen(sockptr->MailBuffer);
+			Len = (int)strlen(sockptr->MailBuffer);
 
 			if (Is8Bit(sockptr->MailBuffer, Len))
 			{
@@ -3191,7 +3192,7 @@ BOOL SendtoAMPR(CIRCUIT * conn)
 		return FALSE;
 	}
 		
-	toLen = strlen(Msg->via);
+	toLen = (int)strlen(Msg->via);
 
 	tocopy = _strdup(Msg->via);
 
@@ -3408,7 +3409,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 				return;
 			}
 
-			linelen = ptr2 - ptr1;
+			linelen = (int)(ptr2 - ptr1);
 
 			// From: "John Wiseman" <john.wiseman@ntlworld.com>
 			// To: <G8BPQ@g8bpq.org.uk>
@@ -3511,7 +3512,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			TidyString(MsgFrom);
 			_strlwr(MsgFrom);
 
-			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
+			MsgLen = (int)(sockptr->MailSize - (ptr2 - ptr1));
 
 			B2Flag = CheckforMIME(sockptr, sockptr->MailBuffer, &ptr2, &MsgLen);	// Will reformat message if necessary. 
 
@@ -3740,7 +3741,7 @@ int CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char
 
 	if (To[0] == '"')
 	{
-		int len = strlen(To) - 1;
+		int len = (int)strlen(To) - 1;
 		
 		if (To[len] == '"')
 		{

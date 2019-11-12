@@ -59,8 +59,6 @@ int (WINAPI FAR *EnumProcessesPtr)();
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 
 //int ResetExtDriver(int num);
@@ -69,7 +67,7 @@ int SemHeldByAPI;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-static void ConnecttoFLDigiThread(int port);
+static void ConnecttoFLDigiThread(void * portptr);
 
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);
@@ -161,9 +159,9 @@ static struct timeval timeout;
 int Blocksizes[10] = {0,2,4,8,16,32,64,128,256,512};
 
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	char txbuff[500];
 	unsigned int txlen=0;
 	struct TNCINFO * TNC = TNCInfo[port];
@@ -348,7 +346,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				FD_SET(TNC->TCPDataSock,&errorfs);
 			
 
-			if (select(TNC->TCPDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
+			if (select((int)TNC->TCPDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
 			{
 				//	See what happened
 
@@ -419,7 +417,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (STREAM->ReportDISC)
 			{
 				STREAM->ReportDISC = FALSE;
-				buff[4] = Stream;
+				buff->PORT = Stream;
 
 				return -1;
 			}
@@ -441,15 +439,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			
 				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
 
-				datalen=buffptr[1];
+				datalen = (int)buffptr->Len;
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
-				
-				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
-		
+				buff->PORT = Stream;						// Compatibility with Kam Driver
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+				datalen += sizeof(void *) + 4;
+
+				PutLengthinBuffer(buff, datalen);
+
 				ReleaseBuffer(buffptr);
 	
 				return (1);
@@ -488,8 +486,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		if (!TNC->CONNECTED) return 0;		// Don't try if not connected to TNC
 
-		Stream = buff[4];
-		
+		Stream = buff->PORT;
+
 		STREAM = &TNC->Streams[Stream]; 
 
 //		txlen=(buff[6]<<8) + buff[5] - 8;	
@@ -502,8 +500,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (buffptr == 0) return (0);			// No buffers, so ignore
 		
-			buffptr[1] = txlen;
-			memcpy(buffptr+2, &buff[8], txlen);
+			buffptr->Len = txlen;
+			memcpy(buffptr->Data, buff->L2DATA, txlen);
 		
 			C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 
@@ -511,13 +509,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		}
 		else
 		{
-			buff[8 + txlen] = 0;
-			_strupr(&buff[8]);
+			buff->L2DATA[txlen] = 0;
+			_strupr(&buff->L2DATA[0]);
 
-			if (_memicmp(&buff[8], "D\r", 2) == 0)
+			if (_memicmp(&buff->L2DATA[0], "D\r", 2) == 0)
 			{
 				if (STREAM->Connected)
-					TidyClose(TNC, buff[4]);
+					TidyClose(TNC, buff->PORT);
 
 				STREAM->ReportDISC = TRUE;		// Tell Node
 				
@@ -528,83 +526,84 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// See if Local command (eg RADIO)
 
-			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
+			if (_memicmp(&buff->L2DATA[0], "RADIO ", 6) == 0)
 			{
-				sprintf(&buff[8], "%d %s", TNC->Port, &buff[14]);
+				sprintf(&buff->L2DATA[0], "%d %s", TNC->Port, &buff->L2DATA[6]);
 
-				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff[8]))
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff->L2DATA[0]))
 				{
 				}
 				else
 				{
-					UINT * buffptr = GetBuff();
+					PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 
 					if (buffptr == 0) return 1;			// No buffers, so ignore
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &buff[8]);
-					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "%s", &buff->L2DATA[0]);
+					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+
 				}
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "MODEM ", 6) == 0)
+			if (_memicmp(&buff->L2DATA[0], "MODEM ", 6) == 0)
 			{
-				_strupr(&buff[8]);
-				buff[7 + txlen] = 0;	
-			
+				buff->L2DATA[txlen -1] = 0;
+				_strupr(&buff->L2DATA[0]);
+
 				// If in KISS mode, send as a KISS command Frame
 
 				if (TNC->FLInfo->KISSMODE)
 				{
-					sprintf(txbuff, "MODEM:%s MODEM:", &buff[14]);
+					sprintf(txbuff, "MODEM:%s MODEM:", &buff->L2DATA[6]);
 					SendKISSCommand(TNC, txbuff);
 				}
 				else
 				{
-					SendXMLCommand(TNC, "modem.set_by_name", &buff[14], 'S');
+					SendXMLCommand(TNC, "modem.set_by_name", &buff->L2DATA[6], 'S');
 				}
 
 				TNC->InternalCmd = TRUE;
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "FREQ ", 5) == 0)
+			if (_memicmp(buff->L2DATA, "FREQ ", 5) == 0)
 			{
-				_strupr(&buff[8]);
-				buff[7 + txlen] = 0;	
-			
+				buff->L2DATA[txlen - 1] = 0;
+				_strupr(&buff->L2DATA[0]);
+
 				// If in KISS mode, send as a KISS command Frame
 
 				if (TNC->FLInfo->KISSMODE)
 				{
-					sprintf(txbuff, "WFF:%s WFF:",&buff[13]);
+					sprintf(txbuff, "WFF:%s WFF:", &buff->L2DATA[5]);
 					SendKISSCommand(TNC, txbuff);
 				}
 				else
 				{
-					SendXMLCommand(TNC, "modem.set_carrier", &buff[13], 'I');
+					SendXMLCommand(TNC, "modem.set_carrier", atoi(&buff->L2DATA[5]), 'I');
 				}
 
 				TNC->InternalCmd = TRUE;
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "SQUELCH ", 8) == 0)
+			if (_memicmp(buff->L2DATA, "SQUELCH ", 8) == 0)
 			{
-				_strupr(&buff[8]);
-				buff[7 + txlen] = 0;	
-			
+				buff->L2DATA[txlen - 1] = 0;
+				_strupr(&buff->L2DATA[0]);
+
 				// Only works in KISS
 				
 				if (TNC->FLInfo->KISSMODE)
 				{
-					if (_memicmp(&buff[16], "ON", 2) == 0)
+					if (_memicmp(&buff->L2DATA[8], "ON", 2) == 0)
 						sprintf(txbuff, "KPSQL:ON KPSQL:");
 
-					else if (_memicmp(&buff[16], "OFF", 3) == 0)
+					else if (_memicmp(&buff->L2DATA[8], "OFF", 3) == 0)
 						sprintf(txbuff, "KPSQL:OFF KPSQL:");
 					else
-						txlen = sprintf(txbuff, "KPSQLS:%s KPSQLS:", &buff[16]);
+						txlen = sprintf(txbuff, "KPSQLS:%s KPSQLS:", &buff->L2DATA[8]);
 
 					SendKISSCommand(TNC, txbuff);	
 					TNC->InternalCmd = TRUE;
@@ -612,16 +611,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "KPSATT ", 7) == 0)
+			if (_memicmp(buff->L2DATA, "KPSATT ", 7) == 0)
 			{
-				_strupr(&buff[8]);
-				buff[7 + txlen] = 0;
+				buff->L2DATA[txlen - 1] = 0;
+				_strupr(&buff->L2DATA[0]);
 
 				// If in KISS mode, send as a KISS command Frame
 
 				if (TNC->FLInfo->KISSMODE)
 				{
-					sprintf(txbuff, "KPSATT:%s KPSATT:", &buff[15]);
+					sprintf(txbuff, "KPSATT:%s KPSATT:", &buff->L2DATA[7]);
+
 					SendKISSCommand(TNC, txbuff);
 					TNC->InternalCmd = TRUE;
 				}
@@ -629,7 +629,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
-			if (STREAM->Connecting && _memicmp(&buff[8], "ABORT", 5) == 0)
+			if (STREAM->Connecting && _memicmp(buff->L2DATA, "ABORT", 5) == 0)
 			{
 //				len = sprintf(Command,"%cSTOP_SELECTIVE_CALL_ARQ_FAE\x1b", '\x1a');
 	
@@ -642,23 +642,24 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return (0);
 			}
 
-			if (_memicmp(&buff[8], "MODE", 4) == 0)
+			if (_memicmp(&buff->L2DATA[0], "MODE", 4) == 0)
 			{
-				UINT * buffptr = GetBuff();
-				buff[7 + txlen] = 0;		// Remove CR
-				
-				if (strstr(&buff[8], "RAW"))
+				PMSGWITHLEN buffptr = GetBuff();
+
+				buff->L2DATA[txlen - 1] = 0;		// Remove CR
+	
+				if (strstr(&buff->L2DATA[0], "RAW"))
 					TNC->FLInfo->RAW = TRUE;
-				else if (strstr(&buff[8], "KISS"))
+				else if (strstr(&buff->L2DATA[0], "KISS"))
 					TNC->FLInfo->RAW = FALSE;
 				else
 				{
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "FLDigi} Error - Invalid Mode\r");
+					buffptr->Len = sprintf(&buffptr->Data[0], "FLDigi} Error - Invalid Mode\r");
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					return 1;
 				}
 
-				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "FLDigi} Ok - Mode is %s\r",
+				buffptr->Len = sprintf(&buffptr->Data[0], "FLDigi} Ok - Mode is %s\r",
 					(TNC->FLInfo->RAW)?"RAW":"KISS");
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
@@ -666,7 +667,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "MCAST", 5) == 0)
+			if (_memicmp(&buff->L2DATA[0], "MCAST", 5) == 0)
 			{
 				UINT * buffptr = GetBuff();
 
@@ -678,7 +679,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "INUSE?", 6) == 0)
+			if (_memicmp(&buff->L2DATA[0], "INUSE?", 6) == 0)
 			{
 				// Return Error if in use, OK if not
 
@@ -706,7 +707,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// See if a Connect Command.
 
-			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
+			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
 				char * ptr;
 				char * context;
@@ -714,8 +715,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				int SendLen;
 				char Reply[80];
 
-				_strupr(&buff[8]);
-				buff[8 + txlen] = 0;
+				buff->L2DATA[txlen] = 0;
+				_strupr(&buff->L2DATA[0]);
 
 				memset(ARQ, 0, sizeof(struct ARQINFO));		// Reset ARQ State
 				ARQ->TXSeq = ARQ->TXLastACK = 63;			// Last Sent
@@ -726,7 +727,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				memset(STREAM->RemoteCall, 0, 10);
 
-				ptr = strtok_s(&buff[10], " ,\r", &context);
+				ptr = strtok_s(&buff->L2DATA[2], " ,\r", &context);
 				strcpy(STREAM->RemoteCall, ptr);
 
 				// See if Busy
@@ -775,8 +776,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// Send any other command to FLDIGI
 
-			_strupr(&buff[8]);
-			buff[7 + txlen] = 0;	
+			buff->L2DATA[txlen - 1] = 0;
+			_strupr(&buff->L2DATA[0]);
 			
 			// If in KISS mode, send as a KISS command Frame
 
@@ -785,14 +786,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				char outbuff[1000];
 				int newlen;
 
-				buff[7] = 6;				// KISS Control
+				buff->L2DATA[-1] = 6;				// KISS Control
 
-				newlen = KissEncode(&buff[7], outbuff, txlen);	
+				newlen = KissEncode(&buff->L2DATA[-1], outbuff, txlen);
 				sendto(TNC->TCPDataSock, outbuff, newlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
 			}
 			else
 			{
-				SendXMLCommand(TNC, "modem.set_by_name", &buff[8], 'S');
+				SendXMLCommand(TNC, "modem.set_by_name", &buff->L2DATA[0], 'S');
 			}
 
 			TNC->InternalCmd = TRUE;
@@ -802,7 +803,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:	
 
-		Stream = (int)buff;
+		Stream = (int)(size_t)buff;
 
 		TNCOK = TNC->CONNECTED;
 
@@ -979,7 +980,7 @@ static int RestartTNC(struct TNCINFO * TNC)
 			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 		}
 
-		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+		n = sendto(sock, TNC->ProgramPath, (int)strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
 	
 		Debugprintf("Restart FLDIGI - sento returned %d", n);
 
@@ -1079,7 +1080,7 @@ VOID SendKISSCommand(struct TNCINFO * TNC, char * Msg)
 	rc = sendto(TNC->TCPDataSock, outbuff, txlen, 0, (struct sockaddr *)&TNC->Datadestaddr, sizeof(struct sockaddr));
 }
 
-UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
+VOID * FLDigiExtInit(EXTPORTDATA * PortEntry)
 {
 	int i, port;
 	char Msg[255];
@@ -1105,7 +1106,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 		sprintf(Msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(Msg);
 
-		return (int) ExtProc;
+		return ExtProc;
 	}
 
 	TNC->Port = port;
@@ -1267,7 +1268,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 	MoveWindows(TNC);
 #endif
 
-	return ((int) ExtProc);
+	return ExtProc;
 
 }
 
@@ -1407,14 +1408,14 @@ static int ProcessLine(char * buf, int Port)
 
 static int ConnecttoFLDigi(int port)
 {
-	_beginthread(ConnecttoFLDigiThread, 0, (void *)port);
+	_beginthread(ConnecttoFLDigiThread, 0, (void *)(size_t)port);
 
-	
 	return 0;
 }
 
-static VOID ConnecttoFLDigiThread(int port)
-{
+static VOID ConnecttoFLDigiThread(void * portptr)
+{	
+	int port = (int)(size_t)portptr;
 	char Msg[255];
 	int err,i;
 	u_long param=1;
@@ -1699,7 +1700,7 @@ static int ProcessReceivedData(int port)
 
 			*(KissEnd) = 0;
 
-			used = KissEnd - Message + 1;
+			used = (int)(KissEnd - Message + 1);
 
 			bytesleft -= used;
 			bytes = used;
@@ -1918,7 +1919,7 @@ static int ProcessReceivedData(int port)
 				}
 				*(out++) = c;
 			}
-			ProcessFLDigiData(TNC, &Message[3], out - &Message[3], Message[2], FALSE);	// KISS not RAW
+			ProcessFLDigiData(TNC, &Message[3], (int)(out - &Message[3]), Message[2], FALSE);	// KISS not RAW
 		}
 		return 0;
 	}
@@ -3395,7 +3396,7 @@ VOID ProcessARQStatus(struct TNCINFO * TNC, struct ARQINFO * ARQ, char * Input)
 	int LastInSeq = Input[1] - 32;
 	int LastRXed = Input[2] - 32;
 	int FirstUnAcked = ARQ->TXLastACK;
-	int n = strlen(Input) - 3;
+	int n = (int)strlen(Input) - 3;
 	char * ptr;
 	int NexttoResend;
 	int First, Last, Outstanding;

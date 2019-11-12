@@ -68,23 +68,27 @@ VOID WriteMiniDump();
 void printStack(void);
 char * FormatMH(PMHSTRUC MH, char Format);
 
+
+
 //	Read/Write length field in a buffer header
 
 //	Needed for Big/LittleEndian and ARM5 (unaligned operation problem) portability
 
 
-VOID PutLengthinBuffer(PDATAMESSAGE buff, int datalen)		// Needed for arm5 portability
+VOID PutLengthinBuffer(PDATAMESSAGE buff, int datalen)
 {
+	if (datalen <= sizeof(void *) + 4)
+		datalen = sizeof(void *) + 4;		// Protect
+
 	memcpy(&buff->LENGTH, &datalen, 2);	
 }
 
-int GetLengthfromBuffer(PDATAMESSAGE buff)				// Needed for arm5 portability
+int GetLengthfromBuffer(PDATAMESSAGE buff)
 {
 	USHORT Length;
 	memcpy(&Length, &buff->LENGTH, 2);
 	return Length;
 }
-
 
 BOOL CheckQHeadder(UINT * Q)
 {
@@ -1924,35 +1928,27 @@ DllExport UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc)
 
 int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 {
-	int PortNum;
-
 	if (conn->WEB_COMMSSTATE == NULL)
 		conn->WEB_COMMSSTATE = zalloc(100);
-
-	if (conn->xIDC_COMMSSTATE == NULL)
-		conn->xIDC_COMMSSTATE = zalloc(100);
 
 	if (Port == NULL)
 		return (FALSE);
 
-	if (_memicmp(Port, "COM", 3) == 0)
-	{
-		PortNum = atoi(&Port[3]);
-		conn->hDevice = OpenCOMPort((char *)PortNum, Speed, TRUE, TRUE, Quiet, 0);
-	}
-	else
-		conn->hDevice = OpenCOMPort(Port, Speed, TRUE, TRUE, Quiet, 0);
+	conn->hDevice = OpenCOMPort(Port, Speed, TRUE, TRUE, Quiet, 0);
 
 	if (conn->hDevice == 0)
 	{
 		sprintf(conn->WEB_COMMSSTATE,"%s Open failed - Error %d", Port, GetLastError());
-		SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
+		if (conn->xIDC_COMMSSTATE)
+			SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
 
 		return (FALSE);
 	}
 
-	sprintf(conn->WEB_COMMSSTATE,"COM%s Open", Port);
-	SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
+	sprintf(conn->WEB_COMMSSTATE,"%s Open", Port);
+	
+	if (conn->xIDC_COMMSSTATE)
+		SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -1973,10 +1969,7 @@ HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	// if Port Name starts COM, convert to \\.\COM or ports above 10 wont work
 
-	if (pPort < (char *)256)			// just a com port number
-		sprintf( szPort, "\\\\.\\COM%d", (int)pPort);
-
-	else if (_memicmp(pPort, "COM", 3) == 0)
+	if (_memicmp(pPort, "COM", 3) == 0)
 	{
 		char * pp = (char *)pPort;
 		int p = atoi(&pp[3]);
@@ -1998,10 +1991,7 @@ HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	{
 		if (Quiet == 0)
 		{
-			if (pPort < (char *)256)
-				Debugprintf("COM%d could not be opened %d", (UINT)pPort, GetLastError());
-			else
-				Debugprintf("%s could not be opened %d", pPort, GetLastError());
+			Debugprintf("%s could not be opened %d", pPort, GetLastError());
 		}
 		return (FALSE);
 	}
@@ -2074,10 +2064,7 @@ HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	}
 	else
 	{
-		if (pPort < (char *)256)
-			sprintf(buf,"COM%d Setup Failed %d ", (char *)pPort, GetLastError());
-		else
-			sprintf(buf,"%s Setup Failed %d ", pPort, GetLastError());
+		sprintf(buf,"%s Setup Failed %d ", pPort, GetLastError());
 
 		WritetoConsoleLocal(buf);
 		OutputDebugString(buf);
@@ -2701,9 +2688,9 @@ void SaveMH()
 			ptr[15] = 0;
 		
 			if (MH->MHDIGI)
-				fprintf(file, "%d %6d %-10s%c %s %s|%s|%s\n", MH->MHTIME, MH->MHCOUNT, Normcall, MH->MHDIGI, ptr, DigiList, MH->MHLocator, MH->MHFreq);
+				fprintf(file, "%d %6d %-10s%c %s %s|%s|%s\n", (int)MH->MHTIME, MH->MHCOUNT, Normcall, MH->MHDIGI, ptr, DigiList, MH->MHLocator, MH->MHFreq);
 			else
-				fprintf(file, "%d %6d %-10s%c %s %s|%s|%s\n", MH->MHTIME, MH->MHCOUNT, Normcall, ' ', ptr, DigiList, MH->MHLocator, MH->MHFreq);
+				fprintf(file, "%d %6d %-10s%c %s %s|%s|%s\n", (int)MH->MHTIME, MH->MHCOUNT, Normcall, ' ', ptr, DigiList, MH->MHLocator, MH->MHFreq);
 
 			MH++;
 		}
@@ -3276,13 +3263,14 @@ void FreeSemaphore(struct SEM * Semaphore)
 #ifdef WIN32
 
 #include "DbgHelp.h"
-
+/*
 USHORT WINAPI RtlCaptureStackBackTrace(
   __in       ULONG FramesToSkip,
   __in       ULONG FramesToCapture,
   __out      PVOID *BackTrace,
   __out_opt  PULONG BackTraceHash
 );
+*/
 #endif
 
 void printStack(void)
@@ -3322,7 +3310,7 @@ void printStack(void)
 
 pthread_t ResolveUpdateThreadId = 0;
 
-VOID ResolveUpdateThread()
+VOID ResolveUpdateThread(void * Unused)
 {
 	struct hostent * HostEnt1;
 	struct hostent * HostEnt2;
@@ -3398,7 +3386,7 @@ VOID OpenReportingSockets()
 	Chatreportdest.sin_family = AF_INET;
 	Chatreportdest.sin_port = htons(10090);
 
-	_beginthread(ResolveUpdateThread,0,(int)0);
+	_beginthread(ResolveUpdateThread, 0, NULL);
 }
 
 /*
@@ -3482,7 +3470,7 @@ VOID SendUIBeacon(int Port);
 
 BOOL RunUI = TRUE;
 
-VOID UIThread()
+VOID UIThread(void * Unused)
 {
 	int Port, MaxPorts = GetNumberofPorts();
 
@@ -3927,7 +3915,7 @@ VOID GetUIConfig()
 
 #endif
 
-	_beginthread(UIThread,0,(int)0);
+	_beginthread(UIThread, 0, NULL);
 
 }
 

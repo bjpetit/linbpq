@@ -178,7 +178,7 @@ VOID SENDBTMSG()
 	
 			memcpy(ptr2, &BTHDDR.PID, BTHDDR.LENGTH);
 			ptr2 += BTHDDR.LENGTH;
-			Buffer->LENGTH = ptr2 - (char *)Buffer;			
+			Buffer->LENGTH = (int)(ptr2 - (char *)Buffer);			
 			Buffer->PORT = PORT->PORTNUMBER;
  	
 			C_Q_ADD(&IDMSG_Q, Buffer);
@@ -236,7 +236,7 @@ VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg)
 	
 			memcpy(ptr2, &Msg->PID, Msg->LENGTH);
 			ptr2 += Msg->LENGTH;
-			Buffer->LENGTH = ptr2 - (char *)Buffer;			
+			Buffer->LENGTH = (int)(ptr2 - (char *)Buffer);			
 			Buffer->PORT = PORT->PORTNUMBER;
 
 			if (PORT->PROTOCOL == 10)

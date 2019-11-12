@@ -99,7 +99,7 @@ int SendWPDetails(WPRec * WP, char * Reply, char * Key);
 int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Key);
 int SetupNodeMenu(char * Buff);
 VOID SendFwdSelectPage(char * Reply, int * ReplyLen, char * Key);
-VOID SendFwdDetails(struct HTTPConnectionInfo * Session, char * Reply, int * ReplyLen, char * Key);
+VOID SendFwdDetails(struct UserInfo * User, char * Reply, int * ReplyLen, char * Key);
 VOID SetMultiStringValue(char ** values, char * Multi);
 VOID SendFwdMainPage(char * Reply, int * ReplyLen, char * Key);
 VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
@@ -114,7 +114,7 @@ BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg);
 int MulticastStatusHTML(char * Reply);
 void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL LOCAL, char * Method, char * NodeURL, char * input, char * Reply, int * RLen, int InputLen);
 int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Session);
-
+struct UserInfo * FindBBS(char * Name);
 void ReleaseWebMailStruct(WebMailInfo * WebMail);
 
 char UNC[] = "";
@@ -393,12 +393,12 @@ int SendHeader(char * Reply, char * Key)
 
 void ConvertTitletoUTF8(char * Title, char * UTF8Title)
 {
-	if (WebIsUTF8(Title, strlen(Title)) == FALSE)
+	if (WebIsUTF8(Title, (int)strlen(Title)) == FALSE)
 	{
 		// With Windows it is simple - convert using current codepage
 		// I think the only reliable way is to convert to unicode and back
 
-		int origlen = strlen(Title) + 1;
+		int origlen = (int)strlen(Title) + 1;
 #ifdef WIN32
 		WCHAR BufferW[128];
 		int wlen;
@@ -679,7 +679,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 				Session->User = LookupCall(param+4);
 				if (Session->User)
 				{
-					SendFwdDetails(Session, Reply, RLen, Key); 
+					SendFwdDetails(Session->User, Reply, RLen, Key); 
 					return;
 				}
 			}
@@ -702,7 +702,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		jsTemplate = GetTemplateFromFile(1, "webscript.js");
 
 		ReplyLen = sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
-			"Cache-Control: max-age=900\r\nContent-Type: text/javascript\r\n\r\n%s", strlen(jsTemplate), jsTemplate);
+			"Cache-Control: max-age=900\r\nContent-Type: text/javascript\r\n\r\n%s", (int)strlen(jsTemplate), jsTemplate);
 		*RLen = ReplyLen;
 		return;
 	}
@@ -742,12 +742,12 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (FwdTemplate)
 			free(FwdTemplate);
 
-		FwdTemplate = GetTemplateFromFile(3, "FwdPage.txt");
+		FwdTemplate = GetTemplateFromFile(4, "FwdPage.txt");
 
 		if (FwdDetailTemplate)
 			free(FwdDetailTemplate);
 
-		FwdDetailTemplate = GetTemplateFromFile(2, "FwdDetail.txt");
+		FwdDetailTemplate = GetTemplateFromFile(3, "FwdDetail.txt");
 
 		SendFwdMainPage(Reply, RLen, Key);
 		return;
@@ -823,11 +823,11 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		ptr[BodyLen] = 0;
 
 		sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Disposition: attachment; filename=\"SavedMsg%05d.txt\" \r\n\r\n",
-			strlen(Hddr) + strlen(ptr), Msg->number);	
+			(int)(strlen(Hddr) + strlen(ptr)), Msg->number);	
 		strcat(Reply, Hddr);
 		strcat(Reply, ptr);
 
-		*RLen = strlen(Reply);
+		*RLen = (int)strlen(Reply);
 
 		free(MailBuffer);
 		return;
@@ -853,8 +853,8 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if ((Msg->B2Flags & Attachments) == 0)
 		{
 			sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s",
-				strlen(Noatt), Noatt);
-			*RLen = strlen(Reply);
+				(int)strlen(Noatt), Noatt);
+			*RLen = (int)strlen(Reply);
 
 			free(MailBuffer);
 			return;
@@ -890,8 +890,8 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (Files == 0)
 		{
 			sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s",
-				strlen(Noatt), Noatt);
-			*RLen = strlen(Reply);
+				(int)strlen(Noatt), Noatt);
+			*RLen = (int)strlen(Reply);
 			free(MailBuffer);
 			return;
 		}
@@ -1023,7 +1023,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 			if (i > 9999) break;
 		}
 
-		qsort((void *)WP, i, 4, compare);
+		qsort((void *)WP, i, sizeof(void *), compare);
 
 		for (i=0; i < NumberofWPrecs; i++)
 		{
@@ -1187,7 +1187,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 				bbs[i++] = USER;
 		}
 
-		qsort((void *)bbs, i, 4, compare );
+		qsort((void *)bbs, i, sizeof(void *), compare );
 
 		n = 0;
 		
@@ -1268,7 +1268,7 @@ char **	SeparateMultiString(char * MultiString, BOOL NoToUpper)
 
 	// Convert to string array
 
-	Value = zalloc(4);				// always NULL entry on end even if no values
+	Value = zalloc(sizeof(void *));				// always NULL entry on end even if no values
 	Value[0] = NULL;
 
 	ptr = DecodedString;
@@ -1282,7 +1282,7 @@ char **	SeparateMultiString(char * MultiString, BOOL NoToUpper)
 
 		if (strlen(ptr))
 		{
-			Value = realloc(Value, (Count+2)*4);
+			Value = realloc(Value, (Count+2) * sizeof(void *));
 			if (_memicmp(ptr, "file ", 5) == 0 || NoToUpper)
 				Value[Count++] = _strdup(ptr);
 			else
@@ -1374,7 +1374,7 @@ VOID * GetOverrideFromString(char * input)
 	struct Override ** Value;
 	char * Val;
 
-	Value = zalloc(4);				// always NULL entry on end even if no values
+	Value = zalloc(sizeof(void *));				// always NULL entry on end even if no values
 	Value[0] = NULL;
 	
 	while (ptr && strlen(ptr))
@@ -1386,7 +1386,7 @@ VOID * GetOverrideFromString(char * input)
 			*(ptr1) = 0;
 			ptr1 += 2;
 		}
-		Value = realloc(Value, (Count+2)*4);
+		Value = realloc(Value, (Count+2) * sizeof(void *));
 		Value[Count] = zalloc(sizeof(struct Override));
 		Val = strlop(ptr, ',');
 		if (Val == NULL)
@@ -1762,14 +1762,16 @@ VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Re
 	
 		AliasText = GetMultiStringInput(input, "Aliases=");
 
-		n = 0;
-
-		while (AliasText[n])
+		if (AliasText)
 		{
-			_strupr(AliasText[n]);
-			n++;
-		}
+			n = 0;
 
+			while (AliasText[n])
+			{
+				_strupr(AliasText[n]);
+				n++;
+			}
+		}
 		SetupFwdAliases();
 	}
 	
@@ -1806,10 +1808,36 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		if (strstr(input, "StartForward"))
 		{
 			StartForwarding(USER->BBSNumber, NULL);
-			SendFwdDetails(Session, Reply, RLen, Session->Key);
+			SendFwdDetails(Session->User, Reply, RLen, Session->Key);
 			return;
 		}
 
+		if (strstr(input, "CopyForward"))
+		{
+			struct UserInfo * OldBBS;
+
+			// Get call to copy from 
+
+			ptr2 = input + 4;
+			ptr1 = GetNextParam(&ptr2);		// Call
+			_strupr(ptr2);
+
+			OldBBS = FindBBS(ptr2);
+
+			if (OldBBS == NULL)
+			{
+
+				*RLen = sprintf(Reply, "<h3 align=center>Copy From BBS %s not found</h3>", ptr2);
+				return;
+			}
+
+			// Set current info from OldBBS
+//
+//			SetForwardingPage(hDlg, OldBBS);			// moved to separate routine as also called from copy config
+
+			SendFwdDetails(OldBBS, Reply, RLen, Session->Key);
+			return;
+		}
 		// Fwd update
 
 		ptr2 = input + 4;
@@ -1874,7 +1902,7 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 
 		ReinitializeFWDStruct(Session->User);
 	
-		SendFwdDetails(Session, Reply, RLen, Session->Key);
+		SendFwdDetails(Session->User, Reply, RLen, Session->Key);
 	}
 }
 
@@ -2138,7 +2166,7 @@ VOID SaveMessageText(struct HTTPConnectionInfo * Session, char * MsgPtr, char * 
 
 		*(ptr2++) = 0;
 
-		MsgLen = strlen(input + 8);
+		MsgLen = (int)strlen(input + 8);
 
 		Msg->datechanged = time(NULL);
 		Msg->length = MsgLen;
@@ -2149,7 +2177,7 @@ VOID SaveMessageText(struct HTTPConnectionInfo * Session, char * MsgPtr, char * 
 	
 			if (hFile)
 			{
-				WriteLen = fwrite(input + 8, 1, Msg->length, hFile); 
+				WriteLen = (int)fwrite(input + 8, 1, Msg->length, hFile); 
 				fclose(hFile);
 			}
 
@@ -2299,10 +2327,9 @@ VOID SetMultiStringValue(char ** values, char * Multi)
 
 
 
-VOID SendFwdDetails(struct HTTPConnectionInfo * Session, char * Reply, int * ReplyLen, char * Key)
+VOID SendFwdDetails(struct UserInfo * User, char * Reply, int * ReplyLen, char * Key)
 {
 	int Len;
-	struct UserInfo * User = Session->User;
 	struct BBSForwardingInfo * FWDInfo = User->ForwardingInfo;
 	char TO[2048] = "";
 	char AT[2048] = "";
@@ -2629,7 +2656,7 @@ VOID SendUserSelectPage(char * Reply, int * ReplyLen, char * Key)
 		if (i > 9999) break;
 	}
 
-	qsort((void *)users, i, 4, compare );
+	qsort((void *)users, i, sizeof(void *), compare );
 		
 	for (n = 0; n < NumberofUsers; n++)
 	{

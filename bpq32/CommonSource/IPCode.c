@@ -257,16 +257,17 @@ int Promiscuous = 1;			// Default to Promiscuous
 
 HINSTANCE PcapDriver=0;
 
-typedef int (FAR *FARPROCX)();
+typedef void * (FAR *FARPROCX)();
+typedef int (FAR *FARPROCI)();		// Routines that return int
 
 int (FAR * pcap_sendpacketx)();
 
-FARPROCX pcap_findalldevsx;
+FARPROCI pcap_findalldevsx;
 
 FARPROCX pcap_compilex;
 FARPROCX pcap_setfilterx;
-FARPROCX pcap_datalinkx;
-FARPROCX pcap_next_exx;
+FARPROCI pcap_datalinkx;
+FARPROCI pcap_next_exx;
 FARPROCX pcap_geterrx;
 FARPROCX pcap_closex;
 FARPROCX pcap_setnonblockx;
@@ -275,7 +276,7 @@ FARPROCX pcap_setnonblockx;
 char Dllname[6]="wpcap";
 
 FARPROCX GetAddress(char * Proc);
-
+FARPROCI GetAddressI(char * Proc);
 #else
 #define pcap_findalldevsx pcap_findalldevs
 #define pcap_compilex pcap_compile
@@ -437,11 +438,11 @@ BOOL GetPCAP()
 
 	if (PcapDriver == NULL) return(FALSE);
 	
-	if ((pcap_findalldevsx=GetAddress("pcap_findalldevs")) == 0 ) return FALSE;
+	if ((pcap_findalldevsx=GetAddressI("pcap_findalldevs")) == 0 ) return FALSE;
 
-	if ((pcap_sendpacketx=GetAddress("pcap_sendpacket")) == 0 ) return FALSE;
+	if ((pcap_sendpacketx = GetAddressI("pcap_sendpacket")) == 0 ) return FALSE;
 
-	if ((pcap_datalinkx=GetAddress("pcap_datalink")) == 0 ) return FALSE;
+	if ((pcap_datalinkx=GetAddressI("pcap_datalink")) == 0 ) return FALSE;
 
 	if ((pcap_compilex=GetAddress("pcap_compile")) == 0 ) return FALSE;
 
@@ -453,7 +454,7 @@ BOOL GetPCAP()
 
 	if ((pcap_geterrx = GetAddress("pcap_geterr")) == 0 ) return FALSE;
 
-	if ((pcap_next_exx = GetAddress("pcap_next_ex")) == 0 ) return FALSE;
+	if ((pcap_next_exx = GetAddressI("pcap_next_ex")) == 0 ) return FALSE;
 
 	if ((pcap_closex = GetAddress("pcap_close")) == 0 ) return FALSE;
 
@@ -844,7 +845,7 @@ Pollloop:
 
 	if (adhandle)
 	{
-		res = pcap_next_exx(adhandle, &header, &pkt_data);
+		res = (int)pcap_next_exx(adhandle, &header, &pkt_data);
 
 		if (res > 0)
 		{
@@ -2375,7 +2376,7 @@ VOID ProcessRIP44Message(PIPMSG IPptr)
 	}
 
 	SaveIPRoutes();
-	qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);
+	qsort(RouteRecords, NumberofRoutes, sizeof(void *), CompareMasks);
 	LastRIP44Msg = time(NULL);
 }
 
@@ -2454,7 +2455,7 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 
 		*ptr1++ = 0x0d;			// CR
 
-		Len = ptr1 - BUFFER;
+		Len = (int)(ptr1 - BUFFER);
 
 		Msg = (struct _MESSAGE *)BUFFER;
 		Msg->LENGTH = Len;
@@ -2881,9 +2882,9 @@ PROUTEENTRY AllocRouteEntry()
 
 	if (NumberofRoutes == 0)
 
-		RouteRecords = malloc(4);
+		RouteRecords = malloc(sizeof(void *));
 	else
-		RouteRecords = realloc(RouteRecords,(NumberofRoutes + 1) * 4);
+		RouteRecords = realloc(RouteRecords,(NumberofRoutes + 1) * sizeof(void *));
 
 	Routeptr = zalloc(sizeof(ROUTEENTRY));
 
@@ -2901,9 +2902,9 @@ PARPDATA AllocARPEntry()
 
 	if (NumberofARPEntries == 0)
 
-		ARPRecords = malloc(4);
+		ARPRecords = malloc(sizeof(void *));
 	else
-		ARPRecords = realloc(ARPRecords, (NumberofARPEntries+1)*4);
+		ARPRecords = realloc(ARPRecords, (NumberofARPEntries+1)* sizeof(void *));
 
 	ARPptr = malloc(sizeof(ARPDATA));
 
@@ -3570,6 +3571,29 @@ FARPROCX GetAddress(char * Proc)
 	return ProcAddr;
 }
 
+FARPROCI GetAddressI(char * Proc)
+{
+	FARPROCI ProcAddr;
+	int err = 0;
+	char buf[256];
+	int n;
+
+
+	ProcAddr = (FARPROCI)GetProcAddress(PcapDriver, Proc);
+
+	if (ProcAddr == 0)
+	{
+		err = GetLastError();
+
+		n = sprintf(buf, "Error finding %s - %d", Proc, err);
+		WritetoConsoleLocal(buf);
+
+		return(0);
+	}
+
+	return ProcAddr;
+}
+
 #endif
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
@@ -3604,7 +3628,8 @@ int OpenPCAP()
 	pcap_setnonblockx(adhandle, 1, errbuf);
 	
 	/* Check the link layer. We support only Ethernet for simplicity. */
-	if(pcap_datalinkx(adhandle) != DLT_EN10MB)
+
+	if((int)pcap_datalinkx(adhandle) != DLT_EN10MB)
 	{
 		n=sprintf(buf,"\nThis program works only on Ethernet networks.\n");
 		WritetoConsoleLocal(buf);
@@ -3817,7 +3842,7 @@ VOID AddToRoutes(PARPDATA Arp, UINT IPAddr, char Type)
 
 	//	Sort into reverse mask order
 
-	qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);
+	qsort(RouteRecords, NumberofRoutes, sizeof(void *), CompareMasks);
 }
 
 // ROUTE 44.131.4.18/32 D GM8BPQ-7 1// Datagram?netrom/VC via Call	!!!! No - this sohuld be an ARP entry
@@ -4519,7 +4544,7 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 	if (IPRequired == FALSE)
 	{
 		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
-		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
@@ -4528,7 +4553,7 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 	if (PingAddr == INADDR_NONE)
 	{
 		Bufferptr += sprintf(Bufferptr, "Invalid Address\r");
-		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
@@ -4557,7 +4582,7 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 	else
 		Bufferptr += sprintf(Bufferptr, "No Route to Host\r");
 
-	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	
 	return;
 }
@@ -4579,7 +4604,7 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	if (IPRequired == FALSE)
 	{
 		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
-		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
@@ -4598,7 +4623,7 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		}
 
 		Bufferptr += sprintf(Bufferptr, "OK\r");
-		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		SaveARP();
 
 		return;
@@ -4655,7 +4680,7 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		}
 	}
 
-	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
 VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
@@ -4672,7 +4697,7 @@ VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	if (IPRequired == FALSE)
 	{
 		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
-		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
@@ -4693,7 +4718,7 @@ VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 #endif
 	}
 
-	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
 int CountBits(unsigned long in)
@@ -4725,14 +4750,14 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 	if (IPRequired == FALSE)
 	{
 		Bufferptr += sprintf(Bufferptr, "\rIP Gateway is not enabled\r");
-		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	Bufferptr += sprintf(Bufferptr, "%d Entries\r", NumberofRoutes);
 
 	if (NumberofRoutes)
-		qsort(RouteRecords, NumberofRoutes, 4, CompareRoutes);
+		qsort(RouteRecords, NumberofRoutes, sizeof(void *), CompareRoutes);
 
 	for (i=0; i < NumberofRoutes; i++)
 	{
@@ -4775,10 +4800,10 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 		Bufferptr += sprintf(Bufferptr, "%s", Reply);
 	}
 
-	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 
 	if (NumberofRoutes)
-		qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);		// Back to Maks order
+		qsort(RouteRecords, NumberofRoutes, sizeof(void *), CompareMasks);		// Back to Maks order
 
 }
 
@@ -5116,7 +5141,7 @@ VOID ProcessSNMPMessage(PIPMSG IPptr)
 
 		if (memcmp(OID, sysName, sysNameLen) == 0)
 		{
-			ValLen = strlen(MYNODECALL);;
+			ValLen = (int)strlen(MYNODECALL);;
 			Value[0] = 4;		// String
 			Value[1] = ValLen;
 			memcpy(&Value[2], MYNODECALL, ValLen);  
@@ -5126,7 +5151,7 @@ VOID ProcessSNMPMessage(PIPMSG IPptr)
 		else if (memcmp(OID, sysUpTime, sysUpTimeLen) == 0)
 		{
 			int ValOffset = 10;
-			ValLen = ASNPutInt(Value, ValOffset, (int)(time(NULL) - TimeLoaded) * 100, TimeTicks);
+			ValLen = ASNPutInt(Value, ValOffset, (int)((time(NULL) - TimeLoaded) * 100), TimeTicks);
 			ValOffset -= ValLen;
 
 			PDULen = BuildReply(Reply, Offset, sysUpTime, sysUpTimeLen, &Value[ValOffset], ReqID);

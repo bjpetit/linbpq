@@ -668,7 +668,7 @@ int decode_rec(char * rec)
 			GetNextLine(rec);
 		}
 
-		Consoleprintf("Missing **** for IPGateway Config %d", portnum);
+		Consoleprintf("Missing **** for IPGateway Config");
 		heading = 1;
 
 		return 0;
@@ -702,7 +702,7 @@ int decode_rec(char * rec)
 			GetNextLine(rec);
 		}
 
-		Consoleprintf("Missing **** for Portmapper Config %d", portnum);
+		Consoleprintf("Missing **** for Portmapper Config");
 		heading = 1;
 
 		return 0;
@@ -760,7 +760,7 @@ NextAPRS:
 		if (_memicmp(rec, "****", 3) == 0)
 			return 0;						// No Newline after ***
 
-		Consoleprintf("Missing **** for APRS Config %d", portnum);
+		Consoleprintf("Missing **** for APRS Config");
 		heading = 1;
 
 		return 0;
@@ -2398,7 +2398,7 @@ int decode_tnc_rec(char * rec)
 	else if (_stricmp(key_word, "AUTOLF") == 0)
 		TNC2ENTRY->AUTOLF =  strtol(value, 0, 0);
 	else if (_stricmp(key_word, "ECHO") == 0)
-		TNC2ENTRY->ECHOFLAG =  strtol(value, 0, 0);
+		TNC2ENTRY->ECHOFLAG =  (char)strtol(value, 0, 0);
 
 	else
 	   Consoleprintf("Source record not recognised - Ignored:%s\r\n",rec);
@@ -2607,7 +2607,7 @@ double xfmod(double p1, double p2)
 {
 	int temp;
 
-	temp = p1/p2;
+	temp = (int)(p1/p2);
 	p1 = p1 -(p2 * temp);
 	return p1;
 }

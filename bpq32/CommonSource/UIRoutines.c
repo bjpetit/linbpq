@@ -49,12 +49,13 @@ PMESSAGEX DG_Q;					// Queue of messages to be sent to node
 
 struct SEM DGSemaphore = {0, 0}; // For locking access to DG_Q;
 
-VOID UnQueueRaw(UINT Param);
-
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
+VOID UnQueueRaw(void * Param);
 
 static VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue);
+DllExport char * APIENTRY GetApplName(int Appl);
 
+int APIENTRY SendRaw(int port, char * msg, int len);
+int APIENTRY GetNumberofPorts();
 
 VOID SetupUIInterface()
 {
@@ -328,7 +329,7 @@ static VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR,
 
 }
 
-VOID UnQueueRaw(UINT Param)
+VOID UnQueueRaw(void * Param)
 {
 	PMESSAGEX AXMSG;
 
@@ -483,7 +484,7 @@ VOID ExpandMailFor()
 	char * OldP = MailForText;
 	char * NewP = MailForExpanded;
 	char * ptr, * pptr;
-	int len;
+	size_t len;
 	char Dollar[] = "\\";
 	char CR[] = "\r";
 
@@ -537,7 +538,7 @@ VOID SendMailFor(char * Msg, BOOL HaveCalls)
 		{
 			if (UIMF[i] && (HaveCalls || UINull[i]))
 			{
-				Send_AX_Datagram(Msg, strlen(Msg) - 1, i, AXMAIL, TRUE);
+				Send_AX_Datagram(Msg, (int)strlen(Msg) - 1, i, AXMAIL, TRUE);
 			}
 		}
 		Mask>>=1;

@@ -449,8 +449,7 @@ NPASYINFO CreateKISSINFO( int port,int speed )
 HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port)
 {
 	NPASYINFO npKISSINFO = KISSInfo[PortVector->PORTNUMBER];
-	HANDLE  ComDev ;
-
+	HANDLE  ComDev = 0 ;
 
 	if (npKISSINFO == NULL)
 		return 0;
@@ -458,10 +457,7 @@ HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port)
 	if (PortVector->PORTIPADDR.s_addr || PortVector->KISSSLAVE)
 		return 0;
 
-	if (PortVector->SerialPortName)
-		ComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE, 0);
-	else
-		ComDev = OpenCOMPort((VOID *)port, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE, 0);
+	ComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE, 0);
 	
 	npKISSINFO->idComDev = ComDev;
 

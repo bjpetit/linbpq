@@ -209,7 +209,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (MsgBytes == 0)
 		{
 			MsgBytes = _strdup("Message file not found\r");
-			conn->FwdMsg->length = strlen(MsgBytes);
+			conn->FwdMsg->length = (int)strlen(MsgBytes);
 		}
 	
 		MsgPtr = MsgBytes;

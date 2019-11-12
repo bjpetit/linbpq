@@ -175,8 +175,6 @@ int APIENTRY SetAppl(int stream, int flags, int mask);
 int APIENTRY SessionState(int stream, int * state, int * change);
 int APIENTRY SessionControl(int stream, int command, int Mask);
 
-unsigned long _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 BOOL ChatInit();
 VOID CloseChat();
 VOID CloseTNCEmulator();
@@ -410,7 +408,7 @@ int LastSemGets = 0;
 
 extern int SemHeldByAPI;
 
-VOID MonitorThread(int x)
+VOID MonitorThread(void * x)
 {
 	// Thread to detect stuck semaphore
 
@@ -496,11 +494,11 @@ extern int ISPort;
 
 extern char ChatConfigName[250];
 
-char * GetBPQDirectory()
+UCHAR * GetBPQDirectory()
 {
 	return BPQDirectory;
 }
-char * GetLogDirectory()
+UCHAR * GetLogDirectory()
 {
 	return LogDirectory;
 }
@@ -1298,12 +1296,14 @@ int WritetoConsoleLocal(char * buff)
 {
 	return printf("%s", buff);
 }
-/*
-UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
-UINT SoundModemExtInit(EXTPORTDATA * PortEntry);
-UINT V4ExtInit(EXTPORTDATA * PortEntry);
-UINT BaycomExtInit(EXTPORTDATA * PortEntry);
-*/
+
+#ifdef WIN32
+void * VCOMExtInit(struct PORTCONTROL *  PortEntry);
+void * V4ExtInit(EXTPORTDATA * PortEntry);
+#endif
+//UINT SoundModemExtInit(EXTPORTDATA * PortEntry);
+//UINT BaycomExtInit(EXTPORTDATA * PortEntry);
+
 void * AEAExtInit(struct PORTCONTROL *  PortEntry);
 void * MPSKExtInit(EXTPORTDATA * PortEntry);
 void * HALExtInit(struct PORTCONTROL *  PortEntry);
@@ -1348,14 +1348,17 @@ void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "HALDRIVER"))
 		return HALExtInit;
-/*
-	if (strstr(Value, "BPQVKISS"))
-		return (UINT) VCOMExtInit;
 
+#ifdef WIN32
+
+	if (strstr(Value, "BPQVKISS"))
+		return VCOMExtInit;
 
 	if (strstr(Value, "V4"))
-		return (UINT) V4ExtInit;
+		return V4ExtInit;
 
+#endif
+/*
 	if (strstr(Value, "SOUNDMODEM"))
 		return (UINT) SoundModemExtInit;
 
@@ -1479,7 +1482,7 @@ int APIENTRY Reconfig()
 
 int APRSWriteLog(char * msg);
 
-VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
+VOID MonitorAPRSIS(char * Msg, size_t MsgLen, BOOL TX)
 {
 	char Line[300];
 	char Copy[300];
@@ -1562,7 +1565,7 @@ int GetListeningPortsPID(int Port)
 	MIB_TCPTABLE_OWNER_PID * TcpTable = NULL;
 	PMIB_TCPROW_OWNER_PID Row;
 	int dwSize = 0;
-	int n;
+	unsigned int n;
 
 	// Get PID of process for this TCP Port
 

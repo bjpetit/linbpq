@@ -313,7 +313,7 @@ ConfigLine:
 	return (TRUE);	
 }
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port,unsigned char * buff)
 {
 	int txlen = 0;
 	UINT * buffptr;

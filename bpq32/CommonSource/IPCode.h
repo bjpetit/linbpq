@@ -7,8 +7,6 @@
 
 #define IDI_ICON2                       123
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 #pragma pack(1) 
 
 typedef struct _ETHMSG

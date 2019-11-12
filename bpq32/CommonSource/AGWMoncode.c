@@ -75,7 +75,7 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 	UCHAR * ptr;
 	int n;
 	MESSAGE * ADJBUFFER;
-	UINT Work;
+	ptrdiff_t Work;
 	UCHAR CTL;
 	BOOL PF = 0;
 	char CRCHAR[3] = "  ";
@@ -90,7 +90,7 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 	BOOL FRMRFLAG = 0;
 	BOOL XIDFLAG = 0;
 	BOOL TESTFLAG = 0;
-	int MsgLen = msg->LENGTH;
+	size_t MsgLen = msg->LENGTH;
 
 	//	GET THE CONTROL BYTE, TO SEE IF THIS FRAME IS TO BE DISPLAYED
 
@@ -112,15 +112,11 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 
 	// Reached End of digis
 
-	Work = (UINT)&msg->ORIGIN[6];
-	ptr -= 	Work;							// ptr is now length of digis
+	Work = ptr - &msg->ORIGIN[6];			// Work is length of digis
 
-	MsgLen -= (UINT)ptr;
+	MsgLen -= Work;
 
-	Work = (UINT)msg;
-	ptr += Work;
-
-	ADJBUFFER = (MESSAGE * )ptr;			// ADJBUFFER points to CTL, etc. allowing for digis
+	ADJBUFFER = (MESSAGE *)((UCHAR *)msg + Work);			// ADJBUFFER points to CTL, etc. allowing for digis
 
 	CTL = ADJBUFFER->CTL;
 
@@ -260,7 +256,7 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 		//	Un-numbered Information Frame 
 		//UI pid=F0 Len=20 >
 
-		Output += sprintf((char *)Output, "<UI pid=%02X Len=%d>", ADJBUFFER->PID, MsgLen - 23);
+		Output += sprintf((char *)Output, "<UI pid=%02X Len=%d>", ADJBUFFER->PID, (int)MsgLen - 23);
 		Info = 1;
 	}
 	else if (CTL & 2)
@@ -348,7 +344,7 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 			char * ptr1 = Infofield;
 			char * ptr2 = ADJBUFFER->L2DATA;
 			UCHAR C;
-			int len;
+			size_t len;
 
 			MsgLen = MsgLen - 23;
 
@@ -378,13 +374,13 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 		}
 		case NETROM_PID:
 			
-			Output = DISPLAY_NETROM(ADJBUFFER, Output, MsgLen);
+			Output = DISPLAY_NETROM(ADJBUFFER, Output,(int) MsgLen);
 			break;
 
 		case IP_PID:
 
 			Output += sprintf((char *)Output, " <IP>\r");
-			Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[0], Output, MsgLen);
+			Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[0], Output, (int)MsgLen);
 			break;
 
 		case ARP_PID:
@@ -402,7 +398,7 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 	if (Output[-1] != 13)
 		Output += sprintf((char *)Output, "\r");
 
-	return Output - buffer;
+	return (int)(Output - buffer);
 
 }
 //      Display NET/ROM data                                                 
@@ -511,7 +507,7 @@ UCHAR * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 			char Infofield[257];
 			char * ptr1 = Infofield;
 			UCHAR C;
-			int len;
+			size_t len;
 			
 			Output += sprintf((char *)Output, " <INFO S%d R%d>", TXNO, RXNO);
 			

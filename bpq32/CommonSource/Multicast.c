@@ -1272,7 +1272,7 @@ DE GM8BPQ K
 		}
 		else if (_memicmp(ptr1, "To:", 3) == 0 || _memicmp(ptr1, "cc:", 3) == 0)
 		{
-			HddrTo=realloc(HddrTo, (Recipients+1)*4);
+			HddrTo=realloc(HddrTo, (Recipients+1) * sizeof(void *));
 			HddrTo[Recipients] = zalloc(100);
 
 			memset(FullTo, 0, 99);
@@ -1409,10 +1409,10 @@ DE GM8BPQ K
 
 			}
 
-			RecpTo=realloc(RecpTo, (Recipients+1)*4);
+			RecpTo=realloc(RecpTo, (Recipients+1) * sizeof(void *));
 			RecpTo[Recipients] = zalloc(10);
 
-			Via=realloc(Via, (Recipients+1)*4);
+			Via=realloc(Via, (Recipients+1) * sizeof(void *));
 			Via[Recipients] = zalloc(50);
 
 			strcpy(Via[Recipients], Msg->via);

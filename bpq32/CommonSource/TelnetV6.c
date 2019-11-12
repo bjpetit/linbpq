@@ -65,7 +65,7 @@ static int RigControlRow = 190;
 UCHAR * APIENTRY GetLogDirectory();
 static BOOL OpenSockets(struct TNCINFO * TNC);
 static BOOL OpenSockets6(struct TNCINFO * TNC);
-int ProcessHTTPMessage(struct ConnectionInfo * conn);
+void ProcessHTTPMessage(void * conn);
 static VOID SetupListenSet(struct TNCINFO * TNC);
 int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
@@ -123,8 +123,6 @@ static	HMENU hMenu, hPopMenu, hPopMenu2, hPopMenu3;		// handle of menu
 static int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
-
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
 
 #ifndef LINBPQ
 LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -322,7 +320,11 @@ void BuffertoNode(struct ConnectionInfo * sockptr, char * MsgPtr, int InputLen)
 
 	if (sockptr->FromHostBuffPutptr + InputLen > sockptr->FromHostBufferSize)
 	{
-		sockptr->FromHostBufferSize += 10000;
+		if (InputLen > 10000)
+			sockptr->FromHostBufferSize += InputLen;
+		else
+			sockptr->FromHostBufferSize += 10000;
+
 		sockptr->FromHostBuffer = realloc(sockptr->FromHostBuffer, sockptr->FromHostBufferSize);
 	}
 
@@ -798,7 +800,7 @@ lineloop:
 	}
 }
 
-static int ExtProc(int fn, int port , PDATAMESSAGE buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
 	int txlen = 0, n;
 	PMSGWITHLEN buffptr;
@@ -964,7 +966,7 @@ static int ExtProc(int fn, int port , PDATAMESSAGE buff)
 		Stream = buff->PORT;
 		STREAM = &TNC->Streams[Stream];
 
-		txlen = GetLengthfromBuffer(buff) - (sizeof(void *) + 4);	
+		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);		// 1 as no PID
 
 		buffptr->Len = txlen;
 		memcpy(&buffptr->Data, &buff->L2DATA, txlen);
@@ -977,7 +979,7 @@ static int ExtProc(int fn, int port , PDATAMESSAGE buff)
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 		
-		Stream = (int)buff;
+		Stream = (int)(size_t)buff;
 		
 		STREAM = &TNC->Streams[Stream];
 
@@ -1552,7 +1554,7 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 	return TRUE;
 }
 
-BOOL OpenSocket6(struct TNCINFO * TNC, int port)
+SOCKET OpenSocket6(struct TNCINFO * TNC, int port)
 {
 	struct sockaddr_in6 local_sin;  /* Local socket - internet style */
 	struct sockaddr_in6 * psin;
@@ -1590,7 +1592,7 @@ BOOL OpenSocket6(struct TNCINFO * TNC, int port)
 
 	if (bind(sock, (struct sockaddr FAR *)psin, sizeof(local_sin)) == SOCKET_ERROR)
 	{
-        sprintf(szBuff, "IPV6 bind(sock) failed Port %d Error %d", port, WSAGetLastError());
+        sprintf(szBuff, "IPV6 bind(sock) failed Port %d Error %d\n", port, WSAGetLastError());
 		WritetoConsoleLocal(szBuff);
 	    closesocket( sock );
 
@@ -1786,7 +1788,7 @@ VOID TelnetPoll(int Port)
 		
 		memcpy(&readfd, &TCP->ListenSet, sizeof(fd_set));
 
-		retval = select(TCP->maxsock + 1, &readfd, NULL, NULL, &timeout);
+		retval = select((int)(TCP->maxsock) + 1, &readfd, NULL, NULL, &timeout);
 
 		if (retval == -1)
 		{
@@ -1926,7 +1928,7 @@ VOID TelnetPoll(int Port)
 
 		if (Active)
 		{
-			retval = select(maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
+			retval = select((int)maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
 
 			if (retval == -1)
 			{				
@@ -3629,14 +3631,17 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 		// Send to Node
 
-
 		// Queue to Node. Data may arrive it large quatities, possibly exceeding node buffer capacity
 
 		STREAM->BytesRXed += InputLen;
 
 		if (sockptr->FromHostBuffPutptr + InputLen > sockptr->FromHostBufferSize)
 		{
-			sockptr->FromHostBufferSize += 10000;
+			if (InputLen > 10000)
+				sockptr->FromHostBufferSize += InputLen;
+			else
+				sockptr->FromHostBufferSize += 10000;
+
 			sockptr->FromHostBuffer = realloc(sockptr->FromHostBuffer, sockptr->FromHostBufferSize);
 		}
 
@@ -4321,7 +4326,7 @@ MsgLoop:
 				char Addr[100];
 				Tel_Format_Addr(sockptr, Addr);
 				sprintf(logmsg,"%d %s Call Accepted. Callsign=%s\n",
-					sockptr->Number, Addr,sockptr->Callsign);
+				sockptr->Number, Addr,sockptr->Callsign);
 
 				WriteLog (logmsg);
 			}
@@ -4480,7 +4485,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 
 	memcpy(sockcopy, sockptr, sizeof(struct ConnectionInfo));
 
-	_beginthread((void (*)())ProcessHTTPMessage, 0, (VOID *)sockcopy);
+	_beginthread(ProcessHTTPMessage, 0, (VOID *)sockcopy);
 
 	sockptr->InputLen = 0;
 	return 0;
@@ -4929,7 +4934,7 @@ VOID Report(struct STREAMINFO * STREAM, char * Msg)
 	C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 }
 
-BOOL CheckCMSThread(struct TNCINFO * TNC);
+void CheckCMSThread(void * TNC);
 
 BOOL CheckCMS(struct TNCINFO * TNC)
 {
@@ -4937,15 +4942,16 @@ BOOL CheckCMS(struct TNCINFO * TNC)
 	if (TNC->TCPInfo->CMS)
 	{
 		TNC->TCPInfo->CheckCMSTimer = 0;
-		_beginthread((void (*)())CheckCMSThread, 0, TNC);
+		_beginthread(CheckCMSThread, 0, (void *)TNC);
 	}
 	return 0;
 }
 
-BOOL CheckCMSThread(struct TNCINFO * TNC)
+void CheckCMSThread(void * TNCPtr)
 {
 	// Resolve Name and check connectivity to each address
 
+	struct TNCINFO * TNC = (struct TNCINFO *)TNCPtr;
 	struct TCPINFO * TCP = TNC->TCPInfo;
 //	struct hostent * HostEnt;
 	struct in_addr addr;
@@ -5091,7 +5097,7 @@ CheckServers:
 #ifndef LINBPQ
 		SetWindowText(TCP->hCMSWnd, "NO CMS"); 
 #endif
-		return TRUE;
+		return;
 	}
 
 	// if we don't know we have Internet connectivity, make sure we can connect to at least one of them
@@ -5104,7 +5110,7 @@ CheckServers:
 	else
 		MySetWindowText(TCP->hCMSWnd, "NO CMS"); 
 #endif
-	return TRUE;
+	return;
 }
 
 #define MAX_KEY_LENGTH 255

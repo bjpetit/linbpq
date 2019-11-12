@@ -89,15 +89,15 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC);
 
 VOID ProcessPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
-static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
+static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, size_t Len);
 VOID ProcessKNormCommand(struct TNCINFO * TNC, UCHAR * rxbuffer);
-static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
+static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, size_t Len);
 
 //	Note that AEA host Mode uses SOH/ETB delimiters, with DLE stuffing
 
 static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
-static int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
-static int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
+static int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, size_t len);
+static int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, size_t len);
 
 int ProcessLine(char * buf, int Port)
 {
@@ -222,10 +222,10 @@ ConfigLine:
 
 
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff) 
 {
 	int txlen = 0;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct STREAMINFO * STREAM;
 	int Stream;
@@ -248,7 +248,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->Streams[Stream].ReportDISC)
 			{
 				TNC->Streams[Stream].ReportDISC = FALSE;
-				buff[4] = Stream;
+				buff->PORT = Stream;
 
 				return -1;
 			}
@@ -261,18 +261,19 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			if (TNC->Streams[Stream].PACTORtoBPQ_Q !=0)
 			{
-				int datalen;
+				size_t datalen;
 			
 				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
 
-				datalen=buffptr[1];
+				datalen = buffptr->Len;
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
+				buff->PORT = Stream;						// Compatibility with Kam Driver
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+				datalen += sizeof(void *) + 4;
 
-				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
+				PutLengthinBuffer(buff, (int)datalen);
+
 		
 				ReleaseBuffer(buffptr);
 	
@@ -290,13 +291,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		// Find TNC Record
 
-		Stream = buff[4];
+		Stream = buff->PORT;
 		
 		if (!TNC->TNCOK)
 		{
 			// Send Error Response
 
-			buffptr[1] = 36;
+			buffptr->Len = 36;
 			memcpy(buffptr+2, "No Connection to PACTOR TNC\r", 36);
 
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -306,7 +307,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
 
-		buffptr[1] = txlen;
+		buffptr->Len = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
@@ -320,7 +321,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 		
-		Stream = (int)buff;
+		Stream = (int)(size_t)buff;
 		STREAM = &TNC->Streams[Stream];
 
 		if (STREAM->FramesQueued  > 4)
@@ -570,10 +571,10 @@ static void CheckRX(struct TNCINFO * TNC)
 
 }
 
-static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
+static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, size_t Len)
 {
 	UCHAR * FendPtr;
-	int NewLen;
+	size_t NewLen;
 
 	//	Split into Packets. By far the most likely is a single packet, so treat as special case
 	//  Beware of DLE ETB and DLE DLE ETB!
@@ -713,7 +714,7 @@ VOID AEAPoll(int Port)
 	if (TNC->CmdSet)
 	{
 		char * start, * end;
-		int len;
+		size_t len;
 
 		start = TNC->CmdSet;
 		
@@ -728,7 +729,7 @@ VOID AEAPoll(int Port)
 			len = ++end - start -1;	// exclude cr
 			TNC->CmdSet = end;
 		
-			EncodeAndSend(TNC, start, len);
+			EncodeAndSend(TNC, start, (int)len);
 			TNC->InternalCmd = 'X';
 			TNC->CommandBusy = TRUE;
 
@@ -1040,7 +1041,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 	if (TNC->ReinitState == 2)		// In Term State, Sending Initialisation Commands
 	{
 		char * start, * end;
-		int len;
+		size_t len;
 
 		start = TNC->InitPtr;
 		
@@ -1072,7 +1073,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 		TNC->InitPtr = end;
 		memcpy(Poll, start, len);
 
-		TNC->TXLen = len;
+		TNC->TXLen = (int)len;
 		WriteCommBlock(TNC);
 
 
@@ -1129,9 +1130,9 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 	}
 }
 
-static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
+static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, size_t Len)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	char * Buffer = &Msg[1];			// Data portion of frame
 	char * Call;
 	char Status[80];
@@ -1177,7 +1178,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		if (Eptr) 
 			Debugprintf("Echoed 1c followed by %x", *(++Eptr));
 
-		TNC->Streams[0].BytesAcked += Len;
+		TNC->Streams[0].BytesAcked += (int)Len;
 
 		Debugprintf("Ack for %d, BytesAcked now %d", Len, TNC->Streams[0].BytesAcked);
 		ShowTraffic(TNC);
@@ -1219,9 +1220,9 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		Len--;							// Remove Header
 
-		buffptr[1] = Len;				// Length
-		TNC->Streams[Stream].BytesRXed += Len;
-		memcpy(&buffptr[2], Buffer, Len);
+		buffptr->Len = Len;				// Length
+		TNC->Streams[Stream].BytesRXed += (int)Len;
+		memcpy(&buffptr->Data[0], Buffer, Len);
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		if (Stream == 0)
@@ -1290,7 +1291,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		Buffer[Len - 1] = 13;
 		Buffer[Len] = 0;
 
-		buffptr[1] = sprintf((UCHAR *)&buffptr[2],"AEA} %s", Buffer);
+		buffptr->Len = sprintf(&buffptr->Data[0],"AEA} %s", Buffer);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
@@ -1341,7 +1342,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
+				buffptr->Len = sprintf(&buffptr->Data[0], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
 
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 	
@@ -1443,7 +1444,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						buffptr = GetBuff();
 						if (buffptr == 0) return;	// No buffers, so ignore
 
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", FreqAppl);
+						buffptr->Len = sprintf(&buffptr->Data[0], "%s\r", FreqAppl);
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 						TNC->SwallowSignon = TRUE;
 						return;
@@ -1454,7 +1455,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						buffptr = GetBuff();
 						if (buffptr == 0) return;			// No buffers, so ignore
 
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
+						buffptr->Len = sprintf(&buffptr->Data[0], "%s\r", TNC->ApplCmd);
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 												
 						TNC->SwallowSignon = TRUE;
@@ -1492,7 +1493,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", Call);;
+				buffptr->Len  = sprintf(&buffptr->Data[0], "*** Connected to %s\r", Call);;
 
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 	
@@ -1513,7 +1514,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 }
 
 
-int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len)
+int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, size_t len)
 {
 	unsigned int i, txptr = 0;
 	UCHAR c;
@@ -1541,7 +1542,7 @@ static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len)
 	WriteCommBlock(TNC);
 }
 
-static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
+static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, size_t len)
 {
 	unsigned int i, txptr = 0;
 	UCHAR c;

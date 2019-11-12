@@ -863,7 +863,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Remove RECONFIG command
 //	Preparations for 64 bit version
 
-// 6.0.19
+// 6.0.19 Sept 2019
 //	Fix UZ7HO interlock
 //	Add commands to set Centre Frequency and Modem with UZ7HO Soundmodem (on Windows only)
 //	Add option to save and restore MH lists and SAVEMH command
@@ -884,6 +884,19 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add IPV4: and IPV6: overrides on AXIP Resolver.
 //	Add SessionTimeLimit to HF sessions (ARDOP, SCSPactor, WINMOR, VARA)
 //	Add RADIO FREQ command to display current frequency
+
+// 6.0.20
+
+//	Trap and reject YAPP file transfer request.
+//	Fix possible overrun of TCP to Node Buffer
+//	Fix possible crash if APRS WX file doesn't have a terminating newline
+//	Change communication with BPQAPRS.exe to restore old message popup behaviour
+//	Preparation for 64 bit version
+//	Improve flow control on SCS Sragon
+//	Fragment messages from network links to L2 links with smaller paclen
+//	Change WL2K report rate to once every two hours
+//	Add CTEXT and CMSG commands to TNC2 Emulator
+
 
 #define CKernel
 

@@ -59,8 +59,6 @@ char * strlop(char * buf, char delim);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL OpenConnection(int);
 BOOL SetupConnection(int);
@@ -294,7 +292,7 @@ ConfigLine:
 
 }
 
-static int ExtProc(int fn, int port, unsigned char * buff)
+static size_t ExtProc(int fn, int port, unsigned char * buff)
 {
 	int txlen = 0;
 	UINT * buffptr;

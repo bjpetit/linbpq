@@ -582,7 +582,7 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 			const char * ptr;
 			int Count = 0;
 
-			Value = zalloc(4);				// always NULL entry on end even if no values
+			Value = zalloc(sizeof(void *));				// always NULL entry on end even if no values
 			Value[0] = NULL;
 
 			ptr = Context;
@@ -594,7 +594,7 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 				if (ptr1)
 					*(ptr1++) = 0;
 
-				Value = realloc(Value, (Count+2)*4);
+				Value = realloc(Value, (Count+2) * sizeof(void *));
 			
 				Value[Count++] = _strdup(ptr);
 			

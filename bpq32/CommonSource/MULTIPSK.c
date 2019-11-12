@@ -51,8 +51,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define AGWHDDRLEN sizeof(struct AGWHEADER)
 
-pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist);
-
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 
 //int ResetExtDriver(int num);
@@ -60,7 +58,7 @@ extern char * PortConfig[33];
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-static void ConnecttoMPSKThread(int port);
+static void ConnecttoMPSKThread(void * portptr);
 
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);
@@ -154,7 +152,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 
 #endif
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port, unsigned char * buff)
 {
 	UINT * buffptr;
 	unsigned int txlen=0;
@@ -860,13 +858,15 @@ static int ProcessLine(char * buf, int Port)
 
 static int ConnecttoMPSK(int port)
 {
-	_beginthread(ConnecttoMPSKThread, 0, (void *)port);
+	_beginthread(ConnecttoMPSKThread, 0, (void *)(size_t)port);
 
 	return 0;
 }
 
-static VOID ConnecttoMPSKThread(int port)
+VOID ConnecttoMPSKThread(void * portptr)
 {
+	
+	int port = (int)(size_t)portptr;
 	char Msg[255];
 	int err,i;
 	u_long param=1;

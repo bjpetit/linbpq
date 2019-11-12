@@ -64,7 +64,7 @@ int APIENTRY GetStreamPID(int Stream);
 
 char * APIENTRY GetBPQDirectory();
 char * APIENTRY GetProgramDirectory();
-char * APIENTRY GetLogDirectory();
+UCHAR * APIENTRY GetLogDirectory();
 
 HKEY APIENTRY GetRegistryKey();
 char * APIENTRY GetRegistryKeyText();
