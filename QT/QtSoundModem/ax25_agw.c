@@ -1,0 +1,1099 @@
+// UZ7HO Soundmodem Port
+
+#include "UZ7HOStuff.h"
+
+/*
+
+
+unit ax25_agw;
+
+interface
+
+uses sysutils,classes;
+
+  void AGW_init;
+  void AGW_free;
+  void AGW_add_socket(socket integer);
+  void AGW_del_socket(socket integer);
+  void AGW_send_to_app(socket integer; data string);
+  void AGW_AX25_frame_analiz(snd_ch byte; RX boolean; frame string);
+  void AGW_frame_analiz(Socket Integer; frame string);
+  void AGW_explode_frame(Socket Integer; data string);
+  void AGW_AX25_conn(socket integer; snd_ch, mode byte; path string);
+  void AGW_AX25_disc(socket integer; snd_ch, mode byte; path string);
+  void AGW_AX25_data_in(socket integer; snd_ch,PID byte; path,data string);
+  void AGW_Raw_monitor(snd_ch byte; data string);
+  void AGW_frame_header(AGWPort,DataKind,PID,CallFrom,CallTo string; Len word) string;
+  void AGW_C_Frame(port char; CallFrom,CallTo,Conn_MSG string) string;
+  void erase_zero_ssid(call string) string;
+  void AGW_get_socket(socket integer) integer;
+  void clr_zero(data string) string;
+
+type TAGWUser = record
+  socket TStringList;
+  AGW_frame_buf TStringList;
+  Monitor TStringList;
+  Monitor_raw TStringList;
+};
+*/
+
+void AGW_AX25_frame_analiz(int snd_ch, int RX, string * frame);
+
+void AGW_frame_analiz(AGWUser *  AGW);
+void AGW_send_to_app(void * socket, string * data);
+
+
+int AGWVersion[2] = {2005, 127};
+  //ports_info1='1;Port1 with LoopBack Port;
+
+char ports_info1[] = "1;Port1 with SoundCard Ch A;";
+char ports_info2[] = "2;Port1 with SoundCard Ch A;Port2 with SoundCard Ch B;";
+
+#define    LSB 29
+#define    MSB 30
+#define    MON_ON '1'
+#define    MON_OFF '0'
+#define    MODE_OUR 0
+#define    MODE_OTHER 1
+#define    MODE_RETRY 2
+
+
+AGWUser ** AGWUsers = NULL;				// List of currently connected clients
+int AGWConCount = 0;
+
+
+struct AGWHeader
+{
+	int Port;
+	unsigned char DataKind;
+	unsigned char filler2;
+	unsigned char PID;
+	unsigned char filler3;
+	char callfrom[10];
+	char callto[10];
+	int DataLength;
+	int reserved;
+};
+
+#define AGWHDDRRLEN sizeof(struct AGWHeader)
+
+
+struct AGWSocketConnectionInfo
+{
+	int Number;					// Number of record - for AGWConnections display
+	void *socket;
+//	SOCKADDR_IN sin;
+	BOOL SocketActive;
+	BOOL RawFlag;
+	BOOL MonFlag;
+	unsigned char CallSign1[10];
+	unsigned char CallSign2[10];
+	BOOL GotHeader;
+	int MsgDataLength;
+	struct AGWHeader AGWRXHeader;
+};
+
+
+AGWUser * AGW_get_socket(void * socket)
+{
+	int i;
+	AGWUser * AGW = NULL;
+
+	if (AGWConCount == 0)
+		return NULL;
+
+	for (i = 0; i < AGWConCount; i++)
+	{
+		if (AGWUsers[i]->socket == socket)
+		{
+			AGW = AGWUsers[i];
+			break;
+		}
+	}
+	return AGW;
+}
+
+
+void AGW_del_socket(void * socket)
+{
+	AGWUser * AGW = AGW_get_socket(socket);
+
+	if (AGW == NULL)
+		return;
+
+	Clear(&AGW->AGW_frame_buf);
+	freeString(AGW->data_in);
+	AGW->Monitor = 0;
+	AGW->Monitor_raw = 0;
+
+}
+
+
+
+void AGW_add_socket(void * socket)
+{
+	AGWUser * User = (struct AGWUser_t *)malloc(sizeof(struct AGWUser_t));			// One Client
+	memset(User, 0, sizeof(struct AGWUser_t));
+
+	AGWUsers = realloc(AGWUsers, (AGWConCount + 1) * sizeof(void *));
+	
+	AGWUsers[AGWConCount++] = User;
+
+	User->data_in = newString();
+	User->socket = socket;
+};
+
+
+void agw_init()
+{
+	AGWUsers = NULL;
+	AGWConCount = 0;
+};
+
+void agw_free()
+{
+ // AGWUser.AGW_frame_buf.Free;
+ // AGWUser.Monitor.Free;
+ // AGWUser.Monitor_raw.Free;
+ // AGWUser.socket.Free;
+};
+
+/*
+void erase_zero_ssid(call string) string;
+var
+  p byte;
+{
+  p = pos('-0',call);
+  if (p>0 ) delete(call,p,2);
+  result = call;
+};
+*/
+
+string * AGW_frame_header(char AGWPort, char DataKind, UCHAR PID, char * CallFrom, char * CallTo, int Len )
+{
+	string * Msg = newString();
+
+	struct AGWHeader * Hddr = (struct AGWHeader *)Msg->Data;
+	memset(Hddr, 0, sizeof(struct AGWHeader));
+
+	Hddr->Port = AGWPort;
+	Hddr->DataLength = Len;
+	Hddr->DataKind = DataKind;
+	Hddr->PID = PID;
+	strcpy(Hddr->callfrom, CallFrom);
+	strcpy(Hddr->callto, CallTo);
+
+	Msg->Length = sizeof(struct AGWHeader);
+	return Msg;
+};
+
+
+
+// AGW to APP frames
+
+string * AGW_R_Frame()
+{
+	string * Msg = AGW_frame_header(0, 'R', 0, "", "", 8);
+	
+	stringAdd(Msg, (UCHAR *)AGWVersion, 8);
+
+	return Msg;
+};
+
+
+string * AGW_X_Frame(char * CallFrom,  UCHAR reg_call)
+{
+	string * Msg = AGW_frame_header(0, 'x', 0, CallFrom, "", 1);
+
+	stringAdd(Msg, (UCHAR *)&reg_call, 1);
+
+	return Msg;
+
+};
+
+string * AGW_G_Frame()
+{
+	char * Ports;
+	string * Msg;
+	
+	if (DualChan)
+		Ports = ports_info2;
+	else
+		Ports = ports_info1;
+
+	Msg = AGW_frame_header(0, 'G', 0, "", "", strlen(Ports) + 1);
+
+	stringAdd(Msg, (UCHAR *)Ports, strlen(Ports) + 1);
+
+	return Msg;
+};
+
+/*
+
+void AGW_Gs_Frame(port char; port_info string) string;
+var
+  DataLen word;
+{
+  DataLen = 12;
+  result = AGW_frame_header(port,'g','','','',DataLen)+port_info;
+};
+
+void AGW_Ys_Frame(port char; frame_outstanding string) string;
+var
+  DataLen word;
+{
+  DataLen = 4;
+  result = AGW_frame_header(port,'y','','','',DataLen)+frame_outstanding;
+};
+
+/
+void AGW_Y_Frame(port char; CallFrom,CallTo,frame_outstanding string) string;
+var
+  DataLen word;
+{
+  DataLen = 4;
+  result = AGW_frame_header(port,'Y','',CallFrom,CallTo,DataLen)+frame_outstanding;
+};
+
+*/
+
+
+string * AGW_Y_Frame(int port, char * CallFrom, char *CallTo, int frame_outstanding)
+{
+	string * Msg;
+	
+	Msg = AGW_frame_header(port, 'Y', 0, CallFrom, CallTo, 4);
+
+	stringAdd(Msg, (UCHAR *)&frame_outstanding, 4);
+	return Msg;
+}
+
+/*
+
+void AGW_H_Frame(port char; heard string) string;
+var
+  DataLen word;
+{
+  DataLen = length(heard);
+  result = AGW_frame_header(port,'H','','','',DataLen)+heard;
+};
+*/
+
+
+string *  AGW_C_Frame(int port, char * CallFrom, char * CallTo, string * Conn_MSG)
+{
+	string * Msg;
+	int DataLen;
+
+	DataLen = Conn_MSG->Length;
+
+	Msg = AGW_frame_header(port, 'C', 240, CallFrom, CallTo, DataLen);
+
+	stringAdd(Msg, Conn_MSG->Data, Conn_MSG->Length);
+
+	freeString(Conn_MSG);
+
+	return Msg;
+}
+
+string * AGW_Ds_Frame(int port, char * CallFrom, char * CallTo, string * Disc_MSG)
+{
+	string * Msg;
+	int DataLen;
+	
+	DataLen = Disc_MSG->Length;
+
+	Msg = AGW_frame_header(port, 'd', 240, CallFrom, CallTo, DataLen);
+
+	stringAdd(Msg, Disc_MSG->Data, Disc_MSG->Length);
+
+	freeString(Disc_MSG);
+
+	return Msg;
+};
+
+
+string * AGW_D_Frame(int port, int PID, char * CallFrom, char * CallTo, string * Data)
+{
+	string * Msg;
+	int DataLen;
+
+	DataLen = Data->Length;
+
+	Msg = AGW_frame_header(port, 'D', PID, CallFrom, CallTo, DataLen);
+
+	stringAdd(Msg, Data->Data, Data->Length);
+
+	freeString(Data);
+
+	return Msg;
+}
+
+/*
+
+void AGW_I_Frame(port char; CallFrom,CallTo,Monitor string) string;
+var
+  DataLen word;
+{
+  DataLen = length(Monitor);
+  result = AGW_frame_header(port,'I','',CallFrom,CallTo,DataLen)+Monitor;
+};
+
+void AGW_S_Frame(port char; CallFrom,CallTo,Monitor string) string;
+var
+  DataLen word;
+{
+  DataLen = length(Monitor);
+  result = AGW_frame_header(port,'S','',CallFrom,CallTo,DataLen)+Monitor;
+};
+
+void AGW_U_Frame(port char; CallFrom,CallTo,Monitor string) string;
+var
+  DataLen word;
+{
+  DataLen = length(Monitor);
+  result = AGW_frame_header(port,'U','',CallFrom,CallTo,DataLen)+Monitor;
+};
+
+void AGW_T_Frame(port char; PID,CallFrom,CallTo,Monitor string) string;
+var
+  DataLen word;
+{
+  DataLen = length(Monitor);
+  result = AGW_frame_header(port,'T',PID,CallFrom,CallTo,DataLen)+Monitor;
+};
+
+void AGW_K_Frame(port char; CallFrom,CallTo,Monitor string) string;
+var
+  DataLen word;
+{
+  DataLen = length(Monitor);
+  result = AGW_frame_header(port,'K','',CallFrom,CallTo,DataLen)+Monitor;
+};
+*/
+
+// APP to AGW frames
+
+void on_AGW_P_frame(AGWUser * AGW)
+{
+}
+
+void on_AGW_X_frame(AGWUser * AGW, char * CallFrom)
+{
+	byte reg_call;
+
+	if (add_incoming_mycalls(AGW->socket, CallFrom))
+		reg_call = 1;
+	else
+		reg_call = 0;
+ 
+	AGW_send_to_app(AGW->socket, AGW_X_Frame(CallFrom, reg_call));
+}
+
+
+void on_AGW_Xs_frame(AGWUser * AGW, char * CallFrom)
+{
+ // del_incoming_mycalls(CallFrom);
+};
+
+void on_AGW_G_frame(AGWUser * AGW)
+{
+  AGW_send_to_app(AGW->socket, AGW_G_Frame());
+};
+
+
+void on_AGW_Ms_frame(AGWUser * AGW)
+{
+	AGW->Monitor ^= 1;				// Flip State
+}
+
+
+void on_AGW_R_frame(AGWUser * AGW)
+{
+  AGW_send_to_app(AGW->socket, AGW_R_Frame());
+}
+
+/*
+void on_AGW_Gs_frame(socket integer; port char
+var
+  info string;
+{
+  //port = #0;
+  info = #$00#$FF#$19#$04#$80#$0F#$06#$00#$01#$00#$00#$00;
+  AGW_send_to_app(socket,AGW_Gs_Frame(port,info));
+};
+
+void on_AGW_H_Frame(socket integer; port char);
+{
+};
+
+void on_AGW_Ys_Frame(socket integer; port char);
+var
+  snd_ch,i byte;
+  info string;
+  frames word;
+{
+  frames = 0;
+  //for i = 0 to port_num-1 do frames = frames+AX25port[i].frame_buf.Count;
+  snd_ch = ord(Port)+1;
+  for i = 0 to port_num-1 do frames = frames+AX25port[snd_ch][i].in_data_buf.Count+AX25port[snd_ch][i].I_frame_buf.Count;
+  info = chr(lo(frames))+chr(hi(frames))+#0#0;
+  AGW_send_to_app(socket,AGW_Ys_Frame(port,info));
+};
+
+*/
+
+void on_AGW_Y_frame(void * socket, int snd_ch, char * CallFrom, char * CallTo)
+{
+	int  frames;
+	TAX25Port * AX25Sess;
+
+	AX25Sess = get_user_port_by_calls(snd_ch, CallFrom, CallTo);
+
+	if (AX25Sess)
+	{
+		//frames = AX25port[snd_ch][user_port].in_data_buf.Count;
+		frames = AX25Sess->in_data_buf.Count + AX25Sess->I_frame_buf.Count;
+;
+		AGW_send_to_app(socket, AGW_Y_Frame(snd_ch, CallFrom, CallTo, frames));
+	}
+}
+
+/*
+void on_AGW_M_frame(socket integer; port char; PID,CallFrom,CallTo,Data string);
+var
+  path string;
+  snd_ch byte;
+{
+  snd_ch = ord(port)+1;
+  path = CallTo+','+CallFrom;
+  all_frame_buf[snd_ch].Add(make_frame(Data,path,ord(PID[1]),0,0,U_FRM,U_UI,FALSE,SET_F,SET_C));
+};
+
+
+*/
+
+void on_AGW_C_frame(AGWUser * AGW, int AGWPort, char * CallFrom, char * CallTo)
+{
+	int snd_ch;
+	char path[32];
+	byte axpath[80];
+	TAX25Port * AX25Sess;
+
+	snd_ch = AGWPort;
+
+	AX25Sess = get_free_port(snd_ch);
+
+	if (AX25Sess)
+	{
+		AX25Sess->snd_ch = snd_ch;
+
+		strcpy(AX25Sess->mycall, CallFrom);
+		strcpy(AX25Sess->corrcall, CallTo);
+
+		AX25Sess->digi[0] = 0;
+
+//		rst_timer(snd_ch, free_port);
+
+		strcpy(AX25Sess->kind, "Outgoing");
+		AX25Sess->socket = AGW->socket;
+
+		sprintf(path, "%s,%s", CallTo, CallFrom);
+
+		AX25Sess->pathLen = get_addr(path, 0, 0, axpath);
+		strcpy(AX25Sess->Path, axpath);
+		reverse_addr(axpath, AX25Sess->ReversePath, AX25Sess->pathLen);
+
+		set_link(AX25Sess, AX25Sess->Path);
+	};
+};
+
+
+
+
+
+void on_AGW_D_frame(int snd_ch, char * CallFrom, char * CallTo, byte * Msg, int Len)
+{
+	TAX25Port * AX25Sess;
+
+	AX25Sess = get_user_port_by_calls(snd_ch, CallFrom, CallTo);
+
+	if (AX25Sess)
+	{
+		string * data = newString();
+
+		stringAdd(data, Msg, Len);
+
+		Add(&AX25Sess->in_data_buf, data);
+
+		send_data_buf(AX25Sess, AX25Sess->vs);
+	}
+}
+
+void on_AGW_Ds_frame(void * socket, int snd_ch, char * CallFrom, char * CallTo)
+{
+	TAX25Port * AX25Sess;
+
+	AX25Sess = get_user_port_by_calls(snd_ch, CallFrom, CallTo);
+
+	if (AX25Sess)
+	{
+		rst_timer(AX25Sess);
+
+		set_unlink(AX25Sess, AX25Sess->Path);
+	}
+	else
+	{
+		string * Msg = newString();
+
+		Msg->Length = sprintf(Msg->Data, "*** DISCONNECTED From Station %s\r", CallTo);
+		Msg->Length++;					// Include the terminating NULL
+
+		//del_outgoing_mycalls(CallTo);
+
+		AGW_send_to_app(socket, AGW_Ds_Frame(snd_ch, CallTo, CallFrom, Msg));
+	}
+}
+
+
+/*
+
+void on_AGW_Vs_Frame(socket integer; port char; CallFrom,CallTo,Data string);
+var
+  snd_ch,num_digi,free_port byte;
+  need_free_port boolean;
+  digi,call,call1 string;
+{
+  snd_ch = ord(Port)+1;
+  num_digi = 0;
+  need_free_port = get_free_port(snd_ch,free_port);
+  if (need_free_port )
+  {
+    digi = '';
+    get_call(CallFrom,AX25Port[snd_ch][free_port].mycall);
+    get_call(CallTo,AX25Port[snd_ch][free_port].corrcall);
+    if (length(data)>0 ) { num_digi = ord(data[1]); delete(data,1,1); };
+    if ((num_digi in [1..7]) and (length(data)>=num_digi*10) )
+    {
+      repeat
+        call = clr_zero(copy(data,1,10)); delete(data,1,10);
+        if (call<>'' )
+        {
+          get_call(call,call1);
+          if (digi='' ) digi = call1
+          else digi = digi+','+call1;
+        };
+      until data='';
+      AX25Port[snd_ch][free_port].digi = reverse_digi(digi);
+      rst_timer(snd_ch,free_port);
+      AX25Port[snd_ch][free_port].kind = 'Outgoing';
+      AX25Port[snd_ch][free_port].socket = socket;
+      set_link(snd_ch,free_port,CallTo+','+CallFrom);
+    };
+  };
+};
+
+void on_AGW_V_Frame(socket integer; port char; PID,CallFrom,CallTo,Data string);
+var
+  call,call1,digi,path string;
+  snd_ch byte;
+  num_digi byte;
+  i byte;
+{
+  digi = '';
+  snd_ch = ord(port)+1;
+  num_digi = 0;
+  if (length(data)>0 ) { num_digi = ord(data[1]); delete(data,1,1); };
+  if ((num_digi in [1..7]) and (length(data)>=num_digi*10) )
+  {
+    for i = 1 to num_digi do
+    {
+      call = clr_zero(copy(data,1,10)); delete(data,1,10);
+      if (call<>'' )
+      {
+        get_call(call,call1);
+        if (digi='' ) digi = call1
+        else digi = digi+','+call1;
+      };
+    };
+  };
+  path = CallTo+','+CallFrom+','+digi;
+  all_frame_buf[snd_ch].Add(make_frame(Data,path,ord(PID[1]),0,0,U_FRM,U_UI,FALSE,SET_F,SET_C));
+};
+
+void on_AGW_Cs_Frame(socket integer; port char; PID,CallFrom,CallTo string);
+{
+};
+*/
+
+void on_AGW_K_frame(struct AGWHeader * Frame)
+{
+	// KISS frame
+
+	unsigned short CRC;
+	UCHAR CRCString[2];
+	string * TXMSG;
+
+	UCHAR * Data = (UCHAR * )Frame;
+	int Len = Frame->DataLength;
+
+	Data = &Data[AGWHDDRRLEN];
+
+	TXMSG = newString();
+
+	stringAdd(TXMSG, Data, Len);		// include Control
+
+	CRC = get_fcs(&Data[1], Len - 1);
+
+	CRCString[0] = CRC & 0xff;
+	CRCString[1] = CRC >> 8;
+
+	stringAdd(TXMSG, CRCString, 2);
+
+	Add(&all_frame_buf[modemtoSoundLR[Frame->Port]], TXMSG);
+
+/*var
+  snd_ch byte;
+  crc word;
+  fcs string;
+{
+  snd_ch = ord(port)+1;
+  delete(data,1,1);
+  crc = get_fcs(data,length(data));
+  fcs = chr(lo(crc))+chr(hi(crc));
+  data = data+fcs;
+  if (not KISS_opt[snd_ch] ) all_frame_buf[snd_ch].Add(data)
+  else
+  {
+    if (add_raw_frames(snd_ch,data,all_frame_buf[snd_ch]) ) all_frame_buf[snd_ch].Add(data);
+ */
+}
+
+void on_AGW_Ks_frame(AGWUser * AGW)
+{
+	AGW->Monitor_raw ^= 1;			// Flip State
+}
+
+// Analiz incoming frames
+
+void AGW_explode_frame(void * socket, UCHAR * data, int length)
+{
+	int AGWHeaderLen = sizeof(struct AGWHeader);
+	int i;
+
+	AGWUser *  AGW = NULL;
+
+	if (AGWConCount == 0)
+		return;
+
+	for (i = 0; i < AGWConCount; i++)
+	{
+		if (AGWUsers[i]->socket == socket)
+		{
+			AGW = AGWUsers[i];
+			break;
+		}
+	}
+
+	if (AGW == NULL)
+		return;
+
+	stringAdd(AGW->data_in, data, length);
+
+	while (AGW->data_in->Length >= AGWHeaderLen)		// Make sure have at least header
+	{
+		struct AGWHeader * Hddr = (struct AGWHeader *)AGW->data_in->Data;
+
+		int AgwLen = Hddr->DataLength + AGWHeaderLen;
+
+		if (AGW->data_in->Length >= AgwLen)
+		{
+			// Have frame as well
+
+			AGW_frame_analiz(AGW);
+
+			mydelete(AGW->data_in, 0, AgwLen);
+		}
+		else
+			return;					// Wait for the data
+	}
+
+
+
+
+	/*
+	idx = AGW_get_socket(socket);
+	 if (idx>=0 )
+	 {
+	   AGWUser.AGW_frame_buf.Strings[idx] = AGWUser.AGW_frame_buf.Strings[idx]+data;
+	   str_buf = AGWUser.AGW_frame_buf.Strings[idx];
+	   repeat
+		 done = FALSE;
+		 BufLen = length(str_buf);
+		 if (BufLen>=HEADER_SIZE )
+		 {
+		   DataLen = ord(str_buf[LSB])+ord(str_buf[MSB])*256;
+		   FrameLen = HEADER_SIZE+DataLen;
+		   if (length(str_buf)>=FrameLen )
+		   {
+			 frame = copy(str_buf,1,FrameLen);
+			 delete(str_buf,1,FrameLen);
+			 done = TRUE;
+			 AGW_frame_analiz(socket,frame);
+		   };
+		 };
+	   until not done;
+	   // Check if (socket is still present and has same index
+	   if ((AGWUser.socket.Count>idx) and (AGWUser.socket.Strings[idx]=inttostr(socket)) )
+		 AGWUser.AGW_frame_buf.Strings[idx] = str_buf;
+	 };
+	 */
+};
+
+/*
+void clr_zero(data string) string;
+var
+  p,i word;
+  s string;
+{
+  s = '';
+  p = pos(#0,data);
+  if (p>1 ) data = copy(data,1,p-1);
+  if (length(data)>0 ) for i = 1 to length(data) do if (data[i]>#31 ) s = s+data[i];
+  result = s;
+};
+
+void AGW_parse_frame(frame string; var DataKind,PID,AGWPort char; var Pass,CallFrom,CallTo,DataLen,Data string);
+{
+  DataKind = frame[5];
+  PID = frame[7];
+  AGWPort = frame[1];
+  Pass = '';
+  CallFrom = clr_zero(copy(frame,9,10));
+  CallTo = clr_zero(copy(frame,19,10));
+  get_call(CallFrom,CallFrom);
+  get_call(CallTo,CallTo);
+  DataLen = inttostr(ord(frame[LSB])+ord(frame[MSB])*256);
+  if (length(frame)>HEADER_SIZE ) Data = copy(frame,37,strtoint(DataLen)) else Data = '';
+};
+
+*/
+
+void AGW_send_to_app(void * socket, string * data)
+{
+	char * Msg = malloc(data->Length);
+	memcpy(Msg, data->Data, data->Length);
+	// can use KISS proc as it just sends to the supplied socket but need copy of message
+	KISSSendtoServer(socket, Msg, data->Length);
+	freeString(data);
+};
+
+
+void AGW_AX25_data_in(void  * socket, int snd_ch, int PID, byte * path, string * data)
+{
+	int len = 250, sendlen;
+
+	char CallFrom[10];
+	char CallTo[10];
+
+	string * pkt;
+
+	CallTo[ConvFromAX25(&path[7], CallTo)] = 0;
+	CallFrom[ConvFromAX25(path, CallFrom)] = 0;
+
+	while (data->Length)
+	{
+		if (data->Length > len)
+			sendlen = len;
+		else
+			sendlen = data->Length;
+
+		pkt = copy(data, 0, sendlen);
+		mydelete(data, 0, sendlen);
+
+		AGW_send_to_app(socket, AGW_D_Frame(snd_ch, PID, CallFrom, CallTo, pkt));
+	}
+
+}
+
+void AGW_AX25_conn(TAX25Port * AX25Sess, int snd_ch, byte mode)
+{
+
+	string * Msg = newString();
+	int agw_port;
+
+	switch (mode)
+	{
+
+	case MODE_OTHER:
+
+		Msg->Length = sprintf((char *)Msg->Data, "*** CONNECTED To Station  %s\r", AX25Sess->corrcall);
+		break;
+
+	case MODE_OUR:
+
+		Msg->Length = sprintf((char *)Msg->Data, "*** CONNECTED With Station %s\r", AX25Sess->corrcall);
+		break;
+
+	};
+
+	Msg->Length++;					// Include the terminating NULL
+
+	AGW_send_to_app(AX25Sess->socket, AGW_C_Frame(snd_ch, AX25Sess->corrcall, AX25Sess->mycall, Msg));
+};
+
+
+
+void AGW_AX25_disc(TAX25Port * AX25Sess, byte mode)
+{
+	string * Msg = newString();
+	int agw_port;
+
+	switch (mode)
+	{
+
+	case MODE_OTHER:
+	case MODE_OUR:
+
+		Msg->Length = sprintf((char *)Msg->Data, "*** DISCONNECTED From Station %s\r", AX25Sess->corrcall);
+		break;
+
+	case MODE_RETRY:
+
+		Msg->Length = sprintf((char *)Msg->Data, "*** DISCONNECTED RETRYOUT With Station %s\r", AX25Sess->corrcall);
+		break;
+
+	};
+
+	Msg->Length++;					// Include the terminating NULL
+
+	//del_outgoing_mycalls(CallTo);
+
+	AGW_send_to_app(AX25Sess->socket, AGW_Ds_Frame(AX25Sess->snd_ch, AX25Sess->corrcall, AX25Sess->mycall, Msg));
+};
+
+/*
+void AGW_frame_monitor(snd_ch byte; path,data string; var pid,nr,ns,f_type,f_id byte; var rpt,pf,cr,rx boolean);
+var
+  _data,mon_frm,frm string;
+  agw_port char;
+  CallFrom,CallTo,Digi string;
+  AGW_path,AGW_data string;
+  socket,i,idx integer;
+  time_now string;
+  ctrl string;
+  len word;
+{
+  len = length(data);
+  // NETROM parsing
+  if (pid=$CF ) data = parse_NETROM(data,f_id);
+  // IP parsing
+  if (pid=$CC ) data = parse_IP(data);
+  // ARP parsing
+  if (pid=$CD ) data = parse_ARP(data);
+  //
+  _data = '';
+  if (length(data)>0 )
+    for i = 1 to length(data) do
+    {
+      if (data[i]>#31 ) _data = _data+data[i];
+      if (data[i]=#13 ) _data = _data+#13;
+      if (data[i]=#9 ) _data = _data+#9;
+    };
+  if (length(_data)>0 )
+  {
+    i = 1;
+    repeat
+      if (i<length(_data) )
+        if ((_data[i]=#13) and (_data[i+1]=#13) ) delete(_data,i,1)
+        else inc(i);
+      if (i=length(_data) )
+        if (_data[i]=#13 ) delete(_data,i,1);
+    until i>=length(_data);
+  };
+  AGW_data = '';
+  agw_port = chr(snd_ch-1);
+  get_monitor_path(path,CallTo,CallFrom,Digi);
+  ctrl = '';
+  case f_id of
+    I_I   : { frm = 'I';    if ((cr=SET_C) and (pf=SET_P) ) ctrl = ' P';   };
+    S_RR  : { frm = 'RR';   if (               (pf=SET_P) ) ctrl = ' P/F'; };
+    S_RNR : { frm = 'RNR';  if (               (pf=SET_P) ) ctrl = ' P/F'; };
+    S_REJ : { frm = 'REJ';  if (               (pf=SET_P) ) ctrl = ' P/F'; };
+    U_SABM: { frm = 'SABM'; if ((cr=SET_C) and (pf=SET_P) ) ctrl = ' P';   };
+    U_DISC: { frm = 'DISC'; if ((cr=SET_C) and (pf=SET_P) ) ctrl = ' P';   };
+    U_DM  : { frm = 'DM';   if ((cr=SET_R) and (pf=SET_P) ) ctrl = ' F ';  };
+    U_UA  : { frm = 'UA';   if ((cr=SET_R) and (pf=SET_P) ) ctrl = ' F ';  };
+    U_FRMR: { frm = 'FRMR'; if ((cr=SET_R) and (pf=SET_P) ) ctrl = ' F ';  };
+    U_UI  : { frm = 'UI';   if (               (pf=SET_P) ) ctrl = ' P/F'; };
+  };
+
+  if (UTC_Time ) time_now = '['+get_UTC_time+']'
+  else time_now = '['+FormatDateTime('hhmmss',now)+']';
+
+  if (digi='' ) AGW_path = ' '+inttostr(snd_ch)+'Fm '+CallFrom+' To '+CallTo+' <'+frm
+  else AGW_path = ' '+inttostr(snd_ch)+'Fm '+CallFrom+' To '+CallTo+' Via '+Digi+' <'+frm;
+  case f_type of
+    I_FRM: mon_frm = AGW_path+ctrl+' R'+inttostr(nr)+' S'+inttostr(ns)+' pid='+dec2hex(pid)+' Len='+inttostr(len)+' >'+time_now+#13+_data+#13#13;
+    U_FRM: if (f_id=U_UI ) mon_frm = AGW_path+' pid='+dec2hex(pid)+' Len='+inttostr(len)+' >'+time_now+#13+_data+#13#13
+              else if (f_id=U_FRMR ) { _data = copy(_data+#0#0#0,1,3); mon_frm = AGW_path+ctrl+'>'+time_now+#13+inttohex((byte(data[1]) shl 16) or (byte(data[2]) shl 8) or byte(data[3]),6)+#13#13 }
+                else mon_frm = AGW_path+ctrl+'>'+time_now+#13;
+    S_FRM: mon_frm = AGW_path+ctrl+' R'+inttostr(nr)+' >'+time_now+#13;
+  };
+  mon_frm = mon_frm+#0; // Добавляем 0 в конце каждого кадра
+  if (Form1.ServerSocket1.Socket.ActiveConnections>0 )
+  for i = 0 to Form1.ServerSocket1.Socket.ActiveConnections-1 do
+  begin
+    socket = Form1.ServerSocket1.Socket.Connections[i].SocketHandle;
+    idx = AGW_get_socket(socket);
+    if (idx>=0 )
+    if (AGWUser.Monitor.Strings[idx]=MON_ON )
+    {
+      if (RX )
+      case f_id of
+        I_I   : AGW_data = AGW_I_frame(agw_port,CallFrom,CallTo,mon_frm);
+        S_RR  : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        S_RNR : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        S_REJ : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        U_SABM: AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        U_DISC: AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        U_DM  : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        U_UA  : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        U_FRMR: AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
+        U_UI  : AGW_data = AGW_U_frame(agw_port,CallFrom,CallTo,mon_frm);
+      }
+      else AGW_data = AGW_T_frame(agw_port,'',CallFrom,CallTo,mon_frm);
+      AGW_send_to_app(socket,AGW_data);
+    };
+  };
+};
+*/
+void AGW_Raw_monitor(int snd_ch, string * data)
+{
+	int ch;
+
+	/*  AGW_data,mon_frm string;
+	  agw_port char;
+	  socket,i,idx integer;
+	{
+	  if (Form1.ServerSocket1.Socket.ActiveConnections>0 )
+	  for i = 0 to Form1.ServerSocket1.Socket.ActiveConnections-1 do
+	  {
+		socket = Form1.ServerSocket1.Socket.Connections[i].SocketHandle;
+		idx = AGW_get_socket(socket);
+		if (idx>=0 )
+		if (AGWUser.Monitor_raw.Strings[idx]=MON_ON )
+		{
+		  ch = snd_ch-1;
+		  agw_port = chr(ch);
+		  mon_frm = chr(ch shl 4)+copy(data,1,length(data)-2);
+		  AGW_data = AGW_K_frame(agw_port,'','',mon_frm);
+		  AGW_send_to_app(socket,AGW_data);
+		};
+	  };
+	*/
+}
+
+void AGW_AX25_frame_analiz(int snd_ch, int RX, string * frame)
+{
+//  path,data string;
+//  pid,nr,ns,f_type,f_id byte;
+//  rpt,cr,pf boolean;
+
+//  decode_frame(frame,path,data,pid,nr,ns,f_type,f_id,rpt,pf,cr);
+//  AGW_frame_monitor(snd_ch,path,data,pid,nr,ns,f_type,f_id,rpt,pf,cr,rx);
+  //if (RX ) AGW_Raw_monitor(snd_ch, frame);
+};
+
+
+void AGW_frame_analiz(AGWUser *  AGW)
+{
+	struct AGWHeader * Frame = (struct AGWHeader *)AGW->data_in->Data;
+	byte * Data = &AGW->data_in->Data[36];
+
+	byte snd_ch;
+
+	snd_ch = AGWPort = Frame->Port;
+
+	if (soundChannel[snd_ch] == 0)
+		return;
+
+	if (snd_ch > 1)
+		return;
+
+	switch (Frame->DataKind)
+	{
+	case 'P':
+		
+		on_AGW_P_frame(AGW);
+		return;
+
+	case 'X':
+
+		on_AGW_X_frame(AGW, Frame->callfrom);
+		return;
+		
+
+	case 'x':
+		
+		on_AGW_Xs_frame(AGW, Frame->callfrom);
+		return;
+
+	case 'G':
+		
+		on_AGW_G_frame(AGW);
+		return;
+		
+
+	case 'm':
+		
+		on_AGW_Ms_frame(AGW);
+		return;
+
+	case 'R':
+		
+		on_AGW_R_frame(AGW);
+		return;
+
+	
+//	'g': on_AGW_Gs_frame(AGW,AGWPort);
+//	'H': on_AGW_H_frame(AGW,AGWPort);
+//	'y': on_AGW_Ys_frame(AGW,AGWPort);
+	case 'Y':
+		on_AGW_Y_frame(AGW->socket, AGWPort, Frame->callfrom, Frame->callto);
+		break;
+//	'M': on_AGW_M_frame(AGW,AGWPort,PID,CallFrom,CallTo,Data);
+	
+
+	case 'C':
+
+		on_AGW_C_frame(AGW, AGWPort, Frame->callfrom, Frame->callto);
+		return;
+
+	case 'D':
+		
+		on_AGW_D_frame(AGWPort, Frame->callfrom, Frame->callto, Data, Frame->DataLength);
+		return;
+	
+	case 'd':
+		on_AGW_Ds_frame(AGW->socket, AGWPort, Frame->callfrom, Frame->callto);
+		return;
+
+//	'v': on_AGW_Vs_frame(AGW,AGWPort,CallFrom,CallTo,Data);
+//	'V': on_AGW_V_frame(AGW,AGWPort,PID,CallFrom,CallTo,Data);
+//	'c': on_AGW_Cs_frame(sAGWocket,AGWPort,PID,CallFrom,CallTo);
+
+
+	case 'K':
+		
+		on_AGW_K_frame(Frame);
+		return;
+
+	case 'k':
+		on_AGW_Ks_frame(AGW);
+		return;
+
+	default:
+		Debugprintf("AGW %c", Frame->DataKind);
+	}
+}

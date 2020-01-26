@@ -26,8 +26,12 @@ SOURCES += ./ax25.c \
     ./SMMain.c \
     ./sm_main.c \
     ./UZ7HOUtils.c \
-    ./ALSASound.c
- 
+    ./ALSASound.c \
+	./ax25_agw.c \
+	./berlekamp.c \
+	./galois.c \
+	./rs.c
+	 
 FORMS += ./calibrateDialog.ui \
     ./devicesDialog.ui \
     ./filterWindow.ui \
@@ -37,7 +41,7 @@ RESOURCES += QtSoundModem.qrc
 
 QMAKE_CFLAGS += -g
 QMAKE_LFLAGS += -lasound
-QMAKE_LIBS += /usr/local/lib/libfftw3f.a
+QMAKE_LIBS += /usr/lib/i386-linux-gnu/libfftw3f.a
 
 
 
