@@ -125,9 +125,9 @@ BEGIN
                     CBS_UPPERCASE | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Text",IDC_TEXTLABEL,60,216,19,8
     EDITTEXT        IDC_INPUT,80,215,222,12,ES_AUTOHSCROLL
-    CONTROL         "Show only mine",IDC_MYMSGS,"Button",BS_AUTOCHECKBOX | 
+	CONTROL         "Show only mine:",IDC_MYMSGS,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT,3,5,73,8
-    CONTROL         "Beep instead of Popup",IDC_MSGBEEP,"Button",
+	CONTROL         "Beep instead of Popup:",IDC_MSGBEEP,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT,282,5,97,8
     CONTROL         "List1",IDC_LIST1,"SysListView32",LVS_REPORT | WS_BORDER,
                     9,26,396,69
@@ -136,12 +136,12 @@ BEGIN
     PUSHBUTTON      "Clear RX",IDC_CLEARRX,382,4,38,10
     LTEXT           "Path",IDC_TEXTLABEL2,307,216,19,8,NOT WS_VISIBLE
     EDITTEXT        IDC_PATH,329,215,76,12,ES_AUTOHSCROLL | NOT WS_VISIBLE
-    CONTROL         "All SSIDs",IDC_MYMSGSDSSID,"Button",BS_AUTOCHECKBOX | 
+	CONTROL         "All SSIDs:",IDC_MYMSGSDSSID,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT,81,5,50,8
     PUSHBUTTON      "Clear TX",IDC_CLEARTX,424,4,38,10,0,0,HIDC_CLEARTX
-    CONTROL         "Show Bulls",IDC_SHOWBULLS,"Button",BS_AUTOCHECKBOX | 
+	CONTROL         "Show Bulls:",IDC_SHOWBULLS,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,227,5,52,8
-    CONTROL         "Only Show Sequenced ",IDC_SHOWSEQ,"Button",
+	CONTROL         "Only Show Sequenced: ",IDC_SHOWSEQ,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,135,5,90,8
 END
 

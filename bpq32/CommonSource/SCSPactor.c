@@ -136,6 +136,48 @@ static char BaseDir[MAX_PATH]="c:\\";
 
 static BOOL WRITELOG = FALSE;
 
+BOOL SCSStopPort(struct PORTCONTROL * PORT)
+{
+	// Disable Port - close TCP Sockets or Serial Port
+
+	struct TNCINFO * TNC = PORT->TNC;
+
+	TNC->CONNECTED = FALSE;
+	TNC->Alerted = FALSE;
+
+	if (TNC->Streams[0].Attached)
+		TNC->Streams[0].ReportDISC = TRUE;
+
+	if (TNC->hDevice)
+	{
+		CloseCOMPort(TNC->hDevice);
+		TNC->hDevice = 0;
+	}
+
+	TNC->HostMode = FALSE;
+
+	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Stopped");
+	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+
+	return TRUE;
+}
+
+BOOL SCSStartPort(struct PORTCONTROL * PORT)
+{
+	// Restart Port - Open Sockets or Serial Port
+
+	struct TNCINFO * TNC = PORT->TNC;
+
+	TNC->ReopenTimer = 999;				// Reopen immediately
+		
+	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Restarted");
+	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+
+	return TRUE;
+}
+
+
+
 static VOID CloseLogFile(int Flags)
 {
 	if (WRITELOG)
@@ -284,7 +326,7 @@ ConfigLine:
 			TNC->WL2K = DecodeWL2KReportLine(buf);
 		else
 		if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
-			TNC->SessionTimeLimit = atoi(&buf[16]) * 60;
+			TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit = atoi(&buf[16]) * 60;
 		else
 		if (_memicmp(buf, "DATE", 4) == 0)
 		{
@@ -387,7 +429,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		if (TNC->PortRecord->PORTCONTROL.PortStopped == 0)
+			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == 0)
 			return 0;
@@ -838,6 +881,9 @@ void * SCSExtInit(EXTPORTDATA *  PortEntry)
 	TNC->SuspendPortProc = PTCSuspendPort;
 	TNC->ReleasePortProc = PTCReleasePort;
 
+	PortEntry->PORTCONTROL.PORTSTARTCODE = SCSStartPort;
+	PortEntry->PORTCONTROL.PORTSTOPCODE = SCSStopPort;
+
 	PortEntry->PORTCONTROL.UICAPABLE = TRUE;
 
 	ptr=strchr(TNC->NodeCall, ' ');
@@ -898,6 +944,8 @@ void * SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	sprintf(msg, "MYCALL %s\rPAC MYCALL %s\r", TNC->NodeCall, TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
+
+	PortEntry->PORTCONTROL.TNC = TNC;
 
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 510;
@@ -1252,7 +1300,9 @@ VOID SCSPoll(int Port)
 			if (Stream == 0)
 			{
 				// Release Scan Lock if it is held
-				
+
+				TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit;		// Reset Limit
+	
 				if (TNC->DontReleasePermission)
 				{
 					TNC->DontReleasePermission = FALSE;
@@ -1865,6 +1915,23 @@ VOID SCSPoll(int Port)
 					return;
 				}
 
+				if (_memicmp(Buffer, "SessionTimeLimit", 16) == 0)
+				{
+					if (Buffer[16] != 13)
+					{					
+						PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
+	
+						TNC->SessionTimeLimit = atoi(&Buffer[16]) * 60;
+
+						if (buffptr)
+						{
+							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "SCS} OK\r");
+							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						}
+						return;
+					}
+				}
+					
 				if (memcmp(Buffer, "MYLEVEL ", 8) == 0)
 				{
 					Switchmode(TNC, Buffer[8] - '0');
@@ -3235,6 +3302,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				{
 					// Incoming Connect
 
+					TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit;		// Reset Limit
+			
 					// Check for ExcludeList
 
 					if (ExcludeList[0])

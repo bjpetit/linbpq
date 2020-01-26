@@ -99,22 +99,27 @@
 //	Only send UTF-8 option if send in UTF-8 is set
 //	Drop received Keepalive packets
 
+//	Version 1.0.16.1 ??
 
-#define _USE_32BIT_TIME_T
+//	Add YAPP File Transfer
+
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "winsock2.h"
 #include "WS2tcpip.h"
 #include <windows.h>
+#include <winuser.h>
 #include <time.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <malloc.h>	
 #include <memory.h>
+#include <sys/types.h>
 #include <wchar.h>
-
+#include <sys/stat.h>
 //#define _RICHEDIT_VER	0x0100
 #include <Richedit.h> 
 #define IDC_STATIC -1
@@ -122,6 +127,7 @@
 #define TermTCP
 #include "Versions.h"
 #include "GetVersion.h"
+#include "Shlobj.h"
 
 #define BPQICON 2
 
@@ -148,6 +154,22 @@ TCHAR KeyWordsName[MAX_PATH] = L"Keywords.sys";
 char ** KeyWords = NULL;
 int NumberofKeyWords = 0;
 
+// YAPP stuff
+
+#define SOH 1
+#define STX 2
+#define ETX 3
+#define EOT 4
+#define ENQ 5
+#define ACK 6
+#define DLE	0x10
+#define NAK 0x15
+#define CAN 0x18
+
+
+UCHAR InputMode;				// Normal or YAPP
+WCHAR YAPPPath[MAX_PATH] = L"";	// Path for saving YAPP Files
+
 // Foward declarations of functions included in this code module:
 
 ATOM MyRegisterClass(CONST WNDCLASS*);
@@ -163,6 +185,9 @@ VOID EnableConnectMenu(HWND hWnd);
 VOID EnableDisconnectMenu(HWND hWnd);
 VOID DisableConnectMenu(HWND hWnd);
 VOID DisableDisconnectMenu(HWND hWnd);
+VOID DisableYAPPMenu(HWND hWnd);
+VOID EnableYAPPMenu(HWND hWnd);
+
 int DoReceivedData(HWND hWnd);
 int	DoStateChange(HWND hWnd);
 int ToggleFlags(HWND hWnd, int Item, int mask);
@@ -186,6 +211,9 @@ VOID DataSocket_Read(SOCKET sock);
 VOID Socket_Data(int sock, int error, int eventcode);
 VOID Socket_Accept(int sock, int error, int eventcode);
 SOCKET OpenListenSocket4(int port);
+void YAPPSendFile(WCHAR * filename);
+void QueueMsg(UCHAR * Msg, int Len);
+BOOL ProcessYAPPMessage(UCHAR * Msg,  int Len);
 
 COLORREF Colours[256] = {0,
 		RGB(0,0,0), RGB(0,0,128), RGB(0,0,192), RGB(0,0,255),				// 1 - 4
@@ -225,10 +253,10 @@ LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 
 
-WNDPROC wpOrigInputProc; 
+LONG_PTR wpOrigInputProc;
 //WNDPROC wpOrigOutputProc; 
-WNDPROC wpOrigMonProc; 
-WNDPROC wpOrigSplitProc; 
+LONG_PTR wpOrigMonProc;
+LONG_PTR wpOrigSplitProc;
 
 HWND hwndInput;
 HWND hwndOutput;
@@ -457,7 +485,7 @@ VOID GetKeyWordFile()
 	FILE * Handle;
 	DWORD FileSize;
 	char * ptr1, * ptr2;
-	struct _stat32 STAT;
+	struct stat STAT;
 	char * KeyWordFile;
 
 	if (_wstat(KeyWordsName, &STAT) == -1)
@@ -592,6 +620,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char * lpCmdL
 		DisableConnectMenu(hWnd);
 		ListenSock = OpenListenSocket4(ListenPort);
 	}
+
+	DisableYAPPMenu(hWnd);
 
 	// Main message loop:
 	while (GetMessage(&msg, NULL, 0, 0)) 
@@ -788,6 +818,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	if (UseKeywords && KeyWordsName[0] == 0)
 		wcscpy(&KeyWordsName[0], L"Keywords.sys");
 
+	GetStringValue(L"YAPPPath", YAPPPath, MAX_PATH - 1);
+
+
 	OutputData.CharWidth = FontWidth;
 
 	// Create a dialog box as the main window
@@ -848,9 +881,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
  
 	// Set our own WndProcs for the controls. 
 
-	wpOrigInputProc = (WNDPROC) SetWindowLong(hwndInput, GWL_WNDPROC, (LONG) InputProc); 
-	wpOrigMonProc = (WNDPROC)SetWindowLong(hwndMon, GWL_WNDPROC, (LONG)MonProc);
-	wpOrigSplitProc = (WNDPROC)SetWindowLong(hwndSplit, GWL_WNDPROC, (LONG)SplitProc);
+	wpOrigInputProc = (WNDPROC) SetWindowLongPtr(hwndInput, GWLP_WNDPROC, InputProc);
+	wpOrigMonProc = (WNDPROC)SetWindowLongPtr(hwndMon, GWLP_WNDPROC, MonProc);
+	wpOrigSplitProc = (WNDPROC)SetWindowLongPtr(hwndSplit, GWLP_WNDPROC, SplitProc);
 
 	MoveWindow(hWnd,Rect.left,Rect.top, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
@@ -1229,6 +1262,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     int y, i;  
     LPMEASUREITEMSTRUCT lpmis; 
     LPDRAWITEMSTRUCT lpdis; 
+	OPENFILENAME ofn;
+	WCHAR FN[MAX_PATH] = L"";
+	BROWSEINFO bi;
+	LPITEMIDLIST pidl;
+	char Mess[64];
+
 
 	switch (message) 
 	{
@@ -1476,6 +1515,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				wsprintf(Title, L"BPQTermTCP Version %s - Disconnected", VersionStringW);
 				SetWindowText(hWnd,Title);
 				DisableDisconnectMenu(hWnd);
+				DisableYAPPMenu(hWnd);
 				EnableConnectMenu(hWnd);
 
 				WritetoOutputWindow(&OutputData , L"*** Disconnected\r", 17);		
@@ -1483,6 +1523,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				SocketActive = FALSE;
 				Connected = FALSE;
 				Disconnecting = FALSE;	
+				InputMode = 0;
 
 				break;
 			}
@@ -1595,6 +1636,54 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 //			HtmlHelp(hWnd,"BPQTerminal.chm",HH_HELP_FINDER,0);  
 			break;
 
+		case YAPPSEND:
+
+			memset(&ofn, 0, sizeof (OPENFILENAME));
+			ofn.lStructSize = sizeof (OPENFILENAME);
+			ofn.hwndOwner = hWnd;
+			ofn.lpstrFile = FN;
+			ofn.nMaxFile = 250;
+			ofn.lpstrTitle = L"File to send";
+//			ofn.lpstrInitialDir = BPQDirectory;
+
+			// Turn off monitoring
+
+			len = sprintf(Mess, "\\\\\\\\%x %x %x %x %x %x %x %x\r", 0, 0, 0, 0, 0, 0, 0, 0);
+			send(sock, Mess, len, 0);
+
+
+			if (GetOpenFileName(&ofn))
+				YAPPSendFile(FN);
+			else
+				SendTraceOptions();
+			break;
+
+
+		case YAPPDIR:
+
+			memset(&bi, 0, sizeof (BROWSEINFO));
+			
+			bi.hwndOwner        =   NULL; 
+			bi.pidlRoot         =   NULL; 
+			bi.pszDisplayName   =   FN; 
+			bi.lpszTitle        =   L"Please select a folder for storing received files"; 
+			bi.ulFlags          =   BIF_RETURNONLYFSDIRS;
+			bi.lParam           =   0; 
+			bi.iImage           =   0;  
+
+			pidl   =   SHBrowseForFolder(&bi);
+
+			if (pidl)
+			{
+				SHGetPathFromIDList(pidl, YAPPPath);
+				wcscat(YAPPPath, L"\\");
+				SaveStringValue(L"YAPPPath", YAPPPath);
+			}
+
+			break;
+
+
+
 		default:
 
 			return 0;
@@ -1646,7 +1735,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			GetWindowRect(hWnd,	&Rect);	// For save soutine
 
-            SetWindowLong(hwndInput, GWL_WNDPROC, 
+            SetWindowLong(hwndInput, -4, 
                 (LONG) wpOrigInputProc); 
          
 			PostQuitMessage(0);
@@ -1667,7 +1756,7 @@ int StackIndex=0;
  
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
-	TCHAR DisplayLine[250] = L"\x1b\x21";
+	TCHAR DisplayLine[250] = L"";
 
 	if (uMsg == WM_CTLCOLOREDIT)
 	{
@@ -1740,7 +1829,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			if (!Connected && ! Connecting)
 			{
 				TCPConnect(Host[CurrentHost], Port[CurrentHost]);
-				SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
+				SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) L"");
 				return 0;
 			}
 
@@ -1766,6 +1855,9 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			// Echo, with set Black escape
 
+			DisplayLine[0] = 0x1b;
+			DisplayLine[1] = 0x21;
+
 			memcpy(&DisplayLine[2], kbbuf, (kbptr+1) * 2);
 
 			if (OutputData.Scrolled)
@@ -1787,7 +1879,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			SendMsg(&kbbuf[0], kbptr+1);
 
-			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
+			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) L"");
 
 			return 0; 
 		}
@@ -1798,7 +1890,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			SendMsg(&kbbuf[0], 2);
 
-			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
+			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) L"");
 
         return 0; 
 		}
@@ -1874,7 +1966,7 @@ VOID wcstoRTF(char * out, TCHAR * in)
 	*ptr2 = 0;
 }
 
-DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, char * lpBuff, LONG cb, PLONG pcb)
+DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, unsigned char * lpBuff, LONG cb, PLONG pcb)
 {
 	struct RTFTerm * OPData	= (struct RTFTerm *)Cookie;
 	int ReqLen = cb;
@@ -2336,12 +2428,27 @@ VOID DisableConnectMenu(HWND hWnd)
 		EnableMenuItem(GetMenu(hWnd), BPQCONNECT1 + n, MF_GRAYED);
 
 	DrawMenuBar(hWnd);	
-}	
+}
+
 VOID DisableDisconnectMenu(HWND hWnd)
 {
 	EnableMenuItem(GetMenu(hWnd), BPQDISCONNECT, MF_GRAYED);
 	DrawMenuBar(hWnd);
 }	
+
+VOID DisableYAPPMenu(HWND hWnd)
+{
+	EnableMenuItem(GetMenu(hWnd), YAPPSEND, MF_GRAYED);
+	DrawMenuBar(hWnd);
+}	
+
+VOID EnableYAPPMenu(HWND hWnd)
+{
+	EnableMenuItem(GetMenu(hWnd), YAPPSEND, MF_ENABLED);
+	DrawMenuBar(hWnd);
+}	
+
+
 
 VOID EnableConnectMenu(HWND hWnd)
 {
@@ -2567,7 +2674,8 @@ TCPConnect(TCHAR * Host, int Port)
 {
 	int err, status;
 	u_long param=1;
-	BOOL bcopt=TRUE;
+	UCHAR  bcopt = 1;
+	int optlen = 1;
 	SOCKADDR_IN sinx; 
 
 	int addrlen=sizeof(sinx);
@@ -2707,7 +2815,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 	TCHAR Msg[80];
 	int Len;
 	int i = 1;
-
+	BOOL bcopt = TRUE;
 
 	// Connect Complete
 				
@@ -2720,6 +2828,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 		wsprintf(Title,L"BPQTermTCP Version %s - Disconnected", VersionStringW);
 		SetWindowText(hWnd,Title);
 		DisableDisconnectMenu(hWnd);
+		DisableYAPPMenu(hWnd);
 		EnableConnectMenu(hWnd);
 
 		wsprintf(Msg, L"Connect Failed - Error %d\r", Error);			
@@ -2734,6 +2843,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 	SocketActive = TRUE;
 	Connecting = FALSE;
 	Connected = TRUE;
+	InputMode = 0;
 
 	// Reset Monitor Menu
 
@@ -2770,6 +2880,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 	SetWindowText(hWnd,Title);
 	DisableConnectMenu(hWnd);
 	EnableDisconnectMenu(hWnd);
+	EnableYAPPMenu(hWnd);
 
 	return 0;
 }
@@ -2783,7 +2894,6 @@ VOID Socket_Accept(int SocketId, int error, int eventcode)
 	u_long param=1;
 
 	sock = accept(SocketId, (struct sockaddr *)&sin, &addrlen);
-
 
 	WSAAsyncSelect(sock, hWnd, WSA_DATA, FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
 	
@@ -2853,6 +2963,8 @@ VOID Socket_Data(int sock, int error, int eventcode)
 
 			SetWindowText(hWnd,Title);
 			DisableDisconnectMenu(hWnd);
+			DisableYAPPMenu(hWnd);
+		
 			if (ListenOn == 0)
 				EnableConnectMenu(hWnd);
 
@@ -2927,6 +3039,12 @@ VOID DataSocket_Read(SOCKET sock)
 		return;
 	}
 
+	if (InputMode == 'Y')			// Yapp
+	{
+		ProcessYAPPMessage(Buffer, len);
+		return;
+	}
+
 //	mbstowcs(Buffer, BufferB, len);
 
 	// Look for MON delimiters (FF/FE)
@@ -2993,7 +3111,7 @@ MonLoop:
 			{
 				// Keepalive
 			}
-
+			
 			else
 			{
 				CheckKeyWords(Buffptr, NormLen);
@@ -3050,6 +3168,9 @@ MonLoop:
 			while(NumberofPorts--)
 			{
 				p = strtok_s(NULL, "|", &Context);
+				if (p == NULL)
+					break;
+				
 				portnum = atoi(p);
 				mbstowcs(ID, p, strlen(p) +1);
 				
@@ -3109,9 +3230,38 @@ MonLoop:
 
 	// No FF, so must be session data
 
+	if (InputMode == 'Y')			// Yapp
+	{
+		ProcessYAPPMessage(Buffer, len);
+		return;
+	}
+
 
 	if (len == 1 && Buffptr[0] == 0)
 		return;							// Keepalive
+
+	// Could be a YAPP Header
+
+
+	if (len == 2 && Buffptr[0] == ENQ  && Buffptr[1] == 1)		// YAPP Send_Init
+	{
+		UCHAR YAPPRR[2];
+		char Mess[64];
+	
+		// Turn off monitoring
+
+		len = sprintf(Mess, "\\\\\\\\%x %x %x %x %x %x %x %x\r", 0, 0, 0, 0, 0, 0, 0, 0);
+		send(sock, Mess, len, 0);
+		InputMode = 'Y';
+
+		YAPPRR[0] = ACK;
+		YAPPRR[1] = 1;
+
+		Sleep(1000);				// To give Monitor Msg time to be sent
+		QueueMsg(YAPPRR, 2);
+
+		return;
+	}
 
 	CheckKeyWords(Buffptr, len);
 
@@ -3156,10 +3306,10 @@ int SendMsg(TCHAR * msg, int len)
 VOID SendTraceOptions()
 {
 	char Buffer[80];
-
  	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI, TXMode == CP_UTF8, 1);
 	mbstowcs(&MonParams[CurrentHost][0], &Buffer[4], Len - 4);
 	SaveStringValue(MON[CurrentHost], MonParams[CurrentHost]);
+	Sleep(1000);				// To give YAPP Msg tome to be sent
 	send(sock, Buffer, Len, 0);
 
 }
@@ -3247,3 +3397,771 @@ static unsigned int cp1251Map[256] = {
   0x0440, 0x0441, 0x0442, 0x0443, 0x0444, 0x0445, 0x0446, 0x0447,
   0x0448, 0x0449, 0x044A, 0x044B, 0x044C, 0x044D, 0x044E, 0x044F
 };
+
+#define INCLUDEYAPP
+#ifdef INCLUDEYAPP
+
+
+// YAPP stuff
+
+#define SOH 1
+#define STX 2
+#define ETX 3
+#define EOT 4
+#define ENQ 5
+#define ACK 6
+#define DLE	0x10
+#define NAK 0x15
+#define CAN 0x18
+
+#define YAPPTX	32768					// Sending YAPP file
+
+int MaxRXSize = 100000;
+char BaseDir[256] = "";
+
+UCHAR InputBuffer[1024];
+
+UCHAR InputMode;			// Line by Line or Binary or YAPP
+int paclen = 128;
+
+int InputLen;				// Data we have already = Offset of end of an incomplete packet;
+
+UCHAR * MailBuffer;			// Yapp Message being received
+int MailBufferSize;			
+int YAPPLen;				// Bytes sent/received of YAPP Message
+long YAPPDate;				// Date for received file - if set enables YAPPC
+char ARQFilename[256];		// Filename from YAPP Header
+
+UCHAR SavedData[4096];		// Max receive is 2000 is should never get more that 4000
+int SaveLen = 0;
+
+void YAPPSendData();
+
+void QueueMsg(UCHAR * Msg, int Len)
+{
+	int Sent = send(sock, Msg, Len, 0);
+
+	if (Sent != Len)
+		Sent = 0;
+}
+
+int InnerProcessYAPPMessage(UCHAR * Msg,  int Len);
+
+BOOL ProcessYAPPMessage(UCHAR * Msg,  int Len)
+{
+	// may have saved data
+	
+	memcpy(&SavedData[SaveLen], Msg, Len);
+	
+	SaveLen += Len;
+
+	while (SaveLen && InputMode == 'Y')
+	{
+		int Used = InnerProcessYAPPMessage(SavedData,  SaveLen);
+
+		if (Used == 0)
+			return 0;			// Waiting for more
+
+		SaveLen -= Used;
+
+		if (SaveLen)
+			memmove(SavedData, &SavedData[Used], SaveLen);
+	}
+	return 0;
+}
+
+int InnerProcessYAPPMessage(UCHAR * Msg,  int Len)
+{
+	int pktLen = Msg[1];
+	char Reply[2] = {ACK};
+	int NameLen, SizeLen, OptLen;
+	char * ptr;
+	int FileSize;
+	WCHAR MsgFile[MAX_PATH];
+	FILE * hFile;
+	char Mess[255];
+	int len;
+	TCHAR BufferW[2000];
+	WCHAR WFN[MAX_PATH];
+
+	switch (Msg[0])
+	{
+	case ENQ: // YAPP Send_Init
+
+		// Shouldn't occur in session. Reset state and process
+
+		if (MailBuffer)
+		{
+			free(MailBuffer);
+			MailBufferSize=0;
+			MailBuffer=0;
+		}
+
+		Mess[0] = ACK;
+		Mess[1] = 1;
+
+		InputMode = 'Y';
+		QueueMsg(Mess, 2);
+
+		// Turn off monitoring
+
+		Sleep(1000);				// To give YAPP Msg tome to be sent
+
+		len = sprintf(Mess, "\\\\\\\\%x %x %x %x %x %x %x %x\r", 0, 0, 0, 0, 0, 0, 0, 0);
+		send(sock, Mess, len, 0);
+
+		return Len;
+
+	case SOH:
+
+		// HD Send_Hdr     SOH  len  (Filename)  NUL  (File Size in ASCII)  NUL (Opt) 
+
+		// YAPPC has date/time in dos format
+
+		NameLen = strlen(&Msg[2]);
+		strcpy(ARQFilename, &Msg[2]);
+
+		// ARQFN normal string. Create WCS copy
+
+		mbstowcs(WFN, ARQFilename, MAX_PATH);
+
+
+		ptr = &Msg[3 + NameLen];
+		SizeLen = strlen(ptr);
+		FileSize = atoi(ptr);
+
+		OptLen = pktLen - (NameLen + SizeLen + 2);
+
+		YAPPDate = 0;
+
+		if (OptLen >= 8)		// We have a Date/Time for YAPPC
+		{
+			ptr = ptr + SizeLen + 1;
+			YAPPDate = strtol(ptr, NULL, 16);
+		}
+
+		// Check Size
+
+		if (FileSize > MaxRXSize)
+		{
+			Mess[0] = NAK;
+			Mess[1] = sprintf(&Mess[2], "File %s size %d larger than limit %d\r", WFN, FileSize, MaxRXSize);
+			Sleep(1000);				// To give YAPP Msg tome to be sent
+			QueueMsg(Mess, Mess[1] + 2);
+
+			len = wsprintf(BufferW, L"YAPP File %s size %d larger than limit %d\r", WFN, FileSize, MaxRXSize);
+			WritetoOutputWindow(&OutputData, BufferW, len);
+			DoRefresh(&OutputData);
+			InputMode = 0;
+			SendTraceOptions();
+
+			return Len;
+		}
+		
+		// Make sure file does not exist
+
+		// Path is Wide String, ARQFN normal
+
+		wsprintf(MsgFile, L"%s%s", YAPPPath, WFN);
+
+		hFile = CreateFile(MsgFile, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+		if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
+		{
+			Mess[0] = NAK;
+			Mess[1] = sprintf(&Mess[2], "%s", "File Already Exists");
+			Sleep(1000);				// To give YAPP Msg tome to be sent
+			QueueMsg(Mess, Mess[1] + 2);
+			len = wsprintf(BufferW, L"YAPP File Receive Failed - %s already exists\r", MsgFile);
+			WritetoOutputWindow(&OutputData, BufferW, len);
+			DoRefresh(&OutputData);
+
+			CloseHandle(hFile);
+			InputMode = 0;
+			SendTraceOptions();
+
+			return Len;
+		}
+
+
+		MailBufferSize = FileSize;
+		MailBuffer = malloc(FileSize);
+		YAPPLen = 0;
+
+		if (YAPPDate)			// If present use YAPPC
+			Reply[1] = ACK;			//Receive_TPK
+		else
+			Reply[1] = 2;			//Rcv_File
+
+		QueueMsg( Reply, 2);
+
+		len = wsprintf(BufferW, L"YAPP Receving File %s size %d\r", WFN, FileSize);
+		WritetoOutputWindow(&OutputData, BufferW, len);
+		DoRefresh(&OutputData);
+
+
+		return Len;
+		
+	case STX:
+
+		// Data Packet
+
+		// Check we have it all
+
+		if (YAPPDate)			// If present use YAPPC so have checksum
+		{
+			if (pktLen > (Len - 3))		// -2 for header and checksum
+				return 0;				// Wait for rest
+		}
+		else
+		{
+			if (pktLen > (Len - 2))		// -2 for header
+				return 0;				// Wait for rest
+		}
+
+		// Save data and remove from buffer
+
+		// if YAPPC check checksum
+
+		if (YAPPDate)
+		{
+			UCHAR Sum = 0;
+			int i;
+			UCHAR * uptr = &Msg[2];
+
+			i = pktLen;
+
+			while(i--)
+				Sum += *(uptr++);
+
+			if (Sum != *uptr)
+			{
+				// Checksum Error
+
+				Mess[0] = CAN;
+				Mess[1] = sprintf_s(&Mess[2], sizeof(Mess), "YAPPC Checksum Error");
+				QueueMsg( Mess, Mess[1] + 2);
+
+				len = wsprintf(BufferW, L"YAPPC Checksum Error\r", MsgFile);
+				WritetoOutputWindow(&OutputData, BufferW, len);
+				DoRefresh(&OutputData);
+				
+				InputMode = 0;
+				SendTraceOptions();
+				return Len;
+			}
+		}
+
+		if ((YAPPLen) + pktLen > MailBufferSize)
+		{
+			// Too Big ??
+
+			Mess[0] = CAN;
+			Mess[1] = sprintf(&Mess[2], "YAPP Too much data received");
+			QueueMsg(Mess, Mess[1] + 2);
+
+			len = wsprintf(BufferW, L"YAPP Too much data received\r", MsgFile);
+			WritetoOutputWindow(&OutputData, BufferW, len);
+			DoRefresh(&OutputData);
+
+			InputMode = 0;
+			SendTraceOptions();
+			return Len;
+		}
+
+
+		memcpy(&MailBuffer[YAPPLen], &Msg[2], pktLen);
+		YAPPLen += pktLen;
+
+		if (YAPPDate)
+			++pktLen;				// Add Checksum
+
+		return pktLen + 2;
+
+	case ETX:
+
+		// End Data
+
+		if (YAPPLen == MailBufferSize)
+		{
+			// All received
+
+			int ret;
+			DWORD Written = 0;
+			WCHAR WFN[MAX_PATH];
+
+			// Path is Wide String, ARQFN normal
+
+			mbstowcs(WFN, ARQFilename, MAX_PATH);
+
+			wsprintf(MsgFile, L"%s%s", YAPPPath, WFN);
+
+#ifdef WIN32
+			hFile = CreateFile(MsgFile, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+			if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
+			{	
+				ret = WriteFile(hFile, MailBuffer, YAPPLen, &Written, NULL);
+ 
+				if (YAPPDate)
+				{
+					FILETIME FileTime;
+					struct tm TM;
+					struct timeval times[2];
+					time_t TT;
+/*			
+					The MS-DOS date. The date is a packed value with the following format.
+
+					cant use DosDateTimeToFileTime on Linux
+		
+					Bits	Description
+					0-4	Day of the month (1–31)
+					5-8	Month (1 = January, 2 = February, and so on)
+					9-15	Year offset from 1980 (add 1980 to get actual year)
+					wFatTime
+					The MS-DOS time. The time is a packed value with the following format.
+					Bits	Description
+					0-4	Second divided by 2
+					5-10	Minute (0–59)
+					11-15	Hour (0–23 on a 24-hour clock)
+*/
+					memset(&TM, 0, sizeof(TM));
+
+					TM.tm_sec = (YAPPDate & 0x1f) << 1;
+					TM.tm_min = ((YAPPDate >> 5) & 0x3f);
+					TM.tm_hour =  ((YAPPDate >> 11) & 0x1f);
+
+					TM.tm_mday =  ((YAPPDate >> 16) & 0x1f);
+					TM.tm_mon =  ((YAPPDate >> 21) & 0xf) - 1;
+					TM.tm_year = ((YAPPDate >> 25) & 0x7f) + 80;
+
+					Debugprintf("%d %d %d %d %d %d", TM.tm_year, TM.tm_mon, TM.tm_mday, TM.tm_hour, TM.tm_min, TM.tm_sec);
+
+					TT = mktime(&TM);
+					times[0].tv_sec = times[1].tv_sec = 
+					times[0].tv_usec = times[1].tv_usec = 0;
+
+					DosDateTimeToFileTime((WORD)(YAPPDate >> 16), (WORD)YAPPDate & 0xFFFF, &FileTime);
+					ret = SetFileTime(hFile, &FileTime, &FileTime, &FileTime);
+					ret = GetLastError();
+
+				}
+				CloseHandle(hFile);
+			}
+#else
+
+			hFile = fopen(MsgFile, "wb");
+			if (hFile)
+			{
+				Written = fwrite(MailBuffer, 1, YAPPLen, hFile);
+				fclose(hFile);
+
+				if (YAPPDate)
+				{
+					struct tm TM;
+					struct timeval times[2];
+/*			
+					The MS-DOS date. The date is a packed value with the following format.
+
+					cant use DosDateTimeToFileTime on Linux
+		
+					Bits	Description
+					0-4	Day of the month (1–31)
+					5-8	Month (1 = January, 2 = February, and so on)
+					9-15	Year offset from 1980 (add 1980 to get actual year)
+					wFatTime
+					The MS-DOS time. The time is a packed value with the following format.
+					Bits	Description
+					0-4	Second divided by 2
+					5-10	Minute (0–59)
+					11-15	Hour (0–23 on a 24-hour clock)
+*/
+					memset(&TM, 0, sizeof(TM));
+
+					TM.tm_sec = (YAPPDate & 0x1f) << 1;
+					TM.tm_min = ((YAPPDate >> 5) & 0x3f);
+					TM.tm_hour =  ((YAPPDate >> 11) & 0x1f);
+
+					TM.tm_mday =  ((YAPPDate >> 16) & 0x1f);
+					TM.tm_mon =  ((YAPPDate >> 21) & 0xf) - 1;
+					TM.tm_year = ((YAPPDate >> 25) & 0x7f) + 80;
+
+					Debugprintf("%d %d %d %d %d %d", TM.tm_year, TM.tm_mon, TM.tm_mday, TM.tm_hour, TM.tm_min, TM.tm_sec);
+
+					times[0].tv_sec = times[1].tv_sec = mktime(&TM);
+					times[0].tv_usec = times[1].tv_usec = 0;
+				}
+			}
+#endif
+
+			free(MailBuffer);
+			MailBufferSize=0;
+			MailBuffer=0;
+
+			if (Written != YAPPLen)
+			{
+				Mess[0] = CAN;
+				Mess[1] = sprintf_s(&Mess[2], sizeof(Mess), "Failed to save YAPP File");
+				QueueMsg(Mess, Mess[1] + 2);
+
+				len = wsprintf(BufferW, L"Failed to save YAPP File\r", MsgFile);
+				WritetoOutputWindow(&OutputData, BufferW, len);
+				DoRefresh(&OutputData);
+				InputMode = 0;
+				SendTraceOptions();
+			}
+		}
+
+		Reply[1] = 3;		//Ack_EOF
+		QueueMsg( Reply, 2);
+
+		len = wsprintf(BufferW, L"Reception of file %s complete\r", MsgFile);
+		WritetoOutputWindow(&OutputData, BufferW, len);
+		DoRefresh(&OutputData);
+
+
+		return Len;
+
+	case EOT:
+
+		// End Session
+
+		Reply[1] = 4;		// Ack_EOT
+		QueueMsg( Reply, 2);
+		InputMode = 0;
+	
+		SendTraceOptions();
+		return Len;
+
+	case CAN:
+
+		// Abort
+
+		Mess[0] = ACK;
+		Mess[1] = 5;			// CAN Ack
+		QueueMsg( Mess, 2);
+
+		if (MailBuffer)
+		{
+			free(MailBuffer);
+			MailBufferSize=0;
+			MailBuffer=0;
+		}
+
+		// May have an error message
+
+		len = Msg[1];
+
+		if (len)
+		{
+			WCHAR ws[256];
+
+			Msg[len + 2] = 0;
+			mbstowcs(ws, &Msg[2], 255);
+
+			len = wsprintf(BufferW, L"YAPP Transfer cancelled - %s\r", ws);
+		}
+		else
+			len = sprintf_s(Mess, sizeof(Mess), "YAPP Transfer cancelled\r");
+
+		InputMode = 0;
+		SendTraceOptions();
+
+		return Len;
+
+	case ACK:
+
+		switch (Msg[1])
+		{
+			char * ptr;
+
+		case 1:					// Rcv_Rdy
+
+			// HD Send_Hdr     SOH  len  (Filename)  NUL  (File Size in ASCII)  NUL (Opt)
+
+			// Remote only needs filename so remove path
+
+			ptr = ARQFilename;
+
+			while (strchr(ptr, '\\'))
+				ptr = strchr(ptr, '\\') + 1;
+			
+			len = strlen(ptr) + 3;
+		
+			strcpy(&Mess[2], ptr);
+			len += sprintf(&Mess[len], "%d", MailBufferSize);
+			len++;					// include null
+			len += sprintf(&Mess[len], "%8X", YAPPDate);
+			len++;					// include null
+			Mess[0] = SOH;
+			Mess[1] = len - 2;
+
+			QueueMsg( Mess, len);
+
+			return Len;
+
+		case 2:
+
+			YAPPDate = 0;				// Switch to Normal (No Checksum) Mode
+
+		case 6:							// Send using YAPPC
+
+			//	Start sending message
+
+			YAPPSendData();
+			return Len;
+
+		case 3:
+
+			// ACK EOF - Send EOT
+
+			Mess[0] = EOT;
+			Mess[1] = 1;
+			QueueMsg( Mess, 2);
+
+			return Len;
+	
+		case 4:
+
+			// ACK EOT
+
+			InputMode = 0;
+			SendTraceOptions();
+
+			len = wsprintf(BufferW, L"File transfer complete\r");
+			WritetoOutputWindow(&OutputData, BufferW, len);
+			DoRefresh(&OutputData);
+
+			return Len;
+
+		default:
+			return Len;
+
+		}
+	
+	case NAK:
+
+		// Either Reject or Restart
+
+		// RE Resume       NAK  len  R  NULL  (File size in ASCII)  NULL
+
+		if (Len > 2 && Msg[2] == 'R' && Msg[3] == 0)
+		{
+			int posn = atoi(&Msg[4]);
+			
+			YAPPLen += posn;
+			MailBufferSize -= posn;
+
+			YAPPSendData();
+			return Len;
+
+		}
+
+		// May have an error message
+
+		len = Msg[1];
+
+		if (len)
+		{
+			WCHAR ws[256];
+
+			Msg[len + 2] = 0;
+
+			mbstowcs(ws, &Msg[2], 255);
+
+			len = wsprintf(BufferW, L"File rejected - %s\r", ws);
+		}
+		else
+			len = wsprintf(BufferW, L"File rejected\r");
+		
+		WritetoOutputWindow(&OutputData, BufferW, len);
+		DoRefresh(&OutputData);
+
+		InputMode = 0;
+		SendTraceOptions();
+
+		return Len;
+
+	}
+
+	len = wsprintf(BufferW, L"Unexpected message during YAPP Transfer. Transfer canncelled\r");
+	WritetoOutputWindow(&OutputData, BufferW, len);
+	DoRefresh(&OutputData);
+
+	InputMode = 0;
+	SendTraceOptions();
+
+	return Len;
+
+}
+
+void YAPPSendFile(WCHAR * FN)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	struct stat STAT;
+	TCHAR BufferW[2000];
+	int Len;
+
+	wcstombs(MsgFile, FN, MAX_PATH);
+
+	if (MsgFile == NULL)
+	{
+		Len = wsprintf(BufferW, L"Filename missing\r");
+		WritetoOutputWindow(&OutputData, BufferW, Len);
+		DoRefresh(&OutputData);
+		SendTraceOptions();
+
+		return;
+	}
+
+	if (stat(MsgFile, &STAT) != -1)
+	{
+		FileSize = STAT.st_size;
+
+		hFile = fopen(MsgFile, "rb");
+
+		if (hFile)
+		{	
+			char Mess[255];
+			time_t UnixTime = STAT.st_mtime;
+			FILETIME ft;
+			LONGLONG ll;
+			SYSTEMTIME st;
+			WORD FatDate;
+			WORD FatTime;
+			struct tm TM;
+
+			strcpy(ARQFilename, MsgFile);
+			MailBuffer = malloc(FileSize);
+			MailBufferSize = FileSize;
+			YAPPLen = 0;
+			fread(MailBuffer, 1, FileSize, hFile); 
+
+			// Get Date and Time for YAPPC Mode
+
+/*					The MS-DOS date. The date is a packed value with the following format.
+
+					cant use DosDateTimeToFileTime on Linux
+		
+					Bits	Description
+					0-4	Day of the month (1–31)
+					5-8	Month (1 = January, 2 = February, and so on)
+					9-15	Year offset from 1980 (add 1980 to get actual year)
+					wFatTime
+					The MS-DOS time. The time is a packed value with the following format.
+					Bits	Description
+					0-4	Second divided by 2
+					5-10	Minute (0–59)
+					11-15	Hour (0–23 on a 24-hour clock)
+
+					memset(&TM, 0, sizeof(TM));
+
+					TM.tm_sec = (YAPPDate & 0x1f) << 1;
+					TM.tm_min = ((YAPPDate >> 5) & 0x3f);
+					TM.tm_hour =  ((YAPPDate >> 11) & 0x1f);
+
+					TM.tm_mday =  ((YAPPDate >> 16) & 0x1f);
+					TM.tm_mon =  ((YAPPDate >> 21) & 0xf) - 1;
+					TM.tm_year = ((YAPPDate >> 25) & 0x7f) + 80;
+*/
+ 
+			// Note that LONGLONG is a 64-bit value
+   
+			ll = Int32x32To64(UnixTime, 10000000) + 116444736000000000;
+			ft.dwLowDateTime = (DWORD)ll;
+			ll >>= 32;
+			ft.dwHighDateTime = (DWORD)ll;
+
+			FileTimeToSystemTime(&ft, &st);
+			FileTimeToDosDateTime(&ft, &FatDate, &FatTime);
+
+			YAPPDate = (FatDate << 16) + FatTime;
+
+			memset(&TM, 0, sizeof(TM));
+
+			TM.tm_sec = (YAPPDate & 0x1f) << 1;
+			TM.tm_min = ((YAPPDate >> 5) & 0x3f);
+			TM.tm_hour =  ((YAPPDate >> 11) & 0x1f);
+
+			TM.tm_mday =  ((YAPPDate >> 16) & 0x1f);
+			TM.tm_mon =  ((YAPPDate >> 21) & 0xf) - 1;
+			TM.tm_year = ((YAPPDate >> 25) & 0x7f) + 80;
+
+			fclose(hFile);
+	
+			Mess[0] = ENQ;
+			Mess[1] = 1;
+
+			QueueMsg(Mess, 2);
+			InputMode = 'Y';
+
+			return;
+		}
+	}
+
+	Len = wsprintf(BufferW, L"File %s not found\r", FN);
+	WritetoOutputWindow(&OutputData, BufferW, Len);
+	DoRefresh(&OutputData);
+}
+
+void YAPPSendData()
+{
+	char Mess[258];
+
+	while (1)
+	{
+		int Left = MailBufferSize;
+
+		if (Left == 0)
+		{
+			// Finished - send End Data
+
+			Mess[0] = ETX;
+			Mess[1] = 1;
+			
+			QueueMsg( Mess, 2);
+
+			break;
+		}
+
+		if (Left > paclen - 3)		// two bytes header and possible checksum
+			Left = paclen - 3;
+
+		memcpy(&Mess[2], &MailBuffer[YAPPLen], Left);
+
+		YAPPLen += Left;
+		MailBufferSize -= Left;	
+
+		// if YAPPC add checksum
+
+		if (YAPPDate)
+		{
+			UCHAR Sum = 0;
+			int i;
+			UCHAR * uptr = &Mess[2];
+
+			i = Left;
+
+			while(i--)
+				Sum += *(uptr++);
+
+			*(uptr) = Sum;
+
+			Mess[0] = STX;
+			Mess[1] = Left;
+				
+			QueueMsg( Mess, Left + 3);
+		}
+		else
+		{
+			Mess[0] = STX;
+			Mess[1] = Left;
+				
+			QueueMsg( Mess, Left + 2);
+		}
+	}
+}
+
+#endif

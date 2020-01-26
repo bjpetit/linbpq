@@ -113,38 +113,12 @@ char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P 
 char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
 	"<html><head></head><body></body></html>";
 
-char NodeMenuHeader[] = "<html><head><title>%s's BPQ32 Web Server</title><script>"
-	"function dev_win(URL,x,y){"
-	"var xx = \"width=\" + x;"
-	"var yy = \",height=\" + y;"
-	"var param = \"toolbar=no, location=no, directories=no, status=no, "
-	"menubar=no, scrollbars=no, resizable=no, titlebar=no, toobar=no, \" + xx + yy;"
-	"window.open(URL,\"_blank\",param);"
-	"}"
-	"function open_win(){";
-
-char NodeMenuLine[] = "dev_win(\"/Node/Port?%d\",%d,%d);";
-char NodeMenuRest[] = "}</script></head>"
-	"<body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
-	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-	"<td><a href=/Node/Routes.html>Routes</a></td>"
-	"<td><a href=/Node/Nodes.html>Nodes</a></td>"
-	"<td><a href=/Node/Ports.html>Ports</a></td>"
-	"<td><a href=/Node/Links.html>Links</a></td>"
-	"<td><a href=/Node/Users.html>Users</a></td>"
-	"<td><a href=/Node/Stats.html>Stats</a></td>"
-	"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s";
-	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
-	"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700);>Stream Status</a></td>";
 char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
 
 char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
 				 "<td><a href=/Webmail>WebMail</a></td>";
 char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
 
-char NodeTail[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>" 
- 				  "<td><a href=/Node/EditCfg.html>Edit Config</a></td>"
-				  "</tr></table>";
 	
 char Tail[] = "</body></html>";
 
@@ -167,13 +141,6 @@ char NodeHddr[] = "<center><form method=get action=/Node/Nodes.html>"
 
 char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
 
-char PortsHddr[] = "<h2 align=center>Ports</h2><table align=center border=2 bgcolor=white>"
-	"<tr><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th></tr>";
-
-char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
-char PortLineWithBeacon[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td><td><a href=PortBeacons?%d>&nbsp;Beacons</a></td></tr>";
-
-char SessionPortLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td></tr>";
 
 char StatsHddr[] = "<h2 align=center>Node Stats</h2><table align=center cellpadding=2 bgcolor=white>"
 	"<col width=250 /><col width=80 /><col width=80 /><col width=80 /><col width=80 /><col width=80 />";
@@ -1202,6 +1169,47 @@ int SetupNodeMenu(char * Buff)
 {
 	int Len = 0, i;
 	struct TNCINFO * TNC;
+	int top = 0, left = 0;
+
+	char NodeMenuHeader[] = "<html><head><title>%s's BPQ32 Web Server</title><script>"
+		"function dev_win(URL,w,h,top,left){"
+		"var ww = \"width=\" + w;"
+		"var xx = \",height=\" + h;"
+		"var yy = \",top=\" + top;"
+		"var zz = \",left=\" + left;"
+		"var param = \"toolbar=no, location=no, directories=no, status=no, "
+		"menubar=no, scrollbars=no, resizable=no, titlebar=no, toobar=no, \" + ww + xx + yy + zz;"
+		"window.open(URL,\"_blank\",param);"
+		"}"
+		"function open_win(){";
+
+	char NodeMenuLine[] = "dev_win(\"/Node/Port?%d\",%d,%d,%d,%d);";
+
+	char NodeMenuRest[] = "}</script></head>"
+		"<body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
+		"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
+		"<td><a href=/Node/Routes.html>Routes</a></td>"
+		"<td><a href=/Node/Nodes.html>Nodes</a></td>"
+		"<td><a href=/Node/Ports.html>Ports</a></td>"
+		"<td><a href=/Node/Links.html>Links</a></td>"
+		"<td><a href=/Node/Users.html>Users</a></td>"
+		"<td><a href=/Node/Stats.html>Stats</a></td>"
+		"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s";
+
+	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
+		"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a></td>";
+
+	char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
+
+	char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
+		"<td><a href=/Webmail>WebMail</a></td>";
+
+	char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
+
+	char NodeTail[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>" 
+		"<td><a href=/Node/EditCfg.html>Edit Config</a></td>"
+		"</tr></table>";
+
 
 	Len = sprintf(Buff, NodeMenuHeader, Mycall);
 		
@@ -1212,7 +1220,11 @@ int SetupNodeMenu(char * Buff)
 			continue;
 	
 		if (TNC->WebWindowProc)
-			Len += sprintf(&Buff[Len], NodeMenuLine, i, TNC->WebWinX, TNC->WebWinY);
+		{
+			Len += sprintf(&Buff[Len], NodeMenuLine, i, TNC->WebWinX, TNC->WebWinY, top, left);
+			top += 22;
+			left += 22;
+		}
 	}
 		
 	Len += sprintf(&Buff[Len], NodeMenuRest, Mycall,
@@ -1384,6 +1396,25 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	BOOL LOCAL = FALSE;
 	BOOL COOKIE = FALSE;
 	int Len;
+
+	char PortsHddr[] = "<h2 align=center>Ports</h2><table align=center border=2 bgcolor=white>"
+			"<tr><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th></tr>";
+
+	char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
+
+	char PortLineWithBeacon[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td>"
+			"<td><a href=PortBeacons?%d>&nbsp;Beacons</a><td> </td></td></tr>\r\n";
+
+	char SessionPortLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
+		"<td> </td></tr>\r\n";
+
+	char PortLineWithDriver[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
+		"<td><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td></tr>\r\n";
+
+
+	char PortLineWithBeaconAndDriver[] = "<tr><td>%d</td><td>%s</td><td>%s</td>"
+		"<td><a href=PortBeacons?%d>&nbsp;Beacons</a></td>"
+		"<td><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td></tr>\r\n";
 
 #ifdef WIN32
 
@@ -2384,10 +2415,23 @@ doHeader:
 				strcpy(DLL, "HDLC");
 
 
-		if (Port->PORTTYPE == 16 && Port->PROTOCOL == 10 && Port->UICAPABLE == 0)		// EXTERNAL, Pactor/WINMO
-			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], SessionPortLine, Port->PORTNUMBER, DLL, Port->PORTDESCRIPTION);
-		else
-			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithBeacon, Port->PORTNUMBER, Port->PORTNUMBER,
+			if (Port->TNC && Port->TNC->WebWindowProc)		// Has a Window
+			{
+				if (Port->UICAPABLE)
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithBeaconAndDriver, Port->PORTNUMBER, DLL,
+						Port->PORTDESCRIPTION, Port->PORTNUMBER, Port->PORTNUMBER, Port->TNC->WebWinX, Port->TNC->WebWinY, 200, 200);
+				else
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithDriver, Port->PORTNUMBER, DLL,
+						Port->PORTDESCRIPTION, Port->PORTNUMBER, Port->TNC->WebWinX, Port->TNC->WebWinY, 200, 200);
+
+				continue;
+			}
+			
+			if (Port->PORTTYPE == 16 && Port->PROTOCOL == 10 && Port->UICAPABLE == 0)		// EXTERNAL, Pactor/WINMO
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], SessionPortLine, Port->PORTNUMBER, DLL,
+					Port->PORTDESCRIPTION, Port->PORTNUMBER);
+			else
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithBeacon, Port->PORTNUMBER, Port->PORTNUMBER,
 					DLL, DLL, Port->PORTDESCRIPTION, Port->PORTNUMBER);
 		}
 	}

@@ -148,7 +148,7 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=UTF
 	" BID <input name=BID><br><br>"
 	"</span></div>"
 	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
-	"<input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></div></form>";
+	"<input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form>";
 
 static char CheckFormMsgPage[] = "<html><head><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
 	"<title></title><script src='/WebMail/webscript.js'></script></head>"
@@ -1673,6 +1673,72 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
  		return;
 	}
 
+	if (memcmp(NodeURL, "/WebMail/QuoteOriginal/", 15) == 0)
+	{
+		// Reply to Message
+
+		int n, len;
+		struct MsgInfo * Msg;
+		char Message[100] = "";
+		char Title[100];
+		char * MsgBytes, * Save, * NewBytes;
+		char * ptr;
+		char * ptr1, * ptr2;
+
+		n = Session->WebMail->CurrentMessageIndex;
+	
+		Msg = GetMsgFromNumber(n);
+
+		if (Msg == NULL)
+		{
+			sprintf(Message, "Message %d not found", n);
+			*RLen = sprintf(Reply, "%s", Message);
+			return;
+		}
+
+		Session->WebMail->Msg = Msg;
+
+		if (stristr(Msg->title, "Re:") == 0)
+			sprintf(Title, "Re:%s", Msg->title);
+		else
+			sprintf(Title, "%s", Msg->title);
+
+		MsgBytes = Save = ReadMessageFile(n);
+
+
+		ptr = NewBytes = malloc((Msg->length * 2) + 256);
+
+		// Copy a line at a time with "> " in front of each
+
+		ptr += sprintf(ptr, "%s", "\r\n\r\n\r\n\r\n\r\nOriginal Message\r\n\r\n> ");
+
+		ptr1 = ptr2 = MsgBytes;
+		len  = strlen(MsgBytes);
+
+		while (len-- > 0)
+		{
+			*ptr++ = *ptr1;
+	
+			if (*(ptr1) == '\n')
+			{
+				*ptr++ = '>';
+				*ptr++ = ' ';
+			}
+		
+			ptr1++;
+		}
+
+		*ptr++ = 0;
+
+		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, "", Title , NewBytes);
+
+		free(MsgBytes);
+		free(NewBytes);
+
+		return;
+	}
+
+
 
 	if (memcmp(NodeURL, "/WebMail/Reply/", 15) == 0)
 	{
@@ -1682,6 +1748,17 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		struct MsgInfo * Msg;
 		char Message[100] = "";
 		char Title[100];
+				
+		// Quote Original
+		
+		char Button[] = 
+			" &nbsp; &nbsp; &nbsp;<script>function myfunc(){"
+			"document.getElementById('myform').action = '/WebMail/QuoteOriginal' + '?%s';"
+			" document.getElementById('myform').submit();}</script>"
+			"<input type=Button onclick='myfunc()' "
+			"value='Include Orignal Msg'>";
+		
+		char Temp[1024];
 
 		Msg = GetMsgFromNumber(n);
 
@@ -1702,10 +1779,16 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		if (*RLen)
 			return;
-	
-		sprintf(Title, "Re:%s", Msg->title);
 
-		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, "", Title , "");
+
+		sprintf(Temp, Button, Key);
+
+		if (stristr(Msg->title, "Re:") == 0)
+			sprintf(Title, "Re:%s", Msg->title);
+		else
+			sprintf(Title, "%s", Msg->title);
+
+		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, Temp, Title , "");
 		return;
 	}
 

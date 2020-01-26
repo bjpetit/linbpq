@@ -308,6 +308,11 @@ BEGIN
         MENUITEM "Clear Monitor Window",        BPQCLEARMON
         MENUITEM "Clear Output Window",         BPQCLEAROUT
     END
+    POPUP "YAPP"
+    BEGIN
+        MENUITEM "Send File",                   YAPPSEND
+        MENUITEM "Set Receive Directory",       YAPPDIR
+    END
 END
 
 #endif    // English (U.K.) resources

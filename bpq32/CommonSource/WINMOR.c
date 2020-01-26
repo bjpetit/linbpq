@@ -450,7 +450,7 @@ static int ProcessLine(char * buf, int Port)
 				TNC->WL2K = DecodeWL2KReportLine(buf);
 			else
 			if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
-				TNC->SessionTimeLimit = atoi(&buf[16]) * 60;
+				TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit = atoi(&buf[16]) * 60;
 			else
 			if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
 				TNC->BusyHold = atoi(&buf[8]);
@@ -751,6 +751,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			int calllen;
 			char Msg[80];
 
+			TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit;		// Reset Limit
+
 			TNC->Streams[0].Attached = TRUE;
 
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
@@ -1008,6 +1010,24 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					return 0;
 				}
 			}
+
+			if (_memicmp(&buff->L2DATA[0], "SessionTimeLimit", 16) == 0)
+			{
+				if (buff->L2DATA[16] != 13)
+				{					
+					PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
+	
+					TNC->SessionTimeLimit = atoi(&buff->L2DATA[16]) * 60;
+
+					if (buffptr)
+					{
+						buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "Winmor} OK\r");
+						C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+					}
+					return 0;
+				}
+			}
+
 			if ((_memicmp(buff->L2DATA, "BW 500", 6) == 0) || (_memicmp(buff->L2DATA, "BW 1600", 7) == 0))
 			{
 				// Generate a local response
@@ -1573,6 +1593,8 @@ void * WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	}
 
+	PortEntry->PORTCONTROL.TNC = TNC;
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 520;
 	TNC->WebWinY = 500;
@@ -2122,6 +2144,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			TRANSPORTENTRY * SESS;
 			
 			// Incomming Connect
+
+			TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit;		// Reset Limit
 
 			// Stop other ports in same group
 

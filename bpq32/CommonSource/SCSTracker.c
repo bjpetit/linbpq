@@ -86,6 +86,9 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
 VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
+BOOL KAMStartPort(struct PORTCONTROL * PORT);
+BOOL KAMStopPort(struct PORTCONTROL * PORT);
+
 
 VOID TRKSuspendPort(struct TNCINFO * TNC)
 {
@@ -329,7 +332,8 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		if (TNC->PortRecord->PORTCONTROL.PortStopped == 0)
+			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == 0)
 			return 0;
@@ -665,6 +669,9 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	TNC->SuspendPortProc = TRKSuspendPort;
 	TNC->ReleasePortProc = TRKReleasePort;
 
+	PortEntry->PORTCONTROL.PORTSTARTCODE = KAMStartPort;
+	PortEntry->PORTCONTROL.PORTSTOPCODE = KAMStopPort;
+
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
@@ -698,6 +705,8 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	strcpy(TNC->Streams[0].MyCall, TNC->NodeCall); // For 1st Connected Test 
 
 	
+	PortEntry->PORTCONTROL.TNC = TNC;
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 520;
 	TNC->WebWinY = 500;

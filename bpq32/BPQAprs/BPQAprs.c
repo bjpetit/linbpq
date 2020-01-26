@@ -77,6 +77,10 @@
 
 //	Move support for APRS messaging in Node
 
+//	?? 1.1.15.1
+
+//	Fix Beep or Popup on Message RX
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 #define _WIN32_WINNT 0x0501	
@@ -373,7 +377,8 @@ HWND hMapWnd, hPopupWnd, hSelWnd, hStatus, hwndDlg, hwndDisplay;
 HWND hMsgsIn, hStnDlg, hStations, hMsgDlg, hMsgsOut, hInput, hToCall, hToLabel, hTextLabel, hPathLabel, hPath;
 WNDPROC wpOrigInputProc; 
 
-BOOL MsgMinimized;
+BOOL MsgMinimized = FALSE;
+BOOL StnMinimized = FALSE;
 
 char szAppName[] = "BPQAPRS";
 char szTitle[80];
@@ -432,8 +437,8 @@ DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName);
 VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
 VOID APRSPoll();
-VOID OSMThread();
-VOID ResolveThread();
+VOID OSMThread(void * unused);
+VOID ResolveThread(void * unused);
 VOID RefreshTile(char * FN, int Zoom, int x, int y);
 BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU);
 BOOL CreateStationWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU);
@@ -452,8 +457,6 @@ BYTE * JpegFileToRGB(char * fileName, UINT *width, UINT *height);
 VOID SendWeatherBeacon();
 VOID DecodeWXPortList();
 BOOL CreatePopeThresd();
-
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
 
 SOCKADDR_IN destaddr = {0};
 
@@ -1070,7 +1073,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if (SharedSize == 0)
 	{
-		sprintf(Error, "Could not get size of Mapping object\n");
+		sprintf(Error, "Could not get size of Mapping object\n\n"
+					   "is APRS configured in BPQ32.cfg?");
 		MessageBox(NULL, Error, "BPQAPRS", MB_ICONERROR);
 		return FALSE;
 	}
@@ -1112,7 +1116,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
-	if (Shared != APRSSHAREDMEMORYBASE)
+	if (Shared != (void *)APRSSHAREDMEMORYBASE)
 	{
 		sprintf(Error, "File is mapped in Wrong Place %x %x.\n", Shared, APRSSHAREDMEMORYBASE);
 		MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
@@ -3082,7 +3086,7 @@ int TogglePort(HWND hWnd, int Item, int mask)
   
 }
 
-VOID ResolveThread()
+VOID ResolveThread(void * unused)
 {
 	struct hostent * HostEnt;
 	int err;
@@ -3216,7 +3220,7 @@ VOID OSMGet(int x, int y, int zoom)
 
 }
 
-VOID OSMThread()
+VOID OSMThread(void * unused)
 {
 	// Request a page from OSM
 
@@ -4992,8 +4996,19 @@ VOID APRSPoll()
 {
 	if (SMEM->NeedRefresh)
 	{
-		SMEM->NeedRefresh  = FALSE;
 		RefreshMessages();
+
+		if (SMEM->NeedRefresh == 255)			// to me?
+		{
+			if (IsDlgButtonChecked(hMsgDlg, IDC_MSGBEEP))
+			{
+				PlaySound("SystemDefault", NULL, SND_ALIAS);
+			}
+			else
+				CreateMessageWindow("APRSMSGS", "APRS Messages", MsgWndProc, NULL); // Will activate if running
+		}
+		SMEM->NeedRefresh  = FALSE;
+
 	}
 
 	CheckTimer();
@@ -5377,7 +5392,7 @@ BOOL CreateStationWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 
 	RefreshStationList();
 
-	if (MsgMinimized)
+	if (StnMinimized)
 		if (MinimizetoTray)
 			ShowWindow(hDlg, SW_HIDE);
 		else
@@ -5444,7 +5459,10 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 
 	RefreshMessages();
 
-	if (MsgMinimized)
+	if (IsDlgButtonChecked(hMsgDlg, IDC_MSGBEEP))
+		PlaySound("SystemDefault", NULL, SND_ALIAS);
+
+	if (MsgMinimized || (IsDlgButtonChecked(hMsgDlg, IDC_MSGBEEP)))
 		if (MinimizetoTray)
 			ShowWindow(hDlg, SW_HIDE);
 		else

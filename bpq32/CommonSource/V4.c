@@ -1103,6 +1103,8 @@ void * V4ExtInit(EXTPORTDATA * PortEntry)
 	}
 
 
+	PortEntry->PORTCONTROL.TNC = TNC;
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 520;
 	TNC->WebWinY = 500;

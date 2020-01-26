@@ -65,12 +65,111 @@ static char ClassName[]="KAMPACTORSTATUS";
 static char WindowTitle[] = "KAM Pactor";
 static int RigControlRow = 165;
 
-
+extern UCHAR LogDirectory[];
 static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
+VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
+
+static FILE * LogHandle[32] = {0};
+
+//char * Logs[4] = {"1", "2", "3", "4"};
+
+static char BaseDir[MAX_PATH]="c:\\";
+
+static BOOL WRITELOG = FALSE;
+
+BOOL KAMStopPort(struct PORTCONTROL * PORT)
+{
+	// Disable Port - close TCP Sockets or Serial Port
+
+	struct TNCINFO * TNC = PORT->TNC;
+
+	TNC->CONNECTED = FALSE;
+	TNC->Alerted = FALSE;
+
+	if (TNC->Streams[0].Attached)
+		TNC->Streams[0].ReportDISC = TRUE;
+
+	if (TNC->hDevice)
+	{
+		CloseCOMPort(TNC->hDevice);
+		TNC->hDevice = 0;
+	}
+
+	TNC->HostMode = FALSE;
+
+	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Stopped");
+	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+
+	return TRUE;
+}
+
+BOOL KAMStartPort(struct PORTCONTROL * PORT)
+{
+	// Restart Port - Open Sockets or Serial Port
+
+	struct TNCINFO * TNC = PORT->TNC;
+
+	TNC->ReopenTimer = 999;
+	TNC->ReinitState = 0;
+		
+	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Restarted");
+	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+
+	return TRUE;
+}
+
+
+
+static VOID CloseLogFile(int Flags)
+{
+	if (WRITELOG)
+	{
+		fclose(LogHandle[Flags]);
+		LogHandle[Flags] = NULL;
+	}
+}
+
+static BOOL OpenLogFile(int Flags)
+{
+	if (WRITELOG)
+	{
+		UCHAR FN[MAX_PATH];
+
+		time_t T;
+		struct tm * tm;
+
+		T = time(NULL);
+		tm = gmtime(&T);	
+
+		sprintf(FN,"%s/Logs/KAMLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
+
+		LogHandle[Flags] = fopen(FN, "ab");
+	
+		return (LogHandle[Flags] != NULL);
+	}
+	return 0;
+}
+
+static void WriteLogLine(int Port, char * Msg, int MsgLen)
+{
+	if (WRITELOG)
+	{
+		OpenLogFile(Port);
+
+		if (LogHandle[Port])
+		{
+			fwrite(Msg, 1, MsgLen, LogHandle[Port]); 
+			fwrite("\r\n", 1, 2, LogHandle[Port]); 
+		}
+		CloseLogFile(Port);
+	}
+}
+
+
 
 int ProcessLine(char * buf, int Port)
 {
@@ -85,123 +184,65 @@ int ProcessLine(char * buf, int Port)
 
 	strcpy(errbuf, buf);
 
-	ptr = strtok(buf, " \t\n\r");
-
-	if(ptr == NULL) return (TRUE);
-
-	if(*ptr =='#') return (TRUE);			// comment
-
-	if(*ptr ==';') return (TRUE);			// comment
-
-	ptr = strtok(NULL, " \t\n\r");
-
-	if (_stricmp(buf, "ADDR") == 0)			// Winmor Using BPQ32 COnfig
-	{
-		BPQport = Port;
-		p_ipad = ptr;
-	}
-	else
-	if (_stricmp(buf, "APPL") == 0)			// Using BPQ32 C0nfig
-	{
-		BPQport = Port;
-		p_cmd = ptr;
-	}
-	else
-	if (_stricmp(buf, "PORT") != 0)			// Using Old Config
-	{
-		// New config without a PORT or APPL  - this is a Config Command
-
-		strcpy(buf, errbuf);
-		strcat(buf, "\r");
-
-		BPQport = Port;
-
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
-
-		TNC->InitScript = malloc(1000);
-		TNC->InitScript[0] = 0;
-		goto ConfigLine;
-	}
-	else
-	{
-
-		// Old Config from file
-
-		BPQport=0;
-		BPQport = atoi(ptr);
+	BPQport = Port;
 	
-		p_cmd = strtok(NULL, " \t\n\r");
+	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+	memset(TNC, 0, sizeof(struct TNCINFO));
 
-		if (Port && Port != BPQport)
-		{
-			// Want a particular port, and this isn't it
+	TNC->InitScript = malloc(1000);
+	TNC->InitScript[0] = 0;
+	
+	goto ConfigLine;
 
-			while(TRUE)
-			{
-				if (GetLine(buf) == 0)
-					return TRUE;
 
-				if (memcmp(buf, "****", 4) == 0)
-					return TRUE;
+	// Read Initialisation lines
 
-			}
-		}
-	}
-
-	if(BPQport > 0 && BPQport < 33)
+	while(TRUE)
 	{
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
-
-		TNC->InitScript = malloc(1000);
-		TNC->InitScript[0] = 0;
-
-		if (p_cmd != NULL)
-		{
-			if (p_cmd[0] != ';' && p_cmd[0] != '#')
-				TNC->ApplCmd=_strdup(p_cmd);
-		}
-
-		// Read Initialisation lines
-
-		while(TRUE)
-		{
-			if (GetLine(buf) == 0)
-				return TRUE;
+		if (GetLine(buf) == 0)
+			return TRUE;
 ConfigLine:
-			strcpy(errbuf, buf);
 
-			if (memcmp(buf, "****", 4) == 0)
-				return TRUE;
+		strcpy(errbuf, buf);
 
-			ptr = strchr(buf, ';');
-			if (ptr)
-			{
-				*ptr++ = 13;
-				*ptr = 0;
-			}
+		if (memcmp(buf, "****", 4) == 0)
+			return TRUE;
 
-			if (_memicmp(buf, "OLDMODE", 7) == 0)
-				TNC->OldMode = TRUE;
-			else
-			if (_memicmp(buf, "VERYOLDMODE", 7) == 0)
-			{
-				TNC->OldMode = TRUE;
-				TNC->VeryOldMode = TRUE;
-			}
-			else
-		
-			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
-				TNC->BusyWait = atoi(&buf[8]);
-
-			else
-
-			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-				TNC->WL2K = DecodeWL2KReportLine(buf);
-			else
-				strcat (TNC->InitScript, buf);
+		ptr = strchr(buf, ';');
+		if (ptr)
+		{
+			*ptr++ = 13;
+			*ptr = 0;
 		}
+		
+		if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
+			WRITELOG = atoi(&buf[8]);
+	
+		else if (_memicmp(buf, "APPL", 4) == 0)
+		{
+			p_cmd = strtok(&buf[5], " \t\n\r");
+
+			if (p_cmd && p_cmd[0] != ';' && p_cmd[0] != '#')
+				TNC->ApplCmd=_strdup(_strupr(p_cmd));
+		}
+	
+		else if (_memicmp(buf, "OLDMODE", 7) == 0)
+			TNC->OldMode = TRUE;
+
+		else if (_memicmp(buf, "VERYOLDMODE", 7) == 0)
+		{
+			TNC->OldMode = TRUE;
+			TNC->VeryOldMode = TRUE;
+		}
+
+		else if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
+			TNC->BusyWait = atoi(&buf[8]);
+
+		else if (_memicmp(buf, "WL2KREPORT", 10) == 0)
+			TNC->WL2K = DecodeWL2KReportLine(buf);
+			
+		else
+			strcat (TNC->InitScript, buf);
 	}
 	return (TRUE);
 }
@@ -250,13 +291,49 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 	if (TNC == NULL)
 		return 0;
-	
-	if (fn < 4 || fn > 5)
+
+	if (TNC->hDevice == 0)
+	{
+		// Clear anything from UI_Q
+
+		while (TNC->PortRecord->UI_Q)
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+		// Try to reopen every 30 secs
+
+		if (fn > 3  && fn < 7)
+			goto ok;
+
+		TNC->ReopenTimer++;
+
+		if (TNC->ReopenTimer < 300)
+			return 0;
+
+		TNC->ReopenTimer = 0;
+		
+		if (TNC->PortRecord->PORTCONTROL.PortStopped == 0)
+			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+
 		if (TNC->hDevice == 0)
-			return 0;					// Port not open
+			return 0;
+	}
+
+ok:
 
 	switch (fn)
 	{
+	case 7:			
+
+		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
+
+		CheckRXKAM(TNC);
+		KAMPoll(port);
+
+		return 0;
+
 	case 1:				// poll
 
 		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
@@ -277,9 +354,6 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 				return -1;
 			}
 		}
-
-		CheckRXKAM(TNC);
-		KAMPoll(port);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
@@ -416,6 +490,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 	Len += sprintf(&Buff[Len], "</table>");
 
+	Len += sprintf(&Buff[Len], "<textarea rows=10 style=\"width:500px; height:250px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
 	Len = DoScanLine(TNC, Buff, Len);
 
 	return Len;
@@ -480,6 +555,9 @@ void * KAMExtInit(EXTPORTDATA * PortEntry)
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 100;
 
+	PortEntry->PORTCONTROL.PORTSTARTCODE = KAMStartPort;
+	PortEntry->PORTCONTROL.PORTSTOPCODE = KAMStopPort;
+
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
@@ -539,6 +617,8 @@ void * KAMExtInit(EXTPORTDATA * PortEntry)
 	if (PortEntry->MAXHOSTMODESESSIONS > 26)
 		PortEntry->MAXHOSTMODESESSIONS = 26;
 
+	PortEntry->PORTCONTROL.TNC = TNC;
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 510;
 	TNC->WebWinY = 280;
@@ -551,11 +631,11 @@ void * KAMExtInit(EXTPORTDATA * PortEntry)
 	TNC->WEB_BUFFERS = zalloc(100);
 	TNC->WEB_STATE = zalloc(100);
 	TNC->WEB_TXRX = zalloc(100);
-
+	TNC->WebBuffer = zalloc(5000);
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 213, ForcedClose);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 500, ForcedClose);
 
  
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -579,7 +659,11 @@ void * KAMExtInit(EXTPORTDATA * PortEntry)
 	CreateWindowEx(0, "STATIC", "Traffic", WS_CHILD | WS_VISIBLE,10,138,80,20, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_TRAFFIC = CreateWindowEx(0, "STATIC", "RX 0 TX 0 ACKED 0", WS_CHILD | WS_VISIBLE,116,138,374,20 , TNC->hDlg, NULL, hInstance, NULL);
 
-	TNC->ClientHeight = 213;
+	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
+            LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
+			0,RigControlRow + 44,250,300, TNC->hDlg, NULL, hInstance, NULL);
+
+	TNC->ClientHeight = 500;
 	TNC->ClientWidth = 500;
 	
 	MoveWindows(TNC);
@@ -596,6 +680,7 @@ void * KAMExtInit(EXTPORTDATA * PortEntry)
 void CheckRXKAM(struct TNCINFO * TNC)
 {
 	int Length, Len;
+	char debug[512] = "RX: ";
 
 	// only try to read number of bytes in queue 
 
@@ -608,6 +693,10 @@ void CheckRXKAM(struct TNCINFO * TNC)
 		return;
 
 	TNC->RXLen += Len;
+
+	memcpy(&debug[4], TNC->RXBuffer, TNC->RXLen);
+	debug[TNC->RXLen + 4] = 0;		
+	WriteLogLine(TNC->Port, debug, TNC->RXLen + 4);
 
 	Length = TNC->RXLen;
 
@@ -709,6 +798,13 @@ VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
 
 static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
+	char debug[512] = "TX: ";
+
+	memcpy(&debug[4], TNC->TXBuffer, TNC->TXLen);
+	debug[TNC->TXLen + 4] = 0;
+			
+	WriteLogLine(TNC->Port, debug, TNC->TXLen + 4);
+
 	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
 
 	return TRUE;
@@ -1010,11 +1106,16 @@ VOID KAMPoll(int Port)
 						EncodeAndSend(TNC, TXMsg, 103);
 						Next += 100;
 						datalen -= 100;
+
+						WritetoTrace(TNC, &TXMsg[3], 100);
 					}
 				}
 
 				memcpy(&TXMsg[3], &MsgPtr[Next], datalen);
 				EncodeAndSend(TNC, TXMsg, datalen + 3);
+
+				WritetoTrace(TNC, &TXMsg[3], datalen);
+
 				ReleaseBuffer(buffptr);
 
 				if (Stream == 0)
@@ -1429,6 +1530,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
 			SetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 		}
+
+		WritetoTrace(TNC, Buffer, Len);
+
 		return;
 	}
 
@@ -1663,9 +1767,10 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					{
 						sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
 						SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+			
 						// If Scan Entry has a Appl, save it
 
-						if (TNC->RIG->FreqPtr[0]->APPL[0])
+						if (TNC->RIG->FreqPtr && TNC->RIG->FreqPtr[0]->APPL[0])
 							strcpy(FreqAppl, &TNC->RIG->FreqPtr[0]->APPL[0]);
 					}
 					else

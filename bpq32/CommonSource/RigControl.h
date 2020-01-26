@@ -168,6 +168,8 @@ struct RIGPORTINFO
 	int Retries;
 	BOOL PORTOK;				// PORT is reponding
 
+	int Closed;					// CLOSE command received
+
 	HANDLE hDevice;					// COM device Handle
 	int ReopenDelay;
 	struct TNCINFO * PTC;			// Set to TNC record address if using an SCS PTC Radio Port

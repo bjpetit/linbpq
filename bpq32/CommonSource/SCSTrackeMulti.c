@@ -53,6 +53,8 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
+BOOL KAMStartPort(struct PORTCONTROL * PORT);
+BOOL KAMStopPort(struct PORTCONTROL * PORT);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen);
@@ -199,7 +201,8 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		if (TNC->PortRecord->PORTCONTROL.PortStopped == 0)
+			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == 0)
 			return 0;
@@ -411,6 +414,9 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 100;
+
+	PortEntry->PORTCONTROL.PORTSTARTCODE = KAMStartPort;
+	PortEntry->PORTCONTROL.PORTSTOPCODE = KAMStopPort;
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate

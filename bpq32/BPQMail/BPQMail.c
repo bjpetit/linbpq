@@ -1006,7 +1006,9 @@
 //	Improvments to YAPP
 //	Add Copy forwarding config
 //	Add Next and Previous buttons to Webmail message read screen
-//	Start moving templates from HTMLPages to inline code.
+//	Move HTML templates from HTMLPages to inline code.
+//	Fix Paclen on YAPP send
+//	Fix bug in handling "RMS Express User"
 
 #include "BPQMail.h"
 #define MAIL

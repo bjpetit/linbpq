@@ -57,6 +57,8 @@
 #define MUIONLY                         1180
 #define BPQPORT							1181
 #define BPQENABLE						1182
+#define YAPPSEND						1200
+#define YAPPDIR							1201
 #define BPQAUTOCONNECT                  40001
 #define BPQAPPL1                        40002
 #define BPQAPPL2                        40003

@@ -892,10 +892,13 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix possible crash if APRS WX file doesn't have a terminating newline
 //	Change communication with BPQAPRS.exe to restore old message popup behaviour
 //	Preparation for 64 bit version
-//	Improve flow control on SCS Sragon
+//	Improve flow control on SCS Dragon
 //	Fragment messages from network links to L2 links with smaller paclen
 //	Change WL2K report rate to once every two hours
-//	Add CTEXT and CMSG commands to TNC2 Emulator
+//	Add PASS, CTEXT and CMSG commands and Stream Switch support to TNC2 Emulator
+//	Add SessionTimeLimit command to  HF drivers (ARDOP, SCSPactor, WINMOR, VARA)
+//	Add links to Ports Web Manangement Page to open individual Driver windows
+//	Add STOPPORT/STARTPORT support to ARDOP, KAM and SCSPactor drivers
 
 
 #define CKernel
@@ -972,7 +975,7 @@ void * ETHERExtInit(struct PORTCONTROL *  PortEntry);
 void * AGWExtInit(struct PORTCONTROL *  PortEntry);
 void * WinmorExtInit(EXTPORTDATA * PortEntry);
 void * TelnetExtInit(EXTPORTDATA * PortEntry);
-void * SoundModemExtInit(EXTPORTDATA * PortEntry);
+//void * SoundModemExtInit(EXTPORTDATA * PortEntry);
 void * TrackerExtInit(EXTPORTDATA * PortEntry);
 void * TrackerMExtInit(EXTPORTDATA * PortEntry);
 void * V4ExtInit(EXTPORTDATA * PortEntry);
@@ -3471,8 +3474,8 @@ VOID * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "TELNET"))
 		return TelnetExtInit;
 
-	if (strstr(Value, "SOUNDMODEM"))
-		return SoundModemExtInit;
+//	if (strstr(Value, "SOUNDMODEM"))
+//		return SoundModemExtInit;
 
 	if (strstr(Value, "SCSTRACKER"))
 		return TrackerExtInit;

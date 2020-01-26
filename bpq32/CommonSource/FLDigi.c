@@ -1213,6 +1213,8 @@ VOID * FLDigiExtInit(EXTPORTDATA * PortEntry)
 
 	time(&lasttime[port]);			// Get initial time value
 
+	PortEntry->PORTCONTROL.TNC = TNC;
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 520;
 	TNC->WebWinY = 500;
@@ -3628,7 +3630,7 @@ static int ProcessXMLData(int port)
 
 	if (bytes == SOCKET_ERROR)
 	{
-//		i=sprintf(ErrMsg, "Read Failed for MPSK socket - error code = %d\r\n", WSAGetLastError());
+//		i=sprintf(ErrMsg, "Read Failed for FLDigi socket - error code = %d\r\n", WSAGetLastError());
 //		WritetoConsole(ErrMsg);
 				
 		closesocket(TNC->TCPSock);

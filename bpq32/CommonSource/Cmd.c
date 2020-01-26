@@ -279,7 +279,6 @@ VOID PORTVAL(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	UCHAR oldvalue, newvalue;
 	struct PORTCONTROL * PORT = PORTTABLE;
 	int n = NUMBEROFPORTS;
-	intptr_t offset, DPBASE;
 	UCHAR * valueptr;
 
 	// Get port number
@@ -346,13 +345,8 @@ VOID PORTVAL(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 						}
 					}
 
-					valueptr = (UCHAR *)PORT;
-					offset = (intptr_t)CMD->CMDFLAG;
-					DPBASE = (intptr_t)&DP;
-					offset -= DPBASE;
-					valueptr += offset;
-
-					oldvalue = (UCHAR)*valueptr;
+					valueptr = (UCHAR *)PORT + CMD->CMDFLAG;
+					oldvalue = *valueptr;
 
 					// Display Param Namee
 
@@ -406,9 +400,9 @@ VOID SWITCHVAL (TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 	int n;
 	UCHAR * valueptr;
 
-	valueptr = CMD->CMDFLAG;
+	valueptr = (UCHAR *)CMD->CMDFLAG;
 
-	oldvalue = (UCHAR)*valueptr;
+	oldvalue = *valueptr;
 
 	// Display Param Name
 
@@ -448,7 +442,7 @@ VOID SWITCHVALW (TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 	int n;
 	USHORT * valueptr;
 
-	valueptr = CMD->CMDFLAG;
+	valueptr = (USHORT *)CMD->CMDFLAG;
 
 	oldvalue = (USHORT)*valueptr;
 
@@ -3903,22 +3897,22 @@ CMDX COMMANDS[] =
 //	"RECONFIG    ",8 , RECONFIG, 0,
 	"RESTART     ",7,RESTART,0,
 	"SENDNODES   ",8,SENDNODES,0,
-	"EXTRESTART  ",10, EXTPORTVAL,&DP.EXTRESTART,
-	"TXDELAY     ",3, PORTVAL,&DP.PORTCONTROL.PORTTXDELAY,
-	"MAXFRAME    ",3, PORTVAL,&DP.PORTCONTROL.PORTWINDOW,
-	"RETRIES     ",3, PORTVAL,&DP.PORTCONTROL.PORTN2,
-	"FRACK       ",3,PORTVAL,&DP.PORTCONTROL.PORTT1,
-	"RESPTIME    ",3,PORTVAL,&DP.PORTCONTROL.PORTT2,
-	"PPACLEN     ",3,PORTVAL,&DP.PORTCONTROL.PORTPACLEN,
-	"QUALITY     ",3,PORTVAL,&DP.PORTCONTROL.PORTQUALITY,
-	"PERSIST     ",2,PORTVAL,&DP.PORTCONTROL.PORTPERSISTANCE,
-	"TXTAIL      ",3,PORTVAL,&DP.PORTCONTROL.PORTTAILTIME,
-	"XMITOFF     ",7,PORTVAL,&DP.PORTCONTROL.PORTDISABLED,
-	"DIGIFLAG    ",5,PORTVAL,&DP.PORTCONTROL.DIGIFLAG,
-	"DIGIPORT    ",5,PORTVAL,&DP.PORTCONTROL.DIGIPORT,
-	"MAXUSERS    ",4,PORTVAL,&DP.PORTCONTROL.USERS,
-	"L3ONLY      ",6,PORTVAL,&DP.PORTCONTROL.PORTL3FLAG,
-	"BBSALIAS    ",4,PORTVAL,&DP.PORTCONTROL.PORTBBSFLAG,
+	"EXTRESTART  ",10, EXTPORTVAL, offsetof(EXTPORTDATA, EXTRESTART),
+	"TXDELAY     ",3, PORTVAL, offsetof(PORTCONTROLX, PORTTXDELAY),
+	"MAXFRAME    ",3, PORTVAL, offsetof(PORTCONTROLX, PORTWINDOW),
+	"RETRIES     ",3, PORTVAL, offsetof(PORTCONTROLX, PORTN2),
+	"FRACK       ",3,PORTVAL, offsetof(PORTCONTROLX, PORTT1),
+	"RESPTIME    ",3,PORTVAL, offsetof(PORTCONTROLX, PORTT2),
+	"PPACLEN     ",3,PORTVAL, offsetof(PORTCONTROLX, PORTPACLEN),
+	"QUALITY     ",3,PORTVAL, offsetof(PORTCONTROLX, PORTQUALITY),
+	"PERSIST     ",2,PORTVAL, offsetof(PORTCONTROLX, PORTPERSISTANCE),
+	"TXTAIL      ",3,PORTVAL, offsetof(PORTCONTROLX, PORTTAILTIME),
+	"XMITOFF     ",7,PORTVAL, offsetof(PORTCONTROLX, PORTDISABLED),
+	"DIGIFLAG    ",5,PORTVAL, offsetof(PORTCONTROLX, DIGIFLAG),
+	"DIGIPORT    ",5,PORTVAL, offsetof(PORTCONTROLX, DIGIPORT),
+	"MAXUSERS    ",4,PORTVAL, offsetof(PORTCONTROLX, USERS),
+	"L3ONLY      ",6,PORTVAL, offsetof(PORTCONTROLX, PORTL3FLAG),
+	"BBSALIAS    ",4,PORTVAL, offsetof(PORTCONTROLX, PORTBBSFLAG),
 	"VALIDCALL   ",5,VALNODES,0,
 	"WL2KSYSOP   ",5,WL2KSYSOP,0,
 	"STOPPORT    ",4,STOPPORT,0,
@@ -3935,24 +3929,24 @@ CMDX COMMANDS[] =
 
 #endif
 
-	"FULLDUP     ",4,PORTVAL,&DP.PORTCONTROL.FULLDUPLEX,
-	"SOFTDCD     ",4,PORTVAL,&DP.PORTCONTROL.SOFTDCDFLAG,
-	"OBSINIT     ",7,SWITCHVAL,&OBSINIT,
-	"OBSMIN      ",6,SWITCHVAL,&OBSMIN,
-	"NODESINT    ",8,SWITCHVAL,&L3INTERVAL,
-	"L3TTL       ",5,SWITCHVAL,&L3LIVES,
-	"L4RETRIES   ",5,SWITCHVAL,&L4N2,
-	"L4TIMEOUT   ",5,SWITCHVALW,&L4T1,
-	"T3          ",2,SWITCHVALW,&T3,
-	"NODEIDLETIME",8,SWITCHVALW,&L4LIMIT,
-	"LINKEDFLAG  ",10,SWITCHVAL,&LINKEDFLAG,
-	"IDINTERVAL  ",5,SWITCHVAL,&IDINTERVAL,
-	"MINQUAL     ",7,SWITCHVAL,&MINQUAL,
-	"FULLCTEXT   ",6,SWITCHVAL,&FULL_CTEXT,
-	"HIDENODES   ",8,SWITCHVAL,&HIDENODES,
-	"L4DELAY     ",7,SWITCHVAL,&L4DELAY,
-	"L4WINDOW    ",6,SWITCHVAL,&L4DEFAULTWINDOW,
-	"BTINTERVAL  ",5,SWITCHVAL,&BTINTERVAL,
+	"FULLDUP     ",4,PORTVAL, offsetof(PORTCONTROLX, FULLDUPLEX),
+	"SOFTDCD     ",4,PORTVAL, offsetof(PORTCONTROLX, SOFTDCDFLAG),
+	"OBSINIT     ",7,SWITCHVAL,(size_t)&OBSINIT,
+	"OBSMIN      ",6,SWITCHVAL,(size_t)&OBSMIN,
+	"NODESINT    ",8,SWITCHVAL,(size_t)&L3INTERVAL,
+	"L3TTL       ",5,SWITCHVAL,(size_t)&L3LIVES,
+	"L4RETRIES   ",5,SWITCHVAL,(size_t)&L4N2,
+	"L4TIMEOUT   ",5,SWITCHVALW,(size_t)&L4T1,
+	"T3          ",2,SWITCHVALW,(size_t)&T3,
+	"NODEIDLETIME",8,SWITCHVALW,(size_t)&L4LIMIT,
+	"LINKEDFLAG  ",10,SWITCHVAL,(size_t)&LINKEDFLAG,
+	"IDINTERVAL  ",5,SWITCHVAL,(size_t)&IDINTERVAL,
+	"MINQUAL     ",7,SWITCHVAL,(size_t)&MINQUAL,
+	"FULLCTEXT   ",6,SWITCHVAL,(size_t)&FULL_CTEXT,
+	"HIDENODES   ",8,SWITCHVAL,(size_t)&HIDENODES,
+	"L4DELAY     ",7,SWITCHVAL,(size_t)&L4DELAY,
+	"L4WINDOW    ",6,SWITCHVAL,(size_t)&L4DEFAULTWINDOW,
+	"BTINTERVAL  ",5,SWITCHVAL,(size_t)&BTINTERVAL,
 	"PASSWORD    ", 8, PWDCMD, 0,
 
 	"************", 12, APPLCMD, 0,
@@ -5047,6 +5041,20 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 				{
 					struct KISSINFO * KISS;
 
+					if (PORT->PORTSTOPCODE)
+					{
+						// Port has Close Routine
+
+						if (PORT->PORTSTOPCODE(PORT))
+							Bufferptr += sprintf(Bufferptr, "Port Closed\r");
+						else
+							Bufferptr += sprintf(Bufferptr, "Port Close Failed\r");
+
+						PORT->PortStopped = TRUE;
+	
+						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+						return;
+					}
 					if (PORT->PORTTYPE != 0)
 					{
 						Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
@@ -5115,6 +5123,22 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 				if (PORT->PORTNUMBER == portno)
 				{
 					struct KISSINFO * KISS;
+
+					if (PORT->PORTSTARTCODE)
+					{
+						// Port has Open Routine
+
+						if (PORT->PORTSTARTCODE(PORT))
+							Bufferptr += sprintf(Bufferptr, "Port Opened\r");
+						else
+							Bufferptr += sprintf(Bufferptr, "Port Open Failed\r");
+
+						PORT->PortStopped = FALSE;
+	
+						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+						return;
+					}
+
 
 					if (PORT->PORTTYPE != 0)
 					{

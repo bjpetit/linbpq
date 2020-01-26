@@ -57,6 +57,8 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 VOID SendInitScript(struct TNCINFO * TNC);
 int SerialGetLine(char * buf);
 int ProcessEscape(UCHAR * TXMsg);
+BOOL KAMStartPort(struct PORTCONTROL * PORT);
+BOOL KAMStopPort(struct PORTCONTROL * PORT);
 
 static char ClassName[]="SERIALSTATUS";
 static char WindowTitle[] = "SERIAL";
@@ -263,7 +265,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		if (TNC->PortRecord->PORTCONTROL.PortStopped == 0)
+			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == 0)
 			return 0;
@@ -801,6 +804,10 @@ VOID * SerialExtInit(EXTPORTDATA * PortEntry)
 
 	TNC->SuspendPortProc = SerialSuspendPort;
 	TNC->ReleasePortProc = SerialReleasePort;
+
+	PortEntry->PORTCONTROL.PORTSTARTCODE = KAMStartPort;
+	PortEntry->PORTCONTROL.PORTSTOPCODE = KAMStopPort;
+
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate

@@ -52,8 +52,8 @@ VOID CONNECTTONODE(struct TNCDATA * TNC);
 DllImport int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall);
 DllImport int APIENTRY GetCallsign(int stream, char * callsign);
 VOID GETDATA(struct TNCDATA * TNC);
-VOID DOCONMODECHANGE(struct TNCDATA * TNC);
-VOID SEND_CONNECTED(struct TNCDATA * TNC);
+VOID DOCONMODECHANGE(struct TNCDATA * TNC, int Stream);
+VOID SEND_CONNECTED(struct TNCDATA * TNC, int ToStream);
 VOID READCHANGE(int Stream);
 VOID DOMONITORING(int NeedTrace);
 int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp);
@@ -81,8 +81,6 @@ extern struct TNCDATA * TNCCONFIGTABLE;
 
 struct TNCDATA * TNC2TABLE;		// malloc'ed
 extern int NUMBEROFTNCPORTS;
-
-struct TNCDATA TDP;			// Only way I can think of to get offets to port data into cmd table
 
 //	MODEFLAG DEFINITIONS
 
@@ -707,6 +705,30 @@ int BPQSerialSetDebugMask(HANDLE hDevice, int DebugMask)
 #endif                  
 }
 
+void CheckForStreamChange(struct TNCDATA * TNC, int ToStream)
+{
+	// Send Stream Switched Message if changed
+
+	char Msg[80];
+	int Len;
+
+	if (ToStream == TNC->RXStream)
+		return;
+
+	TNC->RXStream = ToStream;
+
+	// Send Message
+
+	// |B:WA7GXD:
+
+	if (TNC->StreamCall)
+		Len = sprintf(Msg, "%c%c:%s:", TNC->StreamSW, ToStream + 'A', TNC->TNC2Stream[ToStream]->RemoteCall);
+	else
+		Len = sprintf(Msg, "%c%c", TNC->StreamSW, ToStream + 'A');
+	
+	SENDREPLY(TNC, Msg, Len);
+}
+
 int LocalSessionState(int stream, int * state, int * change, BOOL ACK)
 {
 	//	Get current Session State. Any state changed is ACK'ed
@@ -752,7 +774,6 @@ VOID ONOFF(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	//	PROCESS COMMANDS WITH ON/OFF PARAM
 
 	char Param;
-	intptr_t offset, DPBASE;
 	UCHAR * valueptr;
 	UCHAR oldvalue, newvalue = 0xff;
 
@@ -762,13 +783,8 @@ VOID ONOFF(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	_strupr(Tail);
 	Param = *Tail;
 
-	valueptr = (UCHAR *)TNC;
-	offset = (intptr_t)CMD->CMDFLAG;
-	DPBASE = (intptr_t)&TDP;
-	offset -= DPBASE;
-	valueptr += offset;
+	valueptr = (UCHAR *)TNC + CMD->CMDFLAG;;
 	oldvalue = (UCHAR)*valueptr;
-
 
 	switch(Param)
 	{
@@ -804,14 +820,16 @@ VOID ONOFF(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 
 VOID ONOFF_CONOK(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
 	ONOFF(TNC, Tail, CMD);
 
 	//	UPDATE APPL FLAGS ON NODE PORT
 
 	if (TNC->CONOK)
-		SetAppl(TNC->BPQPort, TNC->APPLFLAGS, TNC->APPLICATION);
+		SetAppl(TNCStream->BPQPort, TNC->APPLFLAGS, TNC->APPLICATION);
 	else
-		SetAppl(TNC->BPQPort, TNC->APPLFLAGS, 0);
+		SetAppl(TNCStream->BPQPort, TNC->APPLFLAGS, 0);
 }
 
 VOID SETMYCALL(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
@@ -874,18 +892,13 @@ VOID VALUE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	//	PROCESS COMMANDS WITH decimal value
 
 	char Param = *Tail;
-	intptr_t offset, DPBASE;
 	UCHAR * valueptr;
 	int oldvalue, newvalue;
 
 	char Response[80];
 	int len;
 
-	valueptr = (UCHAR *)TNC;
-	offset = (intptr_t)CMD->CMDFLAG;
-	DPBASE = (intptr_t)&TDP;
-	offset -= DPBASE;
-	valueptr += offset;
+	valueptr = (UCHAR *)TNC + CMD->CMDFLAG;;
 	oldvalue = *valueptr;
 
 	strlop(Tail, ' ');
@@ -908,7 +921,6 @@ VOID VALHEX(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	//	PROCESS COMMANDS WITH decimal value
 
 	char Param = *Tail;
-	intptr_t offset, DPBASE;
 
 	UCHAR * valueptr;
 	UINT * intvalueptr;
@@ -917,19 +929,20 @@ VOID VALHEX(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	char Response[80];
 	int len;
 
-	valueptr = (UCHAR *)TNC;
-	offset = (intptr_t)CMD->CMDFLAG;
-	DPBASE = (intptr_t)&TDP;
-	offset -= DPBASE;
-	valueptr += offset;
+	valueptr = (UCHAR *)TNC + CMD->CMDFLAG;;
 	intvalueptr = (UINT *)valueptr;
+
 	oldvalue = *intvalueptr;
 
 	strlop(Tail, ' ');
 
 	if (Tail[0])
 	{
-		newvalue = (UINT)strtol(Tail, NULL, 16);
+		if (Tail[0] == '$')
+			newvalue = (UINT)strtol(Tail + 1, NULL, 16);
+		else
+			newvalue = (UINT)strtol(Tail, NULL, 0);
+		
 		len = sprintf(Response, "%s was $%x\r", CMD->String, oldvalue);
 		*intvalueptr = newvalue;
 	}
@@ -987,26 +1000,67 @@ VOID CONMODE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 
 VOID TNCCONV(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
-	TNC->MODEFLAG |= CONV;
-	TNC->MODEFLAG &= ~(COMMAND+TRANS);
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
+	TNCStream->MODEFLAG |= CONV;
+	TNCStream->MODEFLAG &= ~(COMMAND+TRANS);
 }
 
 VOID TNCNODE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
 	//	CONNECT TO NODE
 
-	TNC->VMSR |= 0x88;		// SET CONNECTED
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
 
-	TNC->MODEFLAG |= CONV;		// INTO CONVERSE MODE
-	TNC->MODEFLAG &= ~(COMMAND+TRANS);
+	TNCStream->VMSR |= 0x88;		// SET CONNECTED
+
+	TNCStream->MODEFLAG |= CONV;		// INTO CONVERSE MODE
+	TNCStream->MODEFLAG &= ~(COMMAND+TRANS);
 
 	CONNECTTONODE(TNC);
-	READCHANGE(TNC->BPQPort);		//CLEAR STATUS CHANGE (TO AVOID SUPURIOUS "CONNECTED TO")
 }
 
+VOID CStatus(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
+{
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
+	char Response[80];
+	int i, len;
+	char Call[10] = "";
+	char Selected[3] = "  ";
+
+	for (i = 0; i < TNC->HOSTSTREAMS; i++)
+	{
+		char Selected[3] = "  ";
+		TNCStream = TNC->TNC2Stream[i];
+		
+		if (TNC->RXStream == i)
+			Selected[0] = 'I';
+
+		if (TNC->TXStream == i)
+			Selected[1] = 'O';
+
+		if (TNCStream->VMSR & 0x80)
+		{
+			GetCallsign(TNCStream->BPQPort, Call);
+			strlop(Call, ' ');
+
+			len = sprintf(Response, "%c stream - %s CONNECTED to %s\r", i + 'A', Selected, Call);
+		}
+		else
+		{
+			len = sprintf(Response, "%c stream - %s DISCONNECTED\r", i + 'A', Selected);
+		}
+
+		SENDREPLY(TNC, Response, len);
+	}
+}
+	
 
 VOID TNCCONNECT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
 	char Response[80];
 	int len;
 	char Call[10] = "";
@@ -1019,16 +1073,16 @@ VOID TNCCONNECT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 
 		len = sprintf(Response, "%s", LNKSTATEMSG);
 
-		if (TNC->VMSR & 0x80)
+		if (TNCStream->VMSR & 0x80)
 		{
-			GetCallsign(TNC->BPQPort, Call);
+			GetCallsign(TNCStream->BPQPort, Call);
 			strlop(Call, ' ');
 
-			len = sprintf(Response, "%s%s%s\r", LNKSTATEMSG, CONNECTEDMSG, Call);
+			len = sprintf(Response, "%c Link state is: CONNECTED to %s\r", TNC->TXStream + 'A', Call);
 		}
 		else
 		{
-			len = sprintf(Response, "%s%s", LNKSTATEMSG, DISCONNMSG+5);
+			len = sprintf(Response, "%c Link state is: DISCONNECTED\r", TNC->TXStream + 'A');
 		}
 
 		SENDREPLY(TNC, Response, len);
@@ -1038,6 +1092,8 @@ VOID TNCCONNECT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	//	CONNECT, BUT NOT TO SWITCH - CONNECT TO NODE, THEN PASS TO IT FOR PROCESSING
 
 	TNCNODE(TNC, Tail, CMD);
+	READCHANGE(TNCStream->BPQPort);		//CLEAR STATUS CHANGE (TO AVOID SUPURIOUS "CONNECTED TO")
+
 	strcat(TNC->TONODEBUFFER, "\r");
 	TNC->MSGLEN = (int)strlen(TNC->TONODEBUFFER);
 
@@ -1046,7 +1102,9 @@ VOID TNCCONNECT(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 }
 VOID TNCDISC(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
-	Disconnect(TNC->BPQPort);
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
+	Disconnect(TNCStream->BPQPort);
 
 	SENDREPLY(TNC, CMDMSG, 4);
 }
@@ -1068,17 +1126,21 @@ VOID TNCRELEASE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 }
 VOID TNCTRANS(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 {
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
 	//	MAKE PRETTY SURE THIS ISNT A BIT OF STRAY DATA
 
  	if (TNC->MSGLEN > 6)
 		return;
 
-	TNC->MODEFLAG |= TRANS;
-	TNC->MODEFLAG &= ~(COMMAND+CONV);
+	TNCStream->MODEFLAG |= TRANS;
+	TNCStream->MODEFLAG &= ~(COMMAND+CONV);
 }
 static VOID RESTART(struct TNCDATA * TNC)
 {
 	//	REINITIALISE CHANNEL
+
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
 
 	TNC->PUTPTR = TNC->GETPTR = &TNC->TOUSERBUFFER[0];
 	TNC->RXCOUNT = 0;
@@ -1086,7 +1148,7 @@ static VOID RESTART(struct TNCDATA * TNC)
 	TNC->VLSR = 0x20;
 	TNC->VMSR = 0x30;
 
-	TNC->MODEFLAG = COMMAND;
+	TNCStream->MODEFLAG = COMMAND;
 	TNC->SENDPAC = 13;
 	TNC->CRFLAG = 1;
 	TNC->MALL = 1;
@@ -1107,56 +1169,60 @@ static VOID UNPROTOCMD(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 }
 
 
-
-
 CMDX COMMANDLIST[] =
 {
-	"AUTOLF  ",2, ONOFF, &TDP.AUTOLF,
-	"BBSMON  ",6, ONOFF, &TDP.BBSMON,
+	"AUTOLF  ",2, ONOFF, offsetof(struct TNCDATA, AUTOLF),
+	"BBSMON  ",6, ONOFF, offsetof(struct TNCDATA, BBSMON),
 	"BTEXT   ",2,BTEXT,0,
-	"CONOK   ",4,ONOFF_CONOK,&TDP.CONOK,
+	"CONOK   ",4,ONOFF_CONOK,offsetof(struct TNCDATA, CONOK),
 	"C SWITCH",8,CSWITCH,0,
-	"CBELL   ",2,ONOFF,&TDP.CBELL,
-	"CMDTIME ",2,VALHEX,&TDP.CMDTIME,
-	"CMSG    ",4,ONOFF,&TDP.CMSG,
-	"COMMAND ",3,VALHEX,&TDP.COMCHAR,
+	"CBELL   ",2,ONOFF,offsetof(struct TNCDATA, CBELL),
+	"CMDTIME ",2,VALUE, offsetof(struct TNCDATA, CMDTIME),
+	"CMSG    ",4,ONOFF,offsetof(struct TNCDATA, CMSG),
+	"COMMAND ",3,VALHEX, offsetof(struct TNCDATA, COMCHAR),
 	"CONMODE ",4,CONMODE,0,
-	"CPACTIME",2,ONOFF,&TDP.CPACTIME,
-	"CR      ",2,ONOFF,&TDP.CRFLAG,
+	"CPACTIME",2,ONOFF,offsetof(struct TNCDATA, CPACTIME),
+	"CR      ",2,ONOFF,offsetof(struct TNCDATA, CRFLAG),
+	"CSTATUS ",2,CStatus,0,
 	"CTEXT   ",2,CTEXTCMD,0,
-	"APPLFLAG",5,APPL_VALHEX,&TDP.APPLFLAGS,
-	"APPL    ",4,APPL_VALHEX,&TDP.APPLICATION,
+	"APPLFLAG",5,APPL_VALHEX, offsetof(struct TNCDATA, APPLFLAGS),
+	"APPL    ",4,APPL_VALHEX, offsetof(struct TNCDATA, APPLICATION),
 	"CONVERS ",4,TNCCONV,0,
 	"CONNECT ",1,TNCCONNECT,0,
 	"DISCONNE",1,TNCDISC,0,
-	"ECHO    ",1,ONOFF,&TDP.ECHOFLAG,
-	"FLOW    ",4,ONOFF,&TDP.FLOWFLAG,
-	"HEADERLN",2,ONOFF,&TDP.HEADERLN,
+	"ECHO    ",1,ONOFF,offsetof(struct TNCDATA, ECHOFLAG),
+	"FLOW    ",4,ONOFF,offsetof(struct TNCDATA, FLOWFLAG),
+	"HEADERLN",2,ONOFF,offsetof(struct TNCDATA, HEADERLN),
 	"K       ",1,TNCNODE,0,
-	"MTXFORCE",4,ONOFF,&TDP.MTXFORCE,
-	"LFIGNORE",3,ONOFF,&TDP.LFIGNORE,
-	"MTX     ",3,ONOFF,&TDP.MTX,
-	"MALL    ",2,ONOFF,&TDP.MALL,
-	"MCOM    ",4,ONOFF,&TDP.MCOM,
-	"MCON    ",2,ONOFF,&TDP.MCON,
-	"MMASK   ",2,VALHEX,&TDP.MMASK,
-	"MONITOR ",3,ONOFF,&TDP.TRACEFLAG,
+	"MTXFORCE",4,ONOFF,offsetof(struct TNCDATA, MTXFORCE),
+	"LCSTREAM",8,ONOFF, offsetof(struct TNCDATA, LCStream),
+	"LFIGNORE",3,ONOFF,offsetof(struct TNCDATA, LFIGNORE),
+	"MTX     ",3,ONOFF,offsetof(struct TNCDATA, MTX),
+	"MALL    ",2,ONOFF,offsetof(struct TNCDATA, MALL),
+	"MCOM    ",4,ONOFF,offsetof(struct TNCDATA, MCOM),
+	"MCON    ",2,ONOFF,offsetof(struct TNCDATA, MCON),
+	"MMASK   ",2,VALHEX, offsetof(struct TNCDATA, MMASK),
+	"MONITOR ",3,ONOFF,offsetof(struct TNCDATA, TRACEFLAG),
 	"MYCALL  ",2,SETMYCALL,0,
-	"NEWMODE ",2,ONOFF,&TDP.NEWMODE,
+	"NEWMODE ",2,ONOFF,offsetof(struct TNCDATA, NEWMODE),
 	"NODE    ",3,TNCNODE,0,
-	"NOMODE  ",2,ONOFF,&TDP.NOMODE,
-	"SENDPAC ",2,VALHEX,&TDP.SENDPAC,
-	"PACLEN  ",1,VALUE,&TDP.TPACLEN,
-	"PASS    ",3,VALHEX,&TDP.PASSCHAR,
+	"NOMODE  ",2,ONOFF,offsetof(struct TNCDATA, NOMODE),
+	"SENDPAC ",2,VALHEX, offsetof(struct TNCDATA, SENDPAC),
+	"STREAMCA",8,ONOFF, offsetof(struct TNCDATA, StreamCall),
+	"STREAMDBL",7,ONOFF, offsetof(struct TNCDATA, StreamDbl),
+	"STREAMSW",3,VALHEX, offsetof(struct TNCDATA, StreamSW),
+	"PACLEN  ",1,VALUE, offsetof(struct TNCDATA, TPACLEN),
+	"PASS    ",3,VALHEX, offsetof(struct TNCDATA, PASSCHAR),
 	"RELEASE ",3,TNCRELEASE,0,
 	"RESTART ",7,RESTART,0,
 	"TRANS   ",1,TNCTRANS,0,
 	"UNPROTO ",1,UNPROTOCMD,0,
+	"USERS  ",2,VALUE, offsetof(struct TNCDATA, Users),
 };
 
 static CMDX * CMD = NULL;
 
-static int NUMBEROFTNCCOMMANDS = sizeof(COMMANDLIST)/sizeof(CMDX);
+int NUMBEROFTNCCOMMANDS = sizeof(COMMANDLIST)/sizeof(CMDX);
 
 /*NEWVALUE	DW	0
 HEXFLAG		DB	0
@@ -1226,12 +1292,19 @@ VOID TNC2GetChar(struct TNCDATA * TNC, int * returnedchar, int * moretocome)
 	}
 }
 
-BOOL TNC2GetVMSR(struct TNCDATA * TNC,int * returnedchar)
-{            
-	*returnedchar = TNC->VMSR;
+int TNC2GetVMSR(struct TNCDATA * TNC, struct TNC2StreamInfo * TNCStream, BOOL ClearDeltas)
+{
+	// I think Connected bit should come from current stream
+	// flow control bits from TNC record
 
-	TNC->VMSR &= 0xF0;			// CLEAR DELTA BITS
-	return TRUE;
+	int val = TNC->VMSR | TNCStream->VMSR;
+
+	if (ClearDeltas)
+	{
+		TNC->VMSR &= 0xF0;			// CLEAR DELTA BITS
+		TNCStream->VMSR &= 0xF0;
+	}
+	return val;
 }
 
 BOOL TNCRUNNING;;
@@ -1283,6 +1356,7 @@ BOOL InitializeTNCEmulator()
 	DWORD Errorval;
 	int ApplNum = 1;
 	UINT APPLMASK;
+	struct TNC2StreamInfo * TNCStream;
 
 	struct TNCDATA * TNC = TNCCONFIGTABLE;
 
@@ -1309,28 +1383,41 @@ BOOL InitializeTNCEmulator()
 
 			sprintf(pgm, "TNC2 %s", PNptr);
 
-			TNC->BPQPort = FindFreeStream();
+			// Start with number of streams, can add or remove with USRES command
 
-			if (TNC->BPQPort == 0)
+			if (TNC->Users == 0)
+				TNC->Users = TNC->HOSTSTREAMS;
+
+			if (TNC->HOSTSTREAMS == 0)
+				TNC->Users = TNC->HOSTSTREAMS = 1;
+
+			for (i = 0; i < TNC->HOSTSTREAMS; i++)
 			{
-				Debugprintf("Insufficient free Streams for TNC2 Emulator");
-				return FALSE;
-			}
+				TNCStream = TNC->TNC2Stream[i] = zalloc(sizeof(struct TNC2StreamInfo)); 
+
+				TNCStream->BPQPort = FindFreeStream();
+
+				if (TNCStream->BPQPort == 0)
+				{
+					Debugprintf("Insufficient free Streams for TNC2 Emulator");
+					return FALSE;
+				}
 			
-			READCHANGE(TNC->BPQPort);					// Prevent Initial *** disconnected
+				READCHANGE(TNCStream->BPQPort);					// Prevent Initial *** disconnected
+
+				TNCStream->MODEFLAG = COMMAND;
+
+				if (TNC->CONOK)
+					SetAppl(TNCStream->BPQPort, TNC->APPLFLAGS, TNC->APPLICATION);
+				else
+					SetAppl(TNCStream->BPQPort, TNC->APPLFLAGS, 0);
+
+			}
 
 			strcpy(pgm, "bpq32.exe");
-			TNC->MODEFLAG = COMMAND;
-			TNC->SENDPAC = 13;
-			TNC->CRFLAG = 1;
-			TNC->MTX = 1;
-			TNC->MCOM = 1;
-			TNC->MMASK = -1;			//  MONITOR MASK FOR PORTS
-			TNC->TPACLEN = PACLEN;		// TNC PACLEN
 
-			TNC->COMCHAR = 3;
-			TNC->CMDTIME = 10;			// SYSTEM TIMER = 100MS
-			TNC->PASSCHAR = 0x16;		// CTRL-V
+			if (TNC->TPACLEN == 0)
+				TNC->TPACLEN = PACLEN;		// TNC PACLEN
 
 			break;
 
@@ -1828,7 +1915,9 @@ VOID TNCPoll()
 
 		getstatus:
 
-			TNC2GetVMSR(TNC, &retval);
+			// We look for change on current RX Stream
+
+			retval = TNC2GetVMSR(TNC, TNC->TNC2Stream[TNC->RXStream], TRUE);
         
 			if ((retval & 8) == 8)	 //' DCD (Connected) Changed
 			{	
@@ -2002,10 +2091,12 @@ VOID DOMONITORING(int NeedTrace)
 
 VOID TNC2PutChar(struct TNCDATA * TNC, int Char)
 {
-	if (TNC->MODEFLAG & COMMAND)
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
+	if (TNCStream->MODEFLAG & COMMAND)
 		goto KEYB06C;				// COMMAND MODE - SKIP TRANS TEST
 		
-	if (TNC->MODEFLAG & TRANS)
+	if (TNCStream->MODEFLAG & TRANS)
 		goto KEYB06T;				//  TRANS MODE	
 	
 	//	CONV MODE - SEE IF CPACTIME ON
@@ -2078,9 +2169,38 @@ KEYB06C:
 		return;
 	}
 
+	if (TNC->InStreamSW)
+	{
+		TNC->InStreamSW = 0;
+
+		if (Char != TNC->StreamSW)
+		{
+			if (TNC->ECHOFLAG)
+				KBECHO(TNC, Char);
+
+			if (TNC->LCStream)
+				Char = toupper(Char);
+
+			if (Char > '@' && Char < '@' + TNC->Users)
+				TNC->TXStream = Char - 'A';
+
+			return;
+		}
+	}
+
 	if (Char == TNC->PASSCHAR)
 	{
 		TNC->InEscape = 1;
+		return;
+	}
+
+	if (TNC->StreamSW && Char == TNC->StreamSW)
+	{
+		TNC->InStreamSW = 1;
+	
+		if (TNC->ECHOFLAG)
+			KBECHO(TNC, Char);
+
 		return;
 	}
 
@@ -2098,8 +2218,11 @@ KEYB06C:
 			TNC->CURSOR--;
 		
 			if (TNC->ECHOFLAG)
+			{
+				KBECHO(TNC, Char);			// Delete char from display
+				KBECHO(TNC, ' ');
 				KBECHO(TNC, Char);
-	
+			}
 			return;
 		}
 
@@ -2115,7 +2238,7 @@ KEYB06C:
 			return;
 		}
 	
-		if (TNC->MODEFLAG & COMMAND)
+		if (TNCStream->MODEFLAG & COMMAND)
 		{	
 			if (Char == 0x14)			// CTRL/T
 			{
@@ -2136,6 +2259,8 @@ KEYB06C:
 
 VOID KBNORM(struct TNCDATA * TNC, int Char)
 {
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
 	if (TNC->MSGLEN > 256)
 		goto TOOLONG;			// PROTECT BUFFER
 
@@ -2147,12 +2272,12 @@ TOOLONG:
 	if (TNC->ECHOFLAG)
 		KBECHO(TNC, Char);
 
-	if (TNC->MSGLEN < TNC->TPACLEN)
-		return;;
+	if (TNC->MSGLEN < TNCStream->TPACLEN)
+		return;
 
 //	DONT APPLY PACLEN IN COMMAND MODE
 
-	if (TNC->MODEFLAG & COMMAND)
+	if (TNCStream->MODEFLAG & COMMAND)
 		return;
 
 	SENDPACKET(TNC);			// Send what we have
@@ -2169,8 +2294,10 @@ VOID SETCOMMANDMODE(struct TNCDATA * TNC)
 
 VOID SETCOMM00(struct TNCDATA * TNC)
 {
-	TNC->MODEFLAG |= COMMAND;			// BACK TO COMMAND MODE
-	TNC->MODEFLAG &= ~(CONV+TRANS);
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
+	TNCStream->MODEFLAG |= COMMAND;			// BACK TO COMMAND MODE
+	TNCStream->MODEFLAG &= ~(CONV+TRANS);
 	TNC->TRANSTIMER = 0;				// CANCEL TRANS MODE SEND TIMER
 	TNC->AUTOSENDFLAG = 0;				// IN CASE ALREADY SET
 
@@ -2186,9 +2313,11 @@ VOID SENDPACKET(struct TNCDATA * TNC)
 {
 	//	SEE IF COMMAND STATE
 
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
 	int Stream = 0;			// Unprooto
 
-	if (TNC->MODEFLAG & COMMAND) 
+	if (TNCStream->MODEFLAG & COMMAND) 
 	{
 		TNCCOMMAND(TNC);				// COMMAND TO TNC
 		TNC->CURSOR = &TNC->TONODEBUFFER[0];		// RESET MESSAGE START		
@@ -2200,8 +2329,8 @@ VOID SENDPACKET(struct TNCDATA * TNC)
 	//	   OTHERWISE SEND AS AN UNPROTO FRAME (TO ALL PORTS)
 
 
-	if (TNC->VMSR & 0x80)				// CONNECTED?
-		Stream = TNC->BPQPort;
+	if (TNCStream->VMSR & 0x80)				// CONNECTED?
+		Stream = TNCStream->BPQPort;
 
 	SendMsg(Stream, TNC->TONODEBUFFER, TNC->MSGLEN);
 	
@@ -2507,10 +2636,11 @@ DISPBT20:
 
 */
 
-VOID DOCONMODECHANGE(struct TNCDATA * TNC)
+VOID DOCONMODECHANGE(struct TNCDATA * TNC, int Stream)
 {
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[Stream];
 
-	TNC->VMSR |= 0x88;		// SET CONNECTED
+	TNCStream->VMSR |= 0x88;		// SET CONNECTED
 
 	//	IF NOMODE IS ON LEAVE IN TNC COMMAND MODE, ELSE PUT INTO CONV MODE
 	//		(MAY NEED TO IMPLEMENT CONMODE SOMETIME)
@@ -2518,8 +2648,8 @@ VOID DOCONMODECHANGE(struct TNCDATA * TNC)
 	if (TNC->NOMODE)
 		return;
 
-	TNC->MODEFLAG |= CONV;		// INTO CONVERSE MODE
-	TNC->MODEFLAG &= ~(COMMAND+TRANS);
+	TNCStream->MODEFLAG |= CONV;		// INTO CONVERSE MODE
+	TNCStream->MODEFLAG &= ~(COMMAND+TRANS);
 }
 
 VOID SENDREPLY(struct TNCDATA * TNC, char * Msg, int Len)
@@ -2533,9 +2663,11 @@ VOID SENDREPLY(struct TNCDATA * TNC, char * Msg, int Len)
 }
 
 
-VOID SEND_CONNECTED(struct TNCDATA * TNC)
+VOID SEND_CONNECTED(struct TNCDATA * TNC, int ToStream)
 {
 	//	SEND TAPR-STYLE *** CONNECTED TO CURRENT PORT
+
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[ToStream];
 
 	int len;
 	char Response[128];
@@ -2545,16 +2677,19 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 	TRANSPORTENTRY * L4 = NULL;
 	int stream;
 
-
-	GetConnectionInfo(TNC->BPQPort, Call, &dummy, &dummy, &paclen, &dummy, &dummy);
+	GetConnectionInfo(TNCStream->BPQPort, Call, &dummy, &dummy, &paclen, &dummy, &dummy);
 	
 	if (paclen)
-		TNC->TPACLEN = paclen;
+		TNCStream->TPACLEN = paclen;
 
-	if (TNC->MODEFLAG & TRANS)
+	if (TNCStream->MODEFLAG & TRANS)
 		return;					//NOT IF TRANSPARENT
 
 	strlop(Call, ' ');
+
+	strcpy(TNCStream->RemoteCall, Call);
+
+	CheckForStreamChange(TNC, ToStream);	// Send Stream Switched Message if changed
 
 	if (TNC->CBELL)
 		len = sprintf(Response, "%s%s%c\r", CONMSG, Call, 7);		// Add BELL char
@@ -2565,7 +2700,7 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 
 	// If incoming session  Send CTEXT if set
 
-	stream = TNC->BPQPort;
+	stream = TNCStream->BPQPort;
 	stream--;						// API uses 1 - 64
 
 	if (stream < 0 || stream > 63)
@@ -2585,7 +2720,7 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 			char Msg[256];
 
 			n = sprintf(Msg, "%s\r", TNC->CTEXT);
-			SendMsg(TNC->BPQPort, Msg, n);
+			SendMsg(TNCStream->BPQPort, Msg, n);
 		}
 	
 		// if CHECK_FOR_ESC set in applflags send "^d to disconnect msg
@@ -2594,7 +2729,7 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 		{
 			char Msg[] = "Send ^D to disconnect\r";
 	
-			SendMsg(TNC->BPQPort, Msg, (int)strlen(Msg));
+			SendMsg(TNCStream->BPQPort, Msg, (int)strlen(Msg));
 		}
 	}
 }
@@ -2660,108 +2795,129 @@ VOID CHECKCTS(struct TNCDATA * TNC)
 VOID CONNECTTONODE(struct TNCDATA * TNC)
 {
 	char AXCALL[7];
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
 	
 	ConvToAX25(TNC->MYCALL, AXCALL);
 		
-	SessionControl(TNC->BPQPort, 1, TNC->APPLICATION);
-	ChangeSessionCallsign(TNC->BPQPort, AXCALL);
+	SessionControl(TNCStream->BPQPort, 1, TNC->APPLICATION);
+	ChangeSessionCallsign(TNCStream->BPQPort, AXCALL);
+
+	// Set default Paclen
+
+	TNCStream->TPACLEN = TNC->TPACLEN;
+
 }
 	
 
 VOID GETDATA(struct TNCDATA * TNC)
 {
-	int state, change, InputLen, count, n;
+	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+
+	int state, change, InputLen, count, n, i;
 	char InputBuffer[512];
 
 	//	LOOK FOR STATUS CHANGE
-	
-	LocalSessionState(TNC->BPQPort, &state, &change, TRUE);
+
+	for (i = 0; i < TNC->HOSTSTREAMS; i++)
+	{
+		TNCStream = TNC->TNC2Stream[i];
 		
-	if (change == 1)
-	{
-		if (state == 1) // Connected	
+		LocalSessionState(TNCStream->BPQPort, &state, &change, TRUE);
+		
+		if (change == 1)
 		{
-			SEND_CONNECTED(TNC);
-			DOCONMODECHANGE(TNC);			// SET CONNECTED AND CHANGE MODE IF NEEDED
-		}
-		else
-		{
-			TNC->MODEFLAG |= COMMAND;
-			TNC->MODEFLAG &= ~(CONV+TRANS);
-
-			TNC->VMSR &= 0x7F;			// DROP DCD
-			TNC->VMSR |= 8;				// DELTA DCD
-
-			SENDREPLY(TNC, DISCONNMSG, 18);
-		}
-	}
-	else
-	{
-		// No Change
-
-		//	VERIFY CURRENT STATE
-
-		if (state == 1) // Connected	
-		{
-			//	SWITCH THINKS WE ARE CONNECTED
-
-			if ((TNC->VMSR & 0x80) == 0)
+			if (state == 1) // Connected	
 			{
-				// TNC DOesnt
-
-				SEND_CONNECTED(TNC);
-				DOCONMODECHANGE(TNC);			// SET CONNECTED AND CHANGE MODE IF NEEDED
+				SEND_CONNECTED(TNC, i);
+				DOCONMODECHANGE(TNC, i);			// SET CONNECTED AND CHANGE MODE IF NEEDED
 			}
-		}
-		else
-		{
-			// SWITCH THINKS WE ARE DISCONNECTED
-
-			if (TNC->VMSR & 0x80)
+			else
 			{
-				// We Dissagree, so force off
+				TNCStream->MODEFLAG |= COMMAND;
+				TNCStream->MODEFLAG &= ~(CONV+TRANS);
 
-				TNC->MODEFLAG |= COMMAND;
-				TNC->MODEFLAG &= ~(CONV+TRANS);
+				TNCStream->VMSR &= 0x7F;			// DROP DCD
+				TNCStream->VMSR |= 8;				// DELTA DCD
 
-				TNC->VMSR &= 0x7F;				// DROP DCD
-				TNC->VMSR |= 8;				// DELTA DCD
-
+				CheckForStreamChange(TNC, i);	// Send Stream Switched Message if changed
 				SENDREPLY(TNC, DISCONNMSG, 18);
 			}
 		}
-	}
-
-	// SEE IF ANYTHING QUEUED
-
-	if (TNC->RTSFLAG & 1)
-		return;
-
-	GetMsg(TNC->BPQPort, InputBuffer, &InputLen, &count);
-
-	if (InputLen == 0)
-		return;
-
-	// if CHECK_FOR_ESC set in APPLFLAGS looks for Disconnect Escape
-
-	if (TNC->APPLFLAGS & CHECK_FOR_ESC)
-	{
-		// look for ^D (or ^d)
-
-		if (InputLen == 3)
+		else
 		{
-			if (_memicmp(InputBuffer, "^D\r", 3) == 0)
+			// No Change
+
+			//	VERIFY CURRENT STATE
+
+			if (state == 1) // Connected	
 			{
-				Disconnect(TNC->BPQPort);
+				//	SWITCH THINKS WE ARE CONNECTED
+
+				if ((TNCStream->VMSR & 0x80) == 0)
+				{
+					// TNC Doesn't
+
+					SEND_CONNECTED(TNC, i);
+					DOCONMODECHANGE(TNC, i);			// SET CONNECTED AND CHANGE MODE IF NEEDED
+				}
+			}
+			else
+			{
+				// SWITCH THINKS WE ARE DISCONNECTED
+
+				if (TNCStream->VMSR & 0x80)	
+				{
+					// We Disagree, so force off
+	
+					TNCStream->MODEFLAG |= COMMAND;
+					TNCStream->MODEFLAG &= ~(CONV+TRANS);
+
+					TNCStream->VMSR &= 0x7F;			// DROP DCD
+					TNCStream->VMSR |= 8;				// DELTA DCD
+
+					CheckForStreamChange(TNC, i);	// Send Stream Switched Message if changed
+					SENDREPLY(TNC, DISCONNMSG, 18);
+				}
 			}
 		}
-	}
 
+		// SEE IF ANYTHING QUEUED
 
+		if (TNC->RTSFLAG & 1)
+			continue;
 
-	for (n = 0; n < InputLen; n++)
-	{
-		PUTCHARINBUFFER(TNC, InputBuffer[n]);
+		GetMsg(TNCStream->BPQPort, InputBuffer, &InputLen, &count);
+
+		if (InputLen == 0)
+			continue;
+
+		CheckForStreamChange(TNC, i);	// Send Stream Switched Message if changed
+
+		// if CHECK_FOR_ESC set in APPLFLAGS looks for Disconnect Escape
+
+		if (TNC->APPLFLAGS & CHECK_FOR_ESC)
+		{
+			// look for ^D (or ^d)
+
+			if (InputLen == 3)
+			{
+				if (_memicmp(InputBuffer, "^D\r", 3) == 0)
+				{
+					Disconnect(TNCStream->BPQPort);
+					continue;
+				}
+			}
+		}
+
+		for (n = 0; n < InputLen; n++)
+		{
+			char c = InputBuffer[n];
+
+			if (TNC->StreamDbl && c == TNC->StreamSW)
+				PUTCHARINBUFFER(TNC, TNC->StreamSW);
+
+			PUTCHARINBUFFER(TNC, c);
+		}
 	}
 }
 

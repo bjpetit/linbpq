@@ -701,7 +701,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 			return;
 		}
 
-		if ((_memicmp(&Buffer[1], "CodePage", 2) == 0) || (_memicmp(&Buffer[1], "CP", 2) == 0))
+		if ((_memicmp(&Buffer[1], "CodePage", 3) == 0) || (_memicmp(&Buffer[1], "CP", 2) == 0))
 		{
 			char * Context;
 			char * CP = strtok_s(&Buffer[1], " ,\r", &Context);

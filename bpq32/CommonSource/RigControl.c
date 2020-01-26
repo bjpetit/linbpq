@@ -409,9 +409,37 @@ int Rig_Command(int Session, char * Command)
 
 portok:
 
+	if (_stricmp(FreqString, "CLOSE") == 0)
+	{
+		PORT->Closed = 1;
+		RigCloseConnection(PORT);
+
+		MySetWindowText(RIG->hSCAN, "C");
+		RIG->WEB_SCAN = 'C';
+
+		sprintf(Command, "Ok\r");
+		return FALSE;
+	}
+
+	if (_stricmp(FreqString, "OPEN") == 0)
+	{
+		PORT->ReopenDelay = 300;
+		PORT->Closed = 0;
+		
+		MySetWindowText(RIG->hSCAN, "");
+		RIG->WEB_SCAN = ' ';
+
+		sprintf(Command, "Ok\r");
+		return FALSE;
+	}
+
 	if (RIG->RIGOK == 0 && Session != -1)
 	{
-		sprintf(Command, "Sorry - Radio not responding\r");
+		if (PORT->Closed)
+			sprintf(Command, "Sorry - Radio port closed\r");
+		else
+			sprintf(Command, "Sorry - Radio not responding\r");
+	
 		return FALSE;
 	}
 
@@ -1678,7 +1706,9 @@ BOOL Rig_Poll()
 			if (PORT->ReopenDelay > 150)
 			{
 				PORT->ReopenDelay = 0;
-				OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+
+				if (PORT->Closed == 0)
+					OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
 			}
 		}
 		if (PORT == NULL || (PORT->hDevice == 0 && PORT->PTC == 0 && PORT->remoteSock == 0))
@@ -1735,6 +1765,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
    // to halt
 
    CloseCOMPort(PORT->hDevice); 
+   PORT->hDevice = 0;
    return TRUE;
 
 } // end of CloseConnection()

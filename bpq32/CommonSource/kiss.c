@@ -565,7 +565,7 @@ VOID KISSCLOSE(struct PORTCONTROL * PortVector)
 }
 VOID CloseKISSPort(struct PORTCONTROL * PortVector)
 {
-	// Just close he device - leave reast of info intact
+	// Just close the device - leave rest of info intact
 
 	NPASYINFO Port = KISSInfo[PortVector->PORTNUMBER];
 

@@ -7759,6 +7759,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 					conn->UserPointer->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 					conn->UserPointer->ForwardingInfo->AllowCompressed = TRUE;
+					conn->UserPointer->ForwardingInfo->AllowBlocked = TRUE;
 					conn->UserPointer->BBSNumber = NBBBS;
 			}
 
@@ -9018,6 +9019,7 @@ int Connected(int Stream)
 					ForwardingInfo->AllowCompressed = TRUE;
 					B1 = ForwardingInfo->AllowB1 = FALSE;
 					B2 = ForwardingInfo->AllowB2 = TRUE;
+					BLOCKED = ForwardingInfo->AllowBlocked = TRUE;
 				}
 
 				if (conn->NewUser)
@@ -10027,6 +10029,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 
 				ForwardingInfo->AllowCompressed = TRUE;
+				ForwardingInfo->AllowBlocked = TRUE;
 				conn->UserPointer->ForwardingInfo->AllowB2 = TRUE;
 			}
 			SaveUserDatabase();
@@ -11832,8 +11835,8 @@ void YAPPSendData(ConnectionInfo * conn)
 			break;
 		}
 
-		if (Left > conn->paclen)
-			Left = conn->paclen;
+		if (Left > conn->paclen - 2)		// 2 byte header
+			Left = conn->paclen -2;
 
 		memcpy(&Mess[2], &conn->MailBuffer[conn->YAPPLen], Left);
 		Mess[0] = STX;

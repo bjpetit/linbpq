@@ -2084,9 +2084,6 @@ VOID TIMERINTERRUPT()
 				}
 			}
 
-			PORT->XXX = PORT->YYY;
-
-
 			L2Routine(PORT, Buffer);
 
 			Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTRX_Q);

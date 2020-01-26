@@ -542,6 +542,8 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 	memcpy(&TNC->InitScript[TNC->InitScriptLen], Msg, len); 
 	TNC->InitScriptLen += len;
 
+	PortEntry->PORTCONTROL.TNC = TNC;
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 510;
 	TNC->WebWinY = 280;

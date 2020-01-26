@@ -1374,6 +1374,8 @@ void * TelnetExtInit(EXTPORTDATA * PortEntry)
 		sprintf(TCP->cfgCTEXT, "Connected to %s's Telnet Server\r\n\r\n", Call);
 	}
 
+	PortEntry->PORTCONTROL.TNC = TNC;
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 260;
 	TNC->WebWinY = 325;

@@ -2348,6 +2348,9 @@ static int troutine[] =
 
 #define TPARAMLIM 6
 
+extern CMDX COMMANDLIST[];
+extern int NUMBEROFTNCCOMMANDS;
+
 int decode_tnc_rec(char * rec)
 {
 	char key_word[20];
@@ -2366,7 +2369,23 @@ int decode_tnc_rec(char * rec)
 	else if (_stricmp(key_word, "TYPE") == 0)
 	{
 		if (_stricmp(value, "TNC2") == 0)
+		{
 			TNC2ENTRY->Mode = TNC2;
+
+			// Set Defaults
+
+			TNC2ENTRY->SENDPAC = 13;
+			TNC2ENTRY->CRFLAG = 1;
+			TNC2ENTRY->MTX = 1;
+			TNC2ENTRY->MCOM = 1;
+			TNC2ENTRY->MMASK = -1;			//  MONITOR MASK FOR PORTS
+
+			TNC2ENTRY->COMCHAR = 3;
+			TNC2ENTRY->CMDTIME = 10;		// SYSTEM TIMER = 100MS
+			TNC2ENTRY->PASSCHAR = 0x16;		// CTRL-V
+			TNC2ENTRY->StreamSW = 0x7C;		// |
+			TNC2ENTRY->LCStream = 1;
+		}
 		else if (_stricmp(value, "DED") == 0)
 			TNC2ENTRY->Mode = DED;
 		else if (_stricmp(value, "KANT") == 0)
@@ -2399,10 +2418,57 @@ int decode_tnc_rec(char * rec)
 		TNC2ENTRY->AUTOLF =  strtol(value, 0, 0);
 	else if (_stricmp(key_word, "ECHO") == 0)
 		TNC2ENTRY->ECHOFLAG =  (char)strtol(value, 0, 0);
-
 	else
-	   Consoleprintf("Source record not recognised - Ignored:%s\r\n",rec);
+	{
+		if (TNC2ENTRY->Mode == TNC2)
+		{
+			// Try process as TNC2 Command
 
+			int n = 0;
+			CMDX * CMD = &COMMANDLIST[0];
+			char * ptr1 = key_word;
+			UCHAR * valueptr;
+
+			strcat(key_word, "  ");
+
+			_strupr(key_word);
+	
+			for (n = 0; n < NUMBEROFTNCCOMMANDS; n++)
+			{
+				int CL = CMD->CMDLEN;
+
+				// ptr1 is input command
+
+				if (memcmp(CMD->String, ptr1, CL) == 0)
+				{
+					// Found match so far - check rest
+		
+					char * ptr2 = &CMD->String[CL];
+			
+					ptr1 += CL;
+
+					if (*(ptr1) != ' ')
+					{
+						while(*(ptr1) == *ptr2 && *(ptr1) != ' ')
+						{
+							ptr1++;
+							ptr2++;
+						}
+					}
+
+					if (*(ptr1) == ' ')
+					{
+						valueptr = (UCHAR *)TNC2ENTRY + CMD->CMDFLAG;
+						*valueptr = strtol(value, 0, 0);
+						return 0;
+					}
+				}
+				CMD++;
+			}
+		}
+		
+		Consoleprintf("Source record not recognised - Ignored:%s\r\n",rec);
+	}
 	return 0;
 }
 
