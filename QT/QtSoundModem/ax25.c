@@ -206,10 +206,8 @@ short txdelay[5] = { 400, 400, 400, 400, 400 };
 
 short modem_def[5] = { 1, 1, 1, 1, 1 };
 
-UCHAR emph_db[5] = { 0, 0, 0, 0, 0 };
+int emph_db[5] = { 0, 0, 0, 0, 0 };
 UCHAR emph_all[5] = { 0, 0, 0, 0, 0 };
-
-
 
 boolean  KISS_opt[4] = { FALSE, FALSE, FALSE, FALSE };
 int resptime[4] = { 0,0,0,0 };
@@ -1040,7 +1038,7 @@ end;
 */
 //////////////////////// Register incoming callsign ////////////////////////////
 
-// I think a call should only be registered on one socket (or we won't konw where to send
+// I think a call should only be registered on one socket (or we won't know where to send
 // incoming calls
 
 boolean add_incoming_mycalls(void * socket, char * src_call)
@@ -1060,7 +1058,12 @@ boolean add_incoming_mycalls(void * socket, char * src_call)
 			registeredCalls * check = (registeredCalls *)list_incoming_mycalls.Items[i];
 
 			if (memcmp(check->myCall, reg->myCall, 7) == 0)
+			{
+				// Update socket
+
+				check->socket = socket;
 				return FALSE;
+			}
 		}
 	}
 
@@ -1068,65 +1071,74 @@ boolean add_incoming_mycalls(void * socket, char * src_call)
 	return TRUE;
 }
 
+
+
+void del_incoming_mycalls(byte * src_call)
+{
+	int i = 0;
+	byte axcall[7];
+	registeredCalls * reg;
+
+	ConvToAX25(src_call, axcall);
+
+	while (i < list_incoming_mycalls.Count)
+	{
+		reg = (registeredCalls *)list_incoming_mycalls.Items[i];
+		{
+			if (memcmp(reg->myCall, axcall, 7) == 0)
+			{
+				Delete(&list_incoming_mycalls, i);
+				return;
+			}
+		}
+		i++;
+	}
+}
+
+
+void del_incoming_mycalls_by_sock(void * socket)
+{
+	int i = 0, snd_ch, port;
+	registeredCalls * reg;
+
+	while (i < list_incoming_mycalls.Count)
+	{
+		reg = (registeredCalls *)list_incoming_mycalls.Items[i];
+		{
+			if (reg->socket == socket)
+			{
+				Delete(&list_incoming_mycalls, i);
+			}
+			else
+				i++;
+		}
+	}
+
+	// Should clear all connections on socket
+
+	for (snd_ch = 0; snd_ch < 4; snd_ch++)
+	{
+		for (port = 0; port < port_num; port++)
+		{
+			TAX25Port * AX25Sess = &AX25Port[snd_ch][port];
+
+			if (socket == AX25Sess->socket)
+			{
+				// Shouldn't we send DM? -0 try it
+
+				set_DM(snd_ch, AX25Sess->ReversePath);
+
+				rst_timer(AX25Sess);
+				rst_values(AX25Sess);
+
+				AX25Sess->status = STAT_NO_LINK;
+			}
+		}
+	}
+}
+
+
 /*
-
-
-  ocedure del_incoming_mycalls(src_call: string);
-
-  regstringvar
-  i: integer;
-  call,ssid: string;
-  a_call: array[0..1] of string;
-begin
-  try explode(a_call,'-',src_call,2); except end;
-  call:=trim(a_call[0]);
-  if a_call[1]<>'' then ssid:=a_call[1] else ssid:='0';
-  i:=0;
-  if list_incoming_mycalls.Count>0 then
-  repeat
-	if (call+'-'+ssid)=list_incoming_mycalls.Strings[i] then
-	  begin list_incoming_mycalls.delete(i); list_incoming_mycalls_sock.delete(i); end
-	else inc(i);
-  until (i>=list_incoming_mycalls.Count);
-end;
-
-procedure del_incoming_mycalls_by_sock(socket: integer);
-var
-  i: integer;
-  snd_ch,port: byte;
-  mycall,s: string;
-begin
-  s:=inttostr(socket);
-  i:=0;
-  if list_incoming_mycalls_sock.Count>0 then
-  repeat
-	if s=list_incoming_mycalls_sock.Strings[i] then
-	begin
-	  mycall:=list_incoming_mycalls.Strings[i];
-	  list_incoming_mycalls.delete(i);
-	  list_incoming_mycalls_sock.delete(i);
-	  for snd_ch:=1 to 4 do
-		for port:=0 to port_num-1 do
-		if mycall=AX25Sess->mycall then
-		begin
-		  rst_timer(snd_ch,port);
-		  rst_values(snd_ch,port);
-		  AX25Sess->status:=STAT_NO_LINK;
-		end;
-	end
-	else inc(i);
-  until (i>=list_incoming_mycalls_sock.Count);
-  // Clear rest connections by socket
-  for snd_ch:=1 to 4 do
-	for port:=0 to port_num-1 do
-	if socket=AX25Sess->socket then
-	begin
-	  rst_timer(snd_ch,port);
-	  rst_values(snd_ch,port);
-	  AX25Sess->status:=STAT_NO_LINK;
-	end;
-end;
-
 function get_incoming_socket_by_call(src_call: string): integer;
 var
   i: integer;
@@ -1150,6 +1162,9 @@ begin
   result:=socket;
 end;
 */
+
+
+
 void * in_list_incoming_mycall(byte * path)
 {
 	// See if to call is in registered calls list
@@ -1226,7 +1241,7 @@ boolean is_last_digi(byte *path)
 	if (len == 14)
 		return TRUE;
 
-	if ((path[len - 1] & 64) == 64)
+	if ((path[len - 1] & 128) == 128)
 		return TRUE;
 
 	return FALSE;
@@ -1478,50 +1493,33 @@ int number_digi(string path)
 }
 
 
+
+get_monitor_path(byte * path, char * mycall, char * corrcall, char * digi)
+{
+	byte * digiptr = digi;
+
+	digi[0] = 0;
+
+	mycall[ConvFromAX25(path, mycall)] = 0;
+	path += 7;
+	corrcall[ConvFromAX25(path, corrcall)] = 0;
+
+	while ((path[6] & 1) == 0)				// End of call bit
+	{
+		if (digi != digiptr)
+			*(digi++) = ',';
+
+			path += 7;
+			digi += ConvFromAX25(path, digi);
+
+			if (((path[6] & 128) == 128))		// Digi'd
+				*(digi++) = '*';
+	}
+	*digi = 0;
+}
+
+
 /*
-procedure get_monitor_path(path: string; var mycall,corrcall,digi: string);
-var
-  ssid,call: string;
-  rptd: boolean;
-begin
-  digi:=''; mycall:=''; corrcall:='';
-  // Копируем свой позывной
-  if length(path)>6 then
-  begin
-	call:=trim(copy(path,1,6));
-	ssid:=copy(path,7,1);
-	delete(path,1,7);
-	if ssid<>'' then ssid:=inttostr((ord(ssid[1]) and 15)) else ssid:='0';
-	if ssid<>'0' then call:=call+'-'+ssid;
-	mycall:=call;
-  end;
-  // Копируем позывной корреспондента
-  if length(path)>6 then
-  begin
-	call:=trim(copy(path,1,6));
-	ssid:=copy(path,7,1);
-	delete(path,1,7);
-	if ssid<>'' then ssid:=inttostr((ord(ssid[1]) and 15)) else ssid:='0';
-	if ssid<>'0' then call:=call+'-'+ssid;
-	corrcall:=call;
-  end;
-  // Копируем диги
-  if length(path)>6 then
-  begin
-	repeat
-	  rptd:=FALSE;
-	  call:=trim(copy(path,1,6));
-	  ssid:=copy(path,7,1);
-	  delete(path,1,7);
-	  if ssid<>'' then if (ord(ssid[1]) and 64)=64 then rptd:=TRUE;
-	  if ssid<>'' then ssid:=inttostr((ord(ssid[1]) and 15)) else ssid:='0';
-	  if ssid<>'0' then call:=call+'-'+ssid;
-	  if rptd then call:=call+'*';
-	  if path<>'' then digi:=digi+call+','
-	  else digi:=digi+call;
-	until path='';
-  end;
-end;
 
 function reverse_digi(path: string): string;
 var
@@ -1563,6 +1561,12 @@ void reverse_addr(byte * path, byte * revpath, int Len)
 	byte * ptr = path;
 	byte * copy = revpath;
 	int endbit = Len - 1;
+	int numdigis = (Len - 14) / 7;
+	int i;
+
+	byte digis[57];						// 8 * 7 + null terminator
+	memset(digis, 0, 57);
+	byte * digiptr = digis + 49;			// Last Digi
 
 	// remove end of address bit
 
@@ -1574,13 +1578,21 @@ void reverse_addr(byte * path, byte * revpath, int Len)
 	memcpy(copy, ptr + 7, 7);
 
 	Len -= 14;
+	ptr += 14;
 
-	if (Len > 0)
+	for (i = 0; i < numdigis; i++)
 	{
-		// do any digis
+		memcpy(digiptr, ptr, 7);
+		ptr += 7;
+		digiptr -= 7;
 	}
 
-	path[endbit] |= 1;
+	// Digiptr now points to new first digi 
+
+	memcpy(&copy[14], &digiptr[7], 7 * numdigis);
+
+	path[endbit] |= 1;			// restore original end bit
+
 	copy[endbit++] |= 1;
 	copy[endbit] = 0;			//  Null terminate
 
@@ -1621,7 +1633,6 @@ void decode_frame(string * frame, byte * path, string * data,
 
 	while (len > i && i < ADDR_MAX_LEN * 7)
 	{
-
 		*path++ = frame->Data[i];
 		if ((frame->Data[i] & 1) == 1)
 		{
@@ -1639,7 +1650,7 @@ void decode_frame(string * frame, byte * path, string * data,
 	savepath[6] &= 0x7f;		// Mask 
 	savepath[13] &= 0x7f;		// Mask 
 
-	*path = 0;		// ad nuyll terminate		
+	*path = 0;		// add null terminate		
 
 	i++;			// Points to ctrl byte
 
@@ -2100,7 +2111,7 @@ int CountBits(unsigned long in)
 	return n;
 }
 
-BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
+BOOL ConvToAX25(char * callsign, unsigned char * ax25call)
 {
 	int i;
 
@@ -2143,7 +2154,7 @@ BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 }
 
 
-int ConvFromAX25(unsigned char * incall, unsigned char * outcall)
+int ConvFromAX25(unsigned char * incall, char * outcall)
 {
 	int in, out = 0;
 	unsigned char chr;

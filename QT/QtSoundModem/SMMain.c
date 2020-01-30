@@ -18,10 +18,10 @@ int Capturing = 0;
 
 extern unsigned short buffer[2][1200];
 
-unsigned short * DMABuffer;
+short * DMABuffer;
 
 unsigned short * SendtoCard(unsigned short * buf, int n);
-unsigned short * SoundInit();
+short * SoundInit();
 void DoTX(int Chan);
 
 
@@ -79,6 +79,8 @@ void freefft()
 	fftwf_free(out);
 }
 
+int nonGUIMode = 0;
+
 void soundMain()
 {
 	// non platform specific initialisation
@@ -99,6 +101,12 @@ void soundMain()
 
 	//	waterfall_init;
 	//	ReadIni;
+
+	if (nonGUIMode)
+	{
+		Firstwaterfall = 0;
+		Secondwaterfall = 0;
+	}
 
 	OpenPTTPort();
 }
@@ -701,7 +709,7 @@ char * strlop(char * buf, char delim)
 
 void OpenPTTPort()
 {
-	if (PTTPort[0])
+	if (PTTPort[0] && strcmp(PTTPort, "None") != 0)
 	{
 		char * Baud = strlop(PTTPort, ':');
 		if (Baud)

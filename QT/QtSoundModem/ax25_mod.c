@@ -297,7 +297,7 @@ void get_new_frame(UCHAR snd_ch, TStringList * frame_stream)
 	}
 	*/
 
-	//AGW_AX25_frame_analiz(snd_ch,FALSE,tx_data[snd_ch]};
+	AGW_AX25_frame_analiz(snd_ch, FALSE, tx_data[snd_ch]);
 
     put_frame(snd_ch, tx_data[snd_ch], "" , TRUE, FALSE);
     

@@ -13,6 +13,8 @@
 extern "C" {
 #endif
 
+#define UNUSED(x) (void)(x)
+
 #ifdef M_PI
 #undef M_PI
 #endif
@@ -553,7 +555,7 @@ extern short txdelay[5];
 
 extern short modem_def[5];
 
-extern UCHAR emph_db[5];
+extern int emph_db[5];
 extern UCHAR emph_all[5];
 
 extern UCHAR modem_mode[5];
@@ -680,7 +682,7 @@ extern int RX_device;
 extern int TX_device;
 extern int TX_rotate;
 extern int DualChan;
-extern int StereoSoundcard;
+extern int UsingBothChannels;
 extern int SCO;
 extern int DualPTT;
 extern UCHAR  DebugMode;
@@ -690,6 +692,9 @@ extern int UTC_Tim;
 extern int MainPriority;
 //  MainThreadHandle THandle;
 extern UCHAR w_state;
+
+extern BOOL Firstwaterfall;
+extern BOOL Secondwaterfall;
 
 extern int dcd_threshold;
 
@@ -753,8 +758,8 @@ void rst_timer(TAX25Port * AX25Sess);
 void set_unlink(TAX25Port * AX25Sess, char * path);
 unsigned short get_fcs(UCHAR * Data, unsigned short len);
 void KISSSendtoServer(void * sock, char * Msg, int Len);
-int ConvFromAX25(unsigned char * incall, unsigned char * outcall);
-BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+int ConvFromAX25(unsigned char * incall, char * outcall);
+BOOL ConvToAX25(char * callsign, unsigned char * ax25call);
 void Debugprintf(const char * format, ...);
 
 double pila(double x);

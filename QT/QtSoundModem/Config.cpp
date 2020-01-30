@@ -12,9 +12,9 @@ QSettings* settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
 char Prefix[16] = "AX25_A";
 
-void GetPortSettings(char Chan);
+void GetPortSettings(int Chan);
 
-QVariant getAX25Param(char * key, QVariant Default)
+QVariant getAX25Param(const char * key, QVariant Default)
 {
 	char fullKey[64];
 
@@ -30,7 +30,7 @@ void getAX25Params(int chan)
 }
 
 
-void GetPortSettings(char Chan)
+void GetPortSettings(int Chan)
 {
 	tx_hitoneraisedb[Chan] = getAX25Param("HiToneRaise", 0).toInt();
 
@@ -73,7 +73,8 @@ void getSettings()
 	strcpy(PTTPort, settings->value("Init/PTT", "").toString().toUtf8());
 
 	DualPTT = settings->value("Init/DualPTT", 1).toInt();
-	
+	TX_rotate = settings->value("Init/TXRotate", 0).toInt();
+
 	rx_freq[0] = settings->value("Modem/RXFreq1", 1700).toInt();
 	rx_freq[1] = settings->value("Modem/RXFreq2", 1700).toInt();
 
@@ -106,6 +107,9 @@ void getSettings()
 	emph_db[0] = settings->value("Modem/PreEmphasisDB1", 0).toInt();
 	emph_db[1] = settings->value("Modem/PreEmphasisDB2", 0).toInt();
 
+	Firstwaterfall = settings->value("Window/Waterfall1", TRUE).toInt();;
+	Secondwaterfall = settings->value("Window/Waterfall2", TRUE).toInt();;
+
 	getAX25Params(0);
 	getAX25Params(1);
 
@@ -120,9 +124,9 @@ void getSettings()
 
 		// Different so need both sides 
 
-		StereoSoundcard = 1;
+		UsingBothChannels = 1;
 	else
-		StereoSoundcard = 0;
+		UsingBothChannels = 0;
 
 	if (soundChannel[0] == RIGHT)
 		modemtoSoundLR[0] = 1;
@@ -193,12 +197,16 @@ void saveSettings()
 	settings->setValue("Init/DualChan", DualChan);
 	settings->setValue("Init/SCO", SCO);
 	settings->setValue("Init/DualPTT", DualPTT);
+	settings->setValue("Init/TXRotate", TX_rotate);
+
+
+	settings->setValue("Init/PTT", PTTPort);
 
 	settings->setValue("Modem/RXFreq1", rx_freq[0]);
 	settings->setValue("Modem/RXFreq2", rx_freq[1]);
 
 	settings->setValue("Modem/NRRcvrPairs1", RCVR[0]);
-	settings->setValue("Modem/NRRcvrPairs2", RCVR[1] );
+	settings->setValue("Modem/NRRcvrPairs2", RCVR[1]);
 
 	settings->setValue("Modem/RcvrShift1", rcvr_offset[0]);
 	settings->setValue("Modem/RcvrShift2", rcvr_offset[1]);
@@ -221,12 +229,14 @@ void saveSettings()
 	settings->setValue("AX25_A/soundChannel", soundChannel[0]);
 	settings->setValue("AX25_B/soundChannel", soundChannel[1]);
 
-/*
-	emph_all[0] = settings->value("Modem/PreEmphasisAll1", TRUE).toBool();
-	emph_all[1] = settings->value("Modem/PreEmphasisAll2", TRUE).toBool();
-	emph_db[0] = settings->value("Modem/PreEmphasisDB1", 0).toInt();
-	emph_db[1] = settings->value("Modem/PreEmphasisDB2", 0).toInt();
-*/
+	settings->setValue("Modem/PreEmphasisAll1", emph_all[0]);
+	settings->setValue("Modem/PreEmphasisAll2", emph_all[1]);
+	settings->setValue("Modem/PreEmphasisDB1", emph_db[0]);
+	settings->setValue("Modem/PreEmphasisDB2", emph_db[1]);
+
+	settings->setValue("Window/Waterfall1", Firstwaterfall);
+	settings->setValue("Window/Waterfall2", Secondwaterfall);
+
 	settings->sync();
 
 	delete(settings);

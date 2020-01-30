@@ -21,7 +21,7 @@
 #pragma comment(lib, "winmm.lib")
 void printtick(char * msg);
 void PollReceivedSamples();
-unsigned short * SoundInit();
+short * SoundInit();
 
 #include <math.h>
 
@@ -35,7 +35,7 @@ void GetSoundDevices();
 short buffer[2][SendSize * 2];		// Two Transfer/DMA buffers of 0.1 Sec  (x2 for Stereo)
 short inbuffer[5][ReceiveSize * 2];	// Input Transfer/ buffers of 0.1 Sec (x2 for Stereo)
 
-extern unsigned short * DMABuffer;
+extern short * DMABuffer;
 extern int Number;
 
 BOOL Loopback = FALSE;
@@ -88,7 +88,7 @@ WAVEINCAPSA pwic;
 
 unsigned int RTC = 0;
 
-void InitSound(BOOL Quiet);
+int InitSound(BOOL Quiet);
 void HostPoll();
 
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
@@ -253,7 +253,7 @@ void GetSoundDevices()
 }
 
 
-void InitSound(BOOL Report)
+int InitSound(BOOL Report)
 {
 	int i, t, ret;
 
@@ -338,6 +338,7 @@ for (i = 0; i < 100; i++)
 }
 */
 
+	return TRUE;
 }
 
 int min = 0, max = 0, lastlevelGUI = 0, lastlevelreport = 0;
@@ -500,7 +501,7 @@ VOID WriteSamples(short * buffer, int len)
 	fwrite(buffer, 1, len * 2, wavfp1);
 }
 
-unsigned short * SoundInit()
+short * SoundInit()
 {
 	Index = 0;
 	return &buffer[0][0];

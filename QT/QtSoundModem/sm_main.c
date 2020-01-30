@@ -26,7 +26,9 @@ int debugmode = 0;
 extern float src_buf[5][2048];
 extern byte RCVR[5];
 
-BOOL Firstwaterfall1 = 1;
+BOOL Firstwaterfall = 1;
+BOOL Secondwaterfall = 1;
+
 
 
 
@@ -295,7 +297,7 @@ int RX_device = FALSE;
 int TX_device = FALSE;
 int TX_rotate = FALSE;
 int DualChan = TRUE;
-int StereoSoundcard = FALSE;;
+int UsingBothChannels = FALSE;;
 int SCO = FALSE;
 int DualPTT = TRUE;
 UCHAR  DebugMode = 0;
@@ -1658,8 +1660,8 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 					if ((debugmode && DEBUG_WATERFALL) == 0)
 						if (add_fft_line)
-							//						if ((Firstwaterfall1) && w_state == WIN_MAXIMIZED)
-							doWaterfall(snd_ch);
+							if (Firstwaterfall && w_state == WIN_MAXIMIZED)
+								doWaterfall(snd_ch);
 
 					//disp1(det[0,0].AFC_bit_buf[1],det[0,0].MChannel[2,3].AFC_bit_buf2);
 					//disp1(det[0,0].bit_buf[1],det[0,0].bit_buf[1]);
@@ -1708,8 +1710,8 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 						if ((debugmode && DEBUG_WATERFALL) == 0)
 							if (add_fft_line)
-								//						if ((Firstwaterfall1) && w_state == WIN_MAXIMIZED)
-								doWaterfall(snd_ch);
+								if (Secondwaterfall && w_state == WIN_MAXIMIZED)
+									doWaterfall(snd_ch);
 
 						// do we need to do this again ??
 	//					make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
@@ -1830,204 +1832,206 @@ char FrameData[1024] = "";
 
 char * frame_monitor(string * frame, char * code, int tx_stat)
 {
-	UCHAR CTL;
-	BOOL PF = 0;
-	char CRCHAR[3] = "  ";
-	char PFCHAR[3] = "  ";
-	int Port;
-	int MSGFLAG = 0;		//CR and V1 flags
-	char From[10], To[10];
-	BOOL Info = 0;
-	BOOL FRMRFLAG = 0;
-	BOOL XIDFLAG = 0;
-	BOOL TESTFLAG = 0;
+	char mon_frm[512];
+	char AGW_path[256];
+	string * AGW_data;
 
-	int n;
-	int Len = frame->Length;
-	
-	UCHAR Copy[512];
-	UCHAR * Msg = Copy;
-	UCHAR * OrigMsg = Msg;
-	
-	memcpy(Copy, frame->Data, Len);	// local copy so we can mess with it
+	const byte * frm;
+	byte * datap;
+	byte _data[512];
+	byte * p_data = _data;
+	int _datalen;
 
-	Len -= 2;						// Len included CRC
+	char  agw_port;
+	char  CallFrom[10], CallTo[10], Digi[80];
 
-	Msg[Len] = 0;					// Terminate any data
-	
-	From[ConvFromAX25(&Msg[7], From)] = 0;
-	To[ConvFromAX25(&Msg[0], To)] = 0;
+	char TR = 'R';
+	char codestr[16] = "";
 
-	// for now skip digis and decode control
+	integer i;
+	char  time_now[32];
+	string;
+	int len;
 
-	n = 8;					// Max number of digi-peaters
-	
-	Msg += 13;				// End of Address bit if no digis
+	AGWUser * AGW;
 
-	while ((*Msg & 1) == 0 && n--)
-		Msg += 7;
+	byte pid, nr, ns, f_type, f_id;
+	byte  rpt, cr, pf;
+	byte path[80];
+	char c;
+	const char * p;
 
-	if (n == 0)
+	string * data = newString();
+
+	if (code[0] && strlen(code) < 14)
+		sprintf(codestr, "[%s]", code);
+
+	if (tx_stat)
+		TR = 'T';
+
+	decode_frame(frame, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+
+	datap = data->Data;
+
+	len = data->Length;
+
+	//	if (pid == 0xCF)
+	//		data = parse_NETROM(data, f_id);
+		// IP parsing
+	//	else if (pid == 0xCC)
+	//		data = parse_IP(data);
+		// ARP parsing
+	//	else if (pid == 0xCD)
+	//		data = parse_ARP(data);
+		//
+
+	if (len > 0)
 	{
-		sprintf(FrameData, "Fm %s To %s Len %d [%s] End of Address bit not found\r", From, To, frame->Length, ShortDateTime());
-		return FrameData;
+		for (i = 0; i < len; i++)
+		{
+			if (datap[i] > 31 || datap[i] == 13 || datap[i] == 9)
+				*(p_data++) = datap[i];
+		}
 	}
 
-	Msg++;				// now pointing to CTRL;
+	_datalen = p_data - _data;
 
-	CTL = Msg[0];
-
-	if (CTL & PFBIT)
-		PF = TRUE;
-
-	// Set up CR and PF
-
-	CRCHAR[0] = 0;
-	PFCHAR[0] = 0;
-
-	if (OrigMsg[6] & 0x80)
+	if (_datalen)
 	{
-		if (OrigMsg[13] & 0x80)			//	Both set, assume V1
-			MSGFLAG |= VER1;
-		else
+		byte * ptr = _data;
+		i = 0;
+
+		// remove successive cr or cr on end		while (i < _datalen)
+
+		while (i < _datalen)
 		{
-			MSGFLAG |= CMDBIT;
-			CRCHAR[0] = ' ';
-			CRCHAR[1] = 'C';
-			if (PF)							// If FP set
-			{
-				PFCHAR[0] = ' ';
-				PFCHAR[1] = 'P';
-			}
+			if ((_data[i] == 13) && (_data[i + 1] = 13))
+				i++;
+			else
+				*(ptr++) = _data[i++];
 		}
+
+		if (*(ptr - 1) == 13)
+			ptr--;
+
+		*ptr = 0;
+
+		_datalen = ptr - _data;
+	}
+
+	get_monitor_path(path, CallTo, CallFrom, Digi);
+
+	if (cr)
+	{
+		c = 'C';
+		if (pf)
+			p = " P";
+		else p = "";
 	}
 	else
 	{
-		if (OrigMsg[13] & 0x80)			//	Only Origin Set
+		c = 'R';
+		if (pf)
+			p = " F";
+		else
+			p = "";
+	}
+
+	switch (f_id)
+	{
+	case I_I:
+
+		frm = "I";
+		break;
+
+	case S_RR:
+
+		frm = "RR";
+		break;
+
+	case S_RNR:
+
+		frm = "RNR";
+		break;
+
+	case S_REJ:
+
+		frm = "REJ";
+		break;
+
+	case U_SABM:
+
+		frm = "SABM";
+		break;
+
+	case U_DISC:
+
+		frm = "DISC";
+		break;
+
+	case U_DM:
+
+		frm = "DM";
+		break;
+
+	case U_UA:
+
+		frm = "UA";
+		break;
+
+	case U_FRMR:
+
+		frm = "FRMR";
+		break;
+
+	case U_UI:
+
+		frm = "UI";
+	}
+	
+	if (Digi[0])
+		sprintf(AGW_path, "Fm %s To %s Via %s <%s %c%s",CallFrom, CallTo, Digi, frm, c, p);
+	else
+		sprintf(AGW_path, "Fm %s To %s <%s %c %s", CallFrom, CallTo, frm, c, p);
+
+
+	switch (f_type)
+	{
+	case I_FRM:
+
+		//mon_frm = AGW_path + ctrl + ' R' + inttostr(nr) + ' S' + inttostr(ns) + ' pid=' + dec2hex(pid) + ' Len=' + inttostr(len) + ' >' + time_now + #13 + _data + #13#13;
+		sprintf(mon_frm, "%s R%d S%d pid=%X Len=%d>[%s%c]%s\r%s\r", AGW_path, nr, ns, pid, len, ShortDateTime(), TR, codestr, _data);
+
+		break;
+
+	case U_FRM:
+
+		if (f_id == U_UI)
 		{
-			MSGFLAG |= RESP;
-			CRCHAR[0] = ' ';
-			CRCHAR[1] = 'R';
-			if (PF)							// If FP set
-			{
-				PFCHAR[0] = ' ';
-				PFCHAR[1] = 'F';
-			}
+			sprintf(mon_frm, "%s pid=%X Len=%d>[%s%c]%s\r%s\r", AGW_path, pid, len, ShortDateTime(), TR, codestr, _data); // "= AGW_path + ctrl + '>' + time_now + #13;
+		}
+		else if (f_id == U_FRMR)
+		{
+			//			_data = copy(_data + #0#0#0, 1, 3);
+			//			mon_frm = AGW_path + ctrl + '>' + time_now + #13 + inttohex((byte(data[1]) shl 16) or (byte(data[2]) shl 8) or byte(data[3]), 6) + #13#13;
 		}
 		else
-			MSGFLAG |= VER1;				// Neither, assume V1
-	}
+			sprintf(mon_frm, "%s>[%s%c]%s\r", AGW_path, ShortDateTime(), TR, codestr); // "= AGW_path + ctrl + '>' + time_now + #13;
 
-
-	CTL &= ~PFBIT;
-
-	if ((CTL & 1) == 0)						// I frame
-	{
-		int NS = (CTL >> 1) & 7;			// ISOLATE RECEIVED N(S)
-		int NR = (CTL >> 5) & 7;
-
-
-		sprintf(FrameData, "Fm %s To %s <I%s%s S%d R%d Pid=%02X Len %d>[%s]\r%s",
-				From, To, CRCHAR, PFCHAR, NS, NR, Msg[1], Len - 16, ShortDateTime(), &Msg[2]);
-
-		return FrameData;
-	}
-
-	if (CTL == UI)
-	{
-		sprintf(FrameData, "Fm %s To %s <UI %C Pid=%02X Len %d>[%s]\r%s",
-			From, To, CRCHAR[1], Msg[1], Len - 16, ShortDateTime(), &Msg[2]);
-
-		return FrameData;
-	}
-
-	if (CTL & 2)
-	{
-		// UN Numbered
-
-		char SUP[6] = "??";
-
-		switch (CTL)
-		{
-		case SABM:
-
-			strcpy(SUP, "SABM");
-			break;
-
-		case SABME:
-
-			strcpy(SUP, "SABME");
-			break;
-
-		case XID:
-
-			strcpy(SUP, "XID");
-			XIDFLAG = 1;
-			break;
-
-		case TEST:
-
-			strcpy(SUP, "TEST");
-			TESTFLAG = 1;
-			break;
-
-		case DISC:
-
-			strcpy(SUP, "D");
-			break;
-
-		case DM:
-
-			strcpy(SUP, "DM");
-			break;
-
-		case UA:
-
-			strcpy(SUP, "UA");
-			break;
-
-		case FRMR:
-
-			strcpy(SUP, "FRMR");
-			FRMRFLAG = 1;
-			break;
-		}
-		sprintf(FrameData, "Fm %s To %s <%s%s%s>[%s]\r", From, To, SUP, CRCHAR, PFCHAR, ShortDateTime());
-		return FrameData;
-	}
-
-	// Rest should be supervisory
-		// Super
-
-	int NR = (CTL >> 5) & 7;
-	char SUP[5] = "??";
-
-	switch (CTL & 0x0F)
-	{
-	case RR:
-
-		strcpy(SUP, "RR");
 		break;
 
-	case RNR:
+	case S_FRM:
 
-		strcpy(SUP, "RNR");
+		//		mon_frm = AGW_path + ctrl + ' R' + inttostr(nr) + ' >' + time_now + #13;
+		sprintf(mon_frm, "%s R%d>[%s%c]%s\r", AGW_path, nr, ShortDateTime(), TR, codestr); // "= AGW_path + ctrl + '>' + time_now + #13;
+
 		break;
 
-	case REJ:
-
-		strcpy(SUP, "REJ");
-		break;
-
-	case SREJ:
-
-		strcpy(SUP, "SREJ");
-		break;
 	}
-
-	sprintf(FrameData, "Fm %s To %s <%s%s%s R%d>[%s]\r", From, To, SUP, CRCHAR, PFCHAR, NR, ShortDateTime());
+	sprintf(FrameData, "%s", mon_frm);
 	return FrameData;
 }
+
 
 /*
 procedure TForm1.RX2TX(snd_ch byte);
@@ -2214,7 +2218,7 @@ end;
 
 void Timer_Event2()
 {
-	if (TimerStat2 = TIMER_BUSY || TimerStat2 == TIMER_OFF)
+	if (TimerStat2 == TIMER_BUSY || TimerStat2 == TIMER_OFF)
 		return;
 
 	TimerStat2 = TIMER_BUSY;

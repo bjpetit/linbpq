@@ -50,9 +50,12 @@ private slots:
 	void sendtoTrace(char * Msg, int tx);
 	void preEmphAllAChanged(int);
 	void preEmphAllBChanged(int);
+	void menuChecked();
 
 protected:
 	 
+	bool eventFilter(QObject * obj, QEvent * evt);
+
 	void resizeEvent(QResizeEvent *event) override;
 
 private:
@@ -61,10 +64,14 @@ private:
 	QStringList m_TableHeader;
 
 	QMenu *setupMenu;
+	QMenu *viewMenu;
 
 	QAction *actDevices;
 	QAction *actModems;
 	QAction *actCalib;
+	QAction *actWaterfall1;
+	QAction *actWaterfall2;
+
 
 	void RefreshSpectrum(unsigned char * Data);
 	void show_grid();

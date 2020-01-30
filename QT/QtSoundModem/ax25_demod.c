@@ -2,8 +2,6 @@
 
 #include "UZ7HOStuff.h"
 
-
-
 /*
 
 unit ax25_demod;
@@ -66,7 +64,7 @@ float PI5 = 0.5f * M_PI;
 float PI25 = 0.25f * M_PI;
 float PI75 = 0.75f * M_PI;
 
-byte emph_decoded[nr_emph];
+byte emph_decoded[nr_emph + 1];
 
 unsigned char  modem_mode[5] ={0,0,0,0};
 
@@ -800,6 +798,8 @@ void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string
 			if (my_indexof(&detect_list[snd_ch], data) < 0)
 			{
 				string * xx = newString();
+				memset(xx->Data, 0, 16);
+
 				Add(&detect_list_c[snd_ch], xx);
 
 				Add(&detect_list[snd_ch], data);
@@ -815,6 +815,8 @@ void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string
 		else
 		{
 			string * xx = newString();
+			memset(xx->Data, 0, 16);
+
 			Add(&detect_list_c[snd_ch], xx);
 
 			Add(&detect_list[snd_ch], data);
@@ -911,6 +913,8 @@ void make_rx_frame_PSK(int snd_ch, int rcvr_nr, int emph, string * data)
 			if (my_indexof(&detect_list[snd_ch], data) < 0)
 			{
 				string * xx = newString();
+				memset(xx->Data, 0, 16);
+
 				Add(&detect_list_c[snd_ch], xx);
 				Add(&detect_list[snd_ch], data);
 			}
@@ -920,6 +924,8 @@ void make_rx_frame_PSK(int snd_ch, int rcvr_nr, int emph, string * data)
 		else
 		{
 			string * xx = newString();
+			memset(xx->Data, 0, 16);
+
 			Add(&detect_list_c[snd_ch], xx);
 
 			xx = duplicateString(data);
@@ -2554,7 +2560,7 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 	word max_cnt;
 	single threshold;
 	single tr;
-	single KCorr, AngleCorr, angle, muxI1, muxQ1, muxI2, muxQ2, sumIQ1, sumIQ2;
+	single KCorr = 0, AngleCorr, angle, muxI1, muxQ1, muxI2, muxQ2, sumIQ1, sumIQ2;
 	byte newpkpos, sample_cnt;
 	single PkAmpI, PkAmpQ, PkAmpMax, PSK_AGC;
 	single PSK_IZ1, PSK_QZ1;
@@ -2728,7 +2734,7 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 					dibit = qpsk_set[snd_ch].rx[2];		// 10 - PI
 					qpsk_set[snd_ch].count[2]++;
 				}
-				else if (angle < 0 && angle >= -PI5)
+				else 
 				{
 					dibit = qpsk_set[snd_ch].rx[3];		// 11 - -PI/2
 					qpsk_set[snd_ch].count[3]++;
@@ -2760,19 +2766,14 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 				AngleCorr = AngleCorr * 0.95 - KCorr * 0.05;
 				angle = angle + AngleCorr;
 
-
 				if (fabsf(angle) < PI25)
 					dibit = qpsk_set[snd_ch].rx[0];							// 00 - 0
-
-				if (angle >= PI25 && angle <= PI75)
+				else if (angle >= PI25 && angle <= PI75)
 					dibit = qpsk_set[snd_ch].rx[1];				// 01 - PI/2
-
-				if (fabsf(angle) > PI75)
+				else if (fabsf(angle) > PI75)
 					dibit = qpsk_set[snd_ch].rx[2];					// 10 - PI
-
-				if (angle <= -PI25 && angle >= -PI75)
+				else
 					dibit = qpsk_set[snd_ch].rx[3];					// 11 - -PI/2
-
 			}
 
 			for (j = 0; j < 2; j++)
@@ -3647,23 +3648,25 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last)
 	{
 		s_emph = newString();
 
+		memset(s_emph->Data, 0, 16);
+
 		if (emph_all[snd_ch])
 		{
-			for (i = 0; i < nr_emph; i++)
+			for (i = 0; i <= nr_emph; i++)
 			{
 				switch (emph_decoded[i])
 				{
 				case 1:
-					stringAdd(s_emph, "+", 1); //Norma
+					stringAdd(s_emph, (byte *)"+", 1); //Norma
 					break;
 				case 2:
-					stringAdd(s_emph, "#", 1); //MEM
+					stringAdd(s_emph, (byte *)"#", 1); //MEM
 					break;
 				case 3:
-					stringAdd(s_emph, "$", 1);//Single
+					stringAdd(s_emph, (byte *)"$", 1); //Single
 					break;
 				default:
-					stringAdd(s_emph, "-", 1);//None 
+					stringAdd(s_emph, (byte *)"-", 1); //None 
 				}
 
 				emph_decoded[i] = 0; //None

@@ -20,7 +20,7 @@
 
 #define VOID void
 
-extern  Closing;
+extern int Closing;
 
 
 //#define SHARECAPTURE		// if defined capture device is opened and closed for each transission
@@ -33,7 +33,7 @@ int WriteLog(char * msg, int Log);
 int _memicmp(unsigned char *a, unsigned char *b, int n);
 int stricmp(const unsigned char * pStr1, const unsigned char *pStr2);
 int gpioInitialise(void);
-HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
+HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
 int CloseSoundCard();
 int PackSamplesAndSend(short * input, int nSamples);
 void displayLevel(int max);
@@ -46,12 +46,14 @@ int initdisplay();
 extern BOOL blnDISCRepeating;
 extern BOOL UseKISS;			// Enable Packet (KISS) interface
 
-extern unsigned short * DMABuffer;
+extern short * DMABuffer;
 
 
 BOOL UseLeft = TRUE;
 BOOL UseRight = TRUE;
 char LogDir[256] = "";
+
+void WriteDebugLog(int LogLevel, const char * format, ...);
 
 VOID Debugprintf(const char * format, ...)
 {
@@ -91,7 +93,7 @@ char * PlaybackDevices = CaptureDevice;
 int CaptureIndex = 0;
 int PlayBackIndex = 0;
 
-void InitSound();
+int InitSound();
 
 int Ticks;
 
@@ -178,14 +180,18 @@ void SetupGPIOPTT()
 #endif
 
 
-static void sigterm_handler(int sig)
+static void sigterm_handler(int n)
 {
+	UNUSED(n);
+
 	printf("terminating on SIGTERM\n");
 	Closing = TRUE;
 }
 
-static void sigint_handler(int sig)
+static void sigint_handler(int n)
 {
+	UNUSED(n);
+
 	printf("terminating on SIGINT\n");
 	Closing = TRUE;
 }
@@ -195,7 +201,6 @@ char * PortString = NULL;
 
 void platformInit()
 {
-	struct timespec tp;
 	struct sigaction act;
 
 //	Sleep(1000);	// Give LinBPQ time to complete init if exec'ed by linbpq
@@ -224,7 +229,6 @@ void platformInit()
 
 	if (sigaction(SIGPIPE, &act, NULL) < 0) 
 		perror ("SIGPIPE");
-
 }
 
 void txSleep(int mS)
@@ -557,7 +561,7 @@ nextcard:
 	return CaptureCount;
 }
 
-int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, char * ErrorMsg)
+int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, int Report)
 {
 	int err = 0;
 
@@ -580,15 +584,14 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, cha
 
 	snd_pcm_hw_params_t *hw_params;
 	
-	if ((err = snd_pcm_open(&playhandle, buf1, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
-		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot open playback audio device %s (%s)",  buf1, snd_strerror(err));
-		else
-			Debugprintf("cannot open playback audio device %s (%s)",  buf1, snd_strerror(err));
+	if ((err = snd_pcm_open(&playhandle, buf1, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0)
+	{
+		Debugprintf("cannot open playback audio device %s (%s)",  buf1, snd_strerror(err));
 		return false;
 	}
 		   
-	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
+	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0)
+	{
 		Debugprintf("cannot allocate hardware parameter structure (%s)", snd_strerror(err));
 		return false;
 	}
@@ -599,7 +602,7 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, cha
 	}
 	
 	if ((err = snd_pcm_hw_params_set_access (playhandle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-			Debugprintf("cannot set playback access type (%s)", snd_strerror (err));
+		Debugprintf("cannot set playback access type (%s)", snd_strerror (err));
 		return false;
 	}
 	if ((err = snd_pcm_hw_params_set_format (playhandle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
@@ -608,10 +611,7 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, cha
 	}
 
 	if ((err = snd_pcm_hw_params_set_rate (playhandle, hw_params, m_sampleRate, 0)) < 0) {
-		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot set playback sample rate (%s)", snd_strerror(err));
-		else
-			Debugprintf("cannot set playback sample rate (%s)", snd_strerror(err));
+		Debugprintf("cannot set playback sample rate (%s)", snd_strerror(err));
 		return false;
 	}
 
@@ -635,16 +635,19 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, cha
 		}
 	}
 	
-	Debugprintf("Play using %d channels", channels);
+	if (Report)
+		Debugprintf("Play using %d channels", channels);
 
-	if ((err = snd_pcm_hw_params (playhandle, hw_params)) < 0) {
+	if ((err = snd_pcm_hw_params (playhandle, hw_params)) < 0) 
+	{
 		Debugprintf("cannot set parameters (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	snd_pcm_hw_params_free(hw_params);
 	
-	if ((err = snd_pcm_prepare (playhandle)) < 0) {
+	if ((err = snd_pcm_prepare (playhandle)) < 0) 
+	{
 		Debugprintf("cannot prepare audio interface for use (%s)", snd_strerror(err));
 		return false;
 	}
@@ -652,12 +655,14 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, cha
 	Savedplaychannels = m_playchannels = channels;
 
 	MaxAvail = snd_pcm_avail_update(playhandle);
-//	Debugprintf("Playback Buffer Size %d", (int)MaxAvail);
+
+	if (Report)
+		Debugprintf("Playback Buffer Size %d", (int)MaxAvail);
 
 	return true;
 }
 
-int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
+int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 {
 	int err = 0;
 
@@ -676,14 +681,14 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 
 	sprintf(buf1, "plug%s", CaptureDevice);
 
+	if (Report)
+		Debugprintf("Real Device %s", buf1);
+
 	ptr = strchr(buf1, ' ');
 	if (ptr) *ptr = 0;				// Get Device part of name
 	
 	if ((err = snd_pcm_open (&rechandle, buf1, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
-		else
-			Debugprintf("cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
+		Debugprintf("cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
 		return false;
 	}
 	   
@@ -698,7 +703,7 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	}
 	
 	if ((err = snd_pcm_hw_params_set_access (rechandle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-			Debugprintf("cannot set capture access type (%s)", snd_strerror (err));
+		Debugprintf("cannot set capture access type (%s)", snd_strerror (err));
 		return false;
 	}
 	if ((err = snd_pcm_hw_params_set_format (rechandle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
@@ -707,44 +712,78 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	}
 	
 	if ((err = snd_pcm_hw_params_set_rate (rechandle, hw_params, m_sampleRate, 0)) < 0) {
-		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot set capture sample rate (%s)", snd_strerror(err));
-		else
-			Debugprintf("cannot set capture sample rate (%s)", snd_strerror(err));
+		Debugprintf("cannot set capture sample rate (%s)", snd_strerror(err));
 		return false;
 	}
 
-//	m_recchannels = 1;
-
-//	if (UseLeft == 0 || UseRight == 0)
-		m_recchannels = 2;					// L/R implies stereo
+	m_recchannels = 2;
 	
-	if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, m_recchannels)) < 0)
+	if ((err = snd_pcm_hw_params_set_channels(rechandle, hw_params, m_recchannels)) < 0)
 	{
-		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot set rec channel count to %d (%s)" ,m_recchannels, snd_strerror(err));
-		else
-			Debugprintf("cannot set rec channel count to %d (%s)", m_recchannels, snd_strerror(err));
-	
-		if (m_recchannels  == 1)
-		{
-			m_recchannels = 2;
+		Debugprintf("cannot set rec channel count to 2 (%s)", snd_strerror(err));
 
-			if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, 2)) < 0)
-			{
-				Debugprintf("cannot set rec channel count to 2 (%s)", snd_strerror(err));
-				return false;
-			}
-			if (ErrorMsg)
-				sprintf (ErrorMsg, "Record channel count set to 2 (%s)", snd_strerror(err));
-			else
-				Debugprintf("Record channel count set to 2 (%s)", snd_strerror(err));
+		m_recchannels = 1;
+
+		if ((err = snd_pcm_hw_params_set_channels(rechandle, hw_params, 1)) < 0)
+		{
+			Debugprintf("cannot set rec channel count to 1 (%s)", snd_strerror(err));
+			return false;
 		}
+		if (Report)
+			Debugprintf("Record channel count set to 1");
 	}
+	else
+		if (Report)
+			Debugprintf("Record channel count set to 2");
+
+	/*
+	{
+	unsigned int val = 0;
+	unsigned int dir = 0, frames = 0;
+
 	
-	if ((err = snd_pcm_hw_params (rechandle, hw_params)) < 0) {
-		fprintf (stderr, "cannot set parameters (%s)", snd_strerror(err));
-		return false;
+	snd_pcm_hw_params_get_channels(rechandle, &val);
+	printf("channels = %d\n", val);
+
+	snd_pcm_hw_params_get_rate(rechandle, &val, &dir);
+	printf("rate = %d bps\n", val);
+
+	snd_pcm_hw_params_get_period_time(rechandle, &val, &dir);
+	printf("period time = %d us\n", val);
+
+	snd_pcm_hw_params_get_period_size(rechandle, &frames, &dir);
+	printf("period size = %d frames\n", (int)frames);
+
+	snd_pcm_hw_params_get_buffer_time(rechandle, &val, &dir);
+	printf("buffer time = %d us\n", val);
+
+	snd_pcm_hw_params_get_buffer_size(rechandle, (snd_pcm_uframes_t *)&val);
+	printf("buffer size = %d frames\n", val);
+
+	snd_pcm_hw_params_get_periods(rechandle, &val, &dir);
+	printf("periods per buffer = %d frames\n", val);
+	}
+	*/
+
+	if ((err = snd_pcm_hw_params (rechandle, hw_params)) < 0)
+	{
+		// Try setting some more params
+
+		err = snd_pcm_hw_params_set_buffer_size(rechandle, hw_params, 65536);
+
+		if (err)
+			Debugprintf("cannot set buffer size (%s)", snd_strerror(err));
+
+		err = snd_pcm_hw_params_set_period_size(rechandle, hw_params, (snd_pcm_uframes_t) { 1024 }, (int) { 0 });
+
+		if (err)
+			Debugprintf("cannot set period size (%s)", snd_strerror(err));
+
+		if ((err = snd_pcm_hw_params(rechandle, hw_params)) < 0)
+		{
+			Debugprintf("cannot set parameters (%s)", snd_strerror(err));
+			return false;
+		}
 	}
 	
 	snd_pcm_hw_params_free(hw_params);
@@ -754,7 +793,8 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 		return FALSE;
 	}
 
-	Debugprintf("Capture using %d channels", m_recchannels);
+	if (Report)
+		Debugprintf("Capture using %d channels", m_recchannels);
 
 	int i;
 	short buf[256];
@@ -763,8 +803,7 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	{
 		if ((err = snd_pcm_readi (rechandle, buf, 128)) != 128)
 		{
-			Debugprintf("read from audio interface failed (%s)",
-				 snd_strerror (err));
+			Debugprintf("read from audio interface failed (%s)", snd_strerror (err));
 		}
 	}
 
@@ -773,22 +812,17 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
  	return TRUE;
 }
 
-int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate, int p_sampleRate, char * ErrorMsg)
+int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate, int p_sampleRate, int Report)
 {
 	int Channels = 1;
 
-	
-	if (UseLeft == 0)
-		printf("Using Right Channel of soundcard\n");
-	if (UseRight == 0)
-		printf("Using Left Channel of soundcard\n");
-
-	Debugprintf("Opening Playback Device %s Rate %d", PlaybackDevice, p_sampleRate);
+	if (Report)
+		Debugprintf("Opening Playback Device %s Rate %d", PlaybackDevice, p_sampleRate);
 
 //	if (UseLeft == 0 || UseRight == 0)
 	Channels = 2;						// L or R implies stereo
 
-	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, Channels, ErrorMsg))
+	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, Channels, Report))
 	{
 #ifdef SHARECAPTURE
 
@@ -800,8 +834,9 @@ int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate,
 			playhandle = NULL;
 		}
 #endif
-		Debugprintf("Opening Capture Device %s Rate %d", CaptureDevice, c_sampleRate);
-		return OpenSoundCapture(CaptureDevice, c_sampleRate, ErrorMsg);
+		if (Report)
+			Debugprintf("Opening Capture Device %s Rate %d", CaptureDevice, c_sampleRate);
+		return OpenSoundCapture(CaptureDevice, c_sampleRate, Report);
 	}
 	else
 		return false;
@@ -828,10 +863,8 @@ int CloseSoundCard()
 
 int SoundCardWrite(short * input, unsigned int nSamples)
 {
-	unsigned int i = 0, n;
-	int ret, err, res;
-	snd_pcm_sframes_t avail, maxavail;
-	snd_pcm_status_t *status = NULL;
+	unsigned int i = 0, n, ret;
+	snd_pcm_sframes_t avail; // , maxavail;
 
 	if (playhandle == NULL)
 		return 0;
@@ -859,7 +892,7 @@ int SoundCardWrite(short * input, unsigned int nSamples)
 			Debugprintf("avail play after recovery returned %d", (int)avail);
 	}
 	
-	maxavail = avail;
+//	maxavail = avail;
 
 //	Debugprintf("Tosend %d Avail %d", nSamples, (int)avail);
 
@@ -878,42 +911,9 @@ int SoundCardWrite(short * input, unsigned int nSamples)
 int PackSamplesAndSend(short * input, int nSamples)
 {
 	unsigned short samples[256000];
-	unsigned short * sampptr = samples;
-	unsigned int n;
 	int ret;
 	snd_pcm_sframes_t avail;
 
-	// Convert byte stream to int16 (watch endianness)
-/*
-
-	if (m_playchannels == 1)
-	{
-		for (n = 0; n < nSamples; n++)
-		{
-			*(sampptr++) = input[0];
-			input ++;
-		}
-	}
-	else
-
-	{
-		int i = 0;
-		for (n = 0; n < nSamples; n++)
-		{
-//			if (UseLeft)
-				*(sampptr++) = input[0];
-	//		else
-		//		*(sampptr++) = 0;
-
-			//if (UseRight)
-				*(sampptr++) = input[0];
-//			else
-	//			*(sampptr++) = 0;
-
-			input ++;
-		}
-	}
-*/
 	ret = snd_pcm_writei(playhandle, input, nSamples);
 
 	if (ret < 0)
@@ -992,7 +992,7 @@ int SoundCardRead(short * input, unsigned int nSamples)
 			rechandle = NULL;
 		}
 
-		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);
+		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
 //		snd_pcm_recover(rechandle, avail, 0);
 		avail = snd_pcm_avail_update(rechandle);
 		Debugprintf("After avail recovery %d ..", avail);
@@ -1015,7 +1015,7 @@ int SoundCardRead(short * input, unsigned int nSamples)
 			rechandle = NULL;
 		}
 
-		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);
+		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
 //		snd_pcm_recover(rechandle, avail, 0);
 		avail = snd_pcm_avail_update(rechandle);
 		Debugprintf("After Read recovery Avail %d ..", avail);
@@ -1028,16 +1028,12 @@ int SoundCardRead(short * input, unsigned int nSamples)
 		for (n = 0; n < ret; n++)
 		{
 			*(input++) = samples[n];
+			*(input++) = samples[n];		// Duplicate
 		}
 	}
 	else
 	{
-		if (UseLeft)
-			start = 0;
-		else
-			start = 1;
-
-		for (n = start; n < (ret * 2); n+=2)			// return alternate
+		for (n = 0; n < ret * 2; n++)		// return all
 		{
 			*(input++) = samples[n];
 		}
@@ -1081,18 +1077,20 @@ short loopbuff[1200];		// Temp for testing - loop sent samples to decoder
 //    for (t = 0; t < sizeof(buffer); ++t)
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
-unsigned short * SoundInit();
+short * SoundInit();
 
-void InitSound(BOOL Quiet)
+int InitSound(BOOL Quiet)
 {
 	GetInputDeviceCollection();
 	GetOutputDeviceCollection();
 	
-	OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, NULL);
+	if (!OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, 1))
+		return FALSE;
 
 	printf("InitSound %s %s\n", CaptureDevice, PlaybackDevice);
 
 	DMABuffer = SoundInit();
+	return TRUE;
 }
 
 int min = 0, max = 0, lastlevelreport = 0, lastlevelGUI = 0;
@@ -1156,18 +1154,6 @@ void StopCapture()
 #endif
 }
 
-void StartCodec(char * strFault)
-{
-	strFault[0] = 0;
-	OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, strFault);
-}
-
-void StopCodec(char * strFault)
-{
-	strFault[0] = 0;
-	CloseSoundCard();
-}
-
 void StartCapture()
 {
 	Capturing = TRUE;
@@ -1190,7 +1176,7 @@ VOID WriteSamples(short * buffer, int len)
 #endif
 }
 
-unsigned short * SoundInit()
+short * SoundInit()
 {
 	Index = 0;
 	return &buffer[0][0];
@@ -1204,8 +1190,6 @@ void SoundFlush()
 
 	snd_pcm_status_t *status = NULL;
 	int err, res;
-	char strFault[100] = "";
-
 
 	if (Loopback)
 		ProcessNewSamples(&buffer[Index][0], Number);
@@ -1237,7 +1221,7 @@ void SoundFlush()
 		{
 			// Send complete - Restart Capture
 
-			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, strFault);	
+			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);	
 			break;
 		}
 		usleep(50000);
@@ -1517,103 +1501,6 @@ static struct speed_struct
 	{-1,          B0}
 };
 
-
-HANDLE OpenCOMPort(VOID * Port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
-{
-	;
-	char buf[100];
-
-	//	Linux Version.
-
-	int fd;
-	int hwflag = 0;
-	u_long param = 1;
-	struct termios term;
-	struct speed_struct *s;
-
-	// As Serial ports under linux can have all sorts of odd names, the code assumes that
-	// they are symlinked to a com1-com255 in the BPQ Directory (normally the one it is started from
-
-	if ((fd = open(Port, O_RDWR | O_NDELAY)) == -1)
-	{
-		if (Quiet == 0)
-		{
-			perror("Com Open Failed");
-			sprintf(buf, " %s could not be opened", (char *)Port);
-			Debugprintf(buf);
-		}
-		return 0;
-	}
-
-	// Validate Speed Param
-
-	for (s = speed_table; s->user_speed != -1; s++)
-		if (s->user_speed == speed)
-			break;
-
-	if (s->user_speed == -1)
-	{
-		fprintf(stderr, "tty_speed: invalid speed %d", speed);
-		return FALSE;
-	}
-
-	if (tcgetattr(fd, &term) == -1)
-	{
-		perror("tty_speed: tcgetattr");
-		return FALSE;
-	}
-
-	cfmakeraw(&term);
-	cfsetispeed(&term, s->termios_speed);
-	cfsetospeed(&term, s->termios_speed);
-
-	if (tcsetattr(fd, TCSANOW, &term) == -1)
-	{
-		perror("tty_speed: tcsetattr");
-		return FALSE;
-	}
-
-	ioctl(fd, FIONBIO, &param);
-
-	Debugprintf("LinBPQ Port %s fd %d", Port, fd);
-
-	return fd;
-}
-
-BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
-{
-	//	Some systems seem to have a very small max write size
-
-	int ToSend = BytesToWrite;
-	int Sent = 0, ret;
-
-	while (ToSend)
-	{
-		ret = write(fd, &Block[Sent], ToSend);
-
-		if (ret >= ToSend)
-			return TRUE;
-
-		if (ret == -1)
-		{
-			if (errno != 11 && errno != 35)					// Would Block
-				return FALSE;
-
-			usleep(10000);
-			ret = 0;
-		}
-
-		Sent += ret;
-		ToSend -= ret;
-	}
-	return TRUE;
-}
-
-VOID CloseCOMPort(HANDLE fd)
-{
-	close(fd);
-}
-
 VOID COMSetDTR(HANDLE fd)
 {
 	int status;
@@ -1652,5 +1539,112 @@ VOID COMClearRTS(HANDLE fd)
 	status &= ~TIOCM_RTS;
 	if (ioctl(fd, TIOCMSET, &status) == -1)
 		perror("ARDOP PTT TIOCMSET");
+}
+
+
+
+HANDLE OpenCOMPort(char * Port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
+{
+	char buf[100];
+
+	//	Linux Version.
+
+	int fd;
+	u_long param = 1;
+	struct termios term;
+	struct speed_struct *s;
+
+	char fulldev[80];
+
+	sprintf(fulldev, "/dev/%s", Port);
+
+	if ((fd = open(fulldev, O_RDWR | O_NDELAY)) == -1)
+	{
+		if (Quiet == 0)
+		{
+			perror("Com Open Failed");
+			sprintf(buf, " %s could not be opened", (char *)fulldev);
+			Debugprintf(buf);
+		}
+		return 0;
+	}
+
+	// Validate Speed Param
+
+	for (s = speed_table; s->user_speed != -1; s++)
+		if (s->user_speed == speed)
+			break;
+
+	if (s->user_speed == -1)
+	{
+		fprintf(stderr, "tty_speed: invalid speed %d", speed);
+		return FALSE;
+	}
+
+	if (tcgetattr(fd, &term) == -1)
+	{
+		perror("tty_speed: tcgetattr");
+		return FALSE;
+	}
+
+	cfmakeraw(&term);
+	cfsetispeed(&term, s->termios_speed);
+	cfsetospeed(&term, s->termios_speed);
+
+	if (tcsetattr(fd, TCSANOW, &term) == -1)
+	{
+		perror("tty_speed: tcsetattr");
+		return FALSE;
+	}
+
+	ioctl(fd, FIONBIO, &param);
+
+	Debugprintf("LinBPQ Port %s fd %d", fulldev, fd);
+
+	if (SetDTR)
+		COMSetDTR(fd);
+	else
+		COMClearDTR(fd);
+
+	if (SetRTS)
+		COMSetRTS(fd);
+	else
+		COMClearRTS(fd);
+
+	return fd;
+}
+
+BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
+{
+	//	Some systems seem to have a very small max write size
+
+	int ToSend = BytesToWrite;
+	int Sent = 0, ret;
+
+	while (ToSend)
+	{
+		ret = write(fd, &Block[Sent], ToSend);
+
+		if (ret >= ToSend)
+			return TRUE;
+
+		if (ret == -1)
+		{
+			if (errno != 11 && errno != 35)					// Would Block
+				return FALSE;
+
+			usleep(10000);
+			ret = 0;
+		}
+
+		Sent += ret;
+		ToSend -= ret;
+	}
+	return TRUE;
+}
+
+VOID CloseCOMPort(HANDLE fd)
+{
+	close(fd);
 }
 

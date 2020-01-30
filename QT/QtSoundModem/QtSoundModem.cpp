@@ -1,4 +1,5 @@
 
+#define VersionString "0.0.0.4"
 
 #include "QtSoundModem.h"
 #include <qheaderview.h>
@@ -58,7 +59,7 @@ extern "C" char PlaybackNames[16][256];
 
 extern "C"
 { 
-	void InitSound(BOOL Report);
+	int InitSound(BOOL Report);
 	void soundMain();
 	void MainLoop();
 	void modulator(UCHAR snd_ch, int buf_size);
@@ -125,9 +126,6 @@ int NextWaterfallLine[2] = { 0 };
 unsigned int LastLevel = 255;
 unsigned int LastBusy = 255;
 
-
-
-
 extern "C" void WriteDebugLog(int LogLevel, const char * format, ...)
 {
 	char Mess[10000];
@@ -152,7 +150,13 @@ void QtSoundModem::doupdateDCD(int Chan, int State)
 void workerThread::run()
 {
 	soundMain();
-	InitSound(1);
+
+	if (!InitSound(1))
+	{
+//		QMessageBox msgBox;
+//		msgBox.setText("Open Sound Card Failed");
+//		msgBox.exec();
+	}
 
 	// Initialise Modems
 
@@ -170,6 +174,8 @@ void workerThread::run()
 		this->msleep(10);
 	}
 
+	qApp->exit();
+
 };
 
 extern "C" char * frame_monitor(string * frame, char * code, bool tx_stat);
@@ -181,8 +187,6 @@ extern "C" void put_frame(int snd_ch, string * frame, char * code, int  tx, int 
 	char * Msg = (char *)malloc(1024);		// Cant pass local variable via signal/slot
 
 	string * x = newString();
-
-	//if RxRichedit1.Focused then Windows.SetFocus(0);
 
 	if (strcmp(code, "NON-AX25") == 0)
 		sprintf(Msg, "%d: <NON-AX25 frame Len = %d [%s%c]\r", snd_ch, frame->Length, ShortDateTime(), 'R');
@@ -205,7 +209,22 @@ extern "C" void updateDCD(int Chan, bool State)
 	emit t->updateDCD(Chan, State);
 }
 
+bool QtSoundModem::eventFilter(QObject* obj, QEvent *evt)
+{
+	if (evt->type() == QEvent::WindowStateChange)
+	{
+		if (windowState().testFlag(Qt::WindowMinimized) == true)
+			w_state = WIN_MINIMIZED;
+		else
+			w_state = WIN_MAXIMIZED;
+	}
+//	if (evt->type() == QGuiApplication::applicationStateChanged) - this is a sigma;
+//	{
+//		qDebug() << "App State changed =" << evt->type() << endl;
+//	}
 
+	return QWidget::event(evt);
+}
 
 void QtSoundModem::resizeEvent(QResizeEvent* event)
 {
@@ -215,10 +234,25 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 
 	int A, B, C, W;
 
-	if (StereoSoundcard)
+	if (soundChannel[1])
+	{
+		ui.modeB->setVisible(1);
+		ui.centerB->setVisible(1);
+		ui.labelB->setVisible(1);
+	}
+	else
+	{
+		ui.modeB->setVisible(0);
+		ui.centerB->setVisible(0);
+		ui.labelB->setVisible(0);
+	}
+
+	if (UsingBothChannels)
 	{
 		// Two waterfalls
 
+		ui.WaterfallA->setVisible(1);
+		ui.HeaderA->setVisible(1);
 		ui.WaterfallB->setVisible(1);
 		ui.HeaderB->setVisible(1);
 
@@ -229,8 +263,22 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 	{
 		// One waterfall
 
-		ui.WaterfallB->setVisible(0);
-		ui.HeaderB->setVisible(0);
+		// Could be Left or Right
+
+		if (soundChannel[0] == RIGHT)
+		{
+			ui.WaterfallA->setVisible(0);
+			ui.HeaderA->setVisible(0);
+			ui.WaterfallB->setVisible(1);
+			ui.HeaderB->setVisible(1);
+		}
+		else
+		{
+			ui.WaterfallA->setVisible(1);
+			ui.HeaderA->setVisible(1);
+			ui.WaterfallB->setVisible(0);
+			ui.HeaderB->setVisible(0);
+		}
 
 		A = r.height() - 145;   // Top of Waterfall A
 	}
@@ -243,15 +291,52 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 	ui.monWindow->setGeometry(QRect(0, 30, W, C - 56));
 	sessionTable->setGeometry(QRect(0, C, W, 175));
 
-	ui.HeaderA->setGeometry(QRect(0, A, W, 35));
-	ui.WaterfallA->setGeometry(QRect(0, A + 35, W, 80));
-
-	if (StereoSoundcard)
+	if (UsingBothChannels)
 	{
+		ui.HeaderA->setGeometry(QRect(0, A, W, 35));
+		ui.WaterfallA->setGeometry(QRect(0, A + 35, W, 80));
 		ui.HeaderB->setGeometry(QRect(0, B, W, 35));
 		ui.WaterfallB->setGeometry(QRect(0, B + 35, W, 80));
 	}
+	else
+	{
+		if (soundChannel[0] == RIGHT)
+		{
+			ui.HeaderB->setGeometry(QRect(0, A, W, 35));
+			ui.WaterfallB->setGeometry(QRect(0, A + 35, W, 80));
+		}
+		else
+		{
+			ui.HeaderA->setGeometry(QRect(0, A, W, 35));
+			ui.WaterfallA->setGeometry(QRect(0, A + 35, W, 80));
+		}
+	}
+}
 
+QAction * setupMenuLine(QMenu * Menu, char * Label, QObject * parent, int State)
+{
+	QAction * Act = new QAction(Label, parent);
+	Menu->addAction(Act);
+
+	Act->setCheckable(true);
+	if (State)
+		Act->setChecked(true);
+
+	parent->connect(Act, SIGNAL(triggered()), parent, SLOT(menuChecked()));
+
+	return Act;
+}
+
+void QtSoundModem::menuChecked()
+{
+	QAction * Act = static_cast<QAction*>(QObject::sender());
+
+	int state = Act->isChecked();
+
+	if (Act == actWaterfall1)
+		Firstwaterfall = state;
+	else if (Act == actWaterfall2)
+		Secondwaterfall = state;
 }
 
 QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(this), _AGWserver(this)
@@ -292,6 +377,14 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 		ui.modeB->addItem(modes_name[i]);
 	}
 
+	char Title[128];
+
+	sprintf(Title, "QtSoundModem Version %s", VersionString);
+
+	this->setWindowTitle(Title);
+
+	qDebug() << Title;
+
 	// Set up Menus
 
 	setupMenu = ui.menuBar->addMenu(tr("Settings"));
@@ -305,6 +398,11 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 	setupMenu->addAction(actModems);
 
 	connect(actModems, &QAction::triggered, this, [=] {doModems(); });
+
+	viewMenu = ui.menuBar->addMenu(tr("&View"));
+
+	actWaterfall1 = setupMenuLine(viewMenu, (char *)"First waterfall", this, Firstwaterfall);
+	actWaterfall2 = setupMenuLine(viewMenu, (char *)"Second Waterfall", this, Secondwaterfall);
 
 	actCalib = ui.menuBar->addAction("&Calibration");
 	
@@ -429,6 +527,7 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 		dcd_threshold = i;
 	});
 
+	installEventFilter(this);
 
 	t = new workerThread;
 
@@ -730,6 +829,7 @@ void QtSoundModem::doDevices()
 
 		Dev->PTTPort->setCurrentIndex(Dev->PTTPort->findText(PTTPort, Qt::MatchFixedString));
 
+		Dev->txRotation->setChecked(TX_rotate);
 		Dev->DualPTT->setChecked(DualPTT);
 
 		QObject::connect(Dev->okButton, SIGNAL(clicked()), this, SLOT(deviceaccept()));
@@ -742,17 +842,25 @@ void QtSoundModem::doDevices()
 void QtSoundModem::deviceaccept()
 {
 	QVariant Q = Dev->inputDevice->currentText();
-	strcpy(CaptureDevice, Q.toString().toUtf8());
+	int cardChanged = 0;
+
+	if (strcmp(CaptureDevice, Q.toString().toUtf8()) != 0)
+	{
+		strcpy(CaptureDevice, Q.toString().toUtf8());
+		cardChanged = 1;
+	}
 
 	CaptureIndex = Dev->inputDevice->currentIndex();
 
 	Q = Dev->outputDevice->currentText();
-	strcpy(PlaybackDevice, Q.toString().toUtf8());
+
+	if (strcmp(PlaybackDevice, Q.toString().toUtf8()) != 0)
+	{
+		strcpy(PlaybackDevice, Q.toString().toUtf8());
+		cardChanged = 1;
+	}
 
 	PlayBackIndex = Dev->outputDevice->currentIndex();
-
-	CloseSound();
-	InitSound(1);
 
 	soundChannel[0] = Dev->Modem_1_Chan->currentIndex();
 	soundChannel[1]  = Dev->Modem_2_Chan->currentIndex();
@@ -766,9 +874,9 @@ void QtSoundModem::deviceaccept()
 	
 		// Different so need both sides 
 
-		StereoSoundcard = 1;
+		UsingBothChannels = 1;
 	else
-		StereoSoundcard = 0;
+		UsingBothChannels = 0;
 
 	if (soundChannel[0] == RIGHT)
 		modemtoSoundLR[0] = 1;
@@ -797,6 +905,7 @@ void QtSoundModem::deviceaccept()
 	strcpy(PTTPort, Q.toString().toUtf8());
 
 	DualPTT = Dev->DualPTT->isChecked();
+	TX_rotate = Dev->txRotation->isChecked();
 
 	ClosePTTPort();
 	OpenPTTPort();
@@ -807,6 +916,12 @@ void QtSoundModem::deviceaccept()
 
 	delete(Dev);
 	saveSettings();
+
+	if (cardChanged)
+	{
+		CloseSound();
+		InitSound(1);
+	}
 
 	QSize newSize(this->size());
 	QSize oldSize(this->size());
@@ -1185,12 +1300,10 @@ extern "C" void doWaterfall(int snd_ch)
 	word  hfft_size;
 	byte  n;
 	float RealOut[4096] = { 0 };
-	short RealIn[4096];
 	float ImagOut[4096];
 	QRegion exposed;
 	QPixmap  *pm = (QPixmap *)WaterfallCopy[snd_ch]->pixmap();
 	float max = 0;;
-	float fft[1024];
 
 	hfft_size = fft_size / 2;
 

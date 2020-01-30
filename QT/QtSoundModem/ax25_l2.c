@@ -318,8 +318,8 @@ void delete_I_FRM_port(TAX25Port * AX25Sess)
 	string path = { 0 }; 
 	string data= { 0 };
 
-	byte pid, nr, ns, f_type, f_id;
-	boolean  optimize, rpt, cr, pf;
+	byte pid, nr, ns, f_type, f_id, rpt, cr, pf;
+	boolean  optimize;
 	int  i = 0;
 
 	while (i < AX25Sess->frame_buf.Count)
@@ -352,7 +352,7 @@ void send_data_buf(TAX25Port * AX25Sess, int  nr)
 	AX25Sess->IPOLL_cnt = 0;
 	AX25Sess->vs = nr;
 	delete_I_FRM(AX25Sess, nr);
-	delete_I_FRM_port(AX25Sess);
+//	delete_I_FRM_port(AX25Sess);
 
 	if (TXFrmMode[AX25Sess->snd_ch] == 1)
 	{
@@ -913,9 +913,8 @@ void on_UI(TAX25Port * AX25Sess, int pf, int cr)
 {
 }
 
-on_FRMR(void * socket, TAX25Port * AX25Sess, byte * path)
+void on_FRMR(void * socket, TAX25Port * AX25Sess, byte * path)
 {
-
 	if (AX25Sess->status != STAT_NO_LINK)
 	{
 		AX25Sess->info.stat_end_ses = time(NULL);
@@ -1184,12 +1183,13 @@ void analiz_frame(int snd_ch, string * frame, string * code)
 	int  port, free_port;
 	byte path[80];
 	string  *data = newString();
-	byte  pid, nr, ns, f_type, f_id;
-	boolean	rpt, cr, pf;
+	byte  pid, nr, ns, f_type, f_id, rpt, cr, pf;
 	boolean	need_free_port;
 	void * socket = NULL;
 	boolean	incoming_conn = 0;
 	byte revpath[80];
+	int pathlen;
+	byte * ptr;
 
 	int excluded = 0;
 	int len;
@@ -1254,6 +1254,16 @@ void analiz_frame(int snd_ch, string * frame, string * code)
 
 	if (!is_last_digi(path))
 		return;							// Don't process if still unused digis
+
+	// Clear reapeated bits from digi path
+
+	ptr = &path[13];
+
+	while ((*ptr & 1) == 0)				// end of address
+	{
+		ptr += 7;
+		*(ptr) &= 0x7f;					// Clear digi'd bit
+	}
 
 	// search for port of correspondent
 
@@ -1323,8 +1333,10 @@ void analiz_frame(int snd_ch, string * frame, string * code)
 
 		//		rst_timer(snd_ch, free_port);
 
-		strcpy(AX25Sess->kind, "Outgoing");
+		strcpy(AX25Sess->kind, "Incoming");
 		AX25Sess->socket = socket;
+
+		Debugprintf("incoming call socket = %x", socket);
 
 		// I think we need to reverse the path
 
