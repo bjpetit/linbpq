@@ -1,5 +1,4 @@
 
-#define VersionString "0.0.0.4"
 
 #include "QtSoundModem.h"
 #include <qheaderview.h>
@@ -18,6 +17,7 @@
 
 #include "UZ7HOStuff.h"
 
+
 QImage *Constellation;
 QImage *Waterfall[4];
 QImage *Header[4];
@@ -31,12 +31,9 @@ QLabel *HeaderCopy[2];
 
 QTextEdit * monWindowCopy;
 
-workerThread *t;
+extern workerThread *t;
 
 QList<QSerialPortInfo> Ports = QSerialPortInfo::availablePorts();
-
-QList<QTcpSocket*>  _KISSSockets;
-QList<QTcpSocket*>  _AGWSockets;
 
 void saveSettings();
 void getSettings();
@@ -65,14 +62,9 @@ extern "C"
 	void modulator(UCHAR snd_ch, int buf_size);
 	void SampleSink(int LR, short Sample);
 	void doCalib(int Port, int Act);
-	void KISSDataReceived(void * sender, char * data, int length);
-	void AGW_explode_frame(void * soket, char * data, int len);
 	int Freq_Change(int Chan, int Freq);
 	void set_speed(int snd_ch, int Modem);
 	void init_speed(int snd_ch);
-	void KISS_add_stream(void * Socket);
-	void AGW_add_socket(void * Socket);
-	void AGW_del_socket(void * socket);
 	void wf_pointer(int snd_ch);
 	void FourierTransform(int NumSamples, short * RealIn, float * RealOut, float * ImagOut, int InverseTransform);
 	void dofft(short * in, float * outr, float * outi);
@@ -145,38 +137,6 @@ void QtSoundModem::doupdateDCD(int Chan, int State)
 {
 	DCDLabel[Chan]->setVisible(State);
 }
-
-
-void workerThread::run()
-{
-	soundMain();
-
-	if (!InitSound(1))
-	{
-//		QMessageBox msgBox;
-//		msgBox.setText("Open Sound Card Failed");
-//		msgBox.exec();
-	}
-
-	// Initialise Modems
-
-	init_speed(0);
-	init_speed(1);
-
-	emit t->openSockets();
-
-	while (Closing == 0)
-	{
-		// Run scheduling loop
-
-		MainLoop();
-
-		this->msleep(10);
-	}
-
-	qApp->exit();
-
-};
 
 extern "C" char * frame_monitor(string * frame, char * code, bool tx_stat);
 extern "C" char * ShortDateTime();
@@ -339,13 +299,11 @@ void QtSoundModem::menuChecked()
 		Secondwaterfall = state;
 }
 
-QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(this), _AGWserver(this)
+QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 {
 	int i;
 
 	ui.setupUi(this);
-
-	getSettings();
 
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
 
@@ -383,8 +341,6 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 
 	this->setWindowTitle(Title);
 
-	qDebug() << Title;
-
 	// Set up Menus
 
 	setupMenu = ui.menuBar->addMenu(tr("Settings"));
@@ -405,10 +361,10 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 	actWaterfall2 = setupMenuLine(viewMenu, (char *)"Second Waterfall", this, Secondwaterfall);
 
 	actCalib = ui.menuBar->addAction("&Calibration");
-	
+
 	connect(actCalib, SIGNAL(triggered()), this, SLOT(doCalibrate()));
 
-//	Constellation = new QImage(91, 91, QImage::Format_RGB32);
+	//	Constellation = new QImage(91, 91, QImage::Format_RGB32);
 	Waterfall[0] = new QImage(1024, 80, QImage::Format_RGB32);
 	Header[0] = new QImage(1024, 35, QImage::Format_RGB32);
 	Waterfall[1] = new QImage(1024, 80, QImage::Format_RGB32);
@@ -434,18 +390,15 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 	DCDLabel[0]->setPixmap(QPixmap::fromImage(*DCDLed[0]));
 	DCDLabel[1]->setPixmap(QPixmap::fromImage(*DCDLed[0]));
 
+	//	Waterfall[0]->setColorCount(16);
+	//	Waterfall[1]->setColorCount(16);
 
 
-
-//	Waterfall[0]->setColorCount(16);
-//	Waterfall[1]->setColorCount(16);
-
-
-//	for (i = 0; i < 16; i++)
-//	{
-//	Waterfall[0]->setColor(i, vbColours[i]);
-//		Waterfall[1]->setColor(i, vbColours[i]);
-//	}
+	//	for (i = 0; i < 16; i++)
+	//	{
+	//	Waterfall[0]->setColor(i, vbColours[i]);
+	//		Waterfall[1]->setColor(i, vbColours[i]);
+	//	}
 
 	Header[0]->fill(black);
 	Waterfall[1]->fill(black);
@@ -474,7 +427,7 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 	// Inline handlers for Modem Params as they are pretty small
 
 	connect(ui.modeA, QOverload<int>::of(&QComboBox::currentIndexChanged),
-	[=](int index)
+		[=](int index)
 	{
 		ModemA = ui.modeA->currentIndex();
 		set_speed(0, ModemA);
@@ -482,8 +435,8 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 	});
 
 	connect(ui.modeB, QOverload<int>::of(&QComboBox::currentIndexChanged),
-	
-	[=]	(int index)
+
+		[=](int index)
 	{
 		ModemB = ui.modeB->currentIndex();
 		set_speed(1, ModemB);
@@ -499,8 +452,8 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 	ui.centerB->setValue(rx_freq[1]);
 
 	connect(ui.centerA, QOverload<int>::of(&QSpinBox::valueChanged),
-		
-	[=](int i)
+
+		[=](int i)
 	{
 		if (i > 300)
 		{
@@ -510,7 +463,7 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 
 	connect(ui.centerB, QOverload<int>::of(&QSpinBox::valueChanged),
 
-	[=](int i)
+		[=](int i)
 	{
 		if (i > 300)
 		{
@@ -527,16 +480,10 @@ QtSoundModem::QtSoundModem(QWidget *parent): QMainWindow(parent), _KISSserver(th
 		dcd_threshold = i;
 	});
 
-	installEventFilter(this);
-
-	t = new workerThread;
+//	installEventFilter(this);
 
 	QObject::connect(t, SIGNAL(sendtoTrace(char *, int)), this, SLOT(sendtoTrace(char *, int)), Qt::QueuedConnection);
 	QObject::connect(t, SIGNAL(updateDCD(int, int)), this, SLOT(doupdateDCD(int, int)), Qt::QueuedConnection);
-	QObject::connect(t, SIGNAL(sendtoKISS(void *, char *, int)), this, SLOT(sendtoKISS(void *, char *, int)), Qt::QueuedConnection);
-	QObject::connect(t, SIGNAL(openSockets()), this, SLOT(openSockets()), Qt::QueuedConnection);
-
-	t->start();
 
 	QTimer *timer = new QTimer(this);
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
@@ -548,50 +495,8 @@ void QtSoundModem::MyTimerSlot()
 {
 	// 100 mS Timer Event
 
-	TimerEvent = TIMER_EVENT_ON;
 	show_grid();
 }
-
-
-void QtSoundModem::openSockets()
-{
-	if (KISSServ)
-	{
-		if (_KISSserver.listen(QHostAddress::Any, KISSPort))
-			connect(&_KISSserver, SIGNAL(newConnection()), this, SLOT(onKISSConnection()));
-		else
-		{
-			QMessageBox msgBox;
-			msgBox.setText("Listen failed for KISS Port.");
-			msgBox.exec();
-		}
-	}
-
-	if (AGWServ)
-	{
-		if (_AGWserver.listen(QHostAddress::Any, AGWPort))
-			connect(&_AGWserver, SIGNAL(newConnection()), this, SLOT(onAGWConnection()));
-		else
-		{
-			QMessageBox msgBox;
-			msgBox.setText("Listen failed for AGW Port.");
-			msgBox.exec();
-		}
-	}
-}
-
-
-//procedure TForm1.TrackBar1Change(Sender TObject);
-//begin
-//dcd_threshold = TrackBar1.position;
-//end;
-
-
-
-
-
-
-
 
 Ui_ModemDialog * Dlg;
 
@@ -1051,92 +956,6 @@ void QtSoundModem::sendtoTrace(char * Msg, int tx)
 }
 
 
-void QtSoundModem::sendtoKISS(void * sock, char * Msg, int Len)
-{
-	if (sock == NULL)
-	{
-		for (QTcpSocket* socket : _KISSSockets)
-		{
-			socket->write(Msg, Len);
-		}
-	}
-	else
-	{
-		QTcpSocket* socket = (QTcpSocket*)sock;
-		socket->write(Msg, Len);
-	}
-	free(Msg);
-}
-
-
-extern "C" void KISSSendtoServer(void * sock, char * Msg, int Len)
-{
-	emit t->sendtoKISS(sock, Msg, Len);
-}
-
-
-void QtSoundModem::onKISSConnection()
-{
-	QTcpSocket *clientSocket = _KISSserver.nextPendingConnection();
-	connect(clientSocket, SIGNAL(readyRead()), this, SLOT(onKISSReadyRead()));
-	connect(clientSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onKISSSocketStateChanged(QAbstractSocket::SocketState)));
-
-	_KISSSockets.push_back(clientSocket);
-
-	KISS_add_stream(clientSocket);
-}
-
-void QtSoundModem::onKISSSocketStateChanged(QAbstractSocket::SocketState socketState)
-{
-	if (socketState == QAbstractSocket::UnconnectedState)
-	{
-		QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
-		_KISSSockets.removeOne(sender);
-	}
-}
-
-void QtSoundModem::onKISSReadyRead()
-{
-	QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
-	QByteArray datas = sender->readAll();
-
-	KISSDataReceived(sender, datas.data(), datas.length());
-}
-
-
-void QtSoundModem::onAGWConnection()
-{
-	QTcpSocket *clientSocket = _AGWserver.nextPendingConnection();
-	connect(clientSocket, SIGNAL(readyRead()), this, SLOT(onAGWReadyRead()));
-	connect(clientSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onAGWSocketStateChanged(QAbstractSocket::SocketState)));
-
-	_AGWSockets.push_back(clientSocket);
-
-	AGW_add_socket(clientSocket);
-}
-
-
-void QtSoundModem::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState)
-{
-	if (socketState == QAbstractSocket::UnconnectedState)
-	{
-		QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
-
-		AGW_del_socket(sender);
-
-		_AGWSockets.removeOne(sender);
-	}
-}
-
-void QtSoundModem::onAGWReadyRead()
-{
-	QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
-	QByteArray datas = sender->readAll();
-
-	AGW_explode_frame(sender, datas.data(), datas.length());
-}
-
-
 // I think this does the waterfall
 
 typedef struct TRGBQ_t
@@ -1174,11 +993,16 @@ extern "C" void init_raduga()
 	}
 }
 
+extern "C" int nonGUIMode;
+
 
 // This draws the Frequency Scale on Waterfall
 
 extern "C" void wf_Scale(int Chan)
 {
+	if (nonGUIMode)
+		return;
+
 	float k;
 	int maxfreq, x, i;
 	char Textxx[20];
@@ -1227,6 +1051,9 @@ extern "C" void wf_Scale(int Chan)
 
 void do_pointer(int waterfall)
 {
+	if (nonGUIMode)
+		return;
+
 	float x;
 	int Waterfall = 0;
 
@@ -1286,6 +1113,9 @@ void wf_pointer(int snd_ch)
 
 extern "C" void doWaterfall(int snd_ch)
 {
+	if (nonGUIMode)
+		return;
+
 	if (Closing)
 		return;
 
@@ -1509,7 +1339,10 @@ void QtSoundModem::show_grid()
 	}
 
 	if (num_rows == 0)
+	{
+		sessionTable->setRowCount(0);
 		sessionTable->setRowCount(1);
+	}
 	else
 		sessionTable->setRowCount(num_rows);
 

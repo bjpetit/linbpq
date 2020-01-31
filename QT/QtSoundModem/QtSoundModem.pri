@@ -20,7 +20,8 @@ SOURCES += ./ax25.c \
     ./SMMain.c \
     ./sm_main.c \
     ./UZ7HOUtils.c \
-    ./Waveout.c
+    ./Waveout.c \
+	./tcpCode.cpp
 FORMS += ./calibrateDialog.ui \
     ./devicesDialog.ui \
     ./filterWindow.ui \

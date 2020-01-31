@@ -12,6 +12,8 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 
+#include "tcpCode.h"
+
 
 class QtSoundModem : public QMainWindow
 {
@@ -22,15 +24,12 @@ public:
 	~QtSoundModem();
 
 	void RefreshWaterfall(int snd_ch, unsigned char * Data);
-
-	QTcpServer  _KISSserver;
-	QTcpServer  _AGWserver;
+	void show_grid();
 
 private slots:
 
 	void doDevices();
 	void MyTimerSlot();
-	void openSockets();
 	void doModems();
 	void doFilter(int Chan, int Filter);
 	void deviceaccept();
@@ -39,14 +38,7 @@ private slots:
 	void modemreject();
 	void handleButton(int Port, int Act);
 	void doCalibrate();
-	void onKISSSocketStateChanged(QAbstractSocket::SocketState socketState);
-	void onKISSReadyRead();
-	void onAGWSocketStateChanged(QAbstractSocket::SocketState socketState);
-	void onAGWReadyRead();
 	void doupdateDCD(int, int);
-	void sendtoKISS(void * sock, char * Msg, int Len);
-	void onKISSConnection();
-	void onAGWConnection();
 	void sendtoTrace(char * Msg, int tx);
 	void preEmphAllAChanged(int);
 	void preEmphAllBChanged(int);
@@ -74,26 +66,4 @@ private:
 
 
 	void RefreshSpectrum(unsigned char * Data);
-	void show_grid();
 };
-
-class workerThread : public QThread
-{
-	Q_OBJECT
-signals:
-	void updateDCD(int, int);
-	void sendtoTrace(char *, int);
-	void sendtoKISS(void *, char *, int);
-	void openSockets();
-
-private:
-	void run();
-public:
-
-};
-
-
-
-
-
-

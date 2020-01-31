@@ -1,0 +1,57 @@
+#include <QtCore/QCoreApplication>
+#include <QtNetwork>
+#include <QDebug>
+
+
+#define CONNECT(sndr, sig, rcvr, slt) connect(sndr, SIGNAL(sig), rcvr, SLOT(slt))
+
+class mynet : public QObject
+{
+	Q_OBJECT
+
+public:
+	void start();
+
+public slots:
+	void onAGWReadyRead();
+	void onKISSSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void onKISSReadyRead();
+	void onAGWSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void onKISSConnection();
+	void MyTimerSlot();
+	void onAGWConnection();
+
+	void displayError(QAbstractSocket::SocketError socketError);
+
+	void sendtoKISS(void * sock, char * Msg, int Len);
+
+private:
+	QTcpServer* tcpServer;
+	QTcpSocket* tcpClient;
+	QTcpSocket* tcpServerConnection;
+	int bytesToWrite;
+	int bytesWritten;
+	int bytesReceived;
+	int TotalBytes;
+	int PayloadSize;
+};
+
+
+class workerThread : public QThread
+{
+	Q_OBJECT
+signals:
+	void updateDCD(int, int);
+	void sendtoTrace(char *, int);
+	void sendtoKISS(void *, char *, int);
+	void openSockets();
+
+private:
+	void run();
+public:
+
+};
+
+
+
+

@@ -2,6 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
+#define VersionString "0.0.0.4"
+
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>

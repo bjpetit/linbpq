@@ -160,7 +160,6 @@ BOOL tx_bit_stuffing(UCHAR snd_ch, UCHAR bit)
 	if (tx_bit_stuff_cnt[snd_ch] == 5)
 	{
 		tx_bit_stuff_cnt[snd_ch] = 0;
-		Debugprintf("Stuffing 0");
 		return TRUE;
 	}
 
@@ -461,15 +460,15 @@ void get_new_frame(UCHAR snd_ch, TStringList * frame_stream)
 				switch (tx_frame_status[snd_ch])
 				{
 				case FRAME_NEW_FRAME:
+
 					tx_frame_status[snd_ch] = FRAME_FULL;
 					break;
 
 				case FRAME_NO_FRAME:
+
 					tx_tail_cnt[snd_ch] = 0;
 					tx_frame_status[snd_ch] = FRAME_EMPTY;
 					tx_status[snd_ch] = TX_TAIL;
-					Debugprintf("Start TXTAIL %d", SampleNo);
-
 
 					break;
 				}
@@ -522,7 +521,6 @@ int get_new_bit_tail(UCHAR snd_ch, UCHAR bit)
 		}
 		else
 		{
-			Debugprintf("End TXTAIL %d", SampleNo);
 			tx_status[snd_ch] = TX_WAIT_BPF;
 		}
 
@@ -626,7 +624,6 @@ int get_new_bit_delay(UCHAR snd_ch, UCHAR bit)
 		else
 		{
 			tx_status[snd_ch] = TX_FRAME;
-			Debugprintf("End TXD %d", SampleNo);
 		}
 
 		break;	
@@ -859,7 +856,6 @@ if modem_mode[snd_ch]=MODE_QPSK then
 			if (tx_status[snd_ch] == TX_SILENCE)
 			{
 				tx_delay_cnt[snd_ch] = 0;
-				Debugprintf("Start TXD");
 				tx_status[snd_ch] = TX_DELAY;
 			}
 
@@ -1229,7 +1225,6 @@ void modulator(UCHAR snd_ch, int buf_size)
 	{
 		if (tx_status[snd_ch] == TX_SILENCE)
 		{
-			Debugprintf("New Packet %d", SampleNo);
 			tx_bit_osc[snd_ch] = 0;
 			tx_8PSK[snd_ch] = 0;
 			tx_QPSK[snd_ch] = 0;
