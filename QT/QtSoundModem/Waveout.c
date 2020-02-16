@@ -113,7 +113,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
-	WriteDebugLog(LOGDEBUG, Mess);
+	WriteDebugLog(Mess);
 
 	return;
 }
@@ -150,7 +150,7 @@ unsigned int getTicks()
 void printtick(char * msg)
 {
 	QueryPerformanceCounter(&NewTicks);
-	WriteDebugLog(LOGCRIT, "%s %i\r", msg, Now - LastNow);
+	Debugprintf("%s %i\r", msg, Now - LastNow);
 	LastNow = Now;
 }
 
@@ -210,7 +210,7 @@ void GetSoundDevices()
 {
 	int i;
 
-	WriteDebugLog(LOGALERT, "Capture Devices");
+	Debugprintf("Capture Devices");
 
 	CaptureCount = waveInGetNumDevs();
 
@@ -225,12 +225,12 @@ void GetSoundDevices()
 		if (CaptureDevices)
 			strcat(CaptureDevices, ",");
 		strcat(CaptureDevices, pwic.szPname);
-		WriteDebugLog(LOGALERT, "%d %s", i, pwic.szPname);
+		Debugprintf("%d %s", i, pwic.szPname);
 		memcpy(&CaptureNames[i][0], pwic.szPname, MAXPNAMELEN);
 		_strupr(&CaptureNames[i][0]);
 	}
 
-	WriteDebugLog(LOGALERT, "Playback Devices");
+	Debugprintf("Playback Devices");
 
 	PlaybackCount = waveOutGetNumDevs();
 
@@ -245,7 +245,7 @@ void GetSoundDevices()
 		if (PlaybackDevices[0])
 			strcat(PlaybackDevices, ",");
 		strcat(PlaybackDevices, pwoc.szPname);
-		WriteDebugLog(LOGALERT, "%i %s", i, pwoc.szPname);
+		Debugprintf("%i %s", i, pwoc.szPname);
 		memcpy(&PlaybackNames[i][0], pwoc.szPname, MAXPNAMELEN);
 		_strupr(&PlaybackNames[i][0]);
 		waveOutClose(hWaveOut);
@@ -279,12 +279,12 @@ int InitSound(BOOL Report)
     ret = waveOutOpen(&hWaveOut, PlayBackIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 
 	if (ret)
-		WriteDebugLog(LOGALERT, "Failed to open WaveOut Device %s Error %d", PlaybackDevice, ret);
+		Debugprintf("Failed to open WaveOut Device %s Error %d", PlaybackDevice, ret);
 	else
 	{
 		ret = waveOutGetDevCapsA((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPSA));
 		if (Report)
-			WriteDebugLog(LOGALERT, "Opened WaveOut Device %s", pwoc.szPname);
+			Debugprintf("Opened WaveOut Device %s", pwoc.szPname);
 	}
 
 	if (strlen(CaptureDevice) <= 2)
@@ -305,12 +305,12 @@ int InitSound(BOOL Report)
 
     ret = waveInOpen(&hWaveIn, CaptureIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 	if (ret)
-		WriteDebugLog(LOGALERT, "Failed to open WaveIn Device %s Error %d", CaptureDevice, ret);
+		Debugprintf("Failed to open WaveIn Device %s Error %d", CaptureDevice, ret);
 	else
 	{
 		ret = waveInGetDevCapsA((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPSA));
 		if (Report)
-			WriteDebugLog(LOGALERT, "Opened WaveIn Device %s", pwic.szPname);
+			Debugprintf("Opened WaveIn Device %s", pwic.szPname);
 	}
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
@@ -384,13 +384,13 @@ void PollReceivedSamples()
 				lastlevelreport = Now;
 
 				sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
-				WriteDebugLog(LOGDEBUG, "Input peaks = %d, %d", min, max);
+				Debugprintf("Input peaks = %d, %d", min, max);
 
 			}
 			min = max = 0;
 		}
 
-//		WriteDebugLog(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
+//		debugprintf(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
 //		if (Capturing && Loopback == FALSE)
 			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/4);
 
@@ -438,11 +438,11 @@ void PollReceivedSamples()
 			sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
 			QueueCommandToHost(HostCmd);
 
-			WriteDebugLog(LOGDEBUG, "Input peaks = %d, %d", min, max);
+			debugprintf(LOGDEBUG, "Input peaks = %d, %d", min, max);
 			min = max = 0;
 		}
 
-//		WriteDebugLog(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
+//		debugprintf(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
 			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
 
@@ -464,13 +464,13 @@ void StopCapture()
 	Capturing = FALSE;
 
 //	waveInStop(hWaveIn);
-//	WriteDebugLog(LOGDEBUG, "Stop Capture");
+//	debugprintf(LOGDEBUG, "Stop Capture");
 }
 
 void StartCapture()
 {
 	Capturing = TRUE;
-//	WriteDebugLog(LOGDEBUG, "Start Capture");
+//	debugprintf(LOGDEBUG, "Start Capture");
 }
 void CloseSound()
 { 

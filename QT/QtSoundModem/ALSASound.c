@@ -53,7 +53,7 @@ BOOL UseLeft = TRUE;
 BOOL UseRight = TRUE;
 char LogDir[256] = "";
 
-void WriteDebugLog(int LogLevel, const char * format, ...);
+void WriteDebugLog(char * Msg);
 
 VOID Debugprintf(const char * format, ...)
 {
@@ -62,7 +62,7 @@ VOID Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
-	WriteDebugLog(LOGDEBUG, Mess);
+	WriteDebugLog(Mess);
 
 	return;
 }
@@ -159,7 +159,7 @@ void SetupGPIOPTT()
 {
 	if (pttGPIOPin == -1)
 	{
-		WriteDebugLog(LOGALERT, "GPIO PTT disabled"); 
+		Debugprintf("GPIO PTT disabled"); 
 		RadioControl = FALSE;
 		useGPIO = FALSE;
 	}
@@ -172,7 +172,7 @@ void SetupGPIOPTT()
 
 		gpioSetMode(pttGPIOPin, PI_OUTPUT);
 		gpioWrite(pttGPIOPin, pttGPIOInvert ? 1 : 0);
-		WriteDebugLog(LOGALERT, "Using GPIO pin %d for PTT", pttGPIOPin); 
+		Debugprintf("Using GPIO pin %d for PTT", pttGPIOPin); 
 		RadioControl = TRUE;
 		useGPIO = TRUE;
 	}
@@ -767,7 +767,13 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 
 	if ((err = snd_pcm_hw_params (rechandle, hw_params)) < 0)
 	{
-		// Try setting some more params
+		// Try setting some more params Have to reinit params
+
+		snd_pcm_hw_params_any(rechandle, hw_params);
+		snd_pcm_hw_params_set_access(rechandle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+		snd_pcm_hw_params_set_format(rechandle, hw_params, SND_PCM_FORMAT_S16_LE);
+		snd_pcm_hw_params_set_rate(rechandle, hw_params, m_sampleRate, 0);
+		snd_pcm_hw_params_set_channels(rechandle, hw_params, m_recchannels);
 
 		err = snd_pcm_hw_params_set_buffer_size(rechandle, hw_params, 65536);
 
@@ -861,9 +867,9 @@ int CloseSoundCard()
 }
 
 
-int SoundCardWrite(short * input, unsigned int nSamples)
+int SoundCardWrite(short * input, int nSamples)
 {
-	unsigned int i = 0, n, ret;
+	unsigned int ret;
 	snd_pcm_sframes_t avail; // , maxavail;
 
 	if (playhandle == NULL)
@@ -912,7 +918,6 @@ int PackSamplesAndSend(short * input, int nSamples)
 {
 	unsigned short samples[256000];
 	int ret;
-	snd_pcm_sframes_t avail;
 
 	ret = snd_pcm_writei(playhandle, input, nSamples);
 
@@ -924,7 +929,7 @@ int PackSamplesAndSend(short * input, int nSamples)
 //		Debugprintf("Write after recovery returned %d", ret);
 	}
 
-	avail = snd_pcm_avail_update(playhandle);
+	snd_pcm_avail_update(playhandle);
 	return ret;
 
 }
@@ -970,13 +975,12 @@ int xSoundCardClearInput()
 }
 */
 
-int SoundCardRead(short * input, unsigned int nSamples)
+int SoundCardRead(short * input, int nSamples)
 {
 	short samples[65536];
 	int n;
 	int ret;
 	int avail;
-	int start;
 
 	if (rechandle == NULL)
 		return 0;
@@ -1052,6 +1056,8 @@ int inIndex = 0;				// DMA Buffer being used 0 or 1
 
 BOOL DMARunning = FALSE;		// Used to start DMA on first write
 
+void ProcessNewSamples(short * Samples, int nSamples);
+
 short * SendtoCard(short * buf, int n)
 {
 	if (Loopback)
@@ -1084,7 +1090,7 @@ int InitSound(BOOL Quiet)
 	GetInputDeviceCollection();
 	GetOutputDeviceCollection();
 	
-	if (!OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, 1))
+	if (!OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, Quiet))
 		return FALSE;
 
 	printf("InitSound %s %s\n", CaptureDevice, PlaybackDevice);
@@ -1132,7 +1138,7 @@ void PollReceivedSamples()
 
 				sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
 
-				WriteDebugLog(LOGDEBUG, "Input peaks = %d, %d", min, max);
+				Debugprintf("Input peaks = %d, %d", min, max);
 			}
 			min = max = 0;							// Every 2 secs
 		}
@@ -1165,16 +1171,6 @@ void CloseSound()
 	CloseSoundCard();
 }
 
-
-
-
-VOID WriteSamples(short * buffer, int len)
-{
-
-#ifdef WIN32
-	fwrite(buffer, 1, len * 2, wavfp1);
-#endif
-}
 
 short * SoundInit()
 {
@@ -1555,6 +1551,8 @@ HANDLE OpenCOMPort(char * Port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet,
 	struct speed_struct *s;
 
 	char fulldev[80];
+
+	UNUSED(Stopbits);
 
 	sprintf(fulldev, "/dev/%s", Port);
 

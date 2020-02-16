@@ -41,8 +41,14 @@ void AGW_AX25_frame_analiz(int snd_ch, int RX, string * frame);
 
 void AGW_frame_analiz(AGWUser *  AGW);
 void AGW_send_to_app(void * socket, string * data);
-string * make_frame(string * data, char * path, byte  pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpt, boolean pf, boolean cr);
-
+string * make_frame(string * data, byte * path, byte  pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpt, boolean pf, boolean cr);
+void del_incoming_mycalls_by_sock(void * socket);
+void del_incoming_mycalls(char * src_call);
+void send_data_buf(TAX25Port * AX25Sess, int  nr);
+void get_monitor_path(byte * path, char * mycall, char * corrcall, char * digi);
+void decode_frame(string * frame, byte * path, string * data,
+	byte * pid, byte * nr, byte * ns, byte * f_type, byte * f_id,
+	byte *  rpt, byte * pf, byte * cr);
 
 
 int AGWVersion[2] = {2005, 127};
@@ -384,7 +390,7 @@ string * AGW_K_Frame(int port, int PID, char * CallFrom, char * CallTo, string *
 
 	DataLen = Data->Length;
 
-	Msg = AGW_frame_header(port, 'K', 0, CallFrom, CallTo, DataLen);
+	Msg = AGW_frame_header(port, 'K', PID, CallFrom, CallTo, DataLen);
 
 	stringAdd(Msg, Data->Data, Data->Length);
 
@@ -397,6 +403,7 @@ string * AGW_K_Frame(int port, int PID, char * CallFrom, char * CallTo, string *
 
 void on_AGW_P_frame(AGWUser * AGW)
 {
+	UNUSED(AGW);
 }
 
 void on_AGW_X_frame(AGWUser * AGW, char * CallFrom)
@@ -412,7 +419,7 @@ void on_AGW_X_frame(AGWUser * AGW, char * CallFrom)
 }
 
 
-void on_AGW_Xs_frame(AGWUser * AGW, char * CallFrom)
+void on_AGW_Xs_frame(char * CallFrom)
 {
 	del_incoming_mycalls(CallFrom);
 };
@@ -485,7 +492,6 @@ void on_AGW_Y_frame(void * socket, int snd_ch, char * CallFrom, char * CallTo)
 void on_AGW_M_frame(int port, byte PID, char * CallFrom, char *CallTo, byte *  Msg, int MsgLen)
 {
 	byte path[80];
-	int snd_ch;
 	char Calls[80];
 	string * Data = newString();
 
@@ -550,7 +556,7 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame)
 		AX25Sess->socket = AGW->socket;
 
 		AX25Sess->pathLen = get_addr(path, 0, 0, axpath);
-		strcpy(AX25Sess->Path, axpath);
+		strcpy((char *)AX25Sess->Path, (char *)axpath);
 		reverse_addr(axpath, AX25Sess->ReversePath, AX25Sess->pathLen);
 
 		set_link(AX25Sess, AX25Sess->Path);
@@ -595,7 +601,7 @@ void on_AGW_Ds_frame(void * socket, int snd_ch, char * CallFrom, char * CallTo)
 	{
 		string * Msg = newString();
 
-		Msg->Length = sprintf(Msg->Data, "*** DISCONNECTED From Station %s\r", CallTo);
+		Msg->Length = sprintf((char *)Msg->Data, "*** DISCONNECTED From Station %s\r", CallTo);
 		Msg->Length++;					// Include the terminating NULL
 
 		//del_outgoing_mycalls(CallTo);
@@ -867,13 +873,10 @@ void AGW_AX25_data_in(void  * socket, int snd_ch, int PID, byte * path, string *
 
 void AGW_AX25_conn(TAX25Port * AX25Sess, int snd_ch, byte mode)
 {
-
 	string * Msg = newString();
-	int agw_port;
 
 	switch (mode)
 	{
-
 	case MODE_OTHER:
 
 		Msg->Length = sprintf((char *)Msg->Data, "*** CONNECTED To Station  %s\r", AX25Sess->corrcall);
@@ -896,7 +899,6 @@ void AGW_AX25_conn(TAX25Port * AX25Sess, int snd_ch, byte mode)
 void AGW_AX25_disc(TAX25Port * AX25Sess, byte mode)
 {
 	string * Msg = newString();
-	int agw_port;
 
 	switch (mode)
 	{
@@ -942,6 +944,8 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 	int len;
 
 	AGWUser * AGW;
+
+	UNUSED(rpt);
 
 	len = data->Length;
 
@@ -1224,7 +1228,7 @@ void AGW_frame_analiz(AGWUser *  AGW)
 
 	case 'x':
 		
-		on_AGW_Xs_frame(AGW, Frame->callfrom);
+		on_AGW_Xs_frame(Frame->callfrom);
 		return;
 
 	case 'G':

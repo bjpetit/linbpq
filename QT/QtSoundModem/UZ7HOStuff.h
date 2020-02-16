@@ -2,7 +2,10 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.4"
+#define VersionString "0.0.0.8"
+
+// Added FX25. 4x100 FEC and V27 not Working and disabled
+// 0.8 V27 now OK.
 
 #include <string.h>
 #include <stdlib.h>
@@ -55,8 +58,7 @@ extern "C" {
 #define integer int  //           -2,147,483,648 to 2,147,483,647
 #define int64 long long		 // -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807
 
-
-	typedef unsigned long ULONG;
+typedef unsigned long ULONG;
 
 #define UCHAR unsigned char
 #define UINT unsigned int
@@ -74,227 +76,243 @@ extern "C" {
 // Each pointer is to a Data/Length pair
 //Maybe something like
 
-	typedef struct string_T
-	{
-		unsigned char * Data;
-		int Length;
-		int AllocatedLength;				// A reasonable sized block is allocated at the start to speed up adding chars
+typedef struct string_T
+{
+	unsigned char * Data;
+	int Length;
+	int AllocatedLength;				// A reasonable sized block is allocated at the start to speed up adding chars
 
-	}string;
+}string;
 
+typedef struct TStringList_T
+{
+	int Count;
+	string ** Items;
 
-	typedef struct TStringList_T
-	{
-		int Count;
-		string ** Items;
+} TStringList;
 
-	} TStringList;
+// QPSK struct
 
-	// QPSK struct
-
-	typedef struct TQPSK_t
-	{
-		//		UCHAR tx[4];
-		int count[4];
-		UCHAR rx[4];
-		UCHAR mode;
-	} TPQSK;
-
-
-	typedef struct TKISSMode_t
-	{
-		string * data_in;
-		void * Socket;				// Used as a key
-
-		// Not sure what rest are used for. Seems to be one per channel
-
-		TStringList buffer[4];
-		TStringList request[4];
-		TStringList acked[4];
-		TStringList irequest[4];
-		TStringList iacked[4];
-
-	} TKISSMode;
-
-	typedef struct  TMChannel_t
-	{
-
-		single prev_LPF1I_buf[4096];
-		single prev_LPF1Q_buf[4096];
-		single prev_dLPFI_buf[4096];
-		single prev_dLPFQ_buf[4096];
-		single prev_AFCI_buf[4096];
-		single prev_AFCQ_buf[4096];
-		single AngleCorr;
-		single MUX_osc;
-		single AFC_IZ1;
-		single AFC_IZ2;
-		single AFC_QZ1;
-		single AFC_QZ2;
-		single AFC_bit_buf1I[1024];
-		single AFC_bit_buf1Q[1024];
-		single AFC_bit_buf2[1024];
-		single AFC_IIZ1;
-		single AFC_QQZ1;
-
-	} TMChannel;
+typedef struct TQPSK_t
+{
+	UCHAR tx[4];
+	int count[4];
+	UCHAR rx[4];
+	UCHAR mode;
+} TPQSK;
 
 
-	typedef struct TDetector_t
-	{
-		TStringList	mem_ARQ_F_buf[5];
-		TStringList mem_ARQ_buf[5];
-		float pll_loop[5];
-		float last_sample[5];
-		UCHAR ones[5];
-		UCHAR zeros[5];
-		float bit_buf[5][1024];
-		float bit_buf1[5][1024];
-		UCHAR sample_cnt[5];
-		UCHAR last_bit[5];
-		float PSK_IZ1[5];
-		float PSK_QZ1[5];
-		float PkAmpI[5];
-		float PkAmpQ[5];
-		float PkAmp[5];
-		float PkAmpMax[5];
-		int newpkpos[5];
-		float AverageAmp[5];
-		float AngleCorr[5];
-		float MinAmp[5];
-		float MaxAmp[5];
-		float MUX3_osc[5];
-		float MUX3_1_osc[5];
-		float MUX3_2_osc[5];
-		float Preemphasis6[5];
-		float Preemphasis12[5];
-		float PSK_AGC[5];
-		float AGC[5];
-		float AGC1[5];
-		float AGC2[5];
-		float AGC3[5];
-		float AGC_max[5];
-		float AGC_min[5];
-		float AFC_IZ1[5];
-		float AFC_IZ2[5];
-		float AFC_QZ1[5];
-		float AFC_QZ2[5];
+typedef struct TKISSMode_t
+{
+	string * data_in;
+	void * Socket;				// Used as a key
 
-		UCHAR last_rx_bit[5];
-		UCHAR bit_stream[5];
-		UCHAR byte_rx[5];
-		UCHAR bit_stuff_cnt[5];
-		UCHAR bit_cnt[5];
-		float bit_osc[5];
-		UCHAR frame_status[5];
-		string rx_data[5];
-		string FEC_rx_data[5];
-		//
-		UCHAR FEC_pol[5];
-		unsigned short FEC_err[5];
-		long long FEC_header1[5][2];
-		unsigned short FEC_blk_int[5];
-		unsigned short FEC_len_int[5];
-		unsigned short FEC_len[5];
+	// Not sure what rest are used for. Seems to be one per channel
 
-		UCHAR rx_intv_tbl[5][4];
-		UCHAR rx_intv_sym[5];
-		UCHAR rx_viterbi[5];
-		UCHAR viterbi_cnt[5];
-		//	  SurvivorStates [1..4,0..511] of TSurvivor;
-			  //
-		TMChannel MChannel[5][4];
+	TStringList buffer[4];
+	TStringList request[4];
+	TStringList acked[4];
+	TStringList irequest[4];
+	TStringList iacked[4];
 
-		float AFC_dF_avg[5];
-		float AFC_dF[5];
-		float AFC_bit_osc[5];
-		float AFC_bit_buf[5][1024];
-		unsigned short AFC_cnt[5];
+} TKISSMode;
 
-		string raw_bits1[5];
-		string raw_bits[5];
-		UCHAR last_nrzi_bit[5];
+typedef struct  TMChannel_t
+{
 
-		float BPF_core[5][2048];
-		float LPF_core[5][2048];
+	single prev_LPF1I_buf[4096];
+	single prev_LPF1Q_buf[4096];
+	single prev_dLPFI_buf[4096];
+	single prev_dLPFQ_buf[4096];
+	single prev_AFCI_buf[4096];
+	single prev_AFCQ_buf[4096];
+	single AngleCorr;
+	single MUX_osc;
+	single AFC_IZ1;
+	single AFC_IZ2;
+	single AFC_QZ1;
+	single AFC_QZ2;
+	single AFC_bit_buf1I[1024];
+	single AFC_bit_buf1Q[1024];
+	single AFC_bit_buf2[1024];
+	single AFC_IIZ1;
+	single AFC_QQZ1;
 
-		float src_INTR_buf[5][8192];
-		float src_INTRI_buf[5][8192];
-		float src_INTRQ_buf[5][8192];
-		float src_LPF1I_buf[5][8192];
-		float src_LPF1Q_buf[5][8192];
+} TMChannel;
 
-		float src_BPF_buf[5][2048];
-		float src_Loop_buf[5][8192];
-		float prev_BPF_buf[5][4096];
-
-		float prev_LPF1I_buf[5][4096];
-		float prev_LPF1Q_buf[5][4096];
-		float prev_INTR_buf[5][16384];
-		float prev_INTRI_buf[5][16384];
-		float prev_INTRQ_buf[5][16384];
-
-	} TDetector;
+typedef struct TFX25_t
+{
+	string  data;
+	byte  status;
+	byte  bit_cnt;
+	byte  byte_rx;
+	unsigned long long tag;
+	byte  size;
+	byte  rs_size;
+	byte size_cnt;
+} TFX25;
 
 
-	typedef struct AGWUser_t
-	{
-		void *socket;
-		string * data_in;
-		TStringList AGW_frame_buf;
-		boolean	Monitor ;
-		boolean	Monitor_raw;
+
+typedef struct TDetector_t
+{
+	struct TFX25_t fx25[4];
+	TStringList	mem_ARQ_F_buf[5];
+	TStringList mem_ARQ_buf[5];
+	float pll_loop[5];
+	float last_sample[5];
+	UCHAR ones[5];
+	UCHAR zeros[5];
+	float bit_buf[5][1024];
+	float bit_buf1[5][1024];
+	UCHAR sample_cnt[5];
+	UCHAR last_bit[5];
+	float PSK_IZ1[5];
+	float PSK_QZ1[5];
+	float PkAmpI[5];
+	float PkAmpQ[5];
+	float PkAmp[5];
+	float PkAmpMax[5];
+	int newpkpos[5];
+	float AverageAmp[5];
+	float AngleCorr[5];
+	float MinAmp[5];
+	float MaxAmp[5];
+	float MUX3_osc[5];
+	float MUX3_1_osc[5];
+	float MUX3_2_osc[5];
+	float Preemphasis6[5];
+	float Preemphasis12[5];
+	float PSK_AGC[5];
+	float AGC[5];
+	float AGC1[5];
+	float AGC2[5];
+	float AGC3[5];
+	float AGC_max[5];
+	float AGC_min[5];
+	float AFC_IZ1[5];
+	float AFC_IZ2[5];
+	float AFC_QZ1[5];
+	float AFC_QZ2[5];
+
+	UCHAR last_rx_bit[5];
+	UCHAR bit_stream[5];
+	UCHAR byte_rx[5];
+	UCHAR bit_stuff_cnt[5];
+	UCHAR bit_cnt[5];
+	float bit_osc[5];
+	UCHAR frame_status[5];
+	string rx_data[5];
+	string FEC_rx_data[5];
+	//
+	UCHAR FEC_pol[5];
+	unsigned short FEC_err[5];
+	long long FEC_header1[5][2];
+	unsigned short FEC_blk_int[5];
+	unsigned short FEC_len_int[5];
+	unsigned short FEC_len[5];
+
+	unsigned short FEC_len_cnt[5];
 	
-	} AGWUser;
+	UCHAR rx_intv_tbl[5][4];
+	UCHAR rx_intv_sym[5];
+	UCHAR rx_viterbi[5];
+	UCHAR viterbi_cnt[5];
+	//	  SurvivorStates [1..4,0..511] of TSurvivor;
+		  //
+	TMChannel MChannel[5][4];
 
-	typedef struct  TAX25Info_t
-	{
-		longint	stat_s_pkt;
-		longint stat_s_byte;
-		longint stat_r_pkt;
-		longint stat_r_byte;
-		longint stat_r_fc;
-		time_t stat_begin_ses;
-		time_t stat_end_ses;
-		longint stat_l_r_byte;
-		longint stat_l_s_byte;
+	float AFC_dF_avg[5];
+	float AFC_dF[5];
+	float AFC_bit_osc[5];
+	float AFC_bit_buf[5][1024];
+	unsigned short AFC_cnt[5];
 
-	} TAX25Info;
+	string raw_bits1[5];
+	string raw_bits[5];
+	UCHAR last_nrzi_bit[5];
 
-	typedef struct TAX25Port_t
-	{
-		byte hi_vs;
-		byte vs;
-		byte vr;
-		byte PID;
-		TStringList in_data_buf;
-		TStringList frm_collector;
-		string frm_win[8];
-		string out_data_buf;
-		word t1;
-		word t2;
-		word t3;
-		byte i_lo;
-		byte i_hi;
-		word n1;
-		word n2;
-		word IPOLL_cnt;
-		TStringList frame_buf; //буфер кадров на передачу
-		TStringList I_frame_buf;
-		byte status;
-		word clk_frack;
-		char corrcall[10];
-		char mycall[10];
-		UCHAR digi[56];
-		UCHAR Path[80];				// Path in ax25 format - added to save building it each time
-		UCHAR ReversePath[80];
-		int snd_ch;					// Simplifies parameter passing
-		int port;
-		int pathLen;
-		void * socket;
-		char kind[16];
-		TAX25Info info;
-	} TAX25Port;
+	float BPF_core[5][2048];
+	float LPF_core[5][2048];
+
+	float src_INTR_buf[5][8192];
+	float src_INTRI_buf[5][8192];
+	float src_INTRQ_buf[5][8192];
+	float src_LPF1I_buf[5][8192];
+	float src_LPF1Q_buf[5][8192];
+
+	float src_BPF_buf[5][2048];
+	float src_Loop_buf[5][8192];
+	float prev_BPF_buf[5][4096];
+
+	float prev_LPF1I_buf[5][4096];
+	float prev_LPF1Q_buf[5][4096];
+	float prev_INTR_buf[5][16384];
+	float prev_INTRI_buf[5][16384];
+	float prev_INTRQ_buf[5][16384];
+
+} TDetector;
+
+
+
+typedef struct AGWUser_t
+{
+	void *socket;
+	string * data_in;
+	TStringList AGW_frame_buf;
+	boolean	Monitor;
+	boolean	Monitor_raw;
+
+} AGWUser;
+
+typedef struct  TAX25Info_t
+{
+	longint	stat_s_pkt;
+	longint stat_s_byte;
+	longint stat_r_pkt;
+	longint stat_r_byte;
+	longint stat_r_fc;
+	time_t stat_begin_ses;
+	time_t stat_end_ses;
+	longint stat_l_r_byte;
+	longint stat_l_s_byte;
+
+} TAX25Info;
+
+typedef struct TAX25Port_t
+{
+	byte hi_vs;
+	byte vs;
+	byte vr;
+	byte PID;
+	TStringList in_data_buf;
+	TStringList frm_collector;
+	string frm_win[8];
+	string out_data_buf;
+	word t1;
+	word t2;
+	word t3;
+	byte i_lo;
+	byte i_hi;
+	word n1;
+	word n2;
+	word IPOLL_cnt;
+	TStringList frame_buf; //буфер кадров на передачу
+	TStringList I_frame_buf;
+	byte status;
+	word clk_frack;
+	char corrcall[10];
+	char mycall[10];
+	UCHAR digi[56];
+	UCHAR Path[80];				// Path in ax25 format - added to save building it each time
+	UCHAR ReversePath[80];
+	int snd_ch;					// Simplifies parameter passing
+	int port;
+	int pathLen;
+	void * socket;
+	char kind[16];
+	TAX25Info info;
+} TAX25Port;
 
 
 #define LOGEMERGENCY 0 
@@ -515,6 +533,12 @@ extern "C" {
 #define DCD_WAIT_SLOT 0
 #define DCD_WAIT_PERSIST 1
 
+#define FX25_MODE_NONE  0
+#define FX25_MODE_RX  1
+#define FX25_MODE_TXRX 2
+#define FX25_TAG 0
+#define FX25_LOAD 1
+
 #define    MODE_OUR 0
 #define    MODE_OTHER 1
 #define    MODE_RETRY 2
@@ -730,6 +754,12 @@ extern char PlaybackDevice[80];
 
 extern TAX25Port AX25Port[4][port_num];
 
+extern int fx25_mode[4];
+
+extern int tx_fx25_size[4];
+extern int tx_fx25_size_cnt[4];
+extern int tx_fx25_mode[4];
+
 // Function prototypes
 
 void KISS_send_ack(UCHAR port, string * data);
@@ -757,9 +787,9 @@ int get_addr(char * Calls, int rpt, int cr, UCHAR * AXCalls);
 void reverse_addr(byte * path, byte * revpath, int Len);
 void set_link(TAX25Port * AX25Sess, UCHAR * axpath);
 void rst_timer(TAX25Port * AX25Sess);
-void set_unlink(TAX25Port * AX25Sess, char * path);
+void set_unlink(TAX25Port * AX25Sess, byte * path);
 unsigned short get_fcs(UCHAR * Data, unsigned short len);
-void KISSSendtoServer(void * sock, char * Msg, int Len);
+void KISSSendtoServer(void * sock, byte * Msg, int Len);
 int ConvFromAX25(unsigned char * incall, char * outcall);
 BOOL ConvToAX25(char * callsign, unsigned char * ax25call);
 void Debugprintf(const char * format, ...);

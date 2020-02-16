@@ -91,23 +91,40 @@ void KISS_add_stream(void * Socket)
 
 }
 
-/*
-procedure KISS_del_stream(socket: integer);
-var
-  idx: integer;
-begin
-  if KISS.socket.Count>0 then
-  begin
-    idx:=KISS.socket.IndexOf(inttostr(socket));
-    if idx>-1 then
-    begin
-      KISS.socket.Delete(idx);
-      KISS.data_in.Delete(idx);
-    end;
-  end;
-end;
+void KISS_del_socket(void * socket)
+{
+	int i;
+	
+	TKISSMode * KISS = NULL;
 
-function replace_str(p1,p2,p3: string): string;
+	if (KISSConCount == 0)
+		return;
+
+	for (i = 0; i < KISSConCount; i++)
+	{
+		if (KissConnections[i]->Socket == socket)
+		{
+			KISS = KissConnections[i];
+			break;
+		}
+	}
+
+	if (KISS == NULL)
+		return;
+
+	// Need to remove entry and move others down
+
+	KISSConCount--;
+
+	while (i < KISSConCount)
+	{
+		KissConnections[i] = KissConnections[i + 1];
+		i++;
+	}
+}
+
+
+/*function replace_str(p1,p2,p3: string): string;
 var
   len1,len2,i: longint;
   s,s1: string;
@@ -391,8 +408,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 
 void KISSDataReceived(void * socket, UCHAR * data, int length)
 {
-	int idx, i, p;
-	string frame;
+	int i;
 	UCHAR * ptr1, * ptr2;
 	int Length;
 

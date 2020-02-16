@@ -23,7 +23,7 @@
    <widget class="QSpinBox" name="centerA">
     <property name="geometry">
      <rect>
-      <x>170</x>
+      <x>180</x>
       <y>4</y>
       <width>56</width>
       <height>22</height>
@@ -39,9 +39,9 @@
    <widget class="QComboBox" name="modeB">
     <property name="geometry">
      <rect>
-      <x>267</x>
+      <x>275</x>
       <y>4</y>
-      <width>146</width>
+      <width>156</width>
       <height>22</height>
      </rect>
     </property>
@@ -104,7 +104,7 @@
    <widget class="QSpinBox" name="centerB">
     <property name="geometry">
      <rect>
-      <x>417</x>
+      <x>435</x>
       <y>4</y>
       <width>56</width>
       <height>22</height>
@@ -158,7 +158,7 @@
      <rect>
       <x>22</x>
       <y>4</y>
-      <width>146</width>
+      <width>156</width>
       <height>22</height>
      </rect>
     </property>
@@ -179,7 +179,7 @@
    <widget class="QLabel" name="labelB">
     <property name="geometry">
      <rect>
-      <x>252</x>
+      <x>260</x>
       <y>8</y>
       <width>16</width>
       <height>14</height>

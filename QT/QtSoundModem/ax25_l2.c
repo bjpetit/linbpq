@@ -32,7 +32,7 @@ implementation
 uses ax25,ax25_agw,sm_main,kiss_mode;
 */
 
-string * make_frame(string * data, char * path, byte  pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpt, boolean pf, boolean cr);
+string * make_frame(string * data, byte * path, byte  pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpt, boolean pf, boolean cr);
 void rst_t3(AX25Sess);
 
 TAX25Port * get_user_port(int snd_ch, byte * path);
@@ -565,7 +565,7 @@ void set_link(TAX25Port * AX25Sess, UCHAR * axpath)
 
 #define    MODE_OUR 0
 
-void set_unlink(TAX25Port * AX25Sess, char * path)
+void set_unlink(TAX25Port * AX25Sess, byte * path)
 {
 	if (AX25Sess->status != STAT_NO_LINK)
 	{

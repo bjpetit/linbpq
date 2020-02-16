@@ -1073,7 +1073,7 @@ boolean add_incoming_mycalls(void * socket, char * src_call)
 
 
 
-void del_incoming_mycalls(byte * src_call)
+void del_incoming_mycalls(char * src_call)
 {
 	int i = 0;
 	byte axcall[7];

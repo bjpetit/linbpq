@@ -2,7 +2,6 @@
 #include <QtNetwork>
 #include <QDebug>
 
-
 #define CONNECT(sndr, sig, rcvr, slt) connect(sndr, SIGNAL(sig), rcvr, SLOT(slt))
 
 class mynet : public QObject
@@ -23,7 +22,7 @@ public slots:
 
 	void displayError(QAbstractSocket::SocketError socketError);
 
-	void sendtoKISS(void * sock, char * Msg, int Len);
+	void sendtoKISS(void * sock, unsigned char * Msg, int Len);
 
 private:
 	QTcpServer* tcpServer;
@@ -43,7 +42,7 @@ class workerThread : public QThread
 signals:
 	void updateDCD(int, int);
 	void sendtoTrace(char *, int);
-	void sendtoKISS(void *, char *, int);
+	void sendtoKISS(void *, unsigned char *, int);
 	void openSockets();
 
 private:

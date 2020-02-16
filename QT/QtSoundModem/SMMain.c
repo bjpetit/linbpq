@@ -91,6 +91,8 @@ void soundMain()
 
 	initfft();
 
+	RsCreate();				// RS code for MPSK
+
 	// Initialise KISS port
 
 	detector_init();
@@ -603,7 +605,7 @@ void DoTX(int Chan)
 	if (tx_status[Chan] == TX_NO_DATA)
 	{
 		Flush();
-		WriteDebugLog(LOGALERT, "TX Complete");
+		Debugprintf("TX Complete");
 		RadioPTT(0, 0);
 		tx_status[Chan] = TX_SILENCE;
 
@@ -640,7 +642,7 @@ void DoTX(int Chan)
 
 	// Start a new send. modulator should handle TXD etc
 
-	WriteDebugLog(LOGALERT, "TX Start");
+	Debugprintf("TX Start");
 	SampleNo = 0;
 
 	SoundIsPlaying = TRUE;
@@ -662,7 +664,7 @@ void ptton(int snd_ch)
 void stoptx(int snd_ch)
 {
 	Flush();
-	WriteDebugLog(LOGALERT, "TX Complete");
+	Debugprintf("TX Complete");
 	RadioPTT(snd_ch, 0);
 	tx_status[snd_ch] = TX_SILENCE;
 

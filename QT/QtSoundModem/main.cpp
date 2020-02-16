@@ -1,3 +1,7 @@
+//
+//	 My port of UZ7HO's Soundmodem
+//
+
 #include "QtSoundModem.h"
 #include <QtWidgets/QApplication>
 #include "UZ7HOStuff.h"
@@ -9,8 +13,8 @@ extern void getSettings();
 workerThread *t;
 mynet m1;
 
-QCoreApplication * aa;
-QApplication * a;
+QCoreApplication * a;		
+
 QtSoundModem * w;
 
 int main(int argc, char *argv[])
@@ -28,9 +32,9 @@ int main(int argc, char *argv[])
 	qDebug() << Title;
 
 	if (nonGUIMode)
-		aa = new QCoreApplication(argc, argv);
+		a = new QCoreApplication(argc, argv);
 	else
-		a = new QApplication(argc, argv);
+		a = new QApplication(argc, argv);			// GUI version
 
 	getSettings();
 
@@ -46,8 +50,5 @@ int main(int argc, char *argv[])
 
 	m1.start();				// Start TCP 
 
-	if (nonGUIMode)
-		return aa->exec();
-	else
-		return a->exec();
+	return a->exec();
 }

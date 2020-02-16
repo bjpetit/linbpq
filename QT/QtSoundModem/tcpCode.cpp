@@ -22,6 +22,7 @@ extern "C"
 	void KISSDataReceived(void * sender, char * data, int length);
 	void AGW_explode_frame(void * soket, char * data, int len);
 	void KISS_add_stream(void * Socket);
+	void KISS_del_socket(void * Socket);
 	void AGW_add_socket(void * Socket);
 	void AGW_del_socket(void * socket);
 	void Debugprintf(const char * format, ...);
@@ -64,7 +65,7 @@ void mynet::start()
 		}
 	}
 
-	QObject::connect(t, SIGNAL(sendtoKISS(void *, char *, int)), this, SLOT(sendtoKISS(void *, char *, int)), Qt::QueuedConnection);
+	QObject::connect(t, SIGNAL(sendtoKISS(void *, unsigned char *, int)), this, SLOT(sendtoKISS(void *, unsigned char *, int)), Qt::QueuedConnection);
 
 
 	QTimer *timer = new QTimer(this);
@@ -90,7 +91,7 @@ void mynet::onAGWConnection()
 
 	AGW_add_socket(clientSocket);
 
-	Debugprintf("Connect Sock %x", clientSocket);
+	Debugprintf("AGW Connect Sock %x", clientSocket);
 }
 
 
@@ -124,6 +125,8 @@ void mynet::onKISSConnection()
 	_KISSSockets.push_back(clientSocket);
 
 	KISS_add_stream(clientSocket);
+
+	Debugprintf("KISS Connect Sock %x", clientSocket);
 }
 
 void mynet::onKISSSocketStateChanged(QAbstractSocket::SocketState socketState)
@@ -131,6 +134,9 @@ void mynet::onKISSSocketStateChanged(QAbstractSocket::SocketState socketState)
 	if (socketState == QAbstractSocket::UnconnectedState)
 	{
 		QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
+
+		KISS_del_socket(sender);
+
 		_KISSSockets.removeOne(sender);
 	}
 }
@@ -158,25 +164,25 @@ void mynet::displayError(QAbstractSocket::SocketError socketError)
 
 
 
-void mynet::sendtoKISS(void * sock, char * Msg, int Len)
+void mynet::sendtoKISS(void * sock, unsigned char * Msg, int Len)
 {
 	if (sock == NULL)
 	{
 		for (QTcpSocket* socket : _KISSSockets)
 		{
-			socket->write(Msg, Len);
+			socket->write((char *)Msg, Len);
 		}
 	}
 	else
 	{
 		QTcpSocket* socket = (QTcpSocket*)sock;
-		socket->write(Msg, Len);
+		socket->write((char *)Msg, Len);
 	}
 	free(Msg);
 }
 
 
-extern "C" void KISSSendtoServer(void * sock, char * Msg, int Len)
+extern "C" void KISSSendtoServer(void * sock, byte * Msg, int Len)
 {
 	emit t->sendtoKISS(sock, Msg, Len);
 }

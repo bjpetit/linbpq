@@ -54,6 +54,9 @@ void GetPortSettings(int Chan)
 	IPOLL[Chan] = getAX25Param("IPOLL", 80).toInt();
 	//MyDigiCall[Chan]= getAX25Param("MyDigiCall/")
 
+	fx25_mode[Chan] = getAX25Param("FX25", FX25_MODE_RX).toInt();
+
+
 	soundChannel[Chan] = getAX25Param("soundChannel", 1).toInt();
 }
 
@@ -69,6 +72,8 @@ void getSettings()
 
 	strcpy(CaptureDevice, settings->value("Init/SndRXDeviceName", "hw:1,0").toString().toUtf8());
 	strcpy(PlaybackDevice, settings->value("Init/SndTXDeviceName", "hw:1,0").toString().toUtf8());
+
+	raduga = settings->value("Init/DispMode", DISP_RGB).toInt();
 
 	strcpy(PTTPort, settings->value("Init/PTT", "").toString().toUtf8());
 
@@ -107,8 +112,11 @@ void getSettings()
 	emph_db[0] = settings->value("Modem/PreEmphasisDB1", 0).toInt();
 	emph_db[1] = settings->value("Modem/PreEmphasisDB2", 0).toInt();
 
-	Firstwaterfall = settings->value("Window/Waterfall1", TRUE).toInt();;
-	Secondwaterfall = settings->value("Window/Waterfall2", TRUE).toInt();;
+	Firstwaterfall = settings->value("Window/Waterfall1", TRUE).toInt();
+	Secondwaterfall = settings->value("Window/Waterfall2", TRUE).toInt();
+
+	txdelay[0] = settings->value("Modem/TxDelay1", 250).toInt();
+	txdelay[1] = settings->value("Modem/TxDelay2", 250).toInt();
 
 	getAX25Params(0);
 	getAX25Params(1);
@@ -199,6 +207,7 @@ void saveSettings()
 	settings->setValue("Init/DualPTT", DualPTT);
 	settings->setValue("Init/TXRotate", TX_rotate);
 
+	settings->setValue("Init/DispMode", raduga);
 
 	settings->setValue("Init/PTT", PTTPort);
 
@@ -236,6 +245,12 @@ void saveSettings()
 
 	settings->setValue("Window/Waterfall1", Firstwaterfall);
 	settings->setValue("Window/Waterfall2", Secondwaterfall);
+
+	settings->setValue("Modem/TxDelay1", txdelay[0]);
+	settings->setValue("Modem/TxDelay2", txdelay[1] );
+
+	settings->setValue("AX25_A/FX25", fx25_mode[0]);
+	settings->setValue("AX25_B/FX25", fx25_mode[1]);
 
 	settings->sync();
 

@@ -1,4 +1,6 @@
+// UZ7HO Soundmodem Port
 
+// Not Working 4psk100 FEC 
 
 #include "QtSoundModem.h"
 #include <qheaderview.h>
@@ -118,19 +120,9 @@ int NextWaterfallLine[2] = { 0 };
 unsigned int LastLevel = 255;
 unsigned int LastBusy = 255;
 
-extern "C" void WriteDebugLog(int LogLevel, const char * format, ...)
+extern "C" void WriteDebugLog(char * Mess)
 {
-	char Mess[10000];
-	va_list(arglist);
-	char timebuf[128];
-	UCHAR Value[100];
-
-	va_start(arglist, format);
-	vsnprintf(Mess, sizeof(Mess), format, arglist);
-	
 	qDebug() << Mess;
-
-	return;
 }
 
 void QtSoundModem::doupdateDCD(int Chan, int State)
@@ -143,10 +135,10 @@ extern "C" char * ShortDateTime();
 
 extern "C" void put_frame(int snd_ch, string * frame, char * code, int  tx, int excluded)
 {
+	UNUSED(excluded);
+
 	int Len;
 	char * Msg = (char *)malloc(1024);		// Cant pass local variable via signal/slot
-
-	string * x = newString();
 
 	if (strcmp(code, "NON-AX25") == 0)
 		sprintf(Msg, "%d: <NON-AX25 frame Len = %d [%s%c]\r", snd_ch, frame->Length, ShortDateTime(), 'R');
@@ -171,6 +163,8 @@ extern "C" void updateDCD(int Chan, bool State)
 
 bool QtSoundModem::eventFilter(QObject* obj, QEvent *evt)
 {
+	UNUSED(obj);
+
 	if (evt->type() == QEvent::WindowStateChange)
 	{
 		if (windowState().testFlag(Qt::WindowMinimized) == true)
@@ -301,8 +295,6 @@ void QtSoundModem::menuChecked()
 
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 {
-	int i;
-
 	ui.setupUi(this);
 
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
@@ -334,6 +326,22 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		ui.modeA->addItem(modes_name[i]);
 		ui.modeB->addItem(modes_name[i]);
 	}
+
+	QStandardItemModel *model = dynamic_cast<QStandardItemModel *>(ui.modeA->model());
+	QStandardItem * item = model->item(11, 0);
+	item->setEnabled(false);
+
+	model = dynamic_cast<QStandardItemModel *>(ui.modeB->model());
+	item = model->item(11, 0);
+	item->setEnabled(false);
+
+	model = dynamic_cast<QStandardItemModel *>(ui.modeA->model());
+	item = model->item(13, 0);
+//	item->setEnabled(false);
+
+	model = dynamic_cast<QStandardItemModel *>(ui.modeB->model());
+	item = model->item(13, 0);
+//	item->setEnabled(false);
 
 	char Title[128];
 
@@ -426,17 +434,14 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	// Inline handlers for Modem Params as they are pretty small
 
-	connect(ui.modeA, QOverload<int>::of(&QComboBox::currentIndexChanged),
-		[=](int index)
+	connect(ui.modeA, QOverload<int>::of(&QComboBox::currentIndexChanged), [=]()
 	{
 		ModemA = ui.modeA->currentIndex();
 		set_speed(0, ModemA);
 		saveSettings();
 	});
 
-	connect(ui.modeB, QOverload<int>::of(&QComboBox::currentIndexChanged),
-
-		[=](int index)
+	connect(ui.modeB, QOverload<int>::of(&QComboBox::currentIndexChanged), [=]()
 	{
 		ModemB = ui.modeB->currentIndex();
 		set_speed(1, ModemB);
@@ -509,6 +514,36 @@ void QtSoundModem::doModems()
 
 	Dlg->setupUi(&UI);
 
+	sprintf(valChar, "%d", bpf[0]);
+	Dlg->BPFWidthA->setText(valChar);
+
+	sprintf(valChar, "%d", bpf[1]);
+	Dlg->BPFWidthB->setText(valChar);
+
+	sprintf(valChar, "%d", txbpf[0]);
+	Dlg->TXBPFWidthA->setText(valChar);
+
+	sprintf(valChar, "%d", txbpf[1]);
+	Dlg->TXBPFWidthB->setText(valChar);
+
+	sprintf(valChar, "%d", lpf[0]);
+	Dlg->LPFWidthA->setText(valChar);
+
+	sprintf(valChar, "%d", lpf[1]);
+	Dlg->LPFWidthB->setText(valChar);
+
+	sprintf(valChar, "%d", BPF_tap[0]);
+	Dlg->BPFTapsA->setText(valChar);
+
+	sprintf(valChar, "%d", BPF_tap[1]);
+	Dlg->BPFTapsB->setText(valChar);
+
+	sprintf(valChar, "%d", LPF_tap[0]);
+	Dlg->LPFTapsA->setText(valChar);
+
+	sprintf(valChar, "%d", LPF_tap[1]);
+	Dlg->LPFTapsB->setText(valChar);
+	
 	Dlg->preEmphAllA->setChecked(emph_all[0]);
 
 	if (emph_all[0])
@@ -550,11 +585,8 @@ void QtSoundModem::doModems()
 	//	speed[1]
 	//	speed[2];
 
-	Dlg->leftA->setChecked(!soundChannel[0]);
-	Dlg->leftB->setChecked(!soundChannel[1]);
-
-	Dlg->rightA->setChecked(soundChannel[0]);
-	Dlg->rightB->setChecked(soundChannel[1]);
+	Dlg->fx25ModeA->setCurrentIndex(fx25_mode[0]);
+	Dlg->fx25ModeB->setCurrentIndex(fx25_mode[1]);
 
 	connect(Dlg->showBPF_A, &QPushButton::released, this, [=] { doFilter(0, 0); });
 	connect(Dlg->showTXBPF_A, &QPushButton::released, this, [=] { doFilter(0, 1); });
@@ -623,9 +655,8 @@ void QtSoundModem::modemaccept()
 	Q = Dlg->RXShiftB->text();
 	rcvr_offset[1] = Q.toInt();
 
-	soundChannel[0] = Dlg->rightA->isChecked();
-	soundChannel[1] = Dlg->rightB->isChecked();
-
+	fx25_mode[0] = Dlg->fx25ModeA->currentIndex();
+	fx25_mode[1] = Dlg->fx25ModeB->currentIndex();
 
 	delete(Dlg);
 	saveSettings();
@@ -655,13 +686,13 @@ void QtSoundModem::doFilter(int Chan, int Filter)
 	qPainter.setPen(Qt::black);
 
 	if (Filter == 0)
-		make_graph_buf(DET[0, 0]->BPF_core[Chan], BPF_tap[Chan], &qPainter);
+		make_graph_buf(DET[0][0].BPF_core[Chan], BPF_tap[Chan], &qPainter);
 	else if (Filter == 1)
 		make_graph_buf(tx_BPF_core[Chan], tx_BPF_tap[Chan], &qPainter);
 	else
 		make_graph_buf(LPF_core[Chan], LPF_tap[Chan], &qPainter);
 
-	bool bEnd = qPainter.end();
+	qPainter.end();
 	Dev.label->setPixmap(QPixmap::fromImage(*bitmap));
 
 	UI.exec();
@@ -1055,9 +1086,8 @@ void do_pointer(int waterfall)
 		return;
 
 	float x;
-	int Waterfall = 0;
 
-	int x1, x2, y, k, pos1, pos2, pos3;
+	int x1, x2, k, pos1, pos2, pos3;
 	QImage * bm = Header[waterfall];
 
 	QPainter qPainter(bm);
@@ -1094,7 +1124,6 @@ void do_pointer(int waterfall)
 		pos3 = roundf(rx_freq[i] * x);
 		x1 = pos1 + 5;
 		x2 = pos2 + 5;
-		y = k + 5;
 
 		qPainter.drawLine(x1, k, x2, k);
 		qPainter.drawLine(x1, k - 3, x1, k + 3);
@@ -1107,12 +1136,16 @@ void do_pointer(int waterfall)
 
 void wf_pointer(int snd_ch)
 {
+	UNUSED(snd_ch);
+
 	do_pointer(0);
 	do_pointer(1);
 }
 
 extern "C" void doWaterfall(int snd_ch)
 {
+	UNUSED(snd_ch);
+	
 	if (nonGUIMode)
 		return;
 
@@ -1120,20 +1153,18 @@ extern "C" void doWaterfall(int snd_ch)
 		return;
 
 	QImage * bm = Waterfall[snd_ch];
-	RECT s, d;
+	
 	word  i, wid;
 	single  mag;
 	UCHAR * p;
 	UCHAR Line[4096];
 
-	int lineLen, imax;
+	int lineLen;
 	word  hfft_size;
 	byte  n;
 	float RealOut[4096] = { 0 };
 	float ImagOut[4096];
 	QRegion exposed;
-	QPixmap  *pm = (QPixmap *)WaterfallCopy[snd_ch]->pixmap();
-	float max = 0;;
 
 	hfft_size = fft_size / 2;
 
@@ -1213,16 +1244,6 @@ extern "C" void doWaterfall(int snd_ch)
 		}
 
 		*/
-
-	d.left = 0;
-	d.top = 1;
-	d.right = bm->width();
-	d.bottom = bm->height();
-
-	d.left = 0;
-	d.top = 0;
-	d.right = bm->width();
-	d.bottom = bm->height() - 1;
 
 	//	bm[snd_ch].Canvas.CopyRect(d, bm[snd_ch].canvas, s)
 

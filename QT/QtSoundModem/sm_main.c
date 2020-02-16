@@ -7,7 +7,7 @@ char modes_name[modes_count][20] =
 	"AFSK AX.25 300bd","AFSK AX.25 1200bd","AFSK AX.25 600bd","AFSK AX.25 2400bd",
 	"BPSK AX.25 1200bd","BPSK AX.25 600bd","BPSK AX.25 300bd","BPSK AX.25 2400bd",
 	"QPSK AX.25 4800bd","QPSK AX.25 3600bd","QPSK AX.25 2400bd","BPSK FEC 4x100bd",
-	"DW QPSK 2400bd","DW 8PSK 4800bd","Pi/4 QPSK V26 2400bd"
+	"DW QPSK V26A 2400bd","DW 8PSK V27 4800bd","DW QPSK V26B 2400bd" 
 };
 
 typedef struct wavehdr_tag {
@@ -592,8 +592,8 @@ void init_DW2400(int snd_ch)
 
 	if (stdtones)
 		rx_freq[snd_ch] = 1800;
-	rx_shift[snd_ch] = 1200;
 
+	rx_shift[snd_ch] = 1200;
 	rx_baudrate[snd_ch] = 1200;
 
 	if (modem_def[snd_ch])
@@ -777,14 +777,14 @@ void init_speed(int snd_ch)
 		{
 		case QPSK_SM:
 
-//			move("\0\1\2\3", &qpsk_set[snd_ch].tx[0], 4); 	
-			move("\x0\x20\x40\x80", &qpsk_set[snd_ch].rx[0], 4);
+			move("\0\1\2\3", &qpsk_set[snd_ch].tx[0], 4); 	
+			move("\x0\x20\x40\x60", &qpsk_set[snd_ch].rx[0], 4);
 			break;
 
 		case QPSK_V26:
 
-//			move("\2\3\1\0", &qpsk_set[snd_ch].tx[0], 4); 	
-			move("\x60\x40\x20\x0", &qpsk_set[snd_ch].rx[0], 4);
+			move("\2\3\1\0", &qpsk_set[snd_ch].tx[0], 4); 	
+			move("\x60\x40\0\x20", &qpsk_set[snd_ch].rx[0], 4);
 			break;
 		}
 	}
@@ -1673,21 +1673,23 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 					if ((debugmode && DEBUG_DECODE) == 0)
 					{
-						if (RCVR[snd_ch] > 0)		// if more than 1 RX call Demodulator for each
-						{
-							old_rx_freq = rx_freq[snd_ch];
-							for (rcvr_idx = 1; rcvr_idx <= (RCVR[snd_ch] << 1); rcvr_idx++)
-							{
-								if (rcvr_idx > RCVR[snd_ch])
-									rx_freq[snd_ch] = old_rx_freq - rcvr_offset[snd_ch] * (rcvr_idx - RCVR[snd_ch]);
-								else
-									rx_freq[snd_ch] = old_rx_freq + rcvr_offset[snd_ch] * rcvr_idx;
+						// MAy mave more that 1 modem
 
-								Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], IS_NOT_LAST);
-							}
-							rx_freq[snd_ch] = old_rx_freq;
+						// I want to run lowest to highest to simplify my display 
+
+						int offset = -(RCVR[snd_ch] * rcvr_offset[snd_ch]); // lowest
+						int lastrx = RCVR[snd_ch] * 2 + 1;
+
+						old_rx_freq = rx_freq[snd_ch];
+
+						for (rcvr_idx = 0; rcvr_idx <= lastrx; rcvr_idx++)
+						{
+							rx_freq[snd_ch] = old_rx_freq + offset;
+							offset += rcvr_offset[snd_ch];
+
+							Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx);
 						}
-						Demodulator(snd_ch, 0, src_buf[modemtoSoundLR[snd_ch]], IS_LAST);
+						rx_freq[snd_ch] = old_rx_freq;
 					}
 				}
 
@@ -1838,7 +1840,7 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 
 	const byte * frm;
 	byte * datap;
-	byte _data[512];
+	byte _data[512] = "";
 	byte * p_data = _data;
 	int _datalen;
 

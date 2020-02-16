@@ -8,20 +8,26 @@ message("You are running qmake on a generated .pro file. This may not work!")
 
 
 HEADERS += ./UZ7HOStuff.h \
-    ./QtSoundModem.h
+    ./QtSoundModem.h \
+    ./tcpCode.h
 SOURCES += ./ax25.c \
+    ./ax25_agw.c \
     ./ax25_demod.c \
+    ./ax25_l2.c \
     ./ax25_mod.c \
+    ./berlekamp.c \
     ./Config.cpp \
+    ./galois.c \
     ./kiss_mode.c \
     ./main.cpp \
     ./QtSoundModem.cpp \
+    ./rs.c \
     ./ShowFilter.cpp \
     ./SMMain.c \
     ./sm_main.c \
     ./UZ7HOUtils.c \
     ./Waveout.c \
-	./tcpCode.cpp
+    ./tcpCode.cpp
 FORMS += ./calibrateDialog.ui \
     ./devicesDialog.ui \
     ./filterWindow.ui \

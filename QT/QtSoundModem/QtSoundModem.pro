@@ -42,7 +42,7 @@ FORMS += ./calibrateDialog.ui \
     ./QtSoundModem.ui
 RESOURCES += QtSoundModem.qrc
 
-QMAKE_CFLAGS += -Og
+QMAKE_CFLAGS += -g
 QMAKE_LFLAGS += -lasound
 QMAKE_LIBS += /usr/lib/arm-linux-gnueabihf/libfftw3f.a
 
