@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>TCP Host Config</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>QtTermTCP.ico</normaloff>QtTermTCP.ico</iconset>
+  </property>
   <widget class="QDialogButtonBox" name="buttonBox">
    <property name="geometry">
     <rect>
