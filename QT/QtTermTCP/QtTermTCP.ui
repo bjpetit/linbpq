@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>951</width>
-    <height>724</height>
+    <width>781</width>
+    <height>698</height>
    </rect>
   </property>
   <property name="font">
@@ -23,14 +23,36 @@
    <iconset resource="QtTermTCP.qrc">
     <normaloff>:/QtTermTCP/QtTermTCP.ico</normaloff>:/QtTermTCP/QtTermTCP.ico</iconset>
   </property>
-  <widget class="QWidget" name="centralWidget"/>
+  <widget class="QWidget" name="centralWidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <property name="leftMargin">
+     <number>5</number>
+    </property>
+    <property name="topMargin">
+     <number>5</number>
+    </property>
+    <property name="rightMargin">
+     <number>5</number>
+    </property>
+    <property name="bottomMargin">
+     <number>5</number>
+    </property>
+    <item row="0" column="0">
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="spacing">
+       <number>6</number>
+      </property>
+     </layout>
+    </item>
+   </layout>
+  </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>951</width>
-     <height>26</height>
+     <width>781</width>
+     <height>21</height>
     </rect>
    </property>
   </widget>

@@ -49,7 +49,6 @@
 **
 ****************************************************************************/
 
-
 #ifndef TABDIALOG_H
 #define TABDIALOG_H
 
@@ -81,6 +80,7 @@ public:
 
 private slots:
 	void myaccept();
+	void myreject();
 
 private:
 	//   Ui::TabDialog *ui;

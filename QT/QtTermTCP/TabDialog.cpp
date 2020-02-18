@@ -48,11 +48,17 @@
 **
 ****************************************************************************/
 
-
-#include <QtWidgets>
-#include "QSettings"
+#define _CRT_SECURE_NO_WARNINGS
 
 #include "TabDialog.h"
+
+#include "QSettings"
+#include "QLineEdit"
+#include "QTabWidget"
+#include "QDialogButtonBox"
+#include "QVBoxLayout"
+#include "QLabel"
+#include "QAction"
 
 extern "C" void SaveSettings();
 
@@ -68,10 +74,10 @@ extern int ConfigHost;
 
 #define MAXHOSTS 16
 
-extern "C" char Host[MAXHOSTS + 1][100];
-extern "C" int Port[MAXHOSTS + 1];
-extern "C" char UserName[MAXHOSTS + 1][80];
-extern "C" char Password[MAXHOSTS + 1][80];
+extern char Host[MAXHOSTS + 1][100];
+extern int Port[MAXHOSTS + 1];
+extern char UserName[MAXHOSTS + 1][80];
+extern char Password[MAXHOSTS + 1][80];
 
 
 //ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GUI)
@@ -83,9 +89,8 @@ TabDialog::TabDialog(QWidget *parent) : QDialog(parent)
 
 	buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
 
-	//   connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
-	connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
 
 	QVBoxLayout *mainLayout = new QVBoxLayout;
 	mainLayout->addWidget(tabWidget);
@@ -157,6 +162,11 @@ void TabDialog::myaccept()
 
 	TabDialog::accept();
 
+}
+
+void TabDialog::myreject()
+{
+	TabDialog::reject();
 }
 
 TabDialog::~TabDialog()

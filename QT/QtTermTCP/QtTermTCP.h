@@ -1,13 +1,26 @@
 #pragma once
 
-#include <QtWidgets/QMainWindow>
+#include <QMainWindow>
 #include "ui_QtTermTCP.h"
+#include "ui_ListenPort.h"
 #include "QTextEdit"
 #include "QSplitter"
 #include "QLineEdit"
 #include "QTcpSocket"
 #include <QDataStream>
 #include <QKeyEvent>
+#include "QThread"
+#include "QTcpServer"
+#include "QMdiArea"
+#include <QMdiSubWindow>
+#include "QMessageBox"
+#include "QTimer"
+#include "QSettings"
+#include "QThread"
+#include <QFontDialog>
+#include <QScrollBar>
+#include <QFileDialog>
+#include <QTabWidget>
 
 QT_BEGIN_NAMESPACE
 class QComboBox;
@@ -16,48 +29,167 @@ class QLineEdit;
 class QPushButton;
 class QTcpSocket;
 class QNetworkSession;
-QT_END_NAMESPACE
+
+class myTcpSocket : public QTcpSocket
+{
+public:
+	QWidget * Sess;
+};
+
+
+class Ui_ListenSession : public QMainWindow
+{
+	Q_OBJECT
+
+public:
+	explicit Ui_ListenSession(QWidget *Parent = 0) : QMainWindow(Parent) {}
+	~Ui_ListenSession();
+
+	int SessionType;				// Type Mask - Term, Mon, Listen
+	int CurrentWidth;
+	int CurrentHeight;				// Saved so can be restored after Cascade
+
+	QTextEdit *termWindow;
+	QTextEdit *monWindow;
+	QLineEdit *inputWindow;
+
+	myTcpSocket *clientSocket;
+
+	QAction * actActivate;			// From active Windows menu
+
+	char * KbdStack[50];
+	int StackIndex;
+
+	QMdiSubWindow *sw;				// The MdiSubwindow is the container for this session
+
+	int InputMode;
+	int SlowTimer;
+	int MonData;
+
+	int OutputSaveLen;
+	char OutputSave[16384];
+
+	int MonSaveLen;
+	char MonSave[4096];
+
+	char PortMonString[1024];		// 32 ports 32 Bytes
+	unsigned int portmask;
+	int mtxparam;
+	int mcomparam;
+	int monUI;
+	int MonitorNODES;
+	int MonitorColour;
+	int CurrentHost;
+	int Tab;						// Tab Index if Tabbed Mode
+
+protected:
+
+private slots:
+
+private:
+
+};
+
 
 class QtTermTCP : public QMainWindow
 {
 	Q_OBJECT
 
 public:
-	QtTermTCP(QWidget *parent = Q_NULLPTR);
+	QtTermTCP(QWidget *parent = NULL);
 	~QtTermTCP();
 
 private slots:
-	void Connect(int i);
 	void Disconnect();
-	void SetupHosts(int i);
+	void doYAPPSend();
+	void doYAPPSetRX();
+	void menuChecked();
+	void Connect();
 	void displayError(QAbstractSocket::SocketError socketError);
-	void connected();
-	void disconnected();
-	void bytesWritten(qint64 bytes);
 	void readyRead();
-	void inputChanged(const QString &);
-	void returnPressed();
+
+	void LreturnPressed(Ui_ListenSession * LUI);
+	void LDisconnect(Ui_ListenSession * LUI);
 	void selFont();
+	void SetupHosts();
 	void MyTimerSlot();
+	void myaccept();
+	void ListenSlot();
 	void showContextMenuM(const QPoint &pt);
 	void showContextMenuT(const QPoint &pt);
-	void ontermselectionChanged();
-	void onmonselectionChanged();
+	void doQuit();
+	void onTEselectionChanged();
+	void onLEselectionChanged();
 	void setSplit();
+	void onNewConnection();
+	void onSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void updateWindowMenu();
+	void doNewTerm();
+	void doNewMon();
+	void doNewCombined();
+	void doCascade();
+	void actActivate();
+	void on_mdiArea_changed();
+	void tabSelected(int);
 
 protected:
-	void resizeEvent(QResizeEvent *event) override;
 	bool eventFilter(QObject* obj, QEvent *event);
+
+	Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label = nullptr);
 
 private:
 	Ui::QtTermTCPClass ui;
-	QSplitter *splitter;
 	
 	QMenu *connectMenu;
 	QMenu *disconnectMenu;
 	QMenu *setupMenu;
 	QMenu *hostsubMenu;
+	QMenu *windowMenu;
 
+	QAction *closeAct;
+	QAction *closeAllAct;
+	QAction *tileAct;
+	QAction *cascadeAct;
+	QAction *nextAct;
+	QAction *previousAct;
+	QAction *windowMenuSeparatorAct;
+	QAction *newTermAct;
+	QAction *newMonAct;
+	QAction *newCombinedAct;
 	QAction *discAction;
+	QAction *ListenAction;
+	QAction *quitAction;
+
+	QTcpServer  _server;
+	QList<myTcpSocket*>  _sockets;
+
+	QWidget *centralWidget;
+	QMdiArea *mdiArea;
+	QTabWidget * tabWidget;
 
 };
+
+extern "C"
+{
+	void EncodeSettingsLine(int n, char * String);
+	void DecodeSettingsLine(int n, char * String);
+	void WritetoOutputWindow(Ui_ListenSession * Sess, unsigned char * Buffer, int Len);
+	void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int *OutputSaveLen, char * OutputSave, int Colour);
+	void WritetoMonWindow(Ui_ListenSession * Sess, unsigned char * Buffer, int Len);
+	void ProcessReceivedData(Ui_ListenSession * Sess, unsigned char * Buffer, int len);
+	void SendTraceOptions(Ui_ListenSession * LUI);
+	void setTraceOff(Ui_ListenSession * Sess);
+	void SetPortMonLine(int i, char * Text, int visible, int enabled);
+	void SaveSettings();
+	void Beep();
+	void YAPPSendFile(Ui_ListenSession *  Sess, char * FN);
+	int SocketSend(Ui_ListenSession * Sess, char * Buffer, int len);
+	void SendTraceOptions(Ui_ListenSession * Sess);
+	int SocketFlush(Ui_ListenSession * Sess);
+	extern void Sleep(int ms);
+	extern void setTraceOff(Ui_ListenSession * Sess);
+}
+
+
+char * strlop(char * buf, char delim);
+
