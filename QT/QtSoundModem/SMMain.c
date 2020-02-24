@@ -525,6 +525,12 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 void doCalib(int Chan, int Act)
 {
+	if (Chan == 0 && calib_mode[1])
+		return;						
+	
+	if (Chan == 1 && calib_mode[0])
+		return;
+
 	calib_mode[Chan] = Act;
 
 	if (Act == 0)
@@ -647,6 +653,7 @@ void DoTX(int Chan)
 
 	SoundIsPlaying = TRUE;
 	RadioPTT(Chan, 1);
+	Number = 0;
 
 	modulator(Chan, tx_bufsize);
 

@@ -381,12 +381,12 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	DCDLabel[0] = new QLabel(this);
 	DCDLabel[0]->setObjectName(QString::fromUtf8("DCDLedA"));
-	DCDLabel[0]->setGeometry(QRect(234, 31, 12, 12));
+	DCDLabel[0]->setGeometry(QRect(240, 31, 12, 12));
 	DCDLabel[0]->setVisible(FALSE);
 
 	DCDLabel[1] = new QLabel(this);
 	DCDLabel[1]->setObjectName(QString::fromUtf8("DCDLedB"));
-	DCDLabel[1]->setGeometry(QRect(480, 31, 12, 12));
+	DCDLabel[1]->setGeometry(QRect(514, 31, 12, 12));
 	DCDLabel[1]->setVisible(FALSE);
 
 	DCDLed[0] = new QImage(12, 12, QImage::Format_RGB32);
@@ -462,7 +462,9 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	{
 		if (i > 300)
 		{
+			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerA->setValue(Freq_Change(0, i));
+			settings->setValue("Modem/RXFreq1", rx_freq[0]);
 		}
 	});
 
@@ -472,7 +474,9 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	{
 		if (i > 300)
 		{
+			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			Freq_Change(1, i);
+			settings->setValue("Modem/RXFreq2", rx_freq[1]);
 		}
 	});
 
@@ -835,8 +839,6 @@ void QtSoundModem::deviceaccept()
 	Q = Dev->AGWPort->text();
 	AGWPort = Q.toInt();
 
-	txdelay[1] = Q.toInt();
-
 	Q = Dev->PTTPort->currentText();
 	strcpy(PTTPort, Q.toString().toUtf8());
 
@@ -885,14 +887,14 @@ void QtSoundModem::doCalibrate()
 		QDialog UI;
 		Calibrate.setupUi(&UI);
 
-		connect(Calibrate.Low_A, &QPushButton::released, this, [=] { handleButton(1, 1); });
-		connect(Calibrate.High_A, &QPushButton::released, this, [=] { handleButton(1, 2); });
-		connect(Calibrate.Both_A, &QPushButton::released, this, [=] { handleButton(1, 3); });
-		connect(Calibrate.Stop_A, &QPushButton::released, this, [=] { handleButton(1, 0); });
-		connect(Calibrate.Low_B, &QPushButton::released, this, [=] { handleButton(2, 1); });
-		connect(Calibrate.High_B, &QPushButton::released, this, [=] { handleButton(2, 2); });
-		connect(Calibrate.Both_B, &QPushButton::released, this, [=] { handleButton(2, 3); });
-		connect(Calibrate.Stop_B, &QPushButton::released, this, [=] { handleButton(2, 0); });
+		connect(Calibrate.Low_A, &QPushButton::released, this, [=] { handleButton(0, 1); });
+		connect(Calibrate.High_A, &QPushButton::released, this, [=] { handleButton(0, 2); });
+		connect(Calibrate.Both_A, &QPushButton::released, this, [=] { handleButton(0, 3); });
+		connect(Calibrate.Stop_A, &QPushButton::released, this, [=] { handleButton(0, 0); });
+		connect(Calibrate.Low_B, &QPushButton::released, this, [=] { handleButton(1, 1); });
+		connect(Calibrate.High_B, &QPushButton::released, this, [=] { handleButton(1, 2); });
+		connect(Calibrate.Both_B, &QPushButton::released, this, [=] { handleButton(1, 3); });
+		connect(Calibrate.Stop_B, &QPushButton::released, this, [=] { handleButton(1, 0); });
 
 //		connect(Calibrate.High_A, SIGNAL(released()), this, SLOT(handleButton(1, 2)));
 

@@ -536,6 +536,12 @@ void SoundFlush()
 
 	SoundIsPlaying = FALSE;
 
+	// Clear buffers
+
+	Number = 0;
+	memset(buffer, 0, sizeof(buffer));
+	DMABuffer = &buffer[0][0];
+
 //	StartCapture();
 
 	return;

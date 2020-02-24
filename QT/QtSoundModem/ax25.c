@@ -222,9 +222,9 @@ int maxframe[4] = { 0,0,0,0 };
 int TXFrmMode[4] = { 0,0,0,0 };
 int max_frame_collector[4] = { 0,0,0,0 };
 
-//MyDigiCall : array[1..4] of string=('','','','');
-//  exclude_callsigns : array[1..4] of string=('','','','');
-// exclude_APRS_frm : array[1..4] of string=('','','','');
+char MyDigiCall[4][512] = { "","","","" };
+char exclude_callsigns[4][512] = { "","","","" };
+char exclude_APRS_frm[4][512] = { "","","","" };
 
 TStringList  list_exclude_callsigns[4];
 TStringList list_exclude_APRS_frm[4];
@@ -1325,33 +1325,47 @@ boolean is_correct_path(byte * path, byte pid)
 }
 
 
-/*procedure get_exclude_list(line: string; var list: TStringList);
-var
-  s: string;
-  p: integer;
-begin
-  list.Clear;
-  if line='' then exit;
-  repeat
-	p:=pos(',',line);
-	if p>0 then
-	  begin
-		s:=trim(copy(line,1,p-1));
-		if s<>'' then
-		  if pos('-',s)>0 then list.Add(s) else list.Add(s+'-0');
-		delete(line,1,p);
-	  end
-	else
-	  begin
-		s:=trim(line);
-		if s<>'' then
-		  if pos('-',s)>0 then list.Add(s) else list.Add(s+'-0');
-	  end;
-  until p=0;
-end;
+void get_exclude_list(char * line, TStringList * list)
+{
+	// Convert comma separated list of calls to ax25 format in list
 
-procedure get_exclude_frm(line: string; var list: TStringList);
-var
+	string axcall;
+
+	char copy[512];
+
+	char * ptr, *Context;
+
+	if (line[0] == 0)
+		return;
+
+	strcpy(copy, line);						// copy as strtok messes with it
+	strcat(copy, ",");
+
+	axcall.Length = 8;
+	axcall.AllocatedLength = 8;
+	axcall.Data = malloc(8);
+
+	memset(axcall.Data, 0, 8);
+
+	ptr = strtok_s(copy, " ,", &Context);
+
+	while (ptr)
+	{
+		if (ConvToAX25(ptr, axcall.Data) == 0)
+			return;
+
+		Add(list, duplicateString(&axcall));
+
+		ptr = strtok_s(NULL, " ,", &Context);
+	}
+}
+
+
+
+void get_exclude_frm(char * line, TStringList * list)
+{
+	/*
+
   s: string;
   p: integer;
   n: integer;
@@ -1381,6 +1395,10 @@ begin
 	  end;
   until p=0;
 end;
+*/
+}
+
+/*
 
 function is_excluded_call(snd_ch: byte; path: string): boolean;
 var
@@ -1734,6 +1752,11 @@ void ax25_init()
 		initTStringList(&list_exclude_APRS_frm[i]);
 		initTStringList(&list_digi_callsigns[i]);
 		initTStringList(&KISS_acked[i]);
+
+		get_exclude_list(MyDigiCall[i], &list_digi_callsigns[i]);
+		get_exclude_list(exclude_callsigns[i], &list_exclude_callsigns[i]);
+		get_exclude_frm(exclude_APRS_frm[i], &list_exclude_APRS_frm[i]);
+
 	}
 
 	initTStringList(&list_incoming_mycalls);

@@ -23,8 +23,8 @@
    <widget class="QSpinBox" name="centerA">
     <property name="geometry">
      <rect>
-      <x>180</x>
-      <y>4</y>
+      <x>174</x>
+      <y>6</y>
       <width>56</width>
       <height>22</height>
      </rect>
@@ -39,9 +39,9 @@
    <widget class="QComboBox" name="modeB">
     <property name="geometry">
      <rect>
-      <x>275</x>
-      <y>4</y>
-      <width>156</width>
+      <x>292</x>
+      <y>6</y>
+      <width>145</width>
       <height>22</height>
      </rect>
     </property>
@@ -104,8 +104,8 @@
    <widget class="QSpinBox" name="centerB">
     <property name="geometry">
      <rect>
-      <x>435</x>
-      <y>4</y>
+      <x>444</x>
+      <y>6</y>
       <width>56</width>
       <height>22</height>
      </rect>
@@ -157,8 +157,8 @@
     <property name="geometry">
      <rect>
       <x>22</x>
-      <y>4</y>
-      <width>156</width>
+      <y>6</y>
+      <width>145</width>
       <height>22</height>
      </rect>
     </property>
@@ -166,8 +166,8 @@
    <widget class="QLabel" name="label">
     <property name="geometry">
      <rect>
-      <x>504</x>
-      <y>6</y>
+      <x>544</x>
+      <y>8</y>
       <width>86</width>
       <height>16</height>
      </rect>
@@ -179,8 +179,8 @@
    <widget class="QLabel" name="labelB">
     <property name="geometry">
      <rect>
-      <x>260</x>
-      <y>8</y>
+      <x>276</x>
+      <y>10</y>
       <width>16</width>
       <height>14</height>
      </rect>
@@ -192,10 +192,10 @@
    <widget class="QSlider" name="DCDSlider">
     <property name="geometry">
      <rect>
-      <x>598</x>
+      <x>626</x>
       <y>4</y>
-      <width>135</width>
-      <height>22</height>
+      <width>117</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="orientation">
@@ -211,10 +211,10 @@
    <widget class="QCheckBox" name="holdPointers">
     <property name="geometry">
      <rect>
-      <x>746</x>
+      <x>754</x>
       <y>4</y>
-      <width>101</width>
-      <height>21</height>
+      <width>93</width>
+      <height>22</height>
      </rect>
     </property>
     <property name="text">
@@ -296,7 +296,7 @@
    <widget class="QTextEdit" name="monWindow">
     <property name="geometry">
      <rect>
-      <x>-7</x>
+      <x>-6</x>
       <y>40</y>
       <width>971</width>
       <height>221</height>
@@ -310,7 +310,7 @@
      <x>0</x>
      <y>0</y>
      <width>962</width>
-     <height>26</height>
+     <height>21</height>
     </rect>
    </property>
   </widget>

@@ -1060,7 +1060,7 @@ TAX25Port * get_free_port(int snd_ch)
 
 
 TAX25Port * get_user_port(int snd_ch, byte * path)
-{
+                                                                                                                                                                                                                                                                                                                                                                       {
 	TAX25Port * AX25Sess = NULL;
 
 	int i = 0;
@@ -1128,55 +1128,75 @@ void * get_sock_by_port(TAX25Port * AX25Sess)
 	return socket;
 }
 
-	/*
-	procedure Digipeater(snd_ch: byte; frame: string);
-	var
-	  addr_end,flag_replaced,digi_stop: boolean;
-	  crc,i,k,n: word;
-	  len: integer;
-	  a: byte;
-	  call: string;
-	begin
-	  if list_digi_callsigns[snd_ch].Count=0 then exit;
-	  flag_replaced:=FALSE;
-	  addr_end:=FALSE;
-	  digi_stop:=FALSE;
-	  i:=0; k:=0; n:=0;
-	  call:='';
-	  len:=length(frame)-2;
-	  setlength(frame,len);
-	  if len>0 then
-	  repeat
-		inc(i);
-		inc(k);
-		a:=ord(frame[i]);
-		if k<7 then call:=call+chr(a shr 1);
-		if k=7 then
-		begin
-		  if (n>1) and (a and 128=0) then // Wait for digi field
-		  begin
-			call:=trim(call)+'-'+inttostr(a shr 1 and 15);
-			//if list_digi_callsigns[snd_ch].IndexOf(call)>-1 then
-			if my_indexof(list_digi_callsigns[snd_ch],call)>-1 then
-			begin
-			  frame[i]:=chr(a or 128); // Set DigiFlag
-			  flag_replaced:=TRUE;
-			end;
-			digi_stop:=TRUE; // Stop verification if DigiFlag was 0
-		  end;
-		  k:=0; call:='';
-		  inc(n);
-		end;
-		if a and 1=1 then addr_end:=TRUE;
-	  until digi_stop or addr_end or (i=ADDR_MAX_LEN*7) or (i=len);
-	  if flag_replaced then
-	  begin
-		crc:=get_fcs(frame,len);
-		frame:=frame+chr(lo(crc))+chr(hi(crc));
-		all_frame_buf[snd_ch].Add(frame);
-	  end;
-	end;
-	*/
+void Digipeater(int snd_ch, string * frame)
+{
+	boolean addr_end, flag_replaced, digi_stop;
+	word crc;
+	char call[16];
+	byte * addr = &frame->Data[7];					// Origon
+	int len = frame->Length - 2;					// not FCS
+	string * frameCopy;
+
+	int n = 8;										// Max digis
+
+	if (list_digi_callsigns[snd_ch].Count == 0)
+		return;
+
+	// Look for first unused digi
+
+	while ((addr[6] & 1) == 0 && n--)					// until end of address
+	{
+		addr += 7;
+
+		if ((addr[6] & 128) == 0)
+		{
+			// unused digi - is it addressed to us?
+
+			UCHAR CRCString[2];
+
+			memcpy(call, addr, 7);
+			call[6] &= 0x7E;				// Mask end of call 
+
+			// See if in digi list
+
+			int i;
+
+			for (i = 0; i < list_digi_callsigns->Count; i++)
+			{
+				if (memcmp(list_digi_callsigns->Items[i]->Data, call, 7) == 0)
+				{
+					// for us
+
+					addr[6] |= 128;				// set digi'ed
+
+					// TX Frames need a KISS control on front
+
+					frameCopy = newString();
+
+					frameCopy->Data[0] = 0;
+					frameCopy->Length = 1;
+
+					stringAdd(frameCopy, frame->Data, frame->Length - 2);		// Exclude CRC
+
+					addr[6] &= 0x7f;				// clear digi'ed from original;
+
+					// Need to redo crc
+
+					crc = get_fcs(frameCopy->Data, len);
+
+					CRCString[0] = crc & 0xff;
+					CRCString[1] = crc >> 8;
+
+					stringAdd(frameCopy, CRCString, 2);
+
+					Add(&all_frame_buf[snd_ch], frameCopy);
+
+					return;
+				}
+			}
+		}
+	}
+}
 
 void analiz_frame(int snd_ch, string * frame, string * code)
 {
@@ -1250,7 +1270,8 @@ void analiz_frame(int snd_ch, string * frame, string * code)
 	}
 
 	// Digipeat frame
-	//Digipeater(snd_ch, frame);
+
+	Digipeater(snd_ch, frame);
 
 	if (!is_last_digi(path))
 		return;							// Don't process if still unused digis

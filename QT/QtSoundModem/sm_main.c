@@ -297,7 +297,10 @@ int RX_device = FALSE;
 int TX_device = FALSE;
 int TX_rotate = FALSE;
 int DualChan = TRUE;
-int UsingBothChannels = FALSE;;
+int UsingBothChannels = FALSE;
+int UsingLeft = FALSE;
+int UsingRight = FALSE;
+
 int SCO = FALSE;
 int DualPTT = TRUE;
 UCHAR  DebugMode = 0;
@@ -1608,7 +1611,17 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 	float old_rx_freq;
 	int buf_offset;
 
-	snd_ch = 0; 
+	// Do FFT on every 4th buffer (2048 samples)
+
+	add_fft_line = FALSE;
+	fft_mult++;
+	if (fft_mult == fft_spd)
+	{
+		add_fft_line = TRUE;
+		fft_mult = 0;
+	}
+
+	for (snd_ch = 0; snd_ch < 2; snd_ch++)
 	{
 		if (pnt_change[snd_ch])
 		{
@@ -1616,142 +1629,149 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 			make_core_TXBPF(snd_ch, tx_freq[snd_ch], txbpf[snd_ch]);
 			pnt_change[snd_ch] = FALSE;
 		}
-//		if (!RX_device)
-//			return;
-
-		if (nSamples == rx_bufsize)
-		{
-			if ((debugmode & DEBUG_SOUND) == 0)
-			{
-				add_fft_line = FALSE;
-				fft_mult++;
-				if (fft_mult == fft_spd)
-				{
-					add_fft_line = TRUE;
-					fft_mult = 0;
-				}
-
-				data1 = Samples;
-
-				i1 = 0;
-
-				// This assumes stereo samples. Don't skip alternate ones when momo
-				// src_buf[0] is left data,. src_buf[1] right
-
-				for (i = 0; i < rx_bufsize; i++)
-				{
-					src_buf[0][i] = data1[i1];
-					i1++;
-					src_buf[1][i] = data1[i1];		// for now put same data in both
-					i1++;
-				}
-
-				if (snd_status[snd_ch] != SND_TX)
-				{
-					// Not sending, so process received data
-					// Maybe updating Waterfall
-
-					chk_snd_buf(src_buf[snd_ch], rx_bufsize);
-					buf_offset = fft_size - rx_bufsize;
-					move((UCHAR *)&fft_buf[snd_ch][rx_bufsize], (UCHAR *)&fft_buf[snd_ch][0], buf_offset * 2);
-
-					for (i = 0; i < rx_bufsize; i++)
-						fft_buf[snd_ch][i + buf_offset] = data1[i * 2]; // (src_buf[snd_ch][i]);
-
-					if ((debugmode && DEBUG_WATERFALL) == 0)
-						if (add_fft_line)
-							if (Firstwaterfall && w_state == WIN_MAXIMIZED)
-								doWaterfall(snd_ch);
-
-					//disp1(det[0,0].AFC_bit_buf[1],det[0,0].MChannel[2,3].AFC_bit_buf2);
-					//disp1(det[0,0].bit_buf[1],det[0,0].bit_buf[1]);
-					//disp1(det[emph_db[snd_ch],0].src_Loop_buf[1],det[emph_db[snd_ch],0].src_Loop_buf[1]);
-					//disp1(det[0].bit_buf[1],det[0].bit_buf[1]);
-
-					// do we need to do this again ??
-//					make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
-
-					if ((debugmode && DEBUG_DECODE) == 0)
-					{
-						// MAy mave more that 1 modem
-
-						// I want to run lowest to highest to simplify my display 
-
-						int offset = -(RCVR[snd_ch] * rcvr_offset[snd_ch]); // lowest
-						int lastrx = RCVR[snd_ch] * 2 + 1;
-
-						old_rx_freq = rx_freq[snd_ch];
-
-						for (rcvr_idx = 0; rcvr_idx <= lastrx; rcvr_idx++)
-						{
-							rx_freq[snd_ch] = old_rx_freq + offset;
-							offset += rcvr_offset[snd_ch];
-
-							Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx);
-						}
-						rx_freq[snd_ch] = old_rx_freq;
-					}
-				}
-
-				if (DualChan)
-				{
-					snd_ch = 1;
-
-					if (snd_status[snd_ch] != SND_TX)
-					{
-						// Not sending, so process received data
-						// Maybe updating Waterfall
-
-						chk_snd_buf(src_buf[snd_ch], rx_bufsize);
-
-						buf_offset = fft_size - rx_bufsize;
-						move((UCHAR *)&fft_buf[snd_ch][rx_bufsize], (UCHAR *)&fft_buf[snd_ch][0], buf_offset * 2);
-
-						for (i = 0; i < rx_bufsize; i++)
-							fft_buf[snd_ch][i + buf_offset] = data1[i * 2 + 1]; // (src_buf[snd_ch][i]);
-
-						if ((debugmode && DEBUG_WATERFALL) == 0)
-							if (add_fft_line)
-								if (Secondwaterfall && w_state == WIN_MAXIMIZED)
-									doWaterfall(snd_ch);
-
-						// do we need to do this again ??
-	//					make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
-
-						if ((debugmode && DEBUG_DECODE) == 0)
-						{
-							if (RCVR[snd_ch] > 0)		// if more than 1 RX call Demodulator for each
-							{
-								old_rx_freq = rx_freq[snd_ch];
-								for (rcvr_idx = 1; rcvr_idx <= (RCVR[snd_ch] << 1); rcvr_idx++)
-								{
-									if (rcvr_idx > RCVR[snd_ch])
-										rx_freq[snd_ch] = old_rx_freq - rcvr_offset[snd_ch] * (rcvr_idx - RCVR[snd_ch]);
-									else
-										rx_freq[snd_ch] = old_rx_freq + rcvr_offset[snd_ch] * rcvr_idx;
-
-									Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], IS_NOT_LAST);
-								}
-								rx_freq[snd_ch] = old_rx_freq;
-							}
-							Demodulator(snd_ch, 0, src_buf[modemtoSoundLR[snd_ch]], IS_LAST);
-						}
-					}
-
-				}
-			}
-					
-		}
-
-	 }
-	if (TimerEvent == TIMER_EVENT_ON)
-	{
-		timer_event();
-//		timer_event2();
 	}
 
-	if (snd_status[snd_ch] != SND_TX) 
-		return;
+	// I don't think we should process RX if either is sending
+
+	if (snd_status[0] != SND_TX && snd_status[1] != SND_TX)
+	{
+		// extract mono samples from data. 
+
+		data1 = Samples;
+
+		i1 = 0;
+
+		// src_buf[0] is left data,. src_buf[1] right
+
+		// We could skip extracting other channel if only one in use - is it worth it??
+
+		if (UsingBothChannels)
+		{
+			for (i = 0; i < rx_bufsize; i++)
+			{
+				src_buf[0][i] = data1[i1];
+				i1++;
+				src_buf[1][i] = data1[i1];
+				i1++;
+			}
+		}
+		else if (UsingRight)
+		{
+			// Extract just right
+
+			i1 = 1;
+
+			for (i = 0; i < rx_bufsize; i++)
+			{
+				src_buf[1][i] = data1[i1];
+				i1 += 2;
+			}
+		}
+		else
+		{
+			// Extract just left
+
+			for (i = 0; i < rx_bufsize; i++)
+			{
+				src_buf[0][i] = data1[i1];
+				i1 += 2;
+			}
+		}
+
+		// Do whichever waterfall is needed
+
+		int FirstWaterfallChan = 0;
+
+		// not sure why this is needed
+
+//	if (UsingLeft)
+//		chk_snd_buf(src_buf[0], rx_bufsize);
+//	if (UsingRight)
+//		chk_snd_buf(src_buf[1], rx_bufsize);
+
+
+		if (Firstwaterfall)
+		{
+			if (UsingLeft == 0)
+			{
+				FirstWaterfallChan = 1;
+				data1++;					// to Right Samples
+			}
+
+			buf_offset = fft_size - rx_bufsize;
+			move((UCHAR *)&fft_buf[FirstWaterfallChan][rx_bufsize], (UCHAR *)&fft_buf[FirstWaterfallChan][0], buf_offset * 2);
+
+			for (i = 0; i < rx_bufsize; i++)
+			{
+				fft_buf[FirstWaterfallChan][i + buf_offset] = *data1;
+				data1 += 2;
+			}
+
+			if (add_fft_line)
+				doWaterfall(0);
+		}
+
+		if (UsingBothChannels && Secondwaterfall)
+		{
+			// Second is always Right
+
+			data1 = &Samples[1];			// to Right Samples
+
+
+			buf_offset = fft_size - rx_bufsize;
+			move((UCHAR *)&fft_buf[1][rx_bufsize], (UCHAR *)&fft_buf[1][0], buf_offset * 2);
+
+			for (i = 0; i < rx_bufsize; i++)
+			{
+				fft_buf[1][i + buf_offset] = *data1;
+				data1 += 2;
+			}
+
+			if (add_fft_line)
+				doWaterfall(1);
+		}
+
+		// Now run modems
+
+		for (snd_ch = 0; snd_ch < 2; snd_ch++)
+		{
+
+			//disp1(det[0,0].AFC_bit_buf[1],det[0,0].MChannel[2,3].AFC_bit_buf2);
+			//disp1(det[0,0].bit_buf[1],det[0,0].bit_buf[1]);
+			//disp1(det[emph_db[snd_ch],0].src_Loop_buf[1],det[emph_db[snd_ch],0].src_Loop_buf[1]);
+			//disp1(det[0].bit_buf[1],det[0].bit_buf[1]);
+
+			// do we need to do this again ??
+//					make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
+
+					// MAy mave more that 1 modem
+
+			// I want to run lowest to highest to simplify my display 
+
+			int offset = -(RCVR[snd_ch] * rcvr_offset[snd_ch]); // lowest
+			int lastrx = RCVR[snd_ch] * 2;
+
+			if (snd_ch == 1 && DualChan == 0)
+				break;							// No second modem
+
+			old_rx_freq = rx_freq[snd_ch];
+
+			for (rcvr_idx = 0; rcvr_idx <= lastrx; rcvr_idx++)
+			{
+				rx_freq[snd_ch] = old_rx_freq + offset;
+				offset += rcvr_offset[snd_ch];
+
+				Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx);
+			}
+			rx_freq[snd_ch] = old_rx_freq;
+		}
+	}
+
+	/*
+	
+
+
+
 
 	tx_buf_num[snd_ch]++;
 	
@@ -1760,7 +1780,14 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 	if (buf_status[snd_ch] == BUF_EMPTY && tx_buf_num[snd_ch] == tx_buf_num1[snd_ch])
 		TX2RX(snd_ch);
+*/
 
+
+	if (TimerEvent == TIMER_EVENT_ON)
+	{
+		timer_event();
+//		timer_event2();
+	}
 }
 
 		/*
@@ -1907,7 +1934,7 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 
 		while (i < _datalen)
 		{
-			if ((_data[i] == 13) && (_data[i + 1] = 13))
+			if ((_data[i] == 13) && (_data[i + 1] == 13))
 				i++;
 			else
 				*(ptr++) = _data[i++];

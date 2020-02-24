@@ -705,7 +705,7 @@ void on_AGW_K_frame(struct AGWHeader * Frame)
 
 	stringAdd(TXMSG, CRCString, 2);
 
-	Add(&all_frame_buf[modemtoSoundLR[Frame->Port]], TXMSG);
+	Add(&all_frame_buf[Frame->Port], TXMSG);
 
 /*var
   snd_ch byte;

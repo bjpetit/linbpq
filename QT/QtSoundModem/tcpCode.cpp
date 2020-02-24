@@ -95,6 +95,7 @@ void mynet::onAGWConnection()
 }
 
 
+
 void mynet::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState)
 {
 	if (socketState == QAbstractSocket::UnconnectedState)

@@ -2,10 +2,23 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.8"
+#define VersionString "0.0.0.11"
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
+
 // 0.8 V27 now OK.
+
+// 0.9 Digipeating added
+
+// 0.10 Fix second channel tones and calibrate
+
+// 0.11 Fix allocation of sessions to correct modem
+//		Fix DCD
+//		Fix Monitoring of Multiline packets
+//		Fix possible saving of wrong center freq
+//		Limit TX sample Q in Linux
+//		
+
 
 #include <string.h>
 #include <stdlib.h>
@@ -708,7 +721,10 @@ extern int RX_device;
 extern int TX_device;
 extern int TX_rotate;
 extern int DualChan;
+extern int UsingLeft;
+extern int UsingRight;
 extern int UsingBothChannels;
+
 extern int SCO;
 extern int DualPTT;
 extern UCHAR  DebugMode;
@@ -743,6 +759,15 @@ extern int redtime[4];
 extern int IPOLL[4];
 extern int maxframe[4];
 extern int TXFrmMode[4];
+
+extern char MyDigiCall[4][512];
+extern char exclude_callsigns[4][512];
+extern char exclude_APRS_frm[4][512];
+
+extern TStringList  list_exclude_callsigns[4];
+extern TStringList list_exclude_APRS_frm[4];
+extern TStringList list_digi_callsigns[4];
+
 
 extern int SoundIsPlaying;
 extern int Capturing;

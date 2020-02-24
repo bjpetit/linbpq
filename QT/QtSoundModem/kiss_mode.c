@@ -380,7 +380,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 
 		stringAdd(TXMSG, (char * )&socket, sizeof(socket));
 
-		Add(&all_frame_buf[modemtoSoundLR[Chan]], TXMSG);
+		Add(&all_frame_buf[Chan], TXMSG);
 
 		return;
 
@@ -395,7 +395,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 		CRCString[1] = CRC >> 8;
 
 		stringAdd(TXMSG, CRCString, 2);
-		Add(&all_frame_buf[modemtoSoundLR[Chan]], TXMSG);
+		Add(&all_frame_buf[Chan], TXMSG);
 
 		return;
 	}
@@ -488,14 +488,14 @@ int KISS_encode(UCHAR * KISSBuffer, int port, string * frame, int TXMON)
 
 	if (TXMON)
 	{
-		// TX Frame has ocntrol byte on front
+		// TX Frame has control byte on front
 
 		ptr1++;
 		Len--;
 	}
 
 	KISSBuffer[0] = FEND;
-	KISSBuffer[1] = port;
+	KISSBuffer[1] = port << 4;
 
 	TXCCC ^= KISSBuffer[1];
 

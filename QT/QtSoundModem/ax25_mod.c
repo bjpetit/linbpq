@@ -1614,7 +1614,7 @@ void modulator(UCHAR snd_ch, int buf_size)
 		for (i = 0; i < buf_size; i++)
 		{
 			Sample = tx_BPF_buf[snd_ch][i] * amplitude;
-			SampleSink(snd_ch, Sample);
+			SampleSink(modemtoSoundLR[snd_ch], Sample);
 		}
 	}
 	else

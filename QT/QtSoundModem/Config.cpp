@@ -3,6 +3,9 @@
 
 #include "UZ7HOStuff.h"
 
+extern "C" void get_exclude_list(char * line, TStringList * list);
+extern "C" void get_exclude_frm(char * line, TStringList * list);
+
 extern "C" int RX_SR;
 extern "C" int TX_SR;
 
@@ -52,10 +55,10 @@ void GetPortSettings(int Chan)
 	NonAX25[Chan] = getAX25Param("NonAX25Frm", false).toInt();;
 	//	MEMRecovery[Chan]= getAX25Param("MEMRecovery", 200).toInt();
 	IPOLL[Chan] = getAX25Param("IPOLL", 80).toInt();
-	//MyDigiCall[Chan]= getAX25Param("MyDigiCall/")
+
+	strcpy(MyDigiCall[Chan], getAX25Param("MyDigiCall", "").toString().toUtf8());
 
 	fx25_mode[Chan] = getAX25Param("FX25", FX25_MODE_RX).toInt();
-
 
 	soundChannel[Chan] = getAX25Param("soundChannel", 1).toInt();
 }
@@ -129,12 +132,28 @@ void getSettings()
 		DualChan = 0;
 
 	if (DualChan && (soundChannel[0] != soundChannel[1]))
-
+	{
 		// Different so need both sides 
 
 		UsingBothChannels = 1;
+		UsingLeft = 1;
+		UsingRight = 1;
+	}
 	else
+	{
 		UsingBothChannels = 0;
+
+		if (soundChannel[0] == RIGHT)
+		{
+			UsingLeft = 0;
+			UsingRight = 1;
+		}
+		else
+		{
+			UsingLeft = 1;
+			UsingRight = 0;
+		}
+	}
 
 	if (soundChannel[0] == RIGHT)
 		modemtoSoundLR[0] = 1;
@@ -146,45 +165,43 @@ void getSettings()
 	else
 		modemtoSoundLR[1] = 0;
 
-
 	for (snd_ch = 0; snd_ch < 2; snd_ch++)
 	{
 		tx_hitoneraise[snd_ch] = powf(10.0f, -abs(tx_hitoneraisedb[snd_ch]) / 20.0f);
 
+
+
+		if (IPOLL[snd_ch] < 0)
+			IPOLL[snd_ch] = 0;
+		else if (IPOLL[snd_ch] > 65535)
+			IPOLL[snd_ch] = 65535;
+
+		//	if MEMRecovery[snd_ch] < 1 then MEMRecovery[snd_ch]= 1;
+		//	if MEMRecovery[snd_ch] > 65535 then MEMRecovery[snd_ch]= 65535;
+
 		/*
+		if resptime[snd_ch] < 0 then resptime[snd_ch]= 0;
+			if resptime[snd_ch] > 65535 then resptime[snd_ch]= 65535;
+			if persist[snd_ch] > 255 then persist[snd_ch]= 255;
+			if persist[snd_ch] < 32 then persist[snd_ch]= 32;
+			if fracks[snd_ch] < 1 then fracks[snd_ch]= 1;
+			if frack_time[snd_ch] < 1 then frack_time[snd_ch]= 1;
+			if idletime[snd_ch] < frack_time[snd_ch] then idletime[snd_ch]= 180;
+		*/
 
-	if IPOLL[snd_ch] < 0 then IPOLL[snd_ch]= 0;
-	if IPOLL[snd_ch] > 65535 then IPOLL[snd_ch]= 65535;
+		if (emph_db[snd_ch] < 0 || emph_db[snd_ch] > nr_emph)
+			emph_db[snd_ch] = 0;
+		/*
+		if not (Recovery[snd_ch] in[0..1]) then Recovery[snd_ch]= 0;
+			if not (TXFrmMode[snd_ch] in[0..1]) then TXFrmMode[snd_ch]= 0;
+			if not (max_frame_collector[snd_ch] in[0..6]) then max_frame_collector[snd_ch]= 6;
+			if not (maxframe[snd_ch] in[1..7]) then maxframe[snd_ch]= 3;
 
-	if MEMRecovery[snd_ch] < 1 then MEMRecovery[snd_ch]= 1;
-	if MEMRecovery[snd_ch] > 65535 then MEMRecovery[snd_ch]= 65535;
-
-	get_exclude_list(AnsiUpperCase(MyDigiCall[snd_ch]), list_digi_callsigns[snd_ch]);
-	get_exclude_list(AnsiUpperCase(exclude_callsigns[snd_ch]), list_exclude_callsigns[snd_ch]);
-	get_exclude_frm(exclude_APRS_frm[snd_ch], list_exclude_APRS_frm[snd_ch]);
-
-	if resptime[snd_ch] < 0 then resptime[snd_ch]= 0;
-	if resptime[snd_ch] > 65535 then resptime[snd_ch]= 65535;
-	if persist[snd_ch] > 255 then persist[snd_ch]= 255;
-	if persist[snd_ch] < 32 then persist[snd_ch]= 32;
-	if fracks[snd_ch] < 1 then fracks[snd_ch]= 1;
-	if frack_time[snd_ch] < 1 then frack_time[snd_ch]= 1;
-	if idletime[snd_ch] < frack_time[snd_ch] then idletime[snd_ch]= 180;
-*/
-
-	if (emph_db[snd_ch] < 0 || emph_db[snd_ch] > nr_emph)
-		emph_db[snd_ch] = 0;
-/*
-if not (Recovery[snd_ch] in[0..1]) then Recovery[snd_ch]= 0;
-	if not (TXFrmMode[snd_ch] in[0..1]) then TXFrmMode[snd_ch]= 0;
-	if not (max_frame_collector[snd_ch] in[0..6]) then max_frame_collector[snd_ch]= 6;
-	if not (maxframe[snd_ch] in[1..7]) then maxframe[snd_ch]= 3;
-
-	if not (qpsk_set[snd_ch].mode in[0..1]) then qpsk_set[snd_ch].mode= 0;
-	init_speed(snd_ch);
-	end;
-	TrackBar1.Position= DCD_threshold;
-	*/
+			if not (qpsk_set[snd_ch].mode in[0..1]) then qpsk_set[snd_ch].mode= 0;
+			init_speed(snd_ch);
+			end;
+			TrackBar1.Position= DCD_threshold;
+			*/
 	}
 
 	delete(settings);
@@ -211,8 +228,10 @@ void saveSettings()
 
 	settings->setValue("Init/PTT", PTTPort);
 
-	settings->setValue("Modem/RXFreq1", rx_freq[0]);
-	settings->setValue("Modem/RXFreq2", rx_freq[1]);
+	// Don't save freq on close as it could be offset by multiple decoders
+
+//	settings->setValue("Modem/RXFreq1", rx_freq[0]);
+//	settings->setValue("Modem/RXFreq2", rx_freq[1]);
 
 	settings->setValue("Modem/NRRcvrPairs1", RCVR[0]);
 	settings->setValue("Modem/NRRcvrPairs2", RCVR[1]);

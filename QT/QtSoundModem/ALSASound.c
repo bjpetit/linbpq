@@ -41,6 +41,14 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
 VOID processargs(int argc, char * argv[]);
 void PollReceivedSamples();
 
+
+HANDLE OpenCOMPort(char * Port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
+VOID COMSetDTR(HANDLE fd);
+VOID COMClearDTR(HANDLE fd);
+VOID COMSetRTS(HANDLE fd);
+VOID COMClearRTS(HANDLE fd);
+
+
 int initdisplay();
 
 extern BOOL blnDISCRepeating;
@@ -902,7 +910,7 @@ int SoundCardWrite(short * input, int nSamples)
 
 //	Debugprintf("Tosend %d Avail %d", nSamples, (int)avail);
 
-	while (avail < nSamples)
+	while (avail < nSamples || (MaxAvail - avail) > 12000)				// Limit to 1 sec of audio
 	{
 		txSleep(10);
 		avail = snd_pcm_avail_update(playhandle);
@@ -1234,6 +1242,11 @@ void SoundFlush()
 #endif
 	SoundIsPlaying = FALSE;
 
+	Number = 0;
+	
+	memset(buffer, 0, sizeof(buffer));
+	DMABuffer = &buffer[0][0];
+
 	StartCapture();
 	return;
 }
@@ -1496,6 +1509,7 @@ static struct speed_struct
 	{115200,      B115200},
 	{-1,          B0}
 };
+
 
 VOID COMSetDTR(HANDLE fd)
 {

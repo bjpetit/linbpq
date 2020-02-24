@@ -449,7 +449,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 				{
 					for (n = 0; n < AX25Sess->frame_buf.Count; n++)
 					{
-						Add(&all_frame_buf[modemtoSoundLR[snd_ch]], duplicateString(Strings(&AX25Sess->frame_buf, n)));
+						Add(&all_frame_buf[snd_ch], duplicateString(Strings(&AX25Sess->frame_buf, n)));
 					}
 
 					Clear(&AX25Sess->frame_buf);
@@ -477,7 +477,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 				{
 					for (n = 0; n < all_frame_buf[snd_ch].Count; n++)
 					{
-						KISS_on_data_out(snd_ch, Strings(&all_frame_buf[modemtoSoundLR[snd_ch]], n), 1);	// Mon TX
+						KISS_on_data_out(snd_ch, Strings(&all_frame_buf[snd_ch], n), 1);	// Mon TX
 					}
 
 					// AGW monitor
@@ -489,7 +489,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 							if (AGWServ)
 								AGW_Raw_monitor(snd_ch, Strings(&KISS.buffer[snd_ch], n));
 
-							Add(&all_frame_buf[modemtoSoundLR[snd_ch]], Strings(&KISS.buffer[snd_ch], n));
+							Add(&all_frame_buf[snd_ch], Strings(&KISS.buffer[snd_ch], n));
 						}
 
 						Clear(&KISS.buffer[snd_ch]);
@@ -2134,7 +2134,7 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 	float tr;
 
 	byte sample_cnt;
-	float PkAmp, PkAmpMax, MaxAmp, MinAmp, AverageAmp;
+	float PkAmp, PkAmpMax = 0, MaxAmp, MinAmp, AverageAmp;
 	int newpkpos;
 	float bit_osc;
 	byte last_rx_bit, bit_stream, frame_status;
@@ -2440,6 +2440,10 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 					pDET->raw_bits[snd_ch].Length = 0;
 					pDET->raw_bits1[snd_ch].Length = 0;
 					pDET->last_nrzi_bit[snd_ch] = raw_bit;
+
+					dcd_hdr_cnt[snd_ch] = 48;
+					dcd_on_hdr[snd_ch] = 1;
+
 
 					if (last)
 						chk_dcd1(snd_ch, buf_size);
