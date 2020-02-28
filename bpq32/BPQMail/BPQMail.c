@@ -1009,6 +1009,12 @@
 //	Move HTML templates from HTMLPages to inline code.
 //	Fix Paclen on YAPP send
 //	Fix bug in handling "RMS Express User"
+//	Fix WINPACK compressed forwarding
+//	Add option to send P messages to more than one BBS
+//	Add "Default to Don't Add WINLINK.ORG" Config option
+//	Re-read Badwords.sys during Housekeeping
+//	Add BID Hold and Reject Filters
+//	On SMTP Send try HELO if EHLO rejected
 
 #include "BPQMail.h"
 #define MAIL
@@ -1195,10 +1201,12 @@ struct MsgInfo * MsgnotoMsg[100000];	// Message Number to Message Slot List.
 char ** RejFrom;					// Reject on FROM Call
 char ** RejTo;						// Reject on TO Call
 char ** RejAt;						// Reject on AT Call
+char ** RejBID;						// Reject on BID 
 
 char ** HoldFrom;					// Hold on FROM Call
 char ** HoldTo;						// Hold on TO Call
 char ** HoldAt;						// Hold on AT Call
+char ** HoldBID;					// Hold on BID
 
 // Send WP Params
 
@@ -1618,9 +1626,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	FreeList(RejFrom);
 	FreeList(RejTo);
 	FreeList(RejAt);
+	FreeList(RejBID);
 	FreeList(HoldFrom);
 	FreeList(HoldTo);
 	FreeList(HoldAt);
+	FreeList(HoldBID);
 	FreeList(SendWPAddrs);
 
 	Free_UI();

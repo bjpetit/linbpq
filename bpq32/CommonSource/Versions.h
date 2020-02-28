@@ -10,16 +10,16 @@
 
 #endif
 
-#define KVers 6,0,19,15
-#define KVerstring "6.0.19.15\0"
+#define KVers 6,0,19,37
+#define KVerstring "6.0.19.37\0"
 
 #ifdef CKernel
 
 #define Vers KVers
 #define Verstring KVerstring
-#define Datestring "November 2019"
+#define Datestring "February 2020"
 #define VerComments "G8BPQ Packet Switch (C Version)" KVerstring
-#define VerCopyright "Copyright © 2001-2019 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2001-2020 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 #define VerProduct "BPQ32"
 

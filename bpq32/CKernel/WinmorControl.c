@@ -14,6 +14,10 @@
 
 //	Add remote rigcontrol feature
 
+// Version 1. 0. 3. 2 Feb 2020
+
+//	Fix Rigcontol
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -421,6 +425,7 @@ HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
                   FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
                   NULL );
 
+
 	if (fd == (HANDLE) -1)
 	{
 		char Msg[80];
@@ -442,7 +447,7 @@ HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	// set up for overlapped I/O
 
-	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
+	CommTimeOuts.ReadIntervalTimeout = 4;
 	CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
 	CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
 	CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
@@ -751,7 +756,7 @@ VOID CATThread()
 		
 	while (EndCATThread == FALSE)
 	{
-		ret = WaitForSingleObject(Event, 1000);
+		ret = WaitForSingleObject(Event, 10000);
 
 		if (ret == WAIT_TIMEOUT)
 		{
@@ -770,7 +775,7 @@ VOID CATThread()
 
 		ret =  GetOverlappedResult(RigHandle, &Overlapped, &Length, FALSE);
 
-		if (ret)
+		if (ret && Length)
 		{
 			// got something so send to BPQ
 

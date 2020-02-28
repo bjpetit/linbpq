@@ -1,5 +1,5 @@
 //{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ generated include file.
+// Microsoft Developer Studio generated include file.
 // Used by BPQMail.rc
 //
 #define IDC_MYICON                      2
@@ -154,7 +154,9 @@
 #define IDC_USERRKILLT                  1079
 #define IDC_FILTERSAVE                  1080
 #define IDC_OVERRIDEUNSENT              1081
+#define IDC_REJBID                      1081
 #define IDC_MAILFOR                     1082
+#define IDC_HOLDBID                     1082
 #define IDC_SENDWP                      1083
 #define IDC_FILTERWPB                   1084
 #define IDC_WPTYPE                      1085
@@ -302,6 +304,8 @@
 #define ID_ACTIONS_SENDMESSAGE          40022
 #define IDM_IMPORT                      40023
 #define ID_MULTICAST                    40024
+#define IDC_DEFAULTNOWINLINK			41001
+#define IDC_MULTIP						41002
 
 // Next default values for new objects
 // 

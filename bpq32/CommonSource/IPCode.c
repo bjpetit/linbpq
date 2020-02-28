@@ -4528,6 +4528,7 @@ void OpenTAP()
 #endif
 
 extern struct DATAMESSAGE * REPLYBUFFER;
+char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
 
 VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
@@ -4539,11 +4540,11 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 	PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
 	time_t NOW = time(NULL);
 
-	Bufferptr += sprintf(Bufferptr, "\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
 
 	if (IPRequired == FALSE)
 	{
-		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "IP Gateway is not enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4552,7 +4553,7 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 
 	if (PingAddr == INADDR_NONE)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Address\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Address\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4578,9 +4579,9 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 	ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, 28);
 
 	if (RouteIPMsg(IPptr))	
-		Bufferptr += sprintf(Bufferptr, "OK\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "OK\r");
 	else
-		Bufferptr += sprintf(Bufferptr, "No Route to Host\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "No Route to Host\r");
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	
@@ -4599,11 +4600,11 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	char IP[20];
 	unsigned char work[4];
 
-	Bufferptr += sprintf(Bufferptr, "\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
 
 	if (IPRequired == FALSE)
 	{
-		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "IP Gateway is not enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4622,7 +4623,7 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 				RemoveARP(Arp);
 		}
 
-		Bufferptr += sprintf(Bufferptr, "OK\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "OK\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		SaveARP();
 
@@ -4635,7 +4636,6 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 //		if (ARPRecord->ARPVALID)
 		{
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
 			memcpy(work, &ARPRecord->IPADDR, 4);
 			sprintf(IP, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
@@ -4674,7 +4674,7 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 					AXCall += 7;
 				}
 			}
-			Bufferptr += sprintf(Bufferptr, "%s%s %d %c %d %s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s%s %d %c %d %s\r",
 				IP, Mac, ARPRecord->ARPINTERFACE, ARPRecord->ARPTYPE,
 				(int)ARPRecord->ARPTIMER, ARPRecord->LOCKED?"Locked":"");
 		}
@@ -4692,11 +4692,11 @@ VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	char From[20];
 	char To[20];
 				
-	Bufferptr += sprintf(Bufferptr, "\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
 
 	if (IPRequired == FALSE)
 	{
-		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "IP Gateway is not enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4708,13 +4708,12 @@ VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		strcpy(From, FormatIP(NAT->origipaddr));
 		strcpy(To, FormatIP(NAT->mappedipaddr));
 		
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
 
 #ifdef LINBPQ
-		Bufferptr += sprintf(Bufferptr, "%s to %s %s\r", From, To,
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s to %s %s\r", From, To,
 			NAT->ThisHost?"via TAP":"");
 #else
-		Bufferptr += sprintf(Bufferptr, "%s to %s\r", From, To);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s to %s\r", From, To);
 #endif
 	}
 
@@ -4749,12 +4748,12 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 
 	if (IPRequired == FALSE)
 	{
-		Bufferptr += sprintf(Bufferptr, "\rIP Gateway is not enabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "\rIP Gateway is not enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "%d Entries\r", NumberofRoutes);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "%d Entries\r", NumberofRoutes);
 
 	if (NumberofRoutes)
 		qsort(RouteRecords, NumberofRoutes, sizeof(void *), CompareRoutes);
@@ -4765,7 +4764,6 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 
 //		if (RouteRecord->ARPVALID)
 		{
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
 			memcpy(work, &RouteRecord->NETWORK, 4);
 			sprintf(Net, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
@@ -4797,7 +4795,7 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 		if (CmdTail && CmdTail[0] && strstr(UCReply, CmdTail) == 0)
 			continue;
 	
-		Bufferptr += sprintf(Bufferptr, "%s", Reply);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s", Reply);
 	}
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));

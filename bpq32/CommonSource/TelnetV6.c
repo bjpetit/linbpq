@@ -2142,8 +2142,11 @@ nosocks:
 
 					WriteCMSLog (logmsg);
 				}
+	
+				// Don't report if Internet down
 
-				SendWL2KSessionRecord(sockptr->ADIF, STREAM->BytesTXed, STREAM->BytesRXed);
+				if (sockptr->RelaySession == FALSE)
+					SendWL2KSessionRecord(sockptr->ADIF, STREAM->BytesTXed, STREAM->BytesRXed);
 				
 				WriteADIFRecord(sockptr->ADIF);
 				
@@ -4940,7 +4943,6 @@ void CheckCMSThread(void * TNC);
 
 BOOL CheckCMS(struct TNCINFO * TNC)
 {
-
 	if (TNC->TCPInfo->CMS)
 	{
 		TNC->TCPInfo->CheckCMSTimer = 0;
@@ -6031,5 +6033,271 @@ VOID ProcessTriModeDataMessage(struct TNCINFO * TNC, struct ConnectionInfo * soc
 	}
 
 	SendtoNode(TNC, sockptr->Number, Buffer, len);
+}
+
+extern struct DATAMESSAGE * REPLYBUFFER;
+char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
+
+
+VOID RECONFIGTELNET (TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	int Port = 0, index =0;
+	char * ptr, *Context;
+	struct PORTCONTROL * PORT = NULL;
+	struct TNCINFO * TNC;
+	char * ptr1, * ptr2;
+	char buf[256],errbuf[256];
+	char * Config;
+	struct TCPINFO * TCP;
+	
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+		Port = atoi(ptr);
+
+	if (Port)
+		PORT = GetPortTableEntryFromPortNum(Port);
+
+	if (PORT == NULL)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	TNC = TNCInfo[Port];
+
+	if (TNC == NULL || TNC->Hardware != H_TELNET)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Not a Telnet port\r");
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	TCP = TNC->TCPInfo;
+
+	ptr = strtok_s(NULL, " ", &Context);
+
+	if (ptr && _stricmp(ptr, "ALL") == 0)
+	{
+		// Use EXTRESTART Code
+
+		PEXTPORTDATA PORTVEC = (PEXTPORTDATA) PORT;
+		PORTVEC->EXTRESTART = 1;
+
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Reconfig Telnet Ok\r");
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	if (ptr && _stricmp(ptr, "USERS") == 0)
+	{
+		// Reconfig Users
+
+		if (!ProcessConfig())
+		{		
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Failed to reread config file - leaving config unchanged\r");
+			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+			return;
+		}
+		
+		Config = PortConfig[Port];
+
+		if (Config == NULL)
+		{
+			Bufferptr = Cmdprintf(Session, Bufferptr, "No Config Entries found\r");
+			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+			return;
+		}
+
+		// Don't free old user records - sessions may have pointers to them
+
+		// Free the header
+
+		if (TCP->UserRecPtr)
+		{
+			free(TCP->UserRecPtr);
+			TCP->UserRecPtr = NULL;
+		}
+
+		// Look for USER lines
+
+		ptr1 = Config;
+		ptr2 = strchr(ptr1, 13);
+
+		while(ptr2)
+		{
+			memcpy(buf, ptr1, ptr2 - ptr1 + 1);
+			buf[ptr2 - ptr1 + 1] = 0;
+			ptr1 = ptr2 + 2;
+			ptr2 = strchr(ptr1, 13);
+			strcpy(errbuf,buf);			// save in case of erro
+
+			if (_memicmp(buf, "USER=", 5) == 0 || _memicmp(buf, "USER ", 5) == 0)
+			{
+				char *User, *Pwd, *UserCall, *Secure, * Appl;
+				int End = (int)strlen(buf) -1;
+				struct UserRec * USER;
+				char Param[8][256];
+				char * ptr1, * ptr2;
+				int n = 0;
+				char * value = &buf[5];
+				
+				// USER=user,password,call,appl,SYSOP
+
+				memset(Param, 0, 2048);
+				strlop(value, 13);
+				strlop(value, ';');
+
+				ptr1 = value;
+
+				while (ptr1 && *ptr1 && n < 8)
+				{
+					ptr2 = strchr(ptr1, ',');
+					if (ptr2) *ptr2++ = 0;
+
+					strcpy(&Param[n][0], ptr1);
+					strlop(Param[n++], ' ');
+					ptr1 = ptr2;
+					while(ptr1 && *ptr1 && *ptr1 == ' ')
+						ptr1++;
+				}
+
+
+				User = &Param[0][0];
+
+				if (_stricmp(User, "ANON") == 0)
+				{
+					strcpy(&Param[2][0], "ANON");
+					strcpy(&Param[4][0], "");		// Dont allow SYSOP if ANON
+				}
+
+				Pwd = &Param[1][0];
+				UserCall = &Param[2][0];
+				Appl = &Param[3][0];
+				Secure = &Param[4][0];
+
+				if (User[0] == 0 || Pwd[0] == 0 || UserCall[0] == 0) // invalid record
+				{
+					Bufferptr = Cmdprintf(Session, Bufferptr, "Bad USER Record %s\r", errbuf);
+					SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+					return;
+				}
+
+				_strupr(UserCall);
+
+				if (TCP->NumberofUsers == 0)
+					TCP->UserRecPtr = malloc(sizeof(void *));
+				else
+					TCP->UserRecPtr = realloc(TCP->UserRecPtr, (TCP->NumberofUsers+1) * sizeof(void *));
+
+				USER = zalloc(sizeof(struct UserRec));
+
+				TCP->UserRecPtr[TCP->NumberofUsers] = USER;
+
+				USER->Callsign = _strdup(UserCall);
+				USER->Password = _strdup(Pwd);
+				USER->UserName = _strdup(User);
+				USER->Appl = zalloc(32);
+				USER->Secure = FALSE;
+
+				if (_stricmp(Secure, "SYSOP") == 0)
+					USER->Secure = TRUE;
+
+				if (Appl[0] && strcmp(Appl, "\"\"") != 0)
+				{
+					strcpy(USER->Appl, _strupr(Appl));
+					strcat(USER->Appl, "\r\n");
+				}
+				TCP->NumberofUsers++;
+			}
+		}
+
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Reread Telnet Users Ok - %d USER Records\r", TCP->NumberofUsers);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid parameter - use either USERS or ALL \r");
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+}
+
+VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	//	DISPLAY Telnet Server Status Mheard
+	
+	int Port = 0, index =0;
+	char * ptr, *Context;
+	struct PORTCONTROL * PORT = NULL;
+	int txlen = 0, n;
+	struct TNCINFO * TNC;
+	char msg[80];
+	struct ConnectionInfo * sockptr;
+	int i;
+	char CMS[] = "CMS Disabled";
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+		Port = atoi(ptr);
+
+	if (Port)
+		PORT = GetPortTableEntryFromPortNum(Port);
+
+	if (PORT == NULL)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	TNC = TNCInfo[Port];
+
+	if (TNC == NULL || TNC->Hardware != H_TELNET)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Not a Telnet port\r");
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	if (TNC->TCPInfo->CMS)
+		if (TNC->TCPInfo->CMSOK)
+			strcpy(CMS, "CMS Ok");
+		else
+			strcpy(CMS, "No CMS");
+	
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Telnet Status for Port %d %s\r", Port, CMS);
+
+	for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
+	{
+		sockptr=TNC->Streams[n].ConnectionInfo;
+
+		if (!sockptr->SocketActive)
+		{
+			strcpy(msg,"Idle");
+		}
+		else
+		{
+			if (sockptr->UserPointer == 0)
+			{
+				if (sockptr->HTTPMode)
+				{
+					char Addr[100];
+					Tel_Format_Addr(sockptr, Addr);
+					sprintf(msg, "HTTP From %s", Addr);
+				}
+				else
+					strcpy(msg,"Logging in");
+			}
+			else
+			{
+				i=sprintf(msg,"%-10s %-10s %2d",
+					sockptr->UserPointer->UserName,sockptr->Callsign,sockptr->BPQStream);
+			}
+		}
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s\r", msg);
+	}
+
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 

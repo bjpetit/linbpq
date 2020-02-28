@@ -42,6 +42,8 @@ int MyElementCount;
 BOOL ReaddressLocal;
 BOOL ReaddressReceived;
 BOOL WarnNoRoute = TRUE;
+BOOL SendPtoMultiple = FALSE;
+
 BOOL Localtime = FALSE;		// Use Local Time for Timebands and forward connect scripts
 
 struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg, char * FirstDestElement);
@@ -1298,9 +1300,12 @@ NOHA:
 		// P messages are only sent to one BBS, but check the TO and AT of all BBSs before routing on HA,
 		// and choose the best match on HA
 
+		// now has option to send P messages to more than one BBS
+
 		struct UserInfo * bestbbs = NULL;
 		int bestmatch = 0;
 		int depth;
+		int Matched = 0;
 
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
@@ -1314,6 +1319,11 @@ NOHA:
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
 
 				CheckAndSend(Msg, conn, bbs);
+
+				Matched++;
+				if (SendPtoMultiple && Msg->type == 'P')
+					continue;
+
 				return 1;
 			}
 		}
@@ -1333,6 +1343,10 @@ NOHA:
 
 		
 				CheckAndSend(Msg, conn, bbs);
+	
+				Matched++;
+				if (SendPtoMultiple && Msg->type == 'P')
+					continue;
 
 				return 1;
 			}
@@ -1345,8 +1359,20 @@ NOHA:
 
 				CheckAndSend(Msg, conn, bbs);
 
+				Matched++;
+				if (SendPtoMultiple && Msg->type == 'P')
+					continue;
+
 				return 1;
 			}
+		}
+
+		if (Matched)
+		{
+			// Should only get here if Sending P to Multiples is enabled
+			// and we have at least one forward.
+
+			return 1;
 		}
 
 		// We should choose the BBS with most matching elements (ie match on #23.GBR better that GBR)

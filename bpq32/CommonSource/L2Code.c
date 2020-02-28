@@ -31,6 +31,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "stdio.h"
 				 
 #include "CHeaders.h"
+#include "tncinfo.h"
 
 #define	PFBIT 0x10		// POLL/FINAL BIT IN CONTROL BYTE
 
@@ -126,6 +127,8 @@ extern UCHAR * ALIASPTR;
 
 UCHAR QSTCALL[7] = {'Q'+'Q','S'+'S','T'+'T',0x40,0x40,0x40,0xe0};	// QST IN AX25
 UCHAR NODECALL[7] = {0x9C, 0x9E, 0x88, 0x8A, 0xA6, 0x40, 0xE0};		// 'NODES' IN AX25 FORMAT
+
+struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 
 VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
@@ -354,12 +357,6 @@ USING_NODE:
 	if (CompareAliases(Buffer->DEST, MYALIAS))		// only compare 6 bits - allow any ssid
 		goto FORUS;
 
-	//	WE MAY NOT BE ALLOWED TO USE THE BBS CALL ON SOME BANDS DUE TO
-	//	THE RATHER ODD UK LICENCING RULES!
-
-	if (PORT->BBSBANNED == 1)
-		goto NOWTRY_NODES;
-
 TRYBBS:
 
 	if (BBS == 0)
@@ -379,25 +376,31 @@ TRYBBS:
 	{
 		if (APPL->APPLCALL[0] > 0x40)		// Valid ax.25 addr
 		{
-			ALIASMSG = 0;
-			
-			if (CompareCalls(Buffer->DEST, APPL->APPLCALL))
-				goto FORUS;
+			//	WE MAY NOT BE ALLOWED TO USE THE BBS CALL ON SOME BANDS DUE TO
+			//	THE RATHER ODD UK LICENCING RULES!
+			//  For backward compatibility only apply to appl 1
 
-			ALIASMSG = 1;
+			if (PORT->BBSBANNED == 0 || APPLMASK != 1)
+			{
+				ALIASMSG = 0;
+				
+				if (CompareCalls(Buffer->DEST, APPL->APPLCALL))
+					goto FORUS;
 
-			if (CompareAliases(Buffer->DEST, APPL->APPLALIAS))		// only compare 6 bits - allow any ssid
-				goto FORUS;
+				ALIASMSG = 1;
 
-			if (CompareAliases(Buffer->DEST, APPL->L2ALIAS))		// only compare 6 bits - allow any ssid
-				goto FORUS;
+				if (CompareAliases(Buffer->DEST, APPL->APPLALIAS))		// only compare 6 bits - allow any ssid
+					goto FORUS;
 
+				if (CompareAliases(Buffer->DEST, APPL->L2ALIAS))		// only compare 6 bits - allow any ssid
+					goto FORUS;
+			}
 		}
 		APPLMASK <<= 1;
 		ALIASPTR += ALIASLEN;
 		APPL++;
 	}
-	
+
 	// NOT FOR US - SEE IF 'NODES' OR IP/ARP BROADCAST MESSAGE
 
 NOWTRY_NODES:
@@ -418,14 +421,14 @@ NOWTRY_NODES:
 			PROCESSNODEMESSAGE(Buffer, PORT);
 		}
 	}
-	
+
 	ReleaseBuffer(Buffer);
 	return;
-	
+
 NOTFORUS:
-//
-//	MAY JUST BE A REPLY TO A 'PRIMED' CQ CALL
-//
+	//
+	//	MAY JUST BE A REPLY TO A 'PRIMED' CQ CALL
+	//
 	if ((CTL & ~PFBIT) == SABM)
 		if (CheckForListeningSession(PORT, Buffer))
 			return;		// Used buffer to send UA
@@ -442,16 +445,30 @@ FORUS:
 
 	L2FORUS(LINK, PORT, Buffer, ADJBUFFER, CTL, MSGFLAG);
 }
-	
+
 
 VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 {
-	PMHSTRUC MH = PORT->PORTMHEARD;`
+	PMHSTRUC MH = PORT->PORTMHEARD;
 	PMHSTRUC MHBASE = MH;
 	int i;
 	int OldCount = 0;
-
+	char Freq[16] = "";
 	char DIGI = '*';
+
+	// if port has Rigcontrol associated with it, get frequency
+
+	if (PORT->RIGPort)
+	{
+		struct TNCINFO * TNC = TNCInfo[PORT->RIGPort];
+
+		if (TNC && TNC->RIG)
+		{
+			strcpy(Freq, TNC->RIG->Valchar);
+			Freq[11] = 0;
+		}
+	}
+
 	
 //	if (Buffer->ORIGIN[6] & 1)
 		DIGI = 0;					// DOn't think we wnat to do this
@@ -481,7 +498,7 @@ DoMove:
 	MHBASE->MHDIGI = DIGI;
 	MHBASE->MHTIME = time(NULL);
 	MHBASE->MHCOUNT = ++OldCount;
-	MHBASE->MHFreq[0] = 0;
+	strcpy(MHBASE->MHFreq, Freq);
 	MHBASE->MHLocator[0] = 0;
 
 	return;

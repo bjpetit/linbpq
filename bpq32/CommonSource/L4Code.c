@@ -610,6 +610,9 @@ VOID L4BG()
 
 				int Fragments = (Msglen + Paclen - 1) / Paclen;
 				int Fraglen = Msglen / Fragments;
+						
+				if ((Msglen & 1))		// Odd
+					Fraglen ++;
 
 				while (Msglen > Fraglen)
 				{

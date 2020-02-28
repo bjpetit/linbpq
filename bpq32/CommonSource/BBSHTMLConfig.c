@@ -1575,6 +1575,7 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		MailForInterval = atoi(Temp);
 
 		GetCheckBox(input, "DontHold=", &DontHoldNewUsers);
+		GetCheckBox(input, "DefaultNoWinlink=", &DefaultNoWINLINK);
 		GetCheckBox(input, "DontNeedName=", &AllowAnon);
 		GetCheckBox(input, "DontNeedHomeBBS=", &DontNeedHomeBBS);
 		GetCheckBox(input, "UserCantKillT=", &UserCantKillT);
@@ -1633,9 +1634,11 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		RejFrom = GetMultiStringInput(input, "Rfrom=");
 		RejTo = GetMultiStringInput(input, "Rto=");
 		RejAt = GetMultiStringInput(input, "Rat=");
+		RejBID = GetMultiStringInput(input, "RBID=");
 		HoldFrom = GetMultiStringInput(input, "Hfrom=");
 		HoldTo = GetMultiStringInput(input, "Hto=");
 		HoldAt = GetMultiStringInput(input, "Hat=");
+		HoldBID = GetMultiStringInput(input, "HBID=");
 
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
@@ -1741,6 +1744,7 @@ VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Re
 		MaxAge = atoi(Temp);
 		GetCheckBox(input, "WarnNoRoute=", &WarnNoRoute);
 		GetCheckBox(input, "LocalTime=", &Localtime);
+		GetCheckBox(input, "SendPtoMultiple=", &SendPtoMultiple);
 
 		// Reinitialise Aliases
 
@@ -2373,17 +2377,21 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	char HF[2048] = "";
 	char HT[2048] = "";
 	char HA[2048] = "";
+	char HB[2048] = "";
 	char RF[2048] = "";
 	char RT[2048] = "";
 	char RA[2048] = "";
+	char RB[2048] = "";
 	char WPTO[10000] = "";
 
 	SetMultiStringValue(RejFrom, RF);
 	SetMultiStringValue(RejTo, RT);
 	SetMultiStringValue(RejAt, RA);
+	SetMultiStringValue(RejBID, RB);
 	SetMultiStringValue(HoldFrom, HF);
 	SetMultiStringValue(HoldTo, HT);
 	SetMultiStringValue(HoldAt, HA);
+	SetMultiStringValue(HoldBID, HB);
 	SetMultiStringValue(SendWPAddrs, WPTO);
 
 	
@@ -2396,7 +2404,8 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		(RefuseBulls) ? CHKD  : UNC,
 		(EnableUI) ? CHKD  : UNC,
 		MailForInterval,
-		(DontHoldNewUsers) ? CHKD  : UNC, 
+		(DontHoldNewUsers) ? CHKD  : UNC,
+		(DefaultNoWINLINK) ? CHKD  : UNC,
 		(AllowAnon) ? CHKD  : UNC, 
 		(DontNeedHomeBBS) ? CHKD  : UNC, 
 		(UserCantKillT) ? UNC : CHKD,		// Reverse logic
@@ -2414,7 +2423,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		(SendWPType == 0) ? CHKD  : UNC,
 		(SendWPType == 1) ? CHKD  : UNC,
 		WPTO,
-		RF, RT, RA, HF, HT, HA);
+		RF, RT, RA, RB, HF, HT, HA, HB);
 
 	*ReplyLen = Len;
 }
@@ -2493,7 +2502,9 @@ VOID SendFwdMainPage(char * Reply, int * RLen, char * Key)
 		Key, Key, Key, Key, Key, Key, Key, Key,
 		Key, MaxTXSize, MaxRXSize, MaxAge,
 		(WarnNoRoute) ? CHKD  : UNC, 
-		(Localtime) ? CHKD  : UNC, ALIASES);
+		(Localtime) ? CHKD  : UNC,
+		(SendPtoMultiple) ? CHKD  : UNC,
+		ALIASES);
 }
 
 

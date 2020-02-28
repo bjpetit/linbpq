@@ -1154,8 +1154,8 @@ BOOL ConnecttoBBS (struct UserInfo * user);
 BOOL SetupNewBBS(struct UserInfo * user);
 VOID CreateRegBackup();
 VOID SaveFilters(HWND hDlg);
-BOOL CheckRejFilters(char * From, char * To, char * ATBBS, char Type);
-BOOL CheckHoldFilters(char * From, char * To, char * ATBBS);
+BOOL CheckRejFilters(char * From, char * To, char * ATBBS, char * BID, char Type);
+BOOL CheckHoldFilters(char * From, char * To, char * ATBBS, char * BID);
 BOOL CheckifLocalRMSUser(char * FullTo);
 VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *Context);
 BOOL wildcardcompare(char * Target, char * Match);
@@ -1372,10 +1372,12 @@ extern char * ExpertPrompt;
 extern char ** RejFrom;					// Reject on FROM Call
 extern char ** RejTo;						// Reject on TO Call
 extern char ** RejAt;						// Reject on AT Call
+extern char ** RejBID;
 
 extern char ** HoldFrom;					// Hold on FROM Call
 extern char ** HoldTo;						// Hold on TO Call
 extern char ** HoldAt;						// Hold on AT Call
+extern char ** HoldBID;
 
 // Send WP Params
 
@@ -1462,6 +1464,7 @@ extern BOOL RefuseBulls;
 extern BOOL SendSYStoSYSOPCall;
 extern BOOL SendBBStoSYSOPCall;
 extern BOOL DontHoldNewUsers;
+extern BOOL DefaultNoWINLINK;
 extern BOOL UIEnabled[];
 extern BOOL UINull[];
 extern BOOL UIMF[];
@@ -1529,6 +1532,7 @@ extern struct ALIAS ** Aliases;
 extern BOOL ReaddressLocal;
 extern BOOL ReaddressReceived;
 extern BOOL WarnNoRoute;
+extern BOOL SendPtoMultiple;
 extern BOOL Localtime;
 
 struct ConsoleInfo * ConsHeader[2];

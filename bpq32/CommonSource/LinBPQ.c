@@ -456,6 +456,7 @@ BOOL IGateEnabled = TRUE;
 BOOL APRSActive = FALSE;
 BOOL ReconfigFlag = FALSE;
 BOOL APRSReconfigFlag = FALSE;
+BOOL RigReconfigFlag = FALSE;
 
 BOOL IPActive = FALSE;
 extern BOOL IPRequired;
@@ -1059,6 +1060,26 @@ int main(int argc, char * argv[])
 			KEEPGOING--;					// Give time for links to close
 			setbuf(stdout, NULL);
 			printf("Closing... %d  \r", KEEPGOING);
+		}
+
+
+		if (RigReconfigFlag)
+		{
+			RigReconfigFlag = FALSE;
+			Rig_Close();
+			Sleep(2000);				// Allow CATPTT threads to close
+			RigActive = Rig_Init();
+
+			Consoleprintf("Rigcontrol Reconfiguration Complete");	
+		}
+
+		if (APRSReconfigFlag)
+		{
+			APRSReconfigFlag = FALSE;
+			APRSClose();				
+			APRSActive = Init_APRS();
+
+			Consoleprintf("APRS Reconfiguration Complete");	
 		}
 
 		if (ReconfigFlag)

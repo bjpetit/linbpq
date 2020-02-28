@@ -198,7 +198,7 @@ VOID ASYDISP(struct PORTCONTROL * PortVector)
 {
 	char Msg[80];
 
-	if (PortVector->PORTIPADDR.s_addr)
+	if (PortVector->PORTIPADDR.s_addr  || PortVector->KISSTCP)
 
 		// KISS over UDP
 
@@ -869,7 +869,7 @@ struct PORTCONTROL * CHECKIOADDR(struct PORTCONTROL * OURPORT)
 			continue;
 		}
 
-		if (OURPORT->SerialPortName)
+		if (OURPORT->SerialPortName && strcmp(OURPORT->SerialPortName, "NOPORT") != 0)
 		{
 			// We are using a name
 			
@@ -1064,7 +1064,9 @@ VOID SENDFRAME(struct KISSINFO * KISS, PMESSAGE Buffer)
 
 	//	See if ACKMODE needed
 	
-	if (PORT->KISSFLAGS & ACKMODE)
+	// Make sure we look on correct port if a subport
+
+	if (KISS->PORT.KISSFLAGS & ACKMODE)
 	{
 		if (Buffer->Linkptr)					// Frame Needs ACK
 		{
@@ -1077,7 +1079,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, PMESSAGE Buffer)
 
 			Buffer->Linkptr = 0;
 
-			if (PORT->KISSFLAGS & TNCX)
+			if (KISS->PORT.KISSFLAGS & TNCX)
 			{
 				// Include ACK bytes in Checksum
 
@@ -1110,7 +1112,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, PMESSAGE Buffer)
 
 		case 'C':
 			
-			if (PORT->KISSFLAGS & D700)
+			if (KISS->PORT.KISSFLAGS & D700)
 			{
 				(*ptr2++) = FESC;
 				(*ptr2++) = 'C';
@@ -1127,7 +1129,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, PMESSAGE Buffer)
 
 	// If using checksum, send it
 
-	if (PORT->KISSFLAGS & CHECKSUM)
+	if (KISS->PORT.KISSFLAGS & CHECKSUM)
 	{
 		c = (UCHAR)KISS->TXCCC;
 
@@ -1640,7 +1642,7 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 				return;				// No More
 			}
 
-						memcpy(&TNC->RXBuffer[TNC->RXLen + Len], &Buffer[1], gotThisTime);
+			memcpy(&TNC->RXBuffer[TNC->RXLen + Len], &Buffer[1], gotThisTime);
 	
 			Len += gotThisTime;
 
@@ -1833,11 +1835,11 @@ VOID ConnecttoTCPThread(NPASYINFO ASY)
 
 				closesocket(sock);
 				ASY->Connecting = FALSE;
-				Sleep (57000);				// 1 Mins
+				Sleep (57000/2);				// 1/2 Mins
 				continue;
 			}
 		}
-		Sleep (57000);						// 1 Mins
+		Sleep (57000/2);						// 1/2 Mins
 	}
 }
 

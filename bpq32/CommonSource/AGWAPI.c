@@ -132,6 +132,7 @@ int SendRawPacket(struct AGWSocketConnectionInfo * sockptr, char *txmsg, int Len
 int ShowApps();
 int Terminate();
 int SendtoSocket(SOCKET sock,char * Msg);
+char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
 
 
 VOID Poll_AGW()
@@ -409,12 +410,12 @@ VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 	if (AGWActive == FALSE)
 	{
-		Bufferptr += sprintf(Bufferptr, "\rAGW Interface is not enabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "\rAGW Interface is not enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "\rSockets\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "\rSockets\r");
 	for (i = 1; i <= CurrentSockets; i++)
 	{
 		sockptr=&Sockets[i];
@@ -426,17 +427,15 @@ VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		
 			sprintf(IPAddr, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);
-			Bufferptr += sprintf(Bufferptr, "%2d   %-16s %5d %-10s %-10s\r", i, IPAddr, htons(sockptr->sin.sin_port), &sockptr->CallSign1,  &sockptr->CallSign2);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%2d   %-16s %5d %-10s %-10s\r", i, IPAddr, htons(sockptr->sin.sin_port), &sockptr->CallSign1,  &sockptr->CallSign2);
 		}
 		else
 		{
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);
-			Bufferptr += sprintf(Bufferptr, "%2d   Idle\r", 1);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%2d   Idle\r", 1);
 		}
 	}
 		
-	Bufferptr += sprintf(Bufferptr, "\rPort    Calls        Stream Socket Connecting Listening Mask\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "\rPort    Calls        Stream Socket Connecting Listening Mask\r");
 
 	for (con = 0; con < CurrentConnections; con++)
 	{
@@ -449,11 +448,10 @@ VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		key[10]=0;
 		key[20]=0;
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);
-		Bufferptr += sprintf(Bufferptr, "%2c ", key[0]);
-		Bufferptr += sprintf(Bufferptr, "%-10s%-10s ",&key[1],&key[11]);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%2c ", key[0]);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%-10s%-10s ",&key[1],&key[11]);
 
-		Bufferptr += sprintf(Bufferptr, "%2d     %2d      %s     %s    %X\r",
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%2d     %2d      %s     %s    %X\r",
 			Con->BPQStream,
 			(Con->SocketIndex == 0) ? 0 : AGWConnections[con].SocketIndex->Number,
 			(Con->Connecting == 0) ? "FALSE" : "TRUE ",
@@ -957,6 +955,8 @@ int AGWSocket_Accept(SOCKET SocketId)
 		if (sockptr->SocketActive == FALSE)
 		{
 			addrlen=sizeof(struct sockaddr);
+		
+			memset(sockptr, 0, sizeof(struct AGWSocketConnectionInfo));
 
 			sock = accept(SocketId, (struct sockaddr *)&sockptr->sin, &addrlen);
 
@@ -1098,6 +1098,7 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 	char ConnectMsg[20];
 	int con,conport;
 	int AGWYReply = 0;
+	int state, change;
 
 	switch (sockptr->AGWRXHeader.DataKind)
 	{
@@ -1127,9 +1128,10 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
         Connection->Connecting = TRUE;
         
         Connect(Stream);				// Connect
+		SessionState(Stream, &state, &change);
         
 		ConvToAX25(sockptr->CallSign1, AXCall);
-		ChangeSessionCallsign(Stream, AXCall);
+		ChangeSessionCallsign(Stream, AXCall);		// Prevent triggering incoming connect code
 
         DisplaySessions();
         
@@ -1148,8 +1150,10 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 			conport=GetPortNumber(key[0]-48);
 
 			sprintf(ConnectMsg,"C %d %s\r",conport,ToCall);
-            SendMsg(Stream, ConnectMsg, (int)strlen(ConnectMsg));
 
+			// Send C command to Node
+
+            SendMsg(Stream, ConnectMsg, (int)strlen(ConnectMsg));
 		}
 
         CurrentConnections++;

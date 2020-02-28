@@ -856,6 +856,9 @@ BOOL Start()
 #endif	
 				PORT->SerialPortName = _strdup(Name);
 			}
+			else
+				PORT->SerialPortName = _strdup("NOPORT");
+
 		}
 		PORT->INTLEVEL = (char)PortRec->INTLEVEL;
 		PORT->BAUDRATE = PortRec->SPEED;
@@ -993,6 +996,8 @@ BOOL Start()
 
 		if (PortRec->WL2K)
 			memcpy(&PORT->WL2KInfo, PortRec->WL2K, sizeof(struct WL2KInfo));
+
+		PORT->RIGPort = PortRec->RIGPORT;
 
 		//	SEE IF PERMITTED LINK CALLSIGNS SPECIFIED
 
@@ -2350,6 +2355,7 @@ int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 
 	return TRUE;
 }
+;
 
 VOID INITIALISEPORTS()
 {

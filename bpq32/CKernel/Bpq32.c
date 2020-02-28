@@ -899,7 +899,22 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add SessionTimeLimit command to  HF drivers (ARDOP, SCSPactor, WINMOR, VARA)
 //	Add links to Ports Web Manangement Page to open individual Driver windows
 //	Add STOPPORT/STARTPORT support to ARDOP, KAM and SCSPactor drivers
-
+//	Add CLOSE and OPEN RADIO command so Rigcontrol port can be freed fpr other use.
+//	Don't try to send WL2K Traffic report if Internet is down
+//	Move WL2K Traffic reporting to a separate thread so it doesn't block if it can't connect to server
+//	ADD AGWAPPL config command to set application number. AGWMASK is still supported
+//	Register Node Alias with UZ7HO Driver
+//	Register calls when UZ7HO TNC Restarts and at intervals afterwards
+//	Fix crash when no IOADDR or COMPORT in async port definition
+//  Fix Crash with Paclink-Unix when parsing ; VE7SPR-10 DE N7NIX QTC 1
+//	Only apply BBSFLAG=NOBBS to APPPLICATION 1
+//	Add RIGREONFIG command
+//	fix APRS RECONFIG on LinBPQ
+//	Fix Web Terminal scroll to end problem on some browsers
+//	Add PTT_SETS_INPUT option for IC7600
+//	Add TELRECONFIG command to reread users or whole config
+//	Enforce PACLEN on UZ7HO ports
+//	Fix PACLEN on Command Output.
 
 #define CKernel
 

@@ -2897,8 +2897,9 @@ SocketConn * SMTPConnect(char * Host, int Port, BOOL AMPR, struct MsgInfo * Msg,
 		}
 	}
 	return FALSE;
-
 }
+
+int TryHELO = 0;			// Not thread safe but taking the chance..
 
 VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 {
@@ -2914,17 +2915,16 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "220 ",4) == 0)
 		{
+			TryHELO = 0;
+
 			if (sockptr->AMPR)
 				sockprintf(sockptr, "EHLO %s", AMPRDomain);
+			else if (ISPEHLOName[0])
+				sockprintf(sockptr, "EHLO %s", ISPEHLOName);
 			else
-				if (ISPEHLOName[0])
-					sockprintf(sockptr, "EHLO %s", ISPEHLOName);
-				else
-					sockprintf(sockptr, "EHLO %s", BBSName);
+				sockprintf(sockptr, "EHLO %s", BBSName);
 			
 			sockptr->State = WaitingForHELOResponse;
-
-
 		}
 		else
 		{
@@ -2937,6 +2937,21 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForHELOResponse)
 	{
+/*
+	if (memcmp(Buffer, "500 ",4) == 0 && TryHELO == 0)
+		{
+			TryHELO = 1;
+
+			if (sockptr->AMPR)
+				sockprintf(sockptr, "HELO %s", AMPRDomain);
+			else if (ISPEHLOName[0])
+				sockprintf(sockptr, "HELO %s", ISPEHLOName);
+			else
+				sockprintf(sockptr, "HELO %s", BBSName);
+
+			return;
+		}
+*/
 		if (memcmp(Buffer, "250-",4) == 0)
 			return;
 

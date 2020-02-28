@@ -1333,6 +1333,15 @@ VOID GetBadWordFile()
 	if (Handle == NULL)
 		return;
 
+	// Release old info in case a re-read
+
+	if (BadWords) free(BadWords);
+	if (BadFile) free(BadFile);
+
+	BadWords = NULL;
+	BadFile = NULL;
+	NumberofBadWords = 0;
+
 	BadFile = malloc(FileSize+1);
 
 	fread(BadFile, 1, FileSize, Handle); 
@@ -1562,7 +1571,7 @@ int CountConnectionsOnPort(int CheckPort)
 }
 
 
-BOOL CheckRejFilters(char * From, char * To, char * ATBBS, char Type)
+BOOL CheckRejFilters(char * From, char * To, char * ATBBS, char * BID, char Type)
 {
 	char ** Calls;
 
@@ -1608,10 +1617,30 @@ BOOL CheckRejFilters(char * From, char * To, char * ATBBS, char Type)
 		}
 	}
 
+	if (RejBID && BID)
+	{
+		Calls = RejBID;
+
+		while(Calls[0])
+		{
+			if (Calls[0][0] == '*')
+			{
+				if (stristr(BID, &Calls[0][1]))	
+					return TRUE;
+			}
+			else
+			{
+				if (_stricmp(BID, Calls[0]))	
+					return TRUE;
+			}
+
+			Calls++;
+		}
+	}
 	return FALSE;		// Ok to accept
 }
 
-BOOL CheckHoldFilters(char * From, char * To, char * ATBBS)
+BOOL CheckHoldFilters(char * From, char * To, char * ATBBS, char * BID)
 {
 	char ** Calls;
 
@@ -1654,6 +1683,26 @@ BOOL CheckHoldFilters(char * From, char * To, char * ATBBS)
 		}
 	}
 
+	if (HoldBID && BID)
+	{
+		Calls = HoldBID;
+
+		while(Calls[0])
+		{
+			if (Calls[0][0] == '*')
+			{
+				if (stristr(BID, &Calls[0][1]))	
+					return TRUE;
+			}
+			else
+			{
+				if (_stricmp(BID, Calls[0]))	
+					return TRUE;
+			}
+
+			Calls++;
+		}
+	}
 	return FALSE;		// Ok to accept
 }
 
@@ -4422,7 +4471,7 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 	}
 	else
 	{
-		if (CheckRejFilters(From, ToCall, ATBBS, MsgType))
+		if (CheckRejFilters(From, ToCall, ATBBS, BID, MsgType))
 		{	
 			if ((conn->BBSFlags & BBS))
 			{
@@ -5233,7 +5282,7 @@ nextline:
 			HoldReason = "Bad word in title or body";
 		}
 
-		if (CheckHoldFilters(Msg->from, Msg->to, Msg->via))
+		if (CheckHoldFilters(Msg->from, Msg->to, Msg->via, Msg->bid))
 		{
 			Msg->status = 'H';
 			HoldReason = "Matched Hold Filters";
@@ -8227,6 +8276,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "SendSYStoSYSOPCall", SendSYStoSYSOPCall);
 	SaveIntValue(group, "SendBBStoSYSOPCall", SendBBStoSYSOPCall);
 	SaveIntValue(group, "DontHoldNewUsers", DontHoldNewUsers);
+	SaveIntValue(group, "DefaultNoWINLINK", DefaultNoWINLINK);
 	SaveIntValue(group, "AllowAnon", AllowAnon);
 	SaveIntValue(group, "DontNeedHomeBBS", DontNeedHomeBBS);
 	SaveIntValue(group, "UserCantKillT", UserCantKillT);
@@ -8308,10 +8358,12 @@ VOID SaveConfig(char * ConfigName)
 	SaveMultiStringValue(group,  "RejFrom", RejFrom);
 	SaveMultiStringValue(group,  "RejTo", RejTo);
 	SaveMultiStringValue(group,  "RejAt", RejAt);
+	SaveMultiStringValue(group,  "RejBID", RejBID);
 
 	SaveMultiStringValue(group,  "HoldFrom", HoldFrom);
 	SaveMultiStringValue(group,  "HoldTo", HoldTo);
 	SaveMultiStringValue(group,  "HoldAt", HoldAt);
+	SaveMultiStringValue(group,  "HoldBID", HoldBID);
 
 	SaveIntValue(group, "SendWP", SendWP);
 	SaveIntValue(group, "SendWPType", SendWPType);
@@ -8333,7 +8385,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "ReaddressReceived", ReaddressReceived);
 	SaveIntValue(group, "WarnNoRoute", WarnNoRoute);
 	SaveIntValue(group, "Localtime", Localtime);
-	SaveIntValue(group, "WarnNoRoute", WarnNoRoute);
+	SaveIntValue(group, "SendPtoMultiple", SendPtoMultiple);
 
 	SaveMultiStringValue(group, "FWDAliases", AliasText);
 
@@ -8553,6 +8605,7 @@ BOOL GetConfig(char * ConfigName)
 	SendSYStoSYSOPCall =  GetIntValue(group, "SendSYStoSYSOPCall");
 	SendBBStoSYSOPCall =  GetIntValue(group, "SendBBStoSYSOPCall");
 	DontHoldNewUsers =  GetIntValue(group, "DontHoldNewUsers");
+	DefaultNoWINLINK =  GetIntValue(group, "DefaultNoWINLINK");
 	ForwardToMe =  GetIntValue(group, "ForwardToMe");
 	AllowAnon =  GetIntValue(group, "AllowAnon");
 	UserCantKillT = GetIntValue(group, "UserCantKillT");
@@ -8563,6 +8616,7 @@ BOOL GetConfig(char * ConfigName)
 	ReaddressLocal =  GetIntValue(group, "ReaddressLocal");
 	ReaddressReceived =  GetIntValue(group, "ReaddressReceived");
 	WarnNoRoute =  GetIntValue(group, "WarnNoRoute");
+	SendPtoMultiple =  GetIntValue(group, "SendPtoMultiple");
 	Localtime =  GetIntValue(group, "Localtime");
 	AliasText = GetMultiStringValue(group, "FWDAliases");
 	GetStringValue(group, "BBSName", BBSName);
@@ -8697,10 +8751,12 @@ BOOL GetConfig(char * ConfigName)
 	RejFrom = GetMultiStringValue(group,  "RejFrom");
 	RejTo = GetMultiStringValue(group,  "RejTo");
 	RejAt = GetMultiStringValue(group,  "RejAt");
+	RejBID = GetMultiStringValue(group,  "RejBID");
 
 	HoldFrom = GetMultiStringValue(group,  "HoldFrom");
 	HoldTo = GetMultiStringValue(group,  "HoldTo");
 	HoldAt = GetMultiStringValue(group,  "HoldAt");
+	HoldBID = GetMultiStringValue(group,  "HoldBID");
 
 	// Send WP Params
 	
@@ -8945,6 +9001,9 @@ int Connected(int Stream)
 
 				if (!DontHoldNewUsers)
 					user->flags |= F_HOLDMAIL;
+
+				if (DefaultNoWINLINK)
+					user->flags |= F_NOWINLINK;
 
 				conn->NewUser = TRUE;
 			}
@@ -10935,6 +10994,7 @@ char *stristr (char *ch1, char *ch2)
 			*chNdx = (char) tolower (*chNdx);
 			chNdx ++;
 		}
+
 		chNdx = strstr (chN1, chN2);
 		if (chNdx)
 			chRet = ch1 + (chNdx - chN1);

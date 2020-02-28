@@ -282,6 +282,7 @@ VOID DoHouseKeeping(BOOL Manual)
 	LastHouseKeepingTime = NOW = time(NULL);
 	SaveConfig(ConfigName);
 	GetConfig(ConfigName);
+	GetBadWordFile();			// Reread Badwords
 
 #ifndef LINBPQ
 

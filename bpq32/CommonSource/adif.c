@@ -194,8 +194,15 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 		{
 			// Look for ; GM8BPQ-10 DE G8BPQ (IO92KX)
 
+			// Paclink-Unix Sends
+
+			//  ; VE7SPR-10 DE N7NIX QTC 1
+
 			char * StartLoc = strchr(Msg, '(');
 			char * EndLoc = strchr(Msg, ')');
+
+			if (StartLoc == NULL || EndLoc == NULL)
+				return TRUE;
 
 			if ((EndLoc - StartLoc) < 10)
 				memcpy(ADIF->LOC, StartLoc + 1, (EndLoc - StartLoc) - 1);

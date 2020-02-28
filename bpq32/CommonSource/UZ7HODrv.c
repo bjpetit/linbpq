@@ -74,7 +74,7 @@ int KillTNC(struct TNCINFO * TNC);
 int RestartTNC(struct TNCINFO * TNC);
 VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message);
 struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
-static VOID SendData(struct TNCINFO * TNC, char * key, char * Msg, int MsgLen);
+static VOID SendData(int Stream, struct TNCINFO * TNC, char * key, char * Msg, int MsgLen);
 static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCHAR * Msg);
 VOID SendRPBeacon(struct TNCINFO * TNC);
 VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
@@ -237,6 +237,15 @@ void RegisterAPPLCalls(struct TNCINFO * TNC, BOOL Unregister)
 	strcpy(AGW->TXHeader.callfrom, NodeCall);
 	send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 
+	// Add Alias
+
+	memcpy(NodeCall, MYALIASTEXT, 10);
+	strlop(NodeCall, ' ');
+	memset(AGW->TXHeader.callfrom, 0, 10);
+	strcpy(AGW->TXHeader.callfrom, NodeCall);
+	send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+
+	
 	for (App = 0; App < 32; App++)
 	{
 		APPL=&APPLCALLTABLE[App];
@@ -322,15 +331,28 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		{
 			// Only on first port using a host
 
+			time( &ltime );
+			
 			if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
 			{
 				//	See if time to reconnect
 		
-				time( &ltime );
 				if (ltime-lasttime[port] >9 )
 				{
 					ConnecttoUZ7HO(port);
 					lasttime[port]=ltime;
+				}
+			}
+			else
+			{
+				// See if time to refresh registrations
+
+				if (ltime - AGW->LastParamTime > 60)
+				{
+					AGW->LastParamTime = ltime;
+
+					if (TNC->PortRecord->PORTCONTROL.PortStopped == FALSE)
+						RegisterAPPLCalls(TNC, FALSE);
 				}
 			}
 		
@@ -625,7 +647,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);		// 1 as no PID
 		if (STREAM->Connected)
 		{
-			SendData(TNC, &STREAM->AGWKey[0], &buff->L2DATA[0], txlen);
+			SendData(Stream, TNC, &STREAM->AGWKey[0], &buff->L2DATA[0], txlen);
 			STREAM->FramesOutstanding++;
 		}
 		else
@@ -1097,7 +1119,7 @@ void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	}
 
 	time(&lasttime[port]);			// Get initial time value
-	
+
 	return ExtProc;
 
 }
@@ -1417,10 +1439,10 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 	struct hostent * HostEnt;
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct AGWINFO * AGW = TNC->AGWInfo;
+	
+	Sleep(3000);		// Allow init to complete 
 
 	TNC->CONNECTING = TRUE;
-
-	Sleep(3000);		// Allow init to complete 
 
 #ifndef LINBPQ
 
@@ -1443,7 +1465,6 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		EnumWindows(uz_enum_windows_callback, (LPARAM)TNC);
 	}
 #endif
-
 
 
 	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
@@ -1477,6 +1498,7 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		i=sprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
 		TNC->CONNECTING = FALSE;
+
   	 	return; 
 	}
  
@@ -1512,7 +1534,8 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		return;
 	}
 
-	TNC->LastFreq = 0;			//	so V4 display will be updated
+	TNC->LastFreq = 0;					// so V4 display will be updated
+	RegisterAPPLCalls(TNC, FALSE);		// Register Calls
 
 	return;
 
@@ -1900,7 +1923,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 			if (HFCTEXTLEN)
 			{
 				if (HFCTEXTLEN > 1)
-					SendData(TNC, &STREAM->AGWKey[0], HFCTEXT, HFCTEXTLEN);
+					SendData(Stream, TNC, &STREAM->AGWKey[0], HFCTEXT, HFCTEXTLEN);
 			}
 			else
 			{
@@ -1911,11 +1934,11 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 					while (Len > CTPaclen)		// CTEXT Paclen
 					{
-						SendData(TNC, &STREAM->AGWKey[0], &CTEXTMSG[Next], CTPaclen);
+						SendData(Stream, TNC, &STREAM->AGWKey[0], &CTEXTMSG[Next], CTPaclen);
 						Next += CTPaclen;
 						Len -= CTPaclen;
 					}
-					SendData(TNC, &STREAM->AGWKey[0], &CTEXTMSG[Next], Len);
+					SendData(Stream, TNC, &STREAM->AGWKey[0], &CTEXTMSG[Next], Len);
 				}
 			}
 
@@ -1969,7 +1992,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 					
 						// Send a Message, then a disconenct
 					
-						SendData(TNC, Key, Msg, (int)strlen(Msg));
+						SendData(Stream, TNC, Key, Msg, (int)strlen(Msg));
 
 						STREAM->DiscWhenAllSent = 100;	// 10 secs
 					}
@@ -2118,6 +2141,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 	case 'X':
 		break;
 
+	case 'x':
+		break;
+
 	case 'Y':				// Session Queue
 
 		AGWPort = RXHeader->Port;
@@ -2207,15 +2233,54 @@ CallTo is the call of the other station
 DataLen is the length of the data that follow
 */
 
-VOID SendData(struct TNCINFO * TNC, char * Key, char * Msg, int MsgLen)
+VOID SendData(int Stream, struct TNCINFO * TNC, char * Key, char * Msg, int MsgLen)
 {
 	struct AGWINFO * AGW = TNC->AGWInfo;
 	SOCKET sock = TNCInfo[MasterPort[TNC->Port]]->TCPSock;
+	int Paclen;
 	
 	AGW->TXHeader.Port = Key[0] - '1';
 	AGW->TXHeader.DataKind='D';
 	memcpy(AGW->TXHeader.callfrom, &Key[11], 10);
 	memcpy(AGW->TXHeader.callto, &Key[1], 10);
+
+	// If Length is greater than Paclen we should fragment
+
+	Paclen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
+
+	if (Paclen == 0)
+		Paclen = 80;
+
+	if (MsgLen > Paclen)
+	{
+		// Fragment it. 
+		// Is it best to send Paclen packets then short or equal length?
+		// I think equal length;
+
+		int Fragments = (MsgLen + Paclen - 1) / Paclen;
+		int Fraglen = MsgLen / Fragments;
+
+		if ((MsgLen & 1))		// Odd
+			Fraglen ++;
+
+		while (MsgLen > Fraglen)
+		{
+#ifdef __BIG_ENDIAN__
+			AGW->TXHeader.DataLength = reverse(MsgLen);
+#else
+			AGW->TXHeader.DataLength = Fraglen;
+#endif
+			AGW->TXHeader.PID = 0xf0;
+
+			send(sock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+			send(sock, Msg, Fraglen, 0);
+
+			Msg += Fraglen;
+			MsgLen -= Fraglen;
+		}
+
+		// Drop through to send last bit
+	}
 #ifdef __BIG_ENDIAN__
 	AGW->TXHeader.DataLength = reverse(MsgLen);
 #else
@@ -2295,8 +2360,6 @@ static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCH
 	char * temp;
 
 	Msg[RXHeader->DataLength] = 0;
-
-//	OutputDebugString(Msg);
 
 	Monframe.LENGTH = MSGHDDRLEN + 16;				// Control Frame
 	Monframe.PORT = BPQPort[RXHeader->Port][TNC->Port];

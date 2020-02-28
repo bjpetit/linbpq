@@ -138,7 +138,7 @@ struct _EXTPORTDATA DP;			// Only way I can think of to get offets to port data 
 char CMDALIAS[ALIASLEN][NumberofAppls] = {0};
 char * ALIASPTR	= &CMDALIAS[0][0];
 
-
+extern int RigReconfigFlag;
 
 CMDX COMMANDS[];
 
@@ -163,6 +163,62 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD);
 void ListExcludedCalls(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID RECONFIGTELNET (TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+
+char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...)
+{
+	// Send Command response checking PACLEN
+
+	char Mess[1000];
+	va_list(arglist);
+	int OldLen;
+	int MsgLen;
+	struct DATAMESSAGE * Buffer;
+	char * Messptr = Mess;
+	int Paclen = Session->SESSPACLEN;
+
+	va_start(arglist, format);
+
+	MsgLen = vsprintf(Mess, format, arglist);
+
+	OldLen = (int)(Bufferptr - (char *)REPLYBUFFER->L2DATA);
+
+	while ((OldLen + MsgLen) > Paclen)
+	{
+		// Have to send Paclen then get a new buffer
+
+		int ThisBit = Paclen - OldLen;		// What we can send this time
+
+		memcpy(Bufferptr, Messptr, ThisBit);
+		Messptr += ThisBit;
+		MsgLen -= ThisBit;
+
+		// QUEUE IT AND GET ANOTHER BUFFER
+
+		Buffer = (struct DATAMESSAGE *)GetBuff();
+
+		if (Buffer == NULL)
+
+			// No buffers, so just reuse the old one (better than crashing !!)
+
+			Buffer = REPLYBUFFER;
+		else
+			SendCommandReply(Session, REPLYBUFFER, Paclen + (4 + sizeof(void *)));
+
+
+		REPLYBUFFER = Buffer;
+		Buffer->PID = 0xf0;
+
+		Bufferptr =  &Buffer->L2DATA[0];
+		OldLen = 0;
+	}
+
+	// Add last bit to buffer
+
+	memcpy(Bufferptr, Messptr, MsgLen);
+
+	return Bufferptr + MsgLen;
+}
 
 
 VOID SENDNODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
@@ -205,23 +261,21 @@ VOID DUMPCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 						
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
-/*
-VOID RECONFIG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+
+VOID RIGRECONFIG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
-	if (Reconfig())
+	if (!ProcessConfig())
 	{
-		strcpy(Bufferptr, OKMSG);
-		Bufferptr += (int)strlen(OKMSG);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Configuration File check falled - will continue with old config");
 	}
 	else
 	{
-		strcpy(Bufferptr, BADCONFIGMSG);
-		Bufferptr += (int)strlen(BADCONFIGMSG);
+		RigReconfigFlag=TRUE;	
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Rigcontrol Reconfig requested");
 	}
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
-*/
 
 VOID REBOOT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
@@ -307,21 +361,16 @@ VOID PORTVAL(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 						{
 							while (VNPtr[0])
 							{
-								Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
-								len = ConvFromAX25(VNPtr, Normcall);
-								len++;									// Add a space
-								memcpy(Bufferptr, Normcall, len);
-								Bufferptr += len;
-
+								Normcall[ConvFromAX25(VNPtr, Normcall)] = 0;
+								Bufferptr = Cmdprintf(Session, Bufferptr, "%s ", Normcall);
 								VNPtr += 7;
 							}
 
-							*(Bufferptr++) = 13;
+							Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
 						}
 						else
 						{								
-							strcpy(Bufferptr, NOVALCALLS);
-							Bufferptr += (int)strlen(NOVALCALLS);
+							Bufferptr = Cmdprintf(Session, Bufferptr, "%s", NOVALCALLS);
 						}
 						
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
@@ -367,11 +416,11 @@ VOID PORTVAL(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 							newvalue = atoi(ptr);
 							*valueptr = newvalue;
 
-							Bufferptr += sprintf(Bufferptr, " was %d now %d\r", oldvalue, newvalue);
+							Bufferptr = Cmdprintf(Session, Bufferptr, " was %d now %d\r", oldvalue, newvalue);
 					}
 
 					else
-						Bufferptr += sprintf(Bufferptr, " %d\r", oldvalue);
+						Bufferptr = Cmdprintf(Session, Bufferptr, " %d\r", oldvalue);
 
 					SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 					return;
@@ -423,10 +472,10 @@ VOID SWITCHVAL (TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 			newvalue = atoi(ptr);
 			*valueptr = newvalue;
 
-			Bufferptr += sprintf(Bufferptr, " was %d now %d\r", oldvalue, newvalue);
+			Bufferptr = Cmdprintf(Session, Bufferptr, " was %d now %d\r", oldvalue, newvalue);
 	}
 	else
-		Bufferptr += sprintf(Bufferptr, " %d\r", oldvalue);
+		Bufferptr = Cmdprintf(Session, Bufferptr, " %d\r", oldvalue);
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
@@ -465,10 +514,10 @@ VOID SWITCHVALW (TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 			newvalue = atoi(ptr);
 			*valueptr = newvalue;
 
-			Bufferptr += sprintf(Bufferptr, " was %d now %d\r", oldvalue, newvalue);
+			Bufferptr = Cmdprintf(Session, Bufferptr, " was %d now %d\r", oldvalue, newvalue);
 	}
 	else
-		Bufferptr += sprintf(Bufferptr, " %d\r", oldvalue);
+		Bufferptr = Cmdprintf(Session, Bufferptr, " %d\r", oldvalue);
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
@@ -617,7 +666,7 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	
 	if (Session->LISTEN)
 	{
-		Bufferptr += sprintf(Bufferptr, "Can't use %s while listening\r", APPName);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Can't use %s while listening\r", APPName);
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -652,9 +701,9 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		// No Streams
 
 		if (CONERROR)
-			Bufferptr += sprintf(Bufferptr, "Sorry, All %s Ports are in use - Please try later\r", APPName);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, All %s Ports are in use - Please try later\r", APPName);
 		else
-			Bufferptr += sprintf(Bufferptr, "Sorry, Application %s is not running - Please try later\r", APPName);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, Application %s is not running - Please try later\r", APPName);
 
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
@@ -688,7 +737,7 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	
 	if (Session->L4CROSSLINK->SESS_APPLFLAGS  & MSG_TO_USER)
 	{
-		Bufferptr += sprintf(Bufferptr, "Connected to %s\r", APPName);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Connected to %s\r", APPName);
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -703,13 +752,13 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 VOID CMDI00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
-	Bufferptr = MOVEANDCHECK(Session, Bufferptr, INFOMSG, INFOLEN);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "%s", INFOMSG);
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 	
 VOID CMDV00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
-	Bufferptr += sprintf(Bufferptr, "Version %s\r", VersionString);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Version %s\r", VersionString);
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
@@ -738,7 +787,7 @@ VOID CMDPAC(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 			Session->SESSPACLEN = newvalue & 0xff;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "PACLEN - %d\r", Session->SESSPACLEN);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "PACLEN - %d\r", Session->SESSPACLEN);
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
@@ -760,7 +809,7 @@ VOID CMDIDLE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			Session->L4LIMIT = newvalue;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "IDLETIME - %d\r", Session->L4LIMIT);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "IDLETIME - %d\r", Session->L4LIMIT);
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 
 }
@@ -782,7 +831,7 @@ VOID CMDT00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 			Session->SESSIONT1 = newvalue;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "L4TIMEOUT - %d\r", Session->SESSIONT1);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "L4TIMEOUT - %d\r", Session->SESSIONT1);
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
@@ -852,7 +901,7 @@ VOID PWDCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	Session->PASSWORD = pwsum;
 
-	Bufferptr += sprintf(Bufferptr, "%d %d %d %d %d\r", p1, p2, p3, p4, p5);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "%d %d %d %d %d\r", p1, p2, p3, p4, p5);
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
 }
@@ -879,34 +928,24 @@ VOID CMDSTATS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 	if (Port == 0)
 	{
 		uptime = FormatUptime(STATSTIME);
-		Bufferptr += sprintf(Bufferptr, "%s", uptime);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s", uptime);
 
-		Bufferptr += sprintf(Bufferptr, "Semaphore Get-Rel/Clashes   %9d%9d\r", 
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Semaphore Get-Rel/Clashes   %9d%9d\r", 
 					Semaphore.Gets - Semaphore.Rels, Semaphore.Clashes);
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-
-		Bufferptr += sprintf(Bufferptr, "Buffers:Max/Cur/Min/Out/Wait%9d%9d%9d%9d%9d\r", 
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Buffers:Max/Cur/Min/Out/Wait%9d%9d%9d%9d%9d\r", 
 					MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS);
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-
-		Bufferptr += sprintf(Bufferptr, "Known Nodes/Max Nodes       %9d%9d\r", 
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Known Nodes/Max Nodes       %9d%9d\r", 
 					NUMBEROFNODES, MAXDESTS);
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-
-		Bufferptr += sprintf(Bufferptr, "L4 Connects Sent/Rxed       %9d%9d\r", 
+		Bufferptr = Cmdprintf(Session, Bufferptr, "L4 Connects Sent/Rxed       %9d%9d\r", 
 					L4CONNECTSOUT, L4CONNECTSIN);
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM				
-
-		Bufferptr += sprintf(Bufferptr, "L4 Frames TX/RX/Resent/Reseq%9d%9d%9d%9d\r", 
+		Bufferptr = Cmdprintf(Session, Bufferptr, "L4 Frames TX/RX/Resent/Reseq%9d%9d%9d%9d\r", 
 					L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES);
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-
-		Bufferptr += sprintf(Bufferptr, "L3 Frames Relayed           %9d\r", L3FRAMES);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "L3 Frames Relayed           %9d\r", L3FRAMES);
 
 		if (ptr && ptr[0] == 'S')
 		{
@@ -914,8 +953,6 @@ VOID CMDSTATS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 			return;
 		}
 	}
-
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
 
 	//	POSITION TO REQUESTED PORT
 
@@ -934,183 +971,166 @@ VOID CMDSTATS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 		return;
 	}
 
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-
 	STARTPORT = PORT;
 
 	if (cols > 7)
 		cols = 7;
 
-	Bufferptr += sprintf(Bufferptr, "                  ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "                  ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "Port %02d  ", PORT->PORTNUMBER);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Port %02d  ", PORT->PORTNUMBER);
 		PORT = PORT->PORTPOINTER;	
 	}
 
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "L2 Frames Digied");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "L2 Frames Digied");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2DIGIED);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2DIGIED);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "L2 Frames Heard ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "L2 Frames Heard ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2FRAMES);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2FRAMES);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "L2 Frames Rxed  ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "L2 Frames Rxed  ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2FRAMESFORUS);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2FRAMESFORUS);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "L2 Frames Sent  ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "L2 Frames Sent  ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2FRAMESSENT);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2FRAMESSENT);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "L2 Timeouts     ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "L2 Timeouts     ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2TIMEOUTS);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2TIMEOUTS);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "REJ Frames Rxed ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "REJ Frames Rxed ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2REJCOUNT);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2REJCOUNT);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "RX out of Seq   ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "RX out of Seq   ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2OUTOFSEQ);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2OUTOFSEQ);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "L2 Resequenced  ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "L2 Resequenced  ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2RESEQ);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2RESEQ);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "Undrun/Poll T/o ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Undrun/Poll T/o ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2URUNC);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2URUNC);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "RX Overruns     ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "RX Overruns     ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2ORUNC);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2ORUNC);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "RX CRC Errors   ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "RX CRC Errors   ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->RXERRORS);
-		PORT = PORT->PORTPOINTER;	
-	}
-	*(Bufferptr++) = 13;
-
-	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "FRMRs Sent      ");
-
-	for (i = 0; i < cols; i++)
-	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2FRMRTX);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->RXERRORS);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "FRMRs Received  ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "FRMRs Sent      ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L2FRMRRX);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2FRMRTX);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "Frames abandoned");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "FRMRs Received  ");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "%9d", PORT->L1DISCARD);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L2FRMRRX);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
 
 	PORT = STARTPORT;
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-	Bufferptr += sprintf(Bufferptr, "Link Active %%   ");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Frames abandoned");
 
 	for (i = 0; i < cols; i++)
 	{
-		Bufferptr += sprintf(Bufferptr, "   %2d %3d", PORT->AVSENDING, PORT->AVACTIVE);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%9d", PORT->L1DISCARD);
+		PORT = PORT->PORTPOINTER;	
+	}
+	*(Bufferptr++) = 13;
+
+	PORT = STARTPORT;
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Link Active %%   ");
+
+	for (i = 0; i < cols; i++)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "   %2d %3d", PORT->AVSENDING, PORT->AVACTIVE);
 		PORT = PORT->PORTPOINTER;	
 	}
 	*(Bufferptr++) = 13;
@@ -1127,28 +1147,25 @@ VOID CMDL00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	int len;
 	char Normcall[10];
 
-	Bufferptr += sprintf(Bufferptr, "Links\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Links\r");
 
 	while (n--)
 	{
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-
 		if (LINK->LINKCALL[0])
 		{
 			len = ConvFromAX25(LINK->LINKCALL, Normcall);
 			len++;			// add a apace
-			memcpy(Bufferptr, Normcall, len);
-			Bufferptr += len;
+
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s", Normcall);
 
 			len = ConvFromAX25(LINK->OURCALL, Normcall);
-			memcpy(Bufferptr, Normcall, len);
-			Bufferptr += len;
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s", Normcall);
 
 			if (LINK->Ver2point2)
-				Bufferptr += sprintf(Bufferptr, " S=%d P=%d T=%d V=2.2\r",
+				Bufferptr = Cmdprintf(Session, Bufferptr, " S=%d P=%d T=%d V=2.2\r",
 					LINK->L2STATE, LINK->LINKPORT->PORTNUMBER, LINK->LINKTYPE);
 			else
-				Bufferptr += sprintf(Bufferptr, " S=%d P=%d T=%d V=%d\r",
+				Bufferptr = Cmdprintf(Session, Bufferptr, " S=%d P=%d T=%d V=%d\r",
 					LINK->L2STATE, LINK->LINKPORT->PORTNUMBER, LINK->LINKTYPE, 2 - LINK->VER1FLAG);
 		}
 		LINK++;
@@ -1170,14 +1187,12 @@ VOID CMDS00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	char LHS[50] = "", MID[10] = "", RHS[50] = "";
 	char Line[100];
 	
-	Bufferptr += sprintf(Bufferptr, "%s%d)\r", SESSIONHDDR, QCOUNT);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "%s%d)\r", SESSIONHDDR, QCOUNT);
 
 	while (n--)
 	{
 		if (L4->L4USER[0])
 		{
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-
 			RHS[0] = MID[0] = 0;
 
 			if ((L4->L4CIRCUITTYPE & UPLINK) == 0)   //SHORT CMDS10A		; YES
@@ -1222,7 +1237,7 @@ CMDS50:
 			memcpy(&Line[35], MID, (int)strlen(MID));
 			strcpy(&Line[40], RHS);
 			strcat(&Line[40], "\r");
-			Bufferptr = MOVEANDCHECK(Session, Bufferptr, Line, (int)strlen(Line));
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s", Line);
 		}
 CMDS60:			
 		L4++;
@@ -1236,12 +1251,11 @@ VOID CMDP00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	struct PORTCONTROL * PORT = PORTTABLE;
 
-	Bufferptr += sprintf(Bufferptr, "Ports\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Ports\r");
 
 	while (PORT)
 	{
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-		Bufferptr += sprintf(Bufferptr, " %2d %s\r", PORT->PORTNUMBER, PORT->PORTDESCRIPTION);
+		Bufferptr = Cmdprintf(Session, Bufferptr, " %2d %s\r", PORT->PORTNUMBER, PORT->PORTDESCRIPTION);
 
 		PORT = PORT->PORTPOINTER;
 	}
@@ -1278,8 +1292,6 @@ char *  DisplayRoute(TRANSPORTENTRY * Session, char * Bufferptr, struct ROUTE * 
 	else
 		strcpy(Active, " ");
 
-	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-
 	if (Verbose)
 	{
 		if (Routes->NEIGHBOUR_LINK)					
@@ -1299,7 +1311,7 @@ char *  DisplayRoute(TRANSPORTENTRY * Session, char * Bufferptr, struct ROUTE * 
 			strcpy(PercentString, "    ");
 
 		
-		Bufferptr += sprintf(Bufferptr, "%s%2d %s %3d %3d%s%4d %4d %s %d %d %02d:%02d  %d %d",
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s%2d %s %3d %3d%s%4d %4d %s %d %d %02d:%02d  %d %d",
 							Active, Routes->NEIGHBOUR_PORT, Normcall, 
 							Routes->NEIGHBOUR_QUAL,	NodeCount, locked, Iframes, Retries, PercentString, Routes->NBOUR_MAXFRAME, Routes->NBOUR_FRACK,
 							Routes->NEIGHBOUR_TIME >> 8, (Routes->NEIGHBOUR_TIME) & 0xff, Queued, Routes->OtherendsRouteQual);
@@ -1311,14 +1323,14 @@ char *  DisplayRoute(TRANSPORTENTRY * Session, char * Bufferptr, struct ROUTE * 
 			double srtt = Routes->SRTT/1000.0;
 			double nsrtt = Routes->NeighbourSRTT/1000.0;
 
-			Bufferptr += sprintf(Bufferptr, " %4.2fs %4.2fs", srtt, nsrtt);
+			Bufferptr = Cmdprintf(Session, Bufferptr, " %4.2fs %4.2fs", srtt, nsrtt);
 		}
 
 		*(Bufferptr++) = 13;
 	}
 	else
 	{
-		Bufferptr += sprintf(Bufferptr, "%s %d %s %d %d%s\r",
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s %d %s %d %d%s\r",
 			Active, Routes->NEIGHBOUR_PORT, Normcall, Routes->NEIGHBOUR_QUAL, NodeCount, locked);
 	}
 
@@ -1355,7 +1367,7 @@ VOID CMDR00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 			Port = atoi(ptr);
 	}
 
-	Bufferptr += sprintf(Bufferptr, "Routes\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Routes\r");
 		
 	while (MaxRoutes--)
 	{
@@ -1371,7 +1383,7 @@ ROUTEUPDATE:
 	
 	if (Session->PASSWORD  != 0xFFFF)
 	{
-		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s", PASSWORDMSG);
 		goto SendReply;
 	}
 
@@ -1391,7 +1403,7 @@ ROUTEUPDATE:
 
 	if (Port == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Port Number Missing \r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Port Number Missing \r");
 		goto SendReply;
 	}
 
@@ -1447,7 +1459,7 @@ Displayit:
 	if (Found)
 		Bufferptr = DisplayRoute(Session, Bufferptr, Routes, 1);
 	else
-		Bufferptr += sprintf(Bufferptr, "Not Found\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Not Found\r");
 
 
 
@@ -1634,7 +1646,7 @@ VOID LISTENCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 	if (ptr == 0 || memcmp(ptr, "OFF", 3) == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Listening disabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Listening disabled\r");
 		Session->LISTEN = 0;
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
@@ -1654,19 +1666,19 @@ VOID LISTENCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 		if (PORT == NULL)
 		{
-			Bufferptr += sprintf(Bufferptr, "Invalid Port %d\r", Port);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port %d\r", Port);
 			continue;
 		}
 
 		if (PORT->PROTOCOL == 10  && PORT->UICAPABLE == 0)
 		{
-			Bufferptr += sprintf(Bufferptr, "Sorry, port %d is not an ax.25 port\r", Port);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port %d is not an ax.25 port\r", Port);
 			continue;
 		}
 
 		if (PORT->PORTL3FLAG)
 		{
-			Bufferptr += sprintf(Bufferptr, "Sorry, port %d is for internode traffic only\r", Port);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port %d is for internode traffic only\r", Port);
 			continue;
 		}
 	
@@ -1674,7 +1686,7 @@ VOID LISTENCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		{
 			if (Session->L4TARGET.LINK->LINKPORT->PORTNUMBER == Port)
 			{
-				Bufferptr += sprintf(Bufferptr, "You can't Listen to the port you are connected on\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "You can't Listen to the port you are connected on\r");
 				continue;
 			}
 		}
@@ -1690,9 +1702,9 @@ VOID LISTENCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	if (ListenMask)
 	{
 		if (CountBits(ListenMask) == 1)
-			Bufferptr += sprintf(Bufferptr, "Listening on port%s. Use CQ to send a beacon, LIS to disable\r", ListenPortList);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Listening on port%s. Use CQ to send a beacon, LIS to disable\r", ListenPortList);
 		else
-			Bufferptr += sprintf(Bufferptr, "Listening on ports%s. Use LIS to disable\r", ListenPortList);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Listening on ports%s. Use LIS to disable\r", ListenPortList);
 	}
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
@@ -1724,14 +1736,14 @@ VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 
 	if (PORT == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	if (ptr == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Destination missing\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Destination missing\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -1739,21 +1751,21 @@ VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 
 	if (DecodeCallString(ptr, &Stay, &Spy, &axcalls[0]) == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Call\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Call\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	if (PORT->PROTOCOL == 10 && PORT->UICAPABLE == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Sorry, port is not an ax.25 port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port is not an ax.25 port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	if (PORT->PORTL3FLAG)
 	{
-		Bufferptr += sprintf(Bufferptr, "Sorry, port is for internode traffic only\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port is for internode traffic only\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -1764,7 +1776,7 @@ VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 	Session->UAddrLen = (int)strlen(axcalls);
 	memcpy(Session->UADDRESS, axcalls, 63);
 
-	Bufferptr += sprintf(Bufferptr, "Unproto Mode - enter ctrl/z or /ex to exit\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Unproto Mode - enter ctrl/z or /ex to exit\r");
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
 }
@@ -1792,21 +1804,21 @@ VOID CALCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	if (PORT == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	if (PORT->PROTOCOL == 10 && PORT->UICAPABLE == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Sorry, port is not an ax.25 port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port is not an ax.25 port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	if (ptr == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Count Missing\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Count Missing\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -1815,7 +1827,7 @@ VOID CALCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	ptr = strtok_s(NULL, " ", &Context);		// Get Unproto String
 
-	Bufferptr += sprintf(Bufferptr, "Ok\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Ok\r");
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
 }
@@ -1848,14 +1860,14 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 	if (OneBits == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "You must enter LISTEN before calling CQ\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "You must enter LISTEN before calling CQ\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	if (OneBits > 1)
 	{
-		Bufferptr += sprintf(Bufferptr, "You can't call CQ if LISTENing on more than one port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "You can't call CQ if LISTENing on more than one port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -1881,7 +1893,7 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		{
 			if (ConvToAX25(ptr2, axptr) == 0)
 			{
-				Bufferptr += sprintf(Bufferptr, "Invalid via string\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid via string\r");
 				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 				return;
 			}
@@ -1890,7 +1902,7 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 			if (axptr == &Msg.DIGIS[7][0])
 			{
-				Bufferptr += sprintf(Bufferptr, "Too many digis\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Too many digis\r");
 				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 				return;
 			}
@@ -1920,7 +1932,7 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	
 	Send_AX_Datagram(&Msg, Len + 2, Port);		// Len is Payload ie CTL, PID and Data
 
-	Bufferptr += sprintf(Bufferptr, "CQ sent\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "CQ sent\r");
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
 
@@ -1961,7 +1973,7 @@ TRANSPORTENTRY * SetupNewSession(TRANSPORTENTRY * Session, char * Bufferptr)
 		NewSess++;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "Sorry - System Tables Full\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry - System Tables Full\r");
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return NULL;
 	}
@@ -2060,7 +2072,7 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	if (Session->LISTEN)
 	{
-		Bufferptr += sprintf(Bufferptr, "Can't connect while listening\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Can't connect while listening\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -2084,7 +2096,7 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 		}
 
-		Bufferptr += sprintf(Bufferptr, "Invalid Call\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Call\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -2105,7 +2117,7 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 		if (PORT == NULL)
 		{
-			Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -2116,7 +2128,7 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		{
 			// No param
 
-			Bufferptr += sprintf(Bufferptr, "Invalid Call\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Call\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -2137,7 +2149,7 @@ NoPort:
 
 	if (DecodeCallString(ptr, &Stay, &Spy, &axcalls[0]) == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Call\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Call\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -2239,7 +2251,7 @@ Downlink:
 	{
 		//	L2 NEEDS PORT NUMBER
 
-		Bufferptr += sprintf(Bufferptr, "Downlink connect needs port number - C P CALLSIGN\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Downlink connect needs port number - C P CALLSIGN\r");
 
 		// Send Port List
 
@@ -2273,7 +2285,7 @@ Downlink:
 
 		if (EXTPORT->MAXHOSTMODESESSIONS <= 1)
 		{
-			Bufferptr += sprintf(Bufferptr, "Sorry, port is not an ax.25 port\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port is not an ax.25 port\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -2282,7 +2294,7 @@ Downlink:
 
 		if (EXTPORT->PERMITGATEWAY == 0 && Session->Secure_Session == 0)
 		{
-			Bufferptr += sprintf(Bufferptr, "Sorry, you are not allowed to use this port\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, you are not allowed to use this port\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -2310,7 +2322,7 @@ Downlink:
 			
 				if ((ret & 0xff00) == 0)
 				{
-					Bufferptr += sprintf(Bufferptr, "Error - TNC Not Ready\r");
+					Bufferptr = Cmdprintf(Session, Bufferptr, "Error - TNC Not Ready\r");
 					SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 					return;
 				}
@@ -2410,7 +2422,7 @@ noFlip:
 			count--;
 		}
 
-		Bufferptr += sprintf(Bufferptr, "Error - No free streams on this port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Error - No free streams on this port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -2419,7 +2431,7 @@ noFlip:
 	{
 		//Port only for L3 
 	
-		Bufferptr += sprintf(Bufferptr, "Sorry, port is for internode traffic only\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port is for internode traffic only\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -2428,14 +2440,14 @@ noFlip:
 	{
 		//Port only for UI
 	
-		Bufferptr += sprintf(Bufferptr, "Sorry, port is for UI traffic only\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, port is for UI traffic only\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 	
 	if (Session->L4USER[6] == 0x42 || Session->L4USER[6] == 0x44)
 	{	
-		Bufferptr += sprintf(Bufferptr, "Sorry - Can't make ax.25 calls with SSID of T or R\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry - Can't make ax.25 calls with SSID of T or R\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -2483,7 +2495,7 @@ noFlip3:
 	
 	if (LINK == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Sorry - System Tables Full\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry - System Tables Full\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		
 		// Should release NewSess
@@ -2657,10 +2669,10 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 
 	Normcall[ConvFromAX25(Dest->DEST_CALL, Normcall)] = 0;
 
-	Bufferptr += sprintf(Bufferptr, "Routes to: %s:%s", Alias, Normcall);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Routes to: %s:%s", Alias, Normcall);
 
 	if (Dest->DEST_COUNT)
-		Bufferptr += sprintf(Bufferptr, " RTT=%4.2f FR=%d %c %.1d\r",
+		Bufferptr = Cmdprintf(Session, Bufferptr, " RTT=%4.2f FR=%d %c %.1d\r",
 			Dest->DEST_RTT /1000.0, Dest->DEST_COUNT, 
 			(Dest->DEST_STATE & 0x40)? 'B':' ', (Dest->DEST_STATE & 63));
 	else
@@ -2679,7 +2691,7 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 			len = ConvFromAX25(Neighbour->NEIGHBOUR_CALL, Normcall);
 			Normcall[len] = 0;
 
-			Bufferptr += sprintf(Bufferptr, "%c %d %d %d %s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%c %d %d %d %s\r",
 				(Active == i)?'>':' ',NRRoute->ROUT_QUALITY, NRRoute->ROUT_OBSCOUNT, Neighbour->NEIGHBOUR_PORT, Normcall);
 		}
 		NRRoute++;
@@ -2702,7 +2714,7 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 			len = ConvFromAX25(Neighbour->NEIGHBOUR_CALL, Normcall);
 			Normcall[len] = 0;
 
-			Bufferptr += sprintf(Bufferptr, "%c %d %4.2fs %d %s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%c %d %4.2fs %d %s\r",
 				(Active == i + 3)?'>':' ',Route->Hops, srtt, Neighbour->NEIGHBOUR_PORT, Normcall);
 		}
 		Route++;
@@ -2778,7 +2790,7 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	struct DEST_LIST * List[1000];
 	char Param = 0;
 	char * ptr, * Context;
-	char Nodeline[20];
+	char Nodeline[21];
 	char AXCALL[7];
 	char * Call;
 	char * Qualptr;
@@ -2832,8 +2844,6 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		
 			while (AXCall[6] < 32)
 			{
-				Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-
 				Dest = DESTS;
 
 				for (count = 0; count < MAXDESTS; count++)
@@ -2867,7 +2877,7 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		
 		if (count == MAXDESTS)
 		{
-			Bufferptr += sprintf(Bufferptr, "Not found\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Not found\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -2878,7 +2888,7 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		return;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "Nodes\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Nodes\r");
 
 	while (count--)
 	{
@@ -2918,11 +2928,9 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		if (Alias[0] == '#' && HIDENODES == 1 && Param != '*')	// Hidden Node and not N * command
 			continue;
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-
 		if (Param == 'T')
 		{
-			Bufferptr += sprintf(Bufferptr, "%s%s RTT=%4.2f Frames = %d %c %.1d\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s%s RTT=%4.2f Frames = %d %c %.1d\r",
 				Alias, Normcall, List[i]->DEST_RTT /1000.0, List[i]->DEST_COUNT, 
 				(List[i]->DEST_STATE & 0x40)? 'B':' ', (List[i]->DEST_STATE & 63));
 		}
@@ -2930,7 +2938,8 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		{
 			len = sprintf(Nodeline, "%s%s", Alias, Normcall);
 			memset(&Nodeline[len], ' ', 20 - len);
-			Bufferptr = MOVEANDCHECK(Session, Bufferptr, Nodeline, 20);
+			Nodeline[20] = 0;
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s", Nodeline);
 
 			if (++x == Width)
 			{
@@ -2954,11 +2963,11 @@ NODE_VIA:
 
 	if (ptr == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Missing Call\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Missing Call\r");
 		goto SendReply;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
 
 	ConvToAX25(ptr, AXCALL);
 
@@ -2973,7 +2982,6 @@ NODE_VIA:
 		if (Dest->NRROUTE[0].ROUT_NEIGHBOUR == 0 && Dest->ROUTE[0].ROUT_NEIGHBOUR == 0)
 			continue;
 
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
 
 		if (
 			   (Dest->NRROUTE[0].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[0].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
@@ -3010,7 +3018,7 @@ NODE_VIA:
 			line[cursor++]='\r';
 			line[cursor++]=0;
 
-			Bufferptr += sprintf(Bufferptr, "%s", line);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s", line);
 		}
 		}
 
@@ -3024,7 +3032,7 @@ NODE_ADD:
 
 	if (Session->PASSWORD  != 0xFFFF)
 	{
-		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s", PASSWORDMSG);
 		goto SendReply;
 	}
 
@@ -3032,7 +3040,7 @@ NODE_ADD:
 
 	if (ptr == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Missing Alias:Call\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Missing Alias:Call\r");
 		goto SendReply;
 	}
 
@@ -3044,7 +3052,7 @@ NODE_ADD:
 
 	if (Qualptr == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Quality missing\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Quality missing\r");
 		goto SendReply;
 	}
 
@@ -3052,19 +3060,19 @@ NODE_ADD:
 
 	if (Qual < MINQUAL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Quality is below MINQUAL\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Quality is below MINQUAL\r");
 		goto SendReply;
 	}
 
 	if (FindDestination(AXCALL, &Dest))
 	{
-		Bufferptr += sprintf(Bufferptr, "Node already in Table\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Node already in Table\r");
 		goto SendReply;
 	}
 
 	if (Dest == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Node Table Full\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Node Table Full\r");
 		goto SendReply;
 	}
 
@@ -3077,7 +3085,7 @@ NODE_ADD:
 	
 	if (ptr == NULL || ptr[0] == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Neighbour missing\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Neighbour missing\r");
 		goto SendReply;
 	}
 
@@ -3166,7 +3174,7 @@ NODE_DEL:
 	
 	if (Session->PASSWORD  != 0xFFFF)
 	{
-		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s", PASSWORDMSG);
 		goto SendReply;
 	}
 
@@ -3174,7 +3182,7 @@ NODE_DEL:
 
 	if (ptr == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Missing Call\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Missing Call\r");
 		goto SendReply;
 	}
 
@@ -3193,7 +3201,7 @@ NODE_DEL:
 
 		ClearNodes();
 
-		Bufferptr += sprintf(Bufferptr, "All Nodes Deleted\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "All Nodes Deleted\r");
 		goto SendReply;
 	}
 
@@ -3201,62 +3209,22 @@ NODE_DEL:
 
 	if (FindDestination(AXCALL, &Dest) == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Not Found\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Not Found\r");
 		goto SendReply;
 	}
 
 	if (Dest->DEST_STATE & 0x80)
-		Bufferptr += sprintf(Bufferptr, "APPL Node - Can't delete\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "APPL Node - Can't delete\r");
 	else
 	{
 		REMOVENODE(Dest);
-		Bufferptr += sprintf(Bufferptr, "Node Deleted\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Node Deleted\r");
 	}
-	Bufferptr += sprintf(Bufferptr, "Node Deleted\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Node Deleted\r");
 
 SendReply:
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-}
-char * CHECKBUFFER(TRANSPORTENTRY * Session, char * Bufferptr)
-{
-	//	MAKE SURE THERE IS ROOM IN CURRENT _BUFFER
-
-	int Len = (int)(Bufferptr - (char *)REPLYBUFFER);
-	struct DATAMESSAGE * Buffer;
-
-	if (Len < CMDPACLEN && Len < 156)		// should be enough
-		return Bufferptr;
-
-	//	END OF _BUFFER - QUEUE IT AND GET ANOTHER
-
-	Buffer = (struct DATAMESSAGE *)GetBuff();
-
-	if (Buffer == NULL)
-	{
-		// No buffers, so just reuse the old one (better than crashing !!)
-
-		Buffer = REPLYBUFFER;
-
-		return &Buffer->L2DATA[0];
-	}
-
-	SendCommandReply(Session, REPLYBUFFER, Len);
-
-	REPLYBUFFER = Buffer;
-	Buffer->PID = 0xf0;
-
-	return &Buffer->L2DATA[0];
-}
-
-char * MOVEANDCHECK(TRANSPORTENTRY * Session, char * Bufferptr, char * Source, int Len)
-{
-	while (Len--)
-	{
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		*(Bufferptr++) = *(Source++);
-	}
-	return Bufferptr;
 }
 
 VOID CMDQUERY(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD)
@@ -3265,6 +3233,8 @@ VOID CMDQUERY(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 	int n;
 	char * ptr;
+	char ApplList[2048];
+	char * out = ApplList;
 
 	CMDX * CMD = &COMMANDS[APPL1];
 
@@ -3273,24 +3243,23 @@ VOID CMDQUERY(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 		ptr = &CMD->String[0];
 		if (*(ptr) != '*')
 		{
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
 			while (*ptr != ' ')
 			{
-				*(Bufferptr++) = *(ptr++);
+				*(out++) = *(ptr++);
 			}
-			*(Bufferptr++) = ' ';
+			*(out++) = ' ';
 		}
 		CMD++;
 	}
+
+	*(out) = 0;
 
 	n = CMDLISTLEN;
 
 	if (NEEDMH == 0)
 		n -= 7;					// Dont show MH
 
-	Bufferptr = MOVEANDCHECK(Session, Bufferptr, CMDLIST, n);
-
-	*(Bufferptr++) = 13;
+	Bufferptr = Cmdprintf(Session, Bufferptr, "%s%s\r", ApplList, CMDLIST);
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
@@ -3328,7 +3297,7 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 	if (PORT == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -3342,7 +3311,7 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 	if (MH == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "MHEARD not enabled on that port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "MHEARD not enabled on that port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -3352,11 +3321,12 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		if (Session->Secure_Session)
 		{
 			memset(MH, 0, MHENTRIES * sizeof(MHSTRUC));
-			Bufferptr += sprintf(Bufferptr, "Heard List for Port %d Cleared\r", Port);
+			SaveMH();
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Heard List for Port %d Cleared\r", Port);
 		}
 		else
 		{
-			Bufferptr += sprintf(Bufferptr, "MH Clear needs SYSOP status\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "MH Clear needs SYSOP status\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -3365,24 +3335,20 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	{
 		if (CMD->String[2] == 'V')		// MHV
 		{
-			Bufferptr += sprintf(Bufferptr, "MHeard List %s for Port %d\r", MYNODECALL, Port);
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);
-			Bufferptr += sprintf(Bufferptr, "Callsign   Last heard     Pkts RX    via Digi ;) \r");
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);
-			Bufferptr += sprintf(Bufferptr, "---------  -----------    -------    ------------------------------------------\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "MHeard List %s for Port %d\r", MYNODECALL, Port);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Callsign   Last heard     Pkts RX    via Digi ;) \r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "---------  -----------    -------    ------------------------------------------\r");
 		}
 		else
 			if (pattern)
-				Bufferptr += sprintf(Bufferptr, "Heard List for Port %d filtered by %s\r", Port, pattern);
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Heard List for Port %d filtered by %s\r", Port, pattern);
 			else
-				Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Heard List for Port %d\r", Port);
 	}
 	while (count--)
 	{
 		if (MH->MHCALL[0] == 0)
 			break;
-
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);
 		
 		Digi = 0;
 		
@@ -3462,10 +3428,10 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		ptr = FormatMH(MH, CMD->String[2]);
 		
 		if (CMD->String[2] == 'V')		// MHV
-			Bufferptr += sprintf(Bufferptr, "%-10s %-10s %-10d %-30s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%-10s %-10s %-10d %-30s\r",
 				Normcall, ptr, MH->MHCOUNT, DigiList);
 		else
-			Bufferptr += sprintf(Bufferptr, "%-10s %s %s\r", Normcall, ptr, DigiList);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%-10s %s %s\r", Normcall, ptr, DigiList);
 
 		MH++;
 	}
@@ -3536,7 +3502,7 @@ VOID NRRCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * U
 			Dest++;
 		}
 	}
-	Bufferptr += sprintf(Bufferptr, "Not found\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Not found\r");
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
 }
@@ -3599,7 +3565,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 	if (PORT == NULL || PORT->PROTOCOL < 10)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -3630,7 +3596,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 			
 				if ((ret & 0xff00) == 0)
 				{
-					Bufferptr += sprintf(Bufferptr, "Error - TNC Not Ready\r");
+					Bufferptr = Cmdprintf(Session, Bufferptr, "Error - TNC Not Ready\r");
 					SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 					return;
 				}
@@ -3686,7 +3652,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 			count--;
 		}
 
-		Bufferptr += sprintf(Bufferptr, "Error - No free streams on this port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Error - No free streams on this port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -3698,7 +3664,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 			
 	if ((ret & 0xff00) == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Error - TNC Not Ready\r");
+ 		Bufferptr = Cmdprintf(Session, Bufferptr, "Error - TNC Not Ready\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -3725,7 +3691,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 			if (EXTPORT->PERMITGATEWAY == 0 && Session->Secure_Session == 0)
 			{
-				Bufferptr += sprintf(Bufferptr, "Sorry, you are not allowed to use this port\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, you are not allowed to use this port\r");
 				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 				return;
 			}
@@ -3734,7 +3700,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 			if (sess < 1 || sess > EXTPORT->MAXHOSTMODESESSIONS)
 			{
-				Bufferptr += sprintf(Bufferptr, "Error - Invalid Channel\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Error - Invalid Channel\r");
 				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 				return;
 			}
@@ -3751,7 +3717,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 	if (ret & 0x8000)			// Disconnecting
 	{
-		Bufferptr += sprintf(Bufferptr, "Error - Port in use\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Error - Port in use\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -3766,7 +3732,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	
 		if (p)
 		{
-			Bufferptr += sprintf(Bufferptr, "Sorry, interlocked port %d is in use\r", p);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, interlocked port %d is in use\r", p);
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -3776,7 +3742,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	{
 		// In use
 
-		Bufferptr += sprintf(Bufferptr, "Error - Port in use\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Error - Port in use\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -3891,10 +3857,10 @@ checkattachandcall:
 CMDX COMMANDS[] =
 {
 	"SAVENODES   ",8, SAVENODES, 0,
-//	"TELNETRECON ",7, RECONFIGTELNET, 0,
+	"TELRECONFIG ",4, RECONFIGTELNET, 0,
 	"SAVEMH      ",6, SAVEMHCMD, 0,
 	"REBOOT      ",6, REBOOT, 0,
-//	"RECONFIG    ",8 , RECONFIG, 0,
+	"RIGRECONFIG ",8 , RIGRECONFIG, 0,
 	"RESTART     ",7,RESTART,0,
 	"SENDNODES   ",8,SENDNODES,0,
 	"EXTRESTART  ",10, EXTPORTVAL, offsetof(EXTPORTDATA, EXTRESTART),
@@ -3913,7 +3879,7 @@ CMDX COMMANDS[] =
 	"MAXUSERS    ",4,PORTVAL, offsetof(PORTCONTROLX, USERS),
 	"L3ONLY      ",6,PORTVAL, offsetof(PORTCONTROLX, PORTL3FLAG),
 	"BBSALIAS    ",4,PORTVAL, offsetof(PORTCONTROLX, PORTBBSFLAG),
-	"VALIDCALL   ",5,VALNODES,0,
+	"VALIDCALLS  ",5,VALNODES,0,
 	"WL2KSYSOP   ",5,WL2KSYSOP,0,
 	"STOPPORT    ",4,STOPPORT,0,
 	"STARTPORT   ",5,STARTPORT,0,
@@ -4196,6 +4162,10 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 	if (len == 2 && ptr1[0] == 5 && ptr1[1] == 1)
 	{
 		ptr1[0] = 0x15;				// NAK
+
+		ptr1[1] = sprintf(&ptr1[2], "Node doesn't support YAPP Transfers");
+				
+		Buffer->LENGTH += ptr1[1];
 		
 		C_Q_ADD(&Session->L4TX_Q, (UINT *)Buffer);
 		PostDataAvailable(Session);
@@ -4506,7 +4476,7 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 
 	if (PORT == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4515,18 +4485,16 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 
 	if (AXPORT == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Not an AXIP port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Not an AXIP port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "AXIP Resolver info for Port %d\r", Port);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "AXIP Resolver info for Port %d\r", Port);
 
 	while (index < AXPORT->arp_table_len)
 	{
 		arp = &AXPORT->arp_table[index];
-
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);
 
 		if (arp->ResolveFlag && arp->error != 0)
 		{
@@ -4555,7 +4523,7 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 			strcat(Flags, "A");
 								
 		if (arp->port == arp->SourcePort)
-			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d = %-.42s %s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr,"%.10s = %.64s %d = %-.42s %s\r",
 				Normcall,
 				arp->hostname,
 				arp->port,
@@ -4563,7 +4531,7 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 				Flags);
 
 		else
-			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d<%d = %-.42s %s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr,"%.10s = %.64s %d<%d = %-.42s %s\r",
 				Normcall,
 				arp->hostname,
 				arp->port,
@@ -4597,7 +4565,7 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 	if (PORT == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4606,33 +4574,31 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 	if (AXPORT == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Not an AXIP port\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Not an AXIP port\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "AXIP Mheard for Port %d\r", Port);
+	Bufferptr = Cmdprintf(Session, Bufferptr, "AXIP Mheard for Port %d\r", Port);
 	
 	while (index < MaxMHEntries)
 	{	
 		if (AXPORT->MHTable[index].proto != 0)
 		{
 			char Addr[80];
-
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);
 				
 			Format_Addr((unsigned char *)&AXPORT->MHTable[index].ipaddr6, Addr, AXPORT->MHTable[index].IPv6);
 
 			Normcall[ConvFromAX25(AXPORT->MHTable[index].callsign, Normcall)] = 0;
 
-			Bufferptr += sprintf(Bufferptr, "%-10s%-15s %c %-6d %-25s%c\r", Normcall,
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%-10s%-15s %c %-6d %-25s%c\r", Normcall,
 						Addr,
 						AXPORT->MHTable[index].proto,
 						AXPORT->MHTable[index].port,
 						asctime(gmtime( &AXPORT->MHTable[index].LastHeard )),
 						(AXPORT->MHTable[index].Keepalive == 0) ? ' ' : 'K');
 
-			Bufferptr[-2] =  ' ';			// Clear CR returned by asctime
+			Bufferptr[-3] =  ' ';			// Clear CR returned by asctime
 		}
 
 		index++;
@@ -4643,87 +4609,6 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 #pragma pack()
 
 struct TNCINFO * TNCInfo[34];	
-
-VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
-{
-	//	DISPLAY Telnet Server Status Mheard
-	
-	int Port = 0, index =0;
-	char * ptr, *Context;
-	struct PORTCONTROL * PORT = NULL;
-	int txlen = 0, n;
-	struct TNCINFO * TNC;
-	char msg[80];
-	struct ConnectionInfo * sockptr;
-	int i;
-	char CMS[] = "CMS Disabled";
-
-	ptr = strtok_s(CmdTail, " ", &Context);
-
-	if (ptr)
-		Port = atoi(ptr);
-
-	if (Port)
-		PORT = GetPortTableEntryFromPortNum(Port);
-
-	if (PORT == NULL)
-	{
-		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
-		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-		return;
-	}
-
-	TNC = TNCInfo[Port];
-
-	if (TNC == NULL || TNC->Hardware != H_TELNET)
-	{
-		Bufferptr += sprintf(Bufferptr, "Not a Telnet port\r");
-		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-		return;
-	}
-
-	if (TNC->TCPInfo->CMS)
-		if (TNC->TCPInfo->CMSOK)
-			strcpy(CMS, "CMS Ok");
-		else
-			strcpy(CMS, "No CMS");
-	
-	Bufferptr += sprintf(Bufferptr, "Telnet Status for Port %d %s\r", Port, CMS);
-
-	for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
-	{
-		sockptr=TNC->Streams[n].ConnectionInfo;
-
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);
-
-		if (!sockptr->SocketActive)
-		{
-			strcpy(msg,"Idle");
-		}
-		else
-		{
-			if (sockptr->UserPointer == 0)
-			{
-				if (sockptr->HTTPMode)
-				{
-					char Addr[100];
-					Tel_Format_Addr(sockptr, Addr);
-					sprintf(msg, "HTTP From %s", Addr);
-				}
-				else
-					strcpy(msg,"Logging in");
-			}
-			else
-			{
-				i=sprintf(msg,"%-10s %-10s %2d",
-					sockptr->UserPointer->UserName,sockptr->Callsign,sockptr->BPQStream);
-			}
-		}
-		Bufferptr += sprintf(Bufferptr, "%s\r", msg);
-	}
-
-	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-}
 
 extern char WL2KCall[10];
 extern char WL2KLoc[7];
@@ -4759,7 +4644,7 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 	if (WL2KCall[0] < 33)
 	{
-		Bufferptr += sprintf(Bufferptr, "Winlink reporting is not configured\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Winlink reporting is not configured\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4767,7 +4652,7 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 	if (GetWL2KSYSOPInfo(WL2KCall, _REPLYBUFFER) == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "Failed to connect to WL2K Database\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Failed to connect to WL2K Database\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -4808,7 +4693,7 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	{
 		if (Exists)
 		{
-			Bufferptr += sprintf(Bufferptr, "Record already exists in WL2K Database\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Record already exists in WL2K Database\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -4851,41 +4736,30 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	
 		closesocket(sock);
 
-		Bufferptr += sprintf(Bufferptr, "Database Updated\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Database Updated\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
 	if (Exists)
 	{
-		Bufferptr += sprintf(Bufferptr, "\rWL2K SYSOP Info for %s\r", WL2KCall);
-		Bufferptr += sprintf(Bufferptr, "Grid Square: %s\r", LOC);
-		Bufferptr += sprintf(Bufferptr, "Name: %s\r", Name);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Addr Line 1: %s\r", Addr1);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Addr Line 2: %s\r", Addr2);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "City: %s\r", City);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "State: %s\r", State);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Country: %s\r", Country);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "PostCode: %s\r", PostCode);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Email Address: %s\r", Email);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Website: %s\r", Website);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Phone: %s\r", Phone);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Additional Data: %s\r", Data);
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
-		Bufferptr += sprintf(Bufferptr, "Last Updated: %s\r", LastUpdated);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "\rWL2K SYSOP Info for %s\r", WL2KCall);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Grid Square: %s\r", LOC);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Name: %s\r", Name);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Addr Line 1: %s\r", Addr1);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Addr Line 2: %s\r", Addr2);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "City: %s\r", City);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "State: %s\r", State);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Country: %s\r", Country);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "PostCode: %s\r", PostCode);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Email Address: %s\r", Email);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Website: %s\r", Website);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Phone: %s\r", Phone);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Additional Data: %s\r", Data);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Last Updated: %s\r", LastUpdated);
 	}
 	else
-		Bufferptr += sprintf(Bufferptr, "No SYSOP record for %s\r", WL2KCall);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "No SYSOP record for %s\r", WL2KCall);
 
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
@@ -4925,7 +4799,7 @@ VOID STOPCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 					if (!TNC || !TNC->TCPInfo)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not a Telnet Port\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not a Telnet Port\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
@@ -4938,7 +4812,7 @@ VOID STOPCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 					CheckMenuItem(TCP->hActionMenu, 3, MF_BYPOSITION | TCP->CMS<<3);
 					SetWindowText(TCP->hCMSWnd, "CMS Off"); 
 #endif
-					Bufferptr += sprintf(Bufferptr, "CMS Server Disabled\r");
+					Bufferptr = Cmdprintf(Session, Bufferptr, "CMS Server Disabled\r");
 					SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 					return;
 				}
@@ -4986,7 +4860,7 @@ VOID STARTCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 					if (!TNC || !TNC->TCPInfo)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not a Telnet Port\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not a Telnet Port\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
@@ -4998,7 +4872,7 @@ VOID STARTCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 #endif	
 					CheckCMS(TNC);
 	
-					Bufferptr += sprintf(Bufferptr, "CMS Server Enabled\r");
+					Bufferptr = Cmdprintf(Session, Bufferptr, "CMS Server Enabled\r");
 					SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 					return;
 				}
@@ -5046,9 +4920,9 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 						// Port has Close Routine
 
 						if (PORT->PORTSTOPCODE(PORT))
-							Bufferptr += sprintf(Bufferptr, "Port Closed\r");
+							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Closed\r");
 						else
-							Bufferptr += sprintf(Bufferptr, "Port Close Failed\r");
+							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Close Failed\r");
 
 						PORT->PortStopped = TRUE;
 	
@@ -5057,14 +4931,14 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 					}
 					if (PORT->PORTTYPE != 0)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not a KISS Port\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
 
 					if (PORT->PORTIPADDR.s_addr || PORT->KISSSLAVE)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not a serial port\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not a serial port\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
@@ -5073,14 +4947,14 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 					if (KISS->FIRSTPORT != KISS)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not first port of a Multidrop Set\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not first port of a Multidrop Set\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
 
 					CloseKISSPort(PORT); 
 					PORT->PortStopped = TRUE;
-					Bufferptr += sprintf(Bufferptr, "Port Closed\r");
+					Bufferptr = Cmdprintf(Session, Bufferptr, "Port Closed\r");
 					SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 
 					return;
@@ -5129,9 +5003,9 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 						// Port has Open Routine
 
 						if (PORT->PORTSTARTCODE(PORT))
-							Bufferptr += sprintf(Bufferptr, "Port Opened\r");
+							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Opened\r");
 						else
-							Bufferptr += sprintf(Bufferptr, "Port Open Failed\r");
+							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Open Failed\r");
 
 						PORT->PortStopped = FALSE;
 	
@@ -5142,14 +5016,14 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 					if (PORT->PORTTYPE != 0)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not a KISS Port\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
 
 					if (PORT->PORTIPADDR.s_addr || PORT->KISSSLAVE)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not a serial port\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not a serial port\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
@@ -5158,15 +5032,15 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 					if (KISS->FIRSTPORT != KISS)
 					{
-						Bufferptr += sprintf(Bufferptr, "Not first port of a Multidrop Set\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Not first port of a Multidrop Set\r");
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}
 
 					if (OpenConnection(PORT), TRUE)
-						Bufferptr += sprintf(Bufferptr, "Port Opened\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Port Opened\r");
 					else
-						Bufferptr += sprintf(Bufferptr, "Port Open Failed\r");
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Port Open Failed\r");
 
 					PORT->PortStopped = FALSE;
 	
@@ -5241,7 +5115,7 @@ VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 			if (PORT->PORTTYPE != 0 && PORT->PORTTYPE != 22)
 			{
-				Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Not a KISS Port\r");
 				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 				return;
 			}
@@ -5250,7 +5124,7 @@ VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 			if (KISS->FIRSTPORT != KISS)
 			{
-				Bufferptr += sprintf(Bufferptr, "Not first port of a Multidrop Set\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Not first port of a Multidrop Set\r");
 				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 				return;
 			}
@@ -5266,7 +5140,7 @@ VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 			ASYSEND(PORT, ENCBUFF, 4);
 
-			Bufferptr += sprintf(Bufferptr, "Command Sent\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Command Sent\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -5288,9 +5162,9 @@ VOID FINDBUFFS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	FindLostBuffers();
 
 #ifdef WIN32
-	Bufferptr += sprintf(Bufferptr, "Lost buffer info dumped to Debugview\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Lost buffer info dumped to Debugview\r");
 #else
-	Bufferptr += sprintf(Bufferptr, "Lost buffer info dumped to syslog\r");
+	Bufferptr = Cmdprintf(Session, Bufferptr, "Lost buffer info dumped to syslog\r");
 #endif
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
@@ -5346,7 +5220,7 @@ DISPLIST:
 	while (*ptr)
 	{
 		Normcall[ConvFromAX25(ptr, Normcall)] = 0;
-		Bufferptr += sprintf(Bufferptr, "%s ", Normcall);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s ", Normcall);
 		ptr += 7;
 	}
 
@@ -5358,7 +5232,7 @@ BOOL isSYSOP(TRANSPORTENTRY * Session, char * Bufferptr)
 {
 	if (Session->PASSWORD  != 0xFFFF)
 	{
-		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "%s", PASSWORDMSG);
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 
 		return FALSE;

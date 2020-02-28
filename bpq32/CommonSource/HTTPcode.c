@@ -216,13 +216,11 @@ char TermOutput[] = "<html><head>"
 	"<script type=\"text/javascript\">\r\n"
 	"function ScrollOutput()\r\n"
 	"{window.scrollBy(0,document.body.scrollHeight)}</script>"
-	"</head><body id=Text onload=\"ScrollOutput()\">"
+	"</head><body id=Text>"
 	"<p style=font-family:monospace>";
-//<body onLoad="pageScroll()">
-//char TermOutputTail[] = "</p><script>scrollElementToEnd(document.getElementById(\"Text\"));</script>";
-//char TermOutputTail[] = "</p><script>document.getElementById(\"Text\").scrollTo(0,1500)</script>";
-//char TermOutputTail[] = "</p><script>window.scrollBy(0,500);</script></body></html>";
-char TermOutputTail[] = "</p></script></body></html>";
+
+char TermOutputTail[] = "</p><script type=\"text/javascript\">\r\nsetTimeout(ScrollOutput, 1)</script></body></html>";
+
 /*
 char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize()'>"
 	"<form name=inputform method=post action=/TermInput?%s>"
@@ -1663,7 +1661,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 	if (Session == NULL)
 	{
-		int Sent, Loops;
+		int Sent, Loops = 0;
 		ReplyLen = sprintf(Reply, MailLostSession, Key);
 		RLen = ReplyLen;
 Returnit:
@@ -1699,13 +1697,13 @@ Returnit:
 
 		Sent = send(sock, Reply, ReplyLen, 0);
 
-		while (Sent != ReplyLen && Loops++ < 3000)					// 100 secs max
+		while (Sent < ReplyLen && Loops++ < 3000)					// 100 secs max
 		{	
 //			Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
 		
 			if (Sent > 0)					// something sent
 			{
-				InputLen -= Sent;
+				ReplyLen -= Sent;
 				memmove(Reply, &Reply[Sent], ReplyLen);
 			}
 					

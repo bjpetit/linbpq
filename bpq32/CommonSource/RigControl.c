@@ -153,7 +153,7 @@ struct RIGINFO * DLLRIG = NULL;			// Rig record for dll PTT interface (currently
 
 struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
 {
-	struct TimeScan * Band = malloc(sizeof (struct TimeScan));
+	struct TimeScan * Band = zalloc(sizeof (struct TimeScan));
 	
 	RIG->TimeBands = realloc(RIG->TimeBands, (++RIG->NumberofBands+2) * sizeof(void *));
 	RIG->TimeBands[RIG->NumberofBands] = Band;
@@ -1012,6 +1012,7 @@ portok:
 
 					if ((strcmp(RIG->RigName, "IC7100") == 0) ||
 						(strcmp(RIG->RigName, "IC7410") == 0) ||
+						(strcmp(RIG->RigName, "IC7600") == 0) ||
 						(strcmp(RIG->RigName, "IC7300") == 0))
 					{
 						FreqPtr[0].Cmd3Len = 9;
@@ -1632,7 +1633,6 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		CloseCOMPort(PORT->hDevice);
 
-		
 		if (PORT->hPTTDevice != PORT->hDevice)
 			CloseCOMPort(PORT->hPTTDevice);
 
@@ -2231,12 +2231,23 @@ CheckOtherPorts:
 
 	if (ptr[0] == (struct ScanEntry *)0) // End of list - reset to start
 	{
-		ptr = CheckTimeBands(RIG);
+ 		ptr = CheckTimeBands(RIG);
+	
+		if (ptr[0] == (struct ScanEntry *)0)
+		{
+			// Empty Timeband - delay 15 secs
+
+			RIG->ScanCounter = 150;
+			return FALSE;
+		}
 	}
 
 	PORT->FreqPtr = ptr[0];				// Save Scan Command Block
 
 	RIG->ScanCounter = PORT->FreqPtr->Dwell; 
+		
+	if (RIG->ScanCounter == 0 || RIG->ScanCounter > 600)		// ? After manual change
+		RIG->ScanCounter = 150;
 	
 	MySetWindowText(RIG->hSCAN, "S");
 	RIG->WEB_SCAN = 'S';
@@ -4317,6 +4328,12 @@ domux:
 				*(Poll++) = 0x00;
 				*(Poll++) = 0x67;			// Data Mode Source
 			}
+			else if (strcmp(RIG->RigName, "IC7600") == 0)
+			{
+				*(Poll++) = 0x05;
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x31;			// Data1 Mode Source
+			}
 
 			else if (strcmp(RIG->RigName, "IC7410") == 0)
 			{
@@ -4379,6 +4396,12 @@ domux:
 			{
 				*(Poll++) = 0x03;
 				*(Poll++) = 0x39;			// Data Mode Source
+			}
+			else if (strcmp(RIG->RigName, "IC7600") == 0)
+			{
+				*(Poll++) = 0x05;
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x31;			// Data1 Mode Source
 			}
 
 			*(Poll++) = DataPTTOffMode;
@@ -4519,7 +4542,7 @@ CheckScan:
 		VARAMode[0] = 0;
 		Dwell = 0.0;
 
-		if (strchr(ptr, ':'))
+		while (strchr(ptr, ':'))
 		{
 			// New TimeBand
 
@@ -4955,6 +4978,7 @@ CheckScan:
 
 							if ((strcmp(RIG->RigName, "IC7100") == 0) ||
 								(strcmp(RIG->RigName, "IC7410") == 0) ||
+								(strcmp(RIG->RigName, "IC7600") == 0) ||
 								(strcmp(RIG->RigName, "IC7300") == 0))
 							{
 								FreqPtr[0]->Cmd3Len = 9;

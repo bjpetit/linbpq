@@ -177,6 +177,7 @@ BOOL RefuseBulls = FALSE;
 BOOL SendSYStoSYSOPCall = FALSE;
 BOOL SendBBStoSYSOPCall = FALSE;
 BOOL DontHoldNewUsers = FALSE;
+BOOL DefaultNoWINLINK = FALSE;
 BOOL ForwardToMe = FALSE;
 
 BOOL DontNeedHomeBBS = FALSE;
@@ -209,8 +210,10 @@ struct MsgInfo * MsgnotoMsg[100000];	// Message Number to Message Slot List.
 char ** RejFrom;					// Reject on FROM Call
 char ** RejTo;						// Reject on TO Call
 char ** RejAt;						// Reject on AT Call
+char ** RejBID;						// Reject on BID 
 
 char ** HoldFrom;					// Hold on FROM Call
 char ** HoldTo;						// Hold on TO Call
 char ** HoldAt;						// Hold on AT Call
+char ** HoldBID;					// Hold on BID
 

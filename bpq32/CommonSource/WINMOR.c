@@ -2926,7 +2926,7 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 
 		n = sendto(sock, TNC->ProgramPath, (int)strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
 	
-		Debugprintf("Restart TNC - sento returned %d", n);
+		Debugprintf("Restart TNC - sendto returned %d", n);
 
 		Sleep(100);
 		closesocket(sock);
@@ -2963,7 +2963,7 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 		if (arg_list[6])
 			arg_list[7] = strtok_s(NULL, " \n\r", &Context);
 
-		//	Fork and Exec ARDOP
+		//	Fork and Exec TNC
 
 		printf("Trying to start %s\n", TNC->ProgramPath);
 
@@ -2973,7 +2973,7 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 
 		if (child_pid == -1) 
  		{    				
-			printf ("ARDOPStart fork() Failed\n"); 
+			printf ("StartTNC fork() Failed\n"); 
 			free(Copy);
 			return 0;
 		}
@@ -2984,10 +2984,10 @@ BOOL RestartTNC(struct TNCINFO * TNC)
         
 			/* The execvp  function returns only if an error occurs.  */ 
 
-			printf ("Failed to run ARDOP\n"); 
+			printf ("Failed to start TNC\n"); 
 			exit(0);			// Kill the new process
 		}
-		printf("Started ARDOP TNC\n");
+		printf("Started TNC\n");
 		free(Copy);
 		return TRUE;
 	}								 

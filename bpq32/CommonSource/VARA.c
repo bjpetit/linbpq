@@ -87,8 +87,6 @@ static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-static int ProcessLine(char * buf, int Port);
-
 static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;

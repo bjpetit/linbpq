@@ -474,7 +474,10 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		CheckDlgButton(pHdr->hwndDisplay, IDC_NONAME, AllowAnon);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_USERRKILLT, !UserCantKillT);		// Note negative logic
 		CheckDlgButton(pHdr->hwndDisplay, IDC_NOHOMEBBS, DontNeedHomeBBS);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_DEFAULTNOWINLINK, DefaultNoWINLINK);
 
+		
+		
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDirRaw);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
@@ -650,6 +653,20 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		Text[0] = 0;
 
+		if (RejBID)
+		{
+			char ** Call = RejBID;
+			while(Call[0])
+			{
+				sprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_REJBID, Text);
+
+		Text[0] = 0;
+
 		if (HoldFrom)
 		{
 			char ** Call = HoldFrom;
@@ -688,7 +705,23 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 				Call++;
 			}
 		}
+
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HOLDAT, Text);
+
+		Text[0] = 0;
+
+		if (HoldBID)
+		{
+			char ** Call = HoldBID;
+			while(Call[0])
+			{
+				sprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_HOLDBID, Text);
+
 
 
 		break;
@@ -1518,6 +1551,7 @@ VOID SaveBBSConfig()
 	DontNeedHomeBBS = IsDlgButtonChecked(hwndDisplay, IDC_NOHOMEBBS);
 	AllowAnon = IsDlgButtonChecked(hwndDisplay, IDC_NONAME);
 	UserCantKillT = !IsDlgButtonChecked(hwndDisplay, IDC_USERRKILLT);	// Reverse logic
+	DefaultNoWINLINK = IsDlgButtonChecked(hwndDisplay, IDC_DEFAULTNOWINLINK);
 
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
@@ -1588,6 +1622,8 @@ VOID SaveFWDConfig(HWND hDlg)
 	MaxTXSize = GetDlgItemInt(hDlg, IDC_MAXSEND, &OK, FALSE);
 	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
 	MaxAge = GetDlgItemInt(hDlg, IDC_MAXAGE, &OK, FALSE);
+	SendPtoMultiple = IsDlgButtonChecked(hDlg, IDC_MULTIP);
+
 	
 	// Reinitialise Aliases
 
@@ -1850,10 +1886,12 @@ VOID SaveFilters(HWND hDlg)
 	RejFrom = GetMultiLineDialogParam(hDlg, IDC_REJFROM);
 	RejTo = GetMultiLineDialogParam(hDlg, IDC_REJTO);
 	RejAt = GetMultiLineDialogParam(hDlg, IDC_REJAT);
+	RejBID = GetMultiLineDialogParam(hDlg, IDC_REJBID);
 
 	HoldFrom = GetMultiLineDialogParam(hDlg, IDC_HOLDFROM);
 	HoldTo = GetMultiLineDialogParam(hDlg, IDC_HOLDTO);
 	HoldAt = GetMultiLineDialogParam(hDlg, IDC_HOLDAT);
+	HoldBID = GetMultiLineDialogParam(hDlg, IDC_HOLDBID);
 
 	SaveConfig(ConfigName);
 	GetConfig(ConfigName);
@@ -2950,6 +2988,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		CheckDlgButton(hDlg, IDC_READDRESSRXED, ReaddressReceived);
 		CheckDlgButton(hDlg, IDC_WARNNOROUTE, WarnNoRoute);
 		CheckDlgButton(hDlg, IDC_USELOCALTIME, Localtime);
+		CheckDlgButton(hDlg, IDC_MULTIP, SendPtoMultiple);
 
 		CurrentBBS = NULL;
 

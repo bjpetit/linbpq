@@ -518,6 +518,30 @@ static char Modes [53][18] = {
 	"Vara", "VaraFM", "VaraFM96"};
 
 
+VOID SendWL2KSessionRecordThread(void * param)
+{
+	SOCKET sock;
+	char Message[512];
+
+	strcpy(Message, param);
+	free(param);
+
+	Debugprintf("Sending %s", Message);
+
+	sock = OpenWL2KHTTPSock();
+
+	if (sock)
+	{
+		SendHTTPRequest(sock, "api.winlink.org", 80, 
+				"/session/add", (char *)Message, strlen(Message), NULL);
+	
+		closesocket(sock);
+	}
+
+	return;
+}
+
+
 BOOL SendWL2KSessionRecord(ADIF * ADIF, int BytesSent, int BytesReceived)
 {
 /*
@@ -560,6 +584,7 @@ IdTag (random alphanumeric, 12 chars)
 	time_t T;
 
 	char Message[4096] = "";
+	char * MessagePtr;
 	int MessageLen;
 	int Dist = 0;
 	int intBearing = 0;
@@ -568,8 +593,6 @@ IdTag (random alphanumeric, 12 chars)
 	double myLat, myLon;
 
 	char Tag[32];
-
-	SOCKET sock;
 
 	if (ADIF == NULL)
 		return TRUE;
@@ -613,17 +636,8 @@ IdTag (random alphanumeric, 12 chars)
 	sprintf(Tag, "%012X", (int)T * (rand() + 1));
 	MessageLen += sprintf(&Message[MessageLen], "\"IdTag\":\"%s\"", Tag);
 
-	Debugprintf("Sending %s", Message);
-
-	sock = OpenWL2KHTTPSock();
-
-	if (sock)
-	{
-		SendHTTPRequest(sock, "api.winlink.org", 80, 
-				"/session/add", Message, MessageLen, NULL);
-	
-		closesocket(sock);
-	}
+	MessagePtr = _strdup(Message);
+	_beginthread(SendWL2KSessionRecordThread, 0, (void *)MessagePtr);
 
 	return TRUE;
 }
@@ -1130,8 +1144,6 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 #ifdef WIN32
 		if (TNC->Hardware == H_UZ7HO)	
 		{
-
-
 			// See if we have Center Freq Info
 
 			if (TNC->AGWInfo->hFreq)
@@ -1145,9 +1157,13 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 
 				Freq = atof(TNC->RIG->Valchar) + (ModemFreq / 1000000);
 			}
+			else
+				Freq = atof(TNC->RIG->Valchar) + 0.0015;		// Assume 1500
 		}
 		else
 #endif
+			// Not UZ7HO or Linux
+		
 			Freq = atof(TNC->RIG->Valchar) + 0.0015;
 
 		_gcvt(Freq, 9, ReportFreq);

@@ -93,6 +93,7 @@ BOOL KillOldTNC(char * Path);
 BOOL ToLOC(double Lat, double Lon , char * Locator);
 BOOL InternalSendAPRSMessage(char * Text, char * Call);
 void UndoTransparency(char * input);
+char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
 
 BOOL ProcessConfig();
 
@@ -7472,9 +7473,9 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 	if (memcmp(CmdTail, "? ", 2) == 0)
 	{
-		Bufferptr += sprintf(Bufferptr, "APRS Subcommmands:\r");
-		Bufferptr += sprintf(Bufferptr, "STATUS SEND MSGS SENT ENABLEIGATE DISABLEIGATE RECONFIG\r");
-		Bufferptr += sprintf(Bufferptr, "Default is Station list - Params [Port] [Pattern]\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "APRS Subcommmands:\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "STATUS SEND MSGS SENT ENABLEIGATE DISABLEIGATE RECONFIG\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Default is Station list - Params [Port] [Pattern]\r");
 	
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
@@ -7487,12 +7488,12 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 		if (!ProcessConfig())
 		{
-			Bufferptr += sprintf(Bufferptr, "Configuration File check failed - will continue with old config");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Configuration File check failed - will continue with old config");
 		}
 		else
 		{
 			APRSReconfigFlag=TRUE;	
-			Bufferptr += sprintf(Bufferptr, "Reconfiguration requested\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Reconfiguration requested\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -7504,7 +7505,7 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			return;
 
 		IGateEnabled = TRUE;
-		Bufferptr += sprintf(Bufferptr, "IGate Enabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "IGate Enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -7515,7 +7516,7 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			return;
 
 		IGateEnabled = FALSE;
-		Bufferptr += sprintf(Bufferptr, "IGate Disabled\r");
+		Bufferptr = Cmdprintf(Session, Bufferptr, "IGate Disabled\r");
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
@@ -7523,14 +7524,14 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	if (memcmp(CmdTail, "STATUS ", 7) == 0)
 	{
 		if (IGateEnabled == FALSE)
-			Bufferptr += sprintf(Bufferptr, "IGate Disabled\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "IGate Disabled\r");
 		else
 		{
-			Bufferptr += sprintf(Bufferptr, "IGate Enabled ");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "IGate Enabled ");
 			if (APRSISOpen)
-				Bufferptr += sprintf(Bufferptr, "and connected to %s\r", RealISHost);
+				Bufferptr = Cmdprintf(Session, Bufferptr, "and connected to %s\r", RealISHost);
 			else
-				Bufferptr += sprintf(Bufferptr, "but not connected\r");
+				Bufferptr = Cmdprintf(Session, Bufferptr, "but not connected\r");
 		}
 
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
@@ -7542,21 +7543,19 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		struct APRSMESSAGE * ptr = SMEM->Messages;
 		char Addrs[32];
 
-		Bufferptr += sprintf(Bufferptr,
+		Bufferptr = Cmdprintf(Session, Bufferptr,
 			"\rTime  Calls               Seq   Text\r");
 
 		while (ptr)
 		{
 			char ToLopped[11] = "";
 
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);
-	
 			memcpy(ToLopped, ptr->ToCall, 10);
 			strlop(ToLopped, ' ');
 
 			sprintf(Addrs, "%s>%s", ptr->FromCall, ToLopped);
 
-			Bufferptr += sprintf(Bufferptr, "%s %-20s%-5s %s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s %-20s%-5s %s\r",
 				ptr->Time, Addrs, ptr->Seq, ptr->Text);
 	
 			ptr = ptr->Next;
@@ -7570,7 +7569,7 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		struct APRSMESSAGE * ptr = SMEM->OutstandingMsgs;
 		char Addrs[32];
 
-		Bufferptr += sprintf(Bufferptr,
+		Bufferptr = Cmdprintf(Session, Bufferptr,
 			"\rTime  Calls               Seq State Text\r");
 
 		while (ptr)
@@ -7585,15 +7584,13 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			else
 				sprintf(Retries, "%d", ptr->Retries);
 
-
-			Bufferptr = CHECKBUFFER(Session, Bufferptr);
 	
 			memcpy(ToLopped, ptr->ToCall, 10);
 			strlop(ToLopped, ' ');
 
 			sprintf(Addrs, "%s>%s", ptr->FromCall, ToLopped);
 
-			Bufferptr += sprintf(Bufferptr, "%s %-20s%-5s %-2s %s\r",
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s %-20s%-5s %-2s %s\r",
 				ptr->Time, Addrs, ptr->Seq, Retries, ptr->Text);
 	
 			ptr = ptr->Next;
@@ -7619,14 +7616,14 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 		if (len < 3 || len > 9)
 		{
-			Bufferptr += sprintf(Bufferptr, "Invalid Callsign\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Callsign\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
 
 		if (Text == NULL)
 		{
-			Bufferptr += sprintf(Bufferptr, "No Message Text\r");
+			Bufferptr = Cmdprintf(Session, Bufferptr, "No Message Text\r");
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
@@ -7695,8 +7692,6 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			MH++;
 			continue;
 		}
-
-		Bufferptr = CHECKBUFFER(Session, Bufferptr);
 	
 		ptr = FormatAPRSMH(MH);
 
@@ -7707,9 +7702,7 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			if (Pattern[0] && strstr(ptr, Pattern) == 0)
 				continue;
 
-			len = (int)strlen(ptr);
-			memcpy(Bufferptr, ptr, len);
-			Bufferptr += len;
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%s", ptr);
 		}
 	}
 
