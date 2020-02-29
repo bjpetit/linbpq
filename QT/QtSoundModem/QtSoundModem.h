@@ -43,6 +43,7 @@ private slots:
 	void preEmphAllAChanged(int);
 	void preEmphAllBChanged(int);
 	void menuChecked();
+	void onTEselectionChanged();
 
 protected:
 	 

@@ -834,7 +834,7 @@ void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string
 	}
 	else
 	{
-//	Debugprintf("Bad CRC %x %x Len %d rcvr %d", crc1, crc2, len, rcvr_nr);
+//		Debugprintf("Bad CRC %x %x Len %d rcvr %d", crc1, crc2, len, rcvr_nr);
 
 	if (len == 17)
 		i = 0;
@@ -2441,8 +2441,8 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 					pDET->raw_bits1[snd_ch].Length = 0;
 					pDET->last_nrzi_bit[snd_ch] = raw_bit;
 
-					dcd_hdr_cnt[snd_ch] = 48;
-					dcd_on_hdr[snd_ch] = 1;
+//					dcd_hdr_cnt[snd_ch] = 48;
+//					dcd_on_hdr[snd_ch] = 1;
 
 
 					if (last)

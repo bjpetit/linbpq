@@ -2,7 +2,7 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.11"
+#define VersionString "0.0.0.14"
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -17,7 +17,15 @@
 //		Fix Monitoring of Multiline packets
 //		Fix possible saving of wrong center freq
 //		Limit TX sample Q in Linux
-//		
+//
+
+// 0.12	Add AGWPE monitoring of received frames
+//		Fix DCD Threshold
+//		Fix KISS transparency issue
+
+// 0.13 Fix sending last few bits in FX.25 Mode
+
+// 0.14 Add "Copy on Select" to Trace Window
 
 
 #include <string.h>

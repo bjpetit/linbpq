@@ -3,6 +3,8 @@
 #include <QMainWindow>
 #include "ui_QtTermTCP.h"
 #include "ui_ListenPort.h"
+#include "ui_AGWParams.h"
+#include "ui_AGWConnect.h"
 #include "QTextEdit"
 #include "QSplitter"
 #include "QLineEdit"
@@ -21,6 +23,7 @@
 #include <QScrollBar>
 #include <QFileDialog>
 #include <QTabWidget>
+
 
 QT_BEGIN_NAMESPACE
 class QComboBox;
@@ -81,6 +84,8 @@ public:
 	int MonitorColour;
 	int CurrentHost;
 	int Tab;						// Tab Index if Tabbed Mode
+	void * AGWSession;				// Need to cast to TAGWPort to use it
+
 
 protected:
 
@@ -104,6 +109,7 @@ private slots:
 	void doYAPPSend();
 	void doYAPPSetRX();
 	void menuChecked();
+	void AGWConaccept();
 	void Connect();
 	void displayError(QAbstractSocket::SocketError socketError);
 	void readyRead();
@@ -115,6 +121,8 @@ private slots:
 	void MyTimerSlot();
 	void myaccept();
 	void ListenSlot();
+	void AGWaccept();
+	void AGWSlot();
 	void showContextMenuM(const QPoint &pt);
 	void showContextMenuT(const QPoint &pt);
 	void doQuit();
@@ -129,19 +137,23 @@ private slots:
 	void doNewCombined();
 	void doCascade();
 	void actActivate();
-	void on_mdiArea_changed();
+	void xon_mdiArea_changed();
+	void AGWdisplayError(QAbstractSocket::SocketError socketError);
+	void AGWreadyRead();
+	void onAGWSocketStateChanged(QAbstractSocket::SocketState socketState);
 	void tabSelected(int);
 
 protected:
 	bool eventFilter(QObject* obj, QEvent *event);
 
-	Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label = nullptr);
-
 private:
+
+	void ConnecttoAGW();
+
+	void AGWTimer();
+
 	Ui::QtTermTCPClass ui;
 	
-	QMenu *connectMenu;
-	QMenu *disconnectMenu;
 	QMenu *setupMenu;
 	QMenu *hostsubMenu;
 	QMenu *windowMenu;
@@ -156,17 +168,14 @@ private:
 	QAction *newTermAct;
 	QAction *newMonAct;
 	QAction *newCombinedAct;
-	QAction *discAction;
 	QAction *ListenAction;
+	QAction *AGWAction;
 	QAction *quitAction;
 
 	QTcpServer  _server;
 	QList<myTcpSocket*>  _sockets;
 
 	QWidget *centralWidget;
-	QMdiArea *mdiArea;
-	QTabWidget * tabWidget;
-
 };
 
 extern "C"
@@ -192,4 +201,5 @@ extern "C"
 
 
 char * strlop(char * buf, char delim);
-
+void setMenus(int State);
+void Send_AGW_Ds_Frame(void * AGW);

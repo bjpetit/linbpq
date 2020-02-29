@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.23"
+#define VersionString "0.0.0.26"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -13,6 +13,11 @@
 // .21 Save Window Positions
 // .22 Open a window on first start
 // .23 Add Tabbed display option
+// .24 Fix crash when setting Monitor flags in Tabbed mode
+// .25 Add AGW mode
+// .26 Add sending CTRL/C CTRL/D and CTRL/Z
+
+
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -20,6 +25,8 @@
 #include "TabDialog.h"
 #include <time.h>
 #include <QVBoxLayout>
+#include <QListWidgetItem>
+
 
 #ifndef WIN32
 #define strtok_s strtok_r
@@ -109,6 +116,23 @@ extern int AlertBeep;
 extern int AlertFreq;
 extern int AlertDuration;
 
+// AGW Host Interface stuff
+
+int AGWEnable = 0;
+char AGWTermCall[12] = "";
+char AGWBeaconDest[12] = "";
+char AGWBeaconPath[80] = "";
+int AGWBeaconInterval = 0;
+char AGWBeaconPorts[80];
+char AGWHost[128] = "127.0.0.1";
+int AGWPortNum = 8000;
+int AGWPaclen = 80;
+extern char * AGWPortList;
+extern myTcpSocket * AGWSock; 
+
+QStringList AGWToCalls;
+
+
 extern char YAPPPath[256];
 
 void menuChecked(QAction * Act);
@@ -117,11 +141,23 @@ void GetSettings();
 
 // These widgets defined here as they are accessed from outside the framework
 
-QAction *actHost[16];
+QLabel * Status1;
+QLabel * Status2;
+QLabel * Status3;
+QLabel * Status4;
+
+QAction *actHost[17];
 QAction *actSetup[16];
+
+QAction * TabSingle = NULL;
+QAction * TabBoth = NULL;
+QAction * TabMon = NULL;
 
 QMenu *monitorMenu; 
 QMenu * YAPPMenu;
+QMenu *connectMenu;
+QMenu *disconnectMenu;
+
 QMenu * ListenMenu;
 
 QAction *MonTX;
@@ -139,6 +175,11 @@ QAction *singleAct;
 QAction *singleAct2;
 QAction *MDIAct;
 QAction *tabbedAct;
+QAction *discAction;
+
+QTabWidget *tabWidget;
+QMdiArea *mdiArea;
+QWidget * mythis;
 
 QList<Ui_ListenSession *> _sessions;
 
@@ -148,8 +189,12 @@ QList<Ui_ListenSession *> _sessions;
 #define Mon 2
 #define Listen 4
 
+int TabType[10] = { Term, Term + Mon, Term, Term, Term, Term, Mon, Mon, Mon };
+
 int listenPort = 8015;
 bool listenEnable = false;
+char listenCText[4096] = "";
+
 
 int ConfigHost = 0;
 
@@ -158,9 +203,13 @@ int Split = 50;				// Mon/Term size split
 int termX;
 
 bool Cascading = false;		// Set to stop size being saved when cascading
+
 QMdiSubWindow * ActiveSubWindow = NULL;
 Ui_ListenSession * ActiveSession = NULL;
 
+Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label = nullptr);
+void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
+void AGW_AX25_data_in(void * AX25Sess, int PID, unsigned char * data, int Len);
 
 void EncodeSettingsLine(int n, char * String)
 {
@@ -293,21 +342,38 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 				QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
 
 				int key = keyEvent->key();
-//				Qt::KeyboardModifiers modifier = keyEvent->modifiers();
+				Qt::KeyboardModifiers modifier = keyEvent->modifiers();
 
-//				if (key == Qt::Key_Z)
-//				{
-//					if (modifier == Qt::ControlModifier)
-//					{
-//						QChar * CtrlZ = new QChar('A');
-//
-//						Sess->inputWindow->text().append(*CtrlZ);
-//						QByteArray stringData = Sess->inputWindow->text().toUtf8();
-//
-//						return true;
-//					}
-//				}
+				if (modifier == Qt::ControlModifier)
+				{
+					char Msg[] = "\0\r";
 
+					if (key == Qt::Key_Z)
+						Msg[0] = 0x1a;
+					else if (key == Qt::Key_C)
+						Msg[0] = 3;
+					else if (key == Qt::Key_D)
+						Msg[0] = 4;
+
+					if (Msg[0])
+					{
+
+						if (Sess->AGWSession)
+						{
+							// Terminal is in AGWPE mode - send as AGW frame
+
+							AGW_AX25_data_in(Sess->AGWSession, 240, (unsigned char *)Msg, strlen(Msg));
+
+						}
+						else if (Sess->clientSocket && Sess->clientSocket->state() == QAbstractSocket::ConnectedState)
+						{
+							Sess->clientSocket->write(Msg);
+						}
+
+						return true;
+					}
+				}
+				
 				if (key == Qt::Key_Up)
 				{
 					// Scroll up
@@ -392,7 +458,7 @@ QAction * setupMenuLine(QMenu * Menu, char * Label, QObject * parent, int State)
 
 int Count = 0;
 
-Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char * Label)
+Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 {
 	Ui_ListenSession * Sess = new(Ui_ListenSession);
 
@@ -424,6 +490,7 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 
 	Sess->SessionType = Type;
 	Sess->clientSocket = NULL;
+	Sess->AGWSession = NULL;
 
 	_sessions.push_back(Sess);
 
@@ -438,7 +505,11 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 	else if (TermMode == Tabbed)
 	{
 		Sess->Tab = Count++;
-		tabWidget->addTab(Sess, Label);
+
+		if (Type == Mon)
+			tabWidget->addTab(Sess, "Monitor");
+		else
+			tabWidget->addTab(Sess, Label);
 	}
 
 	Sess->installEventFilter(parent);
@@ -455,7 +526,7 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 		Sess->monWindow->setReadOnly(1);
 //		Sess->monWindow->setGeometry(QRect(0, 0, 770, 300));
 		Sess->monWindow->setFont(font);
-		connect(Sess->monWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
+		mythis->connect(Sess->monWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
 	}
 
 	if ((Type & (Listen | Term)))
@@ -464,7 +535,7 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 		Sess->termWindow->setReadOnly(1);
 //		Sess->termWindow->setGeometry(QRect(0, 0, 770, 300));
 		Sess->termWindow->setFont(font);
-		connect(Sess->termWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
+		mythis->connect(Sess->termWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
 
 		Sess->inputWindow = new QLineEdit(Sess);
 //		Sess->inputWindow->setGeometry(QRect(0, 0, 770, 650));
@@ -472,7 +543,7 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 		Sess->inputWindow->setFont(font);
 		Sess->inputWindow->setContextMenuPolicy(Qt::PreventContextMenu);
 
-		connect(Sess->inputWindow, SIGNAL(selectionChanged()), parent, SLOT(onLEselectionChanged()));
+		mythis->connect(Sess->inputWindow, SIGNAL(selectionChanged()), parent, SLOT(onLEselectionChanged()));
 	}
 
 	if (Type == (Term | Mon))
@@ -484,10 +555,10 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 		Sess->termWindow->setContextMenuPolicy(Qt::CustomContextMenu);
 
 
-		connect(Sess->monWindow, SIGNAL(customContextMenuRequested(const QPoint&)),
+		mythis->connect(Sess->monWindow, SIGNAL(customContextMenuRequested(const QPoint&)),
 			parent, SLOT(showContextMenuM(const QPoint &)));
 
-		connect(Sess->termWindow, SIGNAL(customContextMenuRequested(const QPoint&)),
+		mythis->connect(Sess->termWindow, SIGNAL(customContextMenuRequested(const QPoint&)),
 			parent, SLOT(showContextMenuT(const QPoint &)));
 	}
 
@@ -496,7 +567,7 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 	else
 		Sess->setWindowTitle("Disconnected");
 
-	Sess->installEventFilter(this);
+	Sess->installEventFilter(mythis);
 	Sess->show();
 
 	int pos = (_sessions.size() - 1) * 20;
@@ -514,10 +585,13 @@ Ui_ListenSession * QtTermTCP::newWindow(QObject * parent, int Type, const char *
 	return Sess;
 }
 
+
 QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 {
 	int i;
 	char Title[80];
+
+	mythis = this;
 
 	ui.setupUi(this);
 
@@ -537,7 +611,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 		mdiArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 		mdiArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-		connect(mdiArea, SIGNAL(subWindowActivated(QMdiSubWindow*)), this, SLOT(on_mdiArea_changed()));
+		connect(mdiArea, SIGNAL(subWindowActivated(QMdiSubWindow*)), this, SLOT(xon_mdiArea_changed()));
 
 		setCentralWidget(mdiArea);
 	}
@@ -549,15 +623,17 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 		tabWidget->setTabPosition(QTabWidget::South);
 
-		newWindow(this, Term, "Sess 1");
-		newWindow(this, Term, "Sess 2");
-		newWindow(this, Term, "Sess 3");
-		newWindow(this, Term, "Sess 4");
-		newWindow(this, Term, "Sess 5");
-		newWindow(this, Term, "Sess 6");
-		newWindow(this, Term, "Sess 7");
-		newWindow(this, Mon, "Monitor");
-		newWindow(this, Mon, "Monitor");
+		newWindow(this, TabType[0], "Sess 1");
+		newWindow(this, TabType[1], "Sess 2");
+		newWindow(this, TabType[2], "Sess 3");
+		newWindow(this, TabType[3], "Sess 4");
+		newWindow(this, TabType[4], "Sess 5");
+		newWindow(this, TabType[5], "Sess 6");
+		newWindow(this, TabType[6], "Sess 7");
+		newWindow(this, TabType[7], "Monitor");
+		newWindow(this, TabType[8], "Monitor");
+
+		ActiveSession= _sessions.at(0);
 
 		connect(tabWidget, SIGNAL(currentChanged(int)), this, SLOT(tabSelected(int)));
 	}
@@ -612,7 +688,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 			"window"));
 		connect(previousAct, SIGNAL(triggered()), mdiArea, SLOT(activatePreviousSubWindow()));
 	}
-
+	
 	quitAction = new QAction(tr("&Quit"), this);
 	connect(quitAction, SIGNAL(triggered()), this, SLOT(doQuit()));
 
@@ -622,8 +698,14 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	updateWindowMenu();
 
-
 	connectMenu = ui.menuBar->addMenu(tr("&Connect"));
+
+	actHost[16] = new QAction("AGW Connect", this);
+	actHost[16]->setFont(menufont);
+	actHost[16]->setVisible(0);
+	connectMenu->addAction(actHost[16]);
+
+	connect(actHost[16], SIGNAL(triggered()), this, SLOT(Connect()));
 
 	for (i = 0; i < MAXHOSTS; i++)
 	{
@@ -679,6 +761,10 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	setupMenu->addAction(actFonts);
 	connect(actFonts, SIGNAL(triggered()), this, SLOT(selFont()));
 
+	AGWAction = new QAction("AGW Setup", this); 
+	setupMenu->addAction(AGWAction);
+	connect(AGWAction, SIGNAL(triggered()), this, SLOT(AGWSlot()));
+
 	actChatMode = setupMenuLine(setupMenu, (char *)"Chat Terminal Mode", this, ChatMode);
 	actBells = setupMenuLine(setupMenu, (char *)"Enable Bells", this, Bells);
 
@@ -711,12 +797,39 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connect(YAPPSend, SIGNAL(triggered()), this, SLOT(doYAPPSend()));
 	connect(YAPPSetRX, SIGNAL(triggered()), this, SLOT(doYAPPSetRX()));
 
+	// Set up Status Bar
+
+	
+	setStyleSheet("QStatusBar{border-top: 1px outset black;} QStatusBar::item { border: 1px solid black; border-radius: 3px;}");
+//	setStyleSheet("QStatusBar{border-top: 1px outset black;}");
+
+	
+	Status4 = new QLabel(""); 
+	Status3 = new QLabel("         ");
+	Status2 = new QLabel("    ");
+	Status1 = new QLabel("  Disconnected  ");
+
+	Status1->setMinimumWidth(120);
+	Status2->setFixedWidth(100);
+	Status3->setFixedWidth(100);
+	Status4->setFixedWidth(100);
+
+
+	statusBar()->addPermanentWidget(Status4);
+	statusBar()->addPermanentWidget(Status3);
+	statusBar()->addPermanentWidget(Status2);
+	statusBar()->addPermanentWidget(Status1);
+
+	if (AGWEnable == 0)
+		Status1->setText("AGW Interface Disabled");
+
 	// Restore saved sessions
 
 	if (TermMode == Single)
 	{
 		Ui_ListenSession * Sess = newWindow(this, singlemodeFormat);
 
+		ActiveSession = Sess;
 		ui.verticalLayout->addWidget(Sess);
 	}
 
@@ -752,6 +865,10 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	QTimer *timer = new QTimer(this);
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(10000);
+
+	// Run timer now to connect to AGW if configured
+
+	MyTimerSlot();
 
 	if (listenEnable)
 		_server.listen(QHostAddress::Any, listenPort);
@@ -846,16 +963,39 @@ void QtTermTCP::showContextMenuM(const QPoint &pt)				// Mon Window
 	delete menu;
 }
 
+void setMenus(int State)
+{
+	// Sets Connect, Disconnect and YAPP Send  enable flags to match connection state
+
+	if (State)
+	{
+		connectMenu->setEnabled(false);
+		discAction->setEnabled(true);
+		YAPPSend->setEnabled(true);
+	}
+	else
+	{
+		connectMenu->setEnabled(true);
+		discAction->setEnabled(false);
+		YAPPSend->setEnabled(false);
+	}
+}
+
 
 void QtTermTCP::tabSelected(int Current)
 {
-	Ui_ListenSession * Sess;
+	Ui_ListenSession * Sess = NULL;
 
 	if (Current < _sessions.size())
 	{
 		Sess = _sessions.at(Current);
 
-		if (Sess->clientSocket)
+		if (Sess == nullptr)
+			return;
+
+		ActiveSession = Sess;
+
+		if (Sess->clientSocket || Sess->AGWSession)
 		{
 			connectMenu->setEnabled(false);
 			discAction->setEnabled(true);
@@ -969,6 +1109,35 @@ void QtTermTCP::SetupHosts()
 	tabdialog.exec();
 }
 
+Ui_AGWConnectDkg * AGWConSess;
+QDialog * MUI;
+
+void QtTermTCP::AGWConaccept()
+{
+	QVariant Q;
+
+	int port = AGWConSess->RadioPorts->currentRow();
+	char CallFrom[32];
+	char CallTo[32];
+	char Via[128];
+
+	strcpy(CallFrom, AGWConSess->CallFrom->text().toUpper().toUtf8());
+	strcpy(CallTo, AGWConSess->CallTo->currentText().toUpper().toUtf8());
+	strcpy(Via, AGWConSess->Digis->text().toUpper().toUtf8());
+
+	// Add CallTo if not already in list
+
+	if (AGWToCalls.contains(CallTo))
+		AGWToCalls.removeOne(CallTo);
+
+	AGWToCalls.insert(-1, CallTo);
+
+	Send_AGW_C_Frame(ActiveSession, port, CallFrom, CallTo, Via, strlen(Via));
+
+	MUI->close();
+}
+
+
 void QtTermTCP::Connect()
 {
 	QMdiSubWindow * UI;
@@ -983,8 +1152,54 @@ void QtTermTCP::Connect()
 			break;
 	}
 
-	if (i > 15)
+	if (i == 16)
+	{
+		AGWConSess = new(Ui_AGWConnectDkg);
+		MUI = new(QDialog);
+		QString str;
+		int count;
+
+		char * Context;
+		char * ptr;
+
+		AGWConSess->setupUi(MUI);
+
+		AGWConSess->CallFrom->setText(AGWTermCall);
+
+		AGWConSess->CallTo->addItems(AGWToCalls);
+
+
+		if (AGWPortList)
+		{
+			char * Temp = strdup(AGWPortList);		// Need copy as strtok messes with it
+
+			count = atoi(Temp);
+
+			ptr = strtok_s(Temp, ";", &Context);
+
+			for (int n = 0; n < count; n++)
+			{
+				ptr = strtok_s(NULL, ";", &Context);
+				new QListWidgetItem(ptr, AGWConSess->RadioPorts);
+			}
+
+			free(Temp);
+		}
+	
+
+	//	AGWSess->beaconPorts->setText(AGWBeaconPorts);
+
+	//	AGWSess->Host->setText(AGWHost);
+
+		str.setNum(AGWPortNum);
+	
+		connect(AGWConSess->okButton, SIGNAL(pressed()), this, SLOT(AGWConaccept()));
+
+		MUI->show();
+
 		return;
+	}
+
 
 	SavedHost = i;				// Iast used
 
@@ -1081,9 +1296,15 @@ void QtTermTCP::Disconnect()
 	else if (TermMode == Single)
 		Sess = _sessions.at(0);
 
-	if (Sess && Sess->clientSocket)
-		Sess->clientSocket->disconnectFromHost();
+	// if AGW send a d frame else disconnect TCP session
 
+	if (Sess->AGWSession)
+		Send_AGW_Ds_Frame(Sess->AGWSession);
+	else
+	{
+		if (Sess && Sess->clientSocket)
+			Sess->clientSocket->disconnectFromHost();
+	}
 	return;
 }
 
@@ -1165,10 +1386,29 @@ void QtTermTCP::doYAPPSetRX()
 void QtTermTCP::menuChecked()
 {
 	QAction * Act = static_cast<QAction*>(QObject::sender());
-		
+
 	int state = Act->isChecked();
 	int newTermMode = TermMode;
 	int newSingleMode = singlemodeFormat;
+
+	if (Act == TabSingle || Act == TabBoth || Act == TabMon)
+	{
+		// Tebbed Window format had changed
+
+		int i = tabWidget->currentIndex();
+
+		if (Act == TabSingle)
+			TabType[i] = Term;
+		else if (Act == TabBoth)
+			TabType[i] = Term + Mon;
+		else
+			TabType[i] = Mon;
+
+		QMessageBox msgBox;
+		msgBox.setText("Tab Types will change next time program is started.");
+		msgBox.exec();
+
+	}
 
 	if (Act == singleAct || Act == singleAct2 || Act == MDIAct || Act == tabbedAct)
 	{
@@ -1202,7 +1442,7 @@ void QtTermTCP::menuChecked()
 		return;
 	}
 
-	
+
 	if (Act == MonTX)
 		ActiveSession->mtxparam = state;
 	else if (Act == MonSup)
@@ -1237,9 +1477,10 @@ void QtTermTCP::menuChecked()
 	}
 
 	// Get active Session
+/*
 
 	QMdiSubWindow *SW = mdiArea->activeSubWindow();
-	
+
 	Ui_ListenSession * Sess;
 
 	for (int i = 0; i < _sessions.size(); ++i)
@@ -1250,11 +1491,15 @@ void QtTermTCP::menuChecked()
 //	{
 		if (Sess->sw == SW)
 		{
-			SendTraceOptions(Sess);
-			return;
-		}
-	}
+		*/
+
+	if (ActiveSession->clientSocket && ActiveSession->SessionType & Mon)
+		SendTraceOptions(ActiveSession);
+	
+	return;
 }
+
+
 
 
 void QtTermTCP::LDisconnect(Ui_ListenSession * LUI)
@@ -1262,6 +1507,7 @@ void QtTermTCP::LDisconnect(Ui_ListenSession * LUI)
 	if (LUI->clientSocket)
 		LUI->clientSocket->disconnectFromHost();
 }
+
 
 void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 {
@@ -1301,7 +1547,31 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 
 	LastWrite = time(NULL);				// Stop initial beep
 
-	if (Sess->clientSocket && Sess->clientSocket->state() == QAbstractSocket::ConnectedState)
+	if (Sess->AGWSession)
+	{
+		// Terminal is in AGWPE mode - send as AGW frame
+
+		while ((ptr = strchr(Msgptr, '\n')))
+		{
+			*ptr++ = 0;
+
+			Msg = (char *)malloc(strlen(Msgptr) + 10);
+			strcpy(Msg, Msgptr);
+			strcat(Msg, "\r");
+
+			AGW_AX25_data_in(Sess->AGWSession, 240, (unsigned char *)Msg, strlen(Msg));
+
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 0);		// Black
+
+//			Sess->termWindow->insertPlainText(Msg);
+
+			free(Msg);
+
+			Msgptr = ptr;
+		}
+	}
+	else if (Sess->clientSocket && Sess->clientSocket->state() == QAbstractSocket::ConnectedState)
 	{
 		while ((ptr = strchr(Msgptr, '\n')))
 		{
@@ -1716,6 +1986,7 @@ void GetSettings()
 	QByteArray qb;
 	int i;
 	char Key[16];
+	char Param[256];
 
 	QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
 
@@ -1741,9 +2012,27 @@ void GetSettings()
 
 	listenPort = settings.value("listenPort", 8015).toInt();
 	listenEnable = settings.value("listenEnable", false).toBool();
+	strcpy(listenCText, settings.value("listenCText", "").toString().toUtf8());
 
 	TermMode = settings.value("TermMode", 0).toInt();
 	singlemodeFormat = settings.value("singlemodeFormat", Term + Mon).toInt();
+
+	AGWEnable = settings.value("AGWEnable", 0).toInt();
+	strcpy(AGWTermCall, settings.value("AGWTermCall", "").toString().toUtf8());
+	strcpy(AGWBeaconDest, settings.value("AGWBeaconDest", "").toString().toUtf8());
+	strcpy(AGWBeaconPath, settings.value("AGWBeaconPath", "").toString().toUtf8());
+	AGWBeaconInterval = settings.value("AGWBeaconInterval", 0).toInt();
+	strcpy(AGWBeaconPorts, settings.value("AGWBeaconPorts", "").toString().toUtf8());
+	strcpy(AGWHost, settings.value("AGWHost", "127.0.0.1").toString().toUtf8());
+	AGWPortNum = settings.value("AGWPort", 8000).toInt();
+	AGWPaclen = settings.value("AGWPaclen", 80).toInt();
+	AGWToCalls = settings.value("AGWToCalls","").toStringList();
+
+	strcpy(Param, settings.value("TabType", "1 1 1 1 1 1 1 2 2").toString().toUtf8());
+	sscanf(Param, "%d %d %d %d %d %d %d %d %d %d",
+		&TabType[0], &TabType[1], &TabType[2], &TabType[3], &TabType[4],
+		&TabType[5], &TabType[6], &TabType[7], &TabType[8], &TabType[9]);
+
 }
 
 extern "C" void SaveSettings()
@@ -1769,6 +2058,7 @@ extern "C" void SaveSettings()
 	settings.setValue("YAPPPath", YAPPPath);
 	settings.setValue("listenPort", listenPort);
 	settings.setValue("listenEnable", listenEnable);
+	settings.setValue("listenCText", listenCText);
 
 	// Save Sessions
 
@@ -1776,7 +2066,6 @@ extern "C" void SaveSettings()
 	int SessStringLen;
 
 	SessStringLen = sprintf(SessionString, "%d|", _sessions.size());
-
 
 	if (TermMode == MDI)
 	{
@@ -1792,6 +2081,23 @@ extern "C" void SaveSettings()
 
 		settings.setValue("Sessions", SessionString);
 	}
+
+	settings.setValue("AGWEnable", AGWEnable);
+	settings.setValue("AGWTermCall", AGWTermCall);
+	settings.setValue("AGWBeaconDest", AGWBeaconDest);
+	settings.setValue("AGWBeaconPath", AGWBeaconPath);
+	settings.setValue("AGWBeaconInterval", AGWBeaconInterval);
+	settings.setValue("AGWBeaconPorts", AGWBeaconPorts);
+	settings.setValue("AGWHost", AGWHost);
+	settings.setValue("AGWPort", AGWPortNum);
+	settings.setValue("AGWPaclen", AGWPaclen);
+	settings.setValue("AGWToCalls", AGWToCalls);
+
+	sprintf(Param, "%d %d %d %d %d %d %d %d %d %d",
+		TabType[0], TabType[1], TabType[2], TabType[3], TabType[4], TabType[5], TabType[6], TabType[7], TabType[8], TabType[9]);
+
+	settings.setValue("TabType", Param);
+
 	settings.sync();
 }
 
@@ -1812,7 +2118,6 @@ QtTermTCP::~QtTermTCP()
 void QtTermTCP::MyTimerSlot()
 {
 	// Runs every 10 seconds
-	
 	
 	Ui_ListenSession * Sess;
 
@@ -1839,6 +2144,10 @@ void QtTermTCP::MyTimerSlot()
 			Sess->clientSocket->write("\0", 1);
 		}
 	}
+
+	if (AGWEnable)
+		AGWTimer();
+
 }
 
 extern "C" void Beep()
@@ -1847,7 +2156,6 @@ extern "C" void Beep()
 }
 
 Ui_ListenPort  * Sess;
-QDialog * MUI;
 
 void QtTermTCP::myaccept()
 {
@@ -1857,6 +2165,10 @@ void QtTermTCP::myaccept()
 
 	listenPort = atoi(ptr);
 	listenEnable = Sess->Enabled->isChecked();
+	strcpy(listenCText, Sess->CText->toPlainText().toUtf8());
+
+	while ((ptr = strchr(listenCText, '\n')))
+		*ptr = '\r';
 
 	if (_server.isListening())
 		_server.close();
@@ -1882,8 +2194,87 @@ void QtTermTCP::ListenSlot()
 
 	Sess->portNo->setText(portname);
 	Sess->Enabled->setChecked(listenEnable);
-	
+	Sess->CText->setText(listenCText);
+
 	connect(Sess->buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
+
+	MUI->show();
+}
+
+Ui_AGWParams  * AGWSess;
+
+void QtTermTCP::AGWaccept()
+{
+	QVariant Q;
+
+	int OldEnable = AGWEnable;
+	int OldPort = AGWPortNum;
+
+//	QString val = Sess->portNo->text();A
+//	QByteArray qb = val.toLatin1();
+//	char * ptr = qb.data();
+
+	AGWEnable = AGWSess->AGWEnable->isChecked();
+
+	strcpy(AGWTermCall, AGWSess->TermCall->text().toUtf8().toUpper());
+	strcpy(AGWBeaconDest, AGWSess->beaconDest->text().toUtf8().toUpper());
+
+	Q = AGWSess->beaconInterval->text();
+	AGWBeaconInterval = Q.toInt();
+
+	strcpy(AGWHost, AGWSess->Host->text().toUtf8());
+
+	Q = AGWSess->Port->text();
+	AGWPortNum = Q.toInt();
+
+	SaveSettings();
+
+	if (AGWEnable != OldEnable || AGWPortNum != OldPort)
+	{
+		// (re)start connection
+
+		if (OldEnable && AGWSock && AGWSock->ConnectedState == QAbstractSocket::ConnectedState)
+		{
+			AGWSock->disconnectFromHost();
+			Status1->setText("AGW Disconnected");
+		}
+		
+		// AGWTimer will reopen connection
+
+	}
+	MUI->close();
+}
+
+
+void QtTermTCP::AGWSlot()
+{
+	// This runs the Listen Configuration dialog
+
+	AGWSess = new(Ui_AGWParams);
+	MUI = new(QDialog);
+	QString str;
+
+	AGWSess->setupUi(MUI);
+
+	AGWSess->AGWEnable->setChecked(AGWEnable);
+	AGWSess->TermCall->setText(AGWTermCall);
+	AGWSess->beaconDest->setText(AGWBeaconDest);
+	AGWSess->beaconPath->setText(AGWBeaconPath);
+
+	str.setNum(AGWBeaconInterval);
+	AGWSess->beaconInterval->setText(str);
+
+	AGWSess->beaconPorts->setText(AGWBeaconPorts);
+
+	AGWSess->Host->setText(AGWHost);
+
+	str.setNum(AGWPortNum);
+	AGWSess->Port->setText(str);
+
+	str.setNum(AGWPaclen);
+	AGWSess->Paclen->setText(str);
+
+	connect(AGWSess->okButton, SIGNAL(pressed()), this, SLOT(AGWaccept()));
 
 	MUI->show();
 }
@@ -1990,10 +2381,13 @@ void QtTermTCP::onNewConnection()
 	{
 		// We need to set Connect and Disconnect as the window is already active
 
-		discAction->setEnabled(true);
-		YAPPSend->setEnabled(true);
-		connectMenu->setEnabled(false);
+		setMenus(true);
 	}
+
+	// Send CText if defined
+
+	if (listenCText[0])
+		Sess->clientSocket->write(listenCText);
 
 	Beep();
 }
@@ -2122,6 +2516,31 @@ void QtTermTCP::updateWindowMenu()
 			Sess->actActivate->setChecked(ActiveSubWindow == Sess->sw);
 		}
 	}
+	else if (TermMode == Tabbed)
+	{
+		windowMenu->clear();
+
+		Ui_ListenSession * Sess = (Ui_ListenSession *)tabWidget->currentWidget();
+
+		QActionGroup * termGroup = new QActionGroup(this);
+
+		delete(TabSingle);
+		delete(TabBoth);
+		delete(TabMon);
+
+		TabSingle = setupMenuLine(nullptr, (char *)"Terminal Only", this, (Sess->SessionType == Term));
+		TabBoth = setupMenuLine(nullptr, (char *)"Terminal + Monitor", this, (Sess->SessionType == Term + Mon));
+		TabMon = setupMenuLine(nullptr, (char *)"Monitor Only", this, (Sess->SessionType == Mon));
+
+		termGroup->addAction(TabSingle);
+		termGroup->addAction(TabBoth);
+		termGroup->addAction(TabMon);
+
+		windowMenu->addAction(TabSingle);
+		windowMenu->addAction(TabBoth);
+		windowMenu->addAction(TabMon);
+
+	}
 }
 
 Ui_ListenSession::~Ui_ListenSession()
@@ -2211,7 +2630,7 @@ void QtTermTCP::actActivate()
 }
 
 
-void QtTermTCP::on_mdiArea_changed()
+void QtTermTCP::xon_mdiArea_changed()
 {
 	// This is triggered when the Active MDI window changes
 	// and is used to enable/disable Connect, Disconnect and YAPP Send

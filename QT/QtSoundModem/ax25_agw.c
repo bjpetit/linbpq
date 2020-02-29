@@ -341,32 +341,44 @@ string * AGW_D_Frame(int port, int PID, char * CallFrom, char * CallTo, string *
 	return Msg;
 }
 
-/*
 
-void AGW_I_Frame(port char; CallFrom,CallTo,Monitor string) string;
-var
-  DataLen word;
+
+string *  AGW_I_Frame(int port, char * CallFrom, char * CallTo, char * Monitor)
 {
-  DataLen = length(Monitor);
-  result = AGW_frame_header(port,'I','',CallFrom,CallTo,DataLen)+Monitor;
+	string * Msg;
+	int DataLen;
+
+	DataLen = strlen(Monitor);
+	Msg = AGW_frame_header(port, 'I', 0, CallFrom, CallTo, DataLen);
+
+	stringAdd(Msg, (byte *)Monitor, DataLen);
+	return Msg;
+}
+
+string *  AGW_S_Frame(int port, char * CallFrom, char * CallTo, char * Monitor)
+{
+	string * Msg;
+	int DataLen;
+
+	DataLen = strlen(Monitor);
+	Msg = AGW_frame_header(port, 'S', 0, CallFrom, CallTo, DataLen);
+
+	stringAdd(Msg, (byte *)Monitor, DataLen);
+	return Msg;
 };
 
-void AGW_S_Frame(port char; CallFrom,CallTo,Monitor string) string;
-var
-  DataLen word;
+string *  AGW_U_Frame(int port, char * CallFrom, char * CallTo, char * Monitor)
 {
-  DataLen = length(Monitor);
-  result = AGW_frame_header(port,'S','',CallFrom,CallTo,DataLen)+Monitor;
-};
+	string * Msg;
+	int DataLen;
 
-void AGW_U_Frame(port char; CallFrom,CallTo,Monitor string) string;
-var
-  DataLen word;
-{
-  DataLen = length(Monitor);
-  result = AGW_frame_header(port,'U','',CallFrom,CallTo,DataLen)+Monitor;
-};
-*/
+	DataLen = strlen(Monitor);
+	Msg = AGW_frame_header(port, 'U', 0, CallFrom, CallTo, DataLen);
+
+	stringAdd(Msg, (byte *)Monitor, DataLen);
+	return Msg;
+}
+
 
 string * AGW_T_Frame(int port, char * CallFrom, char * CallTo, char * Data)
 {
@@ -374,7 +386,6 @@ string * AGW_T_Frame(int port, char * CallFrom, char * CallTo, char * Data)
 	int DataLen;
 
 	DataLen = strlen(Data);
-
 	Msg = AGW_frame_header(port, 'T', 0, CallFrom, CallTo, DataLen);
 
 	stringAdd(Msg, (byte *)Data, DataLen);
@@ -1130,24 +1141,51 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 		{
 			if (RX)
 			{
-				/*
+				switch (f_id)
+				{
 
-			case f_id of
-			  I_I   : AGW_data = AGW_I_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  S_RR  : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  S_RNR : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  S_REJ : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  U_SABM: AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  U_DISC: AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  U_DM  : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  U_UA  : AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  U_FRMR: AGW_data = AGW_S_frame(agw_port,CallFrom,CallTo,mon_frm);
-			  U_UI  : AGW_data = AGW_U_frame(agw_port,CallFrom,CallTo,mon_frm);
+				case I_I:
+					AGW_data = AGW_I_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
 
-			  				AGW_send_to_app(AGW->socket, AGW_data);
+				case S_RR:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
 
-			  */
+				case S_RNR:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
+
+				case S_REJ:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
+
+				case U_SABM:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
+
+				case U_DISC:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
+
+				case U_DM:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
+
+				case U_UA:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
+
+				case U_FRMR:
+					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
+					break;
+
+				case U_UI:
+					AGW_data = AGW_U_Frame(agw_port, CallFrom, CallTo, mon_frm);
+				}
+				AGW_send_to_app(AGW->socket, AGW_data);
 			}
+
 			else
 			{
 				AGW_data = AGW_T_Frame(agw_port, CallFrom, CallTo, mon_frm);

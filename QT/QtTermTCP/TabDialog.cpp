@@ -67,7 +67,7 @@ QLineEdit *portEdit;
 QLineEdit *userEdit;
 QLineEdit *passEdit;
 
-extern QAction *actHost[16];
+extern QAction *actHost[17];
 extern QAction *actSetup[16];
 
 extern int ConfigHost;
@@ -84,7 +84,7 @@ extern char Password[MAXHOSTS + 1][80];
 
 TabDialog::TabDialog(QWidget *parent) : QDialog(parent)
 {
-	tabWidget = new QTabWidget;
+	QTabWidget * tabWidget = new QTabWidget;
 	tabWidget->addTab(new GeneralTab, tr("General"));
 
 	buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);

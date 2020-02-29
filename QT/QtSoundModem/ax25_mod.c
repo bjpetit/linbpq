@@ -629,7 +629,7 @@ string * fill_fx25_data(int snd_ch, string * data)
 				bit_cnt++;
 				if (bit_cnt == 8)
 					stringAdd(ax25_data, &tx_byte, 1);
-			} while (bit_cnt > 8);
+			} while (bit_cnt < 8);
 		}
 		tx_fx25_size[snd_ch] = ax25_size;
 		return ax25_data;

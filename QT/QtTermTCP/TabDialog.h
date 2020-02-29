@@ -84,7 +84,6 @@ private slots:
 
 private:
 	//   Ui::TabDialog *ui;
-	QTabWidget *tabWidget;
 	QDialogButtonBox *buttonBox;
 };
 

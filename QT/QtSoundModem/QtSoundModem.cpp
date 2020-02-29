@@ -418,6 +418,8 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	HeaderCopy[1] = ui.HeaderB;
 	monWindowCopy = ui.monWindow;
 
+	connect(ui.monWindow, SIGNAL(selectionChanged()), this, SLOT(onTEselectionChanged()));
+
 	ui.WaterfallA->setPixmap(QPixmap::fromImage(*Waterfall[0]));
 	ui.WaterfallB->setPixmap(QPixmap::fromImage(*Waterfall[1]));
 
@@ -456,9 +458,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	ui.centerA->setValue(rx_freq[0]);
 	ui.centerB->setValue(rx_freq[1]);
 
-	connect(ui.centerA, QOverload<int>::of(&QSpinBox::valueChanged),
-
-		[=](int i)
+	connect(ui.centerA, QOverload<int>::of(&QSpinBox::valueChanged), [=](int i)
 	{
 		if (i > 300)
 		{
@@ -468,14 +468,12 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		}
 	});
 
-	connect(ui.centerB, QOverload<int>::of(&QSpinBox::valueChanged),
-
-		[=](int i)
+	connect(ui.centerB, QOverload<int>::of(&QSpinBox::valueChanged), [=](int i)
 	{
 		if (i > 300)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
-			Freq_Change(1, i);
+			ui.centerB->setValue(Freq_Change(1, i));
 			settings->setValue("Modem/RXFreq2", rx_freq[1]);
 		}
 	});
@@ -1458,4 +1456,12 @@ void QtSoundModem::show_grid()
 			}
 		}
 	}
+}
+
+// "Copy on Select" Code
+
+void QtSoundModem::onTEselectionChanged()
+{
+	QTextEdit * x = static_cast<QTextEdit*>(QObject::sender());
+	x->copy();
 }

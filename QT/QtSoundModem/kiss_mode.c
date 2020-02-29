@@ -21,7 +21,7 @@ uses sysutils,classes;
 // Each needs an input buffer of max size kiss frame and length (or maybe string is a good idea)
 
 TKISSMode ** KissConnections = NULL;
-KISSConCount = 0;
+int KISSConCount = 0;
 
 #define FEND 0xc0
 #define FESC 0xDB
@@ -38,6 +38,9 @@ int KISSServ;
 int newKISSPort = 8100;
 
 int newKISSServ;
+
+int KISS_encode(UCHAR * KISSBuffer, int port, string * frame, int TXMON);
+
 
 void KISS_init()
 {
@@ -332,7 +335,6 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 				//	Either start of message or message complete
 				//
 
-
 				//	npKISSINFO->MSGREADY = TRUE;
 				return;
 
@@ -342,13 +344,14 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 				continue;
 
 			}
-
-			//
-			//	Ok, a normal char
-			//
-
-			*(ptr2++) = c;
 		}
+			
+		//
+		//	Ok, a normal char
+		//
+
+		*(ptr2++) = c;
+		
 	}
 	Len = ptr2 - Msg;
 
@@ -378,7 +381,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 
 		// Ackmode needs to know where to send ack back to, so save socket on end of data
 
-		stringAdd(TXMSG, (char * )&socket, sizeof(socket));
+		stringAdd(TXMSG, (unsigned char * )&socket, sizeof(socket));
 
 		Add(&all_frame_buf[Chan], TXMSG);
 

@@ -163,6 +163,7 @@ void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 		{
 			if ((pf == SET_F && PollREJ) || nr != AX25Sess->vr)
 			{
+				Debugprintf("Optimizer dropping REJ nr %d vr %d pf %d PollREJ %d", nr, AX25Sess->vr, pf, PollREJ);
 				Delete(buf, i);
 				optimize = FALSE;
 			}
@@ -202,6 +203,8 @@ void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 			{
 				if (nr != AX25Sess->vr || ((pf == SET_F) && PollRR) || curr_req)
 				{
+					Debugprintf("Optimizer dropping RR nr %d vr %d pf %d PollRR %d", nr, AX25Sess->vr, pf, PollRR);
+
 					Delete(buf, i);
 					optimize = FALSE;
 				}
@@ -724,7 +727,6 @@ void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * d
 	byte need_frame[8];
 	int index = 0;
 	{
-
 		if (AX25Sess->status == STAT_TRY_LINK)
 			return;
 
