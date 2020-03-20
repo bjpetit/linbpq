@@ -62,7 +62,7 @@ BOOL TfPut(struct TNCDATA * TNC, UCHAR character);
 int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 int DATAPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 int STATUSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
-int PROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC);
+int DEDPROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC);
 VOID ProcessKPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len);;
 int KANTConnected(struct TNCDATA * conn, struct StreamInfo * channel, int Stream);
@@ -72,10 +72,8 @@ VOID ProcessSCSPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Length);
 VOID TNCPoll();
 VOID DisableAppl(struct TNCDATA * TNC);
 int BPQSerialSetPollDelay(HANDLE hDevice, int PollDelay);
-
-
-
-#define TNCBUFFLEN 1024
+int BPQSerialSendData(struct TNCDATA * TNC, UCHAR * Message,int MsgLen);
+int BPQSerialGetData(struct TNCDATA * TNC, UCHAR * Message, unsigned int BufLen, ULONG * MsgLen);
 
 extern struct TNCDATA * TNCCONFIGTABLE;
 
@@ -477,6 +475,24 @@ int BPQSerialClrDCD(HANDLE hDevice)
 #endif                     
 }
 
+static int SendDataToTNC(struct TNCDATA * TNC, UCHAR * TXMsg, int n)
+{
+	// Used for all port types
+
+#ifdef WIN32
+
+	// WIN32 VCOM Used one of my Drivers
+
+	if (TNC->VCOM)
+		BPQSerialSendData(TNC, TXMsg, n);
+
+#endif
+
+	// Linux VCOM uses SOCAT Pairs and normal write
+
+	return WriteCOMBlock(TNC->hDevice, TXMsg, n);	
+}
+
 int BPQSerialSendData(struct TNCDATA * TNC, UCHAR * Message,int MsgLen)
 {
 	HANDLE hDevice = TNC->hDevice;
@@ -531,6 +547,27 @@ int BPQSerialSendData(struct TNCDATA * TNC, UCHAR * Message,int MsgLen)
 	}      
 #endif
 }
+
+int GetDataFromTNC(struct TNCDATA * TNC, UCHAR * Message, unsigned int BufLen, ULONG * MsgLen)
+{
+	// Used for all port types
+
+#ifdef WIN32
+
+	// WIN32 VCOM Used one of my Drivers
+
+	if (TNC->VCOM)
+		return BPQSerialGetData(TNC, Message, BufLen, MsgLen);
+
+#endif
+
+	// Linux VCOM uses SOCAT Pairs and normal Read
+
+	*MsgLen = ReadCOMBlock(TNC->hDevice, Message, BufLen);
+	return 0;
+
+}
+
 
 int BPQSerialGetData(struct TNCDATA * TNC, UCHAR * Message, unsigned int BufLen, ULONG * MsgLen)
 {
@@ -1266,7 +1303,8 @@ VOID TNC2GetChar(struct TNCDATA * TNC, int * returnedchar, int * moretocome)
 {
 	// Poll Node
 
-	GETDATA(TNC);
+	if (TNC->Mode == 0)
+		GETDATA(TNC);
 
 	*returnedchar = -1;
 	*moretocome = 0;
@@ -1292,17 +1330,22 @@ VOID TNC2GetChar(struct TNCDATA * TNC, int * returnedchar, int * moretocome)
 	}
 }
 
-int TNC2GetVMSR(struct TNCDATA * TNC, struct TNC2StreamInfo * TNCStream, BOOL ClearDeltas)
+int TNCGetVMSR(struct TNCDATA * TNC, struct TNC2StreamInfo * TNCStream, BOOL ClearDeltas)
 {
-	// I think Connected bit should come from current stream
+	// On TNC2 Connected bit should come from current stream
 	// flow control bits from TNC record
 
-	int val = TNC->VMSR | TNCStream->VMSR;
+	int val = TNC->VMSR;
 
+	if (TNC->Mode == TNC2)
+		 val |= TNCStream->VMSR;
+	
 	if (ClearDeltas)
 	{
 		TNC->VMSR &= 0xF0;			// CLEAR DELTA BITS
-		TNCStream->VMSR &= 0xF0;
+	
+		if (TNC->Mode == TNC2)
+			TNCStream->VMSR &= 0xF0;
 	}
 	return val;
 }
@@ -1388,8 +1431,13 @@ BOOL InitializeTNCEmulator()
 			if (TNC->Users == 0)
 				TNC->Users = TNC->HOSTSTREAMS;
 
-			if (TNC->HOSTSTREAMS == 0)
+			if (TNC->Users == 0)
 				TNC->Users = TNC->HOSTSTREAMS = 1;
+			else
+				TNC->HOSTSTREAMS = TNC->Users;
+
+			Debugprintf("TNC2 USers = %d, HOSTSTREAMS = %d\n", TNC->Users, TNC->HOSTSTREAMS);
+
 
 			for (i = 0; i < TNC->HOSTSTREAMS; i++)
 			{
@@ -1397,7 +1445,8 @@ BOOL InitializeTNCEmulator()
 
 				TNCStream->BPQPort = FindFreeStream();
 
-				if (TNCStream->BPQPort == 0)
+				if
+					(TNCStream->BPQPort == 0)
 				{
 					Debugprintf("Insufficient free Streams for TNC2 Emulator");
 					return FALSE;
@@ -1530,8 +1579,8 @@ BOOL InitializeTNCEmulator()
 
 			TNC->PortEnabled = 1;   
 
-				TNC->RTS = 1;
-//				TNC->DTR = 1;
+			TNC->RTS = 1;
+//			TNC->DTR = 1;
 		}
 		else
 		{
@@ -1734,6 +1783,7 @@ NextTNC:
 	DOMONITORING(NeedTrace);
 }
 
+/*
 #ifndef WIN32
 
 int TNCReadCOMBlock(HANDLE fd, char * Block, int MaxLength, int * err)
@@ -1756,168 +1806,211 @@ int TNCReadCOMBlock(HANDLE fd, char * Block, int MaxLength, int * err)
 }
 
 #endif
+*/
+
+void CheckForConnectStatusChange(struct TNCDATA * TNC);
+void CheckForHostStatusChange(struct TNCDATA * TNC);
+void CheckForDataFromHost(struct TNCDATA * TNC);
+void CheckForDataFromTerminal(struct TNCDATA * TNC);
+
+int isTNCBusy(struct TNCDATA * TNC)
+{
+	// if using old VCOM check Q
+
+#ifdef WIN32
+
+	if (TNC->VCOM)
+	{
+		if (TNC->NewVCOM == 0)
+		{
+			int TXCount, RXCount;
+
+			BPQSerialGetQCounts(TNC->hDevice, &RXCount, &TXCount);
+			
+			if (TXCount > 4096)
+				return TRUE;		// Busy
+			
+			return FALSE;
+		}
+
+		// Windows New VCOM cant check (I think!)
+	}
+
+#endif
+
+	//
+
+	return FALSE;
+
+}
 
 VOID TNCPoll()
 {
-	unsigned int n;
-	ULONG ConCount, ModemStat;
-	char rxbuffer[1000];
-	int retval, more;
-	char TXMsg[1000];
-	ULONG RXCount, TXCount, Read = 0, resp;
-
 	struct TNCDATA * TNC = TNC2TABLE;		// malloc'ed
+
+	// This logic had got very convoluted. This Tries
+	// to rationalize it
 
 	while (TNC)
 	{
-		if (TNC->hDevice == 0)
+		if (TNC->hDevice)
 		{
-			TNC = TNC->Next;
-			continue;						// Open failed
+			CheckForConnectStatusChange(TNC);
+			CheckForHostStatusChange(TNC);
+			CheckForDataFromHost(TNC);
+			CheckForDataFromTerminal(TNC);
 		}
-		if (TNC->Mode == KANTRONICS)
-		{
-			// Have to poll for Data and State changes
-
-			int n, len, count, state, change;
-			struct StreamInfo * Channel;
-			UCHAR Buffer[400];
-			
-			for (n = 1; n <= TNC->HOSTSTREAMS; n++)
-			{
-				Channel = TNC->Channels[n];
-
-				SessionState(Channel->BPQStream, &state, &change);
-		
-				if (change == 1)
-				{
-					if (state == 1)
 	
-					// Connected
+		TNC = TNC->Next;
+	}
+}
+
+void CheckForConnectStatusChange(struct TNCDATA * TNC)
+{
+#ifdef WIN32
+	if (TNC->VCOM && TNC->NewVCOM == 0)
+	{
+		// Can check if other end is connected
+
+		int ConCount = 0;
+
+		BPQSerialIsCOMOpen(TNC->hDevice, &ConCount);
+
+		if (TNC->PortEnabled == 1 && ConCount == 0)
+		
+			// Connection has just closed - if connected, disconnect stream
+
+			// This should close all streams on multistream port
+
+			SessionControl(TNC->BPQPort, 2, 0);
+		
+		if (TNC->PortEnabled != ConCount)
+		{
+			TNC->PortEnabled = ConCount;
+		}
+	}
+#endif
+}
+
+void CheckForHostStatusChange(struct TNCDATA * TNC)
+{
+	if (TNC->Mode == KANTRONICS)
+	{
+		// Have to poll for Data and State changes
+
+		int n, state, change;
+		struct StreamInfo * Channel;
 			
-						KANTConnected(TNC, Channel, n);	
-					else
-						KANTDisconnected(TNC, Channel, n);
-				}
+		for (n = 1; n <= TNC->HOSTSTREAMS; n++)
+		{
+			Channel = TNC->Channels[n];
 
-				do
-				{ 
-					GetMsg(Channel->BPQStream, &Buffer[3], &len, &count);
+			SessionState(Channel->BPQStream, &state, &change);
+		
+			if (change == 1)
+			{
+				if (state == 1)
+	
+				// Connected
+			
+					KANTConnected(TNC, Channel, n);	
+				else
+					KANTDisconnected(TNC, Channel, n);
+			}
+		}
+		return;
+	}
 
-					if (len > 0)
-					{
-						// If a failure, set a close timer (for Airmail, etc)
+	// ?? Should other modes check here ??
+}
 
-						if (strstr(&Buffer[3], "} Downlink connect needs port number") ||
+void CheckForDataFromHost(struct TNCDATA * TNC)
+{
+	unsigned int n;
+	int retval, more;
+	char TXMsg[1000];
+	ULONG Read = 0;
+
+	// I think we should check for space in TNC to Terminal Buffer
+
+	if (TNC->RXCOUNT + 500 > TNCBUFFLEN)
+		return;
+
+	// Only KANTRONICS and TNC2 check for data here
+	// DED and SCS check when polled by Host Program 
+
+	if (TNC->Mode == KANTRONICS)
+	{
+		// Have to poll for Data and State changes
+
+		int n, len, count;
+		struct StreamInfo * Channel;
+		UCHAR Buffer[400];
+			
+		for (n = 1; n <= TNC->HOSTSTREAMS; n++)
+		{
+			Channel = TNC->Channels[n];
+
+			do
+			{ 
+				if (TNC->RXCOUNT + 500 > TNCBUFFLEN)
+					return;
+				
+				GetMsg(Channel->BPQStream, &Buffer[3], &len, &count);
+
+				if (len > 0)
+				{
+					// If a failure, set a close timer (for Airmail, etc)
+
+					if (strstr(&Buffer[3], "} Downlink connect needs port number") ||
 							strstr(&Buffer[3], "} Failure with ") ||
 							strstr(&Buffer[3], "} Sorry, "))
 							Channel->CloseTimer = CloseDelay * 10;
 
-						else
-							Channel->CloseTimer = 0;			// Cancel Timer
+					else
+						Channel->CloseTimer = 0;			// Cancel Timer
 
-
-						if (TNC->MODE)
-						{
-							Buffer[0] = 'D';
-							Buffer[1] = '1';
-							Buffer[2] = n + '@';
-							SendKISSData(TNC, Buffer, len+3);
-						}
-						else
-							BPQSerialSendData(TNC, &Buffer[3], len); 
+					if (TNC->MODE)
+					{
+						Buffer[0] = 'D';
+						Buffer[1] = '1';
+						Buffer[2] = n + '@';
+						SendKISSData(TNC, Buffer, len+3);
 					}
-	  
+					else
+						SendDataToTNC(TNC, &Buffer[3], len); 
 				}
-				while (count > 0);
 			}
+			while (0); //(count > 0);
 		}
+		return;
+	}
 
+	if (TNC->Mode == SCS)
+		return;
 
-#ifdef WIN32
-		if (TNC->VCOM)
-		{
-			ConCount = 0;
+	n = 0;
 
-			if (TNC->NewVCOM == 0)
-			{
-				BPQSerialIsCOMOpen(TNC->hDevice, &ConCount);
+getloop:
 
-				if (TNC->PortEnabled == 1 && ConCount == 0)
-		
-					//' Connection has just closed - if connected, disconnect stream
-			    
-	//				if (BPQHOSTVECTOR[TNC->BPQPort-1].HOSTSESSION)
-						SessionControl(TNC->BPQPort, 2, 0);
+	TNC2GetChar(TNC, &retval, &more);
 
-  
-			    if (TNC->PortEnabled != ConCount)
-				{
-					TNC->PortEnabled = ConCount;
-				}
+	if (retval != -1)
+		TXMsg[n++] = retval;
 
-				if (!TNC->PortEnabled)
-				{
-					TNC = TNC->Next;
-					continue;
-				}
-			}
-
-			if (TNC->Mode == KANTRONICS)
-				resp = BPQSerialGetData(TNC, &TNC->TOUSERBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr, &Read);
-			else if (TNC->Mode == SCS)
-				resp = BPQSerialGetData(TNC, &TNC->FROMUSERBUFFER[TNC->FROMUSERLEN], TNCBUFFLEN - TNC->FROMUSERLEN, &Read);
-			else
-				resp = BPQSerialGetData(TNC, rxbuffer, 1000, &Read);
-
-			if (Read)
-			{
-				if (TNC->Mode == TNC2)
-				{		
-					for (n = 0; n < Read; n++)
-						TNC2PutChar(TNC, rxbuffer[n]);
-				}
-				else if (TNC->Mode == DED)
-				{		
-					for (n = 0; n < Read; n++)
-						TfPut(TNC, rxbuffer[n]);
-				}
-				else if (TNC->Mode == KANTRONICS)
-				{
-					TNC->RXBPtr += Read;
-					ProcessPacket(TNC, TNC->TOUSERBUFFER, TNC->RXBPtr);
-				}
-				else if (TNC->Mode == SCS)
-				{
-					TNC->FROMUSERLEN += Read;
-					ProcessSCSPacket(TNC, TNC->FROMUSERBUFFER, TNC->FROMUSERLEN);
-				}
-			}
-			if (TNC->NewVCOM == 0)
-			{
-				resp = BPQSerialGetQCounts(TNC->hDevice, &RXCount, &TXCount);
-				if (TXCount > 4096) goto getstatus;
-			}
-
-			n=0;
-
-		getloop:
-
-			TNC2GetChar(TNC, &retval, &more);
-
-			if (retval != -1)
-				TXMsg[n++] = retval;
-
-			if (more > 0 && n < 1000) goto getloop;
+	if (more > 0 && n < 1000) goto getloop;
             
-			if (n > 0)
-				BPQSerialSendData(TNC, TXMsg, n);
+	if (n > 0)
+		WriteCOMBlock(TNC->hDevice, TXMsg, n);
+	
+	return;
+	
+}
+/* Where does this go ??
 
-		getstatus:
+// We look for change on current RX Stream
 
-			// We look for change on current RX Stream
-
-			retval = TNC2GetVMSR(TNC, TNC->TNC2Stream[TNC->RXStream], TRUE);
+			retval = TNCGetVMSR(TNC, TNC->TNC2Stream[TNC->RXStream], TRUE);
         
 			if ((retval & 8) == 8)	 //' DCD (Connected) Changed
 			{	
@@ -2036,6 +2129,49 @@ VOID TNCPoll()
 		TNC = TNC->Next;
 	}
 }
+*/
+
+
+void CheckForDataFromTerminal(struct TNCDATA * TNC)
+{	
+	unsigned int n;
+	char rxbuffer[1000];
+	ULONG Read = 0, resp;
+
+	if (TNC->Mode == KANTRONICS)
+		resp = GetDataFromTNC(TNC, &TNC->TOUSERBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr, &Read);
+	
+	else if (TNC->Mode == SCS)
+		resp = GetDataFromTNC(TNC, &TNC->FROMUSERBUFFER[TNC->FROMUSERLEN], TNCBUFFLEN - TNC->FROMUSERLEN, &Read);
+	
+	else
+		resp = GetDataFromTNC(TNC, rxbuffer, 1000, &Read);
+
+	if (Read)
+	{
+		if (TNC->Mode == TNC2)
+		{		
+			for (n = 0; n < Read; n++)
+				TNC2PutChar(TNC, rxbuffer[n]);
+		}
+		else if (TNC->Mode == DED)
+		{		
+			for (n = 0; n < Read; n++)
+				TfPut(TNC, rxbuffer[n]);
+		}
+		else if (TNC->Mode == KANTRONICS)
+		{
+			TNC->RXBPtr += Read;
+			ProcessPacket(TNC, TNC->TOUSERBUFFER, TNC->RXBPtr);
+		}
+		else if (TNC->Mode == SCS)
+		{
+			TNC->FROMUSERLEN += Read;
+			ProcessSCSPacket(TNC, TNC->FROMUSERBUFFER, TNC->FROMUSERLEN);
+		}
+	}
+}
+
 
 int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 
@@ -2175,14 +2311,20 @@ KEYB06C:
 
 		if (Char != TNC->StreamSW)
 		{
+			// Switch TX Stream if valid
+
+			int n;
+
 			if (TNC->ECHOFLAG)
 				KBECHO(TNC, Char);
 
 			if (TNC->LCStream)
 				Char = toupper(Char);
 
-			if (Char > '@' && Char < '@' + TNC->Users)
-				TNC->TXStream = Char - 'A';
+			n = Char - 'A';
+			
+			if (n >= 0 && TNC->TNC2Stream[n])
+				TNC->TXStream = n;
 
 			return;
 		}
@@ -2193,6 +2335,8 @@ KEYB06C:
 		TNC->InEscape = 1;
 		return;
 	}
+
+
 
 	if (TNC->StreamSW && Char == TNC->StreamSW)
 	{
@@ -2300,6 +2444,8 @@ VOID SETCOMM00(struct TNCDATA * TNC)
 	TNCStream->MODEFLAG &= ~(CONV+TRANS);
 	TNC->TRANSTIMER = 0;				// CANCEL TRANS MODE SEND TIMER
 	TNC->AUTOSENDFLAG = 0;				// IN CASE ALREADY SET
+
+	CheckForStreamChange(TNC, TNC->TXStream);	// Send Stream Switched Message if changed
 
 	SENDREPLY(TNC, CMDMSG, 4);
 
@@ -2655,7 +2801,9 @@ VOID DOCONMODECHANGE(struct TNCDATA * TNC, int Stream)
 VOID SENDREPLY(struct TNCDATA * TNC, char * Msg, int Len)
 {
 	int n = 0;
-	
+
+	CheckForStreamChange(TNC, TNC->TXStream);	// Send Stream Switched Message if changed
+
 	for (n= 0; n < Len; n++)
 	{
 		PUTCHARINBUFFER(TNC, Msg[n]);
@@ -2811,6 +2959,8 @@ VOID CONNECTTONODE(struct TNCDATA * TNC)
 
 VOID GETDATA(struct TNCDATA * TNC)
 {
+	// I'm sure this should only be called for TNC2 devices
+
 	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
 
 	int state, change, InputLen, count, n, i;
@@ -3071,7 +3221,7 @@ BOOL TfPut(struct TNCDATA * TNC, UCHAR character)
 	else
 		Channel = TNC->Channels[1];
 
-	PROCESSHOSTPACKET(Channel, TNC);
+	DEDPROCESSHOSTPACKET(Channel, TNC);
 
 	TNC->HOSTSTATE = 0;
 
@@ -3120,7 +3270,7 @@ CHARMODE:
 }
 	
 
-int PROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC)
+int DEDPROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC)
 {
 	UCHAR * TXBUFFERPTR;
 	int i;
@@ -4863,7 +5013,6 @@ VOID ProcessPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 		//	In Terminal Mode - Pass to Term Mode Handler
 		
 		ProcessKPacket(conn, rxbuffer, Len);
-		conn->RXBPtr = 0;
 		return;
 	}
 
@@ -5003,6 +5152,7 @@ VOID ProcessKNormCommand(struct TNCDATA * conn, UCHAR * rxbuffer)
 			BPQSerialSendData(conn, ResetReply, 6);
 		else
 			BPQSerialSendData(conn, "cmd:", 4);
+
 
 		conn->MODE = conn->nextMode;
 
@@ -5484,7 +5634,7 @@ BOOL CheckStatusChange(struct TNCDATA * conn,  struct StreamInfo * Channel, int 
 	return FALSE;
 }
 
-BOOL CheckForData(struct TNCDATA * conn,  struct StreamInfo * Channel, int HostStream, int BPQStream)
+BOOL SCSCheckForData(struct TNCDATA * conn,  struct StreamInfo * Channel, int HostStream, int BPQStream)
 {
 	int Length, Count;
 
@@ -5637,7 +5787,7 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 		if (CheckStatusChange(conn, channel, Channel, channel->BPQStream))
 			return;						// It has sent reply
 
-		if (CheckForData(conn, channel, Channel, channel->BPQStream))
+		if (SCSCheckForData(conn, channel, Channel, channel->BPQStream))
 			return;						// It has sent reply
 
 		SCSReply[2] = Channel;

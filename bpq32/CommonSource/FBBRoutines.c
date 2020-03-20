@@ -594,8 +594,9 @@ ok:
 			char * From = strtok_s(NULL, seps, &Context);
 			char * ATBBS = strtok_s(NULL, seps, &Context);
 			char * To = strtok_s(NULL, seps, &Context);
+			char * Type = strtok_s(NULL, seps, &Context);
 
-			if (From && To && ATBBS && CheckRejFilters(From, To, ATBBS, NULL, FBBHeader->MsgType))
+			if (From && To && ATBBS && CheckRejFilters(From, To, ATBBS, NULL, *Type))
 			{
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 				conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';

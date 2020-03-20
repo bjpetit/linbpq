@@ -114,7 +114,6 @@ extern void * TRACE_Q;
 
 #define TICKS 10	// Ticks per sec
 
-
 // temp for testing
 
 char lastblock[500];
@@ -1395,7 +1394,7 @@ SeeifMore:
 		for (i = 0; i < len; i++)
 			c += *(ptr++);
 
-		Debugprintf("NETROM RX Len %d CRC %d", len, *ptr);
+//		Debugprintf("NETROM RX Len %d CRC %d", len, *ptr);
 
 
 		if (c != *ptr)		// CRC OK?
@@ -1881,7 +1880,7 @@ int KISSGetTCPMessage(NPASYINFO ASY)
 	{
 		int InputLen;
 
-		//	Poll TCP COnnection for data
+		//	Poll TCP Connection for data
 
 		// May have several messages per packet, or message split over packets
 

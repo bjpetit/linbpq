@@ -1515,10 +1515,14 @@ extern HWND hWndPopup;
 
 static void ResolveNames(struct AXIPPORTINFO * PORT)
 {
+	int count = 0;
+
 	PORT->ResolveNamesThreadId = GetCurrentThreadId();		// Detect if another started
 	
 	while(TRUE)
 	{
+		count++;				// So we can trap first few loops
+		
 		ResolveDelay = 15 * 60;
 
 		for (PORT->ResolveIndex=0; PORT->ResolveIndex < PORT->arp_table_len; PORT->ResolveIndex++)
@@ -1584,7 +1588,12 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 					freeaddrinfo(res);
 				}
 				else
+				{
 					PORT->arp_table[PORT->ResolveIndex].error = WSAGetLastError();
+					
+					if (count < 4)
+						ResolveDelay = 30;		// if errors try again soon
+				}
 			}
 		}
 #ifndef LINBPQ

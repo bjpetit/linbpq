@@ -696,6 +696,7 @@ struct BBSForwardingInfo
 	time_t LastReverseForward;
 	char *BBSHA;					// HA of BBS
 	char ** BBSHAElements;			// elements of HA of BBS
+	int ConTimeout;
 //	char UserCall[10];				// User we are forwarding on behalf of (Currently only for RMS)
 //	int UserIndex;					// index of User we are forwarding on behalf of (Currently only for RMS)
 };
@@ -1168,6 +1169,7 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo);
 VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID ProcessSuspendedListCommand(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len);
+VOID DoReroute(CIRCUIT * conn, struct UserInfo * user);
 
 // FBB Routines
 

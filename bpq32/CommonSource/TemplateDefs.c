@@ -167,7 +167,8 @@ char * FwdPagetxt()
 		"	form.Bin.checked + \"|\" +"
 		"	form.B1.checked + \"|\" +"
 		"	form.B2.checked + \"|\" +"
-		"	form.CTRLZ.checked + \"|\";"
+		"	form.CTRLZ.checked + \"|\" +"
+		"	form.ConTimeOut.value + \"|\";"
 		"	post(fn, msg);"
 		"}\r\n"
 
@@ -309,6 +310,7 @@ char * FwdDetailtxt()
 		"Send Personal Mail Only <input %sname=Personal type=checkbox><br>\r\n"
 		"Allow Binary <input %sname=Bin type=checkbox> Use B1 Protocol <input %sname=B1 type=checkbox>&nbsp; Use B2 Protocol<input %sname=B2 type=checkbox><br>\r\n"
 		"Send ctrl/Z instead of /ex in text mode forwarding <input %sname=CTRLZ type=checkbox><br>\r\n"
+		"Incoming Connect Timeout <input value=%d size=3 name=ConTimeOut>(Secs)<br>\r\n"
 		"<br>\r\n"
 		"<input onclick=copyf(this.form) value=\"Copy from BBS\" type=button>\r\n"
 		"<input value=\"\" size=3 name=CopyCall> \r\n"

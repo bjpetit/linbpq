@@ -2,6 +2,8 @@
 //
 #include "kernelresource.h"
 
+#define CKernel
+
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -113,10 +115,10 @@ BEGIN
     EDITTEXT        ADDITIONALDATA,60,251,205,14,ES_AUTOHSCROLL | NOT 
                     WS_BORDER,WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
     LTEXT           "Password",15,5,13,50,9,0,WS_EX_NOPARENTNOTIFY
-    EDITTEXT        Password,60,12,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+    EDITTEXT        IDC_Password,60,12,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
                     WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
     LTEXT           "Locator",16,5,49,50,9,0,WS_EX_NOPARENTNOTIFY
-    EDITTEXT        Locator,60,48,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+    EDITTEXT        IDC_Locator,60,48,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
                     WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
 END
 
@@ -287,7 +289,7 @@ END
 3 TEXTINCLUDE DISCARDABLE 
 BEGIN
     "#include ""..\\CommonSource\\Versions.h""\r\n"
-    "#include ""..\\StdVer.inc""\r\n"
+    "#include ""..\\CommonSource\\StdVer.inc""\r\n"
     "\r\n"
     "\0"
 END

@@ -373,7 +373,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		
 			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
 
-			if (select(3,&readfs,&writefs,&errorfs,&timeout) > 0)
+			if (select((int)TNC->TCPSock+ 1, &readfs, &writefs, &errorfs, &timeout) > 0)
 			{
 				//	See what happened
 
@@ -2083,6 +2083,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 	case 'K':				// raw data	
 
+		return;
+
 		memset(&Monframe, 0, sizeof(Monframe));
 
 		Monframe.PORT = BPQPort[RXHeader->Port][TNC->Port];
@@ -2496,6 +2498,8 @@ DigiLoop:
 	}
 
 	CPPtr = strchr(ptr, ' ');		
+	if (CPPtr == NULL)
+		return;
 
 	if (strchr(&CPPtr[1], 'P'))
 	{

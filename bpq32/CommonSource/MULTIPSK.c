@@ -236,7 +236,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 		
 			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
 
-			if (select(3,&readfs,&writefs,&errorfs,&timeout) > 0)
+			if (select((int)TNC->TCPSock+ 1, &readfs, &writefs, &errorfs, &timeout) > 0)
 			{
 				//	See what happened
 

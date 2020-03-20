@@ -1095,7 +1095,7 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 	byte * TXMessageptr;
 	char key[21];
 	char ToCall[10];
-	char ConnectMsg[20];
+	char ConnectMsg[128];
 	int con,conport;
 	int AGWYReply = 0;
 	int state, change;
@@ -1103,8 +1103,9 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 	switch (sockptr->AGWRXHeader.DataKind)
 	{
 	case 'C':
+	case 'v':
 
-        //   Connect
+        //   Connect or Connect with Digis
         
         //   Create Session Key from port and callsign pair
 
@@ -1138,22 +1139,42 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
         if (memcmp(ToCall,"SWITCH",6) == 0)
 		{
 			//  Just connect to command level on switch
-            
-            SendConMsgtoAppl(FALSE, Connection, ToCall);
-            Connection->Connecting = FALSE;
+
+			SendConMsgtoAppl(FALSE, Connection, ToCall);
+			Connection->Connecting = FALSE;
 		} 
-        else
+		else
 		{
- 
+
 			// Need to convert port index (used by AGW) to port number
 
 			conport=GetPortNumber(key[0]-48);
 
-			sprintf(ConnectMsg,"C %d %s\r",conport,ToCall);
+			sprintf(ConnectMsg,"C %d %s",conport,ToCall);
+
+			// if 'v' command add digis
+
+			if (sockptr->AGWRXHeader.DataLength)
+			{
+				// Have digis
+
+				char * Digis = AGWMessage;
+				int nDigis = Digis[0];
+
+				Digis ++;
+
+				while(nDigis--)
+				{
+					sprintf(ConnectMsg, "%s, %s", ConnectMsg, Digis);
+					Digis += 10;
+				}
+			}
+
+			strcat(ConnectMsg, "\r");
 
 			// Send C command to Node
 
-            SendMsg(Stream, ConnectMsg, (int)strlen(ConnectMsg));
+			SendMsg(Stream, ConnectMsg, (int)strlen(ConnectMsg));
 		}
 
         CurrentConnections++;

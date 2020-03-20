@@ -81,6 +81,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (Msg)
 		{
+			conn->BBSFlags |= FBBCompressed;	// Needs compression
 			SendCompressed(conn, Msg);
 			FBBputs(conn, ">\r");
 			Msg->status = 'Y';					// Mark as read

@@ -3457,6 +3457,9 @@ MsgLoop:
 		{
 			USER = TCP->UserRecPtr[i];
 
+			if (USER == NULL)
+				continue;
+
 			if (_stricmp(USER->UserName, "ANON") == 0)
 			{
 				// Anon Login - Callsign is supplied as user
@@ -3468,7 +3471,6 @@ MsgLoop:
 			{
                 sockptr->UserPointer = USER;      //' Save pointer for checking password
                 strcpy(sockptr->Callsign, USER->Callsign); //' for *** linked
-
 			}
 			else
 				continue;
@@ -3501,7 +3503,6 @@ MsgLoop:
 		{        
             send(sock, TCP->LoginMsg, (int)strlen(TCP->LoginMsg), 0);
             sockptr->InputLen=0;
-
 		}
 
 		return 0;
@@ -4232,6 +4233,9 @@ MsgLoop:
 		for (i = 0; i < TCP->NumberofUsers; i++)
 		{
 			USER = TCP->UserRecPtr[i];
+
+			if (USER == NULL)
+				continue;
 
 			if (_stricmp(USER->UserName, "ANON") == 0)
 			{
@@ -6119,6 +6123,8 @@ VOID RECONFIGTELNET (TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail,
 			free(TCP->UserRecPtr);
 			TCP->UserRecPtr = NULL;
 		}
+
+		TCP->NumberofUsers = 0;
 
 		// Look for USER lines
 

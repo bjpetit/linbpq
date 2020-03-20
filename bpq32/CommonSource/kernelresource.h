@@ -6,7 +6,9 @@
 #define ID_ADDTIME                      4
 #define IDD_DIALOG1                     101
 #define IDC_PACTORLEVEL                 101
+#define ID_TEST                         102
 #define RIG_MENU1                       103
+#define IDD_DIAGLOG1                    103
 #define IDI_ICON1                       105
 #define IDC_TELNETSERVER                109
 #define BPQCONSOLE                      116
@@ -29,7 +31,7 @@
 #define BPQCLOSEALL                     412
 #define SCANRECONFIG                    413
 #define APRSRECONFIG                    414
-#define BPQUICONFIG	420
+#define BPQUICONFIG                     420
 #define ID_EXIT                         1000
 #define IDC_PROTOSTATE                  1000
 #define IDB_HIDE                        1001
@@ -63,7 +65,9 @@
 #define IDC_WINMORTRACE                 1013
 #define ADDITIONALDATA                  1013
 #define IDC_TIMES                       1014
+#define IDC_Password                    1014
 #define IDC_RIGTYPE                     1015
+#define IDC_Locator                     1015
 #define IDC_COMPORT                     1016
 #define IDC_FREQ                        1017
 #define IDC_SPEED                       1018
@@ -71,6 +75,7 @@
 #define IDC_ADDR2                       1020
 #define IDC_DISPTIMES                   1021
 #define IDC_DISPFREQ                    1022
+#define IDC_FROMFILE                    1022
 #define IDC_RADIO1                      1023
 #define RIG_LINE                        1024
 #define ARDOP_ABORT                     1025
@@ -80,6 +85,18 @@
 #define IGATESTATS                      1042
 #define IDC_BACKGROUND                  1043
 #define IDC_GPS                         1044
+#define IDC_EDIT1                       1054
+#define IDC_FILENAME                    1054
+#define IDC_EDIT2                       1055
+#define IDC_MESSAGE                     1055
+#define IDC_EDIT3                       1056
+#define IDC_INTERVAL                    1056
+#define IDC_EDIT4                       1057
+#define IDC_UIDEST                      1057
+#define IDC_FILE                        1058
+#define IDC_TAB1                        1059
+#define IDC_UIDIGIS                     1059
+#define IDC_PORTNAME                    1060
 #define IDC_TNCSTATE                    1203
 #define IDC_COMMSSTATE                  1204
 #define IDC_MODE                        1902
@@ -104,22 +121,6 @@
 #define StopALLMon                      40007
 #define IDM_FIRSTCHILD                  50000
 #define TRAYBASEID                      60000
-
-#define ID_TEST                         102
-#define IDD_DIAGLOG1                    103
-#define IDC_FROMFILE                    1022
-#define IDC_EDIT1                       1054
-#define IDC_FILENAME                    1054
-#define IDC_EDIT2                       1055
-#define IDC_MESSAGE                     1055
-#define IDC_EDIT3                       1056
-#define IDC_INTERVAL                    1056
-#define IDC_EDIT4                       1057
-#define IDC_UIDEST                      1057
-#define IDC_FILE                        1058
-#define IDC_TAB1                        1059
-#define IDC_UIDIGIS                     1059
-#define IDC_PORTNAME                    1060
 
 // Next default values for new objects
 // 

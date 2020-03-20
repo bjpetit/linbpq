@@ -1634,11 +1634,16 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				Msg->type = Type[i];
 
-				ptr = strstr(conn->MailBuffer, "Type: ");
+				ptr = strstr(conn->MailBuffer, "\nType: ");
 
 				if (ptr)
 				{
-					ptr += 6;
+					char * ptrx;
+
+					ptr += 7;
+
+					// This handles a message arriving with bull/ or nts/ oerrides
+
 					if (_memicmp(ptr, "Private", 7) == 0 && Msg->type != 'P')
 					{
 						if (Msg->type == 'T')
@@ -1655,15 +1660,20 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 						// remove //wl2k from subject
 
-						ptr = strstr(conn->MailBuffer, "Subject: ");
+						ptrx = strstr(conn->MailBuffer, "Subject: ");
 
-						if (ptr && _memicmp(ptr + 9, "//WL2K ", 7) == 0)
+						if (ptrx && _memicmp(ptrx + 9, "//WL2K ", 7) == 0)
 						{
-							memmove(ptr + 9, ptr + 16, count);
+							memmove(ptrx + 9, ptrx + 16, count);
 							conn->TempMsg->length -= 7;
 							memmove(conn->TempMsg->title, &conn->TempMsg->title[7], strlen(conn->TempMsg->title) - 6);
 						}
 					}
+					// if we are receiving from another BBS rather
+					// than WLE or PAT we need to set msgtype from Type:
+
+					Msg->type = ptr[0];		// I think it is save to do it always
+	
 				}
 
 				strcpy(Msg->to, RecpTo[i]);

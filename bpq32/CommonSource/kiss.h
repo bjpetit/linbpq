@@ -2,6 +2,19 @@
 
 #define MAXBLOCK        512
 
+// KISS over TCP Slave now allows multiple connections
+// so need a struct to keep track of them
+
+typedef struct _KISSTCPSess
+{
+	struct _KISSTCPSesssion * Next;
+	SOCKET Socket;
+	UCHAR RXBuffer[MAXBLOCK];
+	int RXLen;
+
+	time_t Timeout;
+
+} KISSTCPSess;
 
 typedef struct tagASYINFO
 {
@@ -26,6 +39,10 @@ typedef struct tagASYINFO
 	BOOL	NEEDCRC;				// ETX received, waiting for CRC (NETROM)
 	int		ReopenTimer;			// for failed com ports
 
+	// We now allow multiple connections to KISS Slave
+
+	struct _KISSTCPSess * slaveSessions;
+
 } ASYINFO, *NPASYINFO ;
 
 NPASYINFO KISSInfo[33] = {0};
@@ -45,7 +62,3 @@ static BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToW
 HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port);
 BOOL SetupConnection(NPASYINFO npKISSINFO);
 BOOL CloseConnection(NPASYINFO npKISSINFO);
-
-//---------------------------------------------------------------------------
-//  End of File: tty.h
-//---------------------------------------------------------------------------

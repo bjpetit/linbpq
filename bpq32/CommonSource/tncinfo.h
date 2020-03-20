@@ -234,6 +234,7 @@ typedef struct AGWINFO
 	int MaxSessions;
 	int ConnTimeOut;
 	int PollDelay;
+	time_t LastParamTime;
 
 #ifdef WIN32
 

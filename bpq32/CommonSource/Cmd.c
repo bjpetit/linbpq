@@ -177,6 +177,9 @@ char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char 
 	char * Messptr = Mess;
 	int Paclen = Session->SESSPACLEN;
 
+	if (Paclen == 0)
+		Paclen = 255;
+
 	va_start(arglist, format);
 
 	MsgLen = vsprintf(Mess, format, arglist);
@@ -188,6 +191,9 @@ char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char 
 		// Have to send Paclen then get a new buffer
 
 		int ThisBit = Paclen - OldLen;		// What we can send this time
+
+		if (ThisBit < 0)
+			ThisBit = 0;					// How can this happen??
 
 		memcpy(Bufferptr, Messptr, ThisBit);
 		Messptr += ThisBit;

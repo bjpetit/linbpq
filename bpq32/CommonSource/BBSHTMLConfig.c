@@ -1900,6 +1900,8 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowB2 = TRUE; else FWDInfo->AllowB2 = FALSE;
 		ptr1 = GetNextParam(&ptr2);		// CTRLZ
 		if (strcmp(ptr1, "true") == 0) FWDInfo->SendCTRLZ = TRUE; else FWDInfo->SendCTRLZ = FALSE;
+		ptr1 = GetNextParam(&ptr2);		// Connect Timeout
+		FWDInfo->ConTimeout = atoi(ptr1);
 
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
@@ -2364,7 +2366,8 @@ VOID SendFwdDetails(struct UserInfo * User, char * Reply, int * ReplyLen, char *
 		(FWDInfo->AllowCompressed) ? CHKD  : UNC,
 		(FWDInfo->AllowB1) ? CHKD  : UNC,
 		(FWDInfo->AllowB2) ? CHKD  : UNC,
-		(FWDInfo->SendCTRLZ) ? CHKD  : UNC);
+		(FWDInfo->SendCTRLZ) ? CHKD  : UNC,
+		FWDInfo->ConTimeout);
 
 	*ReplyLen = Len;
 

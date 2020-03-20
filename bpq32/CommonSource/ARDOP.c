@@ -1841,7 +1841,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (TNC->ARDOPCurrentMode[0] == 'S')	// Skip
 				ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 
-			Debugprintf("ARDOPMODE %s", Scan->ARDOPMode);
+//			Debugprintf("ARDOPMODE %s", Scan->ARDOPMode);
 			
 			memcpy(TNC->ARDOPCurrentMode, Scan->ARDOPMode, 6); 
 			

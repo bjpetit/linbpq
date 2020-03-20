@@ -333,7 +333,7 @@ struct OBJECT
 	struct OBJECT * Next;
 	UCHAR Path[10][7];		//	Dest, Source and up to 8 digis 
 	int PathLen;			// Actual Length used
-	char Message[80];
+	char Message[81];
 	char PortMap[33];
 	int	Interval;
 	int Timer;
@@ -1810,6 +1810,9 @@ static int APRSProcessLine(char * buf)
 			Object->PortMap[SendTo] = TRUE;	
 			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
 		}
+
+		if (strlen(p_Text) > 80)
+			p_Text[80] = 0;
 
 		strcpy(Object->Message, p_Text);
 		return TRUE;

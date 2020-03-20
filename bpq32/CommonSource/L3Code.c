@@ -475,9 +475,18 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 			Qual = (((ROUTEQUAL * ptr1[20]) + 128)) / 256;
 
+			// I think we should normalize indirect routes twice 
+			// as node not only sends differnet qual but adjusts incoming qual with it
+
+			// or should we ............
+
+			// We don't touch appl callsigns so I think everything here is an indirect route
+
 			if (ROUTE->OtherendsRouteQual && PORT->NormalizeQuality)
 			{
 				Qual = (Qual * ROUTEQUAL) / ROUTE->OtherendsRouteQual;
+// not sure about this!	Qual = (Qual * ROUTEQUAL) / ROUTE->OtherendsRouteQual;	// Twice
+
 				if (Qual > ROUTEQUAL)
 					Qual = ROUTEQUAL;
 			}

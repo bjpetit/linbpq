@@ -65,6 +65,7 @@ VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Conte
 	return;
 }
 
+
 VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {
 	char Line[200] = "User Flags:";

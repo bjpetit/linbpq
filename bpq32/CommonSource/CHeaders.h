@@ -295,7 +295,6 @@ extern UCHAR UNPROTOCALL[80];
 
 
 extern char * INFOMSG;
-extern int INFOLEN;
 
 extern char * CTEXTMSG;
 extern int CTEXTLEN;

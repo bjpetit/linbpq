@@ -647,6 +647,7 @@ typedef struct PORTCONTROL
 	struct PORTCONTROL * HookPort;
 	int PortSlot;				// Index in Port Table
 	struct TNCINFO * TNC;		// Associated TNC record
+	int RIGPort;				// Linked port for freq resporting
 
 
 }	PORTCONTROLX, *PPORTCONTROL;
@@ -965,7 +966,7 @@ struct SEM
 };
 
 
-#define TNCBUFFLEN 1024
+#define TNCBUFFLEN 8192
 #define MAXSTREAMS 32
 
 // DED Emulator Stream Info

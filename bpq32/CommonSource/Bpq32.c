@@ -915,6 +915,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add TELRECONFIG command to reread users or whole config
 //	Enforce PACLEN on UZ7HO ports
 //	Fix PACLEN on Command Output.
+//	Retry axip resolver if it fails at startup
+//	Fix AGWAPI connect via digis
+//  Fix Select() for Linux in MultiPSK, UZ7HO and V4 drivers
+//	Limit APRS ONJECT length to 80 chars
 
 #define CKernel
 
@@ -3739,7 +3743,7 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 			SetDlgItemText(hDlg, NAME, Value);
 
 			GetJSONValue(_REPLYBUFFER, "\"GridSquare\":", Value);	
-			SetDlgItemText(hDlg, Locator, Value);
+			SetDlgItemText(hDlg, IDC_Locator, Value);
 
 			GetJSONValue(_REPLYBUFFER, "\"StreetAddress1\":", Value);	
 			SetDlgItemText(hDlg, ADDR1, Value);
@@ -3804,8 +3808,8 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 
 
 			GetDlgItemText(hDlg, NAME, Name, 99);
-			GetDlgItemText(hDlg, Password, PasswordText, 99);
-			GetDlgItemText(hDlg, Locator, LocatorText, 99);
+			GetDlgItemText(hDlg, IDC_Password, PasswordText, 99);
+			GetDlgItemText(hDlg, IDC_Locator, LocatorText, 99);
 			GetDlgItemText(hDlg, ADDR1, Addr1, 99);
 			GetDlgItemText(hDlg, ADDR2, Addr2, 99);
 			GetDlgItemText(hDlg, CITY, City, 99);

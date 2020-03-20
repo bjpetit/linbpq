@@ -158,10 +158,7 @@ UCHAR UNPROTOCALL[80] = "";
 
 UCHAR ExcludeList[71] = "";		// 10 ENTRIES, 7 BYTES EACH
 
-
-
 char * INFOMSG = NULL;
-int INFOLEN = 0;
 
 char * CTEXTMSG = NULL;
 int CTEXTLEN = 0;
@@ -1234,8 +1231,7 @@ BOOL Start()
 	{
 		*(ptr3++) = *(ptr2++);
 	}
-
-	INFOLEN = (int)(ptr3 - (unsigned char *)INFOMSG);
+	*ptr3++ = 0;			// Null Terminate
 
 	NEXTFREEDATA = ptr3;
 

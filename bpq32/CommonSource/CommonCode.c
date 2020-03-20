@@ -2094,6 +2094,9 @@ int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
 	DWORD      dwLength;
 	BOOL	ret;
 
+	if (fd == NULL)
+		return 0;
+
 	// only try to read number of bytes in queue
 
 	ret = ClearCommError(fd, &dwErrorFlags, &ComStat);
@@ -2146,6 +2149,9 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 
 VOID CloseCOMPort(HANDLE fd)
 {
+	if (fd == NULL)
+		return;
+
 	SetCommMask(fd, 0);
 
 	// drop DTR
@@ -2157,6 +2163,7 @@ VOID CloseCOMPort(HANDLE fd)
 	PurgeComm(fd, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
 
 	CloseHandle(fd);
+	fd = NULL;
 }
 
 
@@ -2301,6 +2308,12 @@ int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error)
 {
 	int Length;
 
+	if (fd == 0)
+	{
+		*Error = 1;
+		return 0;
+	}
+
 	errno = 22222;		// to catch zero read (?? file closed ??)
 
 	Length = read(fd, Block, MaxLength);
@@ -2359,7 +2372,11 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 
 VOID CloseCOMPort(HANDLE fd)
 {
+	if (fd == 0)
+		return;
+
 	close(fd);
+	fd = 0;
 }
 
 VOID COMSetDTR(HANDLE fd)

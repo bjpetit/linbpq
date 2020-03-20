@@ -3861,6 +3861,15 @@ int CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char
 		char * NewBody;
 		char DateString[80];
 		struct tm * tm;
+		char Type[16] = "Private";
+					
+		// Get Type
+	
+		if (Msg->type == 'B')
+			strcpy(Type, "Bulletin");
+		else if (Msg->type == 'T')
+			strcpy(Type, "Traffic");
+
 
 		tm = gmtime(&Date);	
 	
@@ -3881,7 +3890,7 @@ int CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char
 
 		B2HddrLen = sprintf(B2Hddr,
 			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n",
-			Msg->bid, DateString, "Private",
+			Msg->bid, DateString, Type,
 			Msg->from, B2To, Msg->title, BBSName);
 
 		NewBody = MsgBody - B2HddrLen;

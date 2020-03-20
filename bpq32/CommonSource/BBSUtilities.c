@@ -4878,6 +4878,14 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 				char DateString[80];
 				struct tm * tm;
 				time_t Date = time(NULL);
+				char Type[16] = "Private";
+					
+				// Get Type
+	
+				if (conn->TempMsg->type == 'B')
+					strcpy(Type, "Bulletin");
+				else if (conn->TempMsg->type == 'T')
+					strcpy(Type, "Traffic");
 
 				tm = gmtime(&Date);	
 	
@@ -4893,7 +4901,7 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 
 				B2HddrLen = sprintf(B2Hddr,
 					"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\n%sSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
-					SaveMsg->bid, DateString, "Private",
+					SaveMsg->bid, DateString, Type,
 					SaveMsg->from, ToString, SaveMsg->title, BBSName, SaveMsgLen);
 
 				memcpy(conn->MailBuffer, B2Hddr, B2HddrLen);
@@ -6118,12 +6126,16 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			ForwardingInfo->FwdInterval = GetIntValue(group, "FwdInterval");
 			ForwardingInfo->RevFwdInterval = GetIntValue(group, "RevFWDInterval");
 			ForwardingInfo->MaxFBBBlockSize = GetIntValue(group, "MaxFBBBlock");
+			ForwardingInfo->ConTimeout = GetIntValue(group, "ConTimeout");
 
 			if (ForwardingInfo->MaxFBBBlockSize == 0)
 				ForwardingInfo->MaxFBBBlockSize = 10000;
 
 			if (ForwardingInfo->FwdInterval == 0)
 				ForwardingInfo->FwdInterval = 3600;
+
+			if (ForwardingInfo->ConTimeout == 0)
+				ForwardingInfo->ConTimeout = 120;
 
 			GetStringValue(group, "BBSHA", Temp);
 		
@@ -8431,6 +8443,7 @@ VOID SaveConfig(char * ConfigName)
 		SaveIntValue(group, "FwdInterval", ForwardingInfo->FwdInterval);
 		SaveIntValue(group, "RevFWDInterval", ForwardingInfo->RevFwdInterval);
 		SaveIntValue(group, "MaxFBBBlock", ForwardingInfo->MaxFBBBlockSize);
+		SaveIntValue(group, "ConTimeout", ForwardingInfo->ConTimeout);
 
 		SaveStringValue(group, "BBSHA", ForwardingInfo->BBSHA);
 	}
@@ -9049,13 +9062,16 @@ int Connected(int Stream)
 			
 			// Send SID and Prompt
 
-			conn->SIDResponseTimer =  12;				// Allow a couple of minutes for response to SID
+			if (user->ForwardingInfo && user->ForwardingInfo->ConTimeout)
+				conn->SIDResponseTimer = user->ForwardingInfo->ConTimeout / 10;			// 10 sec ticks
+			else
+				conn->SIDResponseTimer =  12;				// Allow a couple of minutes for response to SID
 
 			{
 				BOOL B1 = FALSE, B2 = FALSE, BIN = FALSE, BLOCKED = FALSE;
 				struct	BBSForwardingInfo * ForwardingInfo;
 
-				conn->PageLen = user->PageLen;				// No paging for chat
+				conn->PageLen = user->PageLen;
 				conn->Paging = (user->PageLen > 0);
 
 				if (user->flags & F_Temp_B2_BBS)
@@ -10397,6 +10413,19 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (_memicmp(Cmd, "REROUTEMSGS", 7) == 0)
+	{
+		if (conn->sysop == 0)
+			nodeprintf(conn, "Reroute Messages needs SYSOP status\r");
+		else
+		{
+			ReRouteMessages();
+			nodeprintf(conn, "Ok\r");
+		}
+		SendPrompt(conn, user);
+		return;
+	}
+
 	if (_memicmp(Cmd, "YAPP", 4) == 0)
 	{
 		YAPPSendFile(conn, user, Arg1);
@@ -10673,9 +10702,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		}
 
 		SendPrompt(conn, user);
-
 		return;
-
 	}
 
 	if (_memicmp(Cmd, "Ver", CmdLen) == 0)
@@ -10683,7 +10710,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		nodeprintf(conn, "BBS Version %s\rNode Version %s\r", VersionStringWithBuild, GetVersionString());
 
 		SendPrompt(conn, user);
-
 		return;
 	}
 

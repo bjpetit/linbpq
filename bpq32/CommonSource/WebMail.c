@@ -3258,6 +3258,14 @@ char * BuildB2Header(WebMailInfo * WebMail, struct MsgInfo * Msg)
 	char DateString[80];
 	struct tm * tm;
 	int n;
+	char Type[16] = "Private";
+
+	// Get Type
+	
+	if (Msg->type == 'B')
+		strcpy(Type, "Bulletin");
+	else if (Msg->type == 'T')
+		strcpy(Type, "Traffic");
 
 	tm = gmtime((time_t *)&Msg->datecreated);	
 	
@@ -3270,7 +3278,7 @@ char * BuildB2Header(WebMailInfo * WebMail, struct MsgInfo * Msg)
 		"Type: %s\r\n"
 		"From: %s\r\n"
 		"To: %s\r\n",
-			Msg->bid, DateString, "Private", Msg->from, WebMail->To);
+			Msg->bid, DateString, Type, Msg->from, WebMail->To);
 
 	if (WebMail->CC && WebMail->CC[0])
 		NewMsg += sprintf(NewMsg, "CC: %s\r\n", WebMail->CC);
@@ -4305,7 +4313,7 @@ char * doXMLTransparency(char * string)
 {
 	// Make sure string doesn't contain forbidden XML chars (<>"'&)
 
-	char * newstring = malloc(5 * strlen(string));
+	char * newstring = malloc(5 * strlen(string) + 1);		// If len is zero still need null terminator
 
 	char * in = string;
 	char * out = newstring;
@@ -4445,6 +4453,7 @@ char * BuildFormMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 	char * FileBody[100];
 	int n, Files = 0;
 	int TotalFileSize = 0;
+	char Type[16] = "Private";
 
 	WebMailInfo * WebMail = Session->WebMail;
 
@@ -4507,11 +4516,19 @@ char * BuildFormMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 	sprintf(DateString, "%04d/%02d/%02d %02d:%02d",
 		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
-	// We put orignal To call in B2 Header
+	
+	// Get Type
+	
+	if (Msg->type == 'B')
+		strcpy(Type, "Bulletin");
+	else if (Msg->type == 'T')
+		strcpy(Type, "NTS");
+
+	// We put original To call in B2 Header
 
 	NewMsg += sprintf(NewMsg,
 		"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n",
-			Msg->bid, DateString, "Private", Msg->from, WebMail->To, Msg->title, BBSName);
+			Msg->bid, DateString, Type, Msg->from, WebMail->To, Msg->title, BBSName);
 				
 
 	NewMsg += sprintf(NewMsg, "Body: %d\r\n", (int)strlen(WebMail->Body));

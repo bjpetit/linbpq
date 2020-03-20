@@ -447,7 +447,7 @@ HANDLE OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	// set up for overlapped I/O
 
-	CommTimeOuts.ReadIntervalTimeout = 4;
+	CommTimeOuts.ReadIntervalTimeout = 20;
 	CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
 	CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
 	CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;

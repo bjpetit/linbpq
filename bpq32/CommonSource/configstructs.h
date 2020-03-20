@@ -66,6 +66,7 @@ struct PORTCONFIG
 	struct WL2KInfo * WL2K;			// 512
 	char SerialPortName[80]; // 516
 	struct XDIGI * XDIGIS;	//  596 Cross port digi setup
+	int RIGPORT;			// Linked port with RigControl 
 };
 
 struct ROUTECONFIG
