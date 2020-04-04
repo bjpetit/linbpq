@@ -1,7 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'QtTermTCP.ui'
 **
-** Created by: Qt User Interface Compiler version 5.12.6
+** Created by: Qt User Interface Compiler version 5.14.1
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -14,7 +14,6 @@
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QGridLayout>
 #include <QtWidgets/QMainWindow>
-#include <QtWidgets/QMenuBar>
 #include <QtWidgets/QStatusBar>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QWidget>
@@ -27,7 +26,6 @@ public:
     QWidget *centralWidget;
     QGridLayout *gridLayout;
     QVBoxLayout *verticalLayout;
-    QMenuBar *menuBar;
     QStatusBar *statusBar;
 
     void setupUi(QMainWindow *QtTermTCPClass)
@@ -56,10 +54,6 @@ public:
         gridLayout->addLayout(verticalLayout, 0, 0, 1, 1);
 
         QtTermTCPClass->setCentralWidget(centralWidget);
-        menuBar = new QMenuBar(QtTermTCPClass);
-        menuBar->setObjectName(QString::fromUtf8("menuBar"));
-        menuBar->setGeometry(QRect(0, 0, 781, 21));
-        QtTermTCPClass->setMenuBar(menuBar);
         statusBar = new QStatusBar(QtTermTCPClass);
         statusBar->setObjectName(QString::fromUtf8("statusBar"));
         QtTermTCPClass->setStatusBar(statusBar);
@@ -71,7 +65,7 @@ public:
 
     void retranslateUi(QMainWindow *QtTermTCPClass)
     {
-        QtTermTCPClass->setWindowTitle(QApplication::translate("QtTermTCPClass", "QtTermTCP", nullptr));
+        QtTermTCPClass->setWindowTitle(QCoreApplication::translate("QtTermTCPClass", "QtTermTCP", nullptr));
     } // retranslateUi
 
 };

@@ -2,9 +2,9 @@
 
 #include <QMainWindow>
 #include "ui_QtTermTCP.h"
-#include "ui_ListenPort.h"
-#include "ui_AGWParams.h"
-#include "ui_AGWConnect.h"
+//#include "ui_ListenPort.h"
+//#include "ui_AGWParams.h"
+//#include "ui_AGWConnect.h"
 #include "QTextEdit"
 #include "QSplitter"
 #include "QLineEdit"
@@ -23,6 +23,10 @@
 #include <QScrollBar>
 #include <QFileDialog>
 #include <QTabWidget>
+#include <QMenuBar>
+
+
+
 
 
 QT_BEGIN_NAMESPACE
@@ -102,6 +106,8 @@ class QtTermTCP : public QMainWindow
 
 public:
 	QtTermTCP(QWidget *parent = NULL);
+	void closeEvent(QCloseEvent * event);
+	static void setFonts();
 	~QtTermTCP();
 
 private slots:
@@ -109,19 +115,15 @@ private slots:
 	void doYAPPSend();
 	void doYAPPSetRX();
 	void menuChecked();
-	void AGWConaccept();
 	void Connect();
 	void displayError(QAbstractSocket::SocketError socketError);
 	void readyRead();
 
 	void LreturnPressed(Ui_ListenSession * LUI);
 	void LDisconnect(Ui_ListenSession * LUI);
-	void selFont();
 	void SetupHosts();
 	void MyTimerSlot();
-	void myaccept();
 	void ListenSlot();
-	void AGWaccept();
 	void AGWSlot();
 	void showContextMenuM(const QPoint &pt);
 	void showContextMenuT(const QPoint &pt);
@@ -138,6 +140,8 @@ private slots:
 	void doCascade();
 	void actActivate();
 	void xon_mdiArea_changed();
+	void doFonts();
+	void doMFonts();
 	void AGWdisplayError(QAbstractSocket::SocketError socketError);
 	void AGWreadyRead();
 	void onAGWSocketStateChanged(QAbstractSocket::SocketState socketState);
@@ -154,9 +158,7 @@ private:
 
 	Ui::QtTermTCPClass ui;
 	
-	QMenu *setupMenu;
 	QMenu *hostsubMenu;
-	QMenu *windowMenu;
 
 	QAction *closeAct;
 	QAction *closeAllAct;
@@ -168,11 +170,9 @@ private:
 	QAction *newTermAct;
 	QAction *newMonAct;
 	QAction *newCombinedAct;
-	QAction *ListenAction;
 	QAction *AGWAction;
 	QAction *quitAction;
 
-	QTcpServer  _server;
 	QList<myTcpSocket*>  _sockets;
 
 	QWidget *centralWidget;

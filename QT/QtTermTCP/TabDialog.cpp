@@ -1,57 +1,9 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the examples of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:BSD$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** BSD License Usage
-** Alternatively, you may use this file under the terms of the BSD license
-** as follows:
-**
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
-**
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
 
 #define _CRT_SECURE_NO_WARNINGS
 
 #include "TabDialog.h"
-
+#include "QtTermTCP.h"
+#include <QTcpServer>
 #include "QSettings"
 #include "QLineEdit"
 #include "QTabWidget"
@@ -59,8 +11,27 @@
 #include "QVBoxLayout"
 #include "QLabel"
 #include "QAction"
+#include "QGroupBox"
+#include "QPlainTextEdit"
+#include "QCheckBox"
+#include "QFormLayout"
+
+#ifndef WIN32
+#define strtok_s strtok_r
+#endif
 
 extern "C" void SaveSettings();
+
+extern int screenHeight;
+extern int screenWidth;
+
+extern QList<Ui_ListenSession *> _sessions;
+extern QTcpServer * _server;
+
+extern myTcpSocket * AGWSock;
+extern QLabel * Status1;
+extern QFont * menufont;
+extern QStatusBar * myStatusBar;
 
 QLineEdit *hostEdit;
 QLineEdit *portEdit;
@@ -80,31 +51,303 @@ extern char UserName[MAXHOSTS + 1][80];
 extern char Password[MAXHOSTS + 1][80];
 
 
-//ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GUI)
+QLineEdit *TermCall;
+QGroupBox *groupBox;
+QLineEdit *beaconDest;
+QLineEdit *beaconPath;
+QLineEdit *beaconInterval;
+QLineEdit *beaconPorts;
+QLabel *label_2;
+QLabel *label_3;
+QLabel *label_4;
+QLabel *label_5;
+QLabel *label_6;
+QLabel *label_7;
+QLabel *label_11;
+QPlainTextEdit *beaconText;
+QLabel *label_12;
+QGroupBox *groupBox_2;
+QLineEdit *AHost;
+QLineEdit *APort;
+QLineEdit *Paclen;
+QLabel *label_8;
+QLabel *label_9;
+QLabel *label_10;
+QLabel *label;
+QCheckBox *AAGWEnable;
+QLabel *label_13;
+QCheckBox *AAGWMonEnable;
+
+extern int AGWEnable;
+extern int AGWMonEnable;
+extern char AGWTermCall[12];
+extern char AGWBeaconDest[12];
+extern char AGWBeaconPath[80];
+extern int AGWBeaconInterval;
+extern char AGWBeaconPorts[80];
+extern char AGWBeaconMsg[260];
+
+extern char AGWHost[128];
+extern int AGWPortNum;
+extern int AGWPaclen;
+extern char * AGWPortList;
+extern myTcpSocket * AGWSock; 
+extern char * AGWPortList;
+extern QStringList AGWToCalls;
+extern Ui_ListenSession * ActiveSession;
+
+extern int listenPort;
+extern bool listenEnable;
+extern char listenCText[4096];
+
+void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
+
+
+AGWConnect::AGWConnect(QWidget *parent) : QDialog(parent)
+{
+	this->resize(600, 700);
+	this->setFont(*menufont);
+
+	setWindowTitle(tr("AGW Connection"));
+
+	QVBoxLayout *layout = new QVBoxLayout();
+	layout->setContentsMargins(10, 10, 10, 10);
+
+	setLayout(layout);
+
+	QFormLayout *formLayout2 = new QFormLayout();
+	layout->addLayout(formLayout2);
+
+	wCallFrom = new QLineEdit();
+	formLayout2->addRow(new QLabel("Call From"), wCallFrom);
+
+	wCallTo = new QComboBox();
+	wCallTo->setEditable(true);
+	wCallTo->setInsertPolicy(QComboBox::NoInsert);
+
+	formLayout2->addRow(new QLabel("Call To"), wCallTo);
+
+	Digis = new QLineEdit();
+	formLayout2->addRow(new QLabel("Digis"), Digis);
+
+	layout->addSpacing(2);
+	layout->addWidget(new QLabel("Radio Ports"));
+
+	RadioPorts = new QListWidget();
+
+	layout->addWidget(RadioPorts);
+
+	QString str;
+	int count;
+
+	char * Context;
+	char * ptr;
+
+	wCallFrom->setText(AGWTermCall);
+
+	wCallTo->addItems(AGWToCalls);
+
+	if (AGWPortList)
+	{
+		char * Temp = strdup(AGWPortList);		// Need copy as strtok messes with it
+
+		count = atoi(Temp);
+
+		ptr = strtok_s(Temp, ";", &Context);
+
+		for (int n = 0; n < count; n++)
+		{
+			ptr = strtok_s(NULL, ";", &Context);
+			new QListWidgetItem(ptr, RadioPorts);
+		}
+
+		free(Temp);
+	}
+
+
+	RadioPorts->setFont(*menufont);
+
+	buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+	buttonBox->setFont(*menufont);
+	layout->addWidget(buttonBox);
+	setLayout(layout);
+
+	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
+	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
+}
+
+AGWConnect::~AGWConnect()
+{
+}
+
+void AGWConnect::myaccept()
+{
+	QVariant Q;
+
+	int port = RadioPorts->currentRow();
+	char CallFrom[32];
+	char CallTo[32];
+	char Via[128];
+	char DigiMsg[128] = "";
+	int DigiLen = 0;
+	char * digiptr = &DigiMsg[1];
+
+	strcpy(CallFrom, wCallFrom->text().toUpper().toUtf8());
+	strcpy(CallTo, wCallTo->currentText().toUpper().toUtf8());
+	strcpy(Via, Digis->text().toUpper().toUtf8());
+
+	// if digis have to form block with byte count followed by n 10 byte calls
+
+	if (Via[0])
+	{
+		char * context;
+		char * ptr = strtok_s(Via, ", ", &context);
+
+		while (ptr)
+		{
+			DigiMsg[0]++;
+			strcpy(digiptr, ptr);
+			digiptr += 10;
+
+			ptr = strtok_s(NULL, ", ", &context);
+		}
+		DigiLen = digiptr - DigiMsg;
+	}
+
+	// Add CallTo if not already in list
+
+	if (AGWToCalls.contains(CallTo))
+		AGWToCalls.removeOne(CallTo);
+
+	AGWToCalls.insert(-1, CallTo);
+
+	Send_AGW_C_Frame(ActiveSession, port, CallFrom, CallTo, DigiMsg, DigiLen);
+
+	AGWConnect::accept();
+}
+
+void AGWConnect::myreject()
+{
+	AGWConnect::reject();
+}
+
+
+AGWDialog::AGWDialog(QWidget *parent) : QDialog(parent)
+{
+	this->resize(562, 491);
+	this->setFont(*menufont);
+
+	setWindowTitle(tr("TermTCP AGW Configuration"));
+
+	QVBoxLayout *layout = new QVBoxLayout;
+	QHBoxLayout *hlayout = new QHBoxLayout;
+
+	layout->addLayout(hlayout);
+	AAGWEnable = new QCheckBox("Enable AGW Interface");
+	AAGWEnable->setLayoutDirection(Qt::LeftToRight);
+
+	AAGWMonEnable = new QCheckBox("Enable Monitor");
+	AAGWMonEnable->setGeometry(QRect(255, 18, 216, 21));
+	AAGWMonEnable->setLayoutDirection(Qt::RightToLeft);
+
+	hlayout->addWidget(AAGWEnable);
+	hlayout->addWidget(AAGWMonEnable);
+
+	QFormLayout *flayout = new QFormLayout;
+	layout->addLayout(flayout);
+
+	label = new QLabel("Terminal Call");
+	TermCall = new QLineEdit(this);
+
+	flayout->addRow(label, TermCall);
+	
+	layout->addWidget(new QLabel("Beacon Setup"));
+
+	QFormLayout *flayout1 = new QFormLayout;
+	layout->addLayout(flayout1);
+
+	label_2 = new QLabel("Destination");
+	beaconDest = new QLineEdit();
+	label_3 = new QLabel("Digipeaters");
+	beaconPath = new QLineEdit();
+
+	flayout1->addRow(label_2, beaconDest);
+	flayout1->addRow(label_3, beaconPath);
+
+	label_4 = new QLabel("Interval");
+	beaconInterval = new QLineEdit();
+	label_5 = new QLabel("Ports");
+	beaconPorts = new QLineEdit();
+
+	flayout1->addRow(label_4, beaconInterval);
+	flayout1->addRow(label_5, beaconPorts);
+
+//	label_6 = new QLabel("Minutes", groupBox);
+
+//	label_7 = new QLabel("(Separate with commas)", groupBox);
+	label_11 = new QLabel("Message");
+	beaconText = new QPlainTextEdit();
+
+	flayout1->addRow(label_11, beaconText);
+
+
+
+//	label_12 = new QLabel("(max 256 chars)");
+//	label_12->setGeometry(QRect(14, 158, 95, 21));
+
+	layout->addWidget(new QLabel("TNC Setup"));
+
+	QFormLayout *flayout2 = new QFormLayout;
+	layout->addLayout(flayout2);
+
+	AHost = new QLineEdit();
+	APort = new QLineEdit();
+	Paclen = new QLineEdit();
+	label_8 = new QLabel("host");
+	label_9 = new QLabel("Port");
+	label_10 = new QLabel("Paclen  ");
+
+	flayout2->addRow(label_8, AHost);
+	flayout2->addRow(label_9, APort);
+	flayout2->addRow(label_10, Paclen);
+
+	AAGWEnable->setChecked(AGWEnable);
+	AAGWMonEnable->setChecked(AGWMonEnable);
+	TermCall->setText(AGWTermCall);
+	beaconDest->setText(AGWBeaconDest);
+	beaconPath->setText(AGWBeaconPath);
+	beaconPorts->setText(AGWBeaconPorts);
+	beaconText->setPlainText(AGWBeaconMsg);
+	beaconInterval->setText(QString::number(AGWBeaconInterval));
+	AHost->setText(AGWHost);
+	APort->setText(QString::number(AGWPortNum));
+	Paclen->setText(QString::number(AGWPaclen));
+
+	buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
+	buttonBox->setFont(*menufont);
+	layout->addWidget(buttonBox);
+	setLayout(layout);
+
+	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
+	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
+
+}
+
+
+AGWDialog::~AGWDialog()
+{
+}
 
 TabDialog::TabDialog(QWidget *parent) : QDialog(parent)
 {
-	QTabWidget * tabWidget = new QTabWidget;
-	tabWidget->addTab(new GeneralTab, tr("General"));
+	char portnum[10];
 
 	buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
 
 	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
 	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
 
-	QVBoxLayout *mainLayout = new QVBoxLayout;
-	mainLayout->addWidget(tabWidget);
-	mainLayout->addWidget(buttonBox);
-	setLayout(mainLayout);
-
-	setWindowTitle(tr("TermTCP Host Configuration"));
-}
-
-GeneralTab::GeneralTab(QWidget *parent)
-    : QWidget(parent)
-{
-	char portnum[16];
-
+	QVBoxLayout *layout = new QVBoxLayout;
 	QLabel *hostLabel = new QLabel(tr("Host Name:"));
 	hostEdit = new QLineEdit(Host[ConfigHost]);
 
@@ -112,24 +355,89 @@ GeneralTab::GeneralTab(QWidget *parent)
 	sprintf(portnum, "%d", Port[ConfigHost]);
 	portEdit = new QLineEdit(portnum);
 
-	QVBoxLayout *mainLayout = new QVBoxLayout;
 	QLabel *userLabel = new QLabel(tr("User:"));
 	userEdit = new QLineEdit(UserName[ConfigHost]);
 
 	QLabel *passLabel = new QLabel(tr("Password:"));
 	passEdit = new QLineEdit(Password[ConfigHost]);
 
-	mainLayout->addWidget(hostLabel);
-	mainLayout->addWidget(hostEdit);
-	mainLayout->addWidget(portLabel);
-	mainLayout->addWidget(portEdit);
-	mainLayout->addWidget(userLabel);
-	mainLayout->addWidget(userEdit);
-	mainLayout->addWidget(passLabel);
-	mainLayout->addWidget(passEdit);
+	layout->addWidget(hostLabel);
+	layout->addWidget(hostEdit);
+	layout->addWidget(portLabel);
+	layout->addWidget(portEdit);
+	layout->addWidget(userLabel);
+	layout->addWidget(userEdit);
+	layout->addWidget(passLabel);
+	layout->addWidget(passEdit);
 
-	mainLayout->addStretch(1);
-	setLayout(mainLayout);
+	layout->addStretch(1);
+	layout->addWidget(buttonBox);
+	setLayout(layout);
+
+	setWindowTitle(tr("TermTCP Host Configuration"));
+}
+
+void AGWDialog::myaccept()
+{
+	QVariant Q;
+
+	int OldEnable = AGWEnable;
+	int OldPort = AGWPortNum;
+	char oldHost[128];
+	strcpy(oldHost, AGWHost);
+
+	//	QString val = Sess->portNo->text();A
+	//	QByteArray qb = val.toLatin1();
+	//	char * ptr = qb.data();
+
+	AGWEnable = AAGWEnable->isChecked();
+	AGWMonEnable = AAGWMonEnable->isChecked();
+
+	strcpy(AGWTermCall, TermCall->text().toUtf8().toUpper());
+	strcpy(AGWBeaconDest, beaconDest->text().toUtf8().toUpper());
+	strcpy(AGWBeaconPath, beaconPath->text().toUtf8().toUpper());
+	strcpy(AGWBeaconPorts, beaconPorts->text().toUtf8().toUpper());
+
+	if (beaconText->toPlainText().length() > 256)
+	{
+		QMessageBox msgBox;
+		msgBox.setText("Beacon Text Too Long");
+		msgBox.exec();
+	}
+	else
+		strcpy(AGWBeaconMsg, beaconText->toPlainText().toUtf8().toUpper());
+
+	Q = beaconInterval->text();
+	AGWBeaconInterval = Q.toInt();
+
+	strcpy(AGWHost, AHost->text().toUtf8());
+
+	Q = APort->text();
+	AGWPortNum = Q.toInt();
+
+	SaveSettings();
+
+	if (AGWEnable != OldEnable || AGWPortNum != OldPort || strcmp(oldHost, AGWHost) != 0)
+	{
+		// (re)start connection
+
+		if (OldEnable && AGWSock && AGWSock->ConnectedState == QAbstractSocket::ConnectedState)
+		{
+			AGWSock->disconnectFromHost();
+			Status1->setText("AGW Disconnected");
+		}
+		// AGWTimer will reopen connection
+	}
+
+	myStatusBar->setVisible(AGWEnable);
+
+	AGWDialog::accept();
+
+}
+
+void AGWDialog::myreject()
+{
+	AGWDialog::reject();
 }
 
 void TabDialog::myaccept()
@@ -171,4 +479,288 @@ void TabDialog::myreject()
 
 TabDialog::~TabDialog()
 {
+}
+
+// Menu dialog
+
+
+fontDialog::fontDialog(int Menu, QWidget *parent) : QDialog(parent)
+{
+	// Menu is set if setting Menufont, zero for setting terminal font.
+
+	int i;
+	char valChar[16];
+
+	QString family;
+	int csize;
+	int weight;
+
+#ifdef ANDROID
+	this->resize((screenWidth * 7) / 8, 200);
+	this->setMaximumWidth((screenWidth * 7) / 8);
+#endif
+	this->setFont(*menufont);
+
+	Menuflag = Menu;
+
+	if (Menu)
+	{
+		workingFont = *menufont;
+
+		QFontInfo info(*menufont);
+		family = info.family();
+		csize = info.pointSize();
+
+		setWindowTitle("Menu Font Dialog");
+	}
+	else
+	{
+		// get current term font
+
+		QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+
+		family = settings.value("FontFamily", "Courier New").toString();
+		csize = settings.value("PointSize", 10).toInt();
+		weight = settings.value("Weight", 50).toInt();
+
+		workingFont = QFont(family);
+
+		workingFont.setPointSize(csize);
+		workingFont.setWeight(weight);
+
+		setWindowTitle("Terminal Font Dialog");
+	}
+
+	QVBoxLayout *layout = new QVBoxLayout();
+	layout->setContentsMargins(10, 10, 10, 10);
+
+	setLayout(layout);
+
+	QHBoxLayout *hlayout = new QHBoxLayout();
+	layout->addLayout(hlayout);
+
+	font = new QFontComboBox();
+
+	if (Menu == 0)
+		font->setFontFilters(QFontComboBox::MonospacedFonts);
+
+	font->setMaximumWidth((screenWidth * 5) / 8);
+	font->view()->setMaximumWidth((7 * screenWidth) / 8);
+
+	style = new QComboBox();
+	style->setMaximumWidth(screenWidth / 4);
+	size = new QComboBox();
+	sample = new QTextEdit();
+	sample->setText("ABCDabcd1234");
+	sample->setFont(workingFont);
+
+	hlayout->addWidget(font);
+	hlayout->addWidget(style);
+	hlayout->addWidget(size);
+	layout->addWidget(sample);
+
+	QFontDatabase database;
+
+	const QStringList styles = database.styles(family);
+
+	const QList<int> smoothSizes = database.smoothSizes(family, styles[0]);
+
+	for (int points : smoothSizes)
+		size->addItem(QString::number(points));
+
+	for (QString xstyle : styles)
+		style->addItem(xstyle);
+
+	i = font->findText(family, Qt::MatchExactly);
+	font->setCurrentIndex(i);
+
+	sprintf(valChar, "%d", csize);
+	i = size->findText(valChar, Qt::MatchExactly);
+	size->setCurrentIndex(i);
+
+	buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+	buttonBox->setFont(*menufont);
+	layout->addWidget(buttonBox);
+	setLayout(layout);
+
+	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
+	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
+	connect(font, SIGNAL(currentFontChanged(QFont)), this, SLOT(fontchanged(QFont)));
+	connect(style, SIGNAL(currentIndexChanged(int)), this, SLOT(stylechanged()));
+	connect(size, SIGNAL(currentIndexChanged(int)), this, SLOT(sizechanged()));
+}
+
+void fontDialog::fontchanged(QFont newfont)
+{
+	QFontDatabase database;
+	QString family = newfont.family();
+
+	workingFont = newfont;
+
+	const QStringList styles = database.styles(family);
+	const QList<int> smoothSizes = database.smoothSizes(family, styles[0]);
+
+	size->clear();
+	style->clear();
+
+	for (int points : smoothSizes)
+		size->addItem(QString::number(points));
+
+	for (QString xstyle : styles)
+		style->addItem(xstyle);
+
+	sample->setFont(workingFont);
+}
+
+void fontDialog::stylechanged()
+{
+	QFontDatabase database;
+
+	QString family = font->currentFont().family();
+
+	bool italic = database.italic(family, style->currentText());
+	int weight = database.weight(family, style->currentText());
+
+	if (weight < 0)
+		weight = 50;				// Normal
+
+	workingFont.setItalic(italic);
+	workingFont.setWeight(weight);
+
+	sample->setFont(workingFont);
+}
+
+void fontDialog::sizechanged()
+{
+	int newsize = size->currentText().toInt();
+	workingFont.setPointSize(newsize);
+	sample->setFont(workingFont);
+}
+fontDialog::~fontDialog()
+{
+}
+
+void fontDialog::myaccept()
+{
+	QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+
+	if (Menuflag)
+	{
+		delete menufont;
+		menufont = new QFont(workingFont);
+
+		QtTermTCP::setFonts();
+
+		settings.setValue("MFontFamily", workingFont.family());
+		settings.setValue("MPointSize", workingFont.pointSize());
+		settings.setValue("MWeight", workingFont.weight());
+	}
+	else
+	{
+		Ui_ListenSession * Sess;
+
+		for (int i = 0; i < _sessions.size(); ++i)
+		{
+			Sess = _sessions.at(i);
+
+			if (Sess->termWindow)
+				Sess->termWindow->setFont(workingFont);
+
+			if (Sess->inputWindow)
+				Sess->inputWindow->setFont(workingFont);
+
+			if (Sess->monWindow)
+				Sess->monWindow->setFont(workingFont);
+		}
+
+		settings.setValue("FontFamily", workingFont.family());
+		settings.setValue("PointSize", workingFont.pointSize());
+		settings.setValue("Weight", workingFont.weight());
+	}
+
+	fontDialog::accept();
+}
+
+void fontDialog::myreject()
+{
+	fontDialog::reject();
+}
+
+
+
+ListenDialog::ListenDialog(QWidget *parent) : QDialog(parent)
+{
+#ifdef ANDROID
+	this->resize((screenWidth * 3) / 4 , 500);
+#endif
+	verticalLayout = new QVBoxLayout();
+	verticalLayout->setContentsMargins(10, 10, 10, 10);
+
+	setLayout(verticalLayout);
+
+	Enabled = new QCheckBox();
+	Enabled->setText(QString::fromUtf8("Enable Listen"));
+	Enabled->setLayoutDirection(Qt::LeftToRight);
+
+	verticalLayout->addWidget(Enabled);
+
+	formLayout = new QFormLayout();
+
+	portNo = new QLineEdit();
+//	portNo->setMaximumSize(QSize(100, 30));
+
+	formLayout->addRow(new QLabel("Port"), portNo);
+
+	CText = new QTextEdit();
+	CText->setMinimumSize(QSize(0, 150));
+	CText->setMaximumSize(QSize(401, 150));
+
+	formLayout->addRow(new QLabel("CText"), CText);
+	buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+	buttonBox->setFont(*menufont);
+	verticalLayout->addWidget(buttonBox);
+
+	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
+	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
+
+	verticalLayout->addLayout(formLayout);
+	verticalLayout->addWidget(buttonBox);
+
+	portNo->setText(QString::number(listenPort));
+	Enabled->setChecked(listenEnable);
+	CText->setText(listenCText);
+
+}
+
+ListenDialog::~ListenDialog()
+{
+}
+
+void ListenDialog::myaccept()
+{
+	QString val = portNo->text();
+	QByteArray qb = val.toLatin1();
+	char * ptr = qb.data();
+
+	listenPort = atoi(ptr);
+	listenEnable = Enabled->isChecked();
+	strcpy(listenCText, CText->toPlainText().toUtf8());
+
+	while ((ptr = strchr(listenCText, '\n')))
+		*ptr = '\r';
+
+	if (_server->isListening())
+		_server->close();
+
+	SaveSettings();
+
+	if (listenEnable)
+		_server->listen(QHostAddress::Any, listenPort);
+
+	ListenDialog::accept();
+}
+
+void ListenDialog::myreject()
+{
+	ListenDialog::reject();
 }

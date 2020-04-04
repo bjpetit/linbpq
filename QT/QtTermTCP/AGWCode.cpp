@@ -4,6 +4,7 @@
 #include "TabDialog.h"
 #include <time.h>
 #include <QVBoxLayout>
+#include <QLabel>
 
 #ifndef WIN32
 #define strtok_s strtok_r
@@ -18,14 +19,20 @@ extern QTabWidget *tabWidget;
 extern QWidget * mythis;
 
 extern int AGWEnable;
+extern int AGWMonEnable;
 extern char AGWTermCall[12];
 extern char AGWBeaconDest[12];
 extern char AGWBeaconPath[80];
 extern int AGWBeaconInterval;
 extern char AGWBeaconPorts[80];
+extern char AGWBeaconMsg[260];
+
 extern char AGWHost[128];
 extern int AGWPortNum;
 extern int AGWPaclen;
+
+extern char listenCText[4096];
+extern int ConnectBeep;
 
 extern QList<Ui_ListenSession *> _sessions;
 
@@ -121,6 +128,8 @@ void Send_AGW_m_Frame(QTcpSocket* socket);
 
 Ui_ListenSession * FindFreeWindow();
 Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label = nullptr);
+void AGW_frame_header(UCHAR * Msg, char AGWPort, char DataKind, unsigned char PID, const char * CallFrom, const char * CallTo, int Len);
+
 
 void Debugprintf(const char * format, ...)
 {
@@ -226,6 +235,48 @@ int ConvFromAX25(unsigned char * incall, char * outcall)
 	return (out);
 }
 
+void doAGWBeacon()
+{
+	if (AGWBeaconDest[0] && AGWBeaconPorts[0])
+	{
+		// Send as M or V depending on Digis
+
+		UCHAR Msg[512];	
+		char ports[80];
+
+		char * ptr, * context;
+		int DataLen = (int)strlen(AGWBeaconMsg);
+
+		strcpy(ports, AGWBeaconPorts);			// strtok changes it
+
+
+		// Replace newlines with CR
+
+		while ((ptr = strchr(AGWBeaconMsg, 10)))
+			*ptr = 13;
+
+		ptr = strtok_s(ports, " ,", &context);
+
+		if (AGWBeaconPath[0])
+		{
+
+		}
+		else
+		{
+			while (ptr)
+			{
+				AGW_frame_header(Msg, atoi(ptr) - 1, 'M', 240, AGWTermCall, AGWBeaconDest, DataLen);
+
+				memcpy(&Msg[AGWHDDRRLEN], AGWBeaconMsg, DataLen);
+				DataLen += AGWHDDRRLEN;
+				AGWSock->write((char *)Msg, DataLen);
+
+				ptr = strtok_s(NULL, " ,",  &context);
+			}
+		}
+	}
+}
+
 TAGWPort * get_free_port()
 {
 	int i = 0;
@@ -262,8 +313,6 @@ TAGWPort * findSession(int AGWChan, char * MyCall, char * OtherCall)
 
 void QtTermTCP::AGWdisplayError(QAbstractSocket::SocketError socketError)
 {
-	myTcpSocket* sender = static_cast<myTcpSocket*>(QObject::sender());
-
 	switch (socketError)
 	{
 	case QAbstractSocket::RemoteHostClosedError:
@@ -284,12 +333,8 @@ void QtTermTCP::AGWdisplayError(QAbstractSocket::SocketError socketError)
 		break;
 
 	default:
-		QMessageBox::information(this, tr("QtTermTCP"),
-			tr("The following error occurred: %1.")
-			.arg(sender->errorString()));
 
 		Status1->setText("AGW Connection Failed");
-
 	}
 
 	AGWConnecting = 0;
@@ -375,7 +420,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 
 					char Msg[] = "Disconnected\r";
 
-					WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+					WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
 						Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
 
 					if (TermMode == MDI)
@@ -404,25 +449,46 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 							mythis->setWindowTitle("Disconnected");
 					}
 
+					setMenus(false);	
+					
 					// if Single Split or Monitor leave session allocated to AGW
 
-					if (TermMode != Single || (Sess->SessionType & Mon) == 0)
+					if (TermMode == Single && (Sess->SessionType & Mon))
 					{
-						Sess->AGWSession = nullptr;
-						AGW->Sess = nullptr;
+						return;
 					}
 
-					setMenus(false);
+					Sess->AGWSession = nullptr;
+					AGW->Sess = nullptr;
 				}
 			}
+		}
+
+		// Free the monitor Window
+
+		if (AGWUsers && AGWUsers->MonSess)
+		{
+			Sess = AGWUsers->MonSess;
+
+			char Msg[] = "Disconnected\r";
+
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
+				Sess->monWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
+
+			if (TermMode == MDI)
+				Sess->setWindowTitle("Monitor Session Disconnected");
+
+			else if (TermMode == Tabbed)
+				tabWidget->setTabText(Sess->Tab, "Monitor");
+
+			Sess->AGWSession = nullptr;
+			AGWUsers->MonSess = nullptr;
 		}
 
 		AGWConnected = 0;
 	}
 	else if (socketState == QAbstractSocket::ConnectedState)
 	{
-		// only seems to be triggered for outward connect
-
 		AGWConnected = 1;
 		AGWConnecting = 0;
 
@@ -430,7 +496,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 
 		AGW_add_socket(sender);
 
-		actHost[16]->setVisible(1);
+		actHost[16]->setVisible(1);			// Enable AGW Connect Line
 
 		// Send X frame to register Term Call
 
@@ -527,6 +593,9 @@ void QtTermTCP::ConnecttoAGW()
 	return;
 }
 
+int AGWBeaconTimer = 0;
+
+
 void QtTermTCP::AGWTimer()
 {
 	// Runs every 10 Seconds
@@ -536,7 +605,21 @@ void QtTermTCP::AGWTimer()
 		AGWConnecting = true;
 		ConnecttoAGW();
 	}
+
+	if (AGWBeaconInterval)
+	{
+		AGWBeaconTimer++;
+
+		if (AGWBeaconTimer >= AGWBeaconInterval * 6)
+		{
+			AGWBeaconTimer = 0;
+
+			if (AGWConnected)
+				doAGWBeacon();
+		}
+	}
 }
+
 
 void AGW_del_socket(void * socket)
 {
@@ -645,11 +728,17 @@ void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char *
 	if (Port == -1)
 		return;
 
+	Debugprintf("Send_AGW_C_Frame");
+
 	AX25Sess = findSession(Port, CallTo, CallFrom);
 
 	if (AX25Sess)
 	{
-		QMessageBox::information(mythis, "QtTermTCP", "You already have a conenction to that call");
+		// Seems this can be called twice
+		
+		if (Sess->AGWSession == nullptr)
+			QMessageBox::information(mythis, "QtTermTCP", "You already have a conenction to that call");
+		
 		return;
 	}
 
@@ -657,8 +746,6 @@ void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char *
 
 	if (AX25Sess)
 	{
-		// Look for/create Terminal Window for connection
-
 		AX25Sess->Active = 1;
 		AX25Sess->port = Port;
 		AX25Sess->Sess = Sess;				// Crosslink AGW and Term Sessions
@@ -671,12 +758,18 @@ void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char *
 
 		AX25Sess->socket = AGWSock;
 
-		AGW_frame_header(Msg, Port, 'C', 240, CallFrom, CallTo, DataLen);
-
-		memcpy(&Msg[AGWHDDRRLEN], (UCHAR *)Data, DataLen);
-
+		if (DataLen)				// Digis so use 'v' frame
+		{
+			AGW_frame_header(Msg, Port, 'v', 240, CallFrom, CallTo, DataLen);
+			memcpy(&Msg[AGWHDDRRLEN], (UCHAR *)Data, DataLen);
+		}
+		else
+		{
+			AGW_frame_header(Msg, Port, 'C', 240, CallFrom, CallTo, DataLen);
+		}
+		
 		DataLen += AGWHDDRRLEN;
-
+	
 		AGWSock->write((char *)Msg, DataLen);
 
 		sprintf(Title, "Connecting to %s", CallTo);
@@ -924,6 +1017,21 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame, byte * Msg)
 
 				setMenus(true);
 
+				if (ConnectBeep)
+					Beep();
+
+				// Send CText if defined
+
+				if (listenCText[0])
+					Send_AGW_D_Frame(AX25Sess, (unsigned char *)listenCText, (int)strlen(listenCText));
+
+				// Send Message to Terminal
+
+				char Msg[80];
+
+				sprintf(Msg, "Incoming Connect from %s\r\r", CallFrom);
+
+				WritetoOutputWindow(Sess, (unsigned char *)Msg, (int)strlen(Msg));
 				return;
 			}
 		}
@@ -970,16 +1078,29 @@ void on_AGW_D_frame(int snd_ch, char * CallFrom, char * CallTo, byte * Msg, int 
 }
 
 
-void on_AGW_Mon_frame(byte * Msg, int Len)
+void on_AGW_Mon_frame(byte * Msg, int Len, char Type)
 {
 	if (AGWUsers && AGWUsers->MonSess && AGWUsers->MonSess->monWindow)
-		WritetoMonWindow(AGWUsers->MonSess, Msg, Len);
+	{
+		if (Type == 'T')
+			WritetoOutputWindowEx(AGWUsers->MonSess, Msg, Len,
+				AGWUsers->MonSess->monWindow, &AGWUsers->MonSess->OutputSaveLen, AGWUsers->MonSess->OutputSave, 81);		// Red
+		else
+			WritetoOutputWindowEx(AGWUsers->MonSess, Msg, Len,
+				AGWUsers->MonSess->monWindow, &AGWUsers->MonSess->OutputSaveLen, AGWUsers->MonSess->OutputSave, 23);		// Blue
+	}
 }
 
 
-void on_AGW_Ds_frame(int AGWChan, char * CallFrom, char * CallTo)
+void on_AGW_Ds_frame(int AGWChan, char * CallFrom, char * CallTo, struct AGWHeader * Frame)
 {
 	TAGWPort * AX25Sess;
+	char * Msg = (char *)Frame;
+	Msg = &Msg[36];
+
+	char Reply[128] = "";
+
+	memcpy(Reply, Msg, Frame->DataLength);
 
 	// Disconnect Sessiom
 
@@ -989,9 +1110,7 @@ void on_AGW_Ds_frame(int AGWChan, char * CallFrom, char * CallTo)
 	{
 		Ui_ListenSession * Sess = AX25Sess->Sess;
 
-		char Msg[] = "Disconnected\r";
-
-		WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+		WritetoOutputWindowEx(Sess, (unsigned char *)Reply, (int)strlen(Reply),
 			Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
 
 		if (TermMode == MDI)
@@ -1033,7 +1152,7 @@ void on_AGW_Ds_frame(int AGWChan, char * CallFrom, char * CallTo)
 }
 
 
-void AGW_AX25_data_in(void  * Sess, int PID, UCHAR * data, int Len)
+void AGW_AX25_data_in(void  * Sess, UCHAR * data, int Len)
 {
 	TAGWPort * AX25Sess = (TAGWPort *)Sess;
 	int len = 250, sendlen;
@@ -1368,7 +1487,7 @@ void AGW_Process_Input(AGWUser * AGW)
 
 	case 'd':
 
-		on_AGW_Ds_frame(Frame->Port, Frame->callfrom, Frame->callto);
+		on_AGW_Ds_frame(Frame->Port, Frame->callfrom, Frame->callto, Frame);
 		return;
 
 	case 'U':
@@ -1378,7 +1497,9 @@ void AGW_Process_Input(AGWUser * AGW)
 
 			// Monitor Data
 
-			on_AGW_Mon_frame(Data, Frame->DataLength);
+			if (AGWMonEnable)
+				on_AGW_Mon_frame(Data, Frame->DataLength, Frame->DataKind);
+		
 			return;
 
 /*

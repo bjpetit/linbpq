@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.26"
+#define VersionString "0.0.0.38"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -15,9 +15,30 @@
 // .23 Add Tabbed display option
 // .24 Fix crash when setting Monitor flags in Tabbed mode
 // .25 Add AGW mode
-// .26 Add sending CTRL/C CTRL/D and CTRL/Z
-
-
+// .26 Add sending CTRL/C CTRL/D and CTRL/Z)
+// .27 Limit size of windows to 10000 lines 
+//	   Fix YAPP in Tabbed Mode
+// .28 Add AGW Beacon
+// .29 Fix allocating Listem sessions to tabs connected using AGW
+// .30 Fix allocationd AGW Monitor Sessions
+// .31 Fix output being written to the wrong place when window is scrolled back
+// .32 Fix connect with digis
+// .33 Add StripLF option
+// .34 Improvements for Andriod
+//	   Option to change Menu Fonts
+//	   Fix receiving part lines when scrolled back
+// .35 Fix PE if not in Tabbed Mode
+// .36 Improved dialogs mainly for Android
+//	   Try to make sure sessions are closed before exiting
+// .37 Replace VT with LF (for pasting from BPQ32 Terminal Window)
+//	   Dont show AGW status line if AGW interface is disabled
+//	   Don't show Window Menu in Single Mode
+// .38 Protect against connect to normal Telnet Port.
+//	   Send CTEXT and Beep for inward AGW Connects
+//	   Make sending Idle and Connect beeps configurable
+//	   Change displayed Monitor flags when active window changed.
+//	   Fix duplicate text on long lines
+//	   Convert non-utf8 charater
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -26,8 +47,11 @@
 #include <time.h>
 #include <QVBoxLayout>
 #include <QListWidgetItem>
-
-
+#include <QToolButton>
+#include <QInputMethod>
+#include "QTreeWidget"
+#include <QToolBar>
+#include <QLabel>
 #ifndef WIN32
 #define strtok_s strtok_r
 #endif
@@ -60,8 +84,6 @@ int TermMode = 1;
 #define Tabbed 2
 
 int singlemodeFormat = Mon + Term;
-
-
 
 
 // There is something odd about this. It doesn't match BPQTERMTCP though it looks the same
@@ -109,21 +131,27 @@ char * sessionList = NULL;		// Saved sessions
 
 extern int ChatMode;
 extern int Bells;
+extern int StripLF;
+extern int convUTF8;
 
 extern time_t LastWrite;
 extern int AlertInterval;
 extern int AlertBeep;
 extern int AlertFreq;
 extern int AlertDuration;
+extern int ConnectBeep;
 
 // AGW Host Interface stuff
 
 int AGWEnable = 0;
+int AGWMonEnable = 0;
 char AGWTermCall[12] = "";
 char AGWBeaconDest[12] = "";
 char AGWBeaconPath[80] = "";
 int AGWBeaconInterval = 0;
 char AGWBeaconPorts[80];
+char AGWBeaconMsg[260] = "";
+
 char AGWHost[128] = "127.0.0.1";
 int AGWPortNum = 8000;
 int AGWPaclen = 80;
@@ -158,8 +186,6 @@ QMenu * YAPPMenu;
 QMenu *connectMenu;
 QMenu *disconnectMenu;
 
-QMenu * ListenMenu;
-
 QAction *MonTX;
 QAction *MonSup;
 QAction *MonNodes;
@@ -168,7 +194,17 @@ QAction *MonColour;
 QAction *MonPort[32];
 QAction *actChatMode;
 QAction *actBells;
+QAction *actStripLF;
+QAction *actIntervalBeep;
+QAction *actConnectBeep;
+QAction *actAuto;
+QAction *actCP1251;
+QAction *actCP1252;
+QAction *actCP437;
+
 QAction *actFonts;
+QAction *actmenuFont;
+QAction *actmyFonts;
 QAction *YAPPSend;
 QAction *YAPPSetRX;
 QAction *singleAct;
@@ -176,10 +212,25 @@ QAction *singleAct2;
 QAction *MDIAct;
 QAction *tabbedAct;
 QAction *discAction;
+QFont * menufont;
+QMenu *windowMenu;
+QMenu *setupMenu;
+QAction *ListenAction;
 
 QTabWidget *tabWidget;
 QMdiArea *mdiArea;
 QWidget * mythis;
+QStatusBar * myStatusBar;
+
+QTcpServer * _server;
+
+QMenuBar *mymenuBar;
+QToolBar *toolBar;
+QToolButton * but1;
+QToolButton * but2;
+QToolButton * but3;
+QToolButton * but4;
+QToolButton * but5;
 
 QList<Ui_ListenSession *> _sessions;
 
@@ -209,7 +260,10 @@ Ui_ListenSession * ActiveSession = NULL;
 
 Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label = nullptr);
 void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
-void AGW_AX25_data_in(void * AX25Sess, int PID, unsigned char * data, int Len);
+void AGW_AX25_data_in(void * AX25Sess, unsigned char * data, int Len);
+
+extern void initUTF8();
+void checkUTF8(unsigned char * Msg, int Len);
 
 void EncodeSettingsLine(int n, char * String)
 {
@@ -249,7 +303,11 @@ void DecodeSettingsLine(int n, char * String)
 	return;
 }
 
-
+#ifdef ANDROID
+#define inputheight 60
+#else
+#define inputheight 25
+#endif
 
 bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 {
@@ -271,10 +329,14 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 			if (event->type() == QEvent::Close)
 			{
 				// Window closing
-				
+
 				if (Sess->clientSocket)
+				{
+					int loops = 100;
 					Sess->clientSocket->disconnectFromHost();
-	
+					while (Sess->clientSocket && loops-- && Sess->clientSocket->state() != QAbstractSocket::UnconnectedState)
+						QThread::msleep(10);
+				}
 				_sessions.removeOne(Sess);
 			}
 
@@ -304,10 +366,10 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 
 					// Calc Positions of window
 
-					termHeight = H - (25 + 3 * Border);
+					termHeight = H - (inputheight + 3 * Border);
 
 					Sess->termWindow->setGeometry(QRect(Border, Border, Width, termHeight));
-					Sess->inputWindow->setGeometry(QRect(Border, H - (25 + Border), Width, 25));
+					Sess->inputWindow->setGeometry(QRect(Border, H - (inputheight + Border), Width, inputheight));
 				}
 				else if (Sess->SessionType == (Term | Mon))
 				{
@@ -319,11 +381,11 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 
 					monHeight = Mid - Border;
 					termX = Mid;
-					termHeight = H - Mid - (25 + 3 * Border);
+					termHeight = H - Mid - (inputheight + 3 * Border);
 
 					Sess->monWindow->setGeometry(QRect(Border, Border, Width, monHeight));
 					Sess->termWindow->setGeometry(QRect(Border, Mid + Border, Width, termHeight));
-					Sess->inputWindow->setGeometry(QRect(Border, H - (25 + Border), Width, 25));
+					Sess->inputWindow->setGeometry(QRect(Border, H - (inputheight + Border), Width, inputheight));
 				}
 				else
 				{
@@ -362,7 +424,7 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 						{
 							// Terminal is in AGWPE mode - send as AGW frame
 
-							AGW_AX25_data_in(Sess->AGWSession, 240, (unsigned char *)Msg, strlen(Msg));
+							AGW_AX25_data_in(Sess->AGWSession, (unsigned char *)Msg, (int)strlen(Msg));
 
 						}
 						else if (Sess->clientSocket && Sess->clientSocket->state() == QAbstractSocket::ConnectedState)
@@ -451,6 +513,8 @@ QAction * setupMenuLine(QMenu * Menu, char * Label, QObject * parent, int State)
 
 	parent->connect(Act, SIGNAL(triggered()), parent, SLOT(menuChecked()));
 
+	Act->setFont(*menufont);
+
 	return Act;
 }
 
@@ -494,12 +558,13 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 
 	_sessions.push_back(Sess);
 
-	Sess->setObjectName(QString::fromUtf8("Sess"));
+//	Sess->setObjectName(QString::fromUtf8("Sess"));
 
 	if (TermMode == MDI)
 	{
 		Sess->sw = mdiArea->addSubWindow(Sess);
 //		Sess->installEventFilter(parent);
+
 		Sess->sw->resize(800, 600);
 	}
 	else if (TermMode == Tabbed)
@@ -524,7 +589,7 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 	{
 		Sess->monWindow = new QTextEdit(Sess);
 		Sess->monWindow->setReadOnly(1);
-//		Sess->monWindow->setGeometry(QRect(0, 0, 770, 300));
+		Sess->monWindow->document()->setMaximumBlockCount(10000);
 		Sess->monWindow->setFont(font);
 		mythis->connect(Sess->monWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
 	}
@@ -533,12 +598,11 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 	{
 		Sess->termWindow = new QTextEdit(Sess);
 		Sess->termWindow->setReadOnly(1);
-//		Sess->termWindow->setGeometry(QRect(0, 0, 770, 300));
+		Sess->termWindow->document()->setMaximumBlockCount(10000);
 		Sess->termWindow->setFont(font);
 		mythis->connect(Sess->termWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
 
 		Sess->inputWindow = new QLineEdit(Sess);
-//		Sess->inputWindow->setGeometry(QRect(0, 0, 770, 650));
 		Sess->inputWindow->installEventFilter(parent);
 		Sess->inputWindow->setFont(font);
 		Sess->inputWindow->setContextMenuPolicy(Qt::PreventContextMenu);
@@ -548,7 +612,6 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 
 	if (Type == (Term | Mon))
 	{
-
 		// Add Custom Menu to set Mon/Term Split with Right Click
 
 		Sess->monWindow->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -564,10 +627,13 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 
 	if (Sess->SessionType == Mon)			// Mon Only
 		Sess->setWindowTitle("Monitor Session Disconnected");
+	else if (Sess->SessionType == Listen)			// Mon Only
+		Sess->setWindowTitle("Listen Window Disconnected");
 	else
 		Sess->setWindowTitle("Disconnected");
 
 	Sess->installEventFilter(mythis);
+
 	Sess->show();
 
 	int pos = (_sessions.size() - 1) * 20;
@@ -580,6 +646,7 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 	QSize Size(800, 602);						// Not actually used, but Event constructor needs it
 
 	QResizeEvent event(Size, Size);
+
 	QApplication::sendEvent(Sess, &event);		// Resize Widgets to fix Window
 
 	return Sess;
@@ -591,9 +658,20 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	int i;
 	char Title[80];
 
+	_server = new QTcpServer();
+
 	mythis = this;
 
 	ui.setupUi(this);
+
+	initUTF8();
+
+	mymenuBar = new QMenuBar(this);
+	mymenuBar->setGeometry(QRect(0, 0, 781, 26));
+	setMenuBar(mymenuBar);
+
+	toolBar = new QToolBar(this);
+	addToolBar(Qt::TopToolBarArea, toolBar);
 
 	QSettings mysettings("QtTermTCP.ini", QSettings::IniFormat);
 
@@ -601,6 +679,10 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	restoreState(mysettings.value("windowState").toByteArray());
 
 	GetSettings();
+
+	menufont = new QFont(mysettings.value("MFontFamily", "Aerial").value<QString>(),
+		mysettings.value("MPointSize", 10).toInt(),
+		mysettings.value("MWeight", 50).toInt());
 
 	if (TermMode == MDI)
 	{
@@ -636,19 +718,28 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 		ActiveSession= _sessions.at(0);
 
 		connect(tabWidget, SIGNAL(currentChanged(int)), this, SLOT(tabSelected(int)));
+
+		tabWidget->setFont(*menufont);
+
 	}
 
 	sprintf(Title, "QtTermTCP Version %s", VersionString);
 
 	this->setWindowTitle(Title);
 
-	QFont menufont = QFont("Aerial", 10);
-	
-//	ui.menuBar->setGeometry(QRect(0, 0, 951, 50));
-	ui.menuBar->setFont(menufont);
+//#ifdef ANDROID
+//	mymymenuBar->setVisible(false);
+//#endif
 
-	windowMenu = menuBar()->addMenu(tr("&Window"));
+	if (TermMode == Single)
+		windowMenu = mymenuBar->addMenu("");
+	else
+		windowMenu = mymenuBar->addMenu(tr("&Window"));
+	
 	connect(windowMenu, SIGNAL(aboutToShow()), this, SLOT(updateWindowMenu()));
+	windowMenu->setFont(*menufont);
+
+
 
 	newTermAct = new QAction(tr("New Terminal Window"), this);
 	connect(newTermAct, SIGNAL(triggered()), this, SLOT(doNewTerm()));
@@ -692,16 +783,15 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	quitAction = new QAction(tr("&Quit"), this);
 	connect(quitAction, SIGNAL(triggered()), this, SLOT(doQuit()));
 
-
 	windowMenuSeparatorAct = new QAction(this);
 	windowMenuSeparatorAct->setSeparator(true);
 
 	updateWindowMenu();
 
-	connectMenu = ui.menuBar->addMenu(tr("&Connect"));
+	connectMenu = mymenuBar->addMenu(tr("&Connect"));
 
 	actHost[16] = new QAction("AGW Connect", this);
-	actHost[16]->setFont(menufont);
+	actHost[16]->setFont(*menufont);
 	actHost[16]->setVisible(0);
 	connectMenu->addAction(actHost[16]);
 
@@ -710,17 +800,40 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	for (i = 0; i < MAXHOSTS; i++)
 	{
 		actHost[i] = new QAction(Host[i], this);
-		actHost[i]->setFont(menufont);
+		actHost[i]->setFont(*menufont);
 		connectMenu->addAction(actHost[i]);
 		connect(actHost[i], SIGNAL(triggered()), this, SLOT(Connect()));
 	}
 
-	discAction = ui.menuBar->addAction("&Disconnect");
+	discAction = mymenuBar->addAction("&Disconnect");
 	connect(discAction, SIGNAL(triggered()), this, SLOT(Disconnect()));
 	discAction->setEnabled(false);
+	
+	toolBar->setFont(*menufont);
 
-	setupMenu = ui.menuBar->addMenu(tr("&Setup"));
+#ifndef ANDROID
+	toolBar->setVisible(false);
+#endif
+	but4 = new QToolButton();
+	but4->setPopupMode(QToolButton::InstantPopup);
+	but4->setText("Window");
+	but4->addAction(windowMenu->menuAction());
+	but4->setFont(*menufont);
+	toolBar->addWidget(but4);
+
+	but5 = new QToolButton();
+	but5->setPopupMode(QToolButton::InstantPopup);
+	but5->setText("Connect");
+	but5->addAction(connectMenu->menuAction());
+	but5->setFont(*menufont);
+
+	toolBar->addWidget(but5);
+
+	toolBar->addAction(discAction);
+
+	setupMenu = mymenuBar->addMenu(tr("&Setup"));
 	hostsubMenu = setupMenu->addMenu("Setup Hosts");
+	hostsubMenu->setFont(*menufont);
 
 	for (i = 0; i < MAXHOSTS; i++)
 	{
@@ -731,7 +844,10 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 		hostsubMenu->addAction(actSetup[i]);
 		connect(actSetup[i], SIGNAL(triggered()), this, SLOT(SetupHosts()));
+
+		actSetup[i]->setFont(*menufont);
 	}
+
 
 	// Setup Presentation Options
 
@@ -757,18 +873,46 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	setupMenu->addSeparator();
 
-	actFonts = new QAction("Setup Fonts", this);
+	actFonts = new QAction("Setup Terminal Font", this);
 	setupMenu->addAction(actFonts);
-	connect(actFonts, SIGNAL(triggered()), this, SLOT(selFont()));
+	connect(actFonts, SIGNAL(triggered()), this, SLOT(doFonts()));
+	actFonts->setFont(*menufont);
 
-	AGWAction = new QAction("AGW Setup", this); 
+	actmenuFont = new QAction("Setup Menu Font", this);
+	setupMenu->addAction(actmenuFont);
+	connect(actmenuFont, SIGNAL(triggered()), this, SLOT(doMFonts()));
+	actmenuFont->setFont(*menufont);
+
+	AGWAction = new QAction("AGW Setup", this);
 	setupMenu->addAction(AGWAction);
 	connect(AGWAction, SIGNAL(triggered()), this, SLOT(AGWSlot()));
+	AGWAction->setFont(*menufont);
 
 	actChatMode = setupMenuLine(setupMenu, (char *)"Chat Terminal Mode", this, ChatMode);
 	actBells = setupMenuLine(setupMenu, (char *)"Enable Bells", this, Bells);
+	actStripLF = setupMenuLine(setupMenu, (char *)"Strip LineFeeds", this, StripLF);
+	actIntervalBeep = setupMenuLine(setupMenu, (char *)"Beep after inactivity", this, AlertBeep);
+	actConnectBeep = setupMenuLine(setupMenu, (char *)"Beep on inbound connect", this, ConnectBeep);
 
-	monitorMenu = ui.menuBar->addMenu(tr("&Monitor"));
+	setupMenu->addAction(new QAction("Interpret non-UTF8 input as", this));
+	QActionGroup * cpGroup = new QActionGroup(this);
+
+	actAuto = setupMenuLine(nullptr, (char *)"  Auto", this, convUTF8 == 0);
+	actCP1251 = setupMenuLine(nullptr, (char *)"  CP1251 (Cyrillic)", this, convUTF8 == 1251);
+	actCP1252 = setupMenuLine(nullptr, (char *)"  CP1252 (Western Europe)", this, convUTF8 == 1252);
+	actCP437 = setupMenuLine(nullptr, (char *)"  CP437 (Windows Line Draw)", this, convUTF8 == 437);
+
+	cpGroup->addAction(actAuto);
+	cpGroup->addAction(actCP1251);
+	cpGroup->addAction(actCP1252);
+	cpGroup->addAction(actCP437);
+
+	setupMenu->addAction(actAuto);
+	setupMenu->addAction(actCP1251);
+	setupMenu->addAction(actCP1252);
+	setupMenu->addAction(actCP437);
+
+	monitorMenu = mymenuBar->addMenu(tr("&Monitor"));
 
 	MonTX = setupMenuLine(monitorMenu, (char *)"Monitor TX", this, 1);
 	MonSup = setupMenuLine(monitorMenu, (char *)"Monitor Supervisory", this, 1);
@@ -782,13 +926,29 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 		MonPort[i]->setVisible(false);
 	}
 
-	ListenAction = ui.menuBar->addAction("&Listen");
+	but1 = new QToolButton();
+	but1->setPopupMode(QToolButton::InstantPopup);
+	but1->setText("Monitor");
+	but1->addAction(monitorMenu->menuAction());
+	toolBar->addWidget(but1);
+
+	but2 = new QToolButton();
+	but2->setPopupMode(QToolButton::InstantPopup);
+	but2->setText("Setup");
+	but2->addAction(setupMenu->menuAction());
+	toolBar->addWidget(but2);
+
+	ListenAction = mymenuBar->addAction("&Listen");
 	connect(ListenAction, SIGNAL(triggered()), this, SLOT(ListenSlot()));
 
-	YAPPMenu = ui.menuBar->addMenu(tr("&YAPP"));
+	toolBar->addAction(ListenAction);
+
+	YAPPMenu = mymenuBar->addMenu(tr("&YAPP"));
 
 	YAPPSend = new QAction("Send File", this);
 	YAPPSetRX = new QAction("Set Receive Directory", this);
+	YAPPSend->setFont(*menufont);
+	YAPPSetRX->setFont(*menufont);
 
 	YAPPMenu->addAction(YAPPSend);
 	YAPPMenu->addAction(YAPPSetRX);
@@ -797,8 +957,17 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connect(YAPPSend, SIGNAL(triggered()), this, SLOT(doYAPPSend()));
 	connect(YAPPSetRX, SIGNAL(triggered()), this, SLOT(doYAPPSetRX()));
 
-	// Set up Status Bar
 
+	but3 = new QToolButton();
+	but3->setPopupMode(QToolButton::InstantPopup);
+	but3->setText("YAPP");
+	but3->addAction(YAPPMenu->menuAction());
+	but3->setFont(*menufont);
+	toolBar->addWidget(but3);
+
+	toolBar->setFont(*menufont);
+
+	// Set up Status Bar
 	
 	setStyleSheet("QStatusBar{border-top: 1px outset black;} QStatusBar::item { border: 1px solid black; border-radius: 3px;}");
 //	setStyleSheet("QStatusBar{border-top: 1px outset black;}");
@@ -814,14 +983,14 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	Status3->setFixedWidth(100);
 	Status4->setFixedWidth(100);
 
+	myStatusBar = statusBar();
 
 	statusBar()->addPermanentWidget(Status4);
 	statusBar()->addPermanentWidget(Status3);
 	statusBar()->addPermanentWidget(Status2);
 	statusBar()->addPermanentWidget(Status1);
 
-	if (AGWEnable == 0)
-		Status1->setText("AGW Interface Disabled");
+	statusBar()->setVisible(AGWEnable);
 
 	// Restore saved sessions
 
@@ -871,15 +1040,46 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	MyTimerSlot();
 
 	if (listenEnable)
-		_server.listen(QHostAddress::Any, listenPort);
+		_server->listen(QHostAddress::Any, listenPort);
 	
-	connect(&_server, SIGNAL(newConnection()), this, SLOT(onNewConnection()));
+	connect(_server, SIGNAL(newConnection()), this, SLOT(onNewConnection()));
+
+	setFonts();
+}
+
+void QtTermTCP::setFonts()
+{
+	windowMenu->menuAction()->setFont(*menufont);
+	connectMenu->menuAction()->setFont(*menufont);
+	setupMenu->menuAction()->setFont(*menufont);
+	monitorMenu->menuAction()->setFont(*menufont);
+	YAPPMenu->menuAction()->setFont(*menufont);
+
+	if (tabWidget)
+		tabWidget->setFont(*menufont);
+	mymenuBar->setFont(*menufont);
+	toolBar->setFont(*menufont);
+	but1->setFont(*menufont);
+	but2->setFont(*menufont);
+	but3->setFont(*menufont);
+	but4->setFont(*menufont);
+	but5->setFont(*menufont);
+	discAction->setFont(*menufont);
+	ListenAction->setFont(*menufont);
+
+	for (int i = 0; i < MAXHOSTS; i++)
+	{
+		actHost[i]->setFont(*menufont);
+		actSetup[i]->setFont(*menufont);
+	}
+
+	actHost[16]->setFont(*menufont);			// AGW  Host
 }
 
 void QtTermTCP::doQuit()
 {
-	if (_server.isListening())
-		_server.close();
+	if (_server->isListening())
+		_server->close();
 
 	SaveSettings();
 
@@ -1046,46 +1246,14 @@ void QtTermTCP::tabSelected(int Current)
 					SetPortMonLine(portnum, msg, 1, 0);
 			}
 			free(ptr);
+
+			MonTX->setChecked(Sess->mtxparam);
+			MonSup->setChecked(Sess->mcomparam);
+			MonUI->setChecked(Sess->monUI);
+			MonNodes->setChecked(Sess->MonitorNODES);
+			MonColour->setChecked(Sess->MonitorColour);
 		}
 		return;
-	}
-}
-
-void QtTermTCP::selFont()
-{
-	bool ok;
-
-	QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
-
-	QFont font= QFontDialog::getFont(&ok,
-		QFont(settings.value("FontFamily", "Courier New").value<QString>(),
-			settings.value("PointSize", 10).toInt(),
-			settings.value("Weight", 50).toInt()),
-		this, "Select Font", QFontDialog::MonospacedFonts);
-
-	if (ok)
-	{
-		Ui_ListenSession * Sess;
-
-		for (int i = 0; i < _sessions.size(); ++i)
-		{
-			Sess = _sessions.at(i);
-		
-//		for (Ui_ListenSession * Sess : _sessions)
-//		{
-			if (Sess->termWindow)
-				Sess->termWindow->setFont(font);
-
-			if (Sess->inputWindow)
-				Sess->inputWindow->setFont(font);
-
-			if (Sess->monWindow)
-				Sess->monWindow->setFont(font);
-		}
-	
-		settings.setValue("FontFamily", font.family());
-		settings.setValue("PointSize", font.pointSize());
-		settings.setValue("Weight", font.weight());
 	}
 }
 
@@ -1109,33 +1277,6 @@ void QtTermTCP::SetupHosts()
 	tabdialog.exec();
 }
 
-Ui_AGWConnectDkg * AGWConSess;
-QDialog * MUI;
-
-void QtTermTCP::AGWConaccept()
-{
-	QVariant Q;
-
-	int port = AGWConSess->RadioPorts->currentRow();
-	char CallFrom[32];
-	char CallTo[32];
-	char Via[128];
-
-	strcpy(CallFrom, AGWConSess->CallFrom->text().toUpper().toUtf8());
-	strcpy(CallTo, AGWConSess->CallTo->currentText().toUpper().toUtf8());
-	strcpy(Via, AGWConSess->Digis->text().toUpper().toUtf8());
-
-	// Add CallTo if not already in list
-
-	if (AGWToCalls.contains(CallTo))
-		AGWToCalls.removeOne(CallTo);
-
-	AGWToCalls.insert(-1, CallTo);
-
-	Send_AGW_C_Frame(ActiveSession, port, CallFrom, CallTo, Via, strlen(Via));
-
-	MUI->close();
-}
 
 
 void QtTermTCP::Connect()
@@ -1154,48 +1295,10 @@ void QtTermTCP::Connect()
 
 	if (i == 16)
 	{
-		AGWConSess = new(Ui_AGWConnectDkg);
-		MUI = new(QDialog);
-		QString str;
-		int count;
+		// This runs the AGW COnnection dialog
 
-		char * Context;
-		char * ptr;
-
-		AGWConSess->setupUi(MUI);
-
-		AGWConSess->CallFrom->setText(AGWTermCall);
-
-		AGWConSess->CallTo->addItems(AGWToCalls);
-
-
-		if (AGWPortList)
-		{
-			char * Temp = strdup(AGWPortList);		// Need copy as strtok messes with it
-
-			count = atoi(Temp);
-
-			ptr = strtok_s(Temp, ";", &Context);
-
-			for (int n = 0; n < count; n++)
-			{
-				ptr = strtok_s(NULL, ";", &Context);
-				new QListWidgetItem(ptr, AGWConSess->RadioPorts);
-			}
-
-			free(Temp);
-		}
-	
-
-	//	AGWSess->beaconPorts->setText(AGWBeaconPorts);
-
-	//	AGWSess->Host->setText(AGWHost);
-
-		str.setNum(AGWPortNum);
-	
-		connect(AGWConSess->okButton, SIGNAL(pressed()), this, SLOT(AGWConaccept()));
-
-		MUI->show();
+		AGWConnect dialog(0);
+		dialog.exec();
 
 		return;
 	}
@@ -1457,6 +1560,20 @@ void QtTermTCP::menuChecked()
 		ChatMode = state;
 	else if (Act == actBells)
 		Bells = state;
+	else if (Act == actStripLF)
+		StripLF = state;
+	else if (Act == actIntervalBeep)
+		AlertBeep = state;
+	else if (Act == actConnectBeep)
+		ConnectBeep = state;
+	else if (Act == actAuto)
+		convUTF8 = 0;
+	else if (Act == actCP1251)
+		convUTF8 = 1251;
+	else if (Act == actCP1252)
+		convUTF8 = 1252;
+	else if (Act == actCP437)
+		convUTF8 = 437;
 	else
 	{
 		// look for port entry
@@ -1508,10 +1625,10 @@ void QtTermTCP::LDisconnect(Ui_ListenSession * LUI)
 		LUI->clientSocket->disconnectFromHost();
 }
 
+extern QApplication * a;
 
 void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 {
-
 	QByteArray stringData = Sess->inputWindow->text().toUtf8();
 
 	// if multiline input (eg from copy/paste) replace LF with CR
@@ -1545,6 +1662,9 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 
 	Msgptr = stringData.data();
 
+	while ((ptr = strchr(Msgptr, 11)))	// Replace VT with LF
+		*ptr++ = 10;
+
 	LastWrite = time(NULL);				// Stop initial beep
 
 	if (Sess->AGWSession)
@@ -1559,9 +1679,9 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 			strcpy(Msg, Msgptr);
 			strcat(Msg, "\r");
 
-			AGW_AX25_data_in(Sess->AGWSession, 240, (unsigned char *)Msg, strlen(Msg));
+			AGW_AX25_data_in(Sess->AGWSession, (unsigned char *)Msg, (int)strlen(Msg));
 
-			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
 				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 0);		// Black
 
 //			Sess->termWindow->insertPlainText(Msg);
@@ -1583,7 +1703,7 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 
 			Sess->clientSocket->write(Msg);
 
-			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
 				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 0);		// Black
 
 //			Sess->termWindow->insertPlainText(Msg);
@@ -1601,7 +1721,7 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 		{
 			char Msg[] = "Connecting....\r";
 
-			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
 					Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
 
 			delete(Sess->clientSocket);
@@ -1620,7 +1740,7 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 		{
 			char Msg[] = "Incoming Session - Can't Connect\r";
 
-			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
 				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
 
 		}
@@ -1630,6 +1750,7 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 		Sess->termWindow->moveCursor(QTextCursor::End);
 
 	Sess->inputWindow->setText("");
+	a->inputMethod()->hide();
 }
 
 
@@ -1665,7 +1786,7 @@ void QtTermTCP::displayError(QAbstractSocket::SocketError socketError)
 void QtTermTCP::readyRead()
 {
 	int Read;
-	unsigned char Buffer[4096];
+	unsigned char Buffer[8192];
 	myTcpSocket* Socket = static_cast<myTcpSocket*>(QObject::sender());
 
 	Ui_ListenSession * Sess = (Ui_ListenSession *)Socket->Sess;
@@ -1677,6 +1798,9 @@ void QtTermTCP::readyRead()
 	if (Read > 0)
 	{
 		Buffer[Read] = 0;
+		checkUTF8(Buffer, Read);
+		Read = (int)strlen((char *)Buffer);
+
 
 //		if (InputMode == 'Y')			// Yapp
 //		{
@@ -1705,6 +1829,9 @@ extern "C" int SocketSend(Ui_ListenSession * Sess, char * Buffer, int len)
 
 extern "C" int SocketFlush(Ui_ListenSession * Sess)
 {
+	if (Sess->AGWSession)
+		return 0;
+
 	myTcpSocket* Socket = Sess->clientSocket;
 
 	if (Socket->state() == QAbstractSocket::ConnectedState)
@@ -1737,14 +1864,13 @@ extern "C" void WritetoOutputWindow(Ui_ListenSession * Sess, unsigned char * Buf
 
 extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int * OutputSaveLen, char * OutputSave, int Colour)
 {
-	char Copy[8192];
-	char * ptr1, *ptr2;
-	char Line[512];
+	unsigned char Copy[8192];
+	unsigned char * ptr1, *ptr2;
+	unsigned char Line[8192];
 	int num;
 
 	if (termWindow == NULL)
 		return;
-
 
 	time_t NOW = time(NULL);
 
@@ -1766,53 +1892,59 @@ extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * B
 
 	ptr1 = Copy;
 
-	// Write a line at a time so we can action colour chars
-
-//		Buffer[Len] = 0;
+		const QTextCursor old_cursor = termWindow->textCursor();
+		const int old_scrollbar_value = termWindow->verticalScrollBar()->value();
+		const bool is_scrolled_down = old_scrollbar_value == termWindow->verticalScrollBar()->maximum();
 
 	if (*OutputSaveLen)
 	{
 		// Have part line - append to it
 		memcpy(&OutputSave[*OutputSaveLen], Copy, len);
 		*OutputSaveLen += len;
-		ptr1 = OutputSave;
+		ptr1 = (unsigned char *)OutputSave;
 		len = *OutputSaveLen;
 		*OutputSaveLen = 0;
 
 		// part line was written to screen so remove it
 
 //		termWindow->setFocus();
-		QTextCursor storeCursorPos = termWindow->textCursor();
 		termWindow->moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
-		termWindow->moveCursor(QTextCursor::StartOfLine, QTextCursor::MoveAnchor);
+		termWindow->moveCursor(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor);
 		termWindow->moveCursor(QTextCursor::End, QTextCursor::KeepAnchor);
 		termWindow->textCursor().removeSelectedText();
-//		termWindow->textCursor().deletePreviousChar();
-		termWindow->setTextCursor(storeCursorPos);
-
+		//		termWindow->textCursor().deletePreviousChar();
 	}
-	else
-	{
-		QScrollBar *scrollbar = termWindow->verticalScrollBar();
-		scrollbarAtBottom = (scrollbar->value() >= (scrollbar->maximum() - 4));
 
-		if (scrollbarAtBottom)
-			termWindow->moveCursor(QTextCursor::End);
-	}
+	// Move the cursor to the end of the document.
+	
+	termWindow->moveCursor(QTextCursor::End);
+
+	// Insert the text at the position of the cursor (which is the end of the document).
 
 lineloop:
 
 	if (len <= 0)
 	{
-		if (scrollbarAtBottom)
+		if (old_cursor.hasSelection() || !is_scrolled_down)
+		{
+			// The user has selected text or scrolled away from the bottom: maintain position.
+			termWindow->setTextCursor(old_cursor);
+			termWindow->verticalScrollBar()->setValue(old_scrollbar_value);
+		}
+		else
+		{
+			// The user hasn't selected any text and the scrollbar is at the bottom: scroll to the bottom.
 			termWindow->moveCursor(QTextCursor::End);
+			termWindow->verticalScrollBar()->setValue(termWindow->verticalScrollBar()->maximum());
+		}
 
 		return;
 	}
 
+
 	//	copy text to control a line at a time	
 
-	ptr2 = (char *)memchr(ptr1, 13, len);
+	ptr2 = (unsigned char *)memchr(ptr1, 13, len);
 
 	if (ptr2 == 0)	// No CR
 	{
@@ -1827,25 +1959,44 @@ lineloop:
 		memcpy(Line, ptr1, len);
 		Line[len] = 0;
 
+		// I don't think I need to worry oif UTF8 as will be rewritten when rest arrives
+
 		if (Line[0] == 0x1b)			// Colour Escape
 		{
 			if (Sess->MonitorColour)
 				termWindow->setTextColor(Colours[Line[1] - 10]);
 
-			termWindow->insertPlainText(QString::fromUtf8((char*)&Line[2]));
+//			termWindow->append(QString::fromUtf8((char*)&Line[2]));
+			termWindow->textCursor().insertText(QString::fromUtf8((char*)&Line[2]));
+
 		}
 		else
 		{
 			termWindow->setTextColor(Colours[23]);
-			termWindow->insertPlainText(QString::fromUtf8((char*)Line));
+//			termWindow->append(QString::fromUtf8((char*)Line));
+			termWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
 		}
 
-		*OutputSaveLen = 0;		// Test if we need to delete part line
+//		*OutputSaveLen = 0;		// Test if we need to delete part line
 
-		if (scrollbarAtBottom)
+//		if (scrollbarAtBottom)
+//			termWindow->moveCursor(QTextCursor::End);
+
+		if (old_cursor.hasSelection() || !is_scrolled_down)
+		{
+			// The user has selected text or scrolled away from the bottom: maintain position.
+			termWindow->setTextCursor(old_cursor);
+			termWindow->verticalScrollBar()->setValue(old_scrollbar_value);
+		}
+		else
+		{
+			// The user hasn't selected any text and the scrollbar is at the bottom: scroll to the bottom.
 			termWindow->moveCursor(QTextCursor::End);
+			termWindow->verticalScrollBar()->setValue(termWindow->verticalScrollBar()->maximum());
+		}
 
 		return;
+
 	}
 
 	*(ptr2++) = 0;
@@ -1878,21 +2029,32 @@ lineloop:
 		if (Sess->MonitorColour)
 			termWindow->setTextColor(Colours[Line[1] - 10]);
 
-		termWindow->insertPlainText(QString::fromUtf8((char*)&Line[2]));
+//		checkUTF8(&Line[2]);
+		termWindow->textCursor().insertText(QString::fromUtf8((char*)&Line[2]));
 	}
 	else
 	{
 		termWindow->setTextColor(Colours[Colour]);
-		termWindow->insertPlainText(QString::fromUtf8((char*)Line));
+//		checkUTF8(Line); 
+		termWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
 	}
 
 	len -= (ptr2 - ptr1);
 
 	ptr1 = ptr2;
 
-	goto lineloop;
+	if ((len > 0) && StripLF)
+	{
+		if (*ptr1 == 0x0a)					// Line Feed
+		{
+			ptr1++;
+			len--;
+		}
+	}
 
-	termWindow->setTextColor(Colours[23]);
+
+
+	goto lineloop;
 
 }
 
@@ -1902,15 +2064,28 @@ extern "C" void WritetoMonWindow(Ui_ListenSession * Sess, unsigned char * Msg, i
 	char Line[512];
 	int num;
 
-	QScrollBar *scrollbar = Sess->monWindow->verticalScrollBar();
-	bool scrollbarAtBottom = (scrollbar->value() >= (scrollbar->maximum() - 4));
+//	QScrollBar *scrollbar = Sess->monWindow->verticalScrollBar();
+//	bool scrollbarAtBottom = (scrollbar->value() >= (scrollbar->maximum() - 4));
+
+	if (Sess->monWindow == nullptr)
+		return;
+
+	const QTextCursor old_cursor = Sess->monWindow->textCursor();
+	const int old_scrollbar_value = Sess->monWindow->verticalScrollBar()->value();
+	const bool is_scrolled_down = old_scrollbar_value == Sess->monWindow->verticalScrollBar()->maximum();
+
+	// Move the cursor to the end of the document.
+	Sess->monWindow->moveCursor(QTextCursor::End);
+
+	// Insert the text at the position of the cursor (which is the end of the document).
+
 
 	// Write a line at a time so we can action colour chars
 		
 //		Buffer[Len] = 0;
 
-	if (scrollbarAtBottom)
-		Sess->monWindow->moveCursor(QTextCursor::End);
+//	if (scrollbarAtBottom)
+//		Sess->monWindow->moveCursor(QTextCursor::End);
 
 	if (Sess->MonSaveLen)
 	{
@@ -1926,8 +2101,22 @@ lineloop:
 
 	if (len <= 0)
 	{
-		if (scrollbarAtBottom)
+//		if (scrollbarAtBottom)
+//			Sess->monWindow->moveCursor(QTextCursor::End);
+
+
+		if (old_cursor.hasSelection() || !is_scrolled_down)
+		{
+			// The user has selected text or scrolled away from the bottom: maintain position.
+			Sess->monWindow->setTextCursor(old_cursor);
+			Sess->monWindow->verticalScrollBar()->setValue(old_scrollbar_value);
+		}
+		else
+		{
+			// The user hasn't selected any text and the scrollbar is at the bottom: scroll to the bottom.
 			Sess->monWindow->moveCursor(QTextCursor::End);
+			Sess->monWindow->verticalScrollBar()->setValue(Sess->monWindow->verticalScrollBar()->maximum());
+		}
 
 		return;
 	}
@@ -1966,11 +2155,12 @@ lineloop:
 			Sess->monWindow->setTextColor(QColor("black"));
 
 
-		Sess->monWindow->insertPlainText(QString::fromUtf8((char*)&Line[2]));
+		Sess->monWindow->textCursor().insertText(QString::fromUtf8((char*)&Line[2]));
 	}
 	else
 	{
-		Sess->monWindow->insertPlainText(QString::fromUtf8((char*)Line));
+		Sess->monWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
+//		Sess->monWindow->append(QString::fromUtf8((char*)Line));
 	}
 	len -= (ptr2 - ptr1);
 
@@ -2007,6 +2197,9 @@ void GetSettings()
 	Split = settings.value("Split", 50).toInt();
 	ChatMode = settings.value("ChatMode", 1).toInt();
 	Bells = settings.value("Bells", 1).toInt();
+	StripLF = settings.value("StripLF", 1).toInt();
+	AlertBeep = settings.value("AlertBeep", 1).toInt();
+	ConnectBeep = settings.value("ConnectBeep", 1).toInt();
 	SavedHost = settings.value("CurrentHost", 0).toInt();
 	strcpy(YAPPPath, settings.value("YAPPPath", "").toString().toUtf8());
 
@@ -2018,15 +2211,18 @@ void GetSettings()
 	singlemodeFormat = settings.value("singlemodeFormat", Term + Mon).toInt();
 
 	AGWEnable = settings.value("AGWEnable", 0).toInt();
+	AGWMonEnable = settings.value("AGWMonEnable", 0).toInt();
 	strcpy(AGWTermCall, settings.value("AGWTermCall", "").toString().toUtf8());
 	strcpy(AGWBeaconDest, settings.value("AGWBeaconDest", "").toString().toUtf8());
 	strcpy(AGWBeaconPath, settings.value("AGWBeaconPath", "").toString().toUtf8());
 	AGWBeaconInterval = settings.value("AGWBeaconInterval", 0).toInt();
 	strcpy(AGWBeaconPorts, settings.value("AGWBeaconPorts", "").toString().toUtf8());
+	strcpy(AGWBeaconMsg, settings.value("AGWBeaconText", "").toString().toUtf8());
 	strcpy(AGWHost, settings.value("AGWHost", "127.0.0.1").toString().toUtf8());
 	AGWPortNum = settings.value("AGWPort", 8000).toInt();
 	AGWPaclen = settings.value("AGWPaclen", 80).toInt();
 	AGWToCalls = settings.value("AGWToCalls","").toStringList();
+	convUTF8 = settings.value("convUTF8", 0).toInt();
 
 	strcpy(Param, settings.value("TabType", "1 1 1 1 1 1 1 2 2").toString().toUtf8());
 	sscanf(Param, "%d %d %d %d %d %d %d %d %d %d",
@@ -2053,12 +2249,16 @@ extern "C" void SaveSettings()
 	settings.setValue("Split", Split);
 	settings.setValue("ChatMode", ChatMode);
 	settings.setValue("Bells", Bells);
+	settings.setValue("StripLF", StripLF);
+	settings.setValue("AlertBeep", AlertBeep);
+	settings.setValue("ConnectBeep", ConnectBeep);
 	settings.setValue("CurrentHost", SavedHost);
 
 	settings.setValue("YAPPPath", YAPPPath);
 	settings.setValue("listenPort", listenPort);
 	settings.setValue("listenEnable", listenEnable);
 	settings.setValue("listenCText", listenCText);
+	settings.setValue("convUTF8", convUTF8);
 
 	// Save Sessions
 
@@ -2083,11 +2283,13 @@ extern "C" void SaveSettings()
 	}
 
 	settings.setValue("AGWEnable", AGWEnable);
+	settings.setValue("AGWMonEnable", AGWMonEnable);
 	settings.setValue("AGWTermCall", AGWTermCall);
 	settings.setValue("AGWBeaconDest", AGWBeaconDest);
 	settings.setValue("AGWBeaconPath", AGWBeaconPath);
 	settings.setValue("AGWBeaconInterval", AGWBeaconInterval);
 	settings.setValue("AGWBeaconPorts", AGWBeaconPorts);
+	settings.setValue("AGWBeaconText", AGWBeaconMsg);
 	settings.setValue("AGWHost", AGWHost);
 	settings.setValue("AGWPort", AGWPortNum);
 	settings.setValue("AGWPaclen", AGWPaclen);
@@ -2101,11 +2303,52 @@ extern "C" void SaveSettings()
 	settings.sync();
 }
 
+#include <QCloseEvent>
+
+void QtTermTCP::closeEvent(QCloseEvent *event)
+{
+	QMessageBox::StandardButton resBtn = QMessageBox::question(this, "QtTermTCP",
+		tr("Are you sure?\n"),
+		QMessageBox::Cancel | QMessageBox::No | QMessageBox::Yes,
+		QMessageBox::Yes);
+	if (resBtn != QMessageBox::Yes) {
+		event->ignore();
+	}
+	else {
+		event->accept();
+	}
+}
 
 QtTermTCP::~QtTermTCP()
 {
-	if (_server.isListening())
-		_server.close();
+	Ui_ListenSession * Sess;
+
+	for (int i = 0; i < _sessions.size(); ++i)
+	{
+		Sess = _sessions.at(i);
+
+		if (Sess->clientSocket)
+		{
+			int loops = 100;
+			Sess->clientSocket->disconnectFromHost();
+			while (Sess->clientSocket && loops-- && Sess->clientSocket->state() != QAbstractSocket::UnconnectedState)
+				QThread::msleep(10);
+		}
+
+	}
+
+	if (AGWSock && AGWSock->ConnectedState == QAbstractSocket::ConnectedState)
+	{
+		int loops = 100;
+		AGWSock->disconnectFromHost();
+		while (AGWSock && loops-- && AGWSock->state() != QAbstractSocket::UnconnectedState)
+			QThread::msleep(10);
+	}
+
+	if (_server->isListening())
+		_server->close();
+
+	delete(_server);
 
 	QSettings mysettings("QtTermTCP.ini", QSettings::IniFormat);
 	mysettings.setValue("geometry", saveGeometry());
@@ -2155,142 +2398,35 @@ extern "C" void Beep()
 	QApplication::beep();
 }
 
-Ui_ListenPort  * Sess;
-
-void QtTermTCP::myaccept()
-{
-	QString val = Sess->portNo->text();
-    QByteArray qb = val.toLatin1();
-	char * ptr = qb.data();
-
-	listenPort = atoi(ptr);
-	listenEnable = Sess->Enabled->isChecked();
-	strcpy(listenCText, Sess->CText->toPlainText().toUtf8());
-
-	while ((ptr = strchr(listenCText, '\n')))
-		*ptr = '\r';
-
-	if (_server.isListening())
-		_server.close();
-
-	if (listenEnable)
-		_server.listen(QHostAddress::Any, listenPort);
-
-	SaveSettings();
-	MUI->close();
-}
 
 void QtTermTCP::ListenSlot()
 {
 	// This runs the Listen Configuration dialog
 
-	Sess = new(Ui_ListenPort);
-	MUI = new(QDialog);
-	char portnum[16];
-	sprintf(portnum, "%d", listenPort);
-	QString portname(portnum);
-
- 	Sess->setupUi(MUI);
-
-	Sess->portNo->setText(portname);
-	Sess->Enabled->setChecked(listenEnable);
-	Sess->CText->setText(listenCText);
-
-	connect(Sess->buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
-
-	MUI->show();
+	ListenDialog  * xx = new ListenDialog();
+	xx->exec();
 }
-
-Ui_AGWParams  * AGWSess;
-
-void QtTermTCP::AGWaccept()
-{
-	QVariant Q;
-
-	int OldEnable = AGWEnable;
-	int OldPort = AGWPortNum;
-
-//	QString val = Sess->portNo->text();A
-//	QByteArray qb = val.toLatin1();
-//	char * ptr = qb.data();
-
-	AGWEnable = AGWSess->AGWEnable->isChecked();
-
-	strcpy(AGWTermCall, AGWSess->TermCall->text().toUtf8().toUpper());
-	strcpy(AGWBeaconDest, AGWSess->beaconDest->text().toUtf8().toUpper());
-
-	Q = AGWSess->beaconInterval->text();
-	AGWBeaconInterval = Q.toInt();
-
-	strcpy(AGWHost, AGWSess->Host->text().toUtf8());
-
-	Q = AGWSess->Port->text();
-	AGWPortNum = Q.toInt();
-
-	SaveSettings();
-
-	if (AGWEnable != OldEnable || AGWPortNum != OldPort)
-	{
-		// (re)start connection
-
-		if (OldEnable && AGWSock && AGWSock->ConnectedState == QAbstractSocket::ConnectedState)
-		{
-			AGWSock->disconnectFromHost();
-			Status1->setText("AGW Disconnected");
-		}
-		
-		// AGWTimer will reopen connection
-
-	}
-	MUI->close();
-}
-
 
 void QtTermTCP::AGWSlot()
 {
-	// This runs the Listen Configuration dialog
+	// This runs the AGW Configuration dialog
 
-	AGWSess = new(Ui_AGWParams);
-	MUI = new(QDialog);
-	QString str;
-
-	AGWSess->setupUi(MUI);
-
-	AGWSess->AGWEnable->setChecked(AGWEnable);
-	AGWSess->TermCall->setText(AGWTermCall);
-	AGWSess->beaconDest->setText(AGWBeaconDest);
-	AGWSess->beaconPath->setText(AGWBeaconPath);
-
-	str.setNum(AGWBeaconInterval);
-	AGWSess->beaconInterval->setText(str);
-
-	AGWSess->beaconPorts->setText(AGWBeaconPorts);
-
-	AGWSess->Host->setText(AGWHost);
-
-	str.setNum(AGWPortNum);
-	AGWSess->Port->setText(str);
-
-	str.setNum(AGWPaclen);
-	AGWSess->Paclen->setText(str);
-
-	connect(AGWSess->okButton, SIGNAL(pressed()), this, SLOT(AGWaccept()));
-
-	MUI->show();
+	AGWDialog dialog(0);
+	dialog.exec();
 }
 
 // This handles incoming connections
 
 void QtTermTCP::onNewConnection()
 {
-	myTcpSocket *clientSocket = (myTcpSocket *)_server.nextPendingConnection();
+	myTcpSocket *clientSocket = (myTcpSocket *)_server->nextPendingConnection();
 
 	clientSocket->Sess = NULL;
 
 	Ui_ListenSession * S;
 	Ui_ListenSession  * Sess = NULL;
 
-	char Title[128];
+	char Title[512];
 	int i = 0;
 
 	QByteArray Host = clientSocket->peerAddress().toString().toUtf8();
@@ -2323,13 +2459,13 @@ void QtTermTCP::onNewConnection()
 	}
 	else
 	{
-		// Single or MDI - look for free session
+		// Single or Tabbed - look for free session
 
 		for (i = 0; i < _sessions.size(); ++i)
 		{
 			S = _sessions.at(i);
 
-			if (S->clientSocket == NULL)
+			if (S->clientSocket == NULL && S->AGWSession == NULL)
 			{
 				Sess = S;
 				break;
@@ -2356,6 +2492,8 @@ void QtTermTCP::onNewConnection()
 	QByteArray datas = clientSocket->readAll();
 
 	datas.chop(2);
+	datas.truncate(10);				// Just in case!
+
 	datas.append('\0');
 
 	sprintf(Title, "Inward Connect from %s:%d Call " + datas,
@@ -2377,19 +2515,32 @@ void QtTermTCP::onNewConnection()
 
 	Sess->clientSocket = clientSocket;
 
-	if (Sess->sw == ActiveSubWindow)
-	{
-		// We need to set Connect and Disconnect as the window is already active
+	// We need to set Connect and Disconnect if the window is active
 
+	if (TermMode == MDI && Sess->sw == ActiveSubWindow)
 		setMenus(true);
-	}
+	
+	if (TermMode == Tabbed && Sess->Tab == tabWidget->currentIndex())
+		setMenus(true);
+	
+	if (TermMode == Single)
+		setMenus(true);			// Single
 
 	// Send CText if defined
 
 	if (listenCText[0])
 		Sess->clientSocket->write(listenCText);
 
-	Beep();
+	// Send Message to Terminal
+
+	char Msg[80];
+
+	sprintf(Msg, "Listen Connect from %s\r\r", datas.data());
+
+	WritetoOutputWindow(Sess, (unsigned char *)Msg, (int)strlen(Msg)); 
+
+	if (ConnectBeep)
+		Beep();
 }
 
 void QtTermTCP::onSocketStateChanged(QAbstractSocket::SocketState socketState)
@@ -2401,7 +2552,7 @@ void QtTermTCP::onSocketStateChanged(QAbstractSocket::SocketState socketState)
 	{
 		char Msg[] = "Disconnected\r";
 
-		WritetoOutputWindowEx(Sess, (unsigned char *)Msg, strlen(Msg),
+		WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
 			Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
 
 		if (TermMode == MDI)
@@ -2545,13 +2696,22 @@ void QtTermTCP::updateWindowMenu()
 
 Ui_ListenSession::~Ui_ListenSession()
 {
-//	subwindow = NULL;
+	if (this->clientSocket)
+	{
+		int loops = 100;
+		this->clientSocket->disconnectFromHost();
+		while (loops-- && this->clientSocket->state() != QAbstractSocket::UnconnectedState)
+			QThread::msleep(10);
+	}
 }
 
 extern "C" void setTraceOff(Ui_ListenSession * Sess)
 {
 	if ((Sess->SessionType & Mon) == 0)
 		return;					// Not Monitor
+
+	if (Sess->AGWSession)
+		return;
 
 	char Buffer[80];
 	int Len = sprintf(Buffer, "\\\\\\\\0 0 0 0 0 0 0 0\r");
@@ -2566,6 +2726,9 @@ extern "C" void SendTraceOptions(Ui_ListenSession * Sess)
 {
 	if ((Sess->SessionType & Mon) == 0)
 		return;					// Not Monitor
+
+	if (Sess->AGWSession)
+		return;
 	
 	char Buffer[80];
 	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x %x\r", Sess->portmask, Sess->mtxparam, Sess->mcomparam, 
@@ -2714,9 +2877,29 @@ void QtTermTCP::xon_mdiArea_changed()
 						SetPortMonLine(portnum, msg, 1, 0);
 				}
 				free(ptr);
+
+				MonTX->setChecked(Sess->mtxparam);
+				MonSup->setChecked(Sess->mcomparam);
+				MonUI->setChecked(Sess->monUI);
+				MonNodes->setChecked(Sess->MonitorNODES);
+				MonColour->setChecked(Sess->MonitorColour);
+
 			}
 
 			return;
 		}
 	}
 }
+
+void QtTermTCP::doFonts()
+{
+	fontDialog  * xx = new fontDialog(0);
+	xx->exec();
+}
+
+void QtTermTCP::doMFonts()
+{
+	fontDialog  * xx = new fontDialog(1);
+	xx->exec();
+}
+

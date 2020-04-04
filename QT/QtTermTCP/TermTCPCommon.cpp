@@ -30,8 +30,8 @@ typedef unsigned short      WORD;
 
 void QueueMsg(Ui_ListenSession * Sess, char * Msg, int Len);
 BOOL ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
-
 void SetPortMonLine(int i, char * Text, int visible, int enabled);
+void AGW_AX25_data_in(void  * Sess, UCHAR * data, int Len);
 
 BOOL Bells = TRUE;
 BOOL StripLF = FALSE;
@@ -48,7 +48,7 @@ BOOL AlertBeep = TRUE;
 int AlertFreq = 600;
 int AlertDuration = 250;
 TCHAR AlertFileName[256] = { 0 };
-
+BOOL ConnectBeep = TRUE;
 BOOL UseKeywords = TRUE;
 
 char KeyWordsName[MAX_PATH] = "Keywords.sys";
@@ -110,7 +110,7 @@ char * strlop(char * buf, char delim)
 BOOL CheckKeyWord(char * Word, char * Msg)
 {
 	char * ptr1 = Msg, *ptr2;
-	int len = strlen(Word);
+	int len = (int)strlen(Word);
 
 	while (*ptr1)					// Stop at end
 	{
@@ -174,7 +174,8 @@ void ProcessReceivedData(Ui_ListenSession * Sess, unsigned char * Buffer, int le
 
 	//	mbstowcs(Buffer, BufferB, len);
 
-		// Look for MON delimiters (FF/FE)
+	// Look for MON delimiters (FF/FE)
+
 
 	Buffptr = Buffer;
 
@@ -217,6 +218,13 @@ MonLoop:
 
 	if (ptr)
 	{
+		unsigned char telcmd[] = "\xff\xfb\x03\xff\xfb\x01";
+
+		// Try to trap connect to normal Telnet Port
+
+		if (memcmp(ptr, telcmd, 6) == 0)
+			return;
+
 		// Buffer contains Mon Data
 
 		if (ptr > Buffptr)
@@ -312,7 +320,8 @@ MonLoop:
 		{
 			// No FE, so rest of buffer is MON Data
 
-			WritetoMonWindow(Sess, Buffptr + 1, MonLen - 1);
+			if (MonLen)
+				WritetoMonWindow(Sess, Buffptr + 1, MonLen - 1);
 			return;
 		}
 	}
@@ -362,6 +371,15 @@ MonLoop:
 
 int SendMsg(Ui_ListenSession * Sess, TCHAR * Buffer, int len)
 {
+	if (Sess->AGWSession)
+	{
+		// Terminal is in AGWPE mode - send as AGW frame
+
+		AGW_AX25_data_in(Sess->AGWSession, (unsigned char *)Buffer, len);
+		return len;
+
+	}
+	
 	return SocketSend(Sess, Buffer, len);
 }
 
@@ -404,7 +422,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 {
 	int pktLen = Msg[1];
 	char Reply[2] = { ACK };
-	int NameLen, SizeLen, OptLen;
+	size_t NameLen, SizeLen, OptLen;
 	char * ptr;
 	int FileSize;
 	WCHAR MsgFile[MAX_PATH];
@@ -614,7 +632,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 
 			if (hFile)
 			{
-				Written = fwrite(MailBuffer, 1, YAPPLen, hFile);
+				Written = (int)fwrite(MailBuffer, 1, YAPPLen, hFile);
 				fclose(hFile);
 
 				if (YAPPDate)
@@ -744,7 +762,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 			while (strchr(ptr, '/'))
 				ptr = strchr(ptr, '/') + 1;
 
-			len = strlen(ptr) + 3;
+			len = (int)strlen(ptr) + 3;
 
 			strcpy(&Mess[2], ptr);
 			len += sprintf(&Mess[len], "%d", MailBufferSize);
@@ -863,7 +881,7 @@ void YAPPSendFile(Ui_ListenSession * Sess, WCHAR * FN)
 
 	strcpy(MsgFile, FN);
 
-	if (MsgFile == NULL)
+	if (MsgFile[0] == 0)
 	{
 		Len = sprintf((char *)Buffer, "Filename missing\r");
 		WritetoOutputWindow(Sess, Buffer, Len);
