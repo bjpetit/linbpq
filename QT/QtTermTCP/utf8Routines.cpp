@@ -559,32 +559,39 @@ int TrytoGuessCode(unsigned char * Char, int Len)
 		return 1252;
 }
 
-void checkUTF8(unsigned char * Msg, int len)
+unsigned char outbuffer[16384];		// I don't think this needs to be thread safe
+
+int checkUTF8(unsigned char * in, int len, unsigned char * out)
 {
-	// Convert any non-utf8 chars
+	// We mustn't mess with input string
 
-	if (IsUTF8(Msg, len) == FALSE)
+	unsigned char Msg[8192];
+	int u, code = convUTF8;
+
+	if (convUTF8 == -1 || !Is8Bit(in, len))
 	{
-		unsigned char UTF[16384];
-		int u, code = convUTF8;
+		// just copy to output
 
-		Msg[len] = 0;
-
-		if (convUTF8 == 0)		// Auto - Try to guess encoding
-			code = TrytoGuessCode(Msg, len);
-
-		if (code == 437)
-			u = Convert437toUTF8(Msg, len, UTF);
-		else if (code == 1251)
-			u = Convert1251toUTF8(Msg, len, UTF);
-		else
-			u = Convert1252toUTF8(Msg, len, UTF);
-
-		UTF[u] = 0;
-
-		strcpy((char *)Msg, (char *)UTF);
+		memcpy(out, in, len);
+		return len;
 	}
+
+	// Convert 
+
+	memcpy(Msg, in, len);
+	Msg[len] = 0;
+
+	if (convUTF8 == 0)		// Auto - Try to guess encoding
+		code = TrytoGuessCode(Msg, len);
+
+	if (code == 437)
+		u = Convert437toUTF8(Msg, len, out);
+	else if (code == 1251)
+		u = Convert1251toUTF8(Msg, len, out);
 	else
-		Msg[len] = 0;
+		u = Convert1252toUTF8(Msg, len, out);
+
+	return u;
+
 }
 

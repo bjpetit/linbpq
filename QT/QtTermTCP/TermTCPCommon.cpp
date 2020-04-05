@@ -32,6 +32,7 @@ void QueueMsg(Ui_ListenSession * Sess, char * Msg, int Len);
 BOOL ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
 void SetPortMonLine(int i, char * Text, int visible, int enabled);
 void AGW_AX25_data_in(void  * Sess, UCHAR * data, int Len);
+int checkUTF8(unsigned char * Msg, int Len, unsigned char * out);
 
 BOOL Bells = TRUE;
 BOOL StripLF = FALSE;
@@ -240,8 +241,10 @@ MonLoop:
 
 			else
 			{
-				CheckKeyWords(Buffptr, NormLen);
+				unsigned char out[16384];
+				int outlen;
 
+				CheckKeyWords(Buffptr, NormLen);
 				WritetoOutputWindow(Sess, Buffptr, NormLen);
 			}
 
@@ -360,11 +363,14 @@ MonLoop:
 
 		return;
 	}
+	// Check UTF8
+	{
+		unsigned char out[16384];
+		int outlen;
 
-	CheckKeyWords(Buffptr, len);
-
-	WritetoOutputWindow(Sess, Buffptr, len);
-
+		CheckKeyWords(Buffptr, len);
+		WritetoOutputWindow(Sess, Buffptr, len);
+	}
 	Sess->SlowTimer = 0;
 	return;
 }

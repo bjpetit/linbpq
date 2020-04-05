@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.38"
+#define VersionString "0.0.0.39"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -38,7 +38,7 @@
 //	   Make sending Idle and Connect beeps configurable
 //	   Change displayed Monitor flags when active window changed.
 //	   Fix duplicate text on long lines
-//	   Convert non-utf8 charater
+// .39 Convert non-utf8 charater
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -198,6 +198,7 @@ QAction *actStripLF;
 QAction *actIntervalBeep;
 QAction *actConnectBeep;
 QAction *actAuto;
+QAction *actnoConv;
 QAction *actCP1251;
 QAction *actCP1252;
 QAction *actCP437;
@@ -263,7 +264,7 @@ void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char *
 void AGW_AX25_data_in(void * AX25Sess, unsigned char * data, int Len);
 
 extern void initUTF8();
-void checkUTF8(unsigned char * Msg, int Len);
+int checkUTF8(unsigned char * Msg, int Len, unsigned char * out);
 
 void EncodeSettingsLine(int n, char * String)
 {
@@ -894,19 +895,24 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	actIntervalBeep = setupMenuLine(setupMenu, (char *)"Beep after inactivity", this, AlertBeep);
 	actConnectBeep = setupMenuLine(setupMenu, (char *)"Beep on inbound connect", this, ConnectBeep);
 
-	setupMenu->addAction(new QAction("Interpret non-UTF8 input as", this));
+	setupMenu->addAction(new QAction("Interpret non-UTF8 input as:", this));
+	setupMenu->setFont(*menufont);
+
 	QActionGroup * cpGroup = new QActionGroup(this);
 
-	actAuto = setupMenuLine(nullptr, (char *)"  Auto", this, convUTF8 == 0);
-	actCP1251 = setupMenuLine(nullptr, (char *)"  CP1251 (Cyrillic)", this, convUTF8 == 1251);
-	actCP1252 = setupMenuLine(nullptr, (char *)"  CP1252 (Western Europe)", this, convUTF8 == 1252);
-	actCP437 = setupMenuLine(nullptr, (char *)"  CP437 (Windows Line Draw)", this, convUTF8 == 437);
+	actnoConv = setupMenuLine(nullptr, (char *)"   Don't Convert (assume is UTF-8)", this, convUTF8 == -1);
+	actAuto = setupMenuLine(nullptr, (char *)"   Auto", this, convUTF8 == 0);
+	actCP1251 = setupMenuLine(nullptr, (char *)"   CP1251 (Cyrillic)", this, convUTF8 == 1251);
+	actCP1252 = setupMenuLine(nullptr, (char *)"   CP1252 (Western Europe)", this, convUTF8 == 1252);
+	actCP437 = setupMenuLine(nullptr, (char *)"   CP437 (Windows Line Draw)", this, convUTF8 == 437);
 
+	cpGroup->addAction(actnoConv);
 	cpGroup->addAction(actAuto);
 	cpGroup->addAction(actCP1251);
 	cpGroup->addAction(actCP1252);
 	cpGroup->addAction(actCP437);
 
+	setupMenu->addAction(actnoConv);
 	setupMenu->addAction(actAuto);
 	setupMenu->addAction(actCP1251);
 	setupMenu->addAction(actCP1252);
@@ -1566,6 +1572,8 @@ void QtTermTCP::menuChecked()
 		AlertBeep = state;
 	else if (Act == actConnectBeep)
 		ConnectBeep = state;
+	else if (Act == actnoConv)
+		convUTF8 = -1;
 	else if (Act == actAuto)
 		convUTF8 = 0;
 	else if (Act == actCP1251)
@@ -1793,15 +1801,10 @@ void QtTermTCP::readyRead()
 
 	// read the data from the socket
 
-	Read = Socket->read((char *)Buffer, 4095);
+	Read = Socket->read((char *)Buffer, 2047);
 
-	if (Read > 0)
+	while (Read > 0)
 	{
-		Buffer[Read] = 0;
-		checkUTF8(Buffer, Read);
-		Read = (int)strlen((char *)Buffer);
-
-
 //		if (InputMode == 'Y')			// Yapp
 //		{
 //			QString myString = QString::fromUtf8((char*)Buffer, Read);
@@ -1814,6 +1817,7 @@ void QtTermTCP::readyRead()
 
 		QString myString = QString::fromUtf8((char*)Buffer);
 //		qDebug() << myString;
+		Read = Socket->read((char *)Buffer, 2047);
 	}
 }
 
@@ -1867,6 +1871,9 @@ extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * B
 	unsigned char Copy[8192];
 	unsigned char * ptr1, *ptr2;
 	unsigned char Line[8192];
+	unsigned char out[8192];
+	int outlen;
+
 	int num;
 
 	if (termWindow == NULL)
@@ -1959,21 +1966,18 @@ lineloop:
 		memcpy(Line, ptr1, len);
 		Line[len] = 0;
 
-		// I don't think I need to worry oif UTF8 as will be rewritten when rest arrives
+		// I don't think I need to worry if UTF8 as will be rewritten when rest arrives
 
 		if (Line[0] == 0x1b)			// Colour Escape
 		{
 			if (Sess->MonitorColour)
 				termWindow->setTextColor(Colours[Line[1] - 10]);
 
-//			termWindow->append(QString::fromUtf8((char*)&Line[2]));
 			termWindow->textCursor().insertText(QString::fromUtf8((char*)&Line[2]));
-
 		}
 		else
 		{
 			termWindow->setTextColor(Colours[23]);
-//			termWindow->append(QString::fromUtf8((char*)Line));
 			termWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
 		}
 
@@ -1994,9 +1998,7 @@ lineloop:
 			termWindow->moveCursor(QTextCursor::End);
 			termWindow->verticalScrollBar()->setValue(termWindow->verticalScrollBar()->maximum());
 		}
-
 		return;
-
 	}
 
 	*(ptr2++) = 0;
@@ -2029,14 +2031,19 @@ lineloop:
 		if (Sess->MonitorColour)
 			termWindow->setTextColor(Colours[Line[1] - 10]);
 
-//		checkUTF8(&Line[2]);
-		termWindow->textCursor().insertText(QString::fromUtf8((char*)&Line[2]));
+		outlen = checkUTF8(&Line[2], num - 2, out);
+		out[outlen] = 0;
+		termWindow->textCursor().insertText(QString::fromUtf8((char*)out));
+//		termWindow->textCursor().insertText(QString::fromUtf8((char*)&Line[2]));
 	}
 	else
 	{
 		termWindow->setTextColor(Colours[Colour]);
-//		checkUTF8(Line); 
-		termWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
+
+		outlen = checkUTF8(Line, num, out);
+		out[outlen] = 0;
+		termWindow->textCursor().insertText(QString::fromUtf8((char*)out));
+//		termWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
 	}
 
 	len -= (ptr2 - ptr1);
@@ -2732,7 +2739,7 @@ extern "C" void SendTraceOptions(Ui_ListenSession * Sess)
 	
 	char Buffer[80];
 	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x %x\r", Sess->portmask, Sess->mtxparam, Sess->mcomparam, 
-		Sess->MonitorNODES, Sess->MonitorColour, Sess->monUI, 1, 1);
+		Sess->MonitorNODES, Sess->MonitorColour, Sess->monUI, 0, 1);
 
 	strcpy(&MonParams[Sess->CurrentHost][0], &Buffer[4]);
 	SaveSettings();
