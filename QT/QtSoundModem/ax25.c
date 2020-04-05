@@ -1,4 +1,24 @@
-// UZ7HO Soundmodem Port
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
 
@@ -1298,27 +1318,22 @@ boolean is_correct_path(byte * path, byte pid)
 {
 	byte networks[] = { 6, 7, 8, 0xc4, 0xcc, 0xcd, 0xce, 0xcf, 0xf0 , 0 };
 	byte call[10];
+	int i;
+
 
 	if (pid == 0 || strchr(networks, pid))
 	{
 		// Validate calls
-/*
 
+		// I think checking bottom  bit of first 13 bytes is enough
 
-  for i:=0 to 9 do if pid=networks[i] then allowed:=TRUE;
-  if (length(path)>0) and allowed then
-  repeat
-	allowed:=TRUE;
-	call:=copy(path,1,7);
-	delete(path,1,7);
-	if length(call)=7 then
-	begin
-	  for i:=1 to 6 do
-		if not (call[i] in [#32..#127]) then allowed:=FALSE;
-	end
-	else allowed:=FALSE;
-  until (path='') or not allowed;
-  */
+		for (i = 0; i < 13; i++)
+		{
+			if ((*(path) & 1))
+				return FALSE;
+
+			path++;
+		}
 		return TRUE;
 	}
 	return FALSE;
@@ -1582,6 +1597,9 @@ void reverse_addr(byte * path, byte * revpath, int Len)
 	int numdigis = (Len - 14) / 7;
 	int i;
 
+	if (Len < 14)
+		return;
+
 	byte digis[57];						// 8 * 7 + null terminator
 	memset(digis, 0, 57);
 	byte * digiptr = digis + 49;			// Last Digi
@@ -1726,6 +1744,7 @@ void ax25_info_init(TAX25Port * AX25Sess)
 	AX25Sess->info.stat_r_pkt = 0;
 	AX25Sess->info.stat_r_byte = 0;
 	AX25Sess->info.stat_r_fc = 0;
+	AX25Sess->info.stat_fec_count = 0;
 	AX25Sess->info.stat_l_r_byte = 0;
 	AX25Sess->info.stat_l_s_byte = 0;
 	AX25Sess->info.stat_begin_ses = 0;

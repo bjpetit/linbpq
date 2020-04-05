@@ -1,4 +1,24 @@
-// UZ7HO Soundmodem Port
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
 
@@ -53,10 +73,6 @@ void KISS_init()
 	for (i = 0; i < 4; i++)
 	{
 		initTStringList(&KISS.buffer[i]);
-		initTStringList(&KISS.request[i]);
-		initTStringList(&KISS.acked[i]);
-		initTStringList(&KISS.irequest[i]);
-		initTStringList(&KISS.iacked[i]);
 	}
 }
 
@@ -382,8 +398,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 		// Ackmode needs to know where to send ack back to, so save socket on end of data
 
 		stringAdd(TXMSG, (unsigned char * )&socket, sizeof(socket));
-
-		Add(&all_frame_buf[Chan], TXMSG);
+		Add(&KISS.buffer[Chan], TXMSG);
 
 		return;
 
@@ -398,7 +413,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 		CRCString[1] = CRC >> 8;
 
 		stringAdd(TXMSG, CRCString, 2);
-		Add(&all_frame_buf[Chan], TXMSG);
+		Add(&KISS.buffer[Chan], TXMSG);
 
 		return;
 	}

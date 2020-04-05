@@ -32,12 +32,16 @@ private slots:
 	void MyTimerSlot();
 	void doModems();
 	void doFilter(int Chan, int Filter);
+	void DualPTTChanged(bool State);
+	void CATChanged(bool State);
+	void PTTPortChanged(int);
 	void deviceaccept();
 	void devicereject();
 	void modemaccept();
 	void modemreject();
 	void handleButton(int Port, int Act);
 	void doCalibrate();
+	void doAbout();
 	void doupdateDCD(int, int);
 	void sendtoTrace(char * Msg, int tx);
 	void preEmphAllAChanged(int);
@@ -62,6 +66,7 @@ private:
 	QAction *actDevices;
 	QAction *actModems;
 	QAction *actCalib;
+	QAction *actAbout;
 	QAction *actWaterfall1;
 	QAction *actWaterfall2;
 

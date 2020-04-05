@@ -1,3 +1,25 @@
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
+
 // UZ7HO Soundmodem Port
 
 // Not Working 4psk100 FEC 
@@ -308,8 +330,8 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	sessionTable->verticalHeader()->setDefaultSectionSize(20);
 	sessionTable->horizontalHeader()->setDefaultSectionSize(68);
 	sessionTable->setRowCount(1);
-	sessionTable->setColumnCount(11);
-	m_TableHeader << "MyCall" << "DestCall" << "Status" << "Sent pkts" << "Sent Bytes" << "Rcvd pkts" << "Rcvd bytes" << "Rcvd FC" << "CPS TX" << "CPS RX" << "Direction";
+	sessionTable->setColumnCount(12);
+	m_TableHeader << "MyCall" << "DestCall" << "Status" << "Sent pkts" << "Sent Bytes" << "Rcvd pkts" << "Rcvd bytes" << "Rcvd FC" << "FEC corr" << "CPS TX" << "CPS RX" << "Direction";
 
 	sessionTable->setStyleSheet("QHeaderView::section { background-color:rgb(224, 224, 224) }");
 
@@ -319,7 +341,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	sessionTable->setColumnWidth(4, 76);
 	sessionTable->setColumnWidth(5, 76);
 	sessionTable->setColumnWidth(6, 80);
-	sessionTable->setColumnWidth(10, 72);
+	sessionTable->setColumnWidth(11, 72);
 
 	for (int i = 0; i < modes_count; i++)
 	{
@@ -329,18 +351,10 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	QStandardItemModel *model = dynamic_cast<QStandardItemModel *>(ui.modeA->model());
 	QStandardItem * item = model->item(11, 0);
-	item->setEnabled(false);
-
-	model = dynamic_cast<QStandardItemModel *>(ui.modeB->model());
-	item = model->item(11, 0);
-	item->setEnabled(false);
-
-	model = dynamic_cast<QStandardItemModel *>(ui.modeA->model());
-	item = model->item(13, 0);
 //	item->setEnabled(false);
 
 	model = dynamic_cast<QStandardItemModel *>(ui.modeB->model());
-	item = model->item(13, 0);
+	item = model->item(11, 0);
 //	item->setEnabled(false);
 
 	char Title[128];
@@ -371,6 +385,12 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	actCalib = ui.menuBar->addAction("&Calibration");
 
 	connect(actCalib, SIGNAL(triggered()), this, SLOT(doCalibrate()));
+
+
+	actAbout = ui.menuBar->addAction("&About");
+
+	connect(actAbout, SIGNAL(triggered()), this, SLOT(doAbout()));
+
 
 	//	Constellation = new QImage(91, 91, QImage::Format_RGB32);
 	Waterfall[0] = new QImage(1024, 80, QImage::Format_RGB32);
@@ -418,7 +438,9 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	HeaderCopy[1] = ui.HeaderB;
 	monWindowCopy = ui.monWindow;
 
-	connect(ui.monWindow, SIGNAL(selectionChanged()), this, SLOT(onTEselectionChanged()));
+	ui.monWindow->document()->setMaximumBlockCount(10000);
+
+//	connect(ui.monWindow, SIGNAL(selectionChanged()), this, SLOT(onTEselectionChanged()));
 
 	ui.WaterfallA->setPixmap(QPixmap::fromImage(*Waterfall[0]));
 	ui.WaterfallB->setPixmap(QPixmap::fromImage(*Waterfall[1]));
@@ -464,7 +486,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerA->setValue(Freq_Change(0, i));
-			settings->setValue("Modem/RXFreq1", rx_freq[0]);
+			settings->setValue("Modem/RXFreq1", ui.centerA->value());
 		}
 	});
 
@@ -474,7 +496,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerB->setValue(Freq_Change(1, i));
-			settings->setValue("Modem/RXFreq2", rx_freq[1]);
+			settings->setValue("Modem/RXFreq2", ui.centerB->value());
 		}
 	});
 
@@ -560,6 +582,9 @@ void QtSoundModem::doModems()
 	else
 		Dlg->preEmphB->setCurrentIndex(emph_db[1]);
 
+	Dlg->nonAX25A->setChecked(NonAX25[0]);
+	Dlg->nonAX25B->setChecked(NonAX25[1]);
+
 	sprintf(valChar, "%d", txdelay[0]);
 	Dlg->TXDelayA->setText(valChar);
 
@@ -626,6 +651,9 @@ void QtSoundModem::modemaccept()
 
 	emph_all[1] = Dlg->preEmphAllB->isChecked();
 	emph_db[1] = Dlg->preEmphB->currentIndex();
+
+	NonAX25[0] = Dlg->nonAX25A->isChecked();
+	NonAX25[1] = Dlg->nonAX25B->isChecked();
 
 	if (emph_db[0] < 0 || emph_db[0] > nr_emph)
 		emph_db[0] = 0;
@@ -703,78 +731,211 @@ void QtSoundModem::doFilter(int Chan, int Filter)
 
 Ui_devicesDialog * Dev;
 
+char NewPTTPort[80];
+
+void QtSoundModem::DualPTTChanged(bool State)
+{
+	// Forse Evevaluation of Cat Port setting
+
+	PTTPortChanged(0);
+}
+
+void QtSoundModem::CATChanged(bool State)
+{
+	PTTPortChanged(0);
+	/*
+	
+	if (State)
+	{
+		Dev->PTTOnLab->setVisible(true);
+		Dev->PTTOn->setVisible(true);
+		Dev->PTTOff->setVisible(true);
+		Dev->PTTOffLab->setVisible(true);
+		Dev->CATLabel->setVisible(true);
+		Dev->CATSpeed->setVisible(true);
+	}
+	else
+	{
+		Dev->PTTOnLab->setVisible(false);
+		Dev->PTTOn->setVisible(false);
+		Dev->PTTOff->setVisible(false);
+		Dev->PTTOffLab->setVisible(false);
+		Dev->CATLabel->setVisible(false);
+		Dev->CATSpeed->setVisible(false);
+	}
+*/
+}
+
+void QtSoundModem::PTTPortChanged(int Selected)
+{
+	QVariant Q = Dev->PTTPort->currentText();
+	strcpy(NewPTTPort, Q.toString().toUtf8());
+
+	Dev->RTSDTR->setVisible(false);
+	Dev->CAT->setVisible(false);
+
+	Dev->PTTOnLab->setVisible(false);
+	Dev->PTTOn->setVisible(false);
+	Dev->PTTOff->setVisible(false);
+	Dev->PTTOffLab->setVisible(false);
+	Dev->CATLabel->setVisible(false);
+	Dev->CATSpeed->setVisible(false);
+
+	Dev->GPIOLab->setVisible(false);
+	Dev->GPIOLeft->setVisible(false);
+	Dev->GPIORight->setVisible(false);
+	Dev->GPIOLab2->setVisible(false);
+
+	Dev->CM108Label->setVisible(false);
+	Dev->VIDPID->setVisible(false);
+
+	if (strcmp(NewPTTPort, "None") == 0)
+	{
+	}
+	else if (strcmp(NewPTTPort, "GPIO") == 0)
+	{
+		Dev->GPIOLab->setVisible(true);
+		Dev->GPIOLeft->setVisible(true);
+		if (Dev->DualPTT->isChecked())
+		{
+			Dev->GPIORight->setVisible(true);
+			Dev->GPIOLab2->setVisible(true);
+		}
+	}
+
+	else if (strcmp(NewPTTPort, "CM108") == 0)
+	{
+		Dev->CM108Label->setVisible(true);
+//#ifdef __ARM_ARCHX
+		Dev->CM108Label->setText("CM108 Device");
+//#else
+//		Dev->CM108Label->setText("CM108 VID/PID");
+//#endif
+		Dev->VIDPID->setVisible(true);
+	}
+	else
+	{
+		Dev->RTSDTR->setVisible(true);
+		Dev->CAT->setVisible(true);
+
+		if (Dev->CAT->isChecked())
+		{
+			Dev->PTTOnLab->setVisible(true);
+			Dev->PTTOn->setVisible(true);
+			Dev->PTTOff->setVisible(true);
+			Dev->PTTOffLab->setVisible(true);
+			Dev->CATLabel->setVisible(true);
+			Dev->CATSpeed->setVisible(true);
+		}
+	}
+}
+
+
+
 void QtSoundModem::doDevices()
 {
+	char valChar[10];
+
 	Dev = new(Ui_devicesDialog);
+
+	QDialog UI;
+
+	int i;
+
+	Dev->setupUi(&UI);
+
+	for (i = 0; i < PlaybackCount; i++)
+		Dev->outputDevice->addItem(&PlaybackNames[i][0]);
+
+	i = Dev->outputDevice->findText(PlaybackDevice, Qt::MatchContains);
+
+	Dev->outputDevice->setCurrentIndex(i);
+
+	for (i = 0; i < CaptureCount; i++)
+		Dev->inputDevice->addItem(&CaptureNames[i][0]);
+
+	i = Dev->inputDevice->findText(CaptureDevice, Qt::MatchContains);
+	Dev->inputDevice->setCurrentIndex(i);
+
+	Dev->Modem_1_Chan->setCurrentIndex(soundChannel[0]);
+	Dev->Modem_2_Chan->setCurrentIndex(soundChannel[1]);
+
+	// Disable "None" option in first modem
+
+	QStandardItemModel *model = dynamic_cast<QStandardItemModel *>(Dev->Modem_1_Chan->model());
+	QStandardItem * item = model->item(0, 0);
+	item->setEnabled(false);
+
+	Dev->singleChannelOutput->setChecked(SCO);
+	Dev->colourWaterfall->setChecked(raduga);
+
+	sprintf(valChar, "%d", KISSPort);
+	Dev->KISSPort->setText(valChar);
+	Dev->KISSEnabled->setChecked(KISSServ);
+
+	sprintf(valChar, "%d", AGWPort);
+	Dev->AGWPort->setText(valChar);
+	Dev->AGWEnabled->setChecked(AGWServ);
+
+	Dev->PTTOn->setText(PTTOnString);
+	Dev->PTTOff->setText(PTTOffString);
+
+	sprintf(valChar, "%d", PTTBAUD);
+	Dev->CATSpeed->setText(valChar);
+
+	sprintf(valChar, "%d", pttGPIOPin);
+	Dev->GPIOLeft->setText(valChar);
+	sprintf(valChar, "%d", pttGPIOPinR);
+	Dev->GPIORight->setText(valChar);
+
+	Dev->VIDPID->setText(CM108Addr);
+
+	QStringList items;
+
+	connect(Dev->CAT, SIGNAL(toggled(bool)), this, SLOT(CATChanged(bool)));
+	connect(Dev->DualPTT, SIGNAL(toggled(bool)), this, SLOT(DualPTTChanged(bool)));
+	connect(Dev->PTTPort, SIGNAL(currentIndexChanged(int)), this, SLOT(PTTPortChanged(int)));
+
+
+
+	if (PTTMode == PTTCAT)
+		Dev->CAT->setChecked(true);
+	else
+		Dev->RTSDTR->setChecked(true);
+
+	for (const QSerialPortInfo &info : Ports)
 	{
-		QDialog UI;
-	
-		int i;
-		char portnum[16];
-
-		Dev->setupUi(&UI);
-
-		for (i = 0; i < PlaybackCount; i++)
-			Dev->outputDevice->addItem(&PlaybackNames[i][0]);
-
-		i = Dev->outputDevice->findText(PlaybackDevice, Qt::MatchContains);
-
-		Dev->outputDevice->setCurrentIndex(i);
-
-		for (i = 0; i < CaptureCount; i++)
-			Dev->inputDevice->addItem(&CaptureNames[i][0]);
-
-		i = Dev->inputDevice->findText(CaptureDevice, Qt::MatchContains);
-		Dev->inputDevice->setCurrentIndex(i);
-
-		Dev->Modem_1_Chan->setCurrentIndex(soundChannel[0]);
-		Dev->Modem_2_Chan->setCurrentIndex(soundChannel[1]);
-
-		// Disable "None" option in first modem
-		
-		QStandardItemModel *model = dynamic_cast<QStandardItemModel *>(Dev->Modem_1_Chan->model());
-		QStandardItem * item = model->item(0, 0);
-		item->setEnabled(false);
-
-		Dev->singleChannelOutput->setChecked(SCO);
-		Dev->colourWaterfall->setChecked(raduga);
-
-		sprintf(portnum, "%d", KISSPort);
-		QString portname(portnum);
-		Dev->KISSPort->setText(portname);
-		Dev->KISSEnabled->setChecked(KISSServ);
-
-		sprintf(portnum, "%d", AGWPort);
-		QString portname1(portnum);
-		Dev->AGWPort->setText(portname1);
-		Dev->AGWEnabled->setChecked(AGWServ);
-
-		QStringList items;
-
-		for (const QSerialPortInfo &info : Ports)
-		{
-			items.append(info.portName());
-		}
-
-		items.sort();
-
-		Dev->PTTPort->addItem("None");
-
-		for (const QString &info : items)
-		{
-			Dev->PTTPort->addItem(info);
-		}
-
-		Dev->PTTPort->setCurrentIndex(Dev->PTTPort->findText(PTTPort, Qt::MatchFixedString));
-
-		Dev->txRotation->setChecked(TX_rotate);
-		Dev->DualPTT->setChecked(DualPTT);
-
-		QObject::connect(Dev->okButton, SIGNAL(clicked()), this, SLOT(deviceaccept()));
-		QObject::connect(Dev->cancelButton, SIGNAL(clicked()), this, SLOT(devicereject()));
-
-		UI.exec();
+		items.append(info.portName());
 	}
+
+	items.sort();
+
+	Dev->PTTPort->addItem("None");
+	Dev->PTTPort->addItem("CM108");
+
+	//#ifdef __ARM_ARCH
+
+	Dev->PTTPort->addItem("GPIO");
+
+	//#endif
+
+	for (const QString &info : items)
+	{
+		Dev->PTTPort->addItem(info);
+	}
+
+	Dev->PTTPort->setCurrentIndex(Dev->PTTPort->findText(PTTPort, Qt::MatchFixedString));
+
+	PTTPortChanged(0);				// Force reevaluation
+
+	Dev->txRotation->setChecked(TX_rotate);
+	Dev->DualPTT->setChecked(DualPTT);
+
+	QObject::connect(Dev->okButton, SIGNAL(clicked()), this, SLOT(deviceaccept()));
+	QObject::connect(Dev->cancelButton, SIGNAL(clicked()), this, SLOT(devicereject()));
+
+	UI.exec();
+
 }
 
 void QtSoundModem::deviceaccept()
@@ -843,6 +1004,28 @@ void QtSoundModem::deviceaccept()
 	DualPTT = Dev->DualPTT->isChecked();
 	TX_rotate = Dev->txRotation->isChecked();
 
+	if (Dev->CAT->isChecked())
+		PTTMode = PTTCAT;
+	else
+		PTTMode = PTTRTS;
+
+	Q = Dev->PTTOn->text();
+	strcpy(PTTOnString, Q.toString().toUtf8());
+	Q = Dev->PTTOff->text();
+	strcpy(PTTOffString, Q.toString().toUtf8());
+
+	Q = Dev->CATSpeed->text();
+	PTTBAUD = Q.toInt();
+
+	Q = Dev->GPIOLeft->text();
+	pttGPIOPin = Q.toInt();
+
+	Q = Dev->GPIORight->text();
+	pttGPIOPinR = Q.toInt();
+
+	Q = Dev->VIDPID->text();
+	strcpy(CM108Addr, Q.toString().toUtf8());
+
 	ClosePTTPort();
 	OpenPTTPort();
 
@@ -876,6 +1059,12 @@ void QtSoundModem::handleButton(int Port, int Type)
 {
 	doCalib(Port, Type);
 
+}
+
+void QtSoundModem::doAbout()
+{
+	QMessageBox::about(this, tr("About"),
+		tr("G8BPQ's port of UZ7HO's Soundmodem\n\nCopyright (C) 2019-2020 Andrei Kopanchuk UZ7HO"));
 }
 
 void QtSoundModem::doCalibrate()
@@ -966,22 +1155,34 @@ void QtSoundModem::RefreshWaterfall(int snd_ch, unsigned char * Data)
 
 void QtSoundModem::sendtoTrace(char * Msg, int tx)
 {
+	const QTextCursor old_cursor = monWindowCopy->textCursor();
+	const int old_scrollbar_value = monWindowCopy->verticalScrollBar()->value();
+	const bool is_scrolled_down = old_scrollbar_value == monWindowCopy->verticalScrollBar()->maximum();
 
-	QScrollBar *scrollbar = monWindowCopy->verticalScrollBar();
-	int scrollbarAtBottom = (scrollbar->value() >= (scrollbar->maximum() - 4));
+	// Move the cursor to the end of the document.
+	monWindowCopy->moveCursor(QTextCursor::End);
 
-	if (scrollbarAtBottom)
-		monWindowCopy->moveCursor(QTextCursor::End);
+	// Insert the text at the position of the cursor (which is the end of the document).
 
 	if (tx)
 		monWindowCopy->setTextColor(qRgb(192, 0, 0));
 	else
 		monWindowCopy->setTextColor(qRgb(0, 0, 192));
 
-	monWindowCopy->insertPlainText(Msg);
+	monWindowCopy->textCursor().insertText(Msg);
 
-	if (scrollbarAtBottom)
+	if (old_cursor.hasSelection() || !is_scrolled_down)
+	{
+		// The user has selected text or scrolled away from the bottom: maintain position.
+		monWindowCopy->setTextCursor(old_cursor);
+		monWindowCopy->verticalScrollBar()->setValue(old_scrollbar_value);
+	}
+	else
+	{
+		// The user hasn't selected any text and the scrollbar is at the bottom: scroll to the bottom.
 		monWindowCopy->moveCursor(QTextCursor::End);
+		monWindowCopy->verticalScrollBar()->setValue(monWindowCopy->verticalScrollBar()->maximum());
+	}
 
 	free(Msg);
 }
@@ -1411,7 +1612,7 @@ void QtSoundModem::show_grid()
 				sessionTable->setItem(row_idx, 0, item);
 
 				item = new QTableWidgetItem(AX25Port[snd_ch][i].kind);
-				sessionTable->setItem(row_idx, 10, item);
+				sessionTable->setItem(row_idx, 11, item);
 
 				item = new QTableWidgetItem((char *)AX25Port[snd_ch][i].corrcall);
 				sessionTable->setItem(row_idx, 1, item);
@@ -1434,6 +1635,9 @@ void QtSoundModem::show_grid()
 				item = new QTableWidgetItem(QString::number(AX25Port[snd_ch][i].info.stat_r_fc));
 				sessionTable->setItem(row_idx, 7, item);
 
+				item = new QTableWidgetItem(QString::number(AX25Port[snd_ch][i].info.stat_fec_count));
+				sessionTable->setItem(row_idx, 8, item);
+
 				if (grid_timer != upd_time)
 					grid_timer++;
 				else
@@ -1443,10 +1647,10 @@ void QtSoundModem::show_grid()
 					speed_rx = round(abs(AX25Port[snd_ch][i].info.stat_r_byte - AX25Port[snd_ch][i].info.stat_l_r_byte) / upd_time);
 
 					item = new QTableWidgetItem(QString::number(speed_tx));
-					sessionTable->setItem(row_idx, 8, item);
+					sessionTable->setItem(row_idx, 9, item);
 
 					item = new QTableWidgetItem(QString::number(speed_rx));
-					sessionTable->setItem(row_idx, 9, item);
+					sessionTable->setItem(row_idx, 10, item);
 
 					AX25Port[snd_ch][i].info.stat_l_r_byte = AX25Port[snd_ch][i].info.stat_r_byte;
 					AX25Port[snd_ch][i].info.stat_l_s_byte = AX25Port[snd_ch][i].info.stat_s_byte;	

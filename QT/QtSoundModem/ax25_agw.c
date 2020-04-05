@@ -1,4 +1,24 @@
-// UZ7HO Soundmodem Port
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
 
@@ -125,6 +145,26 @@ AGWUser * AGW_get_socket(void * socket)
 void AGW_del_socket(void * socket)
 {
 	AGWUser * AGW = AGW_get_socket(socket);
+	TAX25Port * AX25Sess = NULL;
+
+	int i = 0;
+	int port = 0;
+
+	// Close any connections
+
+	for (port = 0; port < 4; port++)
+	{
+		for (i = 0; i < port_num; i++)
+		{
+			AX25Sess = &AX25Port[port][i];
+
+			if (AX25Sess->status != STAT_NO_LINK && AX25Sess->socket == socket)
+			{
+				rst_timer(AX25Sess);
+				set_unlink(AX25Sess, AX25Sess->Path);
+			}
+		}
+	}
 
 	// Clear registrations
 
@@ -137,7 +177,6 @@ void AGW_del_socket(void * socket)
 	freeString(AGW->data_in);
 	AGW->Monitor = 0;
 	AGW->Monitor_raw = 0;
-
 }
 
 
@@ -567,6 +606,10 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame)
 		AX25Sess->socket = AGW->socket;
 
 		AX25Sess->pathLen = get_addr(path, 0, 0, axpath);
+
+		if (AX25Sess->pathLen == 0)
+			return;						// Invalid Path
+
 		strcpy((char *)AX25Sess->Path, (char *)axpath);
 		reverse_addr(axpath, AX25Sess->ReversePath, AX25Sess->pathLen);
 
@@ -990,7 +1033,7 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 
 		while (i < _datalen)
 		{
-			if ((_data[i] == 13) && (_data[i + 1] = 13))
+			if ((_data[i] == 13) && (_data[i + 1] == 13))
 				i++;
 			else
 				*(ptr++) = _data[i++];

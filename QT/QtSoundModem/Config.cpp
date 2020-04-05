@@ -1,3 +1,24 @@
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include <QSettings>
 
@@ -47,20 +68,17 @@ void GetPortSettings(int Chan)
 	resptime[Chan] = getAX25Param("RespTime", 1500).toInt();
 	TXFrmMode[Chan] = getAX25Param("TXFrmMode", 1).toInt();
 	max_frame_collector[Chan] = getAX25Param("FrameCollector", 6).toInt();
-	//	exclude_callsigns[Chan]= getAX25Param("ExcludeCallsigns/");
-	//	exclude_APRS_frm[Chan]= getAX25Param("ExcludeAPRSFrmType/");
+	//exclude_callsigns[Chan]= getAX25Param("ExcludeCallsigns/");
+	//exclude_APRS_frm[Chan]= getAX25Param("ExcludeAPRSFrmType/");
 	KISS_opt[Chan] = getAX25Param("KISSOptimization", false).toInt();;
 	dyn_frack[Chan] = getAX25Param("DynamicFrack", false).toInt();;
 	recovery[Chan] = getAX25Param("BitRecovery", 0).toInt();
 	NonAX25[Chan] = getAX25Param("NonAX25Frm", false).toInt();;
-	//	MEMRecovery[Chan]= getAX25Param("MEMRecovery", 200).toInt();
+//	MEMRecovery[Chan]= getAX25Param("MEMRecovery", 200).toInt();
 	IPOLL[Chan] = getAX25Param("IPOLL", 80).toInt();
 
 	strcpy(MyDigiCall[Chan], getAX25Param("MyDigiCall", "").toString().toUtf8());
-
 	fx25_mode[Chan] = getAX25Param("FX25", FX25_MODE_RX).toInt();
-
-	soundChannel[Chan] = getAX25Param("soundChannel", 1).toInt();
 }
 
 void getSettings()
@@ -79,6 +97,16 @@ void getSettings()
 	raduga = settings->value("Init/DispMode", DISP_RGB).toInt();
 
 	strcpy(PTTPort, settings->value("Init/PTT", "").toString().toUtf8());
+	PTTMode = settings->value("Init/PTTMode", 19200).toInt();
+	PTTBAUD = settings->value("Init/PTTBAUD", 19200).toInt();
+
+	strcpy(PTTOnString, settings->value("Init/PTTOnString", "").toString().toUtf8());
+	strcpy(PTTOffString, settings->value("Init/PTTOffString", "").toString().toUtf8());
+
+	pttGPIOPin = settings->value("Init/pttGPIOPin", 17).toInt();
+	pttGPIOPinR = settings->value("Init/pttGPIOPinR", 17).toInt();
+
+	strcpy(CM108Addr, settings->value("Init/CM108Addr", "0xD8C:0x08").toString().toUtf8());
 
 	DualPTT = settings->value("Init/DualPTT", 1).toInt();
 	TX_rotate = settings->value("Init/TXRotate", 0).toInt();
@@ -94,7 +122,7 @@ void getSettings()
 	RCVR[0] = settings->value("Modem/NRRcvrPairs1", 0).toInt();;
 	RCVR[1] = settings->value("Modem/NRRcvrPairs2", 0).toInt();;
 
-	soundChannel[0] = settings->value("Modem/soundChannel1", 0).toInt();
+	soundChannel[0] = settings->value("Modem/soundChannel1", 1).toInt();
 	soundChannel[1] = settings->value("Modem/soundChannel2", 0).toInt();
 
 	DualChan = settings->value("Init/DualChan", 0).toInt();
@@ -104,7 +132,7 @@ void getSettings()
 		
 	AGWServ = settings->value("AGWHost/Server", TRUE).toBool();
 	AGWPort = settings->value("AGWHost/Port", 8000).toInt();
-	KISSServ = settings->value("KISS/Server", TRUE).toBool();
+	KISSServ = settings->value("KISS/Server", FALSE).toBool();
 	KISSPort = settings->value("KISS/Port", 8105).toInt();
 
 	RX_Samplerate = RX_SR + RX_SR * 0.000001*RX_PPM;
@@ -207,6 +235,48 @@ void getSettings()
 	delete(settings);
 }
 
+void SavePortSettings(int Chan);
+
+void saveAX25Param(const char * key, QVariant Value)
+{
+	char fullKey[64];
+
+	sprintf(fullKey, "%s/%s", Prefix, key);
+
+	settings->setValue(fullKey, Value);
+}
+
+void saveAX25Params(int chan)
+{
+	Prefix[5] = chan + 'A';
+	SavePortSettings(chan);
+}
+
+void SavePortSettings(int Chan)
+{
+	saveAX25Param("Retries", fracks[Chan]);
+	saveAX25Param("HiToneRaise", tx_hitoneraisedb[Chan]);
+	saveAX25Param("Maxframe",maxframe[Chan]);
+	saveAX25Param("Retries", fracks[Chan]);
+	saveAX25Param("FrackTime", frack_time[Chan]);
+	saveAX25Param("IdleTime", idletime[Chan]);
+	saveAX25Param("SlotTime", slottime[Chan]);
+	saveAX25Param("Persist", persist[Chan]);
+	saveAX25Param("RespTime", resptime[Chan]);
+	saveAX25Param("TXFrmMode", TXFrmMode[Chan]);
+	saveAX25Param("FrameCollector", max_frame_collector[Chan]);
+	saveAX25Param("ExcludeCallsigns", exclude_callsigns[Chan]);
+	saveAX25Param("ExcludeAPRSFrmType", exclude_APRS_frm[Chan]);
+	saveAX25Param("KISSOptimization", KISS_opt[Chan]);
+	saveAX25Param("DynamicFrack", dyn_frack[Chan]);
+	saveAX25Param("BitRecovery", recovery[Chan]);
+	saveAX25Param("NonAX25Frm", NonAX25[Chan]);
+//	getAX25Param("MEMRecovery", MEMRecovery[Chan]);
+	saveAX25Param("IPOLL", IPOLL[Chan]);
+	saveAX25Param("MyDigiCall", MyDigiCall[Chan]);
+	saveAX25Param("FX25", fx25_mode[Chan]);
+}
+
 
 
 void saveSettings()
@@ -227,11 +297,18 @@ void saveSettings()
 	settings->setValue("Init/DispMode", raduga);
 
 	settings->setValue("Init/PTT", PTTPort);
+	settings->setValue("Init/PTTBAUD", PTTBAUD);
+	settings->setValue("Init/PTTMode", PTTMode);
+
+	settings->setValue("Init/PTTOffString", PTTOffString);
+	settings->setValue("Init/PTTOnString", PTTOnString);
+
+	settings->setValue("Init/pttGPIOPin", pttGPIOPin);
+	settings->setValue("Init/pttGPIOPinR", pttGPIOPinR);
+
+	settings->setValue("Init/CM108Addr", CM108Addr);
 
 	// Don't save freq on close as it could be offset by multiple decoders
-
-//	settings->setValue("Modem/RXFreq1", rx_freq[0]);
-//	settings->setValue("Modem/RXFreq2", rx_freq[1]);
 
 	settings->setValue("Modem/NRRcvrPairs1", RCVR[0]);
 	settings->setValue("Modem/NRRcvrPairs2", RCVR[1]);
@@ -252,11 +329,6 @@ void saveSettings()
 	settings->setValue("KISS/Server", KISSServ);
 	settings->setValue("KISS/Port", KISSPort);
 
-	settings->setValue("AX25_A/Retries", fracks[0]);
-
-	settings->setValue("AX25_A/soundChannel", soundChannel[0]);
-	settings->setValue("AX25_B/soundChannel", soundChannel[1]);
-
 	settings->setValue("Modem/PreEmphasisAll1", emph_all[0]);
 	settings->setValue("Modem/PreEmphasisAll2", emph_all[1]);
 	settings->setValue("Modem/PreEmphasisDB1", emph_db[0]);
@@ -266,10 +338,13 @@ void saveSettings()
 	settings->setValue("Window/Waterfall2", Secondwaterfall);
 
 	settings->setValue("Modem/TxDelay1", txdelay[0]);
-	settings->setValue("Modem/TxDelay2", txdelay[1] );
+	settings->setValue("Modem/TxDelay2", txdelay[1]);
 
-	settings->setValue("AX25_A/FX25", fx25_mode[0]);
-	settings->setValue("AX25_B/FX25", fx25_mode[1]);
+	settings->setValue("Modem/TxTail1", txtail[0]);
+	settings->setValue("Modem/TxTail2", txtail[1]);
+
+	saveAX25Params(0);
+	saveAX25Params(1);
 
 	settings->sync();
 

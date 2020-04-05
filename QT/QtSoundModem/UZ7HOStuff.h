@@ -2,7 +2,7 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.14"
+#define VersionString "0.0.0.24"
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -26,6 +26,27 @@
 // 0.13 Fix sending last few bits in FX.25 Mode
 
 // 0.14 Add "Copy on Select" to Trace Window
+
+// 0.15 Limit Trace window to 10000 lines
+
+// 0.16 Fix overwriting monitor window after scrollback
+
+// 0.17	Add GPIO and CAT PTT
+
+// 0.18	Add CM108/119 PTT
+
+// 0.19 Fix scheduling KISS frames
+
+// 0.20 Debug code added to RR processing
+
+// 0.21	Fix AGW monitor of multiple line packets
+//		Close ax.25 sessions if AGW Host session closes
+
+// 0.22	Add FEC Count to Session Stats
+
+// 0.23 Retry DISC until UA received or retry count exceeded
+
+// 0.24	More fixes to DISC handling
 
 
 #include <string.h>
@@ -60,7 +81,6 @@ extern "C" {
 #define single float
 #define boolean int
 #define Byte unsigned char		//                  0 to 255
-#define ShortInt char			//                   -127 to 127
 #define Word unsigned short	//                        0 to 65,535
 #define SmallInt short 		//                  -32,768 to 32,767
 #define LongWord unsigned int	//                        0 to 4,294,967,295
@@ -70,14 +90,12 @@ extern "C" {
 //#define Int64 long long		 // -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807
 
 #define byte unsigned char		//                  0 to 255
-#define shortint char			//                   -127 to 127
 #define word unsigned short	//                        0 to 65,535
 #define smallint short 		//                  -32,768 to 32,767
 #define longword unsigned int	//                        0 to 4,294,967,295
  //  Int6 : Cardinal; //                        0 to 4,294,967,295
 #define longint int			//           -2,147,483,648 to 2,147,483,647
 #define integer int  //           -2,147,483,648 to 2,147,483,647
-#define int64 long long		 // -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807
 
 typedef unsigned long ULONG;
 
@@ -92,6 +110,8 @@ typedef unsigned long ULONG;
 #define NONE 0
 #define LEFT 1
 #define RIGHT 2
+
+#define nr_emph 2
 
 // Seems to use Delphi TStringList for a lot of queues. This seems to be a list of pointers and a count
 // Each pointer is to a Data/Length pair
@@ -130,11 +150,7 @@ typedef struct TKISSMode_t
 
 	// Not sure what rest are used for. Seems to be one per channel
 
-	TStringList buffer[4];
-	TStringList request[4];
-	TStringList acked[4];
-	TStringList irequest[4];
-	TStringList iacked[4];
+	TStringList buffer[4];			// Outgoing Frames
 
 } TKISSMode;
 
@@ -228,7 +244,7 @@ typedef struct TDetector_t
 	//
 	UCHAR FEC_pol[5];
 	unsigned short FEC_err[5];
-	long long FEC_header1[5][2];
+	unsigned long long FEC_header1[5][2];
 	unsigned short FEC_blk_int[5];
 	unsigned short FEC_len_int[5];
 	unsigned short FEC_len[5];
@@ -272,6 +288,10 @@ typedef struct TDetector_t
 	float prev_INTRI_buf[5][16384];
 	float prev_INTRQ_buf[5][16384];
 
+	byte emph_decoded;	
+	byte rx_decoded;
+
+
 } TDetector;
 
 
@@ -293,6 +313,7 @@ typedef struct  TAX25Info_t
 	longint stat_r_pkt;
 	longint stat_r_byte;
 	longint stat_r_fc;
+	longint stat_fec_count;
 	time_t stat_begin_ses;
 	time_t stat_end_ses;
 	longint stat_l_r_byte;
@@ -347,7 +368,8 @@ typedef struct TAX25Port_t
 
 #define PTTRTS		1
 #define PTTDTR		2
-#define PTTCI_V		4
+#define PTTCAT		4
+#define PTTCM108	8
 
 // Status flags
 
@@ -545,7 +567,6 @@ typedef struct TAX25Port_t
 #define TX_FRAME 4
 #define TX_WAIT_BPF 5
 
-#define nr_emph 2
 
 #define FRAME_WAIT 0
 #define FRAME_LOAD 1
@@ -723,6 +744,17 @@ extern UCHAR TimerStat2;
 extern int stat_log;
 
 extern char PTTPort[80];			// Port for Hardware PTT - may be same as control port.
+extern int PTTMode;
+extern int PTTBAUD ;
+
+extern char PTTOnString[128];
+extern char PTTOffString[128];
+
+extern UCHAR PTTOnCmd[64];
+extern UCHAR PTTOnCmdLen;
+
+extern UCHAR PTTOffCmd[64];
+extern UCHAR PTTOffCmdLen;
 
 extern int PTT_device;
 extern int RX_device;
@@ -732,6 +764,14 @@ extern int DualChan;
 extern int UsingLeft;
 extern int UsingRight;
 extern int UsingBothChannels;
+extern int pttGPIOPin;
+extern int pttGPIOPinR;
+extern BOOL pttGPIOInvert;
+extern BOOL useGPIO;
+extern BOOL gotGPIO;
+extern int VID;
+extern int PID;
+extern char CM108Addr[80];
 
 extern int SCO;
 extern int DualPTT;

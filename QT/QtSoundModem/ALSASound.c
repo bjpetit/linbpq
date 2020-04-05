@@ -1,3 +1,24 @@
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 //
 //	Audio interface Routine
 
@@ -8,7 +29,6 @@
 
 //	This is ALSASound.c for Linux
 //	Windows Version is Waveout.c
-//	Nucleo Version is NucleoSound.c
 
 
 #include <alsa/asoundlib.h>
@@ -158,17 +178,11 @@ void PlatformSleep(int mS)
 
 // Set GPIO pin as output and set low
 
-int pttGPIOPin;
-BOOL pttGPIOInvert;
-BOOL useGPIO = FALSE;
-BOOL RadioControl = FALSE;
-
 void SetupGPIOPTT()
 {
 	if (pttGPIOPin == -1)
 	{
 		Debugprintf("GPIO PTT disabled"); 
-		RadioControl = FALSE;
 		useGPIO = FALSE;
 	}
 	else
@@ -180,8 +194,15 @@ void SetupGPIOPTT()
 
 		gpioSetMode(pttGPIOPin, PI_OUTPUT);
 		gpioWrite(pttGPIOPin, pttGPIOInvert ? 1 : 0);
-		Debugprintf("Using GPIO pin %d for PTT", pttGPIOPin); 
-		RadioControl = TRUE;
+		Debugprintf("Using GPIO pin %d for Left/Mono PTT", pttGPIOPin); 
+
+		if (pttGPIOPinR != -1)
+		{
+			gpioSetMode(pttGPIOPinR, PI_OUTPUT);
+			gpioWrite(pttGPIOPinR, pttGPIOInvert ? 1 : 0);
+			Debugprintf("Using GPIO pin %d for Right PTT", pttGPIOPin);
+		}
+
 		useGPIO = TRUE;
 	}
 }

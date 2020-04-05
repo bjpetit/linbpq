@@ -237,7 +237,7 @@
      <rect>
       <x>10</x>
       <y>232</y>
-      <width>121</width>
+      <width>166</width>
       <height>17</height>
      </rect>
     </property>
@@ -250,7 +250,7 @@
      <rect>
       <x>10</x>
       <y>256</y>
-      <width>86</width>
+      <width>176</width>
       <height>17</height>
      </rect>
     </property>
@@ -735,7 +735,7 @@
      <rect>
       <x>10</x>
       <y>232</y>
-      <width>121</width>
+      <width>156</width>
       <height>17</height>
      </rect>
     </property>
@@ -743,12 +743,12 @@
      <string>KISS Optimisations</string>
     </property>
    </widget>
-   <widget class="QCheckBox" name="nonAX25A_4">
+   <widget class="QCheckBox" name="nonAX25B">
     <property name="geometry">
      <rect>
       <x>10</x>
       <y>256</y>
-      <width>81</width>
+      <width>176</width>
       <height>17</height>
      </rect>
     </property>

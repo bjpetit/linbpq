@@ -1,4 +1,24 @@
-// UZ7HO Soundmodem Port
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
 
@@ -66,16 +86,10 @@ float PI5 = 0.5f * M_PI;
 float PI25 = 0.25f * M_PI;
 float PI75 = 0.75f * M_PI;
 
-byte emph_decoded[nr_emph + 1];
-byte rx_decoded[32] = ".";
-
 unsigned char  modem_mode[5] ={0,0,0,0};
 
 unsigned short bpf[5] = { 500, 500, 500, 500,500 };
 unsigned short lpf[5] = { 150, 150, 150, 150, 150 };
-
-
-
 
 float BIT_AFC = 32;
 float slottime_tick[5] = { 0 };
@@ -190,6 +204,8 @@ void detector_init()
 				initString(&pDET->raw_bits[i]);
 				initTStringList(&pDET->mem_ARQ_buf[i]);
 				initTStringList(&pDET->mem_ARQ_F_buf[i]);
+				pDET->rx_decoded = 0;
+				pDET->emph_decoded = 0;
 			}
 		}
 	}
@@ -471,7 +487,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 			if (KISSServ)
 			{
-				// KISS monitor outgoing frames
+				// KISS monitor outgoing AGW frames
 
 				if (all_frame_buf[snd_ch].Count > 0)
 				{
@@ -479,32 +495,24 @@ void chk_dcd1(int snd_ch, int buf_size)
 					{
 						KISS_on_data_out(snd_ch, Strings(&all_frame_buf[snd_ch], n), 1);	// Mon TX
 					}
+				}
 
-					// AGW monitor
+				// Add outgoing KISS frames to TX Q
 
-					if (KISS.buffer[snd_ch].Count > 0)
+				if (KISS.buffer[snd_ch].Count > 0)
+				{
+					for (n = 0; n < KISS.buffer[snd_ch].Count; n++)
 					{
-						for (n = 0; n < KISS.buffer[snd_ch].Count; n++)
-						{
-							if (AGWServ)
-								AGW_Raw_monitor(snd_ch, Strings(&KISS.buffer[snd_ch], n));
+						if (AGWServ)
+							AGW_Raw_monitor(snd_ch, Strings(&KISS.buffer[snd_ch], n));
 
-							Add(&all_frame_buf[snd_ch], Strings(&KISS.buffer[snd_ch], n));
-						}
+						// Need to add copy as clear with free original
 
-						Clear(&KISS.buffer[snd_ch]);
-
+						Add(&all_frame_buf[snd_ch], duplicateString(Strings(&KISS.buffer[snd_ch], n)));
 					}
-
-					//     if KISS.request[snd_ch].Count>0 then
-					 //    {
-					 //      for n = 0 to KISS.request[snd_ch].Count-1 do
-					 //        KISS.acked[snd_ch].add(KISS.request[snd_ch].Strings[n]);
-					 //      KISS.request[snd_ch].Clear;
+					Clear(&KISS.buffer[snd_ch]);
 				}
 			}
-
-			//
 
 			if (all_frame_buf[snd_ch].Count > 0 && snd_status[snd_ch] == SND_IDLE)
 			{
@@ -780,20 +788,24 @@ void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string
 	}
   }
 */
+//	if (len > 60)
+//	crc1++;
+
 	if (crc1 == crc2)
 	{
-		Debugprintf("Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
+		struct TDetector_t * pDET = &DET[emph][rcvr_nr];
 		
-		rx_decoded[rcvr_nr] = '|' ;
+		Debugprintf("Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
+	
+		pDET->rx_decoded = '|' ;
 
-		if (rcvr_nr == 0)
-			emph_decoded[emph] = 1; //Normal
+		pDET->emph_decoded = 4; //Normal
 
 		if (arq_mem)
 		{
 			stat_r_mem++;
 			if (rcvr_nr == 0)
-				emph_decoded[emph] = 2; //MEM
+				pDET->emph_decoded = 2; //MEM
 		}
 
 		if (detect_list[snd_ch].Count > 0)
@@ -814,8 +826,8 @@ void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string
 				else
 					stringAdd(xx, "", 0);
 			}
-			else
-				Debugprintf("Discarding copy rcvr %d", rcvr_nr);
+//			else
+//				Debugprintf("Discarding copy rcvr %d", rcvr_nr);
 		}
 		else
 		{
@@ -907,12 +919,14 @@ void make_rx_frame_PSK(int snd_ch, int rcvr_nr, int emph, string * data)
 
 	if (crc1 == crc2)
 	{
+		struct TDetector_t * pDET = &DET[emph][rcvr_nr];
+
 		Debugprintf("Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
 
 		if (rcvr_nr == 0)
-			emph_decoded[emph] = 1; //Normal
+			pDET->emph_decoded = 4; //Normal
 
-		rx_decoded[rcvr_nr] = '|';
+		pDET->rx_decoded = '|';
 
 		if (detect_list[snd_ch].Count > 0)
 		{
@@ -1024,9 +1038,13 @@ procedure add_to_ARQ_FEC(buf: TStringList; data: string);
   if buf.Count=50 then buf.Delete(0);
   buf.Add(data);
 }
+*/
 
-procedure make_rx_frame_FEC(snd_ch,rcvr_nr: byte; data,fec_data: string; nErr: word);
-var
+void make_rx_frame_FEC(int snd_ch, int rcvr_nr, string * data, string * fec_data, word nErr)
+{
+}
+
+/*var
   len,crc1,crc2: word;
   s: string;
   i,k,n: word;
@@ -1402,10 +1420,21 @@ void Mux3_PSK(int snd_ch, int rcvr_nr, int emph, float * src1, float * core, flo
 
 }
 
+int stats[2] = { 0 };
 
+#define dcd_corr 0.11111f
 
 void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int  last)
 {
+
+#ifndef WIN32
+
+	// Until ASM is converted
+
+	return;
+}
+#else
+
 	float  pi2 = 2 * pi;
 
 #define NR_FEC_CH 3
@@ -1414,8 +1443,6 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 	float agc_fast1 = 1 - agc_fast;
 	float agc_slow = agc_fast / 4;
 	float agc_slow1 = 1 - agc_slow;
-
-#define dcd_corr 0.11111
 
 	word  dcnt, dsize;
 	word  i, k, j, j1, j2, j3;
@@ -1426,7 +1453,7 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 	single  afc_lim;
 	word  i_tap, tap;
 	single  AFC, k1, k2, freq;
-	single  max, div_bit_afc, baudrate;
+	single  maxval, div_bit_afc, baudrate;
 	word  max_cnt;
 	single  AmpI, AmpQ, angle, muxI1, muxQ1, muxI2, muxQ2, sumIQ1, sumIQ2;
 	single  AFC_acc1, AFC_acc2;
@@ -1439,15 +1466,19 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 	longword ii, kk;
 	single * core, *prevI, *prevQ;
 	//
-	unsigned long long bit64;
+	unsigned long long bit64 = 0;
 	boolean  hdr_ok;
 	byte  fec_code;
 	string  fec_data_blk;
-	string  line, line1;
+	string  line1;
+
+	byte line[512];
+	int linelen = 0;
+
 	integer nErr;
 	word  crc1, crc2, size;
 
-	byte  hdr_byte[15];
+	byte  hdr_byte[15] = "";
 
 	tr = dcd_threshold * dcd_corr;
 
@@ -1460,60 +1491,55 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 	}
 
 	baudrate = 400;
-	div_bit_afc = 1.0f / round(BIT_AFC*(RX_Samplerate / 11025));
+	div_bit_afc = 1.0f / roundf(BIT_AFC*(RX_Samplerate / 11025));
 	x1 = baudrate / RX_Samplerate;
-	max_cnt = round(RX_Samplerate / baudrate);
+	max_cnt = roundf(RX_Samplerate / baudrate);
 	//
 
-	afc_lim = rx_baudrate[snd_ch] * 0.1;
+	afc_lim = rx_baudrate[snd_ch] * 0.1f;
 	dsize = buf_size / n_INTR[snd_ch];
 	tap = LPF_tap[snd_ch];
 	i_tap = INTR_tap[snd_ch];
 	freq = rx_freq[snd_ch];
 
-	/*
 
+	for (fec_ch = 0; fec_ch <= NR_FEC_CH; fec_ch++)
+	{
+		struct TMChannel_t * pMChan = &DET[0][rcvr_nr].MChannel[snd_ch][fec_ch];
 
+		fmove(&pMChan->prev_dLPFI_buf[buf_size], &pMChan->prev_dLPFI_buf[0], i_tap * 4);
+		fmove(&pMChan->prev_dLPFQ_buf[buf_size], &pMChan->prev_dLPFQ_buf[0], i_tap * 4);
+		fmove(&pMChan->prev_LPF1I_buf[dsize], &pMChan->prev_LPF1I_buf[0], tap * 4);
+		fmove(&pMChan->prev_LPF1Q_buf[dsize], &pMChan->prev_LPF1Q_buf[0], tap * 4);
+		fmove(&pMChan->prev_AFCI_buf[dsize], &pMChan->prev_AFCI_buf[0], tap * 4);
+		fmove(&pMChan->prev_AFCQ_buf[dsize], &pMChan->prev_AFCQ_buf[0], tap * 4);
+	}
+
+	tap_cnt = i_tap;
+	tap_cnt1 = tap;
+	dcnt = 0;
+	k = 0;
+
+	for (i = 0; i < buf_size; i++)
+	{
 		for (fec_ch = 0; fec_ch <= NR_FEC_CH; fec_ch++)
 		{
-			struct TMChannel_t * pDET = &DET[0][rcvr_nr].MChannel[snd_ch][fec_ch];
+			struct TDetector_t * pDET = &DET[0][rcvr_nr];
 
-			fmove(&pDET->prev_dLPFI_buf[buf_size], &pDET->prev_dLPFI_buf[0], i_tap * 4);
-			fmove(&pDET->prev_dLPFQ_buf[buf_size], &pDET->prev_dLPFQ_buf[0], i_tap * 4);
-			fmove(&pDET->prev_LPF1I_buf[dsize], &pDET->prev_LPF1I_buf[0], tap * 4);
-			fmove(&pDET->prev_LPF1Q_buf[dsize], &pDET->prev_LPF1Q_buf[0], tap * 4);
-			fmove(&pDET->prev_AFCI_buf[dsize], &pDET->prev_AFCI_buf[0], tap * 4);
-			fmove(&pDET->prev_AFCQ_buf[dsize], &pDET->prev_AFCQ_buf[0], tap * 4);
-		}
+			x = (freq + pDET->AFC_dF[snd_ch] + ch_offset[fec_ch])*pi2 / RX_Samplerate;
 
-		tap_cnt = i_tap;
-		tap_cnt1 = tap;
-		dcnt = 0;
-		k = 0;
-
-
-		for (i = 0; i < buf_size; i++)
-
-		{
-			for (fec_ch = 0; fec_ch <= NR_FEC_CH; fec_ch++)
+			struct TMChannel_t * pMChan = &pDET->MChannel[snd_ch][fec_ch];
 			{
-				struct TDetector_t * pDET = &DET[0][rcvr_nr];
-
-				x = (freq + pDET->AFC_dF[snd_ch] + ch_offset[fec_ch])*pi2 / RX_Samplerate;
-
-				struct TMChannel_t * pMChan = &DET[0][rcvr_nr].MChannel[snd_ch][fec_ch];
-
-
 				pMChan->MUX_osc = pMChan->MUX_osc + x;
 
 				if (pMChan->MUX_osc > pi2)
 					pMChan->MUX_osc = pMChan->MUX_osc - pi2;
 
-				pMChan->prev_dLPFI_buf[tap_cnt] = src[i] * sin(pMChan->MUX_osc);
-				pMChan->prev_dLPFQ_buf[tap_cnt] = src[i] * cos(pMChan->MUX_osc);
-				prevI = &pMChan - > prev_dLPFI_buf;
-				prevQ = &pMChan - > prev_dLPFQ_buf;
-				core = &pMChan - > INTR_core[snd_ch];
+				pMChan->prev_dLPFI_buf[tap_cnt] = src[i] * sinf(pMChan->MUX_osc);
+				pMChan->prev_dLPFQ_buf[tap_cnt] = src[i] * cosf(pMChan->MUX_osc);
+				prevI = pMChan->prev_dLPFI_buf;
+				prevQ = pMChan->prev_dLPFQ_buf;
+				core = INTR_core[snd_ch];
 				// Decimation filter
 				ii = i << 2;
 				kk = i_tap << 2;
@@ -1529,49 +1555,51 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 					mov eax, kk;
 					xor ebx, ebx;
 					fldz;
-					@k1:
-						fld dword ptr[edi + ebx];
+				lk1:
+					fld dword ptr[edi + ebx];
 					fmul dword ptr[esi + ebx];
 					fadd;
 					add ebx, 4;
 					cmp ebx, eax;
-					jne @k1;
-						fstp dword ptr acc1;
+					jne lk1;
+					fstp dword ptr acc1;
 					wait;
 					mov edi, prevQ;
 					add edi, ii;
 					xor ebx, ebx;
 					fldz;
-					@k2:
-						fld dword ptr[edi + ebx];
+				lk2:
+					fld dword ptr[edi + ebx];
 					fmul dword ptr[esi + ebx];
 					fadd;
 					add ebx, 4;
 					cmp ebx, eax;
-					jne @k2;
-						fstp dword ptr acc2;
+					jne lk2;
+					fstp dword ptr acc2;
 					wait;
 					pop esi;
 					pop edi;
 					pop ebx;
 					pop eax;
 				}
+			}
 
-				if (fec_ch == NR_FEC_CH)
-					tap_cnt++;
+			if (fec_ch == NR_FEC_CH)
+				tap_cnt++;
 
-				// Decimation
+			// Decimation
 
-				if (dcnt == 0)
+			if (dcnt == 0)
+			{
 				{
 					pMChan->prev_LPF1I_buf[tap_cnt1] = acc1;
 					pMChan->prev_LPF1Q_buf[tap_cnt1] = acc2;
 					pMChan->prev_AFCI_buf[tap_cnt1] = acc1;
 					pMChan->prev_AFCQ_buf[tap_cnt1] = acc2;
 					// Bit-filter
-					prevI = &pMChan->pMChan - > prev_LPF1I_buf;
-					prevQ = &pMChan->prev_LPF1Q_buf;
-					core = &pMChan->LPF_core[snd_ch];
+					prevI = pMChan->prev_LPF1I_buf;
+					prevQ = pMChan->prev_LPF1Q_buf;
+					core = LPF_core[snd_ch];
 					ii = k << 2;
 					kk = tap << 2;
 					__asm
@@ -1586,27 +1614,27 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 						mov eax, kk;
 						xor ebx, ebx;
 						fldz;
-						@k1:
-							fld dword ptr[edi + ebx];
+					xk1:
+						fld dword ptr[edi + ebx];
 						fmul dword ptr[esi + ebx];
 						fadd;
 						add ebx, 4;
 						cmp ebx, eax;
-						jne @k1;
-							fstp dword ptr BIT_acc1;
+						jne xk1;
+						fstp dword ptr BIT_acc1;
 						wait;
 						mov edi, prevQ;
 						add edi, ii;
 						xor ebx, ebx;
 						fldz;
-						@k2:
-							fld dword ptr[edi + ebx];
+					xk2:
+						fld dword ptr[edi + ebx];
 						fmul dword ptr[esi + ebx];
 						fadd;
 						add ebx, 4;
 						cmp ebx, eax;
-						jne @k2;
-							fstp dword ptr BIT_acc2;
+						jne xk2;
+						fstp dword ptr BIT_acc2;
 						wait;
 						pop esi;
 						pop edi;
@@ -1614,9 +1642,9 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 						pop eax;
 					}
 					// AFC-filter
-					prevI = &pMChan->prev_AFCI_buf;
-					prevQ = &pMChan->prev_AFCQ_buf;
-					core = &AFC_core[snd_ch];
+					prevI = pMChan->prev_AFCI_buf;
+					prevQ = pMChan->prev_AFCQ_buf;
+					core = AFC_core[snd_ch];
 					ii = k << 2;
 					kk = tap << 2;
 					_asm
@@ -1631,27 +1659,27 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 						mov eax, kk;
 						xor ebx, ebx;
 						fldz;
-						@k1:
-							fld dword ptr[edi + ebx];
+					xxk1:
+						fld dword ptr[edi + ebx];
 						fmul dword ptr[esi + ebx];
 						fadd;
 						add ebx, 4;
 						cmp ebx, eax;
-						jne @k1;
-							fstp dword ptr AFC_acc1;
+						jne xxk1;
+						fstp dword ptr AFC_acc1;
 						wait;
 						mov edi, prevQ;
 						add edi, ii;
 						xor ebx, ebx;
 						fldz;
-						@k2:
-							fld dword ptr[edi + ebx];
+					xxk2:
+						fld dword ptr[edi + ebx];
 						fmul dword ptr[esi + ebx];
 						fadd;
 						add ebx, 4;
 						cmp ebx, eax;
-						jne @k2;
-							fstp dword ptr AFC_acc2;
+						jne xxk2;
+						fstp dword ptr AFC_acc2;
 						wait;
 						pop esi;
 						pop edi;
@@ -1660,322 +1688,385 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 					}
 				}
 
-			// AGC
+				// AGC
 
-			amp = sqrt(BIT_acc1*BIT_acc1 + BIT_acc2 * BIT_acc2);
-			if (amp > pDET->PSK_AGC[snd_ch])
-				pDET->PSK_AGC[snd_ch] = pDET->PSK_AGC[snd_ch] * agc_fast1 + amp*agc_fast;
-			else
-				pDET->PSK_AGC[snd_ch] = pDET->PSK_AGC[snd_ch] * agc_slow1 + amp*agc_slow;
+				amp = sqrtf(BIT_acc1*BIT_acc1 + BIT_acc2 * BIT_acc2);
+				if (amp > pDET->PSK_AGC[snd_ch])
+					pDET->PSK_AGC[snd_ch] = pDET->PSK_AGC[snd_ch] * agc_fast1 + amp*agc_fast;
+				else
+					pDET->PSK_AGC[snd_ch] = pDET->PSK_AGC[snd_ch] * agc_slow1 + amp*agc_slow;
 
-			if (pDET->PSK_AGC[snd_ch] > 1)
-			{
-			  BIT_acc1 = BIT_acc1 / pDET->PSK_AGC[snd_ch];
-			  BIT_acc2 = BIT_acc2 / pDET->PSK_AGC[snd_ch];
-			  AFC_acc1 = AFC_acc1 / pDET->PSK_AGC[snd_ch];
-			  AFC_acc2 = AFC_acc2 / pDET->PSK_AGC[snd_ch];
-			  amp = amp / pDET->PSK_AGC[snd_ch];
-			}
+				if (pDET->PSK_AGC[snd_ch] > 1)
+				{
+					BIT_acc1 = BIT_acc1 / pDET->PSK_AGC[snd_ch];
+					BIT_acc2 = BIT_acc2 / pDET->PSK_AGC[snd_ch];
+					AFC_acc1 = AFC_acc1 / pDET->PSK_AGC[snd_ch];
+					AFC_acc2 = AFC_acc2 / pDET->PSK_AGC[snd_ch];
+					amp = amp / pDET->PSK_AGC[snd_ch];
+				}
+
+				// AFC Correction
+
+
 				sumIQ = (AFC_acc1 - pMChan->AFC_IZ2)*pMChan->AFC_QZ1 - (AFC_acc2 - pMChan->AFC_QZ2)*pMChan->AFC_IZ1;
 				pMChan->AFC_IZ2 = pMChan->AFC_IZ1;
 				pMChan->AFC_QZ2 = pMChan->AFC_QZ1;
 				pMChan->AFC_IZ1 = AFC_acc1;
 				pMChan->AFC_QZ1 = AFC_acc2;
 
-			pDET->AFC_dF[snd_ch] = pDET->AFC_dF[snd_ch] - sumIQ * 0.07; // AFC_LPF=1
+				pDET->AFC_dF[snd_ch] = pDET->AFC_dF[snd_ch] - sumIQ * 0.07f; // AFC_LPF=1
 
-			if (pDET->AFC_dF[snd_ch] > afc_lim)
-				pDET->AFC_dF[snd_ch] = afc_lim;
+				if (pDET->AFC_dF[snd_ch] > afc_lim)
+					pDET->AFC_dF[snd_ch] = afc_lim;
 
-			if (pDET->AFC_dF[snd_ch] < afc_lim)
-				pDET->AFC_dF[snd_ch] = -afc_lim;
+				if (pDET->AFC_dF[snd_ch] < -afc_lim)
+					pDET->AFC_dF[snd_ch] = -afc_lim;
 
 
-			??pMChan->AFC_bit_buf1I[pDET->AFC_cnt[snd_ch]] = BIT_acc1;
-			??pMChan->AFC_bit_buf1Q[pDET->AFC_cnt[snd_ch]] = BIT_acc2;
-			??pMChan->AFC_bit_buf2[pDET->AFC_cnt[snd_ch]] = amp;
+				pMChan->AFC_bit_buf1I[pDET->AFC_cnt[snd_ch]] = BIT_acc1;
+				pMChan->AFC_bit_buf1Q[pDET->AFC_cnt[snd_ch]] = BIT_acc2;
+				pMChan->AFC_bit_buf2[pDET->AFC_cnt[snd_ch]] = amp;
 
-			if (fec_ch == NR_FEC_CH)
-			{
-				pDET->AFC_cnt[snd_ch]++;
-				pDET->AFC_bit_osc[snd_ch] = pDET->AFC_bit_osc[snd_ch] + x1;
+				if (fec_ch == NR_FEC_CH)
+				{
+					pDET->AFC_cnt[snd_ch]++;
+					pDET->AFC_bit_osc[snd_ch] = pDET->AFC_bit_osc[snd_ch] + x1;
 
-			  if (pDET->AFC_bit_osc[snd_ch] >= 1 )
-			  {
-				  // Находим максимум в буфере синхронизации
-				  for (j = 0; j <= NR_FEC_CH; j++)
-				  {
-					  struct TMChannel_t * pMChan = &DET[0][rcvr_nr].MChannel[snd_ch][j];
-
-					max = 0;
-
-					for (j1 = 0; j1 < pDET->AFC_cnt[snd_ch]; j1++)
+					if (pDET->AFC_bit_osc[snd_ch] >= 1)
 					{
-						amp = pMChan->AFC_bit_buf2[j1];
+						// Find the maximum in the synchronization buffer
 
-						AFC_bit_buf[snd_ch][j1] = AFC_bit_buf[snd_ch][j1] * 0.95 + amp*0.05;
-
-						if (AFC_bit_buf[snd_ch][j1] > max)
+						for (j = 0; j <= NR_FEC_CH; j++)
 						{
+							struct TMChannel_t * pMChan = &pDET->MChannel[snd_ch][j];
+
+							maxval = 0;
+
+							for (j1 = 0; j1 < pDET->AFC_cnt[snd_ch]; j1++)
 							{
-								AFC_newpkpos = j1;
-								max = AFC_bit_buf[snd_ch][j1];
+								amp = pMChan->AFC_bit_buf2[j1];
+
+								pDET->AFC_bit_buf[snd_ch][j1] = pDET->AFC_bit_buf[snd_ch][j1] * 0.95 + amp*0.05;
+
+								if (pDET->AFC_bit_buf[snd_ch][j1] > maxval)
+								{
+									{
+										AFC_newpkpos = j1;
+										maxval = pDET->AFC_bit_buf[snd_ch][j1];
+									}
+								}
+
+								k1 = 1.0f *AFC_newpkpos / (pDET->AFC_cnt[snd_ch] - 1);
+								k2 = pila(k1) - 1;
+
+
+
+								//AFC = div_bit_afc*k2;
+								AFC = div_bit_afc * k2*0.25; //for 4 carriers
+								if (k1 > 0.5)
+									pDET->AFC_bit_osc[snd_ch] = pDET->AFC_bit_osc[snd_ch] + AFC;
+								else
+									pDET->AFC_bit_osc[snd_ch] = pDET->AFC_bit_osc[snd_ch] - AFC;
+
+								//DCD feature
+
+								if (last)
+								{
+									DCD_LastPkPos[snd_ch] = DCD_LastPkPos[snd_ch] * 0.96f + AFC_newpkpos * 0.04f;
+									DCD_LastPerc[snd_ch] = DCD_LastPerc[snd_ch] * 0.96f + abs(AFC_newpkpos - DCD_LastPkPos[snd_ch])*0.04f;
+									if (DCD_LastPerc[snd_ch] >= tr || DCD_LastPerc[snd_ch] < 0.00001f)
+										dcd_bit_cnt[snd_ch] = dcd_bit_cnt[snd_ch] + 1;
+									else
+										dcd_bit_cnt[snd_ch] = dcd_bit_cnt[snd_ch] - 1;
+								}
+
 							}
-						}
+							// Bit-detector
 
-						k1 = AFC_newpkpos / (AFC_cnt[snd_ch] - 1);
-						k2 = pila(k1) - 1;
-						//AFC = div_bit_afc*k2;
-						AFC = div_bit_afc * k2*0.25; //for 4 carriers
-						if (k1 > 0.5)
-							AFC_bit_osc[snd_ch] = AFC_bit_osc[snd_ch] + AFC;
-						else
-							AFC_bit_osc[snd_ch] = AFC_bit_osc[snd_ch] - AFC;
+							AmpI = pMChan->AFC_bit_buf1I[AFC_newpkpos];
+							AmpQ = pMChan->AFC_bit_buf1Q[AFC_newpkpos];
+							muxI1 = AmpI * pMChan->AFC_IIZ1;
+							muxI2 = AmpQ * pMChan->AFC_IIZ1;
+							muxQ1 = AmpQ * pMChan->AFC_QQZ1;
+							muxQ2 = AmpI * pMChan->AFC_QQZ1;
+							sumIQ1 = muxI1 + muxQ1;
+							sumIQ2 = muxI2 - muxQ2;
+							angle = atan2f(sumIQ2, sumIQ1);
+							pMChan->AFC_IIZ1 = AmpI;
+							pMChan->AFC_QQZ1 = AmpQ;
 
-						//DCD feature
+							// Phase corrector
 
-						if (last)
-						{
-							DCD_LastPkPos[snd_ch] = DCD_LastPkPos[snd_ch] * 0.96 + AFC_newpkpos * 0.04;
-							DCD_LastPerc[snd_ch] = DCD_LastPerc[snd_ch] * 0.96 + abs(AFC_newpkpos - DCD_LastPkPos[snd_ch])*0.04;
-							if (DCD_LastPerc[snd_ch] >= tr || DCD_LastPerc[snd_ch] < 0.00001)
-								dcd_bit_cnt[snd_ch] = dcd_bit_cnt[snd_ch] + 1;
+							if (fabsf(angle) < PI5)
+								pMChan->AngleCorr = pMChan->AngleCorr * 0.9f - angle * 0.1f;
 							else
-								dcd_bit_cnt[snd_ch] = dcd_bit_cnt[snd_ch] - 1;
-						}
+							{
+								if (angle > 0)
+									pMChan->AngleCorr = pMChan->AngleCorr * 0.9f + (pi - angle)*0.1f;
+								else
+									pMChan->AngleCorr = pMChan->AngleCorr * 0.9f + (-pi - angle)*0.1f;
+							}
+							angle = angle + pMChan->AngleCorr;
 
-						// Bit-detector
-						AmpI = pMChan->AFC_bit_buf1I[AFC_newpkpos];
-						AmpQ = pMChan->AFC_bit_buf1Q[AFC_newpkpos];
-						muxI1 = AmpI * pMChan->AFC_IIZ1;
-						muxI2 = AmpQ * pMChan->AFC_IIZ1;
-						muxQ1 = AmpQ * pMChan->AFC_QQZ1;
-						muxQ2 = AmpI * pMChan->AFC_QQZ1;
-						sumIQ1 = muxI1 + muxQ1;
-						sumIQ2 = muxI2 - muxQ2;
-						angle = arctan2(sumIQ2, sumIQ1);
-						pMChan->AFC_IIZ1 = AmpI;
-						pMChan->AFC_QQZ1 = AmpQ;
-						// Phase corrector
-						if (abs(angle) < PI5)
-							pMChan->AngleCorr = pMChan->AngleCorr * 0.9 - angle * 0.1;
-						else
-						{
-							if (angle > 0)
-								pMChan->AngleCorr = pMChan->AngleCorr * 0.9 + (pi - angle)*0.1;
+
+							if (fabsf(angle) < PI5)
+								bit = RX_BIT1;
 							else
-								pMChan->AngleCorr = pMChan->AngleCorr * 0.9 + (-pi - angle)*0.1;
-						}
-						angle = angle + pMChan->AngleCorr;
+								bit = RX_BIT0;
 
+							// DCD on flag
 
-					if (abs(angle) < PI5)
-						bit = RX_BIT1;
-					else
-						bit = RX_BIT0;
-
-						// DCD on flag
-						if (last)
-						{
-						  if (dcd_hdr_cnt[snd_ch] > 0)
-							  dcd_hdr_cnt[snd_ch]--);
-
-						  DCD_header[snd_ch] = (DCD_header[snd_ch] >> 1) | (bit << 24);
-
-						  if ((DCD_header[snd_ch] & 0xFFFF0000) == 0x7E7E0000 ||
-							  (DCD_header[snd_ch] & 0xFFFFFF00) == 0x7E000000 ||
-							  (DCD_header[snd_ch] & 0xFFFFFF00) == 0x00000000)
-						  {
-							  dcd_hdr_cnt[snd_ch] = 48;
-							  dcd_on_hdr[snd_ch] = TRUE;
-						  }
-
-						  // header stream
-						  bit64 = (bit64 | bit) << 56;
-						  pDET->FEC_header1[snd_ch][1] = (pDET->FEC_header1[snd_ch][1] >> 1) || (pDET->FEC_header1[snd_ch][0] << 63);
-						  pDET->FEC_header1[snd_ch][0] = (pDET->FEC_header1[snd_ch][0] >> 1) || bit64;
-						  // copy body
-						  if (frame_status[snd_ch] = FRAME_LOAD)
-						  {
-							bit_stream[snd_ch] = (bit_stream[snd_ch] >> 1) + bit;
-							pDET->bit_cnt[snd_ch]++;
-							if (pDET->bit_cnt[snd_ch] == 8)
+							if (last)
 							{
-								pDET->bit_cnt[snd_ch] = 0;
-								pDET->FEC_len_cnt[snd_ch]++;
+								if (dcd_hdr_cnt[snd_ch] > 0)
+									dcd_hdr_cnt[snd_ch]--;
 
-								stringAdd(&pDET->FEC_rx_data[snd_ch], &bit_stream[snd_ch], 1);
+								DCD_header[snd_ch] = (DCD_header[snd_ch] >> 1) | (bit << 24);
 
-							  if (pDET->FEC_len_cnt[snd_ch] == pDET->FEC_len[snd_ch])
-							  {
-								  // descrambler
-								  pDET->FEC_rx_data[snd_ch] = scrambler(pDET->FEC_rx_data[snd_ch]);
-							  // deinterleave
-								  pDET->FEC_blk_int[snd_ch] = ((pDET->FEC_len[snd_ch] - 1) / 16) + 1;
-
-							  line = pDET->FEC_rx_data[snd_ch];
-
-							  j3 = 1;
-
-							  for (j1 = 0; j1 < 16; j1++)
-							  {
-								  for (j2 = 0; j2 < pDET->FEC_blk_int[snd_ch]; j2++)
-								  {
-									  if ((j2 * 16 + j1) <= pDET->FEC_len[snd_ch] && j3 <= pDET->FEC_len[snd_ch])
-									  {
-										  pDET->FEC_rx_data[snd_ch].Data[j2 * 16 + j1] = line.Data[j3];
-										  j3++;
-									  }
-								  }
-							  }
-
-							  // RS-decode
-							  line = FEC_rx_data[snd_ch];
-							  FEC_rx_data[snd_ch] = '';
-							  repeat
-								line1 = copy(line,1,16);
-								size = length(line1);
-								FillChar(xEncoded,SizeOf(xEncoded),0);
-								FillChar(xDecoded,SizeOf(xDecoded),0);
-								move(line1[1],xEncoded[0],size);
-								RS.InitBuffers;
-								nErr = RS.DecodeRS(xEncoded,xDecoded);
-								line1 = '';
-								for j1 = MaxErrors * 2 to size - 1 do line1 = line1 + chr(xDecoded[j1]);
-								FEC_rx_data[snd_ch] = FEC_rx_data[snd_ch] + line1;
-								if nErr >= 0 then FEC_err[snd_ch] = FEC_err[snd_ch] + nErr;
-								// For MEM-ARQ
-								fec_code = length(line1) and $7F;
-								if nErr < 0 then fec_code = fec_code or $80;
-								fec_data_blk = fec_data_blk + chr(fec_code) + line1;
-								delete(line,1,16);
-							  until line = '';
-							  //
-							  make_rx_frame_FEC(snd_ch,rcvr_nr,FEC_rx_data[snd_ch],fec_data_blk,FEC_err[snd_ch]);
-							  FEC_rx_data[snd_ch] = '';
-							  frame_status[snd_ch] = FRAME_WAIT;
-							  FEC_header1[snd_ch][0] = 0;
-							  FEC_header1[snd_ch][1] = 0;
+								if ((DCD_header[snd_ch] & 0xFFFF0000) == 0x7E7E0000 ||
+									(DCD_header[snd_ch] & 0xFFFFFF00) == 0x7E000000 ||
+									(DCD_header[snd_ch] & 0xFFFFFF00) == 0x00000000)
+								{
+									dcd_hdr_cnt[snd_ch] = 48;
+									dcd_on_hdr[snd_ch] = TRUE;
+								}
 							}
-						  }
-						  }
-						  hdr_ok = FALSE;
-						  if (frame_status[snd_ch] = FRAME_WAIT) then
-						  {
-							j1 = FEC_header1[snd_ch][1] shr 16 xor $7E7E;
-							asm
-							  push ax;
-							  push bx;
-							  push cx;
-							  mov ax,15;
-							  mov bx,j1;
-							  @loop:
-								mov cx,bx;
-								and cx,1;
-								cmp cx,1;
-								jne @is_zero;
-								inc ah; // count damaged bits
-								@is_zero:
-								shr bx,1;
-								dec al;
-							  jnz @loop;
-							  cmp ah,5; // greater than 4 bits
-							  jnb @greater;
-							  mov hdr_ok,TRUE;
-							  @greater:
-							  pop cx;
-							  pop bx;
-							  pop ax;
-						  }
-						}
-						//if (FEC_header1[snd_ch][1] shr 24 and $FF=$7E) and (frame_status[snd_ch]=FRAME_WAIT) then
-						if hdr_ok then
-						{
-						  hdr_ok = FALSE;
-						  hdr_byte[1] = FEC_header1[snd_ch][0] shr 56 and $FF;
-						  hdr_byte[2] = FEC_header1[snd_ch][0] shr 48 and $FF;
-						  hdr_byte[3] = FEC_header1[snd_ch][0] shr 40 and $FF;
-						  hdr_byte[4] = FEC_header1[snd_ch][0] shr 32 and $FF;
-						  hdr_byte[5] = FEC_header1[snd_ch][0] shr 24 and $FF;
-						  hdr_byte[6] = FEC_header1[snd_ch][0] shr 16 and $FF;
-						  hdr_byte[7] = FEC_header1[snd_ch][0] shr 8 and $FF;
-						  hdr_byte[8] = FEC_header1[snd_ch][0] and $FF;
-						  hdr_byte[9] = FEC_header1[snd_ch][1] shr 56 and $FF;
-						  hdr_byte[10] = FEC_header1[snd_ch][1] shr 48 and $FF;
-						  hdr_byte[11] = FEC_header1[snd_ch][1] shr 40 and $FF;
-						  hdr_byte[12] = FEC_header1[snd_ch][1] shr 32 and $FF;
-						  hdr_byte[13] = FEC_header1[snd_ch][1] shr 24 and $FF;
-						  hdr_byte[14] = FEC_header1[snd_ch][1] shr 16 and $FF;
-						  if (hdr_byte[13] = $7E) and (hdr_byte[14] = $7E) then
-						  {
-							FEC_len[snd_ch] = hdr_byte[12] shl 8 + hdr_byte[11];
-							line = #$7E#$7E + chr(hdr_byte[12]) + chr(hdr_byte[11]);
-							crc1 = hdr_byte[10] shl 8 + hdr_byte[9];
-							crc2 = get_fcs(line,4);
-							if crc1 = crc2 then hdr_ok = TRUE;
-						  }
-						  if not hdr_ok then
-						  {
-							line = '';
-							for j1 = 14 downto 1 do line = line + chr(hdr_byte[j1]);
-							FillChar(xEncoded,SizeOf(xEncoded),0);
-							FillChar(xDecoded,SizeOf(xDecoded),0);
-							line = copy(line,7,8) + copy(line,1,6);
-							move(line[1],xEncoded[0],14);
-							RS.InitBuffers;
-							nErr = RS.DecodeRS(xEncoded,xDecoded);
-							if nErr > -1 then
+
+							// header stream
+							bit64 = bit;
+							bit64 <<= 56;
+
+							pDET->FEC_header1[snd_ch][1] = (pDET->FEC_header1[snd_ch][1] >> 1) | (pDET->FEC_header1[snd_ch][0] << 63);
+							pDET->FEC_header1[snd_ch][0] = (pDET->FEC_header1[snd_ch][0] >> 1) | bit64;
+	
+							// copy body
+							if (pDET->frame_status[snd_ch] == FRAME_LOAD)
 							{
-							  line = '';
-							  for j1 = 8 to 13 do line = line + chr(xDecoded[j1]);
-							  if (line[1] = #$7E) and (line[2] = #$7E) then
-							  {
-								FEC_len[snd_ch] = ord(line[3]) shl 8 + ord(line[4]);
-								crc1 = ord(line[5]) shl 8 + ord(line[6]);
-								line = copy(line,1,4);
-								crc2 = get_fcs(line,4);
-								if crc1 = crc2 then hdr_ok = TRUE;
-							  }
+								pDET->bit_stream[snd_ch] = (pDET->bit_stream[snd_ch] >> 1) + bit;
+								pDET->bit_cnt[snd_ch]++;
+								if (pDET->bit_cnt[snd_ch] == 8)
+								{
+									pDET->bit_cnt[snd_ch] = 0;
+									pDET->FEC_len_cnt[snd_ch]++;
+
+									stringAdd(&pDET->FEC_rx_data[snd_ch], &pDET->bit_stream[snd_ch], 1);
+
+									if (pDET->FEC_len_cnt[snd_ch] == pDET->FEC_len[snd_ch])
+									{
+										// descrambler
+										scrambler(pDET->FEC_rx_data[snd_ch].Data, pDET->FEC_rx_data[snd_ch].Length);
+										// deinterleave
+										pDET->FEC_blk_int[snd_ch] = ((pDET->FEC_len[snd_ch] - 1) / 16) + 1;
+
+										linelen = pDET->FEC_rx_data[snd_ch].Length;
+
+										memcpy(line, pDET->FEC_rx_data[snd_ch].Data, linelen);
+
+										j3 = 1;
+
+										for (j1 = 0; j1 < 16; j1++)
+										{
+											for (j2 = 0; j2 < pDET->FEC_blk_int[snd_ch]; j2++)
+											{
+												if ((j2 * 16 + j1) <= pDET->FEC_len[snd_ch] && j3 <= pDET->FEC_len[snd_ch])
+												{
+													pDET->FEC_rx_data[snd_ch].Data[j2 * 16 + j1] = line[j3];
+													j3++;
+												}
+											}
+										}
+
+										// RS-decode
+
+										/*
+
+										line = pDET->FEC_rx_data[snd_ch];
+										pDET->FEC_rx_data[snd_ch].Length = 0;
+										do
+										{
+											line1 = copy(line, 1, 16);
+											size = length(line1);
+											FillChar(xEncoded, SizeOf(xEncoded), 0);
+											FillChar(xDecoded, SizeOf(xDecoded), 0);
+											move(line1[1], xEncoded[0], size);
+											RS.InitBuffers;
+											nErr = RS.DecodeRS(xEncoded, xDecoded);
+											line1 = '';
+											for j1 = MaxErrors * 2 to size - 1 do line1 = line1 + chr(xDecoded[j1]);
+											pDET->FEC_rx_data[snd_ch] = FEC_rx_data[snd_ch] + line1;
+											if nErr >= 0 then FEC_err[snd_ch] = FEC_err[snd_ch] + nErr;
+											// For MEM-ARQ
+											fec_code = length(line1) and $7F;
+											if nErr < 0 then fec_code = fec_code or $80;
+											fec_data_blk = fec_data_blk + chr(fec_code) + line1;
+											delete(line, 1, 16);
+										} while(line.Count);
+										*/
+
+
+										make_rx_frame_FEC(snd_ch, rcvr_nr, &pDET->FEC_rx_data[snd_ch], &fec_data_blk, pDET->FEC_err[snd_ch]);
+										pDET->FEC_rx_data[snd_ch].Length = 0;
+										pDET->frame_status[snd_ch] = FRAME_WAIT;
+										pDET->FEC_header1[snd_ch][0] = 0;
+										pDET->FEC_header1[snd_ch][1] = 0;
+									}
+								}
 							}
-						  }
-						  if hdr_ok then
-						  {
-							FEC_len[snd_ch] = FEC_len[snd_ch] and 1023; //limit of length
-							if FEC_len[snd_ch] > 0 then
+
+							hdr_ok = FALSE;
+
+							// I think FEC_header1[0] and FEC_header1[1] form the 128 bit header
+							// We look for a pair of flags, but allow a few bits to be wrong
+							// as FEC may fix them
+
+							if (pDET->frame_status[snd_ch] == FRAME_WAIT)
 							{
-							  frame_status[snd_ch] = FRAME_LOAD;
-							  FEC_len_cnt[snd_ch] = 0;
-							  bit_cnt[snd_ch] = 0;
-							  FEC_err[snd_ch] = 0;
-							  FEC_rx_data[snd_ch] = '';
-							  fec_data_blk = '';
+								j1 = (pDET->FEC_header1[snd_ch][1] >> 16) ^ 0x7E7E;
+								_asm
+								{
+									push ax;
+									push bx;
+									push cx;
+									mov ax, 15;
+									mov bx, j1;
+								zloop:
+									mov cx, bx;
+									and cx, 1;
+									cmp cx, 1;
+									jne is_zero;
+									inc ah; // count damaged bits
+								is_zero:
+									shr bx, 1;
+									dec al;
+									jnz zloop;
+									cmp ah, 5; // greater than 4 bits
+									jnb greater;
+									mov hdr_ok, TRUE;
+								greater:
+									pop cx;
+									pop bx;
+									pop ax;
+								}
 							}
-						  }
+							//if (FEC_header1[snd_ch][1] shr 24 and $FF=$7E) and (frame_status[snd_ch]=FRAME_WAIT) then
+
+							if (hdr_ok)
+							{
+								// Have up to 4 bits wrong in 7E7E pattern
+
+								// Extract header, check crc then try RS
+
+								hdr_ok = FALSE;
+
+//								if ((pDET->FEC_header1[snd_ch][1] & 0xffff0000) == 0x7E7E0000)
+//								{
+
+								hdr_byte[13] = (pDET->FEC_header1[snd_ch][1] >> 24) & 0xFF;
+								hdr_byte[14] = (pDET->FEC_header1[snd_ch][1] >> 16) & 0xFF;
+
+								if (hdr_byte[13] == 0x7E && hdr_byte[14] == 0x7E)
+								{
+									hdr_byte[1] = (pDET->FEC_header1[snd_ch][0] >> 56) & 0xFF;
+									hdr_byte[2] = (pDET->FEC_header1[snd_ch][0] >> 48) & 0xFF;
+									hdr_byte[3] = (pDET->FEC_header1[snd_ch][0] >> 40) & 0xFF;
+									hdr_byte[4] = (pDET->FEC_header1[snd_ch][0] >> 32) & 0xFF;
+									hdr_byte[5] = (pDET->FEC_header1[snd_ch][0] >> 24) & 0xFF;
+									hdr_byte[6] = (pDET->FEC_header1[snd_ch][0] >> 16) & 0xFF;
+									hdr_byte[7] = (pDET->FEC_header1[snd_ch][0] >> 8) & 0xFF;
+									hdr_byte[8] = pDET->FEC_header1[snd_ch][0] & 0xFF;
+									hdr_byte[9] = (pDET->FEC_header1[snd_ch][1] >> 56) & 0xFF;
+									hdr_byte[10] = (pDET->FEC_header1[snd_ch][1] >> 48) & 0xFF;
+									hdr_byte[11] = (pDET->FEC_header1[snd_ch][1] >> 40) & 0xFF;
+									hdr_byte[12] = (pDET->FEC_header1[snd_ch][1] >> 32) & 0xFF;
+
+									pDET->FEC_len[snd_ch] = hdr_byte[12] << 8 + hdr_byte[11];
+									line[0] = 0x7E;
+									line[1] = 0x7E;
+									line[2] = hdr_byte[12];
+									line[3] = hdr_byte[11];
+
+									crc1 = (hdr_byte[10] << 8) + hdr_byte[9];
+									crc2 = get_fcs(line, 4);
+
+									if (crc1 == crc2)
+										hdr_ok = TRUE;
+
+									Debugprintf("Len %d CRC %x %x", pDET->FEC_len[snd_ch], crc1, crc2);
+								}
+								/*									if (!hdr_ok)
+																	{
+																		linelen = 0;
+																		for (j1 = 14; j1 > 0; j1-)
+																			line[linelen++] = hdr_byte[j1);
+
+
+
+																		FillChar(xEncoded, SizeOf(xEncoded), 0);
+																		FillChar(xDecoded, SizeOf(xDecoded), 0);
+																		line = copy(&line, 7, 8) + copy(&line, 1, 6);
+																		move(&line[1], xEncoded[0], 14);
+																		RS.InitBuffers;
+																		nErr = RS.DecodeRS(xEncoded, xDecoded);
+																		if (nErr > -1)
+																		{
+																			line.Length = 0;
+
+																			for (j1 = 8; j1 < 13; j1++)
+																				stringAdd(&line, &xDecoded[j1], 1);
+
+																			if (line[1] == 0x7E && line[2] == 0x7E)
+																			{
+																				FEC_len[snd_ch] = ord(line[3]) shl 8 + ord(line[4]);
+																				crc1 = (line[5] << 8) + line[6]);
+																				line = copy(line, 1, 4);
+																				crc2 = get_fcs(line, 4);
+																				if (crc1 == crc2)
+																					hdr_ok = TRUE;
+																			}
+																		}
+																	}
+								*/
+								if (hdr_ok)
+								{
+									pDET->FEC_len[snd_ch] = pDET->FEC_len[snd_ch] & 1023; //limit of length
+									if (pDET->FEC_len[snd_ch] > 0)
+									{
+										pDET->frame_status[snd_ch] = FRAME_LOAD;
+										pDET->FEC_len_cnt[snd_ch] = 0;
+										pDET->bit_cnt[snd_ch] = 0;
+										pDET->FEC_err[snd_ch] = 0;
+										pDET->FEC_rx_data[snd_ch].Length = 0;
+										fec_data_blk.Length = 0;
+									}
+								}
+							}
 						}
+						// Finalize
+						if (pDET->AFC_cnt[snd_ch] <= max_cnt)
+							for (j = pDET->AFC_cnt[snd_ch]; j <= max_cnt + 5; j++)
+								pDET->AFC_bit_buf[snd_ch][j] = 0.95f*pDET->AFC_bit_buf[snd_ch][j];
+
+						pDET->AFC_cnt[snd_ch] = 0;
+						pDET->AFC_bit_osc[snd_ch] = pDET->AFC_bit_osc[snd_ch] - 1;
 					}
-					// Finalize
-					if AFC_cnt[snd_ch] <= max_cnt then
-						for j = AFC_cnt[snd_ch] to max_cnt + 5 do
-							AFC_bit_buf[snd_ch][j] = 0.95*AFC_bit_buf[snd_ch][j];
-					AFC_cnt[snd_ch] = 0;
-					AFC_bit_osc[snd_ch] = AFC_bit_osc[snd_ch] - 1;
-				  }
-			  }
-			  if fec_ch = NR_FEC_CH then
-			  {
-				inc(tap_cnt1);
-				inc(k);
-			  }
-
-			  dcnt = (dcnt + 1) mod n_INTR[snd_ch];
-
+				}
+				if (fec_ch == NR_FEC_CH)
+				{
+					tap_cnt1++;
+					k++;
+				}
 			}
-
-	*/
+		}
+		dcnt = (dcnt + 1) % n_INTR[snd_ch];
+	}
 }
+
+#endif
 
 void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data)
 {
+	struct TDetector_t * pDET = &DET[emph][rcvr_nr];
+
 	word len, crc1, crc2;
 
 	len = data->Length;
@@ -1989,7 +2080,7 @@ void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data)
 	{
 		Debugprintf("FEC Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
 
-		rx_decoded[rcvr_nr] = 'F';
+		pDET->rx_decoded = 'F';
 
 		if (detect_list[snd_ch].Count > 0)
 		{
@@ -2018,7 +2109,7 @@ void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data)
 			Add(&detect_list[snd_ch], data);
 
 			if (rcvr_nr == 0)
-				emph_decoded[emph] = 4; //FX.25
+				pDET->emph_decoded = 3; //FX.25
 		}
 	}
 }
@@ -2230,13 +2321,13 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 		{
 			if (sample_cnt <= max_cnt)
 				for (k = sample_cnt; k <= max_cnt; k++)
-					bit_buf[k] = 0.95*bit_buf[k];
+					bit_buf[k] = 0.95f*bit_buf[k];
 
 			k1 = (1.0f * newpkpos) / (sample_cnt - 1);
 			k2 = pila(k1) - 1;
 			AFC = div_bit_afc * k2;
 
-			if (k1 > 0.5)
+			if (k1 > 0.5f)
 				bit_osc = bit_osc + AFC;
 			else
 				bit_osc = bit_osc - AFC;
@@ -2250,8 +2341,8 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 			//DCD feature
 			if (last)
 			{
-				DCD_LastPkPos[snd_ch] = DCD_LastPkPos[snd_ch] * 0.96 + newpkpos * 0.04;
-				DCD_LastPerc[snd_ch] = DCD_LastPerc[snd_ch] * 0.96 + fabsf(newpkpos - DCD_LastPkPos[snd_ch])*0.04;
+				DCD_LastPkPos[snd_ch] = DCD_LastPkPos[snd_ch] * 0.96f + newpkpos * 0.04f;
+				DCD_LastPerc[snd_ch] = DCD_LastPerc[snd_ch] * 0.96f + fabsf(newpkpos - DCD_LastPkPos[snd_ch])*0.04f;
 
 				if (DCD_LastPerc[snd_ch] >= tr || DCD_LastPerc[snd_ch] < 0.00001f)
 					dcd_bit_cnt[snd_ch]++;
@@ -2524,7 +2615,6 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 	pDET->fx25[snd_ch] = fx25;
 }
 
-int stats[2] = { 0 };
 
 void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * srcI, float * srcQ, float * bit_buf, int  buf_size, string * data)
 {
@@ -2634,7 +2724,7 @@ void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 
 			afc = div_bit_afc * k2;
 
-			if (k1 > 0.5)
+			if (k1 > 0.5f)
 				bit_osc = bit_osc + afc;
 			else
 				bit_osc = bit_osc - afc;
@@ -2646,10 +2736,10 @@ void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			//DCD feature
 			if (last)
 			{
-				DCD_LastPkPos[snd_ch] = DCD_LastPkPos[snd_ch] * 0.96 + newpkpos * 0.04;
-				DCD_LastPerc[snd_ch] = DCD_LastPerc[snd_ch] * 0.96 + fabsf(newpkpos - DCD_LastPkPos[snd_ch])*0.04;
+				DCD_LastPkPos[snd_ch] = DCD_LastPkPos[snd_ch] * 0.96f + newpkpos * 0.04f;
+				DCD_LastPerc[snd_ch] = DCD_LastPerc[snd_ch] * 0.96f + fabsf(newpkpos - DCD_LastPkPos[snd_ch])*0.04f;
 
-				if (DCD_LastPerc[snd_ch] >= tr || DCD_LastPerc[snd_ch] < 0.00001)
+				if (DCD_LastPerc[snd_ch] >= tr || DCD_LastPerc[snd_ch] < 0.00001f)
 					dcd_bit_cnt[snd_ch] = dcd_bit_cnt[snd_ch] + 1;
 				else
 					dcd_bit_cnt[snd_ch] = dcd_bit_cnt[snd_ch] - 1;
@@ -2669,13 +2759,13 @@ void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			// Phase corrector
 
 			if (fabsf(angle) < PI5)
-				AngleCorr = AngleCorr * 0.95 - angle * 0.05;
+				AngleCorr = AngleCorr * 0.95f - angle * 0.05f;
 			else
 			{
 				if (angle > 0)
-					AngleCorr = AngleCorr * 0.95 + (pi - angle)*0.05;
+					AngleCorr = AngleCorr * 0.95f + (pi - angle)*0.05f;
 				else
-					AngleCorr = AngleCorr * 0.95 - (pi + angle)*0.05;
+					AngleCorr = AngleCorr * 0.95f - (pi + angle)*0.05f;
 			}
 
 			angle = angle + AngleCorr;
@@ -3932,7 +4022,7 @@ void PSK8_Demodulator(int snd_ch, int rcvr_nr, int emph, boolean last)
 }
 
 
-void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last)
+void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int center)
 {
 	// called once per decoder (current one in rcvr_nr)
 
@@ -3943,7 +4033,7 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last)
 	string * s_emph;
 	struct TDetector_t * pDET = &DET[0][rcvr_nr];
 
-	// looks like tihs filters to src_BPF_buf
+	// looks like this filters to src_BPF_buf
 
 	FIR_filter(src_buf, rx_bufsize, BPF_tap[snd_ch], pDET->BPF_core[snd_ch], pDET->src_BPF_buf[snd_ch], pDET->prev_BPF_buf[snd_ch]);
 
@@ -4020,86 +4110,115 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last)
 
 	if (last)
 	{
-		s_emph = newString();
+		boolean fecflag = 0;
 
-		memset(s_emph->Data, 0, 16);
+		// Work out which decoder and which emph settings worked. 
 
-		if (emph_all[snd_ch])
+		if (detect_list[snd_ch].Count > 0)		// no point if nothing decoded
 		{
+			char decoded[32] = "................";
+			char s_emph[4] = "";
+			int emph[4] = { 0 };
+			char report[32] = "";
+
+			// The is one DET for each Decoder for each Emph setting
+
+			struct TDetector_t * pDET;
+			int i = 0, j;
+			int maxemph = nr_emph;
+
 			for (i = 0; i <= nr_emph; i++)
 			{
-				switch (emph_decoded[i])
+				for (j = 0; j <= RCVR[snd_ch] * 2; j++)
 				{
-				case 1:
-					stringAdd(s_emph, (byte *)"+", 1); //Norma
-					break;
-				case 2:
-					stringAdd(s_emph, (byte *)"#", 1); //MEM
-					break;
-				case 3:
-					stringAdd(s_emph, (byte *)"$", 1); //Single
-					break;
-				case 4:
-					stringAdd(s_emph, (byte *)"F", 1); //V
-					break;
-				default:
-					stringAdd(s_emph, (byte *)"-", 1); //None 
+					pDET = &DET[i][j];
+
+					if (pDET->rx_decoded > decoded[j])		// Better than other one (| is higher than F)
+						decoded[j] = pDET->rx_decoded;
+
+					if (pDET->emph_decoded > emph[i])
+						emph[i] = pDET->emph_decoded;
+
+					pDET->rx_decoded = 0;
+					pDET->emph_decoded = 0;					// Ready for next time
+
 				}
-
-				emph_decoded[i] = 0; //None
+				if (emph_all[snd_ch] == 0)
+					break;
 			}
-		}
 
-		if (detect_list[snd_ch].Count > 0)
-		{
-			for (i = 0; i < detect_list[snd_ch].Count; i++)
+			decoded[j] = 0;
+
+			if (emph_all[snd_ch])
 			{
-				found = 0;
-
-				if (detect_list_l[snd_ch].Count > 0)
-					if (my_indexof(&detect_list_l[snd_ch], detect_list[snd_ch].Items[i]) > -1)
-						found = 1;
-
-				if (found == 0)
+				for (i = 0; i <= nr_emph; i++)
 				{
-					if (modem_mode[snd_ch] == MODE_MPSK)
+					switch (emph[i])
 					{
-						//					analiz_frame(snd_ch, detect_list[snd_ch].Items[i]->Data, [snd_ch].Items[i]->Data + ' dF: ' + FloatToStrF(DET[0, 0].AFC_dF[snd_ch], ffFixed, 0, 1));
+					case 4:
+						s_emph[i] = '+';		//Normal
+						break;
+					case 2:
+						s_emph[i] = '#';		 //MEM
+						break;
+					case 1:
+						s_emph[i] = '$';		 //Single
+						break;
+					case 3:
+						s_emph[i] = 'F';		// FEC
+						fecflag = 1;
+						break;
+
+					default:
+						s_emph[i] = '-';		 //None
 					}
-					else
+				}
+				sprintf(report, "%s][%s", s_emph, decoded);
+			}
+			else
+				strcpy(report, decoded);
+
+			if (detect_list[snd_ch].Count > 0)
+			{
+				for (i = 0; i < detect_list[snd_ch].Count; i++)
+				{
+					found = 0;
+
+					//					if (detect_list_l[snd_ch].Count > 0)
+					//						if (my_indexof(&detect_list_l[snd_ch], detect_list[snd_ch].Items[i]) > -1)
+					//							found = 1;
+
+					if (found == 0)
 					{
-						if (emph_all[snd_ch])		//
-							stringAdd(s_emph, "][", 2);
-						
-
-						stringAdd(s_emph, &rx_decoded[0], strlen(rx_decoded));
-
-						analiz_frame(snd_ch, detect_list[snd_ch].Items[i], s_emph);
-						memset(rx_decoded, '.', 30);
-						rx_decoded[RCVR[snd_ch] * 2 + 1] = 0;
+						if (modem_mode[snd_ch] == MODE_MPSK)
+						{
+							//					analiz_frame(snd_ch, detect_list[snd_ch].Items[i]->Data, [snd_ch].Items[i]->Data + ' dF: ' + FloatToStrF(DET[0, 0].AFC_dF[snd_ch], ffFixed, 0, 1));
+						}
+						else
+						{
+							analiz_frame(snd_ch, detect_list[snd_ch].Items[i], report, fecflag);
+						}
 					}
+				}
+
+				// Cancel FX25 decode
+
+				if (fx25_mode[snd_ch] != FX25_MODE_NONE)
+				{
+					int e;
+
+					for (i = 0; i < 16; i++)
+						for (e = 0; e <= nr_emph; e++)
+							DET[e][i].fx25[snd_ch].status = FX25_TAG;
 				}
 			}
 
-			// Cancel FX25 decode
+			//			Assign(&detect_list_l[snd_ch], &detect_list[snd_ch]);	// Duplicate detect_list to detect_list_l
 
-			if (fx25_mode[snd_ch]!=FX25_MODE_NONE) 
-				for (i = 0; i < 16; i++)
-					for (emph = 0; emph <= nr_emph; emph++)
-						DET[emph][i].fx25[snd_ch].status  = FX25_TAG;
-
+			Clear(&detect_list[snd_ch]);
+			Clear(&detect_list_c[snd_ch]);
 		}
-
-		freeString(s_emph);
-
-		Assign(&detect_list_l[snd_ch], &detect_list[snd_ch]);	// Duplicate detect_list to detect_list_l
-
-		Clear(&detect_list[snd_ch]);
-		Clear(&detect_list_c[snd_ch]);
-
 		chk_dcd1(snd_ch, rx_bufsize);
-	
-	
 	}
 }
 	

@@ -1,4 +1,5 @@
 <RCC>
-    <qresource prefix="QtSoundModem">
+    <qresource prefix="/QtSoundModem">
+        <file>soundmodem.ico</file>
     </qresource>
 </RCC>

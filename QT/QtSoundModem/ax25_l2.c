@@ -1,6 +1,24 @@
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
 
+This file is part of QtSoundModem
 
-// UZ7HO Soundmodem Port
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
 
@@ -288,7 +306,7 @@ void add_I_FRM(TAX25Port * AX25Sess, byte * path)
 		{
 			upd_i_hi(AX25Sess, AX25Sess->vs);
 			upd_vs(AX25Sess, AX25Sess->vs);
-			AX25Sess->hi_vs = AX25Sess->vs; // Последний переданный кадр
+			AX25Sess->hi_vs = AX25Sess->vs; // Last transmitted frame
 		}
 	}
 }
@@ -467,7 +485,7 @@ void  write_frame_collector(TAX25Port * AX25Sess, int ns, string * data)
 	}
 }
 
-string * read_frame_collector(TAX25Port * AX25Sess)
+string * read_frame_collector(TAX25Port * AX25Sess, boolean fecflag)
 {
 	// Look for required frame no in saved frames
 
@@ -498,6 +516,9 @@ string * read_frame_collector(TAX25Port * AX25Sess)
 
 			AX25Sess->info.stat_r_pkt++;
 			AX25Sess->info.stat_r_fc++;
+		
+			if (fecflag)
+				AX25Sess->info.stat_fec_count++;
 
 			AX25Sess->info.stat_r_byte += frm->Length;
 			AX25Sess->frm_win[frm_ns].Length = frm->Length; //Save the frame to the window buffer
@@ -568,9 +589,22 @@ void set_link(TAX25Port * AX25Sess, UCHAR * axpath)
 
 #define    MODE_OUR 0
 
+void set_try_unlink(TAX25Port * AX25Sess, byte * path)
+{
+	string nullstring;
+	nullstring.Length = 0;
+	
+	AX25Sess->status = STAT_TRY_UNLINK;
+	add_pkt_buf(AX25Sess, make_frame(&nullstring, path, 0, 0, 0, U_FRM, U_DISC, SET_NO_RPT, SET_P, SET_C));
+	inc_frack(AX25Sess);
+}
+
+
 void set_unlink(TAX25Port * AX25Sess, byte * path)
 {
-	if (AX25Sess->status != STAT_NO_LINK)
+	if (AX25Sess->status == STAT_TRY_UNLINK 
+		|| AX25Sess->status == STAT_TRY_LINK
+		|| AX25Sess->status == STAT_NO_LINK)
 	{
 		string nullstring;
 		nullstring.Length = 0;
@@ -580,7 +614,8 @@ void set_unlink(TAX25Port * AX25Sess, byte * path)
 
 		AGW_AX25_disc(AX25Sess, MODE_OUR);
 
-//		if (AX25Sess->digi[0] then path : = path + ',' + reverse_digi(AX25Sess->digi);
+		if (AX25Sess->status != STAT_TRY_UNLINK)
+			add_pkt_buf(AX25Sess, make_frame(&nullstring, path, 0, 0, 0, U_FRM, U_DISC, SET_NO_RPT, SET_P, SET_C));
 
 		AX25Sess->info.stat_end_ses = time(NULL);
 
@@ -592,8 +627,9 @@ void set_unlink(TAX25Port * AX25Sess, byte * path)
 		AX25Sess->digi[0] = 0;
 		AX25Sess->status = STAT_NO_LINK;
 
-		add_pkt_buf(AX25Sess, make_frame(&nullstring, path, 0, 0, 0, U_FRM, U_DISC, SET_NO_RPT, SET_P, SET_C));
 	}
+	else
+		set_try_unlink(AX25Sess, AX25Sess->Path);
 }
 
 void set_DM(int snd_ch, byte * path)
@@ -612,15 +648,15 @@ void set_DM(int snd_ch, byte * path)
 
 void on_RR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 {
-	char need_frame[8];
+	char need_frame[16] = "";
 	int index = 0;
 
 	int i;
 
 	if (AX25Sess->status == STAT_TRY_LINK)
 		return;
-
-	if (AX25Sess->status == STAT_NO_LINK)
+	
+	if (AX25Sess->status == STAT_NO_LINK || AX25Sess->status == STAT_TRY_UNLINK)
 	{
 		if (cr == SET_C)
 			set_DM(AX25Sess->snd_ch, path);
@@ -635,11 +671,16 @@ void on_RR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 
 		need_frame[index++] = i + '0';
 
-
+		Debugprintf("RR Rxed vs = %d hi_vs = %d", AX25Sess->vs, AX25Sess->hi_vs);
 		while (i != AX25Sess->hi_vs)
 		{
 			i = (i++) & 7;
 			need_frame[index++] = i + '0';
+			if (index > 10)
+			{
+				Debugprintf("Index corrupt %d need_frame = %s", index, need_frame);
+				break;
+			}
 		}
 
 		//Clear the received frames from the transmission buffer.
@@ -669,7 +710,7 @@ void on_RNR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 	if (AX25Sess->status == STAT_TRY_LINK)
 		return;
 
-	if (AX25Sess->status == STAT_NO_LINK)
+	if (AX25Sess->status == STAT_NO_LINK || AX25Sess->status == STAT_TRY_UNLINK)
 	{
 		if (cr == SET_C)
 			set_DM(AX25Sess->snd_ch, path);
@@ -699,7 +740,7 @@ void on_REJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 	if (AX25Sess->status == STAT_TRY_LINK)
 		return;
 
-	if (AX25Sess->status == STAT_NO_LINK)
+	if (AX25Sess->status == STAT_NO_LINK || AX25Sess->status == STAT_TRY_UNLINK)
 	{
 		if (cr == SET_C)
 			set_DM(AX25Sess->snd_ch, path);
@@ -720,17 +761,17 @@ void on_REJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 }
 /////////////////////////// I-FRAMES ////////////////////////////////////
 
-void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * data, int nr, int ns, int pf, int cr)
+void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * data, int nr, int ns, int pf, int cr, boolean fecflag)
 {
 	string * collector_data;
 	int i;
-	byte need_frame[8];
+	byte need_frame[16] = "";
 	int index = 0;
 	{
 		if (AX25Sess->status == STAT_TRY_LINK)
 			return;
 
-		if (AX25Sess->status == STAT_NO_LINK)
+		if (AX25Sess->status == STAT_NO_LINK || AX25Sess->status == STAT_TRY_UNLINK)
 		{
 			set_DM(0, path);
 			return;
@@ -748,12 +789,18 @@ void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * d
 
 		need_frame[index++] = i + '0';
 
+		Debugprintf("I Rxed vs = %d hi_vs = %d", AX25Sess->vs, AX25Sess->hi_vs);
+	
 		while (i != AX25Sess->hi_vs)
 		{
 			i = (i++) & 7;
 			need_frame[index++] = i + '0';
+			if (index > 10)
+			{
+				Debugprintf("Index corrupt %d need_frame = %s", index, need_frame);
+				break;
+			}
 		}
-
 
 		//Clear received frames from the transmission buffer.
 
@@ -777,13 +824,16 @@ void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * d
 
 			AX25Sess->info.stat_r_pkt++;
 			AX25Sess->info.stat_r_byte += data->Length;
+
+			if (fecflag)
+				AX25Sess->info.stat_fec_count++;
+
 			upd_vr(AX25Sess, AX25Sess->vr);
 
 			AX25Sess->frm_win[ns].Length = data->Length; //Save the frame to the window buffer
 			AX25Sess->frm_win[ns].Data = data->Data; //Save the frame to the window buffer
 
-			collector_data = read_frame_collector(AX25Sess);
-
+			collector_data = read_frame_collector(AX25Sess, fecflag);
 
 			AGW_AX25_data_in(socket, AX25Sess->snd_ch, PID, path, stringAdd(data, collector_data->Data, collector_data->Length));
 
@@ -808,6 +858,23 @@ void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * d
 
 void  on_SABM(void * socket, TAX25Port * AX25Sess)
 {
+	if (AX25Sess->status == STAT_TRY_UNLINK)
+	{
+		AX25Sess->info.stat_end_ses = time(NULL);
+
+		write_ax25_info(AX25Sess);
+		rst_values(AX25Sess);
+
+		memset(AX25Sess->corrcall, 0, 10);
+		memset(AX25Sess->mycall, 0, 10);
+		AX25Sess->digi[0] = 0;
+
+		AGW_AX25_disc(AX25Sess, MODE_OTHER);
+		Clear(&AX25Sess->frame_buf);
+
+		AX25Sess->status = STAT_NO_LINK;
+	}
+
 	if (AX25Sess->status == STAT_TRY_LINK)
 	{
 		AGW_AX25_disc(AX25Sess, MODE_OTHER);
@@ -902,9 +969,14 @@ void on_UA(void *socket, TAX25Port * AX25Sess)
 	case STAT_TRY_UNLINK:
 
 		AX25Sess->info.stat_end_ses = time(NULL);
-		AX25Sess->status = STAT_NO_LINK;
 		AGW_AX25_disc(AX25Sess, MODE_OUR);
 		write_ax25_info(AX25Sess);
+
+		rst_values(AX25Sess);
+		AX25Sess->status = STAT_NO_LINK;
+		memset(AX25Sess->corrcall, 0, 10);
+		memset(AX25Sess->mycall, 0, 10);
+		AX25Sess->digi[0] = 0;
 		break;
 	}
 
@@ -994,6 +1066,7 @@ void timer_event()
 				{
 					// This disconnects after retries expires
 
+					AX25Port[snd_ch][port].status = STAT_TRY_UNLINK;
 					rst_frack(AX25Sess);
 
 					//socket:=get_incoming_socket_by_call(AX25Sess->mycall);
@@ -1009,6 +1082,11 @@ void timer_event()
 					set_link(AX25Sess, AX25Sess->Path);
 					break;
 
+				case STAT_TRY_UNLINK:
+					
+					set_try_unlink(AX25Sess, AX25Sess->Path);
+					break;
+				
 				case STAT_WAIT_ANS:
 
 					set_chk_link(AX25Sess, AX25Sess->Path);
@@ -1200,7 +1278,7 @@ void Digipeater(int snd_ch, string * frame)
 	}
 }
 
-void analiz_frame(int snd_ch, string * frame, string * code)
+void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 {
 	int  port, free_port;
 	byte path[80];
@@ -1240,8 +1318,6 @@ void analiz_frame(int snd_ch, string * frame, string * code)
 			AGW_Raw_monitor(snd_ch, frame);
 		if (KISSServ)
 			KISS_on_data_out(snd_ch, frame, 0);
-
-		return;
 	}
 	
 	// CRC Collision Check
@@ -1254,13 +1330,7 @@ void analiz_frame(int snd_ch, string * frame, string * code)
 		return;
 	}
 
-	
-	//end;
-
-	put_frame(snd_ch, frame, code->Data, 0, excluded);				// Monitor
-
-	if (excluded)
-		return;
+	put_frame(snd_ch, frame, code, 0, excluded);				// Monitor
 
 	if (!NonAX25[snd_ch])
 	{
@@ -1376,7 +1446,7 @@ void analiz_frame(int snd_ch, string * frame, string * code)
 	{
 	case I_I:
 
-		on_I(socket, AX25Sess, pid, path, data, nr, ns, pf, cr);
+		on_I(socket, AX25Sess, pid, path, data, nr, ns, pf, cr, fecflag);
 		break;
 
 	case S_RR:

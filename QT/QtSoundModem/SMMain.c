@@ -1,9 +1,32 @@
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
 #include "fftw3.h"
 #include <time.h>
 #include "ecc.h"				// RS Constants
-
+#include "hidapi.h"
+#include <fcntl.h>
+#include <errno.h>
 
 BOOL KISSServ;
 int KISSPort;
@@ -660,14 +683,6 @@ void DoTX(int Chan)
 	return;
 }
 
-void pttoff(int snd_ch)
-{
-}
-
-void ptton(int snd_ch)
-{
-}
-
 void stoptx(int snd_ch)
 {
 	Flush();
@@ -691,7 +706,6 @@ void RX2TX(int snd_ch)
 {
 	if (snd_status[snd_ch] == SND_IDLE)
 	{
-		ptton(snd_ch);
 		DoTX(snd_ch);
 	}
 }
@@ -703,6 +717,102 @@ char PTTPort[80] = "";			// Port for Hardware PTT - may be same as control port.
 int PTTBAUD = 19200;
 int PTTMode = PTTRTS;			// PTT Control Flags.
 
+char PTTOnString[128] = "";
+char PTTOffString[128] = "";
+
+UCHAR PTTOnCmd[64];
+UCHAR PTTOnCmdLen = 0;
+
+UCHAR PTTOffCmd[64];
+UCHAR PTTOffCmdLen = 0;
+
+int pttGPIOPin = 17;			// Default
+int pttGPIOPinR = 17;
+BOOL pttGPIOInvert = FALSE;
+BOOL useGPIO = FALSE;
+BOOL gotGPIO = FALSE;
+
+
+char CM108Addr[80] = "";
+
+int VID = 0;
+int PID = 0;
+
+// CM108 Code
+
+char * CM108Device = NULL;
+
+void DecodeCM108(char * ptr)
+{
+	// Called if Device Name or PTT = Param is CM108
+
+#ifdef WIN32
+
+	// Next Param is VID and PID - 0xd8c:0x8 or Full device name
+	// On Windows device name is very long and difficult to find, so 
+	//	easier to use VID/PID, but allow device in case more than one needed
+
+	char * next;
+	long VID = 0, PID = 0;
+	char product[256] = "Unknown";
+
+	struct hid_device_info *devs, *cur_dev;
+	const char *path_to_open = NULL;
+	hid_device *handle = NULL;
+
+	if (strlen(ptr) > 16)
+		CM108Device = _strdup(ptr);
+	else
+	{
+		VID = strtol(ptr, &next, 0);
+		if (next)
+			PID = strtol(++next, &next, 0);
+
+		// Look for Device
+
+		devs = hid_enumerate((unsigned short)VID, (unsigned short)PID);
+		cur_dev = devs;
+
+		while (cur_dev)
+		{
+			if (cur_dev->product_string)
+				wcstombs(product, cur_dev->product_string, 255);
+			
+			Debugprintf("HID Device %s VID %X PID %X", product, cur_dev->vendor_id, cur_dev->product_id);
+			if (cur_dev->vendor_id == VID && cur_dev->product_id == PID)
+			{
+				path_to_open = cur_dev->path;
+				break;
+			}
+			cur_dev = cur_dev->next;
+		}
+
+		if (path_to_open)
+		{
+			handle = hid_open_path(path_to_open);
+
+			if (handle)
+			{
+				hid_close(handle);
+				CM108Device = _strdup(path_to_open);
+			}
+			else
+			{
+				Debugprintf("Unable to open CM108 device %x %x", VID, PID);
+			}
+		}
+		else
+			Debugprintf("Couldn't find CM108 device %x %x", VID, PID);
+
+		hid_free_enumeration(devs);
+	}
+#else
+
+	// Linux - Next Param HID Device, eg /dev/hidraw0
+
+	CM108Device = _strdup(ptr);
+#endif
+}
 
 char * strlop(char * buf, char delim)
 {
@@ -718,13 +828,80 @@ char * strlop(char * buf, char delim)
 
 void OpenPTTPort()
 {
+	PTTMode &= ~PTTCM108;
+
 	if (PTTPort[0] && strcmp(PTTPort, "None") != 0)
 	{
-		char * Baud = strlop(PTTPort, ':');
-		if (Baud)
-			PTTBAUD = atoi(Baud);
+		if (PTTMode == PTTCAT)
+		{
+			// convert config strings from Hex
 
-		hPTTDevice = OpenCOMPort(PTTPort, PTTBAUD, FALSE, FALSE, FALSE, 0);
+			char * ptr1 = PTTOffString;
+			UCHAR * ptr2 = PTTOffCmd;
+			char c;
+			int val;
+
+			while (c = *(ptr1++))
+			{
+				val = c - 0x30;
+				if (val > 15) val -= 7;
+				val <<= 4;
+				c = *(ptr1++) - 0x30;
+				if (c > 15) c -= 7;
+				val |= c;
+				*(ptr2++) = val;
+			}
+
+			PTTOffCmdLen = ptr2 - PTTOffCmd;
+
+			ptr1 = PTTOnString;
+			ptr2 = PTTOnCmd;
+
+			while (c = *(ptr1++))
+			{
+				val = c - 0x30;
+				if (val > 15) val -= 7;
+				val <<= 4;
+				c = *(ptr1++) - 0x30;
+				if (c > 15) c -= 7;
+				val |= c;
+				*(ptr2++) = val;
+			}
+
+			PTTOnCmdLen = ptr2 - PTTOnCmd;
+		}
+
+		if (stricmp(PTTPort, "GPIO") == 0)
+		{
+			// Initialise GPIO for PTT if available
+
+#ifdef __ARM_ARCH
+
+			if (gpioInitialise() == 0)
+			{
+				printf("GPIO interface for PTT available\n");
+				gotGPIO = TRUE;
+
+				SetupGPIOPTT();
+			}
+			else
+				printf("Couldn't initialise GPIO interface for PTT\n");
+
+#else
+			printf("GPIO interface for PTT not available on this platform\n");
+#endif
+
+		}
+		else if (stricmp(PTTPort, "CM108") == 0)
+		{
+			DecodeCM108(CM108Addr);
+			PTTMode |= PTTCM108;
+		}
+
+		else		//  Not GPIO
+		{
+			hPTTDevice = OpenCOMPort(PTTPort, PTTBAUD, FALSE, FALSE, FALSE, 0);
+		}
 	}
 }
 
@@ -733,11 +910,103 @@ void ClosePTTPort()
 	CloseCOMPort(hPTTDevice);
 	hPTTDevice = 0;
 }
+void CM108_set_ptt(int PTTState)
+{
+	char io[5];
+	hid_device *handle;
+	int n;
+
+	io[0] = 0;
+	io[1] = 0;
+	io[2] = 1 << (3 - 1);
+	io[3] = PTTState << (3 - 1);
+	io[4] = 0;
+
+	if (CM108Device == NULL)
+		return;
+
+#ifdef WIN32
+	handle = hid_open_path(CM108Device);
+
+	if (!handle) {
+		printf("unable to open device\n");
+		return;
+	}
+
+	n = hid_write(handle, io, 5);
+	if (n < 0)
+	{
+		printf("Unable to write()\n");
+		printf("Error: %ls\n", hid_error(handle));
+	}
+
+	hid_close(handle);
+
+#else
+
+	int fd;
+
+	fd = open(CM108Device, O_WRONLY);
+
+	if (fd == -1)
+	{
+		printf("Could not open %s for write, errno=%d\n", CM108Device, errno);
+		return;
+	}
+
+	io[0] = 0;
+	io[1] = 0;
+	io[2] = 1 << (3 - 1);
+	io[3] = PTTState << (3 - 1);
+	io[4] = 0;
+
+	n = write(fd, io, 5);
+	if (n != 5)
+	{
+		printf("Write to %s failed, n=%d, errno=%d\n", CM108Device, n, errno);
+	}
+
+	close(fd);
+#endif
+	return;
+
+}
+
+
 
 void RadioPTT(int snd_ch, BOOL PTTState)
 {
+#ifdef __ARM_ARCH
+	if (useGPIO)
+	{
+		if (DualPTT && modemtoSoundLR[snd_ch] == 1)
+			gpioWrite(pttGPIOPinR, (pttGPIOInvert ? (1 - PTTState) : (PTTState)));
+		else
+			gpioWrite(pttGPIOPin, (pttGPIOInvert ? (1 - PTTState) : (PTTState)));
+
+		return;
+	}
+
+#endif
+
+	if ((PTTMode & PTTCM108))
+	{
+		CM108_set_ptt(PTTState);
+		return;
+	}
+	
 	if (hPTTDevice == 0)
 		return;
+
+	if ((PTTMode & PTTCAT))
+	{
+		if (PTTState)
+			WriteCOMBlock(hPTTDevice, PTTOnCmd, PTTOnCmdLen);
+		else
+			WriteCOMBlock(hPTTDevice, PTTOffCmd, PTTOffCmdLen);
+
+		return;
+	}
 
 	if (DualPTT && modemtoSoundLR[snd_ch] == 1)		// use DTR
 	{
@@ -748,20 +1017,15 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 	}
 	else
 	{
-		if (PTTMode & PTTRTS)
+		if ((PTTMode & PTTRTS))
+		{
 			if (PTTState)
 				COMSetRTS(hPTTDevice);
 			else
 				COMClearRTS(hPTTDevice);
+		}
 	}
 
-/*
-	if (PTTMode & PTTCI_V)
-		if (PTTState)
-			WriteCOMBlock(hCATDevice, PTTOnCmd, PTTOnCmdLen);
-		else
-			WriteCOMBlock(hCATDevice, PTTOffCmd, PTTOffCmdLen);
-*/
 }
 
 char ShortDT[] = "HH:MM:SS";
@@ -929,9 +1193,3 @@ BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)
 
 	return TRUE;
 }
-
-
-
-
-
-

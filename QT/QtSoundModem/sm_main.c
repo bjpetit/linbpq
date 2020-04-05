@@ -1,4 +1,24 @@
-// UZ7HO Soundmodem Port
+/*
+Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
+
+This file is part of QtSoundModem
+
+QtSoundModem is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+QtSoundModem is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with QtSoundModem.  If not, see http://www.gnu.org/licenses
+
+*/
+
+// UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
 
@@ -1629,6 +1649,10 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 			make_core_TXBPF(snd_ch, tx_freq[snd_ch], txbpf[snd_ch]);
 			pnt_change[snd_ch] = FALSE;
 		}
+
+		if (DualChan == 0)
+			break;
+
 	}
 
 	// I don't think we should process RX if either is sending
@@ -1761,7 +1785,7 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 				rx_freq[snd_ch] = old_rx_freq + offset;
 				offset += rcvr_offset[snd_ch];
 
-				Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx);
+				Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx, offset == 0);
 			}
 			rx_freq[snd_ch] = old_rx_freq;
 		}
@@ -1879,7 +1903,6 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 
 	integer i;
 	char  time_now[32];
-	string;
 	int len;
 
 	AGWUser * AGW;
