@@ -29,6 +29,8 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 extern "C" int nonGUIMode;
 
 extern void getSettings();
+extern void saveSettings();
+extern int Closing;
 
 workerThread *t;
 mynet m1;
@@ -63,6 +65,9 @@ int main(int argc, char *argv[])
 	if (nonGUIMode == 0)
 	{
 		w = new QtSoundModem();
+
+		QObject::connect(w, SIGNAL(HLSetPTT(int)), w, SLOT(doHLSetPTT(int)), Qt::QueuedConnection);
+
 		w->show();
 	}
 
@@ -71,4 +76,5 @@ int main(int argc, char *argv[])
 	m1.start();				// Start TCP 
 
 	return a->exec();
+
 }

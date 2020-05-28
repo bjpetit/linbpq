@@ -2,7 +2,7 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.24"
+#define VersionString "0.0.0.30"
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -47,6 +47,16 @@
 // 0.23 Retry DISC until UA received or retry count exceeded
 
 // 0.24	More fixes to DISC handling
+
+// 0.26 Add OSS PulseAudio and HAMLIB support
+
+// 0.27 Dynamically load PulseAudio modules
+
+// 0.28 Add ARDOPPacket Mode
+
+// 0.29 Fix saving settings and geometry on close
+// 0.30 Retructure code to build with Qt 5.3
+//      Fix crash in nogui mode if pulse requested but not available
 
 
 #include <string.h>
@@ -370,6 +380,7 @@ typedef struct TAX25Port_t
 #define PTTDTR		2
 #define PTTCAT		4
 #define PTTCM108	8
+#define PTTHAMLIB	16
 
 // Status flags
 
@@ -396,6 +407,7 @@ typedef struct TAX25Port_t
 #define 	S_RR 1
 #define 	S_RNR 5
 #define 	S_REJ 9
+#define		S_SREJ 0x0D
 #define 	U_SABM 47
 #define 	U_DISC 67
 #define 	U_DM 15
@@ -416,7 +428,7 @@ typedef struct TAX25Port_t
 
 //	Sound interface buffer size
 
-#define SendSize 1200		// 100 mS for now
+#define SendSize 1024		// 100 mS for now
 #define ReceiveSize 512	// try 100 mS for now
 #define NumberofinBuffers 4
 
@@ -450,7 +462,7 @@ typedef struct TAX25Port_t
 #define DEBUG_SOUND 8
 #define IS_LAST TRUE
 #define IS_NOT_LAST FALSE
-#define modes_count 15
+#define modes_count 16
 #define SPEED_300 0
 #define SPEED_1200 1
 #define SPEED_600 2
@@ -466,12 +478,16 @@ typedef struct TAX25Port_t
 #define SPEED_DW2400 12
 #define SPEED_8P4800 13
 #define SPEED_AE2400 14
+#define SPEED_ARDOP 15
+
 #define MODE_FSK 0
 #define MODE_BPSK 1
 #define MODE_QPSK 2
 #define MODE_MPSK 3
 #define MODE_8PSK 4
 #define MODE_PI4QPSK 5
+#define MODE_ARDOP 6
+
 #define QPSK_SM 0
 #define QPSK_V26 1
 
@@ -592,8 +608,14 @@ typedef struct TAX25Port_t
 #define I_MAX 7			// Maximum number of packets
 
 
-
 	// externs for all modules
+
+#define ARDOPBufferSize 12000 * 100
+
+extern short ARDOPTXBuffer[4][12000 * 100];	// Enough to hold whole frame of samples
+
+extern int ARDOPTXLen[4];				// Length of frame
+extern int ARDOPTXPtr[4];				// Tx Pointer
 
 extern BOOL KISSServ;
 extern int KISSPort;
@@ -772,6 +794,8 @@ extern BOOL gotGPIO;
 extern int VID;
 extern int PID;
 extern char CM108Addr[80];
+extern int HamLibPort;
+extern char HamLibHost[];
 
 extern int SCO;
 extern int DualPTT;

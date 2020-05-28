@@ -26,7 +26,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #include "QtSoundModem.h"
 #include <qheaderview.h>
-#include <QDebug>
+//#include <QDebug>
 #include <QHostAddress>
 #include <QAbstractSocket>
 #include <QSettings>
@@ -56,13 +56,14 @@ QLabel *HeaderCopy[2];
 QTextEdit * monWindowCopy;
 
 extern workerThread *t;
+extern QtSoundModem * w;
 
 QList<QSerialPortInfo> Ports = QSerialPortInfo::availablePorts();
 
 void saveSettings();
 void getSettings();
 extern "C" void CloseSound();
-
+extern "C" void GetSoundDevices();
 extern "C" char modes_name[modes_count][20];
 extern "C" int speed[5];
 extern "C" int KISSPort;
@@ -77,6 +78,7 @@ extern "C" int PlayBackIndex;
 extern "C" char CaptureNames[16][256];
 extern "C" char PlaybackNames[16][256];
 
+extern "C" int SoundMode;
 
 extern "C"
 { 
@@ -104,7 +106,7 @@ int FreqA = 1500;
 int FreqB = 1500;
 int DCD = 50;
 
-bool Closing = FALSE;				// Set to stop background thread
+int Closing = FALSE;				// Set to stop background thread
 
 QRgb white = qRgb(255, 255, 255);
 QRgb black = qRgb(0, 0, 0);
@@ -313,6 +315,8 @@ void QtSoundModem::menuChecked()
 		Firstwaterfall = state;
 	else if (Act == actWaterfall2)
 		Secondwaterfall = state;
+
+	saveSettings();
 }
 
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
@@ -370,13 +374,14 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	actDevices = new QAction("Setup Devices", this);
 	setupMenu->addAction(actDevices);
 
-	connect(actDevices, &QAction::triggered, this, [=] {doDevices(); });
-
+	connect(actDevices, SIGNAL(triggered()), this, SLOT(clickedSlot()));
+	actDevices->setObjectName("actDevices");
 	actModems = new QAction("Setup Modems", this);
+	actModems->setObjectName("actModems");
 	setupMenu->addAction(actModems);
 
-	connect(actModems, &QAction::triggered, this, [=] {doModems(); });
-
+	connect(actModems, SIGNAL(triggered()), this, SLOT(clickedSlot()));
+	
 	viewMenu = ui.menuBar->addMenu(tr("&View"));
 
 	actWaterfall1 = setupMenuLine(viewMenu, (char *)"First waterfall", this, Firstwaterfall);
@@ -456,21 +461,8 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	//	RefreshLevel(0);
 	//	RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
 
-	// Inline handlers for Modem Params as they are pretty small
-
-	connect(ui.modeA, QOverload<int>::of(&QComboBox::currentIndexChanged), [=]()
-	{
-		ModemA = ui.modeA->currentIndex();
-		set_speed(0, ModemA);
-		saveSettings();
-	});
-
-	connect(ui.modeB, QOverload<int>::of(&QComboBox::currentIndexChanged), [=]()
-	{
-		ModemB = ui.modeB->currentIndex();
-		set_speed(1, ModemB);
-		saveSettings();
-	});
+	connect(ui.modeA, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
+	connect(ui.modeB, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 
 	ui.modeA->setCurrentIndex(speed[0]);
 	ui.modeB->setCurrentIndex(speed[1]);
@@ -480,34 +472,13 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	ui.centerA->setValue(rx_freq[0]);
 	ui.centerB->setValue(rx_freq[1]);
 
-	connect(ui.centerA, QOverload<int>::of(&QSpinBox::valueChanged), [=](int i)
-	{
-		if (i > 300)
-		{
-			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
-			ui.centerA->setValue(Freq_Change(0, i));
-			settings->setValue("Modem/RXFreq1", ui.centerA->value());
-		}
-	});
-
-	connect(ui.centerB, QOverload<int>::of(&QSpinBox::valueChanged), [=](int i)
-	{
-		if (i > 300)
-		{
-			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
-			ui.centerB->setValue(Freq_Change(1, i));
-			settings->setValue("Modem/RXFreq2", ui.centerB->value());
-		}
-	});
+	connect(ui.centerA, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
+	connect(ui.centerB, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
 
 	ui.DCDSlider->setValue(dcd_threshold);
 
-	connect(ui.DCDSlider, QOverload<int>::of(&QSlider::sliderMoved),
+	connect(ui.DCDSlider, SIGNAL(sliderMoved(int)), this, SLOT(clickedSlotI(int)));
 
-		[=](int i)
-	{
-		dcd_threshold = i;
-	});
 
 //	installEventFilter(this);
 
@@ -525,6 +496,176 @@ void QtSoundModem::MyTimerSlot()
 	// 100 mS Timer Event
 
 	show_grid();
+}
+void QtSoundModem::clickedSlotI(int i)
+{
+	QPushButton * Button = static_cast<QPushButton*>(QObject::sender());
+	char Name[32];
+
+	strcpy(Name, sender()->objectName().toUtf8());
+
+	if (strcmp(Name, "modeA") == 0)
+	{
+		ModemA = ui.modeA->currentIndex();
+		set_speed(0, ModemA);
+		saveSettings();
+		return;
+	}
+
+	if (strcmp(Name, "modeB") == 0)
+	{
+		ModemB = ui.modeB->currentIndex();
+		set_speed(1, ModemB);
+		saveSettings();
+		return;
+	}
+
+	if (strcmp(Name, "centerA") == 0)
+	{
+		if (i > 300)
+		{
+			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
+			ui.centerA->setValue(Freq_Change(0, i));
+			settings->setValue("Modem/RXFreq1", ui.centerA->value());
+		}
+		return;
+	}
+
+	if (strcmp(Name, "centerB") == 0)
+	{
+		if (i > 300)
+		{
+			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
+			ui.centerB->setValue(Freq_Change(1, i));
+			settings->setValue("Modem/RXFreq2", ui.centerB->value());
+		}
+		return;
+	}
+
+	if (strcmp(Name, "DCDSlider") == 0)
+	{
+		dcd_threshold = i;
+		saveSettings();
+		return;
+	}
+	
+	QMessageBox msgBox;
+	msgBox.setWindowTitle("MessageBox Title");
+	msgBox.setText("You Clicked " + ((QPushButton*)sender())->objectName());
+	msgBox.exec();
+}
+
+
+void QtSoundModem::clickedSlot()
+{
+	QPushButton * Button = static_cast<QPushButton*>(QObject::sender());
+	char Name[32];
+
+	strcpy(Name, sender()->objectName().toUtf8());
+
+	if (strcmp(Name, "actDevices") == 0)
+	{
+		doDevices();
+		return;
+	}
+
+	if (strcmp(Name, "actModems") == 0)
+	{
+		doModems();
+		return;
+	}
+
+	if (strcmp(Name, "showBPF_A") == 0)
+	{
+		doFilter(0, 0);
+		return;
+	}
+
+	if (strcmp(Name, "showTXBPF_A") == 0)
+	{
+		doFilter(0, 1);
+		return;
+	}
+
+	if (strcmp(Name, "showLPF_A") == 0)
+	{
+		doFilter(0, 2);
+		return;
+	}
+	
+
+	if (strcmp(Name, "showBPF_B") == 0)
+	{
+		doFilter(1, 0);
+		return;
+	}
+
+	if (strcmp(Name, "showTXBPF_B") == 0)
+	{
+		doFilter(1, 1);
+		return;
+	}
+
+	if (strcmp(Name, "showLPF_B") == 0)
+	{
+		doFilter(1, 2);
+		return;
+	}
+
+	if (strcmp(Name, "Low_A") == 0)
+	{
+		handleButton(0, 1);
+		return;
+	}
+
+	if (strcmp(Name, "High_A") == 0)
+	{
+		handleButton(0, 2);
+		return;
+	}
+
+	if (strcmp(Name, "Both_A") == 0)
+	{
+		handleButton(0, 3);
+		return;
+	}
+
+	if (strcmp(Name, "Stop_A") == 0)
+	{
+		handleButton(0, 0);
+		return;
+	}
+
+
+	if (strcmp(Name, "Low_B") == 0)
+	{
+		handleButton(1, 1);
+		return;
+	}
+
+	if (strcmp(Name, "High_B") == 0)
+	{
+		handleButton(1, 2);
+		return;
+	}
+
+	if (strcmp(Name, "Both_B") == 0)
+	{
+		handleButton(1, 3);
+		return;
+	}
+
+	if (strcmp(Name, "Stop_B") == 0)
+	{
+		handleButton(1, 0);
+		return;
+	}
+
+
+	QMessageBox msgBox;
+	msgBox.setWindowTitle("MessageBox Title");
+	msgBox.setText("You Clicked " + ((QPushButton*)sender())->objectName());
+	msgBox.exec();
 }
 
 Ui_ModemDialog * Dlg;
@@ -615,6 +756,17 @@ void QtSoundModem::doModems()
 	Dlg->fx25ModeA->setCurrentIndex(fx25_mode[0]);
 	Dlg->fx25ModeB->setCurrentIndex(fx25_mode[1]);
 
+
+	connect(Dlg->showBPF_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showTXBPF_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showLPF_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showBPF_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showTXBPF_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showLPF_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+
+
+/*
+
 	connect(Dlg->showBPF_A, &QPushButton::released, this, [=] { doFilter(0, 0); });
 	connect(Dlg->showTXBPF_A, &QPushButton::released, this, [=] { doFilter(0, 1); });
 	connect(Dlg->showLPF_A, &QPushButton::released, this, [=] { doFilter(0, 2); });
@@ -622,7 +774,7 @@ void QtSoundModem::doModems()
 	connect(Dlg->showBPF_B, &QPushButton::released, this, [=] { doFilter(1, 0); });
 	connect(Dlg->showTXBPF_B, &QPushButton::released, this, [=] { doFilter(1, 1); });
 	connect(Dlg->showLPF_B, &QPushButton::released, this, [=] { doFilter(1, 2); });
-
+*/
 	connect(Dlg->okButton, SIGNAL(clicked()), this, SLOT(modemaccept()));
 	connect(Dlg->cancelButton, SIGNAL(clicked()), this, SLOT(modemreject()));
 
@@ -733,6 +885,20 @@ Ui_devicesDialog * Dev;
 
 char NewPTTPort[80];
 
+int newSoundMode = 0;
+int oldSoundMode = 0;
+
+void QtSoundModem::SoundModeChanged(bool State)
+{
+	// Mustn't change SoundMode until dialog is accepted
+
+	if (Dev->PULSE->isChecked())
+		newSoundMode = 2;
+	else
+		newSoundMode = Dev->OSS->isChecked();
+
+}
+
 void QtSoundModem::DualPTTChanged(bool State)
 {
 	// Forse Evevaluation of Cat Port setting
@@ -811,7 +977,19 @@ void QtSoundModem::PTTPortChanged(int Selected)
 //#else
 //		Dev->CM108Label->setText("CM108 VID/PID");
 //#endif
+		Dev->VIDPID->setText(CM108Addr);
 		Dev->VIDPID->setVisible(true);
+	}
+	else if (strcmp(NewPTTPort, "HAMLIB") == 0)
+	{
+		Dev->CM108Label->setVisible(true);
+		Dev->CM108Label->setText("rigctrld Port");
+		Dev->VIDPID->setText(QString::number(HamLibPort));
+		Dev->VIDPID->setVisible(true);
+		Dev->PTTOnLab->setText("rigctrld Host");
+		Dev->PTTOnLab->setVisible(true);
+		Dev->PTTOn->setText(HamLibHost);
+		Dev->PTTOn->setVisible(true);
 	}
 	else
 	{
@@ -821,6 +999,8 @@ void QtSoundModem::PTTPortChanged(int Selected)
 		if (Dev->CAT->isChecked())
 		{
 			Dev->PTTOnLab->setVisible(true);
+			Dev->PTTOnLab->setText("PTT On String");
+			Dev->PTTOn->setText(PTTOnString);
 			Dev->PTTOn->setVisible(true);
 			Dev->PTTOff->setVisible(true);
 			Dev->PTTOffLab->setVisible(true);
@@ -843,6 +1023,26 @@ void QtSoundModem::doDevices()
 	int i;
 
 	Dev->setupUi(&UI);
+
+	newSoundMode = -1;
+	oldSoundMode = SoundMode;
+
+#ifdef WIN32
+	Dev->ALSA->setVisible(0);
+	Dev->OSS->setVisible(0);
+	Dev->PULSE->setVisible(0);
+#endif
+
+	if (SoundMode == 0)
+		Dev->ALSA->setChecked(1);
+	else if (SoundMode == 1)
+		Dev->OSS->setChecked(1);
+	else
+		Dev->PULSE->setChecked(1);
+
+	connect(Dev->ALSA, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
+	connect(Dev->OSS, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
+	connect(Dev->PULSE, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 
 	for (i = 0; i < PlaybackCount; i++)
 		Dev->outputDevice->addItem(&PlaybackNames[i][0]);
@@ -919,6 +1119,8 @@ void QtSoundModem::doDevices()
 
 	//#endif
 
+	Dev->PTTPort->addItem("HAMLIB");
+
 	for (const QString &info : items)
 	{
 		Dev->PTTPort->addItem(info);
@@ -942,6 +1144,52 @@ void QtSoundModem::deviceaccept()
 {
 	QVariant Q = Dev->inputDevice->currentText();
 	int cardChanged = 0;
+
+
+	if (Dev->PULSE->isChecked())
+		SoundMode = 2;
+	else
+		SoundMode = Dev->OSS->isChecked();
+
+	if (oldSoundMode != SoundMode)
+	{
+		//		QMessageBox::about(this, tr("Info"),
+		//			tr("Program must restart to change Sound Mode"));
+
+		QMessageBox msgBox;
+
+		msgBox.setText("QtSoundModem must restart to change Sound Mode.\n"
+			"Program will close if you hit Ok\n"
+			"You will need to reselect audio devices after restarting");
+
+		msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+
+		int i = msgBox.exec();
+
+		if (i == QMessageBox::Ok)
+		{
+			SoundMode = newSoundMode;
+
+			saveSettings();
+
+			Closing = 1;
+			return;
+		}
+
+		if (oldSoundMode == 0)
+			Dev->ALSA->setChecked(1);
+		else if (oldSoundMode == 1)
+			Dev->OSS->setChecked(1);
+		else
+			Dev->PULSE->setChecked(1);
+
+		QMessageBox::about(this, tr("Info"),
+			tr("<p align = 'center'>Changes not saved</p>"));
+
+		return;
+
+	}
+
 
 	if (strcmp(CaptureDevice, Q.toString().toUtf8()) != 0)
 	{
@@ -1024,7 +1272,15 @@ void QtSoundModem::deviceaccept()
 	pttGPIOPinR = Q.toInt();
 
 	Q = Dev->VIDPID->text();
-	strcpy(CM108Addr, Q.toString().toUtf8());
+
+	if (strcmp(PTTPort, "CM108") == 0)
+		strcpy(CM108Addr, Q.toString().toUtf8());
+	else if (strcmp(PTTPort, "HAMLIB") == 0)
+	{
+		HamLibPort = Q.toInt();
+		Q = Dev->PTTOn->text();
+		strcpy(HamLibHost, Q.toString().toUtf8());
+	}
 
 	ClosePTTPort();
 	OpenPTTPort();
@@ -1038,7 +1294,6 @@ void QtSoundModem::deviceaccept()
 
 	if (cardChanged)
 	{
-		CloseSound();
 		InitSound(1);
 	}
 
@@ -1051,7 +1306,7 @@ void QtSoundModem::deviceaccept()
 }
 
 void QtSoundModem::devicereject()
-{
+{	
 	delete(Dev);
 }
 
@@ -1074,6 +1329,17 @@ void QtSoundModem::doCalibrate()
 		QDialog UI;
 		Calibrate.setupUi(&UI);
 
+		connect(Calibrate.Low_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.High_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Both_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Stop_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Low_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.High_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Both_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Stop_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+
+		/*
+		
 		connect(Calibrate.Low_A, &QPushButton::released, this, [=] { handleButton(0, 1); });
 		connect(Calibrate.High_A, &QPushButton::released, this, [=] { handleButton(0, 2); });
 		connect(Calibrate.Both_A, &QPushButton::released, this, [=] { handleButton(0, 3); });
@@ -1084,7 +1350,7 @@ void QtSoundModem::doCalibrate()
 		connect(Calibrate.Stop_B, &QPushButton::released, this, [=] { handleButton(1, 0); });
 
 //		connect(Calibrate.High_A, SIGNAL(released()), this, SLOT(handleButton(1, 2)));
-
+*/
 		UI.exec();
 	}
 }
@@ -1512,18 +1778,39 @@ extern "C" void doWaterfall(int snd_ch)
 
 }
 
+#include <QCloseEvent>
+
+void QtSoundModem::closeEvent(QCloseEvent *event)
+{
+	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
+	mysettings.setValue("geometry", QWidget::saveGeometry());
+	mysettings.setValue("windowState", saveState());
+
+	Closing = TRUE;
+	qDebug() << "Closing";
+
+	QThread::msleep(100);
+}
 
 	
 QtSoundModem::~QtSoundModem()
 {
+	qDebug() << "Saving Settings";
+		
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
 	mysettings.setValue("geometry", saveGeometry());
 	mysettings.setValue("windowState", saveState());
 	
 	saveSettings();	
 	Closing = TRUE;
+	qDebug() << "Closing";
 
 	QThread::msleep(100);
+}
+
+extern "C" void QSleep(int ms)
+{
+	QThread::msleep(ms);
 }
 
 int upd_time = 30;
@@ -1669,3 +1956,111 @@ void QtSoundModem::onTEselectionChanged()
 	QTextEdit * x = static_cast<QTextEdit*>(QObject::sender());
 	x->copy();
 }
+
+
+QTcpSocket * HAMLIBsock;
+int HAMLIBConnected = 0;
+int HAMLIBConnecting = 0;
+
+void QtSoundModem::HAMLIBdisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+		QMessageBox::information(this, tr("QtSM"),
+			tr("HAMLIB host was not found. Please check the "
+				"host name and port settings."));
+
+
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		qDebug() << "HAMLIB Connection Refused";
+		break;
+
+	default:
+
+		qDebug() << "HAMLIB Connection Failed";
+		break;
+
+	}
+
+	HAMLIBConnecting = 0;
+	HAMLIBConnected = 0;
+}
+
+void QtSoundModem::HAMLIBreadyRead()
+{
+	unsigned char Buffer[4096];
+ 	QTcpSocket* Socket = static_cast<QTcpSocket*>(QObject::sender()); 
+
+	// read the data from the socket. Don't do anyhing with it at the moment
+
+	Socket->read((char *)Buffer, 4095);
+}
+
+void QtSoundModem::onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+
+			HAMLIBConnected = 0;
+			qDebug() << "HAMLIB Connection Closed";
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		HAMLIBConnected = 1;
+		HAMLIBConnecting = 0;
+		qDebug() << "HAMLIB Connected";
+	}
+}
+
+
+void QtSoundModem::ConnecttoHAMLIB()
+{
+	delete(HAMLIBsock);
+
+	HAMLIBConnected = 0;
+	HAMLIBConnecting = 1;
+
+	HAMLIBsock = new QTcpSocket();
+
+	connect(HAMLIBsock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(HAMLIBdisplayError(QAbstractSocket::SocketError)));
+	connect(HAMLIBsock, SIGNAL(readyRead()), this, SLOT(HAMLIBreadyRead()));
+	connect(HAMLIBsock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onHAMLIBSocketStateChanged(QAbstractSocket::SocketState)));
+
+	HAMLIBsock->connectToHost(HamLibHost, HamLibPort);
+
+	return;
+}
+
+extern "C" void HAMLIBSetPTT(int PTTState)
+{
+	emit w->HLSetPTT(PTTState);
+}
+
+
+void QtSoundModem::doHLSetPTT(int c)
+{
+	char Msg[16];
+
+	if (HAMLIBsock == nullptr || HAMLIBsock->state() != QAbstractSocket::ConnectedState)
+		ConnecttoHAMLIB();
+
+	sprintf(Msg, "T %d\r\n", c);
+	HAMLIBsock->write(Msg);
+
+	HAMLIBsock->waitForBytesWritten(30000);
+
+	QByteArray datas = HAMLIBsock->readAll();
+
+	qDebug(datas.data());
+
+}
+
+

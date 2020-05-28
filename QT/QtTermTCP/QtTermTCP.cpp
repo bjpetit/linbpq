@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.39"
+#define VersionString "0.0.0.40"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -38,7 +38,8 @@
 //	   Make sending Idle and Connect beeps configurable
 //	   Change displayed Monitor flags when active window changed.
 //	   Fix duplicate text on long lines
-// .39 Convert non-utf8 charater
+// .39 Add option to Convert non-utf8 charaters
+// .40 Prevent crash if AGW monitor Window closed
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -262,6 +263,7 @@ Ui_ListenSession * ActiveSession = NULL;
 Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label = nullptr);
 void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
 void AGW_AX25_data_in(void * AX25Sess, unsigned char * data, int Len);
+void AGWWindowClosing(Ui_ListenSession *Sess);
 
 extern void initUTF8();
 int checkUTF8(unsigned char * Msg, int Len, unsigned char * out);
@@ -330,6 +332,9 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 			if (event->type() == QEvent::Close)
 			{
 				// Window closing
+
+				if (Sess->AGWSession)
+					AGWWindowClosing(Sess);
 
 				if (Sess->clientSocket)
 				{
@@ -672,6 +677,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	setMenuBar(mymenuBar);
 
 	toolBar = new QToolBar(this);
+	toolBar->setObjectName("mainToolbar");
 	addToolBar(Qt::TopToolBarArea, toolBar);
 
 	QSettings mysettings("QtTermTCP.ini", QSettings::IniFormat);
@@ -2831,6 +2837,14 @@ void QtTermTCP::xon_mdiArea_changed()
 			{
 				discAction->setEnabled(true);
 				YAPPSend->setEnabled(true);
+				connectMenu->setEnabled(false);
+			}
+			else if (Sess->AGWSession)
+			{
+				// Connected AGW Monitor Session
+
+				discAction->setEnabled(false);
+				YAPPSend->setEnabled(false);
 				connectMenu->setEnabled(false);
 			}
 			else

@@ -132,6 +132,8 @@ void upd_vr(TAX25Port * AX25Sess, int n) //Refresh the counter of the next frame
 
 void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 {
+	// I think this removes redundant frames from the TX Queue (eg repeated RR frames)
+
 	string * frame;
 	byte path[80];
 	string * data = newString();
@@ -372,7 +374,7 @@ void send_data_buf(TAX25Port * AX25Sess, int  nr)
 
 	AX25Sess->IPOLL_cnt = 0;
 	AX25Sess->vs = nr;
-	delete_I_FRM(AX25Sess, nr);
+	delete_I_FRM(AX25Sess, nr);		// ?? free acked frames
 //	delete_I_FRM_port(AX25Sess);
 
 	if (TXFrmMode[AX25Sess->snd_ch] == 1)
@@ -431,6 +433,46 @@ void send_data_buf(TAX25Port * AX25Sess, int  nr)
 	}
 }
 
+
+void send_data_buf_srej(TAX25Port * AX25Sess, int  nr)
+{
+	// Similar to send_data_buf but only sends the requested I frame with P set
+
+	int i = 0;
+	boolean new_frames;
+	boolean PF_bit;
+
+	if (AX25Sess->status != STAT_LINK)
+		return;
+
+	AX25Sess->IPOLL_cnt = 0;
+	AX25Sess->vs = nr;
+	delete_I_FRM(AX25Sess, nr);		// ?? free acked frames
+
+	new_frames = FALSE;
+
+	add_I_FRM(AX25Sess, AX25Sess->Path);
+	AX25Sess->status = STAT_LINK;
+	new_frames = TRUE;
+
+	if (AX25Sess->I_frame_buf.Count > 0)
+	{
+		if (new_frames)
+		{
+			PF_bit = SET_P;
+
+			add_pkt_buf(AX25Sess, make_frame(Strings(&AX25Sess->I_frame_buf, i), AX25Sess->Path, AX25Sess->PID, AX25Sess->vr, ((AX25Sess->i_lo + i) & 7), I_FRM, I_I, FALSE, PF_bit, SET_C));
+		}
+		else
+		{
+
+			add_pkt_buf(AX25Sess, make_frame(Strings(&AX25Sess->I_frame_buf, 0), AX25Sess->Path, AX25Sess->PID, AX25Sess->vr, AX25Sess->i_lo, I_FRM, I_I, FALSE, SET_P, SET_C)); //SET_P
+			upd_vs(AX25Sess, AX25Sess->vs);
+		}
+	}
+	AX25Sess->status = STAT_WAIT_ANS;
+	rst_timer(AX25Sess);
+}
 
 void  write_frame_collector(TAX25Port * AX25Sess, int ns, string * data)
 {
@@ -754,6 +796,32 @@ void on_REJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 		AX25Sess->status = STAT_LINK;
 
 		send_data_buf(AX25Sess, nr);
+	}
+
+	if (cr == SET_C)
+		add_pkt_buf(AX25Sess, make_frame(NULL, path, 0, AX25Sess->vr, 0, S_FRM, S_RR, FALSE, SET_P, SET_R));
+}
+
+
+void on_SREJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
+{
+	if (AX25Sess->status == STAT_TRY_LINK)
+		return;
+
+	if (AX25Sess->status == STAT_NO_LINK || AX25Sess->status == STAT_TRY_UNLINK)
+	{
+		if (cr == SET_C)
+			set_DM(AX25Sess->snd_ch, path);
+
+		return;
+	}
+
+	if (cr == SET_R)
+	{
+		rst_timer(AX25Sess);
+		AX25Sess->status = STAT_LINK;
+
+		send_data_buf_srej(AX25Sess, nr);
 	}
 
 	if (cr == SET_C)
@@ -1462,6 +1530,11 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 	case S_REJ:
 
 		on_REJ(AX25Sess, path, nr, pf, cr);
+		break;
+
+	case S_SREJ:
+
+		on_SREJ(AX25Sess, path, nr, pf, cr);
 		break;
 
 	case U_SABM:

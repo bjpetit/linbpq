@@ -36,7 +36,13 @@ extern workerThread *t;
 
 extern "C" int KISSPort;
 
-extern bool Closing;				// Set to stop background thread
+
+extern "C" void * initPulse();
+extern "C" int SoundMode;
+
+extern void saveSettings();
+
+extern int Closing;				// Set to stop background thread
 
 extern "C"
 {
@@ -211,6 +217,25 @@ extern "C" void KISSSendtoServer(void * sock, byte * Msg, int Len)
 
 void workerThread::run()
 {
+	if (SoundMode == 2)			// Pulse
+	{
+		if (initPulse() == nullptr)
+		{
+			if (nonGUIMode)
+			{
+				qDebug() << "PulseAudio requested but pulseaudio libraries not found\nMode set to ALSA\n";
+			}
+			else
+			{
+				QMessageBox msgBox;
+				msgBox.setText("PulseAudio requested but pulseaudio libraries not found\nMode set to ALSA");
+				msgBox.exec();
+			}
+			SoundMode = 0;
+			saveSettings();
+		}
+	}
+
 	soundMain();
 
 	if (!InitSound(1))
@@ -236,8 +261,13 @@ void workerThread::run()
 		this->msleep(10);
 	}
 
+	qDebug() << "Saving Settings";
+
+	saveSettings();
+
+	qDebug() << "Main Loop exited";
+
 	qApp->exit();
 
 };
-
 

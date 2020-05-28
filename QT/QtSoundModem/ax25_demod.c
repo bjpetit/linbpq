@@ -22,6 +22,8 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #include "UZ7HOStuff.h"
 
+extern int blnBusyStatus;
+
 void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data);
 
 /*
@@ -141,6 +143,7 @@ TStringList detect_list_l[5];
 TStringList detect_list[5];
 TStringList detect_list_c[5];
 
+int lastDCDState[4] = { 0,0,0,0 };
 /*
 
 implementation
@@ -377,22 +380,29 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 	tick = 1000 / RX_Samplerate;
 
-	if (dcd_bit_cnt[snd_ch] > 0)
-		dcd_bit_sync[snd_ch] = 0;
+	if (modem_mode[snd_ch] == MODE_ARDOP)
+	{
+		dcd_bit_sync[snd_ch] = blnBusyStatus;
+	}
 	else
-		dcd_bit_sync[snd_ch] = 1;
+	{
+		if (dcd_bit_cnt[snd_ch] > 0)
+			dcd_bit_sync[snd_ch] = 0;
+		else
+			dcd_bit_sync[snd_ch] = 1;
 
-	if (dcd_on_hdr[snd_ch])
-		dcd_bit_sync[snd_ch] = 1;
+		if (dcd_on_hdr[snd_ch])
+			dcd_bit_sync[snd_ch] = 1;
 
-	if (modem_mode[snd_ch] == MODE_MPSK && DET[0][0].frame_status[snd_ch] == FRAME_LOAD)
-		dcd_bit_sync[snd_ch] = 1;
+		if (modem_mode[snd_ch] == MODE_MPSK && DET[0][0].frame_status[snd_ch] == FRAME_LOAD)
+			dcd_bit_sync[snd_ch] = 1;
+	}
 
-	if (dcd_bit_sync[snd_ch])
-		updateDCD(snd_ch, 1);
-	else
-		updateDCD(snd_ch, 0);
-
+	if (lastDCDState[snd_ch] != dcd_bit_sync[snd_ch])
+	{
+		updateDCD(snd_ch, dcd_bit_sync[snd_ch]);
+		lastDCDState[snd_ch] = dcd_bit_sync[snd_ch];
+	}
 
 	if (resptime_tick[snd_ch] < resptime[snd_ch])
 		resptime_tick[snd_ch] = resptime_tick[snd_ch] + tick * buf_size;

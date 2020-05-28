@@ -192,6 +192,9 @@ void AGW_add_socket(void * socket)
 
 	User->data_in = newString();
 	User->socket = socket;
+
+	User->Monitor = 0;
+	User->Monitor_raw = 0;
 };
 
 
@@ -982,7 +985,7 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 {
 	char mon_frm[512];
 	char AGW_path[256];
-	string * AGW_data;
+	string * AGW_data = NULL;
 
 	const char * frm;
 	byte * datap = data->Data;
@@ -1083,6 +1086,15 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 	case S_REJ:
 
 		frm = "REJ";
+		if (pf == SET_P)
+			ctrl = " P/F";
+
+		break;
+
+
+	case S_SREJ:
+
+		frm = "SREJ";
 		if (pf == SET_P)
 			ctrl = " P/F";
 
@@ -1192,14 +1204,10 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 					break;
 
 				case S_RR:
-					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
-					break;
-
 				case S_RNR:
-					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
-					break;
-
 				case S_REJ:
+				case S_SREJ:
+
 					AGW_data = AGW_S_Frame(agw_port, CallFrom, CallTo, mon_frm);
 					break;
 
@@ -1226,7 +1234,8 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 				case U_UI:
 					AGW_data = AGW_U_Frame(agw_port, CallFrom, CallTo, mon_frm);
 				}
-				AGW_send_to_app(AGW->socket, AGW_data);
+				if (AGW_data)
+					AGW_send_to_app(AGW->socket, AGW_data);
 			}
 
 			else
@@ -1263,7 +1272,6 @@ void AGW_Raw_monitor(int snd_ch, string * data)
 			AGW_send_to_app(AGW->socket, AGW_K_Frame(snd_ch, 0, "", "", pkt));
 		}
 	}
-
 }
 
 void AGW_AX25_frame_analiz(int snd_ch, int RX, string * frame)

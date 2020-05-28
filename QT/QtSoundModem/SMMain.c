@@ -532,7 +532,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		maxrawSamplesLength = rawSamplesLength;
 
 	if (rawSamplesLength >= 2400)
-		WriteDebugLog(LOGCRIT, "Corrupt rawSamplesLength %d", rawSamplesLength);
+		Debugprintf("Corrupt rawSamplesLength %d", rawSamplesLength);
 
 	nSamples = rawSamplesLength;
 	Samples = rawSamples;
@@ -589,7 +589,7 @@ int Freq_Change(int Chan, int Freq)
 
 void MainLoop()
 {
-	// Called by background thread every 5 ms (maybe)
+	// Called by background thread every 10 ms (maybe)
 
 	// Actually we may have two cards
 	
@@ -601,15 +601,65 @@ void MainLoop()
 
 	PollReceivedSamples();
 
+
+	if (modem_mode[0] == MODE_ARDOP)
+	{
+		chk_dcd1(0, 512);
+	}
+
 	DoTX(0);
 	DoTX(1);
 
-
 }
 
+int ARDOPSendToCard(int Chan, int Len)
+{
+	// Send Next Block of samples to the soundcard
+
+	short * in = &ARDOPTXBuffer[Chan][ARDOPTXPtr[Chan]];		// Enough to hold whole frame of samples
+	short * out = DMABuffer;
+
+	int LR = modemtoSoundLR[Chan];
+
+	int i;
+
+	for (i = 0; i < Len; i++)
+	{
+		if (SCO)			// Single Channel Output - same to both L and R
+		{
+			*out++ = *in;
+			*out++ = *in++;
+		}
+		else
+		{
+			if (LR)				// Right
+			{
+				*out++ = 0;
+				*out++ = *in++;
+			}
+			else
+			{
+				*out++ = *in++;
+				*out++ = 0;
+			}
+		}
+	}
+	DMABuffer = SendtoCard(DMABuffer, Len);
+
+	ARDOPTXPtr[Chan] += Len;
+
+	// See if end of buffer
+
+	if (ARDOPTXPtr[Chan] > ARDOPTXLen[Chan])
+		return 1;
+
+	return 0;
+}
 void DoTX(int Chan)
 {
 	// This kicks off a send sequence or calibrate
+
+//	printtick("dotx");
 
 	if (calib_mode[Chan])
 	{
@@ -623,13 +673,12 @@ void DoTX(int Chan)
 		}
 		
 		// Note this may block in SendtoCard
-		
+
 		modulator(Chan, tx_bufsize);
 		return;
 	}
 
 	// I think we have to detect NO_DATA here and drop PTT and return to SILENCE
-
 
 	if (tx_status[Chan] == TX_NO_DATA)
 	{
@@ -642,12 +691,81 @@ void DoTX(int Chan)
 
 		sendAckModeAcks(Chan);
 	}
-	
+
 	if (tx_status[Chan] != TX_SILENCE)
 	{
 		// Continue the send
 
-		modulator(Chan, tx_bufsize);
+		if (modem_mode[Chan] == MODE_ARDOP)
+		{
+//			if (SeeIfCardBusy())
+//				return 0;
+
+			if (ARDOPSendToCard(Chan, SendSize) == 1)
+			{
+				// End of TX
+
+				Number = 0;
+				Flush();
+
+				// See if more to send. If so, don't drop PTT
+
+				if (all_frame_buf[Chan].Count)
+				{
+					SoundIsPlaying = TRUE;
+					Number = 0;
+
+					Debugprintf("TX Continuing");
+
+					string * myTemp = Strings(&all_frame_buf[Chan], 0);			// get message
+					string * tx_data;
+
+					if ((myTemp->Data[0] & 0x0f) == 12)			// ACKMODE
+					{
+						// Save copy then copy data up 3 bytes
+
+						Add(&KISS_acked[Chan], duplicateString(myTemp));
+
+						mydelete(myTemp, 0, 3);
+						myTemp->Length -= sizeof(void *);
+					}
+					else
+					{
+						// Just remove control 
+
+						mydelete(myTemp, 0, 1);
+					}
+
+					tx_data = duplicateString(myTemp);		// so can free original below
+
+					Delete(&all_frame_buf[Chan], 0);			// This will invalidate temp
+
+					AGW_AX25_frame_analiz(Chan, FALSE, tx_data);
+
+					put_frame(Chan, tx_data, "", TRUE, FALSE);
+
+					PktARDOPEncode(tx_data->Data, tx_data->Length - 2, Chan);
+
+					freeString(tx_data);
+
+					// Samples are now in DMABuffer = Send first block
+
+					ARDOPSendToCard(Chan, SendSize);
+					tx_status[Chan] = TX_FRAME;
+					return;
+				}
+
+				Debugprintf("TX Complete");
+				RadioPTT(0, 0);
+				tx_status[Chan] = TX_SILENCE;
+
+				// We should now send any ackmode acks as the channel is now free for dest to reply
+			}
+
+			return;
+		}
+
+		modulator(Chan, tx_bufsize); 
 		return;
 	}
 
@@ -665,7 +783,6 @@ void DoTX(int Chan)
 		pnt_change[Chan] = FALSE;
 	}
 
-
 	if (all_frame_buf[Chan].Count == 0)
 		return;
 
@@ -678,7 +795,62 @@ void DoTX(int Chan)
 	RadioPTT(Chan, 1);
 	Number = 0;
 
-	modulator(Chan, tx_bufsize);
+	if (modem_mode[Chan] == MODE_ARDOP)
+	{
+		// I think ARDOP will have to generate a whole frame of samples
+		// then send them out a bit at a time to avoid stopping here for
+		// possibly 10's of seconds
+
+		// Can do this here as unlike normal ardop we don't need to run on Teensy
+		// to 12000 sample rate we need either 24K or 48K per second, depending on
+		// where we do the stereo mux. 
+
+		// Slowest rate is 50 baud, so a 255 byte packet would take about a minute
+		// allowing for RS overhead. Not really realistic put perhaps should be possible.
+		// RAM isn't an issue so maybe allocate 2 MB. 
+
+		// ?? Should we allow two ARDOP modems - could make sense if we can run sound
+		// card channels independently
+
+		string * myTemp = Strings(&all_frame_buf[Chan], 0);			// get message
+		string * tx_data;
+
+		if ((myTemp->Data[0] & 0x0f) == 12)			// ACKMODE
+		{
+			// Save copy then copy data up 3 bytes
+
+			Add(&KISS_acked[Chan], duplicateString(myTemp));
+
+			mydelete(myTemp, 0, 3);
+			myTemp->Length -= sizeof(void *);
+		}
+		else
+		{
+			// Just remove control 
+
+			mydelete(myTemp, 0, 1);
+		}
+
+		tx_data = duplicateString(myTemp);		// so can free original below
+
+		Delete(&all_frame_buf[Chan], 0);			// This will invalidate temp
+
+		AGW_AX25_frame_analiz(Chan, FALSE, tx_data);
+
+		put_frame(Chan, tx_data, "", TRUE, FALSE);
+
+		PktARDOPEncode(tx_data->Data, tx_data->Length - 2, Chan);
+
+		freeString(tx_data);
+
+		// Samples are now in DMABuffer = Send first block
+
+		ARDOPSendToCard(Chan, SendSize);
+		tx_status[Chan] = TX_FRAME;
+
+	}
+	else
+		modulator(Chan, tx_bufsize);
 
 	return;
 }
@@ -732,6 +904,8 @@ BOOL pttGPIOInvert = FALSE;
 BOOL useGPIO = FALSE;
 BOOL gotGPIO = FALSE;
 
+int HamLibPort = 4532;
+char HamLibHost[32] = "192.168.1.14";
 
 char CM108Addr[80] = "";
 
@@ -829,6 +1003,7 @@ char * strlop(char * buf, char delim)
 void OpenPTTPort()
 {
 	PTTMode &= ~PTTCM108;
+	PTTMode &= ~PTTHAMLIB;
 
 	if (PTTPort[0] && strcmp(PTTPort, "None") != 0)
 	{
@@ -896,6 +1071,13 @@ void OpenPTTPort()
 		{
 			DecodeCM108(CM108Addr);
 			PTTMode |= PTTCM108;
+		}
+
+		else if (stricmp(PTTPort, "HAMLIB") == 0)
+		{
+			PTTMode |= PTTHAMLIB;
+			HAMLIBSetPTT(0);			// to open port
+			return;
 		}
 
 		else		//  Not GPIO
@@ -995,6 +1177,11 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 		return;
 	}
 	
+	if ((PTTMode & PTTHAMLIB))
+	{
+		HAMLIBSetPTT(PTTState);
+		return;
+	}
 	if (hPTTDevice == 0)
 		return;
 
@@ -1192,4 +1379,17 @@ BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)
 	}
 
 	return TRUE;
+}
+
+extern TStringList detect_list[5];
+extern TStringList detect_list_c[5];
+
+void ProcessPktFrame(int snd_ch, UCHAR * Data, int frameLen)
+{
+	string * pkt = newString();
+
+	stringAdd(pkt, Data, frameLen + 2);			// 2 for crc (not actually there)
+
+	analiz_frame(snd_ch, pkt, "ARDOP", 1);
+
 }

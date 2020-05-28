@@ -59,6 +59,8 @@ short inbuffer[5][ReceiveSize * 2];	// Input Transfer/ buffers of 0.1 Sec (x2 fo
 extern short * DMABuffer;
 extern int Number;
 
+int SoundMode = 0;
+
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
 
@@ -183,11 +185,11 @@ void txSleep(int mS)
 	{
 		PollReceivedSamples();			// discard any received samples
 
-		Sleep(50);
+		QSleep(50);
 		mS -= 50;
 	}
 
-	Sleep(mS);
+	QSleep(mS);
 
 	PollReceivedSamples();			// discard any received samples
 }
@@ -202,6 +204,13 @@ FILE * wavfp1;
 
 BOOL DMARunning = FALSE;		// Used to start DMA on first write
 
+BOOL SeeIfCardBusy()
+{
+	if ((header[!Index].dwFlags & WHDR_DONE))
+		return 0;
+
+	return 1;
+}
 short * SendtoCard(unsigned short * buf, int n)
 {
 	header[Index].dwBufferLength = n * 4;
@@ -230,6 +239,32 @@ short * SendtoCard(unsigned short * buf, int n)
 void GetSoundDevices()
 {
 	int i;
+
+	if (SoundMode == 1)
+	{
+		PlaybackCount = 3;
+
+		strcpy(&PlaybackNames[0][0], "/dev/dsp0");
+		strcpy(&PlaybackNames[1][0], "/dev/dsp1");
+		strcpy(&PlaybackNames[2][0], "/dev/dsp2");
+
+		CaptureCount = 3;
+
+		strcpy(&CaptureNames[0][0], "/dev/dsp0");
+		strcpy(&CaptureNames[1][0], "/dev/dsp1");
+		strcpy(&CaptureNames[2][0], "/dev/dsp2");
+		return;
+	}
+
+	else if (SoundMode == 2)		// Pulse
+	{
+		PlaybackCount = 1;
+		strcpy(&PlaybackNames[0][0], "Pulse");
+
+		CaptureCount = 1;
+		strcpy(&CaptureNames[0][0], "Pulse");
+		return;
+	}
 
 	Debugprintf("Capture Devices");
 
@@ -534,6 +569,8 @@ short * SoundInit()
 
 extern int Number;				// Number of samples waiting to be sent
 
+// Subroutine to add trailer before filtering
+
 void SoundFlush()
 {
 	// Append Trailer then wait for TX to complete
@@ -789,5 +826,10 @@ void CatWrite(char * Buffer, int Len)
 }
 
 */
+
+void * initPulse()
+{
+	return NULL;
+}
 
 

@@ -18,6 +18,8 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 */
 
+//#define TXSILENCE
+
 // UZ7HO Soundmodem Port by John Wiseman G8BPQ
 //
 //	Audio interface Routine
@@ -42,6 +44,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 extern int Closing;
 
+int SoundMode = 0;
 
 //#define SHARECAPTURE		// if defined capture device is opened and closed for each transission
 
@@ -120,8 +123,6 @@ char * PlaybackDevices = CaptureDevice;
 
 int CaptureIndex = 0;
 int PlayBackIndex = 0;
-
-int InitSound();
 
 int Ticks;
 
@@ -608,6 +609,10 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, int
 
 	sprintf(buf1, "plug%s", PlaybackDevice);
 
+	if (Report)
+		Debugprintf("Real Device %s", buf1);
+
+
 	ptr = strchr(buf1, ' ');
 	if (ptr) *ptr = 0;				// Get Device part of name
 
@@ -1011,50 +1016,65 @@ int SoundCardRead(short * input, int nSamples)
 	int ret;
 	int avail;
 
-	if (rechandle == NULL)
-		return 0;
-
-	avail = snd_pcm_avail_update(rechandle);
-
-	if (avail < 0)
+	if (SoundMode == 1)		// OSS
 	{
-		Debugprintf("avail Recovering from %d ..", avail);
-		if (rechandle)
+		ret = oss_read(samples, nSamples);
+	}
+	else if (SoundMode == 2)// Pulse
+	{
+		ret = pulse_read(samples, nSamples);
+	}
+	else
+	{
+		if (rechandle == NULL)
+			return 0;
+
+		avail = snd_pcm_avail_update(rechandle);
+
+		if (avail < 0)
 		{
-			snd_pcm_close(rechandle);
-			rechandle = NULL;
+			Debugprintf("avail Recovering from %d ..", avail);
+			if (rechandle)
+			{
+				snd_pcm_close(rechandle);
+				rechandle = NULL;
+			}
+
+			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
+			//		snd_pcm_recover(rechandle, avail, 0);
+			avail = snd_pcm_avail_update(rechandle);
+			Debugprintf("After avail recovery %d ..", avail);
 		}
 
-		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
-//		snd_pcm_recover(rechandle, avail, 0);
-		avail = snd_pcm_avail_update(rechandle);
-		Debugprintf("After avail recovery %d ..", avail);
-	}
+		if (avail < nSamples)
+			return 0;
 
-	if (avail < nSamples)
-		return 0;
+		//	Debugprintf("ALSARead available %d", avail);
 
-//	Debugprintf("ALSARead available %d", avail);
+		ret = snd_pcm_readi(rechandle, samples, nSamples);
 
-	ret = snd_pcm_readi(rechandle, samples, nSamples);
-
-	if (ret < 0)
-	{
-		Debugprintf("RX Error %d", ret);
-//		snd_pcm_recover(rechandle, avail, 0);
-		if (rechandle)
+		if (ret < 0)
 		{
-			snd_pcm_close(rechandle);
-			rechandle = NULL;
+			Debugprintf("RX Error %d", ret);
+			//		snd_pcm_recover(rechandle, avail, 0);
+			if (rechandle)
+			{
+				snd_pcm_close(rechandle);
+				rechandle = NULL;
+			}
+
+			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
+			//		snd_pcm_recover(rechandle, avail, 0);
+			avail = snd_pcm_avail_update(rechandle);
+			Debugprintf("After Read recovery Avail %d ..", avail);
+
+			return 0;
 		}
-
-		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
-//		snd_pcm_recover(rechandle, avail, 0);
-		avail = snd_pcm_avail_update(rechandle);
-		Debugprintf("After Read recovery Avail %d ..", avail);
-
-		return 0;
 	}
+
+
+	if (ret < nSamples)
+		return 0;
 
 	if (m_recchannels == 1)
 	{
@@ -1096,10 +1116,18 @@ short * SendtoCard(short * buf, int n)
 		ProcessNewSamples(buf, 1200);		// signed
 	}
 
-	if (playhandle)
-		SoundCardWrite(buf, n);
+	if (SoundMode == 1)			// OSS
+		oss_write(buf, n);
+	else if (SoundMode == 2)	// Pulse
+		pulse_write(buf, n);
+	else
+	{
 
-//	txSleep(10);				// Run buckground while waiting 
+		if (playhandle)
+			SoundCardWrite(buf, n);
+
+		//	txSleep(10);				// Run buckground while waiting 
+	}
 
 	Index = !Index;
 	return &buffer[Index][0];
@@ -1114,13 +1142,62 @@ short loopbuff[1200];		// Temp for testing - loop sent samples to decoder
 
 short * SoundInit();
 
+void GetSoundDevices()
+{
+	if (SoundMode == 0)
+	{
+		GetInputDeviceCollection();
+		GetOutputDeviceCollection();
+	}
+	else if (SoundMode == 1)
+	{
+		PlaybackCount = 3;
+
+		strcpy(&PlaybackNames[0][0], "/dev/dsp0");
+		strcpy(&PlaybackNames[1][0], "/dev/dsp1");
+		strcpy(&PlaybackNames[2][0], "/dev/dsp2");
+
+		CaptureCount = 3;
+
+		strcpy(&CaptureNames[0][0], "/dev/dsp0");
+		strcpy(&CaptureNames[1][0], "/dev/dsp1");
+		strcpy(&CaptureNames[2][0], "/dev/dsp2");
+	}
+	else
+	{
+		// Pulse
+
+		listpulse();
+	}
+}
+
 int InitSound(BOOL Quiet)
 {
-	GetInputDeviceCollection();
-	GetOutputDeviceCollection();
-	
-	if (!OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, Quiet))
-		return FALSE;
+	GetSoundDevices();
+
+	switch (SoundMode)
+	{
+	case 0:				// ALSA
+
+		if (!OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, Quiet))
+			return FALSE;
+
+		break;
+
+	case 1:				// OSS
+
+		if (!oss_audio_open(CaptureDevice, PlaybackDevice))
+			return FALSE;
+
+		break;
+
+	case 2:				// PulseAudio
+
+		if (!pulse_audio_open(CaptureDevice, PlaybackDevice))
+			return FALSE;
+
+		break;
+	}
 
 	printf("InitSound %s %s\n", CaptureDevice, PlaybackDevice);
 
@@ -1131,11 +1208,14 @@ int InitSound(BOOL Quiet)
 int min = 0, max = 0, lastlevelreport = 0, lastlevelGUI = 0;
 UCHAR CurrentLevel = 0;		// Peak from current samples
 
-
 void PollReceivedSamples()
 {
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
+
+#ifdef TXSILENCE
+	SendSilence();			// send silence (attempt to fix CM delay issue)
+#endif
 
 	if (SoundCardRead(&inbuffer[0][0], ReceiveSize))
 	{
@@ -1195,11 +1275,27 @@ void StartCapture()
 
 //	Debugprintf("Start Capture");
 }
-void CloseSound()
-{ 
-	CloseSoundCard();
-}
 
+void CloseSound()
+{
+	switch (SoundMode)
+	{
+	case 0:				// ALSA
+
+		CloseSoundCard();
+		return;
+
+	case 1:				// OSS
+		
+		oss_audio_close();
+		return;
+
+	case 2:				// PulseAudio
+
+		pulse_audio_close();
+		return;
+	}
+}
 
 short * SoundInit()
 {
@@ -1223,44 +1319,57 @@ void SoundFlush()
 
 	// Wait for tx to complete
 
-	while (1 && playhandle)
+	Debugprintf("Flush Soundmode = %d", SoundMode);
+
+	if (SoundMode == 0)		// ALSA
 	{
-//		snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
-
-//		Debugprintf("Waiting for complete. Avail %d Max %d", avail, MaxAvail);
-
-		snd_pcm_status_alloca(&status);					// alloca allocates once per function, does not need a free
-
-		if ((err=snd_pcm_status(playhandle, status))!=0)
+		while (1 && playhandle)
 		{
-    		Debugprintf("snd_pcm_status() failed: %s",snd_strerror(err));
-			break;
+			//		snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
+
+			//		Debugprintf("Waiting for complete. Avail %d Max %d", avail, MaxAvail);
+
+			snd_pcm_status_alloca(&status);					// alloca allocates once per function, does not need a free
+
+			if ((err = snd_pcm_status(playhandle, status)) != 0)
+			{
+				Debugprintf("snd_pcm_status() failed: %s", snd_strerror(err));
+				break;
+			}
+
+			res = snd_pcm_status_get_state(status);
+
+			//		Debugprintf("PCM Status = %d", res);
+
+			if (res != SND_PCM_STATE_RUNNING)				// If sound system is not running then it needs data
+	//		if (MaxAvail - avail < 100)	
+			{
+				// Send complete - Restart Capture
+
+				OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
+				break;
+			}
+			usleep(50000);
 		}
-	 
-		res = snd_pcm_status_get_state(status);
-
-//		Debugprintf("PCM Status = %d", res);
-
-		if (res != SND_PCM_STATE_RUNNING)				// If sound system is not running then it needs data
-//		if (MaxAvail - avail < 100)	
-		{
-			// Send complete - Restart Capture
-
-			OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);	
-			break;
-		}
-		usleep(50000);
-	}
-	// I think we should turn round the link here. I dont see the point in
-	// waiting for MainPoll
+		// I think we should turn round the link here. I dont see the point in
+		// waiting for MainPoll
 
 #ifdef SHARECAPTURE
-	if (playhandle)
-	{
-		snd_pcm_close(playhandle);
-		playhandle = NULL;
-	}
+		if (playhandle)
+		{
+			snd_pcm_close(playhandle);
+			playhandle = NULL;
+		}
 #endif
+	}
+	else if (SoundMode == 2)
+	{
+		pulse_flush();
+	}
+	else
+	{
+		oss_flush();
+	}
 	SoundIsPlaying = FALSE;
 
 	Number = 0;
@@ -1268,10 +1377,37 @@ void SoundFlush()
 	memset(buffer, 0, sizeof(buffer));
 	DMABuffer = &buffer[0][0];
 
+#ifdef TXSILENCE
+	SendtoCard(&buffer[0][0], 1200);			// Start sending silence (attempt to fix CM delay issue)
+#endif
+
 	StartCapture();
 	return;
 }
 
+#ifdef TXSILENCE
+		
+// send silence (attempt to fix CM delay issue)
+
+
+void SendSilence()
+{
+	short buffer[2400];
+
+	snd_pcm_sframes_t Avail = snd_pcm_avail_update(playhandle);
+
+	if ((MaxAvail - Avail) < 1200)
+	{
+		// Keep at least 100 ms of audio in buffer
+
+//		printtick("Silence");
+
+		memset(buffer, 0, sizeof(buffer));
+		SendtoCard(buffer, 1200);			// Start sending silence (attempt to fix CM delay issue)
+	}
+}
+
+#endif
 
 // GPIO access stuff for PTT on PI
 

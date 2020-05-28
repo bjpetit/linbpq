@@ -241,9 +241,6 @@ MonLoop:
 
 			else
 			{
-				unsigned char out[16384];
-				int outlen;
-
 				CheckKeyWords(Buffptr, NormLen);
 				WritetoOutputWindow(Sess, Buffptr, NormLen);
 			}
@@ -365,9 +362,6 @@ MonLoop:
 	}
 	// Check UTF8
 	{
-		unsigned char out[16384];
-		int outlen;
-
 		CheckKeyWords(Buffptr, len);
 		WritetoOutputWindow(Sess, Buffptr, len);
 	}

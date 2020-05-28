@@ -118,7 +118,7 @@ decode_data(unsigned char data[], int nbytes)
 		
 		synBytes[j]  = sum;
 
-//	WriteDebugLog(LOGDEBUG, "%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
+//	Debugprintf("%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
 
 	}
 }

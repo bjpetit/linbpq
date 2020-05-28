@@ -96,6 +96,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ARDOPC.c" />
+    <ClCompile Include="ardopSampleArrays.c" />
     <ClCompile Include="ax25.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
     </ClCompile>
@@ -105,6 +107,7 @@
     <ClCompile Include="ax25_l2.c" />
     <ClCompile Include="ax25_mod.c" />
     <ClCompile Include="berlekamp.c" />
+    <ClCompile Include="BusyDetect.c" />
     <ClCompile Include="Config.cpp">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Default</CompileAs>
     </ClCompile>
@@ -112,12 +115,16 @@
     <ClCompile Include="hid.c" />
     <ClCompile Include="kiss_mode.c" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Modulate.c" />
+    <ClCompile Include="ofdm.c" />
+    <ClCompile Include="pktARDOP.c" />
     <ClCompile Include="QtSoundModem.cpp" />
     <ClCompile Include="rs.c" />
     <ClCompile Include="RSUnit.c" />
     <ClCompile Include="ShowFilter.cpp" />
     <ClCompile Include="SMMain.c" />
     <ClCompile Include="sm_main.c" />
+    <ClCompile Include="SoundInput.c" />
     <ClCompile Include="tcpCode.cpp" />
     <ClCompile Include="UZ7HOUtils.c" />
     <ClCompile Include="Waveout.c" />

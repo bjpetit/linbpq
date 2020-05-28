@@ -42,6 +42,9 @@ extern QLabel * Status3;
 extern QLabel * Status4;
 
 extern QMenu *connectMenu;
+extern QAction *discAction;
+extern QAction *YAPPSend;
+
 extern QAction *actHost[17];
 
 // Session Type Equates
@@ -570,6 +573,10 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 			else if (TermMode == Single)
 				mythis->setWindowTitle("AGW Monitor Window");
 
+			discAction->setEnabled(false);
+			YAPPSend->setEnabled(false);
+			connectMenu->setEnabled(false);
+
 			Send_AGW_m_Frame(sender);			// Request Monitor Frames
 		}
 	}
@@ -641,6 +648,13 @@ void AGW_add_socket(QTcpSocket * socket)
 
 	AGWUsers = User;
 };
+
+void AGWWindowClosing(Ui_ListenSession *Sess)
+{
+	if (AGWUsers && AGWUsers->MonSess == Sess)
+		AGWUsers->MonSess = NULL;
+}
+
 
 
 void AGW_frame_header(UCHAR * Msg, char AGWPort, char DataKind, unsigned char PID, const char * CallFrom, const char * CallTo, int Len)

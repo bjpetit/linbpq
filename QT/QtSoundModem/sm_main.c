@@ -27,7 +27,7 @@ char modes_name[modes_count][20] =
 	"AFSK AX.25 300bd","AFSK AX.25 1200bd","AFSK AX.25 600bd","AFSK AX.25 2400bd",
 	"BPSK AX.25 1200bd","BPSK AX.25 600bd","BPSK AX.25 300bd","BPSK AX.25 2400bd",
 	"QPSK AX.25 4800bd","QPSK AX.25 3600bd","QPSK AX.25 2400bd","BPSK FEC 4x100bd",
-	"DW QPSK V26A 2400bd","DW 8PSK V27 4800bd","DW QPSK V26B 2400bd" 
+	"DW QPSK V26A 2400bd","DW 8PSK V27 4800bd","DW QPSK V26B 2400bd", "ARDOP Packet"
 };
 
 typedef struct wavehdr_tag {
@@ -689,6 +689,17 @@ void init_P300(int snd_ch)
 		get_filter_values(snd_ch);
 }
 
+void init_ARDOP(int snd_ch)
+{
+	modem_mode[snd_ch] = MODE_ARDOP;
+	rx_shift[snd_ch] = 500;
+	rx_freq[snd_ch] = 1500;
+	rx_baudrate[snd_ch] = 500;
+
+	if (modem_def[snd_ch])
+		get_filter_values(snd_ch);
+}
+
 
 void init_speed(int snd_ch);
 
@@ -787,6 +798,11 @@ void init_speed(int snd_ch)
 	case SPEED_2400:
 
 		init_2400(snd_ch);
+		break;
+
+	case SPEED_ARDOP:
+
+		init_ARDOP(snd_ch);
 		break;
 	}
 
@@ -1635,6 +1651,7 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 	add_fft_line = FALSE;
 	fft_mult++;
+
 	if (fft_mult == fft_spd)
 	{
 		add_fft_line = TRUE;
@@ -1659,6 +1676,25 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 	if (snd_status[0] != SND_TX && snd_status[1] != SND_TX)
 	{
+		for (snd_ch = 0; snd_ch < 2; snd_ch++)
+		{
+			if (modem_mode[snd_ch] == MODE_ARDOP)
+			{
+				short ardopbuff[1200];
+				i1 = 0;
+
+				for (i = 0; i < rx_bufsize; i++)
+				{
+					ardopbuff[i] = Samples[i1];
+					i1++;
+					i1++;
+				}
+
+				ARDOPProcessNewSamples(ardopbuff, nSamples);
+			}
+		}
+
+
 		// extract mono samples from data. 
 
 		data1 = Samples;
@@ -1760,15 +1796,11 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 		for (snd_ch = 0; snd_ch < 2; snd_ch++)
 		{
 
-			//disp1(det[0,0].AFC_bit_buf[1],det[0,0].MChannel[2,3].AFC_bit_buf2);
-			//disp1(det[0,0].bit_buf[1],det[0,0].bit_buf[1]);
-			//disp1(det[emph_db[snd_ch],0].src_Loop_buf[1],det[emph_db[snd_ch],0].src_Loop_buf[1]);
-			//disp1(det[0].bit_buf[1],det[0].bit_buf[1]);
-
-			// do we need to do this again ??
-//					make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
-
-					// MAy mave more that 1 modem
+			if (modem_mode[snd_ch] == MODE_ARDOP)
+				continue;			// Processed above
+									
+		// do we need to do this again ??
+//			make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
 
 			// I want to run lowest to highest to simplify my display 
 
@@ -1889,7 +1921,7 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 	char AGW_path[256];
 	string * AGW_data;
 
-	const byte * frm;
+	const byte * frm = "???";
 	byte * datap;
 	byte _data[512] = "";
 	byte * p_data = _data;
@@ -2009,6 +2041,11 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 	case S_REJ:
 
 		frm = "REJ";
+		break;
+
+	case S_SREJ:
+
+		frm = "SREJ";
 		break;
 
 	case U_SABM:

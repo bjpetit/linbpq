@@ -27,6 +27,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 extern "C" void get_exclude_list(char * line, TStringList * list);
 extern "C" void get_exclude_frm(char * line, TStringList * list);
 
+extern "C" int SoundMode; 
 extern "C" int RX_SR;
 extern "C" int TX_SR;
 
@@ -43,7 +44,6 @@ QVariant getAX25Param(const char * key, QVariant Default)
 	char fullKey[64];
 
 	sprintf(fullKey, "%s/%s", Prefix, key);
-
 	return settings->value(fullKey, Default);
 }
 
@@ -88,6 +88,8 @@ void getSettings()
 	QSettings* settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 	settings->sync();
 
+	SoundMode = settings->value("Init/SoundMode", 0).toInt();
+
 	RX_SR = settings->value("Init/RXSampleRate", 12000).toInt();
 	TX_SR = settings->value("Init/TXSampleRate", 12000).toInt();
 
@@ -107,6 +109,9 @@ void getSettings()
 	pttGPIOPinR = settings->value("Init/pttGPIOPinR", 17).toInt();
 
 	strcpy(CM108Addr, settings->value("Init/CM108Addr", "0xD8C:0x08").toString().toUtf8());
+
+	HamLibPort = settings->value("Init/HamLibPort", 4532).toInt();
+	strcpy(HamLibHost, settings->value("Init/HamLibHost", "127.0.0.1").toString().toUtf8());
 
 	DualPTT = settings->value("Init/DualPTT", 1).toInt();
 	TX_rotate = settings->value("Init/TXRotate", 0).toInt();
@@ -283,6 +288,8 @@ void saveSettings()
 {
 	QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
+	settings->setValue("Init/SoundMode", SoundMode);
+
 	settings->setValue("Init/TXSampleRate", TX_SR);
 	settings->setValue("Init/RXSampleRate", RX_SR);
 
@@ -307,6 +314,8 @@ void saveSettings()
 	settings->setValue("Init/pttGPIOPinR", pttGPIOPinR);
 
 	settings->setValue("Init/CM108Addr", CM108Addr);
+	settings->setValue("Init/HamLibPort", HamLibPort);
+	settings->setValue("Init/HamLibHost", HamLibHost);
 
 	// Don't save freq on close as it could be offset by multiple decoders
 

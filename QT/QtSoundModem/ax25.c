@@ -1713,8 +1713,9 @@ void decode_frame(string * frame, byte * path, string * data,
 		switch (ctrl & 15)
 		{
 		case  S_RR:
-		case S_RNR:
+		case  S_RNR:
 		case  S_REJ:
+		case  S_SREJ:
 
 			*f_type = S_FRM;
 		}

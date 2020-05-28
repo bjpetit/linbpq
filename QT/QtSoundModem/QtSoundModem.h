@@ -18,9 +18,13 @@
 class QtSoundModem : public QMainWindow
 {
 	Q_OBJECT
+signals:
+
+	void HLSetPTT(int c);
 
 public:
 	QtSoundModem(QWidget *parent = Q_NULLPTR);
+	void closeEvent(QCloseEvent * event);
 	~QtSoundModem();
 
 	void RefreshWaterfall(int snd_ch, unsigned char * Data);
@@ -30,8 +34,10 @@ private slots:
 
 	void doDevices();
 	void MyTimerSlot();
+	void clickedSlotI(int i);
 	void doModems();
 	void doFilter(int Chan, int Filter);
+	void SoundModeChanged(bool State);
 	void DualPTTChanged(bool State);
 	void CATChanged(bool State);
 	void PTTPortChanged(int);
@@ -48,11 +54,16 @@ private slots:
 	void preEmphAllBChanged(int);
 	void menuChecked();
 	void onTEselectionChanged();
+	void HAMLIBdisplayError(QAbstractSocket::SocketError socketError);
+	void HAMLIBreadyRead();
+	void onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void ConnecttoHAMLIB();
+	void doHLSetPTT(int c);
+	void clickedSlot();
 
 protected:
 	 
 	bool eventFilter(QObject * obj, QEvent * evt);
-
 	void resizeEvent(QResizeEvent *event) override;
 
 private:

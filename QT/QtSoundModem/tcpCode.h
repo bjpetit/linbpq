@@ -1,6 +1,6 @@
 #include <QtCore/QCoreApplication>
 #include <QtNetwork>
-#include <QDebug>
+//#include <QDebug>
 
 #define CONNECT(sndr, sig, rcvr, slt) connect(sndr, SIGNAL(sig), rcvr, SLOT(slt))
 
