@@ -308,7 +308,7 @@ extern "C"
 #endif
     delay(mS);
   }
-  void PlatformSleep()
+  void PlatformSleep(int mS)
   {
     noInterrupts();
     WDOG_REFRESH = 0xA602;
@@ -327,6 +327,7 @@ extern "C"
       PKTLEDTimer = 0;
       SetLED(PKTLED, 0);				// turn off packet rxed led
     }
+	Sleep(mS);
   }
 
   void txSleep(int mS)
@@ -335,7 +336,7 @@ extern "C"
 
     PollReceivedSamples();			// discard any received samples
     HostPoll();
-    PlatformSleep();
+    PlatformSleep(0);
     Sleep(mS);
   }
 
@@ -894,14 +895,6 @@ extern "C"
 #endif
     digitalWriteFast(LED, state);
   }
-
-  BOOL KeyPTT(BOOL blnPTT)
-  {
-    digitalWriteFast(pttPin, blnPTT);
-    return TRUE;
-  }
-
-
 }
 
 // Code to drive a Adafruit/PRJC or 3.5" 480*320 PI TFT display
@@ -959,11 +952,22 @@ void setupTFT()
 {
   tft.begin();
   tft.fillScreen(ILI9341_BLACK);
-  tft.setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
-  tft.setRotation(1);
-  tft.setCursor(0, 0);
+  tft.setTextColor(ILI9341_CYAN, ILI9341_BLACK);
+  tft.setRotation(0);
   tft.setTextSize(2);
+  tft.setCursor(0, 220);
+  
+  // Put Program name on botton row of display
+  
+  tft.print(ProgramName);
+  tft.setCursor(0, 0);
+ 
   tftptr = &tft;
+  
+  //	Indicate PTT Location
+  
+  tft.fillRect(300, 220, 20, 20, ILI9341_GREEN);
+
 }
 
  // Write to tft. Gets round problem of different TFT Hardware
@@ -1027,8 +1031,8 @@ const int barlevels[12] = {
 };
 #ifdef TFT
 const int barcolours[12] = {
-  ILI9341_YELLOW, ILI9341_YELLOW, ILI9341_GREEN,
-  ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN,
+  ILI9341_YELLOW, ILI9341_YELLOW, ILI9341_YELLOW,
+  ILI9341_YELLOW, ILI9341_GREEN, ILI9341_GREEN,
   ILI9341_GREEN, ILI9341_GREEN, ILI9341_GREEN,
   ILI9341_YELLOW, ILI9341_RED, ILI9341_RED
 };
@@ -1048,9 +1052,9 @@ extern "C"
     for (i = 0; i < 12; i++)
     {
       if (level > barlevels[i])
-        tft.fillRect(15 * i, 100, 14, 16, barcolours[i]);
+        tft.fillRect(15 * i, 200, 14, 16, barcolours[i]);
       else
-        tft.fillRect(15 * i, 100, 14, 16, ILI9341_BLACK);
+        tft.fillRect(15 * i, 200, 14, 16, ILI9341_BLACK);
     }
 #endif
     for (i = 0; i < 12; i++)
@@ -1568,20 +1572,22 @@ extern "C"
 #ifdef LOGTOHOST
  
  // correct RTC if needed
-	
+
 	while ((millis() - lastRTCTick) > 999)
 	{
 		lastRTCTick += 1000;
 		RTC++;
 	}
-	Mess[0] = RTC >> 24;
-	Mess[1] = RTC >> 16;
-	Mess[2] = RTC >> 0;
-	Mess[3] = RTC;
+	Mess[0] = (RTC >> 24) & 0xff;
+	Mess[1] = (RTC >> 16) & 0xff;
+	Mess[2] = (RTC >> 8) & 0xff;
+	Mess[3] = RTC & 0xff;
 
 	sprintf(&Mess[4], "%03d", millis() % 1000);	// millisecs
     Mess[7] = '0';
+
     len = vsnprintf(&Mess[8], sizeof(Mess) - 8, format, arglist);
+
     strcat(&Mess[8], "\r\n");
     SendLogToHost(Mess, len + 10);
 #endif
@@ -1731,13 +1737,13 @@ volatile unsigned short * SendtoCard(unsigned short buf, int n)
   Adafruit_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 */
 // Uncomment this block to use hardware SPI
-#define OLED_DC     8
-#define OLED_CS     9
+//#define OLED_DC     8
+//#define OLED_CS     9
 #define OLED_RESET  -1
 
-#define _MOSI 11
-#define _SCLK 13		// Clock moved to ALT pin as LED is on A13
-#define _MISO 12
+//#define _MOSI 11
+//#define _SCLK 13		// Clock moved to ALT pin as LED is on A13
+//#define _MISO 12
 
 // for spi Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
@@ -1782,7 +1788,7 @@ extern "C"
       buffer[offset] &= ~val;
   }
 
-  void DrawAxes(int Qual, char * Mode, char * Type)
+  void DrawAxes(int Qual, const char * Mode, const char * Type)
   {
     int y;
   
@@ -1814,7 +1820,7 @@ extern "C"
     display.printf("QUAL %d  ", Qual);
   }
 
-  void DrawDecode(char * Decode)
+  void DrawDecode(const char * Decode)
   {
     display.setCursor(0, 28);
     display.print(Decode);
@@ -1905,7 +1911,7 @@ void setupOLED()
   DrawAxes(99, "16Q.200.100", "");
   DrawDecode("PASS");
 //  Serial.printf("Start Display %d\r\n", millis());
-//  updateDisplay();
+  updateDisplay();
 //  Serial.printf("End Display %d\r\n", millis());
 }
 
@@ -1950,7 +1956,7 @@ extern "C"
 	tft.drawPixel(x + ConsXoffset, y + ConsYoffset, Colour);
   }
 
-  void DrawAxes(int Qual, char * Mode, char * XX)
+  void DrawAxes(int Qual, const char * Mode, const char * XX)
   {
     // Draw x and y axes in centre of constallation area
 
@@ -1973,7 +1979,7 @@ extern "C"
     tft.printf("QUAL %d  ", Qual);
   }
 
-  void DrawDecode(char * Decode)
+  void DrawDecode(const char * Decode)
   {
     tft.setCursor(0, 36);
     tft.printf("%s    ", Decode);
@@ -2053,19 +2059,19 @@ extern "C"
 	tft.drawPixel(x + ConsXoffset, y + ConsYoffset, Colour);
   }
 
-  void DrawAxes(int Qual, char * Mode, char * xx)
+  void DrawAxes(int Qual, const char * Mode, const char * xx)
   {
     // Draw x and y axes in centre of constallation area
 
     int yCenter = ConsYoffset + (ConstellationHeight - 2) / 2;
     int xCenter = ConsXoffset + (ConstellationWidth - 2) / 2;
 	
-	tft.setRotation(1);
+	tft.setRotation(0);
 
 	tft.drawFastVLine(xCenter, ConsYoffset , ConstellationHeight, WHITE);
 	tft.drawFastHLine(ConsXoffset, yCenter , ConstellationWidth, WHITE);
 
-    tft.setRotation(1);
+    tft.setRotation(0);
     tft.setTextSize(2);
     tft.setTextColor(WHITE, 0);
 	tft.setCursor(0, 0);
@@ -2076,7 +2082,7 @@ extern "C"
     tft.printf("QUAL %d  ", Qual);
   }
 
-  void DrawDecode(char * Decode)
+  void DrawDecode(const char * Decode)
   {
    	tft.setCursor(0, 36);
 	tft.print("           ");	//Clear old decode
@@ -2146,6 +2152,26 @@ extern "C" void DrawRXFrame(int State, char * Frame)
     tft.print(Frame);
 #endif
 }
+
+extern "C" BOOL KeyPTT(BOOL blnPTT)
+  {
+    digitalWriteFast(pttPin, blnPTT);
+	
+#ifdef WDTTFT
+
+	// Set PTT indicator on bottom row of FTFif
+	
+	if (blnPTT)
+		 tft.fillRect(300, 220, 20, 20, ILI9341_RED);
+	else
+		tft.fillRect(300, 220, 20, 20,  ILI9341_GREEN);
+	 
+#endif
+		
+    return TRUE;
+  }
+
+
 
 
 

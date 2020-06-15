@@ -1,5 +1,5 @@
 const char ProductName[] = "ARDOP TNC";
-const char ProductVersion[] = "3.0.1.18fv-BPQ";
+const char ProductVersion[] = "3.0.1.18fw-BPQ";
 
 // i revert 2500 levels add check for two tones
 // j maintain AcquireFrameSyncRSBAvg state over samplee buffers
@@ -35,3 +35,7 @@ const char ProductVersion[] = "3.0.1.18fv-BPQ";
 //	 increase envelope correlator to 1.5 symbols starting at 360
 
 // v Use Ardop2OFDM sync code
+// w USe Ardop2OFDM Acquire Frame Sync code
+
+	
+	

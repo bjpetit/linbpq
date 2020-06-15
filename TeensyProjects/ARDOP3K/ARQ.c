@@ -888,7 +888,7 @@ void SendData()
 		// Initial Idle repeat interval is short to speed up turnround
 		// Start delaying when we repeat.
 
-		txSleep(1000);
+		txSleep(100);
 
 		EncodeAndSend4FSKControl(IDLEFRAME, bytSessionID, LeaderLength); // only returns when all sent
   		return;
@@ -1069,11 +1069,12 @@ int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, 
 			if (GetTempMode(SavedMode) == TempMode)
 			{
 				WriteDebugLog(LOGDEBUG, "[GetNextFrameData] Data will fit in current Temp Mode - stay in it");
-	if ((bytCurrentFrameType & 1) == (bytLastARQDataFrameAcked & 1))
-	{
-		*bytFrameTypeToSend = bytCurrentFrameType ^ 1;  // This ensures toggle of  Odd and Even 
-		bytLastARQDataFrameSent = *bytFrameTypeToSend;
-	}
+
+				if ((bytCurrentFrameType & 1) == (bytLastARQDataFrameAcked & 1))
+				{
+					*bytFrameTypeToSend = bytCurrentFrameType ^ 1;  // This ensures toggle of  Odd and Even 
+					bytLastARQDataFrameSent = *bytFrameTypeToSend;
+				}
 				return 0;		// Cant have pending shift after ack of temp mode
 			}
 
@@ -1290,8 +1291,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 	WriteDebugLog(LOGDEBUG, "Time since received = %d", timeSinceDecoded);
 
-	if (timeSinceDecoded < 550)
-		txSleep(550 - timeSinceDecoded);
+	if (timeSinceDecoded < 250)
+		txSleep(250 - timeSinceDecoded);
 
 	// Note this is called as part of the RX sample poll routine
 

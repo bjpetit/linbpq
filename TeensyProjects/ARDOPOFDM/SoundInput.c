@@ -3645,6 +3645,7 @@ void DemodulateFrame(int intFrameType)
 			DemodQAM();
 			break;
 
+		case DOFDM_200_55_E:
 		case DOFDM_500_55_E:
 		case DOFDM_2500_55_E:
 
@@ -3793,7 +3794,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 					ClearAllMixedSamples();
 					break;
 				}
-								
+
+				DrawRXFrame(0, Name(PktFrameData));
+				
 				strcpy(strMod, &pktMod[pktRXMode][0]);
 
 				// Reset to receive rest of frame
@@ -3826,7 +3829,7 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				strlop(strMod, '/');
 				blnDecodeOK = TRUE;
 
-				return 0;
+				return 1;
 	}
 
 					
@@ -3854,6 +3857,9 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				// Packet Data  - if KISS interface ias active
 				// Pass to Host as KISS frame, else pass to
 				// Session code
+
+				DrawRXFrame(1, Name(intFrameType));
+
 
 				// Data in bytData  len in frameLen
 
@@ -3913,6 +3919,7 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 				DrawRXFrame(1, Name(intFrameType));
 			break;
 
+		case DOFDM_200_55_E:
 		case DOFDM_500_55_E:
 		case DOFDM_2500_55_E:
 

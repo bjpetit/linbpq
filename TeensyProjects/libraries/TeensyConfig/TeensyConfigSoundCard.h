@@ -32,12 +32,9 @@
 // Define LOGTOHOST for logging over Host Port (Serial or i2c)
 // Define MONPORT for logging to Teensy Serial Port
 
-// Serial3 connects to ESP01 Module
+// Serial3 connects to ESP01 Header and can be used with level converters as a CAT port
 
-// To use a Serial port for host link, define here
-// Serial for USB Port
-// Serial1 for PI Header
-// Serial3 for ESP01 Header
+
 // If using Serial1 or Serial3 also define SERIAL1SIZE or SERIAL3SIZE to
 // increase size of serial port buffers
 
@@ -45,7 +42,15 @@
 #define SERIAL1SIZE 512
 #define HOSTSPEED 115200
 
-#define MONPORT Serial
+// if using USB port for CAT can't use it for Monitoring
+
+//#define MONPORT Serial1
+
+//#define HIDCAT			// CAT over HID
+#define SERIALCAT			// CAT over USB Serial
+
+#define CATPORT Serial3
+#define CATSPEED 19200
 
 // Shouldn't need to change anything below here
 
@@ -63,31 +68,33 @@
 
 #else
 
-#define WDTBOARD
+#define WDTV2
 
-#define HOSTPORT Serial
-#define MONPORT Serial1
-#define CATPORT Serial5
-#define CATSPEED 19200
+// New WDT Board
+
+#define HOSTPORT Serial1
+#define HOSTSPEED 115200
+#define MONPORT Serial
+#define SERIAL1SIZE 512
 
 #define TFT
+#define WDTTFT
+
 #define BARLEDS
 
-//#define HASPOTS
-//#define I2CPOTS
-//#define I2CPOTADDR
+#define HASPOTS
+#define I2CPOTS
+#define I2CPOTADDR 0x28
 
 #define pttPin 6
 
-#define LED0 24
-#define LED1 25
+#define LED0 8
+#define LED1 8
 #define LED2 26
-#define LED3 31
+#define LED3 25
 
 #define SW1 27
 #define SW2 28
-#define SW3 29
-#define SW4 30
 
 // CAT4016 10 LED display
 
@@ -96,5 +103,28 @@
 #define LATCH 4
 #define SIN 5
 
+
 #endif
 
+
+
+#ifdef WDTTFT
+
+//	Using the display on the WDT board (ILI9341)
+
+#define ConstellationHeight 101
+#define ConstellationWidth 101
+#define PLOTRADIUS 49
+// Set position of constellation on display
+#define ConsXoffset 200
+#define ConsYoffset 0
+#define WHITE 0xffff
+#define Tomato 0xFD20	// ILI9341_ORANGE
+#define Gold Yellow
+#define Lime 0x07E0 	// ILI9341_GREEN
+#define Yellow 0xFFE0	// ILI9341_YELLOW  
+#define Goldenrod 0xffff
+#define Fuchsia 0xffff
+    
+
+#endif

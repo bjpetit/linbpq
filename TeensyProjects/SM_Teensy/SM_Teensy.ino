@@ -230,7 +230,24 @@ void setup()
   // if EEPROM KISS Params are set use them to overide defaults
   // unset EEPROM defaults to 255
 
+  if (EEPROM.read(0) == 255)		// New Teensy
+  {
+  	 SaveEEPROM(TXDELAY, 30);
+  	 SaveEEPROM(PERSIST, 64);
+  	 SaveEEPROM(SLOTTIME, 10);
+  	 SaveEEPROM(TXTAIL, 0);
+  	 SaveEEPROM(FULLDUP, 0);
+  	 SaveEEPROM(KISSCHANNEL, 0);
+  	 SaveEEPROM(I2CADDRESS, 30);
+  	 
+  	 SaveEEPROM(8, Baud / 100);
+  	 SaveEEPROM(9, 0);				// RX Level Auto
+  	 SaveEEPROM(10, 30);			// TX Level ~ 300 mV
+  	 SaveEEPROM(13, centreFreq / 10);
+  }  	 
+
   int value = EEPROM.read(TXDELAY);
+
 
   if (value != 255)
     txdelay = value * 10;
@@ -429,8 +446,7 @@ void setup()
 void loop()
 {
   mainLoop();
-  PlatformSleep();
-  Sleep(1);
+  PlatformSleep(1);
   HostPoll();
 #if defined I2CKISS || defined I2CMONITOR
   i2cloop();

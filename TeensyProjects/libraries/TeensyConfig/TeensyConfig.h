@@ -5,51 +5,60 @@
 // These tests assume a modified platform.txt
 // If you haven't done that you will need to define ARDOP PACKET or SOUNDCARD yourself
 
-
 #ifdef PROJECT_SoundCard  
 #define SOUNDCARD
+#define ProgramName "SoundCard"
 #endif
 
 #ifdef PROJECT_SoundCardPkt  
 #define SOUNDCARD
 #define PACKET
 #define SOUNDCARDPACKET
+#define  ProgramName "SoundCard + Packet"
 #endif
 
 
 #ifdef PROJECT_ARDOP_Teensy
 #define ARDOP
+#define  ProgramName "ARDOP 1"
 #endif
 
 #ifdef PROJECT_ARDOP2_Teensy
 #define ARDOP
+#define  ProgramName "ARDOP2"
 #endif
 
 #ifdef PROJECT_ARDOP3_Teensy
 #define ARDOP
+#define  ProgramName "ARDOP3"
 #endif
 
 #ifdef PROJECT_ARDOP3K_Teensy
 #define ARDOP
+#define  ProgramName "ARDOP3"
 #endif
 
 #ifdef PROJECT_ARDOPOFDM_Teensy
 #define ARDOP
 #define _OFDM
+#define ProgramName "ARDOPOFDM"
 #endif
 
 #ifdef PROJECT_ARDOP1OFDM_Teensy
 #define ARDOP
 #define _OFDM
+#define  ProgramName "ARDOP1OFDM"
 #endif
 
 #ifdef PROJECT_SM_Teensy
 #define PACKET
+#define  ProgramName "Packet"
 #endif
 
 #ifdef PROJECT_ARDOPWithPacket
 #define ARDOP
 #define PACKET
+#define  ProgramName "ARDOP+Packet"
 #endif
 
 // Standard definitions

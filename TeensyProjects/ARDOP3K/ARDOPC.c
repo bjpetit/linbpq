@@ -1,6 +1,3 @@
-// ARDOPC.cpp : Defines the entry point for the console application.
-//
-
 
 #ifdef WIN32
 #define _CRT_SECURE_NO_DEPRECATE

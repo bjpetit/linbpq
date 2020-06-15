@@ -300,6 +300,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\UZ7HOCore.c"
+				>
+			</File>
+			<File
+				RelativePath=".\UZ7HOFEC.c"
+				>
+			</File>
+			<File
 				RelativePath=".\Waveout.c"
 				>
 			</File>
@@ -321,6 +329,10 @@
 			>
 			<File
 				RelativePath=".\ARDOPC.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Version.h"
 				>
 			</File>
 		</Filter>

@@ -43,14 +43,14 @@
 // WDTTFT is the TFT on the WDT version of the board.
 // KMR_1.8 is 1.8" TFT 128 x 160 SPI with ST7735 chip
 
-#define OLED
+//#define OLED
 
 // define the type of display 
 // OLED is i2c 128 x 64 Display
 // WDTTFT is the TFT on the WDT version of the board.
 // KMR_1.8 is 1.8" TFT 128 x 160 SPI with ST7735 chip
 
-//#define WDTTFT
+#define WDTTFT
 //#define KMR_18
 
 // if using KMR_18 display with Black or Green TAB uncomment relevant line
@@ -117,15 +117,15 @@
 
 // Original WDT BOard
 
-#define HOSTPORT Serial
+#define HOSTPORT Serial1
 #define HOSTSPEED 115200
-#define MONPORT Serial1
+#define MONPORT Serial
 #define CATPORT Serial5
 #define CATSPEED 19200
 
-//#ifndef MONPORT
+#ifndef MONPORT
 #define LOGTOHOST
-//#endif
+#endif
 
 #define TFT
 #define BARLEDS
@@ -160,9 +160,9 @@
 
 // New WDT Board
 
-#define HOSTPORT Serial
+#define HOSTPORT Serial1
 #define HOSTSPEED 115200
-#define MONPORT Serial1
+#define MONPORT Serial
 #define SERIAL1SIZE 512
 #define CATPORT Serial4
 #define CATSPEED 19200
@@ -177,7 +177,7 @@
 
 #ifdef BTPORT
 #define SERIAL5SIZE 512
-#define HOSTPORT2 Serial5
+//#define HOSTPORT2 Serial5
 #endif
 
 
@@ -269,11 +269,11 @@
 
 //	Using the display on the WDT board (ILI9341)
 
-#define ConstellationHeight 91
-#define ConstellationWidth 91
-#define PLOTRADIUS 42
+#define ConstellationHeight 101
+#define ConstellationWidth 101
+#define PLOTRADIUS 49
 // Set position of constellation on display
-#define ConsXoffset 150
+#define ConsXoffset 200
 #define ConsYoffset 0
 #define WHITE 0xffff
 #define Tomato 0xFD20	// ILI9341_ORANGE

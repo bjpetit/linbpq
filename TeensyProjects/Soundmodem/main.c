@@ -49,10 +49,12 @@ void DemodAFSKinit(void *state);
 void DemodFSKinit(void *state);
 void mainLoop();
 
-char VersionString[] = "Teensy Packet TNC by G8BPQ Version 1.1 May 2019\r\n"
+char VersionString[] = "Teensy Packet TNC by G8BPQ Version 1.2 June 2020\r\n"
 						"based on Soundmodem by Thomas Sailer";
 
-int VersionNo = 11;		
+int VersionNo = 12;		
+
+// Changes. 12 Teensy EEPROM Init
 
 int Baud = 1200;
 BOOL AFSK = TRUE;
@@ -60,9 +62,6 @@ BOOL FSK = FALSE;
 BOOL PSK = FALSE;
 int samplerate;
 int centreFreq = 1700;
-
-//int Baud = 1200;
-//BOOL AFSK = TRUE;
 
 int TXLevel;				// 300 mV p-p Used on Teensy
 int RXLevel;				// Configured Level - zero means auto tune

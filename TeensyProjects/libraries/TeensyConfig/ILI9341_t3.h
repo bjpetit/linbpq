@@ -53,8 +53,8 @@
 #include "Arduino.h"
 #endif
 
-#define ILI9341_TFTWIDTH  240
-#define ILI9341_TFTHEIGHT 320
+#define ILI9341_TFTWIDTH  320
+#define ILI9341_TFTHEIGHT 240
 
 #define ILI9341_NOP     0x00
 #define ILI9341_SWRESET 0x01

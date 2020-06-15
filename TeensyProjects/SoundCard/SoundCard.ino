@@ -8,7 +8,7 @@
 //	Or a simple passthough (a "Signalink emulator").
 
 //	Sample rates may be a problem. WINMOR uses 48000, but ARDOP 12000. Will PC tell us what
-//  it wants??? Doesn't seem possible so fix at 48000. 
+//  it wants??? Doesn't seem possible so fix at 48000.
 
 //	What happens if we try to run ARDOP at 48000???
 
@@ -59,7 +59,7 @@
 #error ("USB Audio Not Enabled")
 #endif // AUDIO_INTERFACE
 
-#if AUDIO_TX_SIZE != 196
+#if AUDIO_TX_SIZE != 192
 #error ("usb_desc.h has not been updated. See libraries/SoundCard/README.txt")
 #endif
 
@@ -85,7 +85,7 @@ extern "C"
   void HostPoll();
   void MainPoll();
   void InitDMA();
-  void PlatformSleep();
+  void PlatformSleep(int mS);
   void SoundCardBG();
 
   my_audio_block_t * allocate(void);
@@ -113,7 +113,7 @@ extern int SampleRate;
 // (DAC/DAC work with 100 mS blocks). If we want to process sound (eg for ARDOP and also
 // pass to host (which might make sense for multimode scanning) we may have to rethink this
 
-// USB seems to send/requrst a block of samples every mS, so for 48K we send 192
+// USB seems to send/request a block of samples every mS, so for 48K we send 192
 // bytes (2 chan, 2 bytes per sample) so AUDIO_TX_SIZE, AUDIO_RX_SIZE have to be
 // increased from 180 (for 44.1) to 192.
 
@@ -142,6 +142,13 @@ my_audio_block_t pool[POOLCOUNT];
 uint16_t incoming_count;
 uint8_t receive_flag;
 
+
+
+
+// CAT over HID code
+
+#define CATPORT Serial3
+#define CATSPEED 19200
 
 #define DMABUFATTR __attribute__ ((section(".dmabuffers"), aligned (4)))
 uint16_t usb_audio_receive_buffer[AUDIO_RX_SIZE / 2] DMABUFATTR;
@@ -208,14 +215,41 @@ void update(void)
   }
 }
 
+void HIDCatWrite(const uint8_t * Buffer, int Len)
+{
+#ifdef CATPORT
+  CATPORT.write(Buffer, Len);
+#endif
+}
+
+static unsigned char CatRXbuffer[256];
+static int CatRXLen;
+
+int lastAvail = 0;
+
 
 uint16_t usb_audio_transmit_buffer[AUDIO_TX_SIZE / 2] DMABUFATTR;
 uint8_t usb_audio_transmit_setting = 0;
 
+char HIDMSG[64] = "Hello From HID";
+
+// RawHID packets are always 64 bytes
+byte buffer[64] = "\xeHello From HID";
+
+elapsedMillis msUntilNextSend;
+unsigned int packetCount = 0;
+
 
 extern "C" void xxx_Setup(int bmRequestType)
 {
-  // 	Serial.printf("usb_setup Type %x\r\n", bmRequestType);
+  switch (bmRequestType)
+  {
+    case 0x2221: // CDC_SET_CONTROL_LINE_STATE
+      return;
+  }
+#ifdef MONPORT
+  MONPORT.printf("usb_setup Type %x\r\n", bmRequestType);
+#endif
 }
 
 
@@ -226,11 +260,11 @@ void setup()
   AudioInputbegin();
 
   SPI.begin();
+#ifdef MONPORT
   MONPORT.begin(115200);
-
+#endif
   //  while (!MONPORT);
   delay(5000);
-
 
   memset(usb_audio_transmit_buffer, 0, 192);
 
@@ -238,9 +272,8 @@ void setup()
 
   int i, sum = 0;
 
- // MONPORT.printf("%s\r\n", __FILE__);
+  // MONPORT.printf("%s\r\n", __FILE__);
 
-  MONPORT.printf("InitSound\r\n");
   InitSound();
 
   // Configure the ADC and run at least one software-triggered
@@ -258,26 +291,30 @@ void setup()
     sum += analogRead(16);
   }
 
+#ifdef MONPORT
   MONPORT.printf("DAC Baseline %d\r\n", sum / 1024);
+#endif
 
-  // Read Vref
+#ifdef PIBOARD
 
-  SetPot(1, 256);				// TX Level Gain = 1
+  // PI Board can read Analog out which allows u to Read Vref
+
+  SetPot(1, 256);        // TX Level Gain = 1
+
   delay(100);
 
   analogRead(17);
-
-  MONPORT.printf("analogRead ret\r\n");
 
   for (i = 0; i < 100; i++)
   {
     VRef += analogRead(17);
   }
   VRef /= 100;
-  analogRead(16);		// Set ADC back to A0
+  analogRead(16);   // Set ADC back to A0
 
-  MONPORT.printf("VREF %d offset %d\r\n", VRef, VRef - 32768);
+#endif
 
+  (0, "VREF %d offset %d", VRef, VRef - 32768);
 
   // Set up the pool
 
@@ -294,10 +331,110 @@ void setup()
   StartADC();
 
   CommonSetup();
+
+#ifdef CATPORT
+  CATPORT.begin(CATSPEED);	// CAT Port
+#ifdef SERIALCAT
+  Serial.begin(115200);
+#endif
+#endif
+
 }
+
+int rx = 0;
+char rxbuffer[80];
+
+#ifdef CATPORT
+
+void checkCATFromHost()
+{
+  int n = 0;
+
+#ifdef HIDCAT
+  n = RawHID.recv(rxbuffer, 0); // 0 timeout = do not wait
+
+  if (n > 0)
+  {
+    char msg[80];
+
+    // First byte is length
+
+    int len = rxbuffer[0];
+
+    sprintf(msg, "CAT Packet From Host Len %d Data %s", len, &rxbuffer[1]);
+    Serial.println(msg);
+
+    if (len < 64)
+      CATPORT.write(&rxbuffer[1], len);
+  }
+#endif
+#ifdef SERIALCAT
+  n =  Serial.available();
+  if (n > 0)
+  {
+    if (n > 80)
+      n = 80;
+
+    n = Serial.readBytes(rxbuffer, n);
+
+    if (n > 0)
+      CATPORT.write(rxbuffer, n);
+  }
+#endif
+}
+
+void checkCATFromRadio()
+{
+  int i;
+  int Length = CATPORT.available();
+
+  if (Length > lastAvail)
+  {
+    lastAvail = Length;
+    delay(2);
+
+    if (Length < 50)
+      return 0;			   	// wait till we stop getting bytes
+  }
+
+  if (Length == 0)
+    return 0;				// Nothing doing
+
+  memset(CatRXbuffer, 0, 256);
+
+  if (Length > 63)
+    Length = 63;
+
+  Length = CATPORT.readBytes(&CatRXbuffer[1], Length);
+  CatRXbuffer[0] = Length;
+
+  lastAvail = 0;
+
+#ifdef HIDCAT
+  //  Serial.printf("CAT RX Len %d ", Length);
+  //  for (i = 0; i <= Length; i++)
+  //    Serial.printf("%x ", CatRXbuffer[i]);
+  //  Serial.printf("\r\n");
+
+  Length++;				// Include Length Byte
+  RawHID.send(CatRXbuffer, Length);
+#endif
+#ifdef SERIALCAT
+  Serial.write(&CatRXbuffer[1], Length);		// Don't send Length
+#endif
+}
+#endif
 
 void loop()
 {
+  int n;
+
+#ifdef CATPORT
+  // only look for cat messages if CATPORT Defined
+  checkCATFromHost();
+  checkCATFromRadio();
+#endif
+
   SoundCardBG();
 }
 
@@ -326,15 +463,16 @@ my_audio_block_t * receive(unsigned int index)
 
 extern "C"  void debugprintf(const char * format, ...)
 {
+#ifdef MONPORT
   char Mess[256];
   va_list(arglist);
- 
+
   va_start(arglist, format);
   vsnprintf(Mess, sizeof(Mess), format, arglist);
   strcat(Mess, "\r\n");
   vsnprintf(Mess, sizeof(Mess), format, arglist);
   MONPORT.println(Mess);
-
+#endif
   return;
 }
 

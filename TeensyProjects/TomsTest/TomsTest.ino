@@ -487,7 +487,7 @@ void setupTFT()
 #ifdef PI3_5TFT
   tft.setRotation(3);
 #else
-  tft.setRotation(1);
+  tft.setRotation(0);
 #endif
   tft.setCursor(0, 0);
   tft.setTextSize(2);

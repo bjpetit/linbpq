@@ -12,6 +12,7 @@
 #define closesocket close
 #endif
 
+#include "Version.h"
 
 #include "ARDOPC.h"
 #include "getopt.h"
@@ -31,7 +32,7 @@ void SerialHostPoll();
 void TCPHostPoll();
 BOOL MainPoll();
 VOID PacketStartTX();
-void PlatformSleep();
+void PlatformSleep(int mS);
 BOOL BusyDetect2(float * dblMag, int intStart, int intStop);
 BOOL IsPingToMe(char * strCallsign);
 void LookforPacket(float * dblMag, float dblMagAvg, int count, float * real, float * imag);
@@ -207,7 +208,6 @@ extern char strLocalCallsign[10];
 extern char strFinalIDCallsign[10];
 extern int dttTimeoutTrip;
 extern unsigned int dttLastFECIDSent;
-extern int intFrameRepeatInterval;
 extern BOOL blnPending;
 extern unsigned int tmrIRSPendingTimeout;
 extern unsigned int tmrFinalID;
@@ -262,6 +262,8 @@ const UCHAR bytValidFrameTypesALL[]=
 	D16QAMR_500_100_O,
 	D16QAM_500_100_E,
 	D16QAM_500_100_O,
+	DOFDM_200_55_E,
+	DOFDM_200_55_O,
 	DOFDM_500_55_E,
 	DOFDM_500_55_O,
 	D4FSK_1000_50_E,
@@ -327,7 +329,7 @@ const char strAllDataModes[18][16] =
 		{"4PSK.200.50", "4PSK.200.100",
 		"16QAM.200.100", "4FSK.500.50", 
 		"4PSK.500.50", "4PSK.500.100",
-		"OFDM.500.55", 
+		"OFDM.200.55", "OFDM.500.55", 
 		"16QAMR.500.100", "16QAM.500.100",
 		"4FSK.1000.50", 
 		"4PSKR.2500.50", "4PSK.2500.50", 
@@ -405,8 +407,8 @@ const char strFrameType[64][18] =
 	"16QAM.500.100.O",
 	"OFDM.500.55.E",
 	"OFDM.500.55.O",
-	"",
-	"",
+	"OFDM.200.55.E",
+	"OFDM.200.55.O",
 
 	//	1 Khz Bandwidth Data Modes 
 	//	4 Car 4FSK Data mode 1000 Hz, 50 baud tones spaced @ 100 Hz 
@@ -497,8 +499,8 @@ const char shortFrameType[64][12] =
 	"16Q.500.100",
 	"OFDM.500",
 	"OFDM.500",
-	"",
-	"",
+	"OFDM.200",
+	"OFDM.200",
 
 	//	1 Khz Bandwidth Data Modes 
 	//	4 Car 4FSK Data mode 1000 Hz, 50 baud tones spaced @ 100 Hz 
@@ -712,7 +714,11 @@ void ardopmain()
 		else
 			TCPHostPoll();
 		MainPoll();
-		PlatformSleep();
+#ifdef Teensy
+		PlatformSleep(0);
+#else
+		PlatformSleep(10);
+#endif
 	}
 
 	if (!SerialMode)
@@ -945,6 +951,16 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 			*intRSLen = 40;
 			strcpy(strMod, "16QAM");
 			*intBaud = 100;
+			break;
+
+		case DOFDM_200_55_E:
+
+			*blnOdd = (1 & bytFrameType) != 0;
+			*intNumCar = 3;
+			*intDataLen = 40;
+			*intRSLen = 10;
+			strcpy(strMod, "OFDM");
+			*intBaud = 55;
 			break;
 
 		case DOFDM_500_55_E:
@@ -2990,6 +3006,8 @@ static struct option long_options[] =
 	{"cat",  required_argument, 0 , 'c'},
 	{"keystring",  required_argument, 0 , 'k'},
 	{"unkeystring",  required_argument, 0 , 'u'},
+	{"extradelay",  required_argument, 0 , 'e'},
+	{"leaderlength",  required_argument, 0 , 'x'},
 	{"help",  no_argument, 0 , 'h'},
 	{ NULL , no_argument , NULL , no_argument }
 };
@@ -3015,6 +3033,8 @@ char HelpScreen[] =
 	"-u string or --unkeystring string String (In HEX) to send to the radio to unkeykey PTT\n"
 	"-L use Left Channel of Soundcard in stereo mode\n"
 	"-R use Right Channel of Soundcard in stereo mode\n"
+	"-e val or --extradelay val        Extend no response timeot for use on paths with long delay\n"
+	"--leaderlength val                Sets Leader Length (mS)\n"
 	"\n"
 	" CAT and RTS PTT can share the same port.\n"
 	" See the ardop documentation for more information on cat and ptt options\n"
@@ -3031,7 +3051,7 @@ VOID processargs(int argc, char * argv[])
 	{		
 		int option_index = 0;
 
-		c = getopt_long(argc, argv, "l:c:p:g::k:u:hLR", long_options, &option_index);
+		c = getopt_long(argc, argv, "l:c:p:g::k:u:e:hLR", long_options, &option_index);
 
 		// Check for end of operation or error
 		if (c == -1)
@@ -3130,6 +3150,14 @@ VOID processargs(int argc, char * argv[])
 		case 'R':
 			UseLeft = 0;
 			UseRight = 1;
+			break;
+
+		case 'e':
+			extraDelay = atoi(optarg);
+			break;
+
+		case 'x':
+			LeaderLength = atoi(optarg);
 			break;
 
 		case '?':

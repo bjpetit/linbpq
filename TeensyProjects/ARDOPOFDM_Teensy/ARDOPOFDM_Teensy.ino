@@ -49,7 +49,7 @@ extern "C"
   void HostPoll();
   void MainPoll();
   void InitDMA();
-  void PlatformSleep();
+  void PlatformSleep(int mS);
   void AdjustTXLevel(int Level);
   void KISSInit();
 
@@ -257,7 +257,7 @@ void loop()
   {
     // Debug 1 sec tick
   }
-  PlatformSleep();
+  PlatformSleep(0);
   //RadioPoll();
   Sleep(1);
 
@@ -393,4 +393,15 @@ extern "C"
 
   void pktProcessNewSamples(short * buf, int count)
   {}
+
+  
+  // Dummies for ARDOP GUI
+
+  void DrawTXFrame(const char * Frame)
+  {}
+
+  int SendtoGUI(char Type, unsigned char * Msg, int Len)
+  {
+    return 0;
+  }
 }

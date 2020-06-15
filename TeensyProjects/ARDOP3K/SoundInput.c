@@ -1022,6 +1022,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 //			printtick("Got Sym Sync");
 		}
 	}
+
+/* Replace with A2 code
 	
 	//	Acquire Frame Sync
 	
@@ -1063,6 +1065,48 @@ void ProcessNewSamples(short * Samples, int nSamples)
 //		else
 //			printtick("no frame sync");
 
+	}
+	
+*/
+
+	// Ardop 2 code
+
+	
+	//	Acquire Frame Sync
+	
+	if (State == AcquireFrameSync)
+	{
+		blnFrameSyncFound = AcquireFrameSyncRSB();
+
+		// Remove used samples
+
+		intFilteredMixedSamplesLength -= intMFSReadPtr;
+
+		if (intFilteredMixedSamplesLength < 0)
+			WriteDebugLog(LOGDEBUG, "Corrupt intFilteredMixedSamplesLength");
+
+		memmove(intFilteredMixedSamples,
+			&intFilteredMixedSamples[intMFSReadPtr], intFilteredMixedSamplesLength * 2);
+
+		intMFSReadPtr = 0;
+
+	
+		if (blnFrameSyncFound)
+		{
+			State = AcquireFrameType;
+				
+			//	Have frame Sync. Remove used samples from buffer
+
+			printtick("Got Frame Sync");
+
+		}
+		else if ((Now - dttLastLeaderDetect) > 1000)		 // no Frame sync within 1000 ms (may want to make this limit a funciton of Mode and leaders)
+		{
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
+			printtick("frame sync timeout");
+		}
 	}
 	
 	//	Acquire Frame Type
@@ -3005,6 +3049,64 @@ int EnvelopeCorrelator()
 //		return -1;
 }
  
+/* Replace with A2 Version
+
+int EnvelopeCorrelatorNew()
+{
+	// Compute the two symbol correlation with the Two tone leader template.
+	// slide the correlation one sample and repeat up to 240 steps 
+	// keep the point of maximum or minimum correlation...and use this to identify the the symbol start. 
+
+	float dblCorMax  = -1000000.0f;		//  Preset to excessive values
+	float dblCorMin  = 1000000.0f;
+	int intJatMax = 0, intJatMin = 0;
+	float dblCorSum, dblCorProduct, dblCorMaxProduct = 0.0;
+	int i,j;
+	short int75HzFiltered[960];
+
+	if (intFilteredMixedSamplesLength < intMFSReadPtr + 960)
+		return -1;
+	
+	Filter75Hz(int75HzFiltered, TRUE, 960); // This filter appears to help reduce avg decode distance (10 frames) by about 14%-19% at WGN-5 May 3, 2015
+	
+	for (j = 360; j < 600; j++)		// Over 2 symbols
+	{
+		dblCorSum = 0;
+		for (i = 0; i < 240; i++)	 // over 1 50 baud symbol (may be able to reduce to 1 symbol)
+		{
+			dblCorProduct = int50BaudTwoToneLeaderTemplate[i] * int75HzFiltered[120 + i + j]; // note 120 accomdates filter delay of 120 samples
+			dblCorSum += dblCorProduct;
+            if (fabsf(dblCorProduct) > dblCorMaxProduct)
+				dblCorMaxProduct = fabsf(dblCorProduct);
+		}
+
+		if (fabsf(dblCorSum) > dblCorMax)
+		{
+			dblCorMax = fabsf(dblCorSum);
+			intJatMax = j;
+		}		
+	}
+	
+	if (AccumulateStats)
+	{
+		dblAvgCorMaxToMaxProduct = (dblAvgCorMaxToMaxProduct * intEnvelopeCors + (dblCorMax / dblCorMaxProduct)) / (intEnvelopeCors + 1);
+		intEnvelopeCors++;
+	}
+ 
+	if (dblCorMax > 40 * dblCorMaxProduct)
+	{
+		WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator CorMax:MaxProd= %f  J= %d", dblCorMax / dblCorMaxProduct, intJatMax);
+		return intJatMax;
+	}
+		
+	WriteDebugLog(LOGDEBUG, "EnvelopeCorrelator failed %d",  dblCorMax / dblCorMaxProduct);
+	
+	return -1;
+}
+*/ 
+
+// Ardopofdm Version
+
 
 int EnvelopeCorrelatorNew()
 {
@@ -3059,6 +3161,7 @@ int EnvelopeCorrelatorNew()
 	return -1;
 }
  
+
 
 //	Function to acquire the Frame Sync for all Frames 
 
