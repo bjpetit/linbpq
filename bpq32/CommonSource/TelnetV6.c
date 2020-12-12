@@ -450,28 +450,28 @@ int ProcessLine(char * buf, int Port)
 
 	if (_stricmp(param, "IPV4") == 0)
 		TCP->IPV4 = atoi(value);
-	else
-	if (_stricmp(param, "IPV6") == 0)
+
+	else if (_stricmp(param, "IPV6") == 0)
 		TCP->IPV6 = atoi(value);
-	else
-	if (_stricmp(param, "CMS") == 0)
+
+	else if (_stricmp(param, "CMS") == 0)
 		TCP->CMS = atoi(value);
-	else
-	if (_stricmp(param, "CMSPASS") == 0)
+
+	else if (_stricmp(param, "CMSPASS") == 0)
 	{
 		char Temp[80];
-		
+
 		if (strlen(value) > 79)
 			value[79] = 0;
-	
+
 		strcpy(Temp, value);
 		strlop(Temp, 32);
 		strlop(Temp, 13);
 		strcpy(TCP->SecureCMSPassword, Temp);
 
 	}
-	else
-	if (_stricmp(param, "CMSCALL") == 0)
+
+	else if (_stricmp(param, "CMSCALL") == 0)
 	{
 		if (strlen(value) > 9)
 			value[9] = 0;
@@ -479,219 +479,220 @@ int ProcessLine(char * buf, int Port)
 		strlop(TCP->GatewayCall, 13);
 		_strupr(TCP->GatewayCall);
 	}
-	else
-	if (_stricmp(param,"LOGGING") == 0)
+
+	else if (_stricmp(param,"LOGGING") == 0)
 		LogEnabled = atoi(value);
-	else
-	if (_stricmp(param,"CMSLOGGING") == 0)
+
+	else if (_stricmp(param,"CMSLOGGING") == 0)
 		CMSLogEnabled = atoi(value);
-	else
-	if (_stricmp(param,"DisconnectOnClose") == 0)
+
+	else if (_stricmp(param,"DisconnectOnClose") == 0)
 		TCP->DisconnectOnClose = atoi(value);
-	else
-	if (_stricmp(param,"CloseOnDisconnect") == 0)
+
+	else if (_stricmp(param,"SecureTelnet") == 0)
+		TCP->SecureTelnet = atoi(value);
+
+	else if (_stricmp(param,"CloseOnDisconnect") == 0)
 		TCP->DisconnectOnClose = atoi(value);
+
+	else if (_stricmp(param,"TCPPORT") == 0)
+		TCP->TCPPort = atoi(value);
+
+	else if (_stricmp(param,"TRIMODEPORT") == 0)
+		TCP->TriModePort = atoi(value);
+	
+	else if (_stricmp(param,"HTTPPORT") == 0)
+		TCP->HTTPPort = atoi(value);
+
+	else if ((_stricmp(param,"CMDPORT") == 0) || (_stricmp(param,"LINUXPORT") == 0))
+	{
+		int n = 0;
+		char * context;
+		char * ptr = strtok_s(value, ", ", &context);
+
+		while (ptr && n < 33)
+		{
+			TCP->CMDPort[n++] = atoi(ptr);
+			ptr = strtok_s(NULL, ", ", &context);
+		}
+	}
+
+	else if (_stricmp(param,"CMSSERVER") == 0)
+	{
+		int n = 0;
+		char * context;
+		char * ptr = strtok_s(value, ", \r", &context);
+
+		strcpy(TCP->CMSServer, ptr);
+	}
+
+	else if (_stricmp(param,"RELAYHOST") == 0)
+	{
+		int n = 0;
+		char * context;
+		char * ptr = strtok_s(value, ", \r", &context);
+
+		strcpy(TCP->RELAYHOST, ptr);
+	}
+
+
+	else if (_stricmp(param,"FALLBACKTORELAY") == 0)
+	{
+		int n = 0;
+		char * context;
+		char * ptr = strtok_s(value, ", \r", &context);
+
+		TCP->FallbacktoRelay = atoi(value);
+	}
+
+	else if (_stricmp(param,"FBBPORT") == 0)
+	{
+		int n = 0;
+		char * context;
+		char * ptr = strtok_s(value, ", ", &context);
+
+		while (ptr && n < 99)
+		{
+			TCP->FBBPort[n++] = atoi(ptr);
+			ptr = strtok_s(NULL, ", ", &context);
+		}
+	}
+
+	else if (_stricmp(param,"RELAYAPPL") == 0)
+	{
+		TCP->RelayPort = 8772;
+		strcpy(TCP->RelayAPPL, value);
+		strcat(TCP->RelayAPPL, "\r");
+	}
+
+	//		if (strcmp(param,"LOGINRESPONSE") == 0) cfgLOGINRESPONSE = value;
+	//	    if (strcmp(param,"PASSWORDRESPONSE") == 0) cfgPASSWORDRESPONSE = value;
+
+	else if (_stricmp(param,"LOGINPROMPT") == 0)
+	{
+		ptr1 = strchr(value, 13);
+		if (ptr1) *ptr1 = 0;
+		strcpy(TCP->LoginMsg,value);
+	}
+
+	else if (_stricmp(param,"PASSWORDPROMPT") == 0)
+	{
+		ptr1 = strchr(value, 13);
+		if (ptr1) *ptr1 = 0;
+		strcpy(TCP->PasswordMsg, value);
+	}
+
+	else if (_stricmp(param,"HOSTPROMPT") == 0)
+		strcpy(TCP->cfgHOSTPROMPT, value);
+
+	else if (_stricmp(param,"LOCALECHO") == 0)
+		strcpy(TCP->cfgLOCALECHO, value);
+
+	else if (_stricmp(param,"MAXSESSIONS") == 0)
+	{
+		TCP->MaxSessions = atoi(value);
+		if (TCP->MaxSessions > MaxSockets ) TCP->MaxSessions = MaxSockets;
+	}
+
+	else if (_stricmp(param,"CTEXT") == 0 )
+	{
+		int len = (int)strlen (value);
+
+		if (value[len -1] == ' ')
+			value[len -1] = 0;
+
+		strcpy(TCP->cfgCTEXT, value);
+
+		// Replace \n Signon string with cr lf
+
+		ptr = &TCP->cfgCTEXT[0];
+
+scanCTEXT:
+
+		ptr = strstr(ptr, "\\n");
+
+		if (ptr)
+		{    
+			*(ptr++)=13;			// put in cr
+			*(ptr++)=10;			// put in lf
+
+			goto scanCTEXT;
+		}  
+	}
+
+	else if (_stricmp(param,"USER") == 0)
+	{
+		struct UserRec * USER;
+		char Param[8][256];
+		char * ptr1, * ptr2;
+		int n = 0;
+
+		// USER=user,password,call,appl,SYSOP
+
+		memset(Param, 0, 2048);
+		strlop(value, 13);
+		strlop(value, ';');
+
+		ptr1 = value;
+
+		while (ptr1 && *ptr1 && n < 8)
+		{
+			ptr2 = strchr(ptr1, ',');
+			if (ptr2) *ptr2++ = 0;
+
+			strcpy(&Param[n][0], ptr1);
+			strlop(Param[n++], ' ');
+			ptr1 = ptr2;
+			while(ptr1 && *ptr1 && *ptr1 == ' ')
+				ptr1++;
+		}
+
+
+		User = &Param[0][0];
+
+		if (_stricmp(User, "ANON") == 0)
+		{
+			strcpy(&Param[2][0], "ANON");
+			strcpy(&Param[4][0], "");		// Dont allow SYSOP if ANON
+		}
+
+		Pwd = &Param[1][0];
+		UserCall = &Param[2][0];
+		Appl = &Param[3][0];
+		Secure = &Param[4][0];
+
+		if (User[0] == 0 || Pwd[0] == 0 || UserCall[0] == 0) // invalid record
+			return 0;
+
+		_strupr(UserCall);
+
+		if (TCP->NumberofUsers == 0)
+			TCP->UserRecPtr = malloc(sizeof(void *));
+		else
+			TCP->UserRecPtr = realloc(TCP->UserRecPtr, (TCP->NumberofUsers+1) * sizeof(void *));
+
+		USER = zalloc(sizeof(struct UserRec));
+
+		TCP->UserRecPtr[TCP->NumberofUsers] = USER;
+
+		USER->Callsign = _strdup(UserCall);
+		USER->Password = _strdup(Pwd);
+		USER->UserName = _strdup(User);
+		USER->Appl = zalloc(32);
+		USER->Secure = FALSE;
+
+		if (_stricmp(Secure, "SYSOP") == 0)
+			USER->Secure = TRUE;
+
+		if (Appl[0] && strcmp(Appl, "\"\"") != 0)
+		{
+			strcpy(USER->Appl, _strupr(Appl));
+			strcat(USER->Appl, "\r\n");
+		}
+		TCP->NumberofUsers += 1;
+	}
 	else
-		if (_stricmp(param,"TCPPORT") == 0)
-			TCP->TCPPort = atoi(value);
-		else
-		if (_stricmp(param,"TRIMODEPORT") == 0)
-			TCP->TriModePort = atoi(value);
-		else
-		if (_stricmp(param,"HTTPPORT") == 0)
-			TCP->HTTPPort = atoi(value);
-		else
-		if ((_stricmp(param,"CMDPORT") == 0) || (_stricmp(param,"LINUXPORT") == 0))
-		{
-			int n = 0;
-			char * context;
-			char * ptr = strtok_s(value, ", ", &context);
-
-			while (ptr && n < 33)
-			{
-				TCP->CMDPort[n++] = atoi(ptr);
-				ptr = strtok_s(NULL, ", ", &context);
-			}
-		}
-		else
-		if (_stricmp(param,"CMSSERVER") == 0)
-		{
-			int n = 0;
-			char * context;
-			char * ptr = strtok_s(value, ", \r", &context);
-
-			strcpy(TCP->CMSServer, ptr);
-		}
-		else
-		if (_stricmp(param,"RELAYHOST") == 0)
-		{
-			int n = 0;
-			char * context;
-			char * ptr = strtok_s(value, ", \r", &context);
-
-			strcpy(TCP->RELAYHOST, ptr);
-		}
-
-
-		else
-		if (_stricmp(param,"FALLBACKTORELAY") == 0)
-		{
-			int n = 0;
-			char * context;
-			char * ptr = strtok_s(value, ", \r", &context);
-
-			TCP->FallbacktoRelay = atoi(value);
-		}
-
-		else
-		if (_stricmp(param,"FBBPORT") == 0)
-		{
-			int n = 0;
-			char * context;
-			char * ptr = strtok_s(value, ", ", &context);
-
-			while (ptr && n < 99)
-			{
-				TCP->FBBPort[n++] = atoi(ptr);
-				ptr = strtok_s(NULL, ", ", &context);
-			}
-		}
-		else
-		if (_stricmp(param,"RELAYAPPL") == 0)
-		{
-			TCP->RelayPort = 8772;
-			strcpy(TCP->RelayAPPL, value);
-			strcat(TCP->RelayAPPL, "\r");
-		}
-		else
-		//		if (strcmp(param,"LOGINRESPONSE") == 0) cfgLOGINRESPONSE = value;
-//	    if (strcmp(param,"PASSWORDRESPONSE") == 0) cfgPASSWORDRESPONSE = value;
-
-	    if (_stricmp(param,"LOGINPROMPT") == 0)
-		{
-			ptr1 = strchr(value, 13);
-			if (ptr1) *ptr1 = 0;
-			strcpy(TCP->LoginMsg,value);
-		}
-		else
-	    if (_stricmp(param,"PASSWORDPROMPT") == 0)
-		{
-			ptr1 = strchr(value, 13);
-			if (ptr1) *ptr1 = 0;
-			strcpy(TCP->PasswordMsg, value);
-		}
-		else
-	    if (_stricmp(param,"HOSTPROMPT") == 0)
-			strcpy(TCP->cfgHOSTPROMPT, value);
-		else
-		if (_stricmp(param,"LOCALECHO") == 0)
-			strcpy(TCP->cfgLOCALECHO, value);
-		else
-		if (_stricmp(param,"MAXSESSIONS") == 0)
-		{
-			TCP->MaxSessions = atoi(value);
-			if (TCP->MaxSessions > MaxSockets ) TCP->MaxSessions = MaxSockets;
-		}
-		else
-		if (_stricmp(param,"CTEXT") == 0 )
-		{
-			int len = (int)strlen (value);
-
-			if (value[len -1] == ' ')
-				value[len -1] = 0;
-
-			strcpy(TCP->cfgCTEXT, value);
-
-			// Replace \n Signon string with cr lf
-
-			ptr = &TCP->cfgCTEXT[0];
-
-		scanCTEXT:
-
-			ptr = strstr(ptr, "\\n");
-    
-			if (ptr)
-			{    
-				*(ptr++)=13;			// put in cr
-				*(ptr++)=10;			// put in lf
-
-				goto scanCTEXT;
-			}  
-		}
-		else
-		if (_stricmp(param,"USER") == 0)
-		{
-			struct UserRec * USER;
-			char Param[8][256];
-			char * ptr1, * ptr2;
-			int n = 0;
-
-			// USER=user,password,call,appl,SYSOP
-
-			memset(Param, 0, 2048);
-			strlop(value, 13);
-			strlop(value, ';');
-
-			ptr1 = value;
-
-			while (ptr1 && *ptr1 && n < 8)
-			{
-				ptr2 = strchr(ptr1, ',');
-				if (ptr2) *ptr2++ = 0;
-
-				strcpy(&Param[n][0], ptr1);
-				strlop(Param[n++], ' ');
-				ptr1 = ptr2;
-				while(ptr1 && *ptr1 && *ptr1 == ' ')
-					ptr1++;
-			}
-
-
-			User = &Param[0][0];
-
-			if (_stricmp(User, "ANON") == 0)
-			{
-				strcpy(&Param[2][0], "ANON");
-				strcpy(&Param[4][0], "");		// Dont allow SYSOP if ANON
-			}
-
-			Pwd = &Param[1][0];
-			UserCall = &Param[2][0];
-			Appl = &Param[3][0];
-			Secure = &Param[4][0];
-
-			if (User[0] == 0 || Pwd[0] == 0 || UserCall[0] == 0) // invalid record
-				return 0;
-
-			_strupr(UserCall);
-
-			if (TCP->NumberofUsers == 0)
-				TCP->UserRecPtr = malloc(sizeof(void *));
-			else
-				TCP->UserRecPtr = realloc(TCP->UserRecPtr, (TCP->NumberofUsers+1) * sizeof(void *));
-
-			USER = zalloc(sizeof(struct UserRec));
-
-			TCP->UserRecPtr[TCP->NumberofUsers] = USER;
- 
-			USER->Callsign = _strdup(UserCall);
-			USER->Password = _strdup(Pwd);
-			USER->UserName = _strdup(User);
-			USER->Appl = zalloc(32);
-			USER->Secure = FALSE;
-
-			if (_stricmp(Secure, "SYSOP") == 0)
-				USER->Secure = TRUE;
-		
-			if (Appl[0] && strcmp(Appl, "\"\"") != 0)
-			{
-				strcpy(USER->Appl, _strupr(Appl));
-				strcat(USER->Appl, "\r\n");
-			}
-			TCP->NumberofUsers += 1;
-		}
-		else
-			return FALSE;
+		return FALSE;
 
 	return TRUE;
 }
@@ -734,7 +735,7 @@ lineloop:
 	if (Len > 0)
 	{
 		//	copy text to file a line at a time	
-					
+
 		ptr2 = memchr(ptr1, 13 , Len);
 
 		if (ptr2)
@@ -757,7 +758,7 @@ lineloop:
 				ptr2++;
 				Len --;
 			}
-			
+
 			Line[LineLen] = 0;
 
 			// If line contains any data above 7f, assume binary and dont display
@@ -775,7 +776,7 @@ lineloop:
 				UpdateADIFRecord(ADIF, Line, Dirn);
 			}
 
-		Skip:
+Skip:
 			ptr1 = ptr2;
 			goto lineloop;
 		}
@@ -948,7 +949,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				PutLengthinBuffer(buff, datalen);
 
 				ReleaseBuffer(buffptr);
-	
 				return (1);
 			}
 		}
@@ -1770,37 +1770,35 @@ VOID TelnetPoll(int Port)
 	int Msglen;
 	int Stream;
 
-	//	we now poll for incoming connections and data
+	//	we now poll for incoming connections 
 
+	struct timeval timeout;
+	int retval;
+	int n;
+	struct ConnectionInfo * sockptr;
+	SOCKET sock;
+	int Active = 0;
+	SOCKET maxsock;
+
+	fd_set readfd, writefd, exceptfd;
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 0;				// poll
+
+	if (TCP->maxsock == 0)
+		goto nosocks;
+
+	memcpy(&readfd, &TCP->ListenSet, sizeof(fd_set));
+
+	retval = select((int)(TCP->maxsock) + 1, &readfd, NULL, NULL, &timeout);
+
+	if (retval == -1)
 	{
-		fd_set readfd, writefd, exceptfd;
-		struct timeval timeout;
-		int retval;
-		int n;
-		struct ConnectionInfo * sockptr;
-		SOCKET sock;
-		int Active = 0;
-		SOCKET maxsock;
+		retval = WSAGetLastError();
+		perror("listen select");
+	}
 
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 0;				// poll
-
-		if (TCP->maxsock == 0)
-			goto nosocks;
-		
-		memcpy(&readfd, &TCP->ListenSet, sizeof(fd_set));
-
-		retval = select((int)(TCP->maxsock) + 1, &readfd, NULL, NULL, &timeout);
-
-		if (retval == -1)
-		{
-			retval = WSAGetLastError();
-			perror("listen select");
-		}
-
-		if (retval)
-		{
-		
+	if (retval)
+	{
 		n = 0;
 		while (TCP->FBBsock[n])
 		{
@@ -1817,7 +1815,7 @@ VOID TelnetPoll(int Port)
 			if (FD_ISSET(sock, &readfd))
 				Socket_Accept(TNC, sock, TCP->TCPPort);
 		}
-		
+
 		sock = TCP->TriModeSock;
 		if (sock)
 		{
@@ -1830,14 +1828,14 @@ VOID TelnetPoll(int Port)
 			if (FD_ISSET(sock, &readfd))
 				Socket_Accept(TNC, sock, TCP->TriModePort + 1);
 		}
-	
+
 		sock = TCP->Relaysock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
 				Socket_Accept(TNC, sock, TCP->RelayPort);
 		}
-		
+
 		sock = TCP->HTTPsock;
 		if (sock)
 		{
@@ -1846,12 +1844,12 @@ VOID TelnetPoll(int Port)
 		}
 
 		n = 0;
-		
+
 		while (TCP->FBBsock6[n])
 		{
 			sock = TCP->FBBsock6[n];
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock, TCP->FBBPort[n]);
+				Socket_Accept(TNC, sock, TCP->FBBPort[n]);
 			n++;
 		}
 
@@ -1861,138 +1859,137 @@ VOID TelnetPoll(int Port)
 			if (FD_ISSET(sock, &readfd))
 				Socket_Accept(TNC, sock, TCP->TCPPort);
 		}
-		
+
 		sock = TCP->Relaysock6;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock, TCP->RelayPort);
+				Socket_Accept(TNC, sock, TCP->RelayPort);
 		}
-		
+
 		sock = TCP->HTTPsock6;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock, TCP->HTTPPort);
+				Socket_Accept(TNC, sock, TCP->HTTPPort);
 		}
-		
-		}
+	}
 
-		// look for data on any active sockets
+	// look for data on any active sockets
 
-		maxsock = 0;
+	maxsock = 0;
 
-		FD_ZERO(&readfd);
-		FD_ZERO(&writefd);
-		FD_ZERO(&exceptfd);
+	FD_ZERO(&readfd);
+	FD_ZERO(&writefd);
+	FD_ZERO(&exceptfd);
 
-		for (n = 0; n <= TCP->MaxSessions; n++)
+	for (n = 0; n <= TCP->MaxSessions; n++)
+	{
+		sockptr = TNC->Streams[n].ConnectionInfo;
+
+		//	Should we use write event after a blocked write ????
+
+		if (sockptr->SocketActive)
 		{
-			sockptr = TNC->Streams[n].ConnectionInfo;
-		
-			//	Should we use write event after a blocked write ????
+//			if (sockptr->socket == 0)
+//			{
+//				Debugprintf("Active Session but zero socket");
+//				DataSocket_Disconnect(TNC, sockptr);
+//				return;
+//			}
 
-			if (sockptr->SocketActive)
+			if (TNC->Streams[n].Connecting)
 			{
-				if (sockptr->socket == 0)
-				{
-					Debugprintf("Active Session but zero socket");
-					DataSocket_Disconnect(TNC, sockptr);
-					return;
-				}
+				// look for complete or failed
 
-				if (TNC->Streams[n].Connecting)
-				{
-					// look for complete or failed
+				FD_SET(sockptr->socket, &writefd);
+				FD_SET(sockptr->socket, &exceptfd);
+			}
+			else
+			{
+				FD_SET(sockptr->socket, &readfd);
+				FD_SET(sockptr->socket, &exceptfd);
+			}
+			Active++;
+			if (sockptr->socket > maxsock)
+				maxsock = sockptr->socket;
 
-					FD_SET(sockptr->socket, &writefd);
-					FD_SET(sockptr->socket, &exceptfd);
-				}
-				else
-				{
-					FD_SET(sockptr->socket, &readfd);
-					FD_SET(sockptr->socket, &exceptfd);
-				}
-				Active++;
-				if (sockptr->socket > maxsock)
-					maxsock = sockptr->socket;
+			if (sockptr->TriModeDataSock)
+			{
+				FD_SET(sockptr->TriModeDataSock, &readfd);
+				FD_SET(sockptr->TriModeDataSock, &exceptfd);
 
-				if (sockptr->TriModeDataSock)
-				{
-					FD_SET(sockptr->TriModeDataSock, &readfd);
-					FD_SET(sockptr->TriModeDataSock, &exceptfd);
-			
-					if (sockptr->TriModeDataSock > maxsock)
-						maxsock = sockptr->TriModeDataSock;
-				}
+				if (sockptr->TriModeDataSock > maxsock)
+					maxsock = sockptr->TriModeDataSock;
 			}
 		}
+	}
 
-		if (Active)
+	if (Active)
+	{
+		retval = select((int)maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
+
+		if (retval == -1)
+		{				
+			perror("data select");
+			Debugprintf("Telnet Select Error %d Active %d", WSAGetLastError(), Active);
+
+			for (n = 0; n <= TCP->MaxSessions; n++)
+			{
+				sockptr = TNC->Streams[n].ConnectionInfo;
+				if (sockptr->SocketActive)
+					Debugprintf("Active Session %d socket %d", n, sockptr->socket);
+			}
+		}
+		else
 		{
-			retval = select((int)maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
-
-			if (retval == -1)
-			{				
-				perror("data select");
-				Debugprintf("Telnet Select Error %d Active %d", WSAGetLastError(), Active);
+			if (retval)
+			{
+				// see who has data
 
 				for (n = 0; n <= TCP->MaxSessions; n++)
 				{
 					sockptr = TNC->Streams[n].ConnectionInfo;
+
 					if (sockptr->SocketActive)
-						Debugprintf("Active Session %d socket %d", n, sockptr->socket);
-				}
-			}
-			else
-			{
-				if (retval)
-				{
-					// see who has data
-
-					for (n = 0; n <= TCP->MaxSessions; n++)
 					{
-						sockptr = TNC->Streams[n].ConnectionInfo;
-		
-						if (sockptr->SocketActive)
+						sock = sockptr->socket;
+
+						if (sockptr->TriModeDataSock)
 						{
-							sock = sockptr->socket;
-
-							if (sockptr->TriModeDataSock)
+							if (FD_ISSET(sockptr->TriModeDataSock, &readfd))
 							{
-								if (FD_ISSET(sockptr->TriModeDataSock, &readfd))
-								{
-									ProcessTriModeDataMessage(TNC, sockptr, sockptr->TriModeDataSock, &TNC->Streams[n]);
-								}
+								ProcessTriModeDataMessage(TNC, sockptr, sockptr->TriModeDataSock, &TNC->Streams[n]);
 							}
-
-							if (FD_ISSET(sock, &readfd))
-							{
-								if (sockptr->RelayMode)
-									DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
-								else if (sockptr->HTTPMode)
-									DataSocket_ReadHTTP(TNC, sockptr, sock, n);
-								else if (sockptr->FBBMode)
-									DataSocket_ReadFBB(TNC, sockptr, sock, n);
-								else
-									DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
-							}
-
-							if (FD_ISSET(sock, &exceptfd))
-							{
-								Debugprintf("exceptfd set");
-								Telnet_Connected(TNC, sockptr, sock, 1);
-							}
-
-							if (FD_ISSET(sock, &writefd))
-								Telnet_Connected(TNC, sockptr, sock, 0);
-
 						}
+
+						if (FD_ISSET(sock, &readfd))
+						{
+							if (sockptr->RelayMode)
+								DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
+							else if (sockptr->HTTPMode)
+								DataSocket_ReadHTTP(TNC, sockptr, sock, n);
+							else if (sockptr->FBBMode)
+								DataSocket_ReadFBB(TNC, sockptr, sock, n);
+							else
+								DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
+						}
+
+						if (FD_ISSET(sock, &exceptfd))
+						{
+							Debugprintf("exceptfd set");
+							Telnet_Connected(TNC, sockptr, sock, 1);
+						}
+
+						if (FD_ISSET(sock, &writefd))
+							Telnet_Connected(TNC, sockptr, sock, 0);
+
 					}
 				}
 			}
 		}
 	}
+
 
 nosocks:
 
@@ -2078,90 +2075,46 @@ nosocks:
 		if (STREAM->Attached)
 		{
 			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0 && STREAM->Attached)
-		{
-			// Node has disconnected - clear any connection
-
-			struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
-			SOCKET sock = sockptr->socket;
-			char Msg[80];	
-			PMSGWITHLEN buffptr;
-
-			STREAM->Attached = FALSE;
-			STREAM->Connected = FALSE;
-
-			sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;	// clear any queued data
-
-			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
 			{
-				buffptr = (PMSGWITHLEN)Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				if (TelSendPacket(Stream, &TNC->Streams[Stream], buffptr, sockptr->ADIF) == FALSE)
+				// Node has disconnected - clear any connection
+
+				struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
+				SOCKET sock = sockptr->socket;
+				char Msg[80];	
+				PMSGWITHLEN buffptr;
+
+				STREAM->Attached = FALSE;
+				STREAM->Connected = FALSE;
+
+				sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;	// clear any queued data
+
+				while(TNC->Streams[Stream].BPQtoPACTOR_Q)
 				{
-					//	Send failed, and has saved packet
-					//	free saved and discard any more on queue
-
-					free(sockptr->ResendBuffer);
-					sockptr->ResendBuffer = NULL;
-					sockptr->ResendLen = 0;
-
-					while(TNC->Streams[Stream].BPQtoPACTOR_Q)
+					buffptr = (PMSGWITHLEN)Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+					if (TelSendPacket(Stream, &TNC->Streams[Stream], buffptr, sockptr->ADIF) == FALSE)
 					{
-						buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-						ReleaseBuffer(buffptr);
+						//	Send failed, and has saved packet
+						//	free saved and discard any more on queue
+
+						free(sockptr->ResendBuffer);
+						sockptr->ResendBuffer = NULL;
+						sockptr->ResendLen = 0;
+
+						while(TNC->Streams[Stream].BPQtoPACTOR_Q)
+						{
+							buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+							ReleaseBuffer(buffptr);
+						}
+						break;
 					}
-					break;
 				}
-			}
 
-			while(TNC->Streams[Stream].PACTORtoBPQ_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
-				ReleaseBuffer(buffptr);
-			}
-
-            if (!sockptr->FBBMode)
-			{
-				sprintf(Msg,"*** Disconnected from Stream %d\r\n",Stream);
-				send(sock, Msg, (int)strlen(Msg),0);
-			}
-
-			if (sockptr->UserPointer == &TriModeUser)
-			{
-				// Always Disconnect
-
-				send(sockptr->socket, "DISCONNECTED\r\n", 14, 0);
-				return;
-			}
-
-			if (sockptr->UserPointer == &CMSUser)
-			{
-				if (CMSLogEnabled)
+				while(TNC->Streams[Stream].PACTORtoBPQ_Q)
 				{
-					char logmsg[120];
-					sprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d Time %d Seconds\r\n",
-						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed, (int)(time(NULL) - sockptr->ConnectTime));
-
-					WriteCMSLog (logmsg);
+					buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
+					ReleaseBuffer(buffptr);
 				}
-	
-				// Don't report if Internet down
 
-				if (sockptr->RelaySession == FALSE)
-					SendWL2KSessionRecord(sockptr->ADIF, STREAM->BytesTXed, STREAM->BytesRXed);
-				
-				WriteADIFRecord(sockptr->ADIF);
-				
-				if (sockptr->ADIF)
-					free(sockptr->ADIF);
-				
-				sockptr->ADIF = NULL;
-					
-				// Always Disconnect CMS Socket
-
-				DataSocket_Disconnect(TNC, sockptr);	
-			}
-
-			if (sockptr->RelayMode)
-			{
 				if (LogEnabled)
 				{
 					char logmsg[120];
@@ -2171,14 +2124,58 @@ nosocks:
 					WriteLog (logmsg);
 				}
 
-				// Always Disconnect Relay Socket
+				if (!sockptr->FBBMode)
+				{
+					sprintf(Msg,"*** Disconnected from Stream %d\r\n",Stream);
+					send(sock, Msg, (int)strlen(Msg),0);
+				}
 
-				Sleep(100);
-				DataSocket_Disconnect(TNC, sockptr);	
-			}
+				if (sockptr->UserPointer == &TriModeUser)
+				{
+					// Always Disconnect
 
-			else
-			{
+					send(sockptr->socket, "DISCONNECTED\r\n", 14, 0);
+					return;
+				}
+
+				if (sockptr->UserPointer == &CMSUser)
+				{
+					if (CMSLogEnabled)
+					{
+						char logmsg[120];
+						sprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d Time %d Seconds\r\n",
+							sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed, (int)(time(NULL) - sockptr->ConnectTime));
+
+						WriteCMSLog (logmsg);
+					}
+
+					// Don't report if Internet down
+
+					if (sockptr->RelaySession == FALSE)
+						SendWL2KSessionRecord(sockptr->ADIF, STREAM->BytesTXed, STREAM->BytesRXed);
+
+					WriteADIFRecord(sockptr->ADIF);
+
+					if (sockptr->ADIF)
+						free(sockptr->ADIF);
+
+					sockptr->ADIF = NULL;
+
+					// Always Disconnect CMS Socket
+
+					DataSocket_Disconnect(TNC, sockptr);	
+					return;
+				}
+
+				if (sockptr->RelayMode)
+				{
+					// Always Disconnect Relay Socket
+
+					Sleep(100);
+					DataSocket_Disconnect(TNC, sockptr);	
+					return;
+				}
+
 				if (sockptr->Signon[0] || sockptr->ClientSession)		// Outward Connect
 				{
 					Sleep(1000);
@@ -2186,14 +2183,6 @@ nosocks:
 					return;
 				}
 
-				if (LogEnabled)
-				{
-					char logmsg[120];
-					sprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d\n",
-						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed);
-
-					WriteLog (logmsg);
-				}
 
 				if (TCP->DisconnectOnClose)
 				{
@@ -2207,7 +2196,6 @@ nosocks:
 				}
 			}
 		}
-	}
 	}
 
 	for (Stream = 0; Stream <= TCP->MaxSessions; Stream++)
@@ -2322,11 +2310,12 @@ nosocks:
 	
 					sockptr->Signon[0] = 0;		// Not outgoing;
 					sockptr->Keepalive = FALSE;	// No Keepalives
+					sockptr->NoCallsign = FALSE;
 					sockptr->UTF8 = 0;			// Not UTF8
 
 					if (_stricmp(Host, "HOST") == 0)
 					{
-						Port = atoi(P3);
+						Port = atoi(P2);
 
 						if (Port > 33 || TCP->CMDPort[Port] == 0)
 						{
@@ -2339,12 +2328,23 @@ nosocks:
 						STREAM->Connecting = TRUE;
 						sockptr->CMSSession = FALSE;
 						sockptr->FBBMode = FALSE;
-						if (P4[0] == 'K' || P5[0] == 'K')
+
+						if (P3[0] == 'K' || P4[0] == 'K' || P5[0] == 'K')
 						{
 							sockptr->Keepalive = TRUE;
 							sockptr->LastSendTime = REALTIMETICKS;
 						}
-						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port], FALSE);
+
+						if (_stricmp(P3, "NOCALL") == 0 || _stricmp(P4, "NOCALL") == 0 || _stricmp(P5, "NOCALL") == 0)
+							sockptr->NoCallsign = TRUE;
+
+						if (_stricmp(P3, "TRANS") == 0 || _stricmp(P4, "TRANS") == 0 || _stricmp(P5, "TRANS") == 0)
+						{
+							sockptr->FBBMode = TRUE;
+							sockptr->NeedLF = TRUE;
+						}
+
+						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port], sockptr->FBBMode);
 						ReleaseBuffer(buffptr);
 						return;
 					}
@@ -2391,6 +2391,24 @@ nosocks:
 					}
 
 					// Outward Connect. 
+
+					// Only Allow user specified host if Secure Session
+
+					if (TCP->SecureTelnet)
+					{
+						struct _TRANSPORTENTRY * Sess = TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number];
+
+//						if (Sess && Sess->L4CROSSLINK)
+//							Sess = Sess->L4CROSSLINK;
+
+						if (Sess && !Sess->Secure_Session)
+						{
+							buffptr->Len = sprintf(&buffptr->Data[0], "Error - Telnet Outward Connect needs SYSOP Status\r");
+							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+							STREAM->NeedDisc = 10;
+							return;
+						}
+					}
 						
 					Port = atoi(P2);
 
@@ -3709,7 +3727,13 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 		if (*MsgPtr == '.')
 			MsgPtr++;
-        
+
+		if (strlen(MsgPtr) == 0)
+		{
+			DataSocket_Disconnect(TNC, sockptr);       // Silently disconnect - should only be use dfor automatic systems
+			return 0;
+		}
+
         if (LogEnabled)
 		{
 			unsigned char work[4];
@@ -3744,7 +3768,13 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 	case 1:
 		   
 		*(LFPtr)=0;				 // remove cr
-            
+
+		if (strlen(MsgPtr) == 0)
+		{
+			DataSocket_Disconnect(TNC, sockptr);       // Silently disconnect - should only be used for automatic systems
+			return 0;
+		}
+       
         if (LogEnabled)
 		{
 			unsigned char work[4];
@@ -3823,7 +3853,8 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 			return 0;
 		}
 
-		send(sock, RelayMsg, (int)strlen(RelayMsg), 0);
+		if (TCP->FallbacktoRelay)
+			send(sock, RelayMsg, (int)strlen(RelayMsg), 0);
 
 		sockptr->LoginState = 2;
 
@@ -4073,7 +4104,7 @@ MsgLoop:
 			strcpy(sockptr->ADIF->CMSCall, TCP->GatewayCall);
 			
 			send(sock, Msg, Len, 0);
-			sprintf(logmsg,"%d %s", Stream, Msg);
+			sprintf(logmsg,"%d %s\n", Stream, Msg);
 			WriteCMSLog (logmsg);
 
 			sockptr->InputLen=0;
@@ -4137,7 +4168,7 @@ MsgLoop:
 			Len = sprintf(Msg, ";SR: %s %d %d\r", &RespString[2], Freq, Mode);			
 			
 			send(sock, Msg, Len,0);
-			sprintf(logmsg,"%d %s", Stream, Msg);
+			sprintf(logmsg,"%d %s\n", Stream, Msg);
 			WriteCMSLog (logmsg);
 
 			strcat(Msg,"<cr>");
@@ -4179,7 +4210,7 @@ MsgLoop:
 							len = sprintf(Passline, "CMSTELNET %s %d %d\r", PORT->WL2KInfo.RMSCall, PORT->WL2KInfo.Freq, PORT->WL2KInfo.mode);
 							ADIF->Freq = PORT->WL2KInfo.Freq;
 							ADIF->Mode = PORT->WL2KInfo.mode;
-					}
+						}
 					}
 					else
 					{
@@ -4506,7 +4537,8 @@ int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr
 
 	if (sockptr->SocketActive)
 	{
-		closesocket(sockptr->socket);
+		if (sockptr->socket)
+			closesocket(sockptr->socket);
 
 		n = sockptr->Number;
 #ifndef LINBPQ
@@ -4882,8 +4914,9 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 		{
 			buffptr->Len = sprintf(&buffptr->Data[0], "Connected to %s\r",
 				TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4CROSSLINK->APPL);
-			
-			send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
+
+			if (sockptr->NoCallsign == FALSE)
+				send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
 		}
 	}
 
@@ -5002,7 +5035,7 @@ rootok:
 
 	freeaddrinfo(res);
 
-//	INETOK = TRUE;			// We have connectivity
+	INETOK = TRUE;			// We have connectivity
 
 	res = 0;
 	memset(&hints, 0, sizeof hints);
@@ -5130,8 +5163,7 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 {
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	ULONG IPAD;
-
-#ifdef LINBPQ
+	char inname[256];
 	
 	FILE *in;
 	char Buffer[2048];
@@ -5139,9 +5171,20 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 	char *ptr1, *ptr2, *context;
 	int i = 0;
 
+	if (LogDirectory[0] == 0)
+	{
+		strcpy(inname, "logs/CMSInfo.txt");
+	}
+	else
+	{
+		strcpy(inname, LogDirectory);
+		strcat(inname, "/");
+		strcat(inname, "logs/CMSInfo.txt");
+	}
+
 	TCP->NumberofCMSAddrs = 0;
 
-	in = fopen("CMSInfo.txt", "r");
+	in = fopen(inname, "r");
 
 	if (!(in)) return;
 
@@ -5174,102 +5217,6 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 
 	TCP->NumberofCMSAddrs = i;
 
-#else
-
-    TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
-    DWORD    cchClassName = MAX_PATH;  // size of class string 
-    DWORD    cSubKeys=0;               // number of subkeys 
-    DWORD    cbMaxSubKey;              // longest subkey size 
-    DWORD    cchMaxClass;              // longest class string 
-    DWORD    cValues;              // number of values for key 
-    DWORD    cchMaxValue;          // longest value name 
-    DWORD    cbMaxValueData;       // longest value data 
-    DWORD    cbSecurityDescriptor; // size of security descriptor 
-    FILETIME ftLastWriteTime;      // last write time 
- 
-    DWORD i, retCode; 
- 
-    TCHAR  achValue[MAX_VALUE_NAME]; 
-    DWORD cchValue = MAX_VALUE_NAME; 
-
-	HKEY hKey=0;
-	char Key[80];
-
-	Debugprintf("Getting cached CMS Server info"); 
-
-	TCP->NumberofCMSAddrs = 0;
-
-	sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d\\CMSInfo", TNC->Port);
-	
-	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
-
-	if (retCode != ERROR_SUCCESS)
-	{
-		Debugprintf("Cached CMS Server info key not found"); 
-		return;
-	}
-
-    // Get the class name and the value count. 
-    retCode = RegQueryInfoKey(
-        hKey,                    // key handle 
-        achClass,                // buffer for class name 
-        &cchClassName,           // size of class string 
-        NULL,                    // reserved 
-        &cSubKeys,               // number of subkeys 
-        &cbMaxSubKey,            // longest subkey size 
-        &cchMaxClass,            // longest class string 
-        &cValues,                // number of values for this key 
-        &cchMaxValue,            // longest value name 
-        &cbMaxValueData,         // longest value data 
-        &cbSecurityDescriptor,   // security descriptor 
-        &ftLastWriteTime);       // last write time 
- 
-    // Enumerate the key values. 
-
-    if (cValues == 0)
-	{
-		Debugprintf("No Cached CMS Servers found"); 
-		return;
-	}
-
-	if (cValues > MaxCMS)
-		cValues = MaxCMS;
-
-	for (i=0, retCode=ERROR_SUCCESS; i<cValues; i++) 
-	{ 
-		int Type;
-		int ValLen = MAX_VALUE_DATA;
-		UCHAR Value[MAX_VALUE_DATA] = "";
-
-		cchValue = MAX_VALUE_NAME; 
-		achValue[0] = '\0'; 
-	
-		retCode = RegEnumValue(hKey, i, achValue, &cchValue, NULL, &Type, Value, &ValLen);
- 
-		if (retCode == ERROR_SUCCESS) 
-		{
-			char Time[80], IPADDR[80];
-			
-			Debugprintf("%s = %s", achValue, Value); 
-			sscanf(Value, "%s %s", &Time, &IPADDR);
-
-			IPAD = inet_addr(IPADDR);
-			memcpy(&TCP->CMSAddr[i], &IPAD, 4);
-
-			TCP->CMSFailed[i] = FALSE;
-		
-			if (TCP->CMSName[i])
-				free(TCP->CMSName[i]);
-		   		
-			TCP->CMSName[i] = _strdup(achValue);			// Save Host Name
-		}
-	}
-
-	RegCloseKey(hKey);
-
-	TCP->NumberofCMSAddrs = i;
-
-#endif
 	return;
 }
 
@@ -5476,12 +5423,35 @@ int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 {
 	char Info[80];
-#ifdef LINBPQ
+	char inname[256];
+	char outname[256];
+
 	unsigned char work[4];
 	FILE *in, *out;
-	char *c;
 	char Buffer[2048];
 	char *buf = Buffer;
+
+	if (LogDirectory[0] == 0)
+	{
+		strcpy(inname, "logs/CMSInfo.txt");
+	}
+	else
+	{
+		strcpy(inname, LogDirectory);
+		strcat(inname, "/");
+		strcat(inname, "logs/CMSInfo.txt");
+	}
+
+	if (LogDirectory[0] == 0)
+	{
+		strcpy(outname, "logs/CMSInfo.tmp");
+	}
+	else
+	{
+		strcpy(outname, LogDirectory);
+		strcat(outname, "/");
+		strcat(outname, "logs/CMSInfo.tmp");
+	}
 
 	memcpy(work, &TCP->CMSAddr[CMSNo].s_addr, 4);
 
@@ -5489,11 +5459,12 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 					work[0], work[1], work[2], work[3]);
 
 
-	in = fopen("CMSInfo.txt", "r");
+	in = fopen(inname, "r");
 
 	if (!(in))
 	{
-		in = fopen("CMSInfo.txt", "w");
+		in = fopen(inname, "w");
+
 		if (!(in))
 		{
 			perror("Failed to create CMSInfo.txt");
@@ -5501,23 +5472,30 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 			return;
 		}
 		fclose(in);
-		in = fopen("CMSInfo.txt", "r");
+		in = fopen(inname, "r");
 	}
 
-	out = fopen("CMSInfo.tmp", "w");
+	out = fopen(outname, "w");
 
 	if (!(in) || !(out)) return;
 
 	while(fgets(buf, 128, in))
 	{
-		c = strchr(buf, ' ');
-		if (c) *c = '\0';
-			
-		if (strcmp(buf, TCP->CMSName[CMSNo]) != 0)
+		char addr[256];
+		time_t t;
+		char ip[256];
+		int n;
+
+		n = sscanf(buf,"%s %d %s", addr, &t, ip);
+
+		if (n == 3)
 		{
-			if (c) *c = ' ';
-				
-			fputs(buf, out);
+			int age = time(NULL) - t;
+
+			// if not current server and not too old, copy across
+
+			if ((age < 86400 * 30) && strcmp(addr, TCP->CMSName[CMSNo]) != 0)
+				fputs(buf, out);
 		}
 	}
 
@@ -5526,31 +5504,9 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 	fclose(in);
 	fclose(out);
 
-	remove("CMSInfo.txt");
-	rename("CMSInfo.tmp", "CMSInfo.txt");
+	remove(inname);
+	rename(outname, inname);
 
-#else
-
-	HKEY hKey=0;
-	char Key[80];
-	int retCode, disp;
-
-	sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d\\CMSInfo", port);
-	
-	retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0,
-            KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		unsigned char work[4];
-		memcpy(work, &TCP->CMSAddr[CMSNo].s_addr, 4);
-		sprintf(Info,"%d %d.%d.%d.%d", time(NULL),
-					work[0], work[1], work[2], work[3]);
-
-		retCode = RegSetValueEx(hKey, TCP->CMSName[CMSNo], 0, REG_SZ, (BYTE *)&Info, (int)strlen(Info));
-		RegCloseKey(hKey);
-	}
-#endif
 	return;
 }
 

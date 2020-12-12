@@ -468,7 +468,7 @@ int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
 		ptr2 += CP437toUTF8DataLen[c - 128];
 	}
 
-	return ptr2 - UTF;
+	return (int)(ptr2 - UTF);
 }
 
 int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
@@ -492,7 +492,7 @@ int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
 		ptr2 += CP1251toUTF8DataLen[c - 128];
 	}
 
-	return ptr2 - UTF;
+	return (int)(ptr2 - UTF);
 }
 
 int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
@@ -516,7 +516,7 @@ int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
 		ptr2 += CP1252toUTF8DataLen[c - 128];
 	}
 
-	return ptr2 - UTF;
+	return (int)(ptr2 - UTF);
 }
 
 int TrytoGuessCode(unsigned char * Char, int Len)

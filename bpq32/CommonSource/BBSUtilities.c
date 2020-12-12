@@ -55,10 +55,13 @@ extern struct ConsoleInfo BBSConsole;
 #ifdef LINBPQ
 extern BPQVECSTRUC ** BPQHOSTVECPTR;
 UCHAR * GetLogDirectory();
+DllExport int APIENTRY SessionStateNoAck(int stream, int * state);
 #else
 __declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
 #endif
 
+Dll BOOL APIENTRY APISendAPRSMessage(char * Text, char * ToCall);
+VOID APIENTRY md5 (char *arg, unsigned char * checksum);
 int APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
 void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
@@ -95,6 +98,10 @@ VOID SaveIntValue(config_setting_t * group, char * name, int value);
 VOID SaveStringValue(config_setting_t * group, char * name, char * value);
 char *stristr (char *ch1, char *ch2);
 BOOL CheckforMessagetoServer(struct MsgInfo * Msg);
+void DoHousekeepingCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP);
+void ListCategories(ConnectionInfo * conn);
+void RebuildNNTPList();
 
 config_t cfg;
 config_setting_t * group;
@@ -1438,7 +1445,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
 {
 	if (user->Temp->ListSuspended)
-		return;						// Dont send prompt if pausing a liting
+		return;						// Dont send prompt if pausing a listing
 		
 	if (user->flags & F_Expert)
 		ExpandAndSendMessage(conn, ExpertPrompt, LOG_BBS);
@@ -2824,6 +2831,7 @@ VOID FlagAsKilled(struct MsgInfo * Msg)
 		}
 	}
 	SaveMessageDatabase();
+	RebuildNNTPList();
 }
 
 void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
@@ -2856,13 +2864,11 @@ void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char
 		}
 
 		if (Msg->status == 'N')
-		{
-			nodeprintf(conn, "Message %d has not been read\r", msgno);
-			goto Next;
-		}
+			nodeprintf(conn, "Warning - Message has status N\r");
 
 		Msg->status = 'D';
 		Msg->datechanged=time(NULL);
+		SaveMessageDatabase();
 
 		nodeprintf(conn, "Message #%d Flagged as Delivered\r", msgno);
 	Next:
@@ -3094,16 +3100,15 @@ void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 }
 
 
-BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
+BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, struct TempUserInfo * Temp)
 {
 	char FullFrom[80];
 	char FullTo[80];
-	struct TempUserInfo * Temp = conn->UserPointer->Temp;
 
 	strcpy(FullFrom, Msg->from);
 
 	if ((_stricmp(Msg->from, "RMS:") == 0) || (_stricmp(Msg->from, "SMTP:") == 0) || 
-		SendFullFrom || (_stricmp(Msg->emailfrom, "@winlink.org") == 0))
+		Temp->SendFullFrom || (_stricmp(Msg->emailfrom, "@winlink.org") == 0))
 		strcat(FullFrom, Msg->emailfrom);
 
 	if (_stricmp(Msg->to, "RMS") == 0)
@@ -3155,61 +3160,250 @@ BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming)
 {
-	BOOL SendFullFrom = Cmd[2];
-	int Start = 0;
 	struct  TempUserInfo * Temp = user->Temp;
-	char ListType = 0;
-
-	if (conn->Paging)
-	{
-		if (Temp->ListSuspended)
-		{
-			// We have reentered list command after a pause. The next message to list is in Temp->LastListedInPagedMode
-
-			Start = Temp->LastListedInPagedMode;
-			Temp->ListSuspended = FALSE;
-		}
-
-
-		user->Temp->ListActive = TRUE;
-		memcpy(user->Temp->LastListCommand, Cmd, 79);
-		if (Arg1)
-			memcpy(user->Temp->LastListParams, Arg1, 79);
-		else
-			user->Temp->LastListParams[0] = 0;
-		
-		user->Temp->LinesSent = 0;
-	}
+	struct MsgInfo * Msg;
 
 	// Allow compound selection, eg LTN or LFP
 
-	if (Cmd[1] == 0)
-		Cmd[1] = '*';
+	// types P N T
+	// Options LL LR L< L> L@ LM LC (L* used internally for just L, ie List New
+	// Status N Y H F K D 
 
-	_strupr(Cmd);
+	// Allowing options in any order complicates paging. May be best to parse options once and restore if paging.
 
-	if (strchr(Cmd, 'T'))
+	Temp->ListActive = TRUE;
+	Temp->LinesSent = 0;
+
+	if (Resuming)
 	{
-		ListType = 'T';
-		if (Cmd[1] == 'T')		// We want LNT not LTN
-			memmove(&Cmd[1], &Cmd[2], strlen(&Cmd[1]));  // Need Null
-	}	
+		// Entered after a paging pause. Selection fields are already set up
+
+		// We have reentered list command after a pause. The next message to list is in Temp->LastListedInPagedMode
+
+//		Start = Temp->LastListedInPagedMode;
+		Temp->ListSuspended = FALSE;
+	}
 	else
-	if (strchr(Cmd, 'P'))
 	{
-		ListType = 'P';
-		if (Cmd[1] == 'P')		// We want LNT not LTN
-			memmove(&Cmd[1], &Cmd[2], strlen(&Cmd[1]));  // Need Null
-	}	
-	else
-	if (strchr(Cmd, 'B'))
+		Temp->ListRangeEnd = LatestMsg;
+		Temp->ListRangeStart = 1;
+		Temp->LLCount = 0;
+		Temp->SendFullFrom = 0;
+		Temp->ListType = 0;
+		Temp->ListStatus = 0;
+		Temp->ListSelector = 0;
+		Temp->UpdateLatest = 0;
+		Temp->LastListParams[0] = 0;
+
+		//Analyse L params. 
+
+		_strupr(Cmd);
+
+		if (strcmp(Cmd, "LC") == 0)			// List Bull Categories
+		{
+			ListCategories(conn);
+			return;
+		}
+
+		// if command is just L or LR start from last listed
+
+		if (strcmp(Cmd, "L") == 0 || strcmp(Cmd, "LR") == 0)
+		{
+			if (LatestMsg == conn->lastmsg)
+			{
+				BBSputs(conn, "No New Messages\r");
+				return;
+			}
+
+			Temp->UpdateLatest = 1;
+			Temp->ListRangeStart = conn->lastmsg;
+		}
+
+		if (strchr(Cmd, 'V'))					// Verbose
+			Temp->SendFullFrom = 'V';
+
+		if (strchr(Cmd, 'R'))
+			Temp->ListDirn = 'R';
+		else
+			Temp->ListDirn = '*';				// Default newest first
+
+		Cmd++;					// skip L
+
+		if (strchr(Cmd, 'T'))
+			Temp->ListType = 'T';
+		else if (strchr(Cmd, 'P'))
+			Temp->ListType = 'P';
+		else if (strchr(Cmd, 'B'))
+			Temp->ListType = 'B';
+
+		if (strchr(Cmd, 'N'))
+			Temp->ListStatus = 'N';
+		else if (strchr(Cmd, 'Y'))
+			Temp->ListStatus = 'Y';
+		else if (strchr(Cmd, 'F'))
+			Temp->ListStatus = 'F';
+		else if (strchr(Cmd, '$'))
+			Temp->ListStatus = '$';
+		else if (strchr(Cmd, 'H'))
+			Temp->ListStatus = 'H';
+		else if (strchr(Cmd, 'K'))
+			Temp->ListStatus = 'K';
+		else if (strchr(Cmd, 'D'))
+			Temp->ListStatus = 'D';
+
+		// H or K only by Sysop
+
+		switch (Temp->ListStatus)
+		{
+		case 'K':
+		case 'H':				// List Status
+
+			if (conn->sysop)
+				break;
+			
+			BBSputs(conn, "LH or LK can only be used by SYSOP\r");
+			return;
+		}
+
+		if (strchr(Cmd, '<'))
+			Temp->ListSelector = '<';
+		else if (strchr(Cmd, '>'))
+			Temp->ListSelector = '>';
+		else if (strchr(Cmd, '@'))
+			Temp->ListSelector = '@';
+		else if (strchr(Cmd, 'M'))
+			Temp->ListSelector = 'M';
+
+		// Param could be single number, number range or call
+		
+		if (Arg1)
+		{
+			if (strchr(Cmd, 'L'))		// List Last 
+			{
+				// Param is number
+
+				if (Arg1)
+					Temp->LLCount = atoi(Arg1);
+			}
+			else
+			{
+				// Range nnn-nnn or single value or callsign
+
+				char * Arg2, * Arg3;
+				char * Context;
+				char seps[] = " -\t\r";
+				UINT From=LatestMsg, To=0;
+				char * Range = strchr(Arg1, '-');
+			
+				Arg2 = strtok_s(Arg1, seps, &Context);
+				Arg3 = strtok_s(NULL, seps, &Context);
+
+				if (Arg2)
+				{
+					if (isdigits(Arg2))
+						To = From = atoi(Arg2);
+					else
+						strcpy(Temp->LastListParams, Arg2);
+
+					if (Arg3)
+						From = atoi(Arg3);
+					else
+						if (Range)
+							From = LatestMsg;
+
+					if (From > 100000 || To > 100000)
+					{
+						BBSputs(conn, "Message Number too high\r");
+						return;
+					}
+					Temp->ListRangeStart = To;
+					Temp->ListRangeEnd = From;
+				}
+			}
+		}
+	}
+
+	// Run through all messages (either forwards or backwards) and list any that match all selection criteria
+
+	while (1) 
 	{
-		ListType = 'B';
-		if (Cmd[1] =='B')		// We want LNT not LTN
-			memmove(&Cmd[1], &Cmd[2], strlen(&Cmd[1]));  // Need Null
-	}	
-	
-	switch (Cmd[1])
+		if (Temp->ListDirn == 'R')
+			Msg = GetMsgFromNumber(Temp->ListRangeStart);
+		else
+			Msg = GetMsgFromNumber(Temp->ListRangeEnd);
+
+
+		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))		// Check if user is allowed to list this message
+		{
+			// Check filters
+
+			if (Temp->ListStatus && Temp->ListStatus != Msg->status)
+				goto skip;
+
+			if (Temp->ListType && Temp->ListType != Msg->type)
+				goto skip;
+
+			if (Temp->ListSelector == '<')
+				if (_stricmp(Msg->from, Temp->LastListParams) != 0)
+					goto skip;
+
+			if (Temp->ListSelector == '>')
+				if (_stricmp(Msg->to, Temp->LastListParams) != 0)
+					goto skip;
+
+			if (Temp->ListSelector == '@')
+				if (_memicmp(Msg->via, Temp->LastListParams, strlen(Temp->LastListParams)) != 0 &&
+					(_stricmp(Temp->LastListParams, "SMTP:") != 0 || Msg->to[0] != 0))
+						goto skip;
+
+			if (Temp->ListSelector == 'M')
+				if (_stricmp(Msg->to, user->Call) != 0 &&
+					(_stricmp(Msg->to, "SYSOP") != 0 || ((user->flags & F_SYSOP_IN_LM) == 0)))
+
+					goto skip;
+
+			if (ListMessage(Msg, conn, Temp))
+			{
+				if (Temp->ListDirn == 'R')
+					Temp->ListRangeStart++;
+				else
+					Temp->ListRangeEnd--;
+
+				return;			// Hit page limit
+			}
+
+			if (Temp->LLCount)
+			{
+				Temp->LLCount--;
+				if (Temp->LLCount == 0)
+					return;				// LL count reached
+			}
+skip:;	
+		}
+
+		if (Temp->ListRangeStart == Temp->ListRangeEnd)
+		{
+			// if using L or LR (list new) update last listed field
+			
+			if (Temp->UpdateLatest)
+				conn->lastmsg = LatestMsg;
+
+			return;
+		}
+
+		if (Temp->ListDirn == 'R')
+			Temp->ListRangeStart++;
+		else
+			Temp->ListRangeEnd--;
+
+		if (Temp->ListRangeStart > 100000 || Temp->ListRangeEnd < 0)		// Loop protection!
+			return;		
+
+	}
+
+/*
+
+	switch (Cmd[0])
 	{
 
 	case '*':					// Just L
@@ -3248,14 +3442,14 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 				if (Start)
 					To = Start + 1;
 
-				ListMessagesInRangeForwards(conn, user, user->Call, From, To, SendFullFrom);
+				ListMessagesInRangeForwards(conn, user, user->Call, From, To, Temp->SendFullFrom);
 			}
 			else
 			{
 				if (Start)
 					From = Start - 1;
 
-				ListMessagesInRange(conn, user, user->Call, From, To, SendFullFrom);
+				ListMessagesInRange(conn, user, user->Call, From, To, Temp->SendFullFrom);
 			}
 		}
 		else
@@ -3358,9 +3552,9 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 						continue;
 					}
 			
-					if (ListType)
+					if (Temp->ListType)
 					{
-						if (MsgHddrPtr[m]->status == Cmd[1] && MsgHddrPtr[m]->type == ListType)
+						if (MsgHddrPtr[m]->status == Cmd[1] && MsgHddrPtr[m]->type == Temp->ListType)
 							if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
 								return;			// Hit page limit
 					}
@@ -3455,7 +3649,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	
 	// Could be P B or T if specified without a status
 
-	switch (ListType)
+	switch (Temp->ListType)
 	{
 	case 'P':
 	case 'B':
@@ -3475,7 +3669,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 						continue;
 					}
 
-					if (MsgHddrPtr[m]->type == ListType)
+					if (MsgHddrPtr[m]->type == Temp->ListType)
 						if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
 							return;			// Hit page limit
 					m--;
@@ -3486,11 +3680,60 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		}
 	}
 
-	
+*/	
 	nodeprintf(conn, "*** Error: Invalid List option %c\r", Cmd[1]);
 
+}
 
-}	
+void ListCategories(ConnectionInfo * conn)
+{
+	// list bull categories
+	struct NNTPRec * ptr = FirstNNTPRec;
+	char Cat[100];
+	char NextCat[100];
+	int Line = 0;
+	int Count;
+
+	while (ptr)
+	{
+		// if the next name is the same, combine  counts
+
+		strcpy(Cat, ptr->NewsGroup);
+		strlop(Cat, '.');
+		Count = ptr->Count;
+Catloop:
+		if (ptr->Next)
+		{
+			strcpy(NextCat, ptr->Next->NewsGroup);
+			strlop(NextCat, '.');
+			if (strcmp(Cat, NextCat) == 0)
+			{
+				ptr = ptr->Next;
+				Count += ptr->Count;
+				goto Catloop;
+			}
+		}
+
+		nodeprintf(conn, "%-6s %-3d", Cat, Count);
+		Line += 10;
+		if (Line > 80)
+		{
+			Line = 0;
+			nodeprintf(conn, "\r");
+		}
+
+		ptr = ptr->Next;
+	}
+
+	if (Line)
+		nodeprintf(conn, "\r\r");
+	else
+		nodeprintf(conn, "\r");
+
+	return;
+}
+
+/*
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start)
 {
 	int i, Msgs = Start;
@@ -3508,7 +3751,7 @@ int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, B
 			_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0 && (user->flags & F_SYSOP_IN_LM)))
 		{
 			Msgs++;
-			if (ListMessage(MsgHddrPtr[i], conn, SendFullFrom))
+			if (ListMessage(MsgHddrPtr[i], conn, Temp->SendFullFrom))
 				break;			// Hit page limit
 		}
 	}
@@ -3531,7 +3774,7 @@ int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call,
 		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
 		{
 			Msgs++;
-			if (ListMessage(MsgHddrPtr[i], conn, SendFullFrom))
+			if (ListMessage(MsgHddrPtr[i], conn, Temp->SendFullFrom))
 				return Msgs;			// Hit page limit
 
 		}
@@ -3556,13 +3799,14 @@ int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, B
 			(_stricmp(Call, "SMTP:") == 0 && MsgHddrPtr[i]->to[0] == 0))
 		{
 			Msgs++;
-			if (ListMessage(MsgHddrPtr[i], conn, SendFullFrom))
+			if (ListMessage(MsgHddrPtr[i], conn, Temp->SendFullFrom))
 				break;			// Hit page limit
 		}
 	}
 	
 	return(Msgs);
 }
+*/
 int GetUserMsg(int m, char * Call, BOOL SYSOP)
 {
 	struct MsgInfo * Msg;
@@ -3598,6 +3842,7 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 	return 0;
 }
 
+
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
 {
 	// Return TRUE if user is allowed to read message
@@ -3617,7 +3862,7 @@ BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
 
 	return FALSE;
 }
-
+/*
 int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
 {
 	struct MsgInfo * Msg;
@@ -3662,9 +3907,9 @@ void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * C
 	for (m = Start; m >= End; m--)
 	{
 		Msg = GetMsgFromNumber(m);
-		
+
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
-			if (ListMessage(Msg, conn, SendFullFrom))
+			if (ListMessage(Msg, conn, Temp->SendFullFrom))
 				return;			// Hit page limit
 
 	}
@@ -3679,13 +3924,13 @@ void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, 
 	for (m = Start; m <= End; m++)
 	{
 		Msg = GetMsgFromNumber(m);
-		
+
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
-			if (ListMessage(Msg, conn, SendFullFrom))
+			if (ListMessage(Msg, conn, Temp->SendFullFrom))
 				return;			// Hit page limit
 	}
 }
-
+*/
 
 void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
 {
@@ -3693,7 +3938,7 @@ void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 	int i;
 	struct MsgInfo * Msg;
 
-	
+
 	switch (toupper(Cmd[1]))
 	{
 	case 0:					// Just R
@@ -3715,26 +3960,40 @@ void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 	case 'M':					// Read Mine (Unread Messages)
 
-		for (i=NumberofMessages; i>0; i--)
+		if (toupper(Cmd[2]) == 'R')
 		{
-			Msg = MsgHddrPtr[i];
+			for (i = 1; i <= NumberofMessages; i++)
+			{
+				Msg = MsgHddrPtr[i];
 
-			if ((_stricmp(Msg->to, user->Call) == 0) || (conn->sysop && _stricmp(Msg->to, "SYSOP") == 0 && user->flags & F_SYSOP_IN_LM))
-				if (Msg->status == 'N')
-					ReadMessage(conn, user, Msg->number);
+				if ((_stricmp(Msg->to, user->Call) == 0) || (conn->sysop && _stricmp(Msg->to, "SYSOP") == 0 && user->flags & F_SYSOP_IN_LM))
+					if (Msg->status == 'N')
+						ReadMessage(conn, user, Msg->number);
+			}
+		}
+		else
+		{
+			for (i = NumberofMessages; i > 0; i--)
+			{
+				Msg = MsgHddrPtr[i];
+
+				if ((_stricmp(Msg->to, user->Call) == 0) || (conn->sysop && _stricmp(Msg->to, "SYSOP") == 0 && user->flags & F_SYSOP_IN_LM))
+					if (Msg->status == 'N')
+						ReadMessage(conn, user, Msg->number);
+			}
 		}
 
 		return;
 	}
-	
+
 	nodeprintf(conn, "*** Error: Invalid Read option %c\r", Cmd[1]);
-	
+
 	return;
 }
 
 int RemoveLF(char * Message, int len)
 {
-	// Remove lf chars
+	// Remove lf chars and nulls
 
 	char * ptr1, * ptr2;
 
@@ -3742,14 +4001,47 @@ int RemoveLF(char * Message, int len)
 
 	while (len-- > 0)
 	{
+		while (*ptr1 == 0 && len)
+		{
+			ptr1++;
+			len--;
+		}
+		
 		*ptr2 = *ptr1;
-	
+
 		if (*ptr1 == '\r')
 			if (*(ptr1+1) == '\n')
 			{
 				ptr1++;
 				len--;
 			}
+		ptr1++;
+		ptr2++;
+	}
+
+	return (int)(ptr2 - Message);
+}
+
+
+
+int RemoveNulls(char * Message, int len)
+{
+	// Remove nulls
+
+	char * ptr1, * ptr2;
+
+	ptr1 = ptr2 = Message;
+
+	while (len-- > 0)
+	{
+		while (*ptr1 == 0 && len)
+		{
+			ptr1++;
+			len--;
+		}
+		
+		*ptr2 = *ptr1;
+
 		ptr1++;
 		ptr2++;
 	}
@@ -3801,7 +4093,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 	if (MsgBytes)
 	{
-		int Length;
+		int Length = Msg->length;
 
 		if (Msg->B2Flags & B2Msg)
 		{
@@ -3912,12 +4204,15 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 			ptr = strstr(MsgBytes, "Body:");
 
 			if (ptr)
+			{
 				MsgBytes = ptr;
+				Length = (int)strlen(ptr);
+			}
 		}
 
 		// Remove lf chars
 
-		Length = RemoveLF(MsgBytes, (int)strlen(MsgBytes));
+		Length = RemoveLF(MsgBytes, Length);
 
 		user->Total.MsgsSent[Index] ++;
 		user->Total.BytesForwardedOut[Index] += Length;
@@ -3925,7 +4220,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 		QueueMsg(conn, MsgBytes, Length);
 		free(Save);
 
-		nodeprintf(conn, "\r\r[End of Message #%d from %s]\r", msgno, Msg->from);
+		nodeprintf(conn, "\r\r[End of Message #%d from %s%s]\r", msgno, Msg->from, Msg->emailfrom);
 
 		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
 		{
@@ -3935,6 +4230,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 				{
 					Msg->status = 'Y';
 					Msg->datechanged=time(NULL);
+					SaveMessageDatabase();
 				}
 			}
 		}
@@ -5078,6 +5374,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	time_t Age;
 	int OurCount;
 	char * HoldReason = "User has Hold Messages flag set";
+	struct UserInfo * user;
 
 
 #ifndef LINBPQ
@@ -5153,292 +5450,292 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 
 nextline:
 
-		if (memcmp(ptr1, "R:", 2) == 0)
+	if (memcmp(ptr1, "R:", 2) == 0)
+	{
+		// Is if ours?
+
+		// BPQ RLINE Format R:090920/1041Z 6542@N4JOA.#WPBFL.FL.USA.NOAM BPQ1.0.2
+
+		ptr3 = strchr(ptr1, '@');
+		ptr4 = strchr(ptr1, '.');
+
+		if (ptr3 && ptr4 && (ptr4 > ptr3))
 		{
-			// Is if ours?
-
-			// BPQ RLINE Format R:090920/1041Z 6542@N4JOA.#WPBFL.FL.USA.NOAM BPQ1.0.2
-
-			ptr3 = strchr(ptr1, '@');
-			ptr4 = strchr(ptr1, '.');
-
-			if (ptr3 && ptr4 && (ptr4 > ptr3))
-			{
-				if (memcmp(ptr3+1, BBSName, ptr4-ptr3-1) == 0)
-					OurCount++;
-			}
-
-			GetWPBBSInfo(ptr1);		// Create WP /I record from R: Line
-			
-			// see if another
-
-			ptr2 = ptr1;			// save
-			ptr1 = strchr(ptr1, '\r');
-			if (ptr1 == 0)
-			{
-				Debugprintf("Corrupt Message %s from %s - truncated within R: line", Msg->bid, Msg->from);
-				return;
-			}
-			ptr1++;
-			if (*ptr1 == '\n') ptr1++;
-
-			goto nextline;
+			if (memcmp(ptr3+1, BBSName, ptr4-ptr3-1) == 0)
+				OurCount++;
 		}
 
-		// ptr2 points to last R: line (if any)
+		GetWPBBSInfo(ptr1);		// Create WP /I record from R: Line
 
-		if (ptr2)
+		// see if another
+
+		ptr2 = ptr1;			// save
+		ptr1 = strchr(ptr1, '\r');
+		if (ptr1 == 0)
 		{
-			struct tm rtime;
-			time_t result;
+			Debugprintf("Corrupt Message %s from %s - truncated within R: line", Msg->bid, Msg->from);
+			return;
+		}
+		ptr1++;
+		if (*ptr1 == '\n') ptr1++;
 
-			memset(&rtime, 0, sizeof(struct tm));
+		goto nextline;
+	}
 
-			if (ptr2[10] == '/')
+	// ptr2 points to last R: line (if any)
+
+	if (ptr2)
+	{
+		struct tm rtime;
+		time_t result;
+
+		memset(&rtime, 0, sizeof(struct tm));
+
+		if (ptr2[10] == '/')
+		{
+			// Dodgy 4 char year
+
+			sscanf(&ptr2[2], "%04d%02d%02d/%02d%02d",
+				&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+			rtime.tm_year -= 1900;
+			rtime.tm_mon--;
+		}
+		else if (ptr2[8] == '/')
+		{
+			sscanf(&ptr2[2], "%02d%02d%02d/%02d%02d",
+				&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+
+			if (rtime.tm_year < 90)
+				rtime.tm_year += 100;		// Range 1990-2089
+			rtime.tm_mon--;
+		}
+
+		// Otherwise leave date as zero, which should be rejected
+
+		//			result = _mkgmtime(&rtime);
+
+		if ((result = mktime(&rtime)) != (time_t)-1 )
+		{
+			result -= (time_t)_MYTIMEZONE;
+
+			Msg->datecreated =  result;	
+			Age = (time(NULL) - result)/86400;
+
+			if ( Age < -7)
 			{
-				// Dodgy 4 char year
-			
-				sscanf(&ptr2[2], "%04d%02d%02d/%02d%02d",
-					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
-				rtime.tm_year -= 1900;
-				rtime.tm_mon--;
+				Msg->status = 'H';
+				HoldReason = "Suspect Date Sent";
 			}
-			else if (ptr2[8] == '/')
+			else if (Age > BidLifetime || Age > MaxAge)
 			{
-				sscanf(&ptr2[2], "%02d%02d%02d/%02d%02d",
-					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+				Msg->status = 'H';
+				HoldReason = "Message too old";
 
-				if (rtime.tm_year < 90)
-					rtime.tm_year += 100;		// Range 1990-2089
-				rtime.tm_mon--;
-			}
-
-			// Otherwise leave date as zero, which should be rejected
-
-//			result = _mkgmtime(&rtime);
-
-			if ((result = mktime(&rtime)) != (time_t)-1 )
-			{
-				result -= (time_t)_MYTIMEZONE;
-
-				Msg->datecreated =  result;	
-				Age = (time(NULL) - result)/86400;
-
-				if ( Age < -7)
-				{
-					Msg->status = 'H';
-					HoldReason = "Suspect Date Sent";
-				}
-				else if (Age > BidLifetime || Age > MaxAge)
-				{
-					Msg->status = 'H';
-					HoldReason = "Message too old";
-
-				}
-				else
-					GetWPInfoFromRLine(Msg->from, ptr2, result);
 			}
 			else
-			{
-				// Can't decode R: Datestamp
-
-				Msg->status = 'H';
-				HoldReason = "Corrupt R: Line - can't determine age";
-			}
-
-			if (OurCount > 1)
-			{
-				// Message is looping 
-
-				Msg->status = 'H';
-				HoldReason = "Message may be looping";
-
-			}
-	
-			if (strcmp(Msg->to, "WP") == 0)
-			{
-				// If Reject WP Bulls is set, Kill message here.
-				// It should only get here if B2 - otherwise it should be
-				// rejected earlier
-
-				if (Msg->type == 'B' && FilterWPBulls)
-					Msg->status = 'K';
-		
-				if (Msg->status == 'N')
-				{
-					ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
-	
-					if (Msg->type == 'P')			// Kill any processed private WP messages.
-					{
-						char VIA[80];
-					
-						strcpy(VIA, Msg->via);
-						strlop(VIA, '.');
-					
-						if (strcmp(VIA, BBSName) == 0)
-						Msg->status = 'K';
-					}
-				}
-			}
+				GetWPInfoFromRLine(Msg->from, ptr2, result);
 		}
-
-		conn->MailBuffer[Msg->length] = 0;
-
-		if (CheckBadWords(Msg->title) || CheckBadWords(conn->MailBuffer))
-		{
-			Msg->status = 'H';
-			HoldReason = "Bad word in title or body";
-		}
-
-		if (CheckHoldFilters(Msg->from, Msg->to, Msg->via, Msg->bid))
-		{
-			Msg->status = 'H';
-			HoldReason = "Matched Hold Filters";
-		}
-
-		CreateMessageFile(conn, Msg);
-
-		BIDRec = AllocateBIDRecord();
-
-		strcpy(BIDRec->BID, Msg->bid);
-		BIDRec->mode = Msg->type;
-		BIDRec->u.msgno = LOWORD(Msg->number);
-		BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
-
-		if (Msg->length > MaxTXSize)
-		{
-			Msg->status = 'H';
-			HoldReason = "Message too long";
-
-			if (!(conn->BBSFlags & BBS))
-				nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
-		}
-
-		// Check for message to internal server
-
-		if (Msg->via[0] == 0 
-				|| _stricmp(Msg->via, BBSName) == 0		// our BBS a
-				|| _stricmp(Msg->via, AMPRDomain) == 0)	// our AMPR Address
-		{
-			if (CheckforMessagetoServer(Msg))
-			{
-				// Flag as killed and send prompt
-
-				FlagAsKilled(Msg);
-
-				if (!(conn->BBSFlags & BBS))
-				{
-					nodeprintf(conn, "Message %d to Server Processed and Killed.\r", Msg->number);
-					SendPrompt(conn, conn->UserPointer);
-				}
-				return;				// no need to process further
-			}
-		}
-
-		if (Msg->to[0])
-			FWDCount = MatchMessagetoBBSList(Msg, conn);
 		else
 		{
-			// If addressed @winlink.org, and to a local user, Keep here.
-			
-			char * Call;
-			char * AT;
+			// Can't decode R: Datestamp
 
-			// smtp or rms - don't warn no route
+			Msg->status = 'H';
+			HoldReason = "Corrupt R: Line - can't determine age";
+		}
 
-			FWDCount = 1;
+		if (OurCount > 1)
+		{
+			// Message is looping 
 
-			Call = _strupr(_strdup(Msg->via));
-			AT = strlop(Call, '@');
+			Msg->status = 'H';
+			HoldReason = "Message may be looping";
 
-			if (AT && _stricmp(AT, "WINLINK.ORG") == 0)
+		}
+
+		if (strcmp(Msg->to, "WP") == 0)
+		{
+			// If Reject WP Bulls is set, Kill message here.
+			// It should only get here if B2 - otherwise it should be
+			// rejected earlier
+
+			if (Msg->type == 'B' && FilterWPBulls)
+				Msg->status = 'K';
+
+			if (Msg->status == 'N')
 			{
-				struct UserInfo * user = LookupCall(Call);
+				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
 
-				if (user)
+				if (Msg->type == 'P')			// Kill any processed private WP messages.
 				{
-					if (user->flags & F_POLLRMS)
-					{
-						Logprintf(LOG_BBS, conn, '?', "SMTP Message @ winlink.org, but local RMS user - leave here");
-						strcpy(Msg->to, Call);
-						strcpy(Msg->via, AT);
-						if (user->flags & F_BBS)	// User is a BBS, so set FWD bit so he can get it
-							set_fwd_bit(Msg->fbbs, user->BBSNumber);
+					char VIA[80];
 
-					}
+					strcpy(VIA, Msg->via);
+					strlop(VIA, '.');
+
+					if (strcmp(VIA, BBSName) == 0)
+						Msg->status = 'K';
 				}
 			}
-			free(Call);
 		}
+	}
 
-		// Warn SYSOP if P or T forwarded in, and has nowhere to go
+	conn->MailBuffer[Msg->length] = 0;
 
-		if ((conn->BBSFlags & BBS) && Msg->type != 'B' && FWDCount == 0 && WarnNoRoute &&
-			strcmp(Msg->to, "SYSOP") && strcmp(Msg->to, "WP"))
-		{
-			if (Msg->via[0])
-			{	
-				if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
-					if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
-						SendWarningToSYSOP(Msg);
-			}
-			else
-			{
-				// No via - is it for a local user?
-				
-				if (LookupCall(Msg->to) == 0)
-					SendWarningToSYSOP(Msg);
-			}
-		}
+	if (CheckBadWords(Msg->title) || CheckBadWords(conn->MailBuffer))
+	{
+		Msg->status = 'H';
+		HoldReason = "Bad word in title or body";
+	}
+
+	if (CheckHoldFilters(Msg->from, Msg->to, Msg->via, Msg->bid))
+	{
+		Msg->status = 'H';
+		HoldReason = "Matched Hold Filters";
+	}
+
+	CreateMessageFile(conn, Msg);
+
+	BIDRec = AllocateBIDRecord();
+
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	if (Msg->length > MaxTXSize)
+	{
+		Msg->status = 'H';
+		HoldReason = "Message too long";
 
 		if (!(conn->BBSFlags & BBS))
+			nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
+	}
+
+	// Check for message to internal server
+
+	if (Msg->via[0] == 0 
+		|| _stricmp(Msg->via, BBSName) == 0		// our BBS a
+		|| _stricmp(Msg->via, AMPRDomain) == 0)	// our AMPR Address
+	{
+		if (CheckforMessagetoServer(Msg))
 		{
-			nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
+			// Flag as killed and send prompt
 
-			if (Msg->via[0])
-			{
-				if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
-					if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
+			FlagAsKilled(Msg);
 
-				if (FWDCount ==  0 &&  Msg->to[0] != 0)		// unless smtp msg
-					nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
-			}
-			else
+			if (!(conn->BBSFlags & BBS))
 			{
-				if (FWDCount ==  0 && conn->LocalMsg == 0 && Msg->type != 'B')
-					// Not Local and no forward route
-					nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
-			}
-			if (conn->ToCount == 0)
+				nodeprintf(conn, "Message %d to Server Processed and Killed.\r", Msg->number);
 				SendPrompt(conn, conn->UserPointer);
+			}
+			return;				// no need to process further
+		}
+	}
+
+	if (Msg->to[0])
+		FWDCount = MatchMessagetoBBSList(Msg, conn);
+	else
+	{
+		// If addressed @winlink.org, and to a local user, Keep here.
+
+		char * Call;
+		char * AT;
+
+		// smtp or rms - don't warn no route
+
+		FWDCount = 1;
+
+		Call = _strupr(_strdup(Msg->via));
+		AT = strlop(Call, '@');
+
+		if (AT && _stricmp(AT, "WINLINK.ORG") == 0)
+		{
+			struct UserInfo * user = LookupCall(Call);
+
+			if (user)
+			{
+				if (user->flags & F_POLLRMS)
+				{
+					Logprintf(LOG_BBS, conn, '?', "SMTP Message @ winlink.org, but local RMS user - leave here");
+					strcpy(Msg->to, Call);
+					strcpy(Msg->via, AT);
+					if (user->flags & F_BBS)	// User is a BBS, so set FWD bit so he can get it
+						set_fwd_bit(Msg->fbbs, user->BBSNumber);
+
+				}
+			}
+		}
+		free(Call);
+	}
+
+	// Warn SYSOP if P or T forwarded in, and has nowhere to go
+
+	if ((conn->BBSFlags & BBS) && Msg->type != 'B' && FWDCount == 0 && WarnNoRoute &&
+		strcmp(Msg->to, "SYSOP") && strcmp(Msg->to, "WP"))
+	{
+		if (Msg->via[0])
+		{	
+			if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
+				if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
+					SendWarningToSYSOP(Msg);
 		}
 		else
 		{
-			if (!(conn->BBSFlags & FBBForwarding))
-			{
-				if (conn->ToCount == 0)
-					if (conn->BBSFlags & OUTWARDCONNECT)
-						nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
-					else
-						nodeprintf(conn, ">\r");
-			}					
+			// No via - is it for a local user?
+
+			if (LookupCall(Msg->to) == 0)
+				SendWarningToSYSOP(Msg);
 		}
-		if(Msg->to[0] == 0)
-			SMTPMsgCreated=TRUE;
+	}
 
-		if (Msg->status != 'H' && Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
-			Msg->status = '$';				// Has forwarding
+	if (!(conn->BBSFlags & BBS))
+	{
+		nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
 
-		if (Msg->status == 'H')
+		if (Msg->via[0])
 		{
-			int Length=0;
-			char * MailBuffer = malloc(100);
-			char Title[100];
+			if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
+				if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
 
-			Length += sprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
-			sprintf(Title, "Message %d Held - %s", Msg->number, HoldReason);
-			SendMessageToSYSOP(Title, MailBuffer, Length);
+					if (FWDCount ==  0 &&  Msg->to[0] != 0)		// unless smtp msg
+						nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
 		}
+		else
+		{
+			if (FWDCount ==  0 && conn->LocalMsg == 0 && Msg->type != 'B')
+				// Not Local and no forward route
+				nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
+		}
+		if (conn->ToCount == 0)
+			SendPrompt(conn, conn->UserPointer);
+	}
+	else
+	{
+		if (!(conn->BBSFlags & FBBForwarding))
+		{
+			if (conn->ToCount == 0)
+				if (conn->BBSFlags & OUTWARDCONNECT)
+					nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+				else
+					nodeprintf(conn, ">\r");
+		}					
+	}
+	if(Msg->to[0] == 0)
+		SMTPMsgCreated=TRUE;
+
+	if (Msg->status != 'H' && Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+		Msg->status = '$';				// Has forwarding
+
+	if (Msg->status == 'H')
+	{
+		int Length=0;
+		char * MailBuffer = malloc(100);
+		char Title[100];
+
+		Length += sprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+		sprintf(Title, "Message %d Held - %s", Msg->number, HoldReason);
+		SendMessageToSYSOP(Title, MailBuffer, Length);
+	}
 
 	BuildNNTPList(Msg);				// Build NNTP Groups list
 
@@ -5449,12 +5746,29 @@ nextline:
 #ifdef LINBPQ
 		SendMsgUI(Msg);	
 #else
-	__try
+		__try
 	{
 		SendMsgUI(Msg);
 	}
 	My__except_Routine("SendMsgUI");
 #endif
+
+	user = LookupCall(Msg->to);
+
+	if (user && (user->flags & F_APRSMFOR))
+	{
+		char APRS[128];
+		char Call[16];
+		int SSID = user->flags >> 28;
+
+		if (SSID)
+			sprintf(Call, "%s-%d", Msg->to, SSID);
+		else
+			strcpy(Call, Msg->to);
+
+		sprintf(APRS, "New BBS Message %s From %s", Msg->title, Msg->from);
+		APISendAPRSMessage(APRS, Call);
+	}
 
 	return;
 }
@@ -5894,6 +6208,67 @@ int CountMessagestoForward (struct UserInfo * user)
 
 	return n;
 }
+
+int ListMessagestoForward(CIRCUIT * conn, struct UserInfo * user)
+{
+	// See if any messages are queued for this BBS
+
+	int m, n=0;
+	struct MsgInfo * Msg;
+	int BBSNumber = user->BBSNumber;
+	int FirstMessage = FirstMessageIndextoForward;
+
+	if ((user->flags & F_NTSMPS))
+		FirstMessage = 1;
+
+	for (m = FirstMessage; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		if ((Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+		{
+			nodeprintf(conn, "%d %s\r", Msg->number, Msg->title);
+			continue;			// So we dont count twice in Flag set and NTS MPS
+		}
+
+		// if an NTS MPS, also check for any matches
+
+		if (Msg->type == 'T' && (user->flags & F_NTSMPS))
+		{
+			struct BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
+			int depth;
+				
+			if (Msg->status == 'N' && ForwardingInfo)
+			{
+				depth = CheckBBSToForNTS(Msg, ForwardingInfo);
+
+				if (depth > -1 && Msg->Locked == 0)
+				{
+					nodeprintf(conn, "%d %s\r", Msg->number, Msg->title);
+					continue;
+				}						
+				depth = CheckBBSAtList(Msg, ForwardingInfo, Msg->via);
+
+				if (depth && Msg->Locked == 0)
+				{
+					nodeprintf(conn, "%d %s\r", Msg->number, Msg->title);
+					continue;
+				}						
+
+				depth = CheckBBSATListWildCarded(Msg, ForwardingInfo, Msg->via);
+
+				if (depth > -1 && Msg->Locked == 0)
+				{
+					nodeprintf(conn, "%d %s\r", Msg->number, Msg->title);
+					continue;
+				}
+			}
+		}
+	}
+
+	return n;
+}
+
 VOID SendWarningToSYSOP(struct MsgInfo * Msg)
 {
 	int Length=0;
@@ -6901,7 +7276,6 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->BPQStream = p;
 
-			conn->Active = TRUE;
 			strcpy(conn->Callsign, user->Call); 
 			conn->BBSFlags |= (RunningConnectScript | OUTWARDCONNECT);
 			conn->UserPointer = user;
@@ -6911,6 +7285,7 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 			ForwardingInfo->MoreLines = TRUE;
 			
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
+			conn->Active = TRUE;
 
 #ifdef LINBPQ
 			{
@@ -7386,7 +7761,19 @@ InBand:
 				goto LoopBack;
 			}
 
-			nodeprintfEx(conn, "%s\r", Cmd);
+			// Anything else is sent to Node
+
+			// Replace \ with # so can send commands starting with #
+
+			if (Cmd[0] == '\\')
+			{
+				Cmd[0] = '#';
+				nodeprintfEx(conn, "%s\r", Cmd);
+				Cmd[0] = '\\';						// Put \ back in script
+			}
+			else
+				nodeprintfEx(conn, "%s\r", Cmd);
+			
 			return TRUE;
 		}
 
@@ -7480,55 +7867,55 @@ CheckForSID:
 		return FALSE;
 	}
 
-		if (memcmp(Buffer, ";PQ: ", 5) == 0)
-		{
-			// Secure CMS challenge
+	if (memcmp(Buffer, ";PQ: ", 5) == 0)
+	{
+		// Secure CMS challenge
 
-			int Len;
-			struct UserInfo * User = conn->UserPointer;
-			char * Pass = User->CMSPass;
-			int Response ;
-			char RespString[12];
-			char ConnectingCall[10];
+		int Len;
+		struct UserInfo * User = conn->UserPointer;
+		char * Pass = User->CMSPass;
+		int Response ;
+		char RespString[12];
+		char ConnectingCall[10];
 
 #ifdef LINBPQ
-			BPQVECSTRUC * SESS = &BPQHOSTVECTOR[0];
+		BPQVECSTRUC * SESS = &BPQHOSTVECTOR[0];
 #else
-			BPQVECSTRUC * SESS = (BPQVECSTRUC *)BPQHOSTVECPTR;
+		BPQVECSTRUC * SESS = (BPQVECSTRUC *)BPQHOSTVECPTR;
 #endif
 
-			SESS += conn->BPQStream - 1;
+		SESS += conn->BPQStream - 1;
 
-			ConvFromAX25(SESS->HOSTSESSION->L4USER, ConnectingCall);
+		ConvFromAX25(SESS->HOSTSESSION->L4USER, ConnectingCall);
 
-			strlop(ConnectingCall, ' ');
+		strlop(ConnectingCall, ' ');
 
+		if (Pass[0] == 0)
+		{
+			Pass = User->pass;		// Old Way
 			if (Pass[0] == 0)
 			{
-				Pass = User->pass;		// Old Way
-				if (Pass[0] == 0)
-				{
-					strlop(ConnectingCall, '-');
-					User = LookupCall(ConnectingCall);
-					if (User)
+				strlop(ConnectingCall, '-');
+				User = LookupCall(ConnectingCall);
+				if (User)
 					Pass = User->CMSPass;
-				}
 			}
-
-			// 
-
-			Response = GetCMSHash(&Buffer[5], Pass);
-
-			sprintf(RespString, "%010d", Response);
-
-			Len = sprintf(conn->SecureMsg, ";PR: %s\r", &RespString[2]);
-
-			// Save challengs in case needed for FW lines
-
-			strcpy(conn->PQChallenge, &Buffer[5]);
-
-			return FALSE;
 		}
+
+		// 
+
+		Response = GetCMSHash(&Buffer[5], Pass);
+
+		sprintf(RespString, "%010d", Response);
+
+		Len = sprintf(conn->SecureMsg, ";PR: %s\r", &RespString[2]);
+
+		// Save challengs in case needed for FW lines
+
+		strcpy(conn->PQChallenge, &Buffer[5]);
+
+		return FALSE;
+	}
 
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
@@ -7581,7 +7968,7 @@ CheckForSID:
 
 			// Send Message. There is no mechanism for reverse forwarding
 
-			if (FindMessagestoForward(conn))
+			if (FindMessagestoForward(conn) && conn->FwdMsg)
 			{
 				struct MsgInfo * Msg;
 				
@@ -7681,17 +8068,6 @@ CheckForSID:
 			strcat(FWLine, "\r");	
 
 			nodeprintf(conn, FWLine);
-
-			// Also send a Location Comment Line
-
-			//; GM8BPQ-10 DE G8BPQ (IO92KX)<cr>
-			//; WL2K DE GM8BPQ ()<cr>			(PAT)
-
-			user = LookupCall(BBSName);
-
-			if (user)
-				nodeprintf(conn, "; WL2K DE %s (%s)\r", BBSName, user->ZIP);
-
 		}
 
 		// Only declare B1 and B2 if other end did, and we are configued for it
@@ -7705,10 +8081,22 @@ CheckForSID:
 
 		if (conn->SecureMsg[0])
 		{
+			struct UserInfo * user;
 			BBSputs(conn, conn->SecureMsg);
 			conn->SecureMsg[0] = 0;
+
+			// Also send a Location Comment Line
+
+			//; GM8BPQ-10 DE G8BPQ (IO92KX)<cr>
+			//; WL2K DE GM8BPQ ()<cr>			(PAT)
+
+			user = LookupCall(BBSName);
+
+			if (user)
+				nodeprintf(conn, "; WL2K DE %s (%s)\r", BBSName, user->ZIP);
+
 		}
-					
+
 		if (conn->BPQBBS && conn->MSGTYPES[0])
 
 			// Send a ; MSGTYPES to control what he sends us
@@ -7912,6 +8300,22 @@ VOID BBSSlowTimer()
 		
 		if (conn->Active == TRUE)
 		{
+			// Check for stuck BBS sessions (BBS session but no Node Session)
+
+			int state;
+				
+			SessionStateNoAck(conn->BPQStream, &state);
+
+			if (state == 0)		// No Node Session
+			{
+				// is it safe just to clear Active ??
+
+				conn->InputMode = 0;		// So Disconnect wont save partial transfer	
+				conn->BBSFlags = 0;
+				Disconnected (conn->BPQStream);
+				continue;
+			}
+
 			if (conn->BBSFlags & MCASTRX)
 				MCastConTimer(conn);
 
@@ -8185,6 +8589,15 @@ VOID SaveInt64Value(config_setting_t * group, char * name, long long value)
 		config_setting_set_int64(setting, value);
 }
 
+VOID SaveFloatValue(config_setting_t * group, char * name, double value)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_add(group, name, CONFIG_TYPE_FLOAT);
+	if (setting)
+		config_setting_set_float(setting, value);
+}
+
 VOID SaveStringValue(config_setting_t * group, char * name, char * value)
 {
 	config_setting_t *setting;
@@ -8253,6 +8666,7 @@ VOID SaveMultiStringValue(config_setting_t * group, char * name, char ** values)
 
 }
 
+int configSaved = 0;
 
 VOID SaveConfig(char * ConfigName)
 {
@@ -8263,6 +8677,14 @@ VOID SaveConfig(char * ConfigName)
 	char Size[80];
 	struct BBSForwardingInfo DummyForwardingInfo;
 	
+	if (configSaved == 0)
+	{
+		// only create backup once per run
+
+		CopyConfigFile(ConfigName);
+		configSaved = 1;
+	}
+
 	memset(&DummyForwardingInfo, 0, sizeof(struct BBSForwardingInfo));
 
 	//	Get rid of old config before saving
@@ -8463,10 +8885,10 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "MaintInterval", MaintInterval);
 	SaveIntValue(group, "UserLifetime", UserLifetime);
 	SaveIntValue(group, "MaintTime", MaintTime);
-	SaveIntValue(group, "PR", PR);
-	SaveIntValue(group, "PUR", PUR);
-	SaveIntValue(group, "PF", PF);
-	SaveIntValue(group, "PNF", PNF);
+	SaveFloatValue(group, "PR", PR);
+	SaveFloatValue(group, "PUR", PUR);
+	SaveFloatValue(group, "PF", PF);
+	SaveFloatValue(group, "PNF", PNF);
 	SaveIntValue(group, "BF", BF);
 	SaveIntValue(group, "BNF", BNF);
 	SaveIntValue(group, "NTSD", NTSD);
@@ -8549,6 +8971,19 @@ int GetIntValue(config_setting_t * group, char * name)
 	return 0;
 }
 
+double GetFloatValue(config_setting_t * group, char * name)
+{
+	config_setting_t *setting;
+			
+	setting = config_setting_get_member (group, name);
+
+	if (setting)
+	{
+		return config_setting_get_float (setting);
+	}
+	return 0;
+}
+
 int GetIntValueWithDefault(config_setting_t * group, char * name, int Default)
 {
 	config_setting_t *setting;
@@ -8600,6 +9035,8 @@ BOOL GetConfig(char * ConfigName)
 		config_destroy(&cfg);
 		return(EXIT_FAILURE);
 	}
+
+	config_set_auto_convert (&cfg, 1);
 
 	group = config_lookup (&cfg, "main");
 
@@ -8845,12 +9282,17 @@ BOOL GetConfig(char * ConfigName)
 			 MaxAge = 30;
 		 UserLifetime = GetIntValue(group, "UserLifetime");
 		 MaintInterval = GetIntValue(group, "MaintInterval");
+
+		 if (MaintInterval == 0)
+			 MaintInterval = 24;
+
 		 MaintTime = GetIntValue(group, "MaintTime");
 	
-		 PR = GetIntValue(group, "PR");
-		 PUR = GetIntValue(group, "PUR");
-		 PF = GetIntValue(group, "PF");
-		 PNF = GetIntValue(group, "PNF");
+		 PR = GetFloatValue(group, "PR");
+		 PUR = GetFloatValue(group, "PUR");
+		 PF = GetFloatValue(group, "PF");
+		 PNF = GetFloatValue(group, "PNF");
+
 		 BF = GetIntValue(group, "BF");
 		 BNF = GetIntValue(group, "BNF");
 		 NTSD = GetIntValue(group, "NTSD");
@@ -8877,9 +9319,21 @@ BOOL GetConfig(char * ConfigName)
 
 #ifdef LINBPQ
 extern BPQVECSTRUC ** BPQHOSTVECPTR;
+extern char WL2KModes [54][18];
 #else
 __declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
+
+char WL2KModes [54][18] = {
+	"Packet 1200", "Packet 2400", "Packet 4800", "Packet 9600", "Packet 19200", "Packet 38400", "High Speed Packet", "", "", "", "",
+	"", "Pactor 1", "", "", "Pactor 2", "", "Pactor 3", "", "", "Pactor 4", // 10 - 20
+	"Winmor 500", "Winmor 1600", "", "", "", "", "", "", "",				// 21 - 29
+	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
+	"ARDOP 200", "ARDOP 500", "ARDOP 1000", "ARDOP 2000", "ARDOP 2000 FM", "", "", "", "", "",	// 40 - 49
+	"VARA", "VARA FM", "VARA FM WIDE", "VARA 500"};
 #endif
+
+
+
 
 int Connected(int Stream)
 {
@@ -8891,6 +9345,10 @@ int Connected(int Stream)
 	char ConnectedMsg[] = "*** CONNECTED    ";
 	char Msg[100];
 	char Title[100];
+	int Freq = 0;
+	int Mode = 0;
+	BPQVECSTRUC * SESS;
+	TRANSPORTENTRY * Sess1 = NULL, * Sess2;	
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -8920,11 +9378,59 @@ int Connected(int Stream)
 					return 0;
 				}
 			}
+
+			// Incoming Connect
+
+			// Try to find port, freq, mode, etc
+
+#ifdef LINBPQ
+			SESS = &BPQHOSTVECTOR[0];
+#else
+			SESS = (BPQVECSTRUC *)BPQHOSTVECPTR;
+#endif
+			SESS +=(Stream - 1);
+
+			if (SESS)
+				Sess1 = SESS->HOSTSESSION;
+
+			if (Sess1)
+			{
+				Sess2 = Sess1->L4CROSSLINK;
+
+				if (Sess2)
+				{
+					// See if L2 session - if so, get info from WL2K report line
+
+					// if Session has report info, use it
+
+					if (Sess2->Mode)
+					{
+						Freq = Sess2->Frequency;
+						Mode = Sess2->Mode;
+					}
+					else if (Sess2->L4CIRCUITTYPE & L2LINK)	
+					{
+						LINKTABLE * LINK = Sess2->L4TARGET.LINK;
+						PORTCONTROLX * PORT = LINK->LINKPORT;
+
+						Freq = PORT->WL2KInfo.Freq;
+						Mode = PORT->WL2KInfo.mode;
+					}
+					else
+					{
+						if (Sess2->RMSCall[0])
+						{
+							Freq = Sess2->Frequency;
+							Mode = Sess2->Mode;
+						}
+					}
+				}
+			}
 	
 			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->Active = TRUE;
 			conn->BPQStream = Stream;
-			ChangeSessionIdletime(Stream, USERIDLETIME);			// Default Idletime for BBS Sessions
+			ChangeSessionIdletime(Stream, USERIDLETIME);	// Default Idletime for BBS Sessions
 
 			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 			conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
@@ -8958,51 +9464,6 @@ int Connected(int Stream)
 
 				if (SendNewUserMessage)
 				{
-					// Try to find port, freq, mode, etc
-
-					int Freq = 0;
-					int Mode = 0;
-
-#ifdef LINBPQ
-					BPQVECSTRUC * SESS = &BPQHOSTVECTOR[0];
-#else
-					BPQVECSTRUC * SESS = (BPQVECSTRUC *)BPQHOSTVECPTR;
-#endif
-					TRANSPORTENTRY * Sess1 = NULL, * Sess2;	
-					
-					SESS +=(Stream - 1);
-				
-					if (SESS)
-						Sess1 = SESS->HOSTSESSION;
-
-					if (Sess1)
-					{
-						Sess2 = Sess1->L4CROSSLINK;
-
-						if (Sess2)
-						{
-							// See if L2 session - if so, get info from WL2K report line
-	
-							if (Sess2->L4CIRCUITTYPE & L2LINK)	
-							{
-								LINKTABLE * LINK = Sess2->L4TARGET.LINK;
-								PORTCONTROLX * PORT = LINK->LINKPORT;
-								
-								Freq = PORT->WL2KInfo.Freq;
-								Mode = PORT->WL2KInfo.mode;
-							}
-							else
-							{
-								if (Sess2->RMSCall[0])
-								{
-									Freq = Sess2->Frequency;
-									Mode = Sess2->Mode;
-								}
-							}
-						}
-	
-					}
-
 					Length += sprintf(MailBuffer, "New User %s Connected to Mailbox on Port %d Freq %d Mode %d\r\n", callsign, port, Freq, Mode);
 
 					sprintf(Title, "New User %s", callsign);
@@ -9017,6 +9478,10 @@ int Connected(int Stream)
 
 				if (DefaultNoWINLINK)
 					user->flags |= F_NOWINLINK;
+
+				// Always set WLE User - can't see it doing any harm
+
+				user->flags |= F_Temp_B2_BBS;
 
 				conn->NewUser = TRUE;
 			}
@@ -9058,7 +9523,11 @@ int Connected(int Stream)
 				return 0;
 			}
 
-			n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s", user->Call);
+			if (port)
+				n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s on Port %d Freq %d Mode %s",
+					user->Call,  port, Freq, WL2KModes[Mode]);
+			else
+				n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s", user->Call);
 			
 			// Send SID and Prompt
 
@@ -10001,7 +10470,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 
 		// See if any more to forward
 
-		if (FindMessagestoForward(conn))
+		if (FindMessagestoForward(conn) && conn->FwdMsg)
 		{
 			struct MsgInfo * Msg;
 				
@@ -10152,7 +10621,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (user->Temp->ListSuspended)
 	{
-		// Paging limit hit when listing. User may about, continue, or read one or more messages
+		// Paging limit hit when listing. User may abort, continue, or read one or more messages
 
 		ProcessSuspendedListCommand(conn, user, Buffer, len);
 		return;
@@ -10384,7 +10853,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
-	if (_memicmp(Cmd, "D", 1) == 0)
+	if (strlen(Cmd) < 12 && _memicmp(Cmd, "D", 1) == 0)
 	{
 		DoDeliveredCommand(conn, user, Cmd, Arg1, Context);
 		SendPrompt(conn, user);
@@ -10670,12 +11139,14 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "IH PARAM - Lookup HA elements in WP - eg USA EU etc\r");
 
 			BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
-			BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
-			BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
-			BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
-			BBSputs(conn, "                      LN LY LH LK LF L$ LD - List Message with corresponding Status\r");
-			BBSputs(conn, "                      LB LP LT - List Mesaage with corresponding Type\r");
-			BBSputs(conn, "                      LC List TO fields of all active bulletins\r");
+			BBSputs(conn, "L - List Message(s) - \r");
+			BBSputs(conn, "   L = List New, LR = List New (Oldest first)\r");
+			BBSputs(conn, "   LM = List Mine, L> Call, L< Call, L@ = List to, from or at\r");
+			BBSputs(conn, "   LL num = List msg num, L num-num = List Range\r");
+			BBSputs(conn, "   LN LY LH LK LF L$ LD = List Message with corresponding Status\r");
+			BBSputs(conn, "   LB LP LT = List Mesaage with corresponding Type\r");
+			BBSputs(conn, "   LC = List TO fields of all active bulletins\r");
+			BBSputs(conn, "   You can combine most selections eg LMP, LMN LB< G8BPQ\r"); 
 			BBSputs(conn, "LISTFILES or FILES - List files available for download\r");
 
 			BBSputs(conn, "N Name - Set Name\r");
@@ -10684,18 +11155,22 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "PASS Password - Set BBS Password\r");
 			BBSputs(conn, "POLLRMS - Manage Polling for messages from RMS \r");
 			BBSputs(conn, "Q QTH - Set QTH\r");
-			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
+			BBSputs(conn, "R - Read Message(s) - R num \r");
+			BBSputs(conn, "                      RM (Read new messages to me), RMR (RM oldest first)\r");
 			BBSputs(conn, "READ Name - Read File\r");
 
 			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, ST Send NTS,\r");
 			BBSputs(conn, "                   SR Num - Send Reply, SC Num - Send Copy\r");
 			BBSputs(conn, "X - Toggle Expert Mode\r");
+			BBSputs(conn, "YAPP - Download file from BBS using YAPP protocol\r");
 			if (conn->sysop)
 			{
+				BBSputs(conn, "DOHOUSEKEEPING - Run Housekeeping process\r");
 				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
 				BBSputs(conn, "EXPORT - Export messages to file - Type EXPORT for Help\r");
 				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
 				BBSputs(conn, "IMPORT - Import messages from file - Type IMPORT for Help\r");
+				BBSputs(conn, "REROUTEMSGS - Rerun message routing process\r");
 				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling list\r");
 				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
 			}
@@ -10745,6 +11220,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		DoPollRMSCmd(conn, user, Arg1, Context);
 		return;
 	}
+
+	if (_stricmp(Cmd, "DOHOUSEKEEPING") == 0)
+	{
+		DoHousekeepingCmd(conn, user, Arg1, Context);
+		return;
+	}
+
 
 	if (_stricmp(Cmd, "FWD") == 0)
 	{
@@ -10893,6 +11375,29 @@ int DeleteRedundantMessages()
 	return 0;
 }
 #endif
+
+VOID TidyWelcomeMsg(char ** pPrompt)
+{
+	// Make sure Welcome Message doesn't ends with >
+
+	char * Prompt = *pPrompt;
+
+	int i = (int)strlen(Prompt) - 1;
+
+	*pPrompt = realloc(Prompt, i + 5);	// In case we need to expand it
+
+	Prompt = *pPrompt;
+
+	while (Prompt[i] == 10 || Prompt[i] == 13)
+	{
+		Prompt[i--] = 0;
+	}
+
+	while (i >= 0 && Prompt[i] == '>')
+		Prompt[i--] = 0;
+
+	strcat(Prompt, "\r\n");
+}
 
 VOID TidyPrompt(char ** pPrompt)
 {

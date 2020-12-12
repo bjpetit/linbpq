@@ -22,6 +22,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 struct MsgInfo * GetMsgFromNumber(int msgno);
 BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle);
+struct UserInfo * FindBBS(char * Name);
+int ListMessagestoForward(CIRCUIT * conn, struct UserInfo * user);
 
 static char seps[] = " \t\r";
 
@@ -82,7 +84,7 @@ VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * C
 	{
 		nodeprintf(conn, "EDITUSER CALLSIGN to Display\r");
 		nodeprintf(conn, "EDITUSER CALLSIGN FLAG1 FLAG2 ...  to set, -FLAG1 -FLAG2 ...  to clear\r");
-		nodeprintf(conn, "EDITUSER: Flags are: EXC(luded) EXP(ert) SYSOP BBS PMS EMAIL HOLD RMS(Express User)\r");
+		nodeprintf(conn, "EDITUSER: Flags are: EXC(luded) EXP(ert) SYSOP BBS PMS EMAIL HOLD RMS(Express User) APRS(Mail For)\r");
 
 		SendPrompt(conn, user);
 		return;
@@ -124,6 +126,8 @@ VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * C
 			if (Arg1[0] != '-') EUser->flags |= F_HOLDMAIL; else EUser->flags &= ~F_HOLDMAIL;
 		if (strstr(Arg1, "RMS"))
 			if (Arg1[0] != '-') EUser->flags |= F_Temp_B2_BBS; else EUser->flags &= ~F_Temp_B2_BBS;
+		if (strstr(Arg1, "APRS"))
+			if (Arg1[0] != '-') EUser->flags |= F_APRSMFOR; else EUser->flags &= ~F_APRSMFOR;
 
 		Arg1 = strtok_s(NULL, seps, &Context);
 	}
@@ -157,6 +161,8 @@ UDisplay:
 	if (EUser->flags & F_Temp_B2_BBS)
 		strcat(Line, " RMS");
 
+	if (EUser->flags & F_APRSMFOR)
+		strcat(Line, " APRS");
 	
 	strcat(Line, "\r");	
 	nodeprintf(conn, Line);
@@ -529,6 +535,22 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 		struct UserInfo * xuser;
 		int Msgs;
 
+		if (Context && Context[0])
+		{
+			// a bbs name - list all messages queued to it
+
+			strlop(Context, '\r');
+
+			xuser = FindBBS(_strupr(Context));
+
+			if (xuser)
+			{
+				ListMessagestoForward(conn, xuser);
+				SendPrompt(conn, user);
+				return;
+			}
+		}
+
 		for (xuser = BBSChain; xuser; xuser = xuser->BBSNext)
 		{
 			Msgs = CountMessagestoForward(xuser);
@@ -655,3 +677,20 @@ FDisplay:
 
 	return;
 }
+
+void DoHousekeepingCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
+{
+	if (conn->sysop == 0)
+	{
+		nodeprintf(conn, "DOHOUSEKEEPING command needs SYSOP status\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	DoHouseKeeping(FALSE);
+			
+	nodeprintf(conn, "Ok\r", Arg1);
+	SendPrompt(conn, user);
+}
+
+

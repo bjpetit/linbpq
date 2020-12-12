@@ -548,6 +548,8 @@ int BPQSerialSendData(struct TNCDATA * TNC, UCHAR * Message,int MsgLen)
 #endif
 }
 
+int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
+
 int GetDataFromTNC(struct TNCDATA * TNC, UCHAR * Message, unsigned int BufLen, ULONG * MsgLen)
 {
 	// Used for all port types
@@ -559,13 +561,35 @@ int GetDataFromTNC(struct TNCDATA * TNC, UCHAR * Message, unsigned int BufLen, U
 	if (TNC->VCOM)
 		return BPQSerialGetData(TNC, Message, BufLen, MsgLen);
 
-#endif
-
-	// Linux VCOM uses SOCAT Pairs and normal Read
-
 	*MsgLen = ReadCOMBlock(TNC->hDevice, Message, BufLen);
 	return 0;
 
+#else
+
+	int Error = 0;
+
+	if (TNC->VCOM == 0)
+	{
+		*MsgLen = ReadCOMBlock(TNC->hDevice, Message, BufLen);
+		return 0;
+	}
+
+	// Linux VCOM uses SOCAT Pairs and normal Read
+
+	// If the slave closes connection read returns 5. Need to trap and
+	// close/reopen. So use ReadCOMBlockEx
+
+	*MsgLen = ReadCOMBlockEx(TNC->hDevice, Message, BufLen, &Error);
+
+	if (Error == 5)
+	{
+		printf("Read error on TNCPORT %s - Restarting\n", TNC->PORTNAME);
+		close(TNC->hDevice);
+		TNC->hDevice = LinuxOpenPTY(TNC->PORTNAME);
+	}
+	return 0;
+
+#endif
 }
 
 
@@ -5478,11 +5502,12 @@ VOID SendKISSData(struct TNCDATA * conn, UCHAR * txbuffer, int Len)
 
 static int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
-	int i,txptr=0;
+	int i, txptr = 0;
 	UCHAR c;
 
-	outbuff[0]=FEND;
-	txptr=1;
+	outbuff[0] = FEND;
+	outbuff[1] = 0;
+	txptr = 2;
 
 	for (i=0;i<len;i++)
 	{

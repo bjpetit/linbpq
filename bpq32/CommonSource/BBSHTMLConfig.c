@@ -116,6 +116,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Session);
 struct UserInfo * FindBBS(char * Name);
 void ReleaseWebMailStruct(WebMailInfo * WebMail);
+VOID TidyWelcomeMsg(char ** pPrompt);
 
 char UNC[] = "";
 char CHKD[] = "checked=checked ";
@@ -340,11 +341,11 @@ static char WPDetail[] = "<form style=\"font-family: monospace;\" method=post ac
 "<tr><td>Call</td><td><input readonly=readonly size=10 value=\"%s\"></td></tr>"
 "<tr><td>Name</td><td><input size=30 name=Name value=\"%s\"></td></tr>"
 "<tr><td>Home BBS 1</td><td><input size=40 name=Home1 value=%s></td></tr>"
-"<tr><td>Home BBS 2</td><td><input size=40 name=Home2 value %s></td></tr>"
+"<tr><td>Home BBS 2</td><td><input size=40 name=Home2 value=%s></td></tr>"
 "<tr><td>QTH 1</td><td><input size=40 name=QTH1 value=\"%s\"></td></tr>"
 "<tr><td>QTH 2</td><td><input size=40 name=QTH2 value=\"%s\"></td></tr>"
-"<tr><td>ZIP 1<br></td><td><input size=10 name=ZIP1 value=%s></td></tr>"
-"<tr><td>ZIP 2<br></td><td><input size=10 name=ZIP2 value=%s></td></tr>"
+"<tr><td>ZIP 1<br></td><td><input size=10 name=ZIP1 value=\"%s\"></td></tr>"
+"<tr><td>ZIP 2<br></td><td><input size=10 name=ZIP2 value=\"%s\"></td></tr>"
 "<tr><td>Last Seen<br></td><td><input size=15 name=Seen value=\"%s\"></td></tr>"
 "<tr><td>Last Modified<br></td><td><input size=15 name=Modif value=\"%s\"></td></tr>"
 "<tr><td>Type<br></td><td><input size=4 name=Type value=%c></td></tr>"
@@ -720,7 +721,8 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
  		return;
 	}
 
-	if (_stricmp(NodeURL, "/Mail/Status") == 0)
+	if (_stricmp(NodeURL, "/Mail/Status") == 0 ||
+		_stricmp(NodeURL, "/Mail/DisSession") == 0)		// Sent as POST by refresh timer for some reason
 	{
 		SendStatusPage(Reply, RLen, Key);
 		return;
@@ -1157,7 +1159,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 		strcpy(D2, FormatDateAndTime((time_t)Msg->datereceived, FALSE));
 		strcpy(D3, FormatDateAndTime((time_t)Msg->datechanged, FALSE));
 
-		if (Msg->emailfrom[0])
+//		if (Msg->emailfrom[0])
 			sprintf(EmailFromLine, "Email From <input style=\"width:320px;\" name=EFROM value=%s><br>", Msg->emailfrom);
 
 		len = sprintf(Reply, MailDetailPage, Msg->number, Key,
@@ -1428,6 +1430,8 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 
 		GetParam(input, "MTTime=", Temp);
 		MaintTime = atoi(Temp);
+		GetParam(input, "MTInt=", Temp);
+		MaintInterval = atoi(Temp);
 		GetParam(input, "MAXMSG=", Temp);
 		MaxMsgno = atoi(Temp);
 		GetParam(input, "BIDLife=", Temp);
@@ -1446,13 +1450,13 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 		GetCheckBox(input, "OvUnsent=", &OverrideUnsent);
 
 		GetParam(input, "PR=", Temp);
-		PR = atoi(Temp);
+		PR = atof(Temp);
 		GetParam(input, "PUR=", Temp);
-		PUR = atoi(Temp);
+		PUR = atof(Temp);
 		GetParam(input, "PF=", Temp);
-		PF = atoi(Temp);
+		PF = atof(Temp);
 		GetParam(input, "PUF=", Temp);
-		PNF = atoi(Temp);
+		PNF = atof(Temp);
 		GetParam(input, "BF=", Temp);
 		BF = atoi(Temp);
 		GetParam(input, "BUF=", Temp);
@@ -1507,6 +1511,11 @@ VOID SaveWelcome(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Repl
 		GetMallocedParam(input, "NUWelcome=", &WelcomeMsg);
 		GetMallocedParam(input, "NewWelcome=", &NewWelcomeMsg);
 		GetMallocedParam(input, "ExWelcome=", &ExpertWelcomeMsg);
+
+		TidyWelcomeMsg(&WelcomeMsg);
+		TidyWelcomeMsg(&NewWelcomeMsg);
+		TidyWelcomeMsg(&ExpertWelcomeMsg);
+
 		GetMallocedParam(input, "NUPrompt=", &Prompt);
 		GetMallocedParam(input, "NewPrompt=", &NewPrompt);
 		GetMallocedParam(input, "ExPrompt=", &ExpertPrompt);
@@ -2073,6 +2082,15 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		if (strcmp(ptr1, "true") == 0) USER->flags &= ~F_NOBULLS; else USER->flags |= F_NOBULLS;	// Inverted flag
 		ptr1 = GetNextParam(&ptr2);		// NTS Message Pickup Station
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_NTSMPS; else USER->flags &= ~F_NTSMPS;
+		ptr1 = GetNextParam(&ptr2);		// APRS Mail For
+		if (strcmp(ptr1, "true") == 0) USER->flags |= F_APRSMFOR; else USER->flags &= ~F_APRSMFOR;
+	
+		ptr1 = GetNextParam(&ptr2);		// APRS SSID
+		SSID = atoi(ptr1);
+		SSID &= 15;
+		USER->flags &= 0x0fffffff;
+		USER->flags |= (SSID << 28);
+
 
 		ptr1 = GetNextParam(&ptr2);		// Last Listed
 		USER->lastmsg = atoi(ptr1);
@@ -2230,6 +2248,7 @@ VOID ProcessMsgUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 		}
 		ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0;strcpy(Msg->to, ptr1);ptr1 = ptr2;}
 		ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0;strcpy(Msg->bid, ptr1);ptr1 = ptr2;}
+		ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0;strcpy(Msg->emailfrom, ptr1);ptr1 = ptr2;}
 		ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0;strcpy(Msg->via, ptr1);ptr1 = ptr2;}
 		ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0;strcpy(Msg->title, ptr1);ptr1 = ptr2;}
 		ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0;Msg->type = *ptr1;ptr1 = ptr2;}
@@ -2244,7 +2263,7 @@ VOID ProcessMsgUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 		}
 
 		Msg->datechanged = time(NULL);
-
+		SaveMessageDatabase();
 	}
 
 	*RLen = SendMessageDetails(Msg, Reply, Session->Key);
@@ -2470,7 +2489,7 @@ VOID SendHouseKeeping(char * Reply, int * ReplyLen, char * Key)
 
 		*ReplyLen = sprintf(Reply, HousekeepingTemplate, 
 			 BBSName, Key, Key, Key, Key, Key, Key, Key, Key, Key,
-			MaintTime, MaxMsgno, BidLifetime, LogAge, UserLifetime,
+			MaintTime, MaintInterval, MaxMsgno, BidLifetime, LogAge, UserLifetime,
 			(DeletetoRecycleBin) ? CHKD  : UNC,
 			(SendNonDeliveryMsgs) ? CHKD  : UNC,
 			(SuppressMaintEmail) ? CHKD  : UNC,
@@ -2683,9 +2702,10 @@ VOID SendUserSelectPage(char * Reply, int * ReplyLen, char * Key)
 int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Key)
 {
 	char SSID[16][16] = {""};
+	char ASSID[16];
 	int i, n, s, Len;
 	struct UserInfo * User = Session->User;
-	int flags = User->flags;
+	unsigned int flags = User->flags;
 	int RMSSSIDBits = Session->User->RMSSSIDBits;
 	char HiddenPass[20] = "";
 
@@ -2735,6 +2755,12 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 
 	memset(HiddenPass, '*', strlen(User->CMSPass));
 
+	i = (flags >> 28);
+	sprintf(ASSID, "%d", i);
+
+	if (i == 0)
+		ASSID[0] = 0;
+
 	if (!UserDetailTemplate)
 		UserDetailTemplate = GetTemplateFromFile(4, "UserDetail.txt");
 
@@ -2753,6 +2779,7 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 		(flags & F_NOWINLINK)?CHKD:UNC,
 		(flags & F_NOBULLS)?UNC:CHKD,		// Inverted flag
 		(flags & F_NTSMPS)?CHKD:UNC,
+		(flags & F_APRSMFOR)?CHKD:UNC, ASSID,
 
 		ConnectsIn, MsgsReceived, MsgsRejectedIn,
 		ConnectsOut, MsgsSent, MsgsRejectedOut,

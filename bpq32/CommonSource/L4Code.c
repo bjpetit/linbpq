@@ -56,7 +56,7 @@ VOID L4TIMEOUT(TRANSPORTENTRY * L4);
 struct DEST_LIST * CHECKL3TABLES(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * Msg);
 int CHECKIFBUSYL4(TRANSPORTENTRY * L4);
 VOID AUTOTIMER();
-VOID NRRecordRoute(char * Buff, int Len);
+VOID NRRecordRoute(UCHAR * Buff, int Len);
 VOID REFRESHROUTE(TRANSPORTENTRY * Session);
 VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR);
 VOID SENDL4IACK(TRANSPORTENTRY * Session);
@@ -73,13 +73,15 @@ extern BOOL LogL4Connects;
 
 #define DISCPENDING	8		// SEND DISC WHEN ALL DATA ACK'ED
 
+extern APPLCALLS * APPL;
+
 VOID NETROMMSG(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG)
 {
 	//	MAKE SURE PID IS 0CF - IN CASE SOMEONE IS SENDING L2 STUFF ON WHAT 
 	//	WE THINK IS A _NODE-_NODE LINK
 
 	struct DEST_LIST * DEST;
-	APPLCALLS * APPL;
+
 	int n;
 
 	if (L3MSG->L3PID != 0xCF)
@@ -181,7 +183,7 @@ VOID NETROMMSG(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG)
 		{
 			ptr += (Len - 1);
 
-			Count = *(ptr++) = 0x7F;			// Mask End of Route
+			Count = (*(ptr++)) & 0x7F;		// Mask End of Route
 
 			memcpy(ptr, MYCALL, 7);
 
@@ -555,7 +557,7 @@ VOID L4BG()
 
 				LINK = L4->L4TARGET.LINK;
 
-				if (COUNT_AT_L2(LINK) > 5)
+				if (COUNT_AT_L2(LINK) > 8)
 					break;
 			}
 
@@ -1349,11 +1351,9 @@ VOID CONNECTREQUEST(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, UINT Appl
 		if (Msg)
 		{
 			Msg->PID = 0xf0;
-				
-			memcpy(Msg->L2DATA, ALIASPTR, ALIASLEN);
-			Msg->L2DATA[ALIASLEN] = 13;
-			
-			Msg->LENGTH = MSGHDDRLEN + ALIASLEN + 2;		// 2 for PID and CR
+			memcpy(Msg->L2DATA, APPL->APPLCMD, 12);
+			Msg->L2DATA[12] = 13;
+			Msg->LENGTH = MSGHDDRLEN + 12 + 2;		// 2 for PID and CR
 
 			C_Q_ADD(&L4->L4RX_Q, Msg);
 			return;
@@ -1695,7 +1695,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask,
 
 		if (L3MSG->L4ID == 1 && L3MSG->L4INDEX == 0)
 		{
-			NRRecordRoute((char *)L3MSG, L3MSG->LENGTH);
+			NRRecordRoute((UCHAR *)L3MSG, L3MSG->LENGTH);
 			return;
 		}
 
@@ -1876,7 +1876,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask,
 			SENDL4IACK(L4);			// SEND DATA ACK COMMAND TO ACK OUTSTANDING FRAMES
 	
 			//	SEE IF WE ALREADY HAVE A COPY OF THIS ONE
-
+/*
 			Saved = L4->L4RESEQ_Q;
 
 			Call[ConvFromAX25(L3MSG->L3SRCE, Call)] = 0;
@@ -1898,6 +1898,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask,
 
 			C_Q_ADD(&L4->L4RESEQ_Q, L3MSG);		// ADD TO CHAIN
 			return;
+*/
 		}
 
 		// Frame is OK

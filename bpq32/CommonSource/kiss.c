@@ -997,7 +997,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, PMESSAGE Buffer)
 		UCHAR TXCCC = 0;
 
 		ptr1 = &Message->DEST[0];
-		Len = Message->LENGTH - 7;
+		Len = Message->LENGTH - MSGHDDRLEN;
 		ENCBUFF[0] = STX;
 		ptr2 = &ENCBUFF[1];
 

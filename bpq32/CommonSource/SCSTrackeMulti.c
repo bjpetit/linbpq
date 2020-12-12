@@ -486,7 +486,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 			WriteDebugLogLine(TNC->Port, 'R', ptr, Length);
 
 		ptr[Length] = 0;
-		Debugprintf("TRK %s", ptr);
+		Debugprintf("TRKM %s", ptr);
 		TNC->RXLen = 0;
 		return;
 	}
@@ -589,7 +589,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 				// Invalid
 
-				Debugprintf("TRK - Invalid MsgType %d %x %x %x", character, *(ptr), *(ptr+1), *(ptr+2));
+				Debugprintf("TRKM - Invalid MsgType %d %x %x %x", character, *(ptr), *(ptr+1), *(ptr+2));
 				break;
 
 			case 2:		//  Get Length
@@ -750,7 +750,7 @@ static VOID DEDPoll(int Port)
 		if (*(start) == 0)			// End of Script
 		{
 			TNC->InitPtr = NULL;
-			Debugprintf("TRK - Init Complete Port %d", TNC->Port);
+			Debugprintf("TRKM - Init Complete Port %d", TNC->Port);
 		}
 		else
 		{
@@ -924,7 +924,7 @@ static VOID DEDPoll(int Port)
 			
 		buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 		
-		datalen = buffptr->LENGTH - 7;
+		datalen = buffptr->LENGTH - MSGHDDRLEN;
 		Buffer = &buffptr->DEST[0];		// Raw Frame
 		Buffer[datalen] = 0;
 
@@ -1097,7 +1097,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 	{
 		// No Response to trying to enter term mode - do error recovery
 
-		Debugprintf("TRK - Starting Resync Port %d", TNC->Port);
+		Debugprintf("TRKM - Starting Resync Port %d", TNC->Port);
 
 		TNC->ReinitState = 10;
 		TNC->ReinitCount = 256;
@@ -1129,7 +1129,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 
 		// Try Again
 		
-		Debugprintf("TRK Continuing recovery Port %d", TNC->Port);
+		Debugprintf("TRKM Continuing recovery Port %d", TNC->Port);
 		
 		TNC->ReinitState = 0;
 
@@ -1247,6 +1247,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		TNC->ReinitState = 0;
 		TNC->RXLen = 0;
 		TNC->HOSTSTATE = 0;
+
+		Debugprintf("TRKM - Resync Complete");
 		return;
 	}
 

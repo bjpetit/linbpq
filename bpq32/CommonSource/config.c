@@ -241,6 +241,7 @@ int simple(int i);
 
 int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
 int doSerialPortName(int i, char * value, char * rec);
+int doPermittedAppls(int i, char * value, char * rec);
 
 BOOL ProcessAPPLDef(char * rec);
 BOOL ToLOC(double Lat, double Lon , char * Locator);
@@ -345,7 +346,7 @@ static char *pkeywords[] =
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
 "BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY",
 "UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE",
-"IGNOREUNLOCKEDROUTES", "INP3ONLY", "TCPPORT", "RIGPORT"};           /* parameter keywords */
+"IGNOREUNLOCKEDROUTES", "INP3ONLY", "TCPPORT", "RIGPORT", "PERMITTEDAPPLS"};           /* parameter keywords */
 
 static void * poffset[] =
 {
@@ -358,7 +359,7 @@ static void * poffset[] =
 &xxp.TXPORT, &xxp.MHEARD, &xxp.CWIDTYPE, &xxp.MINQUAL, &xxp.MAXDIGIS, &xxp.PORTALIAS2, &xxp.DLLNAME,
 &xxp.BCALL, &xxp.DIGIMASK, &xxp.DefaultNoKeepAlives, &xxp.IOADDR, &xxp.DLLNAME, &xxp.WL2K, &xxp.UIONLY,
 &xxp.IOADDR, &xxp.IPADDR, &xxp.INTLEVEL, &xxp.IOADDR, &xxp.IOADDR, &xxp.ListenPort, &xxp.NoNormalize,
-&xxp.IGNOREUNLOCKED, &xxp.INP3ONLY, &xxp.TCPPORT, &xxp.RIGPORT };	/* offset for corresponding data in config file */
+&xxp.IGNOREUNLOCKED, &xxp.INP3ONLY, &xxp.TCPPORT, &xxp.RIGPORT, &xxp.PERMITTEDAPPLS};	/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -371,7 +372,7 @@ static int proutine[] =
 1, 7, 7, 13, 13, 0, 14,
 0, 1, 2, 18, 15, 16, 2,
 1, 17, 1, 1, 1, 1, 2,
-2, 2, 1, 1};							/* routine to process parameter */
+2, 2, 1, 1, 19};							/* routine to process parameter */
 
 int PPARAMLIM = sizeof(proutine)/sizeof(int);
 
@@ -509,6 +510,7 @@ BOOL ProcessConfig()
 
 	paramok[6]=1;          /* dont need BUFFERS */
 	paramok[8]=1;          /* dont need TRANSDELAY */
+	paramok[13]=1;			// NodeAlias 
 	paramok[17]=1;          /* dont need TNCPORTS */
 	paramok[20]=1;         // Or ROUTES
 
@@ -943,12 +945,12 @@ NextAPRS:
 
 	if (_memicmp(rec, "AGWLOOPMON", 10) == 0)
 	{
-		LoopMonFlag = strtol(&rec[10], 0, 0);
+		LoopMonFlag = strtol(&rec[11], 0, 0);
 		return 0;
 	}
 	if (_memicmp(rec, "AGWLOOPTX", 9) == 0)
 	{
-		Loopflag = strtol(&rec[9], 0, 0);
+		Loopflag = strtol(&rec[10], 0, 0);
 		return 0;
 	}
 
@@ -1586,6 +1588,14 @@ char s[], c;
 /*   GET NEXT LINE THAT ISN'T BLANK OR IS A COMMENT LINE		*/
 /************************************************************************/
 
+// Returns an empty string to indicate end of config
+
+// Modified Aril 2020 to allow #include of file fragments
+
+FILE * savefp = NULL;
+int saveLineNo;
+char includefilename[250];
+
 int GetNextLine(char *rec)
 {
 	int i, j;
@@ -1599,8 +1609,19 @@ int GetNextLine(char *rec)
 
 		if (ret == NULL)
 		{
+			if (savefp)
+			{
+				// we have reached eof on an include file - switch back
+
+				fclose(fp1);
+				fp1 = savefp;
+				savefp = NULL;
+				LineNo = saveLineNo;
+				continue;
+			}
+
 			rec[0] = 0;
-			return 0;
+			return 0;			// return end of config
 		}
 
 		for (i=0; rec[i] != '\0'; i++)
@@ -1662,10 +1683,42 @@ int GetNextLine(char *rec)
 				ptr[strlen(ptr)] = ' ';
 			}
 			rec = ptr;
+
+			// look for #include
+
+			if (_memicmp(rec, "#include ", 9) == 0)
+			{
+				savefp = fp1;
+				
+				if (BPQDirectory[0] == 0)
+				{
+					strcpy(includefilename, &rec[9]);
+				}
+				else
+				{
+					strcpy(includefilename,BPQDirectory);
+					strcat(includefilename,"/");
+					strcat(includefilename, &rec[9]);
+				}
+
+				if ((fp1 = fopen(includefilename,"r")) == NULL)
+				{
+					Consoleprintf("Could not open #include file %s Error code %d", includefilename, errno);
+					fp1 = savefp;
+					savefp = NULL;
+				}
+				else
+				{
+					saveLineNo = LineNo;
+					LineNo = 0;
+				}
+				continue;			// get next line
+			}
 			return 0;
 		}
-
 	} 
+
+	// Should never reach this
 
 	return 0;
 }
@@ -1991,14 +2044,15 @@ int decode_port_rec(char * rec)
             cn = doSerialPortName(i,value,rec);              // COMPORT
 			break;
 
+		case 19:
+            cn = doPermittedAppls(i,value,rec);              // COMPORT
+			break;
+
 
 		case 9:
 			
 			cn = 1;
 			endport=1;
-
-			// copy port config to main config
-
 
 		break;
 	   }
@@ -2094,6 +2148,14 @@ int doDriver(int i, char * value, char * rec)
 	memcpy(xxp.DLLNAME, workstring, 16);
 	xxp.TYPE = 16;				// External
 
+	// Set some defaults in case HFKISS
+
+	xxp.CHANNEL = 'A';
+	xxp.FRACK = 7000;
+	xxp.RESPTIME = 1000;
+	xxp.MAXFRAME = 4;
+	xxp.RETRIES = 6;
+	
 	if (strstr(xxp.DLLNAME, "TELNET") || strstr(xxp.DLLNAME, "AXIP"))
 		RFOnly = FALSE;
 
@@ -2133,6 +2195,25 @@ int doSerialPortName(int i, char * value, char * rec)
 	return 1;
 }
 
+int doPermittedAppls(int i, char * value, char * rec)
+{
+	unsigned int Mask = 0;
+	char * Context;		
+	char * ptr1 = strtok_s(value, " ,=\t\n\r", &Context);
+
+	// Param is a comma separated list of Appl Numbers allowes to connect on this port
+
+	while (ptr1 && ptr1[0])
+	{
+		Mask |= 1 << (atoi(ptr1) - 1);
+		ptr1 = strtok_s(NULL, " ,=\t\n\r", &Context);
+	}
+
+	xxp.HavePermittedAppls = 1;		// indicate used
+	xxp.PERMITTEDAPPLS = Mask;
+
+	return 1;
+}
 
 
 int hwtypes(i, value, rec)
@@ -2182,7 +2263,19 @@ char rec[];
 		hw = 14;
 	}
 	if (_stricmp(value,"EXTERNAL") == 0)
+	{
 	   hw = 16;
+
+		// Set some defaults in case KISSHF
+
+		xxp.CHANNEL = 'A';
+		xxp.FRACK = 7000;
+		xxp.RESPTIME = 1000;
+		xxp.MAXFRAME = 4;
+		xxp.RETRIES = 6;
+		hw = 0;
+	}
+
 	if (_stricmp(value,"BAYCOM") == 0)
 	   hw = 18;
 	if (_stricmp(value,"PA0HZP") == 0)
@@ -2728,38 +2821,69 @@ double xfmod(double p1, double p2)
 	#pragma warning(pop)
 
 	return TRUE;
- }
+}
 
-  VOID FromLOC(char * Locator, double * pLat, double * pLon)
-  {
-      double i;
-	  double Lat, Lon;
+int FromLOC(char * Locator, double * pLat, double * pLon)
+{
+	double i;
+	double Lat, Lon;
 
-	  _strupr(Locator);
+	_strupr(Locator);
 
-      i = Locator[0];
-      Lon = (i - 65) * 20;
+	*pLon = 0;
+	*pLat = 0;			// in case invalid
 
-      i = Locator[2];
-      Lon = Lon + (i - 48) * 2;
 
-      i = Locator[4];
-      Lon = Lon + (i - 65) / 12;
+	// Basic validation for APRS positions
 
-      i = Locator[1];
-      Lat = (i - 65) * 10;
+	// The first pair (a field) encodes with base 18 and the letters "A" to "R".
+	// The second pair (square) encodes with base 10 and the digits "0" to "9".
+	// The third pair (subsquare) encodes with base 24 and the letters "a" to "x".
 
-      i = Locator[3];
-      Lat = Lat + (i - 48);
+	i = Locator[0];
 
-      i = Locator[5];
-      Lat = Lat + (i - 65) / 24;
+	if (i < 'A' || i > 'R')
+		return 0;
 
-      if (Lon < 0 || Lon > 360)
-		  Lon = 180;
-      if (Lat < 0 || Lat > 180)
-		  Lat = 90;
+	Lon = (i - 65) * 20;
 
-      *pLon = Lon - 180;
-      *pLat = Lat - 90;
-  }
+	i = Locator[2];
+	if (i < '0' || i > '9')
+		return 0;
+
+	Lon = Lon + (i - 48) * 2;
+
+	i = Locator[4];
+	if (i < 'A' || i > 'X')
+		return 0;
+
+	Lon = Lon + (i - 65) / 12;
+
+	i = Locator[1];
+	if (i < 'A' || i > 'R')
+		return 0;
+
+	Lat = (i - 65) * 10;
+
+	i = Locator[3];
+	if (i < '0' || i > '9')
+		return 0;
+
+	Lat = Lat + (i - 48);
+
+	i = Locator[5];
+	if (i < 'A' || i > 'X')
+		return 0;
+
+	Lat = Lat + (i - 65) / 24;
+
+	if (Lon < 0 || Lon > 360)
+		Lon = 180;
+	if (Lat < 0 || Lat > 180)
+		Lat = 90;
+
+	*pLon = Lon - 180;
+	*pLat = Lat - 90;
+
+	return 1;
+}

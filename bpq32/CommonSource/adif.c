@@ -92,9 +92,48 @@ extern char LOC[7];
 extern char TextVerstring[50];
 struct WL2KInfo * WL2KReports;
 
+extern char WL2KModes[54][18];
+
 BOOL ADIFLogEnabled = FALSE;
 
 char ADIFLogName[80] = "ADIF.adi";
+
+static char * stristr (char *ch1, char *ch2)
+{
+	char	*chN1, *chN2;
+	char	*chNdx;
+	char	*chRet = NULL;
+
+	chN1 = _strdup(ch1);
+	chN2 = _strdup(ch2);
+
+	if (chN1 && chN2)
+	{
+		chNdx = chN1;
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower(*chNdx);
+			chNdx ++;
+		}
+		chNdx = chN2;
+
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower(*chNdx);
+			chNdx ++;
+		}
+
+		chNdx = strstr(chN1, chN2);
+
+		if (chNdx)
+			chRet = ch1 + (chNdx - chN1);
+	}
+
+	free (chN1);
+	free (chN2);
+	return chRet;
+}
+
 
 VOID CountMessages(ADIF * ADIF)
 {
@@ -190,7 +229,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 			return TRUE;
 		}
 
-		if (ADIF->LOC[0] == 0 && Msg[0] == ';' && strstr(Msg, "DE "))
+		if (ADIF->LOC[0] == 0 && Msg[0] == ';' && stristr(Msg, "DE "))
 		{
 			// Look for ; GM8BPQ-10 DE G8BPQ (IO92KX)
 
@@ -338,21 +377,14 @@ BandLimits Bands[] =
 
 int FreqCount = sizeof(Bands)/sizeof(struct BandLimits);
 
-char WL2KModes [51][18] = {
-	"Packet 1200", "Packet 2400", "Packet 4800", "Packet 9600", "Packet 19200", "Packet 38400", "High Speed Packet", "", "", "", "",
-	"", "Pactor 1", "", "", "Pactor 2", "", "Pactor 3", "", "", "Pactor 4", // 10 - 20
-	"Winmor 500", "Winmor 1600", "", "", "", "", "", "", "",				// 21 - 29
-	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
-	"ARDOP 200", "ARDOP 500", "ARDOP 1000", "ARDOP 2000", "ARDOP 2000FM", "", "", "", "", "",	// 40 - 49
-	"VARA"};
-
-char ADIFModes [53][18] = {
+char ADIFModes [54][18] = {
 	"PKT", "PKT", "PKT", "PKT", "PKT", "PKT", "PKT", "", "", "", "",
 	"", "PAC", "", "", "PAC/PAC2", "", "PAC/PAC3", "", "", "PAC/PAK4", // 10 - 20
 	"WINMOR", "WINMOR", "", "", "", "", "", "", "",				// 21 - 29
 	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
 	"ARDOP", "ARDOP", "ARDOP", "ARDOP", "ARDOP", "", "", "", "", "",	// 40 - 49
-	"VARA", "VARAFM", "VARAFM96"};
+	"VARA", "VARAFM", "VARAFM96", "VARA500"};
+
 
 BOOL WriteADIFRecord(ADIF * ADIF)
 {

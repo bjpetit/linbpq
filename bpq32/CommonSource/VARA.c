@@ -119,6 +119,8 @@ static int ProcessLine(char * buf, int Port)
 	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
 	memset(TNC, 0, sizeof(struct TNCINFO));
 
+	TNC->DefaultMode = TNC->WL2KMode = 50;					// Default to 2300
+
 	TNC->InitScript = malloc(1000);
 	TNC->InitScript[0] = 0;
 	
@@ -166,7 +168,9 @@ static int ProcessLine(char * buf, int Port)
 					TNC->PTTMode = PTTDTR | PTTRTS;
 				else if (_stricmp(ptr, "CM108") == 0)
 					TNC->PTTMode = PTTCM108;
-
+				else if (_stricmp(ptr, "HAMLIB") == 0)
+					TNC->PTTMode = PTTHAMLIB;
+			
 				ptr = strtok(NULL, " \t\n\r");
 			}
 		}
@@ -210,6 +214,28 @@ static int ProcessLine(char * buf, int Port)
 			TNC->BusyHold = atoi(&buf[8]);
 		else if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
 			TNC->BusyWait = atoi(&buf[8]);
+		else if (_memicmp(buf, "BW2300", 6) == 0)
+		{
+			TNC->ARDOPCurrentMode[0] = 'W';				// Save current state for scanning
+			strcat(TNC->InitScript, buf);
+			TNC->DefaultMode = TNC->WL2KMode = 50;
+		}
+		else if (_memicmp(buf, "BW500", 5) == 0)
+		{
+			TNC->ARDOPCurrentMode[0] = 'N';
+			strcat(TNC->InitScript, buf);
+			TNC->DefaultMode = TNC->WL2KMode = 53;
+		}
+		else if (_memicmp(buf, "FM1200", 6) == 0)
+		{
+			strcat(TNC->InitScript, buf);
+			TNC->DefaultMode = TNC->WL2KMode = 51;
+		}
+		else if (_memicmp(buf, "FM9600", 5) == 0)
+		{
+			strcat(TNC->InitScript, buf);
+			TNC->DefaultMode = TNC->WL2KMode = 52;
+		}
 		else
 			strcat(TNC->InitScript, buf);	
 	}
@@ -329,6 +355,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 					PMSGWITHLEN buffptr = GetBuff();
 
+					TNC->Streams[0].Connecting = FALSE;
+
 					if (buffptr == 0) return (0);			// No buffers, so ignore
 
 					buffptr->Len = 39;
@@ -344,6 +372,9 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			}
 		}
 
+/*
+		// not needed - tnc sends IMALIAVE every minute
+
 		if (TNC->HeartBeat++ > 600)			// Every Minute 		{
 		{
 			TNC->HeartBeat = 0;
@@ -358,20 +389,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					VARASendCommand(TNC, "STATE\r", TRUE);
 			}
 		}
-
-		//	FECPending can be set if not in FEC Mode (eg beacon)
-		
-		if (TNC->FECPending)	// Check if FEC Send needed
-		{
-			if (TNC->Streams[0].BytesOutstanding)  //Wait for data to be queued (async data session)
-			{
-				if (!TNC->Busy)
-				{
-					TNC->FECPending = 0;
-//					VARASendCommand(TNC,"FECSEND TRUE", TRUE);
-				}
-			}
-		}
+*/
 
 		if (STREAM->NeedDisc)
 		{
@@ -567,7 +585,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			bytes=send(TNC->TCPDataSock, buff->L2DATA, txlen, 0);
 			STREAM->BytesTXed += bytes;
 			WritetoTrace(TNC, buff->L2DATA, txlen);
-
 		}
 		else
 		{
@@ -635,6 +652,18 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (_memicmp(&buff->L2DATA[0], "CODEC TRUE", 9) == 0)
 				TNC->StartSent = TRUE;
 
+			if (_memicmp(&buff->L2DATA[0], "BW2300", 6) == 0)
+			{
+				TNC->ARDOPCurrentMode[0] = 'W';			// Save current state for scanning
+				TNC->WL2KMode = 50;
+			}
+
+			if (_memicmp(&buff->L2DATA[0], "BW500", 5) == 0)
+			{
+				TNC->ARDOPCurrentMode[0] = 'N';
+				TNC->WL2KMode = 53;
+			}
+
 			if (_memicmp(&buff->L2DATA[0], "D\r", 2) == 0)
 			{
 				TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
@@ -654,6 +683,10 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				_strupr(&buff->L2DATA[2]);
 
 				sprintf(Connect, "CONNECT %s %s\r", TNC->Streams[0].MyCall, &buff->L2DATA[2]);
+
+				// Need to set connecting here as if we delay for busy we may incorrectly process OK response
+
+				TNC->Streams[0].Connecting = TRUE;
 
 				// See if Busy
 				
@@ -677,7 +710,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				TNC->OverrideBusy = FALSE;
 
 				VARASendCommand(TNC, Connect, TRUE);
-				TNC->Streams[0].Connecting = TRUE;
 
 				memset(TNC->Streams[0].RemoteCall, 0, 10);
 				strcpy(TNC->Streams[0].RemoteCall, &buff->L2DATA[2]);
@@ -782,30 +814,31 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		Scan = (struct ScanEntry *)buff;
 
-		if (strcmp(Scan->VARAMode, TNC->ARDOPCurrentMode) != 0)
+		if (Scan->VARAMode != TNC->ARDOPCurrentMode[0])
 		{
 			// Mode changed
-			
-			if (Scan->VARAMode[0] == 'S') // SKIP - Dont Allow Connects
+	
+			if (TNC->ARDOPCurrentMode[0] == 'S')
 			{
-				if (TNC->ARDOPCurrentMode[0] != 'S')
-				{
-					VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
-					TNC->ARDOPCurrentMode[0] = 'S';
-				}
-
-				TNC->WL2KMode = 0;
-				return 0;
+				VARASendCommand(TNC, "LISTEN ON\r", TRUE);
 			}
-			else
+	
+			if (Scan->VARAMode == 'W')		// Set Wide Mode
 			{
-				if (TNC->ARDOPCurrentMode[0] == 'S')
-					VARASendCommand(TNC, "LISTEN ON\r", TRUE);
+				VARASendCommand(TNC, "BW2300\r", TRUE);
+				TNC->WL2KMode = 50;
 			}
-
-			strcpy(TNC->ARDOPCurrentMode, Scan->VARAMode); 
-
-			return 0;
+			else if (Scan->VARAMode == 'N')		// Set Narrow Mode
+			{
+				VARASendCommand(TNC, "BW500\r", TRUE);
+				TNC->WL2KMode = 53;
+			}
+			else if (Scan->VARAMode == 'S')		// Skip
+			{
+				VARASendCommand(TNC, "LISTEN OFF\r", TRUE);			
+			}
+	
+			TNC->ARDOPCurrentMode[0] = Scan->VARAMode;
 		}
 		return 0;
 	}
@@ -1195,7 +1228,6 @@ VOID VARAThread(void * portptr)
   	 	return; 
 	}
 
- 
 	setsockopt(TNC->TCPSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 	setsockopt(TNC->TCPDataSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 //	setsockopt(TNC->TCPDataSock, IPPROTO_TCP, TCP_NODELAY, (const char FAR *)&bcopt, 4); 
@@ -1475,13 +1507,11 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	Buffer[MsgLen - 1] = 0;		// Remove CR
 
 	TNC->TimeSinceLast = 0;
-
-	if (TNC->HeartBeat < 2 && strcmp(Buffer, "WRONG") == 0)
-		return;			// Link probe
-
 		
 	if (_memicmp(Buffer, "PTT ON", 6) == 0)
 	{
+//		Debugprintf("PTT On");
+
 		TNC->Busy = TNC->BusyHold * 10;				// BusyHold  delay
 
 		if (TNC->PTTMode)
@@ -1492,6 +1522,8 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "PTT OFF", 6) == 0)
 	{
+//		Debugprintf("PTT Off");
+
 		if (TNC->PTTMode)
 			Rig_PTT(TNC->RIG, FALSE);
 
@@ -1554,16 +1586,16 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (strcmp(Buffer, "OK") == 0)
 	{
-		if (TNC->Streams[0].Connecting == TRUE)
-			return;		// Discard response or it will mess up connect scripts
-
-		// Need also to discard response to LISTEN OFF after attach
+		// Need to discard response to LISTEN OFF after attach
 
 		if (TNC->DiscardNextOK)
 		{
 			TNC->DiscardNextOK = 0;
 			return;
 		}
+
+		if (TNC->Streams[0].Connecting == TRUE)
+			return;		// Discard response or it will mess up connect scripts
 	}
 
 	if (_memicmp(Buffer, "BUFFER", 6) == 0)
@@ -1600,6 +1632,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %s",
 			STREAM->BytesTXed, STREAM->BytesRXed, &Buffer[7]);
 		MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+
 		return;
 	}
 
@@ -1620,11 +1653,6 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		STREAM->ConnectTime = time(NULL); 
 		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
 
-		if (TNC->WL2K && TNC->WL2K->mode)
-			TNC->WL2KMode = TNC->WL2K->mode;
-		else
-			TNC->WL2KMode = 50;
-
 		memcpy(Call, &Buffer[10], 10);
 
 		ptr = strchr(Call, ' ');	
@@ -1633,6 +1661,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		// Get Target Call
 
 		ptr = strchr(&Buffer[10], ' ');	
+
 		if (ptr)
 		{
 			strcpy(TNC->TargetCall, ++ptr);
@@ -1888,6 +1917,14 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
+
+	if (_memicmp(Buffer, "IAMALIVE", 8) == 0)
+	{
+//		strcat(Buffer, "\r\n");
+//		WritetoTrace(TNC, Buffer, strlen(Buffer));
+		return;
+	}
+
 	Debugprintf(Buffer);
 
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
@@ -1895,6 +1932,16 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		WritetoTrace(TNC, Buffer, MsgLen - 3);
 //		return;
 	}
+
+	if (_memicmp(Buffer, "REGISTERED", 9) == 0)
+	{
+		strcat(Buffer, "\n");
+		WritetoTrace(TNC, Buffer, strlen(Buffer));
+		return;
+	}
+
+
+
 
 	// Others should be responses to commands
 
@@ -1970,7 +2017,7 @@ VOID VARAProcessReceivedControl(struct TNCINFO * TNC)
 	// shouldn't get several messages per packet, as each should need an ack
 	// May get message split over packets
 
-if (TNC->InputLen > 8000)	// Shouldnt have packets longer than this
+	if (TNC->InputLen > 8000)	// Shouldnt have packets longer than this
 		TNC->InputLen=0;
 
 	//	I don't think it likely we will get packets this long, but be aware...
@@ -2103,12 +2150,15 @@ static VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 static VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
 	VARAReleaseTNC(TNC);
+	TNC->ARDOPCurrentMode[0] = 0;		// Force Mode select on next scan change
 
-	if (TNC->FECMode)
-	{
-		TNC->FECMode = FALSE;
-//		VARASendCommand(TNC, "SENDID", TRUE);
-	}
+	// Also reset mode in case incoming call has changed it
+
+	if (TNC->DefaultMode = 50)
+		VARASendCommand(TNC, "BW2300\r", TRUE);
+
+	else if (TNC->DefaultMode = 53)
+		VARASendCommand(TNC, "BW500\r", TRUE);
 }
 
 
@@ -2122,6 +2172,8 @@ VOID VARASendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue)
 	if (memcmp(Buff, "LISTEN O", 8) == 0)
 		TNC->DiscardNextOK = TRUE;			// Responding to LISTEN  messes up forwarding
 
+	if (TNC->CONNECTED == 0)
+		return;
 
 	if(TNC->TCPSock)
 	{

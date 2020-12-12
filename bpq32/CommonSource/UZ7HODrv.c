@@ -80,11 +80,17 @@ VOID SendRPBeacon(struct TNCINFO * TNC);
 VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
 VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
+int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 extern UCHAR BPQDirectory[];
 
 #define MAXBPQPORTS 32
 #define MAXUZ7HOPORTS 16
+
+static char ClassName[]="ARDOPSTATUS";
+static char WindowTitle[] = "UZ7HO";
+static int RigControlRow = 165;
+
 
 //LOGFONT LFTTYFONT ;
 
@@ -405,6 +411,9 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						TNC->CONNECTED = TRUE;
 						TNC->CONNECTING = FALSE;
 
+						sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");		
+						MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+
 						// If required, send signon
 
 						if (UZ7HOSignon[port])
@@ -418,6 +427,12 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 
 						AGW->TXHeader.DataKind='m';		// Monitor Frames
+						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+		
+						AGW->TXHeader.DataKind='R';		// Version
+						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+		
+						AGW->TXHeader.DataKind='g';		// Port Capabilities
 						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 		
 						// Register all applcalls
@@ -711,17 +726,72 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				return 1;
 			}
 
-			if (_memicmp(&buff->L2DATA[0], "FREQ ", 5) == 0)
+			if (_memicmp(&buff->L2DATA[0], "VERSION", 7) == 0)
 			{
 				PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 
-#ifdef WIN32
+				buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Version %d.%d.%d.%d\r",
+					AGW->Version[0], AGW->Version[1], AGW->Version[2], AGW->Version[3]);
+				
+				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+				return 1;
+			}
 
+			if (_memicmp(&buff->L2DATA[0], "FREQ", 4) == 0)
+			{
+				PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
+
+				// May be read or set frequency
+
+				if (txlen == 5)
+				{
+					// Read Freq
+
+					if (buffptr)
+					{
+						buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem Freqency %d\r", AGW->CenterFreq);
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+					}
+					return 1;
+				}
+	
 				AGW->CenterFreq = atoi(&buff->L2DATA[5]);
 
-				if (AGW->CenterFreq && AGW->hFreq)
+				if (AGW->CenterFreq == 0)
 				{
-					// Set it
+					if (buffptr)
+					{
+						buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Invalid Modem Freqency\r");
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+					}
+					return 1;
+				}
+				
+				if (TNCInfo[MasterPort[port]]->AGWInfo->isQTSM == 3)
+				{
+					// QtSM so can send Set Freq Command
+
+					char Buffer[32] = "";
+					int MsgLen = 32;
+
+					memcpy(Buffer, &AGW->CenterFreq, 4);
+
+					AGW->TXHeader.Port = UZ7HOChannel[port];
+					AGW->TXHeader.DataKind = 'g';
+					memset(AGW->TXHeader.callfrom, 0, 10);
+					memset(AGW->TXHeader.callto, 0, 10);
+#ifdef __BIG_ENDIAN__
+					AGW->TXHeader.DataLength = reverse(MsgLen);
+#else
+					AGW->TXHeader.DataLength = MsgLen;
+#endif
+					send(TNCInfo[MasterPort[port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+					send(TNCInfo[MasterPort[port]]->TCPSock, Buffer, MsgLen, 0);
+				}
+#ifdef WIN32
+				else if (AGW->hFreq)
+				{
+					//Using real UZ7HO on Windows
 
 					char Freq[16];
 					sprintf(Freq, "%d", AGW->CenterFreq - 1);
@@ -730,6 +800,17 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					SendMessage(AGW->hSpin, WM_LBUTTONDOWN, 1, 1);
 					SendMessage(AGW->hSpin, WM_LBUTTONUP, 0, 1);
 				}
+#endif
+				else
+				{
+					if (buffptr)
+					{
+						buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Sorry Setting UZ7HO params not supported on this system\r");
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+					}
+
+					return 1;
+				}
 
 				if (buffptr)
 				{
@@ -737,40 +818,85 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}
 
-#else
-
-				if (buffptr)
-				{
-					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Sorry Setting UZ7HO params not supported on LinBPQ\r");
-					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
-				}
-
-#endif
-
 				return 1;
 			}
 
-			if (_memicmp(&buff->L2DATA[0], "MODEM ", 6) == 0)
+			if (_memicmp(&buff->L2DATA[0], "MODEM", 5) == 0)
 			{
 				PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 
-#ifdef WIN32
-
-				AGW->Modem = atoi(&buff->L2DATA[6]);
-
-				if (AGW->cbinfo.cbSize && AGW->cbinfo.hwndCombo)
+				if (txlen == 6)
 				{
-					// Set it
+					// Read Modem
 
-					LRESULT ret = SendMessage(AGW->cbinfo.hwndCombo,CB_SETCURSEL, AGW->Modem, 0);
-					int pos = 13 * AGW->Modem + 7;
+					if (buffptr)
+					{
+						if (AGW->ModemName[0])
+							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem %s\r", AGW->ModemName);
+						else
+							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem Number %d\r", AGW->Modem);
+					
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+					}
+					return 1;
+				}		
+				else if (TNCInfo[MasterPort[port]]->AGWInfo->isQTSM == 3)
+				{
+					// Can send modem name to QTSM
+
+					char Buffer[32] = "";
+					int MsgLen = 32;
+
+					strlop(buff->L2DATA, '\r');
+					strlop(buff->L2DATA, '\n');
+
+					if (strlen(&buff->L2DATA[6]) > 20)
+						buff->L2DATA[26] = 0;
+
+					strcpy(&Buffer[4], &buff->L2DATA[6]);
+
+					AGW->TXHeader.Port = UZ7HOChannel[port];
+					AGW->TXHeader.DataKind = 'g';
+					memset(AGW->TXHeader.callfrom, 0, 10);
+					memset(AGW->TXHeader.callto, 0, 10);
+#ifdef __BIG_ENDIAN__
+					AGW->TXHeader.DataLength = reverse(MsgLen);
+#else
+					AGW->TXHeader.DataLength = MsgLen;
+#endif
+					send(TNCInfo[MasterPort[port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+					send(TNCInfo[MasterPort[port]]->TCPSock, Buffer, MsgLen, 0);
+				}
+#ifdef WIN32
+				else if(AGW->cbinfo.cbSize)
+				{
+					// Real QTSM on Windows
+
+					AGW->Modem = atoi(&buff->L2DATA[6]);
+	
+					if (AGW->cbinfo.cbSize && AGW->cbinfo.hwndCombo)
+					{
+						// Set it
+
+						LRESULT ret = SendMessage(AGW->cbinfo.hwndCombo,CB_SETCURSEL, AGW->Modem, 0);
+						int pos = 13 * AGW->Modem + 7;
 															
-					ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONDOWN, 1, 1);
-					ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONUP, 0, 1);
-					ret = SendMessage(AGW->cbinfo.hwndList, WM_LBUTTONDOWN, 1, pos << 16);
-					ret = SendMessage(AGW->cbinfo.hwndList, WM_LBUTTONUP, 0, pos << 16);
-					ret = 0;
-
+						ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONDOWN, 1, 1);
+						ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONUP, 0, 1);
+						ret = SendMessage(AGW->cbinfo.hwndList, WM_LBUTTONDOWN, 1, pos << 16);
+						ret = SendMessage(AGW->cbinfo.hwndList, WM_LBUTTONUP, 0, pos << 16);
+						ret = 0;
+					}
+				}
+#endif
+				else
+				{
+					if (buffptr)
+					{
+						buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Sorry Setting UZ7HO params not supported this system\r");
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+					}
+					return 1;
 				}
 
 				if (buffptr)
@@ -778,15 +904,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem Set Ok\r");
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}
-#else
-
-				if (buffptr)
-				{
-					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Sorry Setting UZ7HO params not supported on LinBPQ\r");
-					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
-				}
-
-#endif
 				return 1;
 			}
 			// See if a Connect Command.
@@ -812,6 +929,10 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				// See if any digis - accept V VIA or nothing, seps space or comma
 
 				ptr = strtok_s(&buff->L2DATA[2], " ,\r", &context);
+
+				if (*ptr == '!')
+					ptr++;
+
 				strcpy(STREAM->RemoteCall, ptr);
 	
 				Key[0] = UZ7HOChannel[port] + '1';
@@ -992,6 +1113,10 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		closesocket(TNC->TCPSock);
 		TNC->CONNECTED = FALSE;
+		TNC->Alerted = FALSE;
+
+		sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		if (TNC->WeStartedTNC)
 		{
@@ -1018,6 +1143,35 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 	return 0;
 }
+
+
+static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
+{
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+		"<script type=\"text/javascript\">\r\n"
+		"function ScrollOutput()\r\n"
+		"{var textarea = document.getElementById('textarea');"
+		"textarea.scrollTop = textarea.scrollHeight;}</script>"
+		"</head><title>UZ7HO Status</title></head><body id=Text onload=\"ScrollOutput()\">"
+		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
+		"'width=440,height=150');\" action=ARDOPAbort?%d>UZ7HO Status"
+		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
+		TNC->Port);
+
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+
+	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
+	Len += sprintf(&Buff[Len], "<tr><td>Modem</td><td>%s</td></tr>", TNC->WEB_MODE);
+	Len += sprintf(&Buff[Len], "</table>");
+
+	Len += sprintf(&Buff[Len], "<textarea rows=10 style=\"width:500px; height:250px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
+	Len = DoScanLine(TNC, Buff, Len);
+
+	return Len;
+}
+
+
+
 
 void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 {
@@ -1120,8 +1274,50 @@ void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 
 	time(&lasttime[port]);			// Get initial time value
 
-	return ExtProc;
+	PortEntry->PORTCONTROL.TNC = TNC;
 
+	TNC->WebWindowProc = WebProc;
+	TNC->WebWinX = 520;
+	TNC->WebWinY = 500;
+	TNC->WebBuffer = zalloc(5000);
+
+	TNC->WEB_COMMSSTATE = zalloc(100);
+	TNC->WEB_TNCSTATE = zalloc(100);
+	TNC->WEB_CHANSTATE = zalloc(100);
+	TNC->WEB_BUFFERS = zalloc(100);
+	TNC->WEB_PROTOSTATE = zalloc(100);
+	TNC->WEB_RESTARTTIME = zalloc(100);
+	TNC->WEB_RESTARTS = zalloc(100);
+
+	TNC->WEB_MODE = zalloc(50);
+	TNC->WEB_TRAFFIC = zalloc(100);
+	TNC->WEB_LEVELS = zalloc(32);
+
+#ifndef LINBPQ
+
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
+
+	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
+	
+	CreateWindowEx(0, "STATIC", "TNC State", WS_CHILD | WS_VISIBLE, 10,28,106,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_TNCSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,28,520,20, TNC->hDlg, NULL, hInstance, NULL);
+
+	CreateWindowEx(0, "STATIC", "Modem", WS_CHILD | WS_VISIBLE, 10,50,106,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_MODE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 120,50,520,20, TNC->hDlg, NULL, hInstance, NULL);
+
+	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
+            LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
+			0,170,250,300, TNC->hDlg, NULL, hInstance, NULL);
+
+	TNC->ClientHeight = 450;
+	TNC->ClientWidth = 500;
+
+	TNC->hMenu = CreatePopupMenu();
+	
+	MoveWindows(TNC);
+#endif
+	return ExtProc;
 }
 
 /*
@@ -1207,7 +1403,32 @@ static int ProcessLine(char * buf, int Port)
 
 		if (ptr)
 		{
-			if (_memicmp(ptr, "PATH", 4) == 0)
+			if (_stricmp(ptr, "PTT") == 0)
+			{
+				ptr = strtok(NULL, " \t\n\r");
+
+				if (ptr)
+				{
+					if (_stricmp(ptr, "CI-V") == 0)
+						TNC->PTTMode = PTTCI_V;
+					else if (_stricmp(ptr, "CAT") == 0)
+						TNC->PTTMode = PTTCI_V;
+					else if (_stricmp(ptr, "RTS") == 0)
+						TNC->PTTMode = PTTRTS;
+					else if (_stricmp(ptr, "DTR") == 0)
+						TNC->PTTMode = PTTDTR;
+					else if (_stricmp(ptr, "DTRRTS") == 0)
+						TNC->PTTMode = PTTDTR | PTTRTS;
+					else if (_stricmp(ptr, "CM108") == 0)
+						TNC->PTTMode = PTTCM108;
+					else if (_stricmp(ptr, "HAMLIB") == 0)
+						TNC->PTTMode = PTTHAMLIB;
+
+					ptr = strtok(NULL, " \t\n\r");
+				}
+			}
+		
+			if (ptr &&_memicmp(ptr, "PATH", 4) == 0)
 			{
 				p_cmd = strtok(NULL, "\n\r");
 				if (p_cmd) TNC->ProgramPath = _strdup(p_cmd);
@@ -1260,9 +1481,9 @@ static int ProcessLine(char * buf, int Port)
 				TNC->AGWInfo->CenterFreq = atoi(&buf[12]);
 			else
 				
-//			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-//				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
-//			else
+			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
+				TNC->WL2K = DecodeWL2KReportLine(buf);
+			else
 
 			strcat (TNC->InitScript, buf);
 		}
@@ -1444,6 +1665,8 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 
 	TNC->CONNECTING = TRUE;
 
+	TNC->AGWInfo->isQTSM = 0;
+
 #ifndef LINBPQ
 
 	AGW->hFreq = AGW->hSpin = 0;
@@ -1454,6 +1677,7 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		// can only check if running on local host
 		
 		TNC->PID = GetListeningPortsPID(TNC->destaddr.sin_port);
+		
 		if (TNC->PID == 0)
 		{
 			TNC->CONNECTING = FALSE;
@@ -1515,6 +1739,10 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		//
 
 		TNC->CONNECTED=TRUE;
+
+		sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");		
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+
 	}
 	else
 	{
@@ -1524,6 +1752,8 @@ VOID ConnecttoUZ7HOThread(void * portptr)
    			i=sprintf(Msg, "Connect Failed for UZ7HO socket - error code = %d\n", err);
 			WritetoConsole(Msg);
 
+			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");		
+			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 			TNC->Alerted = TRUE;
 		}
 		
@@ -1566,6 +1796,11 @@ static int ProcessReceivedData(int port)
 		TNC->TCPSock = 0;
 					
 		TNC->CONNECTED = FALSE;
+		TNC->Alerted = FALSE;
+
+		sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+
 
 		return (0);
 	}
@@ -1578,6 +1813,12 @@ static int ProcessReceivedData(int port)
 		WritetoConsole(ErrMsg);
 
 		TNC->CONNECTED = FALSE;
+		TNC->Alerted = FALSE;
+
+		sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+
+
 		closesocket(TNC->TCPSock);
 		TNC->TCPSock = 0;
 		return (0);
@@ -1603,6 +1844,11 @@ static int ProcessReceivedData(int port)
 
 			closesocket(TNC->TCPSock);
 			TNC->CONNECTED = FALSE;
+			TNC->Alerted = FALSE;
+
+			sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
+			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+
 			return 0;
 		}
 
@@ -1760,6 +2006,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 {
 	PMSGWITHLEN buffptr;
 	MESSAGE Monframe;
+	struct HDDRWITHDIGIS MonDigis;
 
  	struct AGWINFO * AGW = TNC->AGWInfo;
 	struct AGWHEADER * RXHeader = &AGW->RXHeader;
@@ -1768,6 +2015,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 	struct STREAMINFO * STREAM;
 	UCHAR AGWPort;
 	UCHAR MHCall[10] = "";
+	int n;
+	unsigned char c;
+	unsigned char * ptr;
 
 #ifdef __BIG_ENDIAN__
 	RXHeader->DataLength = reverse(RXHeader->DataLength);
@@ -1892,6 +2142,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 		if (strstr(Message, " To Station"))
 		{
+			char noStreams[] = "No free sessions - disconnecting\r";
+
 			// Incoming. Look for a free Stream
 
 			Stream = 1;
@@ -1904,8 +2156,30 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 				Stream++;
 			}
 
-			// No free streams - send Disconnect
+			// No free streams - send message then Disconnect
 
+			// Do we need to swap From and To? - yes
+
+			memcpy(RXHeader->callfrom, &Key[11], 10);
+			memcpy(RXHeader->callto, &Key[1], 10);
+
+#ifdef __BIG_ENDIAN__
+			AGW->RXHeader.DataLength = reverse(strlen(noStreams));
+#else
+			AGW->RXHeader.DataLength = (int)strlen(noStreams);
+#endif
+			RXHeader->DataKind = 'D';
+			AGW->RXHeader.PID = 0xf0;
+
+			send(TNCInfo[MasterPort[TNC->Port]]->TCPSock, (char *)&AGW->RXHeader, AGWHDDRLEN, 0);
+			send(TNCInfo[MasterPort[TNC->Port]]->TCPSock, noStreams, (int)strlen(noStreams), 0);
+
+			Sleep(500);
+			RXHeader->DataKind = 'd';
+			RXHeader->DataLength = 0;
+
+
+			send(TNCInfo[MasterPort[TNC->Port]]->TCPSock, (char *)&AGW->RXHeader, AGWHDDRLEN, 0);
 			return;
 
 	GotStream:
@@ -2083,9 +2357,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 	case 'K':				// raw data	
 
-		return;
-
 		memset(&Monframe, 0, sizeof(Monframe));
+		memset(&MonDigis, 0, sizeof(MonDigis));
 
 		Monframe.PORT = BPQPort[RXHeader->Port][TNC->Port];
 
@@ -2099,9 +2372,30 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 		if (TNC == 0)
 			return;
 		
-		Monframe.LENGTH = RXHeader->DataLength + 6;
+		Monframe.LENGTH = RXHeader->DataLength + (MSGHDDRLEN - 1);
 
 		memcpy(&Monframe.DEST[0], &Message[1], RXHeader->DataLength);
+
+		// Check address - may have Single bit correction activated and non-x.25 filter off
+
+		ptr = &Monframe.ORIGIN[0];
+		n = 6;
+
+		while(n--)
+		{
+			// Try a bit harder to detect corruption
+
+			c = *(ptr++);
+
+			if (c & 1)
+				return;			// bottom bit set
+
+			c = c >> 1;
+
+			if (!isalnum(c) && !(c == '#') && !(c == ' '))
+				return;
+		}
+
 
 /*		// if NETROM is enabled, and it is a NODES broadcast, process it
 
@@ -2132,12 +2426,133 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 		MHCall[ConvFromAX25(&Monframe.ORIGIN[0], MHCall)] = 0;
 
-		UpdateMHEx(TNC, MHCall, ' ', 0, NULL, FALSE);
-		BPQTRACE((MESSAGE *)&Monframe, TRUE);
+		// I think we need to check if UI and if so report to nodemap
 
+		// should skip digis and report last digi but for now keep it simple
+
+		// if there are digis process them
+
+		if (Monframe.ORIGIN[6]  & 1)		// No digis
+		{
+			if (Monframe.CTL == 3)
+				UpdateMHEx(TNC, MHCall, ' ', 0, NULL, TRUE);
+			else
+				UpdateMHEx(TNC, MHCall, ' ', 0, NULL, FALSE);
+		
+			BPQTRACE((MESSAGE *)&Monframe, TRUE);
+		}
+		else
+		{
+			UCHAR * ptr1 = Monframe.DEST;
+			UCHAR * ptr2 = MonDigis.DEST;
+			int Rest = Monframe.LENGTH - (MSGHDDRLEN - 1);
+
+			MonDigis.PORT = Monframe.PORT;
+			MonDigis.LENGTH = Monframe.LENGTH;
+			MonDigis.Timestamp = Monframe.Timestamp;
+
+
+			while ((ptr1[6] & 1) == 0)		// till end of address
+			{
+				memcpy(ptr2, ptr1, 7);
+				ptr2 += 7;
+				ptr1 += 7;
+				Rest -= 7;
+			}
+
+			memcpy(ptr2, ptr1, 7);			// Copy Last
+			ptr2 += 7;
+			ptr1 += 7;
+			Rest -= 7;
+
+			// Now copy CTL PID and Data
+
+			memcpy(ptr2, ptr1, Rest);
+
+			BPQTRACE((MESSAGE *)&MonDigis, TRUE);
+
+			if (TNC->PortRecord->PORTCONTROL.PORTMHEARD)
+				MHPROC((struct PORTCONTROL *)TNC->PortRecord, (MESSAGE *)&MonDigis);
+
+//			if (ptr1[0] == 3)
+//				UpdateMHEx(TNC, MHCall, ' ', 0, NULL, TRUE);
+//			else
+//				UpdateMHEx(TNC, MHCall, ' ', 0, NULL, FALSE);
+
+
+
+		}
+		
 		return;
 
 	case 'I':
+		break;
+
+	case 'R':
+	{
+		// Version
+
+		int v1, v2;
+
+		memcpy(&v1, Message, 4);
+		memcpy(&v2, &Message[4], 4);
+
+		if (v1 == 2019 && v2 == 'B')
+			TNC->AGWInfo->isQTSM |= 1;
+
+		break;
+	}
+
+	case 'g':
+
+		// Capabilities - along with Version used to indicate QtSoundModem
+		// with ability to set and read Modem type and frequency/
+
+		if (Message[2] == 24 && Message[3] == 3 && Message[4] == 100)
+		{
+			TNC->AGWInfo->isQTSM |= 2;
+
+			// Should also set flag on any other ports on same TNC
+
+			if (RXHeader->DataLength == 12)
+			{
+				// First reply - request Modem Freq and Name
+
+				char Buffer[32] = "";
+				int MsgLen = 32;
+
+				AGW->TXHeader.Port = RXHeader->Port;
+				AGW->TXHeader.DataKind = 'g';
+				memset(AGW->TXHeader.callfrom, 0, 10);
+				memset(AGW->TXHeader.callto, 0, 10);
+#ifdef __BIG_ENDIAN__
+				AGW->TXHeader.DataLength = reverse(MsgLen);
+#else
+				AGW->TXHeader.DataLength = MsgLen;
+#endif
+				send(TNC->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+				send(TNC->TCPSock, Buffer, MsgLen, 0);
+			}	
+		}
+
+		if (RXHeader->DataLength == 44)
+		{
+			// Modem Freq and Type Report from QtSM
+
+			if (RXHeader->Port == 1)
+			{
+				TNC = SlaveTNC[TNC->Port];
+				if (TNC == NULL)
+					return;
+			}
+
+			memcpy(&TNC->AGWInfo->CenterFreq, &Message[12], 4);
+			memcpy(&TNC->AGWInfo->ModemName, &Message[16], 20);
+			memcpy(&TNC->AGWInfo->Version, &Message[38], 4);
+
+			sprintf(TNC->WEB_MODE, "%s / %d Hz", TNC->AGWInfo->ModemName, TNC->AGWInfo->CenterFreq);
+			SetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
+		}
 		break;
 
 	case 'X':
@@ -2239,7 +2654,7 @@ VOID SendData(int Stream, struct TNCINFO * TNC, char * Key, char * Msg, int MsgL
 {
 	struct AGWINFO * AGW = TNC->AGWInfo;
 	SOCKET sock = TNCInfo[MasterPort[TNC->Port]]->TCPSock;
-	int Paclen;
+	int Paclen = 0;
 	
 	AGW->TXHeader.Port = Key[0] - '1';
 	AGW->TXHeader.DataKind='D';
@@ -2248,7 +2663,8 @@ VOID SendData(int Stream, struct TNCINFO * TNC, char * Key, char * Msg, int MsgL
 
 	// If Length is greater than Paclen we should fragment
 
-	Paclen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
+	if (TNC->PortRecord->ATTACHEDSESSIONS[Stream])
+		Paclen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
 
 	if (Paclen == 0)
 		Paclen = 80;
@@ -2449,22 +2865,29 @@ DigiLoop:
 	{
 		AdjMsg->CTL = 0x03;
 
-		if (RXHeader->DataKind != 'T' && strstr(Msg, "To BEACON "))
+		if (RXHeader->DataKind != 'T')
 		{
-			// Update MH with Received Beacons
+			// only report RX
 
-			char * ptr1 = strchr(Msg, ']');
-
-			if (ptr1)
+			if (strstr(Msg, "To BEACON "))
 			{
-				ptr1 += 2;						// Skip ] and cr
-				if (memcmp(ptr1, "QRA ", 4) == 0)
-				{
-					char Call[10], Loc[10] = "";
-					sscanf(&ptr1[4], "%s %s", &Call[0], &Loc[0]);
+				// Update MH with Received Beacons
 
-					UpdateMHEx(TNC, MHCall, ' ', 0, Loc, TRUE);
+				char * ptr1 = strchr(Msg, ']');
+
+				if (ptr1)
+				{
+					ptr1 += 2;						// Skip ] and cr
+					if (memcmp(ptr1, "QRA ", 4) == 0)
+					{
+						char Call[10], Loc[10] = "";
+						sscanf(&ptr1[4], "%s %s", &Call[0], &Loc[0]);
+
+						UpdateMHEx(TNC, MHCall, ' ', 0, Loc, TRUE);
+					}
 				}
+				else
+					UpdateMH(TNC, MHCall, ' ', 0);
 			}
 		}
 	}

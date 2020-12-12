@@ -68,7 +68,6 @@ static UCHAR * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen);
 static UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen);
 static UCHAR * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output);
 
-UINT Mask = 0xffffffff;
 
 int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameType)
 {
@@ -80,11 +79,9 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 	BOOL PF = 0;
 	char CRCHAR[3] = "  ";
 	char PFCHAR[3] = "  ";
-	int Port;
 	int MSGFLAG = 0;		//CR and V1 flags
 	char * Output = buffer;
 	int HH, MM, SS;
-	char TR = 'R';
 	char From[10], To[10];
 	BOOL Info = 0;
 	BOOL FRMRFLAG = 0;
@@ -127,36 +124,6 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 
 	*FrameType = CTL;
 
-	if (MUIONLY)
-		if (CTL != 3)
-			return 0;
-
-	if ((CTL & 1) == 0 || CTL == FRMR || CTL == 3)
-	{
-	}
-	else
-	{
-		if (MCOM == 0)
-			return 0;						// Dont do control
-	}
-
-
-	Port = msg->PORT;
-	
-	if (Port & 0x80)
-	{
-		if (MTX == 0)
-			return 0;							//	TRANSMITTED FRAME - SEE IF MTX ON
-		
-		TR = 'T';
-	}
-
-	Port &= 0x7F;
-
-	if (((1 << (Port - 1)) & Mask) == 0)		// Check MMASK
-		return 0;
-	
-
 	Stamp = Stamp % 86400;		// Secs
 	HH = Stamp / 3600;
 
@@ -165,7 +132,7 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 
 	SS = Stamp - MM * 60;
 
-	Output += sprintf((char *)Output, " %d:Fm ", Port);
+	Output += sprintf((char *)Output, " %d:Fm ", msg->PORT & 0x7f);		// Mask TX bit
 
 	From[ConvFromAX25(msg->ORIGIN, From)] = 0;
 	To[ConvFromAX25(msg->DEST, To)] = 0;

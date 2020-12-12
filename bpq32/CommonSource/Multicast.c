@@ -699,7 +699,7 @@ void SaveMulticastMessage(struct MSESSION * MSession)
 			Len -= 4;
 		}
 
-		DecodedLen = ptr2 - Decoded;
+		DecodedLen = (int)(ptr2 - Decoded);
 		Uncompressed = LZUncompress(Decoded, DecodedLen, &UncompressedLen);
 	}
 	else if (memcmp(MSession->Message, "[b128:start]", 12) == 0)
@@ -725,7 +725,7 @@ void SaveMulticastMessage(struct MSESSION * MSession)
 		ptr1 = strchr(ptr1, 10);
 		ptr1++;
 
-		HddrLen = ptr1 - &MSession->Message[12];
+		HddrLen = (int)(ptr1 - &MSession->Message[12]);
 
 		if (ExpectedLen == 0 || ExpectedLen > Len || ptr1 == (UCHAR *)1)
 		{
@@ -892,7 +892,7 @@ void SaveMulticastMessage(struct MSESSION * MSession)
 			
 		if (hFile)
 		{
-			WriteLen = fwrite(Uncompressed, 1, UncompressedLen, hFile);
+			WriteLen = (int)fwrite(Uncompressed, 1, UncompressedLen, hFile);
 			fclose(hFile);
 		}
 
@@ -939,7 +939,7 @@ VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buff
 	data = strchr(Buffer, '>');
 
 	if (data)
-		headerlen = ++data - Buffer;
+		headerlen = (int)(++data - Buffer);
 
 	if (headerlen + len != MsgLen)
 		return;
@@ -1096,7 +1096,7 @@ VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buff
 		{
 			// Haven't received SIZE Message yet. Guess the blocksize
 
-			int blocksize = MsgLen - (dataptr - Buffer);
+			int blocksize = MsgLen - (int)(dataptr - Buffer);
 
 			if (MSession->BlockSize == 0)
 			{

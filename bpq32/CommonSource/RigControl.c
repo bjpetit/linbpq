@@ -50,10 +50,13 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "CHeaders.h"
 #include "tncinfo.h"
-#ifndef LINBPQ
+#ifdef WIN32
 #include <commctrl.h>
 #else
 char *fcvt(double number, int ndigits, int *decpt, int *sign);  
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #endif
 #include "bpq32.h"
 
@@ -101,6 +104,18 @@ VOID COMClearDTR(HANDLE fd);
 VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
 void CM108_set_ptt(struct RIGINFO *RIG, int PTTState);
+BOOL OpenHIDPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed);
+int HID_Read_Block(struct RIGPORTINFO * PORT);
+int HID_Write_Block(struct RIGPORTINFO * PORT);
+HANDLE rawhid_open(char * Device);
+int rawhid_recv(int num, void *buf, int len, int timeout);
+int rawhid_send(int num, void *buf, int len, int timeout);
+void rawhid_close(int num);
+VOID ConnecttoHAMLIB(struct RIGPORTINFO * PORT);
+int DecodeHAMLIBAddr(struct RIGPORTINFO * PORT, char * ptr);
+void ProcessHAMLIBFrame(struct RIGPORTINFO * PORT, int Length);
+VOID HAMLIBPoll(struct RIGPORTINFO * PORT);
+void HAMLIBSlaveThread(struct RIGINFO * RIG);
 
 VOID SetupPortRIGPointers();
 VOID PTTCATThread(struct RIGINFO *RIG);
@@ -136,6 +151,8 @@ char KenwoodModes[16][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "???
 //char FT2000Modes[16][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "PKT-L", "FSK-R", "PKT-FM", "FM-N", "PKT-U", "????"};
 char FT2000Modes[16][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "CW-R", "PKT-L", "FSK-R", "PKT-FM", "FM-N", "PKT-U", "????"};
 
+char FT991AModes[16][9] = {"????", "LSB",  "USB", "CW-U", "FM", "AM", "RTTY-LSB", "CW-L", "DATA-LSB", "RTTY-USB", "DATA-FM", "FM-N", "DATA-USB", "AM-N", "C4FM", "????"};
+
 char FLEXModes[16][6] = {"LSB", "USB", "DSB", "CWL", "CWU", "FM", "AM", "DIGU", "SPEC", "DIGL", "SAM", "DRM"};
 
 char AuthPassword[100] = "";
@@ -145,6 +162,8 @@ char LastPassword[17];
 int NumberofPorts = 0;
 
 BOOL EndPTTCATThread = FALSE;
+
+int HAMLIBRunning = 1;
 
 struct RIGPORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
 
@@ -197,12 +216,15 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 		MySetWindowText(RIG->hPTT, "T");
 		RIG->WEB_PTT = 'T';
 		RIG->PTTTimer = PTTLimit;
+		RIG->repeatPTTOFFTimer = 0;				// Cancel repeated off command
 	}
 	else
 	{
 		MySetWindowText(RIG->hPTT, "");
 		RIG->WEB_PTT = ' ';
 		RIG->PTTTimer = 0;
+		if (PORT->PortType == ICOM)
+			RIG->repeatPTTOFFTimer = 300;			// set 30 second repeated off command
 	}
 
 	if (RIG->PTTMode & PTTCI_V)
@@ -217,6 +239,7 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 		case ICOM:
 		case KENWOOD:
 		case FT2000:
+		case FT991A:
 		case FLEX:
 		case NMEA:
 
@@ -296,6 +319,13 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 	if (RIG->PTTMode & PTTCM108)
 		CM108_set_ptt(RIG, PTTState);
 
+	if (RIG->PTTMode & PTTHAMLIB)
+	{
+		char Msg[16];
+		int Len = sprintf(Msg, "T %d\n", PTTState);
+	
+		send(PORT->remoteSock, Msg, Len, 0);
+	}
 }
 
 struct RIGINFO * Rig_GETPTTREC(int Port)
@@ -507,6 +537,9 @@ portok:
 			return FALSE;
 		}
 	}
+
+	RIG->Session = Session;		// BPQ Stream
+	RIG->PollCounter = 50;		// Dont read freq for 5 secs in case clash with Poll
 
 	if (_stricmp(FreqString, "TUNE") == 0)
 	{
@@ -738,6 +771,7 @@ portok:
 			break;
 
 		case KENWOOD:
+		case FT991A:
 		case FT2000:
 		case FLEX:
 		case NMEA:
@@ -758,8 +792,6 @@ portok:
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 		return TRUE;
 	}
-
-	RIG->Session = Session;		// BPQ Stream
 
 	if (_memicmp(FreqString, "Chan", 4) == 0)
 	{
@@ -1270,6 +1302,7 @@ portok:
 
 	case KENWOOD:
 	case FT2000:
+	case FT991A:
 	case FLEX:
 			
 		if (n < 3)
@@ -1278,10 +1311,14 @@ portok:
 			return FALSE;
 		}
 
-		for (ModeNo = 0; ModeNo < 14; ModeNo++)
+		for (ModeNo = 0; ModeNo < 16; ModeNo++)
 		{
 			if (PORT->PortType == FT2000)
 				if (_stricmp(FT2000Modes[ModeNo], Mode) == 0)
+				break;
+
+			if (PORT->PortType == FT991A)
+				if (_stricmp(FT991AModes[ModeNo], Mode) == 0)
 				break;
 
 			if (PORT->PortType == KENWOOD)
@@ -1292,7 +1329,7 @@ portok:
 				break;
 		}
 
-		if (ModeNo > 12)
+		if (ModeNo > 15)
 		{
 			sprintf(Command, "Sorry -Invalid Mode\r");
 			return FALSE;
@@ -1319,6 +1356,9 @@ portok:
 
 		if (PORT->PortType == FT2000)
 			buffptr[1] = sprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
+		else
+		if (PORT->PortType == FT991A)
+			buffptr[1] = sprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString, ModeNo);
 		else
 		if (PORT->PortType == FLEX)
 			buffptr[1] = sprintf(Poll, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", &FreqString[1], ModeNo);
@@ -1374,6 +1414,17 @@ portok:
 
 		return TRUE;
 
+	case HAMLIB:
+	{
+		char cmd[80];
+
+		int len = sprintf(cmd, "F %s\n+f\nM %s %d\n+m\n",
+			FreqString, Mode, atoi(Data));
+	
+		send(PORT->remoteSock, cmd, len, 0);
+		return TRUE;
+	}
+
 	}
 	return TRUE;
 }
@@ -1419,12 +1470,12 @@ DllExport BOOL APIENTRY Rig_Init()
 		if (RigConfigMsg[port])
 		{
 			char msg[1000];
-			
+
 			char * SaveRigConfig = _strdup(RigConfigMsg[port]);
 			char * RigConfigMsg1 = _strdup(RigConfigMsg[port]);
 
 			RIG = TNC->RIG = RigConfig(TNC, RigConfigMsg1, port);
-			
+
 			if (TNC->RIG == NULL)
 			{
 				// Report Error
@@ -1435,7 +1486,7 @@ DllExport BOOL APIENTRY Rig_Init()
 				free(RigConfigMsg1);
 				continue;
 			}
-		
+
 			TNC->RIG->PTTMode = TNC->PTTMode;
 
 			if (TNC->RIG->PTTMode == 0)			// Not Set
@@ -1459,43 +1510,45 @@ DllExport BOOL APIENTRY Rig_Init()
 
 			RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
 				10, RigRow, 80,20, hDlg, NULL, hInstance, NULL);
-	
-			RIG->hCAT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 90, RigRow, 40,20, hDlg, NULL, hInstance, NULL);
-	
+
+			//			RIG->hCAT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+			//                 90, RigRow, 40,20, hDlg, NULL, hInstance, NULL);
+
 			RIG->hFREQ = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 135, RigRow, 100,20, hDlg, NULL, hInstance, NULL);
-	
+				95, RigRow, 100,20, hDlg, NULL, hInstance, NULL);
+
 			RIG->hMODE = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 240, RigRow, 60,20, hDlg, NULL, hInstance, NULL);
-	
+				200, RigRow, 100,20, hDlg, NULL, hInstance, NULL);
+
 			RIG->hSCAN = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 300, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
+				300, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
 
 			RIG->hPTT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
+				320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
 
-		//if (PORT->PortType == ICOM)
-		//{
-		//	sprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
-		//	SetWindowText(RIG->hCAT, msg);
-		//}
+			//if (PORT->PortType == ICOM)
+			//{
+			//	sprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
+			//	SetWindowText(RIG->hCAT, msg);
+			//}
 			SetWindowText(RIG->hLabel, RIG->RigName);
 #endif
 
-		RIG->WEB_Label = _strdup(RIG->RigName);
-//		RIG->WEB_CAT;
-		RIG->WEB_FREQ = zalloc(80);
-		RIG->WEB_MODE = zalloc(80);
-		strcpy(RIG->WEB_FREQ, "-----------");
-		strcpy(RIG->WEB_MODE, "------");
+			RIG->WEB_Label = _strdup(RIG->RigName);
+			//		RIG->WEB_CAT;
+			RIG->WEB_FREQ = zalloc(80);
+			RIG->WEB_MODE = zalloc(80);
+			strcpy(RIG->WEB_FREQ, "-----------");
+			strcpy(RIG->WEB_MODE, "------");
 
-		RIG->WEB_PTT = ' ';
-		RIG->WEB_SCAN = ' ';
+			RIG->WEB_PTT = ' ';
+			RIG->WEB_SCAN = ' ';
+
+
 		}
 	}
 
-   
+
 	if (NumberofPorts == 0)
 	{
 		SetupPortRIGPointers();
@@ -1507,14 +1560,17 @@ DllExport BOOL APIENTRY Rig_Init()
 	for (p = 0; p < NumberofPorts; p++)
 	{
 		PORT = PORTInfo[p];
-		
-//		CreateDisplay(PORT);
 
-		if (_stricmp(PORT->IOBASE, "CM108") != 0)
-			if (PORT->PTC == 0)		// Not using Rig Port on a PTC
-				OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+		//		CreateDisplay(PORT);
 
-		if (PORT->PTTIOBASE[0])		// Using separare port for PTT?
+		if (PORT->PortType == HAMLIB)
+			ConnecttoHAMLIB(PORT);
+		else if (PORT->HIDDevice)
+			OpenHIDPort(PORT, PORT->IOBASE, PORT->SPEED);
+		else if (PORT->PTC == 0 && _stricmp(PORT->IOBASE, "CM108") != 0)
+			OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+
+		if (PORT->PTTIOBASE[0])		// Using separate port for PTT?
 		{
 			if (PORT->PTTIOBASE[3] == '=')
 				PORT->hPTTDevice = OpenCOMPort(&PORT->PTTIOBASE[4], PORT->SPEED, FALSE, FALSE, FALSE, 0);
@@ -1545,7 +1601,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			// The Scan "Request Permission to Change" code needs the Port Records in order - 
 			// Those with active connect lock (eg SCS) first, then those with just a connect pending lock (eg WINMOR)
 			// then those with neither
-			
+
 			BitMask = RIG->BPQPort;
 			for (j = 0; j < 32; j++)
 			{
@@ -1586,7 +1642,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			}
 
 			RIG->PORT = PORT;		// For PTT
-			
+
 			if (RIG->NumberofBands)
 				CheckTimeBands(RIG);		// Set initial timeband
 
@@ -1594,9 +1650,53 @@ DllExport BOOL APIENTRY Rig_Init()
 			if (RIG->PTTCATPort[0])			// Serial port RTS to CAT 
 				_beginthread(PTTCATThread,0,RIG);
 #endif
+			if (RIG->HAMLIBPORT)
+			{
+				// Open listening socket
+
+				struct sockaddr_in  local_sin;  /* Local socket - internet style */
+				struct sockaddr_in * psin;
+				SOCKET sock = 0;
+				u_long param=1;
+
+				char szBuff[80];
+
+				psin=&local_sin;
+				psin->sin_family = AF_INET;
+				psin->sin_addr.s_addr = INADDR_ANY;
+
+				sock = socket(AF_INET, SOCK_STREAM, 0);
+
+				setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (char *)&param,4);
+
+				psin->sin_port = htons(RIG->HAMLIBPORT);        // Convert to network ordering 
+
+				if (bind( sock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+				{
+					sprintf(szBuff, "bind(sock) failed port %d Error %d\n", port, WSAGetLastError());
+					WritetoConsoleLocal(szBuff);
+					closesocket(sock);
+				}
+				else
+				{
+					if (listen(sock, 5) < 0)
+					{
+						sprintf(szBuff, "listen(sock) failed port %d Error %d\n", port, WSAGetLastError());
+						WritetoConsoleLocal(szBuff);
+					}
+					else
+					{
+						ioctl(sock, FIONBIO, &param);
+						RIG->ListenSocket = sock;
+						_beginthread(HAMLIBSlaveThread, 0, RIG);
+					}
+				}
+			}
+			Rig_PTT(RIG, 0);				// Send initial PTT Off (Mainly to set input mux on soundcard rigs)
 		}
 	}
-//	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
+
+	//	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
 
 	SetupPortRIGPointers();
 
@@ -1613,6 +1713,8 @@ DllExport BOOL APIENTRY Rig_Close()
 	struct TNCINFO * TNC;
 	int n, p;
 
+	HAMLIBRunning = 0;					// Close HAMLIB thread
+
 	for (p = 0; p < NumberofPorts; p++)
 	{
 		PORT = PORTInfo[p];
@@ -1626,7 +1728,7 @@ DllExport BOOL APIENTRY Rig_Close()
 
 			i = sprintf(REMOFF, "$PICOA,90,%02x,REMOTE,OFF*xx\r\n", PORT->Rigs[0].RigAddr);
 			AddNMEAChecksum(REMOFF);
-	
+
 			WriteCOMBlock(PORT->hDevice, REMOFF, i);
 			Sleep(200);
 		}
@@ -1644,7 +1746,7 @@ DllExport BOOL APIENTRY Rig_Close()
 		for (n = 0; n < PORT->ConfiguredRigs; n++)
 		{
 			struct RIGINFO * RIG = &PORT->Rigs[n];
-			
+
 			if (RIG->TimeBands)
 				free (RIG->TimeBands[1]->Scanlist);
 
@@ -1673,7 +1775,7 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		TNC->RIG = NULL;
 
-//		memset(TNC->WL2KInfoList, 0, sizeof(TNC->WL2KInfoList));
+		//		memset(TNC->WL2KInfoList, 0, sizeof(TNC->WL2KInfoList));
 
 	}
 
@@ -1683,7 +1785,7 @@ DllExport BOOL APIENTRY Rig_Close()
 BOOL Rig_Poll()
 {
 	int p, i;
-	
+
 	struct RIGPORTINFO * PORT;
 	struct RIGINFO * RIG;
 
@@ -1697,20 +1799,30 @@ BOOL Rig_Poll()
 			return TRUE;
 		}
 
-		if (PORT->hDevice == 0 && PORT->PTC == 0 && _stricmp(PORT->IOBASE, "CM108") != 0 && _stricmp(PORT->IOBASE, "REMOTE") != 0)
+		if (PORT->hDevice == 0)
 		{
 			// Try to reopen every 15 secs 
-			
+
 			PORT->ReopenDelay++;
 
 			if (PORT->ReopenDelay > 150)
 			{
 				PORT->ReopenDelay = 0;
 
-				if (PORT->Closed == 0)
-					OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+				if (PORT->PortType == HAMLIB)
+					ConnecttoHAMLIB(PORT);
+				else if (PORT->HIDDevice)
+					OpenHIDPort(PORT, PORT->IOBASE, PORT->SPEED);
+				else if (PORT->PTC == 0
+					&& _stricmp(PORT->IOBASE, "REMOTE") != 0
+					&& _stricmp(PORT->IOBASE, "CM108") != 0)
+				{
+					if (PORT->Closed == 0)
+						OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+				}
 			}
 		}
+
 		if (PORT == NULL || (PORT->hDevice == 0 && PORT->PTC == 0 && PORT->remoteSock == 0))
 			continue;
 
@@ -1720,11 +1832,25 @@ BOOL Rig_Poll()
 		{
 			RIG = &PORT->Rigs[i];
 
+			// Active PTT command
+
 			if (RIG->PTTTimer)
 			{
 				RIG->PTTTimer--;
 				if (RIG->PTTTimer == 0)
 					Rig_PTT(RIG, FALSE);
+			}
+
+			// repeated off timer
+
+			if (RIG->repeatPTTOFFTimer)
+			{
+				RIG->repeatPTTOFFTimer--;
+				if (RIG->repeatPTTOFFTimer == 0)
+				{
+					Rig_PTT(RIG, FALSE);
+					RIG->repeatPTTOFFTimer = 0;			// Don't repeat repeat!
+				}
 			}
 		}
 
@@ -1733,7 +1859,7 @@ BOOL Rig_Poll()
 		switch (PORT->PortType)
 		{ 
 		case ICOM:
-			
+
 			ICOMPoll(PORT);
 			break;
 
@@ -1741,32 +1867,38 @@ BOOL Rig_Poll()
 		case FT100:
 		case FT990:
 		case FT1000:
-			
+
 			YaesuPoll(PORT);
 			break;
 
 		case KENWOOD:
 		case FT2000:
+		case FT991A:
 		case FLEX:
 		case NMEA:
-			
+
 			KenwoodPoll(PORT);
 			break;
+
+		case HAMLIB:
+			HAMLIBPoll(PORT);
+			break;
+
 		}
 	}
 
 	return TRUE;
 }
- 
+
 
 BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 {
-   // disable event notification and wait for thread
-   // to halt
+	// disable event notification and wait for thread
+	// to halt
 
-   CloseCOMPort(PORT->hDevice); 
-   PORT->hDevice = 0;
-   return TRUE;
+	CloseCOMPort(PORT->hDevice); 
+	PORT->hDevice = 0;
+	return TRUE;
 
 } // end of CloseConnection()
 
@@ -1781,15 +1913,20 @@ int OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 	if (PORT->remoteSock)		// Using WINMORCONTROL
 		return TRUE;
 
-	if (PORT->PortType == FT2000 || strcmp(PORT->Rigs[0].RigName, "FT847") == 0)		// FT2000 and similar seem to need two stop bits
-		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, TWOSTOPBITS);
+	if (PORT->PortType == FT2000 || PORT->PortType == FT991A || strcmp(PORT->Rigs[0].RigName, "FT847") == 0)		// FT2000 and similar seem to need two stop bits
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, PORT->Alerted, TWOSTOPBITS);
 	else if (PORT->PortType == NMEA)
-		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, ONESTOPBIT);
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, PORT->Alerted, ONESTOPBIT);
 	else
-		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, TWOSTOPBITS);
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, PORT->Alerted, TWOSTOPBITS);
 
 	if (PORT->hDevice == 0)
-		return (FALSE);
+	{
+		PORT->Alerted = TRUE;
+		return FALSE;
+	}
+
+	PORT->Alerted = FALSE;
 
 	if (PORT->PortType == PTT || (PORT->Rigs[0].PTTMode & PTTRTS))
 		COMClearRTS(PORT->hDevice);
@@ -1834,10 +1971,17 @@ void CheckRX(struct RIGPORTINFO * PORT)
 	unsigned char * ptr;
 	int len;
 
-	if (PORT->PTC)
+	if (PORT->PortType == HAMLIB)
 	{
-		Length = GetPTCRadioCommand(PORT->PTC, &PORT->RXBuffer[PORT->RXLen]);
+		// Data received in thread (do we need thread??
+		
+		Length = PORT->RXLen;
+		PORT->RXLen = 0;
 	}
+	else if (PORT->HIDDevice)
+		Length = HID_Read_Block(PORT);
+	else if (PORT->PTC)
+		Length = GetPTCRadioCommand(PORT->PTC, &PORT->RXBuffer[PORT->RXLen]);
 	else if (PORT->remoteSock)
 	{
 		struct sockaddr_in rxaddr;
@@ -1966,6 +2110,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 
 	case KENWOOD:
 	case FT2000:
+	case FT991A:
 	case FLEX:
 
 		if (Length < 2)				// Minimum Frame Sise
@@ -2013,6 +2158,13 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		}
 
 		PORT->RXLen = Length;
+		return;
+	
+	case HAMLIB:
+
+		ProcessHAMLIBFrame(PORT, Length);
+		PORT->RXLen = 0;
+		return;
 	}
 }
 
@@ -2051,6 +2203,9 @@ BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 
 	int ret;
 
+	if (PORT->HIDDevice)
+		HID_Write_Block(PORT);
+	else
 	if (PORT->PTC)
 		SendPTCRadioCommand(PORT->PTC, PORT->TXBuffer, PORT->TXLen);
 	else if (PORT->remoteSock)
@@ -2503,7 +2658,7 @@ VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * Msg, int framelen)
 
 		return;	
 
-	if (Msg[2] != 0xe0)
+	if (Msg[2] != 0xe0 && Msg[2] != 0)
 	{
 		// Echo - Proves a CI-V interface is attached
 
@@ -2670,8 +2825,11 @@ SetFinished:
 			if (cmdSent == 0x1C && PORT->TXBuffer[5] == 1)		// Tune
 				SendResponse(RIG->Session, "Sorry - Tune Command Rejected");
 			else
-				if (cmdSent == 0x14 && PORT->TXBuffer[5] == 0x0a)		// Power
+			if (cmdSent == 0x14 && PORT->TXBuffer[5] == 0x0a)		// Power
 				SendResponse(RIG->Session, "Sorry - Power Command Rejected");
+			else
+				SendResponse(RIG->Session, "Sorry - Command Rejected");
+
 		}
 		return;
 	}
@@ -2684,6 +2842,7 @@ SetFinished:
 
 		RIG->RIGOK = TRUE;
 		PORT->Timeout = 0;
+
 		if (!PORT->AutoPoll)
 		{
 			// Manual response probably to CMD Query. Retuen response
@@ -2777,6 +2936,7 @@ SetFinished:
 		else
 			sprintf(RIG->WEB_MODE,"%s/%d", Modes[Mode], Msg[6]);
 
+		strcpy(RIG->ModeString, Modes[Mode]);
 		SetWindowText(RIG->hMODE, RIG->WEB_MODE);
 	}
 }
@@ -2848,6 +3008,7 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 		sprintf(RIG->WEB_MODE,"%s", FTRXModes[Mode]);
 	}
 
+	strcpy(RIG->ModeString, RIG->WEB_MODE);
 	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
 
 	if (!PORT->AutoPoll)
@@ -2889,6 +3050,7 @@ VOID ProcessFT990Frame(struct RIGPORTINFO * PORT)
 	Mode = Msg[7] & 7;
 	sprintf(RIG->WEB_MODE,"%s", FTRXModes[Mode]);
 
+	strcpy(RIG->ModeString, RIG->WEB_MODE);
 	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
 
 	if (!PORT->AutoPoll)
@@ -2947,6 +3109,7 @@ VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT)
 		sprintf(RIG->WEB_MODE,"%s", FTRXModes[Mode]);
 	}
 
+	strcpy(RIG->ModeString, RIG->WEB_MODE);
 	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
 
 	if (!PORT->AutoPoll)
@@ -3067,6 +3230,7 @@ VOID ProcessYaesuFrame(struct RIGPORTINFO * PORT)
 	if (Mode > 15) Mode = 15;
 
 	sprintf(RIG->WEB_MODE,"%s", YaesuModes[Mode]);
+	strcpy(RIG->ModeString, RIG->WEB_MODE);
 	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
 
 	//	FT847 Manual Freq Change response ends up here
@@ -3305,6 +3469,7 @@ VOID ProcessNMEA(struct RIGPORTINFO * PORT, char * Msg, int Length)
 
 		SetWindowText(RIG->hMODE, &Msg[18]);
 		strcpy(RIG->WEB_MODE, &Msg[18]);
+		strcpy(RIG->ModeString, RIG->WEB_MODE);
 		return;
 	}
 
@@ -3363,7 +3528,7 @@ Loop:
 
 	if (Msg[0] == 'F' && Msg[1] == 'A' && CmdLen > 9)
 	{
-		char FreqDecimal[10];
+		char FreqDecimal[10] = "";
 		int F1, i;
 
 		if (PORT->PortType == FT2000)
@@ -3371,6 +3536,12 @@ Loop:
 			memcpy(FreqDecimal,&Msg[4], 6);
 			Msg[4] = 0;
 		}
+		else if (PORT->PortType == FT991A)
+		{
+			memcpy(FreqDecimal,&Msg[5], 6);
+			Msg[5] = 0;
+		}
+
 		else
 		{
 			memcpy(FreqDecimal,&Msg[7], 6);
@@ -3405,6 +3576,18 @@ Loop:
 			if (Mode > 13) Mode = 13;
 			SetWindowText(RIG->hMODE, FT2000Modes[Mode]);
 			strcpy(RIG->WEB_MODE, FT2000Modes[Mode]);
+			strcpy(RIG->ModeString, RIG->WEB_MODE);
+		}
+		else if (PORT->PortType == FT991A)
+		{
+			Mode = Msg[3] - 48;
+			if (Mode > 16)
+				Mode -= 7;
+			
+			if (Mode > 15) Mode = 13;
+			SetWindowText(RIG->hMODE, FT991AModes[Mode]);
+			strcpy(RIG->WEB_MODE, FT991AModes[Mode]);
+			strcpy(RIG->ModeString, RIG->WEB_MODE);
 		}
 		else if (PORT->PortType == FLEX)
 		{
@@ -3412,6 +3595,7 @@ Loop:
 			if (Mode > 12) Mode = 12;
 			SetWindowText(RIG->hMODE, FLEXModes[Mode]);
 			strcpy(RIG->WEB_MODE, FLEXModes[Mode]);
+			strcpy(RIG->ModeString, RIG->WEB_MODE);
 		}
 		else
 		{
@@ -3419,6 +3603,7 @@ Loop:
 			if (Mode > 7) Mode = 7;
 			SetWindowText(RIG->hMODE, KenwoodModes[Mode]);
 			strcpy(RIG->WEB_MODE, KenwoodModes[Mode]);
+			strcpy(RIG->ModeString, RIG->WEB_MODE);
 		}
 	}
 
@@ -3650,7 +3835,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				   char * PMinLevel, char * PMaxLevel, char * PacketMode,
 				   char * RPacketMode, char * Split, char * Data, char * WinmorMode,
 				   char * Antenna, BOOL * Supress, char * Filter, char * Appl,
-				   char * MemoryBank, int * MemoryNumber, char * ARDOPMode, char * VARAMode)
+				   char * MemoryBank, int * MemoryNumber, char * ARDOPMode, char * VARAMode, int * BandWidth)
 {
 	char * Context;
 	char * ptr;
@@ -3664,6 +3849,9 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	*VARAMode = 0;
 	
 	ptr = strtok_s(Param, ",", &Context);
+
+	if (ptr == NULL)
+		return FALSE;
 
 	// "New" format - Dwell, Freq, Params.
 	
@@ -3681,6 +3869,10 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	*Dwell = atof(ptr);
 	
 	ptr = strtok_s(NULL, ",", &Context);
+
+	if (ptr == NULL)
+		return FALSE;
+
 
 	// May be a frequency or a Memory Bank/Channel 
 
@@ -3701,7 +3893,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 
 	ptr = strtok_s(NULL, ",", &Context);
 
-	if (strlen(ptr) >  6)
+	if (ptr == NULL || strlen(ptr) >  8)
 		return FALSE;
 
 	// If channel, dont need mode
@@ -3714,7 +3906,10 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 
 	while (ptr)
 	{
-		if (memcmp(ptr, "APPL=", 5) == 0)
+		if (isdigit(ptr[0]))
+			*BandWidth = atoi(ptr);
+
+		else if (memcmp(ptr, "APPL=", 5) == 0)
 			strcpy(Appl, ptr + 5);
 
 		else if (ptr[0] == 'A' && (ptr[1] == 'S' || ptr[1] == '0') && strlen(ptr) < 7)
@@ -3754,9 +3949,13 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				*WinmorMode = 'W';
 		}
 
-		else if (ptr[0] == 'V'  && (ptr[1] == 'S' || ptr[1] == '0') && strlen(ptr) < 7)
-			strcpy(VARAMode, "S");
-
+		else if (ptr[0] == 'V')
+		{
+			*VARAMode = ptr[1];
+			// W N S (skip) or 0 (also Skip)
+			if (ptr[1] == '0')
+				*VARAMode = 'S';
+		}
 		else if (ptr[0] == '+')
 			*Split = '+';
 		else if (ptr[0] == '-')
@@ -3771,7 +3970,6 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 		ptr = strtok_s(NULL, ",", &Context);
 	}
 	return TRUE;
-
 }
 
 VOID AddNMEAChecksum(char * msg)
@@ -3860,7 +4058,7 @@ void DecodeCM108(int Port, char * ptr)
 
 		// Look for Device
 	
-		devs = hid_enumerate((USHORT)VID, (USHORT)PID);
+		devs = hid_enumerate(0,0); // so we list devices(USHORT)VID, (USHORT)PID);
 		cur_dev = devs;
 		while (cur_dev)
 		{
@@ -3974,6 +4172,40 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		goto CheckScan;
 	}
 
+	if (_memicmp(ptr, "HAMLIB", 5) == 0)
+	{
+		// Use rigctld
+
+		// Need parameter - Host:Port
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		if (ptr == NULL || strlen(ptr) > 79) return FALSE;
+
+		// Have a parameter do define port. Will decode it later
+
+		PORT = PORTInfo[NumberofPorts++] = zalloc(sizeof(struct RIGPORTINFO));
+		PORT->PortType = HAMLIB;
+		PORT->ConfiguredRigs = 1;
+		RIG = &PORT->Rigs[0];
+		RIG->PortNum = Port;
+		RIG->BPQPort |=  (1 << Port);
+		RIG->RIGOK = TRUE;
+
+		strcpy(PORT->IOBASE, ptr);
+		strcpy(RIG->RigName, "HAMLIB");
+
+		// Decode host
+
+		DecodeHAMLIBAddr(PORT, ptr);
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		// look for scan params
+
+		goto CheckScan;
+	}
+
 	if ((_memicmp(ptr, "VCOM", 4) == 0) && TNC->Hardware == H_SCS)		// Using Radio Port on PTC
 		COMPort = 0;
 	else if ((_memicmp(ptr, "PTCPORT", 7) == 0) && (TNC->Hardware == H_SCS || TNC->Hardware == H_ARDOP))
@@ -3990,7 +4222,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		if (COMPort)
 			if (strcmp(PORT->IOBASE, COMPort) == 0)
 				goto PortFound;
-	
+
 		if (COMPort == 0)
 			if (PORT->IOBASE == COMPort)
 				goto PortFound;
@@ -4011,8 +4243,19 @@ PortFound:
 
 	if (ptr == NULL) return (FALSE);
 
-	if (_stricmp(PORT->IOBASE, "CM108") == 0) // HID Addr instead of Speed
+	if (_stricmp(PORT->IOBASE, "RAWHID") == 0) // HID Addr instead of Speed
+	{
 		DecodeCM108(Port, ptr);
+		if (CM108Device)
+		{	
+			PORT->HIDDevice = CM108Device;
+			CM108Device = NULL;
+		}
+		else PORT->HIDDevice = _strdup ("MissingHID");
+	}
+	else if (_stricmp(PORT->IOBASE, "CM108") == 0) // HID Addr instead of Speed
+		DecodeCM108(Port, ptr);
+
 	if (_stricmp(PORT->IOBASE, "REMOTE") == 0) // IP Addr/Port
 		DecodeRemote(PORT, ptr);
 	else	
@@ -4042,11 +4285,11 @@ PortFound:
 
 	}
 
-//		if (strcmp(ptr, "ICOM") == 0 || strcmp(ptr, "YAESU") == 0 
-//			|| strcmp(ptr, "KENWOOD") == 0 || strcmp(ptr, "PTTONLY") == 0 || strcmp(ptr, "ANTENNA") == 0)
+	//		if (strcmp(ptr, "ICOM") == 0 || strcmp(ptr, "YAESU") == 0 
+	//			|| strcmp(ptr, "KENWOOD") == 0 || strcmp(ptr, "PTTONLY") == 0 || strcmp(ptr, "ANTENNA") == 0)
 
-			// RADIO IC706 4E 5 14.103/U1 14.112/u1 18.1/U1 10.12/l1
-			// Read RADIO Lines
+	// RADIO IC706 4E 5 14.103/U1 14.112/u1 18.1/U1 10.12/l1
+	// Read RADIO Lines
 
 	_strupr(ptr);
 
@@ -4054,25 +4297,25 @@ PortFound:
 	if (strcmp(ptr, "ICOM") == 0)
 		PORT->PortType = ICOM;
 	else
-	if (strcmp(ptr, "YAESU") == 0)
-		PORT->PortType = YAESU;
-	else
-	if (strcmp(ptr, "KENWOOD") == 0)
-		PORT->PortType = KENWOOD;
-	else
-	if (strcmp(ptr, "FLEX") == 0)
-		PORT->PortType = FLEX;
-	else
-	if (strcmp(ptr, "NMEA") == 0)
-		PORT->PortType = NMEA;
-	else
-	if (strcmp(ptr, "PTTONLY") == 0)
-		PORT->PortType = PTT;
-	else
-	if (strcmp(ptr, "ANTENNA") == 0)
-		PORT->PortType = ANT;
-	else
-		return FALSE;
+		if (strcmp(ptr, "YAESU") == 0)
+			PORT->PortType = YAESU;
+		else
+			if (strcmp(ptr, "KENWOOD") == 0)
+				PORT->PortType = KENWOOD;
+			else
+				if (strcmp(ptr, "FLEX") == 0)
+					PORT->PortType = FLEX;
+				else
+					if (strcmp(ptr, "NMEA") == 0)
+						PORT->PortType = NMEA;
+					else
+						if (strcmp(ptr, "PTTONLY") == 0)
+							PORT->PortType = PTT;
+						else
+							if (strcmp(ptr, "ANTENNA") == 0)
+								PORT->PortType = ANT;
+							else
+								return FALSE;
 
 	Debugprintf("Port type = %d", PORT->PortType);
 
@@ -4099,7 +4342,7 @@ PortFound:
 	}
 
 	if (strlen(ptr) > 9) return FALSE;
-	
+
 	RigName =  ptr;
 
 	Debugprintf("Rigname = *%s*", RigName);
@@ -4139,6 +4382,13 @@ PortFound:
 		PORT->PortType = FT2000;
 	}
 
+	// FT991A seems to be different to most other YAESU types
+
+	if (strcmp(RigName, "FT991A") == 0 && PORT->PortType == YAESU)
+	{
+		PORT->PortType = FT991A;
+	}
+
 	// If PTTONLY, may be defining another rig using the other control line
 
 	if (PORT->PortType == PTT)
@@ -4157,13 +4407,13 @@ PortFound:
 
 		RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
 
-	PTTFound:
+PTTFound:
 
 		strcpy(RIG->RigName, RigName);
 		RIG->PortNum = Port;
 		RIG->BPQPort |=  (1 << Port);
 
-//		return RIG;
+		//		return RIG;
 	}
 
 	// If ICOM, we may be adding a new Rig
@@ -4190,10 +4440,10 @@ PortFound:
 		RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
 		RIG->RigAddr = RigAddr;
 
-	RigFound:
+RigFound:
 
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
-//		if (ptr == NULL) return (FALSE);
+		//		if (ptr == NULL) return (FALSE);
 	}
 	else
 	{
@@ -4204,7 +4454,7 @@ PortFound:
 	}
 
 	RIG->RIG_DEBUG = RIG_DEBUG;
-	
+
 	strcpy(RIG->RigName, RigName);
 
 	RIG->TSMenu = 63;		// Default to TS590S
@@ -4222,8 +4472,11 @@ PortFound:
 			RIG->TSMenu = 69;
 	}
 
+	if (PORT->PortType == FT991A)
+		RIG->TSMenu = 72;			//Menu for Data/USB siwtching
+
 domux:	
-	
+
 	RIG->PortNum = Port;
 	RIG->BPQPort |=  (1 << Port);
 
@@ -4234,7 +4487,7 @@ domux:
 		if (strcmp(ptr, "PTTMUX") == 0)
 		{
 			// Ports whose RTS/DTR will be converted to CAT commands (for IC7100/IC7200 etc)
-	
+
 			int PIndex = 0;
 
 			ptr = strtok_s(NULL, " \t\n\r", &Context);
@@ -4242,12 +4495,12 @@ domux:
 			while (memcmp(ptr, "COM", 3) == 0)
 			{	
 				strcpy(RIG->PTTCATPort[PIndex], &ptr[3]);
-				
+
 				if (PIndex < 3)
 					PIndex++;
 
 				ptr = strtok_s(NULL, " \t\n\r", &Context);
-		
+
 				if (ptr == NULL)
 					break;
 			}
@@ -4266,7 +4519,7 @@ domux:
 
 			if (ptr == NULL)
 				break;
-	
+
 			if (strcmp(ptr, "MIC") == 0)
 				DataPTTOffMode = 0;
 			else if (strcmp(ptr, "AUX") == 0)
@@ -4287,6 +4540,14 @@ domux:
 
 			DataPTT = TRUE;
 		}
+
+		if (memcmp(ptr, "HAMLIB=", 7) == 0)
+		{
+			// HAMLIB Emulator - param is port to listen on
+
+			RIG->HAMLIBPORT = atoi(&ptr[7]);
+		}
+
 		else if (atoi(ptr))
 			break;					// Not scan freq oe timeband, so see if another param
 
@@ -4424,7 +4685,7 @@ domux:
 		else
 		{
 			strcpy(RIG->PTTOff, "RX;");
-			
+
 			if (DataPTT)
 				strcpy(RIG->PTTOn, "TX1;");
 			else
@@ -4455,10 +4716,28 @@ domux:
 		strcpy(RIG->PTTOff, "TX0;");
 		RIG->PTTOffLen = 4;
 	}
+	else if	(PORT->PortType == FT991A)
+	{	
+		RIG->PollLen = 7;
+		strcpy(RIG->Poll, "FA;MD0;");
+
+		if (PTTControlsInputMUX)
+		{
+			RIG->PTTOnLen = sprintf(RIG->PTTOn, "EX0721;TX1;");    // Select USB before PTT
+			RIG->PTTOffLen = sprintf(RIG->PTTOff, "TX0;EX0720;");  // Select DATA after dropping PTT
+		}
+		else
+		{
+			strcpy(RIG->PTTOn, "TX1;");
+			RIG->PTTOnLen = 4;
+			strcpy(RIG->PTTOff, "TX0;");
+			RIG->PTTOffLen = 4;
+		}
+	}
 	else if	(PORT->PortType == NMEA)
 	{	
 		int Len;
-			
+
 		i = sprintf(RIG->Poll, "$PICOA,90,%02x,RXF*xx\r\n", RIG->RigAddr);
 		AddNMEAChecksum(RIG->Poll);
 		Len = i;
@@ -4477,17 +4756,17 @@ domux:
 
 
 	if (ptr == NULL) return RIG;			// No Scanning, just Interactive control
-	
+
 	if (strchr(ptr, ',') == 0)				// Old Format
 	{
 		ScanFreq = atof(ptr);
 
-		#pragma warning(push)
-		#pragma warning(disable : 4244)
+#pragma warning(push)
+#pragma warning(disable : 4244)
 
 		RIG->ScanFreq = ScanFreq * 10;
 
-		#pragma warning(push)
+#pragma warning(push)
 
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
 	}
@@ -4529,14 +4808,15 @@ CheckScan:
 		char VARAMode[6] = "";
 		char Appl[13];
 		char * ApplCall;
+		int BandWidth;
 
 		if (ptr[0] == ';' || ptr[0] == '#')
 			break;
 
 		Filter = PMinLevel = PMaxLevel = PacketMode = RPacketMode = Split =
-			Data = WinmorMode = Antenna = ModeNo = Supress = MemoryNumber = 0;
-	
-		MemoryBank = 0;
+			Data = WinmorMode = Antenna = ModeNo = Supress = 
+			MemoryBank = MemoryNumber = BandWidth = 0;
+
 		Appl[0] = 0;
 		ARDOPMode[0] = 0;
 		VARAMode[0] = 0;
@@ -4547,11 +4827,11 @@ CheckScan:
 			// New TimeBand
 
 			struct TimeScan * Band;
-						
+
 			Band = AllocateTimeRec(RIG);
 
 			*FreqPtr = (struct ScanEntry *)0;		// Terminate Last Band
-						
+
 			Band->Start = (atoi(ptr) * 3600) + (atoi(&ptr[3]) * 60);
 			Band->End = 84540;	//23:59
 			SaveBand->End = Band->Start - 60;
@@ -4568,12 +4848,12 @@ CheckScan:
 		{
 			DecodeModePtr(ptr, &Dwell, &Freq, Mode, &PMinLevel, &PMaxLevel, &PacketMode,
 				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter, &Appl[0],
-				&MemoryBank, &MemoryNumber, ARDOPMode, VARAMode);
+				&MemoryBank, &MemoryNumber, ARDOPMode, VARAMode, &BandWidth);
 		}
 		else
 		{
 			Modeptr = strchr(ptr, '/');
-					
+
 			if (Modeptr)
 				*Modeptr++ = 0;
 
@@ -4596,7 +4876,7 @@ CheckScan:
 					Split = 'S';
 				else if (strchr(&Modeptr[1], 'D'))
 					Data = 1;
-						
+
 				if (strchr(&Modeptr[1], 'W'))
 				{
 					WinmorMode = 'W';
@@ -4630,195 +4910,227 @@ CheckScan:
 					Antenna = '5';
 				else if (strstr(&Modeptr[1], "A6"))
 					Antenna = '6';
+			}
+		}
+
+		switch(PORT->PortType)
+		{
+		case ICOM:						
+
+			for (ModeNo = 0; ModeNo < 8; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
+				{
+					if (Modes[ModeNo][0] == Mode[0])
+						break;
+				}
+				else
+				{
+					if (_stricmp(Modes[ModeNo], Mode) == 0)
+						break;
 				}
 			}
-			
-			switch(PORT->PortType)
+			break;
+
+		case YAESU:						
+
+			for (ModeNo = 0; ModeNo < 16; ModeNo++)
 			{
-			case ICOM:						
-						
-				for (ModeNo = 0; ModeNo < 8; ModeNo++)
+				if (strlen(Mode) == 1)
 				{
-					if (strlen(Mode) == 1)
-					{
-						if (Modes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(Modes[ModeNo], Mode) == 0)
-							break;
-					}
-				}
-				break;
-
-			case YAESU:						
-						
-				for (ModeNo = 0; ModeNo < 16; ModeNo++)
-				{
-					if (strlen(Mode) == 1)
-					{
-						if (YaesuModes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(YaesuModes[ModeNo], Mode) == 0)
-							break;
-					}
-				}
-				break;
-
-			case KENWOOD:
-						
-				for (ModeNo = 0; ModeNo < 8; ModeNo++)
-				{
-					if (strlen(Mode) == 1)
-					{
-						if (KenwoodModes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(KenwoodModes[ModeNo], Mode) == 0)
-							break;
-					}
-				}
-				break;
-
-			case FLEX:
-						
-				for (ModeNo = 0; ModeNo < 12; ModeNo++)
-				{
-					if (strlen(Mode) == 1)
-					{
-						if (FLEXModes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(FLEXModes[ModeNo], Mode) == 0)
-							break;
-					}
-				}
-				break;
-
-			case FT2000:
-						
-				if (Modeptr)
-				{
-					if (strstr(Modeptr, "PL"))
-					{
-						ModeNo = 8;
+					if (YaesuModes[ModeNo][0] == Mode[0])
 						break;
-					}
-					if (strstr(Modeptr, "PU"))
-					{
-						ModeNo = 12;
+				}
+				else
+				{
+					if (_stricmp(YaesuModes[ModeNo], Mode) == 0)
 						break;
-					}
 				}
-				for (ModeNo = 0; ModeNo < 14; ModeNo++)
-				{
-					if (strlen(Mode) == 1)
-					{
-						if (FT2000Modes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(FT2000Modes[ModeNo], Mode) == 0)
-							break;
-					}
-				}
-				break;
+			}
+			break;
 
-			case FT100:						
-				
-				for (ModeNo = 0; ModeNo < 8; ModeNo++)
-				{
-					if (strlen(Mode) == 1)
-					{
-						if (FT100Modes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(FT100Modes[ModeNo], Mode) == 0)
-							break;
-					}
-				}
-				break;
+		case KENWOOD:
 
-			case FT990:	
-
-				for (ModeNo = 0; ModeNo < 12; ModeNo++)
+			for (ModeNo = 0; ModeNo < 8; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
 				{
-					if (strlen(Mode) == 1)
-					{
-						if (FT990Modes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(FT990Modes[ModeNo], Mode) == 0)
-							break;
-					}
+					if (KenwoodModes[ModeNo][0] == Mode[0])
+						break;
 				}
-				break;
-
-			case FT1000:						
-				
-				for (ModeNo = 0; ModeNo < 12; ModeNo++)
+				else
 				{
-					if (strlen(Mode) == 1)
-					{
-						if (FT1000Modes[ModeNo][0] == Mode[0])
-							break;
-					}
-					else
-					{
-						if (_stricmp(FT1000Modes[ModeNo], Mode) == 0)
-							break;
-					}
+					if (_stricmp(KenwoodModes[ModeNo], Mode) == 0)
+						break;
 				}
-				break;
+			}
+			break;
+
+		case FLEX:
+
+			for (ModeNo = 0; ModeNo < 12; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
+				{
+					if (FLEXModes[ModeNo][0] == Mode[0])
+						break;
+				}
+				else
+				{
+					if (_stricmp(FLEXModes[ModeNo], Mode) == 0)
+						break;
+				}
+			}
+			break;
+
+		case FT2000:
+
+			if (Modeptr)
+			{
+				if (strstr(Modeptr, "PL"))
+				{
+					ModeNo = 8;
+					break;
+				}
+				if (strstr(Modeptr, "PU"))
+				{
+					ModeNo = 12;
+					break;
+				}
+			}
+			for (ModeNo = 0; ModeNo < 14; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
+				{
+					if (FT2000Modes[ModeNo][0] == Mode[0])
+						break;
+				}
+				else
+				{
+					if (_stricmp(FT2000Modes[ModeNo], Mode) == 0)
+						break;
+				}
+			}
+			break;
+			
+		case FT991A:
+
+/*			if (Modeptr)
+			{
+				if (strstr(Modeptr, "PL"))
+				{
+					ModeNo = 8;
+					break;
+				}
+				if (strstr(Modeptr, "PU"))
+				{
+					ModeNo = 12;
+					break;
+				}
+			}
+*/	
+			for (ModeNo = 0; ModeNo < 15; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
+				{
+					if (FT991AModes[ModeNo][0] == Mode[0])
+						break;
+				}
+				else
+				{
+					if (_stricmp(FT991AModes[ModeNo], Mode) == 0)
+						break;
+				}
+			}
+			break;
+
+
+		case FT100:						
+
+			for (ModeNo = 0; ModeNo < 8; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
+				{
+					if (FT100Modes[ModeNo][0] == Mode[0])
+						break;
+				}
+				else
+				{
+					if (_stricmp(FT100Modes[ModeNo], Mode) == 0)
+						break;
+				}
+			}
+			break;
+
+		case FT990:	
+
+			for (ModeNo = 0; ModeNo < 12; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
+				{
+					if (FT990Modes[ModeNo][0] == Mode[0])
+						break;
+				}
+				else
+				{
+					if (_stricmp(FT990Modes[ModeNo], Mode) == 0)
+						break;
+				}
+			}
+			break;
+
+		case FT1000:						
+
+			for (ModeNo = 0; ModeNo < 12; ModeNo++)
+			{
+				if (strlen(Mode) == 1)
+				{
+					if (FT1000Modes[ModeNo][0] == Mode[0])
+						break;
+				}
+				else
+				{
+					if (_stricmp(FT1000Modes[ModeNo], Mode) == 0)
+						break;
+				}
+			}
+			break;
 		}
 
 		Freq = Freq * 1000000.0;
 
 
 		Valchar = _fcvt(Freq, 0, &dec, &sign);
-//		_gcvt(Freq, 0, Valchar);
+		//		_gcvt(Freq, 0, Valchar);
 
 
 		if (dec == 9)	// 10-100
 			sprintf(FreqString, "%s", Valchar);
 		else
-		if (dec == 8)	// 10-100
-			sprintf(FreqString, "0%s", Valchar);		
-		else
-		if (dec == 7)	// 1-10
-			sprintf(FreqString, "00%s", Valchar);
-		else
-		if (dec == 6)	// 0.1 - 1
-			sprintf(FreqString, "000%s", Valchar);
-		else
-		if (dec == 5)	// 0.01 - .1
-			sprintf(FreqString, "000%s", Valchar);
+			if (dec == 8)	// 10-100
+				sprintf(FreqString, "0%s", Valchar);		
+			else
+				if (dec == 7)	// 1-10
+					sprintf(FreqString, "00%s", Valchar);
+				else
+					if (dec == 6)	// 0.1 - 1
+						sprintf(FreqString, "000%s", Valchar);
+					else
+						if (dec == 5)	// 0.01 - .1
+							sprintf(FreqString, "000%s", Valchar);
 
 		FreqPtr[0] = malloc(sizeof(struct ScanEntry));
 		memset(FreqPtr[0], 0, sizeof(struct ScanEntry));
 
-		#pragma warning(push)
-		#pragma warning(disable : 4244)
+#pragma warning(push)
+#pragma warning(disable : 4244)
 
 		if (Dwell == 0.0)
 			FreqPtr[0]->Dwell = ScanFreq * 10;
 		else
 			FreqPtr[0]->Dwell = Dwell * 10;
 
-		#pragma warning(pop) 
+#pragma warning(pop) 
 
 		FreqPtr[0]->Freq = Freq;
 		FreqPtr[0]->Bandwidth = WinmorMode;
@@ -4828,7 +5140,7 @@ CheckScan:
 		FreqPtr[0]->PMinLevel = PMinLevel;
 		FreqPtr[0]->Antenna = Antenna;
 		strcpy(FreqPtr[0]->ARDOPMode, ARDOPMode);
-		strcpy(FreqPtr[0]->VARAMode, VARAMode);
+		FreqPtr[0]->VARAMode = VARAMode[0];
 
 		strcpy(FreqPtr[0]->APPL, Appl);
 
@@ -4864,7 +5176,7 @@ CheckScan:
 				char ChanString[5];
 
 				// Send Set Memory, then Channel
-								
+
 				*(CmdPtr++) = 0x08;
 				*(CmdPtr++) = 0xFD;
 
@@ -4874,12 +5186,12 @@ CheckScan:
 				*(CmdPtr++) = 0xE0;
 
 				sprintf(ChanString, "%04d", MemoryNumber); 
-	
+
 				*(CmdPtr++) = 0x08;
 				*(CmdPtr++) = (ChanString[1] - 48) | ((ChanString[0] - 48) << 4);
 				*(CmdPtr++) = (ChanString[3] - 48) | ((ChanString[2] - 48) << 4);
 				*(CmdPtr++) = 0xFD;
-				
+
 				FreqPtr[0]->Cmd1Len = 14;
 
 				if (MemoryBank)
@@ -4901,7 +5213,7 @@ CheckScan:
 				*(CmdPtr++) = 0x5;		// Set frequency command
 
 				// Need to convert two chars to bcd digit
-		
+
 				*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
 				*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
 				*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
@@ -4919,16 +5231,16 @@ CheckScan:
 				}
 
 				// Send Set VFO in case last chan was memory
-							
-//				*(CmdPtr++) = 0xFE;
-//				*(CmdPtr++) = 0xFE;
-//				*(CmdPtr++) = RIG->RigAddr;
-//				*(CmdPtr++) = 0xE0;
 
-//				*(CmdPtr++) = 0x07;
-//				*(CmdPtr++) = 0xFD;
+				//				*(CmdPtr++) = 0xFE;
+				//				*(CmdPtr++) = 0xFE;
+				//				*(CmdPtr++) = RIG->RigAddr;
+				//				*(CmdPtr++) = 0xE0;
 
-//				FreqPtr[0]->Cmd1Len = 17;
+				//				*(CmdPtr++) = 0x07;
+				//				*(CmdPtr++) = 0xFD;
+
+				//				FreqPtr[0]->Cmd1Len = 17;
 
 				if (Filter)
 				{						
@@ -4957,10 +5269,10 @@ CheckScan:
 						else
 							if (Split == '+')
 								*(CmdPtr++) = 0x12;
-						else
-							if (Split == '-')
-								*(CmdPtr++) = 0x11;
-			
+							else
+								if (Split == '-')
+									*(CmdPtr++) = 0x11;
+
 						*(CmdPtr++) = 0xFD;
 					}
 					else
@@ -4999,7 +5311,7 @@ CheckScan:
 								*(CmdPtr++) = 0x6;		// Set Data
 								*(CmdPtr++) = 0x1;		//On		
 							}
-						
+
 							*(CmdPtr++) = 0xFD;
 						}
 					}
@@ -5070,7 +5382,7 @@ CheckScan:
 				FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;AN%c;FA;MD;", FreqString, ModeNo, Antenna - 4);
 			else
 				FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
-	
+
 		}
 		else if	(PORT->PortType == FLEX)
 		{	
@@ -5079,6 +5391,10 @@ CheckScan:
 		else if	(PORT->PortType == FT2000)
 		{	
 			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
+		}
+		else if	(PORT->PortType == FT991A)
+		{	
+			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA%s;MD0%X;FA;MD0;", &FreqString, ModeNo);
 		}
 		else if	(PORT->PortType == FT100 || PORT->PortType == FT990
 			|| PORT->PortType == FT1000)
@@ -5118,18 +5434,18 @@ CheckScan:
 			*(CmdPtr++) = 0;
 			*(CmdPtr++) = 0;
 			*(CmdPtr++) = 0;
-			
+
 			if (PORT->PortType == FT990 || PORT->YaesuVariant == FT1000D)
 				*(CmdPtr++) = 3;
 			else
 				*(CmdPtr++) = 2;		// F100 or FT1000MP
-			
+
 			*(CmdPtr++) = 16;			// Get Status
 		}
 		else if	(PORT->PortType == NMEA)
 		{	
 			int Len;
-			
+
 			i = sprintf(CmdPtr, "$PICOA,90,%02x,RXF,%.6f*xx\r\n", RIG->RigAddr, Freq/1000000.);
 			AddNMEAChecksum(CmdPtr);
 			Len = i;
@@ -5147,6 +5463,10 @@ CheckScan:
 			AddNMEAChecksum(RIG->Poll + Len);
 			RIG->PollLen = Len + i;
 		}
+		else if	(PORT->PortType == HAMLIB)
+		{
+			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "F %s\n+f\nM %s %d\n+m\n", FreqString, Mode, BandWidth);
+		}
 
 		FreqPtr++;
 
@@ -5154,6 +5474,8 @@ CheckScan:
 
 		ptr = strtok_s(NULL, " \t\n\r", &Context);		// Next Freq
 	}
+
+
 
 	if (RIG->NumberofBands)
 	{
@@ -5177,9 +5499,9 @@ VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
 		// Find records in same Interlock Group
 
 		int LockGroup = PortRecord->PORTINTERLOCK;
-					
+
 		PortRecord = PORTTABLE;
-					
+
 		while (PortRecord)
 		{
 			if (LockGroup == PortRecord->PORTINTERLOCK)
@@ -5195,7 +5517,7 @@ VOID SetupPortRIGPointers()
 	struct TNCINFO * TNC;
 	int port;
 
-// For each Winmor/Pactor port set up the TNC to RIG pointers
+	// For each Winmor/Pactor port set up the TNC to RIG pointers
 
 	for (port = 1; port < 33; port++)
 	{
@@ -5210,23 +5532,23 @@ VOID SetupPortRIGPointers()
 		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4 || TNC->Hardware == H_ARDOP || TNC->Hardware == H_VARA)
 			if (TNC->RIG && TNC->PTTMode)
 				TNC->RIG->PTTMode = TNC->PTTMode;
-	
+
 		if (TNC->RIG == NULL)
 			TNC->RIG = &TNC->DummyRig;		// Not using Rig control, so use Dummy
-	
-/*		if (TNC->WL2KFreq[0])
+
+		/*		if (TNC->WL2KFreq[0])
 		{
-			// put in ValChar for MH reporting
+		// put in ValChar for MH reporting
 
-			double Freq;
+		double Freq;
 
-			Freq = atof(TNC->WL2KFreq) - 1500;
-			Freq = Freq/1000000.;
+		Freq = atof(TNC->WL2KFreq) - 1500;
+		Freq = Freq/1000000.;
 
-			_gcvt(Freq, 9, TNC->RIG->Valchar);
-			TNC->RIG->CurrentBandWidth = TNC->WL2KModeChar;
+		_gcvt(Freq, 9, TNC->RIG->Valchar);
+		TNC->RIG->CurrentBandWidth = TNC->WL2KModeChar;
 		}
-*/
+		*/
 	}
 }
 
@@ -5245,15 +5567,19 @@ VOID PTTCATThread(struct RIGINFO *RIG)
 #define DTR 4
 	HANDLE Event;
 	HANDLE Handle[4];
+	DWORD EvtMask[4];
 	OVERLAPPED Overlapped[4];
 	char Port[32];
 	int PIndex = 0;
 	int HIndex = 0;
+	int rc;
 
 	EndPTTCATThread = FALSE;
 
 	while (PIndex < 4 && RIG->PTTCATPort[PIndex][0])
 	{
+		RIG->RealMux[HIndex] = 0;
+
 		sprintf(Port, "\\\\.\\pipe\\BPQCOM%s", RIG->PTTCATPort[PIndex]);
 
 		Handle[HIndex] = CreateFile(Port, GENERIC_READ | GENERIC_WRITE,
@@ -5262,8 +5588,27 @@ VOID PTTCATThread(struct RIGINFO *RIG)
 		if (Handle[HIndex] == (HANDLE) -1)
 		{
 			int Err = GetLastError();
+			Consoleprintf("PTTMUX port BPQCOM%s Open failed code %d", RIG->PTTCATPort[PIndex], Err);
 
-			Consoleprintf("PTTMUX port COM%s Open failed code %d", RIG->PTTCATPort[PIndex], Err);
+			// See if real com port
+
+			sprintf(Port, "\\\\.\\\\COM%s", RIG->PTTCATPort[PIndex]);
+
+			Handle[HIndex] = CreateFile(Port, GENERIC_READ | GENERIC_WRITE,
+				0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+
+			RIG->RealMux[HIndex] = 1;
+
+			if (Handle[HIndex] == (HANDLE) -1)
+			{
+				int Err = GetLastError();
+				Consoleprintf("PTTMUX port COM%s Open failed code %d", RIG->PTTCATPort[PIndex], Err);
+			}
+			else
+			{
+				rc = SetCommMask(Handle[HIndex], EV_CTS | EV_DSR);		// Request notifications
+				HIndex++;
+			}
 		}
 		else
 			HIndex++;
@@ -5279,12 +5624,24 @@ VOID PTTCATThread(struct RIGINFO *RIG)
 
 	for (i = 0; i < HIndex; i ++)
 	{
-		// Prime a read on each handle
-
 		memset(&Overlapped[i], 0, sizeof(OVERLAPPED));
 		Overlapped[i].hEvent = Event;
 
-		ReadFile(Handle[i], Block[i], 80, &Length, &Overlapped[i]);
+		if (RIG->RealMux[i])
+		{
+			// Request Interface change notifications
+
+			rc = WaitCommEvent(Handle[i], &EvtMask[i], &Overlapped[i]);
+			rc = GetLastError();
+ 
+		}
+		else
+		{
+
+			// Prime a read on each handle
+
+			ReadFile(Handle[i], Block[i], 80, &Length, &Overlapped[i]);
+		}
 	}
 		
 	while (EndPTTCATThread == FALSE)
@@ -5320,47 +5677,69 @@ WaitAgain:
 
 			if (ret)
 			{
-				ptr1 = Block[i];
-				ptr2 = Block[i];
-
-				while (Length > 0)
+				if (RIG->RealMux[i])
 				{
-					c = *(ptr1++);
-				
-					Length--;
+					// Request Interface change notifications
 
-					if (c == 0xff)
+					DWORD Mask;
+
+					GetCommModemStatus(Handle[i], &Mask);
+
+					if (Mask & MS_CTS_ON)
+						Rig_PTT(RIG, TRUE);
+					else
+						Rig_PTT(RIG, FALSE);
+
+					memset(&Overlapped[i], 0, sizeof(OVERLAPPED));
+					Overlapped[i].hEvent = Event;
+					WaitCommEvent(Handle[i], &EvtMask[i], &Overlapped[i]);
+
+				}
+				else
+				{
+
+					ptr1 = Block[i];
+					ptr2 = Block[i];
+
+					while (Length > 0)
 					{
 						c = *(ptr1++);
+
 						Length--;
-					
-						if (c == 0xff)			// ff ff means ff
+
+						if (c == 0xff)
 						{
+							c = *(ptr1++);
 							Length--;
-						}
-						else
-						{
-							// This is connection / RTS/DTR statua from other end
-							// Convert to CAT Command
 
-							if (c == CurrentState[i])
-								continue;
-
-							if (c & RTS)
-								Rig_PTT(RIG, TRUE);
+							if (c == 0xff)			// ff ff means ff
+							{
+								Length--;
+							}
 							else
-								Rig_PTT(RIG, FALSE);
+							{
+								// This is connection / RTS/DTR statua from other end
+								// Convert to CAT Command
 
-							CurrentState[i] = c;
-							continue;
+								if (c == CurrentState[i])
+									continue;
+
+								if (c & RTS)
+									Rig_PTT(RIG, TRUE);
+								else
+									Rig_PTT(RIG, FALSE);
+
+								CurrentState[i] = c;
+								continue;
+							}
 						}
 					}
-				}
-				
-				memset(&Overlapped[i], 0, sizeof(OVERLAPPED));
-				Overlapped[i].hEvent = Event;
 
-				ReadFile(Handle[i], Block[i], 80, &Length, &Overlapped[i]);
+					memset(&Overlapped[i], 0, sizeof(OVERLAPPED));
+					Overlapped[i].hEvent = Event;
+
+					ReadFile(Handle[i], Block[i], 80, &Length, &Overlapped[i]);
+				}
 			}
 		}
 	}
@@ -5387,10 +5766,859 @@ WaitAgain:
 					return;
 				}
 			}
-		}
-		
+		}	
 */
 #endif
+
+// HAMLIB Support Code
+
+VOID HAMLIBPoll(struct RIGPORTINFO * PORT)
+{
+	UCHAR * Poll = PORT->TXBuffer;
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on HAMLIB
+	char cmd[80];
+	int len;
+
+	if (RIG->ScanStopped == 0)
+		if (RIG->ScanCounter)
+			RIG->ScanCounter--;
+
+	if (PORT->Timeout)
+	{
+		PORT->Timeout--;
+		
+		if (PORT->Timeout)			// Still waiting
+			return;
+
+		SetWindowText(RIG->hFREQ, "------------------");
+		SetWindowText(RIG->hMODE, "----------");
+		strcpy(RIG->WEB_FREQ, "-----------");;
+		strcpy(RIG->WEB_MODE, "------");
+
+		RIG->RIGOK = FALSE;
+		return;
+	}
+
+	// Send Data if avail, else send poll
+
+	if (RIG->NumberofBands && RIG->RIGOK && (RIG->ScanStopped == 0))
+	{
+		if (RIG->ScanCounter <= 0)
+		{
+			//	Send Next Freq
+
+			if (GetPermissionToChange(PORT, RIG))
+			{
+				if (RIG->RIG_DEBUG)
+					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
+
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
+				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
+
+				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
+
+				send(PORT->remoteSock, PORT->TXBuffer, PORT->TXLen, 0);
+				PORT->CmdSent = 1;
+				PORT->Retries = 0;	
+				PORT->Timeout = 0;
+				PORT->AutoPoll = TRUE;
+
+				// There isn't a response to a set command, so clear Scan Lock here
+			
+				ReleasePermission(RIG);			// Release Perrmission
+				return;
+			}
+		}
+	}
+			
+	if (RIG->PollCounter)
+	{
+		RIG->PollCounter--;
+		if (RIG->PollCounter > 1)
+			return;
+	}
+
+	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
+		return;						// no point in reading freq if we are about to change it
+
+	RIG->PollCounter = 10;			// Once Per Sec
+		
+	// Read Frequency 
+
+	len = sprintf(cmd, "+f\n+m\n");
+
+	send(PORT->remoteSock, cmd, len, 0);
+
+	PORT->Timeout = 10;
+	PORT->CmdSent = 0;
+
+	PORT->AutoPoll = TRUE;
+
+	return;
+}
+
+
+void HAMLIBProcessMessage(struct RIGPORTINFO * PORT)
+{
+	// Called from Background thread
+
+	int InputLen = recv(PORT->remoteSock, &PORT->RXBuffer[PORT->RXLen], 500 - PORT->RXLen, 0);
+
+	if (InputLen == 0 || InputLen == SOCKET_ERROR)
+	{
+		if (PORT->remoteSock)
+			closesocket(PORT->remoteSock);
+
+		PORT->CONNECTED = FALSE;
+		PORT->hDevice = 0;
+		return;					
+	}
+
+	PORT->RXLen += InputLen;
+}
+
+void ProcessHAMLIBFrame(struct RIGPORTINFO * PORT, int Length)
+{
+	char * msg = PORT->RXBuffer;
+	char * rest;
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
+	msg[Length] = 0;
+
+	PORT->Timeout = 0;
+	RIG->RIGOK = 1;
+
+	// extract lines from input
+
+	while (msg && msg[0])
+	{
+		rest = strlop(msg, 10);
+
+		if (memcmp(msg, "Frequency:", 10) == 0)
+		{
+			RIG->RigFreq = atof(&msg[11]) / 1000000.0;
+
+			_gcvt(RIG->RigFreq, 9, RIG->Valchar);
+ 
+			sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
+			SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+		}
+
+		else if (memcmp(msg, "Mode:", 5) == 0)
+		{
+			if (strlen(&msg[6]) < 15)
+				strcpy(RIG->ModeString, &msg[6]);
+		}
+
+		else if (memcmp(msg, "Passband:", 9) == 0)
+		{
+			RIG->Passband = atoi(&msg[10]);
+			sprintf(RIG->WEB_MODE, "%s/%d", RIG->ModeString, RIG->Passband);
+			SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+		}
+		
+		msg = rest;
+	}
+}
+
+
+void HLSetMode(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
+{
+	char Resp[80];
+	int Len;
+	char mode[80] = "";
+	int filter = 0;
+	int n = sscanf(&Msg[1], "%s %d", mode, &filter); 
+
+	// Send to RIGCommand. Can't set Mode without Freq so need to use current
+
+	// ?? Should be try to convert bandwidth to filter ??
+
+	RIG->Passband = filter;
+
+	if (RIG->PORT->PortType == ICOM)		// Needs a Filter
+		sprintf(Resp, "%d %s %s 1\n", RIG->PortNum, RIG->Valchar, mode);
+	else
+		sprintf(Resp, "%d %s %s\n", RIG->PortNum, RIG->Valchar, mode);
+
+	GetSemaphore(&Semaphore, 60);
+	Rig_Command(-1, Resp);
+	FreeSemaphore(&Semaphore);
+
+	if (sep)
+		Len = sprintf(Resp, "set_mode: %s %d%cRPRT 0\n", mode, filter, sep);
+	else
+		Len = sprintf(Resp, "RPRT 0\n");
+
+	send(Sock, Resp, Len, 0);
+}
+
+
+void HLSetFreq(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
+{
+	char Resp[80];
+	int Len;
+	int freq = atoi(&Msg[1]);
+
+	// Send to RIGCommand
+
+	sprintf(Resp, "%d %f\n", RIG->PortNum, freq/1000000.0);
+	GetSemaphore(&Semaphore, 60);
+	Rig_Command(-1, Resp);
+	FreeSemaphore(&Semaphore);
+
+	if (sep)
+		Len = sprintf(Resp, "set_freq: %d%cRPRT 0\n", freq, sep);
+	else
+		Len = sprintf(Resp, "RPRT 0\n");
+
+	send(Sock, Resp, Len, 0);
+}
+
+
+void HLGetPTT(SOCKET Sock, struct RIGINFO * RIG, char sep)
+{
+	char Resp[80];
+	int Len;
+	int ptt = 0;
+	
+	if (RIG->PTTTimer)
+		ptt = 1;
+
+	if (sep)
+		Len = sprintf(Resp, "get_ptt:%cPTT: %d%cRPRT 0\n", sep, ptt, sep);
+	else
+		Len = sprintf(Resp, "%d\n", ptt);
+
+	send(Sock, Resp, Len, 0);
+}
+
+void HLSetPTT(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
+{
+	char Resp[80];
+	int Len;
+	int ptt = atoi(&Msg[1]);
+
+	if (ptt)
+		Rig_PTT(RIG, 1);
+	else
+		Rig_PTT(RIG, 0);
+
+	if (sep)
+		Len = sprintf(Resp, "set_ptt: %d%cRPRT 0\n", ptt, sep);
+	else
+		Len = sprintf(Resp, "RPRT 0\n");
+
+	send(Sock, Resp, Len, 0);
+}
+
+void HLGetMode(SOCKET Sock, struct RIGINFO * RIG, char sep)
+{
+	char Resp[80];
+	int Len;
+
+	if (sep)
+		Len = sprintf(Resp, "get_mode:%cMode: %s%cPassband: %d%cRPRT 0\n", sep, RIG->ModeString, sep, RIG->Passband, sep);
+	else
+		Len = sprintf(Resp, "%s\n%d\n", RIG->ModeString, RIG->Passband);
+
+	send(Sock, Resp, Len, 0);
+
+}
+
+void HLGetFreq(SOCKET Sock, struct RIGINFO * RIG, char sep)
+{
+	char Resp[80];
+	int Len;
+	char freqval[64];
+	double freq = atof(RIG->Valchar) * 1000000.0;
+
+	sprintf(freqval, "%f", freq);
+	strlop(freqval, '.');
+
+	if (sep)
+		Len = sprintf(Resp, "get_freq:%cFrequency: %s%cRPRT 0\n", sep, freqval, sep);
+	else
+		Len = sprintf(Resp, "%s\n", freqval);
+
+	send(Sock, Resp, Len, 0);
+}
+
+void HLGetVFO(SOCKET Sock, struct RIGINFO * RIG, char sep)
+{
+	char Resp[80];
+	int Len;
+
+	if (sep)
+		Len = sprintf(Resp, "get_vfo:%s%cRPRT 0\n", "VFOA", sep);
+	else
+		Len = sprintf(Resp, "%s\n", "VFOA");
+
+	send(Sock, Resp, Len, 0);
+}
+
+void HLGetSplit(SOCKET Sock, struct RIGINFO * RIG, char sep)
+{
+	char Resp[80];
+	int Len;
+
+	if (sep)
+		Len = sprintf(Resp, "get_vfo:%s%cRPRT 0\n", "VFOA", sep);
+	else
+		Len = sprintf(Resp, "0\n%s\n", "VFOA");
+
+	send(Sock, Resp, Len, 0);
+
+}
+
+
+
+int ProcessHAMLIBSlaveMessage(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, int MsgLen)
+{
+	// We only process a pretty small subset of rigctl messages
+
+	// commands are generally a single character, upper case for set
+	// and lower case for get. If preceeded by + ; | or , response will
+	// be in extended form. + adds an LF between field, other values the
+	// supplied char is used as seperator.
+
+	// At the moments we support freq (F) mode (m) and PTT (T)
+
+	char sep = 0;
+
+	if (Msg[0] == '#')
+		return 0;				// Comment
+
+	Msg[MsgLen] = 0;
+	strlop(Msg, 13);
+	strlop(Msg, 10);
+
+	// \ on front is used for long mode. Hopefully not used much
+
+	// WSJT seems ro need \chk_vfo and \dump_state
+
+	if (Msg[0] == '\\')
+	{
+		if (strcmp(&Msg[1], "chk_vfo") == 0)
+		{
+			char Reply[80];
+			int Len = sprintf(Reply, "CHKVFO 0\n");
+			send(Sock, Reply, Len, 0);
+			return 0;
+		}
+
+		if (strcmp(&Msg[1], "dump_state") == 0)
+		{
+			char Reply[4096];
+			int Len = sprintf(Reply,
+				"0\n"
+				"1\n"
+				"2\n"
+				"150000.000000 1500000000.000000 0x1ff -1 -1 0x10000003 0x3\n"
+				"0 0 0 0 0 0 0\n"
+				"0 0 0 0 0 0 0\n"
+				"0x1ff 1\n"
+				"0x1ff 0\n"
+				"0 0\n"
+				"0x1e 2400\n"
+				"0x2 500\n"
+				"0x1 8000\n"
+				"0x1 2400\n"
+				"0x20 15000\n"
+				"0x20 8000\n"
+				"0x40 230000\n"
+				"0 0\n"
+				"9990\n"
+				"9990\n"
+				"10000\n"
+				"0\n"
+				"10 \n"
+				"10 20 30 \n"
+				"0xffffffff\n"
+				"0xffffffff\n"
+				"0xf7ffffff\n"
+				"0x83ffffff\n"
+				"0xffffffff\n"
+				"0xffffffbf\n");
+
+			send(Sock, Reply, Len, 0);
+			return 0;
+		}
+	}
+
+	if (Msg[0] == 'q' || Msg[0] == 'Q')
+	{
+		// close connection
+
+		return 1;
+	}
+
+	if (Msg[0] == '+')
+	{
+		sep = 10;
+		Msg++;
+		MsgLen --;
+	}
+	else if (Msg[0] == '_' || Msg[0] == '?')
+	{
+	}
+	else if (ispunct(Msg[0]))
+	{
+		sep = Msg[0];	
+		Msg++;
+		MsgLen --;
+	}
+
+	switch (Msg[0])
+	{
+	case 'f':			// Get Freqency
+
+		HLGetFreq(Sock, RIG, sep);
+		return 0;
+
+	case 'm':			// Get Mode
+
+		HLGetMode(Sock, RIG, sep);
+		return 0;
+
+	case 't':			// Get Mode
+
+		HLGetPTT(Sock, RIG, sep);
+		return 0;
+
+	case 'v':			// Get VFO
+
+		HLGetVFO(Sock, RIG, sep);
+		return 0;
+
+	case 's':			// Get Split
+
+		HLGetSplit(Sock, RIG, sep);
+		return 0;
+
+	case 'F':
+
+		HLSetFreq(Sock, RIG, Msg, sep);
+		return 0;
+
+	case 'M':
+
+		HLSetMode(Sock, RIG, Msg, sep);
+		return 0;
+
+	case 'T':
+
+		HLSetPTT(Sock, RIG, Msg, sep);
+		return 0;
+	}
+	return 0;
+}
+
+int DecodeHAMLIBAddr(struct RIGPORTINFO * PORT, char * ptr)
+{
+	// Param is IPADDR:PORT. Only Allow numeric addresses 
+	
+	struct sockaddr_in * destaddr = (SOCKADDR_IN * )&PORT->remoteDest;
+
+	char * port = strlop(ptr, ':');
+
+	if (port == NULL)
+		return 0;
+
+	destaddr->sin_family = AF_INET;
+	destaddr->sin_addr.s_addr = inet_addr(ptr);
+	destaddr->sin_port = htons(atoi(port));
+
+	return 1;
+}
+
+VOID HAMLIBThread(struct RIGPORTINFO * PORT);
+
+VOID ConnecttoHAMLIB(struct RIGPORTINFO * PORT)
+{
+	_beginthread(HAMLIBThread, 0, (void *)PORT);
+	return ;
+}
+
+VOID HAMLIBThread(struct RIGPORTINFO * PORT)
+{
+	// Opens sockets and looks for data
+	
+	char Msg[255];
+	int err, i, ret;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	fd_set readfs;
+	fd_set errorfs;
+	struct timeval timeout;
+
+	if (PORT->remoteSock)
+	{
+		closesocket(PORT->remoteSock);
+	}
+
+	PORT->remoteSock = 0;
+	PORT->remoteSock = socket(AF_INET,SOCK_STREAM,0);
+
+	if (PORT->remoteSock == INVALID_SOCKET)
+	{
+		i=sprintf(Msg, "Socket Failed for HAMLIB socket - error code = %d\r\n", WSAGetLastError());
+		WritetoConsole(Msg);
+
+	 	PORT->CONNECTING = FALSE;
+  	 	return; 
+	}
+
+	setsockopt(PORT->remoteSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+	setsockopt(PORT->remoteSock, IPPROTO_TCP, TCP_NODELAY, (const char FAR *)&bcopt, 4); 
+
+	if (connect(PORT->remoteSock,(LPSOCKADDR) &PORT->remoteDest,sizeof(PORT->remoteDest)) == 0)
+	{
+		//
+		//	Connected successful
+		//
+	}
+	else
+	{
+		if (PORT->Alerted == FALSE)
+		{
+			err=WSAGetLastError();
+   			i=sprintf(Msg, "Connect Failed for HAMLIB socket - error code = %d\r\n", err);
+			WritetoConsole(Msg);
+				PORT->Alerted = TRUE;
+		}
+		
+		closesocket(PORT->remoteSock);
+
+		PORT->remoteSock = 0;
+	 	PORT->CONNECTING = FALSE;
+		return;
+	}
+
+	PORT->CONNECTED = TRUE;
+	PORT->hDevice = (HANDLE)1;				// simplifies check code
+
+	PORT->Alerted = TRUE;
+
+	while (PORT->CONNECTED)
+	{
+		FD_ZERO(&readfs);	
+		FD_ZERO(&errorfs);
+
+		FD_SET(PORT->remoteSock,&readfs);
+		FD_SET(PORT->remoteSock,&errorfs);
+		
+		timeout.tv_sec = 60;
+		timeout.tv_usec = 0;
+		
+		ret = select((int)PORT->remoteSock + 1, &readfs, NULL, &errorfs, &timeout);
+
+		if (ret == SOCKET_ERROR)
+		{
+			Debugprintf("HAMLIB Select failed %d ", WSAGetLastError());
+			goto Lost;
+		}
+
+		if (ret > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(PORT->remoteSock, &readfs))
+			{
+				HAMLIBProcessMessage(PORT);
+			}
+
+			if (FD_ISSET(PORT->remoteSock, &errorfs))
+			{
+Lost:	
+				sprintf(Msg, "HAMLIB Connection lost for Port %s\r\n", PORT->IOBASE);
+				WritetoConsole(Msg);
+
+				PORT->CONNECTED = FALSE;
+				PORT->Alerted = FALSE;
+				PORT->hDevice = 0;				// simplifies check code
+
+				closesocket(PORT->remoteSock);
+				PORT->remoteSock = 0;
+				return;
+			}
+
+
+			continue;
+		}
+		else
+		{
+		}
+	}
+	sprintf(Msg, "HAMLIB Thread Terminated Port %s\r\n", PORT->IOBASE);
+	WritetoConsole(Msg);
+}
+
+void HAMLIBSlaveThread(struct RIGINFO * RIG)
+{
+	// Wait for connections and messages from HAMLIB Clients
+
+	fd_set readfs;
+	fd_set errorfs;
+	struct timeval timeout;
+	int ret;
+	unsigned int maxsock;
+
+	while (HAMLIBRunning)
+	{
+		struct HAMLIBSOCK * Entry = RIG->Sockets;
+		struct HAMLIBSOCK * Prev;
+
+		FD_ZERO(&readfs);	
+		FD_ZERO(&errorfs);
+
+		FD_SET(RIG->ListenSocket, &readfs);
+		FD_SET(RIG->ListenSocket, &errorfs);
+	
+		maxsock = RIG->ListenSocket;
+
+		while (Entry && HAMLIBRunning)
+		{
+			FD_SET(Entry->Sock, &readfs);
+			FD_SET(Entry->Sock, &errorfs);
+
+			if (Entry->Sock > maxsock)
+				maxsock = Entry->Sock;
+
+			Entry = Entry->Next;
+		}
+
+		timeout.tv_sec = 600;
+		timeout.tv_usec = 0;
+
+		ret = select(maxsock + 1, &readfs, NULL, &errorfs, &timeout);
+
+		if (ret == -1)
+		{
+			perror("listen select");
+			continue;
+		}
+
+		if (ret)
+		{
+			if (FD_ISSET(RIG->ListenSocket, &readfs))
+			{
+				// Connection. Accept it and create a socket enty
+
+				int addrlen = sizeof(struct sockaddr_in6);
+				struct sockaddr_in6 sin6; 
+				struct HAMLIBSOCK * Entry = zalloc(sizeof(struct HAMLIBSOCK));
+
+				Entry->Sock = accept(RIG->ListenSocket, (struct sockaddr *)&sin6, &addrlen);
+				
+				if (RIG->Sockets)
+					Entry->Next = RIG->Sockets;
+
+				RIG->Sockets = Entry;
+			}
+
+			// See if a Data Socket
+
+			Entry = RIG->Sockets;
+			Prev = 0;
+
+			while (Entry)
+			{
+				unsigned char Msg[256];
+				int MsgLen;
+
+				if (FD_ISSET(Entry->Sock, &readfs))
+				{
+					MsgLen = recv(Entry->Sock, Msg, 256, 0);
+
+					if (MsgLen <= 0)
+					{
+						// Closed - close socket and remove from chain
+
+						closesocket(Entry->Sock);
+
+						if (Prev == 0)
+							RIG->Sockets = Entry->Next;
+						else
+							Prev->Next = Entry->Next;
+
+						free (Entry);
+						break;
+					}
+					else
+					{
+						if (ProcessHAMLIBSlaveMessage(Entry->Sock, RIG, Msg, MsgLen) == 1)
+						{
+							// close request
+		
+							closesocket(Entry->Sock);
+
+							if (Prev == 0)
+								RIG->Sockets = Entry->Next;
+							else
+								Prev->Next = Entry->Next;
+
+							free (Entry);
+							break;
+						}
+					}
+				}
+
+				if (FD_ISSET(Entry->Sock, &errorfs))
+				{
+					// Closed - close socket and remove from chai
+
+					closesocket(Entry->Sock);
+					
+					if (Prev == 0)
+						RIG->Sockets = Entry->Next;
+					else
+						Prev->Next = Entry->Next;
+	
+					free (Entry);
+					break;
+				}
+
+				// Check Next Client
+
+				Prev = Entry;
+				Entry = Entry->Next;
+			}
+		}
+	}
+}
+
+
+// HID Support Code
+
+int HID_Read_Block(struct RIGPORTINFO * PORT)
+{
+	int Len;
+	unsigned char Msg[65] = "";
+	
+	if (PORT->RXLen > 400)
+		PORT->RXLen = 0;
+
+	// Don't try to read more than 64
+
+#ifdef WIN32
+	Len = rawhid_recv(0, Msg, 64, 100);
+#else
+	Len = read(PORT->hDevice, Msg, 64);
+#endif
+
+	if (Len <= 0)
+		return 0;
+
+	// First byte is actual length
+
+	Len = Msg[0];
+
+	if (Len > 0)
+	{
+		if (Len < 64)		// Max in HID Packet
+		{
+			memcpy(&PORT->RXBuffer[PORT->RXLen], Msg + 1, Len);
+			Debugprintf("HID Read %d\n", Len);
+			return Len;
+		}
+	}
+	return 0;
+}
+
+void rawhid_close(int num);
+
+BOOL HID_Write_Block(struct RIGPORTINFO * PORT)
+{
+	int n = PORT->TXLen;
+	UCHAR * ptr = PORT->TXBuffer;
+	UCHAR Msg[64] = "";
+	int ret, i;
+
+	while (n)
+	{
+		i = n;
+		if (i > 63)
+			i = 63;
+
+		Msg[0] = i;		// Length on front
+		memcpy(&Msg[1], ptr, i);
+		ptr += i;
+		n -= i;
+		//	n = hid_write(PORT->hDevice, PORT->TXBuffer, PORT->TXLen);
+#ifdef WIN32
+		ret = rawhid_send(0, Msg, 64, 100);		// Always send 64
+
+		if (ret < 0)
+		{
+			Debugprintf("Rigcontrol HID Write Failed %d", errno);
+			rawhid_close(0);
+			PORT->hDevice = NULL;
+			return FALSE;
+		}
+#else
+		ret = write(PORT->hDevice, Msg, 64);
+
+		if (ret != 64)
+		{
+			printf ("Write to %s failed, n=%d, errno=%d\n", PORT->HIDDevice, ret, errno);
+			close (PORT->hDevice);
+			PORT->hDevice = 0;
+			return FALSE;
+		}
+
+//		printf("HID Write %d\n", i);
+#endif
+	}
+	return TRUE;
+}
+
+
+BOOL OpenHIDPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
+{
+#ifdef WIN32
+
+	if (PORT->HIDDevice== NULL)
+		return FALSE;
+
+	PORT->hDevice = rawhid_open(PORT->HIDDevice);
+
+	if (PORT->hDevice)
+		Debugprintf("Rigcontrol HID Device %s opened", PORT->HIDDevice);
+
+	/*
+	handle = hid_open_path(PORT->HIDDevice);
+
+	if (handle)
+	hid_set_nonblocking(handle, 1);
+
+	PORT->hDevice = handle;
+	*/
+#else
+	int fd;
+	unsigned int param = 1;
+
+	if (PORT->HIDDevice== NULL)
+		return FALSE;
+
+	fd = open (PORT->HIDDevice, O_RDWR);
+		
+	if (fd == -1)
+	{
+          printf ("Could not open %s, errno=%d\n", PORT->HIDDevice, errno);
+          return FALSE;
+	}
+
+	ioctl(fd, FIONBIO, &param);
+	printf("Rigcontrol HID Device %s opened", PORT->HIDDevice);
+	
+	PORT->hDevice = fd;
+#endif
+	if (PORT->hDevice == 0)
+		return (FALSE);
+
+	return TRUE;
+}
+
 
 void CM108_set_ptt(struct RIGINFO *RIG, int PTTState)
 {
@@ -5418,8 +6646,8 @@ void CM108_set_ptt(struct RIGINFO *RIG, int PTTState)
 	n = hid_write(handle, io, 5);
 	if (n < 0)
 	{
-		printf("Unable to write()\n");
-		printf("Error: %ls\n", hid_error(handle));
+		Debugprintf("Unable to write()\n");
+		Debugprintf("Error: %ls\n", hid_error(RIG->PORT->hDevice));
 	}
 	
 	hid_close(handle);
@@ -5429,7 +6657,7 @@ void CM108_set_ptt(struct RIGINFO *RIG, int PTTState)
 	int fd;
 
 	fd = open (RIG->CM108Device, O_WRONLY);
-		
+	
 	if (fd == -1)
 	{
           printf ("Could not open %s for write, errno=%d\n", RIG->CM108Device, errno);
@@ -5453,7 +6681,6 @@ void CM108_set_ptt(struct RIGINFO *RIG, int PTTState)
 	return;
 
 }
-
 
 /*
 int CRow;
@@ -5616,6 +6843,317 @@ return TRUE;
 
 */
 
-/*
-\\?\hid#vid_0d8c&pid_0008&mi_03#7&54c70fe&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}
-*/
+#ifdef WIN32
+
+/* Simple Raw HID functions for Windows - for use with Teensy RawHID example
+ * http://www.pjrc.com/teensy/rawhid.html
+ * Copyright (c) 2009 PJRC.COM, LLC
+ *
+ *  rawhid_open - open 1 or more devices
+ *  rawhid_recv - receive a packet
+ *  rawhid_send - send a packet
+ *  rawhid_close - close a device
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above description, website URL and copyright notice and this permission
+ * notice shall be included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ * Version 1.0: Initial Release
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+//#include <stdint.h>
+//#include <windows.h>
+#include <setupapi.h>
+//#include <ddk/hidsdi.h>
+//#include <ddk/hidclass.h>
+
+typedef USHORT USAGE;
+
+
+typedef struct _HIDD_CONFIGURATION {
+	PVOID cookie;
+ 	ULONG size;
+	ULONG RingBufferSize;
+} HIDD_CONFIGURATION, *PHIDD_CONFIGURATION;
+
+typedef struct _HIDD_ATTRIBUTES {
+	ULONG Size;
+	USHORT VendorID;
+	USHORT ProductID;
+	USHORT VersionNumber;
+} HIDD_ATTRIBUTES, *PHIDD_ATTRIBUTES;
+
+
+typedef struct _HIDP_CAPS {
+  USAGE  Usage;
+  USAGE  UsagePage;
+  USHORT  InputReportByteLength;
+  USHORT  OutputReportByteLength;
+  USHORT  FeatureReportByteLength;
+  USHORT  Reserved[17];
+  USHORT  NumberLinkCollectionNodes;
+  USHORT  NumberInputButtonCaps;
+  USHORT  NumberInputValueCaps;
+  USHORT  NumberInputDataIndices;
+  USHORT  NumberOutputButtonCaps;
+  USHORT  NumberOutputValueCaps;
+  USHORT  NumberOutputDataIndices;
+  USHORT  NumberFeatureButtonCaps;
+  USHORT  NumberFeatureValueCaps;
+  USHORT  NumberFeatureDataIndices;
+} HIDP_CAPS, *PHIDP_CAPS;
+
+
+typedef struct _HIDP_PREPARSED_DATA * PHIDP_PREPARSED_DATA;
+
+
+
+// a list of all opened HID devices, so the caller can
+// simply refer to them by number
+typedef struct hid_struct hid_t;
+static hid_t *first_hid = NULL;
+static hid_t *last_hid = NULL;
+struct hid_struct {
+	HANDLE handle;
+	int open;
+	struct hid_struct *prev;
+	struct hid_struct *next;
+};
+static HANDLE rx_event=NULL;
+static HANDLE tx_event=NULL;
+static CRITICAL_SECTION rx_mutex;
+static CRITICAL_SECTION tx_mutex;
+
+
+// private functions, not intended to be used from outside this file
+static void add_hid(hid_t *h);
+static hid_t * get_hid(int num);
+static void free_all_hid(void);
+void print_win32_err(void);
+
+
+
+
+//  rawhid_recv - receive a packet
+//    Inputs:
+//	num = device to receive from (zero based)
+//	buf = buffer to receive packet
+//	len = buffer's size
+//	timeout = time to wait, in milliseconds
+//    Output:
+//	number of bytes received, or -1 on error
+//
+int rawhid_recv(int num, void *buf, int len, int timeout)
+{
+	hid_t *hid;
+	unsigned char tmpbuf[516];
+	OVERLAPPED ov;
+	DWORD r;
+	int n;
+
+	if (sizeof(tmpbuf) < len + 1) return -1;
+	hid = get_hid(num);
+	if (!hid || !hid->open) return -1;
+	EnterCriticalSection(&rx_mutex);
+	ResetEvent(&rx_event);
+	memset(&ov, 0, sizeof(ov));
+	ov.hEvent = rx_event;
+	if (!ReadFile(hid->handle, tmpbuf, len + 1, NULL, &ov)) {
+		if (GetLastError() != ERROR_IO_PENDING) goto return_error;
+		r = WaitForSingleObject(rx_event, timeout);
+		if (r == WAIT_TIMEOUT) goto return_timeout;
+		if (r != WAIT_OBJECT_0) goto return_error;
+	}
+	if (!GetOverlappedResult(hid->handle, &ov, &n, FALSE)) goto return_error;
+	LeaveCriticalSection(&rx_mutex);
+	if (n <= 0) return -1;
+	n--;
+	if (n > len) n = len;
+	memcpy(buf, tmpbuf + 1, n);
+	return n;
+return_timeout:
+	CancelIo(hid->handle);
+	LeaveCriticalSection(&rx_mutex);
+	return 0;
+return_error:
+	print_win32_err();
+	LeaveCriticalSection(&rx_mutex);
+	return -1;
+}
+
+//  rawhid_send - send a packet
+//    Inputs:
+//	num = device to transmit to (zero based)
+//	buf = buffer containing packet to send
+//	len = number of bytes to transmit
+//	timeout = time to wait, in milliseconds
+//    Output:
+//	number of bytes sent, or -1 on error
+//
+int rawhid_send(int num, void *buf, int len, int timeout)
+{
+	hid_t *hid;
+	unsigned char tmpbuf[516];
+	OVERLAPPED ov;
+	DWORD n, r;
+
+	if (sizeof(tmpbuf) < len + 1) return -1;
+	hid = get_hid(num);
+	if (!hid || !hid->open) return -1;
+	EnterCriticalSection(&tx_mutex);
+	ResetEvent(&tx_event);
+	memset(&ov, 0, sizeof(ov));
+	ov.hEvent = tx_event;
+	tmpbuf[0] = 0;
+	memcpy(tmpbuf + 1, buf, len);
+	if (!WriteFile(hid->handle, tmpbuf, len + 1, NULL, &ov)) {
+		if (GetLastError() != ERROR_IO_PENDING) goto return_error;
+		r = WaitForSingleObject(tx_event, timeout);
+		if (r == WAIT_TIMEOUT) goto return_timeout;
+		if (r != WAIT_OBJECT_0) goto return_error;
+	}
+	if (!GetOverlappedResult(hid->handle, &ov, &n, FALSE)) goto return_error;
+	LeaveCriticalSection(&tx_mutex);
+	if (n <= 0) return -1;
+	return n - 1;
+return_timeout:
+	CancelIo(hid->handle);
+	LeaveCriticalSection(&tx_mutex);
+	return 0;
+return_error:
+	print_win32_err();
+	LeaveCriticalSection(&tx_mutex);
+	return -1;
+}
+
+HANDLE rawhid_open(char * Device)
+{
+	DWORD index=0;
+	HANDLE h;
+	hid_t *hid;
+	int count=0;
+
+	if (first_hid) free_all_hid();
+
+	if (!rx_event)
+	{
+		rx_event = CreateEvent(NULL, TRUE, TRUE, NULL);
+		tx_event = CreateEvent(NULL, TRUE, TRUE, NULL);
+		InitializeCriticalSection(&rx_mutex);
+		InitializeCriticalSection(&tx_mutex);
+	}
+	h = CreateFile(Device, GENERIC_READ|GENERIC_WRITE,
+		FILE_SHARE_READ|FILE_SHARE_WRITE, NULL,
+		OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+
+	if (h == INVALID_HANDLE_VALUE) 
+		return 0;
+
+	hid = (struct hid_struct *)malloc(sizeof(struct hid_struct));
+	if (!hid)
+	{
+		CloseHandle(h);
+		return 0;
+	}
+	hid->handle = h;
+	hid->open = 1;
+	add_hid(hid);
+
+	return h;
+}
+
+
+//  rawhid_close - close a device
+//
+//    Inputs:
+//	num = device to close (zero based)
+//    Output
+//	(nothing)
+//
+void rawhid_close(int num)
+{
+	hid_t *hid;
+
+	hid = get_hid(num);
+	if (!hid || !hid->open) return;
+
+	CloseHandle(hid->handle);
+	hid->handle = NULL;
+	hid->open = FALSE;
+}
+
+
+
+
+static void add_hid(hid_t *h)
+{
+	if (!first_hid || !last_hid) {
+		first_hid = last_hid = h;
+		h->next = h->prev = NULL;
+		return;
+	}
+	last_hid->next = h;
+	h->prev = last_hid;
+	h->next = NULL;
+	last_hid = h;
+}
+
+
+static hid_t * get_hid(int num)
+{
+	hid_t *p;
+	for (p = first_hid; p && num > 0; p = p->next, num--) ;
+	return p;
+}
+
+
+static void free_all_hid(void)
+{
+	hid_t *p, *q;
+
+	for (p = first_hid; p; p = p->next)
+	{
+		CloseHandle(p->handle);
+		p->handle = NULL;
+		p->open = FALSE;
+	}
+	p = first_hid;
+	while (p) {
+		q = p;
+		p = p->next;
+		free(q);
+	}
+	first_hid = last_hid = NULL;
+}
+
+
+
+void print_win32_err(void)
+{
+	char buf[256];
+	DWORD err;
+
+	err = GetLastError();
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, err,
+		0, buf, sizeof(buf), NULL);
+	Debugprintf("err %ld: %s\n", err, buf);
+}
+
+#endif
+

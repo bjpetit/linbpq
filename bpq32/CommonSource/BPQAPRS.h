@@ -21,7 +21,12 @@ struct STATIONRECORD
 	char Callsign[12];
 	char Path[120];
 	char Status[256];
-	char LastPacket[400];
+	char LastPacket[392];		// Was 400. 8 bytes used for Approx Location Flag and Qt Icon pointer
+	char Approx;
+	char spare1;
+	char spare2;
+	char spare3;
+	void * image;				// used in QtBPQAPRS 
 	char LastWXPacket[256];
 	int LastPort;
     double Lat;
@@ -66,7 +71,8 @@ typedef struct _APRSHEARDRECORD
 	UCHAR MHCALL[10];				// Stored with space padding
 	time_t MHTIME;					// Time last heard
  	time_t LASTMSG;					// Time last message sent from this station (via IS)
-	int Port;						// Port last heard on (zero for APRS-IS)
+	int rfPort;						// RF Port last heard on
+	int heardViaIS;					
 	BOOL IGate;						// Set if station is an IGate;
 //	BYTE MHDIGI[56];				// Not sure if we need this
 	struct STATIONRECORD * Station;	// Info previously held by APRS Application
@@ -113,6 +119,9 @@ struct APRSConnectionInfo			// Used for Web Server for thread-specific stuff
 
 struct SharedMem
 {
+	// Max 32 bytes unless code is changed. Also don't change existing items
+	// without changing version and clients
+
 	UCHAR Version;				// For compatibility check
 	UCHAR NeedRefresh;			// Messages Have Changed
 	UCHAR ClearRX;
@@ -121,6 +130,14 @@ struct SharedMem
 
 	struct APRSMESSAGE * Messages;
 	struct APRSMESSAGE * OutstandingMsgs;
+
+	int Arch;					 // to detect running on 64 bit system.
+#pragma pack(1)
+	UCHAR SubVersion;
+
+
+
+#pragma pack()
 };
 
 #define BPQBASE     WM_USER

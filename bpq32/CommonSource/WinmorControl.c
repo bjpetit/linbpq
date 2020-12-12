@@ -69,7 +69,6 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	char Mess[10000];
 	va_list(arglist);
 
-	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);

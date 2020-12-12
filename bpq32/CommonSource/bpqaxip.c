@@ -229,7 +229,8 @@ BOOL OpenListeningSocket(struct AXIPPORTINFO * PORT, struct arp_table_entry * ar
 VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
 static void CreateResolverWindow(struct AXIPPORTINFO * PORT);
 VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);
-
+VOID SaveAXIPCache(struct AXIPPORTINFO * PORT);
+VOID GetAXIPCache(struct AXIPPORTINFO * PORT);
 
 
 union
@@ -411,7 +412,7 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 		
 						PutLengthinBuffer((PDATAMESSAGE)buff, len);		// Needed for arm5 portability
 
-						memcpy(call, &buff[14], 7);
+						memcpy(call, &buff->ORIGIN, 7);
 						call[6] &= 0x7e;		// Mask End of Address bit
 
 						//
@@ -687,6 +688,8 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 
 		_beginthread(OpenSockets, 0, PORT );
 
+		GetAXIPCache(PORT);
+
 		ResolveDelay = 2;
 #ifndef LINBPQ
 		InvalidateRect(PORT->hResWnd,NULL,TRUE);
@@ -809,6 +812,8 @@ int InitAXIP(int Port)
 
 	PORT->Port = Port;
 
+	GetAXIPCache(PORT);			// Prime resolver from cache
+
 	//
     //	Start Resolver Thread if needed
 	//
@@ -855,26 +860,28 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
 		{
 			WritetoConsole("AXIP Failed to create RAW socket\n");
 			err = WSAGetLastError();
-  	 		return; 
 		}
-
-		ioctl (PORT->sock,FIONBIO,&param);
- 
-		setsockopt (PORT->sock,SOL_SOCKET,SO_BROADCAST,(const char FAR *)&bcopt,4);
-
-		sinx.sinx.sin_family = AF_INET;
-		sinx.sinx.sin_addr.s_addr = INADDR_ANY;
-		sinx.sinx.sin_port = 0;
-
-		if (bind(PORT->sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
+		else
 		{
-			//
-			//	Bind Failed
-			//
-			err = WSAGetLastError();
-			sprintf(Msg, "Bind Failed for RAW socket - error code = %d", err);
-			WritetoConsole(Msg);
-			return;
+
+			ioctl (PORT->sock,FIONBIO,&param);
+
+			setsockopt (PORT->sock,SOL_SOCKET,SO_BROADCAST,(const char FAR *)&bcopt,4);
+
+			sinx.sinx.sin_family = AF_INET;
+			sinx.sinx.sin_addr.s_addr = INADDR_ANY;
+			sinx.sinx.sin_port = 0;
+
+			if (bind(PORT->sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
+			{
+				//
+				//	Bind Failed
+				//
+				err = WSAGetLastError();
+				sprintf(Msg, "Bind Failed for RAW socket - error code = %d", err);
+				WritetoConsole(Msg);
+				return;
+			}
 		}
 	}
 
@@ -891,7 +898,7 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
 		{
 			WritetoConsole("Failed to create UDP socket");
 			err = WSAGetLastError();
-			return; 
+			continue; 
 		}
 
 		ioctl (PORT->udpsock[i],FIONBIO,&param);
@@ -1596,6 +1603,9 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 				}
 			}
 		}
+
+		SaveAXIPCache(PORT);
+
 #ifndef LINBPQ
 		InvalidateRect(PORT->hResWnd,NULL,TRUE);
 #endif
@@ -3145,3 +3155,163 @@ VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6)
 	
 	*ptr++ = '\0';	
 }
+
+
+#define LIBCONFIG_STATIC
+#include "libconfig.h"
+
+
+
+VOID SaveAXIPCache(struct AXIPPORTINFO * PORT)
+{
+	config_setting_t *root, *group;
+	config_t cfg;
+	char ConfigName[256];
+	int index=0;
+	struct arp_table_entry * arp;
+	unsigned char  hostaddr[64];
+	char Key[128];
+
+	if (BPQDirectory[0] == 0)
+	{
+		sprintf(ConfigName,"axipcache%d.cfg", PORT->Port);
+	}
+	else
+	{
+		sprintf(ConfigName,"%s/axipcache%d.cfg", BPQDirectory, PORT->Port);
+	}
+
+	//	Get rid of old config before saving
+	
+	config_init(&cfg);
+
+	root = config_root_setting(&cfg);
+
+	group = config_setting_add(root, "main", CONFIG_TYPE_GROUP);
+
+	if (PORT->arp_table_len >= MAX_ENTRIES)
+	{
+		Debugprintf("arp_table_len corrupt - %d", PORT->arp_table_len);
+		PORT->arp_table_len = MAX_ENTRIES - 1;
+	}
+
+	while (index < PORT->arp_table_len)
+	{
+		char * ptr = Key;
+
+		arp = &PORT->arp_table[index++];
+
+		if (arp->IPv6)	
+			Format_Addr((unsigned char *)&arp->destaddr6.sin6_addr, hostaddr, TRUE);
+		else
+			Format_Addr((unsigned char *)&arp->destaddr.sin_addr, hostaddr, FALSE);
+
+		sprintf(Key, "*%s", arp->hostname);
+			
+		// libconfig keys can't contain . so replace with *
+
+		while (*ptr)
+		{
+			if (*ptr == '.') *ptr = '*';
+			ptr++;
+		}
+
+		SaveStringValue(group, Key, hostaddr);
+	}
+
+	if(!config_write_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "Error while writing file.\n");
+		config_destroy(&cfg);
+		return;
+	}
+
+	config_destroy(&cfg);
+}
+
+#ifndef LINBPQ
+
+static BOOL GetStringValue(config_setting_t * group, char * name, char * value)
+{
+	const char * str;
+	config_setting_t *setting;
+
+	setting = config_setting_get_member (group, name);
+	if (setting)
+	{
+		str =  config_setting_get_string (setting);
+		strcpy(value, str);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+#endif
+
+VOID GetAXIPCache(struct AXIPPORTINFO * PORT)
+{
+	config_setting_t *group;
+	config_t cfg;
+	char ConfigName[256];
+	int index=0;
+	struct arp_table_entry * arp;
+	unsigned char hostaddr[64];
+	char Key[128];
+	struct stat STAT;
+
+	if (BPQDirectory[0] == 0)
+	{
+		sprintf(ConfigName,"axipcache%d.cfg", PORT->Port);
+	}
+	else
+	{
+		sprintf(ConfigName,"%s/axipcache%d.cfg", BPQDirectory, PORT->Port);
+	}
+
+	memset((void *)&cfg, 0, sizeof(config_t));
+
+	config_init(&cfg);
+
+	if (stat(ConfigName, &STAT) == -1)
+		return;
+
+	if(!config_read_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "AXIP Cache read error line %d - %s\n", config_error_line(&cfg), config_error_text(&cfg));
+		config_destroy(&cfg);
+		return;
+	}
+
+	group = config_lookup(&cfg, "main");
+
+	if (group == NULL)
+	{
+		config_destroy(&cfg);
+		return;
+	}
+
+	while (index < PORT->arp_table_len)
+	{
+		char * ptr = Key;
+
+		arp = &PORT->arp_table[index++];
+
+		sprintf(Key, "*%s", arp->hostname);
+			
+		// libconfig keys can't contain . so replace with *
+
+		while (*ptr)
+		{
+			if (*ptr == '.') *ptr = '*';
+			ptr++;
+		}
+
+		if (GetStringValue(group, Key, hostaddr))
+		{
+			arp->destaddr.sin_addr.s_addr = inet_addr(hostaddr);
+		}
+	}
+
+	config_destroy(&cfg);
+}
+

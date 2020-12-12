@@ -146,8 +146,59 @@ W0TX*>KC6OAR>KB9KC>ID:
 W0TX/R DRC/D W0TX-2/G W0TX-1/B W0TX-7/N
 KC6OAR*>ID:
 */
+	// Check Port
+
+	Port = msg->PORT;
+	
+	if (Port & 0x80)
+	{
+		if (MTX == 0)
+			return 0;							//	TRANSMITTED FRAME - SEE IF MTX ON
+		
+		TR = 'T';
+	}
+
+	Port &= 0x7F;
+
+	if (((1 << (Port - 1)) & Mask) == 0)		// Check MMASK
+		return 0;
+	
+
+	// We now pass Text format monitoring from non-ax25 drivers through this code
+	// As a valid ax.25 address must have bottom bit set flag plain text messages
+	// with hex 01.
 
 	//	GET THE CONTROL BYTE, TO SEE IF THIS FRAME IS TO BE DISPLAYED
+
+	if (msg->DEST[0] == 1)
+	{
+		// Just copy text (Null Terminated) to output
+
+		// Need Timestamp and T/R
+
+		Stamp = Stamp % 86400;		// Secs
+		HH = (int)(Stamp / 3600);
+
+		Stamp -= HH * 3600;
+		MM = (int)(Stamp  / 60);
+
+		SS = (int)(Stamp - MM * 60);
+
+		// Add Port: if MINI mode and monitoring more than one port
+
+
+		Output += sprintf((char *)Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
+
+		strcpy(Output, &msg->DEST[1]);
+		Output += strlen(Output);
+
+		if (buffer[strlen(buffer) -1] == '\r')
+			Output--;
+
+		Output += sprintf((char *)Output, " Port=%d\r", Port);
+
+		return (int)strlen(buffer);
+	}
 
 	n = 8;						// MAX DIGIS
 	ptr = &msg->ORIGIN[6];	// End of Address bit
@@ -194,22 +245,6 @@ KC6OAR*>ID:
 				return 0;						// Dont do control
 	}
 
-
-	Port = msg->PORT;
-	
-	if (Port & 0x80)
-	{
-		if (MTX == 0)
-			return 0;							//	TRANSMITTED FRAME - SEE IF MTX ON
-		
-		TR = 'T';
-	}
-
-	Port &= 0x7F;
-
-	if (((1 << (Port - 1)) & Mask) == 0)		// Check MMASK
-		return 0;
-	
 
 	Stamp = Stamp % 86400;		// Secs
 	HH = (int)(Stamp / 3600);

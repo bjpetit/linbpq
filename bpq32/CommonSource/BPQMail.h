@@ -17,6 +17,7 @@
 
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
@@ -341,7 +342,17 @@ struct TempUserInfo
 	char LastListCommand[80];
 	char LastListParams[80];
 	int LinesSent;
+	char SendFullFrom;
+	char ListType;
+	char ListDirn;
+	char ListStatus;
+	char ListSelector;				// < > @ etc
+
+	int ListRangeStart;
+	int ListRangeEnd;
 	int LLCount;					// Number still to send in List Last N
+	int UpdateLatest;		// if set, save last listed as latest
+	
 
 };
 
@@ -455,28 +466,28 @@ struct UserInfo
 
 // flags equates
 
-#define F_Excluded   0x0001
-#define F_LOC        0x0002
-#define F_Expert     0x0004
-#define F_SYSOP      0x0008
-#define F_BBS        0x0010
-#define F_PAG        0x0020
-#define F_GST        0x0040
-#define F_MOD        0x0080
-#define F_PRV        0x0100
-#define F_UNP        0x0200
-#define F_NEW        0x0400
-#define F_PMS        0x0800
-#define F_EMAIL      0x1000
-#define F_HOLDMAIL   0x2000
-#define F_POLLRMS	 0x4000
+#define F_Excluded    0x0001
+#define F_GGG         0x0002
+#define F_Expert      0x0004
+#define F_SYSOP       0x0008
+#define F_BBS         0x0010
+#define F_AAA         0x0020
+#define F_BBB         0x0040
+#define F_CCC         0x0080
+#define F_DDD         0x0100
+#define F_EEE         0x0200
+#define F_FFF         0x0400
+#define F_PMS         0x0800
+#define F_EMAIL       0x1000
+#define F_HOLDMAIL    0x2000
+#define F_POLLRMS	  0x4000
 #define F_SYSOP_IN_LM 0x8000
-#define F_Temp_B2_BBS 0x10000
-#define F_NOWINLINK	 0x20000			// Don't add Winlink.org
-#define F_NOBULLS	 0x40000	
-#define F_NTSMPS	 0x80000	
-
-/* #define F_PWD        0x1000 */
+#define F_Temp_B2_BBS 0x00010000			// "Winlink Express User"
+#define F_NOWINLINK	  0x00020000			// Don't add Winlink.org
+#define F_NOBULLS	  0x00040000	
+#define F_NTSMPS	  0x00080000
+#define F_APRSMFOR	  0x00100000			// Send APRS message for new mail
+#define F_APRSSSID	  0xF0000000
 
 
 struct Override
@@ -553,17 +564,17 @@ struct OldMsgInfo
 
 struct MsgInfo
 {
-	char	type ;
-	char	status ;
-	int		number ;
-	int		length ;
+	char	type;
+	char	status;
+	int		number;
+	int		length;
 	int		xdatereceived;
-	char	bbsfrom[7] ;			// ? BBS we got it from ?
-	char	via[41] ;
-	char	from[7] ;
-	char	to[7] ;
-	char	bid[13] ;
-	char	title[61] ;
+	char	bbsfrom[7];			// ? BBS we got it from ?
+	char	via[41];
+	char	from[7];
+	char	to[7];
+	char	bid[13];
+	char	title[61];
 	int		nntpnum;			// Number within topic (ie Bull TO Addr) - used for nntp
 
 	UCHAR	B2Flags;
@@ -1054,7 +1065,7 @@ VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user);
 int QueueMsg(	ConnectionInfo * conn, char * msg, int len);
 VOID SendUnbuffered(int stream, char * msg, int len);
 //int GetFileList(char * Dir);
-BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom);
+BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, struct TempUserInfo * Temp);
 void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming);
@@ -1508,10 +1519,10 @@ extern BOOL OverrideUnsent;
 extern BOOL SendNonDeliveryMsgs;
 extern BOOL GenerateTrafficReport;
 
-extern int PR;
-extern int PUR;
-extern int PF;
-extern int PNF;
+extern double PR;
+extern double PUR;
+extern double PF;
+extern double PNF;
 extern int BF;
 extern int BNF;
 extern int NTSD;

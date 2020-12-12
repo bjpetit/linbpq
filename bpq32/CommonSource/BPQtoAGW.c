@@ -175,13 +175,12 @@ static fd_set errorfs;
 static struct timeval timeout;
 
 
-static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
+static size_t ExtProc(int fn, int port, PMESSAGE buff)
 {
 	int i,winerr;
 	int datalen;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	char txbuff[500];
-	short * sp;
 	unsigned int bytes,txlen=0;
 	char ErrMsg[255];
 
@@ -241,14 +240,14 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					{
 						// Write block has cleared. Send rest of packet
 
-						buffptr=Q_REM(&BPQtoAGW_Q[port]);
+						buffptr = Q_REM(&BPQtoAGW_Q[port]);
 
-						txlen=buffptr[1];
+						txlen = buffptr->Len;
 
-						memcpy(txbuff,buffptr+2,txlen);
+						memcpy(txbuff, buffptr->Data, txlen);
 
-						bytes=send(AGWSock[port],(const char FAR *)&txbuff,txlen,0);
-					
+						bytes = send(AGWSock[port], (const char FAR *)&txbuff, txlen, 0);
+
 						ReleaseBuffer(buffptr);
 					}
 				}
@@ -270,17 +269,12 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		{
 			buffptr=Q_REM(&AGWtoBPQ_Q[port]);
 
-			datalen = buffptr[1];
+			datalen = buffptr->Len - 1;
 
-			memcpy(&buff[6],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-			datalen+=6;
+			memcpy(buff->DEST, &buffptr->Data[1] , datalen);		// Data goes to +7, but we have an extra byte
+			datalen += MSGHDDRLEN;
+			buff->LENGTH = datalen;
 
-			sp = (short *)&buff[5];
-			*sp = datalen;
-
-//			buff[5]=(datalen & 0xff);
-//			buff[6]=(datalen >> 8);
-		
 			ReleaseBuffer(buffptr);
 
 			return (1);
@@ -301,10 +295,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		// AGW has a control byte on front, so only subtract 6 from BPQ length
 
-		sp = (short *)&buff[5];
-		txlen = *sp - 6;
-
-//		txlen=(buff[6]<<8) + buff[5]-6;	
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff);
+		txlen -= (MSGHDDRLEN - 1);
 		
 		AGWHeader.Port=AGWChannel[port];
 		AGWHeader.DataKind='K';				// raw send
@@ -315,7 +307,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		AGWHeader.DataLength = txlen;
 #endif
 		memcpy(&txbuff,&AGWHeader,sizeof(AGWHeader));
-		memcpy(&txbuff[sizeof(AGWHeader)], &buff[6], txlen);
+		memcpy(&txbuff[sizeof(AGWHeader) + 1], &buff->DEST, txlen);
 		txbuff[sizeof(AGWHeader)]=0;
 		
 		txlen+=sizeof(AGWHeader);
@@ -720,7 +712,7 @@ int ProcessReceivedData(int port)
 	int datalen,i;
 	char ErrMsg[255];
 	char Message[500];
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 
 	//	Need to extract messages from byte stream
 
@@ -782,26 +774,25 @@ int ProcessReceivedData(int port)
 
 			// Have header, and data if needed
 
-			// Only use frame type 
+			// Only use frame type K
 
 			if (RXHeader.DataKind == 'K')				// raw data
 			{
 				//	Make sure it is for a port we want - we may not be using all AGW ports
 
 				if (BPQPort[RXHeader.Port][MasterPort[port]] == 0)
-					
 					return (0);
 
 				// Get a buffer
-						
-				buffptr=GetBuff();
+
+				buffptr = GetBuff();
 
 				if (buffptr == 0) return (0);			// No buffers, so ignore
-	
-				buffptr[1]=datalen;
-				memcpy(buffptr+2,&Message,datalen);
 
-				C_Q_ADD(&AGWtoBPQ_Q[BPQPort[RXHeader.Port][MasterPort[port]]],buffptr);
+				buffptr->Len = datalen;
+				memcpy(buffptr->Data, &Message, datalen);
+
+				C_Q_ADD(&AGWtoBPQ_Q[BPQPort[RXHeader.Port][MasterPort[port]]], buffptr);
 			}
 
 			return (0);

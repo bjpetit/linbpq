@@ -67,8 +67,8 @@ VOID GetWPDatabase()
 	strcat(CfgName, ".cfg");
 
 	config_init(&wpcfg);
-	
-	if(!config_read_file(&wpcfg, CfgName))
+
+	if (!config_read_file(&wpcfg, CfgName))
 	{
 		char Msg[256];
 		sprintf(Msg, "Config File %s Line %d - %s\n", CfgName,
@@ -81,8 +81,8 @@ VOID GetWPDatabase()
 
 	// Set up control record
 
-	WPRecPtr=malloc(sizeof(void *));
-	WPRecPtr[0]= zalloc(sizeof (WPRec));
+	WPRecPtr = malloc(sizeof(void *));
+	WPRecPtr[0] = zalloc(sizeof(WPRec));
 	NumberofWPrecs = 0;
 
 	while (1)
@@ -90,7 +90,7 @@ VOID GetWPDatabase()
 		char Key[16];
 		sprintf(Key, "R%d", i++);
 
-		wpgroup = config_lookup (&wpcfg, Key);
+		wpgroup = config_lookup(&wpcfg, Key);
 
 		if (wpgroup == NULL)			// End of List
 		{
@@ -98,7 +98,7 @@ VOID GetWPDatabase()
 			return;
 		}
 
-		memset(&WPRec, 0, sizeof (WPRec));
+		memset(&WPRec, 0, sizeof(WPRec));
 
 		GetStringValue(wpgroup, "c", WPRec.callsign);
 		GetStringValue(wpgroup, "n", WPRec.name);
@@ -114,15 +114,15 @@ VOID GetWPDatabase()
 		GetStringValue(wpgroup, "q", WPRec.first_qth);
 		GetStringValue(wpgroup, "sq", WPRec.secnd_qth);
 
-		val = GetIntValue(wpgroup, "m"); 
+		val = GetIntValue(wpgroup, "m");
 		WPRec.last_modif = val;
-		val = GetIntValue(wpgroup, "ls"); 
+		val = GetIntValue(wpgroup, "ls");
 		WPRec.last_seen = val;
 
 		_strupr(WPRec.callsign);
 
 		strlop(WPRec.callsign, ' ');
-		
+
 		if (strlen(WPRec.callsign) > 2)
 		{
 			if (strchr(WPRec.callsign, ':'))
@@ -143,6 +143,9 @@ VOID GetWPDatabase()
 			if (_memicmp(WPRec.callsign, "SMTP", 4) == 0)
 				continue;
 
+			if (_memicmp(WPRec.callsign, "SMTP:", 5) == 0)
+				continue;
+
 			if (_stricmp(WPRec.callsign, "AMPR") == 0)
 				continue;
 
@@ -157,10 +160,10 @@ VOID GetWPDatabase()
 			if (WP == NULL)
 				WP = AllocateWPRecord();
 
-			memcpy(WP, &WPRec,  sizeof (WPRec));
+			memcpy(WP, &WPRec, sizeof(WPRec));
 		}
 	}
-	
+
 tryOld:
 
 	Handle = fopen(WPDatabasePath, "rb");
@@ -169,9 +172,9 @@ tryOld:
 	{
 		// Initialise a new File
 
-		WPRecPtr=malloc(sizeof(void *));
-		WPRecPtr[0]= malloc(sizeof (WPRec));
-		memset(WPRecPtr[0], 0, sizeof (WPRec));
+		WPRecPtr = malloc(sizeof(void *));
+		WPRecPtr[0] = malloc(sizeof(WPRec));
+		memset(WPRecPtr[0], 0, sizeof(WPRec));
 		NumberofWPrecs = 0;
 
 		return;
@@ -179,34 +182,34 @@ tryOld:
 
 
 	// Get First Record
-		
-	ReadLen = fread(&WPRec, 1, sizeof (WPRec), Handle); 
+
+	ReadLen = fread(&WPRec, 1, sizeof(WPRec), Handle);
 
 	if (ReadLen == 0)
 	{
 		// Duff file
 
-		memset(&WPRec, 0, sizeof (WPRec));
+		memset(&WPRec, 0, sizeof(WPRec));
 	}
 
 	// Set up control record
 
-	WPRecPtr=malloc(sizeof(void *));
-	WPRecPtr[0]= malloc(sizeof (WPRec));
-	memcpy(WPRecPtr[0], &WPRec,  sizeof (WPRec));
+	WPRecPtr = malloc(sizeof(void *));
+	WPRecPtr[0] = malloc(sizeof(WPRec));
+	memcpy(WPRecPtr[0], &WPRec, sizeof(WPRec));
 
 	NumberofWPrecs = 0;
 
 Next:
 
-	ReadLen = fread(&WPRec, 1, sizeof (WPRec), Handle); 
+	ReadLen = fread(&WPRec, 1, sizeof(WPRec), Handle);
 
-	if (ReadLen == sizeof (WPRec))
+	if (ReadLen == sizeof(WPRec))
 	{
 		_strupr(WPRec.callsign);
 
 		strlop(WPRec.callsign, ' ');
-		
+
 		if (strlen(WPRec.callsign) > 2)
 		{
 			if (strchr(WPRec.callsign, ':'))
@@ -227,6 +230,9 @@ Next:
 			if (_memicmp(WPRec.callsign, "SMTP", 4) == 0)
 				goto Next;
 
+			if (_memicmp(WPRec.callsign, "SMTP:", 5) == 0)
+				goto Next;
+
 			if (_stricmp(WPRec.callsign, "AMPR") == 0)
 				goto Next;
 
@@ -241,14 +247,13 @@ Next:
 			if (WP == NULL)
 				WP = AllocateWPRecord();
 
-			memcpy(WP, &WPRec,  sizeof (WPRec));
+			memcpy(WP, &WPRec, sizeof(WPRec));
 		}
 		goto Next;
 	}
 
 	fclose(Handle);
 	SaveWPDatabase();
-
 }
 
 VOID CopyWPDatabase()
@@ -393,7 +398,7 @@ int Do_WP_Sel_Changed(HWND hDlg)
 
 			SetDlgItemText(hDlg, IDC_WPNAME, WP->name);
 			SetDlgItemText(hDlg, IDC_HOMEBBS1, WP->first_homebbs);
-			SetDlgItemText(hDlg, IDC_HOMEBBS2, WP->first_homebbs);
+			SetDlgItemText(hDlg, IDC_HOMEBBS2, WP->secnd_homebbs);
 			SetDlgItemText(hDlg, IDC_QTH1, WP->first_qth);
 			SetDlgItemText(hDlg, IDC_QTH2, WP->secnd_qth);
 			SetDlgItemText(hDlg, IDC_ZIP1, WP->first_zip);
@@ -442,7 +447,7 @@ VOID Do_Save_WPRec(HWND hDlg)
 
 	GetDlgItemText(hDlg, IDC_WPNAME, WP->name, 13);
 	GetDlgItemText(hDlg, IDC_HOMEBBS1, WP->first_homebbs, 41);
-	GetDlgItemText(hDlg, IDC_HOMEBBS2, WP->first_homebbs, 41);
+	GetDlgItemText(hDlg, IDC_HOMEBBS2, WP->secnd_homebbs, 41);
 	GetDlgItemText(hDlg, IDC_QTH1, WP->first_qth, 31);
 	GetDlgItemText(hDlg, IDC_QTH2, WP->secnd_qth, 31);
 	GetDlgItemText(hDlg, IDC_ZIP1, WP->first_zip, 31);
@@ -680,6 +685,9 @@ VOID GetWPBBSInfo(char * Rline)
 		return;
 
 	if (_memicmp(Call, "SMTP", 4) == 0)
+		return;
+
+	if (_memicmp(Call, "SMTP:", 5) == 0)
 		return;
 
 	if (_stricmp(Call, "AMPR") == 0)
@@ -949,6 +957,9 @@ it will not be replaced. This flag will be used in case the WP update messages a
 
 					if (_memicmp(Call, "SMTP", 4) == 0)
 						break;
+
+					if (_memicmp(Call, "SMTP:", 5) == 0)
+						break;
 		
 					if (_stricmp(Call, "AMPR") == 0)
 						break;
@@ -1110,6 +1121,9 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 		return;
 
 	if (_memicmp(user->Call, "SMTP", 4) == 0)
+		return;
+
+	if (_memicmp(user->Call, "SMTP:", 5) == 0)
 		return;
 
 	if (_stricmp(user->Call, "AMPR") == 0)

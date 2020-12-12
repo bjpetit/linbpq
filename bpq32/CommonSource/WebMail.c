@@ -78,6 +78,7 @@ VOID GetPage(struct HTTPConnectionInfo * Session, char * NodeURL);
 VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *URLParams, int InputLen);
 BOOL isAMPRMsg(char * Addr);
 char * doXMLTransparency(char * string);
+Dll BOOL APIENTRY APISendAPRSMessage(char * Text, char * ToCall);
 
 extern char NodeTail[];
 extern char BBSName[10];
@@ -913,6 +914,8 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	struct MsgInfo * Msg;
 	char * ptr = Message;
 	char * MsgBytes, * Save;
+	int msgLen;
+
 	char FullTo[100];
 	char UTF8Title[128];
 	int Index;
@@ -964,11 +967,13 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 	MsgBytes = Save = ReadMessageFile(Number);
 
+	msgLen = Msg->length;
+
 	if (Msg->type == 'P')
 		Index = PMSG;
 	else if (Msg->type == 'B')
 		Index = BMSG;
-	else if (Msg->type == 'T')
+	else 
 		Index = TMSG;
 
 	if (MsgBytes)
@@ -1009,7 +1014,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 						WebMail->FileLen[WebMail->Files] = atoi(&ptr1[6]);
 						WebMail->FileName[WebMail->Files++] = _strdup(&ptr3[1]);
-						*(ptr2 - 1) = ' ';		// put sapce back
+						*(ptr2 - 1) = ' ';		// put space back
 					}
 				
 					ptr1 = ptr2;
@@ -1099,7 +1104,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 				free(Save);
 
-				RemoveLF(Message, (int)strlen(Message) + 1);		// Removes LF agter CR but not on its own
+				RemoveLF(Message, (int)strlen(Message) + 1);		// Removes LF after CR but not on its own
 
 				return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, Key, Key, DisplayStyle, Message, DisplayStyle);
 			}
@@ -1112,32 +1117,32 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	//			MsgBytes = ptr1;
 		}
 
-		// Remove lf chars
-
-//		Length = RemoveLF(MsgBytes, strlen(MsgBytes));
-
-		User->Total.MsgsSent[Index] ++;
-//		User->Total.BytesForwardedOut[Index] += Length;
-
 		// Body  may have cr cr lf which causes double space
 
-		crcrptr = strstr(MsgBytes, "\r\r");
+		crcrptr = strstr(MsgBytes, "\r\r\n");
 
 		while (crcrptr)
 		{
 			*crcrptr = ' ';
-			crcrptr = strstr(crcrptr, "\r\r");
+			crcrptr = strstr(crcrptr, "\r\r\n");
 		}
+
+		// Remove lf chars
+
+		msgLen = RemoveLF(MsgBytes, msgLen);
+
+		User->Total.MsgsSent[Index] ++;
+//		User->Total.BytesForwardedOut[Index] += Length;
 
 
 		// if body not UTF-8, convert it
 
-	if (WebIsUTF8(MsgBytes, (int)strlen(MsgBytes)) == FALSE)
+	if (WebIsUTF8(MsgBytes, msgLen) == FALSE)
 	{
 		// With Windows it is simple - convert using current codepage
 		// I think the only reliable way is to convert to unicode and back
 
-		size_t origlen = strlen(MsgBytes) + 1;
+		size_t origlen = msgLen + 1;
 
 		UCHAR * BufferB = malloc(2 * origlen);
 
@@ -1153,10 +1158,11 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 		free(Save);
 		Save = MsgBytes = BufferB;
 		free(BufferW);
+		msgLen = len - 1;		// exclude NULL
 
 #else
-		int left = 2 * strlen(MsgBytes);
-		int len = strlen(MsgBytes);
+		int left = 2 * msgLen;
+		int len = msgLen;
 		UCHAR * BufferBP = BufferB;
 		iconv_t * icu = NULL;
 
@@ -1168,13 +1174,19 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	
 		free(Save);
 		Save = MsgBytes = BufferB;
+		msgLen = strlen(MsgBytes);
 
 #endif
 
 	}
 
 
-		ptr += sprintf(ptr, "%s", MsgBytes);
+//		ptr += sprintf(ptr, "%s", MsgBytes);
+
+		memcpy(ptr, MsgBytes, msgLen);
+		ptr += msgLen;
+		ptr[0] = 0;
+
 		free(Save);
 
 		ptr += sprintf(ptr, "\r\r[End of Message #%d from %s]\r", Number, Msg->from);
@@ -1447,6 +1459,8 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		{
 			char * msg = strstr(input, "\r\n\r\n");	// End of headers
 			char * user, * password, * Key;
+			char Msg[128];
+			int n;
 
 			if (msg)
 			{
@@ -1476,7 +1490,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 				{
 					// Check Password
 
-					if (strcmp(User->pass, password) == 0)
+					if (password[0] && strcmp(User->pass, password) == 0)
 					{
 						// send Message Index
 
@@ -1490,9 +1504,22 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 							WebMailTemplate = NULL;
 						}
 
+						if (User->flags & F_Excluded)
+						{
+							n = sprintf_s(Msg, sizeof(Msg), "Webmail Connect from %s Rejected by Exclude Flag", _strupr(user));
+							WriteLogLine(NULL, '|',Msg, n, LOG_BBS);
+							ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
+							*RLen = ReplyLen;
+							return;
+						}			
+
 						*RLen = SendWebMailHeader(Reply, Session->Key, Session);
- 						return;
+ 						n=sprintf_s(Msg, sizeof(Msg), "Webmail Connect from %s", _strupr(user));
+						WriteLogLine(NULL, '|',Msg, n, LOG_BBS);
+
+						return;
 					}
+					
 				}
 
 				//	Bad User or Pass
@@ -1713,7 +1740,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		ptr += sprintf(ptr, "%s", "\r\n\r\n\r\n\r\n\r\nOriginal Message\r\n\r\n> ");
 
 		ptr1 = ptr2 = MsgBytes;
-		len  = strlen(MsgBytes);
+		len  = (int)strlen(MsgBytes);
 
 		while (len-- > 0)
 		{
@@ -1759,6 +1786,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"value='Include Orignal Msg'>";
 		
 		char Temp[1024];
+		char ReplyAddr[128];
 
 		Msg = GetMsgFromNumber(n);
 
@@ -1788,7 +1816,10 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		else
 			sprintf(Title, "%s", Msg->title);
 
-		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, Temp, Title , "");
+		strcpy(ReplyAddr, Msg->from);
+		strcat(ReplyAddr, Msg->emailfrom);
+
+		*RLen = sprintf(Reply, MsgInputPage, Key, ReplyAddr, Temp, Title , "");
 		return;
 	}
 
@@ -2198,18 +2229,24 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	BIDRec * BIDRec;
 	char MsgFile[MAX_PATH];
 	size_t WriteLen=0;
-	char HDest[512];
+	char * HDest;
+	char * HDestCopy;
+	char * HDestRest;
 	char * Vptr = NULL;
 	char * FileList = NULL;
 	char Prompt[256] = "Message Saved";
 	char OrigTo[256];
 	WebMailInfo * WebMail = Session->WebMail;
+	struct UserInfo * user;
+	CIRCUIT  conn;
 
 	// So we can have attachments input is now Content-Type: multipart/form-data;
 
 	char * Input; 
 	size_t MsgLen = 0;
 	char * Boundary;		
+
+	strcpy(conn.Callsign, Session->User->Call);
 
 	Input = MsgPtr;
 
@@ -2224,10 +2261,10 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	{
 		char * Name, * Value;
 		int ValLen;
-		
+
 		if (unpackPart(Boundary, &Input, &Name, &Value, &ValLen, MsgPtr + InputLen) == FALSE)
 		{
-//			ReportCorrupt(WebMail);
+			//			ReportCorrupt(WebMail);
 			free(Boundary);
 			return;
 		}
@@ -2244,9 +2281,9 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		// Processing Form Input
 
 		SaveTemplateMessage(Session, MsgPtr, Reply, RLen, Rest);
-	
+
 		// Prevent re-entry
-		
+
 		free(WebMail->txtFileName);
 		WebMail->txtFileName = NULL;
 
@@ -2282,7 +2319,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		return;
 	}
 
-	strcpy(HDest, WebMail->To);
+	HDest = _strdup(WebMail->To);
 
 	if (strlen(WebMail->BID))
 	{		
@@ -2311,191 +2348,235 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 			return;
 		}
 	}
-	
-	Msg = AllocateMsgRecord();
-		
-	// Set number here so they remain in sequence
-		
-	Msg->number = ++LatestMsg;
-	MsgnotoMsg[Msg->number] = Msg;
- 
-	strcpy(Msg->from, Session->User->Call);
 
-	if (_memicmp(HDest, "rms:", 4) == 0 || _memicmp(HDest, "rms/", 4) == 0)
+	// ?? Can we just loop though the rest of the code to allow multiple dests ??
+
+	HDestCopy = HDest;
+
+	while (HDest && HDest[0])
 	{
-		Vptr=&HDest[4];
-		strcpy(Msg->to, "RMS");
-	}
-	else if (_memicmp(HDest, "smtp:", 5) == 0)
-	{
-		if (ISP_Gateway_Enabled)
+		HDestRest = strlop(HDest, ';');
+
+		Msg = AllocateMsgRecord();
+
+		// Set number here so they remain in sequence
+
+		Msg->number = ++LatestMsg;
+		MsgnotoMsg[Msg->number] = Msg;
+
+		strcpy(Msg->from, Session->User->Call);
+
+		if (_memicmp(HDest, "rms:", 4) == 0 || _memicmp(HDest, "rms/", 4) == 0)
 		{
-			Vptr=&HDest[5];
-			Msg->to[0] = 0;
+			Vptr=&HDest[4];
+			strcpy(Msg->to, "RMS");
 		}
-	}
-	else if (strchr(HDest, '@'))
-	{
-		strcpy(OrigTo, HDest);
-
-		Vptr = strlop(HDest, '@');
-
-		if (Vptr)
+		else if (_memicmp(HDest, "smtp:", 5) == 0)
 		{
-			// If looks like a valid email address, treat as such
-
-			if (strlen(HDest) > 6 || !CheckifPacket(Vptr))
+			if (ISP_Gateway_Enabled)
 			{
-				// Assume Email address
-
-				Vptr = OrigTo;
-
-				if (FindRMS() || strchr(Vptr, '!')) // have RMS or source route
-					strcpy(Msg->to, "RMS");
-				else if (ISP_Gateway_Enabled)
-					Msg->to[0] = 0;
-				else if (isAMPRMsg(OrigTo))
-					strcpy(Msg->to, "RMS");		// Routing will redirect it
-				else
-				{		
-					*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow Sending to Internet Email\");window.close();</script></html>");
-					FreeWebMailFields(WebMail);		// We will reprocess message and attachments so reinitialise
-					return;
-		
-				}
+				Vptr=&HDest[5];
+				Msg->to[0] = 0;
 			}
-			else
-				strcpy(Msg->to, _strupr(HDest));
 		}
-	}
-	else
-	{
-		// No @
-
-		if (strlen(HDest) > 6)
-			HDest[6] = 0;
-		
-		strcpy(Msg->to, _strupr(HDest));
-	}
-
-	if (SendBBStoSYSOPCall)
-		if (_stricmp(HDest, BBSName) == 0)
-			strcpy(Msg->to, SYSOPCall);
-
-	if (Vptr)
-	{
-		if (strlen(Vptr) > 40)
-			Vptr[40] = 0;
-
-		strcpy(Msg->via, _strupr(Vptr));
-	}
-	else
-	{
-		// No via. If not local user try to add BBS 
-	
-		struct UserInfo * ToUser = LookupCall(Msg->to);
-
-		if (ToUser)
+		else if (strchr(HDest, '@'))
 		{
-			// Local User. If Home BBS is specified, use it
+			strcpy(OrigTo, HDest);
 
-			if (ToUser->HomeBBS[0])
+			Vptr = strlop(HDest, '@');
+
+			if (Vptr)
 			{
-				strcpy(Msg->via, ToUser->HomeBBS);
-				sprintf(Prompt, "%s added from HomeBBS. Message Saved", Msg->via);
+				// If looks like a valid email address, treat as such
+
+				if (strlen(HDest) > 6 || !CheckifPacket(Vptr))
+				{
+					// Assume Email address
+
+					Vptr = OrigTo;
+
+					if (FindRMS() || strchr(Vptr, '!')) // have RMS or source route
+						strcpy(Msg->to, "RMS");
+					else if (ISP_Gateway_Enabled)
+						Msg->to[0] = 0;
+					else if (isAMPRMsg(OrigTo))
+						strcpy(Msg->to, "RMS");		// Routing will redirect it
+					else
+					{		
+						*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow Sending to Internet Email\");window.close();</script></html>");
+						FreeWebMailFields(WebMail);		// We will reprocess message and attachments so reinitialise
+						return;
+
+					}
+				}
+				else
+					strcpy(Msg->to, _strupr(HDest));
 			}
 		}
 		else
 		{
-			// Not local user - Check WP
-			
-			WPRecP WP = LookupWP(Msg->to);
+			// No @
 
-			if (WP)
+			if (strlen(HDest) > 6)
+				HDest[6] = 0;
+
+			strcpy(Msg->to, _strupr(HDest));
+		}
+
+		if (SendBBStoSYSOPCall)
+			if (_stricmp(HDest, BBSName) == 0)
+				strcpy(Msg->to, SYSOPCall);
+
+		if (Vptr)
+		{
+			if (strlen(Vptr) > 40)
+				Vptr[40] = 0;
+
+			strcpy(Msg->via, _strupr(Vptr));
+		}
+		else
+		{
+			// No via. If not local user try to add BBS 
+
+			struct UserInfo * ToUser = LookupCall(Msg->to);
+
+			if (ToUser)
 			{
-				strcpy(Msg->via, WP->first_homebbs);
-				sprintf(Prompt, "%s added from WP", Msg->via);
+				// Local User. If Home BBS is specified, use it
+
+				if (ToUser->HomeBBS[0])
+				{
+					strcpy(Msg->via, ToUser->HomeBBS);
+					sprintf(Prompt, "%s added from HomeBBS. Message Saved", Msg->via);
+				}
+			}
+			else
+			{
+				// Not local user - Check WP
+
+				WPRecP WP = LookupWP(Msg->to);
+
+				if (WP)
+				{
+					strcpy(Msg->via, WP->first_homebbs);
+					sprintf(Prompt, "%s added from WP", Msg->via);
+				}
 			}
 		}
-	}
 
-	if (strlen(WebMail->Subject) > 60)
-		WebMail->Subject[60] = 0;
+		if (strlen(WebMail->Subject) > 60)
+			WebMail->Subject[60] = 0;
 
-	strcpy(Msg->title, WebMail->Subject);
-	Msg->type = WebMail->Type;
-	Msg->status = 'N';
+		strcpy(Msg->title, WebMail->Subject);
+		Msg->type = WebMail->Type;
 
-	if (strlen(WebMail->BID) == 0)
-		sprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
-	else
-		strcpy(Msg->bid, WebMail->BID);
-
-	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
-
-	BIDRec = AllocateBIDRecord();
-
-	strcpy(BIDRec->BID, Msg->bid);
-	BIDRec->mode = Msg->type;
-	BIDRec->u.msgno = LOWORD(Msg->number);
-	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
-
-	Msg->length = (int)MsgLen;
-
-	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
-	
-//	BuildFormMessage(Session, Msg);
-
-	if (WebMail->Files)
-	{
-		// Send as B2
-
-		char * B2Header = BuildB2Header(WebMail, Msg);
-
-		hFile = fopen(MsgFile, "wb");
-	
-		if (hFile)
+		if (Session->User->flags & F_HOLDMAIL)
 		{
-			WriteLen = fwrite(B2Header, 1, strlen(B2Header), hFile); 
-			WriteLen += fwrite(WebMail->Body, 1, Msg->length, hFile); 
-			WriteLen += fwrite("\r\n", 1, 2, hFile); 
-		
-			for (i = 0; i < WebMail->Files; i++)
+			int Length=0;
+			char * MailBuffer = malloc(100);
+			char Title[100];
+
+			Msg->status = 'H';
+
+			Length = sprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+			sprintf(Title, "Message %d Held - %s", Msg->number, "User has Hold Messages flag set");
+			SendMessageToSYSOP(Title, MailBuffer, Length);
+		}
+		else
+			Msg->status = 'N';
+
+		if (strlen(WebMail->BID) == 0)
+			sprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+		else
+			strcpy(Msg->bid, WebMail->BID);
+
+		Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+		BIDRec = AllocateBIDRecord();
+
+		strcpy(BIDRec->BID, Msg->bid);
+		BIDRec->mode = Msg->type;
+		BIDRec->u.msgno = LOWORD(Msg->number);
+		BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+		Msg->length = (int)MsgLen;
+
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
+
+		//	BuildFormMessage(Session, Msg);
+
+		if (WebMail->Files)
+		{
+			// Send as B2
+
+			char * B2Header = BuildB2Header(WebMail, Msg);
+
+			hFile = fopen(MsgFile, "wb");
+
+			if (hFile)
 			{
-				WriteLen += fwrite(WebMail->FileBody[i], 1, WebMail->FileLen[i], hFile); 
+				WriteLen = fwrite(B2Header, 1, strlen(B2Header), hFile); 
+				WriteLen += fwrite(WebMail->Body, 1, Msg->length, hFile); 
 				WriteLen += fwrite("\r\n", 1, 2, hFile); 
+
+				for (i = 0; i < WebMail->Files; i++)
+				{
+					WriteLen += fwrite(WebMail->FileBody[i], 1, WebMail->FileLen[i], hFile); 
+					WriteLen += fwrite("\r\n", 1, 2, hFile); 
+				}
+				fclose(hFile);
+				free(B2Header);
+
+				Msg->length = (int)WriteLen;
 			}
-			fclose(hFile);
-			free(B2Header);
-
-			Msg->length = (int)WriteLen;
 		}
-	}
-	else
-	{
-		hFile = fopen(MsgFile, "wb");
-	
-		if (hFile)
+		else
 		{
-			WriteLen = fwrite(WebMail->Body, 1, Msg->length, hFile); 
-			fclose(hFile);
+			hFile = fopen(MsgFile, "wb");
+
+			if (hFile)
+			{
+				WriteLen = fwrite(WebMail->Body, 1, Msg->length, hFile); 
+				fclose(hFile);
+			}
 		}
+		MatchMessagetoBBSList(Msg, &conn);
+
+		BuildNNTPList(Msg);				// Build NNTP Groups list
+
+
+		if (EnableUI)
+			SendMsgUI(Msg);	
+
+		user = LookupCall(Msg->to);
+
+		if (user && (user->flags & F_APRSMFOR))
+		{
+			char APRS[128];
+			char Call[16];
+			int SSID = user->flags >> 28;
+
+			if (SSID)
+				sprintf(Call, "%s-%d", Msg->to, SSID);
+			else
+				strcpy(Call, Msg->to);
+
+			sprintf(APRS, "New BBS Message %s From %s", Msg->title, Msg->from);
+			APISendAPRSMessage(APRS, Call);
+		}
+
+		HDest = HDestRest;
 	}
-	MatchMessagetoBBSList(Msg, 0);
-
-	BuildNNTPList(Msg);				// Build NNTP Groups list
-
-	SaveMessageDatabase();
-	SaveBIDDatabase();
 
 	*RLen = SendWebMailHeaderEx(Reply, Session->Key, Session, Prompt);
 
+	SaveMessageDatabase();
+	SaveBIDDatabase();
 	FreeWebMailFields(WebMail);
+	free(HDestCopy);
 
 	return;
 }
-
-
 
 
 
@@ -4345,7 +4426,7 @@ char * doXMLTransparency(char * string)
 
 		case '\'':
 
-			strcpy(out, "&lt;");
+			strcpy(out, "&apos;");
 			out += 6;
 			break;
 

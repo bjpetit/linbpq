@@ -160,6 +160,8 @@ static int ProcessLine(char * buf, int Port)
 					TNC->PTTMode = PTTDTR | PTTRTS;
 				else if (_stricmp(ptr, "CM108") == 0)
 					TNC->PTTMode = PTTCM108;
+				else if (_stricmp(ptr, "HAMLIB") == 0)
+					TNC->PTTMode = PTTHAMLIB;
 
 				ptr = strtok(NULL, " \t\n\r");
 			}
@@ -255,11 +257,11 @@ static VOID ChangeMYC(struct TNCINFO * TNC, char * Call)
 //	send(TNC->TCPSock, "MYCALL\r\n", 8, 0);
 }
 
-static size_t ExtProc(int fn, int port, unsigned char * buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
-	int i,winerr;
 	int datalen;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
+	int i,winerr;
 	char txbuff[500];
 	char Status[80];
 	unsigned int bytes,txlen=0;
@@ -290,7 +292,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 			{
 				// No, so send
 
-				send(TNC->TCPSock, TNC->ConnectCmd, strlen(TNC->ConnectCmd), 0);
+				send(TNC->TCPSock, TNC->ConnectCmd, (int)strlen(TNC->ConnectCmd), 0);
 				TNC->Streams[0].Connecting = TRUE;
 
 				memset(TNC->Streams[0].RemoteCall, 0, 10);
@@ -313,12 +315,11 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 				{
 					// Timed out - Send Error Response
 
-					UINT * buffptr = GetBuff();
+					PMSGWITHLEN buffptr = GetBuff();
 
 					if (buffptr == 0) return (0);			// No buffers, so ignore
 
-					buffptr[1]=39;
-					memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
+					buffptr->Len = sprintf(buffptr->Data, "Sorry, Can't Connect - Channel is busy\r");
 
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 					free(TNC->ConnectCmd);
@@ -490,7 +491,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 		if (TNC->Streams[0].ReportDISC)
 		{
 			TNC->Streams[0].ReportDISC = FALSE;
-			buff[4] = 0;
+			buff->PORT = 0;
 			return -1;
 		}
 
@@ -531,8 +532,9 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 					// Write block has cleared. Send rest of packet
 
 					buffptr=Q_REM(&TNC->BPQtoWINMOR_Q);
-					txlen=buffptr[1];
-					memcpy(txbuff,buffptr+2,txlen);
+					txlen = (unsigned int)buffptr->Len;
+
+					memcpy(txbuff,buffptr->Data, txlen);
 					bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
 					ReleaseBuffer(buffptr);
 				}
@@ -551,17 +553,17 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 		if (TNC->WINMORtoBPQ_Q != 0)
 		{
-			buffptr=Q_REM(&TNC->WINMORtoBPQ_Q);
+			buffptr = Q_REM(&TNC->WINMORtoBPQ_Q);
 
-			datalen=buffptr[1];
+			datalen = (int)buffptr->Len;
 
-			buff[4] = 0;						// Compatibility with Kam Driver
-			buff[7] = 0xf0;
-			memcpy(&buff[8],buffptr+2,datalen);	// Data goes to +7, but we have an extra byte
-			datalen+=8;
-			buff[5]=(datalen & 0xff);
-			buff[6]=(datalen >> 8);
-		
+			buff->PORT = 0;						// Compatibility with Kam Driver
+			buff->PID = 0xf0;
+			memcpy(&buff->L2DATA[0], buffptr->Data, datalen);
+
+			datalen += sizeof(void *) + 4;
+			PutLengthinBuffer(buff, (int)datalen);
+	
 			ReleaseBuffer(buffptr);
 
 			return (1);
@@ -575,12 +577,11 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 		{
 			// Send Error Response
 
-			UINT * buffptr = GetBuff();
+			PMSGWITHLEN buffptr = GetBuff();
 
 			if (buffptr == 0) return (0);			// No buffers, so ignore
 
-			buffptr[1] = 24;
-			memcpy(buffptr + 2, "No Connection to V4 TNC\r", 24);
+			buffptr->Len = sprintf(buffptr->Data, "No Connection to V4 TNC\r");
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 			
@@ -596,13 +597,13 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 			return 0;
 		}
 
-		txlen=(buff[6]<<8) + buff[5]-8;	
-		
+		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);		// 1 as no PID
+
 		if (TNC->Streams[0].Connected)
-			bytes=send(TNC->TCPDataSock,(const char FAR *)&buff[8],txlen,0);
+			bytes=send(TNC->TCPDataSock, buff->L2DATA, txlen,0);
 		else
 		{
-			if (_memicmp(&buff[8], "D\r", 2) == 0)
+			if (_memicmp(buff->L2DATA, "D\r", 2) == 0)
 			{
 				TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
 				return 0;
@@ -615,8 +616,8 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 				// Send FEC Data
 
-				buff[8 + txlen] = 0;
-				len = sprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, &buff[8]);
+				buff->L2DATA[txlen] = 0;
+				len = sprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, buff->L2DATA);
 
 				send(TNC->TCPDataSock, Buffer, len, 0);
 
@@ -637,29 +638,29 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 			// See if Local command (eg RADIO)
 
-			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
+			if (_memicmp(buff->L2DATA, "RADIO ", 6) == 0)
 			{
-				sprintf(&buff[8], "%d %s", TNC->Port, &buff[14]);
+				sprintf(buff->L2DATA, "%d %s", TNC->Port, &buff->L2DATA[6]);
 
-				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff[8]))
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, buff->L2DATA))
 				{
 				}
 				else
 				{
-					UINT * buffptr = GetBuff();
+					PMSGWITHLEN buffptr = GetBuff();
 
 					if (buffptr == 0) return 1;			// No buffers, so ignore
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], &buff[8]);
+					buffptr->Len = sprintf(buffptr->Data, buff->L2DATA);
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 				}
 				return 1;
 			}
 
-			if (_memicmp(&buff[8], "CODEC TRUE", 9) == 0)
+			if (_memicmp(buff->L2DATA, "CODEC TRUE", 9) == 0)
 				TNC->StartSent = TRUE;
 
-			if (_memicmp(&buff[8], "D\r", 2) == 0)
+			if (_memicmp(buff->L2DATA, "D\r", 2) == 0)
 			{
 				TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
 				return 0;
@@ -678,11 +679,11 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 			// See if a Connect Command. If so, start codec and set Connecting
 
-			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
+			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
 				char Connect[80] = "ARQCONNECT ";
 
-				memcpy(&Connect[11], &buff[10], txlen);
+				memcpy(&Connect[11], &buff->L2DATA[2], txlen);
 				txlen += 9;
 				Connect[txlen++] = 0x0a;
 				Connect[txlen] = 0;
@@ -720,8 +721,8 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 			}
 			else
 			{
-				buff[8 + txlen++] = 0x0a;
-				bytes=send(TNC->TCPSock,(const char FAR *)&buff[8],txlen,0);
+				buff->L2DATA[txlen++] = 0x0a;
+				bytes=send(TNC->TCPSock, buff->L2DATA, txlen, 0);
 			}
 		}
 		if (bytes != txlen)
@@ -770,7 +771,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 //				return (0);
 //			}
 	
-//			buffptr[1]=txlen-bytes;			// Bytes still to send
+//			buffptr->Len=txlen-bytes;			// Bytes still to send
 
 //			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
 
@@ -817,7 +818,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 	case 6:				// Scan Stop Interface
 
-		Param = (size_t)buff;
+		Param = (int)(size_t)buff;
 
 		if (Param == 1)		// Request Permission
 		{
@@ -866,7 +867,7 @@ VOID V4ProcessDataSocketData(int port)
 	
 	struct TNCINFO * TNC = TNCInfo[port];
 	int InputLen, PacLen = 236, i;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	char * msg;
 		
 	TNC->TimeSinceLast = 0;
@@ -904,7 +905,7 @@ loop:
 	}
 
 
-	msg = (char *)&buffptr[2];
+	msg = buffptr->Data;
 
 	// Message should always be received in 17 char chunks. 17th is a status byte
 	// In ARQ, 6 = "Echo as sent" ack
@@ -939,7 +940,7 @@ loop:
 		
 	// V4 Sends null padded blocks
 	
-	InputLen = strlen((char *)&buffptr[2]);
+	InputLen = (int)strlen(buffptr->Data);
 
 	if (msg[InputLen - 1] == 10)		// LF
 	{
@@ -949,7 +950,7 @@ loop:
 		msg[InputLen++] = 10;
 	}
 
-	buffptr[1] = InputLen;
+	buffptr->Len = InputLen;
 	C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
 	goto loop;
@@ -1216,7 +1217,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	// Response on WINMOR control channel. Could be a reply to a command, or
 	// an Async  Response
 
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	char Status[80];
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
@@ -1350,7 +1351,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 						return;			// No buffers, so ignore
 					}
 
-					buffptr[1] = MsgLen;
+					buffptr->Len = MsgLen;
 					memcpy(buffptr+2, Buffer, MsgLen);
 
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
@@ -1365,7 +1366,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					
 					// Send a Message, then a disconenct
 					
-					send(TNC->TCPDataSock, Msg, strlen(Msg), 0);
+					send(TNC->TCPDataSock, Msg, (int)strlen(Msg), 0);
 					STREAM->NeedDisc = 100;	// 10 secs
 				}
 			}
@@ -1385,7 +1386,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			ReplyLen = sprintf(Reply, "*** Connected to %s\r", &Buffer[10]);
 
-			buffptr[1] = ReplyLen;
+			buffptr->Len = ReplyLen;
 			memcpy(buffptr+2, Reply, ReplyLen);
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
@@ -1427,7 +1428,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			if (buffptr == 0) return;			// No buffers, so ignore
 
-			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "V4} Failure with %s\r", TNC->Streams[0].RemoteCall);
+			buffptr->Len = sprintf(buffptr->Data, "V4} Failure with %s\r", TNC->Streams[0].RemoteCall);
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
@@ -1620,7 +1621,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (buffptr == 0) return;			// No buffers, so ignore
 
-	buffptr[1] = sprintf((UCHAR *)&buffptr[2], "V4} %s\r", Buffer);
+	buffptr->Len = sprintf(buffptr->Data, "V4} %s\r", Buffer);
 
 	C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 			
@@ -1679,7 +1680,7 @@ loop:
 		{
 			// buffer contains more that 1 message
 
-			MsgLen = TNC->InputLen - (ptr2-ptr);
+			MsgLen = TNC->InputLen - (int)(ptr2 - ptr);
 
 			memcpy(Buffer, TNC->TCPBuffer, MsgLen);
 

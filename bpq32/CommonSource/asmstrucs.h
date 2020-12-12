@@ -344,6 +344,13 @@ typedef struct HDDRWITHDIGIS
 
 	};
 
+	UCHAR Padding[BUFFLEN - (sizeof(time_t) + (2 * sizeof(unsigned short)) + sizeof(VOID *) + 256 + 56 + MSGHDDRLEN + 16)]; // 16 = Addrs CTL PID
+
+	time_t Timestamp;
+	struct _LINKTABLE * Linkptr;		// For ACKMODE processing
+	unsigned short Process;				// Process that got buffer
+	unsigned short GuardZone;
+
 } DIGIMESSAGE, *PDIGIMESSAGE;
 
 
@@ -599,7 +606,6 @@ typedef struct PORTCONTROL
 	UCHAR SOFTDCDFLAG;	// IF SET USE 'SOFT DCD' - IF MODEM CANT GIVE A REAL ONE
 	UCHAR PORTSLOTTIME;	// SLOT TIME
 	UCHAR PORTTAILTIME;	// TAIL TIME
-	UCHAR BBSBANNED;	// SET IF PORT CAN'T ACCEPT L2 CALLS TO BBS CALLSIGN 
 	UCHAR PORTT1;		// L2 TIMEOUT
 	UCHAR PORTT2;		// L2 DELAYED ACK TIMER
 	UCHAR PORTN2;		// RETRIES
@@ -648,7 +654,7 @@ typedef struct PORTCONTROL
 	int PortSlot;				// Index in Port Table
 	struct TNCINFO * TNC;		// Associated TNC record
 	int RIGPort;				// Linked port for freq resporting
-
+	unsigned int PERMITTEDAPPLS;	// Appls allowed on this port (generalisation of BBSBANNED)
 
 }	PORTCONTROLX, *PPORTCONTROL;
 

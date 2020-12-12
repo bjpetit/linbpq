@@ -11,10 +11,8 @@
 #include <time.h>
 #include <stdio.h>
 
-#include "MD5.c"
+#include "md5.c"
 
-int LastNow;
-int PassCode;
 
 VOID CreateOneTimePassword(char * KeyPhrase)
 {
@@ -26,13 +24,9 @@ VOID CreateOneTimePassword(char * KeyPhrase)
 	char Key[1000];
 	int i, chr;
 	long long Val;
+	int PassCode;
 
 	NOW = NOW/30;							// Only Change every 30 secs
-
-	if (NOW == LastNow)
-		return;
-
-	LastNow = NOW;
 
 	sprintf(Key, "%s%x", KeyPhrase, NOW);
 
@@ -49,8 +43,8 @@ VOID CreateOneTimePassword(char * KeyPhrase)
 	Password[16] = 0;
 
 	memcpy(&Val, Password, 8);
-	PassCode = Val %= 1000000;
-	printf("Passcode is %d\n", PassCode);
+	PassCode = Val % 1000000;
+	printf("Passcode is %06d\n", PassCode);
 
 	return;
 }

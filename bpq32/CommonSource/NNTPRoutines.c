@@ -127,6 +127,33 @@ DoneIt:
 	REC->Count++;
 }
 
+void RebuildNNTPList()
+{
+	struct NNTPRec * NNTPREC = FirstNNTPRec;
+	struct NNTPRec * SaveNNTPREC;
+	struct MsgInfo * Msg;
+	int i;
+
+	// Free old list
+
+	while (NNTPREC)
+	{
+		SaveNNTPREC = NNTPREC->Next;
+		free(NNTPREC);
+		NNTPREC = SaveNNTPREC;
+	}
+
+	FirstNNTPRec = NULL;
+
+	for (i = 1; i <= NumberofMessages; i++)
+	{
+		Msg = MsgHddrPtr[i];
+		BuildNNTPList(Msg);
+	}
+}
+
+
+
 char * GetPathFromHeaders(char * MsgBytes)
 {
 	char * Path = zalloc(10000);

@@ -367,7 +367,10 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 	memcpy(Copy, Msg, MsgLen);
 	Copy[MsgLen] = 0;
 
-	Len = sprintf_s(Line, 299, "%02d:%02d:%02d%c %s", TM->tm_hour, TM->tm_min, TM->tm_sec, (TX)? 'T': 'R', Copy);
+	if (strchr(Copy, 13))
+		Len = sprintf_s(Line, 299, "%02d:%02d:%02d%c %s", TM->tm_hour, TM->tm_min, TM->tm_sec, (TX)? 'T': 'R', Copy);
+	else
+		Len = sprintf_s(Line, 299, "%02d:%02d:%02d%c %s\r", TM->tm_hour, TM->tm_min, TM->tm_sec, (TX)? 'T': 'R', Copy);
 
 	if (TX)
 		MonWindow.CurrentColour = 0;
@@ -378,7 +381,6 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 	MonWindow.NeedRefresh = TRUE;
 
 	APRSWriteLog(Line);
-
 }
 
 
@@ -1808,6 +1810,8 @@ LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	return DefMDIChildProc(hWnd, message, wParam, lParam); //Frame window calls DefFrameProc rather than DefWindowProc
 }
 
+struct ConsoleInfo * FontCinfo;
+
 
 LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -2053,6 +2057,12 @@ LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 			ToggleRestoreWindows();
 			break;
 
+		case ID_SETUP_FONT:
+
+			FontCinfo = Cinfo;
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_FONT), hWnd, FontConfigWndProc);
+			i =  GetLastError();
+			break;
 			
 		case BPQCLEAROUT:
 
@@ -3288,8 +3298,8 @@ DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LON
 	int NewLen;
 	int err;
 
-	char LineB[2048];
-	WCHAR LineW[2048];
+	char LineB[12048];
+	WCHAR LineW[12048];
 
 //	if (cb != 4092)
 //		return 0;
@@ -3536,6 +3546,11 @@ VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line)
 	int l, Index;
 	char LineCopy[LINELEN * 2];
 	
+	if (strlen(Line) > 200)
+	{
+		Line[199] = 0;
+	}
+
 	if (Line[0] ==  0x1b && Len > 1)
 	{
 		// Save Colour Char
@@ -4436,7 +4451,7 @@ void WriteMonitorLine(char * Msg, int MsgLen)
 	WriteFile(MonHandle ,Msg , MsgLen, &cnt, NULL);
 	WriteFile(MonHandle ,CRLF , 2, &cnt, NULL);
 }
-/*
+
 INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 
 {
@@ -4511,21 +4526,21 @@ INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 				RegCloseKey(hKey);
 			}
 
-			OutputData.CharWidth = FontWidth;
-			OutputData.FirstTime = FALSE; 
+			FontCinfo->CharWidth = FontWidth;
+			FontCinfo->FirstTime = FALSE; 
 
 			SetupRTFHddr();
 
 			Point.x = 0;
 			Point.y = 25000;					// Should be plenty for any font
 
-			SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
-			OutputData.Scrolled = FALSE;
+			SendMessage(FontCinfo->hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+			FontCinfo->Scrolled = FALSE;
 
-			GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);	// Get Actual Height
-			OutputData.RTFHeight = Max;
+			GetScrollRange(FontCinfo->hwndOutput, SB_VERT, &Min, &Max);	// Get Actual Height
+			FontCinfo->RTFHeight = Max;
 
-			DoRefresh(&OutputData);
+			DoRefresh(FontCinfo);
 			EndDialog(hDlg, LOWORD(wParam));
 
 		case IDCANCEL:
@@ -4540,7 +4555,6 @@ INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 }
 
 
-*/
 struct ConsoleInfo * CreateChildWindow(int Stream, BOOL DuringInit)
 {
     WNDCLASS  wc;

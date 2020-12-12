@@ -279,7 +279,7 @@ static char MailLostSession[] = "<html><body>"
 
 
 static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
-"<title></title></head><body>"
+"<title>Edit Config</title></head><body background=/background.jpg>"
 "<form style=\"font-family: monospace;  text-align: center;\"method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit><input name=Cancel value=Cancel type=submit><br></form>";
@@ -435,6 +435,23 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 				{
 					memcpy(ptr2, "&nbsp;", 6);
 					ptr2 += 6;
+
+					// Make sure line isn't too long
+
+					if ((ptr2 - &Formatted[0]) > 250)
+					{
+						strcpy(ptr2, "<br>\r\n");
+
+						Line = Session->LastLine++;
+						free(Session->ScreenLines[Line]);
+
+						Session->ScreenLines[Line] = _strdup(Formatted);
+
+						if (Line == 99)
+							Session->LastLine = 0;
+
+						ptr2 = &Formatted[0];
+					}
 				}
 				else if (c == '>')
 				{
@@ -448,6 +465,7 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 				}
 				else
 					*(ptr2++) = c;
+
 			}
 
 			*ptr2 = 0;
@@ -783,6 +801,13 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 		if (Appl == 0)
 			Appl = NoApp;
+
+		if (password == NULL)
+		{
+			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Appl);
+			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", PassError);
+			goto Sendit;
+		}
 
 		for (i = 0; i < TCP->NumberofUsers; i++)
 		{
@@ -3187,8 +3212,13 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply);
-			return ReplyLen;
+			ReplyLen =  SetupNodeMenu(Reply);
+
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+					"\r\n", (int)(ReplyLen + strlen(Tail)));	
+			send(sock, Header, HeaderLen, 0);
+			send(sock, Reply, ReplyLen, 0);
+			send(sock, Tail, (int)strlen(Tail), 0);
 		}
 		user = strtok_s(&input[9], "&", &Key);
 		password = strtok_s(NULL, "=", &Key);

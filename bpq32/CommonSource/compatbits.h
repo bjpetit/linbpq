@@ -115,8 +115,8 @@ typedef DWORD   COLORREF;
 #define HANDLE UINT
 #define SOCKET int
 
-#define INVALID_SOCKET  (SOCKET)(~0)
-#define SOCKET_ERROR            (-1)
+#define INVALID_SOCKET  -1
+#define SOCKET_ERROR    -1
 
 #define HMENU UINT
 #define WNDPROC UINT
@@ -154,7 +154,7 @@ pthread_t _beginthread(void(*start_address)(), unsigned stack_size, VOID * argli
 
 #define WSAGetLastError() errno
 #define GetLastError() errno 
-#define closesocket close
+void closesocket(int sock);
 #define GetCurrentProcessId getpid
 #define GetCurrentThreadId pthread_self
 

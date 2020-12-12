@@ -2140,6 +2140,20 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 	char Mess[255];
 	int len;
 
+	struct UserInfo * ToUser = LookupCall(Msg->to);
+
+	if (ToUser && ToUser->flags & F_HOLDMAIL)
+	{
+		int Length=0;
+		char * MailBuffer = malloc(100);
+		char Title[100];
+
+		Msg->status = 'H';
+
+		Length += sprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+		sprintf(Title, "Message %d Held - %s", Msg->number, "User has Hold Messages flag set");
+		SendMessageToSYSOP(Title, MailBuffer, Length);
+	}
 
 	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
 	
@@ -2514,18 +2528,22 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		if (_stricmp(Msg->from, "smtp:") == 0)
 		{
 			sprintf_s(Header, sizeof(Header), "From: smtp/%s", Msg->emailfrom);
+			SendSock(sockptr, Header);
+			sprintf_s(Header, sizeof(Header), "Replyto: smtp/%s", Msg->emailfrom);
 		}
 		else
 		{
 			if (_stricmp(Msg->from, "rms:") == 0)
 			{
 				sprintf_s(Header, sizeof(Header), "From: RMS/%s", Msg->emailfrom);
+				SendSock(sockptr, Header);
+				sprintf_s(Header, sizeof(Header), "Replyto: RMS/%s", Msg->emailfrom);
 			}
 			else
 			{
 				// If there is an adddress in Msg->emailfrom use it
 
-				if (Msg->emailfrom[0] == '@')
+				if (Msg->emailfrom[0])
 				{
 					strcpy(B2From, Msg->from);
 					strcat(B2From, Msg->emailfrom);
@@ -2558,6 +2576,8 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 					}	
 				}
 				sprintf_s(Header, sizeof(Header), "From: %s", B2From);	
+				SendSock(sockptr, Header);
+				sprintf_s(Header, sizeof(Header), "Replyto: %s", B2From);	
 			}
 		}	
 		SendSock(sockptr, Header);

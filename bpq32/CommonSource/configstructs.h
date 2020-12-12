@@ -67,6 +67,9 @@ struct PORTCONFIG
 	char SerialPortName[80]; // 516
 	struct XDIGI * XDIGIS;	//  596 Cross port digi setup
 	int RIGPORT;			// Linked port with RigControl 
+	unsigned int PERMITTEDAPPLS;	// Appls allowed on this port
+	int HavePermittedAppls;			// Indicated PERMITTEDAPPLS uses
+
 };
 
 struct ROUTECONFIG

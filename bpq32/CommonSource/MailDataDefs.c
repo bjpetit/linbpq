@@ -52,7 +52,7 @@ struct UserInfo * BBSChain = NULL;					// Chain of users that are BBSes
 struct MsgInfo ** MsgHddrPtr=NULL;
 int NumberofMessages=0;
 
-int FirstMessageIndextoForward = 0;					// Lowest Message wirh a forward bit set - limits search
+int FirstMessageIndextoForward = 0;					// Lowest Message with a forward bit set - limits search
 
 BIDRec ** BIDRecPtr=NULL;
 int NumberofBIDs=0;

@@ -23,7 +23,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 // Version 0.0.4.1 January 2019
 //	Add option to set IS filter to map view automatically
 
-
+// Version 1.1.14.5 March 2020
+//	Add option to run two instances of Linbpq and APRS
 
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
@@ -75,6 +76,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define UINT unsigned int
 #define TRUE 1
 #define FALSE 0
+
+int multiple = 0;
 
 
 GtkWidget *dialog;
@@ -2922,6 +2925,9 @@ int main(int argc, char *argv[])
 	time_t TimeLoaded = time(NULL);
 	struct stat STAT;
 	char * Env;
+	char BPQDirectory[256];
+	char SharedName[256];
+	char * ptr1;
 
 	int SharedSize;
 
@@ -2961,14 +2967,23 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 1.1.14.4\n");
-  	printf("Copyright(c) 2004-2019 John Wiseman G8BPQ\n");
+	printf("G8BPQ APRS Client for Linux Version 1.1.14.6 \n");
+  	printf("Copyright(c) 2004-2020 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
 	printf("Map Tiles Courtesy of thunderforest (www.thunderforest.com)\n\n");
 
+    if (argc > 1 && argv[1] && stricmp(argv[1], "-v") == 0)
+        return 0;
+        
 	config_init(&cfg);
+
+	if (argc > 1 && argv[1] && stricmp(argv[1], "multiple") == 0)
+	{
+		multiple = 1;
+		printf("Running in multiple instance mode\n\n");
+	}
 
 	/* Read the file. If there is an error, report it and exit. */
 	
@@ -3039,10 +3054,29 @@ int main(int argc, char *argv[])
 
 	// Get shared memory
 
-	fd = shm_open("/BPQAPRSSharedMem", O_RDWR, S_IRUSR | S_IWUSR);
+	// Append last bit of current directory to shared name
+
+	getcwd(BPQDirectory, 256);
+	ptr1 = BPQDirectory;
+
+	while (strchr(ptr1, '/'))
+	{
+		ptr1 = strchr(ptr1, '/');
+		ptr1++;
+	}
+
+	if (multiple)
+		sprintf(SharedName, "/BPQAPRSSharedMem%s", ptr1);
+	else
+		strcpy(SharedName, "/BPQAPRSSharedMem");
+
+	printf("Using Shared Memory %s\n", SharedName);
+
+
+	fd = shm_open(SharedName, O_RDWR, S_IRUSR | S_IWUSR);
 	if (fd == -1)
 	{
-		printf("Open APRS Shared Memory Failed\n");
+		printf("Open APRS Shared Memory %s Failed\n", SharedName);
 		return 0;
 	}
 	else
@@ -3442,7 +3476,7 @@ int main(int argc, char *argv[])
 
 			XLookupString(&event.xkey, text, 255, &key, 0);
 
-			printf("Key %c Hex %x Code %d %x\n", text[0], text[0], key, key);
+//			printf("Key %c Hex %x Code %d %x\n", text[0], text[0], key, key);
 
 			switch(key)
 			{

@@ -29,6 +29,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 // Bulls should not be distributed outside their designated area.
 
+// Use 4 char continent codes if this isn't defined
+
+#define TWOCHARCONT
+
+
 #include "BPQMail.h"
 
 char WW[] = "WW";
@@ -39,8 +44,8 @@ char MyRouteElements[100];
 
 int MyElementCount;
 
-BOOL ReaddressLocal;
-BOOL ReaddressReceived;
+BOOL ReaddressLocal = 0;
+BOOL ReaddressReceived = 0;
 BOOL WarnNoRoute = TRUE;
 BOOL SendPtoMultiple = FALSE;
 
@@ -52,7 +57,7 @@ struct UserInfo * FindAMPR();
 struct Continent
 {
 	char FourCharCode[5];
-	char TwoCharCode[3];
+	char TwoCharCode[5];
 };
 
 struct Country
@@ -69,8 +74,8 @@ struct Continent Continents[] =
    		"MEDR",	"EU", // Mediterranean
    		"ASIA",	"AS", // The Orient
    		"INDI",	"AS", // Indian Ocean including the Indian subcontinent
-   		"MDLE",	"EU", // Middle East
-   		"SEAS",	"EU", // South-East Asia
+   		"MDLE",	"AS", // Middle East
+   		"SEAS",	"AS", // South-East Asia
    		"NOAM",	"NA", // North America (Canada, USA, Mexico)
    		"CEAM",	"NA", // Central America
    		"CARB",	"NA", // Caribbean
@@ -84,6 +89,7 @@ struct Continent Continents[] =
    		"CAFR",	"AF", // Central Africa
    		"SAFR",	"AF", // Southern Africa
    		"ANTR",	"OC", // Antarctica 
+		"MARS",	"MARS", // Special for MARS network
 };
 
 struct Country Countries[] = 
@@ -116,7 +122,7 @@ struct Country Countries[] =
 		"BOL", "SOAM", "SA", 		// Bolivia (Plurinational State of)
 		"BIH", "EURO", "EU", 		// Bosnia and Herzegovina
 		"BWA", "****", "AF", 		// Botswana
-		"BRA", "****", "SA", 		// Brazil
+		"BRA", "SOAM", "SA", 		// Brazil
 		"VGB", "CARB", "NA", 		// British Virgin Islands
 		"BRN", "ASIA", "AS", 		// Brunei Darussalam
 		"BGR", "EURO", "EU", 		// Bulgaria
@@ -157,7 +163,7 @@ struct Country Countries[] =
 		"EST", "EURO", "EU", 		// Estonia
 		"ETH", "****", "AF", 		// Ethiopia
 		"FRO", "EURO", "EU", 		// Faeroe Islands
-		"FLK", "****", "SA", 		// Falkland Islands (Malvinas)
+		"FLK", "SOAM", "SA", 		// Falkland Islands (Malvinas)
 		"FJI", "SPAC", "OC", 		// Fiji
 		"FIN", "EURO", "EU", 		// Finland
 		"FRA", "EURO", "EU", 		// France
@@ -192,7 +198,7 @@ struct Country Countries[] =
 		"IMN", "EURO", "EU", 		// Isle of Man
 		"ISR", "MDLE", "AS", 		// Israel
 		"ITA", "EURO", "EU", 		// Italy
-		"JAM", "****", "NA", 		// Jamaica
+		"JAM", "CEAM", "NA", 		// Jamaica
 		"JPN", "****", "AS", 		// Japan
 		"JEY", "EURO", "EU", 		// Jersey
 		"JOR", "MDLE", "AS", 		// Jordan
@@ -351,7 +357,6 @@ struct Continent * FindContinent(char * Name)
 		
 		if ((_stricmp(Name, Cont->FourCharCode) == 0) || (_stricmp(Name, Cont->TwoCharCode) == 0))
 			return Cont;
-
 	}
 
 	return NULL;
@@ -429,6 +434,7 @@ VOID SetupMyHA()
 
 	if (MyElements[1])
 	{
+#ifdef TWOCHARCONT
 		if (strlen(MyElements[1]) == 4)
 		{
 			// Convert to 2 char Continent;
@@ -439,6 +445,18 @@ VOID SetupMyHA()
 				MyElements[1] = _strdup(Continent->TwoCharCode);
 			}
 		}
+#else
+		if (strlen(MyElements[1]) == 2)
+		{
+			// Convert to 4 char Continent;
+			Continent = FindContinent(MyElements[1]);
+			if (Continent)
+			{
+				free(MyElements[1]);
+				MyElements[1] = _strdup(Continent->FourCharCode);
+			}
+		}
+#endif
 	}
 }
 
@@ -560,6 +578,7 @@ VOID SetupHAElements(struct BBSForwardingInfo * ForwardingInfo)
 
 	if (ForwardingInfo->BBSHAElements[1])
 	{
+#ifdef TWOCHARCONT
 		if (strlen(ForwardingInfo->BBSHAElements[1]) == 4)
 		{
 			// Convert to 2 char Continent;
@@ -570,6 +589,19 @@ VOID SetupHAElements(struct BBSForwardingInfo * ForwardingInfo)
 				ForwardingInfo->BBSHAElements[1] = _strdup(Continent->TwoCharCode);
 			}
 		}
+#else
+		if (strlen(ForwardingInfo->BBSHAElements[1]) == 2)
+		{
+			// Convert to 4 char Continent;
+			Continent = FindContinent(ForwardingInfo->BBSHAElements[1]);
+			if (Continent)
+			{
+				free(ForwardingInfo->BBSHAElements[1]);
+				ForwardingInfo->BBSHAElements[1] = _strdup(Continent->FourCharCode);
+			}
+		}
+#endif
+
 	}
 
 	free(SaveHText);
@@ -605,28 +637,27 @@ VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
 
 		if (strcmp(HText[0], "WW") != 0)
 		{
-
-		do 
-		{
-			ForwardingInfo->HADDRS[Count] = realloc(ForwardingInfo->HADDRS[Count], (Elements+2) * sizeof(void *));
-			
-			while ((*ptr2 != '.') && (ptr2 > SaveHText))
+			do 
 			{
-				ptr2 --;
-			}
+				ForwardingInfo->HADDRS[Count] = realloc(ForwardingInfo->HADDRS[Count], (Elements+2) * sizeof(void *));
 
-			if (ptr2 == SaveHText)
-			{
-				// End
-	
-				ForwardingInfo->HADDRS[Count][Elements++] = _strdup(ptr2);
-				break;
-			}
+				while ((*ptr2 != '.') && (ptr2 > SaveHText))
+				{
+					ptr2 --;
+				}
 
-			ForwardingInfo->HADDRS[Count][Elements++] = _strdup(ptr2+1);
-			*ptr2 = 0;
+				if (ptr2 == SaveHText)
+				{
+					// End
 
-		} while(TRUE);
+					ForwardingInfo->HADDRS[Count][Elements++] = _strdup(ptr2);
+					break;
+				}
+
+				ForwardingInfo->HADDRS[Count][Elements++] = _strdup(ptr2+1);
+				*ptr2 = 0;
+
+			} while(TRUE);
 		}
 
 		ForwardingInfo->HADDRS[Count][Elements++] = NULL;
@@ -662,6 +693,7 @@ FullHR:
 
 		if (ForwardingInfo->HADDRS[Count][1])
 		{
+#ifdef TWOCHARCONT
 			if (strlen(ForwardingInfo->HADDRS[Count][1]) == 4)
 			{
 				// Convert to 2 char Continent;
@@ -672,6 +704,19 @@ FullHR:
 					ForwardingInfo->HADDRS[Count][1] = _strdup(Continent->TwoCharCode);
 				}
 			}
+#else
+			if (strlen(ForwardingInfo->HADDRS[Count][1]) == 2)
+			{
+				// Convert to 4 char Continent;
+				Continent = FindContinent(ForwardingInfo->HADDRS[Count][1]);
+				if (Continent)
+				{
+					free(ForwardingInfo->HADDRS[Count][1]);
+					ForwardingInfo->HADDRS[Count][1] = _strdup(Continent->FourCharCode);
+				}
+			}
+#endif
+
 		}
 		free(SaveHText);
 		HText++;
@@ -679,7 +724,6 @@ FullHR:
 	}
 
 	ForwardingInfo->HADDRS[Count] = NULL;
-
 }
 
 VOID SetupHAddresesP(struct BBSForwardingInfo * ForwardingInfo)
@@ -709,34 +753,34 @@ VOID SetupHAddresesP(struct BBSForwardingInfo * ForwardingInfo)
 
 		if (strcmp(HText[0], "WW") != 0)
 		{
-
-		do 
-		{
-			ForwardingInfo->HADDRSP[Count] = realloc(ForwardingInfo->HADDRSP[Count], (Elements+2) * sizeof(void *));
-			
-			while ((*ptr2 != '.') && (ptr2 > SaveHText))
+			do 
 			{
-				ptr2 --;
-			}
+				ForwardingInfo->HADDRSP[Count] = realloc(ForwardingInfo->HADDRSP[Count], (Elements+2) * sizeof(void *));
 
-			if (ptr2 == SaveHText)
-			{
-				// End
-	
-				ForwardingInfo->HADDRSP[Count][Elements++] = _strdup(ptr2);
-				break;
-			}
+				while ((*ptr2 != '.') && (ptr2 > SaveHText))
+				{
+					ptr2 --;
+				}
 
-			ForwardingInfo->HADDRSP[Count][Elements++] = _strdup(ptr2+1);
-			*ptr2 = 0;
+				if (ptr2 == SaveHText)
+				{
+					// End
 
-		} while(TRUE);
+					ForwardingInfo->HADDRSP[Count][Elements++] = _strdup(ptr2);
+					break;
+				}
+
+				ForwardingInfo->HADDRSP[Count][Elements++] = _strdup(ptr2+1);
+				*ptr2 = 0;
+
+			} while(TRUE);
 		}
 
 		ForwardingInfo->HADDRSP[Count][Elements++] = NULL;
 
 		if (ForwardingInfo->HADDRSP[Count][1])
 		{
+#ifdef TWOCHARCONT
 			if (strlen(ForwardingInfo->HADDRSP[Count][1]) == 4)
 			{
 				// Convert to 2 char Continent;
@@ -747,6 +791,18 @@ VOID SetupHAddresesP(struct BBSForwardingInfo * ForwardingInfo)
 					ForwardingInfo->HADDRSP[Count][1] = _strdup(Continent->TwoCharCode);
 				}
 			}
+#else
+			if (strlen(ForwardingInfo->HADDRSP[Count][1]) == 2)
+			{
+				// Convert to 4 char Continent;
+				Continent = FindContinent(ForwardingInfo->HADDRSP[Count][1]);
+				if (Continent)
+				{
+					free(ForwardingInfo->HADDRSP[Count][1]);
+					ForwardingInfo->HADDRSP[Count][1] = _strdup(Continent->FourCharCode);
+				}
+			}
+#endif
 		}
 		free(SaveHText);
 		HText++;
@@ -1147,8 +1203,11 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	if (Country)
 	{
 		// Just need to add Continent and WW
-
+#ifdef TWOCHARCONT
 		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", RouteElements, Country->Continent2);
+#else
+		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", RouteElements, Country->Continent4);
+#endif
 		goto FULLHA;
 	}
 
@@ -1191,6 +1250,7 @@ FULLHA:
 
 	if (HElements[1])
 	{
+#ifdef TWOCHARCONT
 		if (strlen(HElements[1]) == 4)
 		{
 			// Convert to 2 char Continent;
@@ -1201,6 +1261,18 @@ FULLHA:
 				HElements[1] = _strdup(Continent->TwoCharCode);
 			}
 		}
+#else
+		if (strlen(HElements[1]) == 2)
+		{
+			// Convert to 4 char Continent;
+			Continent = FindContinent(HElements[1]);
+			if (Continent)
+			{
+//				free(MyElements[1]);
+				HElements[1] = _strdup(Continent->FourCharCode);
+			}
+		}
+#endif
 	}
 
 
@@ -1340,7 +1412,6 @@ NOHA:
 			if ((strcmp(ATBBS, bbs->Call) == 0))			// @BBS = BBS		
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches implied AT %s", ATBBS, bbs->Call);
-
 		
 				CheckAndSend(Msg, conn, bbs);
 	
@@ -1470,8 +1541,7 @@ CheckWildCardedAT:
 		{
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
 
-			if ((_stricmp(bbs->Call, BBSName) != 0) ||
-				ForwardToMe && _stricmp(Msg->to, BBSName) == 0)			// Dont forward to ourself - already here! (unless ForwardToMe set)
+			if (ForwardToMe || _stricmp(bbs->Call, BBSName) != 0) // Dont forward to ourself - already here! (unless ForwardToMe set)
 			{
 				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 				ForwardingInfo->MsgCount++;
@@ -1504,7 +1574,9 @@ CheckWildCardedAT:
 
 	}
 
-	if (Count == 0)		
+	if (Count == 0)
+		goto CheckWildCardedAT;
+
 		Logprintf(LOG_BBS, conn, '?', "Routing Trace - No Match");
 
 	return Count;
@@ -1667,8 +1739,8 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct BBSForwardingInfo * Forwarding
 	char ** Calls;
 	char * Call;
 	char * ptr;
-	size_t bestmatch = -1;
-	size_t MatchLen = 0;
+	int bestmatch = -1;
+	int MatchLen = 0;
 
 	// Look for Matches on TO using Wildcarded Addresses. Intended for use with NTS traffic, with TO = ZIPCode
 	
@@ -1736,8 +1808,8 @@ int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct BBSForwardingInfo * Fo
 	char ** Calls;
 	char * Call;
 	char * ptr;
-	size_t bestmatch = -1;
-	size_t MatchLen = 0;
+	int bestmatch = -1;				// must be signed!
+	int MatchLen = 0;
 
 	// Look for Matches on AT using Wildcarded Addresses. Only applied after all other checks fail. Intended mainly
 	// for setting a default route, but could have other uses

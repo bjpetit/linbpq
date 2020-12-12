@@ -46,7 +46,7 @@ typedef unsigned char byte;
 
 static int	ASYINIT(int comport, int speed, int bpqport, BOOL Report);
 int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len);
-int GetRXMessage(int port,UCHAR * buff);
+int GetRXMessage(int port, PMESSAGE buff);
 void CheckReceivedData(PVCOMINFO  pVCOMInfo);
 static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, DWORD nMaxLength );
 static BOOL WriteCommBlock(int port, UCHAR * lpByte , DWORD dwBytesToWrite);
@@ -62,7 +62,7 @@ static BOOL Win98 = FALSE;
 
 struct PORTCONTROL * PORTVEC[33];
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static size_t ExtProc(int fn, int port, PMESSAGE buff)
 {
 	int len,txlen=0;
 	char txbuff[1000];
@@ -106,11 +106,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 2:				// send
 
-		txlen=(buff[6]<<8) + buff[5];
+		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff); 
 
-		txlen=kissencode(&buff[7],(char *)&txbuff,txlen-7);
+		txlen = kissencode(&buff->DEST[0], (char *) &txbuff, txlen - MSGHDDRLEN);
 
-		WriteCommBlock(port,txbuff,txlen);
+		WriteCommBlock(port, txbuff, txlen);
 		
 		return (0);
 
@@ -168,37 +168,37 @@ VOID * VCOMExtInit(struct PORTCONTROL *  PortEntry)
 
 static int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
-	int i,txptr=0;
+	int i, txptr = 0;
 	UCHAR c;
 
-	outbuff[0]=FEND;
-	outbuff[1]=0;
-	txptr=2;
+	outbuff[0] = FEND;
+	outbuff[1] = 0;
+	txptr = 2;
 
-	for (i=0;i<len;i++)
+	for (i = 0; i < len; i++)
 	{
-		c=inbuff[i];
-		
+		c = inbuff[i];
+
 		switch (c)
 		{
 		case FEND:
-			outbuff[txptr++]=FESC;
-			outbuff[txptr++]=TFEND;
+			outbuff[txptr++] = FESC;
+			outbuff[txptr++] = TFEND;
 			break;
 
 		case FESC:
 
-			outbuff[txptr++]=FESC;
-			outbuff[txptr++]=TFESC;
+			outbuff[txptr++] = FESC;
+			outbuff[txptr++] = TFESC;
 			break;
 
 		default:
 
-			outbuff[txptr++]=c;
+			outbuff[txptr++] = c;
 		}
 	}
 
-	outbuff[txptr++]=FEND;
+	outbuff[txptr++] = FEND;
 
 	return txptr;
 
@@ -206,7 +206,7 @@ static int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 
 int	ASYINIT(int comport, int speed, int bpqport, BOOL Report)
 {
-   char       szPort[ 30 ];
+   char szPort[ 30 ];
    char buf[256];
    int n, Err;
 
@@ -279,7 +279,7 @@ int	ASYINIT(int comport, int speed, int bpqport, BOOL Report)
 	return (TRUE) ;
 }
 
-static int GetRXMessage(int port,UCHAR * buff)
+static int GetRXMessage(int port, PMESSAGE buff)
 {
 	int len;
 	PVCOMINFO pVCOMInfo ;
@@ -292,7 +292,7 @@ static int GetRXMessage(int port,UCHAR * buff)
 
 	if (pVCOMInfo->MSGREADY)
 	{
-		len=pVCOMInfo->RXMPTR-&pVCOMInfo->RXMSG[1];		// Don't need KISS Control Byte
+		len = (int)(pVCOMInfo->RXMPTR- &pVCOMInfo->RXMSG[1]);		// Don't need KISS Control Byte
 		
   		if (pVCOMInfo->RXMSG[0] != 0 && pVCOMInfo->RXMSG[0] != 12)
 		{
@@ -317,16 +317,16 @@ static int GetRXMessage(int port,UCHAR * buff)
 			WriteCommBlock(port, AckResp, 5);
 
 			len -= 2;
-			memcpy(&buff[7],&pVCOMInfo->RXMSG[3],len);
+			memcpy(&buff->DEST[0], &pVCOMInfo->RXMSG[3], len);
 //			Debugprintf("VKISS Ackmode Frame");
 		}
 		else
 	
-			memcpy(&buff[7],&pVCOMInfo->RXMSG[1],len);
+			memcpy(&buff->DEST[0], &pVCOMInfo->RXMSG[1], len);
 
-		len+=7;
-		buff[5]=(len & 0xff);
-		buff[6]=(len >> 8);
+		len += MSGHDDRLEN;
+
+		PutLengthinBuffer((PDATAMESSAGE)buff, len);
 		
 		//
 		//	reset pointers

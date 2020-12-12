@@ -23,6 +23,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "BPQMail.h"
 
+struct Country * FindCountry(char * Name);
 struct UserInfo * FindAMPR();
 
 /**************************************************************
@@ -755,6 +756,9 @@ BOOL CheckifPacket(char * Via)
 		ptr2 = strchr(++ptr1, '.');
 	}
 
+	if (ptr1[0] == 0)
+		return TRUE;			// Packet
+
 	// ptr1 is last element. If a valid continent, it is a packet message
 	
 	if (FindContinent(ptr1))
@@ -1025,14 +1029,40 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				
 				FromHA = strlop(SaveFrom, '@');
 
-				if (strlen(SaveFrom) > 12) SaveFrom[12] = 0;
-				strcpy(Msg->from, &SaveFrom[6]);
+				// If it has an @ it could be an internet address - if it has a dot or longer than
+				// 6 chars assume it is.
+				// No, could also be packet
 
-				if (FromHA)
+				// I don't think you can have an Internet message without a . in @field
+				// Why not just use checkifpacket ??
+					
+				if (FromHA && !CheckifPacket(FromHA))
 				{
-					if (strlen(FromHA) > 39) FromHA[39] = 0;
-					Msg->emailfrom[0] = '@';
-					strcpy(&Msg->emailfrom[1], _strupr(FromHA));
+					// Internet address - set from empty and full email in
+					// emailfrom
+					
+					strcpy(Msg->from, "SMTP:");
+
+					if (strlen(FullFrom) > 46)
+						FullFrom[46] = 0;
+
+					strcpy(Msg->emailfrom, &FullFrom[6]);
+				}
+				else
+				{
+					// Not an Internet Address so must be a callsign and therefore <= 6 chars
+
+					if (strlen(SaveFrom) > 12)			
+						SaveFrom[12] = 0;
+
+					strcpy(Msg->from, &SaveFrom[6]);
+
+					if (FromHA)
+					{
+						if (strlen(FromHA) > 39) FromHA[39] = 0;
+						Msg->emailfrom[0] = '@';
+						strcpy(&Msg->emailfrom[1], _strupr(FromHA));
+					}
 				}
 
 				// Remove any SSID
@@ -1055,7 +1085,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				// Also set Emailfrom, in case read on BBS (eg by outpost)
 				
-				strcpy(Msg->emailfrom, "@winlink.org");
+				strcat(Msg->emailfrom, "@winlink.org");
 			}
 
 		}
@@ -1172,7 +1202,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					{
 						// Internet address - do we send via RMS??
 
-
 						// ??? Need to see if RMS is available
 
 						memcpy(Msg->via, &ptr1[9], linelen);
@@ -1180,7 +1209,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 						strcpy(FullTo,"RMS");
 						RMSMsgs ++;
 					}
-
 				}
 				else
 				{
@@ -1672,8 +1700,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					// if we are receiving from another BBS rather
 					// than WLE or PAT we need to set msgtype from Type:
 
-					Msg->type = ptr[0];		// I think it is save to do it always
+					Msg->type = ptr[0];		// I think it is safe to do it always
 	
+					if (Msg->type == 'N')
+						Msg->type = 'T';
 				}
 
 				strcpy(Msg->to, RecpTo[i]);

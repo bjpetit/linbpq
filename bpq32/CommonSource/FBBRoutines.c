@@ -1632,7 +1632,7 @@ copyRest:
 
 	if (strcmp(conn->Callsign, "RMS") != 0 && conn->WL2K == 0)		// if going to RMS - just send calll
 	{
-		if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
+		if (_stricmp(Msg->from, "SMTP:") == 0)		// Address is in via
 			strcpy(B2From, Msg->emailfrom);
 		else
 		{

@@ -353,10 +353,11 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 //	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||TNC->Hardware == H_ARDOP ||
 //			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ || TNC->Hardware == H_VARA)
 		sprintf(Title, "%s Status - Port %d %s", WindowTitle, TNC->Port, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-	if (TNC->Hardware == H_UZ7HO)
-		sprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);
-	else if (TNC->Hardware == H_MPSK)
-		sprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
+	//if (TNC->Hardware == H_UZ7HO)
+	//	sprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);
+	//else
+		if (TNC->Hardware == H_MPSK)
+			sprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
 	else
 		sprintf(Title, "%s Status - Port %d  %s", WindowTitle, TNC->Port, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
 
@@ -398,7 +399,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 			}
 		}
 
-		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_ARDOP)	
+		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_ARDOP|| TNC->Hardware == H_VARA)	
 			retCode = RegQueryValueEx(hKey,"TNC->RestartAfterFailure",0,			
 				(ULONG *)&Type,(UCHAR *)&TNC->RestartAfterFailure,(ULONG *)&Vallen);
 
@@ -506,16 +507,58 @@ extern char TextVerstring[50];
 
 double Distance(double laa, double loa, double lah, double loh, BOOL KM);
 double Bearing(double lat2, double lon2, double lat1, double lon1);
-VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return);
+VOID SendHTTPRequest(SOCKET sock, char * Request, char * Params, int Len, char * Return);
 SOCKET OpenWL2KHTTPSock();
 
-static char Modes [53][18] = {
-	"PKT12", "PKT24", "PKT48", "PKT96", "PKT", "PKT", "PKT", "", "", "", "",
-	"", "Pactor 1", "", "", "Pactor 2", "", "Pactor 3", "", "", "Pactor 4", // 10 - 20
-	"WINMOR5", "WINMOR16", "", "", "", "", "", "", "",				// 21 - 29
+
+
+struct WL2KMode
+{
+	int Mode;
+	char * WL2KString;
+	char * ADIFString;
+	char * BPQString;
+};
+
+struct WL2KMode WL2KModeList[] =
+{
+	{0,"Packet 1200"},
+	{1,"Packet 2400"},
+	{2, "Packet 4800"},
+	{3, "Packet 9600"},
+	{4, "Packet 19200"},
+	{5, "Packet 38400"},
+	{11, "Pactor 1"},
+	{12, "Pactor 1,2"},
+	{13, "Pactor 1,2,3"},
+	{14, "Pactor 2"},
+	{15, "Pactor 2,3"},
+	{16, "Pactor 3"},
+	{17, "Pactor 1,2,3,4"},
+	{18, "Pactor 2,3,4"},
+	{19, "Pactor 3,4"},
+	{20, "Pactor 4"},
+	{21, "WINMOR 500"},
+	{22, "WINMOR 1600"},
+	{30, "Robust Packet"},
+	{40, "ARDOP 200"},
+	{41, "ARDOP 500"},
+	{42, "ARDOP 1000"},
+	{43, "ARDOP 2000"},
+	{44, "ARDOP 2000 FM"},
+	{50, "VARA"},
+	{51, "VARA FM"},
+	{52, "VARA FM WIDE"},
+	{53, "VARA 500"}
+};
+
+char WL2KModes [54][18] = {
+	"Packet 1200", "Packet 2400", "Packet 4800", "Packet 9600", "Packet 19200", "Packet 38400", "High Speed Packet", "", "", "", "",
+	"Pactor 1", "Pactor", "Pactor", "Pactor 2", "Pactor", "Pactor 3", "Pactor", "Pactor", "Pactor", "Pactor 4", // 11 - 20
+	"Winmor 500", "Winmor 1600", "", "", "", "", "", "", "",				// 21 - 29
 	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
-	"ARDOP2", "ARDOP5", "ARDOP10", "ARDOP20", "ARDOP20", "", "", "", "", "",	// 40 - 49
-	"Vara", "VaraFM", "VaraFM96"};
+	"ARDOP 200", "ARDOP 500", "ARDOP 1000", "ARDOP 2000", "ARDOP 2000 FM", "", "", "", "", "",	// 40 - 49
+	"VARA", "VARA FM", "VARA FM WIDE", "VARA 500"};
 
 
 VOID SendWL2KSessionRecordThread(void * param)
@@ -532,15 +575,15 @@ VOID SendWL2KSessionRecordThread(void * param)
 
 	if (sock)
 	{
-		SendHTTPRequest(sock, "api.winlink.org", 80, 
-				"/session/add", (char *)Message, strlen(Message), NULL);
-	
+		SendHTTPRequest(sock, "/session/add", (char *)Message, (int)strlen(Message), NULL);
 		closesocket(sock);
 	}
 
 	return;
 }
 
+BOOL NoSessionAccount = FALSE;
+BOOL SessionAccountChecked = FALSE;
 
 BOOL SendWL2KSessionRecord(ADIF * ADIF, int BytesSent, int BytesReceived)
 {
@@ -594,6 +637,42 @@ IdTag (random alphanumeric, 12 chars)
 
 	char Tag[32];
 
+	SOCKET sock;
+	char Response[1024];
+	int Len;
+
+	// Only report if the CMSCall has a WL2KAccount
+
+	if (NoSessionAccount)
+		return TRUE;
+
+	if (!SessionAccountChecked)
+	{
+		// only check once
+
+		sock = OpenWL2KHTTPSock();
+
+		if (sock)
+		{
+			SessionAccountChecked = TRUE;
+
+			Len = sprintf(Message, "\"Callsign\":\"%s\"", ADIF->CMSCall);
+
+			SendHTTPRequest(sock, "/account/exists", Message, Len, Response);
+			closesocket(sock);
+
+			if (strstr(Response, "false"))
+			{
+				WritetoConsole("WL2K Traffic Reporting disabled - Gateway ");
+				WritetoConsole(ADIF->CMSCall);
+				WritetoConsole(" does not have a Winlink Account\r\n");
+				Debugprintf("WL2K Traffic Reporting disabled - Gateway %s does not have a Winlink Account", ADIF->CMSCall);
+				NoSessionAccount = TRUE;
+				return TRUE;
+			}
+		}
+	}
+
 	if (ADIF == NULL)
 		return TRUE;
 
@@ -623,7 +702,7 @@ IdTag (random alphanumeric, 12 chars)
 	MessageLen += sprintf(&Message[MessageLen], "\"Client\":\"%s\",", ADIF->Call);
 	MessageLen += sprintf(&Message[MessageLen], "\"ClientGrid\":\"%s\",", ADIF->LOC);
 	MessageLen += sprintf(&Message[MessageLen], "\"Sid\":\"%s\",", ADIF->UserSID);
-	MessageLen += sprintf(&Message[MessageLen], "\"Mode\":\"%s\",", Modes[ADIF->Mode]);
+	MessageLen += sprintf(&Message[MessageLen], "\"Mode\":\"%s\",", WL2KModes[ADIF->Mode]);
 	MessageLen += sprintf(&Message[MessageLen], "\"Frequency\":%d,", ADIF->Freq);
 	MessageLen += sprintf(&Message[MessageLen], "\"Kilometers\":%d,", Dist);
 	MessageLen += sprintf(&Message[MessageLen], "\"Degrees\":%d,", intBearing);
@@ -645,7 +724,7 @@ IdTag (random alphanumeric, 12 chars)
 char APIKey[] = ",\"Key\":\"0D0C7AD6B38C45A7A9534E67111C38A7\"";
 
 
-VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return)
+VOID SendHTTPRequest(SOCKET sock, char * Request, char * Params, int Len, char * Return)
 {
 	int InputLen = 0;
 	int inptr = 0;
@@ -657,7 +736,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 	strcat(Params, APIKey);
 	Len += (int)strlen(APIKey);
 
-	sprintf(Header, HeaderTemplate, Request, Host, Port, Len + 2, Params);
+	sprintf(Header, HeaderTemplate, Request, "api.winlink.org", 80, Len + 2, Params);
 	Sent = send(sock, Header, (int)strlen(Header), 0);
 
 	if (Sent == -1)
@@ -712,6 +791,12 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 						}
 						else
 							Debugprintf("WL2K Database update ok");
+					
+					}
+					else
+					{
+						strlop(Buffer, 13);
+						Debugprintf("WL2K Update failed - %s", Buffer);
 					}
 					return;
 				}
@@ -732,6 +817,9 @@ VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * 
 	}
 }
 
+BOOL WL2KAccountChecked = FALSE;
+BOOL NoWL2KAccount = FALSE;
+
 VOID SendHTTPReporttoWL2KThread(void * unused)
 {
 	// Uses HTTP/JSON Interface
@@ -751,6 +839,40 @@ VOID SendHTTPReporttoWL2KThread(void * unused)
 	int Len;
 
 	// Send all reports in list
+
+	char Response[1024];
+
+	// Only report if the CMSCall has a WL2KAccount
+
+	if (NoWL2KAccount)
+		return;
+
+	if (!WL2KAccountChecked)
+	{
+		// only check once
+
+		sock = OpenWL2KHTTPSock();
+
+		if (sock)
+		{
+			WL2KAccountChecked = TRUE;
+
+			Len = sprintf(Message, "\"Callsign\":\"%s\"",
+				WL2KReport->BaseCall);
+
+			SendHTTPRequest(sock, "/account/exists", Message, Len, Response);
+			closesocket(sock);
+
+			if (strstr(Response, "false"))
+			{
+				WritetoConsole("WL2K Reporting disabled - Gateway ");
+				WritetoConsole(WL2KReport->BaseCall);
+				WritetoConsole(" does not have a Winlink Account\r\n");
+				NoWL2KAccount = TRUE;
+				return;
+			}
+		}
+	}
 
 	while (WL2KReport)
 	{
@@ -848,8 +970,7 @@ VOID SendHTTPReporttoWL2KThread(void * unused)
 
 		Debugprintf("Sending %s", Message);
 
-		SendHTTPRequest(sock, WL2KReport->Host, WL2KReport->WL2KPort, 
-				"/channel/add", Message, Len, NULL);
+		SendHTTPRequest(sock, "/channel/add", Message, Len, NULL);
 	
 		
 		//	Send Version Message
@@ -869,8 +990,7 @@ VOID SendHTTPReporttoWL2KThread(void * unused)
 
 			Debugprintf("Sending %s", Message);
 
-			SendHTTPRequest(sock, WL2KReport->Host, WL2KReport->WL2KPort, 
-				"/version/add", Message, Len, NULL);
+			SendHTTPRequest(sock, "/version/add", Message, Len, NULL);
 		}
 
 		WL2KReport = WL2KReport->Next;
@@ -965,7 +1085,7 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
 	if (p_cmd == NULL) goto BadLine;
 	if (strlen(p_cmd) != 6) goto BadLine;
-	
+
 	strcpy(WL2KReport->GridSquare, p_cmd);
 	strcpy(WL2KLoc, p_cmd);
 
@@ -1075,6 +1195,8 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 		WL2KReport->mode = 51;
 	else if (_stricmp(param, "VARAFM96") == 0)
 		WL2KReport->mode = 52;
+	else if (_stricmp(param, "VARA500") == 0)
+		WL2KReport->mode = 53;
 	else
 		goto BadLine;
 	
@@ -1098,6 +1220,7 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	return WL2KReport;
 
 BadLine:
+
 	WritetoConsole(" Bad config record ");
 	WritetoConsole(errbuf);
 	WritetoConsole("\r\n");
@@ -1141,12 +1264,15 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 //	if (Mode != ' ' && TNC->RIG->Valchar[0])
 	if (TNC->RIG->Valchar[0])
 	{
-#ifdef WIN32
 		if (TNC->Hardware == H_UZ7HO)	
 		{
 			// See if we have Center Freq Info
-
-			if (TNC->AGWInfo->hFreq)
+			if (TNC->AGWInfo->CenterFreq)
+			{
+				Freq = atof(TNC->RIG->Valchar) + ((TNC->AGWInfo->CenterFreq * 1.0) / 1000000.0);
+			}
+#ifdef WIN32
+			else if (TNC->AGWInfo->hFreq)
 			{
 				char Centre[16];
 				double ModemFreq;
@@ -1157,11 +1283,12 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 
 				Freq = atof(TNC->RIG->Valchar) + (ModemFreq / 1000000);
 			}
+#endif	
 			else
 				Freq = atof(TNC->RIG->Valchar) + 0.0015;		// Assume 1500
 		}
 		else
-#endif
+
 			// Not UZ7HO or Linux
 		
 			Freq = atof(TNC->RIG->Valchar) + 0.0015;
@@ -1489,8 +1616,7 @@ BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER)
 			
 	Len = sprintf(Message, "\"Callsign\":\"%s\"", Call);
 		
-	SendHTTPRequest(sock, "api.winlink.org", 80, 
-				"/sysop/get", Message, Len, _REPLYBUFFER);
+	SendHTTPRequest(sock, "/sysop/get", Message, Len, _REPLYBUFFER);
 
 	closesocket(sock);
 

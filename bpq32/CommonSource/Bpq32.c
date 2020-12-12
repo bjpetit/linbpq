@@ -885,7 +885,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add SessionTimeLimit to HF sessions (ARDOP, SCSPactor, WINMOR, VARA)
 //	Add RADIO FREQ command to display current frequency
 
-// 6.0.20
+// 6.0.20 April 2020
 
 //	Trap and reject YAPP file transfer request.
 //	Fix possible overrun of TCP to Node Buffer
@@ -918,7 +918,69 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Retry axip resolver if it fails at startup
 //	Fix AGWAPI connect via digis
 //  Fix Select() for Linux in MultiPSK, UZ7HO and V4 drivers
-//	Limit APRS ONJECT length to 80 chars
+//	Limit APRS OBJECT length to 80 chars
+//	UZ7HO disconnect incoming call if no free streams
+//	Improve response to REJ (no F) followed by RR (F). 
+//	Try to prevent more than MAXFRAME frames outstanding when transmitting
+//	Allow more than one instance of APRS on Linux
+//	Stop APRS digi by originating station
+//	Send driver window trace to main monitor system
+//	Improve handling of IPOLL messages
+//	Fix setting end of address bit on dest call on connects to listening sessions
+//	Set default BBS and CHAT application number and number of streams on LinBPQ
+//	Support #include in bpq32.cfg processing
+
+// Version 6.0.21 ??
+
+//	Fix occasional missing newlines in some node command reponses
+//	More 64 bit fixes
+//	Add option to stop setting PDUPLEX param in SCSPACTOR
+//	Try to fix buffer loss
+//	Remove extra space from APRS position reports
+//	Suppress VARA IAMALIVE messages
+//	Add display and control of QtSoundModem modems
+//	Only send "No CMS connection available" message if fallbacktorelay is set.
+//	Add HAMLIB backend and emulator support to RIGCONTROL
+//	Ensure all beacons are sent even with very short beacon intervals
+//	Add VARA500 WL2K Reporting Mode
+//  Fix problem with prpcessing frame collector
+//	Temporarily disable L2 and L4 collectors till I can find problem
+//	Fix possible problem with interactive RADIO commands not giving a response,
+//	Incease maximum length of NODE command responses to handle maximum length INFO message,
+//	Allow WL2KREPORT in CONFIG section of UZ7HO port config.
+//	Fix program error in processing hamlib frame
+//	Save RestartAfterFailure option for VARA
+//	Check callsign has a winlink account before sending WL2KREPORT messages
+//	Add Bandwidth control to VARA scanning
+//	Renable L2 collector
+//	Fix TNCPORT reconnect on Linux
+//	Add SecureTelnet option to limit telnet outward connect to sysop mode sessions or Application Aliases
+//	Add option to suppress sending call to application in Telnet HOST API
+//	Add FT991A support to RigControl
+//	Use background.jpg for Edit Config page
+//	Send OK response to SCS Pactor commands starting with #
+//	Resend ICOM PTT OFF command after 30 seconds
+//	Add WXCall to APRS config
+//	Fixes for AEAPactor
+//	Allow PTTMUX to use real or com0com com ports
+//	Fix monitoring with AGW Emulator
+//	Derive approx position from packets on APRS ports with a valid 6 char location
+//	Fix corruption of APRS message lists if the station table fills up.
+//	Don't accept empty username or password on Relay sessions.
+//	Fix occasional empty Nodes broadcasts
+//	Add Digis to UZ7HO Port MH list
+//	Add PERMITTEDAPPLS port param
+//	Fix WK2K Session Record Reporting for Airmail and some Pactor Modes.
+//	Fix handling AX/IP (proto 93) frames
+//	Fix possible corruption sending APRS messages
+//	Allow Telnet connections to be made using Connect command as well as Attach then Connect
+//	Fix Cancel Sysop Signin
+//	Save axip resolver info and restore on restart
+//	Add Transparent mode to Telnet Server HOST API 
+//	Fix Tracker driver if WL2KREPRRT is in main config section
+//	SNMP InOctets count corrected to include all frames and encoding of zero values fixed.
+//	Change IP Gateway to exclude handling bits of 44 Net sold to Amazon
+//	Fix crash in Web terminal when processing very long lines
 
 #define CKernel
 
@@ -960,7 +1022,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //#define	RAWTX			  10  //IE KISS TYPE DATA
 #define	GETRAWFRAME		  11
 #define	UPDATESWITCH	  12
-#define	BPQALLOC		  13bpqether
+#define	BPQALLOC		  13
 //#define	SENDNETFRAME	  14
 #define	GETTIME			  15
 
@@ -1005,6 +1067,7 @@ void * UIARQExtInit(EXTPORTDATA * PortEntry);
 void * SerialExtInit(EXTPORTDATA * PortEntry);
 void * ARDOPExtInit(EXTPORTDATA * PortEntry);
 void * VARAExtInit(EXTPORTDATA * PortEntry);
+void * KISSHFExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -3525,6 +3588,10 @@ VOID * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	
 	if (strstr(Value, "SERIAL"))
 		return SerialExtInit;
+
+	if (strstr(Value, "KISSHF"))
+
+		return KISSHFExtInit;
 
 	ExtDriver = LoadLibrary(Value);
 

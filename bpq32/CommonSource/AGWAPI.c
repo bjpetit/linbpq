@@ -748,53 +748,38 @@ int AGWDoMonitorData()
 				if (Length > 0)
 				{
 					AGWTXHeader.Port = Port - 1;       // AGW Ports start from 0
-        
-					if (Frametype == 3)
+
+					/*
+					* Patch by D. van der Locht      09-10-2020
+					* Added support for sending 'T' frames to AGW clients if LoopMonFlag is set.
+					*/
+
+					if (RXFlag)
 					{
-						AGWTXHeader.DataKind = 'U';
-					}
-					else
-					{
-						if (Frametype && 1 == 0)
+						if (Frametype == 3)
 						{
-							AGWTXHeader.DataKind = 'I';
+							AGWTXHeader.DataKind = 'U';
 						}
 						else
 						{
-							AGWTXHeader.DataKind = 'S';
+							if (Frametype && 1 == 0)
+							{
+								AGWTXHeader.DataKind = 'I';
+							}
+							else
+							{
+								AGWTXHeader.DataKind = 'S';
+							}
 						}
 					}
-
-                      
-           /* For i = 8 To 17
-        
-                cChar = Asc(Mid(AGWBuffer, i - 1))
-            
-                If cChar = 32 Then Exit For
-            
-                AGWTXHeader(i) = cChar
-            
-            Next i
-        
-            j = i + 3
-        
-            For i = 18 To 27
-        
-                cChar = Asc(Mid(AGWBuffer, j))
-            
-                If cChar = 32 Then Exit For
-            
-                AGWTXHeader(i) = cChar
-            
-                j = j + 1
-            
-            Next i
-
-        */
+					else
+					{
+						AGWTXHeader.DataKind = 'T';
+					}
 
 					AGWTXHeader.DataLength = Length;
 
-				    memset(AGWTXHeader.callfrom, 0,10);
+					memset(AGWTXHeader.callfrom, 0,10);
 					ConvFromAX25(monbuff->ORIGIN, AGWTXHeader.callfrom);
        
 	 				for (n = 1; n<= CurrentSockets; n++)
@@ -928,7 +913,7 @@ int SendDisMsgtoAppl(char * Msg, struct AGWSocketConnectionInfo * sockptr)
     AGWTXHeader.Port = sockptr->AGWRXHeader.Port;
     AGWTXHeader.DataKind = 'd';
  
-    strcat(DisMsg,"\r\0");
+    strcat(DisMsg,"\r");
                                 
     AGWTXHeader.DataLength = (int)strlen(DisMsg)+1;
             
@@ -1487,7 +1472,7 @@ int SendDataToAppl(int Stream, byte * Buffer, int Length)
                 
 		            strcpy(ConMsg,"*** CONNECTED With Station ");
 					strcat(ConMsg, AGWTXHeader.callfrom);
-					strcat(ConMsg,"\0");
+					strcat(ConMsg,"\r");
                 
 					AGWTXHeader.DataLength = (int)strlen(ConMsg)+1;
            

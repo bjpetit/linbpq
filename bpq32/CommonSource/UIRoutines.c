@@ -299,7 +299,7 @@ static VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR,
 	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
 	AXPTR->DEST[6] |= 0x80;			// set Command Bit
 
-	if (UIDigi[Port])
+	if (UIDigi[Port] && UIDigiAX[Port])
 	{
 		// This port has a digi string
 

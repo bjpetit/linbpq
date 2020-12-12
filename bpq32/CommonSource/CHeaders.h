@@ -6,6 +6,8 @@
 
 #define EXCLUDEBITS
 
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
 #include "compatbits.h"
 
 #include "asmstrucs.h"

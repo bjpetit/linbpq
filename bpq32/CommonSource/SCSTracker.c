@@ -704,8 +704,12 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	strcpy(TNC->Streams[0].MyCall, TNC->NodeCall); // For 1st Connected Test 
 
-	
 	PortEntry->PORTCONTROL.TNC = TNC;
+
+	if (TNC->WL2K == NULL)
+		if (PortEntry->PORTCONTROL.WL2KInfo.RMSCall[0])			// Alrerady decoded as part of main config section
+			TNC->WL2K = &PortEntry->PORTCONTROL.WL2KInfo;
+
 
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 520;
@@ -1392,7 +1396,7 @@ VOID DEDPoll(int Port)
 			
 		buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 		
-		datalen = buffptr->LENGTH - 7;
+		datalen = buffptr->LENGTH - MSGHDDRLEN;
 		Buffer = &buffptr->DEST[0];		// Raw Frame
 		
 		Buffer[datalen] = 0;
@@ -2009,6 +2013,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					int App;
 					char Appl[10];
 					char DestCall[10];
+					TRANSPORTENTRY * SESS;
+					struct WL2KInfo * WL2K = TNC->WL2K;
+
 
 					if (Stream == 0)
 					{
@@ -2020,13 +2027,38 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 					ProcessIncommingConnect(TNC, Call, Stream, TRUE);
 
+					SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+
+					if (TNC->RIG && TNC->RIG != &TNC->DummyRig && strcmp(TNC->RIG->RigName, "PTT"))
+					{
+						sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
+						SESS->Frequency = (int)(atof(TNC->RIG->Valchar) * 1000000.0);		// Convert to Centre Freq
+						if (SESS->Frequency == 0)
+						{
+							// try to get from WL2K record
+
+							if (WL2K)
+								SESS->Frequency = WL2K->Freq;
+						}
+					}
+					else
+					{
+						sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->TargetCall);
+						if (WL2K)
+						{
+							SESS->Frequency = WL2K->Freq;
+							SESS->Mode = WL2K->mode;
+						}
+					}
+			
+					if (WL2K)
+					{
+						strcpy(SESS->RMSCall, WL2K->RMSCall);
+						SESS->Mode = WL2K->mode;
+					}
+
 					if (Stream == 0)
 					{
-						if (TNC->RIG)
-							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, STREAM->MyCall, TNC->RIG->Valchar);
-						else
-							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", STREAM->RemoteCall, STREAM->MyCall);
-					
 						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 						TNC->WEB_CHANGED = TRUE;
 					

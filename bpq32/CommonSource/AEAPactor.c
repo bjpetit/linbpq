@@ -298,7 +298,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			// Send Error Response
 
 			buffptr->Len = 36;
-			memcpy(buffptr+2, "No Connection to PACTOR TNC\r", 36);
+			memcpy(buffptr->Data, "No Connection to PACTOR TNC\r", 36);
 
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 			
@@ -308,7 +308,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
 
 		buffptr->Len = txlen;
-		memcpy(buffptr+2, &buff[8], txlen);
+		memcpy(buffptr->Data, buff->L2DATA, txlen);
 		
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 
@@ -526,6 +526,28 @@ static void CheckRX(struct TNCINFO * TNC)
 
 		if (TNC->HostMode)
 		{
+			if (TNC->ReinitState == 2)
+			{
+				// Just entered host mode, so could be text command on front
+
+				unsigned char * ptr = strchr(TNC->RXBuffer, SOH);
+				
+				if (ptr)
+				{
+					int textlen = ptr - TNC->RXBuffer;
+
+					TNC->RXLen -= textlen;
+					Length = TNC->RXLen;
+
+					Debugprintf("%s", TNC->RXBuffer);
+					Debugprintf("AEA Entered Host Mode");
+					TNC->ReinitState =0; 
+
+					memmove(TNC->RXBuffer, ptr, Length);
+					goto hostFrame;
+				}
+			}
+
 			Debugprintf("AEA Bad Host Frame");
 			TNC->RXLen = 0;		// Ready for next frame
 			return;
@@ -535,7 +557,12 @@ static void CheckRX(struct TNCINFO * TNC)
 
 //		if (TNC->RXBuffer[TNC->RXLen-2] != ':')
 		if (strstr(TNC->RXBuffer, "cmd:") == 0)
+		{
+			if (strlen(TNC->RXBuffer) < TNC->RXLen)
+				TNC->RXLen = 0;							// NULL in text mode message
+
 			return;				// Wait for rest of frame
+		}
 
 		// Complete Char Mode Frame
 
@@ -552,6 +579,8 @@ static void CheckRX(struct TNCINFO * TNC)
 		TNC->RXLen = 0;		// Ready for next frame
 		return;
 	}
+
+hostFrame:
 
 	if (Length < 3)				// Minimum Frame Sise
 		return;
@@ -777,7 +806,7 @@ VOID AEAPoll(int Port)
 		{
 			int datalen;
 			UCHAR TXMsg[1000];
-			int * buffptr;
+			PMSGWITHLEN buffptr;
 			UCHAR * MsgPtr;
 			char Status[80];
 			
@@ -808,8 +837,8 @@ VOID AEAPoll(int Port)
 
 				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 				TNC->Streams[Stream].FramesQueued--;
-				datalen=buffptr[1];
-				MsgPtr = (UCHAR *)&buffptr[2];
+				datalen=buffptr->Len;
+				MsgPtr = buffptr->Data;
 
 				if (TNC->SwallowSignon)
 				{
@@ -848,7 +877,7 @@ VOID AEAPoll(int Port)
 
 				sprintf(TXMsg, "%c", Stream + ' ');
 					
-				memcpy(&TXMsg[1], buffptr + 2, datalen);
+				memcpy(&TXMsg[1], buffptr->Data, datalen);
 				
 				EncodeAndSend(TNC, TXMsg, datalen + 1);
 				ReleaseBuffer(buffptr);
@@ -868,8 +897,8 @@ VOID AEAPoll(int Port)
 			else
 			{
 				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				datalen=buffptr[1];
-				MsgPtr = (UCHAR *)&buffptr[2];
+				datalen=buffptr->Len;
+				MsgPtr = buffptr->Data;
 
 				// Command. Do some sanity checking and look for things to process locally
 
@@ -886,7 +915,7 @@ VOID AEAPoll(int Port)
 					}
 					else
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &MsgPtr[40]);
+						buffptr->Len = sprintf(buffptr->Data, "%s", &MsgPtr[40]);
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 					}
 					return;
@@ -895,7 +924,7 @@ VOID AEAPoll(int Port)
 				if (memcmp(MsgPtr, "MODE CONV", 9) == 0)
 				{
 					TNC->TEXTMODE = TRUE;
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2],"AEA} Ok\r");
+					buffptr->Len = sprintf((UCHAR *)buffptr->Data,"AEA} Ok\r");
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
 					EncodeAndSend(TNC, "OCECONV", 7);
@@ -907,7 +936,7 @@ VOID AEAPoll(int Port)
 				if (memcmp(MsgPtr, "MODE TRANS", 9) == 0)
 				{
 					TNC->TEXTMODE = FALSE;
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2],"AEA} Ok\r");
+					buffptr->Len = sprintf(buffptr->Data,"AEA} Ok\r");
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
 					EncodeAndSend(TNC, "OCETRANS", 8);
@@ -1032,6 +1061,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 
 		Poll[0] = 13;
 		TNC->TXLen = 1;
+		TNC->RXLen = 0;
 
 		WriteCommBlock(TNC);
 
@@ -1424,9 +1454,9 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, size_t Len)
 					{
 						// If Scan Entry has a Appl, save it
 
-						if (TNC->RIG->FreqPtr[0]->APPL[0])
+						if (TNC->RIG->FreqPtr && TNC->RIG->FreqPtr[0]->APPL[0])
 							strcpy(FreqAppl, &TNC->RIG->FreqPtr[0]->APPL[0]);
-					}
+						}
 
 					// We are going to Send something, so turn link round
 				
@@ -1439,7 +1469,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, size_t Len)
 
 					// If an autoconnect APPL is defined, send it
 
-					if (FreqAppl[0])				// Frequency spcific APPL overrides TNC APPL
+					if (FreqAppl[0])				// Frequency specific APPL overrides TNC APPL
 					{
 						buffptr = GetBuff();
 						if (buffptr == 0) return;	// No buffers, so ignore

@@ -117,6 +117,7 @@ extern int MaxStreams;
 extern ULONG BBSApplMask;
 extern int BBSApplNum;
 extern int ChatApplNum;
+extern int MaxChatStreams;
 
 extern int NUMBEROFTNCPORTS;
 
@@ -158,7 +159,7 @@ int _MYTIMEZONE = 0;
 #define F_HOLDMAIL   0x2000
 #define F_POLLRMS	 0x4000
 #define F_SYSOP_IN_LM 0x8000
-#define F_Temp_B2_BBS 0x10000
+#define F_Temp_B2_BBS 0x00010000
 
 /* #define F_PWD        0x1000 */
 
@@ -682,6 +683,8 @@ int main(int argc, char * argv[])
 		if (stat(ChatConfigName, &STAT) == -1)
 		{
 			printf("Chat Config File not found - creating a default config\n");
+			ChatApplNum = 2;
+			MaxChatStreams = 10;
 			SaveChatConfigFile(ChatConfigName);
 		}
 
@@ -735,6 +738,8 @@ int main(int argc, char * argv[])
 			strcpy(BBSName, MYNODECALL);
 			strlop(BBSName, '-');
 			strlop(BBSName, ' ');
+			BBSApplNum = 1;
+			MaxStreams = 10;
 			SaveConfig(ConfigName);
 		}
 

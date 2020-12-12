@@ -486,6 +486,8 @@ static int ProcessLine(char * buf, int Port)
 						TNC->PTTMode = PTTDTR | PTTRTS;
 					else if (_stricmp(ptr, "CM108") == 0)
 						TNC->PTTMode = PTTCM108;
+					else if (_stricmp(ptr, "HAMLIB") == 0)
+						TNC->PTTMode = PTTHAMLIB;
 
 					ptr = strtok(NULL, " \t\n\r");
 				}
@@ -981,7 +983,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				continue;
 			}
 	
-			datalen = buffptr->LENGTH - 7;
+			datalen = buffptr->LENGTH - MSGHDDRLEN;
 			Buffer = &buffptr->DEST[0];		// Raw Frame
 			Buffer[datalen] = 0;
 
@@ -1330,7 +1332,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (STREAM->PACTORtoBPQ_Q != 0)
 			{
-				buffptr = (PMSGWITHLEN)Q_REM(&STREAM->PACTORtoBPQ_Q);
+				buffptr = Q_REM(&STREAM->PACTORtoBPQ_Q);
 
 				datalen = (int)buffptr->Len;
 
@@ -1372,8 +1374,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (buffptr == 0) return (0);			// No buffers, so ignore
 
-			buffptr->Len = 36;
-			memcpy(&buffptr->Data[0], "No Connection to ARDOP TNC\r", 36);
+			buffptr->Len = sprintf(&buffptr->Data[0], "No Connection to ARDOP TNC\r");
 
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 			
@@ -3096,7 +3097,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		{
 			TRANSPORTENTRY * SESS;
 			
-			// Incomming Connect
+			// Incoming Connect
 
 			TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit;		// Reset Limit
 
@@ -4731,7 +4732,7 @@ tcpHostFrame:
 
 	if (Msg[3] == 4 || Msg[3] == 5)
 	{
-		MESSAGE Monframe;	
+		MESSAGE Monframe;
 
 		// Packet Monitor Data.
 		// DED Host uses 4 and 5 as Null Terminated ascii encoded header
@@ -4746,6 +4747,8 @@ tcpHostFrame:
 
 		int Len = Msg[4];		// Would be +1 but first is Flag
 							
+		memset(&Monframe, 0, sizeof(Monframe));
+
 		memcpy(Monframe.DEST, &Msg[6], Len);
 		Monframe.LENGTH = Len + MSGHDDRLEN;
 		Monframe.PORT = TNC->Port | Msg[5];		// or in TX Flag
@@ -4779,6 +4782,8 @@ tcpHostFrame:
 
 		MESSAGE Monframe;
 		UCHAR * ptr = (UCHAR *)&Monframe;
+
+		memset(&Monframe, 0, sizeof(Monframe));
 
 		if (TNC->Monframe)
 		{
@@ -5739,7 +5744,7 @@ VOID SerialConnecttoTCPThread(struct TNCINFO * TNC)
 
 			TNC->TCPCONNECTED = TRUE;
 			ioctl(TNC->TCPSock, FIONBIO, &param);
-			Debugprintf("ARDOP TECSerial connected, Socet %d", TNC->TCPSock);
+			Debugprintf("ARDOP TCPSerial connected, Socket %d", TNC->TCPSock);
 		}
 		else
 		{

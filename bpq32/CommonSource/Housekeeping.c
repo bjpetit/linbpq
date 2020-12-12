@@ -35,10 +35,11 @@ BOOL OverrideUnsent = FALSE;
 BOOL SendNonDeliveryMsgs = TRUE;
 VOID UpdateWP();
 
-int PR = 30;
-int PUR = 30;
-int PF = 30;
-int PNF = 30;
+double PR = 30;
+double PUR = 30;
+double PF = 30;
+double PNF = 30;
+
 int BF = 30;
 int BNF = 30;
 //int AP;
@@ -80,7 +81,26 @@ void DeletetoRecycle(char * FN)
 
 	SHFileOperation(&FileOp);
 #else
-	DeleteFile(FN);
+
+	// On Linux move to Deleted under current directory
+
+	char newName[256];
+	char oldName[256];
+
+	strcpy(oldName, FN);
+
+	char * old = FN;
+
+	mkdir("Deleted", S_IRWXU | S_IRWXG | S_IRWXO);		// Make sure exists
+
+	while(strchr(old, '/'))
+	{
+		old = strlop(old, '/');
+	}
+	sprintf(newName, "Deleted/%s", old);
+
+	rename(oldName, newName);
+
 #endif
 }
 
@@ -425,7 +445,7 @@ VOID ExpireMessages()
 				if (Msg->datecreated < NTSULimit)
 				{
 					if (SendNonDeliveryMsgs) 
-						SendNonDeliveryMessage(Msg, TRUE, PUR);
+						SendNonDeliveryMessage(Msg, TRUE, NTSU);
 
 					KillMsg(Msg);
 				}
@@ -630,7 +650,7 @@ VOID Renumber_Messages()
 
 		NewNumber[Msg->number] = ++i;		// Save so we can update users' last listed count
 
-		// New will always be >= old unless somethnig hasgon horribly wrong,
+		// New will always be >= old unless something has gone horribly wrong,
 		// so can rename in place without risk of losing a message
 
 		if (Msg->number < i)

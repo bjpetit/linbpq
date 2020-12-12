@@ -421,6 +421,7 @@ VOID * _GetBuff(char * File, int Line)
 		sprintf(&Msg->DEST[1], "%s %d", fptr, Line);
 
 		Msg->Process = (short)GetCurrentProcessId();
+		Msg->Linkptr = NULL;
 	}
 	else
 		Debugprintf("Warning - Getbuff returned NULL");
@@ -593,7 +594,6 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 			time_t Duration;
 
 			// Need to do a tidy close
-
 
 			STREAM->Connecting = FALSE;
 			STREAM->Disconnecting = TRUE;
@@ -2828,6 +2828,7 @@ char * FormatMH(PMHSTRUC MH, char Format)
 
 }
 
+
 Dll VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset)
 {
 	// Create a time dependent One Time Password from the KeyPhrase
@@ -3491,23 +3492,35 @@ VOID UIThread(void * Unused)
 {
 	int Port, MaxPorts = GetNumberofPorts();
 
+	Sleep(60000);
+
 	while (RunUI)
 	{
-		Sleep(60000);
+		int sleepInterval = 60000;
+
 		for (Port = 1; Port <= MaxPorts; Port++)
 		{
 			if (MinCounter[Port])
 			{
-				MinCounter[Port] --;
+				MinCounter[Port]--;
 
 				if (MinCounter[Port] == 0)
 				{
 					MinCounter[Port] = Interval[Port];
 					SendUIBeacon(Port);
-					break;					// Only one per interval
+
+					// pause beteen beacons but adjust sleep interval to suit
+
+					Sleep(10000);
+					sleepInterval -= 10000;
 				}
 			}
 		}
+
+		while (sleepInterval <= 0)		// just in case we have a crazy config
+			sleepInterval += 60000;
+
+		Sleep(sleepInterval);
 	}
 }
 

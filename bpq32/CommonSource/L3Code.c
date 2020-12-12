@@ -700,7 +700,7 @@ VOID SENDNODESMSG()
 	SENDNEXTNODESFRAGMENT();
 }
 
-
+int fragmentCount = 0;		// Node broadcast packets sent to current port
 
 VOID SENDNEXTNODESFRAGMENT()
 {
@@ -722,6 +722,8 @@ VOID SENDNEXTNODESFRAGMENT()
 	if (DEST == 0)
 	{
 		//	FIRST FRAGMENT TO A PORT
+
+		fragmentCount = 0;
 
 		while (PORT->PORTQUALITY == 0 || PORT->TXPORT || PORT->INP3ONLY)
 			// Don't send NODES to Shared TX or INP3 Port
@@ -851,7 +853,13 @@ Sendit:
 
 	Buffer->LENGTH = (int)(ptr1 - (UCHAR *)Buffer);
 
-	PUT_ON_PORT_Q(PORT, Buffer);
+	if (Buffer->LENGTH > 35 || fragmentCount == 0)		// Always send first even if no other nodes
+	{
+		PUT_ON_PORT_Q(PORT, Buffer);
+		fragmentCount++;
+	}
+	else
+		ReleaseBuffer(Buffer);
 
 }
 

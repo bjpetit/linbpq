@@ -58,20 +58,20 @@ co-ordinating authority for these numbers, so authors just pick an unused
 one. 
 */
 
-VOID NRRecordRoute(char * Buff, int Len)
+VOID NRRecordRoute(UCHAR * Buff, int Len)
 {
 	// NRR frame for us. If We originated it, report outcome, else put our call on end, and send back
 	
 	L3MESSAGEBUFFER * Msg = (L3MESSAGEBUFFER *)Buff;
 	struct DEST_LIST * DEST;
 	char Temp[7];
-	int NRRLen = Len - 28;
+	int NRRLen = Len - (21 + MSGHDDRLEN);
 	UCHAR Flags;
 	char call[10];
 	int calllen;
 	char * Save = Buff;
 
-	if (memcmp(&Buff[28], MYCALL, 7) == 0)
+	if (memcmp(&Msg->L4DATA, MYCALL, 7) == 0)
 	{
 		UCHAR * BUFFER = GetBuff();
 		UCHAR * ptr1;
@@ -80,14 +80,14 @@ VOID NRRecordRoute(char * Buff, int Len)
 		if (BUFFER == NULL)
 			return;
 
-		ptr1 = &BUFFER[7];
+		ptr1 = &BUFFER[MSGHDDRLEN];
 		
 		*ptr1++ = 0xf0;			// PID
 
 		ptr1 += sprintf(ptr1, "NRR Response:");
 
-		Buff += 28;
-		Len -= 28;
+		Buff += 21 + MSGHDDRLEN;
+		Len -= (21 + MSGHDDRLEN);
 
 		while (Len > 0)
 		{
@@ -128,7 +128,7 @@ VOID NRRecordRoute(char * Buff, int Len)
 
 	// Add our call on end, and increase count
 
-	Flags = Buff[Len -1];
+	Flags = Buff[Len - 1];
 
 	Flags--;
 
@@ -155,8 +155,10 @@ VOID NRRecordRoute(char * Buff, int Len)
 		return;
 	}
 		
-	Msg->LENGTH = NRRLen + 20 + 8;
-	
+	Msg->LENGTH = NRRLen + 21 + MSGHDDRLEN;
+
+	Debugprintf("NRR TX Len %d Flags %d NRRLen %d", Msg->LENGTH, Flags, NRRLen);
+
 	C_Q_ADD(&DEST->DEST_Q, Msg);
 }
 
@@ -185,7 +187,7 @@ VOID SendNRRecordRoute(struct DEST_LIST * DEST, TRANSPORTENTRY * Session)
 	memcpy(Msg->L4DATA, MYCALL, 7);
 	Msg->L4DATA[7] = Stream + 28;
 		
-	Msg->LENGTH = 8 + 20 + 8;
+	Msg->LENGTH = 8 + 21 + MSGHDDRLEN;
 	
 	C_Q_ADD(&DEST->DEST_Q, Msg);
 }

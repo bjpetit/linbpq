@@ -35,6 +35,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "kernelresource.h"
 #include "CHeaders.h"
+#include "tncinfo.h"
 
 VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer);
 VOID ProcessIframe(struct _LINKTABLE * LINK, PDATAMESSAGE Buffer);
@@ -140,7 +141,7 @@ extern BOOL APRSActive;
 
 // Although externally streams are numbered 1 to 64, internally offsets are 0 - 63
 
-BPQVECSTRUC DUMMY = {0};					// Needed to force correct order of following
+BPQVECSTRUC XDUMMY = {0};					// Needed to force correct order of following
 
 BPQVECSTRUC BPQHOSTVECTOR[BPQHOSTSTREAMS + 5] = {0};
 
@@ -363,7 +364,7 @@ VOID EXTTX(PEXTPORTDATA PORTVEC, MESSAGE * Buffer)
 	
 	PORTVEC->PORT_EXT_ADDR(2, PORT->PORTNUMBER, Buffer);
 	
-	if (PORT->PROTOCOL == 10)
+	if (PORT->PROTOCOL == 10 && PORT->TNC && PORT->TNC->Hardware != H_KISSHF)
 	{
 		ReleaseBuffer(Buffer);
 		return;
@@ -864,7 +865,6 @@ BOOL Start()
 			PORT->BAUDRATE = (int)115200;
 
 		PORT->CHANNELNUM = (char)PortRec->CHANNEL;
-		PORT->BBSBANNED = (UCHAR)PortRec->BBSFLAG;
 		PORT->PORTQUALITY = (UCHAR)PortRec->QUALITY;
 		PORT->NormalizeQuality = !PortRec->NoNormalize;
 		PORT->IgnoreUnlocked = PortRec->IGNOREUNLOCKED;
@@ -996,6 +996,15 @@ BOOL Start()
 
 		PORT->RIGPort = PortRec->RIGPORT;
 
+		if (PortRec->HavePermittedAppls)
+			PORT->PERMITTEDAPPLS = PortRec->PERMITTEDAPPLS;
+		else
+			PORT->PERMITTEDAPPLS = 0xffffffff;		// Default to all
+
+		if (PortRec->BBSFLAG)						// Appl 1 no permitted - BBSFLAG=NOBBS
+			PORT->PERMITTEDAPPLS &= 0xfffffffe;		// Clear bottom bit
+
+			
 		//	SEE IF PERMITTED LINK CALLSIGNS SPECIFIED
 
 		ptr2 = &PortRec->VALIDCALLS[0];
@@ -1991,17 +2000,26 @@ VOID TIMERINTERRUPT()
 		while (Buffer)
 		{
 			Message = (struct _MESSAGE *) Buffer;
-			
+
 			if (PORT->PROTOCOL == 10)
 			{
-				//	PACTOR Style Message
-
 				int Sessno = Message->PORT;
 				PEXTPORTDATA PORTVEC = (PEXTPORTDATA)PORT;
 				TRANSPORTENTRY * Session;
 				TRANSPORTENTRY * Partner;
 
-				InOctets[PORT->PORTNUMBER] += Message->LENGTH - 8;
+				if (PORT->TNC && PORT->TNC->Hardware == H_KISSHF)
+				{
+
+					// KISSHF - May be L2 packet or Test Response
+
+					if (Message->DEST[0] != 240)			// Should only be ax.25 address field
+						goto L2Packet;
+				}
+
+				//	PACTOR Style Message
+
+				InOctets[PORT->PORTNUMBER] += Message->LENGTH - (MSGHDDRLEN + 1);
 				PORT->L2FRAMESFORUS++;
 
 				Session = PORTVEC->ATTACHEDSESSIONS[Sessno];
@@ -2014,11 +2032,11 @@ VOID TIMERINTERRUPT()
 					Buffer = (PMESSAGE)Q_REM((void *)&PORT->PORTRX_Q);
 					continue;
 				}
-			
+
 				Session->L4KILLTIMER = 0;		// Reset Idle Timeout
 
 				Partner = Session->L4CROSSLINK;
-	
+
 				if (Partner == NULL)
 				{
 					//	No Crosslink - pass to command handler
@@ -2057,6 +2075,8 @@ VOID TIMERINTERRUPT()
 				continue;
 			}
 
+
+L2Packet:
 			//	TIME STAMP IT
 	
 			time(&Message->Timestamp);
@@ -2136,7 +2156,7 @@ VOID TIMERINTERRUPT()
 				}
 
 				PORT->L2FRAMESSENT++;
-				OutOctets[PORT->PORTNUMBER] += Buffer->LENGTH - 7;
+				OutOctets[PORT->PORTNUMBER] += Buffer->LENGTH - MSGHDDRLEN;
 
 				PORT->PORTTXROUTINE(PORT, Buffer);
 				Sent++;

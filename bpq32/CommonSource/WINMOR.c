@@ -156,7 +156,7 @@ lineloop:
 	if (Len > 0)
 	{
 		//	copy text to control a line at a time	
-					
+
 		ptr2 = memchr(ptr1, 13, Len);
 
 		if (ptr2)
@@ -175,7 +175,7 @@ lineloop:
 				ptr2++;
 				Len --;
 			}
-			
+
 			Line[LineLen] = 0;
 
 			// If line contains any data above 7f, assume binary and dont display
@@ -185,6 +185,23 @@ lineloop:
 				if (Line[i] > 126 || Line[i] < 32)
 					goto Skip;
 			}
+
+			// We now also pass to Monitor Window
+
+			if (strlen(Line) < 250)
+			{
+				MESSAGE Monframe;
+				memset(&Monframe, 0, sizeof(Monframe));
+
+				Monframe.PORT = TNC->Port;	
+				Monframe.LENGTH = 12 + strlen(Line);
+				Monframe.DEST[0] = 1;			// Plain Text Monitor
+				strcpy(&Monframe.DEST[1], Line);
+
+				time(&Monframe.Timestamp);
+				BPQTRACE((MESSAGE *)&Monframe, FALSE);
+			}
+
 #ifdef LINBPQ
 #else
 			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Line);
@@ -212,6 +229,23 @@ lineloop:
 
 		if (i == Len)
 		{
+			if (Len < 250)
+			{
+				MESSAGE Monframe;
+				memset(&Monframe, 0, sizeof(Monframe));
+
+				Monframe.PORT = TNC->Port;	
+				Monframe.LENGTH = 12 + Len;
+				Monframe.DEST[0] = 1;			// Plain Text Monitor
+
+				memcpy(&Monframe.DEST[1], ptr1, Len);
+				Monframe.DEST[1 + Len] = 0;
+
+				time(&Monframe.Timestamp);
+				BPQTRACE((MESSAGE *)&Monframe, FALSE);
+			}
+
+
 #ifdef LINBPQ
 #else
 			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) ptr1 );
@@ -279,45 +313,47 @@ VOID SetWindowTextSupport(PMSGWITHLEN Buffer)
 
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
 {
+
 	//	It seems writing from multiple threads can cause problems in Windows
 	//	Queue and process in main thread
 
-	
+
 #ifdef LINBPQ
 
 	WritetoTraceSupport(TNC, Msg, Len);
 }
 
 #else
-
-	UINT * buffptr;
-	BOOL Sem = FALSE;
-
-	if (Len < 0)
-		return;
-
-	if (Semaphore.Flag == 0)
 	{
-		GetSemaphore(&Semaphore, 88);
-		Sem = TRUE;
+		UINT * buffptr;
+		BOOL Sem = FALSE;
+
+		if (Len < 0)
+			return;
+
+		if (Semaphore.Flag == 0)
+		{
+			GetSemaphore(&Semaphore, 88);
+			Sem = TRUE;
+		}
+
+		buffptr = GetBuff();
+
+		if (buffptr)
+		{
+			if (Len > 340)
+				Len = 340;
+
+			buffptr[1] = (UINT)TNC;
+			buffptr[2] = (UINT)Len;
+			memcpy(&buffptr[3], Msg, Len + 1);	
+
+			C_Q_ADD(&WINMORTraceQ, buffptr);
+		}
+
+		if (Sem)
+			FreeSemaphore(&Semaphore);
 	}
-
-	buffptr = GetBuff();
-
-	if (buffptr)
-	{
-		if (Len > 340)
-			Len = 340;
-
-		buffptr[1] = (UINT)TNC;
-		buffptr[2] = (UINT)Len;
-		memcpy(&buffptr[3], Msg, Len + 1);	
-	
-		C_Q_ADD(&WINMORTraceQ, buffptr);
-	}
-
-	if (Sem)
-		FreeSemaphore(&Semaphore);
 }
 #endif
 
@@ -400,6 +436,8 @@ static int ProcessLine(char * buf, int Port)
 						TNC->PTTMode = PTTDTR | PTTRTS;
 					else if (_stricmp(ptr, "CM108") == 0)
 						TNC->PTTMode = PTTCM108;
+					else if (_stricmp(ptr, "HAMLIB") == 0)
+						TNC->PTTMode = PTTHAMLIB;
 
 					ptr = strtok(NULL, " \t\n\r");
 				}
@@ -1281,7 +1319,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		}
 
 
-		if (Scan->Bandwidth == 'N')		// Set Wide Mode
+		if (Scan->Bandwidth == 'N')		// Set Narrow Mode
 		{
 			if (TNC->WinmorCurrentMode != 500)
 			{

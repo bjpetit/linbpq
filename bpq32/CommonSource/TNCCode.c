@@ -31,6 +31,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <fcntl.h>
 
 #include "CHeaders.h"
+#include "tncinfo.h"
 
 int C_Q_COUNT(VOID *PQ);
 VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg);
@@ -278,7 +279,7 @@ Dll VOID APIENTRY Send_AX(UCHAR * Block, DWORD Len, UCHAR Port)
 
 	Copy->LENGTH = (USHORT)Len + MSGHDDRLEN;
 
-	if (PORT->PROTOCOL == 10)
+	if (PORT->PROTOCOL == 10 && PORT->TNC && PORT->TNC->Hardware != H_KISSHF)
 	{
 		// 	Pactor Style. Probably will only be used for Tracker uneless we do APRS over V4 or WINMOR
 

@@ -78,6 +78,7 @@ struct ConsoleInfo
 	HMENU hMenu;		// handle of menu 
 	RECT ConsoleRect;
 	RECT OutputRect;
+	int CharWidth;
 
 	int Height, Width, Top, Left;
 

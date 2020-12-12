@@ -86,14 +86,16 @@ TODo	?Multiple Adapters
 #include "IPCode.h"
 
 #ifdef WIN32
+#include <io.h>
+#define read _read
+#define write _write
+#define close _close
 #include <iphlpapi.h>
 // Link with Iphlpapi.lib
 #pragma comment(lib, "IPHLPAPI.lib")
 #endif
 
-//#ifdef WIN32
 #include "pcap.h"
-//#endif
 
 int pcap_sendpacket(pcap_t *p, u_char *buf, int size);
 
@@ -292,9 +294,17 @@ FARPROCI GetAddressI(char * Proc);
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
+// Out Address Space (now only have lower 3/4 of 44 net)
+
+DWORD Lower44;			// 44.0 to 44.127
+DWORD Upper44 ;			// 44.128 to 44.191
+DWORD Lower44Mask;
+DWORD Upper44Mask;
+
+
 #ifdef WIN32
 
-// Routine to check if a route to 44.0.0.0/8 exists and points to us
+// Routine to check if a route to 44.0.0.0/9 exists and points to us
 
 BOOL Check44Route(int Interface)
 {
@@ -302,6 +312,8 @@ BOOL Check44Route(int Interface)
 	PMIB_IPFORWARDROW Row;
 	int Size = 0;
 	DWORD n;
+	int gotLower = 0;
+	int gotUpper = 0;
 
 	//	First call gets the required size
 
@@ -318,18 +330,21 @@ BOOL Check44Route(int Interface)
 
 	for (n = 0; n < pIpForwardTable->dwNumEntries; n++)
 	{
-		if (Row->dwForwardDest == 44 && Row->dwForwardMask == 255)
+		if (Row->dwForwardIfIndex == Interface)
 		{
-			if (Row->dwForwardIfIndex == Interface)
-			{
-				free(pIpForwardTable);
-				return TRUE;
-			}
+			if (Row->dwForwardDest == Lower44 && Row->dwForwardMask == Lower44Mask)
+				gotLower = 1;
+
+			if (Row->dwForwardDest == Upper44 && Row->dwForwardMask == Upper44Mask)
+				gotUpper = 1;
 		}
 		Row++;
 	}
 
 	free(pIpForwardTable);
+
+	if (gotLower & gotUpper)
+		return TRUE;
 
 	return FALSE;
 }
@@ -340,20 +355,16 @@ BOOL Setup44Route(int Interface, char * Gateway)
 
 	char Params[256];
 
-	sprintf(Params, " -p add 44.0.0.0 mask 255.0.0.0 %s if %d", Gateway, Interface);
+	// delete old 44/8 route
 
+	sprintf(Params, " -delete 44.0.0.0/8");
 	ShellExecute(NULL, "runas", "c:\\windows\\system32\\route.exe", Params, NULL, SW_SHOWNORMAL); 
-/*
-	MIB_IPFORWARDROW Row = {0};
-	int ret;
 
-	Row.dwForwardDest = 44;
-	Row.dwForwardMask = 255;
-	Row.dwForwardIfIndex = 24;
-	Row.dwForwardMetric1 = 100;
-	Row.dwForwardProto = MIB_IPPROTO_NETMGMT;
-	ret = CreateIpForwardEntry(&Row);
-*/
+	sprintf(Params, " -p add 44.0.0.0 mask 255.128.0.0 %s if %d", Gateway, Interface);
+	ShellExecute(NULL, "runas", "c:\\windows\\system32\\route.exe", Params, NULL, SW_SHOWNORMAL); 
+
+	sprintf(Params, " -p add 44.128.0.0 mask 255.192.0.0 %s if %d", Gateway, Interface);
+	ShellExecute(NULL, "runas", "c:\\windows\\system32\\route.exe", Params, NULL, SW_SHOWNORMAL); 
 
 	return 1;
 }
@@ -486,6 +497,13 @@ Dll BOOL APIENTRY Init_IP()
 		strcat(IPRFN,"/");
 		strcat(IPRFN,"BPQIPR.dat");
 	}
+
+	Lower44 = inet_addr("44.0.0.0");
+	Upper44 = inet_addr("44.128.0.0");			// Loer Half
+	Lower44Mask = inet_addr("255.128.0.0");		// 44.128 to 44.192
+	Upper44Mask = inet_addr("255.192.0.0");
+
+
 	
 	//	Clear fields in case of restart
 
@@ -534,7 +552,8 @@ Dll BOOL APIENTRY Init_IP()
 //#ifdef WIN32
 
 	if (Adapter[0])
-		GetPCAP();
+		if (GetPCAP() == FALSE)
+			return FALSE;
 
 	// on Windows create a NAT entry for IPADDR.
 	// on linux enable the TAP device (on Linux you can't use pcap to talk to 
@@ -693,7 +712,7 @@ Dll BOOL APIENTRY Init_IP()
 				// Check Route to 44 and if not there add
 
 				if (Check44Route(Interface))	
-					WritetoConsoleLocal("Route to 44/8 found\n");
+					WritetoConsoleLocal("Route to 44/9 and 44.128/10 found\n");
 				else
 				{
 #ifndef _winver		
@@ -710,9 +729,9 @@ Dll BOOL APIENTRY Init_IP()
 #endif
 					Sleep(2000);
 					if (Check44Route(Interface))	
-						WritetoConsoleLocal("Route to 44/8 added\n");
+						WritetoConsoleLocal("Route to44/9 and 44.128/10 added\n");
 					else				
-						WritetoConsoleLocal("Adding route to 44/8 Failed\n");
+						WritetoConsoleLocal("Adding route to 44/9 and 44.128/10 Failed\n");
 				}
 			}
 		}			
@@ -1163,6 +1182,8 @@ BOOL Send_ETH(VOID * Block, DWORD len, BOOL SendtoTAP)
 {
 	// On Windows we don't use TAP so everything goes to pcap
 
+	if (len < 60) len = 60;
+
 #ifndef WIN32
 	if (SendtoTAP)
 	{
@@ -1177,8 +1198,6 @@ BOOL Send_ETH(VOID * Block, DWORD len, BOOL SendtoTAP)
 
 	if (adhandle)
 	{
-//		if (len < 60) len = 60;
-
 		// Send down the packet 
 
 		pcap_sendpacketx(adhandle,	// Adapter
@@ -1575,7 +1594,7 @@ AlreadyThere:
 //			Debugprintf("Forus ARP Reply for %08x Targ %08x HNAT %08x\n",
 //				arpptr->SENDIPADDR, arpptr->TARGETIPADDR, HostNATAddr);
 
-			Send_ETH(arpptr,42, FromTAP);
+			Send_ETH(arpptr,60, FromTAP);
 
 			return;
 		}
@@ -4433,7 +4452,7 @@ void OpenTAP()
 
 	if (NoDefaultRoute == FALSE)
 	{
-		// Add a Route for 44/8 via TAP
+		// Add a Route for 44/9 and 44.128/10 via TAP
 
 		memset(&rm, 0, sizeof(rm));
 
@@ -4442,11 +4461,11 @@ void OpenTAP()
 		(( struct sockaddr_in*)&rm.rt_dst)->sin_port = 0;
 
 		(( struct sockaddr_in*)&rm.rt_genmask)->sin_family = AF_INET;
-		(( struct sockaddr_in*)&rm.rt_genmask)->sin_addr.s_addr = inet_addr("255.0.0.0");
+		(( struct sockaddr_in*)&rm.rt_genmask)->sin_addr.s_addr = inet_addr("255.128.0.0");
 		(( struct sockaddr_in*)&rm.rt_genmask)->sin_port = 0;
 	
 		(( struct sockaddr_in*)&rm.rt_gateway)->sin_family = AF_INET;
-		(( struct sockaddr_in*)&rm.rt_gateway)->sin_addr.s_addr = 0; //inet_addr("192.168.17.1");
+		(( struct sockaddr_in*)&rm.rt_gateway)->sin_addr.s_addr = 0;
 		(( struct sockaddr_in*)&rm.rt_gateway)->sin_port = 0;
 	
 		rm.rt_dev = if_name;
@@ -4459,7 +4478,34 @@ void OpenTAP()
 			printf("SIOCADDRT failed , ret->%d\n",err);
 			return;
 		}
-		printf("Route to 44/8 added via LinBPQTAP\n");
+		printf("Route to 44/9 added via LinBPQTAP\n");
+
+		memset(&rm, 0, sizeof(rm));
+
+		(( struct sockaddr_in*)&rm.rt_dst)->sin_family = AF_INET;
+		(( struct sockaddr_in*)&rm.rt_dst)->sin_addr.s_addr = inet_addr("44.128.0.0");
+		(( struct sockaddr_in*)&rm.rt_dst)->sin_port = 0;
+
+		(( struct sockaddr_in*)&rm.rt_genmask)->sin_family = AF_INET;
+		(( struct sockaddr_in*)&rm.rt_genmask)->sin_addr.s_addr = inet_addr("255.192.0.0");
+		(( struct sockaddr_in*)&rm.rt_genmask)->sin_port = 0;
+	
+		(( struct sockaddr_in*)&rm.rt_gateway)->sin_family = AF_INET;
+		(( struct sockaddr_in*)&rm.rt_gateway)->sin_addr.s_addr = 0;
+		(( struct sockaddr_in*)&rm.rt_gateway)->sin_port = 0;
+	
+		rm.rt_dev = if_name;
+
+		rm.rt_flags = RTF_UP; // | RTF_GATEWAY;
+	
+		if ((err = ioctl(sockfd, SIOCADDRT, &rm)) < 0)
+		{
+			perror("SIOCADDRT");
+			printf("SIOCADDRT failed , ret->%d\n",err);
+			return;
+		}
+		printf("Route to 44.128/10 added via LinBPQTAP\n");
+
 	}
 
 	// Set up ARP entries for any virtual hosts (eg jnos)
@@ -4883,6 +4929,18 @@ int ASNPutInt(UCHAR * Buffer, int Offset, unsigned int Val, int Type)
 	int Len = 0;
 	
 	// Encode in minimum space. But servers seem to sign-extend top byte, so if top bit set add another zero;
+
+	// I think zero is sent as a zero length field
+
+	if (Val == 0)
+	{
+		// return zero as 01 00, not zero length string
+
+		Buffer[--Offset] = 0;				// Val
+		Buffer[--Offset] = 1;				// Len
+		Buffer[--Offset] = Type;
+		return 3;
+	}
 
 	while(Val)
 	{
