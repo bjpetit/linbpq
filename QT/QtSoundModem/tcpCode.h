@@ -8,6 +8,10 @@ class mynet : public QObject
 {
 	Q_OBJECT
 
+signals:
+
+	void HLSetPTT(int c);
+
 public:
 	void start();
 
@@ -23,6 +27,13 @@ public slots:
 	void displayError(QAbstractSocket::SocketError socketError);
 
 	void sendtoKISS(void * sock, unsigned char * Msg, int Len);
+
+	void HAMLIBdisplayError(QAbstractSocket::SocketError socketError);
+	void HAMLIBreadyRead();
+	void onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void ConnecttoHAMLIB();
+	void doHLSetPTT(int c);
+
 
 private:
 	QTcpServer* tcpServer;

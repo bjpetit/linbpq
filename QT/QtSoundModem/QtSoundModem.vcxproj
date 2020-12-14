@@ -118,7 +118,12 @@
     <ClCompile Include="Modulate.c" />
     <ClCompile Include="ofdm.c" />
     <ClCompile Include="pktARDOP.c" />
-    <ClCompile Include="QtSoundModem.cpp" />
+    <ClCompile Include="QtSoundModem.cpp">
+      <DynamicSource Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">input</DynamicSource>
+      <QtMocFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">%(Filename).moc</QtMocFileName>
+      <DynamicSource Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">input</DynamicSource>
+      <QtMocFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">%(Filename).moc</QtMocFileName>
+    </ClCompile>
     <ClCompile Include="rs.c" />
     <ClCompile Include="RSUnit.c" />
     <ClCompile Include="ShowFilter.cpp" />
@@ -134,7 +139,9 @@
   </ItemGroup>
   <ItemGroup>
     <QtUic Include="calibrateDialog.ui" />
-    <QtUic Include="devicesDialog.ui" />
+    <QtUic Include="devicesDialog.ui">
+      <SubType>Designer</SubType>
+    </QtUic>
     <QtUic Include="filterWindow.ui" />
     <QtUic Include="ModemDialog.ui">
       <SubType>Designer</SubType>
@@ -148,12 +155,14 @@
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="tcpCode.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="UZ7HOStuff.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="QtSoundModem.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="icon1.ico" />
     <Image Include="soundmodem.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

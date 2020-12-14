@@ -24,6 +24,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include "QtSoundModem.h"
 #include "UZ7HOStuff.h"
 
+
 #define CONNECT(sndr, sig, rcvr, slt) connect(sndr, SIGNAL(sig), rcvr, SLOT(slt))
 
 QList<QTcpSocket*>  _KISSSockets;
@@ -33,10 +34,9 @@ QTcpServer * _KISSserver;
 QTcpServer * _AGWserver;
 
 extern workerThread *t;
+extern mynet m1;
 
 extern "C" int KISSPort;
-
-
 extern "C" void * initPulse();
 extern "C" int SoundMode;
 
@@ -73,9 +73,14 @@ void mynet::start()
 			connect(_KISSserver, SIGNAL(newConnection()), this, SLOT(onKISSConnection()));
 		else
 		{
-			QMessageBox msgBox;
-			msgBox.setText("Listen failed for KISS Port.");
-			msgBox.exec();
+			if (nonGUIMode)
+				Debugprintf("Listen failed for KISS Port");
+			else
+			{
+				QMessageBox msgBox;
+				msgBox.setText("Listen failed for KISS Port.");
+				msgBox.exec();
+			}
 		}
 	}
 
@@ -86,9 +91,14 @@ void mynet::start()
 			connect(_AGWserver, SIGNAL(newConnection()), this, SLOT(onAGWConnection()));
 		else
 		{
-			QMessageBox msgBox;
-			msgBox.setText("Listen failed for AGW Port.");
-			msgBox.exec();
+			if (nonGUIMode)
+				Debugprintf("Listen failed for AGW Port");
+			else
+			{
+				QMessageBox msgBox;
+				msgBox.setText("Listen failed for AGW Port.");
+				msgBox.exec();
+			}
 		}
 	}
 
@@ -210,10 +220,127 @@ void mynet::sendtoKISS(void * sock, unsigned char * Msg, int Len)
 }
 
 
+
+QTcpSocket * HAMLIBsock;
+int HAMLIBConnected = 0;
+int HAMLIBConnecting = 0;
+
+void mynet::HAMLIBdisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+		if (nonGUIMode)
+			qDebug() << "HAMLIB host was not found. Please check the host name and port settings.";
+		else
+		{
+			QMessageBox::information(nullptr, tr("QtSM"),
+				tr("HAMLIB host was not found. Please check the "
+					"host name and port settings."));
+		}
+
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		qDebug() << "HAMLIB Connection Refused";
+		break;
+
+	default:
+
+		qDebug() << "HAMLIB Connection Failed";
+		break;
+
+	}
+
+	HAMLIBConnecting = 0;
+	HAMLIBConnected = 0;
+}
+
+void mynet::HAMLIBreadyRead()
+{
+	unsigned char Buffer[4096];
+	QTcpSocket* Socket = static_cast<QTcpSocket*>(QObject::sender());
+
+	// read the data from the socket. Don't do anyhing with it at the moment
+
+	Socket->read((char *)Buffer, 4095);
+}
+
+void mynet::onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+
+		HAMLIBConnected = 0;
+		qDebug() << "HAMLIB Connection Closed";
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		HAMLIBConnected = 1;
+		HAMLIBConnecting = 0;
+		qDebug() << "HAMLIB Connected";
+	}
+}
+
+
+void mynet::ConnecttoHAMLIB()
+{
+	delete(HAMLIBsock);
+
+	HAMLIBConnected = 0;
+	HAMLIBConnecting = 1;
+
+	HAMLIBsock = new QTcpSocket();
+
+	connect(HAMLIBsock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(HAMLIBdisplayError(QAbstractSocket::SocketError)));
+	connect(HAMLIBsock, SIGNAL(readyRead()), this, SLOT(HAMLIBreadyRead()));
+	connect(HAMLIBsock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onHAMLIBSocketStateChanged(QAbstractSocket::SocketState)));
+
+	HAMLIBsock->connectToHost(HamLibHost, HamLibPort);
+
+	return;
+}
+
+extern "C" void HAMLIBSetPTT(int PTTState)
+{
+	// Won't work in non=gui mode
+
+		emit m1.HLSetPTT(PTTState);
+}
+
+
+void mynet::doHLSetPTT(int c)
+{
+	char Msg[16];
+
+	if (HAMLIBsock == nullptr || HAMLIBsock->state() != QAbstractSocket::ConnectedState)
+		ConnecttoHAMLIB();
+
+	sprintf(Msg, "T %d\r\n", c);
+	HAMLIBsock->write(Msg);
+
+	HAMLIBsock->waitForBytesWritten(30000);
+
+	QByteArray datas = HAMLIBsock->readAll();
+
+	qDebug(datas.data());
+
+}
+
+
+
+
+
 extern "C" void KISSSendtoServer(void * sock, byte * Msg, int Len)
 {
 	emit t->sendtoKISS(sock, Msg, Len);
 }
+
 
 void workerThread::run()
 {

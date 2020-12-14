@@ -43,7 +43,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 
 QImage *Constellation;
-QImage *Waterfall[4];
+QImage *Waterfall[4] = { 0,0,0,0 };
 QImage *Header[4];
 QLabel *DCDLabel[4];
 QImage *DCDLed[4];
@@ -68,6 +68,7 @@ extern "C" char modes_name[modes_count][20];
 extern "C" int speed[5];
 extern "C" int KISSPort;
 extern "C" short rx_freq[5];
+extern "C" short active_rx_freq[5];
 
 extern "C" int CaptureCount;
 extern "C" int PlaybackCount;
@@ -79,6 +80,9 @@ extern "C" char CaptureNames[16][256];
 extern "C" char PlaybackNames[16][256];
 
 extern "C" int SoundMode;
+extern "C" int multiCore;
+
+extern "C" int refreshModems;
 
 extern "C"
 { 
@@ -96,6 +100,7 @@ extern "C"
 	void dofft(short * in, float * outr, float * outi);
 	void init_raduga();
 	void wf_Scale(int Chan);
+	void AGW_Report_Modem_Change(int port);
 }
 
 void make_graph_buf(float * buf, short tap, QPainter * bitmap);
@@ -144,6 +149,10 @@ int NextWaterfallLine[2] = { 0 };
 unsigned int LastLevel = 255;
 unsigned int LastBusy = 255;
 
+QSystemTrayIcon * trayIcon = nullptr;
+
+int MintoTray = 1;
+
 extern "C" void WriteDebugLog(char * Mess)
 {
 	qDebug() << Mess;
@@ -189,6 +198,11 @@ bool QtSoundModem::eventFilter(QObject* obj, QEvent *evt)
 {
 	UNUSED(obj);
 
+	if (evt->type() == QEvent::Resize)
+	{
+		return QWidget::event(evt);
+	}
+
 	if (evt->type() == QEvent::WindowStateChange)
 	{
 		if (windowState().testFlag(Qt::WindowMinimized) == true)
@@ -225,7 +239,9 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 		ui.labelB->setVisible(0);
 	}
 
-	if (UsingBothChannels)
+	A = r.height() - 25;   // No waterfalls
+
+	if (UsingBothChannels && Secondwaterfall)
 	{
 		// Two waterfalls
 
@@ -243,22 +259,27 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 
 		// Could be Left or Right
 
-		if (soundChannel[0] == RIGHT)
+		if (Firstwaterfall)
 		{
-			ui.WaterfallA->setVisible(0);
-			ui.HeaderA->setVisible(0);
-			ui.WaterfallB->setVisible(1);
-			ui.HeaderB->setVisible(1);
+			if (soundChannel[0] == RIGHT)
+			{
+				ui.WaterfallA->setVisible(0);
+				ui.HeaderA->setVisible(0);
+				ui.WaterfallB->setVisible(1);
+				ui.HeaderB->setVisible(1);
+			}
+			else
+			{
+				ui.WaterfallA->setVisible(1);
+				ui.HeaderA->setVisible(1);
+				ui.WaterfallB->setVisible(0);
+				ui.HeaderB->setVisible(0);
+			}
+
+			A = r.height() - 145;   // Top of Waterfall A
 		}
 		else
-		{
-			ui.WaterfallA->setVisible(1);
-			ui.HeaderA->setVisible(1);
-			ui.WaterfallB->setVisible(0);
-			ui.HeaderB->setVisible(0);
-		}
-
-		A = r.height() - 145;   // Top of Waterfall A
+			A = r.height() - 25;   // Top of Waterfall A
 	}
 
 	C = A - 150;			// Bottom of Monitor, Top of connection list
@@ -312,11 +333,53 @@ void QtSoundModem::menuChecked()
 	int state = Act->isChecked();
 
 	if (Act == actWaterfall1)
+	{
+		int oldstate = Firstwaterfall;
 		Firstwaterfall = state;
+
+		if (state != oldstate)
+			initWaterfall(0, state);
+
+	}
 	else if (Act == actWaterfall2)
+	{
+		int oldstate = Secondwaterfall;
 		Secondwaterfall = state;
 
+		if (state != oldstate)
+			initWaterfall(1, state);
+
+	}
 	saveSettings();
+}
+
+void QtSoundModem::initWaterfall(int chan, int state)
+{
+	if (state == 1)
+	{
+		if (chan == 0)
+		{
+			ui.WaterfallA = new QLabel(ui.centralWidget);
+			WaterfallCopy[0] = ui.WaterfallA;
+		}
+		else
+		{
+			ui.WaterfallB = new QLabel(ui.centralWidget);
+			WaterfallCopy[1] = ui.WaterfallB;
+		}
+		Waterfall[chan] = new QImage(1024, 80, QImage::Format_RGB32);
+		Waterfall[chan]->fill(black);
+
+	}
+	else
+	{
+		delete(Waterfall[chan]);
+		Waterfall[chan] = 0;
+	}
+
+	QSize Size(800, 602);						// Not actually used, but Event constructor needs it
+	QResizeEvent *event = new QResizeEvent(Size, Size);
+	QApplication::sendEvent(this, event);
 }
 
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
@@ -324,6 +387,16 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	ui.setupUi(this);
 
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
+
+	if (MintoTray)
+	{
+		trayIcon = new QSystemTrayIcon(QIcon(":/QtSoundModem/soundmodem.ico"), this);
+		trayIcon->setToolTip("QtSoundModem");
+		trayIcon->show();
+
+		connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(TrayActivated(QSystemTrayIcon::ActivationReason)));
+	}
+
 
 	restoreGeometry(mysettings.value("geometry").toByteArray());
 	restoreState(mysettings.value("windowState").toByteArray());
@@ -353,14 +426,6 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		ui.modeB->addItem(modes_name[i]);
 	}
 
-	QStandardItemModel *model = dynamic_cast<QStandardItemModel *>(ui.modeA->model());
-	QStandardItem * item = model->item(11, 0);
-//	item->setEnabled(false);
-
-	model = dynamic_cast<QStandardItemModel *>(ui.modeB->model());
-	item = model->item(11, 0);
-//	item->setEnabled(false);
-
 	char Title[128];
 
 	sprintf(Title, "QtSoundModem Version %s", VersionString);
@@ -381,7 +446,11 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	setupMenu->addAction(actModems);
 
 	connect(actModems, SIGNAL(triggered()), this, SLOT(clickedSlot()));
-	
+
+	actMintoTray = setupMenu->addAction("Minimize to Tray", this, SLOT(MinimizetoTray()));
+	actMintoTray->setCheckable(1);
+	actMintoTray->setChecked(MintoTray);
+
 	viewMenu = ui.menuBar->addMenu(tr("&View"));
 
 	actWaterfall1 = setupMenuLine(viewMenu, (char *)"First waterfall", this, Firstwaterfall);
@@ -398,9 +467,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 
 	//	Constellation = new QImage(91, 91, QImage::Format_RGB32);
-	Waterfall[0] = new QImage(1024, 80, QImage::Format_RGB32);
 	Header[0] = new QImage(1024, 35, QImage::Format_RGB32);
-	Waterfall[1] = new QImage(1024, 80, QImage::Format_RGB32);
 	Header[1] = new QImage(1024, 35, QImage::Format_RGB32);
 	RXLevel = new QImage(150, 10, QImage::Format_RGB32);
 
@@ -433,12 +500,15 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	//		Waterfall[1]->setColor(i, vbColours[i]);
 	//	}
 
-	Header[0]->fill(black);
-	Waterfall[1]->fill(black);
-	Header[1]->fill(black);
-
 	WaterfallCopy[0] = ui.WaterfallA;
 	WaterfallCopy[1] = ui.WaterfallB;
+
+	initWaterfall(0, Firstwaterfall);
+	initWaterfall(1, Secondwaterfall);
+
+	Header[0]->fill(black);
+	Header[1]->fill(black);
+
 	HeaderCopy[0] = ui.HeaderA;
 	HeaderCopy[1] = ui.HeaderB;
 	monWindowCopy = ui.monWindow;
@@ -446,9 +516,6 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	ui.monWindow->document()->setMaximumBlockCount(10000);
 
 //	connect(ui.monWindow, SIGNAL(selectionChanged()), this, SLOT(onTEselectionChanged()));
-
-	ui.WaterfallA->setPixmap(QPixmap::fromImage(*Waterfall[0]));
-	ui.WaterfallB->setPixmap(QPixmap::fromImage(*Waterfall[1]));
 
 	ui.HeaderA->setPixmap(QPixmap::fromImage(*Header[0]));
 	ui.HeaderB->setPixmap(QPixmap::fromImage(*Header[1]));
@@ -479,9 +546,6 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	connect(ui.DCDSlider, SIGNAL(sliderMoved(int)), this, SLOT(clickedSlotI(int)));
 
-
-//	installEventFilter(this);
-
 	QObject::connect(t, SIGNAL(sendtoTrace(char *, int)), this, SLOT(sendtoTrace(char *, int)), Qt::QueuedConnection);
 	QObject::connect(t, SIGNAL(updateDCD(int, int)), this, SLOT(doupdateDCD(int, int)), Qt::QueuedConnection);
 
@@ -491,15 +555,41 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 }
 
+void QtSoundModem::MinimizetoTray()
+{
+	MintoTray = actMintoTray->isChecked();
+	saveSettings();
+	QMessageBox::about(this, tr("QtSoundModem"),
+	tr("Program must be restarted to change Minimize mode"));
+}
+
+
+void QtSoundModem::TrayActivated(QSystemTrayIcon::ActivationReason reason)
+{
+	if (reason == 3)
+	{
+		showNormal();
+	} 
+}
+
 void QtSoundModem::MyTimerSlot()
 {
 	// 100 mS Timer Event
+
+	if (refreshModems)
+	{
+		refreshModems = 0;
+
+		ui.modeA->setCurrentIndex(speed[0]);
+		ui.modeB->setCurrentIndex(speed[1]);
+		ui.centerA->setValue(rx_freq[0]);
+		ui.centerB->setValue(rx_freq[1]);
+	}
 
 	show_grid();
 }
 void QtSoundModem::clickedSlotI(int i)
 {
-	QPushButton * Button = static_cast<QPushButton*>(QObject::sender());
 	char Name[32];
 
 	strcpy(Name, sender()->objectName().toUtf8());
@@ -509,6 +599,7 @@ void QtSoundModem::clickedSlotI(int i)
 		ModemA = ui.modeA->currentIndex();
 		set_speed(0, ModemA);
 		saveSettings();
+		AGW_Report_Modem_Change(0);
 		return;
 	}
 
@@ -517,6 +608,7 @@ void QtSoundModem::clickedSlotI(int i)
 		ModemB = ui.modeB->currentIndex();
 		set_speed(1, ModemB);
 		saveSettings();
+		AGW_Report_Modem_Change(1);
 		return;
 	}
 
@@ -527,6 +619,8 @@ void QtSoundModem::clickedSlotI(int i)
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerA->setValue(Freq_Change(0, i));
 			settings->setValue("Modem/RXFreq1", ui.centerA->value());
+			AGW_Report_Modem_Change(0);
+
 		}
 		return;
 	}
@@ -538,6 +632,7 @@ void QtSoundModem::clickedSlotI(int i)
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerB->setValue(Freq_Change(1, i));
 			settings->setValue("Modem/RXFreq2", ui.centerB->value());
+			AGW_Report_Modem_Change(1);
 		}
 		return;
 	}
@@ -558,7 +653,6 @@ void QtSoundModem::clickedSlotI(int i)
 
 void QtSoundModem::clickedSlot()
 {
-	QPushButton * Button = static_cast<QPushButton*>(QObject::sender());
 	char Name[32];
 
 	strcpy(Name, sender()->objectName().toUtf8());
@@ -670,6 +764,9 @@ void QtSoundModem::clickedSlot()
 
 Ui_ModemDialog * Dlg;
 
+QDialog * modemUI;
+QDialog * deviceUI;
+
 void QtSoundModem::doModems()
 {
 	Dlg = new(Ui_ModemDialog);
@@ -678,6 +775,13 @@ void QtSoundModem::doModems()
 	char valChar[10];
 
 	Dlg->setupUi(&UI);
+
+	modemUI = &UI;
+	deviceUI = 0;
+
+	myResize *resize = new myResize();
+
+	UI.installEventFilter(resize);
 
 	sprintf(valChar, "%d", bpf[0]);
 	Dlg->BPFWidthA->setText(valChar);
@@ -726,6 +830,9 @@ void QtSoundModem::doModems()
 	Dlg->nonAX25A->setChecked(NonAX25[0]);
 	Dlg->nonAX25B->setChecked(NonAX25[1]);
 
+	Dlg->KISSOptA->setChecked(KISS_opt[0]);
+	Dlg->KISSOptB->setChecked(KISS_opt[1]);
+
 	sprintf(valChar, "%d", txdelay[0]);
 	Dlg->TXDelayA->setText(valChar);
 
@@ -752,6 +859,9 @@ void QtSoundModem::doModems()
 
 	//	speed[1]
 	//	speed[2];
+
+	Dlg->recoverBitA->setCurrentIndex(recovery[0]);
+	Dlg->recoverBitB->setCurrentIndex(recovery[1]);
 
 	Dlg->fx25ModeA->setCurrentIndex(fx25_mode[0]);
 	Dlg->fx25ModeB->setCurrentIndex(fx25_mode[1]);
@@ -807,6 +917,9 @@ void QtSoundModem::modemaccept()
 	NonAX25[0] = Dlg->nonAX25A->isChecked();
 	NonAX25[1] = Dlg->nonAX25B->isChecked();
 
+	KISS_opt[0] = Dlg->KISSOptA->isChecked();
+	KISS_opt[1] = Dlg->KISSOptB->isChecked();
+
 	if (emph_db[0] < 0 || emph_db[0] > nr_emph)
 		emph_db[0] = 0;
 
@@ -840,13 +953,19 @@ void QtSoundModem::modemaccept()
 	fx25_mode[0] = Dlg->fx25ModeA->currentIndex();
 	fx25_mode[1] = Dlg->fx25ModeB->currentIndex();
 
+	recovery[0] = Dlg->recoverBitA->currentIndex();
+	recovery[1] = Dlg->recoverBitB->currentIndex();
+
 	delete(Dlg);
 	saveSettings();
+
+	modemUI->accept();
 }
 
 void QtSoundModem::modemreject()
 {
 	delete(Dlg);
+	modemUI->reject();
 }
 
 
@@ -890,6 +1009,8 @@ int oldSoundMode = 0;
 
 void QtSoundModem::SoundModeChanged(bool State)
 {
+	UNUSED(State);
+
 	// Mustn't change SoundMode until dialog is accepted
 
 	if (Dev->PULSE->isChecked())
@@ -901,13 +1022,17 @@ void QtSoundModem::SoundModeChanged(bool State)
 
 void QtSoundModem::DualPTTChanged(bool State)
 {
-	// Forse Evevaluation of Cat Port setting
+	UNUSED(State);
+
+	// Forse Evaluation of Cat Port setting
 
 	PTTPortChanged(0);
 }
 
 void QtSoundModem::CATChanged(bool State)
 {
+	UNUSED(State);
+
 	PTTPortChanged(0);
 	/*
 	
@@ -934,6 +1059,8 @@ void QtSoundModem::CATChanged(bool State)
 
 void QtSoundModem::PTTPortChanged(int Selected)
 {
+	UNUSED(Selected);
+
 	QVariant Q = Dev->PTTPort->currentText();
 	strcpy(NewPTTPort, Q.toString().toUtf8());
 
@@ -1010,7 +1137,24 @@ void QtSoundModem::PTTPortChanged(int Selected)
 	}
 }
 
+bool myResize::eventFilter(QObject *obj, QEvent *event)
+{
+	if (event->type() == QEvent::Resize)
+	{
+		QResizeEvent *resizeEvent = static_cast<QResizeEvent *>(event);
+		QSize size = resizeEvent->size();
+		int h = size.height();
+		int w = size.width();
 
+		if (obj == deviceUI)
+			Dev->scrollArea->setGeometry(QRect(5, 5, w - 10, h - 10));
+		else
+			Dlg->scrollArea->setGeometry(QRect(5, 5, w - 10, h - 10));
+
+		return true;
+	}
+	return QObject::eventFilter(obj, event);
+}
 
 void QtSoundModem::doDevices()
 {
@@ -1023,6 +1167,13 @@ void QtSoundModem::doDevices()
 	int i;
 
 	Dev->setupUi(&UI);
+
+	deviceUI = &UI;
+	modemUI = 0;
+
+	myResize *resize = new myResize();
+
+	UI.installEventFilter(resize);
 
 	newSoundMode = -1;
 	oldSoundMode = SoundMode;
@@ -1133,6 +1284,8 @@ void QtSoundModem::doDevices()
 	Dev->txRotation->setChecked(TX_rotate);
 	Dev->DualPTT->setChecked(DualPTT);
 
+	Dev->multiCore->setChecked(multiCore);
+
 	QObject::connect(Dev->okButton, SIGNAL(clicked()), this, SLOT(deviceaccept()));
 	QObject::connect(Dev->cancelButton, SIGNAL(clicked()), this, SLOT(devicereject()));
 
@@ -1144,7 +1297,6 @@ void QtSoundModem::deviceaccept()
 {
 	QVariant Q = Dev->inputDevice->currentText();
 	int cardChanged = 0;
-
 
 	if (Dev->PULSE->isChecked())
 		SoundMode = 2;
@@ -1189,7 +1341,6 @@ void QtSoundModem::deviceaccept()
 		return;
 
 	}
-
 
 	if (strcmp(CaptureDevice, Q.toString().toUtf8()) != 0)
 	{
@@ -1251,6 +1402,7 @@ void QtSoundModem::deviceaccept()
 
 	DualPTT = Dev->DualPTT->isChecked();
 	TX_rotate = Dev->txRotation->isChecked();
+	multiCore = Dev->multiCore->isChecked();
 
 	if (Dev->CAT->isChecked())
 		PTTMode = PTTCAT;
@@ -1286,11 +1438,13 @@ void QtSoundModem::deviceaccept()
 	OpenPTTPort();
 
 	wf_pointer(soundChannel[0]);
+
 	if (DualChan)
 		wf_pointer(soundChannel[1]);
 
 	delete(Dev);
 	saveSettings();
+	deviceUI->accept();
 
 	if (cardChanged)
 	{
@@ -1308,6 +1462,7 @@ void QtSoundModem::deviceaccept()
 void QtSoundModem::devicereject()
 {	
 	delete(Dev);
+	deviceUI->reject();
 }
 
 void QtSoundModem::handleButton(int Port, int Type)
@@ -1609,16 +1764,53 @@ void wf_pointer(int snd_ch)
 	do_pointer(1);
 }
 
+
+void doWaterfallThread(void * param);
+
+/*
+#ifdef WIN32
+
+#define pthread_t uintptr_t
+
+extern "C" uintptr_t _beginthread(void(__cdecl *start_address)(void *), unsigned stack_size, void *arglist);
+
+#else
+
+#include <pthread.h>
+
+extern "C" pthread_t _beginthread(void(*start_address)(void *), unsigned stack_size, void * arglist)
+{
+	pthread_t thread;
+
+	if (pthread_create(&thread, NULL, (void * (*)(void *))start_address, (void*)arglist) != 0)
+		perror("New Thread");
+	else
+		pthread_detach(thread);
+
+	return thread;
+}
+
+#endif
+*/
 extern "C" void doWaterfall(int snd_ch)
 {
-	UNUSED(snd_ch);
-	
 	if (nonGUIMode)
 		return;
 
 	if (Closing)
 		return;
 
+//	if (multiCore)			// Run modems in separate threads
+//		_beginthread(doWaterfallThread, 0, xx);
+//	else
+		doWaterfallThread((void *)(size_t)snd_ch);
+
+}
+
+void doWaterfallThread(void * param)
+{
+	int snd_ch = (int)(size_t)param;
+	
 	QImage * bm = Waterfall[snd_ch];
 	
 	word  i, wid;
@@ -1778,10 +1970,36 @@ extern "C" void doWaterfall(int snd_ch)
 
 }
 
+
+
+void QtSoundModem::changeEvent(QEvent* e)
+{
+	if (e->type() == QEvent::WindowStateChange)
+	{
+		QWindowStateChangeEvent* ev = static_cast<QWindowStateChangeEvent*>(e);
+
+		qDebug() << windowState();
+
+		if (!(ev->oldState() & Qt::WindowMinimized) && windowState() & Qt::WindowMinimized)
+		{
+			if (trayIcon)
+				setVisible(false);
+		}
+//		if (!(ev->oldState() != Qt::WindowNoState) && windowState() == Qt::WindowNoState)
+//		{
+//			QMessageBox::information(this, "", "Window has been restored");
+//		}
+
+	}
+	QWidget::changeEvent(e);
+}
+
 #include <QCloseEvent>
 
 void QtSoundModem::closeEvent(QCloseEvent *event)
 {
+	UNUSED(event);
+
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
 	mysettings.setValue("geometry", QWidget::saveGeometry());
 	mysettings.setValue("windowState", saveState());
@@ -1904,7 +2122,7 @@ void QtSoundModem::show_grid()
 				item = new QTableWidgetItem((char *)AX25Port[snd_ch][i].corrcall);
 				sessionTable->setItem(row_idx, 1, item);
 
-			item = new QTableWidgetItem(msg);
+				item = new QTableWidgetItem(msg);
 				sessionTable->setItem(row_idx, 2, item);
 
 				item = new QTableWidgetItem(QString::number(AX25Port[snd_ch][i].info.stat_s_pkt));
@@ -1956,111 +2174,4 @@ void QtSoundModem::onTEselectionChanged()
 	QTextEdit * x = static_cast<QTextEdit*>(QObject::sender());
 	x->copy();
 }
-
-
-QTcpSocket * HAMLIBsock;
-int HAMLIBConnected = 0;
-int HAMLIBConnecting = 0;
-
-void QtSoundModem::HAMLIBdisplayError(QAbstractSocket::SocketError socketError)
-{
-	switch (socketError)
-	{
-	case QAbstractSocket::RemoteHostClosedError:
-		break;
-
-	case QAbstractSocket::HostNotFoundError:
-		QMessageBox::information(this, tr("QtSM"),
-			tr("HAMLIB host was not found. Please check the "
-				"host name and port settings."));
-
-
-		break;
-
-	case QAbstractSocket::ConnectionRefusedError:
-
-		qDebug() << "HAMLIB Connection Refused";
-		break;
-
-	default:
-
-		qDebug() << "HAMLIB Connection Failed";
-		break;
-
-	}
-
-	HAMLIBConnecting = 0;
-	HAMLIBConnected = 0;
-}
-
-void QtSoundModem::HAMLIBreadyRead()
-{
-	unsigned char Buffer[4096];
- 	QTcpSocket* Socket = static_cast<QTcpSocket*>(QObject::sender()); 
-
-	// read the data from the socket. Don't do anyhing with it at the moment
-
-	Socket->read((char *)Buffer, 4095);
-}
-
-void QtSoundModem::onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState)
-{
-	if (socketState == QAbstractSocket::UnconnectedState)
-	{
-		// Close any connections
-
-			HAMLIBConnected = 0;
-			qDebug() << "HAMLIB Connection Closed";
-	}
-	else if (socketState == QAbstractSocket::ConnectedState)
-	{
-		HAMLIBConnected = 1;
-		HAMLIBConnecting = 0;
-		qDebug() << "HAMLIB Connected";
-	}
-}
-
-
-void QtSoundModem::ConnecttoHAMLIB()
-{
-	delete(HAMLIBsock);
-
-	HAMLIBConnected = 0;
-	HAMLIBConnecting = 1;
-
-	HAMLIBsock = new QTcpSocket();
-
-	connect(HAMLIBsock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(HAMLIBdisplayError(QAbstractSocket::SocketError)));
-	connect(HAMLIBsock, SIGNAL(readyRead()), this, SLOT(HAMLIBreadyRead()));
-	connect(HAMLIBsock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onHAMLIBSocketStateChanged(QAbstractSocket::SocketState)));
-
-	HAMLIBsock->connectToHost(HamLibHost, HamLibPort);
-
-	return;
-}
-
-extern "C" void HAMLIBSetPTT(int PTTState)
-{
-	emit w->HLSetPTT(PTTState);
-}
-
-
-void QtSoundModem::doHLSetPTT(int c)
-{
-	char Msg[16];
-
-	if (HAMLIBsock == nullptr || HAMLIBsock->state() != QAbstractSocket::ConnectedState)
-		ConnecttoHAMLIB();
-
-	sprintf(Msg, "T %d\r\n", c);
-	HAMLIBsock->write(Msg);
-
-	HAMLIBsock->waitForBytesWritten(30000);
-
-	QByteArray datas = HAMLIBsock->readAll();
-
-	qDebug(datas.data());
-
-}
-
 

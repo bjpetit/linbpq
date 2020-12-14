@@ -383,7 +383,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 
 		// How best to do ACKMODE?? I think pass whole frame including CMD and ack bytes to all_frame_buf
 
-		// But ack sound only be sent to client that sent the message - needs more thought!
+		// But ack should only be sent to client that sent the message - needs more thought!
 
 		TXMSG = newString();
 		stringAdd(TXMSG, &Msg[0], Len);		// include  Control
@@ -398,8 +398,18 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 		// Ackmode needs to know where to send ack back to, so save socket on end of data
 
 		stringAdd(TXMSG, (unsigned char * )&socket, sizeof(socket));
-		Add(&KISS.buffer[Chan], TXMSG);
 
+		// if KISS Optimise see if frame is really needed
+
+		if (!KISS_opt[Chan])
+			Add(&KISS.buffer[Chan], TXMSG);
+		else
+		{
+			if (add_raw_frames(Chan, TXMSG, &KISS.buffer[Chan]))
+				Add(&KISS.buffer[Chan], TXMSG);
+		}
+
+		
 		return;
 
 	case KISS_DATA:
@@ -413,7 +423,17 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 		CRCString[1] = CRC >> 8;
 
 		stringAdd(TXMSG, CRCString, 2);
-		Add(&KISS.buffer[Chan], TXMSG);
+
+		// if KISS Optimise see if frame is really needed
+
+		if (!KISS_opt[Chan])
+			Add(&KISS.buffer[Chan], TXMSG);
+		else
+		{
+			if (add_raw_frames(Chan, TXMSG, &KISS.buffer[Chan]))
+				Add(&KISS.buffer[Chan], TXMSG);
+		}
+
 
 		return;
 	}
@@ -449,6 +469,12 @@ void KISSDataReceived(void * socket, UCHAR * data, int length)
 
 	stringAdd(KISS->data_in, data, length);
 
+	if (KISS->data_in->Length > 10000)				// Probably AGW Data on KISS Port
+	{
+		KISS->data_in->Length = 0;
+		return;
+	}
+
 	ptr1 = KISS->data_in->Data;
 	Length = KISS->data_in->Length;
 
@@ -471,7 +497,8 @@ void KISSDataReceived(void * socket, UCHAR * data, int length)
 
 		// Process Frame
 
-		ProcessKISSFrame(socket, ptr1, Len);
+		if (Len < 350)								// Drop obviously corrupt frames
+			ProcessKISSFrame(socket, ptr1, Len);		
 
 		mydelete(KISS->data_in, 0, Len + 1);
 

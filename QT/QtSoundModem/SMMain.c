@@ -112,20 +112,14 @@ void soundMain()
 
 	// initialise fft library
 
-	initfft();
-
 	RsCreate();				// RS code for MPSK
-
-	// Initialise KISS port
 
 	detector_init();
 	KISS_init();
-	agw_init();
 	ax25_init();
 	init_raduga();			// Set up waterfall colour table
 
-	//	waterfall_init;
-	//	ReadIni;
+	initfft();;
 
 	if (nonGUIMode)
 	{

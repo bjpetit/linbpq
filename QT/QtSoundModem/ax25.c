@@ -33,6 +33,10 @@ __declspec(dllimport) unsigned short __stdcall ntohs(__in unsigned short hostsho
 #include <stddef.h>
 #endif 
 
+void decode_frame(byte * frame, int len, byte * path, string * data,
+	byte * pid, byte * nr, byte * ns, byte * f_type, byte * f_id,
+	byte *  rpt, byte * pf, byte * cr);
+
 /*
 
 unit ax25;
@@ -212,13 +216,11 @@ int fullduplex = 0;
 UCHAR diddles = 0;
 struct TQPSK_t qpsk_set[4];
 
-
-
-//MEMRecovery : array[1..4] of word=(200,200,200,200);
+word MEMRecovery[5] = { 200,200,200,200 };
 int NonAX25[5] = { 0 };
 
 boolean dyn_frack[4] = { FALSE,FALSE,FALSE,FALSE };
-byte recovery[4] = { 1,1,1,1 };
+byte recovery[4] = { 0,0,0,0 };
 byte users[4] = { 0,0,0,0 };
 
 short txtail[5] = { 50, 50, 50, 50, 50 };
@@ -293,7 +295,7 @@ void scrambler(UCHAR * in_buf, int Len)
 			//	sreg: = (sreg shl 4 and $200) xor (sreg shl 8 and $200) or (sreg shr 1);
 
 
-			sreg = ((sreg << 4) & 0x200) ^ ((sreg << 8) & 0x200) | (sreg >> 1);
+			sreg = (((sreg << 4) & 0x200) ^ ((sreg << 8) & 0x200)) | (sreg >> 1);
 		}
 		in_buf[i] = in_buf[i] ^ a;
 	}
@@ -844,7 +846,7 @@ end;
 
 
 
-int get_addr(char * Calls, int rpt, int cr, UCHAR * AXCalls)
+int get_addr(char * Calls, UCHAR * AXCalls)
 {
 	//	CONVERT CALL + OPTIONAL DIGI STRING TO AX25, RETURN 
 	//	CONVERTED STRING IN AXCALLS. Return FALSE if invalied
@@ -931,8 +933,10 @@ byte set_ctrl(byte nr, byte ns, byte f_type, byte f_id, boolean pf)
 	return ctrl;
 }
 
-string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpt, boolean pf, boolean cr)
+string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpr, boolean pf, boolean cr)
 {
+	UNUSED(rpr);
+
 	byte ctrl;
 
 	string * frame = newString();
@@ -947,7 +951,7 @@ string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, b
 
 	ctrl = set_ctrl(nr, ns, f_type, f_id, pf);
 
-	addrlen = strlen(axaddr);
+	addrlen = strlen((char *)axaddr);
 
 	memcpy(addr, axaddr, addrlen);
 
@@ -1007,55 +1011,168 @@ string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, b
 	return frame;
 }
 
-/*
 
+int add_raw_frames(int snd_ch, string * frame, TStringList * buf)
+{
+	string  *s_data = newString();
+	byte  s_pid, s_nr, s_ns, s_f_type, s_f_id;
+	byte  s_rpt, s_cr, s_pf;
+	string  *d_data = newString();
+	byte  d_pid, d_nr, d_ns, d_f_type, d_f_id;
+	byte  d_rpt, d_cr, d_pf;
 
-function add_raw_frames(snd_ch: byte; frame: string; var buf: TStringList): boolean;
-var
-  s_path,s_data: string;
-  s_pid,s_nr,s_ns,s_f_type,s_f_id: byte;
-  s_rpt,s_cr,s_pf: boolean;
-  d_path,d_data: string;
-  d_pid,d_nr,d_ns,d_f_type,d_f_id: byte;
-  d_rpt,d_cr,d_pf: boolean;
-  found_I: boolean;
-  i: longint;
-begin
-  result:=TRUE;
-  if buf.Count>0 then
-  begin
-	// Check for duplicate
-	//if buf.IndexOf(frame)>=0 then result:=FALSE;
-	if my_indexof(buf,frame)>=0 then result:=FALSE;
-	// Check for I-frames
-	if result then
-	begin
-	  decode_frame(frame,s_path,s_data,s_pid,s_nr,s_ns,s_f_type,s_f_id,s_rpt,s_pf,s_cr);
-	  found_I:=FALSE;
-	  // check on RR
-	  if (s_f_id=S_FRM) and (s_cr=SET_C) then
-	  begin
-		i:=0;
-		repeat
-		  decode_frame(buf.Strings[i],d_path,d_data,d_pid,d_nr,d_ns,d_f_type,d_f_id,d_rpt,d_pf,d_cr);
-		  if (d_f_id=I_FRM) and (s_path=d_path) then found_I:=TRUE;
-		  inc(i);
-		until (i=buf.Count) or found_I;
-		if found_I then result:=FALSE;
-	  end;
-	  // check on I
-	  if s_f_id=I_FRM then
-	  begin
-		i:=0;
-		repeat
-		  decode_frame(buf.Strings[i],d_path,d_data,d_pid,d_nr,d_ns,d_f_type,d_f_id,d_rpt,d_pf,d_cr);
-		  if (s_path=d_path) and (d_f_id=S_FRM) and (d_cr=SET_C) then buf.Delete(i) else inc(i);
-		until (i>=buf.Count)
-	  end;
-	end;
-  end;
-end;
-*/
+	byte d_path[80];
+	byte s_path[80];
+
+	boolean  found_I;
+	int  i;
+
+	unsigned char * framecontents;
+	int Length;
+
+	boolean result = TRUE;
+
+	// Have to be careful as at this point frames have KISS Header and maybe trailer
+
+	if (buf->Count > 0)
+	{
+		// Check for duplicate. Ok to just compare as copy will have same header
+
+		if (my_indexof(buf, frame) >= 0)
+		{
+			Debugprintf("KISSOptimise discarding duplicate frame");
+			return FALSE;
+		}
+
+		// Need to adjust for KISS bytes
+
+		// Normally one, but ackmode has 3 on front and sizeof(void *) on end
+
+		framecontents = frame->Data;
+		Length = frame->Length;
+
+		if ((framecontents[0] & 15) == 12)		// Ackmode
+		{
+			framecontents += 3;
+			Length -= (3 + sizeof(void *));
+		}
+		else
+		{
+			framecontents++;
+			Length--;
+		}
+
+		decode_frame(framecontents, Length, s_path, s_data, &s_pid, &s_nr, &s_ns, &s_f_type, &s_f_id, &s_rpt, &s_pf, &s_cr);
+
+		found_I = FALSE;
+
+		// check for multiple RR (r)
+
+		if (s_f_id == S_FRM && s_cr == SET_R)
+		{
+			for (i = 0; i < buf->Count; i++)
+			{
+				framecontents = buf->Items[i]->Data;
+				Length = buf->Items[i]->Length;
+
+				if ((framecontents[0] & 15) == 12)		// Ackmode
+				{
+					framecontents += 3;
+					Length -= (3 + sizeof(void *));
+				}
+				else
+				{
+					framecontents++;
+					Length--;
+				}
+
+				decode_frame(framecontents, Length, d_path, d_data, &d_pid, &d_nr, &d_ns, &d_f_type, &d_f_id, &d_rpt, &d_pf, &d_cr);
+
+				if (d_f_id == S_FRM && d_cr == SET_R && strcmp((char *)s_path, (char *)d_path) == 0)
+				{
+					Delete(buf, i);
+					Debugprintf("KISSOptimise discarding unneeded RR(R%d)", d_nr);
+
+					break;
+				}
+			}
+		}
+
+	
+		// check for RR after I Frame
+	
+		if (s_f_id == S_FRM && s_cr == SET_C)
+		{
+			for (i = 0; i < buf->Count; i++)
+			{
+				framecontents = buf->Items[i]->Data;
+				Length = buf->Items[i]->Length;
+
+				if ((framecontents[0] & 15) == 12)		// Ackmode
+				{
+					framecontents += 3;
+					Length -= (3 + sizeof(void *));
+				}
+				else
+				{
+					framecontents++;
+					Length--;
+				}
+
+				decode_frame(framecontents, Length, d_path, d_data, &d_pid, &d_nr, &d_ns, &d_f_type, &d_f_id, &d_rpt, &d_pf, &d_cr);
+
+				if (d_f_id == I_FRM && strcmp((char *)s_path, (char *)d_path) == 0)
+				{
+					found_I = TRUE;
+					break;
+				}
+			}
+
+			if (found_I)
+			{
+				Debugprintf("KISSOptimise discarding unneeded RR(C %d) after I frame", s_nr);
+				result = FALSE;
+			}
+		}
+			
+		// check on I
+
+		if (s_f_id == I_FRM)
+		{
+			for (i = 0; i < buf->Count; i++)
+			{
+				framecontents = buf->Items[i]->Data;
+				Length = buf->Items[i]->Length;
+
+				if ((framecontents[0] & 15) == 12)		// Ackmode
+				{
+					framecontents += 3;
+					Length -= (3 + sizeof(void *));
+				}
+				else
+				{
+					framecontents++;
+					Length--;
+				}
+
+				decode_frame(framecontents, Length, d_path, d_data, &d_pid, &d_nr, &d_ns, &d_f_type, &d_f_id, &d_rpt, &d_pf, &d_cr);
+
+				if (strcmp((char *)s_path, (char *)d_path) == 0 && d_f_id == S_FRM && d_cr == SET_C)
+				{
+					Delete(buf, i);
+					Debugprintf("KISSOptimise discarding unneeded RR(C %d)", d_nr);
+					i--;				// i was removed
+				}
+			}
+		}
+	}
+
+	freeString(d_data);
+	freeString(s_data);
+
+	return result;
+}
+
 //////////////////////// Register incoming callsign ////////////////////////////
 
 // I think a call should only be registered on one socket (or we won't know where to send
@@ -1107,7 +1224,21 @@ void del_incoming_mycalls(char * src_call)
 		{
 			if (memcmp(reg->myCall, axcall, 7) == 0)
 			{
-				Delete(&list_incoming_mycalls, i);
+				// cant use Delete as stringlist doesn't contain strings
+
+				TStringList * Q = &list_incoming_mycalls;
+				int Index = i;
+
+				free(Q->Items[Index]);
+
+				Q->Count--;
+
+				while (Index < Q->Count)
+				{
+					Q->Items[Index] = Q->Items[Index + 1];
+					Index++;
+				}
+
 				return;
 			}
 		}
@@ -1127,7 +1258,22 @@ void del_incoming_mycalls_by_sock(void * socket)
 		{
 			if (reg->socket == socket)
 			{
-				Delete(&list_incoming_mycalls, i);
+				// cant use Delete as stringlist doesn't contain strings
+
+				TStringList * Q = &list_incoming_mycalls;
+				int Index = i; 
+		
+				free(Q->Items[Index]);
+
+				Q->Count--;
+
+				while (Index < Q->Count)
+				{
+					Q->Items[Index] = Q->Items[Index + 1];
+					Index++;
+				}
+				
+				//Delete(&list_incoming_mycalls, i);
 			}
 			else
 				i++;
@@ -1637,11 +1783,11 @@ void reverse_addr(byte * path, byte * revpath, int Len)
 
 
 
-void decode_frame(string * frame, byte * path, string * data,
+void decode_frame(byte * frame, int len, byte * path, string * data,
 	byte * pid, byte * nr, byte * ns, byte * f_type, byte * f_id,
 	byte *  rpt, byte * pf, byte * cr)
 {
-	int len, i;
+	int i;
 	int addr_end;
 	byte ctrl;
 	byte * savepath = path;
@@ -1659,18 +1805,17 @@ void decode_frame(string * frame, byte * path, string * data,
 	*f_type = 0;
 	*f_id = 0;
 	*rpt = FALSE;
-	len = frame->Length;
 
 	if (len < PKT_ERR)
 		return;
 
-	if ((frame->Data[6] & 128) == 128 && (frame->Data[13] & 128) == 0)
+	if ((frame[6] & 128) == 128 && (frame[13] & 128) == 0)
 		*cr = SET_C;
 
 	while (len > i && i < ADDR_MAX_LEN * 7)
 	{
-		*path++ = frame->Data[i];
-		if ((frame->Data[i] & 1) == 1)
+		*path++ = frame[i];
+		if ((frame[i] & 1) == 1)
 		{
 			addr_end = TRUE;
 			break;
@@ -1690,7 +1835,7 @@ void decode_frame(string * frame, byte * path, string * data,
 
 	i++;			// Points to ctrl byte
 
-	ctrl = frame->Data[i];
+	ctrl = frame[i];
 
 	if ((ctrl & 16) == 16)
 		*pf = SET_P;
@@ -1731,10 +1876,10 @@ void decode_frame(string * frame, byte * path, string * data,
 	if (*f_id == I_I || *f_id == U_UI || *f_id == U_FRMR)
 	{
 		i++;
-		*pid = frame->Data[i];
+		*pid = frame[i];
 		i++;
 		if (len > i)
-			stringAdd(data, &frame->Data[i], len - i - 2);		// Exclude FCS
+			stringAdd(data, &frame[i], len - i - 2);		// Exclude FCS
 	}
 
 }

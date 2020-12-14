@@ -30,6 +30,11 @@ extern "C" void get_exclude_frm(char * line, TStringList * list);
 extern "C" int SoundMode; 
 extern "C" int RX_SR;
 extern "C" int TX_SR;
+extern "C" int multiCore;
+
+extern "C" word MEMRecovery[5];
+
+extern int MintoTray;
 
 QSettings* settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
@@ -74,7 +79,7 @@ void GetPortSettings(int Chan)
 	dyn_frack[Chan] = getAX25Param("DynamicFrack", false).toInt();;
 	recovery[Chan] = getAX25Param("BitRecovery", 0).toInt();
 	NonAX25[Chan] = getAX25Param("NonAX25Frm", false).toInt();;
-//	MEMRecovery[Chan]= getAX25Param("MEMRecovery", 200).toInt();
+	MEMRecovery[Chan]= getAX25Param("MEMRecovery", 200).toInt();
 	IPOLL[Chan] = getAX25Param("IPOLL", 80).toInt();
 
 	strcpy(MyDigiCall[Chan], getAX25Param("MyDigiCall", "").toString().toUtf8());
@@ -108,13 +113,20 @@ void getSettings()
 	pttGPIOPin = settings->value("Init/pttGPIOPin", 17).toInt();
 	pttGPIOPinR = settings->value("Init/pttGPIOPinR", 17).toInt();
 
+#ifdef WIN32
 	strcpy(CM108Addr, settings->value("Init/CM108Addr", "0xD8C:0x08").toString().toUtf8());
+#else
+	strcpy(CM108Addr, settings->value("Init/CM108Addr", "/dev/hidraw0").toString().toUtf8());
+#endif
 
 	HamLibPort = settings->value("Init/HamLibPort", 4532).toInt();
 	strcpy(HamLibHost, settings->value("Init/HamLibHost", "127.0.0.1").toString().toUtf8());
 
 	DualPTT = settings->value("Init/DualPTT", 1).toInt();
 	TX_rotate = settings->value("Init/TXRotate", 0).toInt();
+
+	multiCore = settings->value("Init/multiCore", 0).toInt();
+	MintoTray = settings->value("Init/MinimizetoTray", 1).toInt();
 
 	rx_freq[0] = settings->value("Modem/RXFreq1", 1700).toInt();
 	rx_freq[1] = settings->value("Modem/RXFreq2", 1700).toInt();
@@ -202,39 +214,34 @@ void getSettings()
 	{
 		tx_hitoneraise[snd_ch] = powf(10.0f, -abs(tx_hitoneraisedb[snd_ch]) / 20.0f);
 
-
-
 		if (IPOLL[snd_ch] < 0)
 			IPOLL[snd_ch] = 0;
 		else if (IPOLL[snd_ch] > 65535)
 			IPOLL[snd_ch] = 65535;
 
-		//	if MEMRecovery[snd_ch] < 1 then MEMRecovery[snd_ch]= 1;
-		//	if MEMRecovery[snd_ch] > 65535 then MEMRecovery[snd_ch]= 65535;
+		if (MEMRecovery[snd_ch] < 1)
+			MEMRecovery[snd_ch] = 1;
 
-		/*
-		if resptime[snd_ch] < 0 then resptime[snd_ch]= 0;
-			if resptime[snd_ch] > 65535 then resptime[snd_ch]= 65535;
-			if persist[snd_ch] > 255 then persist[snd_ch]= 255;
-			if persist[snd_ch] < 32 then persist[snd_ch]= 32;
-			if fracks[snd_ch] < 1 then fracks[snd_ch]= 1;
-			if frack_time[snd_ch] < 1 then frack_time[snd_ch]= 1;
-			if idletime[snd_ch] < frack_time[snd_ch] then idletime[snd_ch]= 180;
-		*/
+		//			if (MEMRecovery[snd_ch]> 65535)
+		//				MEMRecovery[snd_ch]= 65535;
+
+				/*
+				if resptime[snd_ch] < 0 then resptime[snd_ch]= 0;
+					if resptime[snd_ch] > 65535 then resptime[snd_ch]= 65535;
+					if persist[snd_ch] > 255 then persist[snd_ch]= 255;
+					if persist[snd_ch] < 32 then persist[snd_ch]= 32;
+					if fracks[snd_ch] < 1 then fracks[snd_ch]= 1;
+					if frack_time[snd_ch] < 1 then frack_time[snd_ch]= 1;
+					if idletime[snd_ch] < frack_time[snd_ch] then idletime[snd_ch]= 180;
+				*/
 
 		if (emph_db[snd_ch] < 0 || emph_db[snd_ch] > nr_emph)
 			emph_db[snd_ch] = 0;
-		/*
-		if not (Recovery[snd_ch] in[0..1]) then Recovery[snd_ch]= 0;
-			if not (TXFrmMode[snd_ch] in[0..1]) then TXFrmMode[snd_ch]= 0;
-			if not (max_frame_collector[snd_ch] in[0..6]) then max_frame_collector[snd_ch]= 6;
-			if not (maxframe[snd_ch] in[1..7]) then maxframe[snd_ch]= 3;
 
-			if not (qpsk_set[snd_ch].mode in[0..1]) then qpsk_set[snd_ch].mode= 0;
-			init_speed(snd_ch);
-			end;
-			TrackBar1.Position= DCD_threshold;
-			*/
+		if (max_frame_collector[snd_ch] > 6) max_frame_collector[snd_ch] = 6;
+		if (maxframe[snd_ch] == 0 || maxframe[snd_ch] > 7) maxframe[snd_ch] = 3;
+		if (qpsk_set[snd_ch].mode > 1)  qpsk_set[snd_ch].mode = 0;
+
 	}
 
 	delete(settings);
@@ -276,7 +283,7 @@ void SavePortSettings(int Chan)
 	saveAX25Param("DynamicFrack", dyn_frack[Chan]);
 	saveAX25Param("BitRecovery", recovery[Chan]);
 	saveAX25Param("NonAX25Frm", NonAX25[Chan]);
-//	getAX25Param("MEMRecovery", MEMRecovery[Chan]);
+	getAX25Param("MEMRecovery", MEMRecovery[Chan]);
 	saveAX25Param("IPOLL", IPOLL[Chan]);
 	saveAX25Param("MyDigiCall", MyDigiCall[Chan]);
 	saveAX25Param("FX25", fx25_mode[Chan]);
@@ -316,6 +323,9 @@ void saveSettings()
 	settings->setValue("Init/CM108Addr", CM108Addr);
 	settings->setValue("Init/HamLibPort", HamLibPort);
 	settings->setValue("Init/HamLibHost", HamLibHost);
+	settings->setValue("Init/MinimizetoTray", MintoTray);
+
+	settings->setValue("Init/multiCore", multiCore);
 
 	// Don't save freq on close as it could be offset by multiple decoders
 

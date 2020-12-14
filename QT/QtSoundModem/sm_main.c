@@ -12,6 +12,7 @@ QtSoundModem is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
+newsamp
 
 You should have received a copy of the GNU General Public License
 along with QtSoundModem.  If not, see http://www.gnu.org/licenses
@@ -21,6 +22,12 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 // UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include "UZ7HOStuff.h"
+
+void make_core_BPF(UCHAR snd_ch, short freq, short width);
+void make_core_TXBPF(UCHAR snd_ch, float freq, float width);
+void make_core_INTR(UCHAR snd_ch);
+void make_core_LPF(UCHAR snd_ch, short width);
+void wf_pointer(int snd_ch);
 
 char modes_name[modes_count][20] = 
 {
@@ -49,8 +56,7 @@ extern byte RCVR[5];
 BOOL Firstwaterfall = 1;
 BOOL Secondwaterfall = 1;
 
-
-
+BOOL multiCore = FALSE;
 
 /*
 type
@@ -326,7 +332,7 @@ int DualPTT = TRUE;
 UCHAR  DebugMode = 0;
 UCHAR TimerEvent = TIMER_EVENT_OFF;
 int nr_monitor_lines = 50;
-  UTC_Time = FALSE;
+int UTC_Time = FALSE;
 int MainPriority = 0;
 //  MainThreadHandle THandle;
 UCHAR w_state = WIN_MAXIMIZED;
@@ -705,8 +711,6 @@ void init_speed(int snd_ch);
 
 void set_speed(int snd_ch, int Modem)
 {
-	int i, j, low, high;
-
 	speed[snd_ch] = Modem;
 
 	init_speed(snd_ch);
@@ -715,10 +719,10 @@ void set_speed(int snd_ch, int Modem)
 
 void init_speed(int snd_ch)
 {
-	int i,j,low,high;
+	int low, high;
 
 	/*
-	
+
   if (BPF[snd_ch]>round(rx_samplerate/2) then BPF[snd_ch] = round(rx_samplerate/2);
   if TXBPF[snd_ch]>round(rx_samplerate/2) then TXBPF[snd_ch] = round(rx_samplerate/2);
   if LPF[snd_ch]>round(rx_samplerate/2) then LPF[snd_ch] = round(rx_samplerate/2);
@@ -806,8 +810,8 @@ void init_speed(int snd_ch)
 		break;
 	}
 
-//QPSK_SM: begin move(#0#1#2#3, tx[0], 4); move(#0#32#64#96, rx[0], 4); end;
-//QPSK_V26: begin move(#2#3#1#0, tx[0], 4); move(#96#64#0#32, rx[0], 4); end;
+	//QPSK_SM: begin move(#0#1#2#3, tx[0], 4); move(#0#32#64#96, rx[0], 4); end;
+	//QPSK_V26: begin move(#2#3#1#0, tx[0], 4); move(#96#64#0#32, rx[0], 4); end;
 
 
 	if (modem_mode[snd_ch] == MODE_QPSK || modem_mode[snd_ch] == MODE_PI4QPSK)
@@ -816,55 +820,53 @@ void init_speed(int snd_ch)
 		{
 		case QPSK_SM:
 
-			move("\0\1\2\3", &qpsk_set[snd_ch].tx[0], 4); 	
-			move("\x0\x20\x40\x60", &qpsk_set[snd_ch].rx[0], 4);
+			memcpy(&qpsk_set[snd_ch].tx[0], "\0\1\2\3", 4);
+			memcpy(&qpsk_set[snd_ch].rx[0], "\x0\x20\x40\x60", 4);
 			break;
 
 		case QPSK_V26:
 
-			move("\2\3\1\0", &qpsk_set[snd_ch].tx[0], 4); 	
-			move("\x60\x40\0\x20", &qpsk_set[snd_ch].rx[0], 4);
+			memcpy(&qpsk_set[snd_ch].tx[0], "\2\3\1\0", 4);
+			memcpy(&qpsk_set[snd_ch].rx[0], "\x60\x40\0\x20", 4);
 			break;
 		}
 	}
 
 	tx_shift[snd_ch] = rx_shift[snd_ch];
 	tx_baudrate[snd_ch] = rx_baudrate[snd_ch];
-	low = roundf(rx_shift[snd_ch]/2 + RCVR[snd_ch]*rcvr_offset[snd_ch]+1);
-	high = roundf(RX_Samplerate/2-(rx_shift[snd_ch]/2 + RCVR[snd_ch] * rcvr_offset[snd_ch]));
+	low = roundf(rx_shift[snd_ch] / 2 + RCVR[snd_ch] * rcvr_offset[snd_ch] + 1);
+	high = roundf(RX_Samplerate / 2 - (rx_shift[snd_ch] / 2 + RCVR[snd_ch] * rcvr_offset[snd_ch]));
 
-	if (rx_freq[snd_ch]-low < 0)  rx_freq[snd_ch] = low;
-	if (high-rx_freq[snd_ch] < 0) rx_freq[snd_ch] = high;
+	if (rx_freq[snd_ch] - low < 0)  rx_freq[snd_ch] = low;
+	if (high - rx_freq[snd_ch] < 0) rx_freq[snd_ch] = high;
 
 	tx_freq[snd_ch] = rx_freq[snd_ch];
 
+	make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
+	make_core_TXBPF(snd_ch, tx_freq[snd_ch], txbpf[snd_ch]);
+	make_core_INTR(snd_ch);
+	make_core_LPF(snd_ch, lpf[snd_ch]);
+
+	/*
+	  for i = 0 to 16 do
+		for j = 0 to nr_emph do with DET[j,i] do
+		begin
+		  minamp[snd_ch] = 0;
+		  maxamp[snd_ch] = 0;
+		  ones[snd_ch] = 0;
+		  zeros[snd_ch] = 0;
+		  sample_cnt[snd_ch] = 0;
+		  bit_cnt[snd_ch] = 0;
+		  bit_osc[snd_ch] = 0;
+		  frame_status[snd_ch] = FRAME_WAIT;
+		end;
+	  form1.show_modes;
+	  form1.show_freq_a;
+	  form1.show_freq_b;
+	  */
+	wf_pointer(soundChannel[snd_ch]);
 
 
-  make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
-  make_core_TXBPF(snd_ch, tx_freq[snd_ch], txbpf[snd_ch]);
-  make_core_INTR(snd_ch);
-  make_core_LPF(snd_ch, lpf[snd_ch]);
-
-/*
-  for i = 0 to 16 do
-    for j = 0 to nr_emph do with DET[j,i] do
-    begin
-      minamp[snd_ch] = 0;
-      maxamp[snd_ch] = 0;
-      ones[snd_ch] = 0;
-      zeros[snd_ch] = 0;
-      sample_cnt[snd_ch] = 0;
-      bit_cnt[snd_ch] = 0;
-      bit_osc[snd_ch] = 0;
-      frame_status[snd_ch] = FRAME_WAIT;
-    end;
-  form1.show_modes;
-  form1.show_freq_a;
-  form1.show_freq_b;
-  */
-  wf_pointer(soundChannel[snd_ch]);
-
-  
 }
 
 /*
@@ -1636,6 +1638,99 @@ void  chk_snd_buf(float * buf, int len)
 			buf[i] = rand();
 }
 
+#ifdef WIN32
+
+typedef void *HANDLE;
+typedef unsigned long DWORD;
+
+#define WINAPI __stdcall
+__declspec(dllimport)
+DWORD
+WINAPI
+WaitForSingleObject(
+	__in HANDLE hHandle,
+	__in DWORD dwMilliseconds
+);
+
+
+
+
+#define pthread_t uintptr_t
+
+uintptr_t _beginthread(void(__cdecl *start_address)(void *), unsigned stack_size, void *arglist);
+#else
+
+#include <pthread.h>
+
+pthread_t _beginthread(void(*start_address)(void *), unsigned stack_size, void * arglist)
+{
+	pthread_t thread;
+
+	if (pthread_create(&thread, NULL, (void * (*)(void *))start_address, (void*)arglist) != 0)
+		perror("New Thread");
+
+	return thread;
+}
+
+#endif
+
+void runModemthread(void * param);
+
+void runModems()
+{
+	int snd_ch, res;
+	pthread_t thread[4] = { 0,0,0,0 };
+
+	for (snd_ch = 0; snd_ch < 2; snd_ch++)
+	{
+		if (modem_mode[snd_ch] == MODE_ARDOP)
+			continue;			// Processed above
+
+	// do we need to do this again ??
+//			make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
+
+		if (multiCore)			// Run modems in separate threads
+			thread[snd_ch] = _beginthread(runModemthread, 0, (void *)(size_t)snd_ch);
+		else
+			runModemthread((void *)(size_t)snd_ch);
+
+	}
+
+	if (multiCore)
+	{
+#ifdef WIN32
+		WaitForSingleObject(&thread[0], 2000);
+		WaitForSingleObject(&thread[1], 2000);
+#else
+		pthread_join(thread[0], &res);
+		pthread_join(thread[1], &res);
+#endif
+	}
+}
+
+byte rcvr_idx;
+
+void runModemthread(void * param)
+{
+	int snd_ch = (int)(size_t)param;
+
+
+	// I want to run lowest to highest to simplify my display 
+
+	int offset = -(RCVR[snd_ch] * rcvr_offset[snd_ch]); // lowest
+	int lastrx = RCVR[snd_ch] * 2;
+
+	if (snd_ch == 1 && DualChan == 0)
+		return;							// No second modem
+
+	for (rcvr_idx = 0; rcvr_idx <= lastrx; rcvr_idx++)
+	{
+		active_rx_freq[snd_ch] = rx_freq[snd_ch] + offset;
+		offset += rcvr_offset[snd_ch];
+
+		Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx, offset == 0);
+	}
+}
 
 // I think this processes a buffer of samples
 
@@ -1644,7 +1739,6 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 	word i, i1;
 	byte snd_ch, rcvr_idx;
 	boolean add_fft_line;
-	float old_rx_freq;
 	int buf_offset;
 
 	// Do FFT on every 4th buffer (2048 samples)
@@ -1693,7 +1787,6 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 				ARDOPProcessNewSamples(ardopbuff, nSamples);
 			}
 		}
-
 
 		// extract mono samples from data. 
 
@@ -1768,7 +1861,8 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 			}
 
 			if (add_fft_line)
-				doWaterfall(0);
+				if (Firstwaterfall)
+					doWaterfall(0);
 		}
 
 		if (UsingBothChannels && Secondwaterfall)
@@ -1776,7 +1870,6 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 			// Second is always Right
 
 			data1 = &Samples[1];			// to Right Samples
-
 
 			buf_offset = fft_size - rx_bufsize;
 			move((UCHAR *)&fft_buf[1][rx_bufsize], (UCHAR *)&fft_buf[1][0], buf_offset * 2);
@@ -1788,56 +1881,15 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 			}
 
 			if (add_fft_line)
-				doWaterfall(1);
+				if (Secondwaterfall)
+					doWaterfall(1);
 		}
 
 		// Now run modems
 
-		for (snd_ch = 0; snd_ch < 2; snd_ch++)
-		{
+		runModems();
 
-			if (modem_mode[snd_ch] == MODE_ARDOP)
-				continue;			// Processed above
-									
-		// do we need to do this again ??
-//			make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
-
-			// I want to run lowest to highest to simplify my display 
-
-			int offset = -(RCVR[snd_ch] * rcvr_offset[snd_ch]); // lowest
-			int lastrx = RCVR[snd_ch] * 2;
-
-			if (snd_ch == 1 && DualChan == 0)
-				break;							// No second modem
-
-			old_rx_freq = rx_freq[snd_ch];
-
-			for (rcvr_idx = 0; rcvr_idx <= lastrx; rcvr_idx++)
-			{
-				rx_freq[snd_ch] = old_rx_freq + offset;
-				offset += rcvr_offset[snd_ch];
-
-				Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx, offset == 0);
-			}
-			rx_freq[snd_ch] = old_rx_freq;
-		}
 	}
-
-	/*
-	
-
-
-
-
-	tx_buf_num[snd_ch]++;
-	
-	if (tx_buf_num[snd_ch] > tx_bufcount)
-		tx_buf_num[snd_ch] = 1;
-
-	if (buf_status[snd_ch] == BUF_EMPTY && tx_buf_num[snd_ch] == tx_buf_num1[snd_ch])
-		TX2RX(snd_ch);
-*/
-
 
 	if (TimerEvent == TIMER_EVENT_ON)
 	{
@@ -1953,7 +2005,7 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 	if (tx_stat)
 		TR = 'T';
 
-	decode_frame(frame, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+	decode_frame(frame->Data, frame->Length, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 	datap = data->Data;
 

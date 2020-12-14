@@ -7,19 +7,18 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 
+#define UNUSED(x) (void)(x)
+
 extern char CaptureNames[16][256];
 extern char PlaybackNames[16][256];
 
 extern int PlaybackCount;
 extern int CaptureCount;
 
-
 #include <dlfcn.h>
 
 void *handle = NULL;
 void *shandle = NULL;
-
-
 
 pa_mainloop * (*ppa_mainloop_new)(void);
 pa_mainloop_api * (*ppa_mainloop_get_api)(pa_mainloop * m);
@@ -156,7 +155,10 @@ void pa_state_cb(pa_context *c, void *userdata) {
 // pa_mainloop will call this function when it's ready to tell us about a sink.
 // Since we're not threading, there's no need for mutexes on the devicelist
 // structure
-void pa_sinklist_cb(pa_context *c, const pa_sink_info *l, int eol, void *userdata) {
+void pa_sinklist_cb(pa_context *c, const pa_sink_info *l, int eol, void *userdata)
+{
+	UNUSED(c);
+
 	pa_devicelist_t *pa_devicelist = userdata;
 	int ctr = 0;
 
@@ -182,7 +184,10 @@ void pa_sinklist_cb(pa_context *c, const pa_sink_info *l, int eol, void *userdat
 }
 
 // See above.  This callback is pretty much identical to the previous
-void pa_sourcelist_cb(pa_context *c, const pa_source_info *l, int eol, void *userdata) {
+void pa_sourcelist_cb(pa_context *c, const pa_source_info *l, int eol, void *userdata) 
+{
+	UNUSED(c);
+
 	pa_devicelist_t *pa_devicelist = userdata;
 	int ctr = 0;
 

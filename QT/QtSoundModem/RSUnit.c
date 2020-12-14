@@ -108,7 +108,7 @@ byte CodeWord[256];
 short Original_Recd[256];
 
 short bb[np];
-short data[kk];
+short data[256]; // 
 short recd[nn];
 
 short alpha_to[nn + 1];
@@ -306,7 +306,7 @@ void gen_poly()
 *                                                                      *
 ***********************************************************************/
 
-RsCreate()
+void RsCreate()
 {
 	InitBuffers();
 
@@ -438,26 +438,28 @@ Function TReedSolomon.DecodeRS(Var xData    ;
 
 int DecodeRS(byte * xData, byte * xDecoded)
 {
-	string	cStr;
-	int 	nI, nJ, nK;
+	UNUSED(xDecoded);
+
+//	string	cStr;
+	int 	nI; // , nJ, nK;
 
 	int 	i, j;
-	short 	u, q;
+//	short 	u, q;
 
-	short elp[np + 2][np];
-	short d[np + 2];
-	short l[np + 2];
-	short u_lu[np + 2];
+//	short elp[np + 2][np];
+//	short d[np + 2];
+//	short l[np + 2];
+//	short u_lu[np + 2];
 	short s[np + 1];
 
-	short	count;
+//	short	count;
 	short	syn_error;
 
-	short root[MaxErrors];
-	short loc[MaxErrors];
-	short z[MaxErrors];
-	short err[nn];
-	short reg[MaxErrors + 1];
+//	short root[MaxErrors];
+//	short loc[MaxErrors];
+//	short z[MaxErrors];
+//	short err[nn];
+//	short reg[MaxErrors + 1];
 
 	for (nI = 0; nI < nn; nI++)
 		recd[nI] = xData[nI];
@@ -465,7 +467,7 @@ int DecodeRS(byte * xData, byte * xDecoded)
 	for (i = 0; i < nn; i++)
 		recd[i] = index_of[recd[i]];  // { put recd[i] into index form }
 
-	count = 0;
+//	count = 0;
 	syn_error = 0;
 
 	//	{ first form the syndromes }
@@ -726,6 +728,7 @@ int DecodeRS(byte * xData, byte * xDecoded)
 
 		return syn_error;
 	}
+	return 0;
 }
 
 

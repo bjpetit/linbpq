@@ -60,7 +60,6 @@ For Comparison 16QAM.2500.100
 
 #ifdef WIN32
 #define _CRT_SECURE_NO_DEPRECATE
-#define _USE_32BIT_TIME_T
 
 #include <windows.h>
 #else

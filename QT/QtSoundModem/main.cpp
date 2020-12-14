@@ -65,11 +65,11 @@ int main(int argc, char *argv[])
 	if (nonGUIMode == 0)
 	{
 		w = new QtSoundModem();
-
-		QObject::connect(w, SIGNAL(HLSetPTT(int)), w, SLOT(doHLSetPTT(int)), Qt::QueuedConnection);
-
 		w->show();
 	}
+
+	QObject::connect(&m1, SIGNAL(HLSetPTT(int)), &m1, SLOT(doHLSetPTT(int)), Qt::QueuedConnection);
+
 
 	t->start();				// This runs init
 
@@ -78,3 +78,5 @@ int main(int argc, char *argv[])
 	return a->exec();
 
 }
+
+

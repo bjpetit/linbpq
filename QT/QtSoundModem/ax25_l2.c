@@ -157,7 +157,9 @@ void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 	while (i < buf->Count && !PollREJ)
 	{
 		frame = Strings(buf, i);
-		decode_frame(frame, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+		// TX frame has kiss control on front
+
+		decode_frame(frame->Data + 1, frame->Length - 1, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 		if (cr == SET_R && pf == SET_P)
 		{
@@ -177,7 +179,7 @@ void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 	{
 		optimize = TRUE;
 		frame = Strings(buf, i);
-		decode_frame(frame, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+		decode_frame(frame->Data + 1, frame->Length - 1, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 		if (f_id == S_REJ && cr == SET_R)
 		{
@@ -214,7 +216,7 @@ void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 
 		frame = Strings(buf, i);
 
-		decode_frame(frame, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+		decode_frame(frame->Data +1 , frame->Length - 1, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 		if (f_id == S_RR)
 		{
@@ -236,6 +238,7 @@ void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 			{
 				if (AX25Sess->status == STAT_LINK || AX25Sess->status == STAT_WAIT_ANS)
 				{
+					Debugprintf("Optimizer dropping RR nr %d vr %d pf %d PollRR %d", nr, AX25Sess->vr, pf, PollRR);
 					Delete(buf, i);
 					optimize = FALSE;
 				}
@@ -347,11 +350,10 @@ void delete_I_FRM_port(TAX25Port * AX25Sess)
 
 	while (i < AX25Sess->frame_buf.Count)
 	{
-
 		optimize = TRUE;
 		frame = Strings(&AX25Sess->frame_buf, i);
 
-		decode_frame(frame, &path, &data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+		decode_frame(frame->Data, frame->Length, &path, &data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 		if (f_id == I_I)
 		{
@@ -713,7 +715,7 @@ void on_RR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 
 		need_frame[index++] = i + '0';
 
-		Debugprintf("RR Rxed vs = %d hi_vs = %d", AX25Sess->vs, AX25Sess->hi_vs);
+//		Debugprintf("RR Rxed vs = %d hi_vs = %d", AX25Sess->vs, AX25Sess->hi_vs);
 		while (i != AX25Sess->hi_vs)
 		{
 			i = (i++) & 7;
@@ -857,7 +859,7 @@ void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * d
 
 		need_frame[index++] = i + '0';
 
-		Debugprintf("I Rxed vs = %d hi_vs = %d", AX25Sess->vs, AX25Sess->hi_vs);
+//		Debugprintf("I Rxed vs = %d hi_vs = %d", AX25Sess->vs, AX25Sess->hi_vs);
 	
 		while (i != AX25Sess->hi_vs)
 		{
@@ -955,7 +957,9 @@ void  on_SABM(void * socket, TAX25Port * AX25Sess)
 
 	if (AX25Sess->status != STAT_NO_LINK)
 	{
-		if (AX25Sess->info.stat_s_byte > 0 || AX25Sess->info.stat_r_byte > 0 || AX25Sess->frm_collector.Count > 0)
+		if ((strcmp(AX25Sess->kind, "Outgoing") == 0) ||
+			AX25Sess->status == STAT_TRY_UNLINK || AX25Sess->info.stat_s_byte > 0 || 
+			AX25Sess->info.stat_r_byte > 0 || AX25Sess->frm_collector.Count > 0)
 		{
 			AX25Sess->info.stat_end_ses = time(NULL);
 			AGW_AX25_disc(AX25Sess, MODE_OTHER);
@@ -1371,7 +1375,7 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 	if (len < PKT_ERR)
 		return;
 
-	decode_frame(frame, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+	decode_frame(frame->Data, frame->Length, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 	//  if is_excluded_call(snd_ch,path) then excluded:=TRUE;
 	 // if is_excluded_frm(snd_ch,f_id,data) then excluded:=TRUE;
@@ -1392,10 +1396,13 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 
 	if (!is_correct_path(path, pid))
 	{
-		if (NonAX25[snd_ch])
-			put_frame(snd_ch, frame, "NON-AX25", FALSE, excluded);
+		// Duff path - if Non-AX25 filter active log and discard
 
-		return;
+		if (NonAX25[snd_ch])
+		{
+			put_frame(snd_ch, frame, "NON-AX25", FALSE, excluded);
+			return;
+		}
 	}
 
 	put_frame(snd_ch, frame, code, 0, excluded);				// Monitor

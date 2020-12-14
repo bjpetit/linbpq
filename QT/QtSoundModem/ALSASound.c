@@ -71,6 +71,19 @@ VOID COMClearDTR(HANDLE fd);
 VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
 
+int oss_read(short * samples, int nSamples);
+int oss_write(short * ptr, int len);
+int oss_flush();
+int oss_audio_open(char * adevice_in, char * adevice_out);
+void oss_audio_close();
+
+int listpulse();
+int pulse_read(short * ptr, int len);
+int pulse_write(short * ptr, int len);
+int pulse_flush();
+int pulse_audio_open(char * adevice_in, char * adevice_out);
+void pulse_audio_close();
+
 
 int initdisplay();
 

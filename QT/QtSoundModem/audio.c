@@ -39,6 +39,8 @@
 #include <sys/soundcard.h>
 #endif
 
+void Debugprintf(const char * format, ...);
+
 extern int Closing;
 
 int oss_fd = -1;	/* Single device, both directions. */
@@ -109,7 +111,6 @@ static int set_oss_params(int fd)
 	int devcaps;
 	int asked_for;
 	int ossbuf_size_in_bytes;
-	int policy = 7;
 	int frag = (5 << 16) | (11);
 
 	err = ioctl(fd, SNDCTL_DSP_SETFRAGMENT, &frag);
@@ -235,7 +236,6 @@ static int set_oss_params(int fd)
 int oss_read(short * samples, int nSamples)
 {
 	int n;
-	int retries = 0;
 	int nBytes = nSamples * 4;
 
 	if (oss_fd < 0)
@@ -311,7 +311,7 @@ void oss_flush()
 	{
 		Sleep(10);
 		ioctl(oss_fd, SNDCTL_DSP_GETODELAY, &delay);
-		Debugprintf("Flush Delay %d", delay);
+//		Debugprintf("Flush Delay %d", delay);
 	}
 }
 

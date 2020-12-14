@@ -19,6 +19,10 @@
   <property name="windowTitle">
    <string>QtSoundModem</string>
   </property>
+  <property name="windowIcon">
+   <iconset resource="QtSoundModem.qrc">
+    <normaloff>:/QtSoundModem/soundmodem.ico</normaloff>:/QtSoundModem/soundmodem.ico</iconset>
+  </property>
   <widget class="QWidget" name="centralWidget">
    <widget class="QSpinBox" name="centerA">
     <property name="geometry">

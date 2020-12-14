@@ -23,9 +23,10 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include "UZ7HOStuff.h"
 
 extern int blnBusyStatus;
+extern word MEMRecovery[5];
 
 void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data);
-
+string * memory_ARQ(TStringList * buf, string * data);
 /*
 
 unit ax25_demod;
@@ -118,7 +119,14 @@ unsigned short LPF_tap[5] = { 128, 128,128,128,128 };   // 128
 short rx_freq[5] = { 1700, 1700,1700,1700,1700 };
 short rx_shift[5] = { 200, 200, 200, 200, 200 };  
 short rx_baudrate[5] = { 300, 300, 300, 300, 300 };
-short rcvr_offset[5] = { 30, 30, 30, 30,30 };  
+short rcvr_offset[5] = { 30, 30, 30, 30,30 }; 
+
+// rx_freq is configured freq. We shouldn't change it so need a sparate variable
+// for the actualdemod freq when using multiple decoders
+
+short active_rx_freq[5] = { 1700, 1700,1700,1700,1700 };
+
+
 
 int fx25_mode[4] = { 0, 0, 0, 0 };
 
@@ -583,56 +591,61 @@ string * get_pkt_data(string * stream)
 	return s;
 }
 
-/*
-
-function get_pkt_data2(var stream: string; last_nrzi_bit: byte): string;
-var
-  bitstuff_cnt: byte;
-  bits_cnt: byte;
-  i: word;
-  s: string;
-  bit: byte;
-  raw_bit: byte;
-  sym: byte;
-  n: byte;
+string * get_pkt_data2(string * stream, byte last_nrzi_bit)
 {
-  // limit of AX.25 packet
-  setlength(s,330);
-  n = 0;
-  bits_cnt = 0;
-  bitstuff_cnt = 0;
-  sym = 0;
-  if length(stream)>0 then
-    for i = 1 to length(stream) do
-    {
-      if stream[i]='1' then raw_bit = RX_BIT1 else raw_bit = RX_BIT0;
-      if raw_bit=last_nrzi_bit then bit = RX_BIT1 else bit = RX_BIT0;
-      last_nrzi_bit = raw_bit;
-      if bitstuff_cnt<5 then
-      {
-        sym = (sym shr 1) or bit;
-        inc(bits_cnt);
-      }
-      if (bitstuff_cnt=5) or (bit=RX_BIT0) then bitstuff_cnt = 0;
-      if bit=RX_BIT1 then inc(bitstuff_cnt);
-      if bits_cnt=8 then
-      {
-        if n<330 then
-        {
-          inc(n);
-          s[n] = chr(sym);
-        }
-        sym = 0;
-        bits_cnt = 0;
-      }
-    }
-  if n>0 then setlength(s,n) else s = '';
-  if bits_cnt>0 then s = '';
-  result = s;
-}
-*/
+	byte  bitstuff_cnt;
+	byte  bits_cnt;
+	word  i;
+	string * s = newString();
 
-string * get_NRZI_data(string * stream, UCHAR * last_nrzi_bit)
+	byte pkt[350];
+
+	byte bit;
+	byte raw_bit;
+	byte sym;
+	int  n = 0;
+
+	bits_cnt = 0;
+	bitstuff_cnt = 0;
+	sym = 0;
+
+	if (stream->Length > 0)
+	{
+		for (i = 0; i < stream->Length; i++)
+		{
+			if (stream->Data[i] == '1') raw_bit = RX_BIT1; else raw_bit = RX_BIT0;
+			if (raw_bit == last_nrzi_bit) bit = RX_BIT1; else bit = RX_BIT0;
+
+			last_nrzi_bit = raw_bit;
+
+			if (bitstuff_cnt < 5)
+			{
+				sym = (sym >> 1) | bit;
+				bits_cnt++;
+			}
+
+			if (bitstuff_cnt == 5 || bit == RX_BIT0)
+				bitstuff_cnt = 0;
+
+			if (bit == RX_BIT1)
+				bitstuff_cnt++;
+
+			if (bits_cnt == 8)
+			{
+				if (n < 330) 
+					pkt[n++] = sym;
+			
+				sym = 0;
+				bits_cnt = 0;
+			}
+		}
+	}
+
+	stringAdd(s, pkt, n);
+	return s;
+}
+
+string * get_NRZI_data(string * stream, UCHAR last_nrzi_bit)
 {
 	longword len;
 	word i;
@@ -646,8 +659,8 @@ string * get_NRZI_data(string * stream, UCHAR * last_nrzi_bit)
 
 	if (len > 0)
 	{
-		s = newString(); 
-		
+		s = newString();
+
 		setlength(s, len);
 
 		for (i = 0; i < len; i++)
@@ -657,12 +670,12 @@ string * get_NRZI_data(string * stream, UCHAR * last_nrzi_bit)
 			else
 				raw_bit = RX_BIT0;
 
-			if (raw_bit == *last_nrzi_bit)
+			if (raw_bit == last_nrzi_bit)
 				s->Data[i] = '1';
 			else
 				s->Data[i] = '0';
 
-			*last_nrzi_bit = raw_bit;
+			last_nrzi_bit = raw_bit;
 		}
 	}
 	return s;
@@ -690,42 +703,6 @@ var
   }
   result = s;
 }
-
-function memory_ARQ(buf: TStringList; data: string): string;
-var
-  crc: string;
-  s: string;
-  frame: string;
-  k: word;
-  len: word;
-  i: word;
-  zeros,ones: byte;
-  need_frames: TStringList;
-{
-  s = data;
-  need_frames = TStringList.Create;
-  len = length(data);
-  crc = copy(data,len-17,18);
-  if buf.Count>0 then
-  for i = 0 to buf.Count-1 do
-    if length(buf.Strings[i])=len then
-      if copy(buf.Strings[i],len-17,18)=crc then
-        need_frames.Add(buf.Strings[i]);
-  if need_frames.Count>2 then
-  for i = 1 to len-18 do
-  {
-    zeros = 0;
-    ones = 0;
-    for k = 0 to need_frames.Count-1 do
-    {
-      frame = need_frames.Strings[k];
-      if frame[i]='1' then inc(ones) else inc(zeros);
-    }
-    if ones>zeros then s[i] = '1' else s[i] = '0';
-  }
-  need_frames.Free;
-  result = s;
-}
 */
 
 void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string * raw_data, string * raw_data1)
@@ -737,173 +714,170 @@ void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string
 	word len, crc1, crc2;
 	int arq_mem = 0;
 	string s;
-	word i, k, n;
+	int i, k, n;
+	unsigned char * raw;
+	unsigned char * raw1;
+
+	struct TDetector_t * pDET = &DET[emph][rcvr_nr];
 
 	// Decode RAW-stream
 
 	raw_len = raw_data->Length;
 
-	if (raw_len < 10)
+	if (raw_len < 80)
 		return;
 
-	char lastbit[10] = "";
+	mydelete(raw_data, raw_len - 6, 7);  // Does this remove trailing flag
+	raw_len = raw_data->Length;
 
-//	memcpy(lastbit, &raw_data->Data[raw_data->Length - 7], 7);
-
-//	Debugprintf("Last 7 bits %s", lastbit);
-
-	if (raw_len > 6)
-	{
-		mydelete(raw_data, raw_len - 6, 7);  // Does this remove trailing flag
-		raw_len = raw_data->Length;
-	}
-
-	nrzi_data = get_NRZI_data(raw_data, &last_nrzi_bit);
+	nrzi_data = get_NRZI_data(raw_data, last_nrzi_bit);
 
 	if (nrzi_data == NULL)
 		return;
 
-	data = newString();
+//	data = newString();
 	data = get_pkt_data(nrzi_data);
-
-	free(nrzi_data);
 
 	len = data->Length;
 
 	if (len < pkt_raw_min_len)
 	{
+		freeString(nrzi_data);
 		freeString(data);
 		return;
 	}
-		
 
 	crc1 = get_fcs(data->Data, len - 2);
-
 	crc2 = (data->Data[len - 1] << 8) | data->Data[len - 2];
 
 	// MEM recovery
-/*
 
 	arq_mem = FALSE;
 
-	if (raw_len < 2971)
+	if (raw_len > 2970)
+		freeString(nrzi_data);
+	else
 	{
-	DET[emph,rcvr_nr].mem_ARQ_buf[snd_ch].Add(nrzi_data);
-	if DET[emph,rcvr_nr].mem_ARQ_buf[snd_ch].Count>MEMRecovery[snd_ch] then DET[emph,rcvr_nr].mem_ARQ_buf[snd_ch].Delete(0);
-	if crc1<>crc2 then
-	{
-	  data = get_pkt_data(memory_ARQ(DET[emph,rcvr_nr].mem_ARQ_buf[snd_ch],nrzi_data));
-	  crc1 = get_fcs(data,len-2);
-	  arq_mem = TRUE;
+		Add(&pDET->mem_ARQ_buf[snd_ch], nrzi_data);
+
+		if (pDET->mem_ARQ_buf[snd_ch].Count > MEMRecovery[snd_ch])
+			Delete(&pDET->mem_ARQ_buf[snd_ch], 0);
+
+		if (crc1 != crc2)
+		{
+			freeString(data);
+			data = get_pkt_data(memory_ARQ(&pDET->mem_ARQ_buf[snd_ch], nrzi_data));
+			crc1 = get_fcs(data->Data, len - 2);
+			arq_mem = TRUE;
+		}
 	}
-  }
-*/
-//	if (len > 60)
-//	crc1++;
 
 	if (crc1 == crc2)
 	{
-		struct TDetector_t * pDET = &DET[emph][rcvr_nr];
-		
-		Debugprintf("Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
-	
-		pDET->rx_decoded = '|' ;
-
-		pDET->emph_decoded = 4; //Normal
-
 		if (arq_mem)
 		{
+			Debugprintf("Good CRC after Memory ARQ correction %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
 			stat_r_mem++;
-			if (rcvr_nr == 0)
-				pDET->emph_decoded = 2; //MEM
-		}
 
-		if (detect_list[snd_ch].Count > 0)
-		{
-			//if detect_list[snd_ch].IndexOf(data)<0 then
-
-			if (my_indexof(&detect_list[snd_ch], data) < 0)
-			{
-				string * xx = newString();
-				memset(xx->Data, 0, 16);
-
-				Add(&detect_list_c[snd_ch], xx);
-
-				Add(&detect_list[snd_ch], data);
-
-				if (arq_mem)
-					stringAdd(xx, "MEM", 3);
-				else
-					stringAdd(xx, "", 0);
-			}
-//			else
-//				Debugprintf("Discarding copy rcvr %d", rcvr_nr);
+			pDET->emph_decoded = 2; //MEM
+			pDET->rx_decoded = decodedMEM;
 		}
 		else
 		{
-			string * xx = newString();
-			memset(xx->Data, 0, 16);
+			Debugprintf("Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
 
-			Add(&detect_list_c[snd_ch], xx);
-
-			Add(&detect_list[snd_ch], data);
-
-			if (arq_mem)
-				stringAdd(xx, "MEM", 3);
-			else
-				stringAdd(xx, "", 0);
+			pDET->rx_decoded = decodedNormal;
+			pDET->emph_decoded = 4; //Normal
 		}
+
+
+		if (detect_list[snd_ch].Count > 0 &&
+			my_indexof(&detect_list[snd_ch], data) >= 0)
+		{
+			// Already have a copy of this frame
+
+			freeString(data);
+			Debugprintf("Discarding copy rcvr %d emph %d", rcvr_nr, emph);
+			return;
+		}
+
+		string * xx = newString();
+		memset(xx->Data, 0, 16);
+
+		Add(&detect_list_c[snd_ch], xx);
+		Add(&detect_list[snd_ch], data);
+
+		if (arq_mem)
+			stringAdd(xx, "MEM", 3);
+		else
+			stringAdd(xx, "", 0);
+
+		return;
+
 	}
-	else
+
+	//		Debugprintf("Bad CRC %x %x Len %d rcvr %d", crc1, crc2, len, rcvr_nr);
+
+	// Single bit recovery
+
+	freeString(data);			// finished with original
+
+	if (recovery[snd_ch] == 0 || raw_len > 2970)
+		return;
+
+	raw = raw_data->Data;
+	raw1 = raw_data1->Data;
+
+	for (i = 0; i < raw_len; i++)
 	{
-//		Debugprintf("Bad CRC %x %x Len %d rcvr %d", crc1, crc2, len, rcvr_nr);
-
-	if (len == 17)
-		i = 0;
-
-		// Single bit recovery
-		i = 0;
-		/*
-
-		if (Recovery[snd_ch]=1) and (raw_len<2971) then
-		repeat
-		  inc(i);
-		  if raw_data[i]<>raw_data1[i] then
-		  {
+		if (raw[i] != raw1[i])
+		{
 			//change bit
-			if raw_data[i]='1' then raw_data[i] = '0' else raw_data[i] = '1';
+			raw[i] ^= 1;
+
 			// get new data
-			data = get_pkt_data2(raw_data,last_nrzi_bit);
+
+			data = get_pkt_data2(raw_data, last_nrzi_bit);
+
 			//restore bit
-			if raw_data[i]='1' then raw_data[i] = '0' else raw_data[i] = '1';
-			len = length(data);
-			if not (len<pkt_raw_min_len) then
+
+			raw[i] ^= 1;
+
+			len = data->Length;
+
+			if (len > pkt_raw_min_len)
 			{
-			  crc1 = get_fcs(data,len-2);
-			  crc2 = (ord(data[len]) shl 8) or ord(data[len-1]);
-			  if crc1=crc2 then
-			  {
-				if detect_list[snd_ch].Count>0 then
+				crc1 = get_fcs(data->Data, len - 2);
+				crc2 = (data->Data[len - 1] << 8) | data->Data[len - 2];
+
+				if (crc1 == crc2)
 				{
-				  //if detect_list[snd_ch].IndexOf(data)<0 then
-				  if my_indexof(detect_list[snd_ch],data)<0 then
-				  {
-					detect_list[snd_ch].Add(data);
-					detect_list_c[snd_ch].Add('SINGLE');
-				  }
-				end
-				else
-				{
-				  detect_list[snd_ch].Add(data);
-				  detect_list_c[snd_ch].Add('SINGLE');
+					Debugprintf("Good CRC after single bit correction %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
+
+					if (detect_list[snd_ch].Count > 0 &&
+						my_indexof(&detect_list[snd_ch], data) >=- 0)
+					{
+						// Already have a copy of this frame
+
+						Debugprintf("Discarding copy rcvr %d, emph %d", rcvr_nr, emph);
+						freeString(data);
+						return;
+					}
+					string * xx = newString();
+					memset(xx->Data, 0, 16);
+
+					Add(&detect_list_c[snd_ch], xx);
+					Add(&detect_list[snd_ch], data);
+					stringAdd(xx, "SINGLE", 3);
+
+					pDET->rx_decoded = decodedSingle;
+					pDET->emph_decoded = 1; //SINGLE
+
+					return;
 				}
-				if (rcvr_nr=0) then emph_decoded[emph] = 3; //SINGLE
-			  }
 			}
-		  }
-		until (crc1=crc2) or (i=raw_len);
-	  }
-	  */
+			freeString(data);			// finished with original
+		}
 	}
 }
 
@@ -919,10 +893,7 @@ void make_rx_frame_PSK(int snd_ch, int rcvr_nr, int emph, string * data)
 	len = data->Length;
 
 	if (len < pkt_raw_min_len)
-	{
-// ?		freeString(data);
 		return;
-	}
 
 	crc1 = get_fcs(data->Data, len - 2);
 	crc2 = (data->Data[len - 1] << 8) | data->Data[len - 2];
@@ -933,47 +904,24 @@ void make_rx_frame_PSK(int snd_ch, int rcvr_nr, int emph, string * data)
 
 		Debugprintf("Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
 
-		if (rcvr_nr == 0)
-			pDET->emph_decoded = 4; //Normal
+		pDET->rx_decoded = decodedNormal;
+		pDET->emph_decoded = 4; //Normal
 
-		pDET->rx_decoded = '|';
-
-		if (detect_list[snd_ch].Count > 0)
+		if (detect_list[snd_ch].Count > 0 &&
+			my_indexof(&detect_list[snd_ch], data) >= 0)
 		{
-			if (my_indexof(&detect_list[snd_ch], data) < 0)
-			{
-				string * xx = newString();
-				memset(xx->Data, 0, 16);
+			// Already have a copy of this frame
 
-				Add(&detect_list_c[snd_ch], xx);
-				Add(&detect_list[snd_ch], data);
-			}
-			else
-				Debugprintf("Discarding copy rcvr %d", rcvr_nr);
+			Debugprintf("Discarding copy rcvr %d emph %d", rcvr_nr, emph);
+			return;
 		}
-		else
-		{
-			string * xx = newString();
-			memset(xx->Data, 0, 16);
 
-			Add(&detect_list_c[snd_ch], xx);
+		string * xx = newString();
 
-			xx = duplicateString(data);
-			Add(&detect_list[snd_ch], xx);
-		}
-	}
-	else
-	{
-		data->Data[len] = 0;
-//		Debugprintf("Bad CRC %x %x Len %d", crc1, crc2, len);
-
-//		if (len > 100)
-//			Debugprintf("%s", &data->Data[18]);
-
-		lastcrc = crc2;
-
-
-// ?		freeString(data);
+		memset(xx->Data, 0, 16);
+		Add(&detect_list_c[snd_ch], xx);
+		xx = duplicateString(data);
+		Add(&detect_list[snd_ch], xx);
 	}
 }
 
@@ -1144,7 +1092,7 @@ void  Mux3(int snd_ch, int rcvr_nr, int emph, float * src1, float * core, float 
 	AFC_IZ1 = pDET->AFC_IZ1[snd_ch];
 	//
 	tap4 = tap * 4;
-	x = rx_freq[snd_ch] * pi2 / RX_Samplerate;
+	x = active_rx_freq[snd_ch] * pi2 / RX_Samplerate;
 
 	fmove(&prevI[buf_size], &prevI[0], tap4);
 	fmove(&prevQ[buf_size], &prevQ[0], tap4);
@@ -1332,7 +1280,7 @@ void Mux3_PSK(int snd_ch, int rcvr_nr, int emph, float * src1, float * core, flo
 
 	tap4 = tap * 4;
 
-	x = rx_freq[snd_ch] * pi2 / RX_Samplerate;
+	x = active_rx_freq[snd_ch] * pi2 / RX_Samplerate;
 
 	fmove(&prevI[buf_size], &prevI[0], tap4);
 	fmove(&prevQ[buf_size], &prevQ[0], tap4);
@@ -1510,7 +1458,7 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 	dsize = buf_size / n_INTR[snd_ch];
 	tap = LPF_tap[snd_ch];
 	i_tap = INTR_tap[snd_ch];
-	freq = rx_freq[snd_ch];
+	freq = active_rx_freq[snd_ch];
 
 
 	for (fec_ch = 0; fec_ch <= NR_FEC_CH; fec_ch++)
@@ -2080,48 +2028,59 @@ void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data)
 	word len, crc1, crc2;
 
 	len = data->Length;
+	
 	if (len < pkt_raw_min_len)
+	{
+		free(data);
 		return;
+	}
 
 	crc1 = get_fcs(data->Data, len - 2);
 	crc2 = (data->Data[len - 1] << 8) | data->Data[len - 2];
 
-	if (crc1 == crc2)
+	if (crc1 != crc2)
 	{
-		Debugprintf("FEC Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
+		freeString(data);
+		return;
+	}
+	Debugprintf("FEC Good CRC %x Len %d chan %d rcvr %d emph %d", crc1, len, snd_ch, rcvr_nr, emph);
 
-		pDET->rx_decoded = 'F';
+	pDET->rx_decoded = decodedFEC;
 
-		if (detect_list[snd_ch].Count > 0)
-		{
-			//if detect_list[snd_ch].IndexOf(data)<0 then
+	if (detect_list[snd_ch].Count > 0)
+	{
+		//if detect_list[snd_ch].IndexOf(data)<0 then
 
-			if (my_indexof(&detect_list[snd_ch], data) < 0)
-			{
-				string * xx = newString();
-				memset(xx->Data, 0, 16);
-
-				Add(&detect_list_c[snd_ch], xx);
-				Add(&detect_list[snd_ch], data);
-
-				stringAdd(xx, "", 0);
-			}
-			else
-				Debugprintf("Discarding copy rcvr %d", rcvr_nr);
-		}
-		else
+		if (my_indexof(&detect_list[snd_ch], data) < 0)
 		{
 			string * xx = newString();
 			memset(xx->Data, 0, 16);
 
 			Add(&detect_list_c[snd_ch], xx);
-
 			Add(&detect_list[snd_ch], data);
 
-			if (rcvr_nr == 0)
-				pDET->emph_decoded = 3; //FX.25
+			stringAdd(xx, "", 0);
+		}
+		else
+		{
+			// Should check if previous decode was Single or MEM and if so replace
+
+			Debugprintf("Discarding copy rcvr %d", rcvr_nr);
+			freeString(data);
 		}
 	}
+	else
+	{
+		string * xx = newString();
+		memset(xx->Data, 0, 16);
+
+		Add(&detect_list_c[snd_ch], xx);
+		Add(&detect_list[snd_ch], data);
+
+		if (rcvr_nr == 0)
+			pDET->emph_decoded = 3; //FX.25
+	}
+
 }
 
 	
@@ -2423,8 +2382,8 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 				}
 			}
 
-
 			// FX25 process
+
 			if (rx_fx25_mode)
 			{
 				if (fx25.status == FX25_LOAD)
@@ -2433,6 +2392,7 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 
 					fx25.byte_rx = (fx25.byte_rx >> 1) | bit;
 					fx25.bit_cnt++;
+
 					if (fx25.bit_cnt == 8)
 					{
 						fx25.bit_cnt = 0;
@@ -4032,7 +3992,7 @@ void PSK8_Demodulator(int snd_ch, int rcvr_nr, int emph, boolean last)
 }
 
 
-void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int center)
+void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int xcenter)
 {
 	// called once per decoder (current one in rcvr_nr)
 
@@ -4121,12 +4081,14 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int center)
 	if (last)
 	{
 		boolean fecflag = 0;
+		char indicators[5] = "-$#F+"; // None, Single, MEM, FEC, Normal
 
 		// Work out which decoder and which emph settings worked. 
 
 		if (detect_list[snd_ch].Count > 0)		// no point if nothing decoded
 		{
-			char decoded[32] = "................";
+			char decoded[32] = "";
+			char indicators[5] = "-$#F+"; // None, Single, MEM, FEC, Normal
 			char s_emph[4] = "";
 			int emph[4] = { 0 };
 			char report[32] = "";
@@ -4159,29 +4121,14 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int center)
 
 			decoded[j] = 0;
 
+			for (j--; j >= 0; j--)
+				decoded[j] = indicators[decoded[j]];
+
 			if (emph_all[snd_ch])
 			{
 				for (i = 0; i <= nr_emph; i++)
 				{
-					switch (emph[i])
-					{
-					case 4:
-						s_emph[i] = '+';		//Normal
-						break;
-					case 2:
-						s_emph[i] = '#';		 //MEM
-						break;
-					case 1:
-						s_emph[i] = '$';		 //Single
-						break;
-					case 3:
-						s_emph[i] = 'F';		// FEC
-						fecflag = 1;
-						break;
-
-					default:
-						s_emph[i] = '-';		 //None
-					}
+					s_emph[i] = indicators[emph[i]];
 				}
 				sprintf(report, "%s][%s", s_emph, decoded);
 			}
@@ -4231,4 +4178,52 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int center)
 		chk_dcd1(snd_ch, rx_bufsize);
 	}
 }
+
+string * memory_ARQ(TStringList * buf, string * data)
+{
+	unsigned char crc[32];
+	string * s;
+	string * frame;
+	word k, len, i;
+
+	byte zeros, ones;
+	TStringList need_frames;
+
+	s = data;
+
+	CreateStringList(&need_frames);
+	len = data->Length;
+
+	memcpy(crc, &data->Data[data->Length - 18], 18);
+
+	if (buf->Count > 0)
+	{
+		for (i = 0; i < buf->Count; i++)
+		{
+			if (buf->Items[i]->Length == len)
+				if (memcmp(&buf->Items[i]->Data[len - 18], crc, 18) == 0)
+					Add(&need_frames, buf->Items[i]);
+		}
+	}
+
+	if (need_frames.Count > 2)
+	{
+		for (i = 0; i < len - 18; i++)
+		{
+			zeros = 0;
+			ones = 0;
+
+			for (k = 0; k < need_frames.Count; k++)
+			{
+				frame = need_frames.Items[k];
+				if (frame->Data[i] == '1') ones++;  else zeros++;
+			}
+			if (ones > zeros) s->Data[i] = '1'; else s->Data[i] = '0';
+		}
+	}
+
+//	Clear(&need_frames);
+	return s;
+}
+
 	

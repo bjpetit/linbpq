@@ -2,7 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.30"
+#define VersionString "0.0.0.43"
+#define VersionBytes {0, 0, 0, 43}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -57,7 +58,41 @@
 // 0.29 Fix saving settings and geometry on close
 // 0.30 Retructure code to build with Qt 5.3
 //      Fix crash in nogui mode if pulse requested but not available
+//		Try to fix memory leaks
 
+// 0.31 Add option to run modems in seprate threads
+
+// 0.32	Fix timing problem with AGW connect at startup
+//		Add Memory ARQ
+//		Add Single bit "Correction"
+//		Fix error in 31 when using multiple decoders
+
+// 0.33 Fix Single bit correction
+//		More memory leak fixes
+
+// 0.34 Add API to set Modem and Center Frequency
+//		Fix crash in delete_incoming_mycalls
+
+// 0.35 Return Version in AGW Extended g response
+
+// 0.36 Fix timing problem on startup
+
+// 0.37 Add scrollbars to Device and Modem dialogs
+
+// 0.38 Change default CM108 name to /dev/hidraw0 on Linux
+
+// 0.39	Dont try to display Message Boxes in nogui mode.
+//		Close Device and Modem dialogs on Accept or Reject
+//		Fix using HAMLIB in nogui mode
+
+// 0.40	Fix bug in frame optimize when using 6 char calls
+
+// 0.41	Fix "glitch" on waterfall markers when changing modem freqs 
+
+// 0.42	Add "Minimize to Tray" option
+
+// 0.43 Add Andy's on_SABM fix.
+//		Fix Crash if KISS Data sent to AGW port
 
 #include <string.h>
 #include <stdlib.h>
@@ -122,6 +157,12 @@ typedef unsigned long ULONG;
 #define RIGHT 2
 
 #define nr_emph 2
+
+#define decodedNormal 4 //'|'
+#define decodedFEC    3 //'F'
+#define decodedMEM	  2 //'#'
+#define decodedSingle 1 //'$'
+
 
 // Seems to use Delphi TStringList for a lot of queues. This seems to be a list of pointers and a count
 // Each pointer is to a Data/Length pair
@@ -313,6 +354,7 @@ typedef struct AGWUser_t
 	TStringList AGW_frame_buf;
 	boolean	Monitor;
 	boolean	Monitor_raw;
+	boolean reportFreqAndModem;			// Can report modem and frequency to host
 
 } AGWUser;
 
@@ -655,6 +697,7 @@ extern int soundChannel[5];
 extern int modemtoSoundLR[4];
 
 extern short rx_freq[5];
+extern short active_rx_freq[5];
 extern short rx_shift[5];
 extern short rx_baudrate[5];
 extern short rcvr_offset[5];
@@ -880,7 +923,7 @@ TAX25Port * get_user_port_by_calls(int snd_ch, char *  CallFrom, char *  CallTo)
 TAX25Port * get_free_port(int snd_ch);
 void * in_list_incoming_mycall(byte * path);
 boolean add_incoming_mycalls(void * socket, char * src_call);
-int get_addr(char * Calls, int rpt, int cr, UCHAR * AXCalls);
+int get_addr(char * Calls, UCHAR * AXCalls);
 void reverse_addr(byte * path, byte * revpath, int Len);
 void set_link(TAX25Port * AX25Sess, UCHAR * axpath);
 void rst_timer(TAX25Port * AX25Sess);

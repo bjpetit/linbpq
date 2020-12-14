@@ -135,15 +135,14 @@ void Delete(TStringList * Q, int Index)
 {
 	// Remove item at Index and move rest up list
 	// Index starts at zero
-
-	int i = 0;
 	
 	if (Index >= Q->Count)
 		return;
 
 	// We should free it, so user must duplicate msg if needed after delete
 
-	free(Q->Items[Index]);
+	freeString(Q->Items[Index]);
+//	free(Q->Items[Index]);
 
 	Q->Count--;
 
@@ -303,7 +302,7 @@ boolean compareStrings(string * a, string * b)
 	return FALSE;
 }
 
-// This looks for a string in a stringlist. Returns inhex if found, otherwise -1
+// This looks for a string in a stringlist. Returns index if found, otherwise -1
 
 int  my_indexof(TStringList * l, string * s)
 {

@@ -11,6 +11,7 @@
 #include <QTableWidget>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QSystemTrayIcon>
 
 #include "tcpCode.h"
 
@@ -18,21 +19,23 @@
 class QtSoundModem : public QMainWindow
 {
 	Q_OBJECT
-signals:
-
-	void HLSetPTT(int c);
 
 public:
+
 	QtSoundModem(QWidget *parent = Q_NULLPTR);
+	void changeEvent(QEvent * e);
 	void closeEvent(QCloseEvent * event);
 	~QtSoundModem();
 
 	void RefreshWaterfall(int snd_ch, unsigned char * Data);
+	void initWaterfall(int chan, int state);
 	void show_grid();
 
 private slots:
 
 	void doDevices();
+	void MinimizetoTray();
+	void TrayActivated(QSystemTrayIcon::ActivationReason reason);
 	void MyTimerSlot();
 	void clickedSlotI(int i);
 	void doModems();
@@ -54,11 +57,6 @@ private slots:
 	void preEmphAllBChanged(int);
 	void menuChecked();
 	void onTEselectionChanged();
-	void HAMLIBdisplayError(QAbstractSocket::SocketError socketError);
-	void HAMLIBreadyRead();
-	void onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState);
-	void ConnecttoHAMLIB();
-	void doHLSetPTT(int c);
 	void clickedSlot();
 
 protected:
@@ -76,6 +74,7 @@ private:
 
 	QAction *actDevices;
 	QAction *actModems;
+	QAction *actMintoTray;
 	QAction *actCalib;
 	QAction *actAbout;
 	QAction *actWaterfall1;
@@ -84,3 +83,12 @@ private:
 
 	void RefreshSpectrum(unsigned char * Data);
 };
+
+class myResize : public QObject
+{
+	Q_OBJECT
+
+protected:
+	bool eventFilter(QObject *obj, QEvent *event) override;
+};
+
