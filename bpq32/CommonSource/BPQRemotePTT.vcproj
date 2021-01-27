@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="BPQRemotePTT"
-	ProjectGUID="{005A91EA-3A00-4FB4-ADD9-EB78DBFA2B82}"
+	ProjectGUID="{E9A342AF-65CF-4E38-9079-216264179675}"
 	RootNamespace="BPQRemotePTT"
 	>
 	<Platforms>
@@ -219,10 +219,6 @@
 			</File>
 			<File
 				RelativePath=".\BPQRemotePTT.rc"
-				>
-			</File>
-			<File
-				RelativePath=".\getopt.c"
 				>
 			</File>
 		</Filter>

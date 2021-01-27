@@ -266,36 +266,8 @@
 	</References>
 	<Files>
 		<File
-			RelativePath="S:\DEV\Source\BPQ32\BPQTerminal\BPQTermMDI.c"
+			RelativePath="..\CKernel\BPQTermMDI.c"
 			>
-		</File>
-		<File
-			RelativePath="S:\DEV\Source\BPQ32\BPQTerminal\BPQTermMDI.rc"
-			>
-			<FileConfiguration
-				Name="Debug|Win32"
-				>
-				<Tool
-					Name="VCResourceCompilerTool"
-					PreprocessorDefinitions="BPQTerm"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Release|Win32"
-				>
-				<Tool
-					Name="VCResourceCompilerTool"
-					PreprocessorDefinitions="BPQTerm"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Relase Static|Win32"
-				>
-				<Tool
-					Name="VCResourceCompilerTool"
-					PreprocessorDefinitions="BPQTerm"
-				/>
-			</FileConfiguration>
 		</File>
 	</Files>
 	<Globals>

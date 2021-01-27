@@ -50,7 +50,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="..\CInclude;..\CommonSource;..\CKernel"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL;_USE_32BIT_TIME_T"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -74,7 +74,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib Iphlpapi.lib setupapi.lib"
+				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib Iphlpapi.lib setupapi.lib ..\lib\libconfigd.lib"
 				OutputFile="c:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="2"
 				ModuleDefinitionFile="..\CKernel\bpq32.def"
@@ -83,6 +83,8 @@
 				MapFileName="c:\DevProgs\BPQ32\bpqdev.map"
 				MapExports="true"
 				SubSystem="2"
+				HeapCommitSize="8000000"
+				StackCommitSize="4000000"
 				EnableCOMDATFolding="1"
 				EntryPointSymbol=""
 				BaseAddress="0x42000000"
@@ -155,7 +157,7 @@
 				Optimization="0"
 				WholeProgramOptimization="false"
 				AdditionalIncludeDirectories="..\CInclude;..\CommonSource;..\CKernel"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL;_USE_32BIT_TIME_T"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				AssemblerOutput="2"
@@ -176,7 +178,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib setupapi.lib"
+				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib setupapi.lib ..\lib\libconfig.lib"
 				OutputFile="C:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="1"
 				ModuleDefinitionFile="..\CKernel\bpq32.def"
@@ -228,6 +230,10 @@
 			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
+			<File
+				RelativePath="..\CommonSource\adif.c"
+				>
+			</File>
 			<File
 				RelativePath="..\CommonSource\AEAPactor.c"
 				>
@@ -406,7 +412,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\CKernel\SoundModem.c"
+				RelativePath="..\CommonSource\SerialPort.c"
 				>
 			</File>
 			<File
@@ -452,7 +458,19 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath="..\CommonSource\asmstrucs.h"
+				>
+			</File>
+			<File
 				RelativePath="..\CKernel\bpq32.def"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\CHeaders.h"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\compatbits.h"
 				>
 			</File>
 			<File
@@ -461,6 +479,10 @@
 			</File>
 			<File
 				RelativePath="..\CInclude\Strucs.inc"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\Versions.h"
 				>
 			</File>
 		</Filter>

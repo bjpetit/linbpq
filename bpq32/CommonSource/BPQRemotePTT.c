@@ -17,7 +17,6 @@
 #include <malloc.h>	
 #include <memory.h>
 #include <Psapi.h>
-#include "getopt.h"
 
 #define LIBCONFIG_STATIC
 #include "libconfig.h"

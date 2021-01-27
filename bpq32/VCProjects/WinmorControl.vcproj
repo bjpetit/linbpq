@@ -56,7 +56,7 @@
 				ProgramDataBaseFileName="$(IntDir)\"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
-				DebugInformationFormat="3"
+				DebugInformationFormat="4"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -73,7 +73,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="WS2_32.Lib Psapi.lib"
 				OutputFile="c:\DevProgs\bpq32\WinmorControl.exe"
-				LinkIncremental="1"
+				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug/bpq32.pdb"

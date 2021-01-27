@@ -4,6 +4,7 @@
 	Version="8.00"
 	Name="BPQTermTCP"
 	ProjectGUID="{99625C77-CABA-469A-A5A7-ECB4EE354225}"
+	RootNamespace="BPQTermTCP"
 	Keyword="Win32Proj"
 	>
 	<Platforms>
@@ -17,7 +18,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="Debug"
-			IntermediateDirectory="c:\Dev\Msdev2005\intermed\"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\BPQTermTCP\Debug"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -63,7 +64,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="ws2_32.lib   winmm.lib "
-				OutputFile="c:\DevProgs\bpq32\BPQTermTCP.exe"
+				OutputFile="c:\DevProgs\bpq32\BPQTermTCPYapp.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -97,7 +98,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="Release"
-			IntermediateDirectory="..\..\..\..\..\..\..\Dev\Msdev2005\intermed\BPQTermTCP\Release"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\BPQTermTCP\Release"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -118,6 +119,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
+				Optimization="3"
 				AdditionalIncludeDirectories="..\commonsource"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;"
 				RuntimeLibrary="0"

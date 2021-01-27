@@ -41,7 +41,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="..\CKernel;..\CommonSource;..\CInclude"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;LINBPQ"
+				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;LINBPQ;_USE_32BIT_TIME_T"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfigd.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot; setupapi.lib"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfigd.lib DbgHelp.lib setupapi.lib"
 				OutputFile="c:\LINBPQ\$(ProjectName).exe"
 				LinkIncremental="2"
 				IgnoreDefaultLibraryNames=""
@@ -69,6 +69,8 @@
 				GenerateMapFile="true"
 				MapFileName="c:\linbpq\linmail.map"
 				SubSystem="1"
+				StackReserveSize="4000000"
+				StackCommitSize="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -122,7 +124,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				AdditionalIncludeDirectories="..\CKernel;..\CommonSource;..\CInclude"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;LINBPQ"
+				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;LINBPQ;_USE_32BIT_TIME_T"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -183,6 +185,10 @@
 			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
+			<File
+				RelativePath="..\CommonSource\adif.c"
+				>
+			</File>
 			<File
 				RelativePath="..\CommonSource\AEAPactor.c"
 				>
@@ -430,6 +436,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\SCSTracker.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\SerialPort.c"
 				>
 			</File>
 			<File

@@ -201,7 +201,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CKernel;S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource"
+				AdditionalIncludeDirectories="..\Commonsource"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
