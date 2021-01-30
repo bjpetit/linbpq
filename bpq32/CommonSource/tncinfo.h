@@ -375,6 +375,7 @@ typedef struct TNCINFO
 #define H_VARA 14
 #define H_SERIAL 15
 #define H_KISSHF 16
+#define H_WINRPR 17
 
 
 	int Port;					// BPQ Port Number
@@ -586,6 +587,7 @@ typedef struct TNCINFO
 	BOOL RobustDefault;				// Set if SCS Tracker default is Robust Packet mode
 	BOOL ForceRobust;				// Don't allow Normal Packet even if scan requests it.
 	char NormSpeed[8];				// Speed Param for Normal Packet on Tracker
+	char RobustSpeed[8];			// Speed Param for Robust Packet on Tracker
 	BOOL RPBEACON;					// Send Beacon after each session 
 
 	int TimeInRX;					// Time waiting for ISS before sending

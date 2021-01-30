@@ -65,7 +65,7 @@ extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 extern char * PortConfig[33];
 int SemHeldByAPI;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static void ConnecttoFLDigiThread(void * portptr);
 
@@ -581,7 +581,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				}
 				else
 				{
-					SendXMLCommand(TNC, "modem.set_carrier", atoi(&buff->L2DATA[5]), 'I');
+					SendXMLCommand(TNC, "modem.set_carrier", (char *)atoi(&buff->L2DATA[5]), 'I');
 				}
 
 				TNC->InternalCmd = TRUE;

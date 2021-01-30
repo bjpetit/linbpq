@@ -99,7 +99,7 @@ VOID SaveStringValue(config_setting_t * group, char * name, char * value);
 char *stristr (char *ch1, char *ch2);
 BOOL CheckforMessagetoServer(struct MsgInfo * Msg);
 void DoHousekeepingCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
-BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP);
+BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP, BOOL IncludeKilled);
 void ListCategories(ConnectionInfo * conn);
 void RebuildNNTPList();
 
@@ -3158,7 +3158,7 @@ BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, struct TempUserInf
 	return FALSE;
 }
 
-void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming)
+void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming, char * Context)
 {
 	struct  TempUserInfo * Temp = user->Temp;
 	struct MsgInfo * Msg;
@@ -3194,6 +3194,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		Temp->ListSelector = 0;
 		Temp->UpdateLatest = 0;
 		Temp->LastListParams[0] = 0;
+		Temp->IncludeKilled = 1;			// SYSOP include Killed except LM
 
 		//Analyse L params. 
 
@@ -3207,16 +3208,19 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 		// if command is just L or LR start from last listed
 
-		if (strcmp(Cmd, "L") == 0 || strcmp(Cmd, "LR") == 0)
+		if (Arg1 == NULL)
 		{
-			if (LatestMsg == conn->lastmsg)
+			if (strcmp(Cmd, "L") == 0 || strcmp(Cmd, "LR") == 0)
 			{
-				BBSputs(conn, "No New Messages\r");
-				return;
-			}
+				if (LatestMsg == conn->lastmsg)
+				{
+					BBSputs(conn, "No New Messages\r");
+					return;
+				}
 
-			Temp->UpdateLatest = 1;
-			Temp->ListRangeStart = conn->lastmsg;
+				Temp->UpdateLatest = 1;
+				Temp->ListRangeStart = conn->lastmsg;
+			}
 		}
 
 		if (strchr(Cmd, 'V'))					// Verbose
@@ -3272,7 +3276,10 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		else if (strchr(Cmd, '@'))
 			Temp->ListSelector = '@';
 		else if (strchr(Cmd, 'M'))
+		{
 			Temp->ListSelector = 'M';
+			Temp->IncludeKilled = FALSE;
+		}
 
 		// Param could be single number, number range or call
 		
@@ -3289,28 +3296,52 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			{
 				// Range nnn-nnn or single value or callsign
 
-				char * Arg2, * Arg3;
-				char * Context;
-				char seps[] = " -\t\r";
+				char * Arg2, * Arg3, * Range;
+				char seps[] = " \t\r";
 				UINT From=LatestMsg, To=0;
-				char * Range = strchr(Arg1, '-');
-			
-				Arg2 = strtok_s(Arg1, seps, &Context);
+
+				Arg2 = strtok_s(NULL, seps, &Context);
 				Arg3 = strtok_s(NULL, seps, &Context);
 
-				if (Arg2)
+				if (Temp->ListSelector && Temp->ListSelector != 'M')
 				{
-					if (isdigits(Arg2))
-						To = From = atoi(Arg2);
-					else
-						strcpy(Temp->LastListParams, Arg2);
+					// < > or @ - first param is callsign
 
-					if (Arg3)
-						From = atoi(Arg3);
+					strcpy(Temp->LastListParams, Arg1);
+
+					// Just possible number range
+
+					Arg1 = Arg2;
+					Arg2 = Arg3;
+					Arg3 = strtok_s(NULL, seps, &Context);			
+				}
+
+				if (Arg1)
+				{
+					Range = strchr(Arg1, '-');
+			
+					// A number could be a Numeric Bull Dest (eg 44)
+					// I think this can only resaonably be >
+
+					if (isdigits(Arg1))
+						To = From = atoi(Arg1);
+
+					if (Arg2)
+						From = atoi(Arg2);
 					else
+					{
 						if (Range)
-							From = LatestMsg;
+						{
+							Arg3 = strlop(Arg1, '-');
 
+							To = atoi(Arg1);
+							
+							if (Arg3 && Arg3[0])
+								From = atoi(Arg3);
+							else
+								From = LatestMsg;
+						}
+					}
 					if (From > 100000 || To > 100000)
 					{
 						BBSputs(conn, "Message Number too high\r");
@@ -3333,7 +3364,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			Msg = GetMsgFromNumber(Temp->ListRangeEnd);
 
 
-		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))		// Check if user is allowed to list this message
+		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop, Temp->IncludeKilled))		// Check if user is allowed to list this message
 		{
 			// Check filters
 
@@ -3843,11 +3874,15 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 }
 
 
-BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
+BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP, BOOL IncludeKilled)
 {
 	// Return TRUE if user is allowed to read message
 	
-	if (SYSOP) return TRUE;			// Sysop can list or read anything
+	if (Msg->status == 'K' && IncludeKilled == 0)
+		return FALSE;
+		
+	if (SYSOP)
+		return TRUE;			// Sysop can list or read anything
 
 	if ((Msg->status != 'K') && (Msg->status != 'H'))
 	{
@@ -4064,7 +4099,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 		return;
 	}
 
-	if (!CheckUserMsg(Msg, user->Call, conn->sysop))
+	if (!CheckUserMsg(Msg, user->Call, conn->sysop, TRUE))
 	{
 		nodeprintf(conn, "Message %d not for you\r", msgno);
 		return;
@@ -4196,7 +4231,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 					ptr += FileLen[i];
 					ptr +=2;				// Over separator
 				}
-				return;
+				goto sendEOM;
 			}
 			
 			// Remove B2 Headers (up to the File: Line)
@@ -4218,6 +4253,9 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 		user->Total.BytesForwardedOut[Index] += Length;
 
 		QueueMsg(conn, MsgBytes, Length);
+
+sendEOM:
+
 		free(Save);
 
 		nodeprintf(conn, "\r\r[End of Message #%d from %s%s]\r", msgno, Msg->from, Msg->emailfrom);
@@ -4239,7 +4277,6 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 	{
 		nodeprintf(conn, "File for Message %d not found\r", msgno);
 	}
-
 }
  struct MsgInfo * FindMessage(char * Call, int msgno, BOOL sysop)
  {
@@ -7250,22 +7287,6 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 	CIRCUIT * conn;
 	struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
 
-/*
-if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
-	{
-		// Forward to File
-
-		CIRCUIT conn;
-
-		memset(&conn, 0, sizeof(conn));
-
-		conn.UserPointer = user;
-
-		ForwardMessagestoFile(&conn, &ForwardingInfo->ConnectScript[0][5]);
-
-		return FALSE;
-	}
-*/
 	for (n = NumberofStreams-1; n >= 0 ; n--)
 	{
 		conn = &Connections[n];
@@ -7276,6 +7297,12 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->BPQStream = p;
 
+			// Can't set Active until Connected or Stuck Session detertor can clear session.
+			// But must set Active before Connected() runs or will appear is Incoming Connect.
+			// Connected() is semaphored, so get semaphore before ConnectUsingAppl
+			// Probably better to semaphore lost session code instead
+
+
 			strcpy(conn->Callsign, user->Call); 
 			conn->BBSFlags |= (RunningConnectScript | OUTWARDCONNECT);
 			conn->UserPointer = user;
@@ -7284,8 +7311,10 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 
 			ForwardingInfo->MoreLines = TRUE;
 			
-			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
+			GetSemaphore(&ConSemaphore, 1);
 			conn->Active = TRUE;
+			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
+			FreeSemaphore(&ConSemaphore);
 
 #ifdef LINBPQ
 			{
@@ -8294,6 +8323,7 @@ VOID BBSSlowTimer()
 
 	MCastTimer();
 
+
 	for (n = 0; n < NumberofStreams; n++)
 	{
 		conn = &Connections[n];
@@ -8304,7 +8334,9 @@ VOID BBSSlowTimer()
 
 			int state;
 				
+			GetSemaphore(&ConSemaphore, 1);
 			SessionStateNoAck(conn->BPQStream, &state);
+			FreeSemaphore(&ConSemaphore);
 
 			if (state == 0)		// No Node Session
 			{
@@ -10583,6 +10615,9 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			if (conn->Flags & GETTINGUSER)
 			{
 				conn->Flags &= ~GETTINGUSER;
+				if (len > 18)
+					len = 18;
+
 				memcpy(user->Name, Buffer, len-1);
 				SendWelcomeMsg(conn->BPQStream, conn, user);
 				SaveUserDatabase();
@@ -10775,7 +10810,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (_memicmp(Cmd, "L", 1) == 0 && _memicmp(Cmd, "LISTFILES", 3) != 0)
 	{
-		DoListCommand(conn, user, Cmd, Arg1, FALSE);
+		DoListCommand(conn, user, Cmd, Arg1, FALSE, Context);
 		SendPrompt(conn, user);
 		return;
 	}
@@ -11062,7 +11097,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				Arg1[15] = 0;
 
 			strcpy(user->CMSPass, Arg1);
-			UpdateWPWithUserInfo(user);
 			nodeprintf(conn,"CMS Password Set\r");
 			SaveUserDatabase();
 		}
@@ -11084,7 +11118,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				Arg1[12] = 0;
 
 			strcpy(user->pass, Arg1);
-			UpdateWPWithUserInfo(user);
 			nodeprintf(conn,"BBS Password Set\r");
 			SaveUserDatabase();
 		}
@@ -11171,6 +11204,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
 				BBSputs(conn, "IMPORT - Import messages from file - Type IMPORT for Help\r");
 				BBSputs(conn, "REROUTEMSGS - Rerun message routing process\r");
+				BBSputs(conn, "SETNEXTMESSAGENUMBER - Sets next message number\r");
 				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling list\r");
 				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
 			}
@@ -11713,7 +11747,7 @@ VOID ProcessSuspendedListCommand(CIRCUIT * conn, struct UserInfo * user, char* B
 	{
 		//	Resume Listing from where we left off
 
-		DoListCommand(conn, user, Temp->LastListCommand, Temp->LastListParams, TRUE);
+		DoListCommand(conn, user, Temp->LastListCommand, Temp->LastListParams, TRUE, "");
 		SendPrompt(conn, user);
 		return;
 	}

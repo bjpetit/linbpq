@@ -45,7 +45,7 @@ int TimerHandle = 0;
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
-	char Mess[1000];
+	char Mess[8192];
 	va_list(arglist);int Len;
 
 	va_start(arglist, format);

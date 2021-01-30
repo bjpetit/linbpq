@@ -351,8 +351,8 @@ struct TempUserInfo
 	int ListRangeStart;
 	int ListRangeEnd;
 	int LLCount;					// Number still to send in List Last N
-	int UpdateLatest;		// if set, save last listed as latest
-	
+	int UpdateLatest;				// if set, save last listed as latest
+	BOOL IncludeKilled;				// Show Killed Messages if SYSOP
 
 };
 
@@ -1068,7 +1068,7 @@ VOID SendUnbuffered(int stream, char * msg, int len);
 BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, struct TempUserInfo * Temp);
 void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
-void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming);
+void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming, char * Context);
 void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
 int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);

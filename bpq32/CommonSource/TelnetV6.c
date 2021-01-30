@@ -99,7 +99,7 @@ static RECT Rect;
 
 extern int REALTIMETICKS;
 
-extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 #define MaxSockets 26
 
@@ -707,7 +707,6 @@ BOOL WriteCommBlock(struct TNCINFO * TNC);
 BOOL DestroyTTYInfo(int port);
 void CheckRX(struct TNCINFO * TNC);
 VOID TelnetPoll(int Port);
-VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
 VOID ProcessTermModeResponse(struct TNCINFO * TNC);
 VOID DoTNCReinit(struct TNCINFO * TNC);
 VOID DoTermModeTimeout(struct TNCINFO * TNC);
@@ -4846,7 +4845,11 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 
 			TCP->CMSFailed[sockptr->CMSIndex] = TRUE;
 
-			CMSConnect(TNC, TNC->TCPInfo, &TNC->Streams[Stream], Stream);
+			if (CMSConnect(TNC, TNC->TCPInfo, &TNC->Streams[Stream], Stream))
+				return 0;
+
+			// Connect failure - if no more servers to check look for FALLBACKTORELAY
+
 			return 0;
 		}
 		else
@@ -5140,7 +5143,7 @@ CheckServers:
 #endif
 		return;
 	}
-
+	
 	// if we don't know we have Internet connectivity, make sure we can connect to at least one of them
 
 	TCP->CMSOK = INETOK | CMSCheck(TNC, TCP);		// If we know we have Inet, dont check connectivity
@@ -5157,6 +5160,7 @@ CheckServers:
 #define MAX_KEY_LENGTH 255
 #define MAX_VALUE_NAME 255
 #define MAX_VALUE_DATA 255
+
 
 
 VOID GetCMSCachedInfo(struct TNCINFO * TNC)
@@ -5332,6 +5336,15 @@ int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 #endif
 			ReportError(STREAM, "All CMS Servers are inaccessible");
 			closesocket(sock);
+
+			if (TCP->RELAYHOST[0] && TCP->FallbacktoRelay && STREAM->NoCMSFallback == 0)
+			{
+				STREAM->Connecting = TRUE;
+				STREAM->ConnectionInfo->CMSSession = TRUE;
+				STREAM->ConnectionInfo->RelaySession = TRUE;
+				return TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772, TRUE);
+			}
+
 			STREAM->NeedDisc = 10;
 			TNC->Streams[Stream].Connecting = FALSE;
 			sockptr->SocketActive = FALSE;
@@ -5475,9 +5488,11 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 		in = fopen(inname, "r");
 	}
 
+	if (!(in)) return;
+
 	out = fopen(outname, "w");
 
-	if (!(in) || !(out)) return;
+	if (!(out)) return;
 
 	while(fgets(buf, 128, in))
 	{

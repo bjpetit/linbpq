@@ -151,8 +151,11 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
 // Dummy file routines - write to buffer instead
 
 char * PortConfig[36];
-char * RigConfigMsg[36];
+char * RadioConfigMsg[36];
 char * WL2KReportLine[36];
+
+int nextRadioPort = 0;
+int nextDummyInterlock = 233; 
 
 BOOL PortDefined[36];
 
@@ -448,13 +451,16 @@ BOOL ProcessConfig()
 			free(PortConfig[i]);
 			PortConfig[i] = NULL;
 		}
-		if (RigConfigMsg[i])
-		{
-			free(RigConfigMsg[i]);
-			RigConfigMsg[i] = NULL;
-		}
 		PortDefined[i] = FALSE;
+
+		if (RadioConfigMsg[i])
+		{
+			free(RadioConfigMsg[i]);
+			RadioConfigMsg[i] = NULL;
+		}
 	}
+
+	nextRadioPort = 0;
 
 	TNCCONFIGTABLE = NULL;
 	NUMBEROFTNCPORTS = 0;
@@ -1002,8 +1008,38 @@ NextAPRS:
 
 		return 0;
 	}
+	if (_memicmp(rec, "RADIO", 5) == 0)
+	{
+		if (strlen(rec) > 11)
+		{
+			RadioConfigMsg[nextRadioPort++] = _strdup(rec);	
+			return 0;
+		}
+		else
+		{
+			// Multiline config, ending in ****
 
+			char * rptr;
 
+			RadioConfigMsg[nextRadioPort] = rptr = zalloc(50000);
+
+			strcpy(rptr, rec);
+
+			GetNextLine(rec);
+
+			while(!feof(fp1))
+			{
+				if (memcmp(rec, "***", 3) == 0)
+				{
+					RadioConfigMsg[nextRadioPort] = realloc(RadioConfigMsg[nextRadioPort], (strlen(rptr) + 1));		
+					nextRadioPort++;
+					return 0;
+				}
+				strcat(rptr, rec);
+				GetNextLine(rec);
+			}
+		}
+	}
 
 	if (xindex(rec,"=") >= 0)
 	   sscanf(rec,"%[^=]=%s",key_word,value);
@@ -1854,17 +1890,33 @@ int decode_port_rec(char * rec)
 			{
 				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
+				// Convert to new format (RADIO Interlockno);
+
+				int Interlock = xxp.INTERLOCK;
+				char radio[16];
+
+				if (Interlock == 0)			// Replace with dummy
+				{
+					Interlock = xxp.INTERLOCK = nextDummyInterlock;
+					nextDummyInterlock++;
+				}
+
+				sprintf(radio, "RADIO %d    ", Interlock);
+				memcpy(rec, radio, 10);
+
 				if (strlen(rec) > 15)
-					RigConfigMsg[LogicalPortNum] = _strdup(rec);
+				{
+					RadioConfigMsg[nextRadioPort++] = _strdup(rec);
+				}
 				else
 				{
 					// Multiline config, ending in ****
 
 					char * rptr;
 					
-					RigConfigMsg[LogicalPortNum] = rptr = zalloc(50000);
+					RadioConfigMsg[nextRadioPort] = rptr = zalloc(50000);
 
-					strcpy(rptr, "RIGCONTROL ");
+					strcpy(rptr, radio);
 
 					GetNextLine(rec);
 
@@ -1872,8 +1924,9 @@ int decode_port_rec(char * rec)
 					{
 						if (memcmp(rec, "***", 3) == 0)
 						{
-							RigConfigMsg[LogicalPortNum] = realloc(RigConfigMsg[LogicalPortNum], (strlen(rptr) + 1));		
-							break;
+							RadioConfigMsg[nextRadioPort] = realloc(RadioConfigMsg[nextRadioPort], (strlen(rptr) + 1));		
+							nextRadioPort++;
+							return 0;
 						}
 						strcat(rptr, rec);
 						GetNextLine(rec);
@@ -1885,7 +1938,6 @@ int decode_port_rec(char * rec)
 				strcat(ptr, rec);
 				strcat(ptr, "\r\n");
 			}
-
 			GetNextLine(rec);
 		}
 
@@ -2273,7 +2325,6 @@ char rec[];
 		xxp.RESPTIME = 1000;
 		xxp.MAXFRAME = 4;
 		xxp.RETRIES = 6;
-		hw = 0;
 	}
 
 	if (_stricmp(value,"BAYCOM") == 0)
@@ -2722,6 +2773,13 @@ BOOL ProcessAPPLDef(char * buf)
 
 		strcpy(&Param[n++][0], ptr1);
 		ptr1 = ptr2;
+	}
+
+	if (_stricmp(Param[1], Param[2]) == 0)
+	{
+		// Alias = Application - will loop.
+
+		return FALSE;
 	}
 
 	_strupr(Param[0]);

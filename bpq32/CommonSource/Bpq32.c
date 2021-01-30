@@ -930,7 +930,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Set default BBS and CHAT application number and number of streams on LinBPQ
 //	Support #include in bpq32.cfg processing
 
-// Version 6.0.21 ??
+// Version 6.0.21 14 December 2020
 
 //	Fix occasional missing newlines in some node command reponses
 //	More 64 bit fixes
@@ -981,6 +981,21 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	SNMP InOctets count corrected to include all frames and encoding of zero values fixed.
 //	Change IP Gateway to exclude handling bits of 44 Net sold to Amazon
 //	Fix crash in Web terminal when processing very long lines
+
+//  Version 6.0.22 ??
+
+//	Fix bug in KAM TNCEMULATOR
+//	Add WinRPR Driver (DED over TCP)
+//	Fix handling of VARA config commands FM1200 and FM9600
+//	Improve Web Termanal Line folding
+//	Add StartTNC to WinRPR driver
+//	Add support for VARA2750 Mode
+//	Add support for VARA connects via a VARA Digipeater
+//	Add digis to SCSTracker and WinRPR MHeard
+//	Separate RIGCONTROL config from PORT config and add RigControl window
+//	Fix crash when a Windows HID device doesn't have a product_string
+//	Changes to VARA TNC connection and restart process
+//	Trigger FALLBACKTORELAY if attempt to connect to all CMS servers fail.
 
 #define CKernel
 
@@ -1068,6 +1083,7 @@ void * SerialExtInit(EXTPORTDATA * PortEntry);
 void * ARDOPExtInit(EXTPORTDATA * PortEntry);
 void * VARAExtInit(EXTPORTDATA * PortEntry);
 void * KISSHFExtInit(EXTPORTDATA * PortEntry);
+void * WinRPRExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -1805,6 +1821,8 @@ VOID TimerProcX()
 			OutputDebugString("BPQ32 Reconfiguring ...\n");	
 
 			GetWindowRect(FrameWnd, &FRect);
+
+			SaveWindowPos(40);		// Rigcontrol
 
 			for (i=0;i<NUMBEROFPORTS;i++)
 			{
@@ -3590,8 +3608,10 @@ VOID * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 		return SerialExtInit;
 
 	if (strstr(Value, "KISSHF"))
-
 		return KISSHFExtInit;
+
+	if (strstr(Value, "WINRPR"))
+		return WinRPRExtInit;
 
 	ExtDriver = LoadLibrary(Value);
 
@@ -6145,6 +6165,9 @@ VOID SaveBPQ32Windows()
 		}
 		PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 	}
+
+	SaveWindowPos(40);		// Rigcontrol
+
 
 	if (hIPResWnd)
 		SaveMDIWindowPos(hIPResWnd, "", "IPResSize", IPMinimized);

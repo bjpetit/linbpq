@@ -60,7 +60,7 @@ extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 extern char * PortConfig[33];
 int SemHeldByAPI;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessReceivedData(int bpqport);
 static int ProcessLine(char * buf, int Port);

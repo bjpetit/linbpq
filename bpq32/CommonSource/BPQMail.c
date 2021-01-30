@@ -1026,7 +1026,7 @@
 //	Disable null passwords and check Exclude flag in Webmail Signin
 //	Add basic Webmail logging 
 
-// 6.0.21.1
+// 6.0.21.1    December 2020
 
 //	Remove nulls from displayed messages.
 //	Fix Holding messages from SMTP and POP3 Interfaces
@@ -1054,6 +1054,15 @@
 //	Fix paging on List command and add new combinations of List options
 //	Fix NNTP list and LC command when bulls are killed
 
+//  6.0.22.1       ??????????
+
+//	Fix flagging messages with attachments as read.
+//	Fix possible corruption of WP database and subsequent crash on reloading.
+//	Fix format of Web Manage Messages display
+//	Include SETNEXTMESSAGENUMBER in SYSOP Help Message
+//	Fix occasional "Incoming Connect from SWITCH"
+//	Fix L> with numeric dests
+//	Improved diagnostic for MailTCP select() error.
 
 #include "BPQMail.h"
 #define MAIL

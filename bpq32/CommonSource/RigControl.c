@@ -63,8 +63,7 @@ char *fcvt(double number, int ndigits, int *decpt, int *sign);
 #include "hidapi.h"
 
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
-extern char * RigConfigMsg[35];
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 int Row = -20;
 
@@ -211,6 +210,9 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 
 	PORT = RIG->PORT;
 
+	if (PORT == NULL)
+		return;
+
 	if (PTTState)
 	{
 		MySetWindowText(RIG->hPTT, "T");
@@ -324,15 +326,71 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 		char Msg[16];
 		int Len = sprintf(Msg, "T %d\n", PTTState);
 	
-		send(PORT->remoteSock, Msg, Len, 0);
+		Len = send(PORT->remoteSock, Msg, Len, 0);
+		RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
 	}
 }
 
-struct RIGINFO * Rig_GETPTTREC(int Port)
+// Need version that doesn't need Port Number
+
+int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, char * Command);
+
+int Rig_Command(int Session, char * Command)
 {
-	struct RIGINFO * RIG;
+	char * ptr;
+	int i, n, p, Port;
+	TRANSPORTENTRY * L4 = L4TABLE;
 	struct RIGPORTINFO * PORT;
-	int i, p;
+	struct RIGINFO * RIG;
+
+
+	//	Only Allow RADIO from Secure Applications
+
+	_strupr(Command);
+
+	ptr = strchr(Command, 13);
+	if (ptr) *(ptr) = 0;						// Null Terminate
+
+	if (memcmp(Command, "AUTH ", 5) == 0)
+	{
+		if (AuthPassword[0] && (memcmp(LastPassword, &Command[5], 16) != 0))
+		{
+			if (CheckOneTimePassword(&Command[5], AuthPassword))
+			{
+				L4 += Session;
+				L4->Secure_Session = 1;
+
+				sprintf(Command, "Ok\r");
+
+				memcpy(LastPassword, &Command[5], 16);	// Save
+
+				return FALSE;
+			}
+		}
+		
+		sprintf(Command, "Sorry AUTH failed\r");
+		return FALSE;
+	}
+
+	if (Session != -1)				// Used for internal Stop/Start
+	{		
+		L4 += Session;
+
+		if (L4->Secure_Session == 0)
+		{
+			sprintf(Command, "Sorry - you are not allowed to use this command\r");
+			return FALSE;
+		}
+	}
+	if (NumberofPorts == 0)
+	{
+		sprintf(Command, "Sorry - Rig Control not configured\r");
+		return FALSE;
+	}
+
+	n = sscanf(Command,"%d ", &Port);
+
+	// Look for the port 
 
 	for (p = 0; p < NumberofPorts; p++)
 	{
@@ -343,16 +401,21 @@ struct RIGINFO * Rig_GETPTTREC(int Port)
 			RIG = &PORT->Rigs[i];
 
 			if (RIG->BPQPort & (1 << Port))
-				return RIG;
+				goto portok;
 		}
 	}
 
-	return NULL;
+	sprintf(Command, "Sorry - Port not found\r");
+	return FALSE;
+
+portok:
+
+	return Rig_CommandEx(PORT, RIG, Session, Command);
 }
 
 
 
-int Rig_Command(int Session, char * Command)
+int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, char * Command)
 {
 	int n, Port, ModeNo, Filter;
 	double Freq = 0.0;
@@ -361,9 +424,8 @@ int Rig_Command(int Session, char * Command)
 	UCHAR * Poll;
 	char * Valchar;
 	int dec, sign;
-	struct RIGPORTINFO * PORT;
-	int i, p;
-	struct RIGINFO * RIG;
+
+	int i;
 	TRANSPORTENTRY * L4 = L4TABLE;
 	char * ptr;
 	int Split, DataFlag, Bandwidth, Antenna;
@@ -418,26 +480,6 @@ int Rig_Command(int Session, char * Command)
 	}
 
 	n = sscanf(Command,"%d %s %s %s %s", &Port, &FreqString[0], &Mode[0], &FilterString[0], &Data[0]);
-
-	// Look for the port 
-
-	for (p = 0; p < NumberofPorts; p++)
-	{
-		PORT = PORTInfo[p];
-
-		for (i=0; i< PORT->ConfiguredRigs; i++)
-		{
-			RIG = &PORT->Rigs[i];
-
-			if (RIG->BPQPort & (1 << Port))
-				goto portok;
-		}
-	}
-
-	sprintf(Command, "Sorry - Port not found\r");
-	return FALSE;
-
-portok:
 
 	if (_stricmp(FreqString, "CLOSE") == 0)
 	{
@@ -1442,17 +1484,27 @@ int BittoInt(UINT BitMask)
 	return i;
 }
 
+extern char * RadioConfigMsg[36];
+
+struct TNCINFO RIGTNC;			// Dummy TNC Record for Rigcontrol without a corresponding TNC 
 
 DllExport BOOL APIENTRY Rig_Init()
 {
 	struct RIGPORTINFO * PORT;
 	int i, p, port;
 	struct RIGINFO * RIG;
-	struct TNCINFO * TNC;
+	struct TNCINFO * TNC = &RIGTNC;
 	HWND hDlg;
 #ifndef LINBPQ
-	int RigRow;
+	int RigRow = 0;
 #endif
+	int NeedRig = 0;
+	int Interlock = 0;
+
+	memset(&RIGTNC, 0, sizeof(struct TNCINFO));
+
+	TNCInfo[40] = TNC;
+
 	// Get config info
 
 	NumberofPorts = 0;
@@ -1460,23 +1512,46 @@ DllExport BOOL APIENTRY Rig_Init()
 	for (port = 0; port < 32; port++)
 		PORTInfo[port] = NULL;
 
-	for (port = 1; port < 33; port++)
+	// See if any rigcontrol defined (either RADIO or RIGCONTROL lines)
+
+	for (port = 0; port < 32; port++)
 	{
-		TNC = TNCInfo[port];
+		if (RadioConfigMsg[port])
+			NeedRig++;
+	}
 
-		if (TNC == NULL)
-			continue;
+	if (NeedRig == 0)
+	{
+		SetupPortRIGPointers();			// Sets up Dummy Rig Pointer
+		return FALSE;
+	}
 
-		if (RigConfigMsg[port])
+
+#ifndef LINBPQ
+
+	TNC->Port = 40;
+	CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 450, NeedRig * 20 + 60, NULL);
+	hDlg = TNC->hDlg;
+
+#endif
+
+	TNC->ClientHeight = NeedRig * 20 + 60;
+	TNC->ClientWidth = 450;
+
+	for (port = 0; port < 33; port++)
+	{
+		if (RadioConfigMsg[port])
 		{
 			char msg[1000];
 
-			char * SaveRigConfig = _strdup(RigConfigMsg[port]);
-			char * RigConfigMsg1 = _strdup(RigConfigMsg[port]);
+			char * SaveRigConfig = _strdup(RadioConfigMsg[port]);
+			char * RigConfigMsg1 = _strdup(RadioConfigMsg[port]);
 
-			RIG = TNC->RIG = RigConfig(TNC, RigConfigMsg1, port);
+			Interlock = atoi(&RigConfigMsg1[5]);
 
-			if (TNC->RIG == NULL)
+			RIG = RigConfig(TNC, RigConfigMsg1, port);
+
+			if (RIG == NULL)
 			{
 				// Report Error
 
@@ -1487,26 +1562,11 @@ DllExport BOOL APIENTRY Rig_Init()
 				continue;
 			}
 
-			TNC->RIG->PTTMode = TNC->PTTMode;
-
-			if (TNC->RIG->PTTMode == 0)			// Not Set
-				TNC->RIG->PTTMode = PTTCI_V;	// For PTTMUX
-
-			hDlg = TNC->hDlg;
+			RIG->Interlock = Interlock;
 
 #ifndef LINBPQ
 
-			if (hDlg == 0)
-			{
-				// Running on a port without a window, eg  UZ7HO or MultiPSK
-
-				CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 350, 80, NULL);
-				hDlg = TNC->hDlg;
-				TNC->ClientHeight = 80;
-				TNC->ClientWidth = 350;
-			}
-
-			RigRow = TNC->RigControlRow;
+			// Create line for this rig
 
 			RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
 				10, RigRow, 80,20, hDlg, NULL, hInstance, NULL);
@@ -1526,6 +1586,11 @@ DllExport BOOL APIENTRY Rig_Init()
 			RIG->hPTT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
 				320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
 
+			RIG->hPORTS = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+				340, RigRow, 120,20, hDlg, NULL, hInstance, NULL);
+
+			RigRow += 20;
+
 			//if (PORT->PortType == ICOM)
 			//{
 			//	sprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
@@ -1538,34 +1603,22 @@ DllExport BOOL APIENTRY Rig_Init()
 			//		RIG->WEB_CAT;
 			RIG->WEB_FREQ = zalloc(80);
 			RIG->WEB_MODE = zalloc(80);
+			RIG->WEB_PORTS = zalloc(80);
 			strcpy(RIG->WEB_FREQ, "-----------");
 			strcpy(RIG->WEB_MODE, "------");
 
 			RIG->WEB_PTT = ' ';
 			RIG->WEB_SCAN = ' ';
-
-
 		}
 	}
-
-
-	if (NumberofPorts == 0)
-	{
-		SetupPortRIGPointers();
-		return TRUE;
-	}
-
-	Row = 0;
 
 	for (p = 0; p < NumberofPorts; p++)
 	{
 		PORT = PORTInfo[p];
 
-		//		CreateDisplay(PORT);
-
 		if (PORT->PortType == HAMLIB)
 			ConnecttoHAMLIB(PORT);
-		else if (PORT->HIDDevice)
+		else if (PORT->HIDDevice)		// This is RAWHID, Not CM108
 			OpenHIDPort(PORT, PORT->IOBASE, PORT->SPEED);
 		else if (PORT->PTC == 0 && _stricmp(PORT->IOBASE, "CM108") != 0)
 			OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
@@ -1699,8 +1752,6 @@ DllExport BOOL APIENTRY Rig_Init()
 	//	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
 
 	SetupPortRIGPointers();
-
-	Debugprintf("PORTTYPE %d", PORTInfo[0]->PortType);
 
 	WritetoConsole("\nRig Control Enabled\n");
 
@@ -2606,8 +2657,8 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		return;
 	}
 
-	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
-		return;						// no point in reading freq if we are about to change it
+//	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
+//		return;						// no point in reading freq if we are about to change it
 		
 	if (RIG->PollCounter)
 	{
@@ -2943,12 +2994,14 @@ SetFinished:
 
 int SendResponse(int Session, char * Msg)
 {
-	PMESSAGE Buffer = GetBuff();
+	PMESSAGE Buffer;
 	BPQVECSTRUC * VEC;
 	TRANSPORTENTRY * L4 = L4TABLE;
 
 	if (Session == -1)
 		return 0;
+
+	Buffer = GetBuff();
 
 	L4 += Session;
 
@@ -3952,7 +4005,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 		else if (ptr[0] == 'V')
 		{
 			*VARAMode = ptr[1];
-			// W N S (skip) or 0 (also Skip)
+			// W N S T (skip) or 0 (also Skip)
 			if (ptr[1] == '0')
 				*VARAMode = 'S';
 		}
@@ -4063,12 +4116,15 @@ void DecodeCM108(int Port, char * ptr)
 		while (cur_dev)
 		{
 			wcstombs(product, cur_dev->product_string, 255);
-			Debugprintf("HID Device %s VID %X PID %X", product, cur_dev->vendor_id, cur_dev->product_id);
+
+			if (product)
+				Debugprintf("HID Device %s VID %X PID %X %s", product, cur_dev->vendor_id, cur_dev->product_id, cur_dev->path);
+			else
+				Debugprintf("HID Device %s VID %X PID %X %s", "Missing Product", cur_dev->vendor_id, cur_dev->product_id, cur_dev->path);
+				
 			if (cur_dev->vendor_id == VID && cur_dev->product_id == PID)
-			{
 				path_to_open = cur_dev->path;
-				break;
-			}
+
 			cur_dev = cur_dev->next;
 		}
 	
@@ -4132,7 +4188,12 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	CM108Device = NULL;
 	Debugprintf("Processing RIG line %s", buf);
 
-	ptr = strtok_s(&buf[10], " \t\n\r", &Context);
+	// Starts RADIO Interlockgroup
+
+	ptr = strtok_s(&buf[5], " \t\n\r", &Context);	// Skip Interlock
+	if (ptr == NULL) return FALSE;
+
+	ptr = strtok_s(NULL, " \t\n\r", &Context);
 
 	if (ptr == NULL) return FALSE;
 
@@ -4163,8 +4224,6 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		PORT->PortType = DUMMY;
 		PORT->ConfiguredRigs = 1;
 		RIG = &PORT->Rigs[0];
-		RIG->PortNum = Port;
-		RIG->BPQPort |=  (1 << Port);
 		RIG->RIGOK = TRUE;
 
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
@@ -4182,15 +4241,14 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 		if (ptr == NULL || strlen(ptr) > 79) return FALSE;
 
-		// Have a parameter do define port. Will decode it later
+		// Have a parameter to define port. Will decode it later
 
 		PORT = PORTInfo[NumberofPorts++] = zalloc(sizeof(struct RIGPORTINFO));
 		PORT->PortType = HAMLIB;
 		PORT->ConfiguredRigs = 1;
 		RIG = &PORT->Rigs[0];
-		RIG->PortNum = Port;
-		RIG->BPQPort |=  (1 << Port);
 		RIG->RIGOK = TRUE;
+
 
 		strcpy(PORT->IOBASE, ptr);
 		strcpy(RIG->RigName, "HAMLIB");
@@ -4215,17 +4273,22 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 	// See if port is already defined. We may be adding another radio (ICOM only) or updating an existing one
 
-	for (i = 0; i < NumberofPorts; i++)
+	// Unless CM108 - they must be on separate Ports
+
+	if (_stricmp("CM108", COMPort) != 0)
 	{
-		PORT = PORTInfo[i];
+		for (i = 0; i < NumberofPorts; i++)
+		{
+			PORT = PORTInfo[i];
 
-		if (COMPort)
-			if (strcmp(PORT->IOBASE, COMPort) == 0)
-				goto PortFound;
+			if (COMPort)
+				if (strcmp(PORT->IOBASE, COMPort) == 0)
+					goto PortFound;
 
-		if (COMPort == 0)
-			if (PORT->IOBASE == COMPort)
-				goto PortFound;
+			if (COMPort == 0)
+				if (PORT->IOBASE == COMPort)
+					goto PortFound;
+		}
 	}
 
 	// Allocate a new one
@@ -4246,15 +4309,18 @@ PortFound:
 	if (_stricmp(PORT->IOBASE, "RAWHID") == 0) // HID Addr instead of Speed
 	{
 		DecodeCM108(Port, ptr);
-		if (CM108Device)
-		{	
+		if (CM108Device)	
 			PORT->HIDDevice = CM108Device;
-			CM108Device = NULL;
-		}
-		else PORT->HIDDevice = _strdup ("MissingHID");
+		else
+			PORT->HIDDevice = _strdup ("MissingHID");
+
+		CM108Device = 0;
 	}
-	else if (_stricmp(PORT->IOBASE, "CM108") == 0) // HID Addr instead of Speed
+
+	if ( _stricmp(PORT->IOBASE, "CM108") == 0) // HID Addr instead of Speed
+	{
 		DecodeCM108(Port, ptr);
+	}
 
 	if (_stricmp(PORT->IOBASE, "REMOTE") == 0) // IP Addr/Port
 		DecodeRemote(PORT, ptr);
@@ -4323,6 +4389,21 @@ PortFound:
 
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 
+	if (ptr && memcmp(ptr, "HAMLIB=", 7) == 0)
+	{
+		// HAMLIB Emulator - param is port to listen on
+
+		if (PORT->PortType == PTT)
+		{
+			RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
+			strcpy(RIG->RigName, PTTRigName);
+
+			RIG->HAMLIBPORT = atoi(&ptr[7]);
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		}
+	}
+
 	if (ptr && strcmp(ptr, "PTTMUX") == 0)
 	{
 		if (PORT->PortType == PTT)
@@ -4332,6 +4413,7 @@ PortFound:
 			goto domux;	// PTTONLY with PTTMUX
 		}
 	}
+
 
 	if (ptr == NULL)
 	{
@@ -4389,32 +4471,6 @@ PortFound:
 		PORT->PortType = FT991A;
 	}
 
-	// If PTTONLY, may be defining another rig using the other control line
-
-	if (PORT->PortType == PTT)
-	{
-		// See if already defined
-
-		for (i = 0; i < PORT->ConfiguredRigs; i++)
-		{
-			RIG = &PORT->Rigs[i];
-
-			if (RIG->PortNum == Port)
-				goto PTTFound;
-		}
-
-		// Allocate a new one
-
-		RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
-
-PTTFound:
-
-		strcpy(RIG->RigName, RigName);
-		RIG->PortNum = Port;
-		RIG->BPQPort |=  (1 << Port);
-
-		//		return RIG;
-	}
 
 	// If ICOM, we may be adding a new Rig
 
@@ -4476,9 +4532,6 @@ RigFound:
 		RIG->TSMenu = 72;			//Menu for Data/USB siwtching
 
 domux:	
-
-	RIG->PortNum = Port;
-	RIG->BPQPort |=  (1 << Port);
 
 	RIG->CM108Device = CM108Device;
 
@@ -5489,35 +5542,46 @@ CheckScan:
 VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
 {
 	struct PORTCONTROL * PortRecord;
+	struct TNCINFO * TNC;
+	int port;
+	int Interlock = RIG->Interlock;
+	char PortString[128] = "";
 
-	// See if other ports in same scan/interlock group
+	// Find TNC ports in this Rig's scan group
 
-	PortRecord = GetPortTableEntryFromPortNum(RIG->PortNum);
-
-	if (PortRecord->PORTINTERLOCK)		// Port has Interlock defined
+	for (port = 1; port < 33; port++)
 	{
-		// Find records in same Interlock Group
+		TNC = TNCInfo[port];
 
-		int LockGroup = PortRecord->PORTINTERLOCK;
+		if (TNC == NULL)
+			continue;
 
-		PortRecord = PORTTABLE;
+		PortRecord = &TNC->PortRecord->PORTCONTROL;
 
-		while (PortRecord)
+		if (PortRecord && PortRecord->PORTINTERLOCK == Interlock)		// Port has Interlock defined
 		{
-			if (LockGroup == PortRecord->PORTINTERLOCK)
-				RIG->BPQPort |=  (1 << PortRecord->PORTNUMBER);
+			int p = PortRecord->PORTNUMBER;
+			RIG->BPQPort |=  (1 << p);
+			sprintf(PortString, "%s,%d", PortString, p);
+			TNC->RIG = RIG;
 
-			PortRecord = PortRecord->PORTPOINTER;
+			if (RIG->PTTMode == 0 && TNC->PTTMode)
+				RIG->PTTMode = TNC->PTTMode;
+
 		}
 	}
+
+	if (RIG->PTTMode == 0 && (RIG->PTTCATPort[0] || RIG->HAMLIBPORT)) // PTT Mux Implies CAT
+		RIG->PTTMode = PTTCI_V;
+
+	strcpy(RIG->WEB_PORTS, &PortString[1]);
+	SetWindowText(RIG->hPORTS, RIG->WEB_PORTS);
 }
 
 VOID SetupPortRIGPointers()
 {
 	struct TNCINFO * TNC;
 	int port;
-
-	// For each Winmor/Pactor port set up the TNC to RIG pointers
 
 	for (port = 1; port < 33; port++)
 	{
@@ -5527,28 +5591,7 @@ VOID SetupPortRIGPointers()
 			continue;
 
 		if (TNC->RIG == NULL)
-			TNC->RIG = Rig_GETPTTREC(port);		// Get from Intelock Port
-
-		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4 || TNC->Hardware == H_ARDOP || TNC->Hardware == H_VARA)
-			if (TNC->RIG && TNC->PTTMode)
-				TNC->RIG->PTTMode = TNC->PTTMode;
-
-		if (TNC->RIG == NULL)
 			TNC->RIG = &TNC->DummyRig;		// Not using Rig control, so use Dummy
-
-		/*		if (TNC->WL2KFreq[0])
-		{
-		// put in ValChar for MH reporting
-
-		double Freq;
-
-		Freq = atof(TNC->WL2KFreq) - 1500;
-		Freq = Freq/1000000.;
-
-		_gcvt(Freq, 9, TNC->RIG->Valchar);
-		TNC->RIG->CurrentBandWidth = TNC->WL2KModeChar;
-		}
-		*/
 	}
 }
 
@@ -5588,7 +5631,7 @@ VOID PTTCATThread(struct RIGINFO *RIG)
 		if (Handle[HIndex] == (HANDLE) -1)
 		{
 			int Err = GetLastError();
-			Consoleprintf("PTTMUX port BPQCOM%s Open failed code %d", RIG->PTTCATPort[PIndex], Err);
+			Consoleprintf("PTTMUX port BPQCOM%s Open failed code %d - trying real com port", RIG->PTTCATPort[PIndex], Err);
 
 			// See if real com port
 
@@ -5936,12 +5979,12 @@ void HLSetMode(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
 	RIG->Passband = filter;
 
 	if (RIG->PORT->PortType == ICOM)		// Needs a Filter
-		sprintf(Resp, "%d %s %s 1\n", RIG->PortNum, RIG->Valchar, mode);
+		sprintf(Resp, "%d %s %s 1\n", 0, RIG->Valchar, mode);
 	else
-		sprintf(Resp, "%d %s %s\n", RIG->PortNum, RIG->Valchar, mode);
+		sprintf(Resp, "%d %s %s\n", 0, RIG->Valchar, mode);
 
 	GetSemaphore(&Semaphore, 60);
-	Rig_Command(-1, Resp);
+	Rig_CommandEx(RIG->PORT, RIG, -1, Resp);
 	FreeSemaphore(&Semaphore);
 
 	if (sep)
@@ -5961,9 +6004,9 @@ void HLSetFreq(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
 
 	// Send to RIGCommand
 
-	sprintf(Resp, "%d %f\n", RIG->PortNum, freq/1000000.0);
+	sprintf(Resp, "%d %f\n", 0, freq/1000000.0);
 	GetSemaphore(&Semaphore, 60);
-	Rig_Command(-1, Resp);
+	Rig_CommandEx(RIG->PORT, RIG, -1, Resp);
 	FreeSemaphore(&Semaphore);
 
 	if (sep)
@@ -6088,7 +6131,6 @@ int ProcessHAMLIBSlaveMessage(SOCKET Sock, struct RIGINFO * RIG, unsigned char *
 	if (Msg[0] == '#')
 		return 0;				// Comment
 
-	Msg[MsgLen] = 0;
 	strlop(Msg, 13);
 	strlop(Msg, 10);
 
@@ -6423,7 +6465,8 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 
 			while (Entry)
 			{
-				unsigned char Msg[256];
+				unsigned char MsgBuf[256];
+				unsigned char * Msg = MsgBuf;
 				int MsgLen;
 
 				if (FD_ISSET(Entry->Sock, &readfs))
@@ -6446,10 +6489,24 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 					}
 					else
 					{
-						if (ProcessHAMLIBSlaveMessage(Entry->Sock, RIG, Msg, MsgLen) == 1)
+						// Could have multiple messages in packet
+						// Terminator can be CR LF or CRLF
+
+						char * ptr;
+						int Len;
+
+						Msg[MsgLen] = 0;
+Loop:
+						ptr = strlop(Msg, 10);
+						if (ptr == NULL)
+							strlop(Msg, 13);
+
+						Len = strlen(Msg);
+
+						if (ProcessHAMLIBSlaveMessage(Entry->Sock, RIG, Msg, Len) == 1)
 						{
 							// close request
-		
+
 							closesocket(Entry->Sock);
 
 							if (Prev == 0)
@@ -6460,7 +6517,18 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 							free (Entry);
 							break;
 						}
+						Msg = ptr;
+
+						if (Msg)
+						{
+							while (Msg[0] == 10 || Msg[0] == 13)
+								Msg++;
+
+							if (Msg[0])
+								goto Loop;
+						}
 					}
+
 				}
 
 				if (FD_ISSET(Entry->Sock, &errorfs))
@@ -6468,12 +6536,12 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 					// Closed - close socket and remove from chai
 
 					closesocket(Entry->Sock);
-					
+
 					if (Prev == 0)
 						RIG->Sockets = Entry->Next;
 					else
 						Prev->Next = Entry->Next;
-	
+
 					free (Entry);
 					break;
 				}
@@ -6494,7 +6562,7 @@ int HID_Read_Block(struct RIGPORTINFO * PORT)
 {
 	int Len;
 	unsigned char Msg[65] = "";
-	
+
 	if (PORT->RXLen > 400)
 		PORT->RXLen = 0;
 

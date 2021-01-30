@@ -34,7 +34,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "tncinfo.h"
 
-#include "BPQAPRS.h"
+#include "bpqaprs.h"
 
 #ifndef WIN32
 

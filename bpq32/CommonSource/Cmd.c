@@ -36,7 +36,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //#include "SHELLAPI.H"
 
 #include "CHeaders.h"
-#include "BPQAPRS.h"
+#include "bpqaprs.h"
 
 #pragma pack()
 
@@ -62,6 +62,7 @@ BOOL CheckCMS(struct TNCINFO * TNC);
 VOID L2SENDXID(struct _LINKTABLE * LINK);
 int CountBits(unsigned long in);
 VOID SaveMH();
+BOOL RestartTNC(struct TNCINFO * TNC);
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 char OrigCmdBuffer[81] = "";		// Command Hander input buffer
@@ -72,6 +73,7 @@ UCHAR SAVEDAPPLFLAGS = 0;
 
 UCHAR ALIASINVOKED = 0;
 
+struct TNCINFO * TNCInfo[41];	
 
 VOID * CMDPTR = 0;
 
@@ -311,6 +313,48 @@ VOID RESTART(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	{
 		strcpy(Bufferptr, RESTARTFAILED);
 		Bufferptr += (int)strlen(RESTARTFAILED);
+	}
+							
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+}
+
+VOID RESTARTTNC(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char * ptr, *Context;
+	int portno;
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+	{
+		portno = atoi (ptr);
+
+		if (portno && portno < 33)
+		{
+			struct TNCINFO * TNC = TNCInfo[portno];
+			
+			if (TNC == NULL)
+			{
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
+			}
+			else
+			{
+				if (TNC->ProgramPath)
+				{
+					if (RestartTNC(TNC))
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Restart %s Ok\r", TNC->ProgramPath);
+					else
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Restart %s Failed\r", TNC->ProgramPath);
+				}
+				else
+				{
+					Bufferptr = Cmdprintf(Session, Bufferptr, "PATH not defined so can't restart TNC\r");
+				}
+			}
+		}
+		else
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Port\r");
+
 	}
 							
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
@@ -3900,6 +3944,7 @@ CMDX COMMANDS[] =
 	"REBOOT      ",6, REBOOT, 0,
 	"RIGRECONFIG ",8 , RIGRECONFIG, 0,
 	"RESTART     ",7,RESTART,0,
+	"RESTARTTNC  ",10,RESTARTTNC,0,
 	"SENDNODES   ",8,SENDNODES,0,
 	"EXTRESTART  ",10, EXTPORTVAL, offsetof(EXTPORTDATA, EXTRESTART),
 	"TXDELAY     ",3, PORTVAL, offsetof(PORTCONTROLX, PORTTXDELAY),
@@ -4646,7 +4691,7 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 #pragma pack()
 
-struct TNCINFO * TNCInfo[34];	
+struct TNCINFO * TNCInfo[41];	
 
 extern char WL2KCall[10];
 extern char WL2KLoc[7];

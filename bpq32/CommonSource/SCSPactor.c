@@ -104,8 +104,7 @@ extern char * PortConfig[33];
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
-extern char * RigConfigMsg[35];
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
@@ -381,9 +380,9 @@ unsigned short int compute_crc(unsigned char *buf,int len);
 int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
 VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-VOID ExitHost(struct TNCINFO * TNC);
-VOID DoTNCReinit(struct TNCINFO * TNC);
-VOID DoTermModeTimeout(struct TNCINFO * TNC);
+static VOID ExitHost(struct TNCINFO * TNC);
+static VOID DoTNCReinit(struct TNCINFO * TNC);
+static VOID DoTermModeTimeout(struct TNCINFO * TNC);
 static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 int Switchmode(struct TNCINFO * TNC, int Mode);
 VOID SwitchToPactor(struct TNCINFO * TNC);
@@ -2282,7 +2281,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 	}
 }
 
-VOID DoTermModeTimeout(struct TNCINFO * TNC)
+static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 

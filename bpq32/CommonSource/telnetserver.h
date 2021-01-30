@@ -1,6 +1,6 @@
 
 #ifndef LINBPQ
-#include "resource.h"
+//#include "resource.h"
 #endif
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_CONNECT WM_USER + 2

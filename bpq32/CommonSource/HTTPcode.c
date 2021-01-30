@@ -339,7 +339,7 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 	int state, change;
 	int count, len;
 	char Msg[400] = "";
-	char Formatted[2048];
+	char Formatted[8192];
 	char * ptr1, * ptr2;
 	char c;
 	int Line;
@@ -366,11 +366,14 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 	
 	if (RXCount(Session->Stream) > 0)
 	{
+		int realLen = 0;
+
 		do
 		{
 			GetMsg(Session->Stream, &Msg[0], &len, &count);
 
 			// replace cr with <br> and space with &nbsp;
+
 
 			ptr1 = Msg;
 			ptr2 = &Formatted[0];
@@ -379,6 +382,8 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 			{
 				// Last line was incomplete - append to it
 
+				realLen = Session->PartLine;
+				
 				Line = Session->LastLine - 1;
 
 				if (Line < 0)
@@ -394,6 +399,8 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 			while (len--)
 			{
 				c = *(ptr1++);
+				realLen++;
+
 				if (c == 13)
 				{
 					int LineLen;
@@ -429,7 +436,8 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 						Session->LastLine = 0;
 					
 					ptr2 = &Formatted[0];
-					
+					realLen = 0;
+
 				}
 				else if (c == 32)
 				{
@@ -437,8 +445,9 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 					ptr2 += 6;
 
 					// Make sure line isn't too long
+					// but beware of spaces expanded to &nbsp; - count chars in line
 
-					if ((ptr2 - &Formatted[0]) > 250)
+					if ((realLen) > 100)
 					{
 						strcpy(ptr2, "<br>\r\n");
 
@@ -451,6 +460,7 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 							Session->LastLine = 0;
 
 						ptr2 = &Formatted[0];
+						realLen = 0;
 					}
 				}
 				else if (c == '>')
@@ -484,7 +494,7 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 				if (Line == 99)
 					Session->LastLine = 0;
 				
-				Session->PartLine = TRUE;
+				Session->PartLine = realLen;
 			}
 
 		//	strcat(Session->ScreenBuffer, Formatted);
@@ -1186,7 +1196,7 @@ int RefreshTermWindow(struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
 }
 
 
-struct TNCINFO * TNCInfo[34];	
+struct TNCINFO * TNCInfo[41];	
 
 int SetupNodeMenu(char * Buff)
 {

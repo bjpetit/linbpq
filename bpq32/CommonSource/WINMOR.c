@@ -121,7 +121,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
@@ -279,12 +279,14 @@ VOID MySetWindowText(HWND hWnd, char * Msg)
 	PMSGWITHLEN buffptr;
 	BOOL Sem = FALSE;
 
-	if (Semaphore.Flag == 0)
+	// Get semaphore if it isn't set
+
+	if (InterlockedExchange(&Semaphore.Flag, 1) == 0) 
 	{
-		GetSemaphore(&Semaphore, 88);
 		Sem = TRUE;
+		Semaphore.Gets++;
 	}
-	
+
 	buffptr = GetBuff();
 
 	if (buffptr)
@@ -313,47 +315,44 @@ VOID SetWindowTextSupport(PMSGWITHLEN Buffer)
 
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
 {
-
 	//	It seems writing from multiple threads can cause problems in Windows
 	//	Queue and process in main thread
 
-
 #ifdef LINBPQ
-
 	WritetoTraceSupport(TNC, Msg, Len);
 }
-
 #else
+	UINT * buffptr;
+	BOOL Sem = FALSE;
+
+	if (Len < 0)
+		return;
+
+	// Get semaphore if it isn't set
+
+	if (InterlockedExchange(&Semaphore.Flag, 1) == 0) 
 	{
-		UINT * buffptr;
-		BOOL Sem = FALSE;
-
-		if (Len < 0)
-			return;
-
-		if (Semaphore.Flag == 0)
-		{
-			GetSemaphore(&Semaphore, 88);
-			Sem = TRUE;
-		}
-
-		buffptr = GetBuff();
-
-		if (buffptr)
-		{
-			if (Len > 340)
-				Len = 340;
-
-			buffptr[1] = (UINT)TNC;
-			buffptr[2] = (UINT)Len;
-			memcpy(&buffptr[3], Msg, Len + 1);	
-
-			C_Q_ADD(&WINMORTraceQ, buffptr);
-		}
-
-		if (Sem)
-			FreeSemaphore(&Semaphore);
+		Sem = TRUE;
+		Semaphore.Gets++;
 	}
+
+	buffptr = GetBuff();
+
+	if (buffptr)
+	{
+		if (Len > 340)
+			Len = 340;
+
+		buffptr[1] = (UINT)TNC;
+		buffptr[2] = (UINT)Len;
+		memcpy(&buffptr[3], Msg, Len + 1);	
+
+		C_Q_ADD(&WINMORTraceQ, buffptr);
+	}
+
+	if (Sem)
+		FreeSemaphore(&Semaphore);
+
 }
 #endif
 
@@ -3036,6 +3035,7 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 		
 		STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
 	    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
+//		char workingDirectory[256];
 
 		SInfo.cb=sizeof(SInfo);
 		SInfo.lpReserved=NULL; 
@@ -3051,6 +3051,7 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 		{
 			Sleep(100);
 		}
+
 
 		if (CreateProcess(NULL, TNC->ProgramPath, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
 		{

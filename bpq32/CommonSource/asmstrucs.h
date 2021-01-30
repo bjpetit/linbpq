@@ -499,7 +499,7 @@ struct WL2KInfo
 
 	BOOL UseRigCtrlFreqs;
 	char WL2KFreq[12];
-	char WL2KMode;				// WL2K reporting mode
+	char xWL2KMode;				// WL2K reporting mode
 	char WL2KModeChar;			// W or N
 	BOOL DontReportNarrowOnWideFreqs;
 

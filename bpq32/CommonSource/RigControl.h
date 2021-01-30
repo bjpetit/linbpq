@@ -60,8 +60,8 @@ struct RIGINFO
 	void * BPQtoRADIO_Q;			// Frames from switch for radio
 
 	UINT BPQPort;				// Port this radio is attached to. Bit Map, as may be more than one port controlling radio
-	int PortNum;				// Number of port that defined this rig
-	
+//	int PortNum;				// Number of port that defined this rig
+	int Interlock;				// Interlock group for this Radio
 	int IC735;					// Old ICOM with shorter freq message
 
 	char * CM108Device;			// Device to open for CM108 GPIO PTT
@@ -115,11 +115,13 @@ struct RIGINFO
 	HWND hMODE;
 	HWND hSCAN;
 	HWND hPTT;
+	HWND hPORTS;
 
 	char * WEB_Label;
 	char * WEB_CAT;
 	char * WEB_FREQ;
 	char * WEB_MODE;
+	char * WEB_PORTS;
 	char WEB_SCAN;
 	char WEB_PTT;
 

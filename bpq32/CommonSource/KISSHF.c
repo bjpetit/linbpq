@@ -18,7 +18,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
 //
-//	Interface to allow G8BPQ switch to use a KISS TNC for HF style use (ATTACH and single channel operation)
+//	Interface to allow G8BPQ switch to use a KISS over TCP TNC for HF style use (ATTACH and single channel operation)
 
 
 
@@ -81,7 +81,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
@@ -1000,7 +1000,7 @@ int ConnecttoKISS(int port)
 
 VOID KISSThread(void * portptr)
 {
-	// Opens sockets and looks for data on control and data sockets.
+	// Opens socket and looks for data on control and data sockets.
 	
 	int port = (int)(size_t)portptr;
 	char Msg[255];
@@ -1363,6 +1363,12 @@ VOID KISSHFProcessReceivedPacket(struct TNCINFO * TNC)
 		ptr++;
 
 		MsgLen = ptr - TNC->ARDOPBuffer;
+
+		if (MsgLen > 360)
+		{
+			TNC->InputLen = 0;
+			return;
+		}
 
 		TNC->InputLen -= MsgLen;
 

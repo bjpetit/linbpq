@@ -88,6 +88,8 @@ VOID GetWPDatabase()
 	while (1)
 	{
 		char Key[16];
+		char Temp[128];
+
 		sprintf(Key, "R%d", i++);
 
 		wpgroup = config_lookup(&wpcfg, Key);
@@ -111,8 +113,14 @@ VOID GetWPDatabase()
 		GetStringValue(wpgroup, "sh", WPRec.secnd_homebbs);
 		GetStringValue(wpgroup, "z", WPRec.first_zip);
 		GetStringValue(wpgroup, "sz", WPRec.secnd_zip);
-		GetStringValue(wpgroup, "q", WPRec.first_qth);
-		GetStringValue(wpgroup, "sq", WPRec.secnd_qth);
+
+		GetStringValue(wpgroup, "q", Temp);
+		Temp[30] = 0;
+		strcpy(WPRec.first_qth, Temp);
+	
+		GetStringValue(wpgroup, "sq", Temp);
+		Temp[30] = 0;
+		strcpy(WPRec.secnd_qth, Temp);
 
 		val = GetIntValue(wpgroup, "m");
 		WPRec.last_modif = val;
@@ -1154,8 +1162,12 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 
 	if (user->Address[0])
 	{
-		strcpy(WP->first_qth, user->Address);
-		strcpy(WP->secnd_qth, user->Address);
+		char Temp[127];
+		strcpy(Temp, user->Address);
+		Temp[30] = 0;
+
+		strcpy(WP->first_qth, Temp);
+		strcpy(WP->secnd_qth, Temp);
 	}
 
 	if (user->ZIP[0])

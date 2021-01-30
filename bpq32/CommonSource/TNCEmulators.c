@@ -5505,9 +5505,7 @@ static int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 	int i, txptr = 0;
 	UCHAR c;
 
-	outbuff[0] = FEND;
-	outbuff[1] = 0;
-	txptr = 2;
+	outbuff[txptr++] = FEND;
 
 	for (i=0;i<len;i++)
 	{
@@ -5516,23 +5514,23 @@ static int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 		switch (c)
 		{
 		case FEND:
-			outbuff[txptr++]=FESC;
-			outbuff[txptr++]=TFEND;
+			outbuff[txptr++] = FESC;
+			outbuff[txptr++] = TFEND;
 			break;
 
 		case FESC:
 
-			outbuff[txptr++]=FESC;
-			outbuff[txptr++]=TFESC;
+			outbuff[txptr++] = FESC;
+			outbuff[txptr++] = TFESC;
 			break;
 
 		default:
 
-			outbuff[txptr++]=c;
+			outbuff[txptr++] = c;
 		}
 	}
 
-	outbuff[txptr++]=FEND;
+	outbuff[txptr++] = FEND;
 
 	return txptr;
 

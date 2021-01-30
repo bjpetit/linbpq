@@ -49,7 +49,7 @@ extern struct CONFIGTABLE xxcfg;
 
 #endif
 
-extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 extern int ReportTimer;
 
@@ -229,7 +229,7 @@ BOK1:
 	{
 		if (pointer == BUFF)
 		{
-			Debugprintf("Trying to free buffer when already on FREE_Q");
+			Debugprintf("Trying to free buffer %p when already on FREE_Q", BUFF);
 //			WriteMiniDump();
 
 			return 0;
@@ -754,7 +754,7 @@ VOID SetApplPorts()
 }
 
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT)
 {

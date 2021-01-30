@@ -946,12 +946,12 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 	}
 
 	if (_stricmp(Msg->to, "RMS") == 0)
-		 sprintf(FullTo, "RMS:%s", Msg->via);
+		sprintf(FullTo, "RMS:%s", Msg->via);
 	else
-	if (Msg->to[0] == 0)
-		sprintf(FullTo, "smtp:%s", Msg->via);
-	else
-		strcpy(FullTo, Msg->to);
+		if (Msg->to[0] == 0)
+			sprintf(FullTo, "smtp:%s", Msg->via);
+		else
+			strcpy(FullTo, Msg->to);
 
 	// make sure title is UTF 8 encoded
 
@@ -981,7 +981,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 		if (Msg->B2Flags & B2Msg)
 		{
 			char * ptr1;
-	
+
 			// if message has attachments, display them if plain text
 
 			if (Msg->B2Flags & Attachments)
@@ -993,10 +993,10 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 				sprintf(DownLoad, "<td><a href=/WebMail/DL?%s&%d>Save Attachments</a></td>", Key, Msg->number);
 
 				WebMail->Files = 0;
-			
+
 				ptr1 = MsgBytes;
-	
-//				ptr += sprintf(ptr, "Message has Attachments\r\n\r\n");
+
+				//				ptr += sprintf(ptr, "Message has Attachments\r\n\r\n");
 
 				while(*ptr1 != 13)
 				{
@@ -1016,7 +1016,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 						WebMail->FileName[WebMail->Files++] = _strdup(&ptr3[1]);
 						*(ptr2 - 1) = ' ';		// put space back
 					}
-				
+
 					ptr1 = ptr2;
 					ptr1++;
 				}
@@ -1072,7 +1072,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 					for (n = 0; n < NewLen; n++)
 					{
 						c = *p;
-						
+
 						if (c==0 || (c & 128))
 							BinCount++;
 
@@ -1091,30 +1091,43 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 						*(ptr1 + NewLen) = 0;
 						ptr += sprintf(ptr, "\rAttachment %s\r\r", WebMail->FileName[i]);
 						RemoveLF(ptr1, NewLen + 1);		// Removes LF after CR but not on its own
-				
+
 						ptr += sprintf(ptr, "%s\r\r", ptr1);
 
 						User->Total.MsgsSent[Index] ++;
 						User->Total.BytesForwardedOut[Index] += NewLen;
 					}
-				
+
 					ptr1 += WebMail->FileLen[i];
 					ptr1 +=2;				// Over separator
 				}
 
 				free(Save);
 
+				ptr += sprintf(ptr, "\r\r[End of Message #%d from %s]\r", Number, Msg->from);
+
 				RemoveLF(Message, (int)strlen(Message) + 1);		// Removes LF after CR but not on its own
 
+				if ((_stricmp(Msg->to, User->Call) == 0) || ((User->flags & F_SYSOP) && (_stricmp(Msg->to, "SYSOP") == 0)))
+				{
+					if ((Msg->status != 'K') && (Msg->status != 'H') && (Msg->status != 'F') && (Msg->status != 'D'))
+					{
+						if (Msg->status != 'Y')
+						{
+							Msg->status = 'Y';
+							Msg->datechanged=time(NULL);
+						}
+					}
+				}
 				return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, Key, Key, DisplayStyle, Message, DisplayStyle);
 			}
-			
-			// Remove B2 Headers (up to the File: Line)
-			
-	//		ptr1 = strstr(MsgBytes, "Body:");
 
-	//		if (ptr1)
-	//			MsgBytes = ptr1;
+			// Remove B2 Headers (up to the File: Line)
+
+			//		ptr1 = strstr(MsgBytes, "Body:");
+
+			//		if (ptr1)
+			//			MsgBytes = ptr1;
 		}
 
 		// Body  may have cr cr lf which causes double space
@@ -1132,56 +1145,56 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 		msgLen = RemoveLF(MsgBytes, msgLen);
 
 		User->Total.MsgsSent[Index] ++;
-//		User->Total.BytesForwardedOut[Index] += Length;
+		//		User->Total.BytesForwardedOut[Index] += Length;
 
 
 		// if body not UTF-8, convert it
 
-	if (WebIsUTF8(MsgBytes, msgLen) == FALSE)
-	{
-		// With Windows it is simple - convert using current codepage
-		// I think the only reliable way is to convert to unicode and back
+		if (WebIsUTF8(MsgBytes, msgLen) == FALSE)
+		{
+			// With Windows it is simple - convert using current codepage
+			// I think the only reliable way is to convert to unicode and back
 
-		size_t origlen = msgLen + 1;
+			size_t origlen = msgLen + 1;
 
-		UCHAR * BufferB = malloc(2 * origlen);
+			UCHAR * BufferB = malloc(2 * origlen);
 
 #ifdef WIN32
 
-		WCHAR * BufferW = malloc(2 * origlen);
-		int wlen;
-		int len = (int)origlen;
+			WCHAR * BufferW = malloc(2 * origlen);
+			int wlen;
+			int len = (int)origlen;
 
-		wlen = MultiByteToWideChar(CP_ACP, 0, MsgBytes, len, BufferW, (int)(origlen * 2)); 
-		len = WideCharToMultiByte(CP_UTF8, 0, BufferW, wlen, BufferB, (int)(origlen * 2), NULL, NULL); 
-		
-		free(Save);
-		Save = MsgBytes = BufferB;
-		free(BufferW);
-		msgLen = len - 1;		// exclude NULL
+			wlen = MultiByteToWideChar(CP_ACP, 0, MsgBytes, len, BufferW, (int)(origlen * 2)); 
+			len = WideCharToMultiByte(CP_UTF8, 0, BufferW, wlen, BufferB, (int)(origlen * 2), NULL, NULL); 
+
+			free(Save);
+			Save = MsgBytes = BufferB;
+			free(BufferW);
+			msgLen = len - 1;		// exclude NULL
 
 #else
-		int left = 2 * msgLen;
-		int len = msgLen;
-		UCHAR * BufferBP = BufferB;
-		iconv_t * icu = NULL;
+			int left = 2 * msgLen;
+			int len = msgLen;
+			UCHAR * BufferBP = BufferB;
+			iconv_t * icu = NULL;
 
-		if (icu == NULL)
-			icu = iconv_open("UTF-8", "CP1252");
+			if (icu == NULL)
+				icu = iconv_open("UTF-8", "CP1252");
 
-		iconv(icu, NULL, NULL, NULL, NULL);		// Reset State Machine
-		iconv(icu, &MsgBytes, &len, (char ** __restrict__)&BufferBP, &left);
-	
-		free(Save);
-		Save = MsgBytes = BufferB;
-		msgLen = strlen(MsgBytes);
+			iconv(icu, NULL, NULL, NULL, NULL);		// Reset State Machine
+			iconv(icu, &MsgBytes, &len, (char ** __restrict__)&BufferBP, &left);
+
+			free(Save);
+			Save = MsgBytes = BufferB;
+			msgLen = strlen(MsgBytes);
 
 #endif
 
-	}
+		}
 
 
-//		ptr += sprintf(ptr, "%s", MsgBytes);
+		//		ptr += sprintf(ptr, "%s", MsgBytes);
 
 		memcpy(ptr, MsgBytes, msgLen);
 		ptr += msgLen;
@@ -1210,6 +1223,10 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 
 	if (DisplayHTML && stristr(Message, "html>"))
 		DisplayStyle = "div";				// Use div so HTML and XML are interpreted
+
+
+
+
 
 	return sprintf(Reply, WebMailMsgTemplate, BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key, DownLoad, Key, Key, Key, DisplayStyle, Message, DisplayStyle);
 }

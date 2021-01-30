@@ -350,7 +350,6 @@ extern int NUMBEROFCOMMANDS;
 
 extern char * ConfigBuffer;
 
-extern char * RigConfigMsg[];
 extern char * WL2KReportLine[];
 
 extern CMDX COMMANDS[];

@@ -60,7 +60,7 @@ extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 //int ResetExtDriver(int num);
 extern char * PortConfig[33];
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 void ConnecttoUZ7HOThread(void * portptr);
 
@@ -96,7 +96,7 @@ static int RigControlRow = 165;
 
 //HFONT hFont ;
 
-static int UZ7HOChannel[MAXBPQPORTS+1];			// BPQ Port to UZ7HO Port
+static int UZ7HOChannel[MAXBPQPORTS+1];				// BPQ Port to UZ7HO Port
 static int BPQPort[MAXUZ7HOPORTS][MAXBPQPORTS+1];	// UZ7HO Port and Connection to BPQ Port
 static void * UZ7HOtoBPQ_Q[MAXBPQPORTS+1];			// Frames for BPQ, indexed by BPQ Port
 static void * BPQtoUZ7HO_Q[MAXBPQPORTS+1];			// Frames for UZ7HO. indexed by UZ7HO port. Only used it TCP session is blocked
@@ -107,7 +107,6 @@ static struct TNCINFO * SlaveTNC[MAXBPQPORTS+1];// TNC Record Slave if present
 //	Each port may be on a different machine. We only open one connection to each UZ7HO instance
 
 static char * UZ7HOSignon[MAXBPQPORTS+1];			// Pointer to message for secure signin
-
 
 static unsigned int UZ7HOInst = 0;
 static int AttachedProcesses=0;
@@ -2510,48 +2509,64 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 		if (Message[2] == 24 && Message[3] == 3 && Message[4] == 100)
 		{
-			TNC->AGWInfo->isQTSM |= 2;
+			// Set flag on any other ports on same TNC (all ports with this as master port)
 
-			// Should also set flag on any other ports on same TNC
+			int p;
+			int This = TNC->Port;
 
 			if (RXHeader->DataLength == 12)
 			{
 				// First reply - request Modem Freq and Name
+				for (p = This; p < 33; p++)
+				{
+					if (MasterPort[p] == This)
+					{
+						TNC = TNCInfo[p];
 
-				char Buffer[32] = "";
-				int MsgLen = 32;
+						if (TNC)
+						{
+							char Buffer[32] = "";
+							int MsgLen = 32;
+							SOCKET sock = TNCInfo[MasterPort[This]]->TCPSock;
 
-				AGW->TXHeader.Port = RXHeader->Port;
-				AGW->TXHeader.DataKind = 'g';
-				memset(AGW->TXHeader.callfrom, 0, 10);
-				memset(AGW->TXHeader.callto, 0, 10);
+
+							TNC->AGWInfo->isQTSM |= 2;
+
+							AGW->TXHeader.Port = UZ7HOChannel[p];
+							AGW->TXHeader.DataKind = 'g';
+							memset(AGW->TXHeader.callfrom, 0, 10);
+							memset(AGW->TXHeader.callto, 0, 10);
 #ifdef __BIG_ENDIAN__
-				AGW->TXHeader.DataLength = reverse(MsgLen);
+							AGW->TXHeader.DataLength = reverse(MsgLen);
 #else
-				AGW->TXHeader.DataLength = MsgLen;
+							AGW->TXHeader.DataLength = MsgLen;
 #endif
-				send(TNC->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
-				send(TNC->TCPSock, Buffer, MsgLen, 0);
-			}	
-		}
-
-		if (RXHeader->DataLength == 44)
-		{
-			// Modem Freq and Type Report from QtSM
-
-			if (RXHeader->Port == 1)
-			{
-				TNC = SlaveTNC[TNC->Port];
-				if (TNC == NULL)
-					return;
+							send(sock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+							send(sock, Buffer, MsgLen, 0);
+						}	
+					}
+				}
+				return;
 			}
 
-			memcpy(&TNC->AGWInfo->CenterFreq, &Message[12], 4);
-			memcpy(&TNC->AGWInfo->ModemName, &Message[16], 20);
-			memcpy(&TNC->AGWInfo->Version, &Message[38], 4);
+			if (RXHeader->DataLength == 44)
+			{
+				// Modem Freq and Type Report from QtSM
 
-			sprintf(TNC->WEB_MODE, "%s / %d Hz", TNC->AGWInfo->ModemName, TNC->AGWInfo->CenterFreq);
-			SetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
+				int p = BPQPort[RXHeader->Port][TNC->Port];		// Get subchannel port
+
+				TNC = TNCInfo[p];
+				
+				if (p == 0 || TNC == NULL)
+					return;
+				
+				memcpy(&TNC->AGWInfo->CenterFreq, &Message[12], 4);
+				memcpy(&TNC->AGWInfo->ModemName, &Message[16], 20);
+				memcpy(&TNC->AGWInfo->Version, &Message[38], 4);
+
+				sprintf(TNC->WEB_MODE, "%s / %d Hz", TNC->AGWInfo->ModemName, TNC->AGWInfo->CenterFreq);
+				SetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
+			}
 		}
 		break;
 
@@ -2638,6 +2653,10 @@ struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC)
 		return 0;
 
 	AGWPort = BPQPort[AGWPort][TNC->Port];
+
+	if (AGWPort == 0)
+		return 0;
+
 	TNC = TNCInfo[AGWPort];
 	return TNC;
 }

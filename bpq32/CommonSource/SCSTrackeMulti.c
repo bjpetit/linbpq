@@ -49,7 +49,7 @@ extern char * PortConfig[33];
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);

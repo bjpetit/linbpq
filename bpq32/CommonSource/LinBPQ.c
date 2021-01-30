@@ -1349,6 +1349,7 @@ void * AXIPExtInit(struct PORTCONTROL *  PortEntry);
 void * ARDOPExtInit(EXTPORTDATA * PortEntry);
 void * VARAExtInit(EXTPORTDATA * PortEntry);
 void * SerialExtInit(EXTPORTDATA * PortEntry);
+void * WinRPRExtInit(EXTPORTDATA * PortEntry);
 
 void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
@@ -1426,6 +1427,9 @@ void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "SERIAL"))
 		return SerialExtInit;
+
+	if (strstr(Value, "WINRPR"))
+		return WinRPRExtInit;
 
 	return(0);
 }

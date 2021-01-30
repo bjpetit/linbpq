@@ -136,7 +136,6 @@
 				Name="MASM"
 				PreserveIdentifierCase="3"
 				AssembledCodeListingFile="$(IntDir)\$(InputName)"
-				IncludePaths="..\CInclude"
 				ListAllAvailableInformation="true"
 				EnableAssemblyGeneratedCodeListing="true"
 				EnableFalseConditionalsInListing="true"
@@ -444,6 +443,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\WINMOR.c"
+				>
+			</File>
+			<File
+				RelativePath=".\WinRPR.c"
 				>
 			</File>
 		</Filter>

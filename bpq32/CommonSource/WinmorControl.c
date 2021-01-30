@@ -18,6 +18,14 @@
 
 //	Fix Rigcontol
 
+// Version 1. 0. 3. 3 Dec 2020
+
+//	Set working directory when starting TNC
+
+// Version 1. 0. 3. 4 Jan 2021
+
+//	Add trace window
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -68,7 +76,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
-
+	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
@@ -150,7 +158,8 @@ RestartTNC(char * Path)
 {
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
-	int n = 0;
+	int i, n = 0;
+	char workingDirectory[256];
 
 	SInfo.cb=sizeof(SInfo);
 	SInfo.lpReserved=NULL; 
@@ -162,12 +171,26 @@ RestartTNC(char * Path)
 
 	Debugprintf("RestartTNC Called for %s", Path);
 
+	strcpy(workingDirectory, Path);
+
+	i = strlen(Path);
+
+	while (i--)
+	{
+		if (workingDirectory[i] == '\\' || workingDirectory[i] == '/')
+		{
+			workingDirectory[i] = 0; 
+			break;
+		}
+	}
+
+
 	while (KillOldTNC(Path) && n++ < 100)
 	{
 		Sleep(100);
 	}
 
-	if (CreateProcess(NULL, Path, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+	if (CreateProcess(NULL, Path, NULL, NULL, FALSE,0 ,NULL ,workingDirectory, &SInfo, &PInfo))
 		Debugprintf("Restart TNC OK");
 	else
 		Debugprintf("Restart TNC Failed %d ", GetLastError());
@@ -534,6 +557,8 @@ VOID CloseCOMPort(HANDLE fd)
 	CloseHandle(fd);
 }
 
+HWND hMonitor;
+
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	HWND hWnd;
@@ -548,7 +573,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
 
 	hWnd = CreateWindow(AppName, Title, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0, 350,50,
+		CW_USEDEFAULT, 0, 420,275,
 		NULL, NULL, hInstance, NULL);
 
 	if (!hWnd) {
@@ -576,6 +601,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //	hFont = MyCreateFont();
 
 	SetWindowText(hWnd,Title);
+
+	
+	hMonitor = CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
+            LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
+			2,2,400,230, hWnd, NULL, hInstance, NULL);
+
+
 
 	ShowWindow(hWnd, nCmdShow);
 
@@ -653,12 +685,18 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	return TRUE;
 }
 	
-//
-//  FUNCTION: WndProc(HWND, unsigned, WORD, LONG)
-//
-//  PURPOSE:  Processes messages for the main window.
-//
+void Trace(char * Msg)
+{	
+	int index = SendMessage(hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Msg);
 
+	if (index > 1200)					
+	do
+		index=index=SendMessage(hMonitor, LB_DELETESTRING, 0, 0);
+	while (index > 1000);
+
+	if (index > -1)
+		index=SendMessage(hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+}
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -676,15 +714,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				return 0;
 
 			Msg[len] = 0;
-
+		
+			
 			if (_memicmp(Msg, "REMOTE:", 7) == 0)
+			{
+				Trace(Msg);
 				RestartTNC(&Msg[7]);
+			}
 			else
 			if (_memicmp(Msg, "KILL ", 5) == 0)
+			{
+				Trace(Msg);
 				KillTNC(atoi(&Msg[5]));
+			}
 			else 
 			if (_memicmp(Msg, "KILLBYNAME ", 11) == 0)
+			{
+				Trace(Msg);
 				KillOldTNC(&Msg[11]);
+			}
 			else
 			{
 				// Anything else is Rig Control

@@ -837,13 +837,16 @@ void upduser(USER *user)
 	if (!(in))
 	{
 		in = fopen(RtUsr, "w");
-		fclose(in);
+		if (in)
+			fclose(in);
 		in = fopen(RtUsr, "r");
 	}
 
+	if (!(in)) return;
+
 	out = fopen(RtUsrTemp, "w");
 
-	if (!(in) || !(out)) return;
+	if (!(out)) return;
 
 	while(fgets(buf, 128, in))
 	{
@@ -2246,6 +2249,9 @@ VOID removeknown()
 	FILE *out;
 
 	out = fopen(RtKnown, "w");
+
+	if (!out)
+		return;
 
 	for (node = known_hd; node; node = nextnode)
 	{

@@ -65,7 +65,7 @@ VOID FromLOC(char * Locator, double * pLat, double * pLon);
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_DATA WM_USER + 2
@@ -101,10 +101,7 @@ VOID MoveWindows(struct TNCINFO * TNC)
 	ClientWidth = rcClient.right;
 
 	if (TNC->hMonitor)
-		if (RigConfigMsg[TNC->Port])
-			MoveWindow(TNC->hMonitor,2 , TNC->RigControlRow + 25, ClientWidth-4, ClientHeight - (TNC->RigControlRow + 25), TRUE);
-		else
-			MoveWindow(TNC->hMonitor,2 , TNC->RigControlRow + 3, ClientWidth-4, ClientHeight - (TNC->RigControlRow + 3), TRUE);
+		MoveWindow(TNC->hMonitor,2 , TNC->RigControlRow + 3, ClientWidth-4, ClientHeight - (TNC->RigControlRow + 3), TRUE);
 #endif
 }
 
@@ -125,7 +122,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	char Key[80];
 	int retCode, disp;
 
-	for (i=1; i<33; i++)
+	for (i=0; i<41; i++)
 	{
 		TNC = TNCInfo[i];
 		if (TNC == NULL)
@@ -352,21 +349,24 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 //	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||TNC->Hardware == H_ARDOP ||
 //			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ || TNC->Hardware == H_VARA)
+	if (TNC->PortRecord)
 		sprintf(Title, "%s Status - Port %d %s", WindowTitle, TNC->Port, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-	//if (TNC->Hardware == H_UZ7HO)
-	//	sprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);
-	//else
-		if (TNC->Hardware == H_MPSK)
-			sprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
 	else
-		sprintf(Title, "%s Status - Port %d  %s", WindowTitle, TNC->Port, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-
+		sprintf(Title, "Rigcontrol", WindowTitle);
+	
+	if (TNC->Hardware == H_MPSK)
+		sprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
 
 	TNC->hDlg = hDlg =  CreateMDIWindow(ClassName, Title, 0,
 		  0, 0, Width, Height, ClientWnd, hInstance, ++LP);
 	
 	//	CreateDialog(hInstance,ClassName,0,NULL);
 	
+	Rect.top = 100;
+	Rect.left = 20;
+	Rect.right = Width + 20;
+	Rect.bottom = Height + 100;
+
 
 	sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->Port);
 	
@@ -552,13 +552,13 @@ struct WL2KMode WL2KModeList[] =
 	{53, "VARA 500"}
 };
 
-char WL2KModes [54][18] = {
+char WL2KModes [55][18] = {
 	"Packet 1200", "Packet 2400", "Packet 4800", "Packet 9600", "Packet 19200", "Packet 38400", "High Speed Packet", "", "", "", "",
 	"Pactor 1", "Pactor", "Pactor", "Pactor 2", "Pactor", "Pactor 3", "Pactor", "Pactor", "Pactor", "Pactor 4", // 11 - 20
 	"Winmor 500", "Winmor 1600", "", "", "", "", "", "", "",				// 21 - 29
 	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
 	"ARDOP 200", "ARDOP 500", "ARDOP 1000", "ARDOP 2000", "ARDOP 2000 FM", "", "", "", "", "",	// 40 - 49
-	"VARA", "VARA FM", "VARA FM WIDE", "VARA 500"};
+	"VARA", "VARA FM", "VARA FM WIDE", "VARA 500", "VARA 2750"};
 
 
 VOID SendWL2KSessionRecordThread(void * param)
@@ -1189,6 +1189,8 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 		WL2KReport->mode = 20;
 	else if (_stricmp(param, "VARA") == 0)
 		WL2KReport->mode = 50;
+	else if (_stricmp(param, "VARA2300") == 0)
+		WL2KReport->mode = 50;
 	else if (_stricmp(param, "VARAFM") == 0)
 		WL2KReport->mode = 51;
 	else if (_stricmp(param, "VARAFM12") == 0)
@@ -1197,6 +1199,8 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 		WL2KReport->mode = 52;
 	else if (_stricmp(param, "VARA500") == 0)
 		WL2KReport->mode = 53;
+	else if (_stricmp(param, "VARA2750") == 0)
+		WL2KReport->mode = 54;
 	else
 		goto BadLine;
 	
@@ -1228,24 +1232,27 @@ BadLine:
 	return 0;
 }
 
-VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc, BOOL Report);
+VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc, BOOL Report, BOOL Digis);
 
-
+VOID UpdateMHwithDigis(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
+{
+	UpdateMHSupport(TNC, Call, Mode, Direction, NULL, TRUE, TRUE);
+}
 VOID UpdateMHEx(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * LOC, BOOL Report)
 {
-	UpdateMHSupport(TNC, Call, Mode, Direction, LOC, Report);
+	UpdateMHSupport(TNC, Call, Mode, Direction, LOC, Report, FALSE);
 }
 
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 {
-	UpdateMHSupport(TNC, Call, Mode, Direction, NULL, TRUE);
+	UpdateMHSupport(TNC, Call, Mode, Direction, NULL, TRUE, FALSE);
 }
 
-VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc, BOOL Report)
+VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc, BOOL Report, BOOL Digis)
 {
 	PMHSTRUC MH = TNC->PortRecord->PORTCONTROL.PORTMHEARD;
 	PMHSTRUC MHBASE = MH;
-	UCHAR AXCall[8];
+	UCHAR AXCall[72] = "";
 	int i;
 	char * LOC, *  LOCEND;
 	char ReportMode[20];
@@ -1253,11 +1260,24 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 	double Freq;
 	char ReportFreq[350] = "";
 	int OldCount = 0;
+	char ReportCall[16];
+
 
 	if (MH == 0) return;
 
-	ConvToAX25(Call, AXCall);
-	AXCall[6] |= 1;					// Set End of address
+	if (Digis)
+	{
+		// Call is an ax.25 digi string not a text call
+
+		memcpy(AXCall, Call, 7 * 9);
+		ReportCall[ConvFromAX25(Call, ReportCall)] = 0;
+	}
+	else
+	{
+		strcpy(ReportCall, Call);
+		ConvToAX25(Call, AXCall);
+		AXCall[6] |= 1;					// Set End of address
+	}
 
 	// Adjust freq to centre
 
@@ -1383,7 +1403,8 @@ DoMove:
 	if (i != 0)				// First
 		memmove(MHBASE + 1, MHBASE, i * sizeof(MHSTRUC));
 
-	memcpy (MHBASE->MHCALL, AXCall, 7);
+//	memcpy (MHBASE->MHCALL, Buffer->ORIGIN, 7 * 9);	
+	memcpy (MHBASE->MHCALL, AXCall, 7 * 9);	// Save Digis
 	MHBASE->MHDIGI = Mode;
 	MHBASE->MHTIME = time(NULL);
 	MHBASE->MHCOUNT = ++OldCount;
@@ -1416,7 +1437,7 @@ DoMove:
 	ReportMode[3] = Direction;
 	ReportMode[4] = 0;
 
- 	SendMH(TNC, Call, ReportFreq, LOC, ReportMode);
+ 	SendMH(TNC, ReportCall, ReportFreq, LOC, ReportMode);
 
 	return;
 }

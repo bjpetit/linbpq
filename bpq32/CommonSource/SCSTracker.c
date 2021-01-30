@@ -51,8 +51,7 @@ extern char LOC[];
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
-extern char * RigConfigMsg[35];
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
@@ -63,18 +62,18 @@ struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL OpenConnection(int);
 BOOL SetupConnection(int);
 BOOL CloseConnection(struct TNCINFO * conn);
-static BOOL WriteCommBlock(struct TNCINFO * TNC);
+BOOL TrkWriteCommBlock(struct TNCINFO * TNC);
 BOOL DestroyTTYInfo(int port);
 static void DEDCheckRX(struct TNCINFO * TNC);
-static VOID DEDPoll(int Port);
+VOID DEDPoll(int Port);
 VOID StuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 unsigned short int compute_crc(unsigned char *buf,int len);
 int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
-static VOID ProcessDEDFrame(struct TNCINFO * TNC);
-static VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-static VOID ExitHost(struct TNCINFO * TNC);
-static VOID DoTNCReinit(struct TNCINFO * TNC);
-static VOID DoTermModeTimeout(struct TNCINFO * TNC);
+VOID TrkProcessDEDFrame(struct TNCINFO * TNC);
+VOID TrkProcessTermModeResponse(struct TNCINFO * TNC);
+VOID TrkExitHost(struct TNCINFO * TNC);
+VOID DoTNCReinit(struct TNCINFO * TNC);
+VOID DoTermModeTimeout(struct TNCINFO * TNC);
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type);
 VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 int Switchmode(struct TNCINFO * TNC, int Mode);
@@ -88,6 +87,27 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 BOOL KAMStartPort(struct PORTCONTROL * PORT);
 BOOL KAMStopPort(struct PORTCONTROL * PORT);
+extern VOID TrkTidyClose(struct TNCINFO * TNC, int Stream);
+extern VOID TrkForcedClose(struct TNCINFO * TNC, int Stream);
+extern VOID TrkCloseComplete(struct TNCINFO * TNC, int Stream);
+VOID RPRWriteCOMBlock(struct TNCINFO * TNC, UCHAR * Msg, int Len);
+void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen);
+VOID UpdateMHwithDigis(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
+
+
+BOOL TrkWriteCommBlock(struct TNCINFO * TNC)
+{
+	if (TNC->Hardware == H_WINRPR)
+		RPRWriteCOMBlock(TNC, TNC->TXBuffer, TNC->TXLen);
+	else
+		WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
+
+	if (TNC->WRITELOG)
+		WriteDebugLogLine(TNC->Port, 'T', TNC->TXBuffer, TNC->TXLen);
+
+	TNC->Timeout = 20;				// 2 secs
+	return TRUE;
+}
 
 
 VOID TRKSuspendPort(struct TNCINFO * TNC)
@@ -209,6 +229,7 @@ static int ProcessLine(char * buf, int Port)
 	TNC->InitScript[0] = 0;
 
 	strcpy(TNC->NormSpeed, "300");		// HF Packet
+	strcpy(TNC->RobustSpeed, "R600");
 
 	goto ConfigLine;
 
@@ -288,6 +309,9 @@ ConfigLine:
 				if (ptr) *ptr = 0;
 				if (strchr(buf, 'R') == 0)
 					strcpy(TNC->NormSpeed, &buf[3]);
+				else
+					strcpy(TNC->RobustSpeed, &buf[3]);
+
 			}
 		}
 	}
@@ -462,7 +486,7 @@ ok:
 
 	case 4:				// reinit
 
-		ExitHost(TNC);
+		TrkExitHost(TNC);
 		Sleep(50);
 		CloseCOMPort(TNC->hDevice);
 		TNC->hDevice =(HANDLE)0;
@@ -475,7 +499,7 @@ ok:
 
 		// Ensure in Pactor
 
-		ExitHost(TNC);
+		TrkExitHost(TNC);
 
 		Sleep(25);
 
@@ -554,7 +578,7 @@ ok:
 	return 0;
 }
 
-static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
+int TrkWebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Interval = 15;
 	int Len;
@@ -589,6 +613,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td width=90px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
+	Len += sprintf(&Buff[Len], "<tr><td>Buffers</td><td>%s</td></tr>", TNC->WEB_BUFFERS);
 	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 	Len += sprintf(&Buff[Len], "</table>");
 
@@ -711,7 +736,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 			TNC->WL2K = &PortEntry->PORTCONTROL.WL2KInfo;
 
 
-	TNC->WebWindowProc = WebProc;
+	TNC->WebWindowProc = TrkWebProc;
 	TNC->WebWinX = 520;
 	TNC->WebWinY = 500;
 	TNC->WebBuffer = zalloc(5000);
@@ -719,11 +744,12 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	TNC->WEB_COMMSSTATE = zalloc(100);
 	TNC->WEB_TNCSTATE = zalloc(100);
 	TNC->WEB_MODE = zalloc(20);
+	TNC->WEB_BUFFERS = zalloc(100);
 	TNC->WEB_TRAFFIC = zalloc(100);
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, TrkForcedClose);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,10,120,24, TNC->hDlg, NULL, hInstance, NULL);
 	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,10,386,26, TNC->hDlg, NULL, hInstance, NULL);
@@ -754,8 +780,10 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	if (TNC->RobustDefault)
 	{
+		char Cmd[40];
 		TNC->Robust = TRUE;
-		strcat(TNC->InitScript, "%B R600\r");
+		sprintf(Cmd, "%%B %s\r", TNC->RobustSpeed);
+		strcat(TNC->InitScript, Cmd);
 		SetWindowText(TNC->xIDC_MODE, "Robust Packet");
 		strcpy(TNC->WEB_MODE, "Robust Packet");
 		TNC->WEB_CHANGED = TRUE;
@@ -778,7 +806,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->InitPtr = TNC->InitScript;
 
-	if (RigConfigMsg[port] == NULL)
+	if (TNC->RIG == &TNC->DummyRig || TNC->RIG == NULL)
 		TNC->SwitchToPactor = TNC->RobustTime;		// Don't alternate Modes if using Rig Control
 
 	WritetoConsoleLocal("\n");
@@ -839,7 +867,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 		if (strstr(ptr, "*") || TNC->ReinitState == 5)		// 5 is waiting for reponse to JHOST1
 		{
-			ProcessTermModeResponse(TNC);
+			TrkProcessTermModeResponse(TNC);
 			TNC->RXLen = 0;
 			TNC->HOSTSTATE = 0;
 
@@ -895,7 +923,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 				{
 					// Success, no more info
 
-					ProcessDEDFrame(TNC);
+					TrkProcessDEDFrame(TNC);
 						
 					TNC->HOSTSTATE = 0;
 					break;
@@ -938,7 +966,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 				if (character)
 					continue;			// MORE TO COME
 
-				ProcessDEDFrame(TNC);
+				TrkProcessDEDFrame(TNC);
 
 				TNC->HOSTSTATE = 0;
 				TNC->InputLen = 0;
@@ -956,7 +984,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 				continue;			// MORE TO COME
 
 			TNC->InputLen = CURSOR - TNC->DEDBuffer;
-			ProcessDEDFrame(TNC);
+			TrkProcessDEDFrame(TNC);
 
 			TNC->HOSTSTATE = 0;
 			TNC->InputLen = 0;
@@ -968,17 +996,6 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 	TNC->InputLen = CURSOR - TNC->DEDBuffer;
 	TNC->RXLen = 0;
-}
-
-static BOOL WriteCommBlock(struct TNCINFO * TNC)
-{
-	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
-	
-	if (TNC->WRITELOG)
-		WriteDebugLogLine(TNC->Port, 'T', TNC->TXBuffer, TNC->TXLen);
-
-	TNC->Timeout = 20;				// 2 secs
-	return TRUE;
 }
 
 VOID DEDPoll(int Port)
@@ -1090,7 +1107,7 @@ VOID DEDPoll(int Port)
 			if (TNC->Robust)
 				SwitchToNormPacket(TNC, "");
 			else
-				SwitchToRPacket(TNC, "R600");
+				SwitchToRPacket(TNC, TNC->RobustSpeed);
 		}
 	}
  
@@ -1100,7 +1117,7 @@ VOID DEDPoll(int Port)
 		STREAM = &TNC->Streams[Stream];
 
 		if (STREAM->Attached)
-			CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
+			CheckForDetach(TNC, Stream, STREAM, TrkTidyClose, TrkForcedClose, TrkCloseComplete);
 
 		if (STREAM->NeedDisc)
 		{
@@ -1161,7 +1178,7 @@ VOID DEDPoll(int Port)
 		if (TNC->NeedPACTOR == 0)
 		{
 			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
-			sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s", (TNC->RobustDefault) ? "R600" : TNC->NormSpeed, 0, TNC->NodeCall);
+			sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s", (TNC->RobustDefault) ? TNC->RobustSpeed : TNC->NormSpeed, 0, TNC->NodeCall);
 			
 			strcpy(TNC->Streams[0].MyCall, TNC->NodeCall);
 		}
@@ -1245,7 +1262,7 @@ VOID DEDPoll(int Port)
 				TNC->Streams[Stream].InternalCmd = TNC->Streams[Stream].Connected;
 
 				if (STREAM->Disconnecting && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
-					TidyClose(TNC, 0);
+					TrkTidyClose(TNC, 0);
 
 				// Make sure Node Keepalive doesn't kill session.
 				
@@ -1360,7 +1377,7 @@ VOID DEDPoll(int Port)
 					TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
 							
 					sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s%c\1\1\1%s",
-						(TNC->Robust) ? "R600" : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0,  (char *)buffptr+8);
+						(TNC->Robust) ? TNC->RobustSpeed : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0,  (char *)buffptr+8);
 
 					ReleaseBuffer(buffptr);
 	
@@ -1442,7 +1459,7 @@ VOID DEDPoll(int Port)
 
 	TNC->IntCmdDelay++;
 
-	if (TNC->IntCmdDelay == 5)
+	if (TNC->IntCmdDelay == 5 && TNC->Streams[0].FramesOutstanding)
 	{
 		Poll[0] = TNC->Streams[0].DEDStream;
 		Poll[1] = 0x1;			// Command
@@ -1463,10 +1480,10 @@ VOID DEDPoll(int Port)
 		{
 			Poll[0] = TNC->Streams[0].DEDStream;
 			Poll[1] = 0x1;			// Command
-			TNC->InternalCmd = TRUE;
-	
 			Poll[2] = 0;			// Len-1
 			Poll[3] = 'L';			// Status
+
+			TNC->InternalCmd = TRUE;
 			StuffAndSend(TNC, Poll, 4);
 
 			return;	
@@ -1491,7 +1508,7 @@ VOID DEDPoll(int Port)
 
 }
 
-static VOID DoTNCReinit(struct TNCINFO * TNC)
+VOID DoTNCReinit(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -1507,7 +1524,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 		memcpy(&TNC->TXBuffer[0], "\x18\x1b\r", 2);
 		TNC->TXLen = 2;
 
-		if (WriteCommBlock(TNC) == FALSE)
+		if (TrkWriteCommBlock(TNC) == FALSE)
 		{
 			CloseCOMPort(TNC->hDevice);
 			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
@@ -1525,7 +1542,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 		memcpy(Poll, "\x18\x1bJHOST1\r", 9);
 
 		TNC->TXLen = 9;
-		WriteCommBlock(TNC);
+		TrkWriteCommBlock(TNC);
 
 		TNC->ReinitState = 5;
 		return;
@@ -1536,7 +1553,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 
 }
 
-static VOID DoTermModeTimeout(struct TNCINFO * TNC)
+VOID DoTermModeTimeout(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -1545,7 +1562,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 		//Checking if in Terminal Mode - Try to set back to Term Mode
 
 		TNC->ReinitState = 1;
-		ExitHost(TNC);
+		TrkExitHost(TNC);
 
 		return;
 	}
@@ -1562,7 +1579,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 
 		Poll[0] = 1;
 		TNC->TXLen = 1;
-		WriteCommBlock(TNC);
+		TrkWriteCommBlock(TNC);
 		TNC->Timeout = 10;				// 2 secs
 
 		return;
@@ -1578,7 +1595,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 		{
 			Poll[0] = 1;
 			TNC->TXLen = 1;
-			WriteCommBlock(TNC);
+			TrkWriteCommBlock(TNC);
 			TNC->Timeout = 3;				// 0.3 secs
 
 			return;
@@ -1592,7 +1609,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 
 		// Close and re-open TNC
 
-		ExitHost(TNC);
+		TrkExitHost(TNC);
 		Sleep(50);
 		CloseCOMPort(TNC->hDevice);
 		TNC->hDevice =(HANDLE)0;
@@ -1617,7 +1634,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 
 //#include "Mmsystem.h"
 
-static VOID ExitHost(struct TNCINFO * TNC)
+VOID TrkExitHost(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -1636,10 +1653,10 @@ static VOID ExitHost(struct TNCINFO * TNC)
 VOID StuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
 	TNC->TXLen = Len;
-	WriteCommBlock(TNC);
+	TrkWriteCommBlock(TNC);
 }
 
-static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
+VOID TrkProcessTermModeResponse(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -1689,7 +1706,7 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 	}
 }
 
-static VOID ProcessDEDFrame(struct TNCINFO * TNC)
+VOID TrkProcessDEDFrame(struct TNCINFO * TNC)
 {
 	UINT * buffptr;
 	char * Buffer;				// Data portion of frame
@@ -1787,7 +1804,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		return;
 	}
 
-	if (TNC->MSGTYPE > 0 &&TNC->MSGTYPE < 6)
+	if (TNC->MSGTYPE > 0 && TNC->MSGTYPE < 6)
 	{
 		// Success with message - null terminated
 
@@ -1837,6 +1854,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					{
 						TNC->Buffers = atoi(Buffer);
 						SetWindowText(TNC->xIDC_BUFFERS, Buffer);
+						strcpy(TNC->WEB_BUFFERS, Buffer);
 						return;
 					}
 				}
@@ -2217,6 +2235,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 		if (TNC->MSGTYPE == 4 || TNC->MSGTYPE == 5)
 		{
+
+			// 4 Is header only - Null Terminated
+			// 5 Is header with data following - Null Terminated
+
 			struct STREAMINFO * STREAM = &TNC->Streams[0];		// RP Stream
 
 			// Monitor
@@ -2270,7 +2292,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 								sprintf(Status, "%d SCANSTART 60", TNC->Port);	// Pause scan for 60 secs
 								Rig_Command(-1, Status);
 								
-								if (RigConfigMsg[TNC->Port] == NULL && TNC->RobustTime)
+								if ((TNC->RIG == &TNC->DummyRig || TNC->RIG == NULL) && TNC->RobustTime)
 									TNC->SwitchToPactor = 600;		// Don't change modes for 60 secs
 
 								strcpy(STREAM->MyCall, DestCall);
@@ -2337,9 +2359,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 }
 
 
-static MESSAGE Monframe;		// I frames come in two parts.
+static MESSAGE Monframe[32];	// I frames come in two parts.
 
-MESSAGE * AdjMsg;		// Adjusted for digis
+static MESSAGE * AdjMsg[32];	// Adjusted for digis
 
 
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
@@ -2350,22 +2372,23 @@ VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
 
 	UCHAR * ptr, * starptr;
 	char * context;
-	char MHCall[11];
+	int Port = TNC->Port;
+	char * MHCall = Monframe[Port].ORIGIN;
 
-	Monframe.LENGTH = MSGHDDRLEN + 16;	// Control Frame
-	Monframe.PORT = TNC->Port;
+	Monframe[Port].LENGTH = MSGHDDRLEN + 16;	// Control Frame
+	Monframe[Port].PORT = TNC->Port;
 	
-	AdjMsg = &Monframe;					// Adjusted fir digis
+	AdjMsg[Port] = &Monframe[Port];					// Adjusted fir digis
 	ptr = strstr(Msg, "fm ");
 
-	ConvToAX25(&ptr[3], Monframe.ORIGIN);
+	ConvToAX25(&ptr[3], Monframe[Port].ORIGIN);
 
-	memcpy(MHCall, &ptr[3], 11);
-	strlop(MHCall, ' ');
+//	memcpy(MHCall, &ptr[3], 11);
+//	strlop(MHCall, ' ');
 
 	ptr = strstr(ptr, "to ");
 
-	ConvToAX25(&ptr[3], Monframe.DEST);
+	ConvToAX25(&ptr[3], Monframe[Port].DEST);
 
 	ptr = strstr(ptr, "via ");
 
@@ -2381,114 +2404,116 @@ VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
 		ptr = strtok_s(Save, " ", &context);
 DigiLoop:
 
-		fiddle = (char *)AdjMsg;
+		fiddle = (char *)AdjMsg[Port];
 		fiddle += 7;
-		AdjMsg = (MESSAGE *)fiddle;
+		AdjMsg[Port] = (MESSAGE *)fiddle;
 
-		Monframe.LENGTH += 7;
+		Monframe[Port].LENGTH += 7;
 
 		starptr = strchr(ptr, '*');
 		if (starptr)
 			*(starptr) = 0;
 
-		ConvToAX25(ptr, AdjMsg->ORIGIN);
+		ConvToAX25(ptr, AdjMsg[Port]->ORIGIN);
 
 		if (starptr)
-			AdjMsg->ORIGIN[6] |= 0x80;				// Set end of address
+			AdjMsg[Port]->ORIGIN[6] |= 0x80;				// Set end of address
 
 		ptr = strtok_s(NULL, " ", &context);
 
 		if (memcmp(ptr, "ctl", 3))
 			goto DigiLoop;
 	}
-	AdjMsg->ORIGIN[6] |= 1;				// Set end of address
+	AdjMsg[Port]->ORIGIN[6] |= 1;				// Set end of address
 
 	ptr = strstr(Msg, "ctl ");
 
 	if (memcmp(&ptr[4], "SABM", 4) == 0)
 	{
-		AdjMsg->CTL = 0x2f;
+		AdjMsg[Port]->CTL = 0x2f;
 		if (TNC->Robust)
-			UpdateMH(TNC, MHCall, '.', 0);
+			UpdateMHwithDigis(TNC, MHCall, '.', 0);
 		else
-			UpdateMH(TNC, MHCall, ' ', 0);
+			UpdateMHwithDigis(TNC, MHCall, ' ', 0);
 	}
 	else  
 	if (memcmp(&ptr[4], "DISC", 4) == 0)
-		AdjMsg->CTL = 0x43;
+		AdjMsg[Port]->CTL = 0x43;
 	else 
 	if (memcmp(&ptr[4], "UA", 2) == 0)
 	{
-		AdjMsg->CTL = 0x63;
+		AdjMsg[Port]->CTL = 0x63;
 		if (TNC->Robust)
-			UpdateMH(TNC, MHCall, '.', 0);
+			UpdateMHwithDigis(TNC, MHCall, '.', 0);
 		else
-			UpdateMH(TNC, MHCall, ' ', 0);
+			UpdateMHwithDigis(TNC, MHCall, ' ', 0);
 	}
 	else  
 	if (memcmp(&ptr[4], "DM", 2) == 0)
-		AdjMsg->CTL = 0x0f;
+		AdjMsg[Port]->CTL = 0x0f;
 	else 
 	if (memcmp(&ptr[4], "UI", 2) == 0)
 	{
-		AdjMsg->CTL = 0x03;
+		AdjMsg[Port]->CTL = 0x03;
 		if (TNC->Robust)
-			UpdateMH(TNC, MHCall, '.', 0);
+			UpdateMHwithDigis(TNC, MHCall, '.', 0);
 		else
-			UpdateMH(TNC, MHCall, ' ', 0);
+			UpdateMHwithDigis(TNC, MHCall, ' ', 0);
 	}
 	else 
 	if (memcmp(&ptr[4], "RR", 2) == 0)
-		AdjMsg->CTL = 0x1 | (ptr[6] << 5);
+		AdjMsg[Port]->CTL = 0x1 | (ptr[6] << 5);
 	else 
 	if (memcmp(&ptr[4], "RNR", 3) == 0)
-		AdjMsg->CTL = 0x5 | (ptr[7] << 5);
+		AdjMsg[Port]->CTL = 0x5 | (ptr[7] << 5);
 	else 
 	if (memcmp(&ptr[4], "REJ", 3) == 0)
-		AdjMsg->CTL = 0x9 | (ptr[7] << 5);
+		AdjMsg[Port]->CTL = 0x9 | (ptr[7] << 5);
 	else 
 	if (memcmp(&ptr[4], "FRMR", 4) == 0)
-		AdjMsg->CTL = 0x87;
+		AdjMsg[Port]->CTL = 0x87;
 	else  
 	if (ptr[4] == 'I')
 	{
-		AdjMsg->CTL = (ptr[5] << 5) | (ptr[6] & 7) << 1 ;
+		AdjMsg[Port]->CTL = (ptr[5] << 5) | (ptr[6] & 7) << 1 ;
 	}
 
 	if (strchr(&ptr[4], '+'))
 	{
-		AdjMsg->CTL |= 0x10;
-		Monframe.DEST[6] |= 0x80;				// SET COMMAND
+		AdjMsg[Port]->CTL |= 0x10;
+		Monframe[Port].DEST[6] |= 0x80;				// SET COMMAND
 	}
 
 	if (strchr(&ptr[4], '-'))	
 	{
-		AdjMsg->CTL |= 0x10;
-		Monframe.ORIGIN[6] |= 0x80;				// SET COMMAND
+		AdjMsg[Port]->CTL |= 0x10;
+		Monframe[Port].ORIGIN[6] |= 0x80;				// SET COMMAND
 	}
 
 	if (Type == 5)								// More to come
 	{
 		ptr = strstr(ptr, "pid ");	
-		sscanf(&ptr[3], "%x", (UINT *)&AdjMsg->PID);
+		sscanf(&ptr[3], "%x", (UINT *)&AdjMsg[Port]->PID);
 		return;	
 	}
 
-	time(&Monframe.Timestamp);
+	time(&Monframe[Port].Timestamp);
 
-	BPQTRACE((MESSAGE *)&Monframe, TRUE);
+	BPQTRACE((MESSAGE *)&Monframe[Port], TRUE);
 }
 
 VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
+	int Port = TNC->Port;
+
 	// // Second part of I or UI
 
-	memcpy(AdjMsg->L2DATA, Msg, Len);
-	Monframe.LENGTH += Len;
+	memcpy(AdjMsg[Port]->L2DATA, Msg, Len);
+	Monframe[Port].LENGTH += Len;
 
-	time(&Monframe.Timestamp);
+	time(&Monframe[Port].Timestamp);
 
-	BPQTRACE((MESSAGE *)&Monframe, TRUE);
+	BPQTRACE((MESSAGE *)&Monframe[Port], TRUE);
 	return;
 }
 
@@ -2496,7 +2521,7 @@ VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 //1:fm G8BPQ to KD6PGI-1 ctl I11^ pid F0
 //fm KD6PGI-1 to G8BPQ ctl DISC+
 
-VOID TidyClose(struct TNCINFO * TNC, int Stream)
+VOID TrkTidyClose(struct TNCINFO * TNC, int Stream)
 {
 	// Queue it as we may have just sent data
 
@@ -2505,12 +2530,12 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 }
 
 
-VOID ForcedClose(struct TNCINFO * TNC, int Stream)
+VOID TrkForcedClose(struct TNCINFO * TNC, int Stream)
 {
-	TidyClose(TNC, Stream);			// I don't think Hostmode has a DD
+	TrkTidyClose(TNC, Stream);			// I don't think Hostmode has a DD
 }
 
-VOID CloseComplete(struct TNCINFO * TNC, int Stream)
+VOID TrkCloseComplete(struct TNCINFO * TNC, int Stream)
 {
 	char Status[80];
 
