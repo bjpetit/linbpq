@@ -15,6 +15,7 @@
 #include "QPlainTextEdit"
 #include "QCheckBox"
 #include "QFormLayout"
+#include "QScrollArea"
 
 #ifndef WIN32
 #define strtok_s strtok_r
@@ -103,12 +104,41 @@ extern char listenCText[4096];
 void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
 
 
+QScrollArea *scrollArea;
+QWidget *scrollAreaWidgetContents;
+
+bool myResize::eventFilter(QObject *obj, QEvent *event)
+{
+	if (event->type() == QEvent::Resize)
+	{
+		QResizeEvent *resizeEvent = static_cast<QResizeEvent *>(event);
+		QSize size = resizeEvent->size();
+		int h = size.height();
+		int w = size.width();
+
+		scrollArea->setGeometry(QRect(5, 5, w - 10, h - 10));
+		return true;
+	}
+	return QObject::eventFilter(obj, event);
+}
+
 AGWConnect::AGWConnect(QWidget *parent) : QDialog(parent)
 {
-	this->resize(600, 700);
 	this->setFont(*menufont);
 
 	setWindowTitle(tr("AGW Connection"));
+
+	myResize *resize = new myResize();
+	installEventFilter(resize);
+
+	scrollArea = new QScrollArea(this);
+	scrollArea->setObjectName(QString::fromUtf8("scrollArea"));
+	scrollArea->setGeometry(QRect(5, 5, 562, 681));
+	scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setWidgetResizable(false);
+	scrollAreaWidgetContents = new QWidget();
+	scrollAreaWidgetContents->setObjectName(QString::fromUtf8("scrollAreaWidgetContents"));
 
 	QVBoxLayout *layout = new QVBoxLayout();
 	layout->setContentsMargins(10, 10, 10, 10);
@@ -162,15 +192,22 @@ AGWConnect::AGWConnect(QWidget *parent) : QDialog(parent)
 		}
 
 		free(Temp);
-	}
 
+		// calculate scrollarea height from count
+
+		scrollAreaWidgetContents->setGeometry(QRect(0, 0, 400, 220 + 22 * count));
+		this->resize(420, 240 + 22 * count);
+
+	}
 
 	RadioPorts->setFont(*menufont);
 
 	buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 	buttonBox->setFont(*menufont);
 	layout->addWidget(buttonBox);
-	setLayout(layout);
+
+	scrollAreaWidgetContents->setLayout(layout);
+	scrollArea->setWidget(scrollAreaWidgetContents);
 
 	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
 	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
@@ -179,6 +216,8 @@ AGWConnect::AGWConnect(QWidget *parent) : QDialog(parent)
 AGWConnect::~AGWConnect()
 {
 }
+
+extern QAction *discAction;
 
 void AGWConnect::myaccept()
 {
@@ -221,7 +260,27 @@ void AGWConnect::myaccept()
 
 	AGWToCalls.insert(-1, CallTo);
 
+	if (port == -1)
+	{
+		// Port not set. If connecting to SWITCH use any, otherwise tell user
+
+		if (strcmp(CallTo, "SWITCH") == 0)
+		{
+			port = 0;
+		}
+		else
+		{
+			QMessageBox msgBox;
+			msgBox.setText("Select a port to call on");
+			msgBox.exec();
+			return;
+		}
+	}
+
 	Send_AGW_C_Frame(ActiveSession, port, CallFrom, CallTo, DigiMsg, DigiLen);
+
+	discAction->setEnabled(true);
+
 
 	AGWConnect::accept();
 }
@@ -234,10 +293,25 @@ void AGWConnect::myreject()
 
 AGWDialog::AGWDialog(QWidget *parent) : QDialog(parent)
 {
-	this->resize(562, 491);
 	this->setFont(*menufont);
 
 	setWindowTitle(tr("TermTCP AGW Configuration"));
+
+	myResize *resize = new myResize();
+	installEventFilter(resize);
+
+
+	scrollArea = new QScrollArea(this);
+	scrollArea->setObjectName(QString::fromUtf8("scrollArea"));
+	scrollArea->setGeometry(QRect(5, 5, 562, 681));
+	scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setWidgetResizable(false);
+	scrollAreaWidgetContents = new QWidget();
+	scrollAreaWidgetContents->setObjectName(QString::fromUtf8("scrollAreaWidgetContents"));
+	scrollAreaWidgetContents->setGeometry(QRect(0, 0, 552, 581));
+
+	this->resize(572, 601);
 
 	QVBoxLayout *layout = new QVBoxLayout;
 	QHBoxLayout *hlayout = new QHBoxLayout;
@@ -326,7 +400,8 @@ AGWDialog::AGWDialog(QWidget *parent) : QDialog(parent)
 	buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
 	buttonBox->setFont(*menufont);
 	layout->addWidget(buttonBox);
-	setLayout(layout);
+	scrollAreaWidgetContents->setLayout(layout);
+	scrollArea->setWidget(scrollAreaWidgetContents);
 
 	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
 	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
@@ -415,6 +490,9 @@ void AGWDialog::myaccept()
 	Q = APort->text();
 	AGWPortNum = Q.toInt();
 
+	Q = Paclen->text();
+	AGWPaclen = Q.toInt();
+		
 	SaveSettings();
 
 	if (AGWEnable != OldEnable || AGWPortNum != OldPort || strcmp(oldHost, AGWHost) != 0)

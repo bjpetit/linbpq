@@ -88,7 +88,8 @@ public:
 	int MonitorColour;
 	int CurrentHost;
 	int Tab;						// Tab Index if Tabbed Mode
-	void * AGWSession;				// Need to cast to TAGWPort to use it
+	void * AGWSession;				// Terinal sess - Need to cast to TAGWPort to use it
+	void * AGWMonSession;
 
 
 protected:

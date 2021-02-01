@@ -860,7 +860,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 
 	}
 
-	len = sprintf((char *)Buffer, "Unexpected message during YAPP Transfer. Transfer canncelled\r");
+	len = sprintf((char *)Buffer, "Unexpected message during YAPP Transfer. Transfer cancelled\r");
 	WritetoOutputWindow(Sess, Buffer, len);
 	
 	Sess->InputMode = 0;

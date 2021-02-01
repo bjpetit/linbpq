@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.40"
+#define VersionString "0.0.0.42"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -40,6 +40,9 @@
 //	   Fix duplicate text on long lines
 // .39 Add option to Convert non-utf8 charaters
 // .40 Prevent crash if AGW monitor Window closed
+// .41 Allow AGW Config and Connect dialogs to be resized with scrollbars
+//	   Fix disabling connect flag on current session when AGW connects
+// .42 Fix some bugs in AGW session handling
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -263,6 +266,7 @@ Ui_ListenSession * ActiveSession = NULL;
 Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label = nullptr);
 void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
 void AGW_AX25_data_in(void * AX25Sess, unsigned char * data, int Len);
+void AGWMonWindowClosing(Ui_ListenSession *Sess);
 void AGWWindowClosing(Ui_ListenSession *Sess);
 
 extern void initUTF8();
@@ -332,6 +336,11 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 			if (event->type() == QEvent::Close)
 			{
 				// Window closing
+
+				// This only closed mon sessinos
+
+				if (Sess->AGWMonSession)
+					AGWMonWindowClosing(Sess);
 
 				if (Sess->AGWSession)
 					AGWWindowClosing(Sess);
@@ -561,6 +570,7 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 	Sess->SessionType = Type;
 	Sess->clientSocket = NULL;
 	Sess->AGWSession = NULL;
+	Sess->AGWMonSession = NULL;
 
 	_sessions.push_back(Sess);
 
@@ -2478,7 +2488,7 @@ void QtTermTCP::onNewConnection()
 		{
 			S = _sessions.at(i);
 
-			if (S->clientSocket == NULL && S->AGWSession == NULL)
+			if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
 			{
 				Sess = S;
 				break;
@@ -2588,10 +2598,15 @@ void QtTermTCP::onSocketStateChanged(QAbstractSocket::SocketState socketState)
 		}
 		else if (TermMode == Single)
 		{
-			if (Sess->SessionType == Mon)			// Mon Only
-				this->setWindowTitle("Monitor Session Disconnected");
+			if (Sess->AGWMonSession)
+				mythis->setWindowTitle("AGW Monitor Window");
 			else
-				this->setWindowTitle("Disconnected");
+			{
+				if (Sess->SessionType == Mon)			// Mon Only
+					this->setWindowTitle("Monitor Session Disconnected");
+				else
+					this->setWindowTitle("Disconnected");
+			}
 		}
 
 		Sess->PortMonString[0] = 0;
@@ -2723,7 +2738,7 @@ extern "C" void setTraceOff(Ui_ListenSession * Sess)
 	if ((Sess->SessionType & Mon) == 0)
 		return;					// Not Monitor
 
-	if (Sess->AGWSession)
+	if (Sess->AGWMonSession)
 		return;
 
 	char Buffer[80];
@@ -2740,7 +2755,7 @@ extern "C" void SendTraceOptions(Ui_ListenSession * Sess)
 	if ((Sess->SessionType & Mon) == 0)
 		return;					// Not Monitor
 
-	if (Sess->AGWSession)
+	if (Sess->AGWMonSession)
 		return;
 	
 	char Buffer[80];
@@ -2839,12 +2854,20 @@ void QtTermTCP::xon_mdiArea_changed()
 				YAPPSend->setEnabled(true);
 				connectMenu->setEnabled(false);
 			}
-			else if (Sess->AGWSession)
+			else if (Sess->AGWMonSession)
 			{
 				// Connected AGW Monitor Session
 
 				discAction->setEnabled(false);
 				YAPPSend->setEnabled(false);
+				connectMenu->setEnabled(false);
+			}
+			else if (Sess->AGWSession)
+			{
+				// Connected AGW Terminal Session
+
+				discAction->setEnabled(true);
+				YAPPSend->setEnabled(true);
 				connectMenu->setEnabled(false);
 			}
 			else

@@ -139,3 +139,15 @@ private:
 };
 
 #endif
+
+class myResize : public QObject
+{
+	Q_OBJECT
+
+protected:
+	bool eventFilter(QObject *obj, QEvent *event) override;
+};
+
+
+
+
