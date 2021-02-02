@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.42"
+#define VersionString "0.0.0.43"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -43,6 +43,7 @@
 // .41 Allow AGW Config and Connect dialogs to be resized with scrollbars
 //	   Fix disabling connect flag on current session when AGW connects
 // .42 Fix some bugs in AGW session handling
+// .43 Include Ross KD5LPB's fixes for MAC
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -272,11 +273,43 @@ void AGWWindowClosing(Ui_ListenSession *Sess);
 extern void initUTF8();
 int checkUTF8(unsigned char * Msg, int Len, unsigned char * out);
 
+#include <QStandardPaths>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+
+
+
 void EncodeSettingsLine(int n, char * String)
 {
 	sprintf(String, "%s|%d|%s|%s|%s", Host[n], Port[n], UserName[n], Password[n], MonParams[n]);
 	return;
 }
+
+QString GetConfPath()
+{
+
+	std::string conf_path = "QtTermTCP.ini";  // Default conf file stored alongside application.
+
+#ifdef __APPLE__
+
+	// Get configuration path for MacOS.
+
+	// This will usually be placed in /Users/USER/Library/Application Support/QtTermTCP
+
+	std::string directory = QStandardPaths::standardLocations(QStandardPaths::AppDataLocation).at(0).toStdString();
+
+	conf_path = directory + "/QtTermTCP.ini";
+
+	mkdir(directory.c_str(), 0775);
+
+#endif
+
+	return QString::fromUtf8(conf_path.c_str());
+
+}
+
+
 
 void DecodeSettingsLine(int n, char * String)
 {
@@ -595,7 +628,7 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 
 	Sess->installEventFilter(parent);
 
-	QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+	QSettings settings(GetConfPath(), QSettings::IniFormat);
 
 	QFont font = QFont(settings.value("FontFamily", "Courier New").value<QString>(),
 		settings.value("PointSize", 10).toInt(),
@@ -674,6 +707,12 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	int i;
 	char Title[80];
 
+	// Get configuration path for MacOS.
+	std::string directory = QStandardPaths::standardLocations(QStandardPaths::AppDataLocation).at(0).toStdString();
+	std::string conf_path = directory + "/QtTermTCP.ini";
+
+//mkdir(directory.c_str(), 0775);
+
 	_server = new QTcpServer();
 
 	mythis = this;
@@ -690,7 +729,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	toolBar->setObjectName("mainToolbar");
 	addToolBar(Qt::TopToolBarArea, toolBar);
 
-	QSettings mysettings("QtTermTCP.ini", QSettings::IniFormat);
+	QSettings mysettings(GetConfPath(), QSettings::IniFormat);
 
 	restoreGeometry(mysettings.value("geometry").toByteArray());
 	restoreState(mysettings.value("windowState").toByteArray());
@@ -850,6 +889,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	setupMenu = mymenuBar->addMenu(tr("&Setup"));
 	hostsubMenu = setupMenu->addMenu("Setup Hosts");
+
 	hostsubMenu->setFont(*menufont);
 
 	for (i = 0; i < MAXHOSTS; i++)
@@ -858,6 +898,8 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 			actSetup[i] = new QAction(Host[i], this);
 		else
 			actSetup[i] = new QAction("New Host", this);
+
+		actSetup[i]->setMenuRole(QAction::NoRole);
 
 		hostsubMenu->addAction(actSetup[i]);
 		connect(actSetup[i], SIGNAL(triggered()), this, SLOT(SetupHosts()));
@@ -891,11 +933,13 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	setupMenu->addSeparator();
 
 	actFonts = new QAction("Setup Terminal Font", this);
+	actFonts->setMenuRole(QAction::NoRole);
 	setupMenu->addAction(actFonts);
 	connect(actFonts, SIGNAL(triggered()), this, SLOT(doFonts()));
 	actFonts->setFont(*menufont);
 
 	actmenuFont = new QAction("Setup Menu Font", this);
+	actmenuFont->setMenuRole(QAction::NoRole);
 	setupMenu->addAction(actmenuFont);
 	connect(actmenuFont, SIGNAL(triggered()), this, SLOT(doMFonts()));
 	actmenuFont->setFont(*menufont);
@@ -1556,7 +1600,7 @@ void QtTermTCP::menuChecked()
 
 		if (newTermMode != TermMode || newSingleMode != singlemodeFormat)
 		{
-			QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+			QSettings settings(GetConfPath(), QSettings::IniFormat);
 			settings.setValue("TermMode", newTermMode);
 			settings.setValue("singlemodeFormat", newSingleMode);
 			QMessageBox msgBox;
@@ -2201,7 +2245,7 @@ void GetSettings()
 	char Key[16];
 	char Param[256];
 
-	QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+	QSettings settings(GetConfPath(), QSettings::IniFormat);
 
 	// Get saved session definitions
 
@@ -2256,7 +2300,7 @@ void GetSettings()
 
 extern "C" void SaveSettings()
 {
-	QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+	QSettings settings(GetConfPath(), QSettings::IniFormat);
 	int i;
 	char Param[512];
 	char Key[16];
@@ -2373,7 +2417,7 @@ QtTermTCP::~QtTermTCP()
 
 	delete(_server);
 
-	QSettings mysettings("QtTermTCP.ini", QSettings::IniFormat);
+	QSettings mysettings(GetConfPath(), QSettings::IniFormat);
 	mysettings.setValue("geometry", saveGeometry());
 	mysettings.setValue("windowState", saveState());
 

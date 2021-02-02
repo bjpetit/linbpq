@@ -102,7 +102,7 @@ extern bool listenEnable;
 extern char listenCText[4096];
 
 void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
-
+QString GetConfPath();
 
 QScrollArea *scrollArea;
 QWidget *scrollAreaWidgetContents;
@@ -595,7 +595,7 @@ fontDialog::fontDialog(int Menu, QWidget *parent) : QDialog(parent)
 	{
 		// get current term font
 
-		QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+		QSettings settings(GetConfPath(), QSettings::IniFormat);
 
 		family = settings.value("FontFamily", "Courier New").toString();
 		csize = settings.value("PointSize", 10).toInt();
@@ -720,7 +720,7 @@ fontDialog::~fontDialog()
 
 void fontDialog::myaccept()
 {
-	QSettings settings("QtTermTCP.ini", QSettings::IniFormat);
+	QSettings settings(GetConfPath(), QSettings::IniFormat);
 
 	if (Menuflag)
 	{
