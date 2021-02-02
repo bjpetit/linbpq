@@ -36,7 +36,9 @@ private:
 	void downloadProgress(qint64 bytesReceived, qint64 bytesTotal);
 	void replyFinished(QNetworkReply *reply);
 	void SaveDownloadedFile(QByteArray * Data, int Len, const char * Name, char * programPath, bool unzip);
+	void initNodeParams();
 	void resizeEvent(QResizeEvent * e);
+	void saveConfigBlock(QPlainTextEdit * pt, int config);
 	void datestampedbackup(char * FN);
 	void ReadConfigFile();
 	void WriteARDOPPort(FILE * fp);

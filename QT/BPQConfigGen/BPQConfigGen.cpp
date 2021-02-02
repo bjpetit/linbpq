@@ -1,5 +1,5 @@
 
-#define VersionString "0.0.0.4"
+#define VersionString "0.0.0.5"
 
 // 0.2 Allow updating CMSCALL and PASS
 //	   Read as binary to preserve line endings
@@ -10,6 +10,8 @@
 //	   Add AX/IP MAP line configuration
 
 // 0.4 Minor Fixes
+
+// 0.5 Add Edit Routes page
 
 #include "BPQConfigGen.h"
 #ifdef WIN32
@@ -57,7 +59,7 @@ char * strupr(char* s)
 	if (s == 0)
 		return 0;
 
-	while (*p = toupper(*p)) p++;
+	while ((*p = toupper(*p))) p++;
 	return s;
 }
 
@@ -120,6 +122,8 @@ int RMS;
 char * NODECALL = NULL;
 char * NODEALIAS = NULL;
 
+char HFCText[82];
+
 int nextPortnum = 0;
 int activePortnum = 0;	// May be different from above if PORTNUM used
 
@@ -181,21 +185,22 @@ struct PORTREC Ports[33];
 #define H_VARA 19
 #define H_VKISS 20
 #define H_WINMOR 21
+#define H_KISSHF 22
 
-#define NUMBEROFTYPES 22
+#define NUMBEROFTYPES 23
 
-char Types[NUMBEROFTYPES][14] = {
+char Types[NUMBEROFTYPES][16] = {
 	"AEA Pactor", "ARDOP", "AXIP", "BPQETHER",
 	"FLDIGI", "HAL", "KAM Pactor", "LOOPBACK",
 	"KISS Serial", "KISS TCP", "KISS UDP", "MULTIPSK", 
 	"SCS Pactor", "SCS Tracker","SCS TRKMULTI","Serial",
 	"TELNET", "UZ7HO", "V4", "VARA",
-	"VKISS", "WINMOR"};
+	"VKISS", "WINMOR", "KISSHF"};
 
 int defaultPort[NUMBEROFTYPES] = {
 	9600, 8515, 0, 0, 0, 9600, 9600, 0,
 	9600, 8100, 8100, 0, 38400, 38400, 38400, 9600,
-	0, 8000, 8510, 8300, 0, 8500};
+	0, 8000, 8510, 8300, 0, 8500, 8100};
 
 struct APPL
 {
@@ -224,6 +229,24 @@ int nextApplNum = 0;
 
 char mainConfig[32768] = "";
 char aprsConfig[32768] = "";
+char routeConfig[32768];
+
+char blockConfig[10][16384];
+char tncportConfig[16384];
+
+int currentBlockType = 0;
+
+// Block config types
+
+#define IPGATEWAY 0 
+#define PORTMAPPER 1
+//#define ROUTES 2
+#define INFOMSG 3
+#define IDMSG 4 
+#define BTEXT 5 
+#define CTEXT 6
+
+
 
 // Telnet Server User Record
 
@@ -290,9 +313,81 @@ struct MAPRec
 
 };
 
-struct MAPRec Maps[128] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+struct MAPRec Maps[128];
 
 int NextMap = 0;
+
+struct ROUTECONFIG
+{
+	char call[80];		// May have VIA
+	int quality;
+	int port;
+	int pwind;
+	int pfrack;
+	int ppacl;
+	int farQual;
+	int INP3;
+	int NoKeepAlive;
+	QLineEdit *routeCall;
+	QLineEdit *routeQual;
+	QLineEdit *routePort;
+	QLineEdit *routeWindow;
+	QLineEdit *routeFrack;
+	QLineEdit *routePaclen;
+	QLineEdit *routeFarQual;
+	QCheckBox *routeINP3;
+	QCheckBox *routeNoKeepalives;
+
+};
+
+#define MaxLockedRoutes 100
+
+struct ROUTECONFIG Routes[MaxLockedRoutes];
+
+int NextRoute = 0;
+
+struct NODEPARAM
+{
+	char param[20];
+	char value[20];
+	QWidget * widget;
+	bool inSimple;
+	char simpleDefault[10];
+	bool isCheckBox;
+};
+
+// !!! Dont re-order this list without changing initNodeParams();
+struct NODEPARAM NodeParams[] = {
+	{"NODE", "", 0, 1, "1", 1},
+	{"BBS", "", 0, 1, "1", 1},
+	{"OBSINIT", "", 0, 1, "6", 0},
+	{"OBSMIN","", 0, 1, "5", 0},
+	{"NODESINTERVAL","", 0, 1, "30", 0},
+	{"L3TIMETOLIVE","", 0, 1, "25", 0},
+	{"L4RETRIES","", 0, 1, "3", 0},
+	{"L4TIMEOUT","", 0, 1, "60", 0},
+	{"PACLEN","", 0, 1, "236", 0},
+	{"T3","", 0, 1, "180", 0},
+	{"IDLETIME","", 0, 1, "900", 0},
+	{"MAXLINKS","", 0, 1, "64", 0},
+	{"MAXNODES","", 0, 1, "250", 0},
+	{"MAXROUTES","", 0, 1, "64", 0},
+	{"MAXCIRCUITS","", 0, 1, "128", 0},
+	{"MINQUAL","", 0, 1, "150", 0},
+	{"HIDENODES","", 0, 1, "1", 1},
+	{"L4DELAY","", 0, 1, "10", 0},
+	{"L4WINDOW","", 0, 1, "4", 0},
+	{"AUTOSAVE","", 0, 1, "1", 1},
+	{"MAXRTT","", 0, 1, "90", 0},
+	{"MAXHOPS","", 0, 1, "4", 0},
+	{"SAVEMH","", 0, 1, "1", 1},
+	{"ENABLEADIFLOG","", 0, 0, "", 1},
+	{"NETROMCALL","", 0, 0, "", 0},
+	{"LogL4Connects","", 0, 0, "", 1},
+	{"ENABLE_LINKED","", 0, 1, "A", 0},
+};
+
+int NodeParamCount = sizeof(NodeParams) / sizeof(struct NODEPARAM);
 
 QScrollArea *userscrollArea;
 QWidget *userScroll;
@@ -327,15 +422,49 @@ void RemoveExtraBlankLines(char * msg)
 
 }
 
+void BPQConfigGen::initNodeParams()
+{
+	struct NODEPARAM *NodeParam = &NodeParams[0];
+
+	NodeParam->widget = (QWidget *)ui.Node; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.BBS_2; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.ObsInit; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.ObsMin; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.NodesInterval; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.L3TTL; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.L4Retries; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.L4Timeout; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.Paclen; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.T3; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.IdleTime; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.MaxLinks; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.MaxNodes; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.MaxRoutes; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.MaxCircuits; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.MinQual; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.HideNodes; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.L4Delay; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.L4Window; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.AutoSave; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.MaxRTT; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.MaxHops_2; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.SaveMH; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.EnableADIFLog; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.NETROMCall; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.LogL4Connects; NodeParam++;
+	NodeParam->widget = (QWidget *)ui.EnableLinked; NodeParam++;
+}
+
 BPQConfigGen::BPQConfigGen(QWidget *parent)
 	: QMainWindow(parent)
 {
 	int i;
 	char Label[10];
-	ui.setupUi(this);
 	char Title[80];
-
 	QSysInfo systemInfo;
+
+	ui.setupUi(this);
+	initNodeParams();
 
 /*	qDebug("##### System Information #####");
 	qDebug() << "Windows Version: " << systemInfo.windowsVersion();
@@ -371,7 +500,7 @@ BPQConfigGen::BPQConfigGen(QWidget *parent)
 	strcpy(configPath, settings.value("configPath", "").toString().toUtf8());
 	strcpy(programPath, settings.value("programPath", "").toString().toUtf8());
 
-	if (configPath[0] == 0)
+	if (configPath[0] == 0 || programPath[0] == 0)
 	{
 		// Get default BPQ Directory
 
@@ -411,7 +540,7 @@ BPQConfigGen::BPQConfigGen(QWidget *parent)
 
 			strcpy(programPath, ValfromReg);
 
-			// Try "BPQ Directory"
+			// Get "BPQ Directory"
 
 			Vallen = MAX_PATH;
 			retCode = RegQueryValueExA(hKey, "BPQ Directory", 0,
@@ -507,6 +636,10 @@ BPQConfigGen::BPQConfigGen(QWidget *parent)
 		portSetVisible(i, 0);
 	}
 
+
+
+	ui.APRSOuterscrollAreaWidgetContents->setGeometry(0, 0, 585, 620);
+
 	ui.scrollAreaWidgetContents->setGeometry(0, 0, 563, 22 * 33);
 
 	for (i = 0; i < 32; i++)
@@ -537,28 +670,28 @@ BPQConfigGen::BPQConfigGen(QWidget *parent)
 	{
 		struct OBJECT * Object = &Objects[i];
 
-		Object->label_64 = new QLabel("Path", ui.scrollAreaWidgetContents_4);
+		Object->label_64 = new QLabel("Path", ui.ObjectscrollAreaContents);
 		Object->label_64->setObjectName(QString::fromUtf8("label_64"));
 		Object->label_64->setGeometry(QRect(10, 5 + i * 50, 51, 20));
-		Object->label_65 = new QLabel("Interval", ui.scrollAreaWidgetContents_4);
+		Object->label_65 = new QLabel("Interval", ui.ObjectscrollAreaContents);
 		Object->label_65->setObjectName(QString::fromUtf8("label_65"));
 		Object->label_65->setGeometry(QRect(340, 5 + i * 50, 55, 20));
-		Object->label_66 = new QLabel("Ports", ui.scrollAreaWidgetContents_4);
+		Object->label_66 = new QLabel("Ports", ui.ObjectscrollAreaContents);
 		Object->label_66->setObjectName(QString::fromUtf8("label_66"));
 		Object->label_66->setGeometry(QRect(205, 5 + i * 50, 46, 20));
-		Object->label_67 = new QLabel("Text", ui.scrollAreaWidgetContents_4);
+		Object->label_67 = new QLabel("Text", ui.ObjectscrollAreaContents);
 		Object->label_67->setObjectName(QString::fromUtf8("label_67"));
 		Object->label_67->setGeometry(QRect(10, 27 + i * 50, 46, 20));
-		Object->ObjPath = new QLineEdit(ui.scrollAreaWidgetContents_4);
+		Object->ObjPath = new QLineEdit(ui.ObjectscrollAreaContents);
 		Object->ObjPath->setObjectName(QString::fromUtf8("ObjPath"));
 		Object->ObjPath->setGeometry(QRect(50, 5 + i * 50, 146, 20));
-		Object->ObjPorts = new QLineEdit(ui.scrollAreaWidgetContents_4);
+		Object->ObjPorts = new QLineEdit(ui.ObjectscrollAreaContents);
 		Object->ObjPorts->setObjectName(QString::fromUtf8("ObjPorts"));
 		Object->ObjPorts->setGeometry(QRect(250, 5 + i * 50, 81, 20));
-		Object->ObjInterval = new QLineEdit(ui.scrollAreaWidgetContents_4);
+		Object->ObjInterval = new QLineEdit(ui.ObjectscrollAreaContents);
 		Object->ObjInterval->setObjectName(QString::fromUtf8("ObjInterval"));
 		Object->ObjInterval->setGeometry(QRect(395, 5 + i * 50, 36, 20));
-		Object->ObjText = new QLineEdit(ui.scrollAreaWidgetContents_4);
+		Object->ObjText = new QLineEdit(ui.ObjectscrollAreaContents);
 		Object->ObjText->setObjectName(QString::fromUtf8("ObjText"));
 		Object->ObjText->setGeometry(QRect(50, 27 + i * 50, 491, 20));
 
@@ -568,8 +701,32 @@ BPQConfigGen::BPQConfigGen(QWidget *parent)
 	aprsSetVisible(0, 1);				// Show blanks for user to add one or two 
 	aprsSetVisible(1, 1);
 
-	ui.scrollAreaWidgetContents_4->setGeometry(0, 0, 563, 50 * 129);
+	ui.ObjectscrollAreaContents->setGeometry(0, 0, 563, 50 * 129);
 
+	// Routes dialog
+
+	for (i = 0; i < MaxLockedRoutes; i++)
+	{
+		struct ROUTECONFIG * Route = &Routes[i];
+		Route->routeCall = new QLineEdit(ui.routeScrollareaContents);
+		Route->routeCall->setGeometry(QRect(5, 5 + i * 22, 196, 20));
+		Route->routeQual = new QLineEdit(ui.routeScrollareaContents);
+		Route->routeQual->setGeometry(QRect(255, 5 + i * 22, 31, 20));
+		Route->routePort = new QLineEdit(ui.routeScrollareaContents);
+		Route->routePort->setGeometry(QRect(215, 5 + i * 22, 24, 20));
+		Route->routeWindow = new QLineEdit(ui.routeScrollareaContents);
+		Route->routeWindow->setGeometry(QRect(305, 5 + i * 22, 24, 20));
+		Route->routeFrack = new QLineEdit(ui.routeScrollareaContents);
+		Route->routeFrack->setGeometry(QRect(340, 5 + i * 22, 36, 20));
+		Route->routePaclen = new QLineEdit(ui.routeScrollareaContents);
+		Route->routePaclen->setGeometry(QRect(380, 5 + i * 22, 32, 20));
+		Route->routeFarQual = new QLineEdit(ui.routeScrollareaContents);
+		Route->routeFarQual->setGeometry(QRect(420, 5 + i * 22, 32, 20));
+		Route->routeINP3 = new QCheckBox(ui.routeScrollareaContents);
+		Route->routeINP3->setGeometry(QRect(460, 5 + i * 22, 20, 20));
+		Route->routeNoKeepalives = new QCheckBox(ui.routeScrollareaContents);
+		Route->routeNoKeepalives->setGeometry(QRect(510, 5 + i * 22, 20, 20));
+	}
 
 
 	connect(ui.ReadConfig, SIGNAL(clicked()), this, SLOT(clickedSlot()));
@@ -591,6 +748,13 @@ BPQConfigGen::BPQConfigGen(QWidget *parent)
 
 	connect(ui.UpdateRelease, SIGNAL(clicked()), this, SLOT(clickedSlot()));
 	connect(ui.UpdateBeta, SIGNAL(clicked()), this, SLOT(clickedSlot()));
+
+	connect(ui.saveIPGateway, SIGNAL(clicked()), this, SLOT(clickedSlot()));
+	connect(ui.saveInfoMsg, SIGNAL(clicked()), this, SLOT(clickedSlot()));
+	connect(ui.saveNodePage, SIGNAL(clicked()), this, SLOT(clickedSlot()));
+	connect(ui.saveTNCPort, SIGNAL(clicked()), this, SLOT(clickedSlot()));
+//	connect(ui.saveCtext, SIGNAL(clicked()), this, SLOT(clickedSlot()));
+	connect(ui.saveRoutes, SIGNAL(clicked()), this, SLOT(clickedSlot()));
 
 	ui.OS->setText(thisKernel);
 	ui.Arch->setText(thisCPU);
@@ -795,9 +959,9 @@ void BPQConfigGen::clickedSlot()
 
 		Button->setEnabled(false);
 
-		refreshAppls();
+refreshAppls();
 
-		return;
+return;
 	}
 
 	if (strcmp(Name, "RMS") == 0)
@@ -868,6 +1032,102 @@ void BPQConfigGen::clickedSlot()
 		return;
 	}
 
+	if (strcmp(Name, "saveIPGateway") == 0)
+	{
+		saveConfigBlock(ui.IPGateway, IPGATEWAY);
+		return;
+	}
+
+	if (strcmp(Name, "saveInfoMsg") == 0)
+	{
+		saveConfigBlock(ui.InfoMsg, INFOMSG);
+		saveConfigBlock(ui.IDMsg, IDMSG);
+		saveConfigBlock(ui.BText, BTEXT);
+		saveConfigBlock(ui.CText, CTEXT);
+		return;
+	}
+
+	if (strcmp(Name, "saveNodePage") == 0)
+	{
+		struct NODEPARAM * NodeParam;
+		
+		for (int i = 0; i < NodeParamCount; i++)
+		{
+			NodeParam = &NodeParams[i];
+
+			QCheckBox * checkbox = (QCheckBox *)NodeParam->widget;
+			QLineEdit * lineedit = (QLineEdit *)NodeParam->widget;
+
+			if (checkbox)
+			{
+				if (NodeParam->isCheckBox)
+				{
+					if (checkbox->isChecked())
+						strcpy(NodeParam->value, "1");
+					else
+						strcpy(NodeParam->value, "0");
+				}
+				else
+				{
+					memcpy(NodeParam->value, lineedit->text().toUtf8().data(), 19);
+				}
+			}
+		}
+
+		// Remind user to save config
+
+		QMessageBox msgBox;
+		msgBox.setWindowTitle("Save");
+		msgBox.setText("Node Parameters saved. Remember to write the configuration to apply changes");
+		msgBox.exec();
+
+		ui.tabWidget->setCurrentIndex(1);	// Back to main tab
+
+		return;
+	}
+
+
+
+
+
+
+	if (strcmp(Name, "saveRoutes") == 0)
+	{
+		int i;
+		struct ROUTECONFIG * Route;
+
+		for (i = 0; i < MaxLockedRoutes; i++)
+		{
+			Route = &Routes[i];
+
+			strcpy(Route->call, Route->routeCall->text().toUtf8().toUpper());
+			Route->port = Route->routePort->text().toInt();
+			Route->quality = Route->routeQual->text().toInt();
+			Route->pwind = Route->routeWindow->text().toInt();
+			Route->pfrack = Route->routeFrack->text().toInt();
+			Route->ppacl = Route->routePaclen->text().toInt();
+			Route->farQual = Route->routeFarQual->text().toInt();
+			Route->INP3 = Route->routeINP3->isChecked();
+			Route->NoKeepAlive = Route->routeNoKeepalives->isChecked();
+		}
+
+		//  ?? also save comment block ??
+
+		strcpy(routeConfig, ui.Routes->toPlainText().toLocal8Bit().data());
+
+		// Remind user to save config
+
+		QMessageBox msgBox;
+		msgBox.setWindowTitle("Save");
+		msgBox.setText("ROUTES saved. Remember to write the configuration to apply changes");
+		msgBox.exec();
+
+		ui.tabWidget->setCurrentIndex(1);	// Back to main tab
+		return;
+	}
+
+	// See if Save Port
+
 	int p = 0;
 
 	for (int i = 0; i < 32; i++)
@@ -901,6 +1161,16 @@ void BPQConfigGen::clickedSlot()
 	msgBox.move(mainpos.x() + 200, mainpos.y() + 300);
 	msgBox.exec();
 }
+
+void BPQConfigGen::saveConfigBlock(QPlainTextEdit * pt, int config)
+{
+	QString qs = pt->toPlainText();
+	QByteArray qb = qs.toLocal8Bit();
+
+	memcpy(blockConfig[config], qb.data(), qb.length());
+	blockConfig[config][qb.length()] = 0;
+	return;
+}
 	
 void BPQConfigGen::datestampedbackup(char * FN)
 {
@@ -924,6 +1194,7 @@ void BPQConfigGen::ReadConfigFile()
 	char FN[260];
 	FILE * fp;
 	FILE * savefp = nullptr;
+	int i;
 
 	char line[512];
 	char linecopy[512];
@@ -931,15 +1202,23 @@ void BPQConfigGen::ReadConfigFile()
 	char * Context;
 	bool Comment = false;
 	bool inPort = false;		// parsing a PORT section
+	bool inTNCPort = false;		// parsing a TNCPORT section
 	bool inBlock = false;		// parsing a section ending in ***
 	bool inAPRS = false;
+	bool inRoutes = false;
 	
 	bool gotUser = false;
+
+	bool keepComments = ui.keepComments->isChecked();
 
 	char tempPort[32768] = "";
 
 	mainConfig[0] = 0;
 	aprsConfig[0] = 0;
+	routeConfig[0] = 0;
+
+	memset(blockConfig, 0, sizeof(blockConfig));
+	tncportConfig[0] = 0;
 
 	nextPortnum = 0;
 	activePortnum = 0;
@@ -947,6 +1226,7 @@ void BPQConfigGen::ReadConfigFile()
 	NextUser = 0;
 	NextMap = 0;
 	NextObject = 0;
+	NextRoute = 0;
 
 	for (int i = 0; i < 128; i++)
 	{
@@ -1061,7 +1341,6 @@ void BPQConfigGen::ReadConfigFile()
 
 		// Try keeping comments
 
-
 		if (ptr == NULL || ptr[0] == 0 || ptr[0] == ';')
 		{
 			// Comment
@@ -1074,10 +1353,17 @@ void BPQConfigGen::ReadConfigFile()
 					strcpy(linecopy, "\r\n");
 			}
 
+			if (!keepComments)
+				continue;
+
 			if (inPort)
 				strcat(tempPort, linecopy);
 			else if (inAPRS)
 				strcat(aprsConfig, linecopy);
+			else if (inRoutes)
+				strcat(routeConfig, linecopy);
+			else if (inBlock)
+				strcat(blockConfig[currentBlockType], linecopy);
 			else
 				strcat(mainConfig, linecopy);
 
@@ -1089,20 +1375,61 @@ void BPQConfigGen::ReadConfigFile()
 			if (memcmp(ptr, "/*", 2) == 0)
 			{
 				Comment = TRUE;
-				strcat(mainConfig, linecopy);
+
+				if (!keepComments)
+					continue;
+
+				if (inPort)
+					strcat(tempPort, linecopy);
+				else if (inAPRS)
+					strcat(aprsConfig, linecopy);
+				else if (inRoutes)
+					strcat(routeConfig, linecopy);
+				else if (inBlock)
+					strcat(blockConfig[currentBlockType], linecopy);
+				else
+					strcat(mainConfig, linecopy);
+
 				continue;
 			}
 			else if (memcmp(ptr, "*/", 2) == 0)
 			{
 				Comment = FALSE;
-				strcat(mainConfig, linecopy);
+
+				if (!keepComments)
+					continue;
+
+				if (inPort)
+					strcat(tempPort, linecopy);
+				else if (inAPRS)
+					strcat(aprsConfig, linecopy);
+				else if (inRoutes)
+					strcat(routeConfig, linecopy);
+				else if (inBlock)
+					strcat(blockConfig[currentBlockType], linecopy);
+				else
+					strcat(mainConfig, linecopy);
+	
 				continue;
 			}
 		}
 
 		if (Comment)
 		{
-			strcat(mainConfig, linecopy);
+			if (!keepComments)
+				continue;
+
+			if (inPort)
+				strcat(tempPort, linecopy);
+			else if (inAPRS)
+				strcat(aprsConfig, linecopy);
+			else if (inRoutes)
+				strcat(routeConfig, linecopy);
+			else if (inBlock)
+				strcat(blockConfig[currentBlockType], linecopy);
+			else
+				strcat(mainConfig, linecopy);
+
 			continue;
 		}
 
@@ -1153,15 +1480,93 @@ void BPQConfigGen::ReadConfigFile()
 			continue;
 		}
 
-		if (inBlock)
+		if (inRoutes)
 		{
-			strcat(mainConfig, linecopy);
-
 			if (memcmp(ptr, "***", 3) == 0)
-				inBlock = FALSE;
+			{
+				inRoutes = FALSE;
+				continue;
+			}
+
+			struct ROUTECONFIG * Route = &Routes[NextRoute];
+
+			char Param[8][256];
+			char * ptr1, *ptr2;
+			int n = 0, inp3 = 0;
+
+			// strtok and sscanf can't handle successive commas, so split up usig strchr
+
+			memset(Param, 0, 2048);
+
+			while ((ptr1 = strchr(ptr, 9)))
+				*ptr1 = ' ';
+
+			ptr1 = ptr;
+
+			while (ptr1 && *ptr1 && n < 8)
+			{
+				ptr2 = strchr(ptr1, ',');
+				if (ptr2) *ptr2++ = 0;
+
+				strcpy(&Param[n++][0], ptr1);
+				ptr1 = ptr2;
+				while (ptr1 && *ptr1 && *ptr1 == ' ')
+					ptr1++;
+			}
+
+			strcpy(Route->call, &Param[0][0]);
+
+			Route->quality = atoi(Param[1]);
+			Route->port = atoi(Param[2]);
+			Route->pwind = atoi(Param[3]);
+			Route->pfrack = atoi(Param[4]);
+			Route->ppacl = atoi(Param[5]);
+			inp3 = atoi(Param[6]);
+			Route->farQual = atoi(Param[7]);
+
+			// Use top bit of window as INP3 Flag, next as NoKeepAlive
+
+			if (inp3 & 1)
+				Route->INP3 |= 1;
+
+			if (inp3 & 2)
+				Route->NoKeepAlive |= 1;
+
+			Route->routeCall->setText(Route->call);
+			Route->routePort->setText(Param[2]);
+			Route->routeQual->setText(Param[1]);
+			Route->routeWindow->setText(Param[3]);
+			Route->routeFrack->setText(Param[4]);
+			Route->routePaclen->setText(Param[5]);
+			Route->routeINP3->setChecked(Route->INP3);
+			Route->routeNoKeepalives->setChecked(Route->NoKeepAlive);
+			Route->routeFarQual->setText(Param[7]);
+
+			if (NextRoute < MaxLockedRoutes)
+				NextRoute++;
 
 			continue;
 		}
+
+
+		if (inBlock)
+		{
+			if (memcmp(ptr, "***", 3) == 0)
+				inBlock = FALSE;
+
+			strcat(blockConfig[currentBlockType], linecopy);
+			continue;
+		}
+
+		if (inTNCPort)
+		{
+			strcat (tncportConfig, linecopy);
+			if (memcmp(ptr, "ENDPORT", 7) == 0)
+				inTNCPort = FALSE;
+
+			continue;
+		}
+
 
 		if (inPort)
 		{
@@ -1186,6 +1591,13 @@ void BPQConfigGen::ReadConfigFile()
 					memset(Param, 0, 2048);
 					strlop(Context, 13);
 					strlop(Context, ';');
+					strlop(Context, ';');
+
+					// replace any tab with space
+
+					while ((ptr1 = strchr(Context, 9)))
+						*ptr1 = ' ';
+
 
 					ptr1 = Context;
 
@@ -1204,13 +1616,23 @@ void BPQConfigGen::ReadConfigFile()
 					User = &Param[0][0];
 
 					Pwd = &Param[1][0];
-					UserCall = &Param[2][0];
+	
+					if (stricmp(User, "ANON") == 0)
+					{
+						if (Pwd[0] == 0) //ANON does't need call
+							continue;
+
+						strcpy(&Param[2][0], "ANON");
+						strcpy(&Param[4][0], "");		// Dont allow SYSOP if ANON
+					}
+
+					UserCall = &Param[2][0];	
 					Appl = &Param[3][0];
 					Secure = &Param[4][0];
-
+							
 					if (User[0] == 0 || Pwd[0] == 0 || UserCall[0] == 0) // invalid record
 						continue;
-
+	
 					USER->Callsign = strdup(UserCall);
 					USER->Password = strdup(Pwd);
 					USER->UserName = strdup(User);
@@ -1267,20 +1689,12 @@ void BPQConfigGen::ReadConfigFile()
 					// MAP Call Address[UDP | TCP-Master | TCPSlave Port][KEEPALIVE nnn][SOURCEPORT nnn][B]
 
 					struct MAPRec * MAP = &Maps[NextMap];
-					char *p_call, *p_ipad, *Port, *p_UDP, *BC;
-					char * ptr;
+					char *p_call, *p_ipad, *p_UDP;
 					char * p_udpport = 0;
 					char * p_Interval;
 
-					char Param[8][256];
-					char * ptr1, *ptr2;
-					int n = 0;
-					int Interval = 0;
-					int port = 0;				// Raw IP
 					int bcflag = 0;
 					int TCPMode = 0;
-					int SourcePort = 0;
-					int Dynamic;
 
 					p_call = strtok(Context, " \t\n\r");
 
@@ -1296,11 +1710,8 @@ void BPQConfigGen::ReadConfigFile()
 
 					p_UDP = strtok(NULL, " \t\n\r");
 
-					Interval = 0;
-					port = 0;				// Raw IP
 					bcflag = 0;
 					TCPMode = 0;
-					SourcePort = 0;
 
 					//
 					//		Look for (optional) KEEPALIVE, DYNAMIC, UDP or BROADCAST params
@@ -1309,7 +1720,6 @@ void BPQConfigGen::ReadConfigFile()
 					{
 						if (stricmp(p_UDP, "DYNAMIC") == 0)
 						{
-							Dynamic = TRUE;
 							p_UDP = strtok(NULL, " \t\n\r");
 							continue;
 						}
@@ -1321,7 +1731,6 @@ void BPQConfigGen::ReadConfigFile()
 							if (p_Interval == NULL)
 								continue;
 
-							Interval = atoi(p_Interval);
 							p_UDP = strtok(NULL, " \t\n\r");
 							continue;
 						}
@@ -1333,7 +1742,6 @@ void BPQConfigGen::ReadConfigFile()
 							if (p_udpport == NULL)
 								continue;
 
-							port = atoi(p_udpport);
 							p_UDP = strtok(NULL, " \t\n\r");
 							continue;
 						}
@@ -1345,7 +1753,6 @@ void BPQConfigGen::ReadConfigFile()
 							if (p_udpport == NULL)
 							continue;
 
-							SourcePort = atoi(p_udpport);
 							p_UDP = strtok(NULL, " \t\n\r");
 							continue;
 						}
@@ -1357,7 +1764,6 @@ void BPQConfigGen::ReadConfigFile()
 							if (p_udpport == NULL)
 								continue;
 
-							port = atoi(p_udpport);
 							p_UDP = strtok(NULL, " \t\n\r");
 
 							TCPMode = TCPMaster;
@@ -1372,7 +1778,6 @@ void BPQConfigGen::ReadConfigFile()
 							if (p_udpport == NULL)
 								continue;
 
-							port = atoi(p_udpport);
 							p_UDP = strtok(NULL, " \t\n\r");
 
 							TCPMode = TCPSlave;
@@ -1587,6 +1992,14 @@ void BPQConfigGen::ReadConfigFile()
 					continue;
 				}
 
+
+				if (stricmp(ptr, "SCSTRACKER") == 0)
+				{
+					PORT->PortType = H_TRK;
+					continue;
+				}
+
+
 				if (stricmp(ptr, "SERIAL") == 0)
 				{
 					PORT->PortType= H_SERIAL;
@@ -1613,7 +2026,13 @@ void BPQConfigGen::ReadConfigFile()
 
 				if (stricmp(ptr, "VARA") == 0)
 				{
-					PORT->PortType= H_VARA;
+					PORT->PortType = H_VARA;
+					continue;
+				}
+
+				if (stricmp(ptr, "KISSHF") == 0)
+				{
+					PORT->PortType = H_KISSHF;
 					continue;
 				}
 			}
@@ -1628,21 +2047,48 @@ void BPQConfigGen::ReadConfigFile()
 			continue;
 		}
 
-		if (stricmp(ptr, "IPGATEWAY") == 0 ||
-			stricmp(ptr, "PORTMAPPER") == 0 ||
-			stricmp(ptr, "APRSDIGI") == 0 ||
-			stricmp(ptr, "ROUTES:") == 0 ||
-			stricmp(ptr, "INFOMSG:") == 0 ||
-			stricmp(ptr, "IDMSG:") == 0 ||
-			stricmp(ptr, "BTEXT:") == 0 ||
-			stricmp(ptr, "CTEXT:") == 0)
-
+		if (stricmp(ptr, "ROUTES:") == 0)
 		{
-			strcat(mainConfig, linecopy);
-			inBlock = TRUE;
+			inRoutes = TRUE;
 			continue;
 		}
 
+		if (stricmp(ptr, "IPGATEWAY") == 0)
+		{
+			currentBlockType = IPGATEWAY;
+			inBlock = TRUE;
+		}
+		else if (stricmp(ptr, "PORTMAPPER") == 0)
+		{
+			currentBlockType = PORTMAPPER;
+			inBlock = TRUE;
+		}
+		else if (stricmp(ptr, "INFOMSG:") == 0)
+		{
+			currentBlockType = INFOMSG;
+			inBlock = TRUE;
+		}
+		else if (stricmp(ptr, "IDMSG:") == 0)
+		{
+			currentBlockType = IDMSG;
+			inBlock = TRUE;
+		}
+		else if (stricmp(ptr, "BTEXT:") == 0)
+		{
+			currentBlockType = BTEXT;
+			inBlock = TRUE;
+		}
+		else if (stricmp(ptr, "CTEXT:") == 0)
+		{
+			currentBlockType = CTEXT;
+			inBlock = TRUE;
+		}
+
+		if (inBlock)
+		{
+			strcat(blockConfig[currentBlockType], linecopy);
+			continue;
+		}
 
 		if (stricmp(ptr, "NODECALL") == 0)
 		{
@@ -1661,9 +2107,28 @@ void BPQConfigGen::ReadConfigFile()
 		if (stricmp(ptr, "LOCATOR") == 0)
 		{
 			char * ptr = strtok_s(NULL, "\t\r\n", &Context);
-			strlop(ptr, ' ');
+			strlop(ptr, ';');
 			LOC = ptr;
 			ui.LOC->setText(LOC);
+			continue;
+		}
+
+		if (stricmp(ptr, "HFCTEXT") == 0)
+		{
+			char * Msg = strtok_s(NULL, "=\t\r\n", &Context);
+			ui.HFCTEXT->setText(Msg);
+			if (strlen(Msg) > 80)
+				Msg[80] = 0;
+
+			strcpy(HFCText, Msg);
+
+			continue;
+		}
+
+		if (stricmp(ptr, "TNCPORT") == 0)
+		{
+			strcpy(tncportConfig, linecopy);
+			inTNCPort = TRUE;
 			continue;
 		}
 
@@ -1750,7 +2215,10 @@ void BPQConfigGen::ReadConfigFile()
 		}
 
 		if (stricmp(line, "SIMPLE") == 0)
+		{
+			ui.SIMPLE->setChecked(1);
 			continue;
+		}
 
 		if (stricmp(line, "LINMAIL") == 0)
 			continue;
@@ -1758,6 +2226,58 @@ void BPQConfigGen::ReadConfigFile()
 		if (stricmp(line, "LINCHAT") == 0)
 			continue;
 
+
+		if (stricmp(line, "FULL_CTEXT") == 0)
+		{
+			ptr = strtok_s(NULL, " =\t\r\n", &Context);
+
+			ui.FullCText->setChecked(atoi(ptr));
+			continue;
+		}
+
+		if (stricmp(line, "IDINTERVAL") == 0)
+		{
+			ptr = strtok_s(NULL, " =\t\r\n", &Context);
+
+			ui.IDInterval->setText(ptr);
+			continue;
+		}
+
+		if (stricmp(line, "BTINTERVAL") == 0)
+		{
+			ptr = strtok_s(NULL, " =\t\r\n", &Context);
+
+			ui.BTInterval->setText(ptr);
+			continue;
+		}
+
+		for (i = 0; i < NodeParamCount; i++)
+		{
+			struct NODEPARAM * NodeParam = &NodeParams[i];
+
+			if (stricmp(line, NodeParam->param) == 0)
+			{
+				QCheckBox * checkbox = (QCheckBox *)NodeParam->widget;
+				QLineEdit * linedit = (QLineEdit *)NodeParam->widget;
+
+				ptr = strtok_s(NULL, " =\t\r\n", &Context);
+
+				memcpy(NodeParam->value, ptr, 19);
+				
+				if (checkbox)
+				{
+					if (NodeParam->isCheckBox)
+						checkbox->setChecked(atoi(ptr));
+					else
+						linedit->setText(ptr);
+				}
+				break;
+			}
+		}
+			
+		if (i < NodeParamCount)
+			continue;
+		
 		// Something we don't handle - write to main config section
 
 //		qDebug() << linecopy;
@@ -1771,6 +2291,15 @@ void BPQConfigGen::ReadConfigFile()
 	refreshPorts();
 	refreshAppls();
 	refreshAPRS();
+
+	ui.IPGateway->setPlainText(blockConfig[IPGATEWAY]);
+	ui.PortMapper->setPlainText(blockConfig[PORTMAPPER]);
+	ui.InfoMsg->setPlainText(blockConfig[INFOMSG]);
+	ui.IDMsg->setPlainText(blockConfig[IDMSG]);
+	ui.BText->setPlainText(blockConfig[BTEXT]);
+	ui.CText->setPlainText(blockConfig[CTEXT]);
+	ui.Routes->setPlainText(routeConfig);
+	ui.TNCPort->setPlainText(tncportConfig);
 }
 
 void BPQConfigGen::WriteARDOPPort(FILE * fp)
@@ -1842,7 +2371,6 @@ void BPQConfigGen::AddTCPKISSPort(FILE * fp)
 
 void refreshPorts()
 {
-	int i = 0;
 	int x = 5;
 
 	for (int i = 0; i < 32; i++)
@@ -2031,6 +2559,7 @@ void BPQConfigGen::CreateConfig()
 	char FN[260];
 	FILE *fp;
 	int portcount = 0;
+	int val;
 
 	GetParams();
 
@@ -2050,9 +2579,17 @@ void BPQConfigGen::CreateConfig()
 		return;
 	}
 
+	saveConfigBlock(ui.InfoMsg, INFOMSG);
+	saveConfigBlock(ui.IDMsg, IDMSG);
+	saveConfigBlock(ui.BText, BTEXT);
+	saveConfigBlock(ui.CText, CTEXT);
+
 	fprintf(fp, "; Written by BPQConfigGen\r\n");
 	fprintf(fp, "\r\n");
-	fprintf(fp, "SIMPLE\r\n");
+
+	if (ui.SIMPLE->isChecked())
+		fprintf(fp, "SIMPLE\r\n");
+	
 	fprintf(fp, "NODECALL=%s\r\n", NodeCall.toLocal8Bit().constData());
 
 	if (NodeAlias.size())
@@ -2061,9 +2598,58 @@ void BPQConfigGen::CreateConfig()
 	if (LOC.size())
 		fprintf(fp, "LOCATOR=%s\r\n", LOC.toLocal8Bit().constData());
 
+	if (ui.FullCText->isChecked())
+		fprintf(fp, "FULL_CTEXT=1\r\n");
+
+	val = atoi(ui.IDInterval->text().toUtf8().data());
+	fprintf(fp, "IDINTERVAL=%d\r\n", val);
+
+	val = atoi(ui.BTInterval->text().toUtf8().data());
+	fprintf(fp, "BTINTERVAL=%d\r\n", val);
+
+	if (HFCText[0])
+		fprintf(fp, "HFCTEXT=%s\r\n", HFCText);
+		
 	fprintf(fp, "\r\n");
 
+	// Write Main Settings
+
+	// If we are not using SIMPLE then write all params that have a default in SIMPLE even if not set
+
+	struct NODEPARAM * NodeParam;
+
+	for (int i = 0; i < NodeParamCount; i++)
+	{
+		NodeParam = &NodeParams[i];
+
+		if (NodeParam->value[0])
+			fprintf(fp, "%s=%s\r\n", NodeParam->param, NodeParam->value);
+		else
+		{
+			// Not set, but if not using SIMPLE we need to write the default
+
+			if (ui.SIMPLE->isChecked() == 0)
+				if (NodeParam->inSimple && NodeParam->simpleDefault[0])
+					fprintf(fp, "%s=%s\r\n", NodeParam->param, NodeParam->simpleDefault);
+		}
+	}
+
+	// Any unsupported stuff
+
 	fprintf(fp, mainConfig);
+	fprintf(fp, "\r\n");
+
+	// Write Block Configs
+
+	for (int i = 0; i < 10; i++)
+	{
+		if (blockConfig[i][0])
+		{
+			fprintf(fp, blockConfig[i]);
+			fprintf(fp, "\r\n");
+		}
+	}
+
 
 	// Write PORT Lines 
 
@@ -2107,7 +2693,7 @@ void BPQConfigGen::CreateConfig()
 				}
 
 				fprintf(fp, "\r\n");
-				fprintf(fp, "ENDPORT\r\n");
+				fprintf(fp, "ENDPORT\r\n\r\n");
 
 				strcat(Ports[i].portConfig, "ENDPORT\r\n");
 			}
@@ -2145,7 +2731,7 @@ void BPQConfigGen::CreateConfig()
 				}
 
 				fprintf(fp, "\r\n");
-				fprintf(fp, "ENDPORT\r\n");
+				fprintf(fp, "ENDPORT\r\n\r\n");
 
 				strcat(Ports[i].portConfig, "ENDPORT\r\n");
 			}
@@ -2169,6 +2755,34 @@ void BPQConfigGen::CreateConfig()
 		msgBox.exec();
 	}
 
+	// Write locked routes
+
+	fprintf(fp, "ROUTES:\r\n");
+	fprintf(fp, routeConfig);		// Comment block
+	fprintf(fp, "\r\n");
+
+	for (int i = 0; i < MaxLockedRoutes; i++)
+	{
+		struct ROUTECONFIG * Route = &Routes[i];
+
+		if (Route->call[0])
+		{
+			int INP3Flag = 0;
+
+			if (Route->INP3)
+				INP3Flag |= 1;
+
+			if (Route->NoKeepAlive)
+				INP3Flag |= 2;
+
+
+			fprintf(fp, "%s,%d,%d,%d,%d,%d,%d,%d\r\n",
+				Route->call, Route->quality, Route->port,
+				Route->pwind, Route->pfrack, Route->ppacl,
+				INP3Flag, Route->farQual);
+		}
+	}
+	fprintf(fp, "****\r\n\r\n");
 
 	for (int i = 0; i < 32; i++)
 	{
@@ -2257,6 +2871,7 @@ void PortDialog::PortTypeChanged(int Selected)
 	case H_V4:
 	case H_VARA:
 	case H_WINMOR:
+	case H_KISSHF:
 
 		pLabel1->setText("Host Name");
 		pLabel2->setText("TCP Port");
@@ -2725,6 +3340,20 @@ void PortDialog::myaccept()
 		ptr += sprintf(ptr, "ENDPORT\r\n");
 
 		break;
+
+	case H_KISSHF:
+
+		ptr += sprintf(ptr, "PORT\r\n");
+		ptr += sprintf(ptr, " PORTNUM=%d\r\n", port + 1);
+		ptr += sprintf(ptr, " ID=%s\r\n", PORT->ID);
+		ptr += sprintf(ptr, " DRIVER=KISSHF\r\n");
+		ptr += sprintf(ptr, " INTERLOCK=1\r\n");
+		ptr += sprintf(ptr, " CONFIG\r\n");
+		ptr += sprintf(ptr, "  ADDR %s %d\r\n", PORT->Param1, PORT->Param2);
+		ptr += sprintf(ptr, "ENDPORT\r\n");
+
+		break;
+
 
 	default:
 
@@ -3283,9 +3912,6 @@ int APRSProcessLine(char * buf)
 		char * p_Path, *p_Port, *p_Text;
 		int Interval;
 		struct OBJECT * Object = &Objects[NextObject];;
-		int Digi = 2;
-		char * Context;
-		int SendTo;
 
 		p_value = strtok(NULL, "=");
 		if (p_value == NULL) return FALSE;
@@ -3425,7 +4051,6 @@ int APRSProcessLine(char * buf)
 
 	if (stricmp(ptr, "APRSPATH") == 0)
 	{
-		int Digi = 2;
 		int Port;
 		char * Context;
 
@@ -3454,7 +4079,6 @@ int APRSProcessLine(char * buf)
 
 	if (stricmp(ptr, "DIGIMAP") == 0)
 	{
-		int DigiTo;
 		int Port;
 		char * Context;
 
@@ -3483,7 +4107,6 @@ int APRSProcessLine(char * buf)
 
 	if (stricmp(ptr, "BRIDGE") == 0)
 	{
-		int DigiTo;
 		int Port;
 		char * Context;
 
@@ -3804,11 +4427,12 @@ void BPQConfigGen::WriteAPRSConfig(FILE *fp)
 	if (LogAPRSIS)
 		fprintf(fp, " LogAPRSIS\r\n");
 
-	if (WXFileName[0])
+	if (WXFileName[0] && WXPortList[0])
 	{
 		fprintf(fp, " WXFileName=%s\r\n", WXFileName);
 		fprintf(fp, " WXPortList=%s\r\n", WXPortList);
-		fprintf(fp, " WXComment=%s\r\n", WXComment);
+		if (WXComment[0])
+			fprintf(fp, " WXComment=%s\r\n", WXComment);
 		fprintf(fp, " WXInterval=%d\r\n", WXInterval);
 	}
 
@@ -3966,13 +4590,11 @@ void BPQConfigGen::SaveAPRS()
 	WXInterval = ui.WXInterval->text().toInt();
 	
 	QMessageBox msgBox;
-
 	msgBox.setWindowTitle("Save");
-
 	msgBox.setText("APRS Changes saved. Remember to write the configuration to apply changes");
+	msgBox.exec();
 
 	ui.tabWidget->setCurrentIndex(1);
-	msgBox.exec();
 }
 
 // Install/Update
@@ -4191,9 +4813,9 @@ void BPQConfigGen::doUpdate(int Beta)
 
 		msgBox.exec();
 
-		stateMachine = 10;
+		stateMachine = 9;
 		Mode = Beta;
-		downloadFile("BPQInstaller.enc", Beta, ARM);
+		downloadFile("LatestInstaller/LatestInstaller.txt", 0, 0);
 
 		return;
 	}
@@ -4209,7 +4831,6 @@ void BPQConfigGen::doUpdate(int Beta)
 #else
 
 	// Linux
-
 
 	// can't just call downloadFile several times as it returns
 	// before transfer is complete. And can't just wait, or the GUI freezes
@@ -4234,8 +4855,11 @@ void BPQConfigGen::downloadFile(const char * Filename, int Beta, int ARM)
 	if (Beta)
 		strcat(URL, "Beta/");
 
+
 	if (ARM)
 		strcat(URL, "pi");
+	else if (strcmp(Filename, "BPQAPRS") == 0)
+		strcat(URL, "x86");
 
 	strcat(URL, Filename);
 
@@ -4277,14 +4901,18 @@ void BPQConfigGen::downloadProgress(qint64 bytesReceived, qint64 bytesTotal)
 	ui.updateLog->insertPlainText(QString::fromUtf8(logLine));
 }
 
+char InstallerName[256];
+
 void BPQConfigGen::replyFinished(QNetworkReply *reply)
 {
 	int len = reply->bytesAvailable();
 	QByteArray Data = reply->readAll();
 	char logLine[512];
 	QByteArray TempName;
+
 #ifdef WIN32
 	unsigned char * Prog = (unsigned char *)Data.data();
+	char FN[256];
 #endif
 
 	sprintf(logLine, "\nDownloading Complete - Length %d\n", len);
@@ -4311,7 +4939,7 @@ void BPQConfigGen::replyFinished(QNetworkReply *reply)
 			SaveDownloadedFile(&Data, len, "piBPQAPRS", programPath, false);
 		else
 			SaveDownloadedFile(&Data, len, "x86BPQAPRS", programPath, false);
-	
+
 		// if there isn't an APRS symbol file get APRS base files
 
 		{
@@ -4334,7 +4962,7 @@ void BPQConfigGen::replyFinished(QNetworkReply *reply)
 
 		downloadFile("LinBPQAPRS.zip", 0, 0);
 		return;
-	
+
 	case 4:
 
 		SaveDownloadedFile(&Data, len, "BPQAPRS.zip", programPath, false);
@@ -4347,50 +4975,108 @@ void BPQConfigGen::replyFinished(QNetworkReply *reply)
 
 #ifdef WIN32
 
+	case 10:
+
+		// Windows Installer Filename Download
+
+		strcpy(InstallerName, Data);
+		strlop(InstallerName, 10);
+		strlop(InstallerName, 13);
+
+		sprintf(FN, "LatestInstaller/%s", InstallerName);
+
+		downloadFile(FN, Mode, ARM);
+		return;
+
 	case 11:
 
 		// Windows download complete
 
-		Prog += 256;		// over real filename;
-		len -= 256;
+	{
+		// Extra block so Temp File goes out of scope
 
-		sprintf(logLine, "Installer is %s\n", Data.data());
-		ui.updateLog->insertPlainText(QString::fromUtf8(logLine));
+		char fulltempname[256];
 
-		// Decrypt (xor with 0xFF), write to file and execute
+		QTemporaryDir dir;
+
+		QByteArray TempDir = dir.path().toLatin1();
+
+
+		// The QTemporaryDir destructor removes the temporary directory
+		// as it goes out of scope.
+
+		QByteArray TempName;
 		{
 			// Extra block so Temp File goes out of scope
 
-			QTemporaryFile file("XXXXXX.exe");
+			TempName.append(TempDir);
+			TempName.append("/XXXXXX.zip");
+
+			QTemporaryFile file(TempName);
 
 			if (file.open())
 			{
 				sprintf(logLine, "Writing to Temporary File ");
 				ui.updateLog->insertPlainText(QString::fromUtf8(logLine));
 				ui.updateLog->insertPlainText(file.fileName());
+				ui.updateLog->insertPlainText("\n");
 
 				TempName = file.fileName().toLatin1();
 
 				file.setAutoRemove(false);		// so it isn't deleted
-
-				for (int i = 0; i < len; i++)
-					Prog[i] ^= 0xff;
-
-				file.write((char *)Prog, len);
-
+				file.write(Data.data(), len);
 				file.close();
 			}
 		}
 
+		// Exec unzip 
+
+		QStringList arguments;
+		char dparam[256] = "-o";
+		strcat(dparam, TempDir.data());
+		arguments << "e" << dparam << "-pbpq32" << "-y" << TempName;
+
+		QProcess *myProcess = new QProcess();
+		myProcess->setProgram("7za.exe");
+		myProcess->setArguments(arguments);
+
+		sprintf(logLine, "Unzip to Temporary Directory ");
+		ui.updateLog->insertPlainText(QString::fromUtf8(logLine));
+		ui.updateLog->insertPlainText(TempDir.data());
+		ui.updateLog->insertPlainText("\n");
+
+		myProcess->start();
+
+		if (!myProcess->waitForFinished(10000))
+		{
+			qDebug() << "Didn't Finish";
+			myProcess->kill();
+		}
+
+		QFile::remove(TempName);
+
 		// Exec file. Just running file doesn't seem top work so use cmd.exe to run it
 
 		{
-			QString program = TempName;
+			QString program = TempDir;
+			program.append("/");
+			char * ptr = strstr(InstallerName, "zip");
+			if (ptr)
+				*ptr = 0;
+
+			program.append(InstallerName);
+			program.append("exe");
+
 			QStringList arguments;
-			arguments << "/C" << TempName;
+			arguments << "/C" << program;
 			QProcess *myProcess = new QProcess();
 			myProcess->setProgram("cmd.exe");
 			myProcess->setArguments(arguments);
+
+			sprintf(logLine, "Running Installer ");
+			ui.updateLog->insertPlainText(QString::fromUtf8(logLine));
+			ui.updateLog->insertPlainText(program);
+			ui.updateLog->insertPlainText("\n");
 
 			myProcess->start();
 
@@ -4405,14 +5091,14 @@ void BPQConfigGen::replyFinished(QNetworkReply *reply)
 				qDebug() << "Didn't Finish";
 				myProcess->kill();
 			}
-		}
-		QFile::remove(TempName);
 
+			QFile::remove(program);
+		}
 		getVersions();
 
 		stateMachine = 0;
 		return;
-
+	}
 	case 13:			// get next Windows file
 
 		SaveDownloadedFile(&Data, len, "bpq32.dll", "c:/windows/system32", TRUE);
@@ -4457,7 +5143,7 @@ void BPQConfigGen::SaveDownloadedFile(QByteArray * Data, int len, const char * N
 
 	if (unzip)
 	{
-		// write to temporary file, unzip to temporary dirtory and
+		// write to temporary file, unzip to temporary directory and
 		// compare with original. If different unzip it to target
 		// delete temporary files
 
@@ -4553,24 +5239,21 @@ void BPQConfigGen::SaveDownloadedFile(QByteArray * Data, int len, const char * N
 
 		// Update needed - unzip again to target
 
-		// if updating bpq32.dll make sure we have admin access
+		// if updating on Windows make sure we have admin access
 
-		if (strcmp(Name, "bpq32.dll") == 0)
+		if (IsUserAdmin() == FALSE)
 		{
-			if (IsUserAdmin() == FALSE)
-			{
-				QMessageBox::StandardButton resBtn = QMessageBox::question(this, "BPQConfigGen",
-					tr("Update to bpq32.dll needed. BPQConfigGen will restart with Admin Access to allow this\n"),
-					QMessageBox::Cancel | QMessageBox::No | QMessageBox::Yes, QMessageBox::Yes);
+			QMessageBox::StandardButton resBtn = QMessageBox::question(this, "BPQConfigGen",
+				tr("Update needed. BPQConfigGen will restart with Admin Access to allow this\n"),
+				QMessageBox::Cancel | QMessageBox::No | QMessageBox::Yes, QMessageBox::Yes);
 
-				if (resBtn == QMessageBox::Yes)
-				{
-					Elevate();
-					exit(0);
-				}
+			if (resBtn == QMessageBox::Yes)
+			{
+				Elevate();
+				exit(0);
 			}
 		}
-	
+		
 		datestampedbackup(fullName);
 
 		arguments.clear();
@@ -4611,11 +5294,11 @@ void BPQConfigGen::SaveDownloadedFile(QByteArray * Data, int len, const char * N
 
 		return;
 	}
+
 	// uncompressed - just check if changed then write output
 
 	{
 		// block so QFile goes out of scope
-
 
 		qDebug() << "Checking old file " << fullName;
 
@@ -4635,6 +5318,21 @@ void BPQConfigGen::SaveDownloadedFile(QByteArray * Data, int len, const char * N
 				ui.updateLog->insertPlainText("File unchanged - not updating\n");
 				return;
 			}
+		}
+	}
+
+	// if updating on Windows make sure we have admin access
+
+	if (IsUserAdmin() == FALSE)
+	{
+		QMessageBox::StandardButton resBtn = QMessageBox::question(this, "BPQConfigGen",
+			tr("Update needed. BPQConfigGen will restart with Admin Access to allow this\n"),
+			QMessageBox::Cancel | QMessageBox::No | QMessageBox::Yes, QMessageBox::Yes);
+
+		if (resBtn == QMessageBox::Yes)
+		{
+			Elevate();
+			exit(0);
 		}
 	}
 
@@ -4691,6 +5389,20 @@ void BPQConfigGen::SaveDownloadedFile(QByteArray * Data, int len, const char * N
 		qDebug() << "failed to weite " << fullName;
 
 }
+
+// All Parameters
+
+char keywords[60][20] = {
+"OBSINIT", "OBSMIN", "NODESINTERVAL", "L3TIMETOLIVE", "L4RETRIES", "L4TIMEOUT",
+"BUFFERS", "PACLEN", "TRANSDELAY", "T3", "IDLETIME", "BBS",
+"NODE",  "BBSALIAS", "BBSCALL",
+ "MAXLINKS",
+"MAXNODES", "MAXROUTES", "MAXCIRCUITS" , "MINQUAL",
+"HIDENODES", "L4DELAY", "L4WINDOW",  "UNPROTO", "BBSQUAL",
+"APPLICATIONS", "ENABLE_LINKED",
+ "SIMPLE", "AUTOSAVE", "L4APPL", "NETROMCALL", "C_IS_CHAT", "MAXRTT", "MAXHOPS",		// IPGATEWAY= no longer allowed
+"LogL4Connects", "SAVEMH", "ENABLEADIFLOG"
+};           /* parameter keywords */
 
 
 
