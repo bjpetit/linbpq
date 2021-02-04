@@ -996,6 +996,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix crash when a Windows HID device doesn't have a product_string
 //	Changes to VARA TNC connection and restart process
 //	Trigger FALLBACKTORELAY if attempt to connect to all CMS servers fail.
+//	Fix saving part lines in adif log and Winlink Session reporting
 
 #define CKernel
 

@@ -142,11 +142,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\OneDrive\Dev\Source\bpq32\lib\libconfig.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot; Setupapi.lib"
-				OutputFile="c:\linbpq\LinBPQ.exe"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfig.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot; Setupapi.lib"
+				OutputFile="c:\devprogs\bpq32\LinBPQ.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
+				HeapReserveSize="5000000"
+				StackReserveSize="10000000"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
 				TargetMachine="1"
@@ -243,7 +245,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\CKernel\bpqether.c"
+				RelativePath="..\CommonSource\bpqether.c"
 				>
 			</File>
 			<File
@@ -260,6 +262,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\BPQtoAGW.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\bpqvkiss.c"
 				>
 			</File>
 			<File
@@ -340,6 +346,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\kiss.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\KISSHF.c"
 				>
 			</File>
 			<File

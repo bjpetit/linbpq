@@ -67,7 +67,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfig.lib"
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfigd.lib"
 				OutputFile="c:\DevProgs\bpq32\BPQMail.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"

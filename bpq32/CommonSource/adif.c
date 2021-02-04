@@ -184,15 +184,30 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 
 	// Try to build complete lines
 
-	Len = strlen(&ADIF->PartMessage[0]);
+	if (Dirn == 'R')
+	{
+		Len = strlen(&ADIF->PartMessageRX[0]);
 
-	if (Len + strlen(Msg) < 256)
-		strcat(ADIF->PartMessage, Msg);
+		if (Len + strlen(Msg) < 512)
+			strcat(ADIF->PartMessageRX, Msg);
 
-	if (strstr(Msg, "<cr>"))
-		Msg = ADIF->PartMessage;
+		if (strstr(Msg, "<cr>"))
+			Msg = ADIF->PartMessageRX;
+		else
+			return TRUE;
+	}
 	else
-		return TRUE;
+	{
+		Len = strlen(&ADIF->PartMessageTX[0]);
+
+		if (Len + strlen(Msg) < 256)
+			strcat(ADIF->PartMessageTX, Msg);
+
+		if (strstr(Msg, "<cr>"))
+			Msg = ADIF->PartMessageTX;
+		else
+			return TRUE;
+	}
 
 	switch (Dirn)
 	{
@@ -207,7 +222,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 				if (endsid && (endsid - Msg) < 78)
 					memcpy(ADIF->ServerSID, Msg, ++endsid - Msg);
 			}
-			ADIF->PartMessage[0] = 0;
+			Msg[0] = 0;
 			return TRUE;
 		}
 
@@ -225,13 +240,15 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 					memcpy(ADIF->UserSID, Msg, ++endsid - Msg);
 			}
 
-			ADIF->PartMessage[0] = 0;		
+			Msg[0] = 0;		
 			return TRUE;
 		}
 
 		if (ADIF->LOC[0] == 0 && Msg[0] == ';' && stristr(Msg, "DE "))
 		{
 			// Look for ; GM8BPQ-10 DE G8BPQ (IO92KX)
+			// AirMail EA8URF de KG5VSG (GK86qo) QTC: 1 209 
+
 
 			// Paclink-Unix Sends
 
@@ -246,7 +263,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 			if ((EndLoc - StartLoc) < 10)
 				memcpy(ADIF->LOC, StartLoc + 1, (EndLoc - StartLoc) - 1);
 
-			ADIF->PartMessage[0] = 0;
+			Msg[0] = 0;
 			return TRUE;
 		}
 	}
@@ -284,7 +301,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 			ADIF->Dirn = Dirn;
 		}
 		strcpy(ADIF->Termination, "FC");
-		ADIF->PartMessage[0] = 0;
+		Msg[0] = 0;
 		return TRUE;
 	}
 
@@ -311,7 +328,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 		}
 
 		strcpy(ADIF->Termination, "FS");
-		ADIF->PartMessage[0] = 0;
+		Msg[0] = 0;
 		return TRUE;
 	}
 
@@ -322,7 +339,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 		CountMessages(ADIF);			// This acks last batch
 
 		memcpy(ADIF->Termination, Msg, 2);
-		ADIF->PartMessage[0] = 0;
+		Msg[0] = 0;
 		return TRUE;
 	}
 
@@ -330,7 +347,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 	if (Msg[0] == ';' && Msg[3] == ':' )
 		memcpy(ADIF->Termination, &Msg[1],2);
 
-	ADIF->PartMessage[0] = 0;
+	Msg[0] = 0;
 	return TRUE;
 }
 
