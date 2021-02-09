@@ -37,15 +37,18 @@ int AGWPort;
 int Number = 0;				// Number waiting to be sent
 
 int SoundIsPlaying = 0;
+int UDPSoundIsPlaying = 0;
 int Capturing = 0;
 
 extern unsigned short buffer[2][1200];
+extern int SoundMode;
 
 short * DMABuffer;
 
 unsigned short * SendtoCard(unsigned short * buf, int n);
 short * SoundInit();
 void DoTX(int Chan);
+void UDPPollReceivedSamples();
 
 
 int SampleNo;
@@ -64,7 +67,7 @@ void initfft()
 {
 	in = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * N);
 	out = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * N);
-	p = fftwf_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_MEASURE);
+	p = fftwf_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 }
 
 void dofft(short * inp, float * outr, float * outi)
@@ -512,32 +515,8 @@ int maxrawSamplesLength;
 
 void ProcessNewSamples(short * Samples, int nSamples)
 {
-	if (SoundIsPlaying == FALSE)
+	if (SoundIsPlaying == FALSE && UDPSoundIsPlaying == FALSE)
 		BufferFull(Samples, nSamples);
-
-	/*
-	
-	// Append new data to anything in rawSamples
-
-	memcpy(&rawSamples[rawSamplesLength], Samples, nSamples * 2);
-	rawSamplesLength += nSamples;
-
-	if (rawSamplesLength > maxrawSamplesLength)
-		maxrawSamplesLength = rawSamplesLength;
-
-	if (rawSamplesLength >= 2400)
-		Debugprintf("Corrupt rawSamplesLength %d", rawSamplesLength);
-
-	nSamples = rawSamplesLength;
-	Samples = rawSamples;
-
-	rawSamplesLength = 0;
-
-	//	printtick("Start Busy");
-	UpdateBusyDetector(Samples);
-	//	printtick("Done Busy");
-
-	*/
 };
 
 void doCalib(int Chan, int Act)
@@ -593,7 +572,13 @@ void MainLoop()
 	
 	// So All the soundcard stuff will need to be generalised
 
-	PollReceivedSamples();
+	if (UDPServ)
+		UDPPollReceivedSamples();
+
+	if (SoundMode == 3)
+		UDPPollReceivedSamples();
+	else
+		PollReceivedSamples();
 
 
 	if (modem_mode[0] == MODE_ARDOP)
@@ -603,6 +588,8 @@ void MainLoop()
 
 	DoTX(0);
 	DoTX(1);
+	DoTX(2);
+	DoTX(3);
 
 }
 
@@ -763,7 +750,7 @@ void DoTX(int Chan)
 		return;
 	}
 
-	if (SoundIsPlaying)
+	if (SoundIsPlaying || UDPSoundIsPlaying)
 		return;
 
 	// Not doing anything so see if we have anything new to send
@@ -857,15 +844,6 @@ void stoptx(int snd_ch)
 	tx_status[snd_ch] = TX_SILENCE;
 
 	snd_status[snd_ch] = SND_IDLE;
-}
-
-void TX2RX(int snd_ch)
-{
-	if (snd_status[snd_ch] == SND_TX)
-		stoptx(snd_ch);
-
-	if (snd_status[snd_ch] == SND_IDLE)
-		RadioPTT(snd_ch, 0);
 }
 
 void RX2TX(int snd_ch)

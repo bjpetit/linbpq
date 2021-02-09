@@ -96,74 +96,74 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ARDOPC.c" />
-    <ClCompile Include="ardopSampleArrays.c" />
-    <ClCompile Include="ax25.c">
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ARDOPC.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ardopSampleArrays.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ax25.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
     </ClCompile>
-    <ClCompile Include="ax25_agw.c" />
-    <ClCompile Include="ax25_demod.c" />
-    <ClCompile Include="ax25_fec.c" />
-    <ClCompile Include="ax25_l2.c" />
-    <ClCompile Include="ax25_mod.c" />
-    <ClCompile Include="berlekamp.c" />
-    <ClCompile Include="BusyDetect.c" />
-    <ClCompile Include="Config.cpp">
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ax25_agw.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ax25_demod.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ax25_fec.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ax25_l2.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ax25_mod.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\berlekamp.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\BusyDetect.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\Config.cpp">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Default</CompileAs>
     </ClCompile>
-    <ClCompile Include="galois.c" />
-    <ClCompile Include="hid.c" />
-    <ClCompile Include="kiss_mode.c" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="Modulate.c" />
-    <ClCompile Include="ofdm.c" />
-    <ClCompile Include="pktARDOP.c" />
-    <ClCompile Include="QtSoundModem.cpp">
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\galois.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\hid.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\kiss_mode.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\main.cpp" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\Modulate.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ofdm.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\pktARDOP.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\QtSoundModem.cpp">
       <DynamicSource Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">input</DynamicSource>
       <QtMocFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">%(Filename).moc</QtMocFileName>
       <DynamicSource Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">input</DynamicSource>
       <QtMocFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">%(Filename).moc</QtMocFileName>
     </ClCompile>
-    <ClCompile Include="rs.c" />
-    <ClCompile Include="RSUnit.c" />
-    <ClCompile Include="ShowFilter.cpp" />
-    <ClCompile Include="SMMain.c" />
-    <ClCompile Include="sm_main.c" />
-    <ClCompile Include="SoundInput.c" />
-    <ClCompile Include="tcpCode.cpp" />
-    <ClCompile Include="UZ7HOUtils.c" />
-    <ClCompile Include="Waveout.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\rs.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\RSUnit.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ShowFilter.cpp" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\SMMain.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\sm_main.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\SoundInput.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\tcpCode.cpp" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\UZ7HOUtils.c" />
+    <ClCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\Waveout.c" />
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="QtSoundModem.h" />
+    <QtMoc Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\QtSoundModem.h" />
   </ItemGroup>
   <ItemGroup>
-    <QtUic Include="calibrateDialog.ui" />
-    <QtUic Include="devicesDialog.ui">
+    <QtUic Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\calibrateDialog.ui" />
+    <QtUic Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\devicesDialog.ui">
       <SubType>Designer</SubType>
     </QtUic>
-    <QtUic Include="filterWindow.ui" />
-    <QtUic Include="ModemDialog.ui">
+    <QtUic Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\filterWindow.ui" />
+    <QtUic Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\ModemDialog.ui">
       <SubType>Designer</SubType>
     </QtUic>
-    <QtUic Include="QtSoundModem.ui">
+    <QtUic Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\QtSoundModem.ui">
       <SubType>Designer</SubType>
     </QtUic>
   </ItemGroup>
   <ItemGroup>
-    <QtRcc Include="QtSoundModem.qrc" />
+    <QtRcc Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\QtSoundModem.qrc" />
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="tcpCode.h" />
-    <ClInclude Include="resource.h" />
-    <ClInclude Include="UZ7HOStuff.h" />
+    <QtMoc Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\tcpCode.h" />
+    <ClInclude Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\resource.h" />
+    <ClInclude Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\UZ7HOStuff.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="QtSoundModem.rc" />
+    <ResourceCompile Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\QtSoundModem.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="icon1.ico" />
-    <Image Include="soundmodem.ico" />
+    <Image Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\icon1.ico" />
+    <Image Include="..\..\..\..\..\Users\John\OneDrive\Dev\Source\QT\QtSoundModem\soundmodem.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

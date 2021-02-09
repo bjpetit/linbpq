@@ -53,6 +53,10 @@ int debugmode = 0;
 extern float src_buf[5][2048];
 extern byte RCVR[5];
 
+int UDPServerPort = 8884;
+int UDPClientPort = 8888;
+int TXPort = 8884;
+
 BOOL Firstwaterfall = 1;
 BOOL Secondwaterfall = 1;
 
@@ -279,6 +283,9 @@ UCHAR buf_status [5]  = {0,0,0,0};
 UCHAR tx_buf_num1 [5] = {0,0,0,0};
 UCHAR tx_buf_num [5] = {0,0,0,0};
 
+short active_rx_freq[5];
+
+
 
 int speed[5] = {0,0,0,0};
 int panels[6] = {1,1,1,1,1};
@@ -322,7 +329,6 @@ int PTT_device = FALSE;
 int RX_device = FALSE;
 int TX_device = FALSE;
 int TX_rotate = FALSE;
-int DualChan = TRUE;
 int UsingBothChannels = FALSE;
 int UsingLeft = FALSE;
 int UsingRight = FALSE;
@@ -1681,8 +1687,11 @@ void runModems()
 	int snd_ch, res;
 	pthread_t thread[4] = { 0,0,0,0 };
 
-	for (snd_ch = 0; snd_ch < 2; snd_ch++)
+	for (snd_ch = 0; snd_ch < 4; snd_ch++)
 	{
+		if (soundChannel[snd_ch] == 0)				// Unused channed
+			continue;	
+	
 		if (modem_mode[snd_ch] == MODE_ARDOP)
 			continue;			// Processed above
 
@@ -1714,14 +1723,13 @@ void runModemthread(void * param)
 {
 	int snd_ch = (int)(size_t)param;
 
-
 	// I want to run lowest to highest to simplify my display 
 
 	int offset = -(RCVR[snd_ch] * rcvr_offset[snd_ch]); // lowest
 	int lastrx = RCVR[snd_ch] * 2;
 
-	if (snd_ch == 1 && DualChan == 0)
-		return;							// No second modem
+	if (soundChannel[snd_ch] == 0)				// Unused channed
+		return;
 
 	for (rcvr_idx = 0; rcvr_idx <= lastrx; rcvr_idx++)
 	{
@@ -1741,6 +1749,22 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 	boolean add_fft_line;
 	int buf_offset;
 
+	// if UDP server active send as UDP Datagram
+
+	if (UDPServ)	// Extract just left
+	{
+		short Buff[1024];
+
+		i1 = 0;
+
+		for (i = 0; i < rx_bufsize; i++)
+		{
+			Buff[i] = Samples[i1];
+			i1 += 2;
+		}
+
+		sendSamplestoUDP(Buff, 512, TXPort);
+	}
 	// Do FFT on every 4th buffer (2048 samples)
 
 	add_fft_line = FALSE;
@@ -1752,8 +1776,11 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 		fft_mult = 0;
 	}
 
-	for (snd_ch = 0; snd_ch < 2; snd_ch++)
+	for (snd_ch = 0; snd_ch < 4; snd_ch++)
 	{
+		if (soundChannel[snd_ch] == 0)				// Unused channed
+			continue;
+
 		if (pnt_change[snd_ch])
 		{
 			make_core_BPF(snd_ch, rx_freq[snd_ch], bpf[snd_ch]);
@@ -1761,17 +1788,17 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 			pnt_change[snd_ch] = FALSE;
 		}
 
-		if (DualChan == 0)
-			break;
-
 	}
 
 	// I don't think we should process RX if either is sending
 
-	if (snd_status[0] != SND_TX && snd_status[1] != SND_TX)
+	if (snd_status[0] != SND_TX && snd_status[1] != SND_TX && snd_status[2] != SND_TX && snd_status[3] != SND_TX)
 	{
-		for (snd_ch = 0; snd_ch < 2; snd_ch++)
+		for (snd_ch = 0; snd_ch < 4; snd_ch++)
 		{
+			if (soundChannel[snd_ch] == 0)				// Unused channed
+				continue;
+
 			if (modem_mode[snd_ch] == MODE_ARDOP)
 			{
 				short ardopbuff[1200];

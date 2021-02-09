@@ -844,8 +844,6 @@ begin
 end;
 */
 
-
-
 int get_addr(char * Calls, UCHAR * AXCalls)
 {
 	//	CONVERT CALL + OPTIONAL DIGI STRING TO AX25, RETURN 
@@ -1288,16 +1286,20 @@ void del_incoming_mycalls_by_sock(void * socket)
 		{
 			TAX25Port * AX25Sess = &AX25Port[snd_ch][port];
 
-			if (socket == AX25Sess->socket)
+			if (AX25Sess->socket == socket)
 			{
-				// Shouldn't we send DM? -0 try it
+				if (AX25Sess->status != STAT_NO_LINK)
+				{
+					// Shouldn't we send DM? -0 try it
 
-				set_DM(snd_ch, AX25Sess->ReversePath);
+					set_DM(snd_ch, AX25Sess->ReversePath);
 
-				rst_timer(AX25Sess);
-				rst_values(AX25Sess);
+					rst_timer(AX25Sess);
+					rst_values(AX25Sess);
 
-				AX25Sess->status = STAT_NO_LINK;
+					AX25Sess->status = STAT_NO_LINK;
+				}
+				AX25Sess->socket = 0;
 			}
 		}
 	}

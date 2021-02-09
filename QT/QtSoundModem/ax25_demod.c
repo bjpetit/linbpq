@@ -457,7 +457,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 		if (TX_rotate)
 		{
-			for (i = 0; i < 4; i++)
+			for (int i = 0; i < 4; i++)
 			{
 				if (snd_status[i] == SND_TX)
 					dcd[snd_ch] = TRUE;

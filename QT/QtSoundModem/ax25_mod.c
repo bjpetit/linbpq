@@ -1611,6 +1611,31 @@ void modulator(UCHAR snd_ch, int buf_size)
 
 	if (calib_mode[snd_ch] > 0)
 	{
+		if (calib_mode[snd_ch] == 4)		// CWID
+		{
+			if (tx_status[snd_ch] == TX_SILENCE)
+			{
+				SoundIsPlaying = TRUE;
+				Debugprintf("Start CWID Chan %d", snd_ch);
+				RadioPTT(snd_ch, 1);
+
+				tx_status[snd_ch] = 6;
+			}
+
+			if (ARDOPSendToCard(snd_ch, SendSize) == 1)
+			{
+				// End of TX
+
+				tx_status[snd_ch] = TX_SILENCE;		// Stop TX
+				Flush();
+				RadioPTT(snd_ch, 0);
+				Debugprintf("End CWID");
+				calib_mode[snd_ch] = 0;
+			}
+			return;
+		}
+
+
 		if (tx_status[snd_ch] == TX_SILENCE)
 		{
 			SoundIsPlaying = TRUE;

@@ -2,8 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.43"
-#define VersionBytes {0, 0, 0, 43}
+#define VersionString "0.0.0.47"
+#define VersionBytes {0, 0, 0, 47}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -93,6 +93,14 @@
 
 // 0.43 Add Andy's on_SABM fix.
 //		Fix Crash if KISS Data sent to AGW port
+
+// 0.44 Add UDP bridge.
+
+// 0.45 Add two more modems.
+// 0.46 Fix two more modems.
+
+// 0.47 Fix suprious DM when host connection lost
+//		Add CWID
 
 #include <string.h>
 #include <stdlib.h>
@@ -697,7 +705,6 @@ extern int soundChannel[5];
 extern int modemtoSoundLR[4];
 
 extern short rx_freq[5];
-extern short active_rx_freq[5];
 extern short rx_shift[5];
 extern short rx_baudrate[5];
 extern short rcvr_offset[5];
@@ -747,6 +754,9 @@ extern BOOL MinOnStart;
 //RS TReedSolomon;
 //  Form1 TForm1;
 //  WaveFormat TWaveFormatEx;
+
+extern int UDPServ;
+extern long long udpServerSeqno;
 
 extern int Channels;
 extern int BitsPerSample;
@@ -825,7 +835,6 @@ extern int PTT_device;
 extern int RX_device;
 extern int TX_device;
 extern int TX_rotate;
-extern int DualChan;
 extern int UsingLeft;
 extern int UsingRight;
 extern int UsingBothChannels;

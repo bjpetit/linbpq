@@ -68,7 +68,6 @@ extern "C" char modes_name[modes_count][20];
 extern "C" int speed[5];
 extern "C" int KISSPort;
 extern "C" short rx_freq[5];
-extern "C" short active_rx_freq[5];
 
 extern "C" int CaptureCount;
 extern "C" int PlaybackCount;
@@ -101,15 +100,27 @@ extern "C"
 	void init_raduga();
 	void wf_Scale(int Chan);
 	void AGW_Report_Modem_Change(int port);
+	char * strlop(char * buf, char delim);
 }
 
 void make_graph_buf(float * buf, short tap, QPainter * bitmap);
 
 int ModemA = 2;
 int ModemB = 2;
+int ModemC = 2;
+int ModemD = 2;
 int FreqA = 1500;
 int FreqB = 1500;
+int FreqC = 1500;
+int FreqD = 1500;
 int DCD = 50;
+
+char CWIDCall[128] = "";
+int CWIDInterval = 0;
+int CWIDLeft = 0;
+int CWIDRight = 0;
+int CWIDType = 1;			// on/off
+
 
 int Closing = FALSE;				// Set to stop background thread
 
@@ -148,6 +159,13 @@ int NextWaterfallLine[2] = { 0 };
 
 unsigned int LastLevel = 255;
 unsigned int LastBusy = 255;
+
+extern "C" int UDPClientPort;
+extern "C" int UDPServerPort;
+extern "C" int TXPort;
+extern char UDPHost[64];
+
+QTimer *cwidtimer;
 
 QSystemTrayIcon * trayIcon = nullptr;
 
@@ -225,19 +243,27 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 	QRect r = geometry();
 
 	int A, B, C, W;
+	int modemBoxHeight = 30;
 
-	if (soundChannel[1])
-	{
-		ui.modeB->setVisible(1);
-		ui.centerB->setVisible(1);
-		ui.labelB->setVisible(1);
-	}
-	else
-	{
-		ui.modeB->setVisible(0);
-		ui.centerB->setVisible(0);
-		ui.labelB->setVisible(0);
-	}
+
+	ui.modeB->setVisible(soundChannel[1]);
+	ui.centerB->setVisible(soundChannel[1]);
+	ui.labelB->setVisible(soundChannel[1]);
+	DCDLabel[1]->setVisible(soundChannel[1]);
+
+	ui.modeC->setVisible(soundChannel[2]);
+	ui.centerC->setVisible(soundChannel[2]);
+	ui.labelC->setVisible(soundChannel[2]);
+	DCDLabel[2]->setVisible(soundChannel[2]);
+
+	ui.modeD->setVisible(soundChannel[3]);
+	ui.centerD->setVisible(soundChannel[3]);
+	ui.labelD->setVisible(soundChannel[3]);
+	DCDLabel[3]->setVisible(soundChannel[3]);
+
+	if (soundChannel[2] || soundChannel[3])
+		modemBoxHeight = 60;
+
 
 	A = r.height() - 25;   // No waterfalls
 
@@ -287,7 +313,7 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 
 	// Calc Positions of Waterfalls
 
-	ui.monWindow->setGeometry(QRect(0, 30, W, C - 56));
+	ui.monWindow->setGeometry(QRect(0, modemBoxHeight, W, C - (modemBoxHeight + 26)));
 	sessionTable->setGeometry(QRect(0, C, W, 175));
 
 	if (UsingBothChannels)
@@ -424,6 +450,8 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	{
 		ui.modeA->addItem(modes_name[i]);
 		ui.modeB->addItem(modes_name[i]);
+		ui.modeC->addItem(modes_name[i]);
+		ui.modeD->addItem(modes_name[i]);
 	}
 
 	char Title[128];
@@ -481,14 +509,30 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	DCDLabel[1]->setGeometry(QRect(514, 31, 12, 12));
 	DCDLabel[1]->setVisible(FALSE);
 
+	DCDLabel[2] = new QLabel(this);
+	DCDLabel[2]->setObjectName(QString::fromUtf8("DCDLedC"));
+	DCDLabel[2]->setGeometry(QRect(240, 61, 12, 12));
+	DCDLabel[2]->setVisible(FALSE);
+
+	DCDLabel[3] = new QLabel(this);
+	DCDLabel[3]->setObjectName(QString::fromUtf8("DCDLedD"));
+	DCDLabel[3]->setGeometry(QRect(514, 61, 12, 12));
+	DCDLabel[3]->setVisible(FALSE);
+	
 	DCDLed[0] = new QImage(12, 12, QImage::Format_RGB32);
 	DCDLed[1] = new QImage(12, 12, QImage::Format_RGB32);
+	DCDLed[2] = new QImage(12, 12, QImage::Format_RGB32);
+	DCDLed[3] = new QImage(12, 12, QImage::Format_RGB32);
 
 	DCDLed[0]->fill(red);
 	DCDLed[1]->fill(red);
+	DCDLed[2]->fill(red);
+	DCDLed[3]->fill(red);
 
 	DCDLabel[0]->setPixmap(QPixmap::fromImage(*DCDLed[0]));
-	DCDLabel[1]->setPixmap(QPixmap::fromImage(*DCDLed[0]));
+	DCDLabel[1]->setPixmap(QPixmap::fromImage(*DCDLed[1]));
+	DCDLabel[2]->setPixmap(QPixmap::fromImage(*DCDLed[2]));
+	DCDLabel[3]->setPixmap(QPixmap::fromImage(*DCDLed[3]));
 
 	//	Waterfall[0]->setColorCount(16);
 	//	Waterfall[1]->setColorCount(16);
@@ -530,17 +574,25 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	connect(ui.modeA, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 	connect(ui.modeB, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
+	connect(ui.modeC, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
+	connect(ui.modeD, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 
 	ui.modeA->setCurrentIndex(speed[0]);
 	ui.modeB->setCurrentIndex(speed[1]);
+	ui.modeC->setCurrentIndex(speed[2]);
+	ui.modeD->setCurrentIndex(speed[3]);
 
 	ModemA = ui.modeA->currentIndex();
 
 	ui.centerA->setValue(rx_freq[0]);
 	ui.centerB->setValue(rx_freq[1]);
+	ui.centerC->setValue(rx_freq[2]);
+	ui.centerD->setValue(rx_freq[3]);
 
 	connect(ui.centerA, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
 	connect(ui.centerB, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
+	connect(ui.centerC, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
+	connect(ui.centerD, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
 
 	ui.DCDSlider->setValue(dcd_threshold);
 
@@ -553,6 +605,12 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(100);
 
+
+	cwidtimer = new QTimer(this);
+	connect(cwidtimer, SIGNAL(timeout()), this, SLOT(CWIDTimer()));
+
+	if (CWIDInterval)
+		cwidtimer->start(CWIDInterval * 60000);
 }
 
 void QtSoundModem::MinimizetoTray()
@@ -572,7 +630,15 @@ void QtSoundModem::TrayActivated(QSystemTrayIcon::ActivationReason reason)
 	} 
 }
 
-void QtSoundModem::MyTimerSlot()
+extern "C" void sendCWID(char * strID, BOOL blnPlay, int Chan);
+
+void QtSoundModem::CWIDTimer()
+{
+	sendCWID(CWIDCall, CWIDType, 0);
+	calib_mode[0] = 4;
+}
+	
+	void QtSoundModem::MyTimerSlot()
 {
 	// 100 mS Timer Event
 
@@ -582,8 +648,12 @@ void QtSoundModem::MyTimerSlot()
 
 		ui.modeA->setCurrentIndex(speed[0]);
 		ui.modeB->setCurrentIndex(speed[1]);
+		ui.modeC->setCurrentIndex(speed[2]);
+		ui.modeD->setCurrentIndex(speed[3]);
 		ui.centerA->setValue(rx_freq[0]);
 		ui.centerB->setValue(rx_freq[1]);
+		ui.centerC->setValue(rx_freq[2]);
+		ui.centerD->setValue(rx_freq[3]);
 	}
 
 	show_grid();
@@ -612,6 +682,24 @@ void QtSoundModem::clickedSlotI(int i)
 		return;
 	}
 
+	if (strcmp(Name, "modeC") == 0)
+	{
+		ModemC = ui.modeC->currentIndex();
+		set_speed(2, ModemC);
+		saveSettings();
+		AGW_Report_Modem_Change(2);
+		return;
+	}
+
+	if (strcmp(Name, "modeD") == 0)
+	{
+		ModemD = ui.modeD->currentIndex();
+		set_speed(3, ModemD);
+		saveSettings();
+		AGW_Report_Modem_Change(3);
+		return;
+	}
+
 	if (strcmp(Name, "centerA") == 0)
 	{
 		if (i > 300)
@@ -633,6 +721,30 @@ void QtSoundModem::clickedSlotI(int i)
 			ui.centerB->setValue(Freq_Change(1, i));
 			settings->setValue("Modem/RXFreq2", ui.centerB->value());
 			AGW_Report_Modem_Change(1);
+		}
+		return;
+	}
+
+	if (strcmp(Name, "centerC") == 0)
+	{
+		if (i > 300)
+		{
+			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
+			ui.centerC->setValue(Freq_Change(2, i));
+			settings->setValue("Modem/RXFreq3", ui.centerC->value());
+			AGW_Report_Modem_Change(2);
+		}
+		return;
+	}
+
+	if (strcmp(Name, "centerD") == 0)
+	{
+		if (i > 300)
+		{
+			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
+			ui.centerD->setValue(Freq_Change(3, i));
+			settings->setValue("Modem/RXFreq4", ui.centerD->value());
+			AGW_Report_Modem_Change(3);
 		}
 		return;
 	}
@@ -755,6 +867,53 @@ void QtSoundModem::clickedSlot()
 		return;
 	}
 
+	if (strcmp(Name, "Low_C") == 0)
+	{
+		handleButton(2, 1);
+		return;
+	}
+
+	if (strcmp(Name, "High_C") == 0)
+	{
+		handleButton(2, 2);
+		return;
+	}
+
+	if (strcmp(Name, "Both_C") == 0)
+	{
+		handleButton(2, 3);
+		return;
+	}
+
+	if (strcmp(Name, "Stop_C") == 0)
+	{
+		handleButton(2, 0);
+		return;
+	}
+
+	if (strcmp(Name, "Low_D") == 0)
+	{
+		handleButton(3, 1);
+		return;
+	}
+
+	if (strcmp(Name, "High_D") == 0)
+	{
+		handleButton(3, 2);
+		return;
+	}
+
+	if (strcmp(Name, "Both_D") == 0)
+	{
+		handleButton(3, 3);
+		return;
+	}
+
+	if (strcmp(Name, "Stop_D") == 0)
+	{
+		handleButton(3, 0);
+		return;
+	}
 
 	QMessageBox msgBox;
 	msgBox.setWindowTitle("MessageBox Title");
@@ -785,34 +944,49 @@ void QtSoundModem::doModems()
 
 	sprintf(valChar, "%d", bpf[0]);
 	Dlg->BPFWidthA->setText(valChar);
-
 	sprintf(valChar, "%d", bpf[1]);
 	Dlg->BPFWidthB->setText(valChar);
+	sprintf(valChar, "%d", bpf[2]);
+	Dlg->BPFWidthC->setText(valChar);
+	sprintf(valChar, "%d", bpf[3]);
+	Dlg->BPFWidthD->setText(valChar);
 
 	sprintf(valChar, "%d", txbpf[0]);
 	Dlg->TXBPFWidthA->setText(valChar);
-
 	sprintf(valChar, "%d", txbpf[1]);
 	Dlg->TXBPFWidthB->setText(valChar);
+	sprintf(valChar, "%d", txbpf[2]);
+	Dlg->TXBPFWidthC->setText(valChar);
+	sprintf(valChar, "%d", txbpf[3]);
+	Dlg->TXBPFWidthD->setText(valChar);
 
 	sprintf(valChar, "%d", lpf[0]);
 	Dlg->LPFWidthA->setText(valChar);
-
 	sprintf(valChar, "%d", lpf[1]);
 	Dlg->LPFWidthB->setText(valChar);
+	sprintf(valChar, "%d", lpf[2]);
+	Dlg->LPFWidthC->setText(valChar);
+	sprintf(valChar, "%d", lpf[4]);
+	Dlg->LPFWidthD->setText(valChar);
 
 	sprintf(valChar, "%d", BPF_tap[0]);
 	Dlg->BPFTapsA->setText(valChar);
-
 	sprintf(valChar, "%d", BPF_tap[1]);
 	Dlg->BPFTapsB->setText(valChar);
+	sprintf(valChar, "%d", BPF_tap[2]);
+	Dlg->BPFTapsC->setText(valChar);
+	sprintf(valChar, "%d", BPF_tap[3]);
+	Dlg->BPFTapsD->setText(valChar);
 
 	sprintf(valChar, "%d", LPF_tap[0]);
 	Dlg->LPFTapsA->setText(valChar);
-
 	sprintf(valChar, "%d", LPF_tap[1]);
 	Dlg->LPFTapsB->setText(valChar);
-	
+	sprintf(valChar, "%d", LPF_tap[2]);
+	Dlg->LPFTapsC->setText(valChar);
+	sprintf(valChar, "%d", LPF_tap[3]);
+	Dlg->LPFTapsD->setText(valChar);
+
 	Dlg->preEmphAllA->setChecked(emph_all[0]);
 
 	if (emph_all[0])
@@ -827,29 +1001,67 @@ void QtSoundModem::doModems()
 	else
 		Dlg->preEmphB->setCurrentIndex(emph_db[1]);
 
+	Dlg->preEmphAllC->setChecked(emph_all[2]);
+
+	if (emph_all[2])
+		Dlg->preEmphC->setDisabled(TRUE);
+	else
+		Dlg->preEmphC->setCurrentIndex(emph_db[2]);
+
+	Dlg->preEmphAllD->setChecked(emph_all[3]);
+
+	if (emph_all[3])
+		Dlg->preEmphD->setDisabled(TRUE);
+	else
+		Dlg->preEmphD->setCurrentIndex(emph_db[3]);
+
+
 	Dlg->nonAX25A->setChecked(NonAX25[0]);
 	Dlg->nonAX25B->setChecked(NonAX25[1]);
+	Dlg->nonAX25C->setChecked(NonAX25[2]);
+	Dlg->nonAX25D->setChecked(NonAX25[3]);
 
 	Dlg->KISSOptA->setChecked(KISS_opt[0]);
 	Dlg->KISSOptB->setChecked(KISS_opt[1]);
+	Dlg->KISSOptC->setChecked(KISS_opt[2]);
+	Dlg->KISSOptD->setChecked(KISS_opt[3]);
 
 	sprintf(valChar, "%d", txdelay[0]);
 	Dlg->TXDelayA->setText(valChar);
-
 	sprintf(valChar, "%d", txdelay[1]);
 	Dlg->TXDelayB->setText(valChar);
+	sprintf(valChar, "%d", txdelay[2]);
+	Dlg->TXDelayC->setText(valChar);
+	sprintf(valChar, "%d", txdelay[3]);
+	Dlg->TXDelayD->setText(valChar);
 
 	sprintf(valChar, "%d", txtail[0]);
 	Dlg->TXTailA->setText(valChar);
-
 	sprintf(valChar, "%d", txtail[1]);
 	Dlg->TXTailB->setText(valChar);
+	sprintf(valChar, "%d", txtail[2]);
+	Dlg->TXTailC->setText(valChar);
+	sprintf(valChar, "%d", txtail[3]);
+	Dlg->TXTailD->setText(valChar);
+
+	Dlg->FrackA->setText(QString::number(frack_time[0]));
+	Dlg->FrackB->setText(QString::number(frack_time[1]));
+	Dlg->FrackC->setText(QString::number(frack_time[2]));
+	Dlg->FrackD->setText(QString::number(frack_time[3]));
+
+	Dlg->RetriesA->setText(QString::number(fracks[0]));
+	Dlg->RetriesB->setText(QString::number(fracks[1]));
+	Dlg->RetriesC->setText(QString::number(fracks[2]));
+	Dlg->RetriesD->setText(QString::number(fracks[3]));
 
 	sprintf(valChar, "%d", RCVR[0]);
 	Dlg->AddRXA->setText(valChar);
-
-	sprintf(valChar, "%d", RCVR[01]);
+	sprintf(valChar, "%d", RCVR[1]);
 	Dlg->AddRXB->setText(valChar);
+	sprintf(valChar, "%d", RCVR[2]);
+	Dlg->AddRXC->setText(valChar);
+	sprintf(valChar, "%d", RCVR[3]);
+	Dlg->AddRXD->setText(valChar);
 
 	sprintf(valChar, "%d", rcvr_offset[0]);
 	Dlg->RXShiftA->setText(valChar);
@@ -857,39 +1069,55 @@ void QtSoundModem::doModems()
 	sprintf(valChar, "%d", rcvr_offset[1]);
 	Dlg->RXShiftB->setText(valChar);
 
+	sprintf(valChar, "%d", rcvr_offset[2]);
+	Dlg->RXShiftC->setText(valChar);
+	sprintf(valChar, "%d", rcvr_offset[3]);
+	Dlg->RXShiftD->setText(valChar);
+
 	//	speed[1]
 	//	speed[2];
 
 	Dlg->recoverBitA->setCurrentIndex(recovery[0]);
 	Dlg->recoverBitB->setCurrentIndex(recovery[1]);
+	Dlg->recoverBitC->setCurrentIndex(recovery[2]);
+	Dlg->recoverBitD->setCurrentIndex(recovery[3]);
 
 	Dlg->fx25ModeA->setCurrentIndex(fx25_mode[0]);
 	Dlg->fx25ModeB->setCurrentIndex(fx25_mode[1]);
+	Dlg->fx25ModeC->setCurrentIndex(fx25_mode[2]);
+	Dlg->fx25ModeD->setCurrentIndex(fx25_mode[3]);
 
+	Dlg->CWIDCall->setText(CWIDCall);
+	Dlg->CWIDInterval->setText(QString::number(CWIDInterval));
 
+	if (CWIDType)
+		Dlg->radioButton_2->setChecked(1);
+	else
+		Dlg->CWIDType->setChecked(1);
+	
 	connect(Dlg->showBPF_A, SIGNAL(released()), this, SLOT(clickedSlot()));
 	connect(Dlg->showTXBPF_A, SIGNAL(released()), this, SLOT(clickedSlot()));
 	connect(Dlg->showLPF_A, SIGNAL(released()), this, SLOT(clickedSlot()));
+
 	connect(Dlg->showBPF_B, SIGNAL(released()), this, SLOT(clickedSlot()));
 	connect(Dlg->showTXBPF_B, SIGNAL(released()), this, SLOT(clickedSlot()));
 	connect(Dlg->showLPF_B, SIGNAL(released()), this, SLOT(clickedSlot()));
 
+	connect(Dlg->showBPF_C, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showTXBPF_C, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showLPF_C, SIGNAL(released()), this, SLOT(clickedSlot()));
 
-/*
+	connect(Dlg->showBPF_D, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showTXBPF_D, SIGNAL(released()), this, SLOT(clickedSlot()));
+	connect(Dlg->showLPF_D, SIGNAL(released()), this, SLOT(clickedSlot()));
 
-	connect(Dlg->showBPF_A, &QPushButton::released, this, [=] { doFilter(0, 0); });
-	connect(Dlg->showTXBPF_A, &QPushButton::released, this, [=] { doFilter(0, 1); });
-	connect(Dlg->showLPF_A, &QPushButton::released, this, [=] { doFilter(0, 2); });
-
-	connect(Dlg->showBPF_B, &QPushButton::released, this, [=] { doFilter(1, 0); });
-	connect(Dlg->showTXBPF_B, &QPushButton::released, this, [=] { doFilter(1, 1); });
-	connect(Dlg->showLPF_B, &QPushButton::released, this, [=] { doFilter(1, 2); });
-*/
 	connect(Dlg->okButton, SIGNAL(clicked()), this, SLOT(modemaccept()));
 	connect(Dlg->cancelButton, SIGNAL(clicked()), this, SLOT(modemreject()));
 
 	connect(Dlg->preEmphAllA, SIGNAL(stateChanged(int)), this, SLOT(preEmphAllAChanged(int)));
 	connect(Dlg->preEmphAllB, SIGNAL(stateChanged(int)), this, SLOT(preEmphAllBChanged(int)));
+	connect(Dlg->preEmphAllC, SIGNAL(stateChanged(int)), this, SLOT(preEmphAllCChanged(int)));
+	connect(Dlg->preEmphAllD, SIGNAL(stateChanged(int)), this, SLOT(preEmphAllDChanged(int)));
 
 	UI.exec();
 }
@@ -904,6 +1132,17 @@ void QtSoundModem::preEmphAllBChanged(int state)
 	Dlg->preEmphB->setDisabled(state);
 }
 
+void QtSoundModem::preEmphAllCChanged(int state)
+{
+	Dlg->preEmphC->setDisabled(state);
+}
+
+void QtSoundModem::preEmphAllDChanged(int state)
+{
+	Dlg->preEmphD->setDisabled(state);
+}
+
+
 void QtSoundModem::modemaccept()
 {
 	QVariant Q;
@@ -914,11 +1153,21 @@ void QtSoundModem::modemaccept()
 	emph_all[1] = Dlg->preEmphAllB->isChecked();
 	emph_db[1] = Dlg->preEmphB->currentIndex();
 
+	emph_all[2] = Dlg->preEmphAllC->isChecked();
+	emph_db[2] = Dlg->preEmphC->currentIndex();
+
+	emph_all[3] = Dlg->preEmphAllD->isChecked();
+	emph_db[3] = Dlg->preEmphD->currentIndex();
+
 	NonAX25[0] = Dlg->nonAX25A->isChecked();
 	NonAX25[1] = Dlg->nonAX25B->isChecked();
+	NonAX25[2] = Dlg->nonAX25C->isChecked();
+	NonAX25[3] = Dlg->nonAX25D->isChecked();
 
 	KISS_opt[0] = Dlg->KISSOptA->isChecked();
 	KISS_opt[1] = Dlg->KISSOptB->isChecked();
+	KISS_opt[2] = Dlg->KISSOptC->isChecked();
+	KISS_opt[3] = Dlg->KISSOptD->isChecked();
 
 	if (emph_db[0] < 0 || emph_db[0] > nr_emph)
 		emph_db[0] = 0;
@@ -926,17 +1175,44 @@ void QtSoundModem::modemaccept()
 	if (emph_db[1] < 0 || emph_db[1] > nr_emph)
 		emph_db[1] = 0;
 
+	if (emph_db[2] < 0 || emph_db[2] > nr_emph)
+		emph_db[2] = 0;
+
+	if (emph_db[3] < 0 || emph_db[3] > nr_emph)
+		emph_db[3] = 0;
+
 	Q = Dlg->TXDelayA->text();
 	txdelay[0] = Q.toInt();
 
 	Q = Dlg->TXDelayB->text();
 	txdelay[1] = Q.toInt();
 	
+	Q = Dlg->TXDelayC->text();
+	txdelay[2] = Q.toInt();
+
+	Q = Dlg->TXDelayD->text();
+	txdelay[3] = Q.toInt();
+
 	Q = Dlg->TXTailA->text();
 	txtail[0] = Q.toInt();
 
 	Q = Dlg->TXTailB->text();
 	txtail[1] = Q.toInt();
+
+	Q = Dlg->TXTailC->text();
+	txtail[2] = Q.toInt();
+
+	txtail[3] = Dlg->TXTailD->text().toInt();
+
+	frack_time[0] = Dlg->FrackA->text().toInt();
+	frack_time[1] = Dlg->FrackB->text().toInt();
+	frack_time[2] = Dlg->FrackC->text().toInt();
+	frack_time[3] = Dlg->FrackD->text().toInt();
+
+	fracks[0] = Dlg->RetriesA->text().toInt();
+	fracks[1] = Dlg->RetriesB->text().toInt();
+	fracks[2] = Dlg->RetriesC->text().toInt();
+	fracks[3] = Dlg->RetriesD->text().toInt();
 
 	Q = Dlg->AddRXA->text();
 	RCVR[0] = Q.toInt();
@@ -944,17 +1220,43 @@ void QtSoundModem::modemaccept()
 	Q = Dlg->AddRXB->text();
 	RCVR[1] = Q.toInt();
 
+	Q = Dlg->AddRXC->text();
+	RCVR[2] = Q.toInt();
+
+	Q = Dlg->AddRXD->text();
+	RCVR[3] = Q.toInt();
+
 	Q = Dlg->RXShiftA->text();
 	rcvr_offset[0] = Q.toInt();
 
 	Q = Dlg->RXShiftB->text();
 	rcvr_offset[1] = Q.toInt();
 
+	Q = Dlg->RXShiftC->text();
+	rcvr_offset[2] = Q.toInt();
+
+	Q = Dlg->RXShiftD->text();
+	rcvr_offset[3] = Q.toInt();
+
 	fx25_mode[0] = Dlg->fx25ModeA->currentIndex();
 	fx25_mode[1] = Dlg->fx25ModeB->currentIndex();
+	fx25_mode[2] = Dlg->fx25ModeC->currentIndex();
+	fx25_mode[3] = Dlg->fx25ModeD->currentIndex();
 
 	recovery[0] = Dlg->recoverBitA->currentIndex();
 	recovery[1] = Dlg->recoverBitB->currentIndex();
+	recovery[2] = Dlg->recoverBitC->currentIndex();
+	recovery[3] = Dlg->recoverBitD->currentIndex();
+
+
+	strcpy(CWIDCall, Dlg->CWIDCall->text().toUtf8().toUpper());
+	CWIDInterval = Dlg->CWIDInterval->text().toInt();
+	CWIDType = Dlg->radioButton_2->isChecked();
+
+	if (CWIDInterval)
+		cwidtimer->start(CWIDInterval * 60000);
+	else
+		cwidtimer->stop();
 
 	delete(Dlg);
 	saveSettings();
@@ -1013,7 +1315,9 @@ void QtSoundModem::SoundModeChanged(bool State)
 
 	// Mustn't change SoundMode until dialog is accepted
 
-	if (Dev->PULSE->isChecked())
+	if (Dev->UDP->isChecked())
+		newSoundMode = 3;
+	else if (Dev->PULSE->isChecked())
 		newSoundMode = 2;
 	else
 		newSoundMode = Dev->OSS->isChecked();
@@ -1179,7 +1483,7 @@ void QtSoundModem::doDevices()
 	oldSoundMode = SoundMode;
 
 #ifdef WIN32
-	Dev->ALSA->setVisible(0);
+	Dev->ALSA->setText("WaveOut");
 	Dev->OSS->setVisible(0);
 	Dev->PULSE->setVisible(0);
 #endif
@@ -1188,12 +1492,15 @@ void QtSoundModem::doDevices()
 		Dev->ALSA->setChecked(1);
 	else if (SoundMode == 1)
 		Dev->OSS->setChecked(1);
-	else
+	else if (SoundMode == 2)
 		Dev->PULSE->setChecked(1);
+	else
+		Dev->UDP->setChecked(1);
 
 	connect(Dev->ALSA, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 	connect(Dev->OSS, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 	connect(Dev->PULSE, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
+	connect(Dev->UDP, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 
 	for (i = 0; i < PlaybackCount; i++)
 		Dev->outputDevice->addItem(&PlaybackNames[i][0]);
@@ -1210,6 +1517,8 @@ void QtSoundModem::doDevices()
 
 	Dev->Modem_1_Chan->setCurrentIndex(soundChannel[0]);
 	Dev->Modem_2_Chan->setCurrentIndex(soundChannel[1]);
+	Dev->Modem_3_Chan->setCurrentIndex(soundChannel[2]);
+	Dev->Modem_4_Chan->setCurrentIndex(soundChannel[3]);
 
 	// Disable "None" option in first modem
 
@@ -1233,6 +1542,19 @@ void QtSoundModem::doDevices()
 
 	sprintf(valChar, "%d", PTTBAUD);
 	Dev->CATSpeed->setText(valChar);
+
+	sprintf(valChar, "%d", UDPClientPort);
+	Dev->UDPPort->setText(valChar);
+	Dev->UDPTXHost->setText(UDPHost);
+
+	if (UDPServerPort != TXPort)
+		sprintf(valChar, "%d/%d", UDPServerPort, TXPort);
+	else
+		sprintf(valChar, "%d", UDPServerPort);
+
+	Dev->UDPTXPort->setText(valChar);
+
+	Dev->UDPEnabled->setChecked(UDPServ);
 
 	sprintf(valChar, "%d", pttGPIOPin);
 	Dev->GPIOLeft->setText(valChar);
@@ -1297,8 +1619,22 @@ void QtSoundModem::deviceaccept()
 {
 	QVariant Q = Dev->inputDevice->currentText();
 	int cardChanged = 0;
+	char portString[32];
 
-	if (Dev->PULSE->isChecked())
+	if (Dev->UDP->isChecked())
+	{
+		// cant have server and slave
+
+		if (Dev->UDPEnabled->isChecked())
+		{
+			QMessageBox::about(this, tr("QtSoundModem"),
+				tr("Can't have UDP sound source and UDP server at same time"));
+			return;
+		}
+		SoundMode = 3;
+	}
+
+	else if (Dev->PULSE->isChecked())
 		SoundMode = 2;
 	else
 		SoundMode = Dev->OSS->isChecked();
@@ -1361,30 +1697,31 @@ void QtSoundModem::deviceaccept()
 	PlayBackIndex = Dev->outputDevice->currentIndex();
 
 	soundChannel[0] = Dev->Modem_1_Chan->currentIndex();
-	soundChannel[1]  = Dev->Modem_2_Chan->currentIndex();
+	soundChannel[1] = Dev->Modem_2_Chan->currentIndex();
+	soundChannel[2] = Dev->Modem_3_Chan->currentIndex();
+	soundChannel[3] = Dev->Modem_4_Chan->currentIndex();
 
-	if (soundChannel[1])
-		DualChan = 1;
-	else
-		DualChan = 0;
+	UsingLeft = 0;
+	UsingRight = 0;
+	UsingBothChannels = 0;
 
-	if (DualChan && (soundChannel[0] != soundChannel[1]))
-	
-		// Different so need both sides 
+	for (int i = 0; i < 4; i++)
+	{
+		if (soundChannel[i] == LEFT)
+		{
+			UsingLeft = 1;
+			modemtoSoundLR[i] = 0;
+		}
+		else if (soundChannel[i] == RIGHT)
+		{
+			UsingRight = 1;
+			modemtoSoundLR[i] = 1;
+		}
+	}
 
+	if (UsingLeft && UsingRight)
 		UsingBothChannels = 1;
-	else
-		UsingBothChannels = 0;
 
-	if (soundChannel[0] == RIGHT)
-		modemtoSoundLR[0] = 1;
-	else
-		modemtoSoundLR[0] = 0;
-
-	if (soundChannel[1] == RIGHT)
-		modemtoSoundLR[1] = 1;
-	else
-		modemtoSoundLR[1] = 0;
 
 	SCO = Dev->singleChannelOutput->isChecked();
 	raduga = Dev->colourWaterfall->isChecked();
@@ -1417,6 +1754,27 @@ void QtSoundModem::deviceaccept()
 	Q = Dev->CATSpeed->text();
 	PTTBAUD = Q.toInt();
 
+	Q = Dev->UDPPort->text();
+	UDPClientPort = Q.toInt();
+
+
+	Q = Dev->UDPTXPort->text();
+	strcpy(portString, Q.toString().toUtf8());
+	UDPServerPort = atoi(portString);
+
+	if (strchr(portString, '/'))
+	{
+		char * ptr = strlop(portString, '/');
+		TXPort = atoi(ptr);
+	}
+	else
+		TXPort = UDPServerPort;
+
+	Q = Dev->UDPTXHost->text();
+	strcpy(UDPHost, Q.toString().toUtf8());
+
+	UDPServ = Dev->UDPEnabled->isChecked();
+
 	Q = Dev->GPIOLeft->text();
 	pttGPIOPin = Q.toInt();
 
@@ -1438,9 +1796,7 @@ void QtSoundModem::deviceaccept()
 	OpenPTTPort();
 
 	wf_pointer(soundChannel[0]);
-
-	if (DualChan)
-		wf_pointer(soundChannel[1]);
+	wf_pointer(soundChannel[1]);
 
 	delete(Dev);
 	saveSettings();
@@ -1467,8 +1823,12 @@ void QtSoundModem::devicereject()
 
 void QtSoundModem::handleButton(int Port, int Type)
 {
-	doCalib(Port, Type);
+	// interlock calib with CWID
 
+	if (calib_mode[0] == 4)		// CWID
+		return;
+	
+	doCalib(Port, Type);
 }
 
 void QtSoundModem::doAbout()
@@ -1492,6 +1852,14 @@ void QtSoundModem::doCalibrate()
 		connect(Calibrate.High_B, SIGNAL(released()), this, SLOT(clickedSlot()));
 		connect(Calibrate.Both_B, SIGNAL(released()), this, SLOT(clickedSlot()));
 		connect(Calibrate.Stop_B, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Low_C, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.High_C, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Both_C, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Stop_C, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Low_D, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.High_D, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Both_D, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Stop_D, SIGNAL(released()), this, SLOT(clickedSlot()));
 
 		/*
 		
@@ -1729,17 +2097,18 @@ void do_pointer(int waterfall)
 	// If second is enabled it is on the first unless different
 	//		channel from first
 
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < 4; i++)
 	{
-		if (waterfall == 1 && i == 0)
-			continue;						// First Modem is always on first waterfa;;
+		if (UsingBothChannels == 0 && waterfall == 2)
+			return;
 
-		if (waterfall == 1 && soundChannel[1] == soundChannel[0])
+		if (soundChannel[i] == 0)
 			continue;
 
-		if ((waterfall == 0 && i == 1) &&
-			(soundChannel[1] == NONE || soundChannel[1] != soundChannel[0]))
-			break;
+
+		if (UsingBothChannels == 1)
+			if ((waterfall == 0 && soundChannel[i] == RIGHT) || (waterfall == 1 && soundChannel[i] == LEFT))
+				continue;
 
 		pos1 = roundf((rx_freq[i] - 0.5*rx_shift[i])*x) - 5;
 		pos2 = roundf((rx_freq[i] + 0.5*rx_shift[i])*x) - 5;
@@ -1762,6 +2131,8 @@ void wf_pointer(int snd_ch)
 
 	do_pointer(0);
 	do_pointer(1);
+//	do_pointer(2);
+//	do_pointer(3);
 }
 
 
@@ -2056,7 +2427,7 @@ void QtSoundModem::show_grid()
 	num_rows = 0;
 	row_idx = 0;
 
-	for (snd_ch = 0; snd_ch < 2; snd_ch++)
+	for (snd_ch = 0; snd_ch < 4; snd_ch++)
 	{
 		for (i = 0; i < port_num; i++)
 		{
@@ -2067,6 +2438,7 @@ void QtSoundModem::show_grid()
 
 	if (num_rows == 0)
 	{
+		sessionTable->clearContents();
 		sessionTable->setRowCount(0);
 		sessionTable->setRowCount(1);
 	}
@@ -2074,7 +2446,7 @@ void QtSoundModem::show_grid()
 		sessionTable->setRowCount(num_rows);
 
 
-	for (snd_ch = 0; snd_ch < 2; snd_ch++)
+	for (snd_ch = 0; snd_ch < 4; snd_ch++)
 	{
 		for (i = 0; i < port_num; i++)
 		{

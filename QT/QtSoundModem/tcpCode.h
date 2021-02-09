@@ -11,9 +11,13 @@ class mynet : public QObject
 signals:
 
 	void HLSetPTT(int c);
+	void startTimer(int Time);
+	void stopTimer();
 
 public:
 	void start();
+	void OpenUDP();
+
 
 public slots:
 	void onAGWReadyRead();
@@ -23,6 +27,7 @@ public slots:
 	void onKISSConnection();
 	void MyTimerSlot();
 	void onAGWConnection();
+	void dropPTT();
 
 	void displayError(QAbstractSocket::SocketError socketError);
 
@@ -32,8 +37,12 @@ public slots:
 	void HAMLIBreadyRead();
 	void onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState);
 	void ConnecttoHAMLIB();
+	void dostartTimer(int Time);
+	void dostopTimer();
 	void doHLSetPTT(int c);
 
+	void readPendingDatagrams();
+	void socketError();
 
 private:
 	QTcpServer* tcpServer;

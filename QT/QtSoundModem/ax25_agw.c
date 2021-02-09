@@ -78,9 +78,6 @@ int AGWVersion[2] = {2019, 'B'};		// QTSM Signature
 
   //ports_info1='1;Port1 with LoopBack Port;
 
-char ports_info1[] = "1;Port1 with SoundCard Ch A;";
-char ports_info2[] = "2;Port1 with SoundCard Ch A;Port2 with SoundCard Ch B;";
-
 #define    LSB 29
 #define    MSB 30
 #define    MON_ON '1'
@@ -269,13 +266,22 @@ string * AGW_X_Frame(char * CallFrom,  UCHAR reg_call)
 
 string * AGW_G_Frame()
 {
-	char * Ports;
+	char Ports[256] = "0;";
+	char portMsg[64];
+
 	string * Msg;
 	
-	if (DualChan)
-		Ports = ports_info2;
-	else
-		Ports = ports_info1;
+	for (int i = 0; i < 4; i++)
+	{
+		Ports[0]++;
+		if (soundChannel[i])
+			sprintf(portMsg, "Port%c with SoundCard Ch %c;", Ports[0], 'A' + i);
+		else
+			sprintf(portMsg, "Port%c Disabled;", Ports[0]);
+
+		strcat(Ports, portMsg);
+	}
+
 
 	Msg = AGW_frame_header(0, 'G', 0, "", "", strlen(Ports) + 1);
 
@@ -556,14 +562,6 @@ void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, byte * Data)
 
 		Len = 44;
 		AGW_send_to_app(AGW->socket, AGW_Gs_Frame(Frame->Port, info, Len));
-
-		if (DualChan && Frame->Port == 0)
-		{
-			memcpy(&info[12], &rx_freq[1], 2);
-			memcpy(&info[16], modes_name[speed[1]], 20);
-			info[37] = speed[1];			// Index
-			AGW_send_to_app(AGW->socket, AGW_Gs_Frame(1, info, Len));
-		}
 		return;
 	}
 	AGW_send_to_app(AGW->socket, AGW_Gs_Frame(Frame->Port, info, Len));
@@ -1408,7 +1406,7 @@ void AGW_frame_analiz(AGWUser *  AGW)
 	if (soundChannel[Frame->Port] == 0)
 		return;
 
-	if (Frame->Port > 1)
+	if (Frame->Port > 3)
 		return;
 
 	switch (Frame->DataKind)

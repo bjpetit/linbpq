@@ -1102,7 +1102,7 @@ void timer_event()
 
 	TimerEvent = TIMER_EVENT_OFF;
 
-	for (snd_ch = 0; snd_ch < 2; snd_ch++)
+	for (snd_ch = 0; snd_ch < 4; snd_ch++)
 	{
 		//reset the slottime timer
 		if (dyn_frack[snd_ch])
@@ -1138,12 +1138,10 @@ void timer_event()
 				{
 					// This disconnects after retries expires
 
-					AX25Port[snd_ch][port].status = STAT_TRY_UNLINK;
 					rst_frack(AX25Sess);
 
 					//socket:=get_incoming_socket_by_call(AX25Sess->mycall);
 
-					socket = AX25Sess->socket;
 					set_unlink(AX25Sess, AX25Sess->Path);
 				}
 

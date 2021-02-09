@@ -35,6 +35,19 @@ extern "C" int multiCore;
 extern "C" word MEMRecovery[5];
 
 extern int MintoTray;
+extern "C" int UDPClientPort;
+extern "C" int UDPServerPort;
+extern "C" int TXPort;
+
+extern char UDPHost[64];
+
+extern char CWIDCall[128];
+extern int CWIDInterval;
+extern int CWIDLeft;
+extern int CWIDRight;
+extern int CWIDType;	
+
+
 
 QSettings* settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
@@ -94,6 +107,12 @@ void getSettings()
 	settings->sync();
 
 	SoundMode = settings->value("Init/SoundMode", 0).toInt();
+	UDPClientPort = settings->value("Init/UDPClientPort", 8888).toInt();
+	UDPServerPort = settings->value("Init/UDPServerPort", 8884).toInt();
+	TXPort = settings->value("Init/TXPort", UDPServerPort).toInt();
+
+	strcpy(UDPHost, settings->value("Init/UDPHost", "192.168.1.255").toString().toUtf8());
+	UDPServ = settings->value("Init/UDPServer", FALSE).toBool();
 
 	RX_SR = settings->value("Init/RXSampleRate", 12000).toInt();
 	TX_SR = settings->value("Init/TXSampleRate", 12000).toInt();
@@ -130,19 +149,28 @@ void getSettings()
 
 	rx_freq[0] = settings->value("Modem/RXFreq1", 1700).toInt();
 	rx_freq[1] = settings->value("Modem/RXFreq2", 1700).toInt();
+	rx_freq[2] = settings->value("Modem/RXFreq3", 1700).toInt();
+	rx_freq[3] = settings->value("Modem/RXFreq4", 1700).toInt();
 
 	rcvr_offset[0] = settings->value("Modem/RcvrShift1", 30).toInt();
 	rcvr_offset[1] = settings->value("Modem/RcvrShift2", 30).toInt();
+	rcvr_offset[2] = settings->value("Modem/RcvrShift3", 30).toInt();
+	rcvr_offset[3] = settings->value("Modem/RcvrShift4", 30).toInt();
 	speed[0] = settings->value("Modem/ModemType1", SPEED_1200).toInt();
 	speed[1] = settings->value("Modem/ModemType2", SPEED_1200).toInt();
+	speed[2] = settings->value("Modem/ModemType3", SPEED_1200).toInt();
+	speed[3] = settings->value("Modem/ModemType4", SPEED_1200).toInt();
 
 	RCVR[0] = settings->value("Modem/NRRcvrPairs1", 0).toInt();;
 	RCVR[1] = settings->value("Modem/NRRcvrPairs2", 0).toInt();;
+	RCVR[2] = settings->value("Modem/NRRcvrPairs3", 0).toInt();;
+	RCVR[3] = settings->value("Modem/NRRcvrPairs4", 0).toInt();;
 
 	soundChannel[0] = settings->value("Modem/soundChannel1", 1).toInt();
 	soundChannel[1] = settings->value("Modem/soundChannel2", 0).toInt();
+	soundChannel[2] = settings->value("Modem/soundChannel3", 0).toInt();
+	soundChannel[3] = settings->value("Modem/soundChannel4", 0).toInt();
 
-	DualChan = settings->value("Init/DualChan", 0).toInt();
 	SCO = settings->value("Init/SCO", 0).toInt();
 
 	dcd_threshold = settings->value("Modem/DCDThreshold", 40).toInt();
@@ -155,62 +183,60 @@ void getSettings()
 	RX_Samplerate = RX_SR + RX_SR * 0.000001*RX_PPM;
 	TX_Samplerate = TX_SR + TX_SR * 0.000001*TX_PPM;
 
-	emph_all[0] = settings->value("Modem/PreEmphasisAll1", TRUE).toBool();
-	emph_all[1] = settings->value("Modem/PreEmphasisAll2", TRUE).toBool();
+	emph_all[0] = settings->value("Modem/PreEmphasisAll1", FALSE).toBool();
+	emph_all[1] = settings->value("Modem/PreEmphasisAll2", FALSE).toBool();
+	emph_all[2] = settings->value("Modem/PreEmphasisAll3", FALSE).toBool();
+	emph_all[3] = settings->value("Modem/PreEmphasisAll4", FALSE).toBool();
+
 	emph_db[0] = settings->value("Modem/PreEmphasisDB1", 0).toInt();
 	emph_db[1] = settings->value("Modem/PreEmphasisDB2", 0).toInt();
+	emph_db[2] = settings->value("Modem/PreEmphasisDB3", 0).toInt();
+	emph_db[3] = settings->value("Modem/PreEmphasisDB4", 0).toInt();
 
 	Firstwaterfall = settings->value("Window/Waterfall1", TRUE).toInt();
 	Secondwaterfall = settings->value("Window/Waterfall2", TRUE).toInt();
 
 	txdelay[0] = settings->value("Modem/TxDelay1", 250).toInt();
 	txdelay[1] = settings->value("Modem/TxDelay2", 250).toInt();
+	txdelay[2] = settings->value("Modem/TxDelay3", 250).toInt();
+	txdelay[3] = settings->value("Modem/TxDelay4", 250).toInt();
+
+	strcpy(CWIDCall, settings->value("Modem/CWIDCall", "").toString().toUtf8().toUpper());
+	CWIDInterval = settings->value("Modem/CWIDInterval", 0).toInt();
+	CWIDLeft = settings->value("Modem/CWIDLeft", 0).toInt();
+	CWIDRight = settings->value("Modem/CWIDRight", 0).toInt();
+	CWIDType = settings->value("Modem/CWIDType", 1).toInt();			// on/off
+
 
 	getAX25Params(0);
 	getAX25Params(1);
+	getAX25Params(2);
+	getAX25Params(3);
 
 	// Validate and process settings
 
-	if (soundChannel[1])
-		DualChan = 1;		// DualChan means two modems, not always L and R channels
-	else
-		DualChan = 0;
+	UsingLeft = 0;
+	UsingRight = 0;
+	UsingBothChannels = 0;
 
-	if (DualChan && (soundChannel[0] != soundChannel[1]))
+	for (int i = 0; i < 4; i++)
 	{
-		// Different so need both sides 
-
-		UsingBothChannels = 1;
-		UsingLeft = 1;
-		UsingRight = 1;
-	}
-	else
-	{
-		UsingBothChannels = 0;
-
-		if (soundChannel[0] == RIGHT)
-		{
-			UsingLeft = 0;
-			UsingRight = 1;
-		}
-		else
+		if (soundChannel[i] == LEFT)
 		{
 			UsingLeft = 1;
-			UsingRight = 0;
+			modemtoSoundLR[i] = 0;
+		}
+		else if (soundChannel[i] == RIGHT)
+		{
+			UsingRight = 1;
+			modemtoSoundLR[i] = 1;
 		}
 	}
 
-	if (soundChannel[0] == RIGHT)
-		modemtoSoundLR[0] = 1;
-	else
-		modemtoSoundLR[0] = 0;
+	if (UsingLeft && UsingRight)
+		UsingBothChannels = 1;
 
-	if (soundChannel[1] == RIGHT)
-		modemtoSoundLR[1] = 1;
-	else
-		modemtoSoundLR[1] = 0;
-
-	for (snd_ch = 0; snd_ch < 2; snd_ch++)
+	for (snd_ch = 0; snd_ch < 4; snd_ch++)
 	{
 		tx_hitoneraise[snd_ch] = powf(10.0f, -abs(tx_hitoneraisedb[snd_ch]) / 20.0f);
 
@@ -296,6 +322,13 @@ void saveSettings()
 	QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
 	settings->setValue("Init/SoundMode", SoundMode);
+	settings->setValue("Init/UDPClientPort", UDPClientPort);
+	settings->setValue("Init/UDPServerPort", UDPServerPort);
+	settings->setValue("Init/TXPort", TXPort);
+
+	settings->setValue("Init/UDPServer", UDPServ);
+	settings->setValue("Init/UDPHost", UDPHost);
+
 
 	settings->setValue("Init/TXSampleRate", TX_SR);
 	settings->setValue("Init/RXSampleRate", RX_SR);
@@ -303,7 +336,6 @@ void saveSettings()
 	settings->setValue("Init/SndRXDeviceName", CaptureDevice);
 	settings->setValue("Init/SndTXDeviceName", PlaybackDevice);
 
-	settings->setValue("Init/DualChan", DualChan);
 	settings->setValue("Init/SCO", SCO);
 	settings->setValue("Init/DualPTT", DualPTT);
 	settings->setValue("Init/TXRotate", TX_rotate);
@@ -331,15 +363,23 @@ void saveSettings()
 
 	settings->setValue("Modem/NRRcvrPairs1", RCVR[0]);
 	settings->setValue("Modem/NRRcvrPairs2", RCVR[1]);
+	settings->setValue("Modem/NRRcvrPairs3", RCVR[2]);
+	settings->setValue("Modem/NRRcvrPairs4", RCVR[3]);
 
 	settings->setValue("Modem/RcvrShift1", rcvr_offset[0]);
 	settings->setValue("Modem/RcvrShift2", rcvr_offset[1]);
+	settings->setValue("Modem/RcvrShift3", rcvr_offset[2]);
+	settings->setValue("Modem/RcvrShift4", rcvr_offset[3]);
 
 	settings->setValue("Modem/ModemType1", speed[0]);
 	settings->setValue("Modem/ModemType2", speed[1]);
+	settings->setValue("Modem/ModemType3", speed[2]);
+	settings->setValue("Modem/ModemType4", speed[3]);
 
 	settings->setValue("Modem/soundChannel1", soundChannel[0]);
 	settings->setValue("Modem/soundChannel2", soundChannel[1]);
+	settings->setValue("Modem/soundChannel3", soundChannel[2]);
+	settings->setValue("Modem/soundChannel4", soundChannel[3]);
 
 	settings->setValue("Modem/DCDThreshold", dcd_threshold);
 
@@ -350,20 +390,37 @@ void saveSettings()
 
 	settings->setValue("Modem/PreEmphasisAll1", emph_all[0]);
 	settings->setValue("Modem/PreEmphasisAll2", emph_all[1]);
+	settings->setValue("Modem/PreEmphasisAll3", emph_all[2]);
+	settings->setValue("Modem/PreEmphasisAll4", emph_all[3]);
+
 	settings->setValue("Modem/PreEmphasisDB1", emph_db[0]);
 	settings->setValue("Modem/PreEmphasisDB2", emph_db[1]);
+	settings->setValue("Modem/PreEmphasisDB3", emph_db[2]);
+	settings->setValue("Modem/PreEmphasisDB4", emph_db[3]);
 
 	settings->setValue("Window/Waterfall1", Firstwaterfall);
 	settings->setValue("Window/Waterfall2", Secondwaterfall);
 
 	settings->setValue("Modem/TxDelay1", txdelay[0]);
 	settings->setValue("Modem/TxDelay2", txdelay[1]);
+	settings->setValue("Modem/TxDelay3", txdelay[2]);
+	settings->setValue("Modem/TxDelay4", txdelay[3]);
 
 	settings->setValue("Modem/TxTail1", txtail[0]);
 	settings->setValue("Modem/TxTail2", txtail[1]);
+	settings->setValue("Modem/TxTail3", txtail[2]);
+	settings->setValue("Modem/TxTail4", txtail[3]);
+
+	settings->setValue("Modem/CWIDCall", CWIDCall);
+	settings->setValue("Modem/CWIDInterval", CWIDInterval);
+	settings->setValue("Modem/CWIDLeft", CWIDLeft);
+	settings->setValue("Modem/CWIDRight", CWIDRight);
+	settings->setValue("Modem/CWIDType", CWIDType);			
 
 	saveAX25Params(0);
 	saveAX25Params(1);
+	saveAX25Params(2);
+	saveAX25Params(3);
 
 	settings->sync();
 

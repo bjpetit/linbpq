@@ -581,7 +581,7 @@ extern int intCalcLeader;        // the computed leader to use based on the repo
 extern const char strFrameType[64][18];
 extern const char shortFrameType[64][12];
 extern BOOL Capturing;
-extern BOOL SoundIsPlaying;
+extern int SoundIsPlaying;
 extern int blnLastPTT;
 extern BOOL blnAbort;
 extern BOOL blnClosing;

@@ -374,7 +374,7 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 	Chan = (Msg[0] >> 4);
 	Opcode = Msg[0] & 0x0f;
 
-	if (Chan > 4)
+	if (Chan > 3)
 		return;
 
 	switch (Opcode)

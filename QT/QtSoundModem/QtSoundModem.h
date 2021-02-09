@@ -11,6 +11,7 @@
 #include <QTableWidget>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QUdpSocket>
 #include <QSystemTrayIcon>
 
 #include "tcpCode.h"
@@ -36,6 +37,7 @@ private slots:
 	void doDevices();
 	void MinimizetoTray();
 	void TrayActivated(QSystemTrayIcon::ActivationReason reason);
+	void CWIDTimer();
 	void MyTimerSlot();
 	void clickedSlotI(int i);
 	void doModems();
@@ -55,6 +57,8 @@ private slots:
 	void sendtoTrace(char * Msg, int tx);
 	void preEmphAllAChanged(int);
 	void preEmphAllBChanged(int);
+	void preEmphAllCChanged(int state);
+	void preEmphAllDChanged(int state);
 	void menuChecked();
 	void onTEselectionChanged();
 	void clickedSlot();

@@ -301,13 +301,91 @@
     <property name="geometry">
      <rect>
       <x>-6</x>
-      <y>40</y>
+      <y>60</y>
       <width>971</width>
-      <height>221</height>
+      <height>201</height>
      </rect>
     </property>
     <property name="readOnly">
      <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelC">
+    <property name="geometry">
+     <rect>
+      <x>5</x>
+      <y>31</y>
+      <width>16</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>C:</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="modeC">
+    <property name="geometry">
+     <rect>
+      <x>22</x>
+      <y>31</y>
+      <width>145</width>
+      <height>22</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="centerD">
+    <property name="geometry">
+     <rect>
+      <x>444</x>
+      <y>31</y>
+      <width>56</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="maximum">
+     <number>3000</number>
+    </property>
+    <property name="value">
+     <number>1500</number>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="modeD">
+    <property name="geometry">
+     <rect>
+      <x>292</x>
+      <y>31</y>
+      <width>145</width>
+      <height>22</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelD">
+    <property name="geometry">
+     <rect>
+      <x>274</x>
+      <y>35</y>
+      <width>16</width>
+      <height>14</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>D:</string>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="centerC">
+    <property name="geometry">
+     <rect>
+      <x>174</x>
+      <y>31</y>
+      <width>56</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="maximum">
+     <number>3000</number>
+    </property>
+    <property name="value">
+     <number>1500</number>
     </property>
    </widget>
   </widget>

@@ -950,7 +950,7 @@ extern UCHAR bytSessionID;
 
 // Subroutine to make a CW ID Wave File
 
-void sendCWID(char * strID, BOOL blnPlay, int Chan)
+void sendCWID(char * strID, BOOL CWOnOff, int Chan)
 {
 	// This generates a phase synchronous FSK MORSE keying of strID
 	// FSK used to maintain VOX on some sound cards
@@ -991,10 +991,10 @@ void sendCWID(char * strID, BOOL blnPlay, int Chan)
 		if (CWOnOff)
 			intSpace[i] = 0;
 		else
-
 			intSpace[i] = sin(dblLoPhase) * 0.9 * intAmp;
 
 		intDot[i] = sin(dblHiPhase) * 0.9 * intAmp;
+
 		dblHiPhase += dblHiPhaseInc;
 		if (dblHiPhase > 2 * M_PI)
 			dblHiPhase -= 2 * M_PI;
@@ -1049,19 +1049,21 @@ void sendCWID(char * strID, BOOL blnPlay, int Chan)
 			intMask >>= 1;	//  Right shift mask
 		}
 		}
-			// add 3 dot spaces for inter letter spacing
-			for (k = 6; k >0; k--)
+			// add 2 dot spaces for inter letter spacing
+			for (k = 4; k >0; k--)
 				for (i = 0; i < intDotSampCnt; i++)
 					ARDOPSampleSink(intSpace[i]);
 	}
 	
 	//add 3 spaces for the end tail
 	
-	for (k = 6; k >0; k--)
-		for (i = 0; i < intDotSampCnt; i++)
-			ARDOPSampleSink(intSpace[i]);
+//	for (k = 6; k >0; k--)
+//		for (i = 0; i < intDotSampCnt; i++)
+//			ARDOPSampleSink(intSpace[i]);
 
-	SoundFlush();
+	ARDOPTXPtr[Chan] = 0;
+	ARDOPTXLen[Chan] = Number;
+	Number = 0;
 }
 
 

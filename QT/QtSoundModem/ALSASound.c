@@ -1383,6 +1383,7 @@ void SoundFlush()
 	{
 		oss_flush();
 	}
+
 	SoundIsPlaying = FALSE;
 
 	Number = 0;
@@ -1704,10 +1705,10 @@ VOID COMSetRTS(HANDLE fd)
 	int status;
 
 	if (ioctl(fd, TIOCMGET, &status) == -1)
-		perror("ARDOP PTT TIOCMGET");
+		perror("COMSetRTS PTT TIOCMGET");
 	status |= TIOCM_RTS;
 	if (ioctl(fd, TIOCMSET, &status) == -1)
-		perror("ARDOP PTT TIOCMSET");
+		perror("COMSetRTS PTT TIOCMSET");
 }
 
 VOID COMClearRTS(HANDLE fd)
@@ -1715,10 +1716,11 @@ VOID COMClearRTS(HANDLE fd)
 	int status;
 
 	if (ioctl(fd, TIOCMGET, &status) == -1)
-		perror("ARDOP PTT TIOCMGET");
+		perror("COMClearRTS PTT TIOCMGET");
 	status &= ~TIOCM_RTS;
 	if (ioctl(fd, TIOCMSET, &status) == -1)
-		perror("ARDOP PTT TIOCMSET");
+		perror("COMClearRTS PTT TIOCMSET");
+
 }
 
 

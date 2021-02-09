@@ -182,7 +182,10 @@ void txSleep(int mS)
 
 	while (mS > 50)
 	{
-		PollReceivedSamples();			// discard any received samples
+		if (SoundMode == 3)
+			UDPPollReceivedSamples();
+		else
+			PollReceivedSamples();			// discard any received samples
 
 		QSleep(50);
 		mS -= 50;
@@ -190,7 +193,10 @@ void txSleep(int mS)
 
 	QSleep(mS);
 
-	PollReceivedSamples();			// discard any received samples
+	if (SoundMode == 3)
+		UDPPollReceivedSamples();
+	else
+		PollReceivedSamples();			// discard any received samples
 }
 
 int PriorSize = 0;
@@ -210,8 +216,19 @@ BOOL SeeIfCardBusy()
 
 	return 1;
 }
+
+extern void sendSamplestoUDP(short * Samples, int nSamples, int Port);
+
+extern int UDPClientPort;
+
 short * SendtoCard(unsigned short * buf, int n)
 {
+	if (SoundMode == 3)			// UDP
+	{
+		sendSamplestoUDP(buf, n, UDPClientPort);
+		return buf;
+	}
+
 	header[Index].dwBufferLength = n * 4;
 
 	waveOutPrepareHeader(hWaveOut, &header[Index], sizeof(WAVEHDR));
@@ -264,6 +281,16 @@ void GetSoundDevices()
 		strcpy(&CaptureNames[0][0], "Pulse");
 		return;
 	}
+	else if (SoundMode == 3)		// UDP
+	{
+		PlaybackCount = 1;
+		strcpy(&PlaybackNames[0][0], "UDP");
+
+		CaptureCount = 1;
+		strcpy(&CaptureNames[0][0], "UDP");
+		return;
+	}
+
 
 	Debugprintf("Capture Devices");
 
@@ -396,9 +423,9 @@ for (i = 0; i < 100; i++)
 	return TRUE;
 }
 
-int min = 0, max = 0, lastlevelGUI = 0, lastlevelreport = 0;
+static int min = 0, max = 0, lastlevelGUI = 0, lastlevelreport = 0;
 
-UCHAR CurrentLevel = 0;		// Peak from current samples
+static UCHAR CurrentLevel = 0;		// Peak from current samples
 
 void PollReceivedSamples()
 {
@@ -602,6 +629,14 @@ void SoundFlush()
 //	StartCapture();
 
 	return;
+}
+
+int CheckAllSent()
+{
+	if ((header[0].dwFlags & WHDR_DONE) && (header[1].dwFlags & WHDR_DONE))
+		return 1;
+
+	return 0;
 }
 
 

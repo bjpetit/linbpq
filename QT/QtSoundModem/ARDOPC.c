@@ -1,4 +1,3 @@
-
 #ifdef WIN32
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -42,7 +41,6 @@ void PktARDOPStartTX();
 char GridSquare[9] = "No GS ";
 char Callsign[10] = "";
 BOOL wantCWID = FALSE;
-BOOL CWOnOff = FALSE;
 BOOL NeedID = FALSE;		// SENDID Command Flag
 BOOL NeedCWID = FALSE;
 BOOL NeedConReq = FALSE;	// ARQCALL Command Flag
