@@ -13,7 +13,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 	DWORD Stack[16];
 	DWORD CodeDump[16];
 
-#ifndef BPQ64
+#ifndef _WIN64
 
 	eip = exinfo.ContextRecord->Eip;	
 	SPPtr = exinfo.ContextRecord->Esp;	

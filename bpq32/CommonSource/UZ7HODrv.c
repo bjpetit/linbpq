@@ -2017,6 +2017,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 	int n;
 	unsigned char c;
 	unsigned char * ptr;
+	int Totallen = 0;
+	struct PORTCONTROL * PORT = &TNC->PortRecord->PORTCONTROL;
+
 
 #ifdef __BIG_ENDIAN__
 	RXHeader->DataLength = reverse(RXHeader->DataLength);
@@ -2181,7 +2184,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 			send(TNCInfo[MasterPort[TNC->Port]]->TCPSock, (char *)&AGW->RXHeader, AGWHDDRLEN, 0);
 			return;
 
-	GotStream:
+GotStream:
 
 			STREAM = &TNC->Streams[Stream];
 			memcpy(STREAM->AGWKey, Key, 21);
@@ -2193,6 +2196,41 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 			ProcessIncommingConnect(TNC, RXHeader->callfrom, Stream, FALSE);
 
+			// if Port CTEXT defined, use it
+
+			if (PORT->CTEXT)
+			{
+				Totallen = strlen(PORT->CTEXT);
+				ptr = PORT->CTEXT;
+			}
+			else if (HFCTEXTLEN > 0)
+			{
+				Totallen = HFCTEXTLEN;
+				ptr = HFCTEXT;
+			}
+			else if (FULL_CTEXT)
+			{
+				Totallen = CTEXTLEN;
+				ptr = CTEXTMSG;
+			}
+
+			while (Totallen)
+			{
+				int sendLen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
+
+				if (sendLen == 0)
+					sendLen = 80;
+
+				if (Totallen < sendLen)
+					sendLen = Totallen;
+
+				SendData(Stream, TNC, &STREAM->AGWKey[0], ptr, sendLen);
+
+				Totallen -= sendLen;
+				ptr += sendLen;
+			}
+
+/*
 			if (HFCTEXTLEN)
 			{
 				if (HFCTEXTLEN > 1)
@@ -2214,7 +2252,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 					SendData(Stream, TNC, &STREAM->AGWKey[0], &CTEXTMSG[Next], Len);
 				}
 			}
-
+*/
 			if (strcmp(RXHeader->callto, TNC->NodeCall) != 0)		// Not Connect to Node Call
 			{
 				APPLCALLS * APPL;
@@ -2970,7 +3008,13 @@ DigiLoop:
 		memcpy(AdjMsg->L2DATA, ptr, ILen);
 		Monframe.LENGTH += ILen;
 	}
-	
+	else if (AdjMsg->CTL == 0x97)		// FRMR
+	{
+		ptr = strstr(ptr, ">");
+		sscanf(ptr+1, "%x %x %x", &AdjMsg->PID, &AdjMsg->L2DATA[0], &AdjMsg->L2DATA[1]);
+		Monframe.LENGTH += 3;
+	}
+
 	time(&Monframe.Timestamp);
 	BPQTRACE((MESSAGE *)&Monframe, TRUE);
 

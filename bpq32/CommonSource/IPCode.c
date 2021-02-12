@@ -3087,7 +3087,7 @@ VOID RemoveARP(PARPDATA Arp)
 	int i;
 
 	while (Arp->ARP_Q)
-		free(Q_REM((void *)&Arp->ARP_Q));
+		free(Q_REM_NP((void *)&Arp->ARP_Q));
 
 	for (i=0; i < NumberofARPEntries; i++)
 	{

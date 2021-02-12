@@ -1926,7 +1926,7 @@ int decode_port_rec(char * rec)
 						{
 							RadioConfigMsg[nextRadioPort] = realloc(RadioConfigMsg[nextRadioPort], (strlen(rptr) + 1));		
 							nextRadioPort++;
-							return 0;
+							break;
 						}
 						strcat(rptr, rec);
 						GetNextLine(rec);

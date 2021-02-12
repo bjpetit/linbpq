@@ -306,10 +306,11 @@ VOID MySetWindowText(HWND hWnd, char * Msg)
 VOID SetWindowTextSupport(PMSGWITHLEN Buffer)
 {
 	HWND hWnd = (HWND)Buffer->Len;
-	char * Msg = Buffer->Data;
+	char * Msg = _strdup(Buffer->Data);
 
-	SetWindowText(hWnd, Msg);
 	ReleaseBuffer(Buffer);
+	SetWindowText(hWnd, Msg);
+	free(Msg);
 }
 
 

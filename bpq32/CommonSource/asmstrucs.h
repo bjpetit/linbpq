@@ -655,7 +655,7 @@ typedef struct PORTCONTROL
 	struct TNCINFO * TNC;		// Associated TNC record
 	int RIGPort;				// Linked port for freq resporting
 	unsigned int PERMITTEDAPPLS;	// Appls allowed on this port (generalisation of BBSBANNED)
-
+	char * CTEXT;				// Port Specific CText
 }	PORTCONTROLX, *PPORTCONTROL;
 
 typedef struct FULLPORTDATA

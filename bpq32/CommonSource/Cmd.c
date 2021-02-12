@@ -63,6 +63,7 @@ VOID L2SENDXID(struct _LINKTABLE * LINK);
 int CountBits(unsigned long in);
 VOID SaveMH();
 BOOL RestartTNC(struct TNCINFO * TNC);
+void GetPortCTEXT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 char OrigCmdBuffer[81] = "";		// Command Hander input buffer
@@ -3971,6 +3972,7 @@ CMDX COMMANDS[] =
 
 	"FINDBUFFS   ",4,FINDBUFFS,0,
 	"KISS        ",4,KISSCMD,0,
+	"GETPORTCTEXT",9,GetPortCTEXT, 0,
 
 #ifdef EXCLUDEBITS
 

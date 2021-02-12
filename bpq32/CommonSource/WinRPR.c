@@ -450,10 +450,10 @@ static int ProcessLine(char * buf, int Port)
 
 }
 
-static size_t ExtProc(int fn, int port, unsigned char * buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
+	PMSGWITHLEN buffptr;
 	int txlen = 0;
-	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Param;
 	int Stream = 0;
@@ -527,8 +527,7 @@ ok:
 			if (TNC->Streams[Stream].ReportDISC)
 			{
 				TNC->Streams[Stream].ReportDISC = FALSE;
-				buff[4] = Stream;
-
+				buff->PORT = Stream;
 				return -1;
 			}
 		}
@@ -541,21 +540,18 @@ ok:
 		{
 			if (TNC->Streams[Stream].PACTORtoBPQ_Q !=0)
 			{
-				int datalen;
-			
-				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
+				size_t datalen;
 
-				datalen=buffptr[1];
+				buffptr = Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
+				datalen = buffptr->Len;
 
-				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
+				buff->PORT = Stream;						// Compatibility with Kam Driver
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+				datalen += sizeof(void *) + 4;
 
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
+				PutLengthinBuffer(buff, (int)datalen);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -572,25 +568,25 @@ ok:
 
 		if (buffptr == 0) return (0);			// No buffers, so ignore
 
-		Stream = buff[4];
+		Stream = buff->PORT;
 
 		if (!TNC->TNCOK)
 		{
 			// Send Error Response
 
-			buffptr[1] = 36;
-			memcpy(buffptr+2, "No Connection to PACTOR TNC\r", 36);
+			buffptr->Len = 22;
+			memcpy(buffptr->Data, "No Connection to TNC\r", 22);
 
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 			
 			return 0;
 		}
 
-		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
+		txlen = GetLengthfromBuffer(buff) - (sizeof(void *) + 4);
 
-		buffptr[1] = txlen;
-		memcpy(buffptr+2, &buff[8], txlen);
-		
+		buffptr->Len = txlen;
+		memcpy(&buffptr->Data[0], &buff->L2DATA[0], txlen);
+
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 
 		TNC->Streams[Stream].FramesOutstanding++;
@@ -600,7 +596,7 @@ ok:
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 
-		Stream = (int)buff;
+		Stream = (int)(size_t)buff;
 
 		TNCOK = (TNC->HostMode == 1 && TNC->ReinitState != 10);
 
@@ -643,7 +639,7 @@ ok:
 
 	case 6:				// Scan Interface
 
-		Param = (int)buff;
+		Param = (int)(size_t)buff;
 
 		switch (Param)
 		{
@@ -1117,7 +1113,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 			if (TNC->MSGCOUNT)
 				continue;			// MORE TO COME
 
-			TNC->InputLen = CURSOR - TNC->DEDBuffer;
+			TNC->InputLen = (int)(CURSOR - TNC->DEDBuffer);
 			TrkProcessDEDFrame(TNC);
 
 			TNC->HOSTSTATE = 0;
@@ -1128,7 +1124,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 	// End of Input - Save buffer position
 
-	TNC->InputLen = CURSOR - TNC->DEDBuffer;
+	TNC->InputLen = (int)(CURSOR - TNC->DEDBuffer);
 	TNC->RXLen = 0;
 }
 

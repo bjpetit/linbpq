@@ -766,6 +766,9 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 	TRANSPORTENTRY * Session;
 	int Index = 0;
 	PMSGWITHLEN buffptr;
+	int Totallen = 0;
+	UCHAR * ptr;
+	struct PORTCONTROL * PORT = &TNC->PortRecord->PORTCONTROL;
 
 	// Stop Scanner
 
@@ -823,14 +826,39 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 
 	TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
 
-	if (HFCTEXTLEN > 1 && SENDCTEXT)
+	if (SENDCTEXT == 0)
+		return TRUE;
+
+	// if Port CTEXT defined, use it
+	
+	if (PORT->CTEXT)
 	{
+		Totallen = strlen(PORT->CTEXT);
+		ptr = PORT->CTEXT;
+	}
+	else if (HFCTEXTLEN > 0)
+	{
+		Totallen = HFCTEXTLEN;
+		ptr = HFCTEXT;
+	}
+	else
+		return 0;
+
+	while (Totallen)
+	{
+		int sendLen = 250;
+		
+		if (Totallen < 250)
+			sendLen = Totallen;
+			
 		buffptr = (PMSGWITHLEN)GetBuff();
 		if (buffptr == 0) return TRUE;			// No buffers
 
-		buffptr->Len = HFCTEXTLEN;
-		memcpy(&buffptr->Data[0], HFCTEXT, HFCTEXTLEN);
+		buffptr->Len = sendLen;
+		memcpy(&buffptr->Data[0], ptr, sendLen);
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
+		Totallen -= sendLen;
+		ptr += sendLen;
 	}
 	return TRUE;
 }
@@ -4392,4 +4420,73 @@ LRESULT CALLBACK UIWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 }
 
 #endif
+
+extern struct DATAMESSAGE * REPLYBUFFER;
+char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
+void GetPortCTEXT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char FN[250];
+	FILE *hFile;
+	struct stat STAT;
+	struct PORTCONTROL * PORT = PORTTABLE;
+	char PortList[256] = "";
+
+	while (PORT)
+	{
+		if (PORT->CTEXT)
+		{
+			free(PORT->CTEXT);
+			PORT->CTEXT = 0;
+		}
+
+		if (BPQDirectory[0] == 0)
+			sprintf(FN, "Port%dCTEXT.txt", PORT->PORTNUMBER);
+		else
+			sprintf(FN, "%s/Port%dCTEXT.txt", BPQDirectory, PORT->PORTNUMBER);
+
+		if (stat(FN, &STAT) == -1)
+		{
+			PORT = PORT->PORTPOINTER;
+			continue;
+		}
+
+		hFile = fopen(FN, "rb");
+
+		if (hFile)
+		{
+			char * ptr;
+			
+			PORT->CTEXT = zalloc(STAT.st_size + 1);
+			fread(PORT->CTEXT , 1, STAT.st_size, hFile); 
+			fclose(hFile);
+			
+			// convert CRLF or LF to CR
+	
+			while (ptr = strstr(PORT->CTEXT, "\r\n"))
+				memmove(ptr, ptr + 1, strlen(ptr));
+
+			// Now has LF
+
+			while (ptr = strchr(PORT->CTEXT, '\n'))
+				*ptr = '\r';
+
+
+			sprintf(PortList, "%s,%d", PortList, PORT->PORTNUMBER);
+		}
+
+		PORT = PORT->PORTPOINTER;
+	}
+
+	if (Session)
+	{	
+		Bufferptr = Cmdprintf(Session, Bufferptr, "CTEXT Read for ports %s\r", &PortList[1]);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+	}
+	else
+		Debugprintf("CTEXT Read for ports %s\r", &PortList[1]);
+}
+
+
+
+
 

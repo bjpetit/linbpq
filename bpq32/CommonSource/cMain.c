@@ -41,7 +41,7 @@ VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer);
 VOID ProcessIframe(struct _LINKTABLE * LINK, PDATAMESSAGE Buffer);
 VOID FindLostBuffers();
 VOID ReadMH();
-
+void GetPortCTEXT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 
 #include "configstructs.h"
 
@@ -1394,6 +1394,8 @@ BOOL Start()
 
 	NEXTID = (rand() % 254) + 1;
 
+	GetPortCTEXT(0, 0, 0, 0);
+
 	return 0;
 }
 
@@ -2401,7 +2403,12 @@ VOID FindLostBuffers()
 	struct _TRANSPORTENTRY * L4;	// Pointer to Session
 	
 	struct DEST_LIST * DEST = DESTS;
-	
+
+	struct ROUTE * Routes = NEIGHBOURS;
+	int MaxRoutes = MAXNEIGHBOURS;
+	int Queued;
+	char Call[10]; 
+
 	n = MAXDESTS;
 
 	Debugprintf("Looking for missing Buffers");
@@ -2453,6 +2460,23 @@ VOID FindLostBuffers()
 			Debugprintf("L4 %d TX %d RX %d HOLD %d RESEQ %d", MAXCIRCUITS - n, C_Q_COUNT(&L4->L4TX_Q),
 				C_Q_COUNT(&L4->L4RX_Q), C_Q_COUNT(&L4->L4HOLD_Q), C_Q_COUNT(&L4->L4RESEQ_Q));
 		L4++;
+	}
+
+	// Routes
+
+	while (MaxRoutes--)
+	{
+		if (Routes->NEIGHBOUR_CALL[0] != 0)
+		{
+			Call[ConvFromAX25(Routes->NEIGHBOUR_CALL, Call)] = 0;
+			if (Routes->NEIGHBOUR_LINK)					
+			{
+				Queued = COUNT_AT_L2(Routes->NEIGHBOUR_LINK);			// SEE HOW MANY QUEUED
+				if (Queued)
+					Debugprintf("Route %s %d", Call, Queued);
+			}
+		}
+		Routes++;
 	}
 
 	// Build list of buffers, then mark off all on free Q

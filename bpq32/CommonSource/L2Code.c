@@ -1153,6 +1153,11 @@ VOID L2SABM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 		//	Send CTEXT if connect to NODE/Port Alias, or NODE/Port Call, and FULL_CTEXT set
 		//	Dont sent to known NODEs, or appl connects 
 
+		struct DATAMESSAGE * Msg;
+		int Totallen = 0;
+		int Paclen= PORT->PORTPACLEN;
+		UCHAR * ptr;
+
 		if (PORT->TNC && PORT->TNC->Hardware == H_KISSHF)
 			AttachKISSHF(PORT, Buffer);
 
@@ -1161,39 +1166,50 @@ VOID L2SABM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 		if (NO_CTEXT == 1)
 			return;
 
-		if (CTEXTLEN && (FULL_CTEXT == 1 || ALIASMSG))	// Any connect, or call to alias
+		if (FULL_CTEXT == 0 && !ALIASMSG) // Any connect, or call to alias
+			return;
+
+		// if Port CTEXT defined, use it
+		
+		if (PORT->CTEXT)
 		{
-			struct DATAMESSAGE * Msg;
-			int Totallen = CTEXTLEN;
-			int Paclen= PORT->PORTPACLEN;
-			UCHAR * ptr = CTEXTMSG;
+			Totallen = strlen(PORT->CTEXT);
+			ptr = PORT->CTEXT;
+		}
+		else if (CTEXTLEN)	
+		{
+			Totallen = CTEXTLEN;
+			ptr = CTEXTMSG;
+		}
+		else
+			return;
 
-			if (Paclen == 0)
-				Paclen = PACLEN;
+		if (Paclen == 0)
+			Paclen = PACLEN;
 
-			while(Totallen)
-			{
-				Msg = GetBuff();
+		while(Totallen)
+		{
+			Msg = GetBuff();
 
-				if (Msg == NULL)
-					break;				// No Buffers
+			if (Msg == NULL)
+				break;				// No Buffers
 
-				Msg->PID = 0xf0;
+			Msg->PID = 0xf0;
 
-				if (Paclen > Totallen)
-					Paclen = Totallen;
-				
-				memcpy(Msg->L2DATA, ptr, Paclen);
-				Msg->LENGTH = Paclen + MSGHDDRLEN + 1;
+			if (Paclen > Totallen)
+				Paclen = Totallen;
 
-				C_Q_ADD(&LINK->TX_Q, Msg);
+			memcpy(Msg->L2DATA, ptr, Paclen);
+			Msg->LENGTH = Paclen + MSGHDDRLEN + 1;
 
-				ptr += Paclen;
-				Totallen -= Paclen;
-			}
+			C_Q_ADD(&LINK->TX_Q, Msg);
+
+			ptr += Paclen;
+			Totallen -= Paclen;
 		}
 		return;
 	}
+
 
 	//	Connnect to APPL
 

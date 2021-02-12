@@ -1372,8 +1372,8 @@ VOID DEDPoll(int Port)
 
 					TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
 
-					sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s%c\1\1\1%s",
-						(TNC->Robust) ? TNC->RobustSpeed : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0,  (char *)buffptr+8);
+					sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s%c\1\1\1C%s",
+						(TNC->Robust) ? TNC->RobustSpeed : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0, Buffer);
 
 					ReleaseBuffer(buffptr);
 
