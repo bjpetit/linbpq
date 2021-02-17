@@ -45,7 +45,7 @@
    <widget class="QLabel" name="Waterfall">
     <property name="geometry">
      <rect>
-      <x>128</x>
+      <x>120</x>
       <y>44</y>
       <width>206</width>
       <height>64</height>
@@ -273,10 +273,10 @@
    <widget class="QLabel" name="label_7">
     <property name="geometry">
      <rect>
-      <x>124</x>
-      <y>14</y>
-      <width>53</width>
-      <height>16</height>
+      <x>122</x>
+      <y>6</y>
+      <width>33</width>
+      <height>37</height>
      </rect>
     </property>
     <property name="font">
@@ -287,14 +287,20 @@
     <property name="text">
      <string>Rcv Level:</string>
     </property>
+    <property name="textFormat">
+     <enum>Qt::PlainText</enum>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
    </widget>
    <widget class="QLabel" name="RXLevel">
     <property name="geometry">
      <rect>
-      <x>182</x>
-      <y>16</y>
-      <width>150</width>
-      <height>10</height>
+      <x>164</x>
+      <y>12</y>
+      <width>125</width>
+      <height>15</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -310,10 +316,10 @@
    <widget class="QLabel" name="RXLevelRef">
     <property name="geometry">
      <rect>
-      <x>182</x>
-      <y>24</y>
-      <width>150</width>
-      <height>10</height>
+      <x>164</x>
+      <y>25</y>
+      <width>125</width>
+      <height>15</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -494,6 +500,30 @@
     </property>
     <property name="text">
      <string>Remote Call</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="Offset">
+    <property name="geometry">
+     <rect>
+      <x>302</x>
+      <y>6</y>
+      <width>37</width>
+      <height>37</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Offset: 0.0Hz</string>
+    </property>
+    <property name="textFormat">
+     <enum>Qt::PlainText</enum>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
     </property>
    </widget>
   </widget>

@@ -49,7 +49,7 @@ int PortNum = 0;
 
 ARDOP_GUI::ARDOP_GUI(QWidget *parent) : QMainWindow(parent), ui(new Ui::ARDOP_GUI)
 {
-    char Msg[80];
+    char Msg[512];
     QByteArray qb;
     char * ptr;
 	int i;
@@ -230,7 +230,7 @@ void ARDOP_GUI::MyTimerSlot()
 {
     // Runs every second
 
-	char Msg[80];
+	char Msg[512];
 	
 	Keepalive++;
 
@@ -332,6 +332,10 @@ void ARDOP_GUI::readPendingDatagrams()
 			ui->Frequency->setText(&copy[1]);
 			break;
 
+		case 'O':					// Frequency
+			ui->Offset->setText(&copy[1]);
+			break;
+
 		case 'I':					// Callsign
 			ui->Callsign->setText(&copy[1]);
 			break;
@@ -352,11 +356,11 @@ void ARDOP_GUI::readPendingDatagrams()
 				break;
 			case 1:
 				palette.setColor(QPalette::Base, Qt::green);
-				rxtimer->start(2000);
+				rxtimer->start(5000);
 				break;
 			case 2:
 				palette.setColor(QPalette::Base, Qt::red);
-				rxtimer->start(2000);
+				rxtimer->start(5000);
 			}
 			ui->RXFrame->setPalette(palette);
 			ui->RXFrame->setText(&copy[2]);
@@ -410,8 +414,10 @@ void ARDOP_GUI::RefreshConstellation(unsigned char * Data, int Count)
 
     while (Count--)
     {
-        Constellation->setPixel(Data[0], Data[1], vbColours[Data[2]]);
-        Data += 3;
+		if (Data[0] < 91 && Data[1] < 91)
+			Constellation->setPixel(Data[0], Data[1], vbColours[Data[2]]);
+
+		Data += 3;
     }
 
     ui->Constellation->setPixmap(QPixmap::fromImage(*Constellation));
