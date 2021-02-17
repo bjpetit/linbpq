@@ -48,7 +48,7 @@
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
-				CompileAs="2"
+				CompileAs="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -61,11 +61,10 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="wsock32.lib C:\Users\johnw\OneDrive\Dev\Source\AIS\mmapi.lib Winmm.lib comctl32.lib"
-				OutputFile="c:\devprogs\AIS\$(ProjectName).exe"
+				AdditionalDependencies="wsock32.lib C:\devprogs\AIS\AIS_MM_Iface.lib Winmm.lib comctl32.lib"
+				OutputFile="C:\devprogs\ais\$(ProjectName).exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
-				GenerateMapFile="true"
 				SubSystem="2"
 				TargetMachine="1"
 			/>
@@ -139,9 +138,8 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="wsock32.lib C:\windows\AIS_MM_Iface.lib Winmm.lib comctl32.lib"
-				OutputFile="C:\Documents and Settings\John\Desktop\$(ProjectName).exe"
 				LinkIncremental="1"
-				GenerateDebugInformation="false"
+				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -176,49 +174,52 @@
 	<References>
 	</References>
 	<Files>
-		<File
-			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AIS_MM.c"
+		<Filter
+			Name="Source Files"
+			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
+			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
-		</File>
-		<File
-			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AIS_MM.rc"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AIS_MM_IFace.c"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AISCommon.c"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\AutoPilot.c"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\OneDrive\Dev\Source\AIS\stdafx.c"
-			>
-			<FileConfiguration
-				Name="Debug|Win32"
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\AIS\AIS_MM.c"
 				>
-				<Tool
-					Name="VCCLCompilerTool"
-					UsePrecompiledHeader="1"
-					ObjectFile="$(IntDir)\$(InputName)1.obj"
-					XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Release|Win32"
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\AIS\AISCommon.c"
 				>
-				<Tool
-					Name="VCCLCompilerTool"
-					ObjectFile="$(IntDir)\$(InputName)1.obj"
-					XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-				/>
-			</FileConfiguration>
-		</File>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\AIS\AutoPilot.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\AIS\stdafx.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
+			</File>
+		</Filter>
+		<Filter
+			Name="Header Files"
+			Filter="h;hpp;hxx;hm;inl;inc;xsd"
+			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
+			>
+		</Filter>
+		<Filter
+			Name="Resource Files"
+			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
+			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
+			>
+			<File
+				RelativePath="S:\DEV\Source\AIS\AIS_MM.rc"
+				>
+			</File>
+		</Filter>
 	</Files>
 	<Globals>
 	</Globals>

@@ -18,7 +18,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="..\..\Intermed\$(ProjectName)\$(ConfigurationName)"
+			IntermediateDirectory="..\..\Intermed\$(ProjectName)\(ConfigurationName"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -44,9 +44,7 @@
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				EnableFunctionLevelLinking="false"
 				UsePrecompiledHeader="2"
-				BrowseInformation="1"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
@@ -64,13 +62,10 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="wsock32.lib"
-				OutputFile="C:\DevProgs\GPSMux\$(ProjectName).exe"
+				OutputFile="C:\Documents and Settings\John\Desktop\$(ProjectName).exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
-				GenerateMapFile="true"
-				MapFileName="$(IntDir)\$(InputName).map"
 				SubSystem="2"
-				LinkTimeCodeGeneration="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -103,7 +98,7 @@
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
 			IntermediateDirectory="..\..\Intermed\$(ProjectName)\(ConfigurationName"
 			ConfigurationType="1"
-			CharacterSet="0"
+			CharacterSet="1"
 			WholeProgramOptimization="1"
 			>
 			<Tool
@@ -143,9 +138,9 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="wsock32.lib"
-				OutputFile="C:\DevProgs\GPSMux\$(ProjectName).exe"
+				OutputFile="C:\Documents and Settings\John\Desktop\$(ProjectName).exe"
 				LinkIncremental="1"
-				GenerateDebugInformation="false"
+				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -180,36 +175,129 @@
 	<References>
 	</References>
 	<Files>
-		<File
-			RelativePath="S:\DEV\Source\GPSMuxPC\BPQVComInterface.c"
+		<Filter
+			Name="Source Files"
+			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
+			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
-		</File>
-		<File
-			RelativePath="S:\DEV\Source\GPSMuxPC\GPSMuxPC.c"
-			>
-			<FileConfiguration
-				Name="Debug|Win32"
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\AFXRES.H"
 				>
-				<Tool
-					Name="VCCLCompilerTool"
-					UsePrecompiledHeader="1"
-				/>
-			</FileConfiguration>
-		</File>
-		<File
-			RelativePath="S:\DEV\Source\GPSMuxPC\GPSMuxPC.rc"
-			>
-			<FileConfiguration
-				Name="Debug|Win32"
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\BPQVComInterface.c"
 				>
-				<Tool
-					Name="VCResourceCompilerTool"
-					AdditionalIncludeDirectories="S:\DEV\Source\AIS"
-				/>
-			</FileConfiguration>
-		</File>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\GPSMuxPC.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\GPSMuxPC.rc"
+				>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\resource.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\stdafx.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\stdafx.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\winres.h"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="Header Files"
+			Filter="h;hpp;hxx;hm;inl;inc;xsd"
+			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
+			>
+			<File
+				RelativePath="..\..\..\..\OneDrive\Dev\Source\GPSMuxPC\GPSMuxPC.h"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\GPSMuxPC\resource.h"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\GPSMuxPC\stdafx.h"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="Resource Files"
+			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
+			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
+			>
+			<File
+				RelativePath="..\..\..\..\Users\John\OneDrive\Dev\Source\GPSMuxPC\GPSMuxPC.rc"
+				>
+			</File>
+		</Filter>
 		<File
-			RelativePath="S:\DEV\Source\GPSMuxPC\stdafx.c"
+			RelativePath=".\ReadMe.txt"
 			>
 		</File>
 	</Files>
