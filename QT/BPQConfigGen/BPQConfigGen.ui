@@ -2800,12 +2800,12 @@ Type ? for list of available commands.
            <rect>
             <x>25</x>
             <y>10</y>
-            <width>551</width>
+            <width>26</width>
             <height>16</height>
            </rect>
           </property>
           <property name="text">
-           <string>Call                                              Port  Quality Window Frack Paclen RQual INP3 NoKeepalive</string>
+           <string>Call</string>
           </property>
          </widget>
          <widget class="QLabel" name="label_49">
@@ -2819,6 +2819,110 @@ Type ? for list of available commands.
           </property>
           <property name="text">
            <string>Routes block Comments</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_54">
+          <property name="geometry">
+           <rect>
+            <x>215</x>
+            <y>10</y>
+            <width>36</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string> Port</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_70">
+          <property name="geometry">
+           <rect>
+            <x>255</x>
+            <y>10</y>
+            <width>46</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Quality</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_68">
+          <property name="geometry">
+           <rect>
+            <x>295</x>
+            <y>10</y>
+            <width>51</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string> Window</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_72">
+          <property name="geometry">
+           <rect>
+            <x>345</x>
+            <y>10</y>
+            <width>41</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string> Frack  </string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_73">
+          <property name="geometry">
+           <rect>
+            <x>380</x>
+            <y>10</y>
+            <width>46</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string> Paclen</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_74">
+          <property name="geometry">
+           <rect>
+            <x>430</x>
+            <y>10</y>
+            <width>41</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>RQual</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_71">
+          <property name="geometry">
+           <rect>
+            <x>470</x>
+            <y>10</y>
+            <width>36</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string> INP3</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="label_75">
+          <property name="geometry">
+           <rect>
+            <x>505</x>
+            <y>10</y>
+            <width>76</width>
+            <height>16</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>NoKeepalive</string>
           </property>
          </widget>
         </widget>

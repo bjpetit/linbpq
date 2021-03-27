@@ -1,5 +1,5 @@
 
-#define VersionString "0.0.0.5"
+#define VersionString "0.0.0.6"
 
 // 0.2 Allow updating CMSCALL and PASS
 //	   Read as binary to preserve line endings
@@ -12,6 +12,9 @@
 // 0.4 Minor Fixes
 
 // 0.5 Add Edit Routes page
+
+// 0.6 Fix hang if unknown MAP param specified
+//	   Tidy ROUTES header
 
 #include "BPQConfigGen.h"
 #ifdef WIN32
@@ -723,7 +726,7 @@ BPQConfigGen::BPQConfigGen(QWidget *parent)
 		Route->routeFarQual = new QLineEdit(ui.routeScrollareaContents);
 		Route->routeFarQual->setGeometry(QRect(420, 5 + i * 22, 32, 20));
 		Route->routeINP3 = new QCheckBox(ui.routeScrollareaContents);
-		Route->routeINP3->setGeometry(QRect(460, 5 + i * 22, 20, 20));
+		Route->routeINP3->setGeometry(QRect(470, 5 + i * 22, 20, 20));
 		Route->routeNoKeepalives = new QCheckBox(ui.routeScrollareaContents);
 		Route->routeNoKeepalives->setGeometry(QRect(510, 5 + i * 22, 20, 20));
 	}
@@ -1716,6 +1719,7 @@ void BPQConfigGen::ReadConfigFile()
 					//
 					//		Look for (optional) KEEPALIVE, DYNAMIC, UDP or BROADCAST params
 					//
+
 					while (p_UDP != NULL)
 					{
 						if (stricmp(p_UDP, "DYNAMIC") == 0)
@@ -1793,7 +1797,10 @@ void BPQConfigGen::ReadConfigFile()
 						}
 
 						if ((*p_UDP == ';') || (*p_UDP == '#'))	break;			// Comment on end
+					
+						// Unknown param
 
+						p_UDP = strtok(NULL, " \t\n\r");
 						continue;
 					}
 
