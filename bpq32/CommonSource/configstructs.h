@@ -69,6 +69,7 @@ struct PORTCONFIG
 	int RIGPORT;			// Linked port with RigControl 
 	unsigned int PERMITTEDAPPLS;	// Appls allowed on this port
 	int HavePermittedAppls;			// Indicated PERMITTEDAPPLS uses
+	int Hide;				// Don't show on Ports display or AGW Connect Menu
 
 };
 

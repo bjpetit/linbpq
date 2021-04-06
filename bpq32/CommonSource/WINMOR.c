@@ -271,21 +271,12 @@ lineloop:
 	Msg[SaveLen] = Save;
 
 }
-
-VOID MySetWindowText(HWND hWnd, char * Msg)
+				
+VOID MySetWindowTextWithSem(HWND hWnd, char * Msg)
 {
 #ifndef LINBPQ
 
 	PMSGWITHLEN buffptr;
-	BOOL Sem = FALSE;
-
-	// Get semaphore if it isn't set
-
-	if (InterlockedExchange(&Semaphore.Flag, 1) == 0) 
-	{
-		Sem = TRUE;
-		Semaphore.Gets++;
-	}
 
 	buffptr = GetBuff();
 
@@ -297,20 +288,46 @@ VOID MySetWindowText(HWND hWnd, char * Msg)
 		C_Q_ADD(&SetWindowTextQ, buffptr);
 	}
 
-	if (Sem)
-		FreeSemaphore(&Semaphore);
-
 #endif
 }
 
-VOID SetWindowTextSupport(PMSGWITHLEN Buffer)
-{
-	HWND hWnd = (HWND)Buffer->Len;
-	char * Msg = _strdup(Buffer->Data);
+int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
 
-	ReleaseBuffer(Buffer);
-	SetWindowText(hWnd, Msg);
-	free(Msg);
+struct SEM SetWindTextSem = {0, 0, 0, 0};
+
+VOID MySetWindowText(HWND hWnd, char * Msg)
+{
+	PMSGWITHLEN buffptr;
+
+#ifndef LINBPQ
+
+	GetSemaphore(&SetWindTextSem, 61);
+	buffptr = zalloc(400);
+
+	if (buffptr)
+	{
+		buffptr->Len= (UINT)hWnd;
+		memcpy(&buffptr->Data[0], Msg, strlen(Msg) + 1);
+	
+		C_Q_ADD_NP(&SetWindowTextQ, buffptr);
+	}
+
+	FreeSemaphore(&SetWindTextSem);
+#endif
+}
+
+VOID SetWindowTextSupport()
+{
+	PMSGWITHLEN Buffer;
+
+	while (SetWindowTextQ)
+	{
+		GetSemaphore(&SetWindTextSem, 61);
+		Buffer = Q_REM_NP(&SetWindowTextQ);
+		SetWindowText((HWND)Buffer->Len, Buffer->Data);
+		FreeSemaphore(&SetWindTextSem);
+		free(Buffer);
+	}
 }
 
 

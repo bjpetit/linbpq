@@ -205,7 +205,7 @@ int Update_MH_KeepAlive(struct AXIPPORTINFO * PORT, struct in_addr ipad, char pr
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
 BOOL add_arp_entry(struct AXIPPORTINFO * PORT, unsigned char * call, UCHAR * ip, int len, int port,unsigned char * name,
-int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort, BOOL IPv6);
+int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort, BOOL IPv6, int noUpdate);
 BOOL add_bc_entry(struct AXIPPORTINFO * PORT, unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 static BOOL ReadConfigFile(int Port);
@@ -438,7 +438,7 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 								// Can't reply. If AutoConfig is set, add to table and accept, else reject
 
 								if (PORT->AutoAddARP)
-									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, 0, inet_ntoa(RXaddr.rxaddr.sin_addr), 0, PORT->AutoAddBC, TRUE, 0, 0, FALSE);
+									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, 0, inet_ntoa(RXaddr.rxaddr.sin_addr), 0, PORT->AutoAddBC, TRUE, 0, 0, FALSE, 0);
 								else
 								{
 									char From[11] = "|";
@@ -548,10 +548,10 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 								{
 									char Addr[80];
 									Format_Addr((UCHAR *)&RXaddr.rxaddr6.sin6_addr, Addr, TRUE);
-									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr6.sin6_addr, 7, htons(RXaddr.rxaddr6.sin6_port), Addr, 0, PORT->AutoAddBC, TRUE, 0, PORT->udpport[i], TRUE);		
+									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr6.sin6_addr, 7, htons(RXaddr.rxaddr6.sin6_port), Addr, 0, PORT->AutoAddBC, TRUE, 0, PORT->udpport[i], TRUE, 0);		
 								}
 								else
-									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, htons(RXaddr.rxaddr.sin_port), inet_ntoa(RXaddr.rxaddr.sin_addr), 0, PORT->AutoAddBC, TRUE, 0, PORT->udpport[i], FALSE);		
+									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, htons(RXaddr.rxaddr.sin_port), inet_ntoa(RXaddr.rxaddr.sin_addr), 0, PORT->AutoAddBC, TRUE, 0, PORT->udpport[i], FALSE, 0);		
 							else
 							{
 								char From[11] = "|";
@@ -1384,7 +1384,7 @@ LRESULT FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lPa
 			{
 				if (convtoax25(call,axcall,&calllen))
 				{
-					add_arp_entry(PORT, axcall,0,calllen,port,host,Interval, BCFlag, FALSE, 0, port, FALSE);
+					add_arp_entry(PORT, axcall,0,calllen,port,host,Interval, BCFlag, FALSE, 0, port, FALSE, 0);
 					ResolveDelay = 2;
 					return(DestroyWindow(hWnd));
 				}
@@ -2138,7 +2138,7 @@ static int ProcessLine(char * buf, struct AXIPPORTINFO * PORT)
 	int bcflag;
 	char axcall[7];
 	int Interval;
-	int Dynamic=FALSE;
+	int noUpdate=FALSE;
 	int TCPMode;
 
 	ptr = strtok(buf, " \t\n\r");
@@ -2233,9 +2233,9 @@ static int ProcessLine(char * buf, struct AXIPPORTINFO * PORT)
 //
 		while (p_UDP != NULL)
 		{
-			if (_stricmp(p_UDP,"DYNAMIC") == 0)
+			if (_stricmp(p_UDP,"NOUPDATE") == 0)
 			{
-				Dynamic=TRUE;
+				noUpdate = TRUE;
 				p_UDP = strtok(NULL, " \t\n\r");
 				continue;
 			}
@@ -2320,7 +2320,7 @@ static int ProcessLine(char * buf, struct AXIPPORTINFO * PORT)
 			if (SourcePort == 0)
 				SourcePort = port;
 
-			add_arp_entry(PORT, axcall, 0, calllen, port, p_ipad, Interval, bcflag, FALSE, TCPMode, SourcePort, FALSE);
+			add_arp_entry(PORT, axcall, 0, calllen, port, p_ipad, Interval, bcflag, FALSE, TCPMode, SourcePort, FALSE, noUpdate);
 			return (TRUE);
 		}
 	}		// End of Process MAP
@@ -2431,7 +2431,7 @@ BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call,int * calllen
 }
 
 BOOL add_arp_entry(struct AXIPPORTINFO * PORT, UCHAR * call, UCHAR * ip, int len, int port,
-				   UCHAR * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPFlag, int SourcePort, BOOL IPv6)
+				   UCHAR * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPFlag, int SourcePort, BOOL IPv6, int noUpdate)
 {
 	struct arp_table_entry * arp;
 
@@ -2467,6 +2467,7 @@ BOOL add_arp_entry(struct AXIPPORTINFO * PORT, UCHAR * call, UCHAR * ip, int len
 	arp->BCFlag = BCFlag;
 	arp->AutoAdded = AutoAdded;
 	arp->TCPMode = TCPFlag;
+	arp->noUpdate = noUpdate;
 	PORT->arp_table_len++;
 
 	if (PORT->MaxResWindowlength < (PORT->arp_table_len * 14) + 70)
@@ -2586,7 +2587,7 @@ BOOL CheckSourceisResolvable(struct AXIPPORTINFO * PORT, char * call, int Port, 
 			// Why not refreesh resolved addresses - if dynamic addr has changed
 			// this will give quicker response
 			
-			//if (arp->AutoAdded)
+			if (arp->noUpdate == 0)
 			{
 				if (arp->IPv6)
 				{

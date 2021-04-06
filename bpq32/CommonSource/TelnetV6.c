@@ -45,7 +45,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <winioctl.h>
 #include "WS2tcpip.h"
 #else
-#define TIOCOUTQ        0x5411
+//#define TIOCOUTQ        0x5411
 #define SIOCOUTQ        TIOCOUTQ        /* output queue size (not sent + not acked) */
 #endif
 
@@ -2067,6 +2067,7 @@ nosocks:
 
 			STREAM->Attached = TRUE;
 			STREAM->FramesQueued= 0;
+			STREAM->NoCMSFallback = 0;
 
 			continue;
 		}
@@ -2084,6 +2085,7 @@ nosocks:
 
 				STREAM->Attached = FALSE;
 				STREAM->Connected = FALSE;
+				STREAM->NoCMSFallback = FALSE;
 
 				sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;	// clear any queued data
 
@@ -2348,16 +2350,25 @@ nosocks:
 						return;
 					}
 
-					if (_stricmp(Host, "RELAY") == 0 && TCP->RELAYHOST[0])
+					if (_stricmp(Host, "RELAY") == 0)
 					{
-						STREAM->Connecting = TRUE;
-						STREAM->ConnectionInfo->CMSSession = TRUE;
-						STREAM->ConnectionInfo->RelaySession = TRUE;
-						TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772, TRUE);
-						ReleaseBuffer(buffptr);
-						return;
+						if (P2[0] == 0)
+						{
+							strcpy(P2, TCP->RELAYHOST);
+							strcpy(P3, "8772");
+						}
+
+						if (P2[0])
+						{
+							STREAM->Connecting = TRUE;
+							STREAM->ConnectionInfo->CMSSession = TRUE;
+							STREAM->ConnectionInfo->RelaySession = TRUE;
+							TCPConnect(TNC, TCP, STREAM, P2, atoi(P3), TRUE);
+							ReleaseBuffer(buffptr);
+							return;
+						}
 					}
-							
+		
 					if (_stricmp(Host, "CMS") == 0)
 					{
 						if (!TCP->CMSOK)
@@ -4824,12 +4835,12 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 
 //	SO_ERROR codes
 
-#define	ETIMEDOUT		110	/* Connection timed out */
-#define	ECONNREFUSED	111	/* Connection refused */
-#define	EHOSTDOWN		112	/* Host is down */
-#define	EHOSTUNREACH	113	/* No route to host */
-#define	EALREADY		114	/* Operation already in progress */
-#define	EINPROGRESS		115	/* Operation now in progress */
+//#define	ETIMEDOUT		110	/* Connection timed out */
+//#define	ECONNREFUSED	111	/* Connection refused */
+//#define	EHOSTDOWN		112	/* Host is down */
+//#define	EHOSTUNREACH	113	/* No route to host */
+//#define	EALREADY		114	/* Operation already in progress */
+//#define	EINPROGRESS		115	/* Operation now in progress */
 
 	if (Error == 0)
 		getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&Error, &errlen);
@@ -5198,7 +5209,7 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 		ptr2 =  strtok_s(NULL, ", ", &context);		// Skip Time
 		ptr2 =  strtok_s(NULL, ", ", &context);
 			
-		if (ptr2 == NULL)
+		if (ptr1[0] < 32 || ptr1[0] > 127 || ptr2 == NULL)
 			continue;
 		
 		IPAD = inet_addr(ptr2);
@@ -5435,7 +5446,7 @@ int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 
 VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 {
-	char Info[80];
+	char Info[256];
 	char inname[256];
 	char outname[256];
 
@@ -5443,6 +5454,12 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 	FILE *in, *out;
 	char Buffer[2048];
 	char *buf = Buffer;
+
+	if (CMSNo > 9)
+	{
+		Debugprintf("SaveCMSHostInfo invalid CMS Number %d", CMSNo);
+		return;
+	}
 
 	if (LogDirectory[0] == 0)
 	{
@@ -5509,8 +5526,9 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 
 			// if not current server and not too old, copy across
 
-			if ((age < 86400 * 30) && strcmp(addr, TCP->CMSName[CMSNo]) != 0)
-				fputs(buf, out);
+			if (addr[0] > 31 && addr[0] < 127)
+				if ((age < 86400 * 30) && strcmp(addr, TCP->CMSName[CMSNo]) != 0)
+					fputs(buf, out);
 		}
 	}
 
@@ -5680,7 +5698,7 @@ VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 		}
 	}
 
-	// COnvert 16 bytes to 8 words
+	// Convert 16 bytes to 8 words
 	
 	for (i = 0; i < 16; i += 2)
 	    words[i / 2] = (src[i] << 8) | src[i + 1];

@@ -17,6 +17,8 @@ You should have received a copy of the GNU General Public License
 along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
+// Only used on Windows. Linux uses linether.c
+
 //
 //	DLL to provide BPQEther support for G8BPQ switch in a 
 //	32bit environment,
@@ -98,8 +100,6 @@ BOOL GotMsg;
 
 DWORD n;
 
-#ifdef WIN32
-
 static HINSTANCE PcapDriver=0;
 
 typedef int (FAR *FARPROCX)();
@@ -116,17 +116,6 @@ pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
 static char Dllname[6]="wpcap";
 
 FARPROCX GetAddress(char * Proc);
-
-#else
-
-#define pcap_compilex pcap_compile
-#define pcap_open_livex pcap_open_live
-#define pcap_setfilterx pcap_setfilter
-#define pcap_datalinkx pcap_datalink
-#define pcap_next_exx pcap_next_ex
-#define pcap_geterrx pcap_geterr
-#define pcap_sendpacketx pcap_sendpacket
-#endif
 
 int InitPCAP(void);
 static FARPROCX GetAddress(char * Proc);
@@ -345,12 +334,6 @@ InitPCAP()
 
 //	Use LoadLibrary/GetProcADDR to get round link problem
 
-#ifndef WIN32
-
-	return TRUE;
-
-#endif
-
 	if (PcapDriver)
 		return TRUE;						// Already loaded
 
@@ -382,8 +365,6 @@ InitPCAP()
 	return (TRUE);
 }
 
-#ifdef WIN32
-
 FARPROCX GetAddress(char * Proc)
 {
 	FARPROCX ProcAddr;
@@ -406,7 +387,6 @@ FARPROCX GetAddress(char * Proc)
 
 	return ProcAddr;
 }
-#endif
 
 #include <iphlpapi.h>
 
@@ -475,7 +455,6 @@ int OpenPCAP(PPCAPINFO PCAP)
 
 }
 
-
 static BOOL ReadConfigFile(int Port)
 {
 //TYPE	1	08FF                            # Ethernet Type
@@ -523,7 +502,6 @@ static BOOL ReadConfigFile(int Port)
 
 	return (FALSE);
 }
-
 
 static int ProcessLine(char * buf, int Port, BOOL CheckPort)
 {

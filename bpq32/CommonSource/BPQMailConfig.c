@@ -1430,7 +1430,11 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 			// New BBS
 
 			if(SetupNewBBS(user))
+			{
 				user->flags |= F_BBS;
+				user->flags &= ~F_Temp_B2_BBS;			// Clear RMS Express User
+				CheckDlgButton(hDlg, RMS_EXPRESS_USER, (user->flags & F_Temp_B2_BBS));
+			}
 			else
 			{
 				// Failed - too many bbs's defined

@@ -379,6 +379,15 @@ typedef struct MSGWITHLEN
 
 } *PMSGWITHLEN;
 
+typedef struct MSGWITHOUTLEN
+{
+	//	Basic Chained Buffer
+
+	struct MSGWITHLEN * Next;
+	UCHAR Data[256];
+
+} *PMSGWITHOUTLEN;
+
 //
 //	BPQHOST MODE VECTOR STRUC
 //
@@ -656,6 +665,10 @@ typedef struct PORTCONTROL
 	int RIGPort;				// Linked port for freq resporting
 	unsigned int PERMITTEDAPPLS;	// Appls allowed on this port (generalisation of BBSBANNED)
 	char * CTEXT;				// Port Specific CText
+	char Hide;					// Hide from port display and AGW connect menu
+	TRANSPORTENTRY * Session;	// For Response to KISS command
+	time_t LastKISSCmdTime;
+
 }	PORTCONTROLX, *PPORTCONTROL;
 
 typedef struct FULLPORTDATA
@@ -1249,6 +1262,7 @@ struct arp_table_entry
 	int SourcePort;				// Used to select socket, hence from port.
 //	SOCKET SourceSocket;
 	struct AXIPPORTINFO * PORT;
+	BOOL noUpdate;				// Don't update dest address from incoming packet
 };
 
 

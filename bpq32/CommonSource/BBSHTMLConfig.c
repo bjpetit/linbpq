@@ -1930,6 +1930,7 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 	struct UserInfo * USER = Session->User;
 	int SSID, Mask = 0;
 	char * ptr1, *ptr2;
+	int skipRMSExUser = 0;
 
 	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 
@@ -2018,7 +2019,11 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 				// New BBS
 
 				if(SetupNewBBS(USER))
+				{
 					USER->flags |= F_BBS;
+					USER->flags &= ~F_Temp_B2_BBS;		// Clear RMS Express User
+					skipRMSExUser = 1;					// Dont read old value
+				}
 				else
 				{
 					// Failed - too many bbs's defined
@@ -2048,7 +2053,7 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_PMS; else USER->flags &= ~F_PMS;
 
 		ptr1 = GetNextParam(&ptr2);		// RMS EX User
-		if (strcmp(ptr1, "true") == 0) USER->flags |= F_Temp_B2_BBS; else USER->flags &= ~F_Temp_B2_BBS;
+		if (strcmp(ptr1, "true") == 0 && !skipRMSExUser) USER->flags |= F_Temp_B2_BBS; else USER->flags &= ~F_Temp_B2_BBS;
 		ptr1 = GetNextParam(&ptr2);		// SYSOP
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_SYSOP; else USER->flags &= ~F_SYSOP;
 		ptr1 = GetNextParam(&ptr2);		// PollRMS

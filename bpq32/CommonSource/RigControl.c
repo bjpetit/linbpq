@@ -130,9 +130,19 @@ BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 
 char * GetApplCallFromName(char * App);
 
-char Modes[20][6] = {"LSB",  "USB", "AM", "CW", "RTTY", "FM", "WFM", "CW-R", "RTTY-R",
-					"????","????","????","????","????","????","????","????","DV", "????",};
+char Modes[25][6] = {"LSB",  "USB", "AM", "CW", "RTTY", "FM", "WFM", "CW-R", "RTTY-R",
+					"????","????","????","????","????","????","????","????","DV", "LSBD1",
+					"USBD1", "LSBD2","USBD2", "LSBD3","USBD3", "????"};
 
+/*
+DV = 17
+F8101
+(0000=LSB, 0001=USB, 0002=AM,
+0003=CW, 0004=RTTY,
+0018=LSB D1, 0019=USB D1,
+0020=LSB D2, 0021=USB D2,
+0022=LSB D3, 0023=USB D3
+*/
 //							0		1	  2		3	   4	5	6	7	8	9		0A  0B    0C    88
 
 char YaesuModes[16][6] = {"LSB",  "USB", "CW", "CWR", "AM", "", "", "", "FM", "", "DIG", "", "PKT", "FMN", "????"};
@@ -222,7 +232,7 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 	}
 	else
 	{
-		MySetWindowText(RIG->hPTT, "");
+		MySetWindowText(RIG->hPTT, " ");
 		RIG->WEB_PTT = ' ';
 		RIG->PTTTimer = 0;
 		if (PORT->PortType == ICOM)
@@ -420,7 +430,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 	int n, Port, ModeNo, Filter;
 	double Freq = 0.0;
 	char FreqString[80]="", FilterString[80]="", Mode[80]="", Data[80] = "";
-	UINT * buffptr;
+	struct MSGWITHOUTLEN * buffptr;
 	UCHAR * Poll;
 	char * Valchar;
 	int dec, sign;
@@ -600,10 +610,10 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			
 			// Build a ScanEntry in the buffer
 
-			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			FreqPtr = (struct ScanEntry *)buffptr->Data;
 			memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
-			CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
+			CmdPtr = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 			FreqPtr->Cmd2 = NULL;
 			FreqPtr->Cmd3 = NULL;
 
@@ -619,9 +629,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			*(CmdPtr++) = 0x02;
 			*(CmdPtr++) = 0xFD;
 			FreqPtr[0].Cmd1Len = 8;
-	
-			buffptr[1] = 200;
-		
+			
 			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
 			return TRUE;
@@ -638,12 +646,12 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 			// Build a ScanEntry in the buffer
 
-			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			FreqPtr = (struct ScanEntry *)buffptr->Data;
 			memset(FreqPtr, 0, sizeof(struct ScanEntry));
 	
-			Poll = (UCHAR *)&buffptr[30];
+			Poll = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 
-			buffptr[1] = sprintf(Poll, "AC111;AC;");
+			FreqPtr->Cmd1Len = sprintf(Poll, "AC111;AC;");
 
 			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 			return TRUE;
@@ -681,10 +689,10 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			
 			// Build a ScanEntry in the buffer
 
-			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			FreqPtr = (struct ScanEntry *)buffptr->Data;
 			memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
-			CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
+			CmdPtr = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 			FreqPtr->Cmd2 = NULL;
 			FreqPtr->Cmd3 = NULL;
 
@@ -705,9 +713,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 			*(CmdPtr++) = 0xFD;
 			FreqPtr[0].Cmd1Len = 9;
-	
-			buffptr[1] = 200;
-		
+			
 			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
 			return TRUE;
@@ -730,12 +736,12 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 			// Build a ScanEntry in the buffer
 
-			FreqPtr = (struct ScanEntry *)&buffptr[2];
+			FreqPtr = (struct ScanEntry *)buffptr->Data;
 			memset(FreqPtr, 0, sizeof(struct ScanEntry));
 	
-			Poll = (UCHAR *)&buffptr[30];
+			Poll = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 
-			buffptr[1] = sprintf(Poll, "PC%03d;PC;", Power);
+			FreqPtr->Cmd1Len = sprintf(Poll, "PC%03d;PC;", Power);
 
 			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 			return TRUE;
@@ -773,8 +779,8 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		ptr1 += 4;
 
 
-		FreqPtr = (struct ScanEntry *)&buffptr[2];
-		CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
+		FreqPtr = (struct ScanEntry *)buffptr->Data;
+		CmdPtr = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 		FreqPtr->Cmd2 = NULL;
 		FreqPtr->Cmd3 = NULL;
 
@@ -830,7 +836,6 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		}
 
 		FreqPtr[0].Cmd1Len = Len;		// for ICOM
-		buffptr[1] = Len;
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 		return TRUE;
 	}
@@ -918,7 +923,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			ModeNo = -1;
 		else
 		{
-			if (n < 4)
+			if (n < 4 && RIG->ICF8101 == 0)
 			{
 				strcpy(Command, "Sorry - Invalid Format - should be Port Freq Mode Filter Width\r");
 				return FALSE;
@@ -926,13 +931,13 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 			Filter = atoi(FilterString);
 
-			for (ModeNo = 0; ModeNo < 8; ModeNo++)
+			for (ModeNo = 0; ModeNo < 24; ModeNo++)
 			{
 				if (_stricmp(Modes[ModeNo], Mode) == 0)
 					break;
 			}
 
-			if (ModeNo == 8)
+			if (ModeNo == 24)
 			{
 				sprintf(Command, "Sorry - Invalid Mode\r");
 				return FALSE;
@@ -949,7 +954,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 		// Build a ScanEntry in the buffer
 
-		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		FreqPtr = (struct ScanEntry *)buffptr->Data;
 		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
@@ -957,7 +962,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		FreqPtr->Antenna = Antenna;
 		FreqPtr->Dwell = 51;
 
-		CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[30];
+		CmdPtr = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 		FreqPtr->Cmd2 = NULL;
 		FreqPtr->Cmd3 = NULL;
 
@@ -1008,143 +1013,182 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		}
 		else
 		{
-			*(CmdPtr++) = 0x5;		// Set frequency command
-
-			// Need to convert two chars to bcd digit
-	
-			*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
-			*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
-			*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
-			*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
-			if (RIG->IC735)
+			if (RIG->ICF8101)
 			{
+				// Set Freq is 1A 35 and set Mode 1A 36
+
+				*(CmdPtr++) = 0x1A;
+				*(CmdPtr++) = 0x35;		// Set frequency command
+
+				// Need to convert two chars to bcd digit
+
+				*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
+				*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
+				*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
+				*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+				*(CmdPtr++) = (FreqString[0] - 48);
 				*(CmdPtr++) = 0xFD;
-				FreqPtr[0].Cmd1Len = 10;
+				FreqPtr[0].Cmd1Len = 12;
+
+				if (ModeNo != -1)			// Dont Set
+				{		
+					CmdPtr = FreqPtr->Cmd2 = FreqPtr->Cmd2Msg;
+					FreqPtr[0].Cmd2Len = 9;		
+
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = RIG->RigAddr;
+					*(CmdPtr++) = 0xE0;
+					*(CmdPtr++) = 0x1A;
+					*(CmdPtr++) = 0x36;		// Set mode command
+					*(CmdPtr++) = 0;
+					if (ModeNo > 10)
+						*(CmdPtr++) = ModeNo + 6;
+					else
+						*(CmdPtr++) = ModeNo;
+					*(CmdPtr++) = 0xFD;
+				}
 			}
 			else
 			{
-				*(CmdPtr++) = (FreqString[0] - 48);
-				*(CmdPtr++) = 0xFD;
-				FreqPtr[0].Cmd1Len = 11;
-			}
-	
-			// Send Set VFO in case last chan was memory
-							
-	//		*(CmdPtr++) = 0xFE;
-	//		*(CmdPtr++) = 0xFE;
-	//		*(CmdPtr++) = RIG->RigAddr;
-	//		*(CmdPtr++) = 0xE0;
 
-	//		*(CmdPtr++) = 0x07;
-	//		*(CmdPtr++) = 0xFD;
+				*(CmdPtr++) = 0x5;		// Set frequency command
 
-	//		FreqPtr[0].Cmd1Len = 17;
+				// Need to convert two chars to bcd digit
 
-			if (ModeNo != -1)			// Dont Set
-			{		
-				CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[40];
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = RIG->RigAddr;
-				*(CmdPtr++) = 0xE0;
-				*(CmdPtr++) = 0x6;		// Set Mode
-				*(CmdPtr++) = ModeNo;
-				*(CmdPtr++) = Filter;
-				*(CmdPtr++) = 0xFD;
-
-				FreqPtr->Cmd2Len = 8;
-
-				if (Split)
+				*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
+				*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
+				*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
+				*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+				if (RIG->IC735)
 				{
-					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[50];
-					FreqPtr->Cmd3Len = 7;
+					*(CmdPtr++) = 0xFD;
+					FreqPtr[0].Cmd1Len = 10;
+				}
+				else
+				{
+					*(CmdPtr++) = (FreqString[0] - 48);
+					*(CmdPtr++) = 0xFD;
+					FreqPtr[0].Cmd1Len = 11;
+				}
+
+				// Send Set VFO in case last chan was memory
+
+				//		*(CmdPtr++) = 0xFE;
+				//		*(CmdPtr++) = 0xFE;
+				//		*(CmdPtr++) = RIG->RigAddr;
+				//		*(CmdPtr++) = 0xE0;
+
+				//		*(CmdPtr++) = 0x07;
+				//		*(CmdPtr++) = 0xFD;
+
+				//		FreqPtr[0].Cmd1Len = 17;
+
+				if (ModeNo != -1)			// Dont Set
+				{		
+					CmdPtr = FreqPtr->Cmd2 = FreqPtr->Cmd2Msg;
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = RIG->RigAddr;
 					*(CmdPtr++) = 0xE0;
-					*(CmdPtr++) = 0xF;		// Set Mode
-					if (Split == 'S')
-						*(CmdPtr++) = 0x10;
-					else
-						if (Split == '+')
-							*(CmdPtr++) = 0x12;
-					else
-						if (Split == '-')
-							*(CmdPtr++) = 0x11;
-			
+					*(CmdPtr++) = 0x6;		// Set Mode
+					*(CmdPtr++) = ModeNo;
+					*(CmdPtr++) = Filter;
 					*(CmdPtr++) = 0xFD;
+
+					FreqPtr->Cmd2Len = 8;
+
+					if (Split)
+					{
+						CmdPtr = FreqPtr->Cmd3 = FreqPtr->Cmd3Msg;
+						FreqPtr->Cmd3Len = 7;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = RIG->RigAddr;
+						*(CmdPtr++) = 0xE0;
+						*(CmdPtr++) = 0xF;		// Set Mode
+						if (Split == 'S')
+							*(CmdPtr++) = 0x10;
+						else
+							if (Split == '+')
+								*(CmdPtr++) = 0x12;
+							else
+								if (Split == '-')
+									*(CmdPtr++) = 0x11;
+
+						*(CmdPtr++) = 0xFD;
+					}
+					else if (DataFlag)
+					{
+						CmdPtr = FreqPtr->Cmd3 = FreqPtr->Cmd3Msg;
+
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = RIG->RigAddr;
+						*(CmdPtr++) = 0xE0;
+						*(CmdPtr++) = 0x1a;	
+
+						if ((strcmp(RIG->RigName, "IC7100") == 0) ||
+							(strcmp(RIG->RigName, "IC7410") == 0) ||
+							(strcmp(RIG->RigName, "IC7600") == 0) ||
+							(strcmp(RIG->RigName, "IC7610") == 0) ||
+							(strcmp(RIG->RigName, "IC7300") == 0))
+						{
+							FreqPtr[0].Cmd3Len = 9;
+							*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
+							*(CmdPtr++) = 0x1;		// Data On
+							*(CmdPtr++) = Filter;	//Filter
+						}
+						else if (strcmp(RIG->RigName, "IC7200") == 0)
+						{
+							FreqPtr[0].Cmd3Len = 9;
+							*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
+							*(CmdPtr++) = 0x1;		// Data On
+							*(CmdPtr++) = Filter;	// Filter
+						}
+						else
+						{
+							FreqPtr[0].Cmd3Len = 8;
+							*(CmdPtr++) = 0x6;		// Set Data
+							*(CmdPtr++) = 0x1;		//On		
+						}
+
+						*(CmdPtr++) = 0xFD;
+					}
 				}
-				else if (DataFlag)
+
+				if (Antenna == '5' || Antenna == '6')
 				{
-					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[50];
+					// Antenna select for 746 and maybe others
+
+					// Could be going in cmd2 3 or 4
+
+					if (FreqPtr[0].Cmd2 == NULL)
+					{
+						CmdPtr = FreqPtr->Cmd2 = FreqPtr->Cmd2Msg;
+						FreqPtr[0].Cmd2Len = 7;
+					}
+					else if (FreqPtr[0].Cmd3 == NULL)
+					{
+						CmdPtr = FreqPtr->Cmd3 = FreqPtr->Cmd3Msg;
+						FreqPtr[0].Cmd3Len = 7;
+					}
+					else 
+					{
+						CmdPtr = FreqPtr->Cmd4 = FreqPtr->Cmd4Msg;
+						FreqPtr[0].Cmd4Len = 7;
+					}
 
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = RIG->RigAddr;
 					*(CmdPtr++) = 0xE0;
-					*(CmdPtr++) = 0x1a;	
-
-					if ((strcmp(RIG->RigName, "IC7100") == 0) ||
-						(strcmp(RIG->RigName, "IC7410") == 0) ||
-						(strcmp(RIG->RigName, "IC7600") == 0) ||
-						(strcmp(RIG->RigName, "IC7300") == 0))
-					{
-						FreqPtr[0].Cmd3Len = 9;
-						*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
-						*(CmdPtr++) = 0x1;		// Data On
-						*(CmdPtr++) = Filter;	//Filter
-					}
-					else if (strcmp(RIG->RigName, "IC7200") == 0)
-					{
-						FreqPtr[0].Cmd3Len = 9;
-						*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
-						*(CmdPtr++) = 0x1;		// Data On
-						*(CmdPtr++) = Filter;	// Filter
-					}
-					else
-					{
-						FreqPtr[0].Cmd3Len = 8;
-						*(CmdPtr++) = 0x6;		// Set Data
-						*(CmdPtr++) = 0x1;		//On		
-					}
-						
+					*(CmdPtr++) = 0x12;		// Set Antenna
+					*(CmdPtr++) = Antenna - '5';	// 0 for A5 1 for A6
 					*(CmdPtr++) = 0xFD;
 				}
-			}
-			
-			if (Antenna == '5' || Antenna == '6')
-			{
-				// Antenna select for 746 and maybe others
-
-				// Could be going in cmd2 3 or 4
-
-				if (FreqPtr[0].Cmd2 == NULL)
-				{
-					CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[40];
-					FreqPtr[0].Cmd2Len = 7;
-				}
-				else if (FreqPtr[0].Cmd3 == NULL)
-				{
-					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[50];
-					FreqPtr[0].Cmd3Len = 7;
-				}
-				else 
-				{
-					CmdPtr = FreqPtr->Cmd4 = (UCHAR *)&buffptr[60];
-					FreqPtr[0].Cmd4Len = 7;
-				}
-
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = RIG->RigAddr;
-				*(CmdPtr++) = 0xE0;
-				*(CmdPtr++) = 0x12;		// Set Antenna
-				*(CmdPtr++) = Antenna - '5';	// 0 for A5 1 for A6
-				*(CmdPtr++) = 0xFD;
 			}
 		}
-
-		buffptr[1] = 200;
 		
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1180,14 +1224,14 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 		// Build a ScanEntry in the buffer
 
-		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		FreqPtr = (struct ScanEntry *)buffptr->Data;
 		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[30];
+		Poll = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 
 		// Send Mode then Freq - setting Mode seems to change frequency
 
@@ -1203,7 +1247,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		*(Poll++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
 		*(Poll++) = 1;		// Set Freq
 					
-		buffptr[1] = 10;
+		FreqPtr->Cmd1Len = 10;
 
 		if (strcmp(PORT->Rigs[0].RigName, "FT847") == 0)
 		{
@@ -1213,7 +1257,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			*(Poll++) = 0;
 			*(Poll++) = 3;		// Status Poll
 	
-			buffptr[1] = 15;
+			FreqPtr->Cmd1Len = 15;
 		}
 		
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
@@ -1289,14 +1333,14 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 		// Build a ScanEntry in the buffer
 
-		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		FreqPtr = (struct ScanEntry *)buffptr->Data;
 		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[30];
+		Poll = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 
 		// Send Mode then Freq - setting Mode seems to change frequency
 
@@ -1336,7 +1380,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 		*(Poll++) = 16;		// Status Poll
 	
-		buffptr[1] = 15;
+		FreqPtr->Cmd1Len = 15;
 		
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1387,29 +1431,29 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 		// Build a ScanEntry in the buffer
 
-		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		FreqPtr = (struct ScanEntry *)buffptr->Data;
 		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[30];
+		Poll = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 
 		if (PORT->PortType == FT2000)
-			buffptr[1] = sprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
+			FreqPtr->Cmd1Len = sprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
 		else
 		if (PORT->PortType == FT991A)
-			buffptr[1] = sprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString, ModeNo);
+			FreqPtr->Cmd1Len = sprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString, ModeNo);
 		else
 		if (PORT->PortType == FLEX)
-			buffptr[1] = sprintf(Poll, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", &FreqString[1], ModeNo);
+			FreqPtr->Cmd1Len = sprintf(Poll, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", &FreqString[1], ModeNo);
 		else
 		{
 			if (Antenna == '5' || Antenna == '6')
-				buffptr[1] = sprintf(Poll, "FA00%s;MD%d;AN%c;FA;MD;", FreqString, ModeNo, Antenna - 4);
+				FreqPtr->Cmd1Len = sprintf(Poll, "FA00%s;MD%d;AN%c;FA;MD;", FreqString, ModeNo, Antenna - 4);
 			else
-				buffptr[1] = sprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+				FreqPtr->Cmd1Len = sprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 		}
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1432,14 +1476,14 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 		// Build a ScanEntry in the buffer
 
-		FreqPtr = (struct ScanEntry *)&buffptr[2];
+		FreqPtr = (struct ScanEntry *)buffptr->Data;
 		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
 
-		Poll = (UCHAR *)&buffptr[30];
+		Poll = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 
 		i = sprintf(Poll, "$PICOA,90,%02x,RXF,%.6f*xx\r\n", RIG->RigAddr, Freq/1000000.);
 		AddNMEAChecksum(Poll);
@@ -1450,7 +1494,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		i = sprintf(Poll + Len, "$PICOA,90,%02x,MODE,%s*xx\r\n", RIG->RigAddr, Mode);
 		AddNMEAChecksum(Poll + Len);
 			
-		buffptr[1] = i + Len;
+		FreqPtr->Cmd1Len = i + Len;
 		
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1530,13 +1574,13 @@ DllExport BOOL APIENTRY Rig_Init()
 #ifndef LINBPQ
 
 	TNC->Port = 40;
-	CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 450, NeedRig * 20 + 60, NULL);
+	CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 550, NeedRig * 20 + 60, NULL);
 	hDlg = TNC->hDlg;
 
 #endif
 
 	TNC->ClientHeight = NeedRig * 20 + 60;
-	TNC->ClientWidth = 450;
+	TNC->ClientWidth = 550;
 
 	for (port = 0; port < 33; port++)
 	{
@@ -1587,7 +1631,7 @@ DllExport BOOL APIENTRY Rig_Init()
 				320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
 
 			RIG->hPORTS = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-				340, RigRow, 120,20, hDlg, NULL, hInstance, NULL);
+				340, RigRow, 210, 20, hDlg, NULL, hInstance, NULL);
 
 			RigRow += 20;
 
@@ -1784,10 +1828,13 @@ DllExport BOOL APIENTRY Rig_Close()
 			Sleep(200);
 		}
 
-		CloseCOMPort(PORT->hDevice);
+		if (PORT->PortType != HAMLIB)
+		{
+			CloseCOMPort(PORT->hDevice);
 
-		if (PORT->hPTTDevice != PORT->hDevice)
-			CloseCOMPort(PORT->hPTTDevice);
+			if (PORT->hPTTDevice != PORT->hDevice)
+				CloseCOMPort(PORT->hPTTDevice);
+		}
 
 		PORT->hDevice = 0;
 		PORT->hPTTDevice = 0;
@@ -2321,7 +2368,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 
 	// See if any two stage (CONLOCK) ports
 
-	if (RIG->PortRecord[0]->SCANCAPABILITIES != CONLOCK)
+	if (RIG->PortRecord[0] && RIG->PortRecord[0]->SCANCAPABILITIES != CONLOCK)
 		goto CheckOtherPorts;
 
 	
@@ -2370,7 +2417,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 	{
 		// not waiting for permission, so must be first call of a cycle
 
-		if (RIG->PortRecord[0]->PORT_EXT_ADDR)
+		if (RIG->PortRecord[0] && RIG->PortRecord[0]->PORT_EXT_ADDR)
 			RIG->WaitingForPermission = (int)(intptr_t)RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 		// If it returns zero there is no need to wait.
@@ -2605,16 +2652,13 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 	if (RIG->RIGOK && RIG->BPQtoRADIO_Q)
 	{
-		int datalen;
-		UINT * buffptr;
+		struct MSGWITHOUTLEN * buffptr;
 			
-		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
-
-		datalen=buffptr[1];
+		buffptr = Q_REM(&RIG->BPQtoRADIO_Q);
 
 		// Copy the ScanEntry struct from the Buffer to the PORT Scanentry
 
-		memcpy(&PORT->ScanEntry, buffptr+2, sizeof(struct ScanEntry));
+		memcpy(&PORT->ScanEntry, buffptr->Data, sizeof(struct ScanEntry));
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 
@@ -2622,25 +2666,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 			Debugprintf("BPQ32 Manual Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 
-		memcpy(Poll, &buffptr[30], PORT->FreqPtr->Cmd1Len);
-
-		if (PORT->ScanEntry.Cmd2)
-		{
-			PORT->ScanEntry.Cmd2 = (char *)&PORT->Line2;	// Put The Set mode Command into ScanStruct
-			memcpy(PORT->Line2, &buffptr[40], PORT->FreqPtr->Cmd2Len);
-
-			if (PORT->ScanEntry.Cmd3)
-			{
-				PORT->ScanEntry.Cmd3 = (char *)&PORT->Line3;	// copy from buffer
-				memcpy(PORT->Line3, &buffptr[50], PORT->FreqPtr->Cmd3Len);
-			
-				if (PORT->ScanEntry.Cmd4)
-				{
-					PORT->ScanEntry.Cmd4 = (char *)&PORT->Line4;
-					memcpy(PORT->Line4, &buffptr[60], PORT->FreqPtr->Cmd4Len);
-				}
-			}
-		}
+		memcpy(Poll, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
@@ -2705,7 +2731,7 @@ VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * Msg, int framelen)
 
 	if (Msg[0] != 0xfe || Msg[1] != 0xfe)
 
-		// Duff Packer - return
+		// Duff Packet - return
 
 		return;	
 
@@ -2757,6 +2783,60 @@ ok:
 
 		// if it was the set freq, send the set mode
 
+		if (RIG->ICF8101)
+		{
+			if (cmdSent == 0x1A && PORT->TXBuffer[5] == 0x35)
+			{
+				if (PORT->FreqPtr->Cmd2)
+				{
+					memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd2, PORT->FreqPtr->Cmd2Len);
+					PORT->TXLen = PORT->FreqPtr->Cmd2Len;
+					RigWriteCommBlock(PORT);
+					PORT->Retries = 2;
+				}
+				else
+				{
+					if (!PORT->AutoPoll)
+						SendResponse(RIG->Session, "Frequency Set OK");
+
+					PORT->Timeout = 0;
+				}
+				return;
+			}
+
+			if (cmdSent == 0x1a && PORT->TXBuffer[5] == 0x36)
+			{
+				// Set Mode Response - if scanning read freq, else return OK to user
+
+				if (RIG->ScanStopped == 0)
+				{
+					ReleasePermission(RIG);	// Release Perrmission
+
+					Poll[0] = 0xFE;
+					Poll[1] = 0xFE;
+					Poll[2] = RIG->RigAddr;
+					Poll[3] = 0xE0;
+					Poll[4] = 0x3;		// Get frequency command
+					Poll[5] = 0xFD;
+
+					PORT->TXLen = 6;
+					RigWriteCommBlock(PORT);
+					PORT->Retries = 2;
+					return;
+				}
+				else
+				{
+					if (!PORT->AutoPoll)
+						SendResponse(RIG->Session, "Frequency and Mode Set OK");
+
+					RIG->PollCounter = 50;	// Dont read freq for 5 secs
+				}
+			}
+
+			PORT->Timeout = 0;
+			return;
+		}	
+
 		if (cmdSent == 5 || cmdSent == 7) // Freq or VFO
 		{
 			if (PORT->FreqPtr->Cmd2)
@@ -2772,9 +2852,7 @@ ok:
 					SendResponse(RIG->Session, "Frequency Set OK");
 		
 				PORT->Timeout = 0;
-
 			}
-
 			return;
 		}
 
@@ -2956,31 +3034,69 @@ SetFinished:
 		sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
 		SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
 
+
 		// Now get Mode
 
-			Poll[0] = 0xFE;
-			Poll[1] = 0xFE;
-			Poll[2] = RIG->RigAddr;
-			Poll[3] = 0xE0;
+		Poll[0] = 0xFE;
+		Poll[1] = 0xFE;
+		Poll[2] = RIG->RigAddr;
+		Poll[3] = 0xE0;
+
+		if (RIG->ICF8101)
+		{
+			Poll[4] = 0x1A;		// Get Mode
+			Poll[5] = 0x34;
+			Poll[6] = 0xFD;
+			PORT->TXLen = 7;
+		}
+		else
+		{
 			Poll[4] = 0x4;		// Get Mode
 			Poll[5] = 0xFD;
 
-		PORT->TXLen = 6;
+			PORT->TXLen = 6;
+		}
+
 		RigWriteCommBlock(PORT);
 		PORT->Retries = 2;
 		return;
 	}
+
+	if (RIG->ICF8101)
+	{
+		if (cmdSent == 0x1A && PORT->TXBuffer[5] == 0x34)
+		{
+			// Get Mode
+
+			unsigned int Mode;
+
+			Mode = (Msg[7] >> 4);
+			Mode *= 10;
+			Mode += Msg[7] & 0xf;
+
+			if (Mode > 24) Mode = 24;
+
+			sprintf(RIG->WEB_MODE,"%s", Modes[Mode]);
+
+			strcpy(RIG->ModeString, Modes[Mode]);
+			SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+
+			return;
+		}
+	}
+
+
 	if (Msg[4] == 4)
 	{
 		// Mode
 
 		unsigned int Mode;
-		
+
 		Mode = (Msg[5] >> 4);
 		Mode *= 10;
 		Mode += Msg[5] & 0xf;
 
-		if (Mode > 17) Mode = 17;
+		if (Mode > 24) Mode = 24;
 
 		if (RIG->IC735)
 			sprintf(RIG->WEB_MODE,"%s", Modes[Mode]);
@@ -2994,7 +3110,7 @@ SetFinished:
 
 int SendResponse(int Session, char * Msg)
 {
-	PMESSAGE Buffer;
+	PDATAMESSAGE Buffer;
 	BPQVECSTRUC * VEC;
 	TRANSPORTENTRY * L4 = L4TABLE;
 
@@ -3005,7 +3121,9 @@ int SendResponse(int Session, char * Msg)
 
 	L4 += Session;
 
-	Buffer->LENGTH = sprintf((char *)Buffer, "       \xf0%s\r", Msg);
+	Buffer->PID = 0xf0;
+	Buffer->LENGTH = MSGHDDRLEN + 1; // Includes PID
+	Buffer->LENGTH += sprintf(Buffer->L2DATA, "%s\r", Msg);
 
 	VEC = L4->L4TARGET.HOST;
 
@@ -3381,16 +3499,13 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 	
 	if (RIG->RIGOK && RIG->BPQtoRADIO_Q)
 	{
-		int datalen;
-		UINT * buffptr;
+		struct MSGWITHOUTLEN * buffptr;
 			
-		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
-
-		datalen=buffptr[1];
+		buffptr = Q_REM(&RIG->BPQtoRADIO_Q);
 
 		// Copy the ScanEntry struct from the Buffer to the PORT Scanentry
 
-		memcpy(&PORT->ScanEntry, buffptr+2, sizeof(struct ScanEntry));
+		memcpy(&PORT->ScanEntry, buffptr->Data, sizeof(struct ScanEntry));
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
@@ -3401,7 +3516,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
-		memcpy(Poll, &buffptr[30], datalen);
+		memcpy(Poll, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 
 		if (PORT->PortType == YAESU)
 		{
@@ -3746,16 +3861,13 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 	
 	if (RIG->RIGOK && RIG->BPQtoRADIO_Q)
 	{
-		int datalen;
-		UINT * buffptr;
+		struct MSGWITHOUTLEN * buffptr;
 			
-		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
-
-		datalen=buffptr[1];
+		buffptr = Q_REM(&RIG->BPQtoRADIO_Q);
 
 		// Copy the ScanEntry struct from the Buffer to the PORT Scanentry
 
-		memcpy(&PORT->ScanEntry, buffptr+2, sizeof(struct ScanEntry));
+		memcpy(&PORT->ScanEntry, buffptr->Data, sizeof(struct ScanEntry));
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
@@ -3766,9 +3878,9 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 		_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
 
-		memcpy(Poll, &buffptr[30], datalen);
+		memcpy(Poll, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 
-		PORT->TXLen = datalen;
+		PORT->TXLen = PORT->FreqPtr->Cmd1Len;
 		RigWriteCommBlock(PORT);
 		PORT->CmdSent = Poll[4];
 		PORT->Timeout = 0;
@@ -4184,6 +4296,12 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	BOOL PTTControlsInputMUX = FALSE;
 	BOOL DataPTT = FALSE;
 	int DataPTTOffMode = 1;				// ACC
+	int ICF8101Mode = 8;				// USB (as in upper sideband)
+
+	char onString[256] = "";
+	char offString[256] = "";
+	int onLen = 0;
+	int offLen = 0;
 
 	CM108Device = NULL;
 	Debugprintf("Processing RIG line %s", buf);
@@ -4520,6 +4638,11 @@ RigFound:
 	if (strcmp(RigName, "IC735") == 0 && PORT->PortType == ICOM)
 		RIG->IC735 = TRUE;
 
+	// IC-F8101 uses a different set of commands
+
+	if (strstr(RigName, "F8101") && PORT->PortType == ICOM)
+		RIG->ICF8101 = TRUE;
+
 	if (PORT->PortType == KENWOOD)
 	{
 		RIG->TSMenu = 63;		// Default to TS590S
@@ -4579,6 +4702,22 @@ domux:
 				DataPTTOffMode = 1;
 			else if (strcmp(ptr, "MICAUX") == 0)
 				DataPTTOffMode = 2;
+			else if (RIG->ICF8101 && strcmp(ptr, "LSB") == 0)
+				ICF8101Mode = 0x7;
+			else if (RIG->ICF8101 && strcmp(ptr, "USB") == 0)
+				ICF8101Mode = 0x8;
+			else if (RIG->ICF8101 && strcmp(ptr, "LSBD1") == 0)
+				ICF8101Mode = 0x18;
+			else if (RIG->ICF8101 && strcmp(ptr, "USBD1") == 0)
+				ICF8101Mode = 0x19;
+			else if (RIG->ICF8101 && strcmp(ptr, "LSBD2") == 0)
+				ICF8101Mode = 0x20;
+			else if (RIG->ICF8101 && strcmp(ptr, "USBD2") == 0)
+				ICF8101Mode = 0x21;
+			else if (RIG->ICF8101 && strcmp(ptr, "LSBD3") == 0)
+				ICF8101Mode = 0x22;
+			else if (RIG->ICF8101 && strcmp(ptr, "USBD3") == 0)
+				ICF8101Mode = 0x23;
 			else
 				continue;
 
@@ -4592,6 +4731,79 @@ domux:
 			// Send Select Soundcard as mod source with PTT commands
 
 			DataPTT = TRUE;
+		}
+
+		if (memcmp(ptr, "PTTONHEX=", 9) == 0)
+		{
+			// Hex String to use for PTT on
+
+			char * ptr1 = ptr;
+			char * ptr2 = onString ;
+			int i, j, len;
+
+			ptr1 += 9;
+			onLen = len = strlen(ptr1) / 2;
+
+			if (len < 240)
+			{
+				while ((len--) > 0)
+				{
+					i = *(ptr1++);
+					i -= '0';
+					if (i > 9)
+						i -= 7;
+
+					j = i << 4;
+
+					i = *(ptr1++);
+					i -= '0';
+					if (i > 9)
+						i -= 7;
+
+					*(ptr2++) = j | i;
+				}
+			}
+
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+			if (ptr == NULL)
+				break;
+		}
+
+		if (memcmp(ptr, "PTTOFFHEX=", 10) == 0)
+		{
+			// Hex String to use for PTT off
+
+			char * ptr2 = offString ;
+			int i, j, len;
+
+			ptr += 10;
+			offLen = len = strlen(ptr) / 2;
+
+			if (len < 240)
+			{
+				while ((len--) > 0)
+				{
+					i = *(ptr++);
+					i -= '0';
+					if (i > 9)
+						i -= 7;
+
+					j = i << 4;
+
+					i = *(ptr++);
+					i -= '0';
+					if (i > 9)
+						i -= 7;
+
+					*(ptr2++) = j | i;
+				}
+			}
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+			if (ptr == NULL)
+				break;
+
 		}
 
 		if (memcmp(ptr, "HAMLIB=", 7) == 0)
@@ -4617,113 +4829,192 @@ domux:
 		char * Poll;
 		Poll = &RIG->PTTOn[0];
 
-		if (PTTControlsInputMUX)
+		if (onLen && offLen)
 		{
+			memcpy(RIG->PTTOn, onString, onLen);
+			RIG->PTTOnLen = onLen;
+			memcpy(RIG->PTTOff, offString, offLen);
+			RIG->PTTOffLen = offLen;
+		}
+
+		else if (RIG->ICF8101)
+		{
+			// Need to send ACC PTT command (1A 37 0002), not normal ICOM IC 00
+
+			if (PTTControlsInputMUX)
+			{
+				*(Poll++) = 0xFE;
+				*(Poll++) = 0xFE;
+				*(Poll++) = RIG->RigAddr;
+				*(Poll++) = 0xE0;
+				*(Poll++) = 0x1a;
+				*(Poll++) = 0x05;
+				*(Poll++) = ICF8101Mode;
+				*(Poll++) = 0x03;			// USB Data Mode Source
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x01;			// Soundcard
+				*(Poll++) = 0xFD;
+			}
 			*(Poll++) = 0xFE;
 			*(Poll++) = 0xFE;
 			*(Poll++) = RIG->RigAddr;
 			*(Poll++) = 0xE0;
-			*(Poll++) = 0x1a;
-
-			if (strcmp(RIG->RigName, "IC7100") == 0)
-			{
-				*(Poll++) = 0x05;
-				*(Poll++) = 0x00;
-				*(Poll++) = 0x91;			// Data Mode Source
-			}
-			else if (strcmp(RIG->RigName, "IC7200") == 0)
-			{
-				*(Poll++) = 0x03;
-				*(Poll++) = 0x24;			// Data Mode Source
-			}
-			else if (strcmp(RIG->RigName, "IC7300") == 0)
-			{
-				*(Poll++) = 0x05;
-				*(Poll++) = 0x00;
-				*(Poll++) = 0x67;			// Data Mode Source
-			}
-			else if (strcmp(RIG->RigName, "IC7600") == 0)
-			{
-				*(Poll++) = 0x05;
-				*(Poll++) = 0x00;
-				*(Poll++) = 0x31;			// Data1 Mode Source
-			}
-
-			else if (strcmp(RIG->RigName, "IC7410") == 0)
-			{
-				*(Poll++) = 0x03;
-				*(Poll++) = 0x39;			// Data Mode Source
-			}
-
-			*(Poll++) = 0x03;			// USB Soundcard
+			*(Poll++) = 0x1A; 
+			*(Poll++) = 0x37;		// Send/read the TX status
+			*(Poll++) = 0x00;
+			*(Poll++) = 0x02;		// ACC PTT
 			*(Poll++) = 0xFD;
-		}
 
-		*(Poll++) = 0xFE;
-		*(Poll++) = 0xFE;
-		*(Poll++) = RIG->RigAddr;
-		*(Poll++) = 0xE0;
-		*(Poll++) = 0x1C;		// RIG STATE
-		*(Poll++) = 0x00;		// PTT
-		*(Poll++) = 1;			// ON
-		*(Poll++) = 0xFD;
+			RIG->PTTOnLen = (int)(Poll - &RIG->PTTOn[0]);
 
-		RIG->PTTOnLen = (int)(Poll - &RIG->PTTOn[0]);
+			Poll = &RIG->PTTOff[0];
 
-		Poll = &RIG->PTTOff[0];
-
-		*(Poll++) = 0xFE;
-		*(Poll++) = 0xFE;
-		*(Poll++) = RIG->RigAddr;
-		*(Poll++) = 0xE0;
-		*(Poll++) = 0x1C;		// RIG STATE
-		*(Poll++) = 0x00;		// PTT
-		*(Poll++) = 0;			// OFF
-		*(Poll++) = 0xFD;
-
-		if (PTTControlsInputMUX)
-		{
 			*(Poll++) = 0xFE;
 			*(Poll++) = 0xFE;
 			*(Poll++) = RIG->RigAddr;
 			*(Poll++) = 0xE0;
-			*(Poll++) = 0x1a;
-
-			if (strcmp(RIG->RigName, "IC7100") == 0)
-			{
-				*(Poll++) = 0x05;
-				*(Poll++) = 0x00;
-				*(Poll++) = 0x91;			// Data Mode Source
-			}
-			else if (strcmp(RIG->RigName, "IC7200") == 0)
-			{
-				*(Poll++) = 0x03;
-				*(Poll++) = 0x24;			// Data Mode Source
-			}
-			else if (strcmp(RIG->RigName, "IC7300") == 0)
-			{
-				*(Poll++) = 0x05;
-				*(Poll++) = 0x00;
-				*(Poll++) = 0x67;			// Data Mode Source
-			}
-			else if (strcmp(RIG->RigName, "IC7410") == 0)
-			{
-				*(Poll++) = 0x03;
-				*(Poll++) = 0x39;			// Data Mode Source
-			}
-			else if (strcmp(RIG->RigName, "IC7600") == 0)
-			{
-				*(Poll++) = 0x05;
-				*(Poll++) = 0x00;
-				*(Poll++) = 0x31;			// Data1 Mode Source
-			}
-
-			*(Poll++) = DataPTTOffMode;
+			*(Poll++) = 0x1A; 
+			*(Poll++) = 0x37;		// Send/read the TX status
+			*(Poll++) = 0x00;
+			*(Poll++) = 0x00;		// RX
 			*(Poll++) = 0xFD;
+
+			if (PTTControlsInputMUX)
+			{
+				*(Poll++) = 0xFE;
+				*(Poll++) = 0xFE;
+				*(Poll++) = RIG->RigAddr;
+				*(Poll++) = 0xE0;
+				*(Poll++) = 0x1a;
+
+				*(Poll++) = 0x05;
+				*(Poll++) = ICF8101Mode;
+				*(Poll++) = 0x03;			// USB Data Mode Source
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x02;			// ACC
+				*(Poll++) = 0xFD;
+			}
+			RIG->PTTOffLen = (int)(Poll - &RIG->PTTOff[0]);
 		}
+		else
+		{
+			if (PTTControlsInputMUX)
+			{
+				*(Poll++) = 0xFE;
+				*(Poll++) = 0xFE;
+				*(Poll++) = RIG->RigAddr;
+				*(Poll++) = 0xE0;
+				*(Poll++) = 0x1a;
 
-		RIG->PTTOffLen = (int)(Poll - &RIG->PTTOff[0]);
+				if (strcmp(RIG->RigName, "IC7100") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x91;			// Data Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7200") == 0)
+				{
+					*(Poll++) = 0x03;
+					*(Poll++) = 0x24;			// Data Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7300") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x67;			// Data Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7600") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x31;			// Data1 Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7610") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x92;			// Data1 Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7410") == 0)
+				{
+					*(Poll++) = 0x03;
+					*(Poll++) = 0x39;			// Data Mode Source
+				}
 
+				*(Poll++) = 0x03;			// USB Soundcard
+				*(Poll++) = 0xFD;
+			}
+
+			*(Poll++) = 0xFE;
+			*(Poll++) = 0xFE;
+			*(Poll++) = RIG->RigAddr;
+			*(Poll++) = 0xE0;
+			*(Poll++) = 0x1C;		// RIG STATE
+			*(Poll++) = 0x00;		// PTT
+			*(Poll++) = 1;			// ON
+			*(Poll++) = 0xFD;
+
+			RIG->PTTOnLen = (int)(Poll - &RIG->PTTOn[0]);
+
+			Poll = &RIG->PTTOff[0];
+
+			*(Poll++) = 0xFE;
+			*(Poll++) = 0xFE;
+			*(Poll++) = RIG->RigAddr;
+			*(Poll++) = 0xE0;
+			*(Poll++) = 0x1C;		// RIG STATE
+			*(Poll++) = 0x00;		// PTT
+			*(Poll++) = 0;			// OFF
+			*(Poll++) = 0xFD;
+
+			if (PTTControlsInputMUX)
+			{
+				*(Poll++) = 0xFE;
+				*(Poll++) = 0xFE;
+				*(Poll++) = RIG->RigAddr;
+				*(Poll++) = 0xE0;
+				*(Poll++) = 0x1a;
+
+				if (strcmp(RIG->RigName, "IC7100") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x91;			// Data Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7200") == 0)
+				{
+					*(Poll++) = 0x03;
+					*(Poll++) = 0x24;			// Data Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7300") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x67;			// Data Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7410") == 0)
+				{
+					*(Poll++) = 0x03;
+					*(Poll++) = 0x39;			// Data Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7600") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x31;			// Data1 Mode Source
+				}
+				else if (strcmp(RIG->RigName, "IC7610") == 0)
+				{
+					*(Poll++) = 0x05;
+					*(Poll++) = 0x00;
+					*(Poll++) = 0x92;			// Data1 Mode Source
+				}
+
+				*(Poll++) = DataPTTOffMode;
+				*(Poll++) = 0xFD;
+			}
+			RIG->PTTOffLen = (int)(Poll - &RIG->PTTOff[0]);
+		}
 	}
 	else if	(PORT->PortType == KENWOOD)
 	{	
@@ -4810,7 +5101,7 @@ domux:
 
 	if (ptr == NULL) return RIG;			// No Scanning, just Interactive control
 
-	if (strchr(ptr, ',') == 0)				// Old Format
+	if (strchr(ptr, ',') == 0 && strchr(ptr, ':') == 0) // Old Format
 	{
 		ScanFreq = atof(ptr);
 
@@ -4970,7 +5261,7 @@ CheckScan:
 		{
 		case ICOM:						
 
-			for (ModeNo = 0; ModeNo < 8; ModeNo++)
+			for (ModeNo = 0; ModeNo < 24; ModeNo++)
 			{
 				if (strlen(Mode) == 1)
 				{
@@ -5222,48 +5513,13 @@ CheckScan:
 			*(CmdPtr++) = RIG->RigAddr;
 			*(CmdPtr++) = 0xE0;
 
-			if (MemoryNumber)
+			if (RIG->ICF8101)
 			{
-				// Set Memory Channel instead of Freq, Mode, etc
+				// Set Freq is 1A 35 and set Mode 1A 36
 
-				char ChanString[5];
 
-				// Send Set Memory, then Channel
-
-				*(CmdPtr++) = 0x08;
-				*(CmdPtr++) = 0xFD;
-
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = RIG->RigAddr;
-				*(CmdPtr++) = 0xE0;
-
-				sprintf(ChanString, "%04d", MemoryNumber); 
-
-				*(CmdPtr++) = 0x08;
-				*(CmdPtr++) = (ChanString[1] - 48) | ((ChanString[0] - 48) << 4);
-				*(CmdPtr++) = (ChanString[3] - 48) | ((ChanString[2] - 48) << 4);
-				*(CmdPtr++) = 0xFD;
-
-				FreqPtr[0]->Cmd1Len = 14;
-
-				if (MemoryBank)
-				{						
-					*(CmdPtr++) = 0xFE;
-					*(CmdPtr++) = 0xFE;
-					*(CmdPtr++) = RIG->RigAddr;
-					*(CmdPtr++) = 0xE0;
-					*(CmdPtr++) = 0x08;
-					*(CmdPtr++) = 0xA0;
-					*(CmdPtr++) = MemoryBank - 0x40;
-					*(CmdPtr++) = 0xFD;
-
-					FreqPtr[0]->Cmd1Len += 8;
-				}
-			}	
-			else
-			{
-				*(CmdPtr++) = 0x5;		// Set frequency command
+				*(CmdPtr++) = 0x1A;
+				*(CmdPtr++) = 0x35;		// Set frequency command
 
 				// Need to convert two chars to bcd digit
 
@@ -5271,138 +5527,211 @@ CheckScan:
 				*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
 				*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
 				*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
-				if (RIG->IC735)
-				{
-					*(CmdPtr++) = 0xFD;
-					FreqPtr[0]->Cmd1Len = 10;
-				}
+				*(CmdPtr++) = (FreqString[0] - 48);
+				*(CmdPtr++) = 0xFD;
+				FreqPtr[0]->Cmd1Len = 12;
+
+				CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+				FreqPtr[0]->Cmd2Len = 9;		
+
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = RIG->RigAddr;
+				*(CmdPtr++) = 0xE0;
+				*(CmdPtr++) = 0x1A;
+				*(CmdPtr++) = 0x36;		// Set mode command
+				*(CmdPtr++) = 0;
+				if (ModeNo > 10)
+					*(CmdPtr++) = ModeNo + 6;
 				else
+					*(CmdPtr++) = ModeNo;
+
+				*(CmdPtr++) = 0xFD;
+			}
+			else
+			{
+				if (MemoryNumber)
 				{
-					*(CmdPtr++) = (FreqString[0] - 48);
+					// Set Memory Channel instead of Freq, Mode, etc
+
+					char ChanString[5];
+
+					// Send Set Memory, then Channel
+
+					*(CmdPtr++) = 0x08;
 					*(CmdPtr++) = 0xFD;
-					FreqPtr[0]->Cmd1Len = 11;
-				}
 
-				// Send Set VFO in case last chan was memory
-
-				//				*(CmdPtr++) = 0xFE;
-				//				*(CmdPtr++) = 0xFE;
-				//				*(CmdPtr++) = RIG->RigAddr;
-				//				*(CmdPtr++) = 0xE0;
-
-				//				*(CmdPtr++) = 0x07;
-				//				*(CmdPtr++) = 0xFD;
-
-				//				FreqPtr[0]->Cmd1Len = 17;
-
-				if (Filter)
-				{						
-					CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
-					FreqPtr[0]->Cmd2Len = 8;		
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = RIG->RigAddr;
 					*(CmdPtr++) = 0xE0;
-					*(CmdPtr++) = 0x6;		// Set Mode
-					*(CmdPtr++) = ModeNo;
-					*(CmdPtr++) = Filter - '0'; //Filter
+
+					sprintf(ChanString, "%04d", MemoryNumber); 
+
+					*(CmdPtr++) = 0x08;
+					*(CmdPtr++) = (ChanString[1] - 48) | ((ChanString[0] - 48) << 4);
+					*(CmdPtr++) = (ChanString[3] - 48) | ((ChanString[2] - 48) << 4);
 					*(CmdPtr++) = 0xFD;
 
-					if (Split)
-					{
-						CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-						FreqPtr[0]->Cmd3Len = 7;
+					FreqPtr[0]->Cmd1Len = 14;
+
+					if (MemoryBank)
+					{						
 						*(CmdPtr++) = 0xFE;
 						*(CmdPtr++) = 0xFE;
 						*(CmdPtr++) = RIG->RigAddr;
 						*(CmdPtr++) = 0xE0;
-						*(CmdPtr++) = 0xF;		// Set Mode
-						if (Split == 'S')
-							*(CmdPtr++) = 0x10;
-						else
-							if (Split == '+')
-								*(CmdPtr++) = 0x12;
-							else
-								if (Split == '-')
-									*(CmdPtr++) = 0x11;
-
+						*(CmdPtr++) = 0x08;
+						*(CmdPtr++) = 0xA0;
+						*(CmdPtr++) = MemoryBank - 0x40;
 						*(CmdPtr++) = 0xFD;
+
+						FreqPtr[0]->Cmd1Len += 8;
+					}
+				}	
+				else
+				{
+					*(CmdPtr++) = 0x5;		// Set frequency command
+
+					// Need to convert two chars to bcd digit
+
+					*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
+					*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
+					*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
+					*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+					if (RIG->IC735)
+					{
+						*(CmdPtr++) = 0xFD;
+						FreqPtr[0]->Cmd1Len = 10;
 					}
 					else
 					{
-						if (Data)
+						*(CmdPtr++) = (FreqString[0] - 48);
+						*(CmdPtr++) = 0xFD;
+						FreqPtr[0]->Cmd1Len = 11;
+					}
+
+					// Send Set VFO in case last chan was memory
+
+					//				*(CmdPtr++) = 0xFE;
+					//				*(CmdPtr++) = 0xFE;
+					//				*(CmdPtr++) = RIG->RigAddr;
+					//				*(CmdPtr++) = 0xE0;
+
+					//				*(CmdPtr++) = 0x07;
+					//				*(CmdPtr++) = 0xFD;
+
+					//				FreqPtr[0]->Cmd1Len = 17;
+
+					if (Filter)
+					{						
+						CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+						FreqPtr[0]->Cmd2Len = 8;		
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = RIG->RigAddr;
+						*(CmdPtr++) = 0xE0;
+						*(CmdPtr++) = 0x6;		// Set Mode
+						*(CmdPtr++) = ModeNo;
+						*(CmdPtr++) = Filter - '0'; //Filter
+						*(CmdPtr++) = 0xFD;
+
+						if (Split)
 						{
 							CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-
+							FreqPtr[0]->Cmd3Len = 7;
 							*(CmdPtr++) = 0xFE;
 							*(CmdPtr++) = 0xFE;
 							*(CmdPtr++) = RIG->RigAddr;
 							*(CmdPtr++) = 0xE0;
-							*(CmdPtr++) = 0x1a;	
-
-
-							if ((strcmp(RIG->RigName, "IC7100") == 0) ||
-								(strcmp(RIG->RigName, "IC7410") == 0) ||
-								(strcmp(RIG->RigName, "IC7600") == 0) ||
-								(strcmp(RIG->RigName, "IC7300") == 0))
-							{
-								FreqPtr[0]->Cmd3Len = 9;
-								*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
-								*(CmdPtr++) = 0x1;		// Data On
-								*(CmdPtr++) = Filter - '0'; //Filter
-							}
-							else if (strcmp(RIG->RigName, "IC7200") == 0)
-							{
-								FreqPtr[0]->Cmd3Len = 9;
-								*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
-								*(CmdPtr++) = 0x1;		// Data On
-								*(CmdPtr++) = Filter - '0'; //Filter
-							}
+							*(CmdPtr++) = 0xF;		// Set Mode
+							if (Split == 'S')
+								*(CmdPtr++) = 0x10;
 							else
-							{
-								FreqPtr[0]->Cmd3Len = 8;
-								*(CmdPtr++) = 0x6;		// Set Data
-								*(CmdPtr++) = 0x1;		//On		
-							}
+								if (Split == '+')
+									*(CmdPtr++) = 0x12;
+								else
+									if (Split == '-')
+										*(CmdPtr++) = 0x11;
 
 							*(CmdPtr++) = 0xFD;
 						}
+						else
+						{
+							if (Data)
+							{
+								CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+
+								*(CmdPtr++) = 0xFE;
+								*(CmdPtr++) = 0xFE;
+								*(CmdPtr++) = RIG->RigAddr;
+								*(CmdPtr++) = 0xE0;
+								*(CmdPtr++) = 0x1a;	
+
+
+								if ((strcmp(RIG->RigName, "IC7100") == 0) ||
+									(strcmp(RIG->RigName, "IC7410") == 0) ||
+									(strcmp(RIG->RigName, "IC7600") == 0) ||
+									(strcmp(RIG->RigName, "IC7610") == 0) ||
+									(strcmp(RIG->RigName, "IC7300") == 0))
+								{
+									FreqPtr[0]->Cmd3Len = 9;
+									*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
+									*(CmdPtr++) = 0x1;		// Data On
+									*(CmdPtr++) = Filter - '0'; //Filter
+								}
+								else if (strcmp(RIG->RigName, "IC7200") == 0)
+								{
+									FreqPtr[0]->Cmd3Len = 9;
+									*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
+									*(CmdPtr++) = 0x1;		// Data On
+									*(CmdPtr++) = Filter - '0'; //Filter
+								}
+								else
+								{
+									FreqPtr[0]->Cmd3Len = 8;
+									*(CmdPtr++) = 0x6;		// Set Data
+									*(CmdPtr++) = 0x1;		//On		
+								}
+
+								*(CmdPtr++) = 0xFD;
+							}
+						}
 					}
-				}
 
-				if (Antenna == '5' || Antenna == '6')
-				{
-					// Antenna select for 746 and maybe others
-
-					// Could be going in cmd2 3 or 4
-
-					if (FreqPtr[0]->Cmd2 == NULL)
+					if (Antenna == '5' || Antenna == '6')
 					{
-						CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
-						FreqPtr[0]->Cmd2Len = 7;
-					}
-					else if (FreqPtr[0]->Cmd3 == NULL)
-					{
-						CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-						FreqPtr[0]->Cmd3Len = 7;
-					}
-					else 
-					{
-						CmdPtr = FreqPtr[0]->Cmd4 = malloc(10);
-						FreqPtr[0]->Cmd4Len = 7;
-					}
+						// Antenna select for 746 and maybe others
 
-					*(CmdPtr++) = 0xFE;
-					*(CmdPtr++) = 0xFE;
-					*(CmdPtr++) = RIG->RigAddr;
-					*(CmdPtr++) = 0xE0;
-					*(CmdPtr++) = 0x12;		// Set Antenna
-					*(CmdPtr++) = Antenna - '5';	// 0 for A5 1 for A6
-					*(CmdPtr++) = 0xFD;
+						// Could be going in cmd2 3 or 4
+
+						if (FreqPtr[0]->Cmd2 == NULL)
+						{
+							CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+							FreqPtr[0]->Cmd2Len = 7;
+						}
+						else if (FreqPtr[0]->Cmd3 == NULL)
+						{
+							CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+							FreqPtr[0]->Cmd3Len = 7;
+						}
+						else 
+						{
+							CmdPtr = FreqPtr[0]->Cmd4 = malloc(10);
+							FreqPtr[0]->Cmd4Len = 7;
+						}
+
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = RIG->RigAddr;
+						*(CmdPtr++) = 0xE0;
+						*(CmdPtr++) = 0x12;		// Set Antenna
+						*(CmdPtr++) = Antenna - '5';	// 0 for A5 1 for A6
+						*(CmdPtr++) = 0xFD;
+					}
 				}
 			}
 		}
-
 		else if	(PORT->PortType == YAESU)
 		{	
 			//Send Mode first - changing mode can change freq
@@ -6354,6 +6683,9 @@ VOID HAMLIBThread(struct RIGPORTINFO * PORT)
 		
 		ret = select((int)PORT->remoteSock + 1, &readfs, NULL, &errorfs, &timeout);
 
+		if (HAMLIBRunning == 0)
+			return;
+
 		if (ret == SOCKET_ERROR)
 		{
 			Debugprintf("HAMLIB Select failed %d ", WSAGetLastError());
@@ -6433,6 +6765,9 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 		timeout.tv_usec = 0;
 
 		ret = select(maxsock + 1, &readfs, NULL, &errorfs, &timeout);
+
+		if (HAMLIBRunning == 0)
+			return;
 
 		if (ret == -1)
 		{

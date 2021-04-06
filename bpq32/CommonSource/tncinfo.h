@@ -376,6 +376,7 @@ typedef struct TNCINFO
 #define H_SERIAL 15
 #define H_KISSHF 16
 #define H_WINRPR 17
+#define H_HSMODEM 18
 
 
 	int Port;					// BPQ Port Number
@@ -719,6 +720,8 @@ typedef struct TNCINFO
 
 	MESSAGE * Monframe;				// Used by DED Host for receiving Packet Monitor Frame
 									// split over 2 packets
+
+	struct HSMODEMINFO * HSModemInfo;
 
 } *PTNCINFO;
 

@@ -75,17 +75,18 @@ char * FormatMH(PMHSTRUC MH, char Format);
 //	Needed for Big/LittleEndian and ARM5 (unaligned operation problem) portability
 
 
-VOID PutLengthinBuffer(PDATAMESSAGE buff, int datalen)
+VOID PutLengthinBuffer(PDATAMESSAGE buff, USHORT datalen)
 {
 	if (datalen <= sizeof(void *) + 4)
 		datalen = sizeof(void *) + 4;		// Protect
 
-	memcpy(&buff->LENGTH, &datalen, 2);	
+	memcpy(&buff->LENGTH, &datalen, 2);
 }
 
 int GetLengthfromBuffer(PDATAMESSAGE buff)
 {
 	USHORT Length;
+
 	memcpy(&Length, &buff->LENGTH, 2);
 	return Length;
 }
@@ -162,9 +163,6 @@ VOID * _Q_REM_NP(VOID *PQ, char * File, int Line)
 	//	PQ may not be word aligned, so copy as bytes (for ARM5)
 
 	Q = PQ;
-
-	if (Semaphore.Flag == 0)
-		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
 
 	if (CheckQHeadder((UINT *)Q) == 0)
 		return(0);
@@ -3247,6 +3245,8 @@ int __sync_lock_test_and_set(int * ptr, int val)
 #endif // __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__
 #endif // MACBPQ
 
+
+
 void GetSemaphore(struct SEM * Semaphore, int ID)
 {
 	//
@@ -3382,6 +3382,7 @@ VOID ResolveUpdateThread(void * Unused)
 
 		Debugprintf("Resolving %s", "chatmap.g8bpq.net");
 		HostEnt2 = gethostbyname ("chatmap.g8bpq.net");
+//		HostEnt2 = gethostbyname ("192.168.1.64");
 
 		if (HostEnt2)
 			memcpy(&Chatreportdest.sin_addr.s_addr,HostEnt2->h_addr,4);

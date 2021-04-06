@@ -1513,12 +1513,67 @@ SeeifMore:
 
 	if (Port->RXMSG[0] & 0x0f)		// Not Data
 	{
+		// If a reply to a manual KISS command(Session set and time not too long ago)
+		// send reponse to terminal
+
+		if (PORT->Session && (time(NULL) - PORT->LastKISSCmdTime < 10))
+		{
+			PDATAMESSAGE Buffer;
+			BPQVECSTRUC * VEC;
+			unsigned char * Msg = &Port->RXMSG[1];
+			len--;
+
+			Msg[len] = 0;
+
+			Buffer = GetBuff();
+			if (Buffer)
+			{
+				int i;
+				unsigned char c;
+				int hex = 0;
+
+				// Could be text or hex response
+		
+				for (i = 0; i < len; i++)
+				{
+					c  = Msg[i];
+
+					if (c != 10 && c != 13 && (c < 31 || c > 127))
+					{
+						hex = 1;
+						break;
+					}
+				}
+
+				Buffer->PID = 0xf0;
+				Buffer->LENGTH = MSGHDDRLEN + 1; // Includes PID
+
+				if (hex == 0)
+					Buffer->LENGTH += sprintf(Buffer->L2DATA, "%s\r", Msg);
+				else
+				{
+					if (len == 80)
+						len = 80;			// Protect buffer
+
+					for (i = 0; i < len; i++)
+					{
+						Buffer->LENGTH += sprintf(&Buffer->L2DATA[i * 3], "%02X ", Msg[i]); 
+					}
+					Buffer->LENGTH += sprintf(&Buffer->L2DATA[i * 3], "\r"); 
+				}
+				
+				VEC = PORT->Session->L4TARGET.HOST;
+				C_Q_ADD(&PORT->Session->L4TX_Q, (UINT *)Buffer);
+#ifndef LINBPQ
+				if (VEC)
+					PostMessage(VEC->HOSTHANDLE, BPQMsg, VEC->HOSTSTREAM, 2);  
+#endif
+			}
+			PORT->Session = 0;
+		}
+
 		Port->RXMSG[len] = 0;
-/*
-RSIDN:1504,PSK250C6,1499,PSK250C6,ACTIVE
-TXBE:Q:PSK250C6.78.Kiss
-RSIDN:1504,PSK250C6,1504,PSK250C6,ACTIVE
-*/
+
 //		Debugprintf(Port->RXMSG);
 		return 0;
 	}

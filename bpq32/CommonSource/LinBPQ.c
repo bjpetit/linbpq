@@ -1350,6 +1350,7 @@ void * ARDOPExtInit(EXTPORTDATA * PortEntry);
 void * VARAExtInit(EXTPORTDATA * PortEntry);
 void * SerialExtInit(EXTPORTDATA * PortEntry);
 void * WinRPRExtInit(EXTPORTDATA * PortEntry);
+void * HSMODEMExtInit(EXTPORTDATA * PortEntry);
 
 void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
@@ -1430,6 +1431,9 @@ void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "WINRPR"))
 		return WinRPRExtInit;
+
+	if (strstr(Value, "HSMODEM"))
+		return HSMODEMExtInit;
 
 	return(0);
 }

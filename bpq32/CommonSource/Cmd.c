@@ -1315,7 +1315,8 @@ VOID CMDP00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	while (PORT)
 	{
-		Bufferptr = Cmdprintf(Session, Bufferptr, " %2d %s\r", PORT->PORTNUMBER, PORT->PORTDESCRIPTION);
+		if (PORT->Hide == 0) 
+			Bufferptr = Cmdprintf(Session, Bufferptr, " %2d %s\r", PORT->PORTNUMBER, PORT->PORTDESCRIPTION);
 
 		PORT = PORT->PORTPOINTER;
 	}
@@ -2214,6 +2215,13 @@ NoPort:
 		ptr++;
 	}
 
+	if (memcmp(ptr, "RELAY ", 5) == 0)
+	{
+		// c p relay with extra parms
+
+		goto Downlink;
+	}
+
 	if (DecodeCallString(ptr, &Stay, &Spy, &axcalls[0]) == 0)
 	{
 		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Call\r");
@@ -2877,6 +2885,10 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	int Qual;
 	char line[160];
 	int cursor, len;
+	UCHAR axcall[7];
+	int SavedOBSINIT = OBSINIT;
+	struct ROUTE * ROUTE = NULL;
+
 
 	ptr = strtok_s(CmdTail, " ", &Context);
 
@@ -3126,6 +3138,13 @@ NODE_ADD:
 
 	Call = strlop(ptr, ':');
 
+	if (Call == NULL)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Missing Alias:Call\r");
+		goto SendReply;
+	}
+
+
 	ConvToAX25(Call, AXCALL);
 
 	Qualptr = strtok_s(NULL, " ", &Context);
@@ -3160,8 +3179,8 @@ NODE_ADD:
 	memcpy(Dest->DEST_ALIAS, ptr, 6);
 
 	NUMBEROFNODES++;
-/*
-	ptr = strtok_s(NULL, seps, &Context);
+
+	ptr = strtok_s(NULL, " ", &Context);
 	
 	if (ptr == NULL || ptr[0] == 0)
 	{
@@ -3171,28 +3190,42 @@ NODE_ADD:
 
 	if (ConvToAX25(ptr, axcall) == 0)
 	{
-			ptr = strtok_s(NULL, seps, &Context);
-			if (ptr == NULL) continue;
-			Port = atoi(ptr);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Neighbour\r");
+		goto SendReply;
+	}
+	else
+	{
+		int Port;
 
-			ptr = strtok_s(NULL, seps, &Context);
-			if (ptr == NULL) continue;
-			Qual = atoi(ptr);
+		ptr = strtok_s(NULL, " ", &Context);
+		if (ptr == NULL)
+		{
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Port missing\r");
+			goto SendReply;
+		}
 
-			if (Context[0] == '!')
-			{
-				OBSINIT = 255;			//; SPECIAL FOR LOCKED
-			}
+		Port = atoi(ptr);
+
+		if (Context[0] == '!')
+		{
+			OBSINIT = 255;			//; SPECIAL FOR LOCKED
+		}
 		
-			if (FindNeighbour(axcall, Port, &ROUTE))
-			{
-				PROCROUTES(DEST, ROUTE, Qual);
-			}
+		if (FindNeighbour(axcall, Port, &ROUTE))
+		{
+			PROCROUTES(Dest, ROUTE, Qual);
+		}
 
-			OBSINIT = SavedOBSINIT;
+		OBSINIT = SavedOBSINIT;
 
-			goto RouteLoop;
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Node Added\r");
+		goto SendReply;
+	}
+
+
+
 	
+/*
 PNODE48:
 
 
@@ -5222,6 +5255,9 @@ VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			*(ptr++) = FEND;
 
 			PORT = (struct PORTCONTROL *)KISS->FIRSTPORT;			// ALL FRAMES GO ON SAME Q
+
+			PORT->Session = Session;
+			PORT->LastKISSCmdTime = time(NULL);
 
 			ASYSEND(PORT, ENCBUFF, 4);
 

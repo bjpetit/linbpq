@@ -106,9 +106,10 @@ extern BPQVECSTRUC * AGWMONVECPTR;
 
 extern int SemHeldByAPI;
 
-char szBuff[ 80 ];
+char szBuff[80];
 
-BOOL Initialise();
+static int VisiblePortToRealPort[32];
+
 int SetUpHostSessions();
 int DisplaySessions();
 int AGWDoStateChange(int Stream);
@@ -285,6 +286,7 @@ BOOL AGWAPIInit()
 {	
 	struct PORTCONTROL * PORT = PORTTABLE;
 	int i = 1;
+	int v = 0;
 	char * ptr;
 	BOOL opt=TRUE;
 
@@ -340,6 +342,9 @@ BOOL AGWAPIInit()
 
 	while (PORT)
 	{
+		if (PORT->Hide == 0)
+		{
+		VisiblePortToRealPort[v++] = i - 1;
 		memcpy(ptr,"Port",4);
 		ptr += sprintf(ptr, "%d", i);
 		memcpy(ptr, " with ", 6);
@@ -352,6 +357,7 @@ BOOL AGWAPIInit()
 		ptr++;
 
 		*(ptr++)=';';
+		}
 		i++;
 		PORT=PORT->PORTPOINTER;
 	}
@@ -1085,6 +1091,9 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 	int AGWYReply = 0;
 	int state, change;
 
+	// if we have hidden some ports then the port in the AGW packet will be an index into the visible ports,
+	// not the real port number
+
 	switch (sockptr->AGWRXHeader.DataKind)
 	{
 	case 'C':
@@ -1133,7 +1142,7 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 
 			// Need to convert port index (used by AGW) to port number
 
-			conport=GetPortNumber(key[0]-48);
+			conport=GetPortNumber(VisiblePortToRealPort[key[0]-48]);
 
 			sprintf(ConnectMsg,"C %d %s",conport,ToCall);
 

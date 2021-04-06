@@ -1001,6 +1001,8 @@ BOOL Start()
 		else
 			PORT->PERMITTEDAPPLS = 0xffffffff;		// Default to all
 
+		PORT->Hide = PortRec->Hide;
+
 		if (PortRec->BBSFLAG)						// Appl 1 no permitted - BBSFLAG=NOBBS
 			PORT->PERMITTEDAPPLS &= 0xfffffffe;		// Clear bottom bit
 

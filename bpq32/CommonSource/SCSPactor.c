@@ -547,9 +547,7 @@ ok:
 		{
 			// Send Error Response
 
-			buffptr->Len = 36;
-			memcpy(buffptr->Data, "No Connection to PACTOR TNC\r", 36);
-
+			buffptr->Len = sprintf(buffptr->Data, "No Connection to PACTOR TNC\r");
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 			
 			return 0;

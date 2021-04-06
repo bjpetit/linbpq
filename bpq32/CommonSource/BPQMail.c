@@ -1063,6 +1063,8 @@
 //	Fix occasional "Incoming Connect from SWITCH"
 //	Fix L> with numeric dests
 //	Improved diagnostic for MailTCP select() error.
+//	Clear "RMS Express User"  if user is changed to a BBS
+//	Fix saving Window positions on exit
 
 #include "BPQMail.h"
 #define MAIL
@@ -1456,6 +1458,8 @@ void FreeSemaphore(struct SEM * Semaphore)
 
 char * CmdLine;
 
+extern int configSaved;
+
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
                      LPTSTR    lpCmdLine,
@@ -1578,6 +1582,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	SaveUserDatabase();
 	SaveMessageDatabase();
 	SaveBIDDatabase();
+
+	configSaved = 1;
+	SaveConfig(ConfigName);
 
 	if (cfgMinToTray)
 	{

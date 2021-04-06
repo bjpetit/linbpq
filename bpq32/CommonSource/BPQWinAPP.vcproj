@@ -168,7 +168,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="S:\DEV\Source\BPQ32\lib\bpq32.lib"
+				AdditionalDependencies="..\lib\bpq32.lib"
 				OutputFile="c:\DevProgs\bpq32\bpq32.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

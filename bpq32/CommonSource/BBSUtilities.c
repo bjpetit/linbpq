@@ -8202,6 +8202,9 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 	if (_memicmp(SID, "OpenBCM", 7) == 0)
 	{
+		// We should really only do this on Telnet Connections, as OpenBCM flag is used to remove relnet transparency
+
+
 		conn->OpenBCM = TRUE;
 	}
 

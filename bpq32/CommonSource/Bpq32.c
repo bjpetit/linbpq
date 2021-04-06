@@ -998,6 +998,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Trigger FALLBACKTORELAY if attempt to connect to all CMS servers fail.
 //	Fix saving part lines in adif log and Winlink Session reporting
 //	Add port specific CTEXT
+//	Add FRMR monitoring to UZ7HO driver
+//	Add audio input switching for IC7610
+//	Include Rigcontrol Support for IC-F8101E
+//	Process any response to KISS command 
+//	Fix NODE ADD command
+//	Add noUpdate flag to AXIP MAP
+//	Fix clearing NOFALLBACK flag in Telnet Server
+//	Allow connects to RMS Relay running on another host 
 
 #define CKernel
 
@@ -1086,6 +1094,7 @@ void * ARDOPExtInit(EXTPORTDATA * PortEntry);
 void * VARAExtInit(EXTPORTDATA * PortEntry);
 void * KISSHFExtInit(EXTPORTDATA * PortEntry);
 void * WinRPRExtInit(EXTPORTDATA * PortEntry);
+void * HSMODEMExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -1189,7 +1198,7 @@ void SaveMH();
 #define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__);
 int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line);
 
-VOID SetWindowTextSupport(UINT * Buffer);
+VOID SetWindowTextSupport();
 int WritetoConsoleSupport(char * buff);
 VOID PMClose();
 VOID MySetWindowText(HWND hWnd, char * Msg);
@@ -1774,11 +1783,8 @@ VOID TimerProcX()
 		RelBuff(Buffer);
 	}
 
-	while (SetWindowTextQ)
-	{
-		UINT * Buffer = Q_REM(&SetWindowTextQ);
-		SetWindowTextSupport(Buffer);
-	}
+	if (SetWindowTextQ)
+		SetWindowTextSupport();
 
 	while (WritetoConsoleQ)
 	{
@@ -3615,6 +3621,9 @@ VOID * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "WINRPR"))
 		return WinRPRExtInit;
 
+	if (strstr(Value, "HSMODEM"))
+		return HSMODEMExtInit;
+
 	ExtDriver = LoadLibrary(Value);
 
 	if (ExtDriver == NULL)
@@ -5080,7 +5089,7 @@ int WritetoConsoleSupport(char * buff)
 
 	pindex=SendMessage(hWndCons, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Temp);
 	return 0;
-}
+ }
 
 DllExport VOID APIENTRY  BPQOutputDebugString(char * String)
 {

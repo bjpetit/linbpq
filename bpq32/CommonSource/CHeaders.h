@@ -12,6 +12,10 @@
 
 #include "asmstrucs.h"
 
+#ifndef WIN32
+__asm__(".symver fcntl,fcntl@GLIBC_2.4");
+#endif
+
 BOOL CheckExcludeList(UCHAR * Call);
 
 Dll int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
@@ -24,7 +28,7 @@ int GetListeningPortsPID(int Port);
 
 void * InitializeExtDriver(PEXTPORTDATA PORTVEC);
 
-VOID PutLengthinBuffer(PDATAMESSAGE buff, int datalen);			// Neded for arm5 portability
+VOID PutLengthinBuffer(PDATAMESSAGE buff, USHORT datalen);			// Needed for arm5 portability
 int GetLengthfromBuffer(PDATAMESSAGE buff);	
 
 

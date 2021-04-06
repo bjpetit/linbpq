@@ -164,12 +164,8 @@ typedef struct ConnectionInfo_S
 	struct ConnectionInfo_S *next;
 	PROC *proc;
 	UCHAR RadioOnlyMode;	// T or R flag for Radio Only mode.
-	int s;					// Socket.
-//	char buf[ln_ibuf];		// Line of incoming text.
 
 	int Number;				// Number of record - for Connections display
-//    SOCKET socket;
-//	SOCKADDR_IN sin;  
 	BOOL Active;
     int BPQStream;
 	int paclen;
