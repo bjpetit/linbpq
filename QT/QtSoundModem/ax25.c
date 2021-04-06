@@ -1875,7 +1875,7 @@ void decode_frame(byte * frame, int len, byte * path, string * data,
 	}
 
 
-	if (*f_id == I_I || *f_id == U_UI || *f_id == U_FRMR)
+	if (*f_id == I_I || *f_id == U_UI)
 	{
 		i++;
 		*pid = frame[i];
@@ -1883,7 +1883,13 @@ void decode_frame(byte * frame, int len, byte * path, string * data,
 		if (len > i)
 			stringAdd(data, &frame[i], len - i - 2);		// Exclude FCS
 	}
-
+	else if (*f_id == U_FRMR)
+	{
+		*pid = 0;
+		i++;
+		if (len > i)
+			stringAdd(data, &frame[i], len - i - 2);		// Exclude FCS
+	}
 }
 void ax25_info_init(TAX25Port * AX25Sess)
 {

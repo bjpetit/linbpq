@@ -2,8 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.47"
-#define VersionBytes {0, 0, 0, 47}
+#define VersionString "0.0.0.49"
+#define VersionBytes {0, 0, 0, 49}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -101,6 +101,10 @@
 
 // 0.47 Fix suprious DM when host connection lost
 //		Add CWID
+
+// 0.48 Send FRMR for unrecognised frame types
+
+// 0.49 Add Andy's FEC Tag correlation coode
 
 #include <string.h>
 #include <stdlib.h>

@@ -84,6 +84,7 @@ void saveSettings()
 	settings->setValue("Init/SndTXDeviceName", PlaybackDevice);
 
 	settings->setValue("Init/multiCore", multiCore);
+	settings->setValue("Init/MinimizetoTray", MintoTray);
 
 	// Don't save freq on close as it could be offset by multiple decoders
 

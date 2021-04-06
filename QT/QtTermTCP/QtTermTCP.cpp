@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.43"
+#define VersionString "0.0.0.44"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -44,6 +44,7 @@
 //	   Fix disabling connect flag on current session when AGW connects
 // .42 Fix some bugs in AGW session handling
 // .43 Include Ross KD5LPB's fixes for MAC
+// .44 Ctrl/[ sends ESC (0x1b)
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -286,9 +287,15 @@ void EncodeSettingsLine(int n, char * String)
 	return;
 }
 
+// This is used for placing discAction in the preference menu
+#ifdef __APPLE__
+    bool is_mac = true;
+#else
+    bool is_mac = false;
+#endif
+
 QString GetConfPath()
 {
-
 	std::string conf_path = "QtTermTCP.ini";  // Default conf file stored alongside application.
 
 #ifdef __APPLE__
@@ -458,6 +465,8 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 				{
 					char Msg[] = "\0\r";
 
+					if (key == Qt::Key_BracketLeft)
+						Msg[0] = 0x1b;
 					if (key == Qt::Key_Z)
 						Msg[0] = 0x1a;
 					else if (key == Qt::Key_C)
@@ -862,6 +871,15 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	}
 
 	discAction = mymenuBar->addAction("&Disconnect");
+
+    // Place discAction in mac preferences menu, otherwise it doesn't appear
+    if (is_mac == true) {
+        QMenu * app_menu = mymenuBar->addMenu("App Menu");
+        discAction->setMenuRole(QAction::ApplicationSpecificRole);
+        app_menu->addAction(discAction);
+
+    }
+
 	connect(discAction, SIGNAL(triggered()), this, SLOT(Disconnect()));
 	discAction->setEnabled(false);
 	
@@ -888,8 +906,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	toolBar->addAction(discAction);
 
 	setupMenu = mymenuBar->addMenu(tr("&Setup"));
-	hostsubMenu = setupMenu->addMenu("Setup Hosts");
-
+    hostsubMenu = setupMenu->addMenu("Hosts");
 	hostsubMenu->setFont(*menufont);
 
 	for (i = 0; i < MAXHOSTS; i++)
@@ -898,8 +915,6 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 			actSetup[i] = new QAction(Host[i], this);
 		else
 			actSetup[i] = new QAction("New Host", this);
-
-		actSetup[i]->setMenuRole(QAction::NoRole);
 
 		hostsubMenu->addAction(actSetup[i]);
 		connect(actSetup[i], SIGNAL(triggered()), this, SLOT(SetupHosts()));
@@ -932,14 +947,12 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	setupMenu->addSeparator();
 
-	actFonts = new QAction("Setup Terminal Font", this);
-	actFonts->setMenuRole(QAction::NoRole);
+    actFonts = new QAction("Terminal Font", this);
 	setupMenu->addAction(actFonts);
 	connect(actFonts, SIGNAL(triggered()), this, SLOT(doFonts()));
 	actFonts->setFont(*menufont);
 
-	actmenuFont = new QAction("Setup Menu Font", this);
-	actmenuFont->setMenuRole(QAction::NoRole);
+    actmenuFont = new QAction("Menu Font", this);
 	setupMenu->addAction(actmenuFont);
 	connect(actmenuFont, SIGNAL(triggered()), this, SLOT(doMFonts()));
 	actmenuFont->setFont(*menufont);

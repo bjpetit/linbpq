@@ -2175,9 +2175,177 @@ string * decode_FX25_data(TFX25 fx25)
 			}
 		}
 	}
-
 	return data;
 }
+
+int FX25_corr[4] = {1, 1, 1, 1};
+
+#define tags_nr 11
+#define tt 8
+
+unsigned long long tags[tags_nr] =
+{
+	0xB74DB7DF8A532F3E, 0x26FF60A600CC8FDE, 0xC7DC0508F3D9B09E, 0x8F056EB4369660EE,
+	0x6E260B1AC5835FAE, 0xFF94DC634F1CFF4E, 0x1EB7B9CDBC09C00E, 0xDBF869BD2DBB1776,
+	0x3ADB0C13DEAE2836, 0xAB69DB6A543188D6, 0x4A4ABEC4A724B796
+};
+
+int sizes[tags_nr] = { 255, 144, 80, 48, 255, 160, 96, 64, 255, 192, 128 };
+int rs_sizes[tags_nr] = { 16, 16, 16, 16, 32, 32, 32, 32, 64, 64, 64 };
+
+/*
+unsigned char get_corr_arm(unsigned long long n)
+{
+	unsigned char  max_corr;
+	unsigned char result = 255;
+	int i = 0;
+
+	while (i < tags_nr)
+	{
+		if (__builtin_popcountll(n ^ tags[i] <= tt))
+			return i;
+	}
+
+	return 255;
+}
+*/
+
+char errors;
+
+#ifndef WIN32
+
+unsigned char get_corr(unsigned long long val)
+{
+	unsigned long v;
+	unsigned long long n;
+	int i = 0;
+
+	while (i < tags_nr)
+	{
+		n = val ^ tags[i];
+
+		v = n;
+
+		v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
+		v = (v & 0x33333333) + ((v >> 2) & 0x33333333);     // temp
+		errors = ((v + (v >> 4) & 0xF0F0F0F) * 0x1010101) >> 24; // count
+
+		if (errors > tt)
+		{
+			i++;
+			continue;
+		}
+
+		v = n >> 32;
+
+		v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
+		v = (v & 0x33333333) + ((v >> 2) & 0x33333333);     // temp
+		errors += ((v + (v >> 4) & 0xF0F0F0F) * 0x1010101) >> 24; // count
+
+		if (errors <= tt)
+			return i;
+
+		i++;
+	}
+	return 255;
+}
+
+#else
+
+unsigned char get_corr(unsigned long long n)
+{
+	unsigned char  max_corr;
+	int i = 0;
+	unsigned char result = 255;
+
+	__asm {
+		push eax
+		push ebx
+		push ecx
+		push esi
+		lea esi, tags
+		xor bl, bl
+	loopx:
+		mov eax, dword ptr[esi]
+		xor eax, dword ptr[n]
+		mov ecx, eax
+		and ecx, 0x55555555
+		shr eax, 1
+		and eax, 0x55555555
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x33333333
+		shr eax, 2
+		and eax, 0x33333333
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x0F0F0F0F
+		shr eax, 4
+		and eax, 0x0F0F0F0F
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x00FF00FF
+		shr eax, 8
+		and eax, 0x00FF00FF
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x0000FFFF
+		shr eax, 16
+		add eax, ecx
+		// skip the rest if damaged bits greater than tag threshold
+		cmp al, tt
+		mov errors, al
+		jnbe end_tt
+		mov bh, al
+		mov eax, dword ptr[esi + 4]
+		xor eax, dword ptr[n + 4]
+		mov ecx, eax
+		and ecx, 0x55555555
+		shr eax, 1
+		and eax, 0x55555555
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x33333333
+		shr eax, 2
+		and eax, 0x33333333
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x0F0F0F0F
+		shr eax, 4
+		and eax, 0x0F0F0F0F
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x00FF00FF
+		shr eax, 8
+		and eax, 0x00FF00FF
+		add eax, ecx
+		mov ecx, eax
+		and ecx, 0x0000FFFF
+		shr eax, 16
+		add eax, ecx
+		add bh, al
+		// check for tag threshold
+		cmp bh, tt
+		jnbe end_tt
+		mov result, bl
+		mov errors, bh
+		jmp ret_tt;
+		//
+	end_tt:
+		add esi, 8
+		inc bl
+		cmp bl, tags_nr
+		jbe loopx
+	ret_tt:
+		pop esi
+		pop ecx
+		pop ebx
+		pop eax
+	}
+	return result;
+}
+
+#endif
 
 void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_buf, float * bit_buf, int  buf_size, string * data)
 {
@@ -2416,62 +2584,79 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 
 					tag64 = fx25.tag & 0XFFFFFFFFFFFFFFFE;
 
-					if (tag64 == 0xB74DB7DF8A532F3E)
-					{
-						fx25.size = 255;
-						fx25.rs_size = 16;
-					}
-					if (tag64 == 0x26FF60A600CC8FDE)
-					{
-						fx25.size = 144;
-						fx25.rs_size = 16;
-					}
-					if (tag64 == 0xC7DC0508F3D9B09E)
-					{
-						fx25.size = 80;
-						fx25.rs_size = 16;
-					}
-					if (tag64 == 0x8F056EB4369660EE)
-					{
-						fx25.size = 48;
-						fx25.rs_size = 16;
-					}
-					if (tag64 == 0x6E260B1AC5835FAE)
-					{
-						fx25.size = 255;
-						fx25.rs_size = 32;
-					}
-					if (tag64 == 0xFF94DC634F1CFF4E)
-					{
-						fx25.size = 160;
-						fx25.rs_size = 32;
-					}
-					if (tag64 == 0x1EB7B9CDBC09C00E)
-					{
-						fx25.size = 96;
-						fx25.rs_size = 32;
-					}
-					if (tag64 == 0xDBF869BD2DBB1776)
-					{
-						fx25.size = 64;
-						fx25.rs_size = 32;
-					}
-					if (tag64 == 0x3ADB0C13DEAE2836)
-					{
-						fx25.size = 255;
-						fx25.rs_size = 64;
-					}
-					if (tag64 == 0xAB69DB6A543188D6)
-					{
-						fx25.size = 192;
-						fx25.rs_size = 64;
-					}
-					if (tag64 == 0x4A4ABEC4A724B796)
-					{
-						fx25.size = 128;
-						fx25.rs_size = 64;
-					}
+					// FX25 tag correlation
 
+					if (FX25_corr[snd_ch])
+					{
+						unsigned char res;
+
+						res = get_corr(tag64);
+
+						if (res < tags_nr)
+						{
+							Debugprintf("Got FEC Tag %d Errors %d", res, errors);
+							fx25.size = sizes[res];
+							fx25.rs_size = rs_sizes[res];
+						}
+					}
+					else
+					{
+						if (tag64 == 0xB74DB7DF8A532F3E)
+						{
+							fx25.size = 255;
+							fx25.rs_size = 16;
+						}
+						if (tag64 == 0x26FF60A600CC8FDE)
+						{
+							fx25.size = 144;
+							fx25.rs_size = 16;
+						}
+						if (tag64 == 0xC7DC0508F3D9B09E)
+						{
+							fx25.size = 80;
+							fx25.rs_size = 16;
+						}
+						if (tag64 == 0x8F056EB4369660EE)
+						{
+							fx25.size = 48;
+							fx25.rs_size = 16;
+						}
+						if (tag64 == 0x6E260B1AC5835FAE)
+						{
+							fx25.size = 255;
+							fx25.rs_size = 32;
+						}
+						if (tag64 == 0xFF94DC634F1CFF4E)
+						{
+							fx25.size = 160;
+							fx25.rs_size = 32;
+						}
+						if (tag64 == 0x1EB7B9CDBC09C00E)
+						{
+							fx25.size = 96;
+							fx25.rs_size = 32;
+						}
+						if (tag64 == 0xDBF869BD2DBB1776)
+						{
+							fx25.size = 64;
+							fx25.rs_size = 32;
+						}
+						if (tag64 == 0x3ADB0C13DEAE2836)
+						{
+							fx25.size = 255;
+							fx25.rs_size = 64;
+						}
+						if (tag64 == 0xAB69DB6A543188D6)
+						{
+							fx25.size = 192;
+							fx25.rs_size = 64;
+						}
+						if (tag64 == 0x4A4ABEC4A724B796)
+						{
+							fx25.size = 128;
+							fx25.rs_size = 64;
+						}
+					}
 					if (fx25.size != 0)
 					{
 						fx25.status = FX25_LOAD;

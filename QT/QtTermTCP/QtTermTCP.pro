@@ -21,18 +21,24 @@ DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x050000    # disables all the APIs depr
 
 
 SOURCES += main.cpp\
-        QtTermTCP.cpp\
-		TermTCPCommon.cpp\
-		TabDialog.cpp 
+    QtTermTCP.cpp\
+	TermTCPCommon.cpp\
+	TabDialog.cpp \
+	AGWCode.cpp \
+	utf8Routines.cpp
 
 HEADERS  += QtTermTCP.h\
-		TabDialog.h
+	TabDialog.h
 
 FORMS    += QtTermTCP.ui\
-		ListenPort.ui
+	ListenPort.ui \
+	AGWParams.ui \
+	AGWConnect.ui
 		
 RESOURCES += QtTermTCP.qrc
 
 RC_ICONS = QtTermTCP.ico
 
+QMAKE_CFLAGS += -g
+QMAKE_CXXFLAGS += -g
 QMAKE_LFLAGS += -no-pie

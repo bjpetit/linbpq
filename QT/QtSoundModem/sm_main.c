@@ -2132,6 +2132,11 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 		frm = "SABM";
 		break;
 
+	case SABME:
+
+		frm = "SABME";
+		break;
+
 	case U_DISC:
 
 		frm = "DISC";
@@ -2180,8 +2185,7 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 		}
 		else if (f_id == U_FRMR)
 		{
-			//			_data = copy(_data + #0#0#0, 1, 3);
-			//			mon_frm = AGW_path + ctrl + '>' + time_now + #13 + inttohex((byte(data[1]) shl 16) or (byte(data[2]) shl 8) or byte(data[3]), 6) + #13#13;
+			sprintf(mon_frm, "%s>%02x %02x %02x[%s]\r", AGW_path, datap[0], datap[1], datap[2], ShortDateTime()); // "= AGW_path + ctrl + '>' + time_now + #13;
 		}
 		else
 			sprintf(mon_frm, "%s>[%s%c]%s\r", AGW_path, ShortDateTime(), TR, codestr); // "= AGW_path + ctrl + '>' + time_now + #13;

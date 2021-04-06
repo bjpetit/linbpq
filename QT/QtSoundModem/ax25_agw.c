@@ -1241,8 +1241,7 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 		}
 		else if (f_id == U_FRMR)
 		{
-			//			_data = copy(_data + #0#0#0, 1, 3);
-			//			mon_frm = AGW_path + ctrl + '>' + time_now + #13 + inttohex((byte(data[1]) shl 16) or (byte(data[2]) shl 8) or byte(data[3]), 6) + #13#13;
+			sprintf(mon_frm, "%s%s>%02x %02x %02x[%s]\r", AGW_path, ctrl, datap[0], datap[1], datap[2], ShortDateTime()); // "= AGW_path + ctrl + '>' + time_now + #13;
 		}
 		else
 			sprintf(mon_frm, "%s%s>[%s]\r", AGW_path, ctrl, ShortDateTime()); // "= AGW_path + ctrl + '>' + time_now + #13;

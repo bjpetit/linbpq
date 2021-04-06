@@ -1,5 +1,5 @@
 
-#define VersionString "0.0.0.6"
+#define VersionString "0.0.0.7"
 
 // 0.2 Allow updating CMSCALL and PASS
 //	   Read as binary to preserve line endings
@@ -15,6 +15,8 @@
 
 // 0.6 Fix hang if unknown MAP param specified
 //	   Tidy ROUTES header
+
+// 0.7 Add WinRPR and HSModem port types
 
 #include "BPQConfigGen.h"
 #ifdef WIN32
@@ -189,21 +191,29 @@ struct PORTREC Ports[33];
 #define H_VKISS 20
 #define H_WINMOR 21
 #define H_KISSHF 22
+#define H_WINRPR 23
+#define H_HSMODEM 24
 
-#define NUMBEROFTYPES 23
 
-char Types[NUMBEROFTYPES][16] = {
+
+#define NUMBEROFTYPES 25
+
+char Types[NUMBEROFTYPES][16] =
+{
 	"AEA Pactor", "ARDOP", "AXIP", "BPQETHER",
 	"FLDIGI", "HAL", "KAM Pactor", "LOOPBACK",
 	"KISS Serial", "KISS TCP", "KISS UDP", "MULTIPSK", 
 	"SCS Pactor", "SCS Tracker","SCS TRKMULTI","Serial",
 	"TELNET", "UZ7HO", "V4", "VARA",
-	"VKISS", "WINMOR", "KISSHF"};
+	"VKISS", "WINMOR", "KISSHF", "WinRPR", "HSModem"
+};
 
-int defaultPort[NUMBEROFTYPES] = {
+int defaultPort[NUMBEROFTYPES] =
+{
 	9600, 8515, 0, 0, 0, 9600, 9600, 0,
 	9600, 8100, 8100, 0, 38400, 38400, 38400, 9600,
-	0, 8000, 8510, 8300, 0, 8500, 8100};
+	0, 8000, 8510, 8300, 0, 8500, 8100, 8101, 40131
+};
 
 struct APPL
 {
@@ -1884,12 +1894,12 @@ void BPQConfigGen::ReadConfigFile()
 
 				if (stricmp(type, "ASYNC") == 0)
 				{
-					PORT->PortType= H_KISS;
+					PORT->PortType = H_KISS;
 				}
 
 				if (stricmp(type, "LOOPBACK") == 0 || stricmp(type, "INTERNAL") == 0)
 				{
-					PORT->PortType= H_LOOP;
+					PORT->PortType = H_LOOP;
 				}
 
 				continue;
@@ -2040,6 +2050,17 @@ void BPQConfigGen::ReadConfigFile()
 				if (stricmp(ptr, "KISSHF") == 0)
 				{
 					PORT->PortType = H_KISSHF;
+					continue;
+				}
+
+				if (stricmp(ptr, "WINRPR") == 0)
+				{
+					PORT->PortType = H_WINRPR;
+					continue;
+				}
+				if (stricmp(ptr, "HSMODEM") == 0)
+				{
+					PORT->PortType = H_HSMODEM;
 					continue;
 				}
 			}

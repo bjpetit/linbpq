@@ -676,6 +676,25 @@ void set_unlink(TAX25Port * AX25Sess, byte * path)
 		set_try_unlink(AX25Sess, AX25Sess->Path);
 }
 
+void set_FRMR(int snd_ch, byte * path, unsigned char frameType)
+{
+	//We may not have a session when sending FRMR so reverse path and send
+
+	byte revpath[80];
+	string * Data = newString();
+
+	Data->Data[0] = frameType;
+	Data->Data[1] = 0;
+	Data->Data[2] = 1;			// Invalid CTL Byte
+	Data->Length = 3;
+
+	reverse_addr(path, revpath, strlen(path));
+
+	add_pkt_buf(&AX25Port[snd_ch][0], make_frame(Data, revpath, 0, 0, 0, U_FRM, U_FRMR, FALSE, SET_P, SET_R));
+
+	freeString(Data);
+}
+
 void set_DM(int snd_ch, byte * path)
 {
 	//We may not have a session when sending DM so reverse path and send
@@ -1466,7 +1485,16 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 				case I_I:
 
 					set_DM(snd_ch, path);
+					break;
+
+				case U_UI:
+					break;
+
+				default:
+					set_FRMR(snd_ch, path, f_id);
 				}
+
+
 			}
 			return;
 		}
