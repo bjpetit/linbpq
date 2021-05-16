@@ -2242,13 +2242,39 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			{
 				if (CheckExcludeList(SESS->L4USER) == FALSE)
 				{
-					char Status[32];
+					char Status[64];
 
 					TidyClose(TNC, 0);
 					sprintf(Status, "%d SCANSTART 15", TNC->Port);
 					Rig_Command(-1, Status);
 					Debugprintf("WINMOR Call from %s rejected", Call);
 					return;
+				}
+			}
+
+			//	IF WE HAVE A PERMITTED CALLS LIST, SEE IF HE IS IN IT
+
+			if (TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS)
+			{
+				UCHAR * ptr = TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS;
+
+				while (TRUE)
+				{
+					if (memcmp(SESS->L4USER, ptr, 6) == 0)	// Ignore SSID
+						break;
+
+					ptr += 7;
+
+					if ((*ptr) == 0)							// Not in list
+					{
+						char Status[64];
+
+						TidyClose(TNC, 0);
+						sprintf(Status, "%d SCANSTART 15", TNC->Port);
+						Rig_Command(-1, Status);
+						Debugprintf("WINMOR Call from %s not in ValidCalls - rejected", Call);
+						return;
+					}
 				}
 			}
 
@@ -2946,7 +2972,7 @@ int KillTNC(struct TNCINFO * TNC)
 
 BOOL RestartTNC(struct TNCINFO * TNC)
 {
-	if (TNC->ProgramPath == NULL)
+	if (TNC->ProgramPath == NULL || TNC->DontRestart)
 		return 0;
 
 	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)

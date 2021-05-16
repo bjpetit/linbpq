@@ -3340,7 +3340,36 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 							return;
 						}
 					}
-			
+
+					//	IF WE HAVE A PERMITTED CALLS LIST, SEE IF HE IS IN IT
+
+					if (TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS)
+					{
+						UCHAR * ptr = TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS;
+						UCHAR AXCALL[7];
+						
+						ConvToAX25(MHCall, AXCALL);			//Permitted calls are stored in ax.25 format
+
+						while (TRUE)
+						{
+							if (memcmp(AXCALL, ptr, 6) == 0)	// Ignore SSID
+								break;
+
+							ptr += 7;
+
+							if ((*ptr) == 0)							// Not in list
+							{
+								char Status[64];
+
+								TidyClose(TNC, 0);
+								sprintf(Status, "%d SCANSTART 15", TNC->Port);
+								Rig_Command(-1, Status);
+								Debugprintf("Pactor Call from %s not in ValidCalls - rejected", Call);
+								return;
+							}
+						}
+					}
+
 					// Check that we think we are in the right mode
 
 					if (Stream == 0 && TNC->Dragon == 0)	// Dragon runs both at the same time
@@ -3729,7 +3758,7 @@ static MESSAGE Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
-MESSAGE * AdjMsg = &Monframe;				// Adjusted for digis
+MESSAGE * AdjMsg = &Monframe;	// Adjusted for digis
 
 static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
@@ -3737,6 +3766,8 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	UCHAR * ptr, * starptr;
 	char * context;
+	char * MHCall = Monframe.ORIGIN;
+
 
 	if (Msg[0] == 6)		// Second part of I or UI
 	{
@@ -3760,12 +3791,9 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	ConvToAX25(&ptr[3], Monframe.ORIGIN);
 
-	UpdateMH(TNC, &ptr[3], '.', 0);
-
 	ptr = strstr(ptr, "to ");
 
 	ConvToAX25(&ptr[3], Monframe.DEST);
-
 
 	ptr = strstr(ptr, "via ");
 
@@ -3806,19 +3834,28 @@ DigiLoop:
 	ptr = strstr(Msg, "ctl ");
 
 	if (memcmp(&ptr[4], "SABM", 4) == 0)
+	{
 		AdjMsg->CTL = 0x2f;
+		UpdateMHwithDigis(TNC, MHCall, '.', 0);
+	}
 	else  
 	if (memcmp(&ptr[4], "DISC", 4) == 0)
 		AdjMsg->CTL = 0x43;
 	else 
 	if (memcmp(&ptr[4], "UA", 2) == 0)
+	{
 		AdjMsg->CTL = 0x63;
+		UpdateMHwithDigis(TNC, MHCall, '.', 0);
+	}
 	else  
 	if (memcmp(&ptr[4], "DM", 2) == 0)
 		AdjMsg->CTL = 0x0f;
 	else 
 	if (memcmp(&ptr[4], "UI", 2) == 0)
+	{
 		AdjMsg->CTL = 0x03;
+		UpdateMHwithDigis(TNC, MHCall, '.', 0);
+	}
 	else 
 	if (memcmp(&ptr[4], "RR", 2) == 0)
 		AdjMsg->CTL = 0x1 | (ptr[6] << 5);

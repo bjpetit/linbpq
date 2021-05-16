@@ -230,11 +230,13 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		{
 		case WINMOR_KILL:
 
+			TNC->DontRestart = TRUE;
 			KillTNC(TNC);
 			break;
 
 		case WINMOR_RESTART:
 
+			TNC->DontRestart = FALSE;
 			KillTNC(TNC);
 			RestartTNC(TNC);
 			break;

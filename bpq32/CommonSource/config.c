@@ -169,6 +169,10 @@ extern int AGWMask;
 extern BOOL LoopMonFlag;
 extern BOOL Loopflag;
 
+extern char NodeMapServer[80];
+extern char ChatMapServer[80];
+
+
 VOID * zalloc(int len);
 
 int WritetoConsoleLocal(char * buff);
@@ -649,6 +653,16 @@ int decode_rec(char * rec)
 
 	char key_word[300] = "";
 	char value[300] = "";
+
+	if (_memicmp(rec, "NODEMAPSERVER=", 14) == 0)
+	{
+		// Map reporting override
+
+		strcpy(NodeMapServer, &rec[14]);
+		strlop(NodeMapServer, ' ');
+
+		return 1;
+	}
 
 	if (_memicmp(rec, "IPGATEWAY", 9) == 0 && rec[9] != '=')	// IPGATEWAY, not IPGATEWAY=
 	{

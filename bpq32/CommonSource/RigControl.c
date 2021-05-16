@@ -4000,7 +4000,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				   char * PMinLevel, char * PMaxLevel, char * PacketMode,
 				   char * RPacketMode, char * Split, char * Data, char * WinmorMode,
 				   char * Antenna, BOOL * Supress, char * Filter, char * Appl,
-				   char * MemoryBank, int * MemoryNumber, char * ARDOPMode, char * VARAMode, int * BandWidth)
+				   char * MemoryBank, int * MemoryNumber, char * ARDOPMode, char * VARAMode, int * BandWidth, int * Power)
 {
 	char * Context;
 	char * ptr;
@@ -4012,6 +4012,8 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	*Mode = 0;
 	*ARDOPMode = 0;
 	*VARAMode = 0;
+	*Power = 0;
+
 	
 	ptr = strtok_s(Param, ",", &Context);
 
@@ -4076,6 +4078,9 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 
 		else if (memcmp(ptr, "APPL=", 5) == 0)
 			strcpy(Appl, ptr + 5);
+
+		else if (memcmp(ptr, "POWER=", 6) == 0)
+			*Power = atoi(ptr + 6);
 
 		else if (ptr[0] == 'A' && (ptr[1] == 'S' || ptr[1] == '0') && strlen(ptr) < 7)
 			strcpy(ARDOPMode, "S");
@@ -5153,6 +5158,7 @@ CheckScan:
 		char Appl[13];
 		char * ApplCall;
 		int BandWidth;
+		int Power;
 
 		if (ptr[0] == ';' || ptr[0] == '#')
 			break;
@@ -5192,7 +5198,7 @@ CheckScan:
 		{
 			DecodeModePtr(ptr, &Dwell, &Freq, Mode, &PMinLevel, &PMaxLevel, &PacketMode,
 				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter, &Appl[0],
-				&MemoryBank, &MemoryNumber, ARDOPMode, VARAMode, &BandWidth);
+				&MemoryBank, &MemoryNumber, ARDOPMode, VARAMode, &BandWidth, &Power);
 		}
 		else
 		{
@@ -5760,11 +5766,20 @@ CheckScan:
 		}
 		else if	(PORT->PortType == KENWOOD)
 		{	
-			if (Antenna == '5' || Antenna == '6')
-				FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;AN%c;FA;MD;", FreqString, ModeNo, Antenna - 4);
+			if (Power == 0)
+			{
+				if (Antenna == '5' || Antenna == '6')
+					FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;AN%c;FA;MD;", FreqString, ModeNo, Antenna - 4);
+				else
+					FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+			}
 			else
-				FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
-
+			{
+				if (Antenna == '5' || Antenna == '6')
+					FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;AN%c;PC%03d;FA;MD;PC;", FreqString, ModeNo, Antenna - 4, Power);
+				else
+					FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;PC%03d;FA;MD;PC;", FreqString, ModeNo, Power);
+			}
 		}
 		else if	(PORT->PortType == FLEX)
 		{	

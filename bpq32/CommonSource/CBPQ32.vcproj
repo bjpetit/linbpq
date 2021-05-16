@@ -251,6 +251,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\APRSStdPages.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\ARDOP.c"
 				>
 			</File>

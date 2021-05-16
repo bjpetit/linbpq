@@ -1065,6 +1065,9 @@
 //	Improved diagnostic for MailTCP select() error.
 //	Clear "RMS Express User"  if user is changed to a BBS
 //	Fix saving Window positions on exit
+//	Fix parsing ReplyTemplate name in Webmail
+//	Handle multiple addressees for WebMail Forms messages to packet stations
+//	Add option to allow only known users to connect
 
 #include "BPQMail.h"
 #define MAIL

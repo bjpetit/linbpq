@@ -780,7 +780,7 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 		UpdateMH(TNC, Call, '+', 'I');
 	}
 
-	Session=L4TABLE;
+	Session = L4TABLE;
 
 	// Find a free Circuit Entry
 
@@ -3164,6 +3164,67 @@ VOID SendMH(struct TNCINFO * TNC, char * call, char * freq, char * LOC, char * M
 	return;
 
 }
+
+time_t TimeLastNRRouteSent = 0;
+
+char NRRouteMessage[256];
+int NRRouteLen = 0;
+
+
+VOID SendNETROMRoute(struct PORTCONTROL * PORT, unsigned char * axcall)
+{
+	//	Called to update Link Map when a NODES Broadcast is received
+	//  Batch to reduce Load
+
+	MESSAGE AXMSG;
+	PMESSAGE AXPTR = &AXMSG;
+	char Msg[300];
+	int Len;
+	char Call[10];
+	char Report[16];
+	time_t Now = time(NULL);
+	int NeedSend = FALSE;
+
+
+	if (ReportSocket == 0 || LOCATOR[0] == 0)
+		return;
+
+	Call[ConvFromAX25(axcall, Call)] = 0;
+
+	sprintf(Report, "%s,%d,", Call, PORT->PORTTYPE);
+
+	if (Now - TimeLastNRRouteSent > 60)
+		NeedSend = TRUE;
+	
+	if (strstr(NRRouteMessage, Report) == 0)	//  reported recently
+		strcat(NRRouteMessage, Report);
+		
+	if (strlen(NRRouteMessage) > 230 || NeedSend)
+	{
+		Len = sprintf(Msg, "LINK %s", NRRouteMessage);
+
+		// Block includes the Msg Header (7 bytes), Len Does not!
+
+		memcpy(AXPTR->DEST, ReportDest, 7);
+		memcpy(AXPTR->ORIGIN, MYCALL, 7);
+		AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+		AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+		AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+		AXPTR->CTL = 3;		//UI
+		AXPTR->PID = 0xf0;
+		memcpy(AXPTR->L2DATA, Msg, Len);
+
+		SendReportMsg((char *)&AXMSG.DEST, Len + 16) ;
+
+		TimeLastNRRouteSent = Now;
+		NRRouteMessage[0] = 0;
+	}
+
+	return;
+
+}
+
 DllExport char * APIENTRY GetApplCall(int Appl)
 {
 	if (Appl < 1 || Appl > NumberofAppls ) return NULL;
@@ -3356,6 +3417,9 @@ void printStack(void)
 
 pthread_t ResolveUpdateThreadId = 0;
 
+char NodeMapServer[80] = "update.g8bpq.net";
+char ChatMapServer[80] = "chatmap.g8bpq.net";
+
 VOID ResolveUpdateThread(void * Unused)
 {
 	struct hostent * HostEnt1;
@@ -3373,15 +3437,15 @@ VOID ResolveUpdateThread(void * Unused)
 
 		//	Resolve name to address
 
-		Debugprintf("Resolving %s", "update.g8bpq.net");
-		HostEnt1 = gethostbyname ("update.g8bpq.net");
+		Debugprintf("Resolving %s", NodeMapServer);
+		HostEnt1 = gethostbyname (NodeMapServer);
 //		HostEnt1 = gethostbyname ("192.168.1.64");
 
 		if (HostEnt1)
 			memcpy(&reportdest.sin_addr.s_addr,HostEnt1->h_addr,4);
 
-		Debugprintf("Resolving %s", "chatmap.g8bpq.net");
-		HostEnt2 = gethostbyname ("chatmap.g8bpq.net");
+		Debugprintf("Resolving %s", ChatMapServer);
+		HostEnt2 = gethostbyname (ChatMapServer);
 //		HostEnt2 = gethostbyname ("192.168.1.64");
 
 		if (HostEnt2)
@@ -3431,6 +3495,7 @@ VOID OpenReportingSockets()
 	// Socket must be opened in MailChat Process
 
 	Chatreportdest.sin_family = AF_INET;
+	
 	Chatreportdest.sin_port = htons(10090);
 
 	_beginthread(ResolveUpdateThread, 0, NULL);

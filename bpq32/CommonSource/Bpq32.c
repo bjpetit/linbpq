@@ -1006,6 +1006,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add noUpdate flag to AXIP MAP
 //	Fix clearing NOFALLBACK flag in Telnet Server
 //	Allow connects to RMS Relay running on another host 
+//	Allow use of Power setting in Rigcontol scan lines for Kenwood radios
+//	Prevent problems caused by using "CMS" as a Node Alias
+//	Include standard APRS Station pages in code
+//	Fix VALIDCALLS processing in HF drivers
+//	Send Netrom Link reports to Node Map
 
 #define CKernel
 

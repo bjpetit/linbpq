@@ -56,7 +56,7 @@ VOID MOVEALL(dest_list * DEST);
 VOID MOVE3TO2(dest_list * DEST);
 VOID CLEARTHIRD(dest_list * DEST);
 VOID L3TRYNEXTDEST(struct ROUTE * ROUTE);
-
+VOID SendNETROMRoute(struct PORTCONTROL * PORT, unsigned char * axcall);
 
 extern BOOL NODESINPROGRESS ;;
 PPORTCONTROL L3CURRENTPORT;
@@ -295,6 +295,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 		if (PORT->IgnoreUnlocked)
 			return;
 	
+	SendNETROMRoute(PORT, Msg->ORIGIN);
 
 	// if not locked, update route quality from port quality (may have changed config and not cleared SAVENODES
 

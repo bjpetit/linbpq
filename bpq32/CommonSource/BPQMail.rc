@@ -162,7 +162,7 @@ FONT 8, "System"
 BEGIN
 END
 
-BBS_CONFIG DIALOG DISCARDABLE  0, 0, 368, 290
+BBS_CONFIG DIALOG DISCARDABLE  0, 0, 381, 290
 STYLE WS_CHILD
 FONT 8, "System"
 BEGIN
@@ -185,10 +185,10 @@ BEGIN
     EDITTEXT        IDC_HRoute,83,120,119,13,ES_UPPERCASE
     LTEXT           "BBS Appl Number",IDC_STATIC,7,138,61,10
     EDITTEXT        IDC_BBSAppl,83,136,29,12
-    LTEXT           "Streams",IDC_STATIC,171,138,32,10
-    EDITTEXT        IDC_BBSStreams,205,136,29,12
+    LTEXT           "Streams",IDC_STATIC,130,138,32,10
+    EDITTEXT        IDC_BBSStreams,168,136,29,12
     CONTROL         "Refuse Bulls",IDC_REFUSEBULLS,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,264,138,53,10
+                    BS_LEFTTEXT | WS_TABSTOP,211,138,53,10
     CONTROL         "Enable FBB UI System",IDC_ENABLEUI,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,157,87,10
     LTEXT           "Send Mail For Beacons Every",IDC_STATIC,102,157,100,12
@@ -213,7 +213,7 @@ BEGIN
                     12
     CONTROL         "Redirect msgs to BBS Call to SYSOP Call",
                     IDC_BBSTOSYSOPCALL,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,214,120,146,12
+                    BS_LEFTTEXT | WS_TABSTOP,213,120,146,12
     CONTROL         "Don't Request Home BBS",IDC_NOHOMEBBS,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,260,174,99,12
     CONTROL         "Don't Request Name",IDC_NONAME,"Button",BS_AUTOCHECKBOX | 
@@ -227,6 +227,8 @@ BEGIN
     CONTROL         "Set Don't add WINLINK.ORG flag on new users",
                     IDC_DEFAULTNOWINLINK,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,5,174,162,12
+    CONTROL         "Don't allow unknown users",IDC_KNOWNUSERS,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,277,138,98,10
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -1164,7 +1166,7 @@ BEGIN
 
     "BBS_CONFIG", DIALOG
     BEGIN
-        BOTTOMMARGIN, 276
+        BOTTOMMARGIN, 287
         HORZGUIDE, 87
     END
 

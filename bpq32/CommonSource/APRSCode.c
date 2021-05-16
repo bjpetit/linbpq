@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License
 along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
-
 // Module to implement APRS "New Paradigm" Digipeater and APRS-IS Gateway
 
 // First Version, November 2011
@@ -34,7 +33,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "tncinfo.h"
 
-#include "bpqaprs.h"
+#include "BPQAPRS.h"
 
 #ifndef WIN32
 
@@ -93,6 +92,7 @@ BOOL ToLOC(double Lat, double Lon , char * Locator);
 BOOL InternalSendAPRSMessage(char * Text, char * Call);
 void UndoTransparency(char * input);
 char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
+char * GetStandardPage(char * FN, int * Len);
 
 BOOL ProcessConfig();
 
@@ -6271,7 +6271,7 @@ char * DoDetailLine(struct STATIONRECORD * ptr, BOOL LocalTime, BOOL KM)
 	sprintf(DistString, "%6.1f", myDistance(ptr->Lat, ptr->Lon, KM));
 	sprintf(BearingString, "%3.0f", myBearing(ptr->Lat, ptr->Lon));
 	
-	sprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>",
+	sprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>\r\n",
 			XCall, ptr->Callsign, 
 			(strchr(ptr->Path, '*'))?  "*": "", &SymbolText[ptr->iconRow << 4 | ptr->iconCol][0], LatString, LongString, DistString, BearingString, Time);
 
@@ -6815,8 +6815,8 @@ loop:
 VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 {
 	int FileSize = 0;
-	char * MsgBytes;
-	char * SaveMsgBytes;
+	char * MsgBytes = 0;
+	char * SaveMsgBytes = 0;
 
 	char MsgFile[MAX_PATH];
 	FILE * hFile;
@@ -6841,32 +6841,49 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	{
 		// Try normal pages
 
+
 		if (strcmp(FN, "/") == 0)
 			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/%s/index.html", BPQDirectory, APRSDir, HTDocs);
 		else
 			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/%s%s", BPQDirectory,APRSDir, HTDocs, &FN[5]);
 	
-		hFile = fopen(MsgFile, "rb");
+		// My standard page set is now hard coded
 
-		if (hFile == NULL)
+
+
+		MsgBytes = SaveMsgBytes = GetStandardPage(&FN[6], &FileSize);
+
+		if (MsgBytes)
 		{
-			HeaderLen = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
-			send(sockptr->sock, Header, HeaderLen, 0); 
-			return;
+			if (FileSize == 0)
+				FileSize = strlen(MsgBytes);
+		}
+		else
+		{
+			hFile = fopen(MsgFile, "rb");
 
+			if (hFile == NULL)
+			{
+				HeaderLen = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+				send(sockptr->sock, Header, HeaderLen, 0); 
+				return;
+			}
 		}
 	}
 	else
 		Special = TRUE;
 
-	if (stat(MsgFile, &STAT) == 0)
-		FileSize = STAT.st_size;
+	if (FileSize == 0)				// Not from internal template
+	{
+		if (stat(MsgFile, &STAT) == 0)
+			FileSize = STAT.st_size;
 
-	MsgBytes = SaveMsgBytes = malloc(FileSize+1);
+		MsgBytes = SaveMsgBytes = malloc(FileSize+1);
 
-	fread(MsgBytes, 1, FileSize, hFile); 
+		fread(MsgBytes, 1, FileSize, hFile); 
 
-	fclose(hFile);
+		fclose(hFile);
+	}
 
 	// if HTML file, look for ##...## substitutions
 
@@ -7924,3 +7941,4 @@ VOID APRSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	}
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
+

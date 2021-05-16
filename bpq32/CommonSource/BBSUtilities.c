@@ -8742,6 +8742,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveStringValue(group, "AMPRDomain", AMPRDomain);
 	SaveIntValue(group, "EnableUI", EnableUI);
 	SaveIntValue(group, "RefuseBulls", RefuseBulls);
+	SaveIntValue(group, "OnlyKnown", OnlyKnown);
 	SaveIntValue(group, "SendSYStoSYSOPCall", SendSYStoSYSOPCall);
 	SaveIntValue(group, "SendBBStoSYSOPCall", SendBBStoSYSOPCall);
 	SaveIntValue(group, "DontHoldNewUsers", DontHoldNewUsers);
@@ -9087,6 +9088,7 @@ BOOL GetConfig(char * ConfigName)
 	EnableUI =  GetIntValue(group, "EnableUI");
 	MailForInterval =  GetIntValue(group, "MailForInterval");
 	RefuseBulls =  GetIntValue(group, "RefuseBulls");
+	OnlyKnown =  GetIntValue(group, "OnlyKnown");
 	SendSYStoSYSOPCall =  GetIntValue(group, "SendSYStoSYSOPCall");
 	SendBBStoSYSOPCall =  GetIntValue(group, "SendBBStoSYSOPCall");
 	DontHoldNewUsers =  GetIntValue(group, "DontHoldNewUsers");
@@ -9492,13 +9494,24 @@ int Connected(int Stream)
 			if (user == NULL)
 			{
 				int Length=0;
-				char * MailBuffer = malloc(100);
+
+				if (OnlyKnown)
+				{
+					// Unknown users not allowed
+
+					n = sprintf_s(Msg, sizeof(Msg), "Incoming Connect from unknown user %s Rejected", callsign);
+					WriteLogLine(conn, '|',Msg, n, LOG_BBS);
+
+					Disconnect(Stream);
+					return 0;
+				}
 
 				user = AllocateUserRecord(callsign);
 				user->Temp = zalloc(sizeof (struct TempUserInfo));
 
 				if (SendNewUserMessage)
 				{
+					char * MailBuffer = malloc(100);
 					Length += sprintf(MailBuffer, "New User %s Connected to Mailbox on Port %d Freq %d Mode %d\r\n", callsign, port, Freq, Mode);
 
 					sprintf(Title, "New User %s", callsign);

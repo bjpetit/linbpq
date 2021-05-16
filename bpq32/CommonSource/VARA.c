@@ -1741,7 +1741,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			{
 				if (CheckExcludeList(SESS->L4USER) == FALSE)
 				{
-					char Status[32];
+					char Status[64];
 
 					TidyClose(TNC, 0);
 					sprintf(Status, "%d SCANSTART 15", TNC->Port);
@@ -1750,6 +1750,33 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					return;
 				}
 			}
+
+			//	IF WE HAVE A PERMITTED CALLS LIST, SEE IF HE IS IN IT
+
+			if (TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS)
+			{
+				UCHAR * ptr = TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS;
+
+				while (TRUE)
+				{
+					if (memcmp(SESS->L4USER, ptr, 6) == 0)	// Ignore SSID
+						break;
+
+					ptr += 7;
+
+					if ((*ptr) == 0)							// Not in list
+					{
+						char Status[64];
+
+						TidyClose(TNC, 0);
+						sprintf(Status, "%d SCANSTART 15", TNC->Port);
+						Rig_Command(-1, Status);
+						Debugprintf("VARA Call from %s not in ValidCalls - rejected", Call);
+						return;
+					}
+				}
+			}
+
 
 			// See which application the connect is for
 
@@ -2232,7 +2259,7 @@ BOOL CALLBACK EnumVARAWindowsProc(HWND hwnd, LPARAM  lParam)
 
 	n = GetWindowText(hwnd, wtext, 127);
 
-	if (memcmp(wtext,"VARA HF", 7) == 0)
+	if (memcmp(wtext,"VARA", 4) == 0)
 	{
 		GetWindowThreadProcessId(hwnd, &ProcessId);
 
@@ -2240,9 +2267,18 @@ BOOL CALLBACK EnumVARAWindowsProc(HWND hwnd, LPARAM  lParam)
 		{
 			 // Our Process
 
+			char msg[512];
+			char ID[64] = "";
+			int i = 29;
+
+			memcpy(ID, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION, 30);
+
+			while (ID[i] == ' ')
+				ID[i--] = 0;
+
 			wtext[n] = 0;
-			sprintf (wtext, "%s- BPQ %s", wtext, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-			SetWindowText(hwnd, wtext);
+			sprintf (msg, "BPQ %s - %s", ID, wtext);
+			SetWindowText(hwnd, msg);
 			return FALSE;
 		}
 	}

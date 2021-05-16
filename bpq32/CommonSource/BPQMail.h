@@ -1355,6 +1355,7 @@ extern BOOL LogBBS;
 extern BOOL LogCHAT;
 extern BOOL LogTCP;
 extern BOOL ForwardToMe;
+extern BOOL OnlyKnown;
 
 extern BOOL AllowAnon;
 extern BOOL UserCantKillT;

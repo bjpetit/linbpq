@@ -1590,6 +1590,7 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		GetCheckBox(input, "UserCantKillT=", &UserCantKillT);
 		UserCantKillT = !UserCantKillT;	// Reverse Logic
 		GetCheckBox(input, "FWDtoMe=", &ForwardToMe);
+		GetCheckBox(input, "OnlyKnown=", &OnlyKnown);
 
 		GetParam(input, "POP3Port=", Temp);
 		POP3InPort = atoi(Temp);
@@ -2437,6 +2438,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		(DontNeedHomeBBS) ? CHKD  : UNC, 
 		(UserCantKillT) ? UNC : CHKD,		// Reverse logic
 		(ForwardToMe) ? CHKD  : UNC,
+		(OnlyKnown) ? CHKD  : UNC,
 		POP3InPort, SMTPInPort, NNTPInPort,
 		(RemoteEmail) ? CHKD  : UNC,
 		AMPRDomain,

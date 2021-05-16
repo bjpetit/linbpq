@@ -1734,7 +1734,7 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 	if (connect(TNC->TCPSock,(struct sockaddr *) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
 	{
 		//
-		//	Connected successful
+		//	Connect successful
 		//
 
 		TNC->CONNECTED=TRUE;

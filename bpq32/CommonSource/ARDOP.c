@@ -3138,7 +3138,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			{
 				if (CheckExcludeList(SESS->L4USER) == FALSE)
 				{
-					char Status[32];
+					char Status[64];
 
 					TidyClose(TNC, 0);
 					sprintf(Status, "%d SCANSTART 15", TNC->Port);
@@ -3147,6 +3147,33 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					return;
 				}
 			}
+
+			//	IF WE HAVE A PERMITTED CALLS LIST, SEE IF HE IS IN IT
+
+			if (TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS)
+			{
+				UCHAR * ptr = TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS;
+
+				while (TRUE)
+				{
+					if (memcmp(SESS->L4USER, ptr, 6) == 0)	// Ignore SSID
+						break;
+
+					ptr += 7;
+
+					if ((*ptr) == 0)							// Not in list
+					{
+						char Status[64];
+
+						TidyClose(TNC, 0);
+						sprintf(Status, "%d SCANSTART 15", TNC->Port);
+						Rig_Command(-1, Status);
+						Debugprintf("ARDOP Call from %s not in ValidCalls - rejected", Call);
+						return;
+					}
+				}
+			}
+
 
 			// See which application the connect is for
 
@@ -4976,6 +5003,29 @@ tcpHostFrame:
 						return 0;
 					}
 				}
+
+				//	IF WE HAVE A PERMITTED CALLS LIST, SEE IF HE IS IN IT
+
+				if (TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS)
+				{
+					UCHAR * ptr = TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS;
+
+					while (TRUE)
+					{
+						if (memcmp(SESS->L4USER, ptr, 6) == 0)	// Ignore SSID
+							break;
+
+						ptr += 7;
+
+						if ((*ptr) == 0)							// Not in list
+						{
+							TidyClose(TNC, 0);
+							Debugprintf("ARDOP Packet Call from %s not in ValidCalls - rejected", Call);
+							return 0;
+						}
+					}
+				}
+
 
 				// See which application the connect is for
 	

@@ -723,6 +723,8 @@ typedef struct TNCINFO
 
 	struct HSMODEMINFO * HSModemInfo;
 
+	int DontRestart;					// Don't automatically restart failed TNC
+
 } *PTNCINFO;
 
 VOID * zalloc(int len);

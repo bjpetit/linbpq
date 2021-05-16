@@ -858,8 +858,9 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
 
 		if (PORT->sock == INVALID_SOCKET)
 		{
-			WritetoConsole("AXIP Failed to create RAW socket\n");
 			err = WSAGetLastError();
+			sprintf(Msg, "AXIP Failed to create RAW socket - Error %d\n", err);
+			WritetoConsole(Msg);
 		}
 		else
 		{

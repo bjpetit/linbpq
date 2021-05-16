@@ -14,7 +14,7 @@ VOID GetVersionInfo(TCHAR * File)
 	strcat(isDebug, SPECIALVERSION);
 #endif
 #ifdef _DEBUG 
-	strcat(isDebug, "Debug Build");
+	strcat(isDebug, "Debug Build ");
 #endif
 
 	sprintf(VersionString,"%d.%d.%d.%d %s", Ver[0], Ver[1], Ver[2], Ver[3], isDebug);

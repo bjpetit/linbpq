@@ -623,7 +623,7 @@ static RestartTNC(struct TNCINFO * TNC)
 	SInfo.cbReserved2=0; 
   	SInfo.lpReserved2=NULL; 
 
-	if (TNC->ProgramPath)
+	if (TNC->ProgramPath && TNC->DontRestart == 0)
 	{
 		strcpy(HomeDir, TNC->ProgramPath);
 		i = strlen(HomeDir);

@@ -36,7 +36,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //#include "SHELLAPI.H"
 
 #include "CHeaders.h"
-#include "bpqaprs.h"
+#include "BPQAPRS.h"
 
 #pragma pack()
 
@@ -2202,6 +2202,9 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 		}
 		
 		CONNECTPORT = Port;
+
+		if (strcmp(ptr, "CMS") == 0 || strcmp(ptr, "HOST") == 0)	// In case someeone has CMS or HOST as an alias
+			goto Downlink;
 	
 	}
 

@@ -88,12 +88,15 @@ char * strlop(char * buf, char delim)
 {
 	// Terminate buf at delim, and return rest of string
 
-	char * ptr = strchr(buf, delim);
+	char * ptr;
+	
+	if (buf == NULL) return NULL;		// Protect
+	
+	ptr = strchr(buf, delim);
 
 	if (ptr == NULL) return NULL;
 
-	*(ptr)++=0;
-
+	*(ptr)++ = 0;
 	return ptr;
 }
 
