@@ -1,43 +1,126 @@
+<!-- Nodemap using my map servers -->
 
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3c.org/TR/1999/REC-html401-19991224/loose.dtd">
-<HTML xml:lang="en" xmlns="http://www.w3.org/1999/xhtml"><HEAD><TITLE>Packet Network Display</TITLE>
+<HTML xml:lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<HEAD>
+<link rel='shortcut icon' type='image/x-icon' href='favicon.ico' />
+<TITLE>Packet Network Display</TITLE>
 <META content="text/html; charset=windows-1252" http-equiv=Content-Type>
 <STYLE type=text/css> 
 
+<style type="text/css">
+
+body {background: white;color: black}
+h1 {color: #c33;background: none;font-weight: bold;text-align: center}
+h2 {background: none;font-weight: bold}
+h3 {background: none;font-weight: bold}
+h4 {font-weight: bold}
+h5 {font-weight: bold}
+
+/* Style the tab */
+.tab {
+  overflow: hidden;
+ // border: 1px solid #ccc;
+//  background-color: #f1f1f1;
+}
+
+/* Style the buttons that are used to open the tab content */
+.tab button {
+  background-color: inherit;
+  float: left;
+  border: 1;
+  font-size: 1.0em;
+  outline: none;
+  cursor: pointer;
+  padding: 4px 4px;
+  transition: 0.3s;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+  background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab button.active {
+  background-color: #ccc;
+}
+
+/* Style the tab content */
+.tabcontent {
+//  display: none;
+//  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-top: none;
+}
+#newDiv
+{
+	position: absolute;
+	top: 70px;
+	left: 10px;
+	height: 35px;
+}
 #main
 {
 	position: absolute;
-	top: 120px;
+	top: 170px;
 	left: 10px;
-	width: 800px;
-	height: 600px;
 }
 #selcall
 {
 	position: absolute;
-	top: 710px;
+	top: 70px;
 	left: 10px;
-	width: 800px;
-	height: 25px;
+	height: 35px;
 }
 #detail
 {
 	position: absolute;
-	top: 820px;
+	top: 170px;
 	left: 10px;
-	width: 800px;
-	height: 600px;
 }
  
+#linkhddr
+{
+	font-size: 1.0em;
+	position: absolute;
+	top: 70px;
+	left: 10px;
+	height: 25px;
+}
+
+#detail3
+{
+	position: absolute;
+	top: 170px;
+	left: 10px;
+}
 #map
 {
 	position: absolute;
 	left: 100px;
+	border-right: #888 2px solid;
+	border-top: #888 2px solid;
+	border-left: #888 2px solid;
+	border-bottom: #888 2px solid;
 }
 #map2
 {
 	position: absolute;
 	left: 100px;
+	border-right: #888 2px solid;
+	border-top: #888 2px solid;
+	border-left: #888 2px solid;
+	border-bottom: #888 2px solid;
+}
+#map3
+{
+	position: absolute;
+	left: 100px;
+	border-right: #888 2px solid;
+	border-top: #888 2px solid;
+	border-left: #888 2px solid;
+	border-bottom: #888 2px solid;
 }
 #sidebar
 {
@@ -61,19 +144,25 @@
 	width: 90px;
 	height: 600px;
 }
+#sidebar3
+{
+ position: absolute;
+	top: 0px;
+	left: 3px;
+	width: 90px;
+	height: 600px;
+}
 #sidebar2 table
 {
 	width: 77px;
 	margin-left: 0px;
 	margin-right: 0px;
 }
- 
-#map
+#sidebar3 table
 {
-	border-right: #888 2px solid;
-	border-top: #888 2px solid;
-	border-left: #888 2px solid;
-	border-bottom: #888 2px solid;
+	width: 77px;
+	margin-left: 0px;
+	margin-right: 0px;
 }
  
 #sidebar
@@ -89,6 +178,7 @@
 }
  
 #sidebar table{font-size: 1.2em;}
+
 #sidebar2
 {
 	font-size: 0.7em;
@@ -103,7 +193,21 @@
  
 #sidebar2 table{font-size: 1.2em;}
  
-</STYLE>
+#sidebar3
+{
+	font-size: 0.7em;
+	background-color: #f9fbfd;
+	border-bottom: #888 1px solid;
+	border-left: #888 1px solid;
+	border-right: #888 1px solid;
+	border-top: #888 1px solid;
+	overflow: auto;
+	padding-left: 3px;
+}
+ 
+#sidebar3 table{font-size: 1.2em;}
+
+ </STYLE>
  
  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css" integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA==" crossorigin=""/>
 
@@ -114,33 +218,35 @@
 <SCRIPT type=text/javascript> 
 //<![CDATA[
 
+var url1 = 'http://server1.g8bpq.net:7381/styles/klokantech-basic/{z}/{x}/{y}.png';
+
 var Zoom = 2;
 var NodesFile = "NodeStatus.txt";
-var map;
-var mymap, mymap2
-var map2;
+var map, map2, map3;
+var mymap, mymap2, mymap3
 var SelectedCall = "";
+var SelectedLat = "";
+var SelectedLon = "";
 var redicon;
 var greenicon;
+var blueicon;
 var pointx;
 var point2x;
 var Mouse;
 var myHtml;
-var Selected;
-var CodeInfo = "Codes in popup are: A - Winmor, G- Robust Packet, H - V4, I - UZ7HO, M - ARDOP, N - VARA, others Pactor.<br> + connected ! heard W/N Wide or Narrow modes I/O In or Outbound Connects";
+var SelectedLinks;
+var KissOnly = 0;
+var linkmode;
+
+var CodeInfo = "Codes in popup are: A - Winmor, G - Robust Packet, H - V4, I - UZ7HO, M - ARDOP, N - VARA,  Q - WinRPR, others Pactor.<br> + connected ! heard W/N Wide or Narrow modes I/O In or Outbound Connects<br>Stations without positions are not plotted on the map and are shown without a link";
  
 function initialize()
 {	
-	newDiv = document.createElement("div");
-	newDiv.innerHTML = "<h3>Waiting for Data...</h3>";
-	document.body.insertBefore(newDiv, document.getElementById("main"));
+	var x = document.getElementById("sellinks");
+	SelectedLinks = x;
 	
-	Selected = document.createElement("div");
-	Selected.id="selcall";
+	linkmode = document.getElementById("linktext");
 	
-	Selected.innerHTML = "<h4>Nothing Selected...</h4>" + CodeInfo;
-	document.body.insertBefore(Selected, document.getElementById("detail"));
-		
 	greenicon = L.icon(
 	{
 		iconUrl: 'greenmarker.png',
@@ -157,58 +263,137 @@ function initialize()
 		popupAnchor:  [-3, -20] // point from which the popup should open relative to the iconAnchor
 	});
 				
+	blueicon = L.icon(
+	{
+		iconUrl: 'bluemarker.png',
+		iconSize:     [15, 20], // size of the icon
+		iconAnchor:   [7, 20], // point of the icon which will correspond to marker's location
+		popupAnchor:  [-3, -20] // point from which the popup should open relative to the iconAnchor
+	});
 
 	loadMap();
 	loadMap2();
+	loadMap3();
+	
 	GetData();
+	document.getElementById("button1").click();
+	resize();
 }
 
+var myLayer;
+var myLayer2;
+var myLayer3;
 var layergroup;
 var layergroup2;
+var layergroup3;
 
 var latlng = L.latLng(40, -40);
 var latlng2 = L.latLng(40, -40);
+var latlng3 = L.latLng(40, -40);
 
 var Zoom = 2;
 var Zoom2 = 2;
+var Zoom3 = 2;
+
+
 
 function loadMap() {
 
 	mymap = L.map(document.getElementById("map")).setView(latlng, Zoom);
 
-	L.tileLayer('http://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f', {
+	myLayer = L.tileLayer(url1, {
 		maxZoom: 18,
 		attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
 			'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
-			'Imagery &copy; <a href="http://thunderforest.com/">thunderforest.com</a>',
+			'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',
 		id: 'mapbox.streets'
 	}).addTo(mymap);
+
 	
+	myLayer.on('tileerror', function(error, tile)
+	{
+		url1 = 'http://server2.g8bpq.net:7381/styles/klokantech-basic/{z}/{x}/{y}.png';
+
+		myLayer = L.tileLayer(url1,
+		{
+			maxZoom: 18,
+			attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> 	 contributors, ' +
+				'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+				'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',
+			id: 'mapbox.streets'
+		}).addTo(mymap);
+	
+	});
 	layergroup = L.layerGroup().addTo(mymap); 
+
 }
 
- 
+
 function loadMap2() {
 
 	mymap2 = L.map(document.getElementById("map2")).setView(latlng2, Zoom2);
 
-		L.tileLayer('http://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f', {
+	myLayer2 = 	L.tileLayer(url1,
+	{
 		maxZoom: 18,
 		attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
 			'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
-			'Imagery &copy; <a href="http://thunderforest.com/">thunderforest.com</a>',
-		id: 'mapbox.streets'
+			'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',		id: 'mapbox.streets'
 	}).addTo(mymap2);
+	
+	myLayer2.on('tileerror', function(error, tile)
+	{		
+		url1 = 'http://server2.g8bpq.net:7381/styles/klokantech-basic/{z}/{x}/{y}.png';
+
+		myLayer2 = L.tileLayer(url1,
+		{
+			maxZoom: 18,
+			attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> 	 contributors, ' +
+				'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+				'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',
+			id: 'mapbox.streets'
+		}).addTo(mymap2);
+
+	});
 	
 	layergroup2 = L.layerGroup().addTo(mymap2); 
 }
  
+ function loadMap3() {
+
+	mymap3 = L.map(document.getElementById("map3")).setView(latlng3, Zoom3);
+
+	myLayer3 = 	L.tileLayer(url1,
+	{
+		maxZoom: 18,
+		attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+			'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+			'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',		id: 'mapbox.streets'
+	}).addTo(mymap3);
+	
+	myLayer3.on('tileerror', function(error, tile)
+	{		
+		url1 = 'http://server2.g8bpq.net:7381/styles/klokantech-basic/{z}/{x}/{y}.png';
+
+		myLayer3 = L.tileLayer(url1,
+		{
+			maxZoom: 18,
+			attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> 	 contributors, ' +
+				'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+				'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',
+			id: 'mapbox.streets'
+		}).addTo(mymap3);
+
+	});
+	
+	layergroup3 = L.layerGroup().addTo(mymap3); 
+}
  
 var NodeList;
  
 function GetData()
 {
-	$.ajax({url: "NodeStatus.txt", cache: false})
+	$.ajax({url: "nodestatus.txt", cache: false})
 	.done(function(Nodes){NodeList = Nodes;processData(NodeList);})	
 	.fail(function(jqXHR, textStatus, errorThrown){alert("Failed to load Node data");})
 //	.always(function() {alert( "finished" );})
@@ -217,6 +402,9 @@ function GetData()
 
 function processData(Nodes)
 {
+	var first1 = 1;
+	var first2 = 1;
+	
   // Save map centre and zoom
 	
 	latlng = mymap.getCenter();
@@ -226,7 +414,8 @@ function processData(Nodes)
 	
 	layergroup.clearLayers();
 	layergroup2.clearLayers();
-		
+	layergroup3.clearLayers();
+			
 	var lines = Nodes.split("|");
 	
 	var i = 1;
@@ -237,13 +426,27 @@ function processData(Nodes)
 	var infoArea2 = document.getElementById("sidebar2"); 
 	var strInfo2 = '<table>';
 	
+	var infoArea3 = document.getElementById("sidebar3"); 
+	var strInfo3 = '<table>';
+
 	// First line is a timestamp
 				
-	newDiv.innerHTML = "<h4>Last Updated " + lines[0] + "</h4>" + "Note Stations are plotted randomly in the Grid square, and frequencies aee shown as centre, not dial.<br>Calls shown in red have reported HF connections.<br>Click on a Call to zoom in, and show on the lower map the stations that call has heard";
+	newDiv.innerHTML = "<span style=font-size: 1.1em;><b>Last Updated " + lines[0] + "</b></span>" + "<br><br>Note Stations are plotted randomly in the Grid square, and frequencies are shown as centre, not dial.<br>Calls shown in red have reported HF connections. Blue Icons indicate stations that have only been heard and may not be BPQ nodes.<br>Click on a Call to zoom in, and show on the Heard map the stations that call has heard";
 			
+	
 	lines.sort();
-						
-	while(i < lines.length)
+
+	var calls = [];
+	var lats = [];
+	var lons = [];
+	var states = [];
+	var heards = [];
+	var heardbys = [];
+
+
+	// First scan to get all calls, posns, etc
+		
+	while (i < lines.length)
 	{
 		if (lines[i].length < 5)
 		{
@@ -253,7 +456,43 @@ function processData(Nodes)
 				
 		var elements = lines[i].split(",")
 							
-		// Either a Node, or Heard station
+		// Either a Node, Link or Heard station
+				
+		if (elements[0].length < 2 || elements[0].length > 12)
+		{
+			i = i + 1;
+			continue;
+		}
+				
+		if (elements[0] == "MH" || elements[0] == "Link")
+		{
+			i = i + 1;
+			continue;
+		}
+		
+		calls.push(elements[0]);
+		lats.push(elements[2]);
+		lons.push(elements[1]);
+		states.push(elements[3]);
+		heards.push(elements[7]);
+		heardbys.push(elements[8]);
+
+		i=i+1;
+	}
+	
+	i = 1;
+
+	while (i < lines.length)
+	{
+		if (lines[i].length < 5)
+		{
+		   i = i + 1;
+		   continue;
+		}
+				
+		var elements = lines[i].split(",")
+							
+		// Either a Node, Link or Heard station
 				
 		if (elements[0].length < 2 || elements[0].length > 12)
 		{
@@ -277,6 +516,101 @@ function processData(Nodes)
 				.on('mouseout', function (e) {this.closePopup();});
 			}  
 		}
+		else if (elements[0] == "Link")
+		{
+			//Link,AB0AF-7,VK2IO-1,33.754676,-117.003963,-33.738500,150.985300,green,
+			
+			if (KissOnly == 1 && elements[7] != "blue")
+			{
+				i = i + 1;
+				continue;
+			}
+	
+			if (elements[1] == SelectedCall || elements[2] == SelectedCall || SelectedCall == "")
+			{
+				var colour;
+				var clink;
+				
+				if (strInfo3.indexOf(elements[2]) == -1)
+				{
+					var Param = elements[5] + "/" + elements[6]	 + "/" + elements[2];
+
+					if (elements[5] == "0.000000" && elements[6] == "0.000000")	
+					{
+						clink = elements[2];
+					}
+					else
+					{
+						L.marker([elements[5], elements[6]] ,{icon: greenicon, title: elements[2]})
+						.addTo(layergroup3)
+						.bindPopup(elements[2])
+						.on('click', function (e) {FindNodeFromLatLon(this.getLatLng());})
+						.on('mouseover', function (e) {this.openPopup();})
+						.on('mouseout', function (e) {this.closePopup();});
+						clink = '<a href=javascript:ZoomTo3("' + Param + '")>' + elements[2] + '</a>'
+					}
+					
+					var tableRow = '<tr><td>' + clink + '</td></tr>\n';	 
+					strInfo3 += tableRow;		
+				}
+				
+				if (strInfo3.indexOf(elements[1]) == -1)
+				{
+					var Param = elements[3] + "/" + elements[4] + "/" + elements[1];	
+					
+					// if no position don't add icon and use plain text for list entry
+					
+					if (elements[3] == "0.000000" && elements[4] == "0.000000")	
+					{
+						clink = elements[1];
+					}
+					else
+					{
+						L.marker([elements[3], elements[4]] ,{icon: greenicon, title: elements[2]})
+						.addTo(layergroup3)
+						.bindPopup(elements[1])
+						.on('click', function (e) {FindNodeFromLatLon(this.getLatLng());})
+						.on('mouseover', function (e) {this.openPopup();})
+						.on('mouseout', function (e) {this.closePopup();});
+					
+						clink = '<a href=javascript:ZoomTo3("' + Param + '")>' + elements[1] + '</a>';
+					}
+						
+					var tableRow = '<tr><td>' + clink + '</td></tr>\n';	 
+					strInfo3 += tableRow;
+				}
+				
+				// Dont draw line if one end is at 0, 0
+				
+				if (elements[7] == "red")		// Don't draw
+				{
+					i = i + 1;
+					continue;
+				}
+
+				pointx = L.latLng(elements[3], elements[4]);
+				point2x = L.latLng(elements[5], elements[6]);
+					
+				var latlngs = [point2x, pointx];
+							
+				if (elements[7] == "blue")		// Down - Black
+					colour = "#0000ff";
+				else
+					colour =  "#00ff00";
+								
+				dist = pointx.distanceTo(point2x) / 1609.34;
+								
+				L.polyline(latlngs, {color: colour}).addTo(layergroup3)
+				.bindPopup(elements[2] + "<br>Distance " + dist.toFixed(0) + " Miles")
+				.on('click', function (e) {FindNodeFrom
+				LatLon(this.getLatLng());})
+				.on('mouseover', function (e) {this.openPopup(mouselatlng);})
+				.on('mouseout', function (e) {this.closePopup();});
+			
+			}
+				
+			  
+		}
 		else // Node
 		{
 			// Element 0 is call
@@ -292,42 +626,167 @@ function processData(Nodes)
 					
 			strInfo += tableRow;
 					
-			if (elements[3] == 'redmarker.png')
+			if (elements[3] == 'R')
 				var Icon = redicon;
+			else if (elements[3] == 'G')
+				var Icon = greenicon;
+			else if (elements[3] == 'B')
+				var Icon = blueicon;
 			else
-				var Icon  = greenicon;
-		
+			{
+				i = i + 1;
+				continue;
+			}
+	
 			L.marker([elements[2], elements[1]], {icon: Icon})
 			.addTo(layergroup).bindPopup(elements[5])
+			.on('click', function (e) {FindNodeFromLatLon(this.getLatLng());})
 			.on('mouseover', function (e) {this.openPopup();})
 			.on('mouseout', function (e) {this.closePopup();});
 
 			if (elements[0] == SelectedCall)
 			{
-				L.marker([elements[2], elements[1]], {icon: Icon})
-					.addTo(layergroup2).bindPopup(elements[5])
-					.on('mouseover', function (e) {this.openPopup();})
-					.on('mouseout', function (e) {this.closePopup();});
+				// Add Selected station to lower map (Heard/Heard By)
+				
+				// Also add any stations heard/heard by that we don't already have
+				
+				if (strInfo2.indexOf(elements[0]) == -1)
+				{
+					if (elements[3] == 'R')
+						var Icon = redicon;
+					else if (elements[3] == 'B')
+						var Icon = blueicon;
+					else
+						var Icon = greenicon;
+		
+					L.marker([elements[2], elements[1]], {icon: Icon})
+						.addTo(layergroup2).bindPopup(elements[7], {maxHeight: 200})
+						.on('mouseover', function (e) {this.openPopup();});
+					//	.on('mouseout', function (e) {this.closePopup();});
+			
+			
+					var Param = elements[2] + "/" + elements[1]			
+					var clink = '<a href=javascript:ZoomTo2("' + Param + '")>' + elements[0] + '</a>';
+					var tableRow = '<tr><td>' + clink + '</td></tr>\n';	 
+					strInfo2 += tableRow;
+				}
+				
+				var hcalls = elements[8].split("%");
+				var c = 0;
+				
+				hcalls.sort();
+				
+				while (c < hcalls.length)
+				{
+					var ixx = calls.indexOf(hcalls[c]);
+						
+					if (ixx > -1)
+					{
+						if (strInfo2.indexOf(hcalls[c]) == -1)
+						{
+							// only add marker if position known
+														
+							if (lats[ixx] != 0.000000 && lons[ixx] != 0.000000)
+							{
+								if (states[ixx] == 'G')
+									var Icon = greenicon;
+								else if (states[ixx] == 'B')
+									var Icon = blueicon;
+								else
+									var Icon = redicon;
+									
+								L.marker([lats[ixx], lons[ixx]], {icon: Icon})
+									.addTo(layergroup2).bindPopup(heards[ixx], {maxHeight: 200})
+									.on('mouseover', function (e) {this.openPopup();});
+							//		.on('mouseout', function (e) {this.closePopup();});
+							}
+			
+							var Param = lats[ixx] + "/" + lons[ixx]		
+						
+							if (lats[ixx] != 0.000000 && lons[ixx] != 0.000000)
+								var clink = '<a href=javascript:ZoomTo2("' + Param + '")>' + hcalls[c] + '</a>';
+							else
+								var clink = hcalls[c];
+								
+							var tableRow = '<tr><td>' + clink + '</td></tr>\n';	 
+							strInfo2 += tableRow;
+						}
+					}						
+					c++;
+				}
 			}
-		}
+		}		
+
 		i=i+1;
 	}
 			
 	infoArea.innerHTML = strInfo + "</table>"; 
 	infoArea2.innerHTML = strInfo2 + "</table>"; 
+	infoArea3.innerHTML = strInfo3 + "</table>"; 
 			
 	mymap.setView(latlng);
 }
 
+function setSelectedText()
+{
+	if (SelectedCall == "")
+	{
+		selcall.innerHTML = "<h3><b>Nothing Selected</b></h3>" + CodeInfo;
+	
+		if (KissOnly)
+			SelectedLinks.innerHTML = "<b>All KISS Node to Node Links. </b>";
+		else
+			SelectedLinks.innerHTML = "<b>All Node to Node Links. </b>";
+	}
+	
+	else
+	{
+		selcall.innerHTML = "<span style=font-size: 1.2em;><b>" + SelectedCall + "</b></span><br><br>" + CodeInfo;
+
+		if (KissOnly)
+			SelectedLinks.innerHTML = "<b> KISS Links to " + SelectedCall + ". </b>" ;
+		else
+			SelectedLinks.innerHTML = "<b> All Links to " + SelectedCall + ". </b>" ;
+	}
+}
+
+function resetMap()
+{
+	SelectedCall = "";
+	setSelectedText();
+	
+	mymap3.setView(latlng3, 3);
+		
+	processData(NodeList);
+}
+
+function toggleKISS()
+{	
+	KissOnly = !KissOnly;
+	
+	if (KissOnly)
+		linkmode.innerHTML = "Show all Links";
+	else
+		linkmode.innerHTML = "Show only KISS Links";
+		
+	setSelectedText();	
+	processData(NodeList);
+}
+	
 function ZoomTo(LatLon)
 {
 	var ll = LatLon.split("/")
 	SelectedCall = ll[2];
-	Selected.innerHTML = "<h3><b>" + SelectedCall + "</b></h3>" + CodeInfo;
-
+	SelectedLat = ll[0];
+	SelectedLon = ll[1];
+	
+	setSelectedText();
+	
 	latlng = L.latLng(ll[0], ll[1]);
 	Zoom = 7;
 	mymap.setView(latlng, Zoom);
+	mymap2.setView(latlng, 5);
+	mymap3.setView(latlng, 5);
 
 	processData(NodeList);
 }
@@ -342,6 +801,92 @@ function ZoomTo2(LatLon)
 	mymap2.setView(latlng2, Zoom2);
 	
 }
+
+function ZoomTo3(LatLon)
+{
+	var ll = LatLon.split("/")
+
+	latlng3 = L.latLng(ll[0], ll[1]);
+	
+	Zoom3 = 7;
+
+	mymap3.setView(latlng3, Zoom3);	
+
+	// Also Select it
+	
+	SelectedCall = ll[2];
+	SelectedLat = ll[0];
+	SelectedLon = ll[1];
+	
+	setSelectedText();
+
+	latlng = L.latLng(ll[0], ll[1]);
+	Zoom = 7;
+	mymap.setView(latlng, Zoom);
+
+	processData(NodeList);
+	
+}
+
+function FindNodeFromLatLon(LatLon)
+{	
+	var lat = LatLon.lat;
+	var lon = LatLon.lng;
+	
+	var lines = NodeList.split("|");
+	
+	var i = 1;
+	while(i < lines.length)
+	{
+		if (lines[i].length < 5)
+		{
+		   i = i + 1;
+		   continue;
+		}
+				
+		var elements = lines[i].split(",")
+							
+		// Either a Node, Link or Heard station
+				
+		if (elements[0].length < 2 || elements[0].length > 12)
+		{
+			i = i + 1;
+			continue;
+		}
+				
+		if (elements[0] == "MH")
+		{
+		}
+		else if (elements[0] == "Link")
+		{
+		}
+		else // Node
+		{
+			// Element 0 is call
+						
+			if (elements[1] == lon && elements[2] == lat)
+			{
+				// found it
+								
+				SelectedCall = elements[0];
+				SelectedLat = lat;
+				SelectedLon = lon;
+	
+				setSelectedText();
+				
+				mymap.setView(LatLon, 7);
+				mymap3.setView(LatLon, 5);
+				
+				latlng3 = LatLon;
+
+				processData(NodeList);
+				return;
+			}
+		}
+		i=i+1;
+	}
+}
+
 // Refresh map every 300 seconds
  
 setInterval ( "Refresh()", 300000 );
@@ -351,15 +896,128 @@ function Refresh ( )
 	GetData();
 }
 
+var currentTab;
+
+function openTab(evt, cityName) {
+  // Declare all variables
+  var i, tabcontent, tablinks;
+
+	currentTab = cityName;
+	
+  // Get all elements with class="tabcontent" and hide them
+  tabcontent = document.getElementsByClassName("tabcontent");
+  for (i = 0; i < tabcontent.length; i++) {
+    tabcontent[i].style.display = "none";
+  }
+
+  // Get all elements with class="tablinks" and remove the class "active"
+  tablinks = document.getElementsByClassName("tablinks");
+  for (i = 0; i < tablinks.length; i++) {
+    tablinks[i].className = tablinks[i].className.replace(" active", "");
+  }
+
+  // Show the current tab, and add an "active" class to the button that opened the tab
+  document.getElementById(cityName).style.display = "block";
+  evt.currentTarget.className += " active";
+  
+  var resizeEvent = new Event('resize');
+
+	window.dispatchEvent(resizeEvent);
+
+}
+
+function resize()
+{
+	if (currentTab == "Tab1")
+	{
+		$("#map").height($(window).height() - 190).width($(window).width() - 120);
+		$("#sidebar").height($(window).height() - 190);
+	}
+	else if (currentTab == "Tab2")
+	{
+		$("#map2").height($(window).height() - 190).width($(window).width() - 120);
+		$("#sidebar2").height($(window).height() - 190);
+    }
+	else if (currentTab == "Tab3")
+	{
+		$("#map3").height($(window).height() - 190).width($(window).width() - 120);
+		$("#sidebar3").height($(window).height() - 190);
+	}
+}
+	
+	
+//	<body onload='resize()' onresize='resize()'>
 
 //]]>
 </SCRIPT>
 
 <META name=GENERATOR content="MSHTML 8.00.6001.23515"></HEAD>
-<BODY onload=initialize()>
+<BODY onload=initialize() onresize='resize()'>
+<div style="font-size: 1.5em; text-align: center"><b>G8BPQ Network Maps</b></div>
+
+<div class="tab">
+  <button id=button1 class="tablinks" onclick="openTab(event, 'Tab1')">Nodes</button>
+  <button class="tablinks" onclick="openTab(event, 'Tab2')">Heard</button>
+  <button class="tablinks" onclick="openTab(event, 'Tab3')">Node Links</button>
+  <button class="tablinks" onclick="openTab(event, 'Tab4')">Chat Network</button>
+  <button class="tablinks" onclick="openTab(event, 'Tab5')">Chat Problems</button>
+</div>
+
+<div id="Tab1" class="tabcontent">
+
+<div id=newDiv>
+<h3>Waiting for Data...</h3>
+</div>
+
 <DIV id=main>
-<DIV style="WIDTH: 800px; HEIGHT: 600px" id=map></DIV>
-<DIV id=sidebar></DIV></DIV>
+	<DIV id=sidebar></DIV>
+	<DIV id=map></DIV>
+</DIV>
+
+</div>
+
+<div id="Tab2" class="tabcontent">
+
+<div id=selcall>
+<h3>Nothing Selected...</h3>
+</div>
+
 <DIV id=detail>
-<DIV style="WIDTH: 800px; HEIGHT: 600px" id=map2></DIV>
-<DIV id=sidebar2></DIV></DIV></BODY></HTML>
+	<DIV id=sidebar2></DIV>
+	<DIV id=map2></DIV>
+</DIV>
+
+</div>
+
+<div id="Tab3" class="tabcontent">
+
+<div id=linkhddr>	
+	<div style="font-size: 1.1em;">
+	<span id=sellinks><b>All Node to Node Links. </span>Click on an Icon or Callsign to show links to that call.</b><br>
+	</div>
+	<b>Stations without positions are not plotted on the map and are shown without a link</b><br><br>
+	<button onclick="resetMap()">Reset selected call</button>  
+	<button id=linktext onclick="toggleKISS()">Show only KISS Links</button>
+</div>
+
+<DIV id=detail3>
+	<DIV id=sidebar3></DIV>
+	<DIV id=map3></DIV>
+	
+</DIV>
+</div>
+
+<div id="Tab4" class="tabcontent">
+<iframe src="ChatNetwork.htm" title=""style="WIDTH: 100%; HEIGHT: 800px"></iframe>
+</div>
+
+<div id="Tab5" class="tabcontent">
+<iframe src="ChatErrors.html" title=""style="WIDTH: 100%; HEIGHT: 800px"></iframe>
+</div>
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,7 +1,8 @@
+<!-- Chatmap using my map servers -->
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"> 
 <head> 
-
+<link rel='shortcut icon' type='image/x-icon' href='favicon.ico' />
 <meta http-equiv="content-type" content="text/html; charset=UTF-8"/> 
 <title>Packet Network Display</title> 
 
@@ -17,9 +18,10 @@
 
 //<![CDATA[
 
-var NodesFile = "Status.txt";
+var NodesFile = "status.txt";
  
 var mymap;
+var myLayer;
 var pointx;
 var point2x;
 var layergroup;
@@ -27,6 +29,8 @@ var latlng = L.latLng(40, -40);
 var Zoom = 2;
 
 var mouselatlng;
+
+var url1 = 'http://server1.g8bpq.net:7381/styles/klokantech-basic/{z}/{x}/{y}.png';
 
 function initialize()
 {
@@ -42,13 +46,29 @@ function loadMap()
 {
 	mymap = L.map(document.getElementById("map")).setView(latlng, Zoom);
 
-	L.tileLayer('http://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f', {
+	myLayer = L.tileLayer(url1,
+	{
 		maxZoom: 16,
 		attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
 			'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
-			'Imagery Â© <a href="http://thunderforest.com/">thunderforest.com</a>',
+			'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',
 		id: 'mapbox.streets'
 	}).addTo(mymap);
+	
+	myLayer.on('tileerror', function(error, tile)
+	{
+		url1 = 'http://server2.g8bpq.net:7381/styles/klokantech-basic/{z}/{x}/{y}.png';
+
+		myLayer = L.tileLayer(url1,
+		{
+			maxZoom: 16,
+			attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> 	 contributors, ' +
+				'<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+				'Imagery &copy; <a href="https://openmaptiles.org//">OpenMapTimes</a>',
+			id: 'mapbox.streets'
+		}).addTo(mymap);
+	
+	});
 	
 	layergroup = L.layerGroup().addTo(mymap);
 	mymap.on('mousemove', function (e) {mouselatlng = e.latlng}); 
@@ -57,7 +77,7 @@ function loadMap()
 
 function GetData()
 {
-	$.ajax({url: "Status.txt", cache: false})
+	$.ajax({url: "status.txt", cache: false})
 	.done(function(Nodes){NodeList = Nodes;processData(NodeList);})	
 	.fail(function(jqXHR, textStatus, errorThrown){alert("Failed to load Node data");})
 //	.always(function() {alert( "finished" );})
@@ -83,7 +103,7 @@ function processData(text)
 		if (lines[i].length < 5) break;
 	
 		var elements = lines[i].split(",");
-				
+			
 		pointx = L.latLng(elements[2], elements[1]);
 	
 		// Either a Node, or a Line between nodes
@@ -108,7 +128,7 @@ function processData(text)
 			dist = pointx.distanceTo(point2x) / 1609.34;
 				
 			L.polyline(latlngs, {color: colour}).addTo(layergroup)
-			.bindPopup(elements[6] + "<br>Distance " + dist.toFixed(0) + " Miles")
+			.bindPopup(elements[6] + "<>" +elements[7] + "<br>Distance " + dist.toFixed(0) + " Miles")
 			.on('mouseover', function (e) {this.openPopup(mouselatlng);})
 			.on('mouseout', function (e) {this.closePopup();});
 		}
@@ -116,18 +136,24 @@ function processData(text)
 		{
 			// Node.
 			
+				
 			if (elements[3].indexOf(".ok.") > 1)
 				html = '<b style="background-color: lime;">' + elements[0] + '</b>'
 			else
 				html = '<b style="background-color: OrangeRed;">' + elements[0] + '</b>'
 		
+
 			var myIcon =  L.divIcon({className: 'my-div-icon', iconSize: new L.Point(70, 14), html: html});
 		
-			L.marker([elements[2], elements[1]], {icon: myIcon})
-				.addTo(layergroup).bindPopup(elements[5])
-				.on('mouseover', function (e) {this.openPopup();})
-				.on('mouseout', function (e) {this.closePopup();});
-
+			if (elements[4] == "0")		// popup mode
+				L.marker([elements[2], elements[1]], {icon: myIcon})
+					.addTo(layergroup).bindPopup(elements[5])
+					.on('mouseover', function (e) {this.openPopup();})
+					.on('mouseout', function (e) {this.closePopup();});
+			else
+				L.marker([elements[2], elements[1]], {icon: myIcon})
+					.addTo(layergroup).bindPopup(elements[5])
+					.on('mouseover', function (e) {this.openPopup();});
 		}
 		i=i+1;
 	}
@@ -149,15 +175,13 @@ function Refresh ( )
 
 </head>
 <body onload="initialize()" bgcolor="#0099CC" vlink="#000000" link="#000000" alink="#000000">
-<div id="map" style="width:100%px;height:615px"></div>
+<div id="map" style="width:100%;height:615px"></div>
 <center>
 
 <font color="#FFFFFF">Key - </font><b><font color="#00FF00"><u>Green</u></font></b><font color="#FFFFFF"> = Link up, reported from both ends. 
 </font><font color="#FFFF00"><u><b>Yellow</b></u> </font><font color="#FFFFFF">= Link up, reported from one end<br>
-</font><u><b>Black</b></u><font color="#FFFFFF"><b> </b>= Link Down, reported from both ends,
-</font><u><b><font color="#000099">Blue</font></b></u><font color="#000099">
-</font><font color="#FFFFFF">= Link Down, reported from one end.<br> A </font>
-<u><b><font color="#000099">Blue</font></b></u><font color="#FFFFFF"> link may indicate either a configuration mismatch, or one end isn't sending any reports.
+</font><u><b>Black</b></u><font color="#FFFFFF"><b> </b>= Link Down, reported from both ends. <br> Links that are down and only reported from one end are not displayed, but are shown on the error list
+</font><u><b>
 </font>
 <p><font color="#FFFF00">&nbsp;<a href="http://www.ve9sc.com"><font color="#FFFF00">VE9SC</font></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </font><font color="#FFFFFF">
 <a href="mailto:ve9sc@ve9sc.com?subject=BPQ BBS/Chat Node"><font color="#FFFF00">Email: ve9sc@ve9sc.com</font></a></font><font color="#FFFF00">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
