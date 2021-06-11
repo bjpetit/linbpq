@@ -154,7 +154,7 @@ typedef struct _TRANSPORTENTRY
 	VOID *	DUMPPTR;			// POINTER FOR REMOTnE DUMP MODE
 	VOID *	PARTCMDBUFFER;		//  Save area for incomplete commmand
 
-	int Frequency;				// If known - for CMS Reporting Hz
+	long long Frequency;		// If known - for CMS Reporting Hz
 	char RMSCall[10];
 	UCHAR Mode;					// ditto
 
@@ -517,7 +517,7 @@ struct WL2KInfo
 
 //	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
 
-	int Freq;
+	long long Freq;
 	char Bandwidth;
 //	char * TimeList;		// eg 06-10,12-15
 	int mode;              // see below (an integer)

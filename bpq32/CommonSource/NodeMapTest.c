@@ -1,5 +1,3 @@
-// ChatForward.cpp : Defines the entry point for the console application.
-//
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -62,49 +60,55 @@
 
 char * strupr(char* s)
 {
-  char* p = s;
+	char* p = s;
 
-  if (s == 0)
-	  return 0;
+	if (s == 0)
+		return 0;
 
-  while (*p = toupper( *p )) p++;
-  return s;
+	while (*p = toupper( *p )) p++;
+	return s;
 }
 
 char * strlwr(char* s)
 {
-  char* p = s;
-  while (*p = tolower( *p )) p++;
-  return s;
+	char* p = s;
+	while (*p = tolower( *p )) p++;
+	return s;
 }
 
 #endif
 
 struct ChatNodeData
 {
-	char Callsign[10];
+	char Call[10];
 	char NAlias[10];
 	double Lat;
 	double Lon;
+	double derivedLat;
+	double derivedLon;
 	int PopupMode;
-	char Comment[256];
-	int Count;
-	int Deleted;
-	int KillTimer;
+	char Comment[512];
+	int hasLinks;
+	int derivedPosn;
+	time_t LastHeard;
 };
 
 struct ChatLink
 {
-	char Call1[10];
-	char Call2[10];
-	int Call1State;
+	struct ChatNodeData * Call1;
+	struct ChatNodeData * Call2;
+	int Call1State;					// reported state from each end
 	int Call2State;
-	int Timeout1;
-	int Timeout2;
-	int KillTimer;
+	time_t LastHeard;
 };
 
 struct ChatNodeData ** ChatNodes = NULL;
+
+int NumberOfChatNodes = 0;
+
+struct ChatLink ** ChatLinks = NULL;
+
+int NumberOfChatLinks = 0;
 
 struct NodeData
 {
@@ -112,8 +116,11 @@ struct NodeData
 	double Lat;
 	double Lon;
 	int PopupMode;
-	char Comment[256];
+	char Comment[512];
 	time_t LastHeard;
+	int onlyHeard;			// Station heard but not reporting
+	struct HeardItem * HeardBy;
+	struct HeardItem * Heard;
 };
 
 struct NodeData ** Nodes = NULL;
@@ -134,16 +141,41 @@ struct NodeLink ** NodeLinks = NULL;
 int NumberOfNodeLinks = 0;
 
 
-SOCKET sock;
+struct HeardItem
+{
+	struct HeardItem * Next;			// Chein of heard calls
+	struct HeardItem * NextBy;			// Chain of heardby calls
+	time_t Time;
+	struct NodeData * ReportingCall;
+	struct NodeData * HeardCall;
+	char Freq[16];
+	char Flags[16];
+};
+
+/*
+struct HeardData
+{
+struct NodeData * CallSign;
+struct HeardItem * HeardItems;
+};
+
+struct HeardByData
+{
+struct NodeData * CallSign;
+struct HeardItem * HeardItems;
+};
+*/
+SOCKET sock, chatsock;
 
 time_t LastUpdate = 0;
 
 
 int ConvFromAX25(unsigned char * incall, char * outcall);
-void GenerateNodeLinks(time_t Now);
-void UpdateHeardData(struct NodeData * Node, char * Call, char * Freq, char * LOC, char * Flags);
-
-
+void GenerateOutputFiles(time_t Now);
+void UpdateHeardData(struct NodeData * Node, struct NodeData * Call, char * Freq, char * LOC, char * Flags);
+char * strlop(char * buf, char delim);
+void ProcessChatUpdate(char * From, char * Msg);
+void ProcessNodeUpdate(char * From, char * Msg);
 
 struct NodeData * FindNode(char * Call)
 {
@@ -157,10 +189,10 @@ struct NodeData * FindNode(char * Call)
 		if (strcmp(Nodes[i]->Call, Call) == 0)
 			return Nodes[i];
 	}
-	
+
 	Node = malloc(sizeof(struct NodeData));
 	memset (Node, 0, sizeof(struct NodeData))
-;
+		;
 	Nodes = realloc(Nodes, (NumberOfNodes + 1) * sizeof(void *));
 	Nodes[NumberOfNodes++] = Node;
 
@@ -168,6 +200,35 @@ struct NodeData * FindNode(char * Call)
 	strcpy(Node->Comment, Call);
 
 	return Node;
+}
+
+struct NodeData * FindBaseCall(char * Call)
+{
+	// See if we have any other ssid of the requested call
+
+	char FindCall[12]= "";
+	char compareCall[12] = "";
+
+	int i;
+
+	if (strlen(Call) > 9)
+		return NULL;
+
+	if (strcmp(Call, "PE1NNZ-8") == 0)
+		i = 0;
+
+	memcpy(FindCall, Call, 10);
+	strlop(FindCall, '-');
+
+	for (i = 0; i < NumberOfNodes; i++)
+	{
+		memcpy(compareCall, Nodes[i]->Call, 10);
+		strlop(compareCall, '-');
+		if (strcmp(compareCall, FindCall) == 0 && Nodes[i]->Lat != 0.0)
+			return Nodes[i];
+	}
+
+	return NULL;
 }
 
 struct NodeLink * FindLink(char * Call1, char * Call2, int Type)
@@ -191,22 +252,105 @@ struct NodeLink * FindLink(char * Call1, char * Call2, int Type)
 		if (strcmp(Link->Call1->Call, Call2) == 0 && Link->Type == Type && strcmp(Link->Call2->Call, Call1) == 0)
 			return Link;
 	}
-	
+
 	Link = malloc(sizeof(struct NodeLink));
 	memset (Link, 0, sizeof(struct NodeLink))
-;
+		;
 	NodeLinks = realloc(NodeLinks, (NumberOfNodeLinks + 1) * sizeof(void *));
 	NodeLinks[NumberOfNodeLinks++] = Link;
 
-	
+
 	Node = FindNode(Call1);
+	Node->onlyHeard = 0;			// Reported
 	Link->Call1 = Node;
 	Node = FindNode(Call2);
+	Node->onlyHeard = 0;			// Reported
 	Link->Call2 = Node;
 	Link->Type = Type;
 
 	return Link;
 }
+
+struct ChatNodeData * FindChatNode(char * Call)
+{
+	struct ChatNodeData * Node;
+	int i;
+
+	if (strcmp("KD8MJL-11", Call) == 0)
+	{
+		int xx = 1;
+	}
+
+
+	// Find, and if not found add
+
+	for (i = 0; i < NumberOfChatNodes; i++)
+	{
+		if (strcmp(ChatNodes[i]->Call, Call) == 0)
+			return ChatNodes[i];
+	}
+
+	Node = malloc(sizeof(struct ChatNodeData));
+	memset (Node, 0, sizeof(struct ChatNodeData))
+		;
+	ChatNodes = realloc(ChatNodes, (NumberOfChatNodes + 1) * sizeof(void *));
+	ChatNodes[NumberOfChatNodes++] = Node;
+
+	strcpy(Node->Call, Call);
+	strcpy(Node->Comment, Call);
+	return Node;
+}
+
+struct ChatLink * FindChatLink(char * Call1, char * Call2, int State)
+{
+	struct ChatLink * Link;
+	struct ChatNodeData * Node;
+
+	int i;
+
+	// Find, and if not found add
+
+	for (i = 0; i < NumberOfChatLinks; i++)
+	{
+		// We only want one copy, whichever end it is reported from
+
+		Link = ChatLinks[i];
+
+		if (strcmp(Link->Call1->Call, Call1) == 0 && strcmp(Link->Call2->Call, Call2) == 0)
+		{
+			Link->Call1State = State;
+			return Link;
+		}
+		if (strcmp(Link->Call1->Call, Call2) == 0 && strcmp(Link->Call2->Call, Call1) == 0)
+		{
+			Link->Call2State = State;
+			return Link;
+		}
+	}
+
+	Link = malloc(sizeof(struct ChatLink));
+	memset (Link, 0, sizeof(struct ChatLink));
+
+	ChatLinks = realloc(ChatLinks, (NumberOfChatLinks + 1) * sizeof(void *));
+	ChatLinks[NumberOfChatLinks++] = Link;
+
+	Node = FindChatNode(Call1);
+	Link->Call1 = Node;
+	Node->hasLinks = 1;
+	Node = FindChatNode(Call2);
+	Link->Call2 = Node;
+	Link->Call1State = State;
+	Link->Call2State = -1;
+	Node->hasLinks = 1;
+
+	return Link;
+}
+
+int CompareChatCalls(const struct ChatNodeData ** a, const struct ChatNodeData ** b)
+{
+	return memcmp(a[0]->Call, b[0]->Call, 7);
+}
+
 
 int FromLOC(char * Locator, double * pLat, double * pLon)
 {
@@ -218,8 +362,6 @@ int FromLOC(char * Locator, double * pLat, double * pLon)
 	*pLon = 0;
 	*pLat = 0;			// in case invalid
 
-
-	// Basic validation for APRS positions
 
 	// The first pair (a field) encodes with base 18 and the letters "A" to "R".
 	// The second pair (square) encodes with base 10 and the digits "0" to "9".
@@ -278,9 +420,9 @@ char * strlop(char * buf, char delim)
 	// Terminate buf at delim, and return rest of string
 
 	char * ptr;
-	
+
 	if (buf == NULL) return NULL;		// Protect
-	
+
 	ptr = strchr(buf, delim);
 
 	if (ptr == NULL) return NULL;
@@ -297,20 +439,24 @@ int main(int argc, char * argv[])
 {
 	char RXBUFFER[512];
 	struct NodeData * Node;
+	struct ChatNodeData * ChatNode;
+	struct NodeData * HeardNode;
+	struct NodeData * HeardByNode;
 	struct NodeLink * Link;
+	struct ChatLink * ChatLink;
 	char * Msg = &RXBUFFER[16];
 
 	struct sockaddr_in rxaddr, txaddr, txaddr2;
 	int addrlen = sizeof(struct sockaddr_in);
-	u_long param=1;
+	u_long param = 1;
 	BOOL bcopt=TRUE;
 	struct sockaddr_in sinx;
 	int nLength;
-	
-	struct hostent * HostEnt2;
-	char * ptr, *Context;
+
+	struct hostent * HostEnt1, * HostEnt2;
+	char * Context;
 	FILE * pFile;
-	char Line[512];
+	char Line[16384];
 
 	char * pCall;
 	char * pCall2;
@@ -319,11 +465,34 @@ int main(int argc, char * argv[])
 	char * pPopupMode;
 	char * pLastHeard;
 	char * pType;
+	char * pHeardOnly;
+	char * pHeard;
+	char * pHeardby;
+	char * Next;
+
+	char * pHeardCall;
+	char * pFreq;
+	char * pFlags;
+	char * pHeardTime = "0";
+	char * pStatus1;
+	char * pStatus2;
+
+	double Lat, Lon;
+
+	struct HeardItem * Item;
+	struct HeardItem * lastItem = NULL;
+	SOCKET maxsock;
+	fd_set readfd, writefd, exceptfd;
+	struct timeval timeout;
+	int retval;
 
 #ifdef WIN32
 	WSADATA WsaData;            // receives data from WSAStartup
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
 #endif
+
+	timeout.tv_sec = 60;
+	timeout.tv_usec = 0;
 
 	logFile = fopen("nodelog.txt","ab");
 
@@ -333,7 +502,7 @@ int main(int argc, char * argv[])
 
 	while (pFile)
 	{
-		if (fgets(Line, 499, pFile) == NULL)
+		if (fgets(Line, 16383, pFile) == NULL)
 		{
 			fclose(pFile);
 			pFile = NULL;
@@ -341,21 +510,169 @@ int main(int argc, char * argv[])
 		else
 		{
 			pCall = strtok_s(Line, ",", &Context); 
+
+			if (strcmp(pCall, "EI5HBB-10") == 0)
+			{
+				int i = 1;
+			}
 			pLat = strtok_s(NULL, ",", &Context); 
 			pLon = strtok_s(NULL, ",", &Context); 
 			pPopupMode = strtok_s(NULL, ",", &Context); 
 			pComment = strtok_s(NULL, "|", &Context); 
-			pLastHeard = strtok_s(NULL, ",", &Context); 
+			pLastHeard = strtok_s(NULL, "|", &Context);
+
+			// Can't use strtok from here as fields may be missing
+
+			pHeardOnly = Context;
+			pHeard = strlop(pHeardOnly, '|');
 
 			if (pLastHeard == NULL)
 				continue;
 
 			Node = FindNode(pCall);
-			Node->Lat = atof(pLat);
-			Node->Lon = atof(pLon);
+			Lat = atof(pLat);
+			Lon = atof(pLon);
+
+			if (Lat >  90.0 || Lon > 180.0 || Lat < -90.0 || Lon < -180.0)
+			{
+				Lat = 0.0;
+				Lon = 0.0;
+			}
+
+			Node->Lat = Lat;
+			Node->Lon = Lon;
+
 			Node->PopupMode = atoi(pPopupMode);
 			Node->LastHeard = atoi(pLastHeard);
+			Node->onlyHeard = atoi(pHeardOnly);
+			if (strlen(pComment) > 510)
+				pComment[510] = 0;
+
 			strcpy(Node->Comment, pComment);
+
+			pHeardby = strlop(pHeard, '|');
+
+			// Look for heard/heard by entries
+
+			// Each heard entry is five comma delimited fields, ending with /
+
+			while (pHeard && strlen(pHeard) > 2)
+			{			
+				Next = strlop(pHeard, '/');
+
+				pHeardCall = strlop(pHeard, ',');
+				pFreq = strlop(pHeardCall, ',');
+				pFlags = strlop(pFreq, ',');
+				pHeardTime = strlop(pFlags, ',');
+
+				if (pFlags && strlen(pFlags) > 14)
+					break;
+
+				HeardNode = FindNode(pHeard);
+
+				if (HeardNode->LastHeard == 0)
+					HeardNode->onlyHeard = 1;			// So far not reported
+
+				// See if we already have it
+
+				Item = Node->Heard;
+
+				while (Item)
+				{
+					if (Item->HeardCall->Call == HeardNode->Call && strcmp(Item->Freq, pFreq) == 0 && strcmp(Item->Flags, pFlags) == 0)
+						break;
+
+					Item = Item->Next;
+				}
+
+				if (Item == NULL)
+				{
+					Item = malloc(sizeof(struct HeardItem));
+
+					Item->ReportingCall = Node;
+					Item->HeardCall = HeardNode;
+					strcpy(Item->Freq, pFreq);
+					strcpy(Item->Flags, pFlags);
+
+					if (pHeardTime)
+						Item->Time = atoi(pHeardTime);
+
+					Item->Next = 0;
+					Item->NextBy = 0;
+
+					if (Node->Heard == NULL)		// First
+						Node->Heard = Item;
+					else
+						lastItem->Next = Item;
+
+					lastItem = Item;
+				}
+
+				pHeard = Next;
+			}
+
+			// Now do heard by
+
+			pHeard = pHeardby;
+
+			while (pHeard && strlen(pHeard) > 2)
+			{				
+				Next = strlop(pHeard, '/');
+
+				pHeardCall = strlop(pHeard, ',');
+				pFreq = strlop(pHeardCall, ',');
+				pFlags = strlop(pFreq, ',');
+				pHeardTime = strlop(pFlags, ',');
+
+				if (pFlags && strlen(pFlags) > 14)
+					break;
+
+				if (pHeardCall == NULL)
+					break;
+
+				HeardByNode = FindNode(pHeardCall);
+
+				if (HeardByNode->LastHeard == 0)
+					HeardByNode->onlyHeard = 1;			// So far not reported
+
+				HeardNode = FindNode(pHeard);
+
+				// See if we already have it
+
+				Item = Node->HeardBy;
+
+				while (Item)
+				{
+					if (Item->HeardCall->Call == HeardNode->Call && strcmp(Item->Freq, pFreq) == 0 && strcmp(Item->Flags, pFlags) == 0)
+						break;
+
+					Item = Item->NextBy;
+				}
+
+				if (Item == NULL)
+				{
+
+					Item = malloc(sizeof(struct HeardItem));
+
+					Item->ReportingCall = HeardByNode;
+					Item->HeardCall = HeardNode;
+					strcpy(Item->Freq, pFreq);
+					strcpy(Item->Flags, pFlags);
+					if (pHeardTime)
+						Item->Time = atoi(pHeardTime);
+
+					Item->Next = 0;
+					Item->NextBy = 0;
+
+					if (Node->HeardBy == NULL)		// First
+						Node->HeardBy = Item;
+					else
+						lastItem->Next = Item;
+
+					lastItem = Item;
+				}
+				pHeard = Next;
+			}
 		}
 	}
 
@@ -384,12 +701,97 @@ int main(int argc, char * argv[])
 		}
 	}
 
-	Now = time(NULL);
-	GenerateNodeLinks(Now);
+	// Read Chat Files
 
+	pFile = fopen("savechat.txt","r");
+
+	while (pFile)
+	{
+		if (fgets(Line, 16383, pFile) == NULL)
+		{
+			fclose(pFile);
+			pFile = NULL;
+		}
+		else
+		{
+			pCall = strtok_s(Line, ",", &Context); 
+			pLat = strtok_s(NULL, ",", &Context); 
+			pLon = strtok_s(NULL, ",", &Context); 
+			pPopupMode = strtok_s(NULL, ",", &Context); 
+
+			// Can't use strtok from here as fields may be missing
+
+			pComment = Context;
+			pLastHeard = strlop(pComment, '|');
+
+			if (pLastHeard == NULL)
+				continue;
+
+			ChatNode = FindChatNode(pCall);
+
+			Lat = atof(pLat);
+			Lon = atof(pLon);
+
+			if (Lat >  90.0 || Lon > 180.0 || Lat < -90.0 || Lon < -180.0)
+			{
+				Lat = 0.0;
+				Lon = 0.0;
+			}
+
+			ChatNode->Lat = Lat;
+			ChatNode->Lon = Lon;
+			ChatNode->derivedLat = 	Lat;
+			ChatNode->derivedLon = 	Lon;
+
+			ChatNode->PopupMode = atoi(pPopupMode);
+			ChatNode->LastHeard = atoi(pLastHeard);
+			if (strlen(pComment) > 510)
+				pComment[510] = 0;
+
+			strcpy(ChatNode->Comment, pComment);
+		}
+	}
+
+	pFile = fopen("savechatlinks.txt","r");
+
+	while (pFile)
+	{
+		if (fgets(Line, 16383, pFile) == NULL)
+		{
+			fclose(pFile);
+			pFile = NULL;
+		}
+		else
+		{
+			pCall = strtok_s(Line, ",", &Context); 
+			pCall2 = strtok_s(NULL, ",", &Context); 
+			pStatus1 = strtok_s(NULL, ",", &Context); 
+			pStatus2 = strtok_s(NULL, ",", &Context); 
+			pHeardTime = strtok_s(NULL, ",", &Context); 
+
+			if (pHeardTime == NULL)
+				continue;
+
+			ChatLink = FindChatLink(pCall, pCall2, atoi(pStatus1));
+
+			ChatLink->LastHeard = atoi(pHeardTime);
+		}
+	}
+
+	LastUpdate = Now = time(NULL);
 
 	sock = socket(AF_INET,SOCK_DGRAM,0);
-//	ioctl(sock, FIONBIO, &param);
+	chatsock = socket(AF_INET,SOCK_DGRAM,0);
+
+	maxsock = sock;
+
+	if (chatsock > sock)
+		maxsock = chatsock;
+
+	ioctl(sock, FIONBIO, &param);
+	ioctl(chatsock, FIONBIO, &param);
+
+	//	ioctl(sock, FIONBIO, &param);
 
 	setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&bcopt,4);
 
@@ -404,16 +806,16 @@ int main(int argc, char * argv[])
 	txaddr2.sin_family = AF_INET;
 	txaddr2.sin_addr.s_addr = INADDR_ANY;		
 	txaddr2.sin_port = htons(81);
-	
+
 	//	Resolve name to address
 
 	printf("Resolving %s\n", "guardian.no-ip.org.");
-	HostEnt2 = gethostbyname ("guardian.no-ip.org.");
+	HostEnt1 = gethostbyname ("guardian.no-ip.org.");
 
-	if (HostEnt2)
-		memcpy(&txaddr.sin_addr.s_addr,HostEnt2->h_addr,4);
+	if (HostEnt1)
+		memcpy(&txaddr.sin_addr.s_addr,HostEnt1->h_addr,4);
 
-	HostEnt2 = gethostbyname ("192.168.1.63");
+	HostEnt2 = gethostbyname ("10.8.0.38");
 
 	if (HostEnt2)
 		memcpy(&txaddr2.sin_addr.s_addr,HostEnt2->h_addr,4);
@@ -426,13 +828,52 @@ int main(int argc, char * argv[])
 		printf("Bind Failed for UDP port %d - error code = %d", 81, err);
 	}
 
+	sinx.sin_port = htons(10090);
+
+	if (bind(chatsock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
+	{
+		//	Bind Failed
+
+		int err = GetLastError();
+		printf("Bind Failed for UDP port %d - error code = %d", 10090, err);
+	}
 
 	printf("Map Update Started\n");
 	fflush(stdout);
 
 	while (1)
 	{
-		nLength = recvfrom(sock, RXBUFFER, 512, 0, (struct sockaddr *)&rxaddr, &addrlen);
+		int ret = 0;
+
+		FD_ZERO(&readfd);
+		FD_ZERO(&writefd);
+		FD_ZERO(&exceptfd);
+
+		FD_SET(sock, &readfd);
+		FD_SET(chatsock, &readfd);
+
+		retval = select((int)maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
+
+		if (retval == -1)
+		{				
+			perror("select");
+		}
+		else
+		{
+			if (retval)
+			{
+				// see who has data
+
+				if (FD_ISSET(sock, &readfd))
+					nLength = recvfrom(sock, RXBUFFER, 512, 0, (struct sockaddr *)&rxaddr, &addrlen);
+
+				else if (FD_ISSET(chatsock, &readfd))
+					nLength = recvfrom(chatsock, RXBUFFER, 512, 0, (struct sockaddr *)&rxaddr, &addrlen);
+			}
+			else
+				nLength = 0;
+
+		}
 
 		if (nLength < 0)
 		{
@@ -441,234 +882,404 @@ int main(int argc, char * argv[])
 			//				printf("KISS Error %d %d\n", nLength, err);
 			nLength = 0;
 		}
-		else
-		{
-			nLength = sendto(sock, RXBUFFER, nLength, 0, (LPSOCKADDR)&txaddr2, sizeof(txaddr));
 
-			if (memcmp(&RXBUFFER[16], "LINK ", 5) != 0)
-				if (HostEnt2)
-					nLength = sendto(sock, RXBUFFER, nLength, 0, &txaddr, sizeof(txaddr));
+		if (nLength == 0)
+			continue;
+
+		//	ret = sendto(sock, RXBUFFER, nLength, 0, &txaddr2, sizeof(txaddr));
+
+		if (ret == -1)
+			perror("sendto 1");
+
+		if (memcmp(&RXBUFFER[16], "LINK ", 5) != 0)
+		{
+			if (HostEnt1)
+			{
+		//		ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr, sizeof(txaddr));
+				if (ret == -1)
+					perror("sendto 1");
+			}
+		}
+
+#ifdef WIN32
+		Sleep(10);
+#else
+		usleep(10000);
+#endif
+
+		RXBUFFER[nLength] = 0;
+
+		if (strstr(RXBUFFER, "ctl"))
+		{
+			//			return;
 		}
 
 		Now = time(NULL);
 
 		if ((Now - LastUpdate) > 60)
-			GenerateNodeLinks(Now);
+			GenerateOutputFiles(Now);
 
 		RXBUFFER[nLength - 2] = 0;
 
 		if (RXBUFFER[14] == 3)			// UI
 		{
 			char From[10], To[10];
-			double Lat, Lon;
-			char * Comment, * Version;
-
 
 			From[ConvFromAX25((unsigned char *)&RXBUFFER[7], From)] = 0;
 			To[ConvFromAX25((unsigned char *)&RXBUFFER[0], To)] = 0;
 
-			Node = FindNode(From);
-			Node->LastHeard = Now;
-
-//			printf("%s %s %s\n", From, To, Msg);
-//			fprintf(logFile, "%s %s %s\n", From, To, Msg);
-
-
-			if (memcmp(Msg, "MH ", 3) == 0)
+			if (strcmp(To, "DUMMY") == 0)
 			{
-				/*
-	Line 4211: WA7WWC-12 DUMMY-1 MH AL1Q-12,,,I!?
-	Line 4221: YU7BPQ DUMMY-1 MH YU7BPQ to APBPQ1 via WIDE2-1 ctl UI^ pid F0
-	Line 4315: WA4ZKO DUMMY-1 MH WA4ZKO,,,G.?
-	Line 4316: WA4ZKO DUMMY-1 MH WA4ZKO,,,G.?
-	Line 4317: WA4ZKO-7 DUMMY-1 MH WA4ZKO,,,G.?
-	Line 4318: WA4ZKO-7 DUMMY-1 MH WA4ZKO-7,,,G.?
-	Line 4319: WA4ZKO-7 DUMMY-1 MH WA4ZKO,,,G.?
-	Line 4350: YU7BPQ DUMMY-1 MH GB7CIP,14.1104,,B+?O
-	Line 4351: M0IPU-2 DUMMY-1 MH G0WYG,,,I!?
-	Line 4360: N3HYM DUMMY-1 MH W3JY,3.5919,,B+?O
-	Line 4361: W3JY DUMMY-1 MH N3HYM,3.5919,,B+?I
-	Line 4385: M0IPU-2 DUMMY-1 MH MB7IWG,,,I!?
-	Line 4394: GM8BPQ-2 DUMMY-1 MH GM8BPQ-2,14.1035,IO68vl,M!?I
-				                                 ' Heard or Connection Report
-
-                                    Elements = Split(Mid(Report, 4), ",")
-
-                                    If Elements.Length < 4 Then Continue While
-
-                                    Index = FindNodeCall(CallFrom)
-
-                                    HeardCall = Elements(0)
-                                    Freq = Elements(1)
-                                    LOC = Elements(2)
-                                    Flags = Elements(3)
-
-                                    If LOC.Length <> 6 Then LOC = ""
-					
-					GM8BPQ-2 DUMMY-1 MH GM8BPQ-2,14.1035,IO68vl,M!?I
-
-*/
-				 // There are 4 fields - Call, Freq, Loc, Flags
-
-				char * Call, * Freq = 0, * LOC = 0, * Flags = 0;
-
-				// I think strlop will work - cant use strtok with null fields
-
-				Call = &Msg[3];
-				Freq = strlop(Call, ',');
-				LOC = strlop(Freq, ',');
-				Flags = strlop(LOC, ',');
-
-				if (Flags == NULL)
-					continue;				// Corrupt
-
-				UpdateHeardData(Node, Call, Freq, LOC, Flags);
+				ProcessChatUpdate(From, Msg);
 				continue;
 			}
 
-			if (memcmp(Msg, "LINK ", 3) == 0)
+			if (strcmp(To, "DUMMY-1") == 0)
 			{
-				// GM8BPQ-2 DUMMY-1 LINK LU1HVK-4,16,YU4ZED-4,16,AE5E-14,16,
-
-				char * Call;
-				int Type;
-				struct NodeLink * Link;
-
-				ptr = strtok_s(Msg, " ", &Context);
-
-				while (Context && Context[0])
-				{
-					Call = strtok_s(NULL, ",", &Context);
-					ptr = strtok_s(NULL, ",", &Context);
-
-					if (ptr == 0)
-						break;
-
-					Type = atoi(ptr);
-
-					Link = FindLink(From, Call, Type);
-
-					Link->LastHeard = Now;
-				}
-
+				ProcessNodeUpdate(From, Msg);
 				continue;
 			}
-
-			// Node Info Message
-
-			// Location Space Version<br>Comment. Location and version may contain spaces!
-
-			// There is always <br> between Version and Comment
-
-			Comment = strstr(Msg, "<br>");
-
-			if (Comment == 0)
-				continue;			// Corrupt
-
-			*(Comment)= 0;
-			Comment += 4;
-
-			// We now have Location and Version, both of which may contain spaces
-
-			// Actually, looks like node always reformats lat and lon with colon but no spaces
-
-			ptr = strtok_s(Msg, " ,:", &Context);
-
-			if (strlen(ptr) == 6 && FromLOC(ptr, &Lat, &Lon))	// Valid Locator
-			{
-				// Rest must be version
-
-				Version = Context;
-			}
-			else
-			{
-				// See if Space Comma or Colon Separated Lat Lon
-
-				char * ptr2 = strtok_s(NULL, " ,:", &Context);
-
-				if (ptr2 == NULL)
-					continue;			// Invalid
-
-				Lat = atof(ptr);
-				Lon = atof(ptr2);
-
-				if (Lat == 0.0 || Lon == 0.0)
-					continue;					// Invalid
-
-				// Rest should be version
-
-				Version = Context;
-			}
-
-			Node->Lat = Lat;
-			Node->Lon = Lon;
-
-	//		If Locator.Length = 6 Then
-    //            .Comment = .Callsign & " " & Locator & " Ver " & Version
-     //       Else
-     //           .Comment = .Callsign & " Ver " & Version
-     //       End If
-
-
-			sprintf(Node->Comment, "%s %s<br>%s", From, Version, Comment);
-			continue;
 		}
 	}
 }
 
-int ConvFromAX25(unsigned char * incall, char * outcall)
+
+void ProcessNodeUpdate(char * From, char * Msg)
 {
-        int in,out=0;
-        unsigned char chr;
+	struct NodeData * Node;
 
-        memset(outcall,0x20,10);
+	char * ptr, *Context;
 
-        for (in=0;in<6;in++)
-        {
-                chr=incall[in];
-                if (chr == 0x40)
-                        break;
-                chr >>= 1;
-                outcall[out++]=chr;
-        }
+	char * pHeardTime = "0";
+	char * Comment, * Version;
 
-        chr = incall[6];                          // ssid
+	double Lat, Lon;
 
-        if (chr == 0x42)
-        {
-                outcall[out++]='-';
-                outcall[out++]='T';
-                return out;
-        }
+	struct HeardItem * lastItem = NULL;
 
-        if (chr == 0x44)
-        {
-                outcall[out++]='-';
-                outcall[out++]='R';
-                return out;
-        }
+	Node = FindNode(From);
+	Node->LastHeard = Now;
+	Node->onlyHeard = 0;			// Reported
 
-        chr >>= 1;
-        chr     &= 15;
+	//			printf("%s %s %s\n", From, To, Msg);
+	//			fprintf(logFile, "%s %s %s\n", From, To, Msg);
 
-        if (chr > 0)
-        {
-                outcall[out++]='-';
-                if (chr > 9)
-                {
-                        chr-=10;
-                        outcall[out++]='1';
-                }
-                chr+=48;
-                outcall[out++]=chr;
-        }
-        return (out);
+
+	if (memcmp(Msg, "MH ", 3) == 0)
+	{
+		/*
+		Line 4211: WA7WWC-12 DUMMY-1 MH AL1Q-12,,,I!?
+		Line 4221: YU7BPQ DUMMY-1 MH YU7BPQ to APBPQ1 via WIDE2-1 ctl UI^ pid F0
+		Line 4315: WA4ZKO DUMMY-1 MH WA4ZKO,,,G.?
+		Line 4316: WA4ZKO DUMMY-1 MH WA4ZKO,,,G.?
+		Line 4317: WA4ZKO-7 DUMMY-1 MH WA4ZKO,,,G.?
+		Line 4318: WA4ZKO-7 DUMMY-1 MH WA4ZKO-7,,,G.?
+		Line 4319: WA4ZKO-7 DUMMY-1 MH WA4ZKO,,,G.?
+		Line 4350: YU7BPQ DUMMY-1 MH GB7CIP,14.1104,,B+?O
+		Line 4351: M0IPU-2 DUMMY-1 MH G0WYG,,,I!?
+		Line 4360: N3HYM DUMMY-1 MH W3JY,3.5919,,B+?O
+		Line 4361: W3JY DUMMY-1 MH N3HYM,3.5919,,B+?I
+		Line 4385: M0IPU-2 DUMMY-1 MH MB7IWG,,,I!?
+		Line 4394: GM8BPQ-2 DUMMY-1 MH GM8BPQ-2,14.1035,IO68vl,M!?I
+		' Heard or Connection Report
+
+		Elements = Split(Mid(Report, 4), ",")
+
+		If Elements.Length < 4 Then Continue While
+
+		Index = FindNodeCall(CallFrom)
+
+		HeardCall = Elements(0)
+		Freq = Elements(1)
+		LOC = Elements(2)
+		Flags = Elements(3)
+
+		If LOC.Length <> 6 Then LOC = ""
+
+		GM8BPQ-2 DUMMY-1 MH GM8BPQ-2,14.1035,IO68vl,M!?I
+
+		*/
+		// There are 4 fields - Call, Freq, Loc, Flags
+
+		char * Call, * Freq = 0, * LOC = 0, * Flags = 0;
+		struct NodeData * heardCall;
+
+		// I think strlop will work - cant use strtok with null fields
+
+		Call = &Msg[3];
+		Freq = strlop(Call, ',');
+		LOC = strlop(Freq, ',');
+		Flags = strlop(LOC, ',');
+
+		if (strstr(Call, " to ") || strlen(Call) > 10)			// Node sending duff report
+			strlop(Call, ' ');
+
+		if (Flags == NULL)
+			return;				// Corrupt
+
+		heardCall = FindNode(Call);
+
+		if (heardCall->LastHeard == 0)	// First time, so set onlyHeard
+		{
+			// Maybe also add position if LOC supplied
+
+			Node->onlyHeard = 1;
+		}
+
+		if (LOC[0] && heardCall->Lat == 0.0 && heardCall->Lon == 0.0)
+		{
+			double Lat, Lon;
+
+			if (FromLOC(LOC, &Lat, &Lon))
+			{
+				heardCall->Lat = Lat;
+				heardCall->Lon = Lon;
+			}
+		}
+
+		Node->LastHeard = Now;
+
+		UpdateHeardData(Node, heardCall, Freq, LOC, Flags);
+		return;
+	}
+
+	if (memcmp(Msg, "LINK ", 3) == 0)
+	{
+		// GM8BPQ-2 DUMMY-1 LINK LU1HVK-4,16,YU4ZED-4,16,AE5E-14,16,
+
+		char * Call;
+		int Type;
+		struct NodeLink * Link;
+
+		ptr = strtok_s(Msg, " ", &Context);
+
+		while (Context && Context[0])
+		{
+			Call = strtok_s(NULL, ",", &Context);
+			ptr = strtok_s(NULL, ",", &Context);
+
+			if (ptr == 0)
+				break;
+
+			Type = atoi(ptr);
+
+			Link = FindLink(From, Call, Type);
+
+			Link->LastHeard = Now;
+		}
+
+		return;
+	}
+
+	// Node Info Message
+
+	// Location Space Version<br>Comment. Location and version may contain spaces!
+
+	// There is always <br> between Version and Comment
+
+	Comment = strstr(Msg, "<br>");
+
+	if (Comment == 0)
+		return;			// Corrupt
+
+	*(Comment)= 0;
+	Comment += 4;
+
+	// We now have Location and Version, both of which may contain spaces
+
+	// Actually, looks like node always reformats lat and lon with colon but no spaces
+
+	ptr = strtok_s(Msg, " ,:", &Context);
+
+	if (strlen(ptr) == 6 && FromLOC(ptr, &Lat, &Lon))	// Valid Locator
+	{
+		// Rest must be version
+
+		Version = Context;
+	}
+	else
+	{
+		// See if Space Comma or Colon Separated Lat Lon
+
+		char * ptr2 = strtok_s(NULL, " ,:", &Context);
+
+		if (ptr2 == NULL)
+			return;			// Invalid
+
+		Lat = atof(ptr);
+		Lon = atof(ptr2);
+
+		if (Lat == 0.0 || Lon == 0.0)
+			return;					// Invalid
+
+		if (Lat >  90.0 || Lon > 180.0 || Lat <  -90.0 || Lon < -180.0)
+			return;					// Invalid
+
+		// Rest should be version
+
+		Version = Context;
+	}
+
+	Node->Lat = Lat;
+	Node->Lon = Lon;
+
+	//		If Locator.Length = 6 Then
+	//            .Comment = .Callsign & " " & Locator & " Ver " & Version
+	//       Else
+	//           .Comment = .Callsign & " Ver " & Version
+	//       End If
+
+
+	sprintf(Node->Comment, "%s %s<br>%s", From, Version, Comment);
+	return;
 }
 
-void UpdateHeardData(struct NodeData * Node, char * Call, char * Freq, char * LOC, char * Flags)
+
+int ConvFromAX25(unsigned char * incall, char * outcall)
 {
+	int in,out=0;
+	unsigned char chr;
+
+	memset(outcall,0x20,10);
+
+	for (in=0;in<6;in++)
+	{
+		chr=incall[in];
+		if (chr == 0x40)
+			break;
+		chr >>= 1;
+		outcall[out++]=chr;
+	}
+
+	chr = incall[6];                          // ssid
+
+	if (chr == 0x42)
+	{
+		outcall[out++]='-';
+		outcall[out++]='T';
+		return out;
+	}
+
+	if (chr == 0x44)
+	{
+		outcall[out++]='-';
+		outcall[out++]='R';
+		return out;
+	}
+
+	chr >>= 1;
+	chr     &= 15;
+
+	if (chr > 0)
+	{
+		outcall[out++]='-';
+		if (chr > 9)
+		{
+			chr-=10;
+			outcall[out++]='1';
+		}
+		chr+=48;
+		outcall[out++]=chr;
+	}
+	return (out);
+
+}
+void UpdateHeardData(struct NodeData * HeardBy, struct NodeData * Heard, char * Freq, char * LOC, char * Flags)
+{
+	// I think the logic should be to keep only the latest record for any
+	// Call, Reporting Call Pair, Freq, Flags combination
+
+	// I think I'll just store that and postprocess to link to nodes when NodeStatus.txt is generated
+
+	// No, on reflection better to chain heard and heard by records off the Node record
+	// Is a linked list best? Maybe, as we'll have to follow the list anyway to see if
+	// we aleady have it. Will also remove old entries from front
 
 
+	struct HeardItem * Item = HeardBy->Heard;
+	struct HeardItem * lastItem = Item;
+	struct HeardItem * NewItem;
+
+	while (Item)
+	{
+		if (Item->HeardCall == Heard && strcmp(Item->Freq, Freq) == 0 && strcmp(Item->Flags, Flags) == 0)
+		{
+			// Already have it - just update time
+
+			Item->Time = Now;
+			return;
+		}
+
+		lastItem = Item;
+		Item = Item->Next;
+	}
+
+	// Not found - add
+
+	NewItem = malloc(sizeof(struct HeardItem));
+	memset(NewItem, 0, sizeof(struct HeardItem));
+
+	NewItem->Time = Now;
+	NewItem->ReportingCall = HeardBy;
+	NewItem->HeardCall = Heard;
+	strcpy(NewItem->Freq, Freq);
+	strcpy(NewItem->Flags, Flags);
+	NewItem->Next = 0;
+	NewItem->NextBy = 0;
+
+	if (HeardBy->Heard == NULL)		// First
+		HeardBy->Heard = NewItem;
+	else
+		lastItem->Next = NewItem;
+
+	// Now add to heardby
+
+	// Why do we have two copies? 
+	// Shouldn't there just be one record chained to the hearing node as heard and the heard node as heardby
+	// Which I think means two chains
+
+	// If we only have one copy, then if we find and update on heard, it will also exist on heardby
+
+
+	Item = Heard->HeardBy;
+
+	if (Item == NULL)
+	{
+		Heard->HeardBy = NewItem;
+		return;
+	}
+
+	// Find end of chain
+
+	while (Item->NextBy)
+		Item = Item->NextBy;
+	
+	Item->NextBy = NewItem;
+	return;
+
+
+	/*
+	// Not found - add
+
+	// Why do we have two copies? 
+	// Shouldn't there just be one record chained to the hearing node as heard and the heard node as heardby
+	// Which I think means two chains
+
+
+	Item = malloc(sizeof(struct HeardItem));
+
+	Item->Time = Now;
+	Item->ReportingCall = HeardBy;
+	Item->HeardCall = Heard;
+	strcpy(Item->Freq, Freq);
+	strcpy(Item->Flags, Flags);
+	Item->Next = 0;
+
+	if (Heard->HeardBy == NULL)		// First
+		Heard->HeardBy = Item;
+	else
+		lastItem->Next = Item;
+*/
 }
 
 
@@ -683,7 +1294,15 @@ void UpdateHeardData(struct NodeData * Node, char * Call, char * Freq, char * LO
 
 static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-void GenerateNodeLinks(time_t Now)
+char reportHeader[] = 
+		"<html><body><h1>Chat Configuration Report</h1>"
+		"This lists the status of all known Chat nodes. This includes all nodes sending"
+		" reports and all nodes which a reporting node is configured to link to. "
+		"The latter may not exist if there is a configuration error. Stations that have no configured"
+		" links are listed, though this isn't necessarily an error.<br><br>";
+
+
+void GenerateOutputFiles(time_t Now)
 {
 	struct tm * TM;
 	struct NodeData * Node;
@@ -691,12 +1310,23 @@ void GenerateNodeLinks(time_t Now)
 	int i;
 	FILE * pFile;
 	int activeNodes = 0;
+	char HeardString[16384];
+	char HeardCalls[16384];
+	double Lat, Lon;
+	char Colour, State;
+	struct ChatNodeData * ChatNode;
+	struct ChatLink * ChatLink;
+	FILE * errFile;
+	int noPosition;
+	int Age;
+
+	int hl = 0;
+	struct HeardItem * Heard;
 
 	LastUpdate = Now;
 
 	fclose(logFile);
 	logFile = fopen("nodelog.txt","ab");
-
 
 	pFile = fopen("nodestatus.txt","wb");
 
@@ -713,22 +1343,94 @@ void GenerateNodeLinks(time_t Now)
 			activeNodes++;
 	}
 
-	
 	fprintf(pFile, "%04d/%02d/%.2d %02d:%02d:%02d - %d Active Nodes\r\n|",
-		TM->tm_year + 1900, TM->tm_mon - 1, TM->tm_mday, TM->tm_hour,
+		TM->tm_year + 1900, TM->tm_mon + 1, TM->tm_mday, TM->tm_hour,
 		TM->tm_min, TM->tm_sec, activeNodes);
-	
+
 	for (i = 0; i < NumberOfNodes; i++)
 	{
 		Node = Nodes[i];
 
-		if ((Now - Node->LastHeard) > 86400)			//  > One day old - don't show
-			continue;
+		Age = Now - Node->LastHeard;
 
-		if ((Now - Node->LastHeard) < 3600) 
-			fprintf(pFile, "%s,%f,%f,green,%d,%s,0,\r\n|", Node->Call, Node->Lon, Node->Lat, Node->PopupMode, Node->Comment); 
-		else	
-			fprintf(pFile, "%s,%f,%f,redmarker.png,%d,%s,0,\r\n|", Node->Call, Node->Lon, Node->Lat, Node->PopupMode, Node->Comment); 
+		if (strcmp("EI5HBB-10", Node->Call) == 0)
+			i = i;
+
+
+		//		if (Node->onlyHeard)
+		//			continue;					// Only heard, not reported
+
+		// We need unheard nodes in the file for the MH list but don't display on main map
+
+		if (Age < 3600) 
+			Colour = 'G';
+		else if (Age < 86400)
+			Colour ='R';
+		else
+		{
+			if (Node->Lat != 0.0 && Node->Lon != 0.0 && Node->LastHeard == 0) 
+				Colour = 'B';
+			else
+				Colour ='0';
+		}
+
+		HeardString[0] = 0;
+		hl = 0;
+		HeardCalls[0] = 0;
+
+		hl = sprintf(&HeardString[0], "%s<br>", Node->Call);
+
+		if (Node->Heard || Node->HeardBy)
+		{
+			Heard = Node->Heard;
+
+			hl += sprintf(&HeardString[hl], "Heard<br>");
+
+			while (Heard)
+			{
+				if ((Now - Heard->Time) < 4 * 86400)  // Less than 4 days old
+				{
+					TM = gmtime(&Heard->Time);
+
+					strcat(HeardCalls, Heard->HeardCall->Call);
+					strcat(HeardCalls, "%");
+					hl += sprintf(&HeardString[hl], "%04d/%02d/%.2d %02d:%02d:%02d %s %s %s<br>",
+						TM->tm_year + 1900, TM->tm_mon + 1, TM->tm_mday, TM->tm_hour,
+						TM->tm_min, TM->tm_sec, Heard->HeardCall, Heard->Freq, Heard->Flags);
+				}
+				Heard = Heard->Next;
+			}
+
+			hl += sprintf(&HeardString[hl], "Heard By<br>");
+
+			Heard = Node->HeardBy;
+
+			while (Heard)
+			{
+				if ((Now - Heard->Time) < 4 * 86400)  // Less than 4 days old
+				{
+					strcat(HeardCalls, Heard->ReportingCall->Call);
+					strcat(HeardCalls, "%");
+					hl += sprintf(&HeardString[hl], "%s<br>", Heard->ReportingCall);
+				}
+				Heard = Heard->NextBy;
+			}
+		}
+
+		Lat = Node->Lat;
+		Lon = Node->Lon;
+
+		if (Lat == 0.0 && Lon == 0.0)
+		{
+			struct NodeData * x = FindBaseCall(Node->Call);
+
+			if (x)
+			{
+				Lat = x->Lat;
+				Lon = x->Lon;
+			}
+		}
+		fprintf(pFile, "%s,%f,%f,%c,%d,%s,%d,%s,%s\r\n|", Node->Call, Lon, Lat, Colour, Node->PopupMode, Node->Comment, Node->Heard != NULL, HeardString, HeardCalls); 
 	}
 
 
@@ -736,20 +1438,213 @@ void GenerateNodeLinks(time_t Now)
 	{		
 		Link = NodeLinks[i];
 
-		if ((Now - Link->LastHeard) >86400)			//  > One day old - don't show
+		if ((Now - Link->LastHeard) > 86400)			//  > One day old - don't show
 			continue;
 
 		if ((Link->Call1->Lat == 0.0 && Link->Call1->Lon == 0.0) || (Link->Call2->Lat == 0.0 && Link->Call2->Lon == 0.0))
 			fprintf(pFile, "Link,%s,%s,%f,%f,%f,%f,red,\r\n|",
-				Link->Call1->Call, Link->Call2->Call, Link->Call1->Lat, Link->Call1->Lon,	Link->Call2->Lat, Link->Call2->Lon);
+			Link->Call1->Call, Link->Call2->Call, Link->Call1->Lat, Link->Call1->Lon,	Link->Call2->Lat, Link->Call2->Lon);
 		else if (Link->Type == 16)
 			fprintf(pFile, "Link,%s,%s,%f,%f,%f,%f,green,\r\n|",
-				Link->Call1->Call, Link->Call2->Call, Link->Call1->Lat, Link->Call1->Lon,	Link->Call2->Lat, Link->Call2->Lon);
+			Link->Call1->Call, Link->Call2->Call, Link->Call1->Lat, Link->Call1->Lon,	Link->Call2->Lat, Link->Call2->Lon);
 		else 
 			fprintf(pFile, "Link,%s,%s,%f,%f,%f,%f,blue,\r\n|",
-				Link->Call1->Call, Link->Call2->Call, Link->Call1->Lat, Link->Call1->Lon,	Link->Call2->Lat, Link->Call2->Lon);
+			Link->Call1->Call, Link->Call2->Call, Link->Call1->Lat, Link->Call1->Lon,	Link->Call2->Lat, Link->Call2->Lon);
 	}
 	fclose(pFile);
+
+	// Generate Chat File
+
+	//	Sort Calls for error report
+
+	qsort((void *)ChatNodes, NumberOfChatNodes, sizeof(void *), CompareChatCalls);
+
+	pFile = fopen("status.txt","wb");
+
+	if (pFile == NULL)
+		return;
+
+	errFile = fopen("ChatErrors.html","wb");
+
+	if (errFile == NULL)
+		return;
+
+	fprintf(errFile, reportHeader);
+
+	activeNodes = 0;
+
+	// Count active nodes
+
+	for (i = 0; i < NumberOfChatNodes; i++)
+	{
+		if ((Now - ChatNodes[i]->LastHeard) < 86400)			//  > One day old - don't show
+			activeNodes++;
+	}
+
+	TM = gmtime(&Now);
+
+	fprintf(pFile, "%04d/%02d/%.2d %02d:%02d:%02d - %d Active Nodes\r\n|",
+		TM->tm_year + 1900, TM->tm_mon + 1, TM->tm_mday, TM->tm_hour,
+		TM->tm_min, TM->tm_sec, activeNodes);
+
+	for (i = 0; i < NumberOfChatNodes; i++)
+	{
+		ChatNode = ChatNodes[i];
+		noPosition = 0;
+
+		if (strcmp(ChatNode->Call, "GM8BPQ-4") == 0)
+			i = i;
+
+		// |GM8BPQ-4,-6.21863670150439,58.4901567374667,GM8BPQ.ok.png,0,BPQ Chat Node, Skigersta, |
+
+		// derivedLat/Lon will be overwritten if a real report is received, so if that
+		// is set use it
+
+		Lat = ChatNode->Lat;
+		Lon = ChatNode->Lon;
+
+		// If we don't have a real lat/lon, try to find one from other ssid's of call.
+		// If still not found generate randomised position around 0, 0
+
+		if (Lat == 0.0 && Lon == 0.0)
+		{
+			struct NodeData * x = FindBaseCall(ChatNode->Call);
+
+			noPosition = 1;
+
+			if (x)
+			{
+				Lat = x->Lat;
+				Lon = x->Lon;
+				ChatNode->Lat = Lat;
+				ChatNode->Lon = Lon;
+				ChatNode->derivedLat = 	Lat;
+				ChatNode->derivedLon = 	Lon;
+				ChatNode->derivedPosn = 1;
+				noPosition = 0;
+			}
+
+			if (Lat == 0.0 && Lon == 0.0)
+			{
+				// Radmomise unknown posn around 0, 0
+
+				Lat += (rand() * 0.1) / RAND_MAX;
+				Lon += (rand() * 0.1) / RAND_MAX;
+				ChatNode->derivedLat = 	Lat;
+				ChatNode->derivedLon = 	Lon;
+			}
+		}
+
+		// Try with error file as a status file, so include all calls and
+		// list after any misconfigured links
+
+		fprintf(errFile, "<b>%s</b>", ChatNode->Call);
+
+		if (noPosition)
+			fprintf(errFile, " Unknown position");
+
+	
+		if (ChatNode->LastHeard == 0)
+ 			fprintf(errFile, " Not Reporting");
+					
+		if (ChatNode->hasLinks == 0)
+ 			fprintf(errFile, " No Links");
+		else
+		{
+			// Check through links for any mismatches
+
+			struct ChatLink * Link;
+			char * Call = ChatNode->Call;
+			char * OtherCall;
+			int reported = 0;
+			
+			int i;
+
+			for (i = 0; i < NumberOfChatLinks; i++)
+			{
+				Link = ChatLinks[i];
+
+				if (strcmp(Link->Call1->Call, Call) == 0)
+					OtherCall = Link->Call2->Call;
+				else if (strcmp(Link->Call2->Call, Call) == 0)
+					OtherCall = Link->Call1->Call;
+				else
+					continue;
+
+				if ((Now - Link->LastHeard) < 3600 && Link->Call1State != Link->Call2State )
+				{
+					if (reported == 0)
+					{
+						fprintf(errFile, " Mismatched Links");
+						reported = 1;
+					}
+					fprintf(errFile, " %s", OtherCall);
+				}		
+			}
+		}		
+	
+		fprintf(errFile, "<br>");
+
+		if (ChatNode->LastHeard == 0)		// Don't display if not reporting
+			continue;					
+
+		if (ChatNode->hasLinks == 0)
+ 
+
+
+		if (noPosition && ChatNode->hasLinks == 0)
+		{
+			continue;				// Don't display if no posn and no links
+		}
+
+		if ((Now - ChatNode->LastHeard) < 86400)
+		{
+			if ((Now - ChatNode->LastHeard) < 3600)
+				fprintf(pFile, "%s,%f,%f,xx.ok.,%d,%s,\r\n|",
+				ChatNode->Call, Lon, Lat, ChatNode->PopupMode, ChatNode->Comment);
+			else
+				fprintf(pFile, "%s,%f,%f,xx.down.,%d,%s,\r\n|",
+				ChatNode->Call, Lon, Lat, ChatNode->PopupMode, ChatNode->Comment);
+		}
+	}
+
+	for (i = 0; i < NumberOfChatLinks; i++)
+	{
+		ChatLink = ChatLinks[i];
+
+		// |Line,-122.1225,47.6891666666667, -93.294332,36.620264,#000000,2
+
+		if ((Now - ChatLink->LastHeard) < 86400)
+		{
+			if (ChatLink->Call1State == 0 && ChatLink->Call2State == -1) 
+				State = 3;      // Down Mismatch
+			else if (ChatLink->Call1State == -1 && ChatLink->Call2State == 0)
+				State = 3;
+			else if (ChatLink->Call1State == 2 && ChatLink->Call2State == 2)
+				State = 2;		// Up
+			else if (ChatLink->Call1State == 2 || ChatLink->Call2State == 2)
+				State = 1;		// Reported up from one end
+			else
+				State = 0;
+
+			if (State == 1 || State == 2 || State == 0)
+			{
+				fprintf(pFile, "Line,%f,%f,%f,%f,%d,%s,%s\r\n|",
+					ChatLink->Call1->derivedLon, ChatLink->Call1->derivedLat,
+					ChatLink->Call2->derivedLon, ChatLink->Call2->derivedLat, 
+					State, ChatLink->Call1->Call, ChatLink->Call2->Call);
+			}
+//			if (State == 1 || State == 3)
+//				fprintf(errFile, "Config Mismatch %s > %s<br>", ChatLink->Call1->Call, ChatLink->Call2->Call); 
+
+		}
+	}
+
+	fprintf(errFile, "</body></html>\r\n");
+
+	fclose(pFile);
+	fclose(errFile);
+
 
 	// Save status for restart
 
@@ -757,13 +1652,36 @@ void GenerateNodeLinks(time_t Now)
 
 	if (pFile == NULL)
 		return;
- 	
+
 	for (i = 0; i < NumberOfNodes; i++)
 	{
 		Node = Nodes[i];
-	
-		if (Node->LastHeard && Node->Lat != 0.0)
-			fprintf(pFile, "%s,%f,%f,%d,%s|%d\r\n", Node->Call, Node->Lat, Node->Lon, Node->PopupMode, Node->Comment, Node->LastHeard); 
+
+		//		if (Node->LastHeard && Node->Lat != 0.0)
+		{
+			struct HeardItem * Heard = Node->Heard;
+
+			fprintf(pFile, "%s,%f,%f,%d,%s|%d|%d|", Node->Call, Node->Lat, Node->Lon, Node->PopupMode, Node->Comment, Node->LastHeard, Node->onlyHeard); 
+
+			while (Heard)
+			{
+				if ((Now - Heard->Time) < 4 * 86400)  // Less than 4 days old
+					fprintf(pFile, "%s,%s,%s,%s,%d/", Heard->HeardCall, Heard->ReportingCall, Heard->Freq, Heard->Flags, Heard->Time);
+				Heard = Heard->Next;
+			}
+			fprintf(pFile, "|");
+
+			Heard = Node->HeardBy;
+
+			while (Heard)
+			{
+				if ((Now - Heard->Time) < 4 * 86400)  // Less than 4 days old
+					fprintf(pFile, "%s,%s,%s,%s,%d/", Heard->HeardCall, Heard->ReportingCall, Heard->Freq, Heard->Flags, Heard->Time);
+				Heard = Heard->NextBy;
+			}
+
+			fprintf(pFile, "|\r\n");
+		}
 	}
 
 	fclose(pFile);
@@ -772,13 +1690,236 @@ void GenerateNodeLinks(time_t Now)
 
 	if (pFile == NULL)
 		return;
- 	
+
 	for (i = 0; i < NumberOfNodeLinks; i++)
 	{
 		Link = NodeLinks[i];
-		fprintf(pFile, "%s,%s,%d,%d\r\n", Link->Call1->Call, Link->Call2->Call, Link->Type, Link->LastHeard);
+		if ((Now - Link->LastHeard) < 86400)  // Less than a days old
+			fprintf(pFile, "%s,%s,%d,%d\r\n", Link->Call1->Call, Link->Call2->Call, Link->Type, Link->LastHeard);
+	}
+	fclose(pFile);
+
+	// Save Chat Info
+
+	pFile = fopen("savechat.txt","wb");
+
+	if (pFile == NULL)
+		return;
+
+	for (i = 0; i < NumberOfChatNodes; i++)
+	{
+		ChatNode = ChatNodes[i];
+
+		fprintf(pFile, "%s,%f,%f,%d,%s|%d|\r\n",
+			ChatNode->Call, ChatNode->Lat, ChatNode->Lon, ChatNode->PopupMode, ChatNode->Comment, ChatNode->LastHeard);
+
+	}
+	fclose(pFile);
+
+	pFile = fopen("savechatlinks.txt","wb");
+
+	if (pFile == NULL)
+		return;
+
+	for (i = 0; i < NumberOfChatLinks; i++)
+	{
+		ChatLink = ChatLinks[i];
+
+		fprintf(pFile, "%s,%s,%d,%d,%d\r\n",
+			ChatLink->Call1->Call, ChatLink->Call2->Call, ChatLink->Call1State, ChatLink->Call2State, ChatLink->LastHeard);
+
 	}
 	fclose(pFile);
 
 }
 
+void ProcessChatUpdate(char * From, char * Msg)
+{
+	struct ChatNodeData * Node = FindChatNode(From);
+	struct ChatNodeData * OtherNode;
+	struct ChatLink * Link;
+	int i;
+
+	char * p1, * p2, * p3, * p4, * context;
+	int NewState;
+
+	if (strcmp(From, "GB7UOD-12") == 0)
+		i = 0;
+
+	Node->LastHeard = Now;
+
+	if (memcmp(Msg, "INFO", 4) == 0)
+	{
+		int i = 0;
+
+		char * latstring;
+		char * Popup;
+		char * PopupMode;
+		double Lat, Lon;
+
+
+		//		printf("%s %s\r\n", From, Msg);
+
+		if (memcmp(&Msg[5], "MapPosition=", 12) == 0)
+			Msg += 12;
+
+		latstring = &Msg[5];
+
+		Popup = strlop(latstring, '|');
+		PopupMode = strlop(Popup, '|');
+
+		if (strlen(latstring) == 6)
+		{
+			// Most Likely a Lccator
+
+			_strupr(latstring);
+
+			if (FromLOC(latstring, &Lat, &Lon))
+			{
+				//				printf("**%s %s %f %f\r\n", From, latstring, Lat, Lon);
+				goto gotPos;
+			}
+		}
+
+		// Split latstring into up to 4 components
+
+		p1 = strtok_s(latstring, " ,", &context);
+		p2 = strtok_s(NULL, " ,", &context);
+		p3 = strtok_s(NULL, " ,", &context);
+		p4 = strtok_s(NULL, " ,", &context);
+
+		if (p1 == 0 || p2 == 0)
+		{
+			return;
+		}
+
+		if (p3 == 0 || p3[0] == 0)
+		{
+			// Only two - Lat and Lon. May have NS or EW on end, and may be aprs format
+
+			char * dot = strchr(p1, '.');
+
+			if (dot && (dot - p1) == 4)
+			{
+				// APRS Format (probably)
+
+				char NS, EW;
+				char LatDeg[3], LonDeg[4];
+
+				NS = p1[7];
+				EW = p2[8];
+
+				// Standard format ddmm.mmN/dddmm.mmE?
+
+				memcpy(LatDeg, p1,2);
+				LatDeg[2]=0;
+				Lat = atof(LatDeg) + (atof(p1+2) / 60);
+
+				if (NS == 'S')
+					Lat = -Lat;
+
+				memcpy(LonDeg,p2, 3);
+				LonDeg[3]=0;
+
+				Lon = atof(LonDeg) + (atof(p2+3) / 60);
+
+				if (EW == 'W')
+					Lon = -Lon;
+
+				//				printf("APRS %s %f %f\r\n", From, Lat, Lon);
+				goto gotPos;
+			}
+
+			Lat = atof(p1);
+			Lon = atof(p2);
+
+			if (Lat >  90.0 || Lon > 180.0 || Lat < -90.0 || Lon < -180.0)
+			{
+				printf("**%s Corrupt %s %s \r\n", From, p1, p2);
+				return;
+			}
+
+			//	See if NS/EW
+
+			if (strchr(p1, 'S'))
+				Lat -= Lat;
+			if (strchr(p2, 'W'))
+				Lon -= Lon;
+
+			//			printf("**%s %f %f\r\n", From, Lat, Lon);
+			goto gotPos;
+		}
+
+		if (p3 && p4 && strchr(p2, 'N') || strchr(p2, 'S'))
+		{
+			char * min;
+
+			// Spaces between lat and n/s, lon e/s 
+
+			// Could be decimal degrees or deg min or seg min s
+
+			if (strchr(p1, '\xb0'))
+			{
+				min = strlop(p1, '\xb0');
+
+				Lat = atof(p1) + atof(min) /60;
+
+				if (strchr(p2, 'S'))
+					Lat -= Lat;
+			}
+
+			if (strchr(p3, '\xb0'))
+			{
+				min = strlop(p3, '\xb0');
+
+				Lon = atof(p3) + atof(min) /60;
+
+				if (strchr(p4, 'W'))
+					Lon -= Lon;
+			}
+		}
+
+gotPos:
+
+		if (Lat >  90.0 || Lat < -90.0)
+			return;
+
+		Node->derivedLat = Node->Lat = Lat;
+		Node->derivedLon = Node->Lon = Lon;
+		Node->derivedPosn = 0;
+
+		strcpy(Node->Comment, Popup);
+		Node->PopupMode = atoi(PopupMode);
+
+		return;
+	}
+
+	// Link Info
+
+	// Call / State Pairs
+
+	//	printf("%s\r\n", Msg);
+
+	p1 = strtok_s(Msg, " \r", &context);
+	p2 = strtok_s(NULL, " \r", &context);
+
+	while (p1 && p2)
+	{
+		//		printf("%s %s\r\n", p1, p2);
+
+		NewState = atoi(p2);
+
+		// Ignore down reports if target doesn't exist
+
+		if (NewState != 4)					// 4 is setting up
+		{
+			OtherNode = FindChatNode(p1);
+			Link = FindChatLink(From, p1, NewState);
+			Link->LastHeard = Now;
+		}
+		p1 = strtok_s(NULL, " \r", &context);
+		p2 = strtok_s(NULL, " \r", &context);
+
+	}
+	return;
+}

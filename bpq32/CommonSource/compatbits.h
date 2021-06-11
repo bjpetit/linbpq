@@ -22,6 +22,9 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #include <crtdbg.h>
+
+#define strtoll _strtoi64
+
 #ifdef _WIN64
 #include "stdint.h"
 #else

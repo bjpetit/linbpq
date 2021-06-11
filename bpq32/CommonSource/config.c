@@ -664,6 +664,16 @@ int decode_rec(char * rec)
 		return 1;
 	}
 
+	if (_memicmp(rec, "CHATMAPSERVER=", 14) == 0)
+	{
+		// Map reporting override
+
+		strcpy(ChatMapServer, &rec[14]);
+		strlop(ChatMapServer, ' ');
+
+		return 1;
+	}
+
 	if (_memicmp(rec, "IPGATEWAY", 9) == 0 && rec[9] != '=')	// IPGATEWAY, not IPGATEWAY=
 	{
 		// Create Embedded IPGateway Config

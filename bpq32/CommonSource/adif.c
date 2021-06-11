@@ -591,7 +591,7 @@ VOID ADIFWriteFreqList()
 	char Locator[16];
 	char Call[16];
 	int i, freqCount = 0;
-	int Freqs[100] = {0};
+	long long Freqs[100] = {0};
 
 	if (WL2KReport == NULL)
 		return;
@@ -646,7 +646,7 @@ VOID ADIFWriteFreqList()
 
 
 	for (i = 0; i < freqCount; i++)
-		fprintf(Handle, "Frequency %d=%d\r\n" , i + 1, Freqs[i]); 
+		fprintf(Handle, "Frequency %d=%lld\r\n" , i + 1, Freqs[i]); 
 
 	fclose(Handle);
 }

@@ -62,6 +62,9 @@ char * GetChallengeResponse(char * Call, char *  ChallengeString);
 
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID FromLOC(char * Locator, double * pLat, double * pLon);
+BOOL ToLOC(double Lat, double Lon , char * Locator);
+
+int GetPosnFromAPRS(char * Call, double * Lat, double * Lon);
 
 static RECT Rect;
 
@@ -705,7 +708,7 @@ IdTag (random alphanumeric, 12 chars)
 	MessageLen += sprintf(&Message[MessageLen], "\"ClientGrid\":\"%s\",", ADIF->LOC);
 	MessageLen += sprintf(&Message[MessageLen], "\"Sid\":\"%s\",", ADIF->UserSID);
 	MessageLen += sprintf(&Message[MessageLen], "\"Mode\":\"%s\",", WL2KModes[ADIF->Mode]);
-	MessageLen += sprintf(&Message[MessageLen], "\"Frequency\":%d,", ADIF->Freq);
+	MessageLen += sprintf(&Message[MessageLen], "\"Frequency\":%lld,", ADIF->Freq);
 	MessageLen += sprintf(&Message[MessageLen], "\"Kilometers\":%d,", Dist);
 	MessageLen += sprintf(&Message[MessageLen], "\"Degrees\":%d,", intBearing);
 	MessageLen += sprintf(&Message[MessageLen], "\"LastCommand\":\"%s\",", ADIF->Termination);
@@ -763,6 +766,8 @@ VOID SendHTTPRequest(SOCKET sock, char * Request, char * Params, int Len, char *
 		//	for complete message
 
 		inptr += InputLen;
+
+		Buffer[inptr] = 0;
 		
 		ptr = strstr(Buffer, "\r\n\r\n");
 
@@ -810,7 +815,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Request, char * Params, int Len, char *
 				if (ptr1)
 				{
 					// Just accept anything until I've sorted things with Lee
-				
+					Debugprintf("%s", ptr1);
 					Debugprintf("WL2K Database update ok");
 					return;
 				}
@@ -955,7 +960,7 @@ VOID SendHTTPReporttoWL2KThread(void * unused)
 				"\"Callsign\":\"%s\","
 				"\"BaseCallsign\":\"%s\","
 				"\"GridSquare\":\"%s\","
-				"\"Frequency\":%d,"
+				"\"Frequency\":%lld,"
 				"\"Mode\":%d,"
 				"\"Baud\":%d,"
 				"\"Power\":%d,"
@@ -1110,7 +1115,7 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
 	if (p_cmd == NULL) goto BadLine;
 
-	WL2KReport->Freq = atoi(p_cmd);
+	WL2KReport->Freq = strtoll(p_cmd, NULL, 10);
 
 	if (WL2KReport->Freq == 0)	// Invalid
 		goto BadLine;					
@@ -1273,6 +1278,10 @@ VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Directi
 
 		memcpy(AXCall, Call, 7 * 9);
 		ReportCall[ConvFromAX25(Call, ReportCall)] = 0;
+
+		// if this is a UI frame with a locator or APRS position
+		// we could derive a position from it
+
 	}
 	else
 	{
@@ -1438,6 +1447,18 @@ DoMove:
 		ReportMode[2] = (TNC->RIG->CurrentBandWidth) ? TNC->RIG->CurrentBandWidth : '?';
 	ReportMode[3] = Direction;
 	ReportMode[4] = 0;
+
+	// If no position see if we have an APRS posn
+
+	if (LOC[0] == 0)
+	{
+		double Lat, Lon;
+
+		if (GetPosnFromAPRS(ReportCall, &Lat, &Lon) && Lat != 0.0)
+		{
+			ToLOC(Lat, Lon, LOC);
+		}
+	}
 
  	SendMH(TNC, ReportCall, ReportFreq, LOC, ReportMode);
 
@@ -1718,3 +1739,21 @@ BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
 
 }
 // http://server.winlink.org:8085/csv/reply/ChannelList?Modes=40,41,42,43,44&ServiceCodes=BPQTEST,PUBLIC
+
+int standardParams(struct TNCINFO * TNC, char * buf)
+{
+	if (_memicmp(buf, "WL2KREPORT", 10) == 0)
+		TNC->WL2K = DecodeWL2KReportLine(buf);
+	else if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
+		TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit = atoi(&buf[16]) * 60;
+	else if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
+		TNC->BusyHold = atoi(&buf[8]);
+	else if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
+		TNC->BusyWait = atoi(&buf[8]);
+	else if (_memicmp(buf, "DEFAULTRADIOCOMMAND", 19) == 0)
+		TNC->DefaultRadioCmd = _strdup(&buf[20]);
+	else
+		return FALSE;
+
+	return TRUE;
+}

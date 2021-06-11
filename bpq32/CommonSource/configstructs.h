@@ -70,7 +70,8 @@ struct PORTCONFIG
 	unsigned int PERMITTEDAPPLS;	// Appls allowed on this port
 	int HavePermittedAppls;			// Indicated PERMITTEDAPPLS uses
 	int Hide;				// Don't show on Ports display or AGW Connect Menu
-
+	long long txOffset;		// Transverter tx offset 
+	long long rxOffset;		// Transverter rx offset ppa
 };
 
 struct ROUTECONFIG

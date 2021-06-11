@@ -1025,6 +1025,12 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 
 	UndoTransparency(FN);
 
+	if (strstr(FN, ".."))
+	{
+		FN[0] = '/';
+		FN[1] = 0;
+	}
+
 	if (strlen(FN) > 256)
 	{
 		FN[256] = 0;

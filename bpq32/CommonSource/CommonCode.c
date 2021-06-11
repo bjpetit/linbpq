@@ -3418,7 +3418,7 @@ void printStack(void)
 pthread_t ResolveUpdateThreadId = 0;
 
 char NodeMapServer[80] = "update.g8bpq.net";
-char ChatMapServer[80] = "chatmap.g8bpq.net";
+char ChatMapServer[80] = "chatupdate.g8bpq.net";
 
 VOID ResolveUpdateThread(void * Unused)
 {
@@ -3495,13 +3495,12 @@ VOID OpenReportingSockets()
 	// Socket must be opened in MailChat Process
 
 	Chatreportdest.sin_family = AF_INET;
-	
-	Chatreportdest.sin_port = htons(10090);
+	Chatreportdest.sin_port = htons(81);
 
 	_beginthread(ResolveUpdateThread, 0, NULL);
 }
 
-/*
+
 VOID WriteMiniDump()
 {
 #ifdef WIN32
@@ -3510,7 +3509,7 @@ VOID WriteMiniDump()
 	BOOL ret;
 	char FN[256];
 
-	sprintf(FN, "MiniDump%d.dmp", (time(NULL) & 0xffff));
+	sprintf(FN, "%s/Logs/MiniDump%x.dmp", BPQDirectory, time(NULL));
 
 	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE,
 		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -3530,7 +3529,7 @@ VOID WriteMiniDump()
 	}
 #endif
 }
-*/
+
 
 // UI Util Code
 

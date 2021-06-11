@@ -102,6 +102,7 @@ void ProcessKISSBytes(struct TNCINFO * TNC, UCHAR * Data, int Len);
 void ProcessKISSPacket(struct TNCINFO * TNC, UCHAR * KISSBuffer, int Len);
 int ARDOPProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen);
 int ConnecttoARDOP(struct TNCINFO * TNC);
+int standardParams(struct TNCINFO * TNC, char * buf);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -537,22 +538,9 @@ static int ProcessLine(char * buf, int Port)
 			}
 			else
 */
-			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-				TNC->WL2K = DecodeWL2KReportLine(buf);
-			else
-			if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
-				TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit = atoi(&buf[16]) * 60;
-			else
+
 			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)	// Packet Channels
 				TNC->PacketChannels = atoi(&buf[14]);
-			else
-			if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
-				TNC->BusyHold = atoi(&buf[8]);
-
-			else
-			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
-				TNC->BusyWait = atoi(&buf[8]);
-
 			else
 			if (_memicmp(buf, "MAXCONREQ", 9) == 0)		// Hold Time for Busy Detect
 				TNC->MaxConReq = atoi(&buf[9]);
@@ -579,15 +567,15 @@ static int ProcessLine(char * buf, int Port)
 					TNC->PacketChannels = 5;
 			//	AddVirtualKISSPort(TNC, Port, buf);
 			}
-			else
-//			if (_memicmp(buf, "PAC ", 4) == 0 && _memicmp(buf, "PAC MODE", 8) != 0)
+
+//			else if (_memicmp(buf, "PAC ", 4) == 0 && _memicmp(buf, "PAC MODE", 8) != 0)
 //			{
 				// PAC MODE goes to TNC, others are parsed locally
 //
 //				ConfigVirtualKISSPort(TNC, buf);
 //			}
-//			else
-				strcat (TNC->InitScript, buf);
+			else if (standardParams(TNC, buf) == FALSE)
+				strcat(TNC->InitScript, buf);
 		}
 
 
@@ -1889,8 +1877,15 @@ VOID ARDOPReleaseTNC(struct TNCINFO * TNC)
 
 	//	Start Scanner
 				
-	sprintf(TXMsg, "%d SCANSTART 15", TNC->Port);
+	//	Start Scanner
 
+	if (TNC->DefaultRadioCmd)
+	{
+		sprintf(TXMsg, "%d %s", TNC->Port, TNC->DefaultRadioCmd);
+		Rig_Command(-1, TXMsg);
+	}
+
+	sprintf(TXMsg, "%d SCANSTART 15", TNC->Port);
 	Rig_Command(-1, TXMsg);
 
 	ReleaseOtherPorts(TNC);

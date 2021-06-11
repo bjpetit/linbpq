@@ -1470,9 +1470,6 @@ static int ProcessLine(char * buf, int Port)
 			if (_memicmp(buf, "WINDOW", 6) == 0)
 				TNC->Window = atoi(&buf[7]);
 			else
-			if (_memicmp(buf, "ARQMODE", 7) == 0)
-				TNC->FLInfo->KISSMODE = FALSE;
-			else
 			if (_memicmp(buf, "DEFAULTMODEM", 12) == 0) 
 				TNC->AGWInfo->Modem = atoi(&buf[13]);
 			else

@@ -62,7 +62,6 @@ char *fcvt(double number, int ndigits, int *decpt, int *sign);
 
 #include "hidapi.h"
 
-
 struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 int Row = -20;
@@ -215,6 +214,7 @@ struct ScanEntry ** CheckTimeBands(struct RIGINFO * RIG)
 VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 {
 	struct RIGPORTINFO * PORT;
+	int i;
 
 	if (RIG == NULL) return;
 
@@ -243,7 +243,12 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 	{
 		UCHAR * Poll = PORT->TXBuffer;
 
-		RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+		// Don't read for 10 secs to avoid clash with PTT OFF
+		// Should do this for all rigs on port
+
+		for (i = 0; i< PORT->ConfiguredRigs; i++)
+			PORT->Rigs[i].PollCounter = 100;
+
 		PORT->AutoPoll = TRUE;
 
 		switch (PORT->PortType)
@@ -584,7 +589,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			if (RIG->RIG_DEBUG)
 				Debugprintf("BPQ32 SCANSTOP Port %d", Port);
 
-			RIG->PollCounter = 50;	// Dont read freq for 5 secs
+			RIG->PollCounter = 50 / RIG->PORT->ConfiguredRigs;	// Dont read freq for 5 secs
 
 			return FALSE;
 		}
@@ -1830,10 +1835,10 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		if (PORT->PortType != HAMLIB)
 		{
-			CloseCOMPort(PORT->hDevice);
-
 			if (PORT->hPTTDevice != PORT->hDevice)
 				CloseCOMPort(PORT->hPTTDevice);
+
+			CloseCOMPort(PORT->hDevice);
 		}
 
 		PORT->hDevice = 0;
@@ -1880,6 +1885,8 @@ DllExport BOOL APIENTRY Rig_Close()
 	return TRUE;
 }
 
+
+
 BOOL Rig_Poll()
 {
 	int p, i;
@@ -1916,7 +1923,11 @@ BOOL Rig_Poll()
 					&& _stricmp(PORT->IOBASE, "CM108") != 0)
 				{
 					if (PORT->Closed == 0)
+					{
 						OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+						if (PORT->IOBASE && PORT->PTTIOBASE[0] == 0)		// Using separate port for PTT?
+							PORT->hPTTDevice = PORT->hDevice;
+					}
 				}
 			}
 		}
@@ -2405,7 +2416,7 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 
 			RIG->ScanCounter = PORT->FreqPtr->Dwell; 
 			
-			if (RIG->ScanCounter == 0 || RIG->ScanCounter > 150)		// ? After manual change
+			if (RIG->ScanCounter == 0)		// ? After manual change
 				RIG->ScanCounter = 50;
 
 			return FALSE;
@@ -2454,7 +2465,7 @@ CheckOtherPorts:
 			RIG->WEB_SCAN = '-';
 			RIG->ScanCounter = PORT->FreqPtr->Dwell;
 
-			if (RIG->ScanCounter == 0 || RIG->ScanCounter > 150)		// ? After manual change
+			if (RIG->ScanCounter == 0)		// ? After manual change
 				RIG->ScanCounter = 50; 
 
 			ReleasePermission(RIG);
@@ -2499,7 +2510,7 @@ CheckOtherPorts:
 
 	RIG->ScanCounter = PORT->FreqPtr->Dwell; 
 		
-	if (RIG->ScanCounter == 0 || RIG->ScanCounter > 600)		// ? After manual change
+	if (RIG->ScanCounter == 0)		// ? After manual change
 		RIG->ScanCounter = 150;
 	
 	MySetWindowText(RIG->hSCAN, "S");
@@ -2614,9 +2625,9 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 	RIG = &PORT->Rigs[PORT->CurrentRig];
 
+/*
 	RIG->DebugDelay ++;
 
-/*
 	if (RIG->DebugDelay > 600)
 	{
 		RIG->DebugDelay = 0;
@@ -2638,8 +2649,14 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 	
-				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar);
+				if (PORT->FreqPtr->Freq > 0.0)
+				{
+					_gcvt((PORT->FreqPtr->Freq + RIG->rxOffset) / 1000000.0, 9, RIG->Valchar); // For MH
+					strcpy(RIG->WEB_FREQ, RIG->Valchar);
+					SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+				}
 
+		
 				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
 				RigWriteCommBlock(PORT);
 				PORT->Retries = 2;
@@ -2670,7 +2687,12 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
-		_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
+		if (PORT->FreqPtr->Freq > 0.0)
+		{
+			_gcvt((PORT->FreqPtr->Freq + RIG->rxOffset) / 1000000.0, 9, RIG->Valchar); // For MH
+			strcpy(RIG->WEB_FREQ, RIG->Valchar);
+			SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+		}
 
 		PORT->TXLen = PORT->FreqPtr->Cmd1Len;					// First send the set Freq
 		RigWriteCommBlock(PORT);
@@ -2683,15 +2705,19 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		return;
 	}
 
-//	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
-//		return;						// no point in reading freq if we are about to change it
 		
+	if (RIG->RIGOK && RIG->ScanStopped == 0 && RIG->NumberofBands &&
+		RIG->ScanCounter && RIG->ScanCounter < 30) // no point in reading freq if we are about to change
+		return;
+
 	if (RIG->PollCounter)
 	{
 		RIG->PollCounter--;
 		if (RIG->PollCounter)
 			return;
 	}
+
+	// Need to make sure we don't poll multiple rigs on port at the same time
 
 	if (RIG->RIGOK)
 	{
@@ -2703,6 +2729,8 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		PORT->Retries = 1;
 		RIG->PollCounter = 100 / PORT->ConfiguredRigs;			// Slow Poll if down
 	}
+
+	RIG->PollCounter += PORT->CurrentRig * 3;
 
 	PORT->AutoPoll = TRUE;
 
@@ -2718,6 +2746,10 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 	PORT->TXLen = 6;
 
 	RigWriteCommBlock(PORT);
+
+	PORT->Retries = 1;
+	PORT->Timeout = 10;
+
 	return;
 }
 
@@ -2829,7 +2861,7 @@ ok:
 					if (!PORT->AutoPoll)
 						SendResponse(RIG->Session, "Frequency and Mode Set OK");
 
-					RIG->PollCounter = 50;	// Dont read freq for 5 secs
+					RIG->PollCounter = 30 / RIG->PORT->ConfiguredRigs;	// Dont read freq for 3 secs
 				}
 			}
 
@@ -2923,7 +2955,7 @@ SetFinished:
 				if (!PORT->AutoPoll)
 					SendResponse(RIG->Session, "Frequency and Mode Set OK");
 
-				RIG->PollCounter = 50;	// Dont read freq for 5 secs
+				RIG->PollCounter = 30 / RIG->PORT->ConfiguredRigs;	// Dont read freq for 3 secs
 			}
 		}
 
@@ -2974,7 +3006,7 @@ SetFinished:
 
 		if (!PORT->AutoPoll)
 		{
-			// Manual response probably to CMD Query. Retuen response
+			// Manual response probably to CMD Query. Return response
 
 			char reply[256] = "CMD Response ";
 			char * p1 = &reply[13];
@@ -3011,8 +3043,15 @@ SetFinished:
 	if (Msg[4] == 3)
 	{
 		// Rig Frequency
-		int n, j, Freq = 0, decdigit;
+		int n, j, decdigit;
+		long long Freq = 0;
 		int start = 9;
+		long long MHz, Hz;
+		char CharMHz[16] = "";
+		char CharHz[16] = "";
+
+		int i;
+
 	
 		if (RIG->IC735)
 			start = 8;		// shorted msg
@@ -3026,14 +3065,31 @@ SetFinished:
 			Freq = (Freq *100 ) + decdigit;
 		}
 
+		Freq += RIG->rxOffset;
+
 		RIG->RigFreq = Freq / 1000000.0;
 
-//		Valchar = _fcvt(FreqF, 6, &dec, &sign);
-		_gcvt(RIG->RigFreq, 9, RIG->Valchar);
- 
-		sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
-		SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+		// If we convert to float to display we get rounding errors, so convert to MHz and Hz to display
 
+		MHz = Freq / 1000000;
+
+		Hz = Freq - MHz * 1000000;
+
+		sprintf(CharMHz, "%lld", MHz);
+		sprintf(CharHz, "%06lld", Hz);
+
+		for (i = 5; i > 2; i--)
+		{
+			if (CharHz[i] == '0')
+				CharHz[i] = 0;
+			else
+				break;
+		}
+
+		sprintf(RIG->WEB_FREQ,"%lld.%s", MHz, CharHz);
+		SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+		strcpy(RIG->Valchar, RIG->WEB_FREQ);
+ 
 
 		// Now get Mode
 
@@ -3543,9 +3599,10 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 		return;
 	}
 
-	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
-		return;						// no point in reading freq if we are about to change it
-		
+	if (RIG->RIGOK && RIG->ScanStopped == 0 && RIG->NumberofBands &&
+		RIG->ScanCounter && RIG->ScanCounter < 30) // no point in reading freq if we are about to change
+		return;
+	
 	if (RIG->PollCounter)
 	{
 		RIG->PollCounter--;
@@ -3696,9 +3753,25 @@ Loop:
 
 	if (Msg[0] == 'F' && Msg[1] == 'A' && CmdLen > 9)
 	{
-		char FreqDecimal[10] = "";
-		int F1, i;
+		char CharMHz[16] = "";
+		char CharHz[16] = "";
 
+		int i;
+		long long Freq;
+		long long MHz, Hz;
+
+		Freq = strtoll(&Msg[2], NULL, 10) + RIG->rxOffset;
+
+		// If we convert to float to display we get rounding errors, so convert to MHz and Hz to display
+
+		MHz = Freq / 1000000;
+
+		Hz = Freq - MHz * 1000000;
+
+		sprintf(CharMHz, "%lld", MHz);
+		sprintf(CharHz, "%06lld", Hz);
+
+/*
 		if (PORT->PortType == FT2000)
 		{
 			memcpy(FreqDecimal,&Msg[4], 6);
@@ -3716,19 +3789,18 @@ Loop:
 			Msg[7] = 0;
 		}
 		FreqDecimal[6] = 0;
+*/
 
 		for (i = 5; i > 2; i--)
 		{
-			if (FreqDecimal[i] == '0')
-				FreqDecimal[i] = 0;
+			if (CharHz[i] == '0')
+				CharHz[i] = 0;
 			else
 				break;
 		}
 
 
-		F1 = atoi(&Msg[2]);
-
-		sprintf(RIG->WEB_FREQ,"%d.%s", F1, FreqDecimal);
+		sprintf(RIG->WEB_FREQ,"%lld.%s", MHz, CharHz);
 		SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
 		strcpy(RIG->Valchar, RIG->WEB_FREQ);
 
@@ -3899,7 +3971,8 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 			return;
 	}
 
-	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
+	if (RIG->RIGOK && RIG->ScanStopped == 0 && RIG->NumberofBands &&
+		RIG->ScanCounter && RIG->ScanCounter < 30)
 		return;						// no point in reading freq if we are about to change it
 
 	RIG->PollCounter = 10;			// Once Per Sec
@@ -4818,6 +4891,20 @@ domux:
 			RIG->HAMLIBPORT = atoi(&ptr[7]);
 		}
 
+		if (memcmp(ptr, "TXOFFSET=", 9) == 0)
+		{
+			// HAMLIB Emulator - param is port to listen on
+
+			RIG->txOffset =  strtoll(&ptr[9], NULL, 10);
+		}
+
+		if (memcmp(ptr, "RXOFFSET=", 9) == 0)
+		{
+			// HAMLIB Emulator - param is port to listen on
+
+			RIG->rxOffset =  strtoll(&ptr[9], NULL, 10);
+		}
+
 		else if (atoi(ptr))
 			break;					// Not scan freq oe timeband, so see if another param
 
@@ -5102,7 +5189,6 @@ domux:
 		AddNMEAChecksum(RIG->PTTOff);
 		RIG->PTTOffLen = i;
 	}
-
 
 	if (ptr == NULL) return RIG;			// No Scanning, just Interactive control
 

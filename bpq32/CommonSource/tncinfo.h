@@ -622,6 +622,8 @@ typedef struct TNCINFO
 	int DefaultMode;
 	int CurrentMode;				// Used on HAL
 
+	char * DefaultRadioCmd;		// RADIO command to send at end of session
+
 	// Mode Equates
 
 	#define Clover 'C'

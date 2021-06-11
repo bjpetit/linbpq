@@ -1011,6 +1011,13 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Include standard APRS Station pages in code
 //	Fix VALIDCALLS processing in HF drivers
 //	Send Netrom Link reports to Node Map
+//	Add REALTELNET mode to Telnet Outward Connect
+//	Fix using S (Stay) parameter on Telnet connects when using CMDPORT and C HOST
+//	Add Default frequency to rigcontrol to set a freq/mode to retuen to after a connection
+//	Fix long (> 60 seconds) scan intervals
+//	Improved debugging of stuck semaphores
+//	Fix potential securiby bug in BPQ Web server
+//	Send Chat Updates to chatupdate.g8bpq.net port 81
 
 #define CKernel
 
@@ -1416,6 +1423,15 @@ BOOL PartLine = FALSE;
 int pindex = 0;
 DWORD * WritetoConsoleQ;
 
+
+LARGE_INTEGER lpFrequency = {0};
+LARGE_INTEGER lastRunTime;
+LARGE_INTEGER currentTime; 
+
+int ticksPerMillisec;
+int interval;
+
+
 VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dwTime);
 
 
@@ -1452,6 +1468,7 @@ BOOL APRSActive = FALSE;
 BOOL AGWActive = FALSE;
 
 extern int AGWPort;
+
 
 Tell_Sessions();
 
@@ -1610,7 +1627,7 @@ VOID MonitorThread(int x)
 			
 			// Write a minidump
 
-//			WriteMiniDump();
+			WriteMiniDump();
 			
 			Semaphore.Flag = 0;
 		}
@@ -1774,6 +1791,15 @@ VOID TimerProcX()
 	//
 
 	GetSemaphore(&Semaphore, 2);
+
+	// Get time since last run
+
+	QueryPerformanceCounter(&currentTime);
+
+	interval = (int)(currentTime.QuadPart - lastRunTime.QuadPart) / ticksPerMillisec;
+	lastRunTime.QuadPart = currentTime.QuadPart;
+
+	//Debugprintf("%d", interval);
 
 	// Process WINMORTraceQ
 
@@ -2380,6 +2406,12 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		LoadToolHelperRoutines();
 
 		Our_PID = GetCurrentProcessId();
+
+		QueryPerformanceFrequency(&lpFrequency);
+
+		ticksPerMillisec = (int)lpFrequency.QuadPart / 1000;
+
+		lastRunTime.QuadPart = lpFrequency.QuadPart;
 
 		GetProcess(Our_PID, pgm);
 

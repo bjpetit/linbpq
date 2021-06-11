@@ -7,7 +7,7 @@ typedef struct ADIF
 	int Mode;
 	char LOC[7];
 	char Band[8];			// ?Derive from freq?
-	int Freq;
+	long long Freq;
 
 	// Extra fields for Trimode comment fields
 

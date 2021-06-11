@@ -164,7 +164,7 @@
 				AssemblerListingLocation="c:\devprogs\bpq32\listings\"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="0"
+				DebugInformationFormat="3"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -182,7 +182,7 @@
 				OutputFile="C:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="1"
 				ModuleDefinitionFile="..\CommonSource\bpq32.def"
-				GenerateDebugInformation="false"
+				GenerateDebugInformation="true"
 				GenerateMapFile="true"
 				MapFileName="c:\DevProgs\BPQ32\bpqpdn.map"
 				MapExports="true"

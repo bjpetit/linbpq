@@ -64,6 +64,7 @@ int VARASendData(struct TNCINFO * TNC, UCHAR * Buff, int Len);
 VOID VARASendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue);
 VOID VARAProcessDataPacket(struct TNCINFO * TNC, UCHAR * Data, int Length);
 void CountRestarts(struct TNCINFO * TNC);
+int standardParams(struct TNCINFO * TNC, char * buf);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumVARAWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -204,15 +205,7 @@ static int ProcessLine(char * buf, int Port)
 			*ptr++ = 13;
 			*ptr = 0;
 		}
-
-		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-			TNC->WL2K = DecodeWL2KReportLine(buf);
-		else if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
-			TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit = atoi(&buf[16]) * 60;
-		else if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
-			TNC->BusyHold = atoi(&buf[8]);
-		else if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
-			TNC->BusyWait = atoi(&buf[8]);
+	
 		else if (_memicmp(buf, "BW2300", 6) == 0)
 		{
 			TNC->ARDOPCurrentMode[0] = 'W';				// Save current state for scanning
@@ -235,7 +228,7 @@ static int ProcessLine(char * buf, int Port)
 			TNC->DefaultMode = TNC->WL2KMode = 51;
 		else if (_memicmp(buf, "FM9600", 5) == 0)
 			TNC->DefaultMode = TNC->WL2KMode = 52;
-		else
+		else if (standardParams(TNC, buf) == FALSE)
 			strcat(TNC->InitScript, buf);	
 	}
 	return (TRUE);	
@@ -2301,13 +2294,17 @@ VOID VARAReleaseTNC(struct TNCINFO * TNC)
 	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	//	Start Scanner
-				
-	sprintf(TXMsg, "%d SCANSTART 15", TNC->Port);
 
+	if (TNC->DefaultRadioCmd)
+	{
+		sprintf(TXMsg, "%d %s", TNC->Port, TNC->DefaultRadioCmd);
+		Rig_Command(-1, TXMsg);
+	}
+
+	sprintf(TXMsg, "%d SCANSTART 15", TNC->Port);
 	Rig_Command(-1, TXMsg);
 
 	ReleaseOtherPorts(TNC);
-
 }
 
 

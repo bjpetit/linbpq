@@ -121,6 +121,7 @@ int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int CheckMode(struct TNCINFO * TNC);
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 void SCSTryToSendDATA(struct TNCINFO * TNC, int Stream);
+VOID UpdateMHwithDigis(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB

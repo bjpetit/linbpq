@@ -64,6 +64,7 @@ int CountBits(unsigned long in);
 VOID SaveMH();
 BOOL RestartTNC(struct TNCINFO * TNC);
 void GetPortCTEXT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID WriteMiniDump();
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 char OrigCmdBuffer[81] = "";		// Command Hander input buffer
@@ -263,8 +264,7 @@ VOID SAVENODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 VOID DUMPCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
-	char * ptr = 0;
-	*ptr = 0;
+	WriteMiniDump();
 
 	strcpy(Bufferptr, OKMSG);
 	Bufferptr += (int)strlen(OKMSG);

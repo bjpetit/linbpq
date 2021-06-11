@@ -155,6 +155,9 @@ struct RIGINFO
 
 	struct HAMLIBSOCK * Sockets;
 
+	long long txOffset;
+	long long rxOffset;
+
 };
 
 // PortType Equates

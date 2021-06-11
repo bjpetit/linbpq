@@ -2330,16 +2330,25 @@ nosocks:
 						sockptr->CMSSession = FALSE;
 						sockptr->FBBMode = FALSE;
 
-						if (P3[0] == 'K' || P4[0] == 'K' || P5[0] == 'K')
+						if (P3[0] == 'K' || P4[0] == 'K' || P5[0] == 'K' || P6[0] == 'K')
 						{
 							sockptr->Keepalive = TRUE;
 							sockptr->LastSendTime = REALTIMETICKS;
 						}
 
-						if (_stricmp(P3, "NOCALL") == 0 || _stricmp(P4, "NOCALL") == 0 || _stricmp(P5, "NOCALL") == 0)
+						if (P3[0] == 'S' || P4[0] == 'S' || P5[0] == 'S' || P6[0] == 'S')
+						{
+							// Set Say flag on partner session
+
+							struct _TRANSPORTENTRY * Sess = TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->L4CROSSLINK;
+							if (Sess)
+								Sess->STAYFLAG = 1;
+						}
+
+						if (_stricmp(P3, "NOCALL") == 0 || _stricmp(P4, "NOCALL") == 0 || _stricmp(P5, "NOCALL") == 0 || _stricmp(P6, "NOCALL") == 0)
 							sockptr->NoCallsign = TRUE;
 
-						if (_stricmp(P3, "TRANS") == 0 || _stricmp(P4, "TRANS") == 0 || _stricmp(P5, "TRANS") == 0)
+						if (_stricmp(P3, "TRANS") == 0 || _stricmp(P4, "TRANS") == 0 || _stricmp(P5, "TRANS") == 0 || _stricmp(P6, "TRANS") == 0)
 						{
 							sockptr->FBBMode = TRUE;
 							sockptr->NeedLF = TRUE;
@@ -2405,7 +2414,7 @@ nosocks:
 					// Only Allow user specified host if Secure Session
 
 					if (TCP->SecureTelnet)
-					{
+					{						
 						struct _TRANSPORTENTRY * Sess = TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number];
 
 //						if (Sess && Sess->L4CROSSLINK)
@@ -2424,6 +2433,8 @@ nosocks:
 
 					if (Port)
 					{
+						int useFBBMode = TRUE;
+
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = FALSE;
 						STREAM->ConnectionInfo->RelaySession = FALSE;
@@ -2431,7 +2442,14 @@ nosocks:
 						if (_stricmp(P3, "TELNET") == 0)
 						{
 //							// FBB with CRLF
+	
+							STREAM->ConnectionInfo->NeedLF = TRUE;
+						}
+						else if (_stricmp(P3, "REALTELNET") == 0)
+						{
+//							// Telnet Mode with CRLF
 		
+							useFBBMode = FALSE;
 							STREAM->ConnectionInfo->NeedLF = TRUE;
 						}
 						else
@@ -2465,7 +2483,7 @@ nosocks:
 								sprintf(STREAM->ConnectionInfo->Signon, "%s\r", P3);
 						}
 
-						TCPConnect(TNC, TCP, STREAM, Host, Port, TRUE);
+						TCPConnect(TNC, TCP, STREAM, Host, Port, useFBBMode);
 						ReleaseBuffer(buffptr);
 						return;
 					}
@@ -3740,7 +3758,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 		if (strlen(MsgPtr) == 0)
 		{
-			DataSocket_Disconnect(TNC, sockptr);       // Silently disconnect - should only be use dfor automatic systems
+			DataSocket_Disconnect(TNC, sockptr);       // Silently disconnect - should only be used for automatic systems
 			return 0;
 		}
 
@@ -4129,7 +4147,7 @@ MsgLoop:
 			int Len;
 			int Response = GetCMSHash(&MsgPtr[5], TCP->SecureCMSPassword);
 			char RespString[12];
-			int Freq = 0;
+			long long Freq = 0;
 			int Mode = 0;
 			ADIF * ADIF = sockptr->ADIF;
 
@@ -4217,7 +4235,7 @@ MsgLoop:
 						
 						if (PORT->WL2KInfo.Freq)
 						{
-							len = sprintf(Passline, "CMSTELNET %s %d %d\r", PORT->WL2KInfo.RMSCall, PORT->WL2KInfo.Freq, PORT->WL2KInfo.mode);
+							len = sprintf(Passline, "CMSTELNET %s %lld %d\r", PORT->WL2KInfo.RMSCall, PORT->WL2KInfo.Freq, PORT->WL2KInfo.mode);
 							ADIF->Freq = PORT->WL2KInfo.Freq;
 							ADIF->Mode = PORT->WL2KInfo.mode;
 						}
@@ -4226,7 +4244,7 @@ MsgLoop:
 					{
 						if (Sess2->RMSCall[0])
 						{
-							len = sprintf(Passline, "CMSTELNET %s %d %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
+							len = sprintf(Passline, "CMSTELNET %s %lld %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
 							ADIF->Mode = Sess2->Frequency;
 							ADIF->Mode = Sess2->Mode;
 						}

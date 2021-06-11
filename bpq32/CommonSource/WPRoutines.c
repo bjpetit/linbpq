@@ -957,6 +957,9 @@ it will not be replaced. This flag will be used in case the WP update messages a
 					if (_stricmp(Call, "RMS") == 0)
 						break;
 
+					if (_stricmp(Call, "SWITCH") == 0)
+						break;
+
 					if (_stricmp(Call, "SYSTEM") == 0)
 						break;
 
@@ -1123,6 +1126,9 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 		return;
 
 	if (_stricmp(user->Call, "SYSTEM") == 0)
+		return;
+
+	if (_stricmp(user->Call, "SWITCH") == 0)
 		return;
 
 	if (_stricmp(user->Call, "SYSOP") == 0)
