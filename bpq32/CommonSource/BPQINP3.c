@@ -995,7 +995,7 @@ int SendRIPTimer()
 							char Call [11] = "";
 
 							ConvFromAX25(Route->NEIGHBOUR_CALL, Call);
-							Debugprintf("BPQ32 IMP Neighbour %s Lost", Call);
+							Debugprintf("BPQ32 INP Neighbour %s Lost", Call);
 
 							Route->Status = 0;	// Down
 						}

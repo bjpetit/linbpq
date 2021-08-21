@@ -553,7 +553,7 @@ BOOL WriteADIFRecord(ADIF * ADIF)
 	sprintf	(Date, "%04d-%02d-%02d %02d:%02d:%02d", 
 		endtm.tm_year + 1900, endtm.tm_mon + 1, endtm.tm_mday, endtm.tm_hour, endtm.tm_min, endtm.tm_sec);
 
-	CommentLen = sprintf(Comment, "0|%s|%s|%s|%s|%s|%s|%s|%s|%d|%d|%d|%s|%d|%d|%d|%d|%d|%s|%s",
+	CommentLen = sprintf(Comment, "0|%s|%s|%s|%s|%s|%s|%s|%s|%lld|%d|%d|%s|%d|%d|%d|%d|%d|%s|%s",
 		Date,
 		"BPQ32",
 		TextVerstring,

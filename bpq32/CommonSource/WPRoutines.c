@@ -48,6 +48,9 @@ WPRec * AllocateWPRecord()
 
 	return WP;
 }
+
+extern config_t cfg;
+
 VOID GetWPDatabase()
 {
 	WPRec WPRec;
@@ -57,14 +60,142 @@ VOID GetWPDatabase()
 	char CfgName[MAX_PATH];
 	long long val;
 	config_t wpcfg;
-	config_setting_t * wpgroup;
+	config_setting_t * group, * wpgroup;
 	int i = 1;
+	struct stat STAT;
+
+	// If WP info is in main config file, use it
+
+	group = config_lookup (&cfg, "WP");
+
+	if (group)
+	{
+		// Set up control record
+
+		WPRecPtr = malloc(sizeof(void *));
+		WPRecPtr[0] = zalloc(sizeof(WPRec));
+		NumberofWPrecs = 0;
+
+		while (1)
+		{
+			char Key[16];
+			char Record[1024]; 
+			char * ptr, * ptr2;
+			unsigned int n;
+
+			sprintf(Key, "R%d", i++);
+
+			GetStringValue(group, Key, Record);
+
+			if (Record[0] == 0)			// End of List
+				return;
+
+			memset(&WPRec, 0, sizeof(WPRec));
+
+			WP = &WPRec;
+
+			ptr = Record;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) strcpy(&WP->callsign[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) strcpy(&WP->name[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) WP->Type = atoi(ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) WP->changed = atoi(ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) WP->seen = atoi(ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) strcpy(&WP->first_homebbs[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) strcpy(&WP->secnd_homebbs[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) strcpy(&WP->first_zip[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+			if (ptr) strcpy(&WP->secnd_zip[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+
+			if (ptr == NULL) continue;
+			
+			if (strlen(ptr) > 30)
+				ptr[30] = 0;
+
+			strcpy(&WP->first_qth[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+
+			if (ptr == NULL) continue;
+
+			if (strlen(ptr) > 30)
+				ptr[30] = 0;
+
+			strcpy(&WP->secnd_qth[0], ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+
+			if (ptr) WP->last_modif = atol(ptr);
+
+			ptr = ptr2;
+			ptr2 = strlop(ptr, '|');
+
+			if (ptr)
+			{
+				WP->last_seen = atol(ptr);
+
+				// Check Call
+
+				for (n = 1; n < strlen(WP->callsign); n++)		// skip first which may also be digit
+				{
+					if (isdigit(WP->callsign[n]))
+					{
+						// Has a digit. Check Last is not digit
+
+						if (isalpha(WP->callsign[strlen(WP->callsign) - 1]))
+						{
+							WP = LookupWP(WPRec.callsign);
+							if (WP == NULL)
+								WP = AllocateWPRecord();
+
+							memcpy(WP, &WPRec, sizeof(WPRec));
+							goto WPOK;
+						}
+					}
+				}
+				Debugprintf("Bad WP Call %s", WP->callsign);
+			}
+WPOK:;
+		}
+		return;
+	}
 
 	// If text format exists use it
 
 	strcpy(CfgName, WPDatabasePath);
 	strlop(CfgName, '.');
 	strcat(CfgName, ".cfg");
+
+	if (stat(CfgName, &STAT) == -1)
+		goto tryOld;
 
 	config_init(&wpcfg);
 
@@ -269,6 +400,8 @@ VOID CopyWPDatabase()
 	char Backup[MAX_PATH];
 	char Orig[MAX_PATH];
 
+	return;
+
 	strcpy(Backup, WPDatabasePath);
 	strcat(Backup, ".bak");
 
@@ -286,8 +419,8 @@ VOID CopyWPDatabase()
 
 VOID SaveWPDatabase()
 {
-//	FILE * Handle;
-//	int WriteLen;
+	SaveConfig(ConfigName);			// WP config is now in main config file
+/*
 	int i;
 	config_setting_t *root, *group;
 	config_t cfg;
@@ -295,17 +428,6 @@ VOID SaveWPDatabase()
 	WPRec * WP;
 	char CfgName[MAX_PATH];
 	long long val;
-
-//	Handle = fopen(WPDatabasePath, "wb");
-
-////	WPRecPtr[0]-> = NumberofWPrecs;			// First Record has file size
-
-//	for (i=0; i <= NumberofWPrecs; i++)
-//	{
-//		WriteLen = fwrite(WPRecPtr[i], 1, sizeof (WPRec), Handle);
-//	}
-
-//	fclose(Handle);
 
 	memset((void *)&cfg, 0, sizeof(config_t));
 
@@ -345,9 +467,8 @@ VOID SaveWPDatabase()
 	
 	config_write_file(&cfg, CfgName);
 	config_destroy(&cfg);
+*/
 }
-
-			
 
 WPRec * LookupWP(char * Call)
 {
@@ -592,7 +713,6 @@ VOID GetWPBBSInfo(char * Rline)
 	// Update WP with /I records for each R: Line
 
 	// R:111206/1636Z 29130@N9PMO.#SEWI.WI.USA.NOAM [Racine, WI] FBB7.00i
-
 
 	struct tm rtime;
 	time_t RLineTime;

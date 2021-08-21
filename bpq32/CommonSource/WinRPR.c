@@ -756,7 +756,7 @@ int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 
 
 
-UINT WinRPRExtInit(EXTPORTDATA *  PortEntry)
+void * WinRPRExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[500];
 	struct TNCINFO * TNC;
@@ -778,7 +778,7 @@ UINT WinRPRExtInit(EXTPORTDATA *  PortEntry)
 		sprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsoleLocal(msg);
 
-		return (int) ExtProc;
+		return ExtProc;
 	}
 
 	sprintf(msg,"WinRPR Host %s %d", TNC->HostName, htons(TNC->destaddr.sin_port));
@@ -941,7 +941,7 @@ UINT WinRPRExtInit(EXTPORTDATA *  PortEntry)
 
 	ConnecttoWinRPR(TNC->Port);
 
-	return ((int)ExtProc);
+	return ExtProc;
 }
 
 static void DEDCheckRX(struct TNCINFO * TNC)
@@ -1604,7 +1604,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;

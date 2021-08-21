@@ -122,6 +122,7 @@ int CheckMode(struct TNCINFO * TNC);
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 void SCSTryToSendDATA(struct TNCINFO * TNC, int Stream);
 VOID UpdateMHwithDigis(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
+int standardParams(struct TNCINFO * TNC, char * buf);
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
@@ -279,14 +280,6 @@ ConfigLine:
 		else			
 		if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)	// Packet Channels
 			TNC->PacketChannels = atoi(&buf[14]);
-		
-		else
-		if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
-			TNC->BusyHold = atoi(&buf[8]);
-
-		else
-		if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
-			TNC->BusyWait = atoi(&buf[8]);
 
 		else
 		if (_memicmp(buf, "SCANFORROBUSTPACKET", 19) == 0)
@@ -328,12 +321,6 @@ ConfigLine:
 		if (_memicmp(buf, "MAXLEVEL", 8) == 0)		// Maximum Pactor Level to use.
 			TNC->MaxLevel = atoi(&buf[8]);
 		else
-		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-			TNC->WL2K = DecodeWL2KReportLine(buf);
-		else
-		if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
-			TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit = atoi(&buf[16]) * 60;
-		else
 		if (_memicmp(buf, "DATE", 4) == 0)
 		{
 			char Cmd[32];
@@ -360,7 +347,7 @@ ConfigLine:
 
 			strcat (TNC->InitScript, Cmd);
 		}
-		else
+		else if (standardParams(TNC, buf) == FALSE)
 			strcat (TNC->InitScript, buf);
 	}
 	
@@ -1579,6 +1566,9 @@ VOID SCSPoll(int Port)
 			TNC->InternalCmd = TRUE;
 			TNC->WantToChangeFreq = FALSE;
 
+			if (TNC->RIG->RIG_DEBUG)
+				Debugprintf("Scan Debug SCS Pactor Requesting permission from TNC");
+
 			return;
 		}
 
@@ -1596,6 +1586,9 @@ VOID SCSPoll(int Port)
 			TNC->InternalCmd = TRUE;
 			TNC->DontWantToChangeFreq = FALSE;
 			TNC->OKToChangeFreq = FALSE;
+
+			if (TNC->RIG->RIG_DEBUG)
+				Debugprintf("Scan Debug SCS Pactor Release Scan Lock sent to TNC");
 
 			return;
 		}
@@ -2885,6 +2878,12 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 			memcpy(AppName, &ApplPtr[App * sizeof(CMDX)], 12);
 			AppName[12] = 0;
 
+			// if SendTandRtoRelay set and Appl is RMS change to RELAY
+
+			if (TNC->SendTandRtoRelay && memcmp(AppName, "RMS ", 4) == 0
+				&& (strstr(Call, "-T" ) || strstr(Call, "-R")))
+					strcpy(AppName, "RELAY       ");
+
 			// Make sure app is available
 
 			Debugprintf("Connect is to APPL %s", AppName);
@@ -2927,8 +2926,14 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	if (!PactorCall && TNC->UseAPPLCalls)
 		goto DontUseAPPLCmd;				// Don't use APPL= for Packet Calls
 
+	// if SendTandRtoRelay set and Appl is RMS change to RELAY
+
+	if (TNC->SendTandRtoRelay && strcmp(FreqAppl, "RMS") == 0
+		&& (strstr(Call, "-T" ) || strstr(Call, "-R")))
+			strcpy(FreqAppl, "RELAY");
+
 	Debugprintf("Pactor Call is %s Freq Specific Appl is %s Freq is %s",
-	DestCall, FreqAppl, TNC->RIG->Valchar);
+		DestCall, FreqAppl, TNC->RIG->Valchar);
 						
 	if (FreqAppl[0])			// Frequency specific APPL overrides TNC APPL
 	{
@@ -2945,12 +2950,25 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 						
 	if (TNC->ApplCmd)	
 	{
+		char App[16];
+
 		buffptr = GetBuff();
 		if (buffptr == 0) return;			// No buffers, so ignore
 
-		Debugprintf("Using Default Appl %s", TNC->ApplCmd);
+		strcpy(App, TNC->ApplCmd);
 
-		buffptr->Len = sprintf(buffptr->Data, "%s\r", TNC->ApplCmd);
+		Debugprintf("Using Default Appl *%s*, connecting call is %s", App, Call);
+
+		// if SendTandRtoRelay set and Appl is RMS change to RELAY
+
+		if (TNC->SendTandRtoRelay && memcmp(App, "RMS", 3) == 0
+			&& (strstr(Call, "-T" ) || strstr(Call, "-R")))
+		{
+			strcpy(App, "RELAY");
+			Debugprintf("Radio Only Call - Connecting to RELAY");
+		}
+
+		buffptr->Len = sprintf(buffptr->Data, "%s\r", App);
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 		TNC->SwallowSignon = TRUE;
 		return;
@@ -3220,12 +3238,18 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						{
 							TNC->OKToChangeFreq = 1;
 							TNC->TimeScanLocked = 0;
+							if (TNC->RIG->RIG_DEBUG)
+								Debugprintf("Scan Debug SCS Pactor TNC gave permission");
 						}
 						else
 						{
 							TNC->OKToChangeFreq = -1;
 							if (TNC->SyncSupported == FALSE && TNC->UseAPPLCallsforPactor && TNC->TimeScanLocked == 0)	
 								TNC->TimeScanLocked = time(NULL);
+
+							if (TNC->RIG->RIG_DEBUG)
+								Debugprintf("Scan Debug SCS Pactor TNC refused permission");
+
 						}
 					}
 				}

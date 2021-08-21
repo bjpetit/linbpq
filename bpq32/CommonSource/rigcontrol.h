@@ -57,6 +57,8 @@ struct HAMLIBSOCK
 	};
 };
 
+struct TNCINFO;
+
 struct RIGINFO
 {
 //	struct TRANSPORTENTRY * AttachedSession;
@@ -145,6 +147,8 @@ struct RIGINFO
 
 	char PTTCATPort[4][10];
 	HANDLE PTTCATHandles[4];
+	struct TNCINFO * PTTCATTNC[4];
+
 	int RealMux[4];		// BPQ Virtual or Real
 
 	int TSMenu;			// Menu number for ACC?USB switching on TS590S/SG

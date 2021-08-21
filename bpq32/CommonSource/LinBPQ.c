@@ -68,6 +68,7 @@ int GetHTMLForms();
 char * AddUser(char * Call, char * password, BOOL BBSFlag);
 VOID SaveChatConfigFile(char * ConfigName);
 VOID SaveMH();
+int upnpClose();
 
 BOOL IncludesMail = FALSE;
 BOOL IncludesChat = FALSE;
@@ -797,12 +798,12 @@ int main(int argc, char * argv[])
 
 	// Make backup copies of Databases
 
-	CopyConfigFile(ConfigName);
+//	CopyConfigFile(ConfigName);
 
-	CopyBIDDatabase();
-	CopyMessageDatabase();
-	CopyUserDatabase();
-	CopyWPDatabase();
+//	CopyBIDDatabase();
+//	CopyMessageDatabase();
+//	CopyUserDatabase();
+//	CopyWPDatabase();
 
 	SetupMyHA();
 	SetupFwdAliases();
@@ -1301,6 +1302,8 @@ int main(int argc, char * argv[])
 
 	if (RunMail)
 		FreeWebMailMallocs();
+
+	upnpClose();
 
 	// Close any open logs
 

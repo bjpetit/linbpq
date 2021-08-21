@@ -210,8 +210,16 @@ struct ScanEntry ** CheckTimeBands(struct RIGINFO * RIG)
 	return RIG->FreqPtr;
 }
 
+VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC);
 
-VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
+VOID Rig_PTT(struct TNCINFO * TNC, BOOL PTTState)
+{
+	if (TNC == NULL) return;
+
+	Rig_PTTEx(TNC->RIG, PTTState, TNC);
+}
+
+VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 {
 	struct RIGPORTINFO * PORT;
 	int i;
@@ -262,15 +270,30 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 
 			if (PTTState)
 			{
-				memcpy(Poll, RIG->PTTOn, RIG->PTTOnLen);
-				PORT->TXLen = RIG->PTTOnLen;
+				if (TNC && TNC->PTTOnLen)
+				{
+					memcpy(Poll, TNC->PTTOn, TNC->PTTOnLen);
+					PORT->TXLen = TNC->PTTOnLen;
+				}
+				else
+				{
+					memcpy(Poll, RIG->PTTOn, RIG->PTTOnLen);
+					PORT->TXLen = RIG->PTTOnLen;
+				}
 			}
 			else
 			{
-				memcpy(Poll, RIG->PTTOff, RIG->PTTOffLen);
-				PORT->TXLen = RIG->PTTOffLen;
+				if (TNC && TNC->PTTOffLen)
+				{
+					memcpy(Poll, TNC->PTTOff, TNC->PTTOffLen);
+					PORT->TXLen = TNC->PTTOffLen;
+				}
+				else
+				{
+					memcpy(Poll, RIG->PTTOff, RIG->PTTOffLen);
+					PORT->TXLen = RIG->PTTOffLen;
+				}
 			}
-
 
 			RigWriteCommBlock(PORT);
 
@@ -1794,7 +1817,7 @@ DllExport BOOL APIENTRY Rig_Init()
 					}
 				}
 			}
-			Rig_PTT(RIG, 0);				// Send initial PTT Off (Mainly to set input mux on soundcard rigs)
+			Rig_PTTEx(RIG, 0, NULL);				// Send initial PTT Off (Mainly to set input mux on soundcard rigs)
 		}
 	}
 
@@ -1855,7 +1878,7 @@ DllExport BOOL APIENTRY Rig_Close()
 
 			if (RIG->PTTCATPort[0])
 			{
-				Rig_PTT(RIG, FALSE);				// Make sure PTT is down
+				Rig_PTTEx(RIG, FALSE, NULL);				// Make sure PTT is down
 				EndPTTCATThread = TRUE;
 			}
 		}
@@ -1947,7 +1970,7 @@ BOOL Rig_Poll()
 			{
 				RIG->PTTTimer--;
 				if (RIG->PTTTimer == 0)
-					Rig_PTT(RIG, FALSE);
+					Rig_PTTEx(RIG, FALSE, NULL);
 			}
 
 			// repeated off timer
@@ -1957,7 +1980,7 @@ BOOL Rig_Poll()
 				RIG->repeatPTTOFFTimer--;
 				if (RIG->repeatPTTOFFTimer == 0)
 				{
-					Rig_PTT(RIG, FALSE);
+					Rig_PTTEx(RIG, FALSE, NULL);
 					RIG->repeatPTTOFFTimer = 0;			// Don't repeat repeat!
 				}
 			}
@@ -2421,6 +2444,10 @@ int GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 
 			return FALSE;
 		}
+
+		if (RIG->RIG_DEBUG)
+			Debugprintf("Scan Debug %s Still Waiting", RIG->PortRecord[0]->PORT_DLL_NAME); 
+
 		
 		return FALSE;			// Haven't got reply yet. Will re-enter next tick
 	}
@@ -2871,7 +2898,7 @@ ok:
 
 		if (cmdSent == 5 || cmdSent == 7) // Freq or VFO
 		{
-			if (PORT->FreqPtr->Cmd2)
+			if (PORT->FreqPtr && PORT->FreqPtr->Cmd2)
 			{
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd2, PORT->FreqPtr->Cmd2Len);
 				PORT->TXLen = PORT->FreqPtr->Cmd2Len;
@@ -2890,7 +2917,7 @@ ok:
 
 		if (cmdSent == 6)		// Set Mode
 		{
-			if (PORT->FreqPtr->Cmd3)
+			if (PORT->FreqPtr && PORT->FreqPtr->Cmd3)
 			{
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd3, PORT->FreqPtr->Cmd3Len);
 				PORT->TXLen = PORT->FreqPtr->Cmd3Len;
@@ -4747,9 +4774,14 @@ domux:
 			ptr = strtok_s(NULL, " \t\n\r", &Context);
 
 			while (memcmp(ptr, "COM", 3) == 0)
-			{	
+			{
+				char * tncport = strlop(ptr, '/');
+
 				strcpy(RIG->PTTCATPort[PIndex], &ptr[3]);
 
+				if (tncport)
+					RIG->PTTCATTNC[PIndex] = TNCInfo[atoi(tncport)];
+				
 				if (PIndex < 3)
 					PIndex++;
 
@@ -5218,7 +5250,11 @@ CheckScan:
 	{
 		// Create Default Timeband
 
-		struct TimeScan * Band = AllocateTimeRec(RIG);
+		struct TimeScan * Band;
+		
+		RIG->TimeBands = zalloc(sizeof(void *));
+
+		Band = AllocateTimeRec(RIG);
 		SaveBand = Band;
 
 		Band->Start = 0;
@@ -6159,9 +6195,9 @@ WaitAgain:
 					GetCommModemStatus(Handle[i], &Mask);
 
 					if (Mask & MS_CTS_ON)
-						Rig_PTT(RIG, TRUE);
+						Rig_PTTEx(RIG, TRUE, RIG->PTTCATTNC[i]);
 					else
-						Rig_PTT(RIG, FALSE);
+						Rig_PTTEx(RIG, FALSE, RIG->PTTCATTNC[i]);
 
 					memset(&Overlapped[i], 0, sizeof(OVERLAPPED));
 					Overlapped[i].hEvent = Event;
@@ -6198,9 +6234,9 @@ WaitAgain:
 									continue;
 
 								if (c & RTS)
-									Rig_PTT(RIG, TRUE);
+									Rig_PTTEx(RIG, TRUE, RIG->PTTCATTNC[i]);
 								else
-									Rig_PTT(RIG, FALSE);
+									Rig_PTTEx(RIG, FALSE, RIG->PTTCATTNC[i]);
 
 								CurrentState[i] = c;
 								continue;
@@ -6472,9 +6508,9 @@ void HLSetPTT(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
 	int ptt = atoi(&Msg[1]);
 
 	if (ptt)
-		Rig_PTT(RIG, 1);
+		Rig_PTTEx(RIG, 1, NULL);
 	else
-		Rig_PTT(RIG, 0);
+		Rig_PTTEx(RIG, 0, NULL);
 
 	if (sep)
 		Len = sprintf(Resp, "set_ptt: %d%cRPRT 0\n", ptt, sep);

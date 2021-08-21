@@ -42,6 +42,7 @@ VOID ProcessIframe(struct _LINKTABLE * LINK, PDATAMESSAGE Buffer);
 VOID FindLostBuffers();
 VOID ReadMH();
 void GetPortCTEXT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+int upnpInit();
 
 #include "configstructs.h"
 
@@ -442,6 +443,11 @@ VOID EXTTIMER(PEXTPORTDATA PORTVEC)
 	}
 
 	PORTVEC->PORT_EXT_ADDR(7, PORTVEC->PORTCONTROL.PORTNUMBER, 0);		// Timer Routine
+}
+
+VOID EXTSLOWTIMER(PEXTPORTDATA PORTVEC)
+{
+	PORTVEC->PORT_EXT_ADDR(8, PORTVEC->PORTCONTROL.PORTNUMBER, 0);		// Timer Routine
 }
 
 size_t EXTTXCHECK(PEXTPORTDATA PORTVEC, int Chan)
@@ -1398,6 +1404,10 @@ BOOL Start()
 
 	GetPortCTEXT(0, 0, 0, 0);
 
+	upnpInit();
+
+	CurrentSecs = lastSlowSecs = time(NULL);
+
 	return 0;
 }
 
@@ -1893,6 +1903,9 @@ RouteLoop:
 
 int DelayBuffers = 0;
 
+void sendModeReport();
+void sendFreqReport();
+
 VOID TIMERINTERRUPT()
 {
 	// Main Processing loop - CALLED EVERY 100 MS
@@ -1904,7 +1917,8 @@ VOID TIMERINTERRUPT()
 	struct _MESSAGE * Message;
 	int toPort;
 
-//	RAN1++;
+	CurrentSecs =  time(NULL);
+
 	BGTIMER++;
 	REALTIMETICKS++;
 	L2TIMERFLAG++;		// INCREMENT FLAG FOR BG
@@ -1927,16 +1941,38 @@ VOID TIMERINTERRUPT()
 		L2TimerProc();					// 300 mS
 	}
 
-	if (L3TIMERFLAG >= 549)				// 1 PER MIN, but PC Clock is a bit slow
+	if (CurrentSecs - lastSlowSecs >= 60)		// 1 PER MIN
 	{
-		L3TIMERFLAG -= 549;
+		lastSlowSecs = CurrentSecs;
 
 		L3TimerProc();
+
 		if (APRSActive)
 			Debugprintf("BPQ32 Heartbeat Buffers %d APRS Queues %d %d", QCOUNT, C_Q_COUNT(&APRSMONVECPTR->HOSTTRACEQ), C_Q_COUNT(&APPL_Q));
 		else
 			Debugprintf("BPQ32 Heartbeat Buffers %d", QCOUNT);
+		
 		StatsTimer();
+
+		// Call EXT Port Slow Timer
+
+		PORT = PORTTABLE;
+
+		for (i = 0; i < NUMBEROFPORTS; i++)
+		{	
+			if (PORT->PROTOCOL == 10)
+			{
+				PEXTPORTDATA PORTVEC = (PEXTPORTDATA)PORT;
+				EXTSLOWTIMER(PORTVEC);
+			}
+			
+			PORT = PORT->PORTPOINTER;
+		}
+	
+		// Call Mode Map support routine
+
+		sendFreqReport();
+		sendModeReport();
 
 /*
 		if (QCOUNT < 200)

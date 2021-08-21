@@ -53,6 +53,7 @@ BOOL Localtime = FALSE;		// Use Local Time for Timebands and forward connect scr
 
 struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg, char * FirstDestElement);
 struct UserInfo * FindAMPR();
+struct UserInfo * FindBBS(char * Name);
 
 struct Continent
 {
@@ -827,7 +828,26 @@ VOID CheckAndSend(struct MsgInfo * Msg, CIRCUIT * conn, struct UserInfo * bbs)
 		}
 	}
 	else
-		Logprintf(LOG_BBS, conn, '?', "Message matches this BBS and ForwardToMe not set - not queuing message");
+	{
+		// if User has Redirect to RMS set do it.
+
+		struct UserInfo * user = LookupCall(Msg->to);
+
+		if (user && user->flags & F_RMSREDIRECT)
+		{
+			user = FindBBS("RMS");
+
+			if (user)
+			{
+				CheckAndSend(Msg, conn, user);
+			}
+			
+			Logprintf(LOG_BBS, conn, '?', "Message matches this BBS and RMS Redirect set - fwd to RMS");
+			
+		}
+		else
+			Logprintf(LOG_BBS, conn, '?', "Message matches this BBS and ForwardToMe not set - not queuing message");
+	}
 }
 
 VOID UpdateB2Dest(struct MsgInfo * Msg, char * Alias)

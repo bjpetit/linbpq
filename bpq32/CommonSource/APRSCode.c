@@ -4556,6 +4556,12 @@ struct STATIONRECORD * ProcessRFFrame(char * Msg, int len, int * ourMessage)
 
 	// Look up station - create a new one if not found
 
+	if (strcmp(Callsign, "AIS") == 0)
+	{
+		Debugprintf(Payload);
+		return 0;
+	}
+
 	Station = FindStation(Callsign, TRUE);
 	
 	strcpy(Station->Path, Path);

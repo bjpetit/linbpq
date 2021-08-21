@@ -1013,11 +1013,15 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Send Netrom Link reports to Node Map
 //	Add REALTELNET mode to Telnet Outward Connect
 //	Fix using S (Stay) parameter on Telnet connects when using CMDPORT and C HOST
-//	Add Default frequency to rigcontrol to set a freq/mode to retuen to after a connection
+//	Add Default frequency to rigcontrol to set a freq/mode to return to after a connection
 //	Fix long (> 60 seconds) scan intervals
 //	Improved debugging of stuck semaphores
 //	Fix potential securiby bug in BPQ Web server
 //	Send Chat Updates to chatupdate.g8bpq.net port 81
+//	Add ReportRelayTraffic to Telnet config to send WL2K traffic reports for connections to RELAY
+//	Add experimental Mode reporting
+//	Add SendTandRtoRelay param to SCS Pactor, ARDOP and VARA drivers to divert calls to CMS for -T and -R to RELAY
+//	Add UPNP Support
 
 #define CKernel
 
@@ -1457,6 +1461,7 @@ VOID ResolveUpdateThread();
 VOID OpenReportingSockets();
 DllExport VOID APIENTRY CloseAllPrograms();
 DllExport BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
+int upnpClose();
 
 BOOL IPActive = FALSE;
 extern BOOL IPRequired;
@@ -1886,6 +1891,7 @@ VOID TimerProcX()
 			CloseTNCEmulator();
 			if (AGWActive)	
 				AGWAPITerminate();
+
 			WSACleanup();
 
 			WL2KReports = NULL;
@@ -2749,6 +2755,9 @@ SkipInit:
 			CloseTNCEmulator();
 			if (AGWActive)
 				AGWAPITerminate();
+
+			upnpClose();
+
 			WSACleanup();
 			WSAGetLastError();
 
@@ -2866,6 +2875,8 @@ DllExport int APIENTRY CloseBPQ32()
 		Rig_Close();
 		if (AGWActive)	
 			AGWAPITerminate();
+
+		upnpClose();
 
 		CloseTNCEmulator();
 		WSACleanup();
@@ -6328,7 +6339,8 @@ int GetListeningPortsPID(int Port)
 
 extern struct RIGINFO * DLLRIG;			// Rig record for dll PTT interface (currently only for UZ7HO);
 
-VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState);
+VOID Rig_PTT(struct TNCINFO * TNC, BOOL PTTState);
+VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC);
 
 int WINAPI ext_PTT_info()
 {
@@ -6343,7 +6355,7 @@ int WINAPI ext_PTT_settings()
 int WINAPI ext_PTT_OFF(int Port)
 {
 	if (DLLRIG)
-		Rig_PTT(DLLRIG, 0);
+		Rig_PTTEx(DLLRIG, 0, 0);
 
 	return 0;
 }
@@ -6351,14 +6363,14 @@ int WINAPI ext_PTT_OFF(int Port)
 int WINAPI ext_PTT_ON(int Port)
 {
 	if (DLLRIG)
-		Rig_PTT(DLLRIG, 1);
+		Rig_PTTEx(DLLRIG, 1, 0);
 
 	return 0;
 }
 int WINAPI ext_PTT_close()
 {
 	if (DLLRIG)
-		Rig_PTT(DLLRIG, 0);
+		Rig_PTTEx(DLLRIG, 0, 0);
 
 	return 0;
 }

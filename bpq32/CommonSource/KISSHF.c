@@ -691,25 +691,14 @@ noFlip3:
 	
 		if (Param == 2)		// Check  Permission (Shouldn't happen)
 		{
-			Debugprintf("Scan Check Permission called on ARDOP");
+			Debugprintf("Scan Check Permission called on KISSHF");
 			return 1;		// OK to change
 		}
 
 		if (Param == 1)		// Request Permission
 		{
-			if (TNC->ARDOPCommsMode == 'T')		// TCP Mode
-			{
-				if (!TNC->CONNECTED)
-					return 0;					// No connection so no interlock
-			}
-			else
-			{
-				// Serial Modes
-
-				if (!TNC->HostMode)
-					return 0;					// No connection so no interlock
-			}
-			
+			if (!TNC->CONNECTED)
+				return 0;					// No connection so no interlock
 
 			if (TNC->ConnectPending == 0 && TNC->PTTState == 0)
 			{
@@ -1240,7 +1229,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;

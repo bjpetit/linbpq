@@ -1,0 +1,752 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>BPQConfigGeneratorClass</class>
+ <widget class="QMainWindow" name="BPQConfigGeneratorClass">
+  <property name="enabled">
+   <bool>true</bool>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>632</width>
+    <height>655</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Simple BPQ Config File Generator</string>
+  </property>
+  <property name="layoutDirection">
+   <enum>Qt::RightToLeft</enum>
+  </property>
+  <widget class="QWidget" name="centralWidget">
+   <widget class="QLineEdit" name="NODECALL">
+    <property name="geometry">
+     <rect>
+      <x>75</x>
+      <y>70</y>
+      <width>86</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="plainText" stdset="0">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="ReadConfig">
+    <property name="geometry">
+     <rect>
+      <x>405</x>
+      <y>35</y>
+      <width>125</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Read Existing Config</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>11</x>
+      <y>11</y>
+      <width>91</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Config Directory</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>11</x>
+      <y>70</y>
+      <width>61</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Node Call</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>170</x>
+      <y>70</y>
+      <width>60</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Node Alias</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="NODEALIAS">
+    <property name="geometry">
+     <rect>
+      <x>240</x>
+      <y>70</y>
+      <width>60</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="plainText" stdset="0">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_6">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>350</y>
+      <width>68</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Applications</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Save">
+    <property name="geometry">
+     <rect>
+      <x>5</x>
+      <y>190</y>
+      <width>136</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string extracomment="Writes a new config based on info typed above"/>
+    </property>
+    <property name="toolTipDuration">
+     <number>5</number>
+    </property>
+    <property name="statusTip">
+     <string extracomment="Status tip"/>
+    </property>
+    <property name="whatsThis">
+     <string extracomment="Whats this?"/>
+    </property>
+    <property name="text">
+     <string> Create Basic Config</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="EnRMS">
+    <property name="geometry">
+     <rect>
+      <x>9</x>
+      <y>150</y>
+      <width>136</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Enable RMS Access</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="Directory">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>35</y>
+      <width>376</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_13">
+    <property name="geometry">
+     <rect>
+      <x>315</x>
+      <y>70</y>
+      <width>138</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>LOCATOR (Grid Square)</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="LOC">
+    <property name="geometry">
+     <rect>
+      <x>470</x>
+      <y>70</y>
+      <width>60</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="plainText" stdset="0">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_16">
+    <property name="geometry">
+     <rect>
+      <x>335</x>
+      <y>150</y>
+      <width>61</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>CMSPASS</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="CMSCALL">
+    <property name="geometry">
+     <rect>
+      <x>245</x>
+      <y>150</y>
+      <width>75</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="plainText" stdset="0">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="CMSPASS">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>150</y>
+      <width>75</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="plainText" stdset="0">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_17">
+    <property name="geometry">
+     <rect>
+      <x>175</x>
+      <y>150</y>
+      <width>66</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>CMSCALL</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="ADDPORT">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>190</y>
+      <width>96</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Add Port</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="ADDAPP">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>255</x>
+      <y>190</y>
+      <width>126</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Add Application</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Update">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>395</x>
+      <y>190</y>
+      <width>136</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string extracomment="Updates config based on info typed above"/>
+    </property>
+    <property name="text">
+     <string>SaveUpdated Config</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_18">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>225</y>
+      <width>70</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Ports</string>
+    </property>
+   </widget>
+   <widget class="QScrollArea" name="scrollArea">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>245</y>
+      <width>601</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="verticalScrollBarPolicy">
+     <enum>Qt::ScrollBarAlwaysOn</enum>
+    </property>
+    <property name="widgetResizable">
+     <bool>false</bool>
+    </property>
+    <widget class="QWidget" name="scrollAreaWidgetContents">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>570</width>
+       <height>800</height>
+      </rect>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QScrollArea" name="scrollArea_2">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>380</y>
+      <width>601</width>
+      <height>116</height>
+     </rect>
+    </property>
+    <property name="verticalScrollBarPolicy">
+     <enum>Qt::ScrollBarAlwaysOn</enum>
+    </property>
+    <property name="widgetResizable">
+     <bool>false</bool>
+    </property>
+    <widget class="QWidget" name="scrollAreaWidgetContents_2">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>0</y>
+       <width>578</width>
+       <height>300</height>
+      </rect>
+     </property>
+     <widget class="QLineEdit" name="ChatQual">
+      <property name="geometry">
+       <rect>
+        <x>415</x>
+        <y>75</y>
+        <width>36</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="BBSCall">
+      <property name="geometry">
+       <rect>
+        <x>175</x>
+        <y>15</y>
+        <width>75</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_4">
+      <property name="geometry">
+       <rect>
+        <x>145</x>
+        <y>17</y>
+        <width>21</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Call</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="RMSAlias">
+      <property name="geometry">
+       <rect>
+        <x>298</x>
+        <y>44</y>
+        <width>60</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_12">
+      <property name="geometry">
+       <rect>
+        <x>370</x>
+        <y>15</y>
+        <width>39</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Quality</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="ChatCall">
+      <property name="geometry">
+       <rect>
+        <x>175</x>
+        <y>75</y>
+        <width>75</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="RMS">
+      <property name="geometry">
+       <rect>
+        <x>15</x>
+        <y>46</y>
+        <width>87</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>RMS</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_10">
+      <property name="geometry">
+       <rect>
+        <x>145</x>
+        <y>77</y>
+        <width>21</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Call</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_14">
+      <property name="geometry">
+       <rect>
+        <x>370</x>
+        <y>45</y>
+        <width>39</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Quality</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_5">
+      <property name="geometry">
+       <rect>
+        <x>259</x>
+        <y>17</y>
+        <width>27</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Alias</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="RMSQual">
+      <property name="geometry">
+       <rect>
+        <x>415</x>
+        <y>44</y>
+        <width>36</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="CHAT">
+      <property name="geometry">
+       <rect>
+        <x>15</x>
+        <y>77</y>
+        <width>87</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Chat</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_8">
+      <property name="geometry">
+       <rect>
+        <x>259</x>
+        <y>47</y>
+        <width>27</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Alias</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_15">
+      <property name="geometry">
+       <rect>
+        <x>370</x>
+        <y>75</y>
+        <width>39</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Quality</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_9">
+      <property name="geometry">
+       <rect>
+        <x>259</x>
+        <y>77</y>
+        <width>27</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Alias</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="RMSCall">
+      <property name="geometry">
+       <rect>
+        <x>175</x>
+        <y>44</y>
+        <width>75</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_7">
+      <property name="geometry">
+       <rect>
+        <x>145</x>
+        <y>47</y>
+        <width>21</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Call</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="BBSQual">
+      <property name="geometry">
+       <rect>
+        <x>415</x>
+        <y>13</y>
+        <width>36</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="BBS">
+      <property name="geometry">
+       <rect>
+        <x>15</x>
+        <y>15</y>
+        <width>87</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>BBS</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="ChatAlias">
+      <property name="geometry">
+       <rect>
+        <x>298</x>
+        <y>75</y>
+        <width>60</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="BBSAlias">
+      <property name="geometry">
+       <rect>
+        <x>298</x>
+        <y>13</y>
+        <width>60</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="plainText" stdset="0">
+       <string/>
+      </property>
+     </widget>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="label_11">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>110</y>
+      <width>131</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Web Mgmt Interface:</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="sysopUser">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>110</y>
+      <width>86</width>
+      <height>22</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_19">
+    <property name="geometry">
+     <rect>
+      <x>160</x>
+      <y>110</y>
+      <width>121</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Sysop UserName</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_20">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>110</y>
+      <width>55</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Password</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="sysopPass">
+    <property name="geometry">
+     <rect>
+      <x>440</x>
+      <y>110</y>
+      <width>86</width>
+      <height>22</height>
+     </rect>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>632</width>
+     <height>26</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QToolBar" name="mainToolBar">
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+  </widget>
+  <widget class="QStatusBar" name="statusBar"/>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <resources>
+  <include location="BPQConfigGenerator.qrc"/>
+ </resources>
+ <connections/>
+ <designerdata>
+  <property name="gridDeltaX">
+   <number>5</number>
+  </property>
+  <property name="gridDeltaY">
+   <number>5</number>
+  </property>
+  <property name="gridSnapX">
+   <bool>true</bool>
+  </property>
+  <property name="gridSnapY">
+   <bool>true</bool>
+  </property>
+  <property name="gridVisible">
+   <bool>true</bool>
+  </property>
+ </designerdata>
+</ui>

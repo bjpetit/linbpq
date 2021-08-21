@@ -455,7 +455,7 @@ struct UserInfo
 	char CMSPass[16];			// For Secure Signon
 	int WebSeqNo;
 	
-	long long TimeLastConnected;  //Last connexion date */
+	long long TimeLastConnected;  //Last connection date */
 
 	char Filler[44 - 8];			// So we can add a few fields wirhout another resize
 };
@@ -467,7 +467,7 @@ struct UserInfo
 #define F_Expert      0x0004
 #define F_SYSOP       0x0008
 #define F_BBS         0x0010
-#define F_AAA         0x0020
+#define F_RMSREDIRECT 0x0020
 #define F_BBB         0x0040
 #define F_CCC         0x0080
 #define F_DDD         0x0100
@@ -483,7 +483,7 @@ struct UserInfo
 #define F_NOBULLS	  0x00040000	
 #define F_NTSMPS	  0x00080000
 #define F_APRSMFOR	  0x00100000			// Send APRS message for new mail
-#define F_APRSSSID	  0xF0000000
+#define F_APRSSSID	  0xF0000000			// (Top 4 Bits
 
 
 struct Override
@@ -1071,7 +1071,7 @@ int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 void DoUnholdCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 
-VOID FlagAsKilled(struct MsgInfo * Msg);
+VOID FlagAsKilled(struct MsgInfo * Msg, BOOL SaveDB);
 int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start);
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start);
 int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start);
@@ -1556,6 +1556,8 @@ extern BOOL MulticastRX;
 extern BOOL FilterWPBulls;
 extern BOOL NoWPGuesses;
 extern char ** SendWPAddrs;					// Replacers WP To and VIA
+
+extern BOOL DontCheckFromCall;
 
 // YAPP stuff
 

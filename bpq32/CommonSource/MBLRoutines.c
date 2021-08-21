@@ -391,7 +391,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			{
 				if (Msg->type == 'P' && Msg->status == 'Y')
 				{
-					FlagAsKilled(Msg);
+					FlagAsKilled(Msg, TRUE);
 					nodeprintfEx(conn, "Message #%d Killed\r", Msg->number);
 				}
 			}

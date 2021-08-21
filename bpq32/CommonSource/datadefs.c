@@ -59,6 +59,9 @@ UCHAR PACTORCALL[7] = {'P'+'P','A'+'A','C'+'C','T'+'T','O'+'O','R'+'R'};	//PACTO
 UCHAR L3RTT[7] = {'L'+'L','3'+'3','R'+'R','T'+'T','T'+'T',0x40, 0xe0};		// L3RTT IN AX25
 UCHAR L3KEEP[7] = {'K'+'K','E'+'E','E'+'E','P'+'P','L'+'L','I'+'I', 0xe0};	//  KEEPLI IN AX25
 
+time_t CurrentSecs;
+time_t lastSlowSecs;
+
 char WL2KCall[10] = "";
 char WL2KLoc[7] = "";
 

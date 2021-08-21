@@ -489,6 +489,9 @@ int ProcessLine(char * buf, int Port)
 	else if (_stricmp(param,"DisconnectOnClose") == 0)
 		TCP->DisconnectOnClose = atoi(value);
 
+	else if (_stricmp(param,"ReportRelayTraffic") == 0)
+		TCP->ReportRelayTraffic = atoi(value);
+
 	else if (_stricmp(param,"SecureTelnet") == 0)
 		TCP->SecureTelnet = atoi(value);
 
@@ -2150,9 +2153,9 @@ nosocks:
 						WriteCMSLog (logmsg);
 					}
 
-					// Don't report if Internet down
+					// Don't report if Internet down unless ReportRelayTraffic set)
 
-					if (sockptr->RelaySession == FALSE)
+					if (sockptr->RelaySession == FALSE || TCP->ReportRelayTraffic)
 						SendWL2KSessionRecord(sockptr->ADIF, STREAM->BytesTXed, STREAM->BytesRXed);
 
 					WriteADIFRecord(sockptr->ADIF);
@@ -4226,27 +4229,37 @@ MsgLoop:
 
 				if (Sess2)
 				{
-					// See if L2 session - if so, get info from WL2K report line
+					// if Session has report info, use it
 
-					if (Sess2->L4CIRCUITTYPE & L2LINK)
+					if (Sess2->Mode)
 					{
-						LINKTABLE * LINK = Sess2->L4TARGET.LINK;
-						PORTCONTROLX * PORT = LINK->LINKPORT;
-						
-						if (PORT->WL2KInfo.Freq)
-						{
-							len = sprintf(Passline, "CMSTELNET %s %lld %d\r", PORT->WL2KInfo.RMSCall, PORT->WL2KInfo.Freq, PORT->WL2KInfo.mode);
-							ADIF->Freq = PORT->WL2KInfo.Freq;
-							ADIF->Mode = PORT->WL2KInfo.mode;
-						}
+						ADIF->Freq = Sess2->Frequency;
+						ADIF->Mode = Sess2->Mode;
 					}
 					else
 					{
-						if (Sess2->RMSCall[0])
+						// See if L2 session - if so, get info from WL2K report line
+
+						if (Sess2->L4CIRCUITTYPE & L2LINK)
 						{
-							len = sprintf(Passline, "CMSTELNET %s %lld %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
-							ADIF->Mode = Sess2->Frequency;
-							ADIF->Mode = Sess2->Mode;
+							LINKTABLE * LINK = Sess2->L4TARGET.LINK;
+							PORTCONTROLX * PORT = LINK->LINKPORT;
+
+							if (PORT->WL2KInfo.Freq)
+							{
+								len = sprintf(Passline, "CMSTELNET %s %lld %d\r", PORT->WL2KInfo.RMSCall, PORT->WL2KInfo.Freq, PORT->WL2KInfo.mode);
+								ADIF->Freq = PORT->WL2KInfo.Freq;
+								ADIF->Mode = PORT->WL2KInfo.mode;
+							}
+						}
+						else
+						{
+							if (Sess2->RMSCall[0])
+							{
+								len = sprintf(Passline, "CMSTELNET %s %lld %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
+								ADIF->Mode = Sess2->Frequency;
+								ADIF->Mode = Sess2->Mode;
+							}
 						}
 					}
 				}
@@ -5639,6 +5652,15 @@ int TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 		ReportError(STREAM, "Bind Failed");	
   	 	return FALSE; 
 	}
+
+	if (LogEnabled)
+	{
+		char logmsg[512];
+							
+		sprintf(logmsg,"%d Outward Connect to %s  Port %d\n", sockptr->Number, Host, Port);
+		WriteLog (logmsg);
+	}
+
 
 	if (connect(sockptr->socket,(struct sockaddr *) &destaddr, sizeof(destaddr)) == 0)
 	{

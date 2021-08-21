@@ -300,8 +300,12 @@ VOID DoHouseKeeping(BOOL Manual)
 		MailHousekeepingResults();
 	
 	LastHouseKeepingTime = NOW = time(NULL);
+		
+	SaveMessageDatabase();
+	
 	SaveConfig(ConfigName);
 	GetConfig(ConfigName);
+
 	GetBadWordFile();			// Reread Badwords
 
 #ifndef LINBPQ
@@ -544,7 +548,7 @@ VOID ExpireMessages()
 
 VOID KillMsg(struct MsgInfo * Msg)
 {
-	FlagAsKilled(Msg);
+	FlagAsKilled(Msg, FALSE);
 	Killed++;
 }
 
@@ -607,8 +611,6 @@ BOOL RemoveKilledMessages()
 
 	FreeSemaphore(&MsgNoSemaphore);
 	FreeSemaphore(&AllocSemaphore);
-
-	SaveMessageDatabase();
 
 	return TRUE;
 

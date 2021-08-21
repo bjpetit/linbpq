@@ -1054,6 +1054,21 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 				{
 					int Len = DisplayWebForm(Session, Msg, WebMail->FileName[0], ptr1, Reply, MsgBytes, BodyLen + 32); // 32 for added "has attachments"
 					free(MsgBytes);
+
+					// Flag as read
+
+					if ((_stricmp(Msg->to, User->Call) == 0) || ((User->flags & F_SYSOP) && (_stricmp(Msg->to, "SYSOP") == 0)))
+					{
+						if ((Msg->status != 'K') && (Msg->status != 'H') && (Msg->status != 'F') && (Msg->status != 'D'))
+						{
+							if (Msg->status != 'Y')
+							{
+								Msg->status = 'Y';
+								Msg->datechanged=time(NULL);
+							}
+						}
+					}
+
 					return Len;
 				}
 
@@ -1246,7 +1261,7 @@ int KillWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Num
 
 	if (OkToKillMessage(User->flags & F_SYSOP, User->Call, Msg))
 	{
-		FlagAsKilled(Msg);
+		FlagAsKilled(Msg, TRUE);
 		sprintf(Message, "Message #%d Killed\r", Number);
 		goto returnit;
 	}
@@ -2235,6 +2250,7 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 	return;
 }
 
+static char WinlinkAddr[] = "WINLINK.ORG";
 
 VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest, int InputLen)
 {
@@ -2461,7 +2477,14 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 			{
 				// Local User. If Home BBS is specified, use it
 
-				if (ToUser->HomeBBS[0])
+				if (ToUser->flags & F_RMSREDIRECT)
+				{
+					// sent to Winlink
+				
+					strcpy(Msg->via, WinlinkAddr);
+					sprintf(Prompt, "Redirecting to winlink.org\r");
+				}
+				else if (ToUser->HomeBBS[0])
 				{
 					strcpy(Msg->via, ToUser->HomeBBS);
 					sprintf(Prompt, "%s added from HomeBBS. Message Saved", Msg->via);
@@ -3776,7 +3799,14 @@ VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, cha
 			{
 				// Local User. If Home BBS is specified, use it
 
-				if (ToUser->HomeBBS[0])
+				if (ToUser->flags & F_RMSREDIRECT)
+				{
+					// sent to Winlink
+				
+					strcpy(Msg->via, WinlinkAddr);
+					sprintf(Prompt, "Redirecting to winlink.org\r");
+				}
+				else if (ToUser->HomeBBS[0])
 				{
 					strcpy(Msg->via, ToUser->HomeBBS);
 					sprintf(Prompt, "%s added from HomeBBS. Message Saved", Msg->via);
@@ -3989,7 +4019,14 @@ VOID BuildMessageFromHTMLInput(struct HTTPConnectionInfo * Session, char * Reply
 		{
 			// Local User. If Home BBS is specified, use it
 
-			if (ToUser->HomeBBS[0])
+			if (ToUser->flags & F_RMSREDIRECT)
+			{
+				// sent to Winlink
+				
+				strcpy(Msg->via, WinlinkAddr);
+				sprintf(Prompt, "Redirecting to winlink.org\r");
+			}
+			else if (ToUser->HomeBBS[0])
 			{
 				strcpy(Msg->via, ToUser->HomeBBS);
 				sprintf(Prompt, "%s added from HomeBBS", Msg->via);

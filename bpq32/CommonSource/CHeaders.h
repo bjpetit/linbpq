@@ -393,6 +393,10 @@ extern UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure
 
 extern int REALTIMETICKS;
 
+extern time_t CurrentSecs;
+extern time_t lastSlowSecs;
+
+
 // SNMP Variables
 
 int InOctets[32];

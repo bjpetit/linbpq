@@ -140,7 +140,7 @@ BOOL ARDOPStopPort(struct PORTCONTROL * PORT)
 	TNC->Alerted = FALSE;
 
 	if (TNC->PTTMode)
-		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+		Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 	if (TNC->Streams[0].Attached)
 		TNC->Streams[0].ReportDISC = TRUE;
@@ -2683,7 +2683,7 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 					TNC->Alerted = FALSE;
 
 					if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 					TNCLost(TNC);
 					return;					
@@ -2722,7 +2722,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;
@@ -2746,7 +2746,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;
@@ -2766,7 +2766,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;
@@ -2798,7 +2798,7 @@ Lost:
 			TNC->Alerted = FALSE;
 
 			if (TNC->PTTMode)
-				Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+				Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 			if (TNC->Streams[0].Attached)
 				TNC->Streams[0].ReportDISC = TRUE;
@@ -2958,7 +2958,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->PTTState = TRUE;
 
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, TRUE);
+			Rig_PTT(TNC, TRUE);
 
 		return;
 	}
@@ -2966,7 +2966,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		TNC->PTTState = FALSE;
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, FALSE);
+			Rig_PTT(TNC, FALSE);
 
 		return;
 	}
@@ -3191,6 +3191,10 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 				memcpy(AppName, &ApplPtr[App * sizeof(CMDX)], 12);
 				AppName[12] = 0;
+
+				if (TNC->SendTandRtoRelay && memcmp(AppName, "RMS ", 4) == 0
+					&& (strstr(Call, "-T" ) || strstr(Call, "-R")))
+						strcpy(AppName, "RELAY       ");
 
 				// Make sure app is available
 

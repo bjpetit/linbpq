@@ -142,17 +142,11 @@
 #define RMS_SSID2                       1071
 #define RMS_SSID3                       1072
 #define IDC_SYSTOSYSOPCALL              1073
-#define IDC_HOLDFROM                    1074
 #define IDC_DONTHOLDNEW                 1074
-#define IDC_HOLDTO                      1075
 #define IDC_FORWARDTOBBS                1075
-#define IDC_HOLDAT                      1076
 #define IDC_BBSTOSYSOPCALL              1076
-#define IDC_REJFROM                     1077
 #define IDC_NOHOMEBBS                   1077
-#define IDC_REJTO                       1078
 #define IDC_NONAME                      1078
-#define IDC_REJAT                       1079
 #define IDC_USERRKILLT                  1079
 #define IDC_FILTERSAVE                  1080
 #define IDC_OVERRIDEUNSENT              1081
@@ -174,6 +168,7 @@
 #define IDM_DISCONNECT                  2000
 #define IDC_ChatAppl                    2001
 #define IDC_ChatNodes                   2002
+#define IDC_DONTCHECKFROM               2010
 #define IDM_LOGGING                     2100
 #define IDC_CHATSAVE                    2100
 #define IDC_ISP_Gateway_Enabled         3000
@@ -239,6 +234,7 @@
 #define IDD_UserEditInfo                5051
 #define IDC_NTSMPS                      5060
 #define IDC_APRSMFOR                    5061
+#define IDC_RMSREDIRECT                 5062
 #define IDC_ADDUSER                     5100
 #define IDC_DELETEUSER                  5101
 #define IDC_SAVEUSER                    5102
@@ -253,6 +249,12 @@
 #define IDC_EDITTEXT                    6104
 #define IDC_SAVETOFILE                  6105
 #define IDM_FORWARD_ALL                 7000
+#define IDC_HOLDFROM                    7074
+#define IDC_HOLDTO                      7075
+#define IDC_HOLDAT                      7076
+#define IDC_REJFROM                     7077
+#define IDC_REJTO                       7078
+#define IDC_REJAT                       7079
 #define IDM_HOUSEKEEPING                9000
 #define IDM_PR                          9001
 #define IDM_PUR                         9002

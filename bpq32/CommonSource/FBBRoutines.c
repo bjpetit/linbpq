@@ -214,7 +214,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 					// if we dont kill it will be offered again
 
 					if (FBBHeader->FwdMsg->type == 'P' || (check_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber) == 0))
-						FlagAsKilled(FBBHeader->FwdMsg);
+						FlagAsKilled(FBBHeader->FwdMsg, FALSE);
 				}
 				
 				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
@@ -783,7 +783,7 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 
 				if (check_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber) == 0)
 				{
-					FlagAsKilled(FBBHeader->FwdMsg);
+					FlagAsKilled(FBBHeader->FwdMsg, FALSE);
 					continue;
 				}
 			}

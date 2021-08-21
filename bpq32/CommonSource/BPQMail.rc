@@ -162,7 +162,7 @@ FONT 8, "System"
 BEGIN
 END
 
-BBS_CONFIG DIALOG DISCARDABLE  0, 0, 381, 290
+BBS_CONFIG DIALOG DISCARDABLE  0, 0, 381, 306
 STYLE WS_CHILD
 FONT 8, "System"
 BEGIN
@@ -173,7 +173,7 @@ BEGIN
     LTEXT           "The eMail Server Params configure the NNTP, SMTP and POP3 Servers, which allow  normal Internet email and News clients to get messages from, and post mesages to the BBS. If you don't want to use this, set them to zero.. ",
                     IDC_STATIC,8,52,357,27
     LTEXT           "Enable UI System activates FBB compatible UI broadcasting of Message Headers",
-                    IDC_STATIC,0,81,364,15
+                    IDC_STATIC,8,80,357,15
     LTEXT           "BBS Call",IDC_STATIC,7,105,37,12
     EDITTEXT        IDC_BBSCall,83,103,47,14,ES_UPPERCASE
     LTEXT           "SYSOP Call",IDC_STATIC,138,105,42,12
@@ -195,16 +195,16 @@ BEGIN
     EDITTEXT        MAILFOR_MINS,205,156,22,12,ES_UPPERCASE
     LTEXT           "Minutes",IDC_STATIC,232,157,30,12
     PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,273,155,91,13
-    LTEXT           "eMail Server Params:",IDC_STATIC,7,206,135,10
-    LTEXT           "NNTP Port",IDC_STATIC,7,222,39,12
-    EDITTEXT        IDC_NNTPPort,47,220,29,14
-    LTEXT           "POP3 Port",IDC_STATIC,90,222,37,12
-    EDITTEXT        IDC_POP3Port,130,220,29,14
-    LTEXT           "SMTP Port",IDC_STATIC,170,222,37,12
-    EDITTEXT        IDC_SMTPPort,210,220,29,14
+    LTEXT           "eMail Server Params:",IDC_STATIC,7,227,135,10
+    LTEXT           "NNTP Port",IDC_STATIC,7,243,39,12
+    EDITTEXT        IDC_NNTPPort,47,241,29,14
+    LTEXT           "POP3 Port",IDC_STATIC,90,243,37,12
+    EDITTEXT        IDC_POP3Port,130,241,29,14
+    LTEXT           "SMTP Port",IDC_STATIC,170,243,37,12
+    EDITTEXT        IDC_SMTPPort,210,241,29,14
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,249,219,91,14
-    PUSHBUTTON      "Save",IDC_BBSSAVE,159,260,50,14,BS_CENTER | BS_VCENTER
+                    WS_TABSTOP,249,240,91,14
+    PUSHBUTTON      "Save",IDC_BBSSAVE,159,281,50,14,BS_CENTER | BS_VCENTER
     CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
                     189,134,12
@@ -218,10 +218,10 @@ BEGIN
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,260,174,99,12
     CONTROL         "Don't Request Name",IDC_NONAME,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,176,174,79,12
-    EDITTEXT        IDC_AMPR,72,237,119,13
-    LTEXT           "AMPR Address",IDC_STATIC,6,239,60,12
+    EDITTEXT        IDC_AMPR,72,258,119,13
+    LTEXT           "AMPR Address",IDC_STATIC,6,260,60,12
     CONTROL         "Send ampr.org mail to AMPR host",IDC_FORWARDAMPR,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,201,237,124,14
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,201,258,124,14
     CONTROL         "Allow users to kill T msgs",IDC_USERRKILLT,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,264,189,95,12
     CONTROL         "Set Don't add WINLINK.ORG flag on new users",
@@ -229,6 +229,8 @@ BEGIN
                     BS_LEFTTEXT | WS_TABSTOP,5,174,162,12
     CONTROL         "Don't allow unknown users",IDC_KNOWNUSERS,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,277,138,98,10
+    CONTROL         "Don't Check From Calls",IDC_DONTCHECKFROM,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,204,95,12
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -252,9 +254,9 @@ END
 IDD_USEREDIT DIALOGEX 20, 20, 293, 281
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit User"
-FONT 8, "System", 0, 0, 0x1
+FONT 8, "System"
 BEGIN
-    COMBOBOX        5000,7,7,57,88,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
+    COMBOBOX        5000,7,10,57,123,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
                     WS_VSCROLL | WS_TABSTOP
     CONTROL         "BBS",IDC_BBSFLAG,"Button",BS_AUTOCHECKBOX | BS_LEFT | 
                     WS_TABSTOP,72,9,57,10
@@ -281,52 +283,54 @@ BEGIN
     CONTROL         "RMS Express User",RMS_EXPRESS_USER,"Button",
                     BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,163,35,77,10
     LTEXT           "Last Listed",IDC_STATIC,163,87,38,12
-    EDITTEXT        IDC_LASTLISTED,248,85,29,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "Name",IDC_STATIC,7,175,35,14
-    EDITTEXT        IDC_NAME,55,173,96,14,ES_AUTOHSCROLL
-    LTEXT           "Password",IDC_STATIC,7,193,35,14
-    EDITTEXT        IDC_PASSWORD,55,191,89,14,ES_AUTOHSCROLL
-    LTEXT           "QTH",IDC_STATIC,7,211,35,14
-    EDITTEXT        IDC_QTH,55,209,130,14,ES_AUTOHSCROLL
-    LTEXT           "Home BBS",IDC_STATIC,7,229,40,14
-    EDITTEXT        IDC_HOMEBBS,55,227,162,14,ES_UPPERCASE | ES_AUTOHSCROLL
-    PUSHBUTTON      "Add user",IDC_ADDUSER,79,255,42,14,BS_CENTER | 
+    EDITTEXT        IDC_LASTLISTED,248,85,29,12,ES_AUTOHSCROLL
+    LTEXT           "Name",IDC_STATIC,7,184,35,14
+    EDITTEXT        IDC_NAME,55,182,96,14,ES_AUTOHSCROLL
+    LTEXT           "Password",IDC_STATIC,7,202,35,14
+    EDITTEXT        IDC_PASSWORD,55,200,89,14,ES_AUTOHSCROLL
+    LTEXT           "QTH",IDC_STATIC,7,220,35,14
+    EDITTEXT        IDC_QTH,55,218,130,14,ES_AUTOHSCROLL
+    LTEXT           "Home BBS",IDC_STATIC,7,238,40,14
+    EDITTEXT        IDC_HOMEBBS,55,236,162,14,ES_UPPERCASE | ES_AUTOHSCROLL
+    PUSHBUTTON      "Add user",IDC_ADDUSER,79,257,42,14,BS_CENTER | 
                     BS_VCENTER
-    PUSHBUTTON      "Delete user",5101,124,255,42,14,BS_CENTER | BS_VCENTER
-    PUSHBUTTON      "Save",5102,169,255,42,14,BS_CENTER | BS_VCENTER
-    LTEXT           "Connects in",IDC_STATIC,10,122,45,10
-    LTEXT           "Connects out",IDC_STATIC,10,133,45,10
-    LTEXT           "0",CONN_IN,57,122,26,10,0,WS_EX_RIGHT
-    LTEXT           "0",CONN_OUT,57,133,26,10,0,WS_EX_RIGHT
-    LTEXT           "Msgs in",IDC_STATIC,87,122,35,10
-    LTEXT           "Msgs out",IDC_STATIC,87,133,35,10
-    LTEXT           "0",MSGS_IN,125,122,26,10,0,WS_EX_RIGHT
-    LTEXT           "0",MSGS_OUT,125,133,26,10,0,WS_EX_RIGHT
-    LTEXT           "Rejects in",IDC_STATIC,159,122,35,10
-    LTEXT           "Rejects out",IDC_STATIC,159,133,40,10
-    LTEXT           "0",REJECTS_IN,201,122,26,10,0,WS_EX_RIGHT
-    LTEXT           "0",REJECTS_OUT,201,133,26,10,0,WS_EX_RIGHT
-    LTEXT           "Bytes out",IDC_STATIC,10,155,35,10
-    LTEXT           "",BYTES_OUT,45,155,38,10,0,WS_EX_RIGHT
-    LTEXT           "Bytes in",IDC_STATIC,10,144,35,10
-    LTEXT           "0",BYTES_IN,45,144,38,10,0,WS_EX_RIGHT
-    LTEXT           "Last Connect",IDC_STATIC,87,144,45,10
-    LTEXT           "Never",LASTCONNECT,134,144,93,10
+    PUSHBUTTON      "Delete user",5101,124,257,42,14,BS_CENTER | BS_VCENTER
+    PUSHBUTTON      "Save",5102,169,257,42,14,BS_CENTER | BS_VCENTER
+    LTEXT           "Connects in",IDC_STATIC,10,131,45,10
+    LTEXT           "Connects out",IDC_STATIC,10,142,45,10
+    LTEXT           "0",CONN_IN,57,131,26,10,0,WS_EX_RIGHT
+    LTEXT           "0",CONN_OUT,57,142,26,10,0,WS_EX_RIGHT
+    LTEXT           "Msgs in",IDC_STATIC,87,131,35,10
+    LTEXT           "Msgs out",IDC_STATIC,87,142,35,10
+    LTEXT           "0",MSGS_IN,125,131,26,10,0,WS_EX_RIGHT
+    LTEXT           "0",MSGS_OUT,125,142,26,10,0,WS_EX_RIGHT
+    LTEXT           "Rejects in",IDC_STATIC,159,131,35,10
+    LTEXT           "Rejects out",IDC_STATIC,159,142,40,10
+    LTEXT           "0",REJECTS_IN,201,131,26,10,0,WS_EX_RIGHT
+    LTEXT           "0",REJECTS_OUT,201,142,26,10,0,WS_EX_RIGHT
+    LTEXT           "Bytes out",IDC_STATIC,10,164,35,10
+    LTEXT           "",BYTES_OUT,45,164,38,10,0,WS_EX_RIGHT
+    LTEXT           "Bytes in",IDC_STATIC,10,153,35,10
+    LTEXT           "0",BYTES_IN,45,153,38,10,0,WS_EX_RIGHT
+    LTEXT           "Last Connect",IDC_STATIC,87,153,45,10
+    LTEXT           "Never",LASTCONNECT,134,153,93,10
     CONTROL         "Don't add @winlink.org",NO_WINLINKdotORG,"Button",
                     BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,163,47,100,10
-    LTEXT           "ZIP",IDC_STATIC,189,212,12,11
-    EDITTEXT        IDC_UZIP,207,210,38,12,ES_AUTOHSCROLL
+    LTEXT           "ZIP",IDC_STATIC,189,221,12,11
+    EDITTEXT        IDC_UZIP,207,219,38,12,ES_AUTOHSCROLL
     CONTROL         "Allow sending Bulls",ALLOW_BULLS,"Button",
                     BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,163,61,100,10
     CONTROL         "Include SYSOP msgs in LM",IDC_SYSOP_IN_LM,"Button",
                     BS_AUTOCHECKBOX | BS_LEFT | WS_DISABLED | WS_TABSTOP,163,
                     74,100,10
-    EDITTEXT        IDC_CMSPASS,187,192,88,14,ES_PASSWORD
+    EDITTEXT        IDC_CMSPASS,187,201,88,14,ES_PASSWORD
     CONTROL         "CMS Pass",IDC_STATIC,"Static",SS_LEFTNOWORDWRAP | 
-                    WS_GROUP,149,194,34,14
+                    WS_GROUP,149,203,34,14
     CONTROL         "Send Mail For to APRS ssid",IDC_APRSMFOR,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,72,105,108,10
-    EDITTEXT        IDC_APRSSSID,182,103,16,12,ES_AUTOHSCROLL | ES_NUMBER
+                    BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,72,113,108,10
+    EDITTEXT        IDC_APRSSSID,182,112,16,12,ES_AUTOHSCROLL
+    CONTROL         "Redirect to RMS",IDC_RMSREDIRECT,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,72,100,69,10
 END
 
 ISP_CONFIG DIALOG DISCARDABLE  26, 5, 381, 284
@@ -1166,7 +1170,7 @@ BEGIN
 
     "BBS_CONFIG", DIALOG
     BEGIN
-        BOTTOMMARGIN, 287
+        BOTTOMMARGIN, 303
         HORZGUIDE, 87
     END
 

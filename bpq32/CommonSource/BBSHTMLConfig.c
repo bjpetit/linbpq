@@ -1587,6 +1587,7 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		GetCheckBox(input, "DefaultNoWinlink=", &DefaultNoWINLINK);
 		GetCheckBox(input, "DontNeedName=", &AllowAnon);
 		GetCheckBox(input, "DontNeedHomeBBS=", &DontNeedHomeBBS);
+		GetCheckBox(input, "DontCheckFromCall=", &DontCheckFromCall);
 		GetCheckBox(input, "UserCantKillT=", &UserCantKillT);
 		UserCantKillT = !UserCantKillT;	// Reverse Logic
 		GetCheckBox(input, "FWDtoMe=", &ForwardToMe);
@@ -2089,6 +2090,9 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		ptr1 = GetNextParam(&ptr2);		// NTS Message Pickup Station
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_NTSMPS; else USER->flags &= ~F_NTSMPS;
 		ptr1 = GetNextParam(&ptr2);		// APRS Mail For
+		if (strcmp(ptr1, "true") == 0) USER->flags |= F_RMSREDIRECT; else USER->flags &= ~F_RMSREDIRECT;
+		ptr1 = GetNextParam(&ptr2);		// Redirect to RMS
+
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_APRSMFOR; else USER->flags &= ~F_APRSMFOR;
 	
 		ptr1 = GetNextParam(&ptr2);		// APRS SSID
@@ -2265,7 +2269,7 @@ VOID ProcessMsgUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 			// Need to take action if killing message
 
 			if (Msg->status == 'K')
-				FlagAsKilled(Msg);					// Clear forwarding bits
+				FlagAsKilled(Msg, FALSE);					// Clear forwarding bits
 		}
 
 		Msg->datechanged = time(NULL);
@@ -2436,6 +2440,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		(DefaultNoWINLINK) ? CHKD  : UNC,
 		(AllowAnon) ? CHKD  : UNC, 
 		(DontNeedHomeBBS) ? CHKD  : UNC, 
+		(DontCheckFromCall) ? CHKD  : UNC, 
 		(UserCantKillT) ? UNC : CHKD,		// Reverse logic
 		(ForwardToMe) ? CHKD  : UNC,
 		(OnlyKnown) ? CHKD  : UNC,
@@ -2786,6 +2791,7 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 		(flags & F_NOWINLINK)?CHKD:UNC,
 		(flags & F_NOBULLS)?UNC:CHKD,		// Inverted flag
 		(flags & F_NTSMPS)?CHKD:UNC,
+		(flags & F_RMSREDIRECT)?CHKD:UNC,
 		(flags & F_APRSMFOR)?CHKD:UNC, ASSID,
 
 		ConnectsIn, MsgsReceived, MsgsRejectedIn,

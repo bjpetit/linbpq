@@ -81,6 +81,7 @@ VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
 VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
+int standardParams(struct TNCINFO * TNC, char * buf);
 
 extern UCHAR BPQDirectory[];
 
@@ -1476,12 +1477,8 @@ static int ProcessLine(char * buf, int Port)
 			if (_memicmp(buf, "MODEMCENTER", 11) == 0 || _memicmp(buf, "MODEMCENTRE", 11) == 0)
 				TNC->AGWInfo->CenterFreq = atoi(&buf[12]);
 			else
-				
-			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-				TNC->WL2K = DecodeWL2KReportLine(buf);
-			else
-
-			strcat (TNC->InitScript, buf);
+			if (standardParams(TNC, buf) == FALSE)
+				strcat(TNC->InitScript, buf);
 		}
 
 

@@ -199,6 +199,8 @@ int do_kiss (char value[],char rec[]);
 struct TNCDATA * TNCCONFIGTABLE = NULL;		// malloc'ed
 int NUMBEROFTNCPORTS = 0;
 
+struct UPNP * UPNPConfig = NULL;
+
 struct TNCDATA * TNC2ENTRY;
 
 extern char PWTEXT[];
@@ -471,6 +473,8 @@ BOOL ProcessConfig()
 
 	AGWMask = 0;
 
+	UPNPConfig = NULL;
+
 	Consoleprintf("Configuration file Preprocessor.");
 
 	if (BPQDirectory[0] == 0)
@@ -514,7 +518,6 @@ BOOL ProcessConfig()
 	while (rec[0])
 	{
 	   decode_rec(rec);
-
 	   GetNextLine(rec);
 	}
 
@@ -1064,6 +1067,43 @@ NextAPRS:
 			}
 		}
 	}
+
+	if (_memicmp(rec, "UPNP ", 5) == 0)
+	{
+		struct UPNP * Entry = (struct UPNP *)zalloc(sizeof(struct UPNP));
+		char * ptr, * context;
+		char copy[256];
+
+		strcpy(copy, rec);
+
+		ptr = strtok_s(&rec[5], ", ", &context);
+	 
+		if (ptr)
+			Entry->Protocol = _strdup(ptr);
+
+		ptr = strtok_s(NULL, ", ", &context);
+
+		if (ptr)
+			Entry->LANport = Entry->WANPort = _strdup(ptr);;
+
+		ptr = strtok_s(NULL, ", ", &context);
+
+		if (ptr)
+			Entry->WANPort = _strdup(ptr);;
+
+		if (Entry->LANport)
+		{
+			Entry->Next = UPNPConfig;
+			UPNPConfig = Entry;
+			return 1;
+		}
+
+		Consoleprintf("Bad UPNP Line %s", copy);
+		heading = 1;
+
+		return 0;
+	}
+
 
 	if (xindex(rec,"=") >= 0)
 	   sscanf(rec,"%[^=]=%s",key_word,value);

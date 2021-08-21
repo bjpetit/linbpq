@@ -103,6 +103,7 @@ int SendReporttoWL2K(struct TNCINFO * TNC);
 char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 BOOL KillOldTNC(char * Path);
+int standardParams(struct TNCINFO * TNC, char * buf);
 
 static char ClassName[]="WINMORSTATUS";
 static char WindowTitle[] = "WINMOR";
@@ -501,20 +502,6 @@ static int ProcessLine(char * buf, int Port)
 			}
 			else
 */
-			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-				TNC->WL2K = DecodeWL2KReportLine(buf);
-			else
-			if (_memicmp(buf, "SESSIONTIMELIMIT", 16) == 0)
-				TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit = atoi(&buf[16]) * 60;
-			else
-			if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
-				TNC->BusyHold = atoi(&buf[8]);
-
-			else
-			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
-				TNC->BusyWait = atoi(&buf[8]);
-
-			else
 			if (_memicmp(buf, "STARTINROBUST", 13) == 0)
 				TNC->StartInRobust = TRUE;
 			
@@ -526,9 +513,8 @@ static int ProcessLine(char * buf, int Port)
 				
 				strcat (TNC->InitScript, buf);
 			}
-			else
-
-			strcat (TNC->InitScript, buf);
+			else if (standardParams(TNC, buf) == FALSE)
+				strcat (TNC->InitScript, buf);
 		}
 
 
@@ -1981,7 +1967,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;
@@ -2011,7 +1997,7 @@ Lost:
 			TNC->Alerted = FALSE;
 
 			if (TNC->PTTMode)
-				Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+				Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 			if (TNC->Streams[0].Attached)
 				TNC->Streams[0].ReportDISC = TRUE;
@@ -2113,13 +2099,13 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->Busy = TNC->BusyHold * 10;				// BusyHold  delay
 
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, TRUE);
+			Rig_PTT(TNC, TRUE);
 		return;
 	}
 	if (_memicmp(Buffer, "PTT F", 5) == 0)
 	{
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, FALSE);
+			Rig_PTT(TNC, FALSE);
 		return;
 	}
 
@@ -2954,7 +2940,7 @@ int KillTNC(struct TNCINFO * TNC)
 	Debugprintf("KillTNC Called for Pid %d", TNC->PID);
 
 	if (TNC->PTTMode)
-		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+		Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
 

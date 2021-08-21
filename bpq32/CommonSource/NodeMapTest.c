@@ -99,7 +99,33 @@ struct ChatLink
 	struct ChatNodeData * Call2;
 	int Call1State;					// reported state from each end
 	int Call2State;
+	time_t LastHeard1;
+	time_t LastHeard2;
+};
+
+struct ModeItem
+{
+	int Mode;
+	int Interlock;
+	double Freq;
 	time_t LastHeard;
+};
+
+struct ModeEntries
+{
+	struct ModeItem * Mode[32];		// One per port
+};
+
+struct FreqItem
+{
+	int Interlock;
+	char * Freqs;					// Store as text as that is what the web page will want
+	time_t LastHeard;
+};
+
+struct FreqEntries
+{
+	struct FreqItem * Freq[32];		// One per interlock group
 };
 
 struct ChatNodeData ** ChatNodes = NULL;
@@ -121,6 +147,8 @@ struct NodeData
 	int onlyHeard;			// Station heard but not reporting
 	struct HeardItem * HeardBy;
 	struct HeardItem * Heard;
+	struct ModeEntries * Modes;
+	struct FreqEntries * Freqs;
 };
 
 struct NodeData ** Nodes = NULL;
@@ -301,7 +329,7 @@ struct ChatNodeData * FindChatNode(char * Call)
 	return Node;
 }
 
-struct ChatLink * FindChatLink(char * Call1, char * Call2, int State)
+struct ChatLink * FindChatLink(char * Call1, char * Call2, int State, time_t Time)
 {
 	struct ChatLink * Link;
 	struct ChatNodeData * Node;
@@ -319,11 +347,13 @@ struct ChatLink * FindChatLink(char * Call1, char * Call2, int State)
 		if (strcmp(Link->Call1->Call, Call1) == 0 && strcmp(Link->Call2->Call, Call2) == 0)
 		{
 			Link->Call1State = State;
+			Link->LastHeard1 = Time;
 			return Link;
 		}
 		if (strcmp(Link->Call1->Call, Call2) == 0 && strcmp(Link->Call2->Call, Call1) == 0)
 		{
 			Link->Call2State = State;
+			Link->LastHeard2 = Time;
 			return Link;
 		}
 	}
@@ -431,6 +461,20 @@ char * strlop(char * buf, char delim)
 	return ptr;
 }
 
+void * zalloc(int len)
+{
+	// malloc and clear
+
+	void * ptr;
+
+	ptr = malloc(len);
+
+	if (ptr)
+		memset(ptr, 0, len);
+
+	return ptr;
+}
+
 FILE * logFile;
 
 time_t Now;
@@ -456,7 +500,7 @@ int main(int argc, char * argv[])
 	struct hostent * HostEnt1, * HostEnt2;
 	char * Context;
 	FILE * pFile;
-	char Line[16384];
+	char Line[65536];
 
 	char * pCall;
 	char * pCall2;
@@ -468,12 +512,18 @@ int main(int argc, char * argv[])
 	char * pHeardOnly;
 	char * pHeard;
 	char * pHeardby;
+	char * pModes;
+	char * pFreqs;
 	char * Next;
 
 	char * pHeardCall;
 	char * pFreq;
 	char * pFlags;
 	char * pHeardTime = "0";
+	char * pInterLock;
+	char * pTime;
+	char * pMode;
+	char * pPort;
 	char * pStatus1;
 	char * pStatus2;
 
@@ -485,6 +535,7 @@ int main(int argc, char * argv[])
 	fd_set readfd, writefd, exceptfd;
 	struct timeval timeout;
 	int retval;
+	char * ptr;
 
 #ifdef WIN32
 	WSADATA WsaData;            // receives data from WSAStartup
@@ -502,13 +553,15 @@ int main(int argc, char * argv[])
 
 	while (pFile)
 	{
-		if (fgets(Line, 16383, pFile) == NULL)
+		if (fgets(Line, 65535, pFile) == NULL)
 		{
 			fclose(pFile);
 			pFile = NULL;
 		}
 		else
 		{
+			int j;
+
 			pCall = strtok_s(Line, ",", &Context); 
 
 			if (strcmp(pCall, "EI5HBB-10") == 0)
@@ -614,6 +667,7 @@ int main(int argc, char * argv[])
 			// Now do heard by
 
 			pHeard = pHeardby;
+			pModes = strlop(pHeard, '|');
 
 			while (pHeard && strlen(pHeard) > 2)
 			{				
@@ -673,6 +727,81 @@ int main(int argc, char * argv[])
 				}
 				pHeard = Next;
 			}
+
+			pFreqs = strlop(pModes, '|');
+
+			while (pModes && strlen(pModes) > 2)
+			{	
+				struct ModeEntries * Modes;
+				struct ModeItem * Mode;
+
+				Next = strlop(pModes, '/');
+
+				pPort = pModes;
+				pMode = strlop(pPort, ',');
+				pInterLock = strlop(pMode, ',');
+				pHeardTime = strlop(pInterLock, ',');
+				pFreq = strlop(pHeardTime, ',');
+
+				if (pHeardTime)
+				{
+					int Port = atoi(pPort);
+
+					if (Port < 32)
+					{
+						Modes = Node->Modes;
+
+						if (Modes == NULL)
+							Modes = Node->Modes = (struct ModeEntries *)zalloc(sizeof(struct ModeEntries));
+
+						Mode = Modes->Mode[Port];
+
+						if (Mode == NULL)
+							Mode = Modes->Mode[Port] = (struct ModeItem *)zalloc(sizeof(struct ModeItem));
+
+						Mode->LastHeard = atoi(pHeardTime);
+						Mode->Mode = atoi(pMode);
+						Mode->Interlock = atoi(pInterLock);
+
+						if (pFreq)
+							Mode->Freq = atof(pFreq);
+					}
+				}
+
+				pModes = Next;
+			}
+
+			strlop(pFreqs, '|');
+
+			j = 0;
+
+			while (pFreqs && strlen(pFreqs) > 2)
+			{	
+				struct FreqItem * FreqItem;
+
+				Next = strlop(pFreqs, '&');
+
+				pInterLock = pFreqs;
+				pTime = strlop(pInterLock, ',');
+				pHeardTime = strlop(pTime, ',');
+
+				if (pHeardTime)
+				{
+					if (Node->Freqs == NULL)
+						Node->Freqs = (struct FreqEntries *)zalloc(sizeof(struct FreqEntries));
+
+					FreqItem = Node->Freqs->Freq[j] = (struct FreqItem *)zalloc(sizeof(struct FreqItem));
+
+					FreqItem->Interlock = atoi(pInterLock);
+					FreqItem->LastHeard = atoi(pHeardTime);
+					FreqItem->Freqs = _strdup(pTime);
+					j++;
+				}
+				pFreqs = Next;
+			}
+
+			if (Node->Heard == 0 && Node->HeardBy && Node->LastHeard == 0)
+				Node->onlyHeard = 1;
 		}
 	}
 
@@ -772,9 +901,13 @@ int main(int argc, char * argv[])
 			if (pHeardTime == NULL)
 				continue;
 
-			ChatLink = FindChatLink(pCall, pCall2, atoi(pStatus1));
+			ChatLink = FindChatLink(pCall, pCall2, atoi(pStatus1), 0);
+			ChatLink->LastHeard1 = atoi(pHeardTime);
 
-			ChatLink->LastHeard = atoi(pHeardTime);
+			pHeardTime = strtok_s(NULL, ",", &Context); 
+
+			if (pHeardTime)
+				ChatLink->LastHeard2 = atoi(pHeardTime);
 		}
 	}
 
@@ -852,6 +985,9 @@ int main(int argc, char * argv[])
 		FD_SET(sock, &readfd);
 		FD_SET(chatsock, &readfd);
 
+		timeout.tv_sec = 60;
+		timeout.tv_usec = 0;
+
 		retval = select((int)maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
 
 		if (retval == -1)
@@ -886,10 +1022,20 @@ int main(int argc, char * argv[])
 		if (nLength == 0)
 			continue;
 
-		//	ret = sendto(sock, RXBUFFER, nLength, 0, &txaddr2, sizeof(txaddr));
+		//	ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr2, sizeof(txaddr));
 
 		if (ret == -1)
 			perror("sendto 1");
+
+		RXBUFFER[nLength - 2] = 0;
+		
+		if (memcmp(&RXBUFFER[16], "LINK ", 5) != 0 && memcmp(&RXBUFFER[16], "INFO ", 5) != 0 && memcmp(&RXBUFFER[16], "FREQ ", 5) != 0)
+		{
+			ptr = &RXBUFFER[16];
+		
+			while (ptr = strchr(Msg, '|'))
+				*ptr = '/';
+		}
 
 		if (memcmp(&RXBUFFER[16], "LINK ", 5) != 0)
 		{
@@ -906,8 +1052,6 @@ int main(int argc, char * argv[])
 #else
 		usleep(10000);
 #endif
-
-		RXBUFFER[nLength] = 0;
 
 		if (strstr(RXBUFFER, "ctl"))
 		{
@@ -943,6 +1087,30 @@ int main(int argc, char * argv[])
 	}
 }
 
+#define H_WINMOR 1
+#define H_SCS 2
+#define H_KAM 3
+#define H_AEA 4
+#define H_HAL 5
+#define H_TELNET 6
+#define H_TRK 7
+#define H_TRKM 7
+#define H_V4 8
+#define H_UZ7HO 9
+#define H_MPSK 10
+#define H_FLDIGI 11
+#define H_UIARQ 12
+#define H_ARDOP 13
+#define H_VARA 14
+#define H_SERIAL 15
+#define H_KISSHF 16
+#define H_WINRPR 17
+#define H_HSMODEM 18
+
+char ModeNames[20][16] = {
+	"", "WINMOR", "PACTOR",  "PACTOR", "PACTOR", "PACTOR", "TELNET", "ROBUST", "V4",
+	"PACKET", "MPSK", "FLDIGI", "UIARQ", "ARDOP", "VARA", "SERIAL", "PACKET", "ROBUST", "HSMODEM"};
+
 
 void ProcessNodeUpdate(char * From, char * Msg)
 {
@@ -957,48 +1125,21 @@ void ProcessNodeUpdate(char * From, char * Msg)
 
 	struct HeardItem * lastItem = NULL;
 
+	if (strcmp("KO0OOO-8", From) == 0)
+	{
+		int i = 1;
+	}
+
 	Node = FindNode(From);
 	Node->LastHeard = Now;
 	Node->onlyHeard = 0;			// Reported
 
-	//			printf("%s %s %s\n", From, To, Msg);
+	// printf("%s %s\n", From, Msg);
 	//			fprintf(logFile, "%s %s %s\n", From, To, Msg);
 
 
 	if (memcmp(Msg, "MH ", 3) == 0)
 	{
-		/*
-		Line 4211: WA7WWC-12 DUMMY-1 MH AL1Q-12,,,I!?
-		Line 4221: YU7BPQ DUMMY-1 MH YU7BPQ to APBPQ1 via WIDE2-1 ctl UI^ pid F0
-		Line 4315: WA4ZKO DUMMY-1 MH WA4ZKO,,,G.?
-		Line 4316: WA4ZKO DUMMY-1 MH WA4ZKO,,,G.?
-		Line 4317: WA4ZKO-7 DUMMY-1 MH WA4ZKO,,,G.?
-		Line 4318: WA4ZKO-7 DUMMY-1 MH WA4ZKO-7,,,G.?
-		Line 4319: WA4ZKO-7 DUMMY-1 MH WA4ZKO,,,G.?
-		Line 4350: YU7BPQ DUMMY-1 MH GB7CIP,14.1104,,B+?O
-		Line 4351: M0IPU-2 DUMMY-1 MH G0WYG,,,I!?
-		Line 4360: N3HYM DUMMY-1 MH W3JY,3.5919,,B+?O
-		Line 4361: W3JY DUMMY-1 MH N3HYM,3.5919,,B+?I
-		Line 4385: M0IPU-2 DUMMY-1 MH MB7IWG,,,I!?
-		Line 4394: GM8BPQ-2 DUMMY-1 MH GM8BPQ-2,14.1035,IO68vl,M!?I
-		' Heard or Connection Report
-
-		Elements = Split(Mid(Report, 4), ",")
-
-		If Elements.Length < 4 Then Continue While
-
-		Index = FindNodeCall(CallFrom)
-
-		HeardCall = Elements(0)
-		Freq = Elements(1)
-		LOC = Elements(2)
-		Flags = Elements(3)
-
-		If LOC.Length <> 6 Then LOC = ""
-
-		GM8BPQ-2 DUMMY-1 MH GM8BPQ-2,14.1035,IO68vl,M!?I
-
-		*/
 		// There are 4 fields - Call, Freq, Loc, Flags
 
 		char * Call, * Freq = 0, * LOC = 0, * Flags = 0;
@@ -1071,6 +1212,189 @@ void ProcessNodeUpdate(char * From, char * Msg)
 		return;
 	}
 
+	if (memcmp(Msg, "MODE ", 5) == 0)
+	{
+		char * pPort, * pType, * pInterlock, * pFreq;
+		int Port;
+		int Type;
+		int Interlock;
+		struct ModeEntries * Modes;
+		struct ModeItem * Mode;
+		char * nextBit = strlop(Msg, '/');
+
+		Msg += 5;
+
+		while (strlen(Msg) > 3)
+		{
+			pPort = Msg;
+			pType = strlop(pPort, ',');
+			pInterlock = strlop(pType, ',');
+			pFreq = strlop(pInterlock, ',');
+
+			if (pInterlock == NULL)
+				return;
+
+			Port = atoi(pPort);
+			Type = atoi(pType);
+			Interlock = atoi(pInterlock);
+
+			if (Port == 0)
+				return;
+
+			if (pFreq)
+				printf("%s %d %s %d %s\n", From, Port, ModeNames[Type], Interlock, pFreq);
+			else
+				printf("%s %d %s %d\n", From, Port, ModeNames[Type], Interlock);
+
+			Port--;				// Index from zero
+
+			Modes = Node->Modes;
+
+			if (Modes == NULL)
+				Modes = Node->Modes = (struct ModeEntries *)zalloc(sizeof(struct ModeEntries));
+
+			Mode = Modes->Mode[Port];
+
+			if (Mode == NULL)
+				Mode = Modes->Mode[Port] = (struct ModeItem *)zalloc(sizeof(struct ModeItem));
+
+			Mode->LastHeard = Now;
+			Mode->Mode = Type;
+			Mode->Interlock = Interlock;
+			if (pFreq)
+				Mode->Freq = atof(pFreq);
+
+			Msg = nextBit;
+			nextBit = strlop(Msg, '/');
+		}
+		return;
+	}
+
+	if (memcmp(Msg, "FREQ ", 5) == 0)
+	{
+		int Interlock = 0;
+		double Freq;
+		char TimeBand[16];
+		char * nextBit;
+		char * pInterlock, * pTime, *pFreq;
+		struct FreqEntries * Freqs;
+		struct FreqItem * FreqItem;
+		int n;
+		char Line[16384];
+		int lineLen = 0;
+		char freqString[256];
+
+		printf("%s %s\r\n", From, Msg);
+
+		if (strcmp("GM8BPQ-2", From) == 0)
+			n = 0;
+
+		nextBit = strlop(Msg, '|');
+
+		Msg += 5;
+
+		while (Msg && Msg[0])
+		{
+			char * nextTime;
+
+			lineLen = 0;
+
+			pInterlock = Msg;
+			pTime = strlop(pInterlock, '/');
+
+			Interlock = atoi(pInterlock);	
+
+			if (Interlock < 0)
+			{
+				// Try to convert to new format report
+
+				int Port = -Interlock;
+				struct ModeItem * Mode;
+				char * FreqPtr = strlop(pTime, '/');
+				
+				if (Node->Modes)
+				{
+					Mode = Node->Modes->Mode[Port - 1];
+
+					if (Mode && FreqPtr)
+						Mode->Freq = atof(FreqPtr) / 1000000.0;
+				}
+
+				Msg = nextBit;
+				nextBit = strlop(Msg, '|');
+				continue;
+			}
+
+			if (Node->Freqs == NULL)
+				Node->Freqs = (struct FreqEntries *)zalloc(sizeof(struct FreqEntries));
+
+			Freqs = Node->Freqs;
+
+			// Do we have a record for this group?
+
+			for (n = 0; n < 32; n++)
+			{
+				FreqItem = Node->Freqs->Freq[n];
+
+				if (FreqItem == NULL || FreqItem->Interlock == Interlock)
+					break;
+			}
+
+			// We have either found it or first free slot
+
+			if (FreqItem == NULL)			// Not found
+			{
+				FreqItem = Node->Freqs->Freq[n] = (struct FreqItem *)zalloc(sizeof(struct FreqItem));
+				FreqItem->Interlock = Interlock;
+			}
+
+			FreqItem->LastHeard = Now;
+
+			nextTime = strlop(pTime, '\\');
+
+			while (pTime && pTime[0])
+			{
+				pFreq = strlop(pTime, '/');
+
+				if (pTime)
+				{
+					strcpy(TimeBand, pTime);
+
+					lineLen += sprintf(&Line[lineLen], "%s ", TimeBand);
+
+					while (pFreq && pFreq[0])
+					{
+						Freq = atof(pFreq);
+						pFreq = strlop(pFreq, ',');
+						sprintf(freqString, "%.6f", Freq/1000000.0);
+
+						while (freqString[strlen(freqString) - 1] == '0')
+							freqString[strlen(freqString) - 1] = 0;
+
+						lineLen += sprintf(&Line[lineLen], "%s ", freqString);
+					}
+
+					lineLen += sprintf(&Line[lineLen], "/ ");
+				}
+
+				pTime = nextTime;
+				nextTime = strlop(pTime, '\\');
+			}
+
+			if (FreqItem->Freqs)
+				free (FreqItem->Freqs);
+
+			Line[strlen(Line) -2] = 0;
+
+			FreqItem->Freqs = _strdup(Line);
+
+			Msg = nextBit;
+			nextBit = strlop(Msg, '|');
+		}
+
+		return;
+	}
+
 	// Node Info Message
 
 	// Location Space Version<br>Comment. Location and version may contain spaces!
@@ -1091,7 +1415,7 @@ void ProcessNodeUpdate(char * From, char * Msg)
 
 	ptr = strtok_s(Msg, " ,:", &Context);
 
-	if (strlen(ptr) == 6 && FromLOC(ptr, &Lat, &Lon))	// Valid Locator
+	if ((strlen(ptr) == 6 || strlen(ptr) == 10) && FromLOC(ptr, &Lat, &Lon))	// Valid Locator
 	{
 		// Rest must be version
 
@@ -1123,12 +1447,10 @@ void ProcessNodeUpdate(char * From, char * Msg)
 	Node->Lat = Lat;
 	Node->Lon = Lon;
 
-	//		If Locator.Length = 6 Then
-	//            .Comment = .Callsign & " " & Locator & " Ver " & Version
-	//       Else
-	//           .Comment = .Callsign & " Ver " & Version
-	//       End If
+	// Check Comment for Embedded | which will mess up javascript
 
+	while (ptr = strchr(Comment, '|'))
+		*ptr = '/';
 
 	sprintf(Node->Comment, "%s %s<br>%s", From, Version, Comment);
 	return;
@@ -1307,11 +1629,15 @@ void GenerateOutputFiles(time_t Now)
 	struct tm * TM;
 	struct NodeData * Node;
 	struct NodeLink * Link;
-	int i;
+	int i, j;
 	FILE * pFile;
 	int activeNodes = 0;
 	char HeardString[16384];
 	char HeardCalls[16384];
+	char ModesString[16384];
+	char FreqsString[16384];
+	int ModesLen;
+	int FreqsLen;
 	double Lat, Lon;
 	char Colour, State;
 	struct ChatNodeData * ChatNode;
@@ -1322,6 +1648,7 @@ void GenerateOutputFiles(time_t Now)
 
 	int hl = 0;
 	struct HeardItem * Heard;
+	char * startofHeardBy;
 
 	LastUpdate = Now;
 
@@ -1339,7 +1666,7 @@ void GenerateOutputFiles(time_t Now)
 
 	for (i = 0; i < NumberOfNodes; i++)
 	{
-		if ((Now - Nodes[i]->LastHeard) < 86400)			//  > One day old - don't show
+		if ((Now - Nodes[i]->LastHeard) < 3600)			//  Only count green stations
 			activeNodes++;
 	}
 
@@ -1351,16 +1678,16 @@ void GenerateOutputFiles(time_t Now)
 	{
 		Node = Nodes[i];
 
-		Age = Now - Node->LastHeard;
+		Age = (int)(Now - Node->LastHeard);
 
-		if (strcmp("EI5HBB-10", Node->Call) == 0)
+		if (strcmp("KF4YMC-3", Node->Call) == 0)
 			i = i;
 
 
 		//		if (Node->onlyHeard)
 		//			continue;					// Only heard, not reported
 
-		// We need unheard nodes in the file for the MH list but don't display on main map
+		// We need unheard nodes in the file for the MH list. Display on main map in blue
 
 		if (Age < 3600) 
 			Colour = 'G';
@@ -1401,6 +1728,8 @@ void GenerateOutputFiles(time_t Now)
 				Heard = Heard->Next;
 			}
 
+			startofHeardBy = &HeardString[hl];
+
 			hl += sprintf(&HeardString[hl], "Heard By<br>");
 
 			Heard = Node->HeardBy;
@@ -1409,11 +1738,74 @@ void GenerateOutputFiles(time_t Now)
 			{
 				if ((Now - Heard->Time) < 4 * 86400)  // Less than 4 days old
 				{
+					if (strstr(startofHeardBy, Heard->ReportingCall->Call))
+					{
+						Heard = Heard->NextBy;
+						continue;		// only a call add once
+					}
 					strcat(HeardCalls, Heard->ReportingCall->Call);
 					strcat(HeardCalls, "%");
 					hl += sprintf(&HeardString[hl], "%s<br>", Heard->ReportingCall);
 				}
 				Heard = Heard->NextBy;
+			}
+		}
+
+		// Build Mode List
+
+		ModesString[0] = 0;
+		ModesLen = 0;
+
+		if (Node->Modes)
+		{
+			struct ModeEntries * Modes = Node->Modes;
+
+			for (j = 0; j < 32; j++)
+			{
+				if (Modes->Mode[j])
+				{
+					struct ModeItem * Mode = Modes->Mode[j];
+
+					if (Now - Mode->LastHeard < 2400)
+					{
+						if (Mode->Freq)
+						{
+							char freqString[256];
+							int freqLen = sprintf(freqString, "%.6f", Mode->Freq);
+
+							while (freqString[--freqLen] == '0')
+							{
+								freqString[freqLen] = 0;
+							}
+
+							ModesLen += sprintf(&ModesString[ModesLen], "%02d:%d:%s/", Mode->Mode, Mode->Interlock, freqString);
+						}
+						else
+							ModesLen += sprintf(&ModesString[ModesLen], "%02d:%d/", Mode->Mode, Mode->Interlock);
+					}
+				}
+			}
+		}
+
+		// Build Freq List
+
+		FreqsString[0] = 0;
+		FreqsLen = 0;
+
+		for (j = 0; j < 32; j++)
+		{
+			if (Node->Freqs)
+			{
+				struct FreqEntries * Freqs = Node->Freqs;
+
+				if (Freqs->Freq[j])
+				{
+					struct FreqItem * Freq = Freqs->Freq[j];
+
+					FreqsLen += sprintf(&FreqsString[FreqsLen], "%02d!%s\\", Freq->Interlock, &Freq->Freqs[6]);
+				}
+				else
+					break;
 			}
 		}
 
@@ -1430,9 +1822,12 @@ void GenerateOutputFiles(time_t Now)
 				Lon = x->Lon;
 			}
 		}
-		fprintf(pFile, "%s,%f,%f,%c,%d,%s,%d,%s,%s\r\n|", Node->Call, Lon, Lat, Colour, Node->PopupMode, Node->Comment, Node->Heard != NULL, HeardString, HeardCalls); 
+		fprintf(pFile, "%s,%f,%f,%c,%d,%s,%d,%s,%s,%s,%s\r\n|",
+			Node->Call, Lon, Lat, Colour, Node->PopupMode, Node->Comment, (HeardCalls[0] != 0), HeardString, HeardCalls, ModesString, FreqsString); 
+		
+//		printf("%s,%f,%f,%c,%d,%s,%d,%s,%s,%s,%s\r\n|",
+//			Node->Call, Lon, Lat, Colour, Node->PopupMode, Node->Comment, (HeardCalls[0] != 0), HeardString, HeardCalls, ModesString, FreqsString); 	
 	}
-
 
 	for (i = 0; i < NumberOfNodeLinks; i++)
 	{		
@@ -1477,7 +1872,7 @@ void GenerateOutputFiles(time_t Now)
 
 	for (i = 0; i < NumberOfChatNodes; i++)
 	{
-		if ((Now - ChatNodes[i]->LastHeard) < 86400)			//  > One day old - don't show
+		if ((Now - ChatNodes[i]->LastHeard) < 3600)			//  Only current
 			activeNodes++;
 	}
 
@@ -1491,14 +1886,18 @@ void GenerateOutputFiles(time_t Now)
 	{
 		ChatNode = ChatNodes[i];
 		noPosition = 0;
+		Age = Now - ChatNode->LastHeard;
 
-		if (strcmp(ChatNode->Call, "GM8BPQ-4") == 0)
+		if (strcmp(ChatNode->Call, "KG4FZR-1") == 0)
 			i = i;
 
 		// |GM8BPQ-4,-6.21863670150439,58.4901567374667,GM8BPQ.ok.png,0,BPQ Chat Node, Skigersta, |
 
 		// derivedLat/Lon will be overwritten if a real report is received, so if that
 		// is set use it
+
+		if (Age > 86400 && ChatNode->LastHeard != 0)
+			continue;					
 
 		Lat = ChatNode->Lat;
 		Lon = ChatNode->Lon;
@@ -1571,7 +1970,7 @@ void GenerateOutputFiles(time_t Now)
 				else
 					continue;
 
-				if ((Now - Link->LastHeard) < 3600 && Link->Call1State != Link->Call2State )
+				if ((Now - Link->LastHeard1) < 3600 && Link->Call1State != Link->Call2State )
 				{
 					if (reported == 0)
 					{
@@ -1589,7 +1988,7 @@ void GenerateOutputFiles(time_t Now)
 			continue;					
 
 		if (ChatNode->hasLinks == 0)
- 
+
 
 
 		if (noPosition && ChatNode->hasLinks == 0)
@@ -1614,7 +2013,7 @@ void GenerateOutputFiles(time_t Now)
 
 		// |Line,-122.1225,47.6891666666667, -93.294332,36.620264,#000000,2
 
-		if ((Now - ChatLink->LastHeard) < 86400)
+		if ((Now - ChatLink->LastHeard1) < 3600)
 		{
 			if (ChatLink->Call1State == 0 && ChatLink->Call2State == -1) 
 				State = 3;      // Down Mismatch
@@ -1622,8 +2021,8 @@ void GenerateOutputFiles(time_t Now)
 				State = 3;
 			else if (ChatLink->Call1State == 2 && ChatLink->Call2State == 2)
 				State = 2;		// Up
-			else if (ChatLink->Call1State == 2 || ChatLink->Call2State == 2)
-				State = 1;		// Reported up from one end
+			else if (ChatLink->Call1State == 2 || (ChatLink->Call2State == 2 && (Now - ChatLink->LastHeard2) < 3600))
+				State = 1;	
 			else
 				State = 0;
 
@@ -1657,7 +2056,7 @@ void GenerateOutputFiles(time_t Now)
 	{
 		Node = Nodes[i];
 
-		//		if (Node->LastHeard && Node->Lat != 0.0)
+		if ((Now - Node->LastHeard) < 30 * 86400)		// Drop very old records
 		{
 			struct HeardItem * Heard = Node->Heard;
 
@@ -1678,6 +2077,53 @@ void GenerateOutputFiles(time_t Now)
 				if ((Now - Heard->Time) < 4 * 86400)  // Less than 4 days old
 					fprintf(pFile, "%s,%s,%s,%s,%d/", Heard->HeardCall, Heard->ReportingCall, Heard->Freq, Heard->Flags, Heard->Time);
 				Heard = Heard->NextBy;
+			}
+
+			fprintf(pFile, "|");
+
+			// Do Modes
+	
+			for (j = 0; j < 32; j++)
+			{
+				if (Node->Modes)
+				{
+					struct ModeEntries * Modes = Node->Modes;
+
+					if (Modes->Mode[j])
+					{
+						struct ModeItem * Mode = Modes->Mode[j];
+
+						if (Now - Mode->LastHeard < 2400)
+						{
+							if (Mode->Freq)
+								fprintf(pFile, "%d,%d,%d,%lld,%f/", j, Mode->Mode, Mode->Interlock, Mode->LastHeard, Mode->Freq);
+							else
+								fprintf(pFile, "%d,%d,%d,%d/", j, Mode->Mode, Mode->Interlock, Mode->LastHeard);
+						}
+					}
+				}
+			}
+
+			fprintf(pFile, "|");
+
+			// Do Frequencies
+	
+			if (Node->Freqs)
+			{
+				struct FreqEntries * Freqs = Node->Freqs;
+		
+				for (j = 0; j < 32; j++)
+				{
+					struct FreqItem * Freq = Freqs->Freq[j];
+
+					if (Freq)
+					{
+						if (Now - Freq->LastHeard < 86400)
+							fprintf(pFile, "%d,%s,%d&", Freq->Interlock, Freq->Freqs, Freq->LastHeard);
+						else
+							break;
+					}
+				}
 			}
 
 			fprintf(pFile, "|\r\n");
@@ -1710,8 +2156,9 @@ void GenerateOutputFiles(time_t Now)
 	{
 		ChatNode = ChatNodes[i];
 
-		fprintf(pFile, "%s,%f,%f,%d,%s|%d|\r\n",
-			ChatNode->Call, ChatNode->Lat, ChatNode->Lon, ChatNode->PopupMode, ChatNode->Comment, ChatNode->LastHeard);
+		if ((Now - ChatNode->LastHeard) < 30 * 86400)		// Drop very old records
+			fprintf(pFile, "%s,%f,%f,%d,%s|%d|\r\n",
+				ChatNode->Call, ChatNode->Lat, ChatNode->Lon, ChatNode->PopupMode, ChatNode->Comment, ChatNode->LastHeard);
 
 	}
 	fclose(pFile);
@@ -1725,12 +2172,12 @@ void GenerateOutputFiles(time_t Now)
 	{
 		ChatLink = ChatLinks[i];
 
-		fprintf(pFile, "%s,%s,%d,%d,%d\r\n",
-			ChatLink->Call1->Call, ChatLink->Call2->Call, ChatLink->Call1State, ChatLink->Call2State, ChatLink->LastHeard);
-
+		if ((Now - ChatLink->LastHeard1) < 30 * 86400 || (Now - ChatLink->LastHeard2) < 30 * 86400)		// Drop very old records
+			fprintf(pFile, "%s,%s,%d,%d,%lld,%lld\r\n",
+				ChatLink->Call1->Call, ChatLink->Call2->Call, ChatLink->Call1State, ChatLink->Call2State, ChatLink->LastHeard1, ChatLink->LastHeard2);
 	}
 	fclose(pFile);
-
+	fflush(NULL);
 }
 
 void ProcessChatUpdate(char * From, char * Msg)
@@ -1738,13 +2185,9 @@ void ProcessChatUpdate(char * From, char * Msg)
 	struct ChatNodeData * Node = FindChatNode(From);
 	struct ChatNodeData * OtherNode;
 	struct ChatLink * Link;
-	int i;
 
 	char * p1, * p2, * p3, * p4, * context;
 	int NewState;
-
-	if (strcmp(From, "GB7UOD-12") == 0)
-		i = 0;
 
 	Node->LastHeard = Now;
 
@@ -1898,15 +2341,18 @@ gotPos:
 
 	// Call / State Pairs
 
-	//	printf("%s\r\n", Msg);
+//	printf("%s\r\n", Msg);
 
 	p1 = strtok_s(Msg, " \r", &context);
 	p2 = strtok_s(NULL, " \r", &context);
 
 	while (p1 && p2)
 	{
-		//		printf("%s %s\r\n", p1, p2);
+		//	printf("%s %s\r\n", p1, p2);
 
+		if (strcmp(From, "KG4FZR-1") == 0 || strcmp(p1, "KG4FZR-1") == 0)
+			printf("%s\r\n", Msg);
+		
 		NewState = atoi(p2);
 
 		// Ignore down reports if target doesn't exist
@@ -1914,8 +2360,7 @@ gotPos:
 		if (NewState != 4)					// 4 is setting up
 		{
 			OtherNode = FindChatNode(p1);
-			Link = FindChatLink(From, p1, NewState);
-			Link->LastHeard = Now;
+			Link = FindChatLink(From, p1, NewState, Now);
 		}
 		p1 = strtok_s(NULL, " \r", &context);
 		p2 = strtok_s(NULL, " \r", &context);

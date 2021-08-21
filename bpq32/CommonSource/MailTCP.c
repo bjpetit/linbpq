@@ -2707,7 +2707,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		Msg = sockptr->POP3Msgs[i-1];
 
-		FlagAsKilled(Msg);
+		FlagAsKilled(Msg, TRUE);
 
 		SendSock(sockptr, "+OK ");
 		return;
@@ -3244,7 +3244,7 @@ BOOL SendtoAMPR(CIRCUIT * conn)
 
 	if (Body == NULL)
 	{
-		FlagAsKilled(Msg);
+		FlagAsKilled(Msg, TRUE);
 		return FALSE;
 	}
 		
@@ -3301,7 +3301,7 @@ BOOL SendtoISP()
 
 			if (Body == NULL)
 			{
-				FlagAsKilled(Msg);
+				FlagAsKilled(Msg, TRUE);
 				return FALSE;
 			}
 
@@ -3757,6 +3757,8 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 }
 
+static char Winlink[] = "WINLINK.ORG";
+
 int CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag)
 {
 	struct MsgInfo * Msg;
@@ -3857,7 +3859,13 @@ int CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char
 		{
 			// Local User. If Home BBS is specified, use it
 
-			if (ToUser->HomeBBS[0])
+			if (ToUser->flags & F_RMSREDIRECT)
+			{
+				// sent to Winlink
+				
+				strcpy(Msg->via, Winlink);
+			}
+			else if (ToUser->HomeBBS[0])
 				strcpy(Msg->via, ToUser->HomeBBS);
 		}
 		else

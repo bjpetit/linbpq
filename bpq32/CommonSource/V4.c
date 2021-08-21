@@ -1239,14 +1239,14 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		TNC->Busy |= PTTBusy;
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, TRUE);
+			Rig_PTT(TNC, TRUE);
 		return;
 	}
 	if (_memicmp(Buffer, "PTT F", 5) == 0)
 	{
 		TNC->Busy &= ~PTTBusy;
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, FALSE);
+			Rig_PTT(TNC, FALSE);
 		return;
 	}
 

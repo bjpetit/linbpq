@@ -1068,6 +1068,11 @@
 //	Fix parsing ReplyTemplate name in Webmail
 //	Handle multiple addressees for WebMail Forms messages to packet stations
 //	Add option to allow only known users to connect
+//	Add basic callsign validation to From address
+//	Add option to forward a user's messages to Winlink
+//	Move User and WP Config to main config file.
+//	Update message status whne reading a Forms Webmail message
+//	Speed up killing multiple messages
 
 #include "BPQMail.h"
 #define MAIL
@@ -1582,9 +1587,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	}
 
 
-	SaveUserDatabase();
-	SaveMessageDatabase();
-	SaveBIDDatabase();
+//	SaveUserDatabase();
+//	SaveMessageDatabase();
+//	SaveBIDDatabase();
 
 	configSaved = 1;
 	SaveConfig(ConfigName);
@@ -3208,6 +3213,9 @@ BOOL Initialise()
 	if (strstr(CmdLine, "nohomebbs"))
 		DontNeedHomeBBS = TRUE;
 
+	if (strstr(CmdLine, "DontCheckFromCall"))
+		DontCheckFromCall = TRUE;
+
 	CheckMenuItem(hMenu,IDM_LOGBBS, (LogBBS) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_LOGTCP, (LogTCP) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_LOGCHAT, (LogCHAT) ? MF_CHECKED : MF_UNCHECKED);
@@ -3521,7 +3529,11 @@ char * strlop(char * buf, char delim)
 {
 	// Terminate buf at delim, and return rest of string
 
-	char * ptr = strchr(buf, delim);
+	char * ptr;
+
+	if (buf == NULL) return NULL;		// Protect
+
+	ptr = strchr(buf, delim);
 
 	if (ptr == NULL) return NULL;
 

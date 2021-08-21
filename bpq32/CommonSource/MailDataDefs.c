@@ -182,6 +182,7 @@ BOOL ForwardToMe = FALSE;
 BOOL OnlyKnown = FALSE;
 
 BOOL DontNeedHomeBBS = FALSE;
+BOOL DontCheckFromCall = FALSE;
 
 // Send WP Params
 

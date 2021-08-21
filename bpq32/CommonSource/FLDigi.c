@@ -921,7 +921,7 @@ static KillTNC(struct TNCINFO * TNC)
 	HANDLE hProc;
 
 	if (TNC->PTTMode)
-		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+		Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 	if (TNC->ProgramPath)
 		TNC->PID = FindFLDIGI(TNC->ProgramPath);

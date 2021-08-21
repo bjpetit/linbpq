@@ -285,9 +285,16 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 	switch (fn)
 	{
-	case 1:				// poll
+	case 8:
 
+		return 0;
+
+	case 7:
+
+		// approx 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
+		
 		// Check session limit timer
+
 
 		if ((STREAM->Connecting || STREAM->Connected) && !STREAM->Disconnecting)
 		{
@@ -363,6 +370,10 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				}
 			}
 		}
+
+		return 0;
+
+	case 1:				// poll
 
 		if (STREAM->NeedDisc)
 		{
@@ -1420,7 +1431,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;
@@ -1428,7 +1439,7 @@ Lost:
 				closesocket(TNC->TCPSock);
 				closesocket(TNC->TCPDataSock);
 				TNC->TCPSock = 0;
-				return;
+				break;
 			}
 
 			if (FD_ISSET(TNC->TCPDataSock, &errorfs))
@@ -1443,7 +1454,7 @@ Lost:
 				TNC->Alerted = FALSE;
 
 				if (TNC->PTTMode)
-					Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+					Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 				if (TNC->Streams[0].Attached)
 					TNC->Streams[0].ReportDISC = TRUE;
@@ -1451,7 +1462,7 @@ Lost:
 				closesocket(TNC->TCPSock);
 				closesocket(TNC->TCPDataSock);
 				TNC->TCPSock = 0;
-				return;
+				break;
 			}
 			continue;
 		}
@@ -1474,7 +1485,7 @@ Lost:
 			TNC->Alerted = FALSE;
 
 			if (TNC->PTTMode)
-				Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+				Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 			if (TNC->Streams[0].Attached)
 				TNC->Streams[0].ReportDISC = TRUE;
@@ -1499,9 +1510,24 @@ Lost:
 //	{
 //		KillTNC(TNC);
 //
-			return;
+			break;
 		}
 	}
+
+	if (TNC->TCPSock)
+	{
+		shutdown(TNC->TCPSock, SD_BOTH);
+		Sleep(100);
+		closesocket(TNC->TCPSock);
+	}
+
+	if (TNC->TCPDataSock)
+	{
+		shutdown(TNC->TCPDataSock, SD_BOTH);
+		Sleep(100);
+		closesocket(TNC->TCPDataSock);
+	}
+
 	sprintf(Msg, "VARA Thread Terminated Port %d\r\n", TNC->Port);
 	WritetoConsole(Msg);
 }
@@ -1523,7 +1549,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->Busy = TNC->BusyHold * 10;				// BusyHold  delay
 
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, TRUE);
+			Rig_PTT(TNC, TRUE);
 
 		return;
 	}
@@ -1533,7 +1559,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 //		Debugprintf("PTT Off");
 
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, FALSE);
+			Rig_PTT(TNC, FALSE);
 
 		return;
 	}
@@ -1575,6 +1601,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(&Buffer[0], "CANCELPENDING", 13) == 0)
 	{
 		TNC->ConnectPending = FALSE;
+		Debugprintf(Buffer);
 
 		// If a callsign is present it is the calling station - add to MH
 
@@ -1792,6 +1819,12 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 				memcpy(AppName, &ApplPtr[App * sizeof(CMDX)], 12);
 				AppName[12] = 0;
+
+				// if SendTandRtoRelay set and Appl is RMS change to RELAY
+
+				if (TNC->SendTandRtoRelay && memcmp(AppName, "RMS ", 4) == 0
+					&& (strstr(Call, "-T" ) || strstr(Call, "-R")))
+						strcpy(AppName, "RELAY       ");
 
 				// Make sure app is available
 
@@ -2021,7 +2054,7 @@ VOID VARAProcessReceivedData(struct TNCINFO * TNC)
 		TNC->Alerted = FALSE;
 
 		if (TNC->PTTMode)
-			Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+			Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
 		if (TNC->Streams[0].Attached)
 			TNC->Streams[0].ReportDISC = TRUE;

@@ -2,6 +2,7 @@
 // Common definitons for Pactor-like Modules
 
 #include "kernelresource.h"
+
 #include "rigcontrol.h"
 
 #define MAXBLOCK 4096
@@ -159,6 +160,7 @@ struct TCPINFO
 	HWND hCMSWnd;
 
 	int SecureTelnet;
+	int ReportRelayTraffic;			// Send WL2K Reports for Relay Traffic
 
 };
 
@@ -461,6 +463,11 @@ typedef struct TNCINFO
 	int PTTMode;					// PTT Mode Flags
 	int PTTState;					// Current State
 
+	char PTTOn[60];					// Port override of RIGCONTROL config
+	char PTTOff[60];
+	int PTTOnLen;
+	int PTTOffLen;
+
 	int PID;						// Process ID for Software TNC
 	HWND hWnd;						// Main window handle for Software TNC
 
@@ -622,8 +629,9 @@ typedef struct TNCINFO
 	int DefaultMode;
 	int CurrentMode;				// Used on HAL
 
-	char * DefaultRadioCmd;		// RADIO command to send at end of session
-
+	char * DefaultRadioCmd;			// RADIO command to send at end of session
+	char * Frequency;
+	// For Mode Map if no Rigcontrol
 	// Mode Equates
 
 	#define Clover 'C'
@@ -725,7 +733,8 @@ typedef struct TNCINFO
 
 	struct HSMODEMINFO * HSModemInfo;
 
-	int DontRestart;					// Don't automatically restart failed TNC
+	int DontRestart;				// Don't automatically restart failed TNC
+	int SendTandRtoRelay;			// Send T and R suffix messages to RELAY instead of CMS
 
 } *PTNCINFO;
 
@@ -772,7 +781,8 @@ int Rig_Command(int Session, char * Command);
 
 BOOL Rig_Poll();
 
-VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState);
+VOID Rig_PTT(struct TNCINFO * TNC, BOOL PTTState);
+VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC);
 
 struct RIGINFO * Rig_GETPTTREC(int Port);
 	

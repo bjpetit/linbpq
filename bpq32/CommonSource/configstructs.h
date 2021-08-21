@@ -166,4 +166,13 @@ struct CONFIGTABLE
 
 };
 
+struct UPNP 
+{
+	struct UPNP * Next;
+	char * Protocol;
+	char * LANport;
+	char * WANPort;
+};
+
+
 
