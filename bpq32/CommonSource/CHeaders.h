@@ -34,11 +34,14 @@ int GetLengthfromBuffer(PDATAMESSAGE buff);
 
 #define GetBuff() _GetBuff(__FILE__, __LINE__)
 #define ReleaseBuffer(s) _ReleaseBuffer(s, __FILE__, __LINE__)
+#define CheckGuardZone() _CheckGuardZone(__FILE__, __LINE__)
 
 #define Q_REM(s) _Q_REM(s, __FILE__, __LINE__)
 #define Q_REM_NP(s) _Q_REM_NP(s, __FILE__, __LINE__)
 
 #define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__)
+
+void _CheckGuardZone(char * File, int Line);
 
 VOID * _Q_REM(VOID **Q, char * File, int Line);
 VOID * _Q_REM_NP(VOID *Q, char * File, int Line);
@@ -399,5 +402,8 @@ extern time_t lastSlowSecs;
 
 // SNMP Variables
 
-int InOctets[32];
-int OutOctets[32];
+extern int InOctets[32];
+extern int OutOctets[32];
+
+extern BOOL CloseAllNeeded;
+extern int CloseOnError;

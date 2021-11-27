@@ -81,7 +81,8 @@ int TrytoGuessCode(unsigned char * Char, int Len);
 DllExport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 extern BPQVECSTRUC * TELNETMONVECPTR;
 BOOL SendWL2KSessionRecord(ADIF * ADIF, int BytesSent, int BytesReceived);
-
+int DataSocket_ReadSync(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
+VOID SendWL2KRegisterHybrid(struct TNCINFO * TNC);
 
 #ifndef LINBPQ
 extern HKEY REGTREE;
@@ -104,11 +105,10 @@ extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 #define MaxSockets 26
 
 struct UserRec RelayUser;
+struct UserRec SyncUser = {"","Sync"};;
 struct UserRec CMSUser;
-struct UserRec HostUser= {"","Host"};
+struct UserRec HostUser = {"","Host"};
 struct UserRec TriModeUser;
-
-
 
 static char AttemptsMsg[] = "Too many attempts - Disconnected\r\n";
 static char disMsg[] = "Disconnected by SYSOP\r\n";
@@ -438,7 +438,7 @@ int ProcessLine(char * buf, int Port)
 		TCP->MaxSessions = 10;				// Default Values
 		TNC->Hardware = H_TELNET;
 		TCP->IPV4 = TRUE;
-		strcpy(TCP->CMSServer, "CMS.Winlink.org");
+		strcpy(TCP->CMSServer, "cms.winlink.org");
 	}
 
 	TNC = TNCInfo[Port];
@@ -480,6 +480,42 @@ int ProcessLine(char * buf, int Port)
 		_strupr(TCP->GatewayCall);
 	}
 
+	else if (_stricmp(param, "CMSLOC") == 0)
+	{
+		if (strlen(value) > 9)
+			value[9] = 0;
+		strcpy(TCP->GatewayLoc, value);
+		strlop(TCP->GatewayLoc, 13);
+		_strupr(TCP->GatewayLoc);
+	}
+
+	else if (_stricmp(param,"ReportHybrid") == 0)
+		TCP->ReportHybrid = atoi(value);
+
+	else if (_stricmp(param, "HybridServiceCode") == 0)
+	{
+		TCP->HybridServiceCode = _strdup(value);
+		strlop(TCP->HybridServiceCode, 13);
+		strlop(TCP->HybridServiceCode, ';');
+		_strupr(TCP->HybridServiceCode);
+	}
+
+	else if (_stricmp(param, "HybridFrequencies") == 0)
+	{
+		TCP->HybridFrequencies = _strdup(value);
+		strlop(TCP->HybridFrequencies, 13);
+		strlop(TCP->HybridFrequencies, ' ');
+		_strupr(TCP->HybridFrequencies);
+	}
+
+	else if (_stricmp(param, "HybridCoLocatedRMS") == 0)
+	{
+		TCP->HybridCoLocatedRMS = _strdup(value);
+		strlop(TCP->HybridCoLocatedRMS, 13);
+		strlop(TCP->HybridCoLocatedRMS, ' ');
+		_strupr(TCP->HybridCoLocatedRMS);
+	}
+
 	else if (_stricmp(param,"LOGGING") == 0)
 		LogEnabled = atoi(value);
 
@@ -506,6 +542,9 @@ int ProcessLine(char * buf, int Port)
 	
 	else if (_stricmp(param,"HTTPPORT") == 0)
 		TCP->HTTPPort = atoi(value);
+
+	else if (_stricmp(param,"SYNCPORT") == 0)
+		TCP->SyncPort = atoi(value);
 
 	else if ((_stricmp(param,"CMDPORT") == 0) || (_stricmp(param,"LINUXPORT") == 0))
 	{
@@ -561,11 +600,23 @@ int ProcessLine(char * buf, int Port)
 		}
 	}
 
+	else if (_stricmp(param,"RELAYPORT") == 0)
+		TCP->RelayPort = atoi(value);
+
 	else if (_stricmp(param,"RELAYAPPL") == 0)
 	{
-		TCP->RelayPort = 8772;
+		if (TCP->RelayPort == 0)
+			TCP->RelayPort = 8772;
 		strcpy(TCP->RelayAPPL, value);
 		strcat(TCP->RelayAPPL, "\r");
+	}
+
+	else if (_stricmp(param,"SYNCAPPL") == 0)
+	{
+		if (TCP->SyncPort == 0)
+			TCP->SyncPort = 8780;
+		strcpy(TCP->SyncAPPL, value);
+		strcat(TCP->SyncAPPL, "\r");
 	}
 
 	//		if (strcmp(param,"LOGINRESPONSE") == 0) cfgLOGINRESPONSE = value;
@@ -670,7 +721,7 @@ scanCTEXT:
 		_strupr(UserCall);
 
 		if (TCP->NumberofUsers == 0)
-			TCP->UserRecPtr = malloc(sizeof(void *));
+			TCP->UserRecPtr = zalloc(sizeof(void *));
 		else
 			TCP->UserRecPtr = realloc(TCP->UserRecPtr, (TCP->NumberofUsers+1) * sizeof(void *));
 
@@ -693,6 +744,10 @@ scanCTEXT:
 			strcat(USER->Appl, "\r\n");
 		}
 		TCP->NumberofUsers += 1;
+	}
+	else if (_stricmp(param,"WebTermCSS") == 0)
+	{	
+		TCP->WebTermCSS =  _strdup(value);
 	}
 	else
 		return FALSE;
@@ -1459,6 +1514,10 @@ void * TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	ShowConnections(TNC);
 
+	if (TCP->ReportHybrid)
+		SendWL2KRegisterHybrid(TNC);
+
+
 	return ExtProc;
 }
 
@@ -1548,6 +1607,9 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 
 	if (TCP->HTTPPort)
 		TCP->HTTPsock = OpenSocket4(TNC, TCP->HTTPPort);
+
+	if (TCP->SyncPort)
+		TCP->Syncsock = OpenSocket4(TNC, TCP->SyncPort);
 
 	CMSUser.UserName = _strdup("CMS");
 
@@ -1655,6 +1717,9 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 	if (TCP->HTTPPort)
 		TCP->HTTPsock6 = OpenSocket6(TNC, TCP->HTTPPort);
 
+	if (TCP->SyncPort)
+		TCP->Syncsock6 = OpenSocket6(TNC, TCP->SyncPort);
+
 	CMSUser.UserName = _strdup("CMS");
 
 	return TRUE;
@@ -1708,6 +1773,14 @@ static VOID SetupListenSet(struct TNCINFO * TNC)
 			maxsock = sock;
 	}
 		
+	sock = TCP->Syncsock;
+	if (sock)
+	{
+		FD_SET(sock, readfd);
+		if (sock > maxsock)
+			maxsock = sock;
+	}
+
 	sock = TCP->TriModeSock;
 	if (sock)
 	{
@@ -1845,6 +1918,15 @@ VOID TelnetPoll(int Port)
 				Socket_Accept(TNC, sock, TCP->HTTPPort);
 		}
 
+		sock = TCP->Syncsock;
+		if (sock)
+		{
+			if (FD_ISSET(sock, &readfd))
+				Socket_Accept(TNC, sock, TCP->SyncPort);
+		}
+
+
+
 		n = 0;
 
 		while (TCP->FBBsock6[n])
@@ -1971,6 +2053,8 @@ VOID TelnetPoll(int Port)
 								DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
 							else if (sockptr->HTTPMode)
 								DataSocket_ReadHTTP(TNC, sockptr, sock, n);
+							else if (sockptr->SyncMode)
+								DataSocket_ReadSync(TNC, sockptr, sock, n);
 							else if (sockptr->FBBMode)
 								DataSocket_ReadFBB(TNC, sockptr, sock, n);
 							else
@@ -2267,6 +2351,17 @@ nosocks:
 
 			if (TNC->Streams[Stream].Connected)
 			{
+				if (sockptr->SyncMode)
+				{
+					// Suppress Conected and SID - Relay doesn't understand them
+
+					if (strstr(buffptr->Data,  "Connected to") || memcmp(buffptr->Data, "[BPQ-", 5) == 0)
+					{
+						ReleaseBuffer(buffptr);
+						return;
+					}
+				}
+
 				if (TelSendPacket(Stream, STREAM, buffptr, sockptr->ADIF) == FALSE)
 				{
 					//	Send failed, and has requeued packet
@@ -2380,6 +2475,25 @@ nosocks:
 							return;
 						}
 					}
+
+					if (_stricmp(Host, "SYNC") == 0)
+					{
+						if (P2[0] == 0)
+						{
+							strcpy(P2, TCP->RELAYHOST);
+							strcpy(P3, "8780");
+						}
+
+						if (P2[0])
+						{
+							STREAM->Connecting = TRUE;
+							STREAM->ConnectionInfo->SyncMode = TRUE;
+							TCPConnect(TNC, TCP, STREAM, P2, atoi(P3), TRUE);
+							ReleaseBuffer(buffptr);
+							return;
+						}
+					}
+		
 		
 					if (_stricmp(Host, "CMS") == 0)
 					{
@@ -2997,6 +3111,7 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 			sockptr->RelayMode = FALSE;
 			sockptr->ClientSession = FALSE;
 			sockptr->NeedLF = FALSE;
+			sockptr->TNC = TNC;
 
 			if (sockptr->ADIF == NULL)
 				sockptr->ADIF = malloc(sizeof(struct ADIF));
@@ -3005,6 +3120,8 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 
 			if (SocketId == TCP->HTTPsock || SocketId == TCP->HTTPsock6)
 				sockptr->HTTPMode = TRUE;
+			else if (SocketId == TCP->Syncsock || SocketId == TCP->Syncsock6)
+				sockptr->SyncMode = TRUE;
 			else if (SocketId == TCP->Relaysock || SocketId == TCP->Relaysock6)
 			{
 				sockptr->RelayMode = TRUE;
@@ -3029,6 +3146,21 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 			if (sockptr->HTTPMode)
 				return 0;
 
+			if (sockptr->SyncMode)
+			{
+				char MyCall[16] = "";
+				char Hello[32];
+				int Len;
+				memcpy(MyCall, MYNODECALL, 10);
+				strlop(MyCall, ' ');
+				strlop(MyCall, '-');
+				
+				Len = sprintf(Hello, "POSYNCHELLO %s\r", MyCall);
+
+				send(sock, Hello, Len, 0);
+				return 0;
+			}
+			else
 			if (sockptr->RelayMode)
 			{
 				send(sock,"\r\rCallsign :\r", 13,0);
@@ -3923,6 +4055,68 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 	return 0;
 }
+#define ZEXPORT WINAPI
+
+#include "zlib.h"
+
+int DataSocket_ReadSync(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream)
+{
+	int len=0, maxlen, InputLen;
+	byte * MsgPtr;
+	struct TCPINFO * TCP = TNC->TCPInfo;
+	struct STREAMINFO * STREAM = &TNC->Streams[Stream];
+	TRANSPORTENTRY * Sess1 = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+	TRANSPORTENTRY * Sess2 = NULL;
+
+	ioctl(sock,FIONREAD,&len);
+
+	maxlen = InputBufferLen - sockptr->InputLen;
+	
+	if (len > maxlen) len = maxlen;
+
+	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
+
+	if (len == SOCKET_ERROR || len == 0)
+	{
+		// Failed or closed - clear connection
+
+		TNC->Streams[sockptr->Number].ReportDISC = TRUE;		//Tell Node
+		DataSocket_Disconnect(TNC, sockptr);
+		return 0;
+	}
+
+	sockptr->InputLen+=len;
+	MsgPtr = &sockptr->InputBuffer[0];
+	InputLen = sockptr->InputLen;
+	MsgPtr[InputLen] = 0;
+
+	STREAM->BytesRXed += InputLen;
+
+	if (sockptr->LoginState == 0)			// Initial connection
+	{
+	//	if (TNC->Streams[Stream].Connected == 0)
+
+		strcpy(sockptr->Callsign, "SYNC");
+
+		sockptr->UserPointer  = &SyncUser;
+
+		SendtoNode(TNC, sockptr->Number, TCP->SyncAPPL, (int)strlen(TCP->SyncAPPL));
+		BuffertoNode(sockptr, MsgPtr, InputLen);
+		STREAM->RelaySyncStream = 1;
+		sockptr->LoginState = 1;
+
+		ShowConnections(TNC);
+		return 0;
+	}
+
+	// Queue to Node. Data may arrive in large quantities, possibly exceeding node buffer capacity
+
+	BuffertoNode(sockptr, MsgPtr, InputLen); 
+	sockptr->InputLen = 0;
+
+	return 0;
+}
+
 
 
 int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream)
@@ -4465,7 +4659,6 @@ MsgLoop:
 							return 0;
 						}
 					}
-					return 0;
 				}
 				else
 				{
@@ -4473,7 +4666,6 @@ MsgLoop:
 					SendtoNode(TNC, sockptr->Number, MsgPtr, InputLen+1);
 				}
 				sockptr->InputLen = 0;
-				return 0;
 			}
 
 			Appl = sockptr->UserPointer->Appl;
@@ -4482,8 +4674,6 @@ MsgLoop:
 				SendtoNode(TNC, sockptr->Number, Appl, (int)strlen(Appl));
 
 			return 0;
-	
-
 		}
 		// Bad Password
         
@@ -4566,7 +4756,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 
 	memcpy(sockcopy, sockptr, sizeof(struct ConnectionInfo));
 
-	_beginthread(ProcessHTTPMessage, 0, (VOID *)sockcopy);
+	_beginthread(ProcessHTTPMessage, 2048000, (VOID *)sockcopy);
 
 	sockptr->InputLen = 0;
 	return 0;
@@ -4949,19 +5139,26 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 		sockptr->DoEcho = FALSE;
 		sockptr->ClientSession = TRUE;
 
-
-		if (sockptr->Signon[0])
+		if (sockptr->SyncMode)
 		{
-			buffptr->Len  = sprintf(&buffptr->Data[0], "*** Connected to Server\r");
+			buffptr->Len  = sprintf(&buffptr->Data[0], "*** Connected to SYNC\r");
 			send(sockptr->socket, sockptr->Signon, (int)strlen(sockptr->Signon), 0);
 		}
 		else
 		{
-			buffptr->Len = sprintf(&buffptr->Data[0], "Connected to %s\r",
-				TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4CROSSLINK->APPL);
+			if (sockptr->Signon[0])
+			{
+				buffptr->Len  = sprintf(&buffptr->Data[0], "*** Connected to Server\r");
+				send(sockptr->socket, sockptr->Signon, (int)strlen(sockptr->Signon), 0);
+			}
+			else
+			{
+				buffptr->Len = sprintf(&buffptr->Data[0], "Connected to %s\r",
+					TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4CROSSLINK->APPL);
 
-			if (sockptr->NoCallsign == FALSE)
-				send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
+				if (sockptr->NoCallsign == FALSE)
+					send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
+			}
 		}
 	}
 

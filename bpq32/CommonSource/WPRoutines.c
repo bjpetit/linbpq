@@ -419,8 +419,8 @@ VOID CopyWPDatabase()
 
 VOID SaveWPDatabase()
 {
-	SaveConfig(ConfigName);			// WP config is now in main config file
-/*
+//	SaveConfig(ConfigName);			// WP config is now in main config file
+
 	int i;
 	config_setting_t *root, *group;
 	config_t cfg;
@@ -467,7 +467,7 @@ VOID SaveWPDatabase()
 	
 	config_write_file(&cfg, CfgName);
 	config_destroy(&cfg);
-*/
+
 }
 
 WPRec * LookupWP(char * Call)
@@ -1264,6 +1264,9 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 		return;
 
 	if (_stricmp(user->Call, "FILE") == 0)
+		return;
+
+	if (_stricmp(user->Call, "SYNC") == 0)
 		return;
 
 	if (_memicmp(user->Call, "MCAST", 5) == 0)

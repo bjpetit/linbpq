@@ -64,7 +64,6 @@ int VARASendData(struct TNCINFO * TNC, UCHAR * Buff, int Len);
 VOID VARASendCommand(struct TNCINFO * TNC, char * Buff, BOOL Queue);
 VOID VARAProcessDataPacket(struct TNCINFO * TNC, UCHAR * Data, int Length);
 void CountRestarts(struct TNCINFO * TNC);
-int standardParams(struct TNCINFO * TNC, char * buf);
 
 #ifndef LINBPQ
 BOOL CALLBACK EnumVARAWindowsProc(HWND hwnd, LPARAM  lParam);
@@ -156,21 +155,7 @@ static int ProcessLine(char * buf, int Port)
 
 			if (ptr)
 			{
-				if (_stricmp(ptr, "CI-V") == 0)
-					TNC->PTTMode = PTTCI_V;
-				else if (_stricmp(ptr, "CAT") == 0)
-					TNC->PTTMode = PTTCI_V;
-				else if (_stricmp(ptr, "RTS") == 0)
-					TNC->PTTMode = PTTRTS;
-				else if (_stricmp(ptr, "DTR") == 0)
-					TNC->PTTMode = PTTDTR;
-				else if (_stricmp(ptr, "DTRRTS") == 0)
-					TNC->PTTMode = PTTDTR | PTTRTS;
-				else if (_stricmp(ptr, "CM108") == 0)
-					TNC->PTTMode = PTTCM108;
-				else if (_stricmp(ptr, "HAMLIB") == 0)
-					TNC->PTTMode = PTTHAMLIB;
-			
+				DecodePTTString(TNC, ptr);			
 				ptr = strtok(NULL, " \t\n\r");
 			}
 		}
@@ -231,6 +216,7 @@ static int ProcessLine(char * buf, int Port)
 		else if (standardParams(TNC, buf) == FALSE)
 			strcat(TNC->InitScript, buf);	
 	}
+
 	return (TRUE);	
 }
 
@@ -827,20 +813,31 @@ void CountRestarts(struct TNCINFO * TNC)
 	strcpy(TNC->WEB_RESTARTS, Time);
 }
 
-
-static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
-{
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+		"<link rel='stylesheet' href='webproc.css'>\r\n"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>VARA Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
-		"'width=440,height=150');\" action=ARDOPAbort?%d>VARA Status"
-		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
-		TNC->Port);
+		"textarea.scrollTop = textarea.scrollHeight;}\r\n"
+		"function xxx(data){\r\n"
+		"req = new XMLHttpRequest();\r\n"
+		"req.open('POST', 'PortAction?%d', true);\r\n"
+		"req.send(data);alert(data + ' Sent');}\r\n"
+		"</script>"
+		"</head><title>%s</title></head><body id=Text onload=\"ScrollOutput()\">"
+		"<span class='dropdown'>"
+		"<button class='dropbtn'>Actions</button><span style=\"margin-left:120px;font-size:16px\"><b>%s</b></span>"
+		"<div class='dropdown-content'>"
+//		"<a href='javascript:alert(\"hello world!\");'>Click me</a>"
+		"<a href='javascript:xxx(\"Abort\");'>Abort Session</a>"
+		"<a href='javascript:xxx(\"Kill\");'>Kill TNC</a>"
+		"<a href='javascript:xxx(\"KillRestart\");'>Kill and Restart TNC</a>"
+		"</div></span>";
 
+
+static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
+{
+	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, "VARA Status", "VARA Status");
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -893,6 +890,9 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 
 	TNC = TNCInfo[port];
 
+	if (TNC->AutoStartDelay == 0)
+		TNC->AutoStartDelay = 2000;
+
 	if (TNC == NULL)
 	{
 		// Not defined in Config file
@@ -926,7 +926,8 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
@@ -954,30 +955,38 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 
 //	strcat(TempScript, "ROBUST False\r");
 
-	// Set MYCALL
+	// Set MYCALL(S)
 
-	sprintf(Msg, "MYCALL %s", TNC->NodeCall);
-
-	for (i = 0; i < 32; i++)
+	if (TNC->LISTENCALLS)
 	{
-		APPL=&APPLCALLTABLE[i];
+		sprintf(Msg, "MYCALL %s", TNC->LISTENCALLS);
+	}
+	else
+	{
 
-		if (APPL->APPLCALL_TEXT[0] > ' ')
+		sprintf(Msg, "MYCALL %s", TNC->NodeCall);
+
+		for (i = 0; i < 32; i++)
 		{
-			char * ptr;
-			memcpy(Appl, APPL->APPLCALL_TEXT, 10);
-			ptr=strchr(Appl, ' ');
+			APPL=&APPLCALLTABLE[i];
 
-			if (ptr)
+			if (APPL->APPLCALL_TEXT[0] > ' ')
 			{
-//				*ptr++ = ' ';
-				*ptr = 0;
+				char * ptr;
+				memcpy(Appl, APPL->APPLCALL_TEXT, 10);
+				ptr=strchr(Appl, ' ');
+
+				if (ptr)
+				{
+					//				*ptr++ = ' ';
+					*ptr = 0;
+				}
+				strcat(Msg, " ");
+				strcat(Msg, Appl);
+				AuxCount++;
+				if (AuxCount == 4)			// Max 5 in MYCALL
+					break;
 			}
-			strcat(Msg, " ");
-			strcat(Msg, Appl);
-			AuxCount++;
-			if (AuxCount == 4)			// Max 5 in MYCALL
-				break;
 		}
 	}
 
@@ -1182,7 +1191,7 @@ TNCNotRunning:
 		if (RestartTNC(TNC))
 			CountRestarts(TNC);
 
-		Sleep(2000);
+		Sleep(TNC->AutoStartDelay);
 	}
 
 TNCRunning:
@@ -1227,7 +1236,7 @@ TNCRunning:
   	 	return; 
 	}
 
-	TNC->TCPDataSock=socket(AF_INET,SOCK_STREAM,0);
+	TNC->TCPDataSock = socket(AF_INET,SOCK_STREAM,0);
 
 	if (TNC->TCPDataSock == INVALID_SOCKET)
 	{
@@ -1261,7 +1270,9 @@ TNCRunning:
 	if (TNC->Alerted == FALSE)
 	{
 		err=WSAGetLastError();
-		i=sprintf(Msg, "Connect Failed for VARA socket - error code = %d\r\n", err);
+		sprintf(Msg, "Connect Failed for VARA socket - error code = %d Port %d\n",
+				err, htons(TNC->destaddr.sin_port));
+
 		WritetoConsole(Msg);
 		TNC->Alerted = TRUE;
 
@@ -1688,6 +1699,11 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		STREAM->ConnectTime = time(NULL); 
 		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
 
+		if (strstr(Buffer, "NARROW"))
+			Speed = 51;
+		else if (strstr(Buffer, "WIDE"))
+			Speed = 52;
+
 		memcpy(Call, &Buffer[10], 10);
 
 		ptr = strchr(Call, ' ');	
@@ -1721,7 +1737,10 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
 
-			SESS->Mode = TNC->WL2KMode;
+			if (Speed)
+				SESS->Mode = Speed;
+			else
+				SESS->Mode = TNC->WL2KMode;
 
 			TNC->ConnectPending = FALSE;
 
@@ -1992,7 +2011,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	Debugprintf(Buffer);
+//	Debugprintf(Buffer);
 
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
 	{
@@ -2212,6 +2231,7 @@ static VOID TidyClose(struct TNCINFO * TNC, int Stream)
 static VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 {
 	VARASendCommand(TNC, "ABORT\r", TRUE);
+	WritetoTrace(TNC, "ABORT", 5);
 }
 
 static VOID CloseComplete(struct TNCINFO * TNC, int Stream)

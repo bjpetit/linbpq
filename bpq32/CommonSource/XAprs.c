@@ -26,6 +26,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 // Version 1.1.14.5 March 2020
 //	Add option to run two instances of Linbpq and APRS
 
+// Version 1.1.14.6 Sept 2021
+//	Use my Tile Servers
+
+
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 #endif	
@@ -687,7 +691,8 @@ BOOL CentrePositionToMouse(double Lat, double Lon)
 	return TRUE;
 }
 
-SOCKADDR_IN destaddr = {0};
+SOCKADDR_IN destaddr1 = {0};
+SOCKADDR_IN destaddr2 = {0};
 
 unsigned int ipaddr = 0;
 
@@ -696,7 +701,14 @@ unsigned int ipaddr = 0;
 //char Host[] = "oatile1.mqcdn.com";		//SAT
 //char Host[] = "otile1.mqcdn.com";
 
-char Host[] = "tile.thunderforest.com";
+//char Host[] = "tile.thunderforest.com";
+
+char Host[] = "server.g8bpq.net";
+char Host1[] = "server1.g8bpq.net";
+char Host2[] = "server2.g8bpq.net";
+
+int Host1Down = 0;
+int Host2Down = 0;
 
 char mapStyle[64] =	"outdoors"; //"neighbourhood mobile-atlas
 
@@ -713,18 +725,30 @@ VOID ResolveThread()
 	{
 		// Resolve Name if needed
 
-		HostEnt = gethostbyname(Host);
+		HostEnt = gethostbyname(Host1);
 		 
 		if (!HostEnt)
 		{
 			err = WSAGetLastError();
-			printf("Resolve Failed for %s %d %x", Host, err, err);
+			printf("Resolve Failed for %s %d %x\n", Host1, err);
 		}
 		else
 		{
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+			memcpy(&destaddr1.sin_addr.s_addr,HostEnt->h_addr,4);	
 		}
-//		Sleep(60 * 15 * 1000);
+	
+		HostEnt = gethostbyname(Host2);
+		 
+		if (!HostEnt)
+		{
+			err = WSAGetLastError();
+			printf("Resolve Failed for %s %d %x\n", Host2, err);
+		}
+		else
+		{
+			memcpy(&destaddr2.sin_addr.s_addr,HostEnt->h_addr,4);	
+		}
+///		Sleep(60 * 15 * 1000);
 	}
 }
 
@@ -773,8 +797,10 @@ VOID OSMThread()
 	struct stat STAT;
 	FILE * Handle;
 
-	destaddr.sin_family = AF_INET;
-	destaddr.sin_port = htons(80);
+	destaddr1.sin_family = AF_INET;
+	destaddr1.sin_port = htons(7381);
+	destaddr2.sin_family = AF_INET;
+	destaddr2.sin_port = htons(7381);
 
 	while (TRUE)
 	{
@@ -799,7 +825,9 @@ VOID OSMThread()
 //		wsprintf(Tile, "/tiles/1.0.0/sat/%02d/%d/%d.jpg", Zoom, x, y);
 //		sprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
 
-		sprintf(Tile, "/%s/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", mapStyle, Zoom, x, y);
+//		sprintf(Tile, "/%s/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", mapStyle, Zoom, x, y);
+		
+		sprintf(Tile, "/styles/klokantech-basic/%d/%d/%d.png", Zoom, x, y);
 
 		sprintf(FN, "%s/%02d/%d/%d.png", OSMDir, Zoom, x, y);
 
@@ -822,16 +850,33 @@ VOID OSMThread()
  
 		setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
 
-		if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) != 0)
+		if (Host1Down == 0)
 		{
-			err=WSAGetLastError();
-
-			//
-			//	Connect failed
-			//
-
-			break;
+			if (connect(sock,(LPSOCKADDR) &destaddr1, sizeof(destaddr1)) != 0)
+			{
+				printf("OSM GET Connect to %s Failed %d\n", Host1, errno);
+				Host1Down = 600;			// Don't try again for 10 mins
+			}
+			else
+				goto ConnectOK;
 		}
+		if (Host2Down == 0)
+		{
+			if (connect(sock,(LPSOCKADDR) &destaddr2, sizeof(destaddr2)) != 0)
+			{
+				printf("OSM GET Connect to %s Failed %d\n", Host2, errno);
+				Host1Down = 600;			// Don't try again for 10 mins
+			}
+			else
+				goto ConnectOK;
+		}
+
+		//
+		//	Neither available or connect failed to both
+		//
+		break;
+	
+ConnectOK:
 
 //GET /15/15810/9778.png HTTP/1.0
 //Accept: */*
@@ -932,7 +977,7 @@ VOID OSMThread()
 				break;
 			}
 		}
-		closesocket(sock);
+		close(sock);
 	}
 
 	// Queue is empty
@@ -2134,15 +2179,16 @@ gotfile:
 	
 		LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
 	
-		ImgChannels = 4;
+//		printf("%d %d %d\n", cxImgSize, cyImgSize, ImgChannels);
+//		ImgChannels = 4;
 		StartCol = x * Bytesperpixel * 256;
 		StartRow = y * 256;
 
 //		printf("WIDTH %d Height %d Bytesperpixel = %d x = %d y = %d\n", WIDTH, HEIGHT, Bytesperpixel, x, y); 
 		if (pbImage == NULL)
 		{
-			pbImage = malloc(256 * 3 * 256);
-			memset(pbImage, 0x40, 256 * 3 * 256);
+			pbImage = malloc(256 * ImgChannels * 256);
+			memset(pbImage, 0x40, 256 * ImgChannels * 256);
 		}
 
 		ImageSave = pbImage;
@@ -2164,21 +2210,21 @@ gotfile:
 			{
 				if (Bytesperpixel == 2)
 				{
-					val = (*(pbImage + count * 3 + 2) >> 3);
-					val |= ((*(pbImage + count * 3 + 1) >> 2) << 5);
-					val |= ((*(pbImage + count * 3 + 0) >> 3) << 11);
+					val = (*(pbImage + count * ImgChannels + 2) >> 3);
+					val |= ((*(pbImage + count * ImgChannels + 1) >> 2) << 5);
+					val |= ((*(pbImage + count * ImgChannels + 0) >> 3) << 11);
 					Image[offset++] = (val & 0xff);
 					Image[offset++] = (unsigned char)(val >> 8);
 				}
 				else
 				{
-					Image[offset++] = *(pbImage + count * 3 + 2);		// Blue
-					Image[offset++] = *(pbImage + count * 3 + 1);		// Green
-					Image[offset++] = *(pbImage + count * 3 + 0);		// Red	
+					Image[offset++] = *(pbImage + count * ImgChannels + 2);		// Blue
+					Image[offset++] = *(pbImage + count * ImgChannels + 1);		// Green
+					Image[offset++] = *(pbImage + count * ImgChannels + 0);		// Red	
 					offset++;
 				}
 			}
-			pbImage += 768; // used 768 pixels
+			pbImage += ImgChannels * 256; 
 		}
 			
 		free(ImageSave);
@@ -2967,12 +3013,12 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 1.1.14.6 \n");
-  	printf("Copyright(c) 2004-2020 John Wiseman G8BPQ\n");
+	printf("G8BPQ APRS Client for Linux Version 1.1.14.7 \n");
+  	printf("Copyright(c) 2004-2021 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
-	printf("Map Tiles Courtesy of thunderforest (www.thunderforest.com)\n\n");
+	printf("Imagery (c) OpenMapTiles (https://openmaptiles.org)\n\n");
 
     if (argc > 1 && argv[1] && stricmp(argv[1], "-v") == 0)
         return 0;
@@ -3788,7 +3834,14 @@ VOID SecTimer()
 	struct STATIONRECORD * sptr = *StationRecords;
 	int n = 0;
 	char Msg[20];
-
+	
+	if (Host1Down)
+		Host1Down --;
+	
+	if (Host2Down)
+		Host2Down --;
+	
+	
 	// See if changed flag set on any stations
 
 	NeedRedraw += RefreshStationMap(FALSE);			// Draw new or moved stations

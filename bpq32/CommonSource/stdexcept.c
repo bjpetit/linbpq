@@ -70,6 +70,13 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 	Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
 		eip+32, CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15]);
 
+	WriteMiniDump();
+
 	// Note - no closing } so additional code may be run in the __except block
+
+#ifdef MDIKERNEL
+	if (CloseOnError == 1)
+		CloseAllNeeded = 1;
+#endif
 
 #undef EXCEPTMSG

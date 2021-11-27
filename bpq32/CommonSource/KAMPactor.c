@@ -550,7 +550,8 @@ void * KAMExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
 	PortEntry->SCANCAPABILITIES = NONE;		// No Scan Control 
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 100;

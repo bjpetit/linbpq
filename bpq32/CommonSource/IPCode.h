@@ -138,6 +138,7 @@ typedef struct _ROUTEENTRY
 	UCHAR	GARTIMOUT;  // FOR REMOVING DEAD ENTRIES
 	PARPDATA ARP;		// Pointer to ARP entry if resolved
 	BOOL	LOCKED;
+	struct sockaddr_in UDPADDR;	// Send Tunnelled packets over UDP
 
 } ROUTEENTRY, *PROUTEENTRY;
 

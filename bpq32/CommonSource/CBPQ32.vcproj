@@ -74,7 +74,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib Iphlpapi.lib setupapi.lib ..\lib\libconfigd.lib miniupnpc.lib"
+				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib Iphlpapi.lib setupapi.lib ..\lib\libconfig.lib miniupnpc.lib zlibstat.lib"
 				OutputFile="c:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="2"
 				IgnoreAllDefaultLibraries="false"
@@ -117,7 +117,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="&quot;C:\Program Files\7-Zip\7z.exe&quot; a  C:\DevProgs\BPQ32\bpq32.zip C:\DevProgs\BPQ32\bpq32.dll &amp;&amp; rename C:\DevProgs\BPQ32\bpq32.dll bpq32.xxx &amp;&amp; c:\windows\SysWOW64\xcopy /Y  c:\DevProgs\BPQ32\bpq32.xxx c:\windows\SysWOW64\bpq32.dll &amp;&amp; del C:\DevProgs\BPQ32\bpq32.xxx"
+				CommandLine="&quot;C:\Program Files\7-Zip\7z.exe&quot; a  C:\DevProgs\BPQ32\bpq32.zip C:\DevProgs\BPQ32\bpq32.dll &amp;&amp; myxcopy /y  c:\DevProgs\BPQ32\bpq32.dll c:\windows\SysWOW64\bpq32.dll &amp;&amp; del C:\DevProgs\BPQ32\bpq32.dll"
 			/>
 		</Configuration>
 		<Configuration
@@ -180,12 +180,13 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib setupapi.lib ..\lib\libconfig.lib miniupnpc.lib"
+				AdditionalDependencies="WS2_32.Lib winmm.lib DbgHelp.lib comctl32.lib setupapi.lib ..\lib\libconfig.lib miniupnpc.lib zlibstat.lib"
 				OutputFile="C:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="1"
-				IgnoreDefaultLibraryNames="LIBCMT.lib"
+				IgnoreDefaultLibraryNames=""
 				ModuleDefinitionFile="..\CommonSource\bpq32.def"
 				GenerateDebugInformation="true"
+				ProgramDatabaseFile="c:\DevProgs\BPQ32\bpq32.pdb"
 				GenerateMapFile="true"
 				MapFileName="c:\DevProgs\BPQ32\bpqpdn.map"
 				MapExports="true"
@@ -221,7 +222,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="&quot;C:\Program Files\7-Zip\7z.exe&quot; a  C:\DevProgs\BPQ32\bpq32.zip C:\DevProgs\BPQ32\bpq32.dll &amp;&amp; rename C:\DevProgs\BPQ32\bpq32.dll bpq32.xxx &amp;&amp; xcopy /Y  c:\DevProgs\BPQ32\bpq32.xxx c:\windows\SysWOW64\bpq32.dll &amp;&amp; del C:\DevProgs\BPQ32\bpq32.xxx"
+				CommandLine="&quot;C:\Program Files\7-Zip\7z.exe&quot; a  C:\DevProgs\BPQ32\bpq32.zip C:\DevProgs\BPQ32\bpq32.dll &amp;&amp; myxcopy /y  c:\DevProgs\BPQ32\bpq32.dll c:\windows\SysWOW64\bpq32.dll &amp;&amp; del C:\DevProgs\BPQ32\bpq32.dll"
 			/>
 		</Configuration>
 	</Configurations>
@@ -247,6 +248,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\AGWMoncode.c"
+				>
+			</File>
+			<File
+				RelativePath=".\AISCommon.c"
 				>
 			</File>
 			<File

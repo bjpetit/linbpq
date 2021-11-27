@@ -231,21 +231,7 @@ static int ProcessLine(char * buf, int Port)
 
 			if (ptr)
 			{
-				if (_stricmp(ptr, "CI-V") == 0)
-					TNC->PTTMode = PTTCI_V;
-				else if (_stricmp(ptr, "CAT") == 0)
-					TNC->PTTMode = PTTCI_V;
-				else if (_stricmp(ptr, "RTS") == 0)
-					TNC->PTTMode = PTTRTS;
-				else if (_stricmp(ptr, "DTR") == 0)
-					TNC->PTTMode = PTTDTR;
-				else if (_stricmp(ptr, "DTRRTS") == 0)
-					TNC->PTTMode = PTTDTR | PTTRTS;
-				else if (_stricmp(ptr, "CM108") == 0)
-					TNC->PTTMode = PTTCM108;
-				else if (_stricmp(ptr, "HAMLIB") == 0)
-					TNC->PTTMode = PTTHAMLIB;
-			
+				DecodePTTString(TNC, ptr);		
 				ptr = strtok(NULL, " \t\n\r");
 			}
 		}
@@ -1235,7 +1221,8 @@ VOID * HSMODEMExtInit(EXTPORTDATA * PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;

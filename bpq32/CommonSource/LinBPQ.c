@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
-// Control Routine for LinBPQ
+// Control Routine for LinBPQ 
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -69,12 +69,18 @@ char * AddUser(char * Call, char * password, BOOL BBSFlag);
 VOID SaveChatConfigFile(char * ConfigName);
 VOID SaveMH();
 int upnpClose();
+void SaveAIS();
+void initAIS();
 
 BOOL IncludesMail = FALSE;
 BOOL IncludesChat = FALSE;
 
 BOOL RunMail = FALSE;
 BOOL RunChat = FALSE;
+BOOL needAIS= FALSE;
+BOOL needADSB = FALSE;
+
+int CloseOnError = 0;
 
 VOID Poll_AGW();
 BOOL AGWAPIInit();
@@ -630,6 +636,9 @@ int main(int argc, char * argv[])
 	if (ISPort == 0)
 		IGateEnabled = 0;
 
+	if (needAIS)
+		initAIS();
+
 	RigActive = Rig_Init();
 
 	FreeSemaphore(&Semaphore);
@@ -800,10 +809,10 @@ int main(int argc, char * argv[])
 
 //	CopyConfigFile(ConfigName);
 
-//	CopyBIDDatabase();
-//	CopyMessageDatabase();
-//	CopyUserDatabase();
-//	CopyWPDatabase();
+	CopyBIDDatabase();
+	CopyMessageDatabase();
+	CopyUserDatabase();
+	CopyWPDatabase();
 
 	SetupMyHA();
 	SetupFwdAliases();
@@ -1056,10 +1065,9 @@ int main(int argc, char * argv[])
 					}
 				}
 
-				SaveUserDatabase();
+//				SaveUserDatabase();
 				SaveMessageDatabase();
 				SaveBIDDatabase();
-
 				SaveConfig(ConfigName);
 			}
 
@@ -1274,6 +1282,10 @@ int main(int argc, char * argv[])
 
 	if (AGWActive)
 		AGWAPITerminate();
+
+	if (needAIS)
+		SaveAIS();
+
 
 	// Close Ports
 

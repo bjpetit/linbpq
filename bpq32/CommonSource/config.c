@@ -161,6 +161,8 @@ BOOL PortDefined[36];
 
 extern BOOL IncludesMail;
 extern BOOL IncludesChat;
+extern int needAIS;
+extern int needADSB;
 
 extern int AGWPort;
 extern int AGWSessions;
@@ -176,6 +178,7 @@ extern char ChatMapServer[80];
 VOID * zalloc(int len);
 
 int WritetoConsoleLocal(char * buff);
+char * stristr (char *ch1, char *ch2);
 
 VOID Consoleprintf(const char * format, ...)
 {
@@ -667,6 +670,14 @@ int decode_rec(char * rec)
 		return 1;
 	}
 
+	if (_memicmp(rec, "CloseOnError=", 13) == 0)
+	{
+		// Close BPQ on trapped program error
+
+		CloseOnError = atoi(&rec[13]);
+		return 1;
+	}
+
 	if (_memicmp(rec, "CHATMAPSERVER=", 14) == 0)
 	{
 		// Map reporting override
@@ -835,6 +846,19 @@ NextAPRS:
 		return 0;
 	}
 #endif
+
+	if (_memicmp(rec, "ENABLEAIS", 9) == 0)
+	{
+		needAIS = TRUE;
+		return 0;
+	}
+
+	if (_memicmp(rec, "ENABLEADSB", 9) == 0)
+	{
+		needADSB = TRUE;
+		return 0;
+	}
+	
 	if (_memicmp(rec, "HFCTEXT", 7) == 0)
 	{
 		// HF only CTEXT (normlly short to reduce traffic)
@@ -1741,8 +1765,11 @@ int GetNextLine(char *rec)
 
 			rec[i] = '\0';
 		}
-			
-		strlop(rec, ';');
+
+		if (stristr(rec,"WebTermCSS") == 0 && stristr(rec,"HybridCoLocatedRMS") == 0 && stristr(rec,"HybridFrequencies") == 0)	// Needs ; in string
+			strlop(rec, ';');
+		else
+			j = j;
 
 		if (strlen(rec) > 1)
 			if (memcmp(rec, "/*",2) == 0)

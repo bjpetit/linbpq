@@ -587,6 +587,73 @@ VOID SendWL2KSessionRecordThread(void * param)
 	return;
 }
 
+VOID SendWL2KRegisterHybridThread(void * param)
+{
+	SOCKET sock;
+	char Message[512];
+
+	strcpy(Message, param);
+	free(param);
+
+	Debugprintf("Sending %s", Message);
+
+	sock = OpenWL2KHTTPSock();
+
+	if (sock)
+	{
+		SendHTTPRequest(sock, "/radioNetwork/params/add", (char *)Message, (int)strlen(Message), NULL);
+		closesocket(sock);
+	}
+
+	return;
+}
+
+VOID SendWL2KRegisterHybrid(struct TNCINFO * TNC)
+{
+	char Message[512];
+	char Date[80] ;
+	int Len;
+	struct TCPINFO * TCP = TNC->TCPInfo;
+	time_t T;
+	struct tm * tm;
+	char Call[10];
+
+	if (TCP == NULL || TCP->GatewayLoc[0] == 0)
+		return;
+
+	strcpy(Call, TCP->GatewayCall);
+	strlop(Call, '-');
+
+	T = time(NULL);
+	tm = gmtime(&T);
+
+	//2021-10-31-14=35=29
+
+	sprintf(Date, "%04d-%02d-%02d-%02d:%02d:%02d",
+		tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+		tm->tm_hour, tm->tm_min, tm->tm_sec);
+	
+// "Callsign":"String","Password":"String","Param":"String","Value":"String","Key":"String"
+
+	Len = sprintf(Message, "\"Callsign\":\"%s\",\"Password\":\"%s\",\"Param\":\"RMSRelayVersion\",\"Value\":\"%s|%s|*HARMNNNN|%s|%s|\"",
+		Call, TCP->SecureCMSPassword, Date, "3.1.11.2",
+		TCP->HybridServiceCode, TCP->GatewayLoc);
+
+	SendWL2KRegisterHybridThread(_strdup(Message));
+
+	Len = sprintf(Message, "\"Callsign\":\"%s\",\"Password\":\"%s\",\"Param\":\"CoLocatedRMS\",\"Value\":\"%s\"",
+		Call, TCP->SecureCMSPassword, TCP->HybridCoLocatedRMS);
+
+	SendWL2KRegisterHybridThread(_strdup(Message));
+
+	Len = sprintf(Message, "\"Callsign\":\"%s\",\"Password\":\"%s\",\"Param\":\"AllowFreq\",\"Value\":\"%s\"",
+		Call, TCP->SecureCMSPassword, TCP->HybridFrequencies);
+
+	SendWL2KRegisterHybridThread(_strdup(Message));
+
+	return;
+}
+
 BOOL NoSessionAccount = FALSE;
 BOOL SessionAccountChecked = FALSE;
 
@@ -1525,12 +1592,14 @@ BOOL InterlockedCheckBusy(struct TNCINFO * ThisTNC)
 	// See if this port, or any interlocked ports are reporting channel busy
 
 	struct TNCINFO * TNC;
-	int i, Interlock = ThisTNC->Interlock;
+	int i;
+	int rxInterlock = ThisTNC->RXRadio;
+	int txInterlock = ThisTNC->TXRadio;
 
 	if (ThisTNC->Busy)
 		return TRUE;				// Our port is busy
 		
-	if (Interlock == 0)
+	if (rxInterlock == 0 && txInterlock == 0)
 		return ThisTNC->Busy;		// No Interlock
 
 	for (i=1; i<33; i++)
@@ -1543,7 +1612,7 @@ BOOL InterlockedCheckBusy(struct TNCINFO * ThisTNC)
 		if (TNC == ThisTNC)
 			continue;
 
-		if (Interlock == TNC->Interlock)	// Same Group	
+		if (rxInterlock == TNC->RXRadio || txInterlock == TNC->TXRadio)	// Same Group	
 			if (TNC->Busy)
 				return TRUE;				// Interlocked port is busy
 
@@ -1754,13 +1823,25 @@ int standardParams(struct TNCINFO * TNC, char * buf)
 		TNC->BusyHold = atoi(&buf[8]);
 	else if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time before failing connect if busy
 		TNC->BusyWait = atoi(&buf[8]);
+	else if (_memicmp(buf, "AUTOSTARTDELAY", 14) == 0) // Time to wait for TNC to start
+		TNC->AutoStartDelay = atoi(&buf[15]);
 	else if (_memicmp(buf, "DEFAULTRADIOCOMMAND", 19) == 0)
 		TNC->DefaultRadioCmd = _strdup(&buf[20]);
+	else if (_memicmp(buf, "MYCALLS", 7) == 0)
+		TNC->LISTENCALLS = _strdup(&buf[8]);
 	else if (_memicmp(buf, "FREQUENCY", 9) == 0)
 		TNC->Frequency = _strdup(&buf[10]);
 	else if (_memicmp(buf, "SendTandRtoRelay", 16) == 0)
 		TNC->SendTandRtoRelay = atoi(&buf[17]);
-	else if (_memicmp(buf, "PTTONHEX=", 9) == 0)
+	else if (_memicmp(buf, "TXRadio", 7) == 0)		// Rig Control RADIO for TX
+		TNC->TXRadio = atoi(&buf[8]);
+	else if (_memicmp(buf, "RXRadio", 7) == 0)		// Rig Control RADIO for RX
+		TNC->RXRadio = atoi(&buf[8]);
+	else if (_memicmp(buf, "TXFreq", 6) == 0)		// For PTT Sets Freq mode
+		TNC->TXFreq = strtoll(&buf[7], NULL, 10);
+	else if (_memicmp(buf, "DefaultFreq", 11) == 0)	// For PTT Sets Freq mode
+		TNC->DefaultFreq = strtoll(&buf[12], NULL, 10);
+	else if (_memicmp(buf, "PTTONHEX", 8) == 0)
 	{
 		// Hex String to use for PTT on for this port
 
@@ -1790,7 +1871,7 @@ int standardParams(struct TNCINFO * TNC, char * buf)
 			}
 		}
 	}
-	else if (_memicmp(buf, "PTTOFFHEX=", 10) == 0)
+	else if (_memicmp(buf, "PTTOFFHEX", 9) == 0)
 	{
 		// Hex String to use for PTT off
 
@@ -1824,6 +1905,26 @@ int standardParams(struct TNCINFO * TNC, char * buf)
 		return FALSE;
 
 	return TRUE;
+}
+
+void DecodePTTString(struct TNCINFO * TNC, char * ptr)
+{
+	if (_stricmp(ptr, "CI-V") == 0)
+		TNC->PTTMode = PTTCI_V;
+	else if (_stricmp(ptr, "CAT") == 0)
+		TNC->PTTMode = PTTCI_V;
+	else if (_stricmp(ptr, "RTS") == 0)
+		TNC->PTTMode = PTTRTS;
+	else if (_stricmp(ptr, "DTR") == 0)
+		TNC->PTTMode = PTTDTR;
+	else if (_stricmp(ptr, "DTRRTS") == 0)
+		TNC->PTTMode = PTTDTR | PTTRTS;
+	else if (_stricmp(ptr, "CM108") == 0)
+		TNC->PTTMode = PTTCM108;
+	else if (_stricmp(ptr, "HAMLIB") == 0)
+		TNC->PTTMode = PTTHAMLIB;
+	else if (_stricmp(ptr, "FLRIG") == 0)
+		TNC->PTTMode = PTTFLRIG;
 }
 
 extern SOCKET ReportSocket;
@@ -1875,9 +1976,9 @@ void sendModeReport()
 				continue;
 
 			if (TNC->Frequency)
-				Len += sprintf(&Msg[Len], "%d,%d,%d,%.6f/", TNC->Port, TNC->Hardware, TNC->Interlock, atof(TNC->Frequency));
+				Len += sprintf(&Msg[Len], "%d,%d,%d,%.6f/", TNC->Port, TNC->Hardware, TNC->RXRadio, atof(TNC->Frequency));
 			else
-				Len += sprintf(&Msg[Len], "%d,%d,%d/", TNC->Port, TNC->Hardware, TNC->Interlock);
+				Len += sprintf(&Msg[Len], "%d,%d,%d/", TNC->Port, TNC->Hardware, TNC->RXRadio);
 
 			if (Len > 240)
 				break;
@@ -1931,31 +2032,38 @@ void sendFreqReport(char * From)
 		for (i = 0; i < RIGPORT->ConfiguredRigs; i++)
 		{
 			int j = 1, k = 0;
-			
+
 			RIG = &RIGPORT->Rigs[i];
 
-			if (RIG->TimeBands)
+			if (RIG->reportFreqs)
 			{
-				Len += sprintf(&Msg[Len], "%d/",RIG->Interlock); 
-				while (RIG->TimeBands[j])
+				Len += sprintf(&Msg[Len], "%d/00:00/%s,\\|",RIG->Interlock,RIG->reportFreqs); 
+			}
+			else
+			{
+				if (RIG->TimeBands)
 				{
-					Band = RIG->TimeBands[j];
-					k = 0;
-
-					if (Band->Scanlist[0])
+					Len += sprintf(&Msg[Len], "%d/",RIG->Interlock); 
+					while (RIG->TimeBands[j])
 					{
-						Len += sprintf(&Msg[Len], "%02d:%02d/", Band->Start / 3600, Band->Start % 3600); 
-					
-						while (Band->Scanlist[k])
+						Band = RIG->TimeBands[j];
+						k = 0;
+
+						if (Band->Scanlist[0])
 						{
-							Len += sprintf(&Msg[Len],"%.0f,", Band->Scanlist[k]->Freq + RIG->rxOffset);
-							k++;
+							Len += sprintf(&Msg[Len], "%02d:%02d/", Band->Start / 3600, Band->Start % 3600); 
+
+							while (Band->Scanlist[k])
+							{
+								Len += sprintf(&Msg[Len],"%.0f,", Band->Scanlist[k]->Freq + RIG->rxOffset);
+								k++;
+							}
+							Len += sprintf(&Msg[Len], "\\"); 
 						}
-						Len += sprintf(&Msg[Len], "\\"); 
+						j++;
 					}
-					j++;
+					Len += sprintf(&Msg[Len], "|"); 
 				}
-				Len += sprintf(&Msg[Len], "|"); 
 			}
 		}
 	}
@@ -1979,12 +2087,12 @@ void sendFreqReport(char * From)
 			if (TNC->RIG->TimeBands && TNC->RIG->TimeBands[1]->Scanlist)
 				continue;					// Have freq info from Rigcontrol
 			
-			if (TNC->Interlock == 0)		// Replace with dummy
-				TNC->Interlock = nextDummyInterlock++;
+			if (TNC->RXRadio == 0)		// Replace with dummy
+				TNC->RXRadio = nextDummyInterlock++;
 
 			// Use negative port no instead of interlock group
 
-			Len += sprintf(&Msg[Len], "%d/00:00/%.0f|", TNC->Interlock, atof(TNC->Frequency) * 1000000.0);
+			Len += sprintf(&Msg[Len], "%d/00:00/%.0f|", TNC->RXRadio, atof(TNC->Frequency) * 1000000.0);
 		}
 		else
 			PORT = PORT->PORTPOINTER;

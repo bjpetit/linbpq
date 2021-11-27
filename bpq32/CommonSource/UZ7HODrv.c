@@ -353,12 +353,15 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			{
 				// See if time to refresh registrations
 
-				if (ltime - AGW->LastParamTime > 60)
+				if (TNC->CONNECTED)
 				{
-					AGW->LastParamTime = ltime;
+					if (ltime - AGW->LastParamTime > 60)
+					{
+						AGW->LastParamTime = ltime;
 
-					if (TNC->PortRecord->PORTCONTROL.PortStopped == FALSE)
-						RegisterAPPLCalls(TNC, FALSE);
+						if (TNC->PortRecord->PORTCONTROL.PortStopped == FALSE)
+							RegisterAPPLCalls(TNC, FALSE);
+					}
 				}
 			}
 		
@@ -374,12 +377,14 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPSock,&writefs);	// Need notification of busy clearing
 
 
-
 			FD_ZERO(&errorfs);
 		
-			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
+			if (TNC->CONNECTING || TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
 
-			if (select((int)TNC->TCPSock+ 1, &readfs, &writefs, &errorfs, &timeout) > 0)
+			timeout.tv_sec = 0;
+			timeout.tv_usec = 0;
+
+			if (select((int)TNC->TCPSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
 			{
 				//	See what happened
 
@@ -388,7 +393,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					// data available
 			
 					ProcessReceivedData(port);
-				
 				}
 
 				if (FD_ISSET(TNC->TCPSock,&writefs))
@@ -1212,7 +1216,8 @@ void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	TNC->SuspendPortProc = UZ7HOSuspendPort;
 	TNC->ReleasePortProc = UZ7HOReleasePort;
@@ -1259,21 +1264,6 @@ void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 
 	BPQPort[PortEntry->PORTCONTROL.CHANNELNUM-65][MasterPort[port]] = port;
 			
-	if (MasterPort[port] == port)
-	{
-#ifndef LINBPQ
-		if (EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC))
-			if (TNC->ProgramPath)
-				TNC->WeStartedTNC = RestartTNC(TNC);
-#else
-		if (TNC->ProgramPath)
-			TNC->WeStartedTNC = RestartTNC(TNC);
-#endif
-		ConnecttoUZ7HO(port);
-	}
-
-	time(&lasttime[port]);			// Get initial time value
-
 	PortEntry->PORTCONTROL.TNC = TNC;
 
 	TNC->WebWindowProc = WebProc;
@@ -1316,6 +1306,32 @@ void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	TNC->hMenu = CreatePopupMenu();
 	
 	MoveWindows(TNC);
+
+	if (MasterPort[port] == port)
+	{
+		// First port for this TNC - start TNC if sonfigured and connect
+
+#ifndef LINBPQ
+		if (EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC))
+			if (TNC->ProgramPath)
+				TNC->WeStartedTNC = RestartTNC(TNC);
+#else
+		if (TNC->ProgramPath)
+			TNC->WeStartedTNC = RestartTNC(TNC);
+#endif
+		ConnecttoUZ7HO(port);
+	}
+	else
+	{
+		// Slave Port
+
+		sprintf(TNC->WEB_COMMSSTATE, "Slave to Port %d", MasterPort[port] );		
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	}
+
+
+	time(&lasttime[port]);			// Get initial time value
+
 #endif
 	return ExtProc;
 }
@@ -1409,21 +1425,7 @@ static int ProcessLine(char * buf, int Port)
 
 				if (ptr)
 				{
-					if (_stricmp(ptr, "CI-V") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "CAT") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "RTS") == 0)
-						TNC->PTTMode = PTTRTS;
-					else if (_stricmp(ptr, "DTR") == 0)
-						TNC->PTTMode = PTTDTR;
-					else if (_stricmp(ptr, "DTRRTS") == 0)
-						TNC->PTTMode = PTTDTR | PTTRTS;
-					else if (_stricmp(ptr, "CM108") == 0)
-						TNC->PTTMode = PTTCM108;
-					else if (_stricmp(ptr, "HAMLIB") == 0)
-						TNC->PTTMode = PTTHAMLIB;
-
+					DecodePTTString(TNC, ptr);
 					ptr = strtok(NULL, " \t\n\r");
 				}
 			}
@@ -1656,8 +1658,6 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 	
 	Sleep(3000);		// Allow init to complete 
 
-	TNC->CONNECTING = TRUE;
-
 	TNC->AGWInfo->isQTSM = 0;
 
 #ifndef LINBPQ
@@ -1672,9 +1672,29 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		TNC->PID = GetListeningPortsPID(TNC->destaddr.sin_port);
 		
 		if (TNC->PID == 0)
+			return;
+	
+//		goto TNCNotRunning;
+
+		// Get the File Name in case we want to restart it.
+
+		if (TNC->ProgramPath == NULL)
 		{
-			TNC->CONNECTING = FALSE;
-			return;						// Not listening so no point trying to connect
+			if (GetModuleFileNameExPtr)
+			{
+				HANDLE hProc;
+				char ExeName[256] = "";
+
+				hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->PID);
+	
+				if (hProc)
+				{
+					GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
+					CloseHandle(hProc);
+
+					TNC->ProgramPath = _strdup(ExeName);
+				}
+			}
 		}
 
 		// Get Window Handles so we can change centre freq and modem
@@ -1682,7 +1702,6 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		EnumWindows(uz_enum_windows_callback, (LPARAM)TNC);
 	}
 #endif
-
 
 	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
 
@@ -1703,7 +1722,6 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 	{
 		Debugprintf("UZ7HO Closing Sock %d", TNC->TCPSock); 
 		closesocket(TNC->TCPSock);
-		TNC->CONNECTING = FALSE;
 	}
 
 	TNC->TCPSock = 0;
@@ -1714,7 +1732,6 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 	{
 		i=sprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
-		TNC->CONNECTING = FALSE;
 
   	 	return; 
 	}
@@ -1731,18 +1748,21 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		//	Connect successful
 		//
 
-		TNC->CONNECTED=TRUE;
+		TNC->CONNECTED = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");		
 		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
+		ioctl(TNC->TCPSock, FIONBIO, &param);
 	}
 	else
 	{
 		if (TNC->Alerted == FALSE)
 		{
 			err=WSAGetLastError();
-   			i=sprintf(Msg, "Connect Failed for UZ7HO socket - error code = %d\n", err);
+   			sprintf(Msg, "Connect Failed for UZ7HO socket - error code = %d Port %d\n",
+				err, htons(TNC->destaddr.sin_port));
+		
 			WritetoConsole(Msg);
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");		

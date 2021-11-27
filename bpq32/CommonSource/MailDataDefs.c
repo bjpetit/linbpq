@@ -109,7 +109,7 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[%s%d.%d.%d.%d-%s%s%s%sIHJM$]\r";
+char BBSSID[]="[%s%d.%d.%d.%d-%s%s%s%sIH%sM$]\r";
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 

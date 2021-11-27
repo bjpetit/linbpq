@@ -152,9 +152,9 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 
 #endif
 
-static size_t ExtProc(int fn, int port, unsigned char * buff)
+static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	unsigned int txlen=0;
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Stream = 0;
@@ -304,7 +304,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 					if (buffptr)
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "MPSK} Failure with %s\r", STREAM->RemoteCall);
+						buffptr->Len = sprintf(buffptr->Data, "MPSK} Failure with %s\r", STREAM->RemoteCall);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
 	
@@ -323,7 +323,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 			if (STREAM->ReportDISC)
 			{
 				STREAM->ReportDISC = FALSE;
-				buff[4] = Stream;
+				buff->PORT = Stream;
 
 				return -1;
 			}
@@ -343,19 +343,16 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 			{
 				int datalen;
 			
-				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
+				buffptr = Q_REM(&STREAM->PACTORtoBPQ_Q);
 
-				datalen=buffptr[1];
+				datalen = (int)buffptr->Len;
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
-				
-				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
-		
+				buff->PORT = Stream;						// Compatibility with Kam Driver
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);	
+				datalen += sizeof(void *) + 4;
+
+				PutLengthinBuffer(buff, datalen);		
 				ReleaseBuffer(buffptr);
 	
 				return (1);
@@ -384,7 +381,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 		
 		if (!TNCInfo[MasterPort[port]]->CONNECTED) return 0;		// Don't try if not connected to TNC
 
-		Stream = buff[4];
+		Stream = buff->PORT;
 		
 		STREAM = &TNC->Streams[Stream]; 
 
@@ -394,45 +391,46 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 						
 		if (STREAM->Connected)
 		{
-			SendData(TNC, &buff[8], txlen);
+			SendData(TNC, buff->L2DATA, txlen);
 		}
 		else
 		{
 			char Command[80];
 			int len;
 
-			buff[8 + txlen] = 0;
-			_strupr(&buff[8]);
+			buff->L2DATA[txlen] = 0;
 
-			if (_memicmp(&buff[8], "D\r", 2) == 0)
+			_strupr(buff->L2DATA);
+
+			if (_memicmp(buff->L2DATA, "D\r", 2) == 0)
 			{
-				TidyClose(TNC, buff[4]);
+				TidyClose(TNC, buff->PORT);
 				STREAM->ReportDISC = TRUE;		// Tell Node
 				return 0;
 			}
 
 			// See if Local command (eg RADIO)
 
-			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
+			if (_memicmp(buff->L2DATA, "RADIO ", 6) == 0)
 			{
-				sprintf(&buff[8], "%d %s", TNC->Port, &buff[14]);
+				sprintf(buff->L2DATA, "%d %s", TNC->Port, &buff->L2DATA[6]);
 
-				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff[8]))
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, buff->L2DATA))
 				{
 				}
 				else
 				{
-					UINT * buffptr = GetBuff();
+					PMSGWITHLEN buffptr = GetBuff();
 
 					if (buffptr == 0) return 1;			// No buffers, so ignore
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &buff[8]);
+					buffptr->Len = sprintf(buffptr->Data, "%s", buff->L2DATA);
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}
 				return 1;
 			}
 
-			if (STREAM->Connecting && _memicmp(&buff[8], "ABORT", 5) == 0)
+			if (STREAM->Connecting && _memicmp(buff->L2DATA, "ABORT", 5) == 0)
 			{
 				len = sprintf(Command,"%cSTOP_SELECTIVE_CALL_ARQ_FAE\x1b", '\x1a');
 	
@@ -445,9 +443,9 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 				return (0);
 			}
 
-			if (_memicmp(&buff[8], "MODE", 4) == 0)
+			if (_memicmp(buff->L2DATA, "MODE", 4) == 0)
 			{
-				buff[7 + txlen] = 0;		// Remove CR
+				buff->L2DATA[txlen - 1] = 0;	// Remove CR
 				
 				len = sprintf(Command,"%cDIGITAL MODE %s\x1b", '\x1a', &buff[13]);
 	
@@ -461,11 +459,11 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 			}
 
 
-			if (_memicmp(&buff[8], "INUSE?", 6) == 0)
+			if (_memicmp(buff->L2DATA, "INUSE?", 6) == 0)
 			{
 				// Return Error if in use, OK if not
 
-				UINT * buffptr = GetBuff();
+				PMSGWITHLEN buffptr = GetBuff();
 				int s = 0;
 
 				while(s <= TNC->MPSKInfo->MaxSessions)
@@ -474,14 +472,14 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 					{		
 						if (TNC->PortRecord->ATTACHEDSESSIONS[s])
 						{
-							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "MPSK} Error - In use\r");
+							buffptr->Len  = sprintf(buffptr->Data, "MPSK} Error - In use\r");
 							C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 							return 1;							// Busy
 						}
 					}
 					s++;
 				}
-				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "MPSK} Ok - Not in use\r");
+				buffptr->Len  = sprintf(buffptr->Data, "MPSK} Ok - Not in use\r");
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 			
 				return 1;
@@ -489,17 +487,17 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 			// See if a Connect Command.
 
-			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
+			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
 				char * ptr;
 				char * context;
 
-				_strupr(&buff[8]);
-				buff[8 + txlen] = 0;
+				buff->L2DATA[txlen] = 0;
+				_strupr(buff->L2DATA);
 
 				memset(STREAM->RemoteCall, 0, 10);
 
-				ptr = strtok_s(&buff[10], " ,\r", &context);
+				ptr = strtok_s(&buff->L2DATA[2], " ,\r", &context);
 				strcpy(STREAM->RemoteCall, ptr);
 
 				len = sprintf(Command,"%cCALLSIGN_TO_CALL_ARQ_FAE %s%c%cSELECTIVE_CALL_ARQ_FAE\x1b",
@@ -520,8 +518,9 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 			// Send any other command to Multipsk
 
-			_strupr(&buff[8]);
-			buff[7 + txlen] = 0;
+			buff->L2DATA[txlen - 1] = 0;
+			_strupr(buff->L2DATA);
+
 			len = sprintf(Command,"%c%s\x1b", '\x1a', &buff[8]);
 		
 			if (TNC->MPSKInfo->TX)
@@ -537,7 +536,7 @@ static size_t ExtProc(int fn, int port, unsigned char * buff)
 
 	case 3:	
 
-		Stream = (int)buff;
+		Stream = (int)(size_t)buff;
 
 		TNCOK = TNCInfo[MasterPort[port]]->CONNECTED;
 
@@ -647,7 +646,7 @@ static RestartTNC(struct TNCINFO * TNC)
 }
 #endif
 
-UINT MPSKExtInit(EXTPORTDATA * PortEntry)
+void * MPSKExtInit(EXTPORTDATA * PortEntry)
 {
 	int i, port;
 	char Msg[255];
@@ -674,7 +673,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 		sprintf(Msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(Msg);
 
-		return (int) ExtProc;
+		return ExtProc;
 	}
 
 	TNC->Port = port;
@@ -686,7 +685,8 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
@@ -742,8 +742,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 
 //	SendMessage(0x40eaa, WM_COMMAND, 0x03000eaa, 0x40eaa);
 
-	return ((int) ExtProc);
-
+	return ExtProc;
 }
 
 
@@ -1185,7 +1184,7 @@ VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 
 			if (TNC->InternalCmd)
 			{
-				ULONG * buffptr = GetBuff();
+				PMSGWITHLEN buffptr = GetBuff();
 				char * ptr = strstr(TNC->CmdBuffer, "OK");
 
 				if (ptr)
@@ -1195,7 +1194,7 @@ VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 
 				if (buffptr)
 				{
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "MPSK} %s\r", TNC->CmdBuffer);
+					buffptr->Len= sprintf(buffptr->Data, "MPSK} %s\r", TNC->CmdBuffer);
 					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 				}
 
@@ -1234,7 +1233,8 @@ static int UnStuff(UCHAR * inbuff, int len)
 
 VOID ProcessMSPKData(struct TNCINFO * TNC)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
+
 	int Stream = 0;
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 	char * ptr;
@@ -1266,7 +1266,7 @@ VOID ProcessMSPKData(struct TNCINFO * TNC)
 
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "MPSK} Failure with %s\r", STREAM->RemoteCall);
+				buffptr->Len = sprintf(buffptr->Data, "MPSK} Failure with %s\r", STREAM->RemoteCall);
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				STREAM->DiscWhenAllSent = 10;
@@ -1299,8 +1299,8 @@ VOID ProcessMSPKData(struct TNCINFO * TNC)
 			if (memchr(TNC->DataBuffer, 0xc0, TNC->DataLen))
 				TNC->DataLen = UnStuff(TNC->DataBuffer, TNC->DataLen);
 
-			buffptr[1]  = TNC->DataLen;
-			memcpy(&buffptr[2], TNC->DataBuffer, TNC->DataLen);
+			buffptr->Len  = TNC->DataLen;
+			memcpy(buffptr->Data, TNC->DataBuffer, TNC->DataLen);
 
 			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
@@ -1379,7 +1379,7 @@ DataLoop:
 				buffptr = GetBuff();
 				if (buffptr)
 				{
-					buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", CallFrom);
+					buffptr->Len  = sprintf(buffptr->Data, "*** Connected to %s\r", CallFrom);
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}				
 			}

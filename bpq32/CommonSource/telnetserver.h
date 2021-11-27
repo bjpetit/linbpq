@@ -33,6 +33,7 @@ struct ConnectionInfo
 	BOOL NeedLF;				// FBB mode, but with cr > crlf outbound
 	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
 	BOOL HTTPMode;				// HTML Terminal Emulator
+	BOOL SyncMode;				// RMS Relay Sync
 	BOOL TriMode;				// Trimode emulation
 	BOOL TriModeConnected;		// Set when remote session is connected - now send data to DataSock
 	SOCKET TriModeDataSock;		// Data Socket

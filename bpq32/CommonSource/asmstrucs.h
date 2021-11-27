@@ -633,6 +633,20 @@ typedef struct PORTCONTROL
 	UCHAR USERS;			// MAX USERS ON PORT
 	USHORT KISSFLAGS;		// KISS SPECIAL MODE BITS
 	UCHAR PORTINTERLOCK;	// TO DEFINE PORTS WHICH CANT TX AT SAME TIME
+	//
+	//	PORTINTERLOCK was also used to prevent use of Attach'able ports at the same time
+	//	and was the RADIO number used in rig control
+	//
+	//	Now a port can have both a rx and tx radio definition, so Attach now	
+	//	Checks them (Transferred to TNC->TXRADIO and RXRADIO
+	//
+	//	For backward compatibility of configs, if INTERLOCK is set on an Attachable 
+	//	port it is set as a default tx and rx radio
+	//
+	//	Acually may not need the following PORT fields
+
+	UCHAR PORTXRADIO;		// TO DEFINE PORTS WHICH CANT TX Attach AT SAME TIME
+	UCHAR PORRXRADIO;		// TO DEFINE PORTS WHICH CANT TX Attach AT SAME TIME
 	UCHAR NODESPACLEN;		// MAX LENGTH OF 'NODES' MSG 
 	UCHAR TXPORT;			// PORT FOR SHARED TX OPERATION
 	MHSTRUC * PORTMHEARD;		// POINTER TO MH DATA

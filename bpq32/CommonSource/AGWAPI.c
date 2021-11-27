@@ -977,19 +977,37 @@ int AGWSocket_Accept(SOCKET SocketId)
 	return 0;
 }
 
-int SendtoSocket(SOCKET sock,char * Msg)
+int SendtoSocket(SOCKET sock, char * Msg)
 {
 	int len;
-	
-	len=AGWTXHeader.DataLength;
-	
+	int n;
+	char * ptr;
+
+	len = AGWTXHeader.DataLength;
+
+	// Make sure calls are null terminated
+
+	n = 10;
+	ptr = &AGWTXHeader.callfrom[9];
+	while (n-- && *(ptr) == ' ')
+	{
+		*(ptr) = 0;
+		ptr--;
+	}
+
+	n = 10;
+	ptr = &AGWTXHeader.callto[9];
+	while (n-- && *(ptr) == ' ')
+	{
+		*(ptr) = 0;
+		n--;
+	}
+
 	send(sock,(char *)&AGWTXHeader, 36,0);
 	if (len > 0) send(sock, Msg, len,0);
 
 	return 0;
 }
-
-
 
 int AGWDataSocket_Read(struct AGWSocketConnectionInfo * sockptr, SOCKET sock)
 {

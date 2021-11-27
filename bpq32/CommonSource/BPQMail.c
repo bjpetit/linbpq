@@ -1054,7 +1054,7 @@
 //	Fix paging on List command and add new combinations of List options
 //	Fix NNTP list and LC command when bulls are killed
 
-//  6.0.22.1       ??????????
+//  6.0.22.1       August 2021
 
 //	Fix flagging messages with attachments as read.
 //	Fix possible corruption of WP database and subsequent crash on reloading.
@@ -1070,9 +1070,22 @@
 //	Add option to allow only known users to connect
 //	Add basic callsign validation to From address
 //	Add option to forward a user's messages to Winlink
-//	Move User and WP Config to main config file.
+//	Move User config to main config file.
 //	Update message status whne reading a Forms Webmail message
 //	Speed up killing multiple messages
+
+//  6.0.23.1  ?????????
+
+//	Fix crash when ; added to call in send commands
+//	Allow smtp/ override for messages from RMS Express to send via ISP gateway
+//	Send Internet email from RMS Express to ISP Gateway if enabled and RMS BBS not configured 
+//	Recompiled for Web Interface changes in Node
+//  Add RMS Relay SYNC Mode (.17)
+//	Add Protocol changes for Relay RO forwarding
+//	Add SendWL2KPM command to connect script to allow users other than RMS to send ;FW: string to RMS Relay
+//	Fix B2 Header Date in Webmail message with sttachments.
+//	Fix bug when using YAPP with VARA (.27)
+
 
 #include "BPQMail.h"
 #define MAIL
@@ -1266,6 +1279,7 @@ char ** HoldTo;						// Hold on TO Call
 char ** HoldAt;						// Hold on AT Call
 char ** HoldBID;					// Hold on BID
 
+
 // Send WP Params
 
 BOOL SendWP;
@@ -1275,6 +1289,9 @@ int SendWPType;
 
 
 int ProgramErrors = 0;
+
+UCHAR BPQDirectory[260] = "";
+
 
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
@@ -1412,6 +1429,37 @@ VOID CheckProgramErrors()
 		exit(0);
 	}
 }
+
+
+VOID WriteMiniDump()
+{
+#ifdef WIN32
+
+	HANDLE hFile;
+	BOOL ret;
+	char FN[256];
+
+	sprintf(FN, "%s/Logs/MiniDump%x.dmp", GetBPQDirectory(), time(NULL));
+
+	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE,
+		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
+	{
+		// Create the minidump
+
+		ret = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
+			hFile, MiniDumpNormal, 0, 0, 0 );
+
+		if(!ret)
+			Debugprintf("MiniDumpWriteDump failed. Error: %u", GetLastError());
+		else
+			Debugprintf("Minidump %s created.", FN);
+			CloseHandle(hFile);
+	}
+#endif
+}
+
 
 void GetSemaphore(struct SEM * Semaphore, int ID)
 {
@@ -1588,8 +1636,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 
 //	SaveUserDatabase();
-//	SaveMessageDatabase();
-//	SaveBIDDatabase();
+	SaveMessageDatabase();
+	SaveBIDDatabase();
 
 	configSaved = 1;
 	SaveConfig(ConfigName);
@@ -2901,7 +2949,7 @@ PSOCKADDR_IN psin;
 
 SOCKET sock;
 
-UCHAR BPQDirectory[260];
+
 
 BOOL Initialise()
 {

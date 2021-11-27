@@ -27,6 +27,7 @@
 #ifndef LINBPQ
 #include "bpq32.h"
 #include "BPQMailrc.h"
+#include "dbghelp.h"
 #else
 #include "CHeaders.h"
 #endif
@@ -41,6 +42,7 @@
 // Standard __except handler for try/except
 
 VOID CheckProgramErrors();
+VOID WriteMiniDump();
 
 extern int ProgramErrors;
 
@@ -57,6 +59,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
 		CheckProgramErrors();\
+		WriteMiniDump();\
 }
 
 
@@ -218,6 +221,7 @@ typedef struct ConnectionInfo_S
 	BOOL SendT;							// Send T messages
 	BOOL SendP;							// Send P messages
 	BOOL SendB;							// Send Bulls
+	BOOL SendWL2KPM;					// send ;PM:
 	int MaxBLen;						// Max Size for this session
 	int MaxPLen;						// Max Size for this session
 	int MaxTLen;						// Max Size for this session
@@ -266,6 +270,11 @@ typedef struct ConnectionInfo_S
 
 	int YAPPLen;						// Bytes sent/received of YAPP Message
 	long YAPPDate;						// Date for received file - if set enables YAPPC
+
+	int SyncCompressedLen;
+	int SyncXMLLen;
+	int SyncMsgLen;
+
 	struct ConnectionInfo_S * SysopChatStream;			// Stream sysop is chatting to
 
 } ConnectionInfo, CIRCUIT;
@@ -301,6 +310,8 @@ typedef struct ConnectionInfo_S
 #define DISCONNECTING 16384				// Disconnect sent to Node
 #define YAPPTX	32768					// Sending YAPP file
 #define SYSOPCHAT 65536					// Chatting to BBS console
+#define WINLINKRO 131072				// WL2K RO (no J in SID)
+#define SYNCMODE 262144					// RMS RELAY SYNC
 
 struct FBBRestartData
 {
@@ -1183,7 +1194,7 @@ VOID DoReroute(CIRCUIT * conn, struct UserInfo * user);
 VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg);
 VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 VOID UnpackFBBBinary(CIRCUIT * conn);
-void Decode(CIRCUIT * conn) ;
+void Decode(CIRCUIT * conn, __int16 DecodeOnly);
 //long Encode(char * in, char * out, long inlen, BOOL B1Protocol);
 
 BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rline);

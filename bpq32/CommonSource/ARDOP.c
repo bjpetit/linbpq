@@ -36,17 +36,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define NOI2C
 #endif
 
-#ifdef NOI2C
-int i2c_smbus_write_byte()
-{
-	return -1;
-}
-
-int i2c_smbus_read_byte()
-{
-	return -1;
-}
-#else
+#ifndef NOI2C
 #include "i2c-dev.h"
 #endif
 #endif
@@ -475,21 +465,7 @@ static int ProcessLine(char * buf, int Port)
 
 				if (ptr)
 				{
-					if (_stricmp(ptr, "CI-V") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "CAT") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "RTS") == 0)
-						TNC->PTTMode = PTTRTS;
-					else if (_stricmp(ptr, "DTR") == 0)
-						TNC->PTTMode = PTTDTR;
-					else if (_stricmp(ptr, "DTRRTS") == 0)
-						TNC->PTTMode = PTTDTR | PTTRTS;
-					else if (_stricmp(ptr, "CM108") == 0)
-						TNC->PTTMode = PTTCM108;
-					else if (_stricmp(ptr, "HAMLIB") == 0)
-						TNC->PTTMode = PTTHAMLIB;
-
+					DecodePTTString(TNC, ptr);
 					ptr = strtok(NULL, " \t\n\r");
 				}
 			}
@@ -1902,19 +1878,11 @@ VOID ARDOPReleasePort(struct TNCINFO * TNC)
 	ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 }
 
+extern char WebProcTemplate[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>ARDOP Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
-		"'width=440,height=150');\" action=ARDOPAbort?%d>ARDOP Status"
-		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
-		TNC->Port);
+	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, "ARDOP Status", "ARDOP Status");
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -1996,7 +1964,8 @@ VOID * ARDOPExtInit(EXTPORTDATA * PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
@@ -2442,8 +2411,9 @@ VOID ARDOPThread(struct TNCINFO * TNC)
 	{
 		if (TNC->Alerted == FALSE)
 		{
-			err=WSAGetLastError();
-   			i=sprintf(Msg, "Connect Failed for ARDOP socket - error code = %d\r\n", err);
+  			sprintf(Msg, "Connect Failed for ARDOP socket - error code = %d Port %d\n",
+				WSAGetLastError(), htons(TNC->destaddr.sin_port));
+
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
 			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
@@ -5717,7 +5687,7 @@ int SerialConnecttoTCP(struct TNCINFO * TNC)
 VOID SerialConnecttoTCPThread(struct TNCINFO * TNC)
 {
 	char Msg[255];
-	int err,i;
+	int i;
 	u_long param = 1;
 	BOOL bcopt=TRUE;
 	struct hostent * HostEnt;
@@ -5799,8 +5769,9 @@ VOID SerialConnecttoTCPThread(struct TNCINFO * TNC)
 		{
 			if (TNC->Alerted == FALSE)
 			{
-				err=WSAGetLastError();
-   				i=sprintf(Msg, "Connect Failed for ARDOP socket - error code = %d\r\n", err);
+ 				sprintf(Msg, "Connect Failed for ARDOP socket - error code = %d Port %d\n",
+					WSAGetLastError(), htons(TNC->destaddr.sin_port));
+
 				WritetoConsole(Msg);
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
 				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);

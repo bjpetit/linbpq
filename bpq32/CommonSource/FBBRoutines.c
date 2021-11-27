@@ -63,6 +63,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	int RestartPtr;
 	char * Respptr;
 	BOOL AllRejected = TRUE;
+	char * MPS;
+	char * ROChar;
 
 	if (conn->Flags & GETTINGMESSAGE)
 	{
@@ -573,6 +575,13 @@ ok:
 		ptr = strtok_s(NULL, seps, &Context);
 
 		if (ptr == NULL) goto badparam2;
+
+		// Relay In RO mode adds @MPS@R to the MID. Non't know why (yet!)
+
+		MPS = strlop(ptr, '@');
+		if (MPS)
+			ROChar = strlop(MPS, '@');
+
 		if (strlen(ptr) > 12 ) goto badparam;
 		strcpy(FBBHeader->BID, ptr);
 
@@ -1129,7 +1138,7 @@ loop:
 			{
 #endif
 				conn->InputMode = 0;		//  So we won't save Restart data if decode fails
-				Decode(conn);				// Setup Next Message will reset InputMode if needed
+				Decode(conn, 0);			// Setup Next Message will reset InputMode if needed
 #ifndef LINBPQ
 			}
 			__except(EXCEPTION_EXECUTE_HANDLER)

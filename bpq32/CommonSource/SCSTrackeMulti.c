@@ -299,7 +299,7 @@ ok:
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 
-		Stream = (int)buff;
+		Stream = (int)(size_t)buff;
 
 		TNCOK = (TNC->HostMode == 1 && TNC->ReinitState != 10);
 
@@ -347,7 +347,7 @@ ok:
 	return 0;
 }
 
-UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
+void * TrackerMExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[500];
 	struct TNCINFO * TNC;
@@ -379,7 +379,7 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 		sprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
-		return (int) ExtProc;
+		return ExtProc;
 	}
 	
 	TNC->Port = port;
@@ -453,7 +453,7 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 
 	WritetoConsole("\n");
 
-	return ((int)ExtProc);
+	return ExtProc;
 }
 
 static void DEDCheckRX(struct TNCINFO * TNC)

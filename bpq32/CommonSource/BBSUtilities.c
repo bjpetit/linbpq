@@ -103,6 +103,9 @@ BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP, BOOL IncludeKil
 void ListCategories(ConnectionInfo * conn);
 void RebuildNNTPList();
 long long GetInt64Value(config_setting_t * group, char * name);
+void ProcessSyncModeMessage(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len);
+int ReformatSyncMessage(CIRCUIT * conn);
+char * initMultipartUnpack(char ** Input);
 
 config_t cfg;
 config_setting_t * group;
@@ -1004,6 +1007,8 @@ VOID CopyConfigFile(char * ConfigName)
 VOID SaveUserDatabase()
 {
 	SaveConfig(ConfigName);			// User config is now in main config file
+	GetConfig(ConfigName);
+
 /*
 	FILE * Handle;
 	size_t WriteLen;
@@ -1046,8 +1051,6 @@ VOID GetMessageDatabase()
 		// We have User config in the main config file. so use that
 
 		int index = 0;
-		char * stats;
-		struct MsgStats * Stats;
 		char * ptr, * ptr2;
 		config_setting_t * entry =  config_setting_get_elem (group, index++);
 
@@ -1399,7 +1402,7 @@ VOID CopyMessageDatabase()
 	char Backup1[MAX_PATH];
 	char Backup2[MAX_PATH];
 
-	return;
+//	return;
 
 	// Keep 4 Generations
 
@@ -1445,8 +1448,8 @@ VOID SaveMessageDatabase()
 //	int CfgLen = 0;
 //	FILE * hFile;
 
-	SaveConfig(ConfigName);		// Message Headers now in main config
-	return;
+//	SaveConfig(ConfigName);		// Message Headers now in main config
+//	return;
 
 	Handle = fopen(MsgDatabasePath, "wb");
 
@@ -1604,7 +1607,7 @@ VOID CopyBIDDatabase()
 {
 	char Backup[MAX_PATH];
 
-	return;
+//	return;
 
 
 	strcpy(Backup, BIDDatabasePath);
@@ -1620,7 +1623,7 @@ VOID SaveBIDDatabase()
 	size_t WriteLen;
 	int i;
 
-	return;					// Bids are now in main config and are saved when message is saved
+//	return;					// Bids are now in main config and are saved when message is saved
 
 	Handle = fopen(BIDDatabasePath, "wb");
 
@@ -2036,7 +2039,7 @@ BOOL CheckValidCall(char * From)
 	if (DontCheckFromCall)
 		return TRUE;
 	
-	if (strcmp(From, "SYSOP") == 0 || strcmp(From, "SYSTEM") == 0 || strcmp(From, "IMPORT") == 0)
+	if (strcmp(From, "SYSOP") == 0 || strcmp(From, "SYSTEM") == 0 || strcmp(From, "IMPORT") == 0 || strcmp(From, "SMTP:") == 0)
 		return TRUE;
 
 	for (i = 1; i < strlen(From); i++)		// skip first which may also be digit
@@ -5049,14 +5052,21 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char *To, ch
 
 	// SB WANT @ ALLCAN < N6ZFJ $4567_N0ARY
 
+	// Having trailing ; will mess up parsing multiple addresses, so remove.
+
+	while (To[strlen(To) - 1] == ';')
+		To[strlen(To) - 1] = 0;
+
 	if (strchr(Context, ';') || strchr(To, ';'))
 	{
 		// Multiple Addresses - put address list back together
 
+		char * p;
+		
 		To[strlen(To)] = ' ';
 		Context = To;
 
-		while (strchr(Context, ';'))
+		while (p = strchr(Context, ';'))
 		{
 			// Multiple Addressees
 
@@ -6155,38 +6165,42 @@ nextline:
 		}
 	}
 
-	if (!(conn->BBSFlags & BBS))
+	if ((conn->BBSFlags & SYNCMODE) == 0)
 	{
-		nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
-
-		if (Msg->via[0])
+		if (!(conn->BBSFlags & BBS))
 		{
-			if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
-				if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
+			nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
 
-					if (FWDCount ==  0 &&  Msg->to[0] != 0)		// unless smtp msg
-						nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
+			if (Msg->via[0])
+			{
+				if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
+					if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
+
+						if (FWDCount ==  0 &&  Msg->to[0] != 0)		// unless smtp msg
+							nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
+			}
+			else
+			{
+				if (FWDCount ==  0 && conn->LocalMsg == 0 && Msg->type != 'B')
+					// Not Local and no forward route
+					nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
+			}
+			if (conn->ToCount == 0)
+				SendPrompt(conn, conn->UserPointer);
 		}
 		else
 		{
-			if (FWDCount ==  0 && conn->LocalMsg == 0 && Msg->type != 'B')
-				// Not Local and no forward route
-				nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
+			if (!(conn->BBSFlags & FBBForwarding))
+			{
+				if (conn->ToCount == 0)
+					if (conn->BBSFlags & OUTWARDCONNECT)
+						nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+					else
+						nodeprintf(conn, ">\r");
+			}					
 		}
-		if (conn->ToCount == 0)
-			SendPrompt(conn, conn->UserPointer);
 	}
-	else
-	{
-		if (!(conn->BBSFlags & FBBForwarding))
-		{
-			if (conn->ToCount == 0)
-				if (conn->BBSFlags & OUTWARDCONNECT)
-					nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
-				else
-					nodeprintf(conn, ">\r");
-		}					
-	}
+
 	if(Msg->to[0] == 0)
 		SMTPMsgCreated=TRUE;
 
@@ -7985,7 +7999,6 @@ InBand:
 	// Look for (Space)Connected so we aren't fooled by ###CONNECTED TO NODE, which is not
 	// an indication of a connect.
 
-
 	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") || strstr(Buffer, "IDLETIME") ||
 			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE") || strstr(Buffer, "VIRTUAL CIRCUIT ESTABLISHED"))
 	{
@@ -8105,6 +8118,14 @@ InBand:
 				goto CheckForEnd;
 			}
 
+			if (_memicmp(Cmd, "SendWL2KPM", 10) == 0)
+			{
+				// Remote Node sends Connected in CTEXT - we need to swallow it
+
+				conn->SendWL2KPM = TRUE;
+				goto CheckForEnd;
+			}
+
 			if (_memicmp(Cmd, "SKIPPROMPT", 10) == 0)
 			{
 				// Remote Node sends > at end of CTEXT - we need to swallow it
@@ -8116,6 +8137,12 @@ InBand:
 			if (_memicmp(Cmd, "TEXTFORWARDING", 10) == 0)
 			{
 				conn->BBSFlags |= TEXTFORWARDING;			
+				goto CheckForEnd;
+			}
+
+			if (_memicmp(Cmd, "RADIOONLY", 9) == 0)
+			{
+				conn->BBSFlags |= WINLINKRO;			
 				goto CheckForEnd;
 			}
 
@@ -8319,6 +8346,13 @@ InBand:
 
 CheckForSID:
 
+	if (strstr(Buffer, "POSYNCHELLO"))			// URONODE
+	{
+		conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
+		ProcessLine(conn, 0, Buffer, len);
+		return FALSE;
+	}
+
 	if (strstr(Buffer, "SORRY, NO"))			// URONODE
 	{
 		conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
@@ -8449,7 +8483,7 @@ CheckForSID:
 			return TRUE;
 		}
 
-		if (strcmp(conn->Callsign, "RMS") == 0)
+		if (strcmp(conn->Callsign, "RMS") == 0 || conn->SendWL2KPM)
 		{
 			// Build a ;FW: line with all calls with PollRMS Set
 
@@ -8464,7 +8498,6 @@ CheckForSID:
 			//	I think this should use the session callsign, which 
 			//	normally will be the BBS ApplCall, and not the BBS Name, 
 			//	but coudl be changed by *** LINKED
-
 
 			int i, s;
 			char FWLine[10000] = ";FW: ";
@@ -8536,7 +8569,8 @@ CheckForSID:
 			(conn->BBSFlags & FBBCompressed) ? "B" : "", 
 			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
-			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
+			(conn->BBSFlags & FBBForwarding) ? "F" : "", 
+			(conn->BBSFlags & WINLINKRO) ? "" : "J"); 
 
 		if (conn->SecureMsg[0])
 		{
@@ -8628,6 +8662,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 	if (strstr(SID, "WL2K-"))
 	{
 		conn->WL2K = TRUE;
+		conn->BBSFlags |= WINLINKRO;
 	}
 
 	if (_memicmp(SID, "OpenBCM", 7) == 0)
@@ -8695,7 +8730,14 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 				conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
 			}
 			break;
-	
+
+		case 'J':
+
+			// Suspected to be associated with Winlink Radio Only
+
+			conn->BBSFlags &= ~WINLINKRO;
+			break;
+
 		case 'B':
 
 			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
@@ -9137,15 +9179,10 @@ VOID SaveConfig(char * ConfigName)
 {
 	struct UserInfo * user;
 	struct	BBSForwardingInfo * ForwardingInfo ;
-	config_setting_t *root, *group, *bbs, *wp, *msgs;
-	int i, n;
+	config_setting_t *root, *group, *bbs;
+	int i;
 	char Size[80];
 	struct BBSForwardingInfo DummyForwardingInfo;
-	WPRec * WP;	
-	char Key[16];
-	struct MsgInfo *Msg;
-	char HEXString1[64];
-	char HEXString2[64];
 	char Line[1024];
 
 	if (configSaved == 0)
@@ -9481,6 +9518,7 @@ VOID SaveConfig(char * ConfigName)
 		SaveStringValue(bbs, Key, Line);
 	}
 
+/*
 	wp = config_setting_add(root, "WP", CONFIG_TYPE_GROUP);
 
 	for (i = 0; i <= NumberofWPrecs; i++)
@@ -9553,12 +9591,28 @@ VOID SaveConfig(char * ConfigName)
 		SaveStringValue(msgs, Key, Line);
 	}
 
+#ifdef LINBPQ
+
+	if(! config_write_file(&cfg,"/dev/shm/linmail.cfg.temp" ))
+	{
+		print("Error while writing file.\n");
+		config_destroy(&cfg);
+		return;
+	}
+
+	CopyFile("/dev/shm/linmail.cfg.temp", ConfigName, FALSE);
+
+#else
+*/
 	if(! config_write_file(&cfg, ConfigName))
 	{
 		fprintf(stderr, "Error while writing file.\n");
 		config_destroy(&cfg);
 		return;
 	}
+
+//#endif
+
 	config_destroy(&cfg);
 
 /*
@@ -10186,7 +10240,12 @@ int Connected(int Stream)
 
 			{
 				BOOL B1 = FALSE, B2 = FALSE, BIN = FALSE, BLOCKED = FALSE;
+				BOOL WL2KRO = FALSE;
+
 				struct	BBSForwardingInfo * ForwardingInfo;
+
+				if (conn->RadioOnlyMode == 'R')
+					WL2KRO = 1;
 
 				conn->PageLen = user->PageLen;
 				conn->Paging = (user->PageLen > 0);
@@ -10234,9 +10293,13 @@ int Connected(int Stream)
 
 				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
 
+				if (conn->RadioOnlyMode)
+					nodeprintf(conn,";WL2K-Radio/Internet_Network\r");
+				
 				nodeprintf(conn, BBSSID, "BPQ-",
 					Ver[0], Ver[1], Ver[2], Ver[3],
-					BIN ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", BLOCKED ? "FW": "");
+					BIN ? "B" : "", B1 ? "1" : "", B2 ? "2" : "",
+					BLOCKED ? "FW": "", WL2KRO ? "" : "J");
 
 //				 if (user->flags & F_Temp_B2_BBS)
 //					 nodeprintf(conn,";PQ: 66427529\r");
@@ -10509,9 +10572,9 @@ int DoReceivedData(int Stream)
 
 				user = conn->UserPointer;
 
-				if (conn->BBSFlags & MCASTRX)
+				if (conn->BBSFlags & (MCASTRX | SYNCMODE))
 				{
-					//	MCAST delivers full packets
+					//	MCAST and SYNCMODE deliver full packets
 
 					if (conn->BBSFlags & RunningConnectScript)
 						ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
@@ -11140,6 +11203,15 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 }
 
 
+#define N               2048    /* buffer size */
+#define F               60      /* lookahead buffer size */
+#define THRESHOLD       2
+#define NIL             N       /* leaf of tree */
+
+extern UCHAR * infile;
+
+BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen);
+
 
 VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
@@ -11148,7 +11220,34 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	char seps[] = " \t\r";
 	int CmdLen;
 
-	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
+	if (_memicmp(Buffer, "POSYNCLOGON", 11) == 0)
+	{
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+		conn->BBSFlags |= SYNCMODE;
+		conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
+
+		BBSputs(conn, "OK\r");
+		return;
+	}
+
+	if (_memicmp(Buffer, "POSYNCHELLO", 11) == 0)
+	{
+		char Reply[32];
+		conn->BBSFlags |= SYNCMODE;
+		conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
+
+		sprintf(Reply, "POSYNCLOGON %s\r", BBSName);
+		BBSputs(conn, Reply);
+		return;
+	}
+
+	if (conn->BBSFlags & SYNCMODE)
+	{
+		ProcessSyncModeMessage(conn, user, Buffer, len);
+		return;
+	}
+
+	WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
 
 	if (conn->BBSFlags & FBBForwarding)
 	{
@@ -12517,6 +12616,9 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 
 		// YAPPC has date/time in dos format
 
+		if (Len < Msg[1] + 1)
+			return 0;
+
 		NameLen = (int)strlen(FN);
 		strcpy(conn->ARQFilename, FN);
 		ptr = &Msg[3 + NameLen];
@@ -12624,8 +12726,16 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 
 		// Check we have it all
 
-		if (pktLen > (Len - 2))		// -2 for header
-			return FALSE;			// Wait for rest
+		if (conn->YAPPDate)			// If present use YAPPC so have checksum
+		{
+			if (pktLen > (Len - 3))		// -3 for header and checksum
+				return 0;				// Wait for rest
+		}
+		else
+		{
+			if (pktLen > (Len - 2))		// -2 for header
+				return 0;				// Wait for rest
+		}
 
 		// Save data and remove from buffer
 
@@ -13275,6 +13385,170 @@ BOOL ProcessReqDir(struct MsgInfo * Msg)
 	return TRUE;
 }
 
+
+void ProcessSyncModeMessage(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
+{
+	Buffer[len] = 0;
+
+	if (strcmp(Buffer, "OK\r") == 0)
+	{
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+
+		// Propose any waiting files
+
+		BBSputs(conn, "BYE\r");
+		conn->CloseAfterFlush = 20;			// 2 Secs
+		conn->BBSFlags &= ~SYNCMODE;
+		return;
+	}
+
+	if (memcmp(Buffer, "TR AddMessage_", 14) == 0) 
+	{
+		BIDRec * BID;
+		char *ptr1, *ptr2, *context;
+
+		//		TR AddMessage_1145_G8BPQ 727 1202 440 True
+
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+		ptr1 =  strtok_s(&Buffer[14], " ", &context);	// MID
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncCompressedLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncXMLLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncMsgLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+
+		BID = LookupBID(ptr1);
+
+		if (BID)
+		{
+			BBSputs(conn, "Rejected - Duplicate BID\r");
+			return;
+		}
+		conn->TempMsg = zalloc(sizeof(struct MsgInfo));
+
+		BBSputs(conn, "OK\r");
+		return;
+	}
+
+	if (memcmp(Buffer, "TR RequestSync_", 15) == 0) 
+	{
+		char *ptr1, *ptr2, *context;
+
+		//			TR RequestSync_G8BPQ_14 224 417 0 True
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+
+		ptr1 =  strtok_s(&Buffer[15], " ", &context);	// MID
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncCompressedLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncXMLLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncMsgLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+
+		conn->TempMsg = zalloc(sizeof(struct MsgInfo));
+
+		BBSputs(conn, "OK\r");
+		return;
+	}
+
+	if (memcmp(Buffer, "TR Delivered_", 13) == 0) 
+	{
+		char *ptr1, *ptr2, *context;
+
+		//			TR RequestSync_G8BPQ_14 224 417 0 True
+
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+		ptr1 =  strtok_s(&Buffer[13], " ", &context);	// MID
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncCompressedLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncXMLLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncMsgLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+
+		conn->TempMsg = zalloc(sizeof(struct MsgInfo));
+
+		BBSputs(conn, "OK\r");
+		return;
+	}
+
+	if (memcmp(Buffer, "TR Remove_", 10) == 0) 
+	{
+		char *ptr1, *ptr2, *context;
+
+		//			TR RequestSync_G8BPQ_14 224 417 0 True
+
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+		ptr1 =  strtok_s(&Buffer[10], " ", &context);	// MID
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncCompressedLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncXMLLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+		conn->SyncMsgLen = atoi(ptr2);
+		ptr2 =  strtok_s(NULL, " ", &context);
+
+		conn->TempMsg = zalloc(sizeof(struct MsgInfo));
+
+		BBSputs(conn, "OK\r");
+		return;
+	}
+
+	if (strcmp(Buffer, "BYE\r") == 0)
+	{
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+		conn->BBSFlags &= ~SYNCMODE;
+		return;
+	}
+
+	if (memcmp(Buffer, "BBS\r", 4) == 0)
+	{
+		// Out of Sync
+
+		WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+		conn->BBSFlags &= ~SYNCMODE;
+		return;
+	}
+
+	// Data
+
+	if ((conn->TempMsg->length + len) > conn->MailBufferSize)
+	{
+		conn->MailBufferSize += 10000;
+		conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+
+		if (conn->MailBuffer == NULL)
+		{
+			BBSputs(conn, "*** Failed to extend Message Buffer\r");
+			conn->CloseAfterFlush = 20;			// 2 Secs
+
+			return;
+		}
+	}
+
+	memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, len);
+
+	conn->TempMsg->length += len;
+
+	if (conn->TempMsg->length >= conn->SyncCompressedLen)
+	{
+		// Complete - decompress it
+
+		conn->BBSFlags |= FBBCompressed;
+		Decode(conn, 1);
+
+		BBSputs(conn, "OK\r");	
+		return;
+	}
+	return;
+}
+
+
+
 BOOL ProcessReqFile(struct MsgInfo * Msg)
 {
 	char FN[128];
@@ -13433,13 +13707,255 @@ VOID SendServerReply(char * Title, char * MailBuffer, int Length, char * To)
 	free(MailBuffer);
 }
 
+int ReformatSyncMessage(CIRCUIT * conn)
+{
+	// Message has been decompressed - reformat to look lime a WLE message
 
+	char * MsgBit;
+	char *ptr1, *ptr2;
+	int linelen;
+	char FullFrom[80];
+	char FullTo[80];
+	char BID[80];
+	time_t Date;
+	char Mon[80];
+	char Subject[80];
+	int i = 0;
+	char * Boundary;
+	char * Input;
+	char * via = NULL;
+	char * NewMsg = conn->MailBuffer;
+	char * SaveMsg = NewMsg;
+	char DateString[80];
+	struct tm * tm;
+	char Type[16] = "Private";
+	char * part[100];
+	int partLen[100];
+	char * partName[100];
 
+	// Message has an XML header which I don't think we need, then the message
+	/*
+	Date: Mon, 25 Oct 2021 10:22:00 -0000
+	From: GM8BPQ
+	Subject: Test
+	To: 2E1BGT
+	Message-ID: ALYJQJRXVQAO
+	X-Source: GM8BPQ
+	X-Relay: G8BPQ
+	MIME-Version: 1.0
+	MIME-Version: 1.0
+	Content-Type: multipart/mixed; boundary="boundaryBSoxlw=="
+
+	--boundaryBSoxlw==
+	Content-Type: text/plain; charset="iso-8859-1"
+	Content-Transfer-Encoding: quoted-printable
+
+	Hello Hello
+
+	--boundaryBSoxlw==--
+	*/
+
+	// I think the best way is to reformat as if from Winlink Express, then pass 
+	//through the normal B2 code.
+
+//	WriteLogLine(conn, '<', conn->MailBuffer, conn->TempMsg->length, LOG_BBS);
+
+	if (conn->SyncMsgLen == 0)
+		return 0;
+
+	MsgBit = &conn->MailBuffer[conn->SyncXMLLen];
+	conn->TempMsg->length -= conn->SyncXMLLen;
+
+	ptr1 = MsgBit;
+
+Loop:
+
+	ptr2 = strchr(ptr1, '\r');
+
+	linelen = (int)(ptr2 - ptr1);
+
+	if (_memicmp(ptr1, "From:", 5) == 0)
+	{
+		memcpy(FullFrom, &ptr1[6], linelen - 6);
+		FullFrom[linelen - 6] = 0;
+	}
+
+	if (_memicmp(ptr1, "To:", 3) == 0)
+	{
+		memcpy(FullTo, &ptr1[4], linelen - 4);
+		FullTo[linelen - 4] = 0;
+	}
+
+	else if (_memicmp(ptr1, "Subject:", 8) == 0)
+	{
+		memcpy(Subject, &ptr1[9], linelen - 9);
+		Subject[linelen - 9] = 0;
+	}
+
+	else if (_memicmp(ptr1, "Message-ID", 10) == 0)
+	{
+		memcpy(BID, &ptr1[12], linelen - 12);
+		BID[linelen - 12] = 0;
+	}
+
+	else if (_memicmp(ptr1, "Date:", 5) == 0)
+	{
+		struct tm rtime;
+		char seps[] = " ,\t\r";
+
+		memset(&rtime, 0, sizeof(struct tm));
+
+		// Date: Mon, 25 Oct 2021 10:22:00 -0000
+
+		sscanf(&ptr1[11], "%02d %s %04d %02d:%02d:%02d",
+			&rtime.tm_mday, &Mon, &rtime.tm_year, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec);
+
+		rtime.tm_year -= 1900;
+
+		for (i = 0; i < 12; i++)
+		{
+			if (strcmp(Mon, month[i]) == 0)
+				break;
+		}
+
+		rtime.tm_mon = i;
+
+		Date = mktime(&rtime) - (time_t)_MYTIMEZONE;
+
+		if (Date == (time_t)-1)
+			Date = time(NULL);
+
+	}
+
+	if (linelen)			// Not Null line
+	{
+		ptr1 = ptr2 + 2;		// Skip crlf
+		goto Loop;
+	}
+
+	// Unpack Body - seems to be multipart even if only one
+
+	Input = MsgBit;
+
+	Boundary = initMultipartUnpack(&Input);
 	
+	i = 0;
 
+	if (Boundary)
+	{
+		// input should be start of part
 
-	
+		// Find End of part - ie -- Boundary + CRLF or --
 
+		char * ptr, * saveptr;
+		char * Msgptr;
+		size_t BLen = strlen(Boundary);
+		size_t Partlen;
+
+		saveptr = Msgptr = ptr = Input;
+
+		while(ptr)				// Just in case we run off end
+		{
+			if (*ptr == '-' && *(ptr+1) == '-')
+			{
+				if (memcmp(&ptr[2], Boundary, BLen) == 0)
+				{
+					// Found Boundary
+
+					Partlen = ptr - Msgptr;
+
+					ptr += (BLen + 2);			// End of Boundary
+
+					if (*ptr == '-')			// Terminating Boundary
+						Input = NULL;
+					else
+						Input = ptr + 2;
+
+					// Part Starts with header (content-type, etc), but skip for now
+
+					part[i] = strstr(Msgptr, "\r\n\r\n");	// Over separator
+					if (part[i])
+					{
+						part[i] += 4;
+						partLen[i] = Partlen - (part[i] - Msgptr) - 2;
+					}
+					Msgptr = ptr = Input;
+					i++;
+				}
+			}
+			else
+				ptr++;
+		}
+	}
+
+	// Build the message
+
+	tm = gmtime(&Date);	
+
+	sprintf(DateString, "%04d/%02d/%02d %02d:%02d",
+		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+	NewMsg += sprintf(NewMsg,
+		"MID: %s\r\n"
+		"Date: %s\r\n"
+		"Type: %s\r\n"
+		"From: %s\r\n",
+			BID, DateString, Type, FullFrom);
+
+//	if (ToCalls)
+//	{
+//		int i;
+
+//		for (i = 0; i < Calls; i++)
+//			NewMsg += sprintf(NewMsg, "To: %s\r\n",	ToCalls[i]);
+
+//	}
+//	else
+	{
+		NewMsg += sprintf(NewMsg, "To: %s\r\n",
+			FullTo);
+	}
+//	if (WebMail->CC && WebMail->CC[0])
+//		NewMsg += sprintf(NewMsg, "CC: %s\r\n", WebMail->CC);
+
+	NewMsg += sprintf(NewMsg,
+		"Subject: %s\r\n"
+		"Mbo: %s\r\n",
+		Subject, BBSName);
+
+	// Write the Body: line and any File Lines
+
+	NewMsg += sprintf(NewMsg, "Body: %d\r\n", partLen[0]);
+
+/*
+	i == 1;
+
+	while (part[i])
+	{
+		Msg->B2Flags |= Attachments;
+		NewMsg += sprintf(NewMsg, "File: %d %s\r\n",
+			partn[i], partName[i]);
+	}
+*/
+	NewMsg += sprintf(NewMsg, "\r\n");		// Blank Line to end header
+
+	// Now add parts
+
+	memmove(NewMsg, part[0], partLen[0]);
+	NewMsg += partLen[0];
+
+	conn->TempMsg->length = NewMsg - SaveMsg;
+	conn->TempMsg->datereceived = conn->TempMsg->datechanged = time(NULL);
+	conn->TempMsg->datecreated = Date;
+	strcpy(conn->TempMsg->bid, BID);
+
+	if (strlen(Subject) > 60)
+		Subject[60] = 0;
+
+	strcpy(conn->TempMsg->title, Subject);
+
+	return TRUE;
+}
 
 
 

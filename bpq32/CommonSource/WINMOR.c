@@ -298,9 +298,9 @@ struct SEM SetWindTextSem = {0, 0, 0, 0};
 
 VOID MySetWindowText(HWND hWnd, char * Msg)
 {
-	PMSGWITHLEN buffptr;
-
 #ifndef LINBPQ
+
+	PMSGWITHLEN buffptr;
 
 	GetSemaphore(&SetWindTextSem, 61);
 	buffptr = zalloc(400);
@@ -442,21 +442,7 @@ static int ProcessLine(char * buf, int Port)
 
 				if (ptr)
 				{
-					if (_stricmp(ptr, "CI-V") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "CAT") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "RTS") == 0)
-						TNC->PTTMode = PTTRTS;
-					else if (_stricmp(ptr, "DTR") == 0)
-						TNC->PTTMode = PTTDTR;
-					else if (_stricmp(ptr, "DTRRTS") == 0)
-						TNC->PTTMode = PTTDTR | PTTRTS;
-					else if (_stricmp(ptr, "CM108") == 0)
-						TNC->PTTMode = PTTCM108;
-					else if (_stricmp(ptr, "HAMLIB") == 0)
-						TNC->PTTMode = PTTHAMLIB;
-
+					DecodePTTString(TNC, ptr);
 					ptr = strtok(NULL, " \t\n\r");
 				}
 			}
@@ -1392,9 +1378,11 @@ VOID SuspendOtherPorts(struct TNCINFO * ThisTNC)
 	// Disable other TNCs in same Interlock Group
 	
 	struct TNCINFO * TNC;
-	int i, Interlock = ThisTNC->Interlock;
+	int i;
+	int rxInterlock = ThisTNC->RXRadio;
+	int txInterlock = ThisTNC->TXRadio;
 
-	if (Interlock == 0)
+	if (rxInterlock == 0 || txInterlock == 0)
 		return;
 
 	for (i=1; i<33; i++)
@@ -1406,7 +1394,7 @@ VOID SuspendOtherPorts(struct TNCINFO * ThisTNC)
 		if (TNC == ThisTNC)
 			continue;
 
-		if (Interlock == TNC->Interlock)	// Same Group
+		if (rxInterlock == TNC->RXRadio || txInterlock == TNC->TXRadio)	// Same Group	
 			if (TNC->SuspendPortProc)
 				TNC->SuspendPortProc(TNC);
 	}
@@ -1417,9 +1405,11 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
 	// Enable other TNCs in same Interlock Group
 	
 	struct TNCINFO * TNC;
-	int i, Interlock = ThisTNC->Interlock;
+	int i;
+	int rxInterlock = ThisTNC->RXRadio;
+	int txInterlock = ThisTNC->TXRadio;
 
-	if (Interlock == 0)
+	if (rxInterlock == 0 && txInterlock == 0)
 		return;
 
 	for (i=1; i<33; i++)
@@ -1431,7 +1421,7 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
 		if (TNC == ThisTNC)
 			continue;
 
-		if (Interlock == TNC->Interlock)	// Same Group	
+		if (rxInterlock == TNC->RXRadio || txInterlock == TNC->TXRadio)	// Same Group	
 			if (TNC->ReleasePortProc)
 				TNC->ReleasePortProc(TNC);
 	}
@@ -1456,25 +1446,14 @@ VOID WinmorReleasePort(struct TNCINFO * TNC)
 		send(TNC->TCPSock, "CODEC TRUE\r\n", 13, 0);
 }
 
+extern char WebProcTemplate[];
+
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>WINMOR Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-//		"<h2>WINMOR Status</h2>"
-		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
-		"'width=440,height=150');\" action=ARDOPAbort?%d>WINMOR Status"
-		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
-		TNC->Port);
-;
-
+	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, "WINMOR Status", "WINMOR Status");
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
-
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
@@ -1544,7 +1523,8 @@ void * WinmorExtInit(EXTPORTDATA * PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
@@ -2886,6 +2866,10 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 }
 */
 
+#ifdef LINBPQ
+#include <signal.h>
+#endif
+
 
 int KillTNC(struct TNCINFO * TNC)
 {
@@ -2910,7 +2894,7 @@ int KillTNC(struct TNCINFO * TNC)
 			//	Resolve name to address
 
 			struct hostent * HostEnt = gethostbyname (TNC->HostName);
-		 
+
 			if (!HostEnt)
 				return 0;			// Resolve failed
 
@@ -2933,23 +2917,27 @@ int KillTNC(struct TNCINFO * TNC)
 	if (TNC->PID == 0)
 		return 0;
 
-#ifndef LINBPQ
+#ifdef WIN32
 	{
-	HANDLE hProc;
+		HANDLE hProc;
 
-	Debugprintf("KillTNC Called for Pid %d", TNC->PID);
+		Debugprintf("KillTNC Called for Pid %d", TNC->PID);
 
-	if (TNC->PTTMode)
-		Rig_PTT(TNC, FALSE);			// Make sure PTT is down
+		if (TNC->PTTMode)
+			Rig_PTT(TNC, FALSE);			// Make sure PTT is down
 
-	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
+		hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
 
-	if (hProc)
-	{
-		TerminateProcess(hProc, 0);
-		CloseHandle(hProc);
+		if (hProc)
+		{
+			TerminateProcess(hProc, 0);
+			CloseHandle(hProc);
+		}
 	}
-	}
+#else
+
+	printf("KillTNC Called for Pid %d Returned %d\n", TNC->PID, kill(TNC->PID, SIGTERM));
+
 #endif
 	TNC->PID = 0;			// So we don't try again
 
@@ -3054,7 +3042,11 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 			printf ("Failed to start TNC\n"); 
 			exit(0);			// Kill the new process
 		}
-		printf("Started TNC\n");
+		else
+		{
+			TNC->PID = child_pid;
+			printf("Started TNC, Process ID = %d\n", TNC->PID);
+		}
 		free(Copy);
 		return TRUE;
 	}								 

@@ -1518,7 +1518,7 @@ VOID Do_Save_Msg(HWND hDlg)
 
 		Msg->status = status[0];
 		if (status[0] == 'K')
-			FlagAsKilled(Msg);					// Clear forwarding bits
+			FlagAsKilled(Msg, TRUE);					// Clear forwarding bits
 	}
 
 	sprintf(InfoBoxText, "Message Updated");

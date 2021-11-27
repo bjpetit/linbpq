@@ -175,7 +175,10 @@ BOOL WantTAP = FALSE;
 BOOL WantEncap = 0;				// Run RIP44 and Net44 Encap
 BOOL NoDefaultRoute = FALSE;	// Don't add route to 44/8
 
+int WantUDPTunnel = 0;
+
 SOCKET EncapSock = 0;
+SOCKET UDPSendSock = 0;
 
 BOOL UDPEncap = FALSE;
 
@@ -476,6 +479,8 @@ BOOL GetPCAP()
 }
 Dll BOOL APIENTRY Init_IP()
 {
+	int ret;
+
 	if (BPQDirectory[0] == 0)
 	{
 		strcpy(ARPFN,"BPQARP.dat");
@@ -661,7 +666,25 @@ Dll BOOL APIENTRY Init_IP()
 
 	// if we are running as Net44 encap, open a socket for IPIP
 
-	if (WantEncap)
+	if (WantUDPTunnel)
+	{
+		struct sockaddr_in sinx; 
+		u_long param = 1;
+
+		UDPSendSock = socket(AF_INET,SOCK_DGRAM,0);
+
+		ioctl (UDPSendSock,FIONBIO,&param);
+
+		sinx.sin_family = AF_INET;
+		sinx.sin_addr.s_addr = INADDR_ANY;
+		sinx.sin_port = htons(WantUDPTunnel);
+
+		ret = bind(UDPSendSock, (struct sockaddr *) &sinx, sizeof(sinx));
+
+
+	}
+
+	if (WantEncap || WantUDPTunnel)
 	{
 		union
 		{
@@ -690,9 +713,9 @@ Dll BOOL APIENTRY Init_IP()
 			// the necessary size into the ulOutBufLen variable
 
 			GetAdaptersInfo(NULL, &ulOutBufLen);
-				
+
 			pAdapterInfo = (IP_ADAPTER_INFO *) malloc(ulOutBufLen);
-		
+
 			if ((dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen)) == NO_ERROR)
 			{
 				pAdapter = pAdapterInfo;
@@ -737,73 +760,76 @@ Dll BOOL APIENTRY Init_IP()
 		}			
 #endif
 
-		if (EncapAddr != INADDR_NONE)
+		if (WantEncap)
 		{
-			// Using Virtual Host on PCAP Adapter (Windows)
 
-			WritetoConsoleLocal("Net44 Tunnel opened on PCAP device\n");
-			WritetoConsoleLocal("IP Support Enabled\n");
-			return TRUE;
-		}
-
-		if (UDPEncap)
-		{
-			// Open UDP Socket
-
-			if (IPv6)
-				EncapSock = socket(AF_INET6,SOCK_DGRAM,0);
-			else
-				EncapSock = socket(AF_INET,SOCK_DGRAM,0);
-
-			sinx.sinx.sin_port = htons(UDPPort);
-		}
-		else
-		{
-			// Open Raw Socket
-
-			EncapSock = socket(AF_INET, SOCK_RAW, 4);
-			sinx.sinx.sin_port = 0;
-		}
-
-		if (EncapSock == INVALID_SOCKET)
-		{
-			err = WSAGetLastError();
-			sprintf(Msg, "Failed to create socket for IPIP Encap - error code = %d\n", err);
-			WritetoConsoleLocal(Msg);
-		}
-		else
-		{
-			
-			ioctl (EncapSock,FIONBIO,&param);
-
-			if (IPv6)
+			if (EncapAddr != INADDR_NONE)
 			{
-				sinx.sinx.sin_family = AF_INET6;
-				memset (&sinx.sinx6.sin6_addr, 0, 16);
-				ret = bind(EncapSock, (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx6));
+				// Using Virtual Host on PCAP Adapter (Windows)
+
+				WritetoConsoleLocal("Net44 Tunnel opened on PCAP device\n");
+				WritetoConsoleLocal("IP Support Enabled\n");
+				return TRUE;
+			}
+
+			if (UDPEncap)
+			{
+				// Open UDP Socket
+
+				if (IPv6)
+					EncapSock = socket(AF_INET6,SOCK_DGRAM,0);
+				else
+					EncapSock = socket(AF_INET,SOCK_DGRAM,0);
+
+				sinx.sinx.sin_port = htons(UDPPort);
 			}
 			else
 			{
-				sinx.sinx.sin_family = AF_INET;
-				sinx.sinx.sin_addr.s_addr = INADDR_ANY;
-				ret = bind(EncapSock, (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx));
-			}
-	
-			if (ret)
-			{
-				//	Bind Failed
+				// Open Raw Socket
 
+				EncapSock = socket(AF_INET, SOCK_RAW, 4);
+				sinx.sinx.sin_port = 0;
+			}
+
+			if (EncapSock == INVALID_SOCKET)
+			{
 				err = WSAGetLastError();
-				sprintf(Msg, "Bind Failed  for IPIP Encap socket - error code = %d\n", err);
+				sprintf(Msg, "Failed to create socket for IPIP Encap - error code = %d\n", err);
 				WritetoConsoleLocal(Msg);
 			}
 			else
 			{
-				WritetoConsoleLocal("Net44 Tunnel opened\n");
+
+				ioctl (EncapSock,FIONBIO,&param);
+
+				if (IPv6)
+				{
+					sinx.sinx.sin_family = AF_INET6;
+					memset (&sinx.sinx6.sin6_addr, 0, 16);
+					ret = bind(EncapSock, (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx6));
+				}
+				else
+				{
+					sinx.sinx.sin_family = AF_INET;
+					sinx.sinx.sin_addr.s_addr = INADDR_ANY;
+					ret = bind(EncapSock, (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx));
+				}
+
+				if (ret)
+				{
+					//	Bind Failed
+
+					err = WSAGetLastError();
+					sprintf(Msg, "Bind Failed  for IPIP Encap socket - error code = %d\n", err);
+					WritetoConsoleLocal(Msg);
+				}
+				else
+				{
+					WritetoConsoleLocal("Net44 Tunnel opened\n");
+				}
 			}
 		}
 	}
-
 	WritetoConsoleLocal("IP Support Enabled\n");
 
 	return TRUE;
@@ -1046,6 +1072,28 @@ PollEncaploop:
 		else
 			res = GetLastError();
 	}
+
+	if (UDPSendSock)
+	{
+		int nread;
+		int addrlen = sizeof(struct sockaddr_in6);
+
+		nread = recvfrom(UDPSendSock, &Buffer[EthOffset], 1600, 0, (struct sockaddr *)&RXaddr.rxaddr,&addrlen);
+
+		if (nread > 0)
+		{
+			PIPMSG IPptr = (PIPMSG)&Buffer[EthOffset];
+
+	//		RouteIPMsg(IPptr);
+			ProcessIPMsg(IPptr, Buffer, 'E', 255);
+
+			goto PollEncaploop;
+		}
+		else
+			res = GetLastError();
+	}
+
+
 
 
 	if (IPHOSTVECTORPTR->HOSTTRACEQ != 0)
@@ -1456,6 +1504,11 @@ VOID ProcessEthIPMsg(PETHMSG Buffer)
 		// Generate IP and TCP/UDP checksums
 
 		int Len = ntohs(ipptr->IPLENGTH);
+
+		if (Len == 0)
+		{
+			return;
+		}
 		Len-=20;
 
 		ipptr->IPCHECKSUM = Generate_CHECKSUM(ipptr, 20);
@@ -1611,7 +1664,7 @@ AlreadyThere:
 
 		if (Route)
 		{
-			if (Route->TYPE == 'T')
+			if (Route->TYPE == 'T' || Route->TYPE == 'U')
 				goto ProxyARPReply;			// Assume we can always reach via tunnel
 
 			Arp = LookupARP(Route->GATEWAY, FALSE, &Found);
@@ -2120,10 +2173,13 @@ ForUs:
 unsigned short cksum(unsigned short *ip, int len)
 {
 	long sum = 0;  /* assume 32 bit long, 16 bit short */
+	unsigned short copy [2048];
 
 	// if not word aligned copy
 
-	unsigned short copy [1024];
+	if (len > 1024  ||  len < 0 || ip == 0)
+		Debugprintf("%d", len);
+	
 
 //	if (&ip & 1)
 	{
@@ -2711,6 +2767,19 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 			return TRUE;
 		}
 
+		else if (Route->TYPE == 'U')
+		{
+			int sent;
+			int addrlen = sizeof(struct sockaddr_in6);
+			int Origlen;
+
+			Origlen = htons(IPptr->IPLENGTH);
+
+			sent = sendto(UDPSendSock, (char *)IPptr, Origlen, 0, (struct sockaddr *)&Route->UDPADDR, addrlen);
+			return TRUE;
+		}
+
+
 		// Look up target address in ARP 
 
 		if (Route->GATEWAY)
@@ -3238,11 +3307,11 @@ static int ProcessLine(char * buf)
 		return (TRUE);
 	}
 
-//	if(_stricmp(ptr,"USEBPQTAP") == 0)
-//	{
-//		WantTAP = TRUE;
-//		return (TRUE);
-//	}
+	if(_stricmp(ptr,"UDPTunnel") == 0)
+	{
+		WantUDPTunnel = atoi(p_value);
+		return (TRUE);
+	}
 
 	if (_stricmp(ptr,"44Encap") == 0)			// Enable Net44 IPIP Tunnel
 	{
@@ -3884,10 +3953,10 @@ int CountDots(char * Addr)
 
 BOOL ProcessROUTELine(char * buf, BOOL Locked)
 {
-	char * p_ip, * p_type, * p_mask, * p_gateway;
+	char * p_ip, * p_type, * p_mask, * p_gateway, * p_port;
 	ULONG IPAddr, IPMask, IPGateway;
 	char Type =  ' ';
-	int n;	
+	int n, Port;	
 	PROUTEENTRY Route;
 	BOOL Found;
 
@@ -3920,8 +3989,19 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 
 	if (p_type)
 	{
-		Type = *p_type;
-		if (Type == 't') Type = 'T';
+		if (_stricmp(p_type, "UDPT") == 0)		// Tunnelling over UDP
+		{
+			p_port = strtok(NULL, " \t\n\r");
+			Type = 'U';
+
+			if (p_port)
+				Port = atoi(p_port);
+		}
+		else
+		{
+			Type = *p_type;
+			if (Type == 't') Type = 'T';
+		}
 	}
 
 	p_mask = strchr(p_ip, '/');
@@ -3976,7 +4056,13 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 			Route->NETWORK = IPAddr;
 			Route->SUBNET = IPMask;
 
-			if (Type == 'T')
+			if (Type == 'U')
+			{
+				Route->UDPADDR.sin_port = htons(Port);
+				Route->UDPADDR.sin_addr.s_addr = inet_addr(p_gateway);
+				Route->UDPADDR.sin_family = AF_INET;
+			}
+			else if (Type == 'T')
 				Route->Encap = IPGateway;
 			else
 			 	Route->GATEWAY = IPGateway;
@@ -4991,7 +5077,6 @@ int BuildReply(UCHAR * Buffer, int Offset, UCHAR * OID, int OIDLen, UCHAR * Valu
 
 	Buffer[--Offset] = OIDLen + ValLen + 4;
 	Buffer[--Offset] = 48;				// Sequence
-
 
 	// Add the error fields (two zero ints
 

@@ -685,7 +685,8 @@ void * TrackerExtInit(EXTPORTDATA *  PortEntry)
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 100;
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	TNC->SuspendPortProc = TRKSuspendPort;
 	TNC->ReleasePortProc = TRKReleasePort;
@@ -2504,12 +2505,15 @@ VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	// // Second part of I or UI
 
-	memcpy(AdjMsg[Port]->L2DATA, Msg, Len);
-	Monframe[Port].LENGTH += Len;
+	if (AdjMsg[Port])
+	{
+		memcpy(AdjMsg[Port]->L2DATA, Msg, Len);
+		Monframe[Port].LENGTH += Len;
 
-	time(&Monframe[Port].Timestamp);
+		time(&Monframe[Port].Timestamp);
 
-	BPQTRACE((MESSAGE *)&Monframe[Port], TRUE);
+		BPQTRACE((MESSAGE *)&Monframe[Port], TRUE);
+	}
 	return;
 }
 

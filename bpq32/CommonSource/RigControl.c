@@ -110,13 +110,21 @@ int rawhid_recv(int num, void *buf, int len, int timeout);
 int rawhid_send(int num, void *buf, int len, int timeout);
 void rawhid_close(int num);
 VOID ConnecttoHAMLIB(struct RIGPORTINFO * PORT);
+VOID ConnecttoFLRIG(struct RIGPORTINFO * PORT);
 int DecodeHAMLIBAddr(struct RIGPORTINFO * PORT, char * ptr);
 void ProcessHAMLIBFrame(struct RIGPORTINFO * PORT, int Length);
 VOID HAMLIBPoll(struct RIGPORTINFO * PORT);
 void HAMLIBSlaveThread(struct RIGINFO * RIG);
+void CheckAndProcessRTLUDP(struct RIGPORTINFO * PORT);
+VOID RTLUDPPoll(struct RIGPORTINFO * PORT);
+VOID ConnecttoRTLUDP(struct RIGPORTINFO * PORT);
+VOID FLRIGPoll(struct RIGPORTINFO * PORT);
+void ProcessFLRIGFrame(struct RIGPORTINFO * PORT);
+VOID FLRIGSendCommand(struct RIGPORTINFO * PORT, char * Command, char * Value);
 
 VOID SetupPortRIGPointers();
 VOID PTTCATThread(struct RIGINFO *RIG);
+VOID ConnecttoHAMLIB(struct RIGPORTINFO * PORT);
 
 int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length);
 int GetPTCRadioCommand(struct TNCINFO * TNC, char * Block);
@@ -171,7 +179,8 @@ int NumberofPorts = 0;
 
 BOOL EndPTTCATThread = FALSE;
 
-int HAMLIBRunning = 1;
+int HAMLIBRunning = 0;
+int FLRIGRunning = 0;
 
 struct RIGPORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
 
@@ -216,13 +225,20 @@ VOID Rig_PTT(struct TNCINFO * TNC, BOOL PTTState)
 {
 	if (TNC == NULL) return;
 
-	Rig_PTTEx(TNC->RIG, PTTState, TNC);
+	if (TNC->TXRIG)
+		Rig_PTTEx(TNC->TXRIG, PTTState, TNC);
+	else
+		Rig_PTTEx(TNC->RIG, PTTState, TNC);
 }
 
 VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 {
 	struct RIGPORTINFO * PORT;
-	int i;
+	int i, Len;
+	char cmd[32];
+	char onString[128];			// Actual CAT strings to send. May be modified for QSY on PTT
+	char offString[128];
+	int onLen = 0, offLen = 0;
 
 	if (RIG == NULL) return;
 
@@ -231,21 +247,208 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 	if (PORT == NULL)
 		return;
 
+	// CAT string defaults to that set up by RIGConfig in RIG->PTTOn and RIG->PTTOff,
+	// but can be overidden by Port specify strings from TNC->PTTOn and TNC->PTTOff.
+	// If PTTSetsFreq is set on a Rig, that overrides the RIG->PTTOn but not TNC->PTTOn
+
+
 	if (PTTState)
 	{
 		MySetWindowText(RIG->hPTT, "T");
 		RIG->WEB_PTT = 'T';
 		RIG->PTTTimer = PTTLimit;
 		RIG->repeatPTTOFFTimer = 0;				// Cancel repeated off command
+
+		if (TNC && TNC->PTTOn[0])
+		{
+			memcpy(onString, TNC->PTTOn, TNC->PTTOnLen);
+			onLen = TNC->PTTOnLen;
+		}
+		else
+		{
+			memcpy(onString, RIG->PTTOn, RIG->PTTOnLen);
+			onLen = RIG->PTTOnLen;
+
+			// If PTT_SETS_FREQ set calculate TX Freq and see if changed
+
+			// Freq can be set on the TNC, the RIG, or calculated from current rx freq + pttOffset
+
+			if (RIG->PTTSetsFreq)
+			{
+				long long txfreq = 0;
+
+				if (TNC->TXFreq)
+					txfreq = TNC->TXFreq;
+				else if (TNC->RIG && TNC->RIG->txFreq)
+					txfreq = RIG->txFreq;		// Used if not associated with a TNC port - eg HAMLIB + WSJT
+				else if (TNC->RIG && TNC->RIG->RigFreq != 0.0)
+				{
+					// Use RigFreq + pttOffset, so TX Tracks RX
+					
+					long long rxfreq = (long long)(TNC->RIG->RigFreq * 1000000.0) - TNC->RIG->rxOffset;
+					txfreq = rxfreq + RIG->pttOffset + RIG->txError;
+					txfreq += RIG->rxError;
+				}
+
+				if (txfreq)
+				{
+
+					if (RIG->lastSetFreq != txfreq)
+					{
+						char FreqString[80];
+						char * CmdPtr = onString;
+
+						RIG->lastSetFreq = txfreq;
+
+						// Convert to CAT string
+
+						sprintf(FreqString, "%012d", txfreq);
+
+						switch (PORT->PortType)
+						{
+						case ICOM:
+
+							// CI-V must send all commands as one string, or Radio will start to ack them and
+							// collide with rest of command
+
+							// Set Freq is sent before set PTT, so set up QSY string then copy PTT string to buffer
+							// Need to convert two chars to bcd digit
+
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = RIG->RigAddr;
+							*(CmdPtr++) = 0xE0;
+							*(CmdPtr++) = 0x5;		// Set frequency command
+
+							*(CmdPtr++) = (FreqString[11] - 48) | ((FreqString[10] - 48) << 4);
+							*(CmdPtr++) = (FreqString[9] - 48) | ((FreqString[8] - 48) << 4);
+							*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
+							*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
+							if (RIG->IC735)
+							{
+								*(CmdPtr++) = 0xFD;
+								onLen = 10;
+							}
+							else
+							{
+								*(CmdPtr++) = (FreqString[3] - 48);
+								*(CmdPtr++) = 0xFD;
+								onLen = 11;
+							}
+
+							// Now add PTT String
+
+							memcpy(&onString[onLen], RIG->PTTOn, RIG->PTTOnLen);
+							onLen += RIG->PTTOnLen;
+
+						case HAMLIB:
+
+							// Dont need to save, as we can send strings separately
+
+							Len = sprintf(cmd, "F %lld\n", txfreq);
+							send(PORT->remoteSock, cmd, Len, 0);
+							RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+						}
+					}
+				}
+			}
+		}
 	}
 	else
 	{
+		// Drop PTT
+
 		MySetWindowText(RIG->hPTT, " ");
 		RIG->WEB_PTT = ' ';
 		RIG->PTTTimer = 0;
 		if (PORT->PortType == ICOM)
 			RIG->repeatPTTOFFTimer = 300;			// set 30 second repeated off command
+
+		if (TNC && TNC->PTTOff[0])
+		{
+			memcpy(offString, TNC->PTTOff, TNC->PTTOffLen);
+			offLen = TNC->PTTOffLen;
+		}
+		else
+		{
+			memcpy(offString, RIG->PTTOff, RIG->PTTOffLen);
+			offLen = RIG->PTTOffLen;
+
+			// If PTT_SETS_FREQ set calculate TX Freq and see if changed
+
+			if (PTTState == 0 && RIG->PTTSetsFreq && RIG->defaultFreq)
+			{
+				// Dropped PTT. See if need to set freq back to default
+
+				long long txfreq = RIG->defaultFreq + RIG->txError;
+
+				if (RIG->lastSetFreq != txfreq)
+				{
+					char FreqString[80];
+					char * CmdPtr = offString;
+	
+					RIG->lastSetFreq = txfreq;
+
+					// Convert to CAT string
+
+					sprintf(FreqString, "%012d", txfreq);
+
+					switch (PORT->PortType)
+					{
+					case ICOM:
+
+						// CI-V must send all commands as one string, or Radio will start to ack them and
+						// collide with rest of command
+
+						// Set Freq is sent after drop PTT, so copy PTT string to buffer then set up QSY string  
+						// Need to convert two chars to bcd digit
+
+						// We copied off string earlier, so just append QSY string
+
+						CmdPtr += offLen;
+
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = RIG->RigAddr;
+						*(CmdPtr++) = 0xE0;
+						*(CmdPtr++) = 0x5;		// Set frequency command
+
+						*(CmdPtr++) = (FreqString[11] - 48) | ((FreqString[10] - 48) << 4);
+						*(CmdPtr++) = (FreqString[9] - 48) | ((FreqString[8] - 48) << 4);
+						*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
+						*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
+						if (RIG->IC735)
+						{
+							*(CmdPtr++) = 0xFD;
+							offLen += 10;
+						}
+						else
+						{
+							*(CmdPtr++) = (FreqString[3] - 48);
+							*(CmdPtr++) = 0xFD;
+							offLen += 11;
+						}
+
+					case FLRIG:
+		
+						sprintf(cmd, "<double>%lld</double>", txfreq);
+						FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
+						RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+	
+					case HAMLIB:
+
+						// Dont need to save, as we can send strings separately
+
+						Len = sprintf(cmd, "F %lld\n", txfreq);
+						send(PORT->remoteSock, cmd, Len, 0);
+						RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+					}
+				}
+			}
+		}
 	}
+
+	// Now send the command
 
 	if (RIG->PTTMode & PTTCI_V)
 	{
@@ -270,29 +473,13 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 
 			if (PTTState)
 			{
-				if (TNC && TNC->PTTOnLen)
-				{
-					memcpy(Poll, TNC->PTTOn, TNC->PTTOnLen);
-					PORT->TXLen = TNC->PTTOnLen;
-				}
-				else
-				{
-					memcpy(Poll, RIG->PTTOn, RIG->PTTOnLen);
-					PORT->TXLen = RIG->PTTOnLen;
-				}
+				memcpy(Poll, onString, onLen);
+				PORT->TXLen = onLen;
 			}
 			else
 			{
-				if (TNC && TNC->PTTOffLen)
-				{
-					memcpy(Poll, TNC->PTTOff, TNC->PTTOffLen);
-					PORT->TXLen = TNC->PTTOffLen;
-				}
-				else
-				{
-					memcpy(Poll, RIG->PTTOff, RIG->PTTOffLen);
-					PORT->TXLen = RIG->PTTOffLen;
-				}
+				memcpy(Poll, offString, offLen);
+				PORT->TXLen = offLen;
 			}
 
 			RigWriteCommBlock(PORT);
@@ -341,6 +528,21 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 
 			return;
 
+		case FLRIG:
+		
+			sprintf(cmd, "<i4>%d</i4>", PTTState);
+			FLRIGSendCommand(PORT, "rig.set_ptt", cmd);
+			RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+
+			return;
+
+		case HAMLIB:
+	
+			Len = sprintf(cmd, "T %d\n", PTTState);
+			send(PORT->remoteSock, cmd, Len, 0);
+			RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+		
+			return;
 		}
 	}
 
@@ -367,8 +569,15 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 		Len = send(PORT->remoteSock, Msg, Len, 0);
 		RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
 	}
-}
+	if (RIG->PTTMode & PTTFLRIG)
+	{
+		char cmd[32];
 
+		sprintf(cmd, "<i4>%d</i4>", PTTState);
+		FLRIGSendCommand(PORT, "rig.set_ptt", cmd);
+		RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
+	}
+}
 // Need version that doesn't need Port Number
 
 int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, char * Command);
@@ -380,7 +589,6 @@ int Rig_Command(int Session, char * Command)
 	TRANSPORTENTRY * L4 = L4TABLE;
 	struct RIGPORTINFO * PORT;
 	struct RIGINFO * RIG;
-
 
 	//	Only Allow RADIO from Secure Applications
 
@@ -426,9 +634,33 @@ int Rig_Command(int Session, char * Command)
 		return FALSE;
 	}
 
+	// if Port starts with 'R' then select Radio (was Interlock) number, not BPQ Port
+
+	if (Command[0] == 'R')
+	{
+		n = sscanf(&Command[1],"%d ", &Port);
+
+		for (p = 0; p < NumberofPorts; p++)
+		{
+			PORT = PORTInfo[p];
+	
+			for (i=0; i< PORT->ConfiguredRigs; i++)
+			{
+				RIG = &PORT->Rigs[i];
+
+				if (RIG->Interlock == Port)
+					goto portok;
+			}
+		}
+
+		sprintf(Command, "Sorry - Port not found\r");
+		return FALSE;
+	}
+
 	n = sscanf(Command,"%d ", &Port);
 
 	// Look for the port 
+
 
 	for (p = 0; p < NumberofPorts; p++)
 	{
@@ -455,9 +687,9 @@ portok:
 
 int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, char * Command)
 {
-	int n, Port, ModeNo, Filter;
+	int n, ModeNo, Filter, Port = 0;
 	double Freq = 0.0;
-	char FreqString[80]="", FilterString[80]="", Mode[80]="", Data[80] = "";
+	char FreqString[80]="", FilterString[80]="", Mode[80]="", Data[80] = "", Dummy[80] = "";
 	struct MSGWITHOUTLEN * buffptr;
 	UCHAR * Poll;
 	char * Valchar;
@@ -517,7 +749,12 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		return FALSE;
 	}
 
-	n = sscanf(Command,"%d %s %s %s %s", &Port, &FreqString[0], &Mode[0], &FilterString[0], &Data[0]);
+	// if Port starts with 'R' then select Radio (was Interlock) number, not BPQ Port
+
+	if (Command[0] == 'R')
+		n = sscanf(Command,"%s %s %s %s %s", &Dummy, &FreqString[0], &Mode[0], &FilterString[0], &Data[0]);
+	else
+		n = sscanf(Command,"%d %s %s %s %s", &Port, &FreqString[0], &Mode[0], &FilterString[0], &Data[0]);
 
 	if (_stricmp(FreqString, "CLOSE") == 0)
 	{
@@ -808,11 +1045,12 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 
 		FreqPtr = (struct ScanEntry *)buffptr->Data;
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
+
 		CmdPtr = FreqPtr->Cmd1 = FreqPtr->Cmd1Msg;
 		FreqPtr->Cmd2 = NULL;
 		FreqPtr->Cmd3 = NULL;
 
-		memset(FreqPtr, 0, sizeof(struct ScanEntry));
 	
 		switch (PORT->PortType)
 		{ 
@@ -857,10 +1095,31 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			Len = sprintf(CmdPtr, ptr1);
 			break;
 
+		case YAESU:
+
+			// String is in Hex (5 values)
+
+			while (c = *(ptr1++))
+			{
+				if (c == ' ') continue;		// Allow space between pairs
+
+				val = c - 0x30;
+				if (val > 15) val -= 7;
+				val <<= 4;
+				c = *(ptr1++) - 0x30;
+				if (c > 15) c -= 7;
+				val |= c;
+				*(CmdPtr++) = val;
+			}
+
+			*(CmdPtr) = 0; 
+
+			Len = 5;
+			break;
+
 		default:
 			sprintf(Command, "Sorry - CMD not supported on your Radio\r");
 			return FALSE;
-	
 		}
 
 		FreqPtr[0].Cmd1Len = Len;		// for ICOM
@@ -1539,6 +1798,63 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		return TRUE;
 	}
 
+	case FLRIG:
+	{
+		char cmd[80];
+
+		int len = sprintf(cmd, "<double>%.0f</double>", Freq);
+
+		// Save Mode to send when get response to set freq
+
+		strcpy(PORT->ScanEntry.Cmd2Msg, Mode);
+		PORT->AutoPoll = 0;
+
+		FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
+		return TRUE;
+	}
+
+
+	case RTLUDP:
+	{
+		char cmd[80];
+		int len = 5;
+		int FreqInt = (int)Freq;
+		int FM = 0;
+		int AM = 1;
+		int USB = 2;
+		int LSB = 3;
+		
+		cmd[0] = 0;	
+		cmd[1] = FreqInt & 0xff;
+		cmd[2] = (FreqInt >> 8) & 0xff;
+		cmd[3] = (FreqInt >> 16) & 0xff;
+		cmd[4] = (FreqInt >> 24) & 0xff;
+
+		len = sendto(PORT->remoteSock, cmd, 5,  0, &PORT->remoteDest, sizeof(struct sockaddr));
+
+		if (Mode[0])
+		{
+			if (strcmp(Mode, "FM") == 0)
+				memcpy(&cmd[1], &FM, 4); 
+			else if (strcmp(Mode, "AM") == 0)
+				memcpy(&cmd[1], &AM, 4); 
+			else if (strcmp(Mode, "USB") == 0)
+				memcpy(&cmd[1], &USB, 4); 
+			else if (strcmp(Mode, "LSB") == 0)
+				memcpy(&cmd[1], &LSB, 4); 
+		
+			cmd[0] = 1;
+			len = sendto(PORT->remoteSock, cmd, 5,  0, &PORT->remoteDest, sizeof(struct sockaddr));
+		}
+
+		sprintf(Command, "Ok\r");
+		return FALSE;
+	}
+
+
+
+
+
 	}
 	return TRUE;
 }
@@ -1689,7 +2005,17 @@ DllExport BOOL APIENTRY Rig_Init()
 		PORT = PORTInfo[p];
 
 		if (PORT->PortType == HAMLIB)
+		{
+			HAMLIBRunning = 1;
 			ConnecttoHAMLIB(PORT);
+		}
+		else if (PORT->PortType == FLRIG)
+		{
+			FLRIGRunning = 1;
+			ConnecttoFLRIG(PORT);
+		}
+		else if (PORT->PortType == RTLUDP)
+			ConnecttoRTLUDP(PORT);
 		else if (PORT->HIDDevice)		// This is RAWHID, Not CM108
 			OpenHIDPort(PORT, PORT->IOBASE, PORT->SPEED);
 		else if (PORT->PTC == 0 && _stricmp(PORT->IOBASE, "CM108") != 0)
@@ -1779,7 +2105,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			{
 				// Open listening socket
 
-				struct sockaddr_in  local_sin;  /* Local socket - internet style */
+				struct sockaddr_in local_sin;  /* Local socket - internet style */
 				struct sockaddr_in * psin;
 				SOCKET sock = 0;
 				u_long param=1;
@@ -1836,7 +2162,8 @@ DllExport BOOL APIENTRY Rig_Close()
 	struct TNCINFO * TNC;
 	int n, p;
 
-	HAMLIBRunning = 0;					// Close HAMLIB thread
+	HAMLIBRunning = 0;					// Close HAMLIB thread(s)
+	FLRIGRunning = 0;					// Close FLRIG thread(s)
 
 	for (p = 0; p < NumberofPorts; p++)
 	{
@@ -1856,7 +2183,7 @@ DllExport BOOL APIENTRY Rig_Close()
 			Sleep(200);
 		}
 
-		if (PORT->PortType != HAMLIB)
+		if (PORT->PortType != HAMLIB && PORT->PortType != RTLUDP && PORT->PortType != FLRIG)
 		{
 			if (PORT->hPTTDevice != PORT->hDevice)
 				CloseCOMPort(PORT->hPTTDevice);
@@ -1872,7 +2199,23 @@ DllExport BOOL APIENTRY Rig_Close()
 		for (n = 0; n < PORT->ConfiguredRigs; n++)
 		{
 			struct RIGINFO * RIG = &PORT->Rigs[n];
+			struct HAMLIBSOCK * Entry = RIG->Sockets;
+			struct HAMLIBSOCK * Save;
 
+			// if RIG has any HAMLIB slave connections, close them
+
+			Entry = RIG->Sockets;
+
+			while (Entry)
+			{
+				closesocket(Entry->Sock);
+				Save = Entry;
+				Entry = Entry->Next;
+				free(Save);
+			}
+
+			RIG->Sockets = 0;
+		
 			if (RIG->TimeBands)
 				free (RIG->TimeBands[1]->Scanlist);
 
@@ -1882,7 +2225,6 @@ DllExport BOOL APIENTRY Rig_Close()
 				EndPTTCATThread = TRUE;
 			}
 		}
-
 
 		free (PORT);
 		PORTInfo[p] = NULL;
@@ -1939,6 +2281,10 @@ BOOL Rig_Poll()
 
 				if (PORT->PortType == HAMLIB)
 					ConnecttoHAMLIB(PORT);
+				else if (PORT->PortType == FLRIG)
+					ConnecttoFLRIG(PORT);
+				else if (PORT->PortType == RTLUDP)
+					ConnecttoRTLUDP(PORT);
 				else if (PORT->HIDDevice)
 					OpenHIDPort(PORT, PORT->IOBASE, PORT->SPEED);
 				else if (PORT->PTC == 0
@@ -2015,6 +2361,15 @@ BOOL Rig_Poll()
 		case HAMLIB:
 			HAMLIBPoll(PORT);
 			break;
+
+		case RTLUDP:
+			RTLUDPPoll(PORT);
+			break;
+
+		case FLRIG:
+			FLRIGPoll(PORT);
+			break;
+
 
 		}
 	}
@@ -2110,6 +2465,15 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		Length = PORT->RXLen;
 		PORT->RXLen = 0;
 	}
+
+	else if (PORT->PortType == RTLUDP)
+	{
+		CheckAndProcessRTLUDP(PORT);
+		Length = 0;
+		PORT->RXLen = 0;
+		return;
+	}
+
 	else if (PORT->HIDDevice)
 		Length = HID_Read_Block(PORT);
 	else if (PORT->PTC)
@@ -2353,10 +2717,15 @@ BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 		fWriteStat = WriteFile(PORT->hDevice, PORT->TXBuffer, PORT->TXLen, &BytesWritten, NULL );
 #endif
 		if (PORT->TXLen != BytesWritten)
-		{
+		{	
 			if (PORT->hDevice)
 				 CloseCOMPort(PORT->hDevice);
+		
 			OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+			
+			if (PORT->IOBASE && PORT->PTTIOBASE[0] == 0)		// Using separate port for PTT?
+				PORT->hPTTDevice = PORT->hDevice;
+			
 			if (PORT->hDevice)
 			{
 				// Try Again
@@ -3245,6 +3614,8 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 	if (PORT->YaesuVariant == FT1000MP)
 		FreqF = FreqF / 2;				// No idea why!
 
+	RIG->RigFreq = FreqF;
+
 	_gcvt(FreqF, 9, RIG->Valchar);
 
 	sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
@@ -3296,6 +3667,8 @@ VOID ProcessFT990Frame(struct RIGPORTINFO * PORT)
 	
 	FreqF = (Freq * 10.0) / 1000000;
 
+	RIG->RigFreq = FreqF;
+
 	_gcvt(FreqF, 9, RIG->Valchar);
 
 	sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
@@ -3345,6 +3718,8 @@ VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT)
 		Freq =  (Msg[1] << 16) + (Msg[2] << 8) + Msg[3];
 		FreqF = (Freq * 10.0) / 1000000;
 	}
+
+	RIG->RigFreq = FreqF;
 
 	_gcvt(FreqF, 9, RIG->Valchar);
 
@@ -3472,6 +3847,8 @@ VOID ProcessYaesuFrame(struct RIGPORTINFO * PORT)
 	}
 
 	FreqF = Freq / 100000.0;
+
+	RIG->RigFreq = FreqF;
 
 //		Valchar = _fcvt(FreqF, 6, &dec, &sign);
 	_gcvt(FreqF, 9, RIG->Valchar);
@@ -3695,14 +4072,12 @@ VOID ProcessNMEA(struct RIGPORTINFO * PORT, char * Msg, int Length)
 
 	if (memcmp(&Msg[13], "RXF", 3) == 0)
 	{
-		double Freq;
-
 		if (Length < 24)
 			return;
 
-		Freq = atof(&Msg[17]);
-
-		sprintf(RIG->WEB_FREQ,"%f", Freq);
+		RIG->RigFreq = atof(&Msg[17]);
+	
+		sprintf(RIG->WEB_FREQ,"%f", RIG->RigFreq);
 		SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
 		strcpy(RIG->Valchar, RIG->WEB_FREQ);
 
@@ -3788,6 +4163,8 @@ Loop:
 		long long MHz, Hz;
 
 		Freq = strtoll(&Msg[2], NULL, 10) + RIG->rxOffset;
+
+		RIG->RigFreq = Freq / 1000000.0;
 
 		// If we convert to float to display we get rounding errors, so convert to MHz and Hz to display
 
@@ -4454,6 +4831,39 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		goto CheckScan;
 	}
 
+	if (_memicmp(ptr, "FLRIG", 5) == 0)
+	{
+		// Use FLRIG
+
+		// Need parameter - Host:Port
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		if (ptr == NULL || strlen(ptr) > 79) return FALSE;
+
+		// Have a parameter to define port. Will decode it later
+
+		PORT = PORTInfo[NumberofPorts++] = zalloc(sizeof(struct RIGPORTINFO));
+		PORT->PortType = FLRIG;
+		PORT->ConfiguredRigs = 1;
+		RIG = &PORT->Rigs[0];
+		RIG->RIGOK = TRUE;
+
+
+		strcpy(PORT->IOBASE, ptr);
+		strcpy(RIG->RigName, "FLRIG");
+
+		// Decode host
+
+		DecodeHAMLIBAddr(PORT, ptr);
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		// look for other config statementes and scan params
+
+		goto CheckOtherParams;
+	}
+
 	if (_memicmp(ptr, "HAMLIB", 5) == 0)
 	{
 		// Use rigctld
@@ -4484,8 +4894,42 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 		// look for scan params
 
-		goto CheckScan;
+		goto CheckOtherParams;
 	}
+
+	if (_memicmp(ptr, "rtludp", 5) == 0)
+	{
+		// rtl_fm with udp freq control 
+
+		// Need parameter - Host:Port
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		if (ptr == NULL || strlen(ptr) > 79) return FALSE;
+
+		// Have a parameter to define port. Will decode it later
+
+		PORT = PORTInfo[NumberofPorts++] = zalloc(sizeof(struct RIGPORTINFO));
+		PORT->PortType = RTLUDP;
+		PORT->ConfiguredRigs = 1;
+		RIG = &PORT->Rigs[0];
+		RIG->RIGOK = TRUE;
+
+
+		strcpy(PORT->IOBASE, ptr);
+		strcpy(RIG->RigName, "RTLUDP");
+
+		// Decode host
+
+		DecodeHAMLIBAddr(PORT, ptr);
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		// look for scan params
+
+		goto CheckOtherParams;
+	}
+
 
 	if ((_memicmp(ptr, "VCOM", 4) == 0) && TNC->Hardware == H_SCS)		// Using Radio Port on PTC
 		COMPort = 0;
@@ -4585,26 +5029,20 @@ PortFound:
 
 	if (strcmp(ptr, "ICOM") == 0)
 		PORT->PortType = ICOM;
+	else if (strcmp(ptr, "YAESU") == 0)
+		PORT->PortType = YAESU;
+	else if (strcmp(ptr, "KENWOOD") == 0)
+		PORT->PortType = KENWOOD;
+	else if (strcmp(ptr, "FLEX") == 0)
+		PORT->PortType = FLEX;
+	else if (strcmp(ptr, "NMEA") == 0)
+		PORT->PortType = NMEA;
+	else if (strcmp(ptr, "PTTONLY") == 0)
+		PORT->PortType = PTT;
+	else if (strcmp(ptr, "ANTENNA") == 0)
+		PORT->PortType = ANT;
 	else
-		if (strcmp(ptr, "YAESU") == 0)
-			PORT->PortType = YAESU;
-		else
-			if (strcmp(ptr, "KENWOOD") == 0)
-				PORT->PortType = KENWOOD;
-			else
-				if (strcmp(ptr, "FLEX") == 0)
-					PORT->PortType = FLEX;
-				else
-					if (strcmp(ptr, "NMEA") == 0)
-						PORT->PortType = NMEA;
-					else
-						if (strcmp(ptr, "PTTONLY") == 0)
-							PORT->PortType = PTT;
-						else
-							if (strcmp(ptr, "ANTENNA") == 0)
-								PORT->PortType = ANT;
-							else
-								return FALSE;
+		return FALSE;
 
 	Debugprintf("Port type = %d", PORT->PortType);
 
@@ -4763,6 +5201,8 @@ domux:
 
 	RIG->CM108Device = CM108Device;
 
+CheckOtherParams:
+
 	while (ptr)
 	{
 		if (strcmp(ptr, "PTTMUX") == 0)
@@ -4792,8 +5232,10 @@ domux:
 			}
 			if (ptr == NULL)
 				break;
+			else 
+				continue;
 		}
-		if (strcmp(ptr, "PTT_SETS_INPUT") == 0)
+		else if (strcmp(ptr, "PTT_SETS_INPUT") == 0)
 		{
 			// Send Select Soundcard as mod source with PTT commands
 
@@ -4836,14 +5278,25 @@ domux:
 			continue;
 
 		}
-		if (strcmp(ptr, "DATAPTT") == 0)
+		else if (strcmp(ptr, "PTT_SETS_FREQ") == 0)
+		{
+			// Send Select Soundcard as mod source with PTT commands
+
+			RIG->PTTSetsFreq = TRUE;
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+			continue;
+
+		}
+
+		else if (strcmp(ptr, "DATAPTT") == 0)
 		{
 			// Send Select Soundcard as mod source with PTT commands
 
 			DataPTT = TRUE;
 		}
 
-		if (memcmp(ptr, "PTTONHEX=", 9) == 0)
+		else if (memcmp(ptr, "PTTONHEX=", 9) == 0)
 		{
 			// Hex String to use for PTT on
 
@@ -4880,7 +5333,7 @@ domux:
 				break;
 		}
 
-		if (memcmp(ptr, "PTTOFFHEX=", 10) == 0)
+		else if (memcmp(ptr, "PTTOFFHEX=", 10) == 0)
 		{
 			// Hex String to use for PTT off
 
@@ -4916,27 +5369,48 @@ domux:
 
 		}
 
-		if (memcmp(ptr, "HAMLIB=", 7) == 0)
+		else if (memcmp(ptr, "HAMLIB=", 7) == 0)
 		{
 			// HAMLIB Emulator - param is port to listen on
 
 			RIG->HAMLIBPORT = atoi(&ptr[7]);
 		}
 
-		if (memcmp(ptr, "TXOFFSET=", 9) == 0)
+		else if (memcmp(ptr, "TXOFFSET", 8) == 0)
 		{
-			// HAMLIB Emulator - param is port to listen on
-
 			RIG->txOffset =  strtoll(&ptr[9], NULL, 10);
 		}
 
-		if (memcmp(ptr, "RXOFFSET=", 9) == 0)
+		else if (memcmp(ptr, "RXOFFSET", 8) == 0)
 		{
-			// HAMLIB Emulator - param is port to listen on
-
 			RIG->rxOffset =  strtoll(&ptr[9], NULL, 10);
 		}
 
+		else if (memcmp(ptr, "PTTOFFSET", 9) == 0)
+		{
+			RIG->pttOffset =  strtoll(&ptr[10], NULL, 10);
+		}
+
+		else if (memcmp(ptr, "RXERROR", 7) == 0)
+		{
+			RIG->rxError = atoi(&ptr[8]);
+		}
+
+		else if (memcmp(ptr, "TXERROR", 7) == 0)
+		{
+			RIG->txError = atoi(&ptr[8]);
+		}
+
+		else if (memcmp(ptr, "REPORTFREQS", 11) == 0)
+		{
+			RIG->reportFreqs = _strdup(&ptr[12]);
+		}
+
+		else if (memcmp(ptr, "DEFAULTFREQ", 11) == 0)
+		{
+			RIG->defaultFreq = atoi(&ptr[12]);
+		}
+		
 		else if (atoi(ptr))
 			break;					// Not scan freq oe timeband, so see if another param
 
@@ -5268,6 +5742,7 @@ CheckScan:
 		int ModeNo;
 		BOOL Supress;
 		double Freq = 0.0;
+		int FreqInt = 0;
 		char FreqString[80]="";
 		char * Valchar;
 		char * Modeptr = NULL;
@@ -5574,6 +6049,8 @@ CheckScan:
 
 		Valchar = _fcvt(Freq, 0, &dec, &sign);
 		//		_gcvt(Freq, 0, Valchar);
+
+		FreqInt = Freq;
 
 
 		if (dec == 9)	// 10-100
@@ -5987,6 +6464,46 @@ CheckScan:
 			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "F %s\n+f\nM %s %d\n+m\n", FreqString, Mode, BandWidth);
 		}
 
+		else if	(PORT->PortType == FLRIG)
+		{
+			sprintf(FreqPtr[0]->Cmd1Msg, "%.0f", Freq);
+			sprintf(FreqPtr[0]->Cmd2Msg, "%s", Mode);
+		}
+
+		else if	(PORT->PortType == RTLUDP)
+		{
+			int FM = 0;
+			int AM = 1;
+			int USB = 2;
+			int LSB = 3;
+		
+			CmdPtr[0] = 0;
+			memcpy(&CmdPtr[1], &FreqInt, 4); 
+
+			CmdPtr[1] = FreqInt & 0xff;
+			CmdPtr[2] = (FreqInt >> 8) & 0xff;
+			CmdPtr[3] = (FreqInt >> 16) & 0xff;
+			CmdPtr[4] = (FreqInt >> 24) & 0xff;
+
+			FreqPtr[0]->Cmd1Len = 5;
+	
+			if (Mode[0])
+			{
+				CmdPtr[5] = 1;
+				FreqPtr[0]->Cmd1Len = 10;
+
+				if (strcmp(Mode, "FM") == 0)
+					memcpy(&CmdPtr[6], &FM, 4); 
+				else if (strcmp(Mode, "AM") == 0)
+					memcpy(&CmdPtr[6], &AM, 4); 
+				else if (strcmp(Mode, "USB") == 0)
+					memcpy(&CmdPtr[6], &USB, 4); 
+				else if (strcmp(Mode, "LSB") == 0)
+					memcpy(&CmdPtr[6], &LSB, 4); 
+			}
+		
+		}
+
 		FreqPtr++;
 
 		RIG->ScanCounter = 20;
@@ -6012,6 +6529,7 @@ VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
 	int port;
 	int Interlock = RIG->Interlock;
 	char PortString[128] = "";
+	char TxPortString[128] = "";
 
 	// Find TNC ports in this Rig's scan group
 
@@ -6024,7 +6542,7 @@ VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
 
 		PortRecord = &TNC->PortRecord->PORTCONTROL;
 
-		if (PortRecord && PortRecord->PORTINTERLOCK == Interlock)		// Port has Interlock defined
+		if (TNC->RXRadio == Interlock)
 		{
 			int p = PortRecord->PORTNUMBER;
 			RIG->BPQPort |=  (1 << p);
@@ -6033,14 +6551,29 @@ VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
 
 			if (RIG->PTTMode == 0 && TNC->PTTMode)
 				RIG->PTTMode = TNC->PTTMode;
+		}
+		if (TNC->TXRadio == Interlock && TNC->TXRadio != TNC->RXRadio)
+		{
+			int p = PortRecord->PORTNUMBER;
+			RIG->BPQPort |=  (1 << p);
+			sprintf(TxPortString, "%s,%d", TxPortString, p);
+			TNC->TXRIG = RIG;
 
+			if (RIG->PTTMode == 0 && TNC->PTTMode)
+				RIG->PTTMode = TNC->PTTMode;
 		}
 	}
 
 	if (RIG->PTTMode == 0 && (RIG->PTTCATPort[0] || RIG->HAMLIBPORT)) // PTT Mux Implies CAT
 		RIG->PTTMode = PTTCI_V;
 
-	strcpy(RIG->WEB_PORTS, &PortString[1]);
+	if (PortString[0] && TxPortString[0])			// Have both
+		sprintf(RIG->WEB_PORTS, "Rx: %s Tx: %s", &PortString[1], &TxPortString[1]);
+	else if (PortString[0])
+		strcpy(RIG->WEB_PORTS, &PortString[1]);
+	else  if (TxPortString[0])
+		sprintf(RIG->WEB_PORTS, "Tx: %s", &TxPortString[1]);
+
 	SetWindowText(RIG->hPORTS, RIG->WEB_PORTS);
 }
 
@@ -6386,6 +6919,26 @@ void HAMLIBProcessMessage(struct RIGPORTINFO * PORT)
 	PORT->RXLen += InputLen;
 }
 
+void FLRIGProcessMessage(struct RIGPORTINFO * PORT)
+{
+	// Called from Background thread
+
+	int InputLen = recv(PORT->remoteSock, &PORT->RXBuffer[PORT->RXLen], 500 - PORT->RXLen, 0);
+
+	if (InputLen == 0 || InputLen == SOCKET_ERROR)
+	{
+		if (PORT->remoteSock)
+			closesocket(PORT->remoteSock);
+
+		PORT->CONNECTED = FALSE;
+		PORT->hDevice = 0;
+		return;					
+	}
+
+	PORT->RXLen += InputLen;
+	ProcessFLRIGFrame(PORT);
+}
+
 void ProcessHAMLIBFrame(struct RIGPORTINFO * PORT, int Length)
 {
 	char * msg = PORT->RXBuffer;
@@ -6428,6 +6981,162 @@ void ProcessHAMLIBFrame(struct RIGPORTINFO * PORT, int Length)
 		msg = rest;
 	}
 }
+
+
+
+
+
+
+
+static char MsgHddr[] = "POST /RPC2 HTTP/1.1\r\n"
+					"User-Agent: XMLRPC++ 0.8\r\n"
+					"Host: 127.0.0.1:7362\r\n"
+					"Content-Type: text/xml\r\n"
+					"Content-length: %d\r\n"
+					"\r\n%s";
+
+static char Req[] = "<?xml version=\"1.0\"?>\r\n"
+					"<methodCall><methodName>%s</methodName>\r\n"
+					"%s"
+					"</methodCall>\r\n";
+
+void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
+{
+	char * msg;
+	int Length;
+
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
+	char * ptr1, * ptr2, * val;
+	int Len, TotalLen;
+	char cmd[80];
+	char ReqBuf[256];
+	char SendBuff[256];
+
+	while (PORT->RXLen > 0)
+	{
+		msg = PORT->RXBuffer;
+		Length = PORT->RXLen;
+
+		msg[Length] = 0;
+		ptr1 = strstr(msg, "Content-length:");
+
+		if (ptr1 == NULL)
+			return;
+
+		Len = atoi(&ptr1[15]);
+		ptr2 = strstr(ptr1, "\r\n\r\n");
+		if (ptr2)
+		{
+			TotalLen = ptr2 +4 + Len - msg;
+
+			if (TotalLen > Length)		// Don't have it all
+				return;
+		}
+		else
+			return;
+
+		val = strstr(ptr2, "<value>");
+
+		if (val)
+		{
+			val += 7;
+
+			RIG->RIGOK = 1;
+			PORT->RXLen -= TotalLen;
+
+			memmove(PORT->RXBuffer, &PORT->RXBuffer[TotalLen], PORT->RXLen);
+
+			if (memcmp(PORT->TXBuffer, "rig.set_vfo", 11) == 0)
+			{
+				//	Set Freq - Send Set Mode if needed
+
+				if (PORT->ScanEntry.Cmd2Msg[0])
+				{
+					sprintf(cmd, "<string>%s</string>", PORT->ScanEntry.Cmd2Msg);
+					FLRIGSendCommand(PORT, "rig.set_mode", cmd);
+				}
+				else
+				{
+					if (!PORT->AutoPoll)
+						SendResponse(RIG->Session, "Set Freq OK");
+
+					strcpy(PORT->TXBuffer, "rig.get_vfo"); 
+					Len = sprintf(ReqBuf, Req, "rig.get_vfo", "");
+					Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+					send(PORT->remoteSock, SendBuff, Len, 0);
+				}
+				continue;
+			}
+
+			if (memcmp(PORT->TXBuffer, "rig.set_mode", 11) == 0)
+			{
+				strcpy(PORT->TXBuffer, "rig.get_vfo"); 		
+				Len = sprintf(ReqBuf, Req, "rig.get_vfo", "");
+				Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+				send(PORT->remoteSock, SendBuff, Len, 0);
+
+				if (!PORT->AutoPoll)
+					SendResponse(RIG->Session, "Set Freq and Mode OK");
+
+				continue;
+			}
+
+			if (memcmp(PORT->TXBuffer, "rig.get_vfo", 11) == 0)
+			{
+				RIG->RigFreq = atof(val) / 1000000.0;
+
+				_gcvt(RIG->RigFreq, 9, RIG->Valchar);
+
+				sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
+				MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+
+				strcpy(PORT->TXBuffer, "rig.get_mode"); 
+
+				Len = sprintf(ReqBuf, Req, "rig.get_mode", "");
+				Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+				send(PORT->remoteSock, SendBuff, Len, 0);
+				continue;
+			}
+
+			if (memcmp(PORT->TXBuffer, "rig.get_mode", 11) == 0)
+			{
+				strlop(val, '<');
+				sprintf(RIG->WEB_MODE, "%s", val);
+				MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
+			}
+		}
+		PORT->Timeout = 0;
+	}
+}
+
+/*
+POST /RPC2 HTTP/1.1
+User-Agent: XMLRPC++ 0.8
+Host: 127.0.0.1:12345
+Content-type: text/xml
+Content-length: 89
+
+<?xml version="1.0"?>
+<methodCall><methodName>rig.get_vfoA</methodName>
+</methodCall>
+HTTP/1.1 200 OK
+Server: XMLRPC++ 0.8
+Content-Type: text/xml
+Content-length: 118
+
+<?xml version="1.0"?>
+<methodResponse><params><param>
+<value>14070000</value>
+</param></params></methodResponse>
+*/
+
+
+
+
+
 
 
 void HLSetMode(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
@@ -6688,7 +7397,7 @@ int ProcessHAMLIBSlaveMessage(SOCKET Sock, struct RIGINFO * RIG, unsigned char *
 		HLGetMode(Sock, RIG, sep);
 		return 0;
 
-	case 't':			// Get Mode
+	case 't':			// Get PTT
 
 		HLGetPTT(Sock, RIG, sep);
 		return 0;
@@ -6725,7 +7434,7 @@ int DecodeHAMLIBAddr(struct RIGPORTINFO * PORT, char * ptr)
 {
 	// Param is IPADDR:PORT. Only Allow numeric addresses 
 	
-	struct sockaddr_in * destaddr = (SOCKADDR_IN * )&PORT->remoteDest;
+	struct sockaddr_in * destaddr = (SOCKADDR_IN *)&PORT->remoteDest;
 
 	char * port = strlop(ptr, ':');
 
@@ -6743,7 +7452,9 @@ VOID HAMLIBThread(struct RIGPORTINFO * PORT);
 
 VOID ConnecttoHAMLIB(struct RIGPORTINFO * PORT)
 {
-	_beginthread(HAMLIBThread, 0, (void *)PORT);
+	if (HAMLIBRunning)
+		_beginthread(HAMLIBThread, 0, (void *)PORT);
+
 	return ;
 }
 
@@ -6784,13 +7495,20 @@ VOID HAMLIBThread(struct RIGPORTINFO * PORT)
 		//
 		//	Connected successful
 		//
+
+		ioctl(PORT->remoteSock, FIONBIO, &param);
 	}
 	else
 	{
 		if (PORT->Alerted == FALSE)
 		{
-			err=WSAGetLastError();
-   			i=sprintf(Msg, "Connect Failed for HAMLIB socket - error code = %d\r\n", err);
+			struct sockaddr_in * destaddr = (SOCKADDR_IN * )&PORT->remoteDest;
+
+			err = WSAGetLastError();
+
+   			sprintf(Msg, "Connect Failed for HAMLIB socket - error code = %d Port %d\r\n",
+				err, htons(destaddr->sin_port));
+
 			WritetoConsole(Msg);
 				PORT->Alerted = TRUE;
 		}
@@ -6815,7 +7533,7 @@ VOID HAMLIBThread(struct RIGPORTINFO * PORT)
 		FD_SET(PORT->remoteSock,&readfs);
 		FD_SET(PORT->remoteSock,&errorfs);
 		
-		timeout.tv_sec = 60;
+		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
 		
 		ret = select((int)PORT->remoteSock + 1, &readfs, NULL, &errorfs, &timeout);
@@ -6864,6 +7582,8 @@ Lost:
 	WritetoConsole(Msg);
 }
 
+
+
 void HAMLIBSlaveThread(struct RIGINFO * RIG)
 {
 	// Wait for connections and messages from HAMLIB Clients
@@ -6898,7 +7618,7 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 			Entry = Entry->Next;
 		}
 
-		timeout.tv_sec = 600;
+		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
 
 		ret = select(maxsock + 1, &readfs, NULL, &errorfs, &timeout);
@@ -6930,7 +7650,7 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 				RIG->Sockets = Entry;
 			}
 
-			// See if a Data Socket
+			// See if any Data Sockets
 
 			Entry = RIG->Sockets;
 			Prev = 0;
@@ -7000,7 +7720,6 @@ Loop:
 								goto Loop;
 						}
 					}
-
 				}
 
 				if (FD_ISSET(Entry->Sock, &errorfs))
@@ -7026,6 +7745,257 @@ Loop:
 		}
 	}
 }
+
+
+VOID FLRIGPoll(struct RIGPORTINFO * PORT)
+{
+	UCHAR * Poll = PORT->TXBuffer;
+	struct RIGINFO * RIG = &PORT->Rigs[0];
+	int Len;
+	char ReqBuf[256];
+	char SendBuff[256];
+
+	if (RIG->ScanStopped == 0)
+		if (RIG->ScanCounter)
+			RIG->ScanCounter--;
+
+	if (PORT->Timeout)
+	{
+		PORT->Timeout--;
+		
+		if (PORT->Timeout)			// Still waiting
+			return;
+
+		SetWindowText(RIG->hFREQ, "------------------");
+		SetWindowText(RIG->hMODE, "----------");
+		strcpy(RIG->WEB_FREQ, "-----------");;
+		strcpy(RIG->WEB_MODE, "------");
+
+		RIG->RIGOK = FALSE;
+		return;
+	}
+
+	// Send Data if avail, else send poll
+
+	if (RIG->NumberofBands && RIG->RIGOK && (RIG->ScanStopped == 0))
+	{
+		if (RIG->ScanCounter <= 0)
+		{
+			//	Send Next Freq
+
+			if (GetPermissionToChange(PORT, RIG))
+			{
+				char cmd[80];
+
+				if (RIG->RIG_DEBUG)
+					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
+
+				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
+
+				// Send the Set Freq here, send set mode when we get a response
+				
+				memcpy(&PORT->ScanEntry, PORT->FreqPtr, sizeof(struct ScanEntry));
+
+				sprintf(cmd, "<double>%s</double>", PORT->FreqPtr->Cmd1Msg);
+				FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
+
+				PORT->CmdSent = 1;
+				PORT->Retries = 0;	
+				PORT->Timeout = 10;
+				PORT->AutoPoll = TRUE;
+
+				// There isn't a response to a set command, so clear Scan Lock here
+			
+				ReleasePermission(RIG);			// Release Perrmission
+				return;
+			}
+		}
+	}
+			
+	if (RIG->PollCounter)
+	{
+		RIG->PollCounter--;
+		if (RIG->PollCounter > 1)
+			return;
+	}
+
+	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
+		return;						// no point in reading freq if we are about to change it
+
+	RIG->PollCounter = 10;			// Once Per Sec
+		
+	// Read Frequency 
+
+	strcpy(Poll, "rig.get_vfo");
+
+	Len = sprintf(ReqBuf, Req, Poll, "");
+	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+	send(PORT->remoteSock, SendBuff, Len, 0);
+
+	PORT->Timeout = 10;
+	PORT->CmdSent = 0;
+
+	PORT->AutoPoll = TRUE;
+
+	return;
+}
+
+VOID FLRIGSendCommand(struct RIGPORTINFO * PORT, char * Command, char * Value)
+{
+	int Len;
+	char ReqBuf[512];
+	char SendBuff[512];
+	char ValueString[256] ="";
+
+	if (!PORT->CONNECTED)
+		return;
+	
+	sprintf(ValueString, "<params><param><value>%s</value></param></params\r\n>", Value);
+	
+	strcpy(PORT->TXBuffer, Command);
+	Len = sprintf(ReqBuf, Req, PORT->TXBuffer, ValueString);
+	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+	send(PORT->remoteSock, SendBuff, Len, 0); 
+	return;
+}
+
+
+
+VOID FLRIGThread(struct RIGPORTINFO * PORT);
+
+VOID ConnecttoFLRIG(struct RIGPORTINFO * PORT)
+{
+	if (FLRIGRunning)
+		_beginthread(FLRIGThread, 0, (void *)PORT);
+	return ;
+}
+
+VOID FLRIGThread(struct RIGPORTINFO * PORT)
+{
+	// Opens sockets and looks for data
+	
+	char Msg[255];
+	int err, i, ret;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	fd_set readfs;
+	fd_set errorfs;
+	struct timeval timeout;
+
+	if (PORT->remoteSock)
+	{
+		closesocket(PORT->remoteSock);
+	}
+
+	PORT->remoteSock = 0;
+	PORT->remoteSock = socket(AF_INET,SOCK_STREAM,0);
+
+	if (PORT->remoteSock == INVALID_SOCKET)
+	{
+		i=sprintf(Msg, "Socket Failed for FLRIG socket - error code = %d\r\n", WSAGetLastError());
+		WritetoConsole(Msg);
+
+	 	PORT->CONNECTING = FALSE;
+  	 	return; 
+	}
+
+	setsockopt(PORT->remoteSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+	setsockopt(PORT->remoteSock, IPPROTO_TCP, TCP_NODELAY, (const char FAR *)&bcopt, 4); 
+
+	if (connect(PORT->remoteSock,(LPSOCKADDR) &PORT->remoteDest,sizeof(PORT->remoteDest)) == 0)
+	{
+		//
+		//	Connected successful
+		//
+
+		ioctl(PORT->remoteSock, FIONBIO, &param);
+	}
+	else
+	{
+		if (PORT->Alerted == FALSE)
+		{
+			struct sockaddr_in * destaddr = (SOCKADDR_IN * )&PORT->remoteDest;
+
+			err = WSAGetLastError();
+
+   			sprintf(Msg, "Connect Failed for FLRIG socket - error code = %d Port %d\r\n",
+				err, htons(destaddr->sin_port));
+
+			WritetoConsole(Msg);
+				PORT->Alerted = TRUE;
+		}
+		
+		closesocket(PORT->remoteSock);
+
+		PORT->remoteSock = 0;
+	 	PORT->CONNECTING = FALSE;
+		return;
+	}
+
+	PORT->CONNECTED = TRUE;
+	PORT->hDevice = (HANDLE)1;				// simplifies check code
+
+	PORT->Alerted = TRUE;
+
+	while (PORT->CONNECTED && FLRIGRunning)
+	{
+		FD_ZERO(&readfs);	
+		FD_ZERO(&errorfs);
+
+		FD_SET(PORT->remoteSock,&readfs);
+		FD_SET(PORT->remoteSock,&errorfs);
+		
+		timeout.tv_sec = 5;
+		timeout.tv_usec = 0;
+		
+		ret = select((int)PORT->remoteSock + 1, &readfs, NULL, &errorfs, &timeout);
+
+		if (FLRIGRunning == 0)
+			return;
+
+		if (ret == SOCKET_ERROR)
+		{
+			Debugprintf("FLRIG Select failed %d ", WSAGetLastError());
+			goto Lost;
+		}
+
+		if (ret > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(PORT->remoteSock, &readfs))
+			{
+				FLRIGProcessMessage(PORT);
+			}
+
+			if (FD_ISSET(PORT->remoteSock, &errorfs))
+			{
+Lost:	
+				sprintf(Msg, "FLRIG Connection lost for Port %s\r\n", PORT->IOBASE);
+				WritetoConsole(Msg);
+
+				PORT->CONNECTED = FALSE;
+				PORT->Alerted = FALSE;
+				PORT->hDevice = 0;				// simplifies check code
+
+				closesocket(PORT->remoteSock);
+				PORT->remoteSock = 0;
+				return;
+			}
+
+
+			continue;
+		}
+		else
+		{
+		}
+	}
+	sprintf(Msg, "FLRIG Thread Terminated Port %s\r\n", PORT->IOBASE);
+	WritetoConsole(Msg);
+}
+
+
 
 
 // HID Support Code
@@ -7696,4 +8666,204 @@ void print_win32_err(void)
 }
 
 #endif
+
+// RTL_SDR support code
+
+char RTLModes[5][6] = {"FM",  "AM", "USB", "LSB", "????"};
+
+
+void CheckAndProcessRTLUDP(struct RIGPORTINFO * PORT)
+{
+	int Length;
+	struct sockaddr_in rxaddr;
+	int addrlen = sizeof(struct sockaddr_in);
+	int Freq;
+	unsigned char RXBuffer[16];
+
+	struct RIGINFO * RIG = &PORT->Rigs[0];
+
+	Length = recvfrom(PORT->remoteSock, RXBuffer, 16, 0, (struct sockaddr *)&rxaddr, &addrlen);
+
+	if (Length == 6)
+	{
+		long long MHz, Hz;
+		char CharMHz[16] = "";
+		char CharHz[16] = "";
+		int i;
+		int Mode;
+
+		PORT->Timeout = 0;
+		RIG->RIGOK = TRUE;
+
+		Freq = (RXBuffer[4] << 24) + (RXBuffer[3] << 16) + (RXBuffer[2] << 8) + RXBuffer[1];
+		Mode = RXBuffer[5]; 
+
+		Freq += RIG->rxOffset;
+
+		RIG->RigFreq = Freq / 1000000.0;
+
+		// If we convert to float to display we get rounding errors, so convert to MHz and Hz to display
+
+		MHz = Freq / 1000000;
+
+		Hz = Freq - MHz * 1000000;
+
+		sprintf(CharMHz, "%lld", MHz);
+		sprintf(CharHz, "%06lld", Hz);
+
+		for (i = 5; i > 2; i--)
+		{
+			if (CharHz[i] == '0')
+				CharHz[i] = 0;
+			else
+				break;
+		}
+
+		sprintf(RIG->WEB_FREQ,"%lld.%s", MHz, CharHz);
+		SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+		strcpy(RIG->Valchar, RIG->WEB_FREQ);
+
+		sprintf(RIG->WEB_MODE,"%s", RTLModes[Mode]);
+
+		strcpy(RIG->ModeString, Modes[Mode]);
+			SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+
+	}
+}
+
+VOID RTLUDPPoll(struct RIGPORTINFO * PORT)
+{
+	UCHAR * Poll = PORT->TXBuffer;
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on HAMLIB
+	char cmd[80];
+	int len;
+
+	if (RIG->ScanStopped == 0)
+		if (RIG->ScanCounter)
+			RIG->ScanCounter--;
+
+	if (PORT->Timeout)
+	{
+		PORT->Timeout--;
+		
+		if (PORT->Timeout)			// Still waiting
+			return;
+
+		SetWindowText(RIG->hFREQ, "------------------");
+		SetWindowText(RIG->hMODE, "----------");
+		strcpy(RIG->WEB_FREQ, "-----------");;
+		strcpy(RIG->WEB_MODE, "------");
+
+		RIG->RIGOK = FALSE;
+		return;
+	}
+
+	// Send Data if avail, else send poll
+
+	if (RIG->NumberofBands && RIG->RIGOK && (RIG->ScanStopped == 0))
+	{
+		if (RIG->ScanCounter <= 0)
+		{
+			//	Send Next Freq
+
+			if (GetPermissionToChange(PORT, RIG))
+			{
+				int n;
+				
+				if (RIG->RIG_DEBUG)
+					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
+
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
+				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
+
+				_gcvt(PORT->FreqPtr->Freq / 1000000.0, 9, RIG->Valchar); // For MH
+
+				n = sendto(PORT->remoteSock, PORT->TXBuffer, 5,  0, &PORT->remoteDest, sizeof(struct sockaddr));
+				
+				if (PORT->TXLen == 10)
+					n = sendto(PORT->remoteSock, PORT->TXBuffer + 5, 5,  0, &PORT->remoteDest, sizeof(struct sockaddr));
+
+				PORT->TXBuffer[0] = 'P';		// Send Poll
+				
+				n = sendto(PORT->remoteSock, PORT->TXBuffer, 5,  0, &PORT->remoteDest, sizeof(struct sockaddr));
+
+				PORT->CmdSent = 1;
+				PORT->Retries = 0;	
+				PORT->Timeout = 0;
+				PORT->AutoPoll = TRUE;
+
+				// There isn't a response to a set command, so clear Scan Lock here
+			
+				ReleasePermission(RIG);			// Release Perrmission
+				return;
+			}
+		}
+	}
+			
+	if (RIG->PollCounter)
+	{
+		RIG->PollCounter--;
+		if (RIG->PollCounter > 1)
+			return;
+	}
+
+	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
+		return;						// no point in reading freq if we are about to change it
+
+	RIG->PollCounter = 10;			// Once Per Sec
+		
+	// Read Frequency 
+
+	cmd[0] = 'P';
+	
+	len = sendto(PORT->remoteSock, cmd, 5,  0, &PORT->remoteDest, sizeof(struct sockaddr));
+
+	PORT->Timeout = 10;
+	PORT->CmdSent = 0;
+
+	PORT->AutoPoll = TRUE;
+
+	return;
+}
+
+VOID ConnecttoRTLUDP(struct RIGPORTINFO * PORT)
+{
+	char Msg[255];
+	int i;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	struct sockaddr_in sinx;
+
+	if (PORT->remoteSock)
+	{
+		closesocket(PORT->remoteSock);
+	}
+
+	PORT->remoteSock = 0;
+	PORT->remoteSock = socket(AF_INET,SOCK_DGRAM,0);
+
+	if (PORT->remoteSock == INVALID_SOCKET)
+	{
+		i=sprintf(Msg, "Socket Failed for RTLUDP socket - error code = %d\r\n", WSAGetLastError());
+		WritetoConsole(Msg);
+
+	 	PORT->CONNECTING = FALSE;
+  	 	return; 
+	}
+
+	ioctl(PORT->remoteSock, FIONBIO, &param);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = 0;
+
+	PORT->CONNECTED = TRUE;
+	PORT->hDevice = (HANDLE)1;				// simplifies check code
+	PORT->Alerted = TRUE;
+}
+
+
+
+
+
 

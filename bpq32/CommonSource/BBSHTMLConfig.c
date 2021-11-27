@@ -2379,6 +2379,9 @@ VOID SendFwdDetails(struct UserInfo * User, char * Reply, int * ReplyLen, char *
 	SetMultiStringValue(FWDInfo->ConnectScript, FWD);
 	SetMultiStringValue(FWDInfo->Haddresses, HRB);
 	SetMultiStringValue(FWDInfo->HaddressesP, HRP);
+
+	if (FwdDetailTemplate == NULL)
+		FwdDetailTemplate = GetTemplateFromFile(3, "FwdDetail.txt");
 		
 	Len = sprintf(Reply, FwdDetailTemplate, User->Call,
 		CountMessagestoForward (User), Key,

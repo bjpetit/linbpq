@@ -1389,7 +1389,6 @@ VOID TNCBGThread(void * unused)
 	}
 }
 
-
 VOID AllocateDEDChannel(struct TNCDATA * TNC, int Num)
 {
 	struct StreamInfo * Channel = zalloc(sizeof(struct StreamInfo));

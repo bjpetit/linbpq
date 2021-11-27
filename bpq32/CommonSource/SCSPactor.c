@@ -761,7 +761,20 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len)
 		Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_FREQ);
 		Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_MODE);
 		Len += sprintf(&Buff[Len], "<td width=90px>%c</td>", RIG->WEB_SCAN);
-		Len += sprintf(&Buff[Len], "<td width=90px>%c</td></tr></table>", RIG->WEB_PTT);
+		Len += sprintf(&Buff[Len], "<td width=90px>%c</td></tr>", RIG->WEB_PTT);
+
+
+		if (TNC->TXRIG && TNC->TXRIG != TNC->RIG)
+		{
+			struct RIGINFO * RIG = TNC->TXRIG;
+
+			Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_Label);
+			Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_FREQ);
+			Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_MODE);
+			Len += sprintf(&Buff[Len], "<td width=90px>%c</td>", RIG->WEB_SCAN);
+			Len += sprintf(&Buff[Len], "<td width=90px>%c</td></tr></table>", RIG->WEB_PTT);
+		}
+		Len += sprintf(&Buff[Len], "</table>");
 	}
 	return Len;
 }
@@ -858,7 +871,8 @@ void * SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->PortRecord = PortEntry;
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
 		memcpy(TNC->NodeCall, MYNODECALL, 10);

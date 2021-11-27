@@ -103,6 +103,7 @@ struct TCPINFO
 	int RelayPort;
 	int HTTPPort;
 	int TriModePort;
+	int SyncPort;
 	int CMDPort[33];
 	char RELAYHOST[64];
 	char CMSServer[64];
@@ -122,6 +123,11 @@ struct TCPINFO
 
 	char SecureCMSPassword[80];	// For Secure CMS Signin
 	char GatewayCall[10];		// Call for CMS access
+	char GatewayLoc[10];		// Loc - Needed to report Hybrid Mode
+	int ReportHybrid;			// Report as Hybrod Station
+	char * HybridServiceCode;
+	char * HybridFrequencies;
+	char * HybridCoLocatedRMS;
 
 	BOOL DisconnectOnClose;
 
@@ -138,6 +144,7 @@ struct TCPINFO
 	char LoginMsg[100];
 
 	char RelayAPPL[20];
+	char SyncAPPL[20];
 
 	SOCKET TCPSock;
 	SOCKET FBBsock[100];
@@ -145,11 +152,13 @@ struct TCPINFO
 	SOCKET HTTPsock;
 	SOCKET TriModeSock;
 	SOCKET TriModeDataSock;
+	SOCKET Syncsock;
 	struct ConnectionInfo * TriModeControlSession;
 	SOCKET sock6;
 	SOCKET FBBsock6[100];
 	SOCKET Relaysock6;
 	SOCKET HTTPsock6;
+	SOCKET Syncsock6;
 
 	fd_set ListenSet;
 	SOCKET maxsock;
@@ -161,6 +170,8 @@ struct TCPINFO
 
 	int SecureTelnet;
 	int ReportRelayTraffic;			// Send WL2K Reports for Relay Traffic
+
+	char * WebTermCSS;				// css override for web terminal
 
 };
 
@@ -227,6 +238,8 @@ struct STREAMINFO
 	HWND xIDC_RESENT;
 	HWND xIDC_ACKED;
 	HWND xIDC_DIRN;
+
+	int RelaySyncStream;
 };
 
 typedef struct AGWINFO
@@ -352,7 +365,8 @@ typedef struct TNCINFO
 	char * WebBuffer;			// Buffer for logs
 	int RigControlRow;			// Rig Control Line in Dialog
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
-	struct RIGINFO * RIG;		// Pointer to Rig Control RIG record 
+	struct RIGINFO * RIG;		// Pointer to Rig Control RIG record for RX or Both 
+	struct RIGINFO * TXRIG;		// Pointer to Rig Control RIG record for TX 
 	char * InitScript;			// Initialisation Commands
 	int InitScriptLen;			// Length
 	time_t SessionTimeLimit;	// Optional limit to total session time
@@ -454,6 +468,7 @@ typedef struct TNCINFO
 
 	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
 	char CurrentMYC[10];			// Save current call so we don't change it unnecessarily
+	char * LISTENCALLS;				// Calls TNC will respond to (currently only for VARA)
 
 	char TargetCall[10];			// Call incoming connect is addressed to (for appl call support)
 
@@ -467,6 +482,12 @@ typedef struct TNCINFO
 	char PTTOff[60];
 	int PTTOnLen;
 	int PTTOffLen;
+
+	int TXRadio;					// Rigcontrol Radio Number for TX
+	int RXRadio;					// Rigcontrol Radio Number for RX
+
+	long long int TXFreq;			// Freq to set on tx before ptt
+	long long int DefaultFreq;		// Freq to set on tx after ptt 
 
 	int PID;						// Process ID for Software TNC
 	HWND hWnd;						// Main window handle for Software TNC
@@ -482,7 +503,7 @@ typedef struct TNCINFO
 	int TimeSinceLast;				// Time since last message from TNC (10ths of a sec)
 	int HeartBeat;
 
-	int Interlock;					// Port Interlock Group
+//	int Interlock;					// Port Interlock Group
 
 	HWND hMonitor;					// Handle to Monitor control
 //	HMENU hPopMenu;					// Actions Menu Handle
@@ -493,6 +514,7 @@ typedef struct TNCINFO
 
 	BOOL OverrideBusy;
 	int BusyDelay;					// Timer for busy timeout
+	int AutoStartDelay;				// Time to wait for TNC to start
 	char * ConnectCmd;				// Saved command if waiting for busy to clear
 	BOOL UseAPPLCalls;				// Robust Packet to use Applcalls
 	BOOL UseAPPLCallsforPactor;		// Pactor to use Applcalls
@@ -776,6 +798,8 @@ VOID __cdecl Consoleprintf(const char * format, ...);
 
 extern BOOL MinimizetoTray;
 
+int standardParams(struct TNCINFO * TNC, char * buf);
+void DecodePTTString(struct TNCINFO * TNC, char * ptr);
 
 int Rig_Command(int Session, char * Command);
 

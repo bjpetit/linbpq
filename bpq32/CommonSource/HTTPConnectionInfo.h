@@ -2,6 +2,8 @@
 //	HTTP Session Control. Used In Kernel HTTPCode, BBSHTMLConfig
 //	and ChatHTMLConfig
 
+// On Windows ghanges to layout or length of this struct require rebuilding BPQ32.dll, BPQMail and BPQChat
+
 struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 {
 	struct HTTPConnectionInfo * Next;
@@ -37,4 +39,5 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	char WebMailTypes[4];		// Types To List
 	BOOL WebMailMine;			// List all meessage to or from me
 	time_t WebMailLastUsed;
+	struct TNCINFO * TNC;		// Session -> TNC link
 };

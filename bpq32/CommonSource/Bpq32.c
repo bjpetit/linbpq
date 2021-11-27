@@ -982,7 +982,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Change IP Gateway to exclude handling bits of 44 Net sold to Amazon
 //	Fix crash in Web terminal when processing very long lines
 
-//  Version 6.0.22 ??
+//  Version 6.0.22.1 August 2021
 
 //	Fix bug in KAM TNCEMULATOR
 //	Add WinRPR Driver (DED over TCP)
@@ -1023,6 +1023,31 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add SendTandRtoRelay param to SCS Pactor, ARDOP and VARA drivers to divert calls to CMS for -T and -R to RELAY
 //	Add UPNP Support
 
+//  Version 6.0.23 ??
+
+//	Add option to control which applcalls are enabled in VARA
+//	Add support for rtl_udp to Rig Control
+//	Fix Telnet Auto Conneect to Application when using TermTCP or Web Terminal
+//	Allow setting css styles for Web Terminal
+//	And Kill TNC and Kill and Restart TNC commands to Web Driver Windows
+//	More flexible RigControl for split frequency operation, eg for QO100
+//	Increase stack size for ProcessHTMLMessage	(.11)	
+//	Fix HTML Content-Type on images (.12)
+//	Add AIS and ADSB Support (.13)
+//	Compress web pages (.14)
+//	Change minidump routine and close after program error (.15)
+//  Add RMS Relay SYNC Mode (.17)
+//  Changes for compatibility with Winlink Hybrid
+//	Add Rigcontrol CMD feature to Yaesu code (21)
+//  More diagnostic code
+//	Trap potential buffer overrun in ax/tcp code
+//	Fix possible hang in UZ7HO driver if connect takes a long time to succeed or fail
+//	Add FLRIG as backend for RigControl (.24)
+//	Fix bug in compressing some management web pages
+//	Fix bugs in AGW Emulator (.25)
+//	Add more PTT_Sets_Freq options for split frequency working (.26)
+//	Allow RIGCONTROL using Radio Number (Rnn) as well as Port (.26)
+
 #define CKernel
 
 #include "Versions.h"
@@ -1049,6 +1074,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "GetVersion.h"
 
 #define DllImport	__declspec( dllimport )
+
+#define CheckGuardZone() _CheckGuardZone(__FILE__, __LINE__)
+void _CheckGuardZone(char * File, int Line);
 
 #define	CHECKLOADED		  0
 #define	SETAPPLFLAGS	  1
@@ -1118,9 +1146,13 @@ DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
 DllExport int ConvToAX25(unsigned char * incall,unsigned char * outcall);
 VOID GetUIConfig();
 VOID ADIFWriteFreqList();
+void SaveAIS();
+void initAIS();
+void initADSB();
 
 extern BOOL ADIFLogEnabled;
 
+int CloseOnError = 0;
 
 char UIClassName[]="UIMAINWINDOW";					// the main window class name
 
@@ -1219,7 +1251,7 @@ int WritetoConsoleSupport(char * buff);
 VOID PMClose();
 VOID MySetWindowText(HWND hWnd, char * Msg);
 BOOL CreateMonitorWindow(char * MonSize);
-
+VOID FormatTime3(char * Time, time_t cTime);
 
 char EXCEPTMSG[80] = "";
 
@@ -1471,9 +1503,10 @@ BOOL RigRequired = TRUE;
 BOOL RigActive = FALSE;
 BOOL APRSActive = FALSE;
 BOOL AGWActive = FALSE;
+BOOL needAIS = FALSE;
+int needADSB = 0;
 
 extern int AGWPort;
-
 
 Tell_Sessions();
 
@@ -1982,8 +2015,9 @@ VOID TimerProcX()
 		if(TimerInst == GetCurrentProcessId())
 		{
 			RigReconfigFlag = FALSE;
+			CloseDriverWindow(40);
 			Rig_Close();
-			Sleep(2000);				// Allow CATPTT threads to close
+			Sleep(6000);		// Allow any CATPTT, HAMLIB and FLRIG threads to close
 			RigActive = Rig_Init();
 			
 			WritetoConsole("Rigcontrol Reconfiguration Complete\n");	
@@ -2019,11 +2053,22 @@ VOID TimerProcX()
 		if (IPActive) Poll_IP();
 		if (PMActive) Poll_PM();
 		if (RigActive) Rig_Poll();
-		if (APRSActive) Poll_APRS();
+
+		CheckGuardZone();
+
+		if (APRSActive)
+		{
+			Poll_APRS();
+			CheckGuardZone();
+		}
 
 	 	CheckWL2KReportTimer();
+
+		CheckGuardZone();
 		
 		TIMERINTERRUPT();
+
+		CheckGuardZone();
 
 		FreeSemaphore(&Semaphore);			// SendLocation needs to get the semaphore
 
@@ -2033,9 +2078,13 @@ VOID TimerProcX()
 		if (AGWActive)
 			Poll_AGW();
 
+		CheckGuardZone();
+
 		strcpy(EXCEPTMSG, "HTTP Timer Processing");
 
 		HTTPTimer();
+
+		CheckGuardZone();
 
 		strcpy(EXCEPTMSG, "WL2K Report Timer Processing");
 
@@ -2057,6 +2106,8 @@ VOID TimerProcX()
 		FreeSemaphore(&Semaphore);
 
 	}
+
+	CheckGuardZone();
 
 	return;
 }
@@ -2154,6 +2205,12 @@ FirstInit()
 		ADIFWriteFreqList();
 
 	OutputDebugString("BPQ32 Port Initialisation Complete\n");
+
+	if (needAIS)
+		initAIS();
+
+	if (needADSB)
+		initADSB();
 
 	return 0;
 }
@@ -2790,9 +2847,12 @@ SkipInit:
 		if (AttachedProcesses < 2)
 		{
 			if (AUTOSAVE == 1)
-				SaveNodes();	// Soundmo	
+				SaveNodes();
 			if (AUTOSAVEMH)
 				SaveMH();
+
+			if (needAIS)
+				SaveAIS();
 		}
 		if (AttachedProcesses == 0)
 		{
@@ -2908,6 +2968,7 @@ VOID SetupBPQDirectory()
 	char ValfromReg[MAX_PATH] = "";
 	char DLLName[256]="Not Known";
 	char LogDir[256];
+	char Time[64];
 
 /*
 •NT4 was/is '4' 
@@ -3051,7 +3112,11 @@ if (_winver < 0x0600)
 	if (BPQProgramDirectory[0] == 0)
 		strcpy(BPQProgramDirectory, BPQDirectory);
 
-	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionString, DLLName, pgm);
+	sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionString, DLLName, pgm);
+	WritetoConsole(msg);
+	OutputDebugString(msg);
+	FormatTime3(Time, time(NULL));
+	sprintf(msg,"Loaded %s\n", Time);
 	WritetoConsole(msg);
 	OutputDebugString(msg);
 
@@ -6379,4 +6444,42 @@ DllExport INT WINAPI ext_PTT_open()
 {
 	return 1;
 }
+
+char * stristr (char *ch1, char *ch2)
+{
+	char	*chN1, *chN2;
+	char	*chNdx;
+	char	*chRet = NULL;
+
+	chN1 = _strdup(ch1);
+	chN2 = _strdup(ch2);
+
+	if (chN1 && chN2)
+	{
+		chNdx = chN1;
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower(*chNdx);
+			chNdx ++;
+		}
+		chNdx = chN2;
+
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower(*chNdx);
+			chNdx ++;
+		}
+
+		chNdx = strstr(chN1, chN2);
+
+		if (chNdx)
+			chRet = ch1 + (chNdx - chN1);
+	}
+
+	free (chN1);
+	free (chN2);
+	return chRet;
+}
+
+
 

@@ -332,22 +332,8 @@ static int ProcessLine(char * buf, int Port)
 			ptr = strtok(NULL, " \t\n\r");
 
 			if (ptr)
-			{
-				if (_stricmp(ptr, "CI-V") == 0)
-					TNC->PTTMode = PTTCI_V;
-				else if (_stricmp(ptr, "CAT") == 0)
-					TNC->PTTMode = PTTCI_V;
-				else if (_stricmp(ptr, "RTS") == 0)
-					TNC->PTTMode = PTTRTS;
-				else if (_stricmp(ptr, "DTR") == 0)
-					TNC->PTTMode = PTTDTR;
-				else if (_stricmp(ptr, "DTRRTS") == 0)
-					TNC->PTTMode = PTTDTR | PTTRTS;
-				else if (_stricmp(ptr, "CM108") == 0)
-					TNC->PTTMode = PTTCM108;
-				else if (_stricmp(ptr, "HAMLIB") == 0)
-					TNC->PTTMode = PTTHAMLIB;
-			
+			{			
+				DecodePTTString(TNC, ptr);
 				ptr = strtok(NULL, " \t\n\r");
 			}
 		}
@@ -819,7 +805,8 @@ void * WinRPRExtInit(EXTPORTDATA *  PortEntry)
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 100;
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	TNC->SuspendPortProc = TRKSuspendPort;
 	TNC->ReleasePortProc = TRKReleasePort;
@@ -1362,7 +1349,7 @@ VOID WinRPRThread(void * portptr)
 	
 	int port = (int)(size_t)portptr;
 	char Msg[255];
-	int err, i, ret;
+	int i, ret;
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	struct hostent * HostEnt;
@@ -1483,8 +1470,9 @@ VOID WinRPRThread(void * portptr)
 	{
 		if (TNC->Alerted == FALSE)
 		{
-			err=WSAGetLastError();
-   			i=sprintf(Msg, "Connect Failed for WinRPR socket - error code = %d\r\n", err);
+   			sprintf(Msg, "Connect Failed for WinRPR socket - error code = %d Port %d\n",
+				WSAGetLastError(), htons(TNC->destaddr.sin_port));
+	
 			WritetoConsoleLocal(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
 			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);

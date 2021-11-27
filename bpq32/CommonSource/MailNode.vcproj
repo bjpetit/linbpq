@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfigd.lib DbgHelp.lib setupapi.lib"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfigd.lib DbgHelp.lib setupapi.lib miniupnpc.lib zlibstat.lib"
 				OutputFile="c:\LINBPQ\$(ProjectName).exe"
 				LinkIncremental="2"
 				IgnoreDefaultLibraryNames=""
@@ -142,7 +142,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfig.lib DbgHelp.lib Setupapi.lib"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib ..\lib\libconfig.lib DbgHelp.lib Setupapi.lib miniupnpc.lib zlibstat.lib"
 				OutputFile="c:\devprogs\bpq32\LinBPQ.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
@@ -201,6 +201,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\AGWMoncode.c"
+				>
+			</File>
+			<File
+				RelativePath=".\AISCommon.c"
 				>
 			</File>
 			<File
@@ -474,6 +478,10 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\UIRoutines.c"
+				>
+			</File>
+			<File
+				RelativePath=".\upnp.c"
 				>
 			</File>
 			<File

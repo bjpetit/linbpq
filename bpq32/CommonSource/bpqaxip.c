@@ -343,7 +343,7 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 	struct iphdr * iphdrptr;
 	int len,txlen=0,err,index,digiptr,i;
 	unsigned short int crc;
-	char rxbuff[500];
+	char rxbuff[5000];
 	char axcall[7];
 	char errmsg[100];
 	union
@@ -510,7 +510,7 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 						return 0;
 					}
 
-					memcpy(&buff->DEST, &rxbuff[0],len);
+					memcpy(&buff->DEST, &rxbuff[0], len);
 					
 					len += (3 + sizeof(void *));
 					
@@ -591,14 +591,21 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 			if (len)
 			{
 				len = KissDecode(rxbuff, len-1);		// Len includes FEND
-				len -= 2;	// Ignore Cheksum
+				len -= 2;	// Ignore Checksum
 
-				memcpy(&buff->DEST, &rxbuff[0], len);
-				len += (3 + sizeof(void *));
+				if (len < MAXDATA)
+				{
+					memcpy(&buff->DEST, &rxbuff[0], len);
+					len += (3 + sizeof(void *));
 
-				PutLengthinBuffer((PDATAMESSAGE)buff, len);		// fix big endian issue
-
-				return 1;
+					PutLengthinBuffer((PDATAMESSAGE)buff, len);		// fix big endian issue
+					return 1;
+				}
+				else
+				{
+					Debugprintf("Oversized AX/TCP frame %d", len);
+					return 0;
+				}
 			}
 		}
 
@@ -974,8 +981,8 @@ int OpenListeningSocket(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp
 	struct sockaddr_in * psin;
 	BOOL bOptVal = TRUE;
 	struct sockaddr_in local_sin;  /* Local socket - internet style */
-	u_long param=1;
-	arp->TCPBuffer=malloc(4000);
+	u_long param = 1;
+	arp->TCPBuffer = malloc(4000);
 	arp->TCPState = 0;
 
 	arp->TCPListenSock = socket(AF_INET, SOCK_STREAM, 0);
@@ -2771,7 +2778,7 @@ int GetMessageFromBuffer(struct AXIPPORTINFO * PORT, char * Buffer)
 					continue;
 				}
 
-				Debugprintf("Connect accepted - Socket %d", sock);
+				Debugprintf("AXIP Connect accepted - Socket %d Port %d", sock, sockptr->port);
 
 				if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&bOptVal, 4) != SOCKET_ERROR)
 					Debugprintf("Set SO_KEEPALIVE: ON");
@@ -2784,13 +2791,13 @@ int GetMessageFromBuffer(struct AXIPPORTINFO * PORT, char * Buffer)
 			{
 				int InputLen;
 
-				//	Poll TCP COnnection for data
+				//	Poll TCP Connection for data
 
 				// May have several messages per packet, or message split over packets
 
 				if (sockptr->InputLen > 3000)	// Shouldnt have lines longer  than this in text mode
 				{
-					sockptr->InputLen=0;
+					sockptr->InputLen = 0;
 				}
 
 				ioctl(sockptr->TCPSock, FIONBIO, &param);
@@ -2979,6 +2986,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 	BOOL bcopt=TRUE;
 	struct sockaddr_in sinx; 
 //	struct AXIPPORTINFO * PORT;
+	int Alerted = 0;
 
 	Sleep(15000);									// Delay startup a bit
 
@@ -3025,6 +3033,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 				arp->TCPState = TCPConnected;
 				OutputDebugString("AXTCP Connected\r\n");
 				ioctl (arp->TCPSock, FIONBIO, &param);
+				Alerted = 0;
 			}
 			else
 			{
@@ -3032,9 +3041,14 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 
 				//	Connect failed
 				//
-    			i=sprintf(Msg, "Connect Failed for AX/TCP port %d  - error code = %d\n", htons(arp->destaddr.sin_port), err);
-				WritetoConsole(Msg);
-				OutputDebugString(Msg);
+
+				if (Alerted == 0)
+				{
+					i = sprintf(Msg, "Connect Failed for AX/TCP port %d  - error code = %d\n", htons(arp->destaddr.sin_port), err);
+					WritetoConsole(Msg);
+					OutputDebugString(Msg);
+					 Alerted = 1;
+				}
 				closesocket(arp->TCPSock);
 				arp->TCPSock = 0;
 				arp->TCPState = 0;
@@ -3044,7 +3058,7 @@ wait:
 		Sleep (115000);				// 2 Mins 
 	}
 
-	Debugprintf("TCP Connect Thread %x Closing", arp->TCPThreadID);
+	Debugprintf("AX/TCP Connect Thread %x Closing", arp->TCPThreadID);
 
 	arp->TCPThreadID = 0;
 	

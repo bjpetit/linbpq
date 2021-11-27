@@ -65,7 +65,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfig.lib"
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfig.lib DbgHelp.lib"
 				OutputFile="c:\DevProgs\bpq32\BPQChat.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -152,7 +152,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfig.lib"
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfig.lib DbgHelp.lib"
 				OutputFile="c:\DevProgs\bpq32\BPQChat.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"
@@ -258,24 +258,6 @@
 			<File
 				RelativePath=".\ChatUtilities.c"
 				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\ChatUtils.c"

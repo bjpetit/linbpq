@@ -11,6 +11,7 @@
 
 //		Add try/except round main loop
 
+#define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
 
@@ -18,6 +19,8 @@
 #include <stdio.h>
 #include <malloc.h>	
 #include <memory.h>
+#include <time.h>
+#include "DbgHelp.h"
 
 //#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #include "..\Include\bpq32.h"
@@ -54,6 +57,37 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	OutputDebugString(Mess);
 	return;
 }
+
+VOID WriteMiniDump()
+{
+#ifdef WIN32
+
+	HANDLE hFile;
+	BOOL ret;
+	char FN[256];
+
+	sprintf(FN, "%s/Logs/MiniDump%x.dmp", GetBPQDirectory(), time(NULL));
+
+	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE,
+		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
+	{
+		// Create the minidump
+
+		ret = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
+			hFile, MiniDumpNormal, 0, 0, 0 );
+
+		if(!ret)
+			Debugprintf("MiniDumpWriteDump failed. Error: %u", GetLastError());
+		else
+			Debugprintf("Minidump %s created.", FN);
+			CloseHandle(hFile);
+	}
+#endif
+}
+
+
 
 //
 //  FUNCTION: WinMain(HANDLE, HANDLE, LPSTR, int)

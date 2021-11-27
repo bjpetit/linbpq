@@ -87,7 +87,7 @@ extern char LTFROMString[2048];
 extern char LTTOString[2048];
 extern char LTATString[2048];
 
-//static UCHAR BPQDirectory[260];
+ UCHAR BPQDirectory[260];
 
 int LineCount = 35;					// Lines per page on message list
 
@@ -366,8 +366,6 @@ char * initMultipartUnpack(char ** Input)
 	}
 
 	// Find First part - there is a boundary before it
-
-	
 
 	ptr = strstr(ptr2, Boundary);
 
@@ -3390,8 +3388,8 @@ char * BuildB2Header(WebMailInfo * WebMail, struct MsgInfo * Msg, char ** ToCall
 
 	tm = gmtime((time_t *)&Msg->datecreated);	
 	
-	sprintf(DateString, "%04d%02d%02d%02d%02d%02d",
-		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+	sprintf(DateString, "%04d/%02d/%02d %02d:%02d",
+		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
 	NewMsg += sprintf(NewMsg,
 		"MID: %s\r\n"

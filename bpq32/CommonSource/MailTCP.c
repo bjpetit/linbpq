@@ -84,11 +84,7 @@ char mycd64[256];
 static const char cb64[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static const char cd64[]="|$$$}rstuvwxyz{$$$$$$$>?@ABCDEFGHIJKLMNOPQRSTUVW$$$$$$XYZ[\\]^_`abcdefghijklmnopq";
 
-//char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-//char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-
 char sockTypes[6][12] = {"Undefined", "SMTPServer", "POP3Server", "SMTPClient", "POP3Client", "NNTPServer"};
-
 
 void decodeblock( unsigned char in[4], unsigned char out[3] );
 VOID FormatTime(char * Time, time_t cTime);

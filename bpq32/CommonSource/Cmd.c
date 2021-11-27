@@ -2218,7 +2218,7 @@ NoPort:
 		ptr++;
 	}
 
-	if (memcmp(ptr, "RELAY ", 5) == 0)
+	if (memcmp(ptr, "RELAY ", 5) == 0 || memcmp(ptr, "SYNC ", 5) == 0)
 	{
 		// c p relay with extra parms
 
@@ -3662,6 +3662,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 	TRANSPORTENTRY * NewSess;
 	struct _EXTPORTDATA * EXTPORT;
+	struct TNCINFO * TNC;
 	
 	int Port = 0, sess = 0;
 	char * ptr, *Context;
@@ -3841,21 +3842,46 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		return;
 	}
 
-	if (PORT->PORTINTERLOCK)
-	{
-		// Check Interlocked Ports
+	// Check Interlock. Only ports with a TNC record can be interlocked
 
-		int p;
-		
-		p = CHECKINTERLOCK(PORT);
-	
-		if (p)
+	TNC = PORT->TNC;
+
+	if (TNC)
+	{
+		// See if any interlocked ports are in use
+
+		struct TNCINFO * OtherTNC;
+		int i;
+		int rxInterlock = TNC->RXRadio;
+		int txInterlock = TNC->TXRadio;
+
+		if (rxInterlock || txInterlock)
 		{
-			Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, interlocked port %d is in use\r", p);
-			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-			return;
+			for (i=1; i<33; i++)
+			{
+				OtherTNC = TNCInfo[i];
+
+				if (OtherTNC == NULL)
+					continue;
+
+				if (OtherTNC == TNC)
+					continue;
+
+				if (rxInterlock == OtherTNC->RXRadio || txInterlock == OtherTNC->TXRadio)	// Same Group	
+				{
+					if (OtherTNC->PortRecord->ATTACHEDSESSIONS[0])
+					{			
+						Bufferptr = Cmdprintf(Session, Bufferptr, "Sorry, interlocked port %d is in use\r", i);
+						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+						return;
+					}
+				}
+			}
 		}
 	}
+
+
+
 
 	if (EXTPORT->ATTACHEDSESSIONS[sess])
 	{

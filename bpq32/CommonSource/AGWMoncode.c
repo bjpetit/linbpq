@@ -149,7 +149,11 @@ int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameT
 		//	MORE TO COME
 
 		From[ConvFromAX25(ptr + 1, From)] = 0;
-		Output += sprintf((char *)Output, ",%s", From);
+
+		if (n == 8)
+			Output += sprintf((char *)Output, " Via %s", From);	// Send via on first
+		else
+			Output += sprintf((char *)Output, ",%s", From);
 	
 		ptr += 7;
 		n--;

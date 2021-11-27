@@ -503,7 +503,8 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->Hardware = H_HAL;
 
-	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+	if (PortEntry->PORTCONTROL.PORTINTERLOCK && TNC->RXRadio == 0 && TNC->TXRadio == 0)
+		TNC->RXRadio = TNC->TXRadio = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->MAXHOSTMODESESSIONS = 1;		// Default
 

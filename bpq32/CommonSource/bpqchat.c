@@ -50,7 +50,12 @@
 //	Send INFO to Map every hour
 //	Remove CMD_TO_APPL flag from Applflags
 
+// October 2021 1.0.11.2
+//	Recompiled for Web Interface changes in Node
+
+
 #include "BPQChat.h"
+#include "Dbghelp.h"
 
 #define CHAT
 #include "Versions.h"
@@ -327,6 +332,37 @@ VOID CheckProgramErrors()
 		exit(0);
 	}
 }
+
+VOID WriteMiniDump()
+{
+#ifdef WIN32
+
+	HANDLE hFile;
+	BOOL ret;
+	char FN[256];
+
+	sprintf(FN, "%s/Logs/MiniDump%x.dmp", GetBPQDirectory(), time(NULL));
+
+	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE,
+		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
+	{
+		// Create the minidump
+
+		ret = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
+			hFile, MiniDumpNormal, 0, 0, 0 );
+
+		if(!ret)
+			Debugprintf("MiniDumpWriteDump failed. Error: %u", GetLastError());
+		else
+			Debugprintf("Minidump %s created.", FN);
+			CloseHandle(hFile);
+	}
+#endif
+}
+
+
 
 HKEY OpenReg()
 {

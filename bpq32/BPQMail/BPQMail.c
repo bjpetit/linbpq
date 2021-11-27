@@ -3468,3 +3468,34 @@ char * strlop(char * buf, char delim)
 
 	return ptr;
 }
+
+VOID WriteMiniDump()
+{
+#ifdef WIN32
+
+	HANDLE hFile;
+	BOOL ret;
+	char FN[256];
+
+	sprintf(FN, "%s/Logs/MiniDump%x.dmp", BPQDirectory, time(NULL));
+
+	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE,
+		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
+	{
+		// Create the minidump
+
+		ret = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
+			hFile, MiniDumpNormal, 0, 0, 0 );
+
+		if(!ret)
+			Debugprintf("MiniDumpWriteDump failed. Error: %u", GetLastError());
+		else
+			Debugprintf("Minidump %s created.", FN);
+			CloseHandle(hFile);
+	}
+#endif
+}
+
+

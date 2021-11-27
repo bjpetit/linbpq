@@ -93,13 +93,15 @@ BOOL InternalSendAPRSMessage(char * Text, char * Call);
 void UndoTransparency(char * input);
 char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
 char * GetStandardPage(char * FN, int * Len);
-
+VOID WriteMiniDump();
 BOOL ProcessConfig();
+int ProcessAISMessage(char * msg, int len);
 
 extern int SemHeldByAPI;
 extern int APRSMONDECODE();
 extern struct ConsoleInfo MonWindow;
 extern char VersionString[];
+
 
 BOOL LogAPRSIS = FALSE;
 
@@ -167,6 +169,11 @@ char LAT[] = "0000.00N";	// in standard APRS Format
 char LON[] = "00000.00W";	//in standard APRS Format
 
 char HostName[80];			// for BlueNMEA
+int HostPort = 4352;
+
+extern int ADSBPort;
+extern char ADSBHost[];
+
 BOOL BlueNMEAOK = FALSE;
 int BlueNMEATimer = 0;
 
@@ -233,6 +240,7 @@ BOOL DefaultDistKM = FALSE;
 
 int multiple = 0;						// Allows multiple copies of LinBPQ/APRS on one machine
 
+extern BOOL needAIS;
 
 typedef struct _ISDELAY
 {
@@ -2248,7 +2256,7 @@ static int APRSProcessLine(char * buf)
 		return TRUE;
 	}
 
-	if (_stricmp(ptr, "BlueNMEA") == 0)
+	if (_stricmp(ptr, "BlueNMEA") == 0 || _stricmp(ptr, "TCPHost") == 0 || _stricmp(ptr, "AISHost") == 0)
 	{
 		if (strlen(p_value) > 70)
 			return FALSE;
@@ -2256,6 +2264,29 @@ static int APRSProcessLine(char * buf)
 		strcpy(HostName, p_value);
 		return TRUE;
 	}
+
+	if (_stricmp(ptr, "TCPPort") == 0  || _stricmp(ptr, "AISPort") == 0)
+	{
+		HostPort = atoi(p_value);
+		return TRUE;
+	}
+
+	if (_stricmp(ptr, "ADSBHost") == 0)
+	{
+		if (strlen(p_value) > 70)
+			return FALSE;
+
+		strcpy(ADSBHost, p_value);
+		return TRUE;
+	}
+
+	if (_stricmp(ptr, "ADSBPort") == 0)
+	{
+		ADSBPort = atoi(p_value);
+		return TRUE;
+	}
+
+	
 
 	if (_stricmp(ptr, "GPSSetsLocator") == 0)
 	{
@@ -2918,7 +2949,6 @@ static VOID DoMinTimer()
 				else
 				{
 					ptr = NULL;
-					CountPool();
 				}
 			}
 		}
@@ -4068,15 +4098,12 @@ Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon)
 
 #define SD_BOTH         0x02
 
-static char Buffer[8192];
-int SavedLen = 0;
-
-
 static VOID ProcessReceivedData(SOCKET TCPSock)
 {
 	char UDPMsg[8192];
+	char Buffer[65536];
 
-	int len = recv(TCPSock, &Buffer[SavedLen], 8100 - SavedLen, 0);
+	int len = recv(TCPSock, Buffer, 65536, 0);
 
 	char * ptr;
 	char * Lastptr;
@@ -4088,11 +4115,7 @@ static VOID ProcessReceivedData(SOCKET TCPSock)
 		return;
 	}
 
-	len += SavedLen;
-	SavedLen = 0;
-
 	ptr = Lastptr = Buffer;
-
 	Buffer[len] = 0;
 
 	while (len > 0)
@@ -4101,12 +4124,12 @@ static VOID ProcessReceivedData(SOCKET TCPSock)
 
 		if (ptr)
 		{
-			size_t Len = ptr - Lastptr;
+			size_t Len = ptr - Lastptr -1;
 		
 			memcpy(UDPMsg, Lastptr, Len);
 			UDPMsg[Len++] = 13;
 			UDPMsg[Len++] = 10;
-			UDPMsg[Len++] = 0;
+			UDPMsg[Len] = 0;
 
 			if (!Check0183CheckSum(UDPMsg, Len))
 			{
@@ -4117,12 +4140,15 @@ static VOID ProcessReceivedData(SOCKET TCPSock)
 				if (memcmp(UDPMsg, "$GPRMC", 6) == 0)
 					DecodeRMC(UDPMsg, Len);
 
+				else if (memcmp(UDPMsg, "!AIVDM", 6) == 0)
+					ProcessAISMessage(UDPMsg, Len);
+
 			}
 			Lastptr = ptr + 1;
 			len -= (int)Len;
 		}
 		else
-			SavedLen = len;
+			return;
 	}
 }
 
@@ -4134,17 +4160,15 @@ static VOID TCPConnect(void * unused)
 	fd_set readfs;
 	fd_set errorfs;
 	struct timeval timeout;
-	SOCKADDR_IN sinx; 
 	struct sockaddr_in destaddr;
 	SOCKET TCPSock;
-	int addrlen=sizeof(sinx);
 
 	if (HostName[0] == 0)
 		return;
 
 	destaddr.sin_addr.s_addr = inet_addr(HostName);
 	destaddr.sin_family = AF_INET;
-	destaddr.sin_port = htons(4352);
+	destaddr.sin_port = htons(HostPort);
 
 	TCPSock = socket(AF_INET,SOCK_STREAM,0);
 
@@ -4155,36 +4179,27 @@ static VOID TCPConnect(void * unused)
  
 	setsockopt (TCPSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
 
-	sinx.sin_family = AF_INET;
-	sinx.sin_addr.s_addr = INADDR_ANY;
-	sinx.sin_port = 0;
-
-	if (bind(TCPSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
-	{
-		//
-		//	Bind Failed
-		//
-	
-		closesocket(TCPSock);
-
-  	 	return; 
-	}
+	BlueNMEAOK = TRUE;			// So we don't try to reconnect while waiting		
 
 	if (connect(TCPSock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) == 0)
 	{
 		//
 		//	Connected successful
 		//
+
+		ioctl(TCPSock, FIONBIO, &param);
 	}
 	else
 	{
 		err=WSAGetLastError();
 #ifdef LINBPQ
-   		printf("Connect Failed for BlueNMEA socket - error code = %d\n", err);
+   		printf("Connect Failed for AIS socket - error code = %d\n", err);
 #else
-   		Debugprintf("Connect Failed for BlueNMEA socket - error code = %d", err);
+   		Debugprintf("Connect Failed for AIS socket - error code = %d", err);
 #endif		
 		closesocket(TCPSock);
+		BlueNMEAOK = FALSE;
+
 		return;
 	}
 
@@ -4198,7 +4213,7 @@ static VOID TCPConnect(void * unused)
 		FD_SET(TCPSock,&readfs);
 		FD_SET(TCPSock,&errorfs);
 
-		timeout.tv_sec = 60;
+		timeout.tv_sec = 900;
 		timeout.tv_usec = 0;				// We should get messages more frequently that this
 
 		ret = select((int)TCPSock + 1, &readfs, NULL, &errorfs, &timeout);
@@ -4220,7 +4235,7 @@ static VOID TCPConnect(void * unused)
 			{
 Lost:				
 #ifdef LINBPQ
-				printf("BlueNMEA Connection lost\n");
+				printf("AIS Connection lost\n");
 #endif			
 				closesocket(TCPSock);
 				BlueNMEAOK = FALSE;;
@@ -4229,17 +4244,17 @@ Lost:
 		}
 		else
 		{
-			// 60 secs without data. Shouldn't happen
+			// 15 mins without data. Shouldn't happen
 
 			shutdown(TCPSock, SD_BOTH);
 			Sleep(100);
+
 			closesocket(TCPSock);
 			BlueNMEAOK = FALSE;
 			return;
 		}
 	}
 }
-
 // Code Moved from APRS Application
 
 //
@@ -4558,7 +4573,14 @@ struct STATIONRECORD * ProcessRFFrame(char * Msg, int len, int * ourMessage)
 
 	if (strcmp(Callsign, "AIS") == 0)
 	{
-		Debugprintf(Payload);
+		if (needAIS)
+		{
+			Payload += 3;
+			ProcessAISMessage(Payload, strlen(Payload));
+		}
+		else
+			Debugprintf(Payload);
+
 		return 0;
 	}
 
@@ -6839,7 +6861,7 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	char * Param;
 	struct stat STAT;
 	int Sent;
-
+	char * ptr;
 
 	FN = strtok_s(FN, "?", &Param);
 
@@ -6934,7 +6956,19 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 		return;			// ProcessSpecial has sent the reply
 	}
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", FileSize);
+	ptr = FN;
+
+	while (strchr(ptr, '.'))
+	{
+		ptr = strchr(ptr, '.');
+		++ptr;
+	}
+
+	if (_stricmp(ptr, "jpg") == 0 || _stricmp(ptr, "jpeg") == 0 || _stricmp(ptr, "png") == 0 || _stricmp(ptr, "gif") == 0 || _stricmp(ptr, "ico") == 0)
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: image\r\n\r\n", FileSize);
+	else
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", FileSize);
+	
 	send(sockptr->sock, Header, HeaderLen, 0); 
 	
 	Sent = send(sockptr->sock, MsgBytes, FileSize, 0);

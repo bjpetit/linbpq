@@ -184,6 +184,46 @@ extern VOID * BUFFERPOOL;
 extern void ** Bufferlist[1000];
 void printStack(void);
 
+void _CheckGuardZone(char * File, int Line)
+{
+	int n = 0, i, offset = 0;
+	PMESSAGE Test;
+	UINT CodeDump[8];
+	unsigned char * ptr;
+
+	n = NUMBEROFBUFFERS;
+
+	while (n--)
+	{
+		Test = (PMESSAGE)Bufferlist[n];
+	
+		if (Test && Test->GuardZone)
+		{
+			Debugprintf("CheckGuardZone %p GUARD ZONE CORRUPT %d Called from %s Line %d", Test, Test->Process, File, Line);
+
+			offset = 0;
+			ptr = (unsigned char *)Test;
+
+			while (offset < 400)
+			{
+				memcpy(CodeDump, &ptr[offset], 32);
+	
+				for (i = 0; i < 8; i++)
+					CodeDump[i] = htonl(CodeDump[i]);
+	
+				Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+					&ptr[offset], CodeDump[0], CodeDump[1], CodeDump[2], CodeDump[3], CodeDump[4], CodeDump[5], CodeDump[6], CodeDump[7]);
+
+				offset += 32;
+			}
+			WriteMiniDump();
+#ifdef MDIKERNEL
+			CloseAllNeeded = 1;
+#endif
+		}
+
+	}
+}
 
 UINT _ReleaseBuffer(VOID *pBUFF, char * File, int Line)
 {
@@ -694,7 +734,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 						if (APPLTNC)
 						{
 							if (APPLTNC->TCPInfo && !APPLTNC->TCPInfo->CMSOK && !APPLTNC->TCPInfo->FallbacktoRelay)
-							return NULL;
+								return NULL;
 						}
 					}
 				}
@@ -3504,16 +3544,38 @@ VOID OpenReportingSockets()
 	_beginthread(ResolveUpdateThread, 0, NULL);
 }
 
+VOID WriteMiniDumpThread();
 
-VOID WriteMiniDump()
+time_t lastMiniDump = 0;
+
+void WriteMiniDump()
 {
 #ifdef WIN32
 
+	_beginthread(WriteMiniDumpThread, 0, 0);
+	Sleep(3000);
+}
+
+VOID WriteMiniDumpThread()
+{
 	HANDLE hFile;
 	BOOL ret;
 	char FN[256];
+	struct tm * TM;
+	time_t Now = time(NULL);
 
-	sprintf(FN, "%s/Logs/MiniDump%x.dmp", BPQDirectory, time(NULL));
+	if (lastMiniDump == Now)		// Not more than one per second
+	{
+		Debugprintf("minidump suppressed");
+		return;
+	}
+
+	lastMiniDump = Now;
+
+	TM = gmtime(&Now);
+
+	sprintf(FN, "%s/Logs/MiniDump%d%02d%02d%02d%02d%02d.dmp", BPQDirectory,
+		TM->tm_year + 1900, TM->tm_mon +1, TM->tm_mday, TM->tm_hour, TM->tm_min, TM->tm_sec);
 
 	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE,
 		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -3533,7 +3595,6 @@ VOID WriteMiniDump()
 	}
 #endif
 }
-
 
 // UI Util Code
 

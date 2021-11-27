@@ -72,7 +72,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib"
+				AdditionalDependencies="..\lib\bpq32.lib DbgHelp.lib"
 				OutputFile="c:\DevProgs\bpq32\bpq32.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -80,6 +80,8 @@
 				ProgramDatabaseFile=".\Debug/bpq32.pdb"
 				GenerateMapFile="true"
 				SubSystem="2"
+				StackReserveSize="0"
+				StackCommitSize="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -168,7 +170,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib"
+				AdditionalDependencies="..\lib\bpq32.lib DbgHelp.lib"
 				OutputFile="c:\DevProgs\bpq32\bpq32.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

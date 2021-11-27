@@ -23,6 +23,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "BPQMail.h"
 
+BOOL isAMPRMsg(char * Addr);
+
 struct Country * FindCountry(char * Name);
 struct UserInfo * FindAMPR();
 
@@ -53,6 +55,7 @@ struct UserInfo * FindAMPR();
       don't know what environment it will be running on.
 **************************************************************/
 	   
+int ReformatSyncMessage(CIRCUIT * conn);
 
 #define int __int16
 
@@ -136,7 +139,7 @@ static int crc_fputc(unsigned short c)
 	return 0;
 }
 
-static short crc_fgetc()
+short crc_fgetc()
 {
 	short retour = *(infile++);
 
@@ -418,26 +421,27 @@ static void Putcode(int l, unsigned c)     /* output c bits of code */
 
 /* initialization of tree */
 
-static void StartHuff(void)
+int StartHuff(void)
 {
-    int i, j;
+	int i, j;
 
-        for (i = 0; i < N_CHAR; i++) {
-                freq[i] = 1;
-                son[i] = i + T;
-                prnt[i + T] = i;
-        }
-        i = 0; j = N_CHAR;
-        while (j <= R) {
-                freq[j] = freq[i] + freq[i + 1];
-                son[j] = i;
-                prnt[i] = prnt[i + 1] = j;
-                i += 2; j++;
-        }
-        freq[T] = 0xffff;
-        prnt[R] = 0;
+	for (i = 0; i < N_CHAR; i++) {
+		freq[i] = 1;
+		son[i] = i + T;
+		prnt[i + T] = i;
+	}
+	i = 0; j = N_CHAR;
+	while (j <= R) {
+		freq[j] = freq[i] + freq[i + 1];
+		son[j] = i;
+		prnt[i] = prnt[i + 1] = j;
+		i += 2; j++;
+	}
+	freq[T] = 0xffff;
+	prnt[R] = 0;
+
+	return 0;
 }
-
 
 /* reconstruction of tree */
 
@@ -568,7 +572,7 @@ static void EncodeEnd(void)
         }
 }
 
-static int DecodeChar(void)
+int DecodeChar(void)
 {
     unsigned int c;
 
@@ -586,7 +590,7 @@ static int DecodeChar(void)
     return (int)c;
 }
 
-static int DecodePosition(void)
+int DecodePosition(void)
 {
     unsigned int i, j, c;
 
@@ -770,7 +774,7 @@ BOOL CheckifPacket(char * Via)
 	return FALSE;
 }
 
-void Decode(CIRCUIT * conn)  
+void Decode(CIRCUIT * conn, int FromSync)  
 {
 	unsigned char *ptr;
 	char * StartofMsg;
@@ -917,6 +921,20 @@ void Decode(CIRCUIT * conn)
 	conn->MailBuffer = outfile;
 		
 	conn->TempMsg->length = count;
+
+	if (FromSync)
+	{
+		// Refomat Sync message as if from WLE
+		
+		if (ReformatSyncMessage(conn) == 0)
+		{
+			BBSputs(conn, "OK\r");			// only xml - don't need it (i think)
+			return;
+		}
+
+		FBBHeader->B2Message = TRUE;
+		FBBHeader->MsgType = 'P';
+	}
 
 	if (FBBHeader->MsgType == 'P')
 		Index = PMSG;
@@ -1251,10 +1269,27 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					{
 						// Internet address - do we send via RMS??
 
-						memcpy(Msg->via, &ptr1[4], linelen);
-						Msg->via[linelen-4] = 0;
-						strcpy(FullTo,"RMS");
-						RMSMsgs ++;
+						if (_memicmp(FullTo, "smtp/", 5) == 0 && ISP_Gateway_Enabled)
+						{
+							memcpy(Msg->via, &ptr1[9], linelen - 9);
+							Msg->via[linelen-9] = 0;
+							FullTo[0] = Msg->to[0] = 0;
+						}
+						else if (FindRMS()) // have RMS 
+						{
+							memcpy(Msg->via, &ptr1[4], linelen);
+							Msg->via[linelen-4] = 0;
+							strcpy(FullTo,"RMS");
+							RMSMsgs ++;
+						}
+						else if (ISP_Gateway_Enabled)
+						{
+							memcpy(Msg->via, &ptr1[4], linelen);
+							Msg->via[linelen-4] = 0;
+							FullTo[0] = Msg->to[0] = 0;
+						}
+						else if (isAMPRMsg(Msg->via))
+							strcpy(Msg->to, "RMS");		// Routing will redirect it
 					}
 				}
 				else
@@ -1720,6 +1755,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			free(SaveBody);
 			conn->MailBuffer = NULL;
 			conn->MailBufferSize=0;
+
+			if (FromSync)
+				return;
 
 			SetupNextFBBMessage(conn);
 			return;

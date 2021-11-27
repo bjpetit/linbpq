@@ -106,6 +106,7 @@ struct RIGINFO
 	#define PTTCI_V		4
 	#define PTTCM108	8
 	#define PTTHAMLIB	16
+	#define PTTFLRIG	32
 
 	int PTTTimer;				// PTT Timer watchdog (limits PTT ON to PTT OFF time
 
@@ -159,8 +160,18 @@ struct RIGINFO
 
 	struct HAMLIBSOCK * Sockets;
 
-	long long txOffset;
+	long long txOffset;		// Used primarily with transverters
 	long long rxOffset;
+	long long pttOffset;	// Used to set tx freq to corresponding rx freq (for split freq)
+	long long txFreq;		// Used in preference to Rx Freq + pttOffset if set
+	int rxError;			// RX Frequency Error
+	int txError;			// TX Calibration Error
+	int PTTSetsFreq;
+	int defaultFreq;
+
+	char * reportFreqs;
+
+	long long lastSetFreq;	// Last freq we set (saves recalulating ptt string if not changed
 
 };
 
@@ -181,6 +192,8 @@ struct RIGINFO
 #define FT990 13
 #define HAMLIB 14
 #define FT991A 15			// 991A is a varient of FT2000 but easier to have own type
+#define RTLUDP 16
+#define FLRIG 17
 
 // Yease seem to have lots of variants of the same model
 

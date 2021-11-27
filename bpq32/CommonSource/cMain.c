@@ -43,10 +43,15 @@ VOID FindLostBuffers();
 VOID ReadMH();
 void GetPortCTEXT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 int upnpInit();
+void AISTimer();
+void ADSBTimer();
+
 
 #include "configstructs.h"
 
 extern struct CONFIGTABLE xxcfg;
+extern BOOL needAIS;
+extern int needADSB;
 
 struct PORTCONFIG * PortRec;
 
@@ -1946,6 +1951,12 @@ VOID TIMERINTERRUPT()
 		lastSlowSecs = CurrentSecs;
 
 		L3TimerProc();
+
+		if (needAIS)
+			AISTimer();
+
+		if (needADSB)
+			ADSBTimer();
 
 		if (APRSActive)
 			Debugprintf("BPQ32 Heartbeat Buffers %d APRS Queues %d %d", QCOUNT, C_Q_COUNT(&APRSMONVECPTR->HOSTTRACEQ), C_Q_COUNT(&APPL_Q));
