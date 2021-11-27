@@ -576,6 +576,12 @@ void  mynet::socketError()
 	//	QMessageBox::question(NULL, "ARDOP GUI", errMsg, QMessageBox::Yes | QMessageBox::No);
 }
 
+extern "C" void sendSamplestoStdout(short * Samples, int nSamples)
+{
+
+}
+
+
 extern "C" void sendSamplestoUDP(short * Samples, int nSamples, int Port)
 {
 	if (udpSocket == nullptr)
@@ -606,6 +612,7 @@ extern "C" short * DMABuffer;
 
 
 extern "C" void ProcessNewSamples(short * Samples, int nSamples);
+
 
 extern "C" void UDPPollReceivedSamples()
 {

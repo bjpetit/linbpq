@@ -174,7 +174,8 @@ void getSettings()
 	SCO = settings->value("Init/SCO", 0).toInt();
 
 	dcd_threshold = settings->value("Modem/DCDThreshold", 40).toInt();
-		
+	rxOffset = settings->value("Modem/rxOffset", 0).toInt();
+
 	AGWServ = settings->value("AGWHost/Server", TRUE).toBool();
 	AGWPort = settings->value("AGWHost/Port", 8000).toInt();
 	KISSServ = settings->value("KISS/Server", FALSE).toBool();
@@ -382,6 +383,7 @@ void saveSettings()
 	settings->setValue("Modem/soundChannel4", soundChannel[3]);
 
 	settings->setValue("Modem/DCDThreshold", dcd_threshold);
+	settings->setValue("Modem/rxOffset", rxOffset);
 
 	settings->setValue("AGWHost/Server", AGWServ);
 	settings->setValue("AGWHost/Port", AGWPort);

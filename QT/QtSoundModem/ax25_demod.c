@@ -98,6 +98,8 @@ float BIT_AFC = 32;
 float slottime_tick[5] = { 0 };
 float resptime_tick[5] = { 0 };
 int dcd_threshold = 128;
+int rxOffset = 0;
+
 float DCD_LastPkPos[5] = { 0 };
 float DCD_LastPerc[5] = { 0 };
 int dcd_bit_cnt[5] = { 0 };
@@ -3946,19 +3948,21 @@ void  make_core_BPF(UCHAR snd_ch, short freq, short width)
 
 	UCHAR i;
 
-	rx_samplerate2 = 0.5*RX_Samplerate;
-	width2 = 0.5*width;
+	freq = freq + rxOffset;
+
+	// I want to run decoders lowest to highest to simplify my display,
+	// so filters must be calculated in same order
+
+	int offset = -(RCVR[snd_ch] * rcvr_offset[snd_ch]); // lowest
+
+	rx_samplerate2 = 0.5 * RX_Samplerate;
+	width2 = 0.5 * width;
 	old_freq = freq;
+
 	for (i = 0; i <= RCVR[snd_ch] << 1; i++)
 	{
-		if (i > 0)
-		{
-			if (i > RCVR[snd_ch])
-				freq = old_freq - rcvr_offset[snd_ch] * (i - RCVR[snd_ch]);
-			else
-				freq = old_freq + rcvr_offset[snd_ch] * i;
-		}
-
+		freq = old_freq + offset;
+	
 		freq1 = freq - width2;
 		freq2 = freq + width2;
 		if (freq1 < 1)
@@ -3974,6 +3978,8 @@ void  make_core_BPF(UCHAR snd_ch, short freq, short width)
 			freq2 = rx_samplerate2;
 
 		init_BPF(freq1, freq2, BPF_tap[snd_ch], RX_Samplerate, &DET[0][i].BPF_core[snd_ch][0]);
+
+		offset += rcvr_offset[snd_ch];
 	}
 }
 

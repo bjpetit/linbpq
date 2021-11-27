@@ -5,6 +5,7 @@
 //#include "ui_ListenPort.h"
 //#include "ui_AGWParams.h"
 //#include "ui_AGWConnect.h"
+#include "ui_VARAConfig.h"
 #include "QTextEdit"
 #include "QSplitter"
 #include "QLineEdit"
@@ -24,7 +25,7 @@
 #include <QFileDialog>
 #include <QTabWidget>
 #include <QMenuBar>
-
+#include <QProcess>
 
 
 
@@ -126,6 +127,9 @@ private slots:
 	void MyTimerSlot();
 	void ListenSlot();
 	void AGWSlot();
+	void VARASlot();
+	void deviceaccept();
+	void devicereject();
 	void showContextMenuM(const QPoint &pt);
 	void showContextMenuT(const QPoint &pt);
 	void doQuit();
@@ -143,9 +147,31 @@ private slots:
 	void xon_mdiArea_changed();
 	void doFonts();
 	void doMFonts();
+	void ConnecttoVARA();
+	void VARATimer();
 	void AGWdisplayError(QAbstractSocket::SocketError socketError);
 	void AGWreadyRead();
 	void onAGWSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void VARAdisplayError(QAbstractSocket::SocketError socketError);
+	void VARAreadyRead();
+	void onVARASocketStateChanged(QAbstractSocket::SocketState socketState);
+	void VARADatadisplayError(QAbstractSocket::SocketError socketError);
+	void VARADatareadyRead();
+	void onVARADataSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void HAMLIBdisplayError(QAbstractSocket::SocketError socketError);
+	void HAMLIBreadyRead();
+	void onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void ConnecttoHAMLIB();
+	void HAMLIBSetPTT(int PTTState);
+	void FLRigdisplayError(QAbstractSocket::SocketError socketError);
+	void FLRigreadyRead();
+	void onFLRigSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void ConnecttoFLRig();
+	void FLRigSetPTT(int PTTState);
+	void CATChanged(bool State);
+	void PTTPortChanged(int Selected);
+	void OpenPTTPort();
+	void RadioPTT(bool PTTState);
 	void tabSelected(int);
 
 protected:
@@ -172,6 +198,7 @@ private:
 	QAction *newMonAct;
 	QAction *newCombinedAct;
 	QAction *AGWAction;
+	QAction *VARAAction;
 	QAction *quitAction;
 
 	QList<myTcpSocket*>  _sockets;

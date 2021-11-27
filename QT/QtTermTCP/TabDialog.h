@@ -109,6 +109,33 @@ private:
 	QDialogButtonBox *buttonBox;
 };
 
+
+
+class VARAConnect : public QDialog
+{
+	Q_OBJECT
+
+public:
+	explicit VARAConnect(QWidget *parent = 0);
+	~VARAConnect();
+
+public:
+	QLineEdit * wCallFrom;
+	QComboBox * wCallTo;
+	QLineEdit * Digis;
+	QListWidget * RadioPorts;
+
+private slots:
+	void myaccept();
+	void myreject();
+
+private:
+	//   Ui::TabDialog *ui;
+	QDialogButtonBox *buttonBox;
+};
+
+
+
 class fontDialog : public QDialog
 {
 	Q_OBJECT

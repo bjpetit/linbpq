@@ -65,6 +65,11 @@ int main(int argc, char *argv[])
 	if (nonGUIMode == 0)
 	{
 		w = new QtSoundModem();
+
+		char Title[128];
+		sprintf(Title, "QtSoundModem Version %s Ports %d/%d", VersionString, AGWPort, KISSPort);
+		w->setWindowTitle(Title);
+
 		w->show();
 	}
 

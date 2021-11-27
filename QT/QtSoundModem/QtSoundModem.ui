@@ -43,7 +43,7 @@
    <widget class="QComboBox" name="modeB">
     <property name="geometry">
      <rect>
-      <x>292</x>
+      <x>272</x>
       <y>6</y>
       <width>145</width>
       <height>22</height>
@@ -96,7 +96,7 @@
     <property name="geometry">
      <rect>
       <x>6</x>
-      <y>6</y>
+      <y>7</y>
       <width>16</width>
       <height>18</height>
      </rect>
@@ -108,7 +108,7 @@
    <widget class="QSpinBox" name="centerB">
     <property name="geometry">
      <rect>
-      <x>444</x>
+      <x>424</x>
       <y>6</y>
       <width>56</width>
       <height>22</height>
@@ -170,21 +170,24 @@
    <widget class="QLabel" name="label">
     <property name="geometry">
      <rect>
-      <x>544</x>
-      <y>8</y>
-      <width>86</width>
+      <x>602</x>
+      <y>0</y>
+      <width>73</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
-     <string>DCD Threshold</string>
+     <string>DCD Level</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="labelB">
     <property name="geometry">
      <rect>
-      <x>276</x>
-      <y>10</y>
+      <x>256</x>
+      <y>9</y>
       <width>16</width>
       <height>14</height>
      </rect>
@@ -196,17 +199,17 @@
    <widget class="QSlider" name="DCDSlider">
     <property name="geometry">
      <rect>
-      <x>626</x>
-      <y>4</y>
-      <width>117</width>
-      <height>24</height>
+      <x>602</x>
+      <y>18</y>
+      <width>73</width>
+      <height>14</height>
      </rect>
     </property>
     <property name="orientation">
      <enum>Qt::Horizontal</enum>
     </property>
     <property name="tickPosition">
-     <enum>QSlider::TicksBothSides</enum>
+     <enum>QSlider::NoTicks</enum>
     </property>
     <property name="tickInterval">
      <number>10</number>
@@ -215,8 +218,8 @@
    <widget class="QCheckBox" name="holdPointers">
     <property name="geometry">
      <rect>
-      <x>754</x>
-      <y>4</y>
+      <x>694</x>
+      <y>6</y>
       <width>93</width>
       <height>22</height>
      </rect>
@@ -314,7 +317,7 @@
     <property name="geometry">
      <rect>
       <x>5</x>
-      <y>31</y>
+      <y>32</y>
       <width>16</width>
       <height>18</height>
      </rect>
@@ -336,7 +339,7 @@
    <widget class="QSpinBox" name="centerD">
     <property name="geometry">
      <rect>
-      <x>444</x>
+      <x>424</x>
       <y>31</y>
       <width>56</width>
       <height>22</height>
@@ -352,7 +355,7 @@
    <widget class="QComboBox" name="modeD">
     <property name="geometry">
      <rect>
-      <x>292</x>
+      <x>272</x>
       <y>31</y>
       <width>145</width>
       <height>22</height>
@@ -362,8 +365,8 @@
    <widget class="QLabel" name="labelD">
     <property name="geometry">
      <rect>
-      <x>274</x>
-      <y>35</y>
+      <x>254</x>
+      <y>33</y>
       <width>16</width>
       <height>14</height>
      </rect>
@@ -386,6 +389,47 @@
     </property>
     <property name="value">
      <number>1500</number>
+    </property>
+   </widget>
+   <widget class="QSlider" name="RXOffset">
+    <property name="geometry">
+     <rect>
+      <x>512</x>
+      <y>18</y>
+      <width>63</width>
+      <height>14</height>
+     </rect>
+    </property>
+    <property name="minimum">
+     <number>-200</number>
+    </property>
+    <property name="maximum">
+     <number>200</number>
+    </property>
+    <property name="value">
+     <number>0</number>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+    <property name="tickPosition">
+     <enum>QSlider::NoTicks</enum>
+    </property>
+    <property name="tickInterval">
+     <number>10</number>
+    </property>
+   </widget>
+   <widget class="QLabel" name="RXOffsetLabel">
+    <property name="geometry">
+     <rect>
+      <x>512</x>
+      <y>2</y>
+      <width>87</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>RX Offset 0</string>
     </property>
    </widget>
   </widget>

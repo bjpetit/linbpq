@@ -210,7 +210,7 @@ boolean dcd[5] = { 0 ,0 ,0, 0 };
 
 boolean  tx = 0;
 
-int stdtones = 1;
+int stdtones = 0;
 int fullduplex = 0;
 
 UCHAR diddles = 0;

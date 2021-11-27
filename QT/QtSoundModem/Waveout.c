@@ -34,6 +34,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
+#include <fcntl.h>
 #include <mmsystem.h>
 
 #include "UZ7HOStuff.h"
@@ -42,6 +43,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 void printtick(char * msg);
 void PollReceivedSamples();
 short * SoundInit();
+void StdinPollReceivedSamples();
 
 #include <math.h>
 
@@ -59,6 +61,7 @@ extern short * DMABuffer;
 extern int Number;
 
 int SoundMode = 0;
+int stdinMode = 0;
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -229,6 +232,13 @@ short * SendtoCard(unsigned short * buf, int n)
 		return buf;
 	}
 
+	if (SoundMode == 4)			// UDP
+	{
+		sendSamplestoStdout(buf, n);
+		return buf;
+	}
+
+
 	header[Index].dwBufferLength = n * 4;
 
 	waveOutPrepareHeader(hWaveOut, &header[Index], sizeof(WAVEHDR));
@@ -291,12 +301,11 @@ void GetSoundDevices()
 		return;
 	}
 
-
 	Debugprintf("Capture Devices");
 
 	CaptureCount = waveInGetNumDevs();
 
-	CaptureDevices = malloc((MAXPNAMELEN + 2) * CaptureCount);
+	CaptureDevices = malloc((MAXPNAMELEN + 2) * (CaptureCount + 2));
 	CaptureDevices[0] = 0;
 	
 	for (i = 0; i < CaptureCount; i++)
@@ -311,6 +320,10 @@ void GetSoundDevices()
 		memcpy(&CaptureNames[i][0], pwic.szPname, MAXPNAMELEN);
 		_strupr(&CaptureNames[i][0]);
 	}
+
+	CaptureCount++;
+	Debugprintf("%d %s", i, "STDIN");
+	strcpy(&CaptureNames[i][0], "STDIN"); 
 
 	Debugprintf("Playback Devices");
 
@@ -335,9 +348,42 @@ void GetSoundDevices()
 }
 
 
+HANDLE hStdin;
+
 int InitSound(BOOL Report)
 {
 	int i, t, ret;
+
+	if (SoundMode == 4)
+	{
+		char fn[] = "D:samples.wav";
+
+		// create a separate new console window
+//		AllocConsole();
+
+		// attach the new console to this application's process
+//		AttachConsole(GetCurrentProcessId());
+
+		hStdin =  CreateFileA(fn,
+			GENERIC_READ,
+			1,                    // exclusive access
+			NULL,                 // no security attrs
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL);
+			
+		// reopen the std I/O streams to redirect I/O to the new console
+
+//		freopen("CON", "r", stdin);
+
+//		i = _setmode(_fileno(stdin), _O_BINARY);
+//		if (i == -1)
+//			i = errno;
+//		else
+//			printf("'stdin' successfully changed to binary mode\n");
+
+		return TRUE;
+	}
 
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
@@ -383,6 +429,24 @@ int InitSound(BOOL Report)
 				break;
 			}
 		}
+	}
+
+	if (strcmp(CaptureNames[CaptureIndex], "STDIN") == 0)
+	{
+		stdinMode = 1;
+		char fn[] = "D:samples.wav";
+
+		hStdin = CreateFileA(fn,
+			GENERIC_READ,
+			1,                    // exclusive access
+			NULL,                 // no security attrs
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL);
+
+		DMABuffer = SoundInit();
+
+		return TRUE;
 	}
 
     ret = waveInOpen(&hWaveIn, CaptureIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
@@ -436,6 +500,12 @@ void PollReceivedSamples()
 	// to log every 10 secs or so
 
 	// with Windows we get mono data
+
+	if (stdinMode)
+	{
+		StdinPollReceivedSamples();
+		return;
+	}
 
 	if (inheader[inIndex].dwFlags & WHDR_DONE)
 	{
@@ -864,6 +934,59 @@ void CatWrite(char * Buffer, int Len)
 void * initPulse()
 {
 	return NULL;
+}
+
+
+
+void StdinPollReceivedSamples()
+{
+	short buffer[2048];
+	DWORD out;
+	int res = ReadFile(hStdin, buffer, 2048, &out, NULL);
+	if (res <= 0)
+	{
+		res = GetLastError();
+		printf("\nEnd of file on stdin.  Exiting.\n");
+	}
+
+	short * ptr = buffer;
+	int i;
+
+	for (i = 0; i < ReceiveSize; i++)
+	{
+		if (*(ptr) < min)
+			min = *ptr;
+		else if (*(ptr) > max)
+			max = *ptr;
+		ptr++;
+	}
+
+	CurrentLevel = ((max - min) * 75) / 32768;	// Scale to 150 max
+
+	if ((Now - lastlevelGUI) > 2000)	// 2 Secs
+	{
+		//			if (WaterfallActive == 0 && SpectrumActive == 0)				// Don't need to send as included in Waterfall Line
+		//				SendtoGUI('L', &CurrentLevel, 1);	// Signal Level
+
+		lastlevelGUI = Now;
+
+		if ((Now - lastlevelreport) > 10000)	// 10 Secs
+		{
+			char HostCmd[64];
+			lastlevelreport = Now;
+
+			sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
+			Debugprintf("Input peaks = %d, %d", min, max);
+
+		}
+		min = max = 0;
+	}
+
+	//		debugprintf(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
+	//		if (Capturing && Loopback == FALSE)
+	ProcessNewSamples(buffer, 512);
+
+
 }
 
 

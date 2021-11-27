@@ -5130,12 +5130,12 @@ void BPQConfigGen::replyFinished(QNetworkReply *reply)
 	case 13:			// get next Windows file
 
 		SaveDownloadedFile(&Data, len, "bpq32.dll", "c:/windows/system32", TRUE);
-		downloadFile("BPQMail.zip", Mode, ARM);
+		downloadFile("BPQMail.exe", Mode, ARM);
 		return;
 
 	case 14:
 
-		SaveDownloadedFile(&Data, len, "BPQMail.exe", programPath, TRUE);
+		SaveDownloadedFile(&Data, len, "BPQMail.exe", programPath, FALSE);
 		downloadFile("BPQChat.exe", Mode, ARM);
 		return;
 

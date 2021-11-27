@@ -53,6 +53,8 @@ int debugmode = 0;
 extern float src_buf[5][2048];
 extern byte RCVR[5];
 
+int SatelliteMode = 0;
+
 int UDPServerPort = 8884;
 int UDPClientPort = 8888;
 int TXPort = 8884;
@@ -283,7 +285,7 @@ UCHAR buf_status [5]  = {0,0,0,0};
 UCHAR tx_buf_num1 [5] = {0,0,0,0};
 UCHAR tx_buf_num [5] = {0,0,0,0};
 
-short active_rx_freq[5];
+extern short active_rx_freq[5];
 
 
 
@@ -1702,17 +1704,20 @@ void runModems()
 			thread[snd_ch] = _beginthread(runModemthread, 0, (void *)(size_t)snd_ch);
 		else
 			runModemthread((void *)(size_t)snd_ch);
-
 	}
 
 	if (multiCore)
 	{
 #ifdef WIN32
-		WaitForSingleObject(&thread[0], 2000);
-		WaitForSingleObject(&thread[1], 2000);
+		if (thread[0]) WaitForSingleObject(&thread[0], 2000);
+		if (thread[1]) WaitForSingleObject(&thread[1], 2000);
+		if (thread[2]) WaitForSingleObject(&thread[2], 2000);
+		if (thread[3]) WaitForSingleObject(&thread[3], 2000);
 #else
-		pthread_join(thread[0], &res);
-		pthread_join(thread[1], &res);
+		if (thread[0]) pthread_join(thread[0], &res);
+		if (thread[1]) pthread_join(thread[1], &res);
+		if (thread[2]) pthread_join(thread[2], &res);
+		if (thread[3]) pthread_join(thread[3], &res);
 #endif
 	}
 }
@@ -1733,7 +1738,7 @@ void runModemthread(void * param)
 
 	for (rcvr_idx = 0; rcvr_idx <= lastrx; rcvr_idx++)
 	{
-		active_rx_freq[snd_ch] = rx_freq[snd_ch] + offset;
+		active_rx_freq[snd_ch] = rxOffset + rx_freq[snd_ch] + offset;
 		offset += rcvr_offset[snd_ch];
 
 		Demodulator(snd_ch, rcvr_idx, src_buf[modemtoSoundLR[snd_ch]], rcvr_idx == lastrx, offset == 0);
@@ -1742,7 +1747,7 @@ void runModemthread(void * param)
 
 // I think this processes a buffer of samples
 
-void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
+void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 {
 	word i, i1;
 	byte snd_ch, rcvr_idx;
@@ -1765,6 +1770,7 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 		sendSamplestoUDP(Buff, 512, TXPort);
 	}
+
 	// Do FFT on every 4th buffer (2048 samples)
 
 	add_fft_line = FALSE;
@@ -1775,6 +1781,13 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 		add_fft_line = TRUE;
 		fft_mult = 0;
 	}
+
+	// if in Satellite Mode look for a Tuning signal
+
+//	if (SatelliteMode)
+//	{
+//		doTuning(Samples, nSamples);
+//	}
 
 	for (snd_ch = 0; snd_ch < 4; snd_ch++)
 	{
@@ -1889,7 +1902,7 @@ void BufferFull(short * Samples, int nSamples)			// These are Mono Samples
 
 			if (add_fft_line)
 				if (Firstwaterfall)
-					doWaterfall(0);
+					doWaterfall(FirstWaterfallChan);
 		}
 
 		if (UsingBothChannels && Secondwaterfall)

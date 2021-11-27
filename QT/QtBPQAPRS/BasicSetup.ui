@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>configDialog</class>
+ <widget class="QDialog" name="configDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>711</width>
+    <height>389</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>BPQAPRS Basic Setup</string>
+  </property>
+  <widget class="QWidget" name="layoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>160</x>
+     <y>322</y>
+     <width>351</width>
+     <height>33</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout">
+    <property name="spacing">
+     <number>6</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QPushButton" name="okButton">
+      <property name="text">
+       <string>OK</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="cancelButton">
+      <property name="text">
+       <string>Cancel</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QLineEdit" name="trackExpireTime">
+   <property name="geometry">
+    <rect>
+     <x>140</x>
+     <y>40</y>
+     <width>45</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="retryCount">
+   <property name="geometry">
+    <rect>
+     <x>138</x>
+     <y>68</y>
+     <width>49</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="retryInterval">
+   <property name="geometry">
+    <rect>
+     <x>326</x>
+     <y>68</y>
+     <width>31</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="ISFIlter">
+   <property name="geometry">
+    <rect>
+     <x>92</x>
+     <y>108</y>
+     <width>395</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="JPEGInterval">
+   <property name="geometry">
+    <rect>
+     <x>308</x>
+     <y>228</y>
+     <width>47</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="JPEGFileName">
+   <property name="geometry">
+    <rect>
+     <x>146</x>
+     <y>268</y>
+     <width>459</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="noTracks">
+   <property name="geometry">
+    <rect>
+     <x>206</x>
+     <y>40</y>
+     <width>147</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Default to no tracks</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="addCurrentView">
+   <property name="geometry">
+    <rect>
+     <x>502</x>
+     <y>108</y>
+     <width>205</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Add current view to filter string</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>40</y>
+     <width>113</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Track Expire Time</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>68</y>
+     <width>109</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Msg Retry Count</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_3">
+   <property name="geometry">
+    <rect>
+     <x>206</x>
+     <y>68</y>
+     <width>117</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Msg Retry Interval</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_4">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>108</y>
+     <width>47</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>IS Filter</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_5">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>148</y>
+     <width>79</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Status Msg</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_10">
+   <property name="geometry">
+    <rect>
+     <x>178</x>
+     <y>228</y>
+     <width>101</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Interval (Seconds)</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_11">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>270</y>
+     <width>109</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>JPEG File Name</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="statusMsg">
+   <property name="geometry">
+    <rect>
+     <x>92</x>
+     <y>148</y>
+     <width>497</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="suppressNoPosn">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>188</y>
+     <width>237</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Supress Stations with zero Lat/Lon</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="useLocalTime">
+   <property name="geometry">
+    <rect>
+     <x>260</x>
+     <y>188</y>
+     <width>125</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Use Local Time</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="distKM">
+   <property name="geometry">
+    <rect>
+     <x>396</x>
+     <y>188</y>
+     <width>169</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Distance in Kilometers</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="createJPEG">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>228</y>
+     <width>159</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Create JPEG of display</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_6">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>10</y>
+     <width>123</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Station Icon Font Size</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="icomFortSize">
+   <property name="geometry">
+    <rect>
+     <x>140</x>
+     <y>10</y>
+     <width>45</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>okButton</sender>
+   <signal>clicked()</signal>
+   <receiver>configDialog</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>278</x>
+     <y>253</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>96</x>
+     <y>254</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>cancelButton</sender>
+   <signal>clicked()</signal>
+   <receiver>configDialog</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>369</x>
+     <y>253</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>179</x>
+     <y>282</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

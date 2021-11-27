@@ -32,7 +32,7 @@ extern int AGWPortNum;
 extern int AGWPaclen;
 
 extern char listenCText[4096];
-extern int ConnectBeep;
+extern bool ConnectBeep;
 
 extern QList<Ui_ListenSession *> _sessions;
 
@@ -45,7 +45,7 @@ extern QMenu *connectMenu;
 extern QAction *discAction;
 extern QAction *YAPPSend;
 
-extern QAction *actHost[17];
+extern QAction *actHost[18];
 
 // Session Type Equates
 
@@ -646,7 +646,6 @@ void QtTermTCP::AGWTimer()
 		}
 	}
 }
-
 
 void AGW_del_socket(void * socket)
 {

@@ -29,28 +29,28 @@ typedef unsigned short      WORD;
 #define TCHAR char
 
 void QueueMsg(Ui_ListenSession * Sess, char * Msg, int Len);
-BOOL ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
+bool ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
 void SetPortMonLine(int i, char * Text, int visible, int enabled);
 void AGW_AX25_data_in(void  * Sess, UCHAR * data, int Len);
 int checkUTF8(unsigned char * Msg, int Len, unsigned char * out);
 
-BOOL Bells = TRUE;
-BOOL StripLF = FALSE;
-BOOL LogMonitor = FALSE;
-BOOL LogOutput = FALSE;
-BOOL SendDisconnected = TRUE;
-BOOL ChatMode = TRUE;
+bool Bells = TRUE;
+bool StripLF = FALSE;
+bool LogMonitor = FALSE;
+bool LogOutput = FALSE;
+bool SendDisconnected = TRUE;
+bool ChatMode = TRUE;
 int MonPorts = 1;
-BOOL ListenOn = FALSE;
+bool ListenOn = FALSE;
 
 time_t LastWrite = 0xffffffff;
 int AlertInterval = 300;
-BOOL AlertBeep = TRUE;
+bool AlertBeep = TRUE;
 int AlertFreq = 600;
 int AlertDuration = 250;
 TCHAR AlertFileName[256] = { 0 };
-BOOL ConnectBeep = TRUE;
-BOOL UseKeywords = TRUE;
+bool ConnectBeep = TRUE;
+bool UseKeywords = TRUE;
 
 char KeyWordsName[MAX_PATH] = "Keywords.sys";
 char ** KeyWords = NULL;
@@ -108,7 +108,7 @@ char * strlop(char * buf, char delim)
 	return ptr;
 }
 
-BOOL CheckKeyWord(char * Word, char * Msg)
+bool CheckKeyWord(char * Word, char * Msg)
 {
 	char * ptr1 = Msg, *ptr2;
 	int len = (int)strlen(Word);
@@ -134,7 +134,7 @@ BOOL CheckKeyWord(char * Word, char * Msg)
 	return FALSE;					// OK
 }
 
-BOOL CheckKeyWords(UCHAR * Msg, int len)
+bool CheckKeyWords(UCHAR * Msg, int len)
 {
 	char dupMsg[2048];
 	int i;
@@ -369,6 +369,9 @@ MonLoop:
 	return;
 }
 
+extern myTcpSocket * VARASock;
+extern myTcpSocket * VARADataSock;
+
 int SendMsg(Ui_ListenSession * Sess, TCHAR * Buffer, int len)
 {
 	if (Sess->AGWSession)
@@ -379,7 +382,12 @@ int SendMsg(Ui_ListenSession * Sess, TCHAR * Buffer, int len)
 		return len;
 
 	}
-	
+	else if (VARASock && VARASock->Sess == Sess)
+	{
+		VARADataSock->write(Buffer, len);
+		return len;
+	}
+
 	return SocketSend(Sess, Buffer, len);
 }
 
@@ -395,7 +403,7 @@ void QueueMsg(Ui_ListenSession * Sess, char * Msg, int len)
 
 int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
 
-BOOL ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
+bool ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 {
 	// may have saved data
 
@@ -418,6 +426,8 @@ BOOL ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 	return 0;
 }
 
+extern int VARAEnable;
+
 int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 {
 	int pktLen = Msg[1];
@@ -431,8 +441,6 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 	int len;
 	UCHAR Buffer[2000];
 	struct stat STAT;
-
-
 
 	switch (Msg[0])
 	{
@@ -467,6 +475,9 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 
 		// YAPPC has date/time in dos format
 
+		if (Len < Msg[1] + 1)
+			return 0;				// Wait till we have it all
+
 		NameLen = strlen((char *)&Msg[2]);
 		strcpy(ARQFilename, (char *)&Msg[2]);
 
@@ -486,7 +497,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 
 		// Check Size
 
-		if (FileSize > MaxRXSize)
+		if (FileSize > MaxRXSize && VARAEnable == 0)
 		{
 			Mess[0] = NAK;
 			Mess[1] = sprintf(&Mess[2], "File %s size %d larger than limit %d\r", ARQFilename, FileSize, MaxRXSize);
@@ -591,7 +602,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 			}
 		}
 
-		if ((YAPPLen)+pktLen > MailBufferSize)
+		if ((YAPPLen) + pktLen > MailBufferSize)
 		{
 			// Too Big ??
 
@@ -613,6 +624,9 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 
 		if (YAPPDate)
 			++pktLen;				// Add Checksum
+
+		if (YAPPLen == MailBufferSize)
+			pktLen = pktLen;
 
 		return pktLen + 2;
 

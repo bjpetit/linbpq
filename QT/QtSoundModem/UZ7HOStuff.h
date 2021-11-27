@@ -2,8 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.49"
-#define VersionBytes {0, 0, 0, 49}
+#define VersionString "0.0.0.52"
+#define VersionBytes {0, 0, 0, 52}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -105,6 +105,17 @@
 // 0.48 Send FRMR for unrecognised frame types
 
 // 0.49 Add Andy's FEC Tag correlation coode
+
+// 0.50 Fix Waterfall display when only using right channel
+//		Allow 1200 baud fsk at other center freqs
+//		Add Port numbers to Window title and Try Icon tooltip
+//		Fix calculation of filters for multiple decoders
+//		Add RX Offset setting (for satellite operation
+
+// 0.51	Fix Multithreading with more that 2 modems
+
+// 0.52	Add Stdin as source on Linux
+
 
 #include <string.h>
 #include <stdlib.h>
@@ -867,6 +878,7 @@ extern BOOL Firstwaterfall;
 extern BOOL Secondwaterfall;
 
 extern int dcd_threshold;
+extern int rxOffset;
 
 extern boolean busy;
 extern boolean dcd[5];
@@ -912,6 +924,8 @@ extern int fx25_mode[4];
 extern int tx_fx25_size[4];
 extern int tx_fx25_size_cnt[4];
 extern int tx_fx25_mode[4];
+
+extern int SatelliteMode;
 
 // Function prototypes
 

@@ -185,7 +185,7 @@ BOOL blnLastPTT = FALSE;
 
 BOOL PlayComplete = FALSE;
 
-BOOL blnBusyStatus;
+BOOL blnBusyStatus = 0;
 BOOL newStatus;
 
 unsigned int tmrSendTimeout;
@@ -1569,8 +1569,8 @@ void CheckTimers()
 int dttLastBusy;
 int dttLastClear;
 int dttStartRTMeasure;
-int intLastStart;
-int intLastStop;
+extern int intLastStart;
+extern int intLastStop;
 float dblAvgBaselineSlow;
 float dblAvgBaselineFast;
 float dblAvgPk2BaselineRatio;

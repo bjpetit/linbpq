@@ -45,6 +45,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 extern int Closing;
 
 int SoundMode = 0;
+int stdinMode = 0;
 
 //#define SHARECAPTURE		// if defined capture device is opened and closed for each transission
 
@@ -123,7 +124,7 @@ void Sleep(int mS)
 // STM32 and Teensy DAC uses unsigned 0 - 4095
 
 short buffer[2][1200 * 2];			// Two Transfer/DMA buffers of 0.1 Sec
-short inbuffer[2][1200 * 2];		// Two Transfer/DMA buffers of 0.1 Sec
+short inbuffer[1200 * 2];		// Two Transfer/DMA buffers of 0.1 Sec
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -601,6 +602,9 @@ nextcard:
 		if (snd_card_next(&card) < 0 )
 			break;
 	}
+
+	strcpy(CaptureNames[CaptureCount++], "stdin");
+
 	return CaptureCount;
 }
 
@@ -716,6 +720,14 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 	char buf1[100];
 	char * ptr;
 	snd_pcm_hw_params_t *hw_params;
+
+	if (strcmp(CaptureDevice, "stdin") == 0)
+	{
+		stdinMode = 1;
+
+		Debugprintf("Input from stdin");
+		return TRUE;
+	}
 
 	if (rechandle)
 	{
@@ -1135,7 +1147,6 @@ short * SendtoCard(short * buf, int n)
 		pulse_write(buf, n);
 	else
 	{
-
 		if (playhandle)
 			SoundCardWrite(buf, n);
 
@@ -1176,7 +1187,7 @@ void GetSoundDevices()
 		strcpy(&CaptureNames[1][0], "/dev/dsp1");
 		strcpy(&CaptureNames[2][0], "/dev/dsp2");
 	}
-	else
+	else if (SoundMode == 2)
 	{
 		// Pulse
 
@@ -1210,6 +1221,7 @@ int InitSound(BOOL Quiet)
 			return FALSE;
 
 		break;
+
 	}
 
 	printf("InitSound %s %s\n", CaptureDevice, PlaybackDevice);
@@ -1226,15 +1238,52 @@ void PollReceivedSamples()
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
 
+	int bytes;
 #ifdef TXSILENCE
 	SendSilence();			// send silence (attempt to fix CM delay issue)
 #endif
 
-	if (SoundCardRead(&inbuffer[0][0], ReceiveSize))
+	if (stdinMode)
 	{
-		// returns ReceiveSize or none
+		// will block if no input. May get less, in which case wait a bit then try to read rest
 
-		short * ptr = &inbuffer[0][0];
+		// rtl_udp outputs mono samples
+
+		short input[1200];
+		short * ptr1, *ptr2;		
+		int n = 20; // Max Wait
+
+		bytes = read(STDIN_FILENO, input, ReceiveSize * 2);		// 4 = Stereo 2 bytes per sample
+
+		while (bytes < ReceiveSize * 2 && n--)
+		{
+			Sleep(50);	//mS
+			bytes += read(STDIN_FILENO, &input[bytes / 2], (ReceiveSize * 2) - bytes);
+		}
+			
+		// if still not enough, too bad!
+
+		if (bytes != ReceiveSize * 2)
+			Debugprintf("Short Read %d", bytes);
+
+		// convert to stereo
+
+		ptr1 = input;
+		ptr2 = inbuffer;
+		n = ReceiveSize;
+
+		while (n--)
+		{
+			*ptr2++ = *ptr1;
+			*ptr2++ = *ptr1++;
+		}
+	}
+	else
+		bytes = SoundCardRead(inbuffer, ReceiveSize);	 // returns ReceiveSize or none
+
+	if (bytes > 0)
+	{
+		short * ptr = inbuffer;
 		int i;
 
 		for (i = 0; i < ReceiveSize; i++)
@@ -1265,7 +1314,7 @@ void PollReceivedSamples()
 			min = max = 0;							// Every 2 secs
 		}
 
-		ProcessNewSamples(&inbuffer[0][0], ReceiveSize);
+		ProcessNewSamples(inbuffer, ReceiveSize);
 	}
 } 
 
@@ -1375,13 +1424,13 @@ void SoundFlush()
 		}
 #endif
 	}
+	else if (SoundMode == 1)
+	{
+		oss_flush();
+	}
 	else if (SoundMode == 2)
 	{
 		pulse_flush();
-	}
-	else
-	{
-		oss_flush();
 	}
 
 	SoundIsPlaying = FALSE;

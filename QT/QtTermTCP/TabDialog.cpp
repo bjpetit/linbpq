@@ -70,6 +70,7 @@ QLabel *label_12;
 QGroupBox *groupBox_2;
 QLineEdit *AHost;
 QLineEdit *APort;
+QLineEdit *APath;
 QLineEdit *Paclen;
 QLabel *label_8;
 QLabel *label_9;
@@ -79,6 +80,12 @@ QCheckBox *AAGWEnable;
 QLabel *label_13;
 QCheckBox *AAGWMonEnable;
 
+QLineEdit *AVARATermCall;
+QLineEdit *AVARAHost;
+QLineEdit *AVARAPort;
+QCheckBox *AVARAEnable;
+
+
 extern int AGWEnable;
 extern int AGWMonEnable;
 extern char AGWTermCall[12];
@@ -87,6 +94,12 @@ extern char AGWBeaconPath[80];
 extern int AGWBeaconInterval;
 extern char AGWBeaconPorts[80];
 extern char AGWBeaconMsg[260];
+
+extern int VARAEnable;
+extern int VARAPortNum;
+extern char VARAHost[128];
+extern char VARATermCall[12];
+extern char VARAPath[256];
 
 extern char AGWHost[128];
 extern int AGWPortNum;
@@ -412,6 +425,117 @@ AGWDialog::AGWDialog(QWidget *parent) : QDialog(parent)
 AGWDialog::~AGWDialog()
 {
 }
+
+
+
+
+
+VARAConnect::VARAConnect(QWidget *parent) : QDialog(parent)
+{
+	this->setFont(*menufont);
+
+	setWindowTitle(tr("VARA Connection"));
+
+	myResize *resize = new myResize();
+	installEventFilter(resize);
+
+	scrollArea = new QScrollArea(this);
+	scrollArea->setObjectName(QString::fromUtf8("scrollArea"));
+	scrollArea->setGeometry(QRect(5, 5, 562, 681));
+	scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setWidgetResizable(false);
+	scrollAreaWidgetContents = new QWidget();
+	scrollAreaWidgetContents->setObjectName(QString::fromUtf8("scrollAreaWidgetContents"));
+
+	QVBoxLayout *layout = new QVBoxLayout();
+	layout->setContentsMargins(10, 10, 10, 10);
+
+	setLayout(layout);
+
+	QFormLayout *formLayout2 = new QFormLayout();
+	layout->addLayout(formLayout2);
+
+	wCallFrom = new QLineEdit();
+	formLayout2->addRow(new QLabel("Call From"), wCallFrom);
+
+	wCallTo = new QComboBox();
+	wCallTo->setEditable(true);
+	wCallTo->setInsertPolicy(QComboBox::NoInsert);
+
+	formLayout2->addRow(new QLabel("Call To"), wCallTo);
+
+	Digis = new QLineEdit();
+	formLayout2->addRow(new QLabel("Digis"), Digis);
+
+	layout->addSpacing(2);
+
+	buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+	buttonBox->setFont(*menufont);
+	layout->addWidget(buttonBox);
+
+	scrollAreaWidgetContents->setLayout(layout);
+	scrollArea->setWidget(scrollAreaWidgetContents);
+
+	wCallFrom->setText(VARATermCall);
+	wCallTo->addItems(AGWToCalls);
+
+	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
+	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
+}
+
+VARAConnect::~VARAConnect()
+{
+}
+
+extern myTcpSocket * VARASock;
+extern myTcpSocket * VARADataSock;
+
+void VARAConnect::myaccept()
+{
+	QVariant Q;
+
+	char CallFrom[32];
+	char CallTo[32];
+	char Via[128];
+	char Msg[256];
+	int Len;
+
+	strcpy(CallFrom, wCallFrom->text().toUpper().toUtf8());
+	strcpy(CallTo, wCallTo->currentText().toUpper().toUtf8());
+	strcpy(Via, Digis->text().toUpper().toUtf8());
+
+// if digis have to form block with byte count followed by n 10 byte calls
+
+
+// Add CallTo if not already in list
+
+	if (AGWToCalls.contains(CallTo))
+		AGWToCalls.removeOne(CallTo);
+
+	AGWToCalls.insert(-1, CallTo);
+
+
+	if (Via[0])
+		Len = sprintf(Msg, "CONNECT %s %s VIA %s\r", CallFrom, CallTo, Via);
+	else 
+		Len = sprintf(Msg, "CONNECT %s %s\r", CallFrom, CallTo);
+
+	VARASock->write(Msg, Len);
+
+	discAction->setEnabled(true);
+	VARAConnect::accept();
+}
+
+void VARAConnect::myreject()
+{
+	VARAConnect::reject();
+}
+
+
+extern QProcess *process;
+
+
 
 TabDialog::TabDialog(QWidget *parent) : QDialog(parent)
 {

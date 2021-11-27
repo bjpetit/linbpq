@@ -43,7 +43,7 @@ int Capturing = 0;
 extern unsigned short buffer[2][1200];
 extern int SoundMode;
 
-short * DMABuffer;
+extern short * DMABuffer;
 
 unsigned short * SendtoCard(unsigned short * buf, int n);
 short * SoundInit();
@@ -51,7 +51,7 @@ void DoTX(int Chan);
 void UDPPollReceivedSamples();
 
 
-int SampleNo;
+extern int SampleNo;
 
 extern int pnt_change[5];				// Freq Changed Flag
 
@@ -319,7 +319,7 @@ extern UCHAR Pixels[4096];
 extern UCHAR * pixelPointer;
 #endif
 
-int blnBusyStatus = 0;
+extern int blnBusyStatus;
 BusyDet = 0;
 
 #define PLOTWATERFALL
@@ -509,9 +509,9 @@ void UpdateBusyDetector(short * bytNewSamples)
 
 */
 
-short rawSamples[2400];	// Get Frame Type need 2400 and we may add 1200
+extern short rawSamples[2400];	// Get Frame Type need 2400 and we may add 1200
 int rawSamplesLength = 0;
-int maxrawSamplesLength;
+extern int maxrawSamplesLength;
 
 void ProcessNewSamples(short * Samples, int nSamples)
 {
@@ -1241,11 +1241,11 @@ int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 
 extern int index_of[];
 extern int recd[];
-int Corrected[256];
+extern int Corrected[256];
 extern int tt;		//  number of errors that can be corrected 
 extern int kk;		// Info Symbols
 
-BOOL blnErrorsCorrected;
+extern BOOL blnErrorsCorrected;
 
 
 BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)

@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/QtBPQAPRS">
+        <file>Icon.ico</file>
+        <file>Icon1.ico</file>
+        <file>aprs.ico</file>
+    </qresource>
+</RCC>

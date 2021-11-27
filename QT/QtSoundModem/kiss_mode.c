@@ -52,15 +52,7 @@ int KISSConCount = 0;
 
 struct TKISSMode_t  KISS;
 
-int KISSPort = 8100;
-int KISSServ;
-
-int newKISSPort = 8100;
-
-int newKISSServ;
-
 int KISS_encode(UCHAR * KISSBuffer, int port, string * frame, int TXMON);
-
 
 void KISS_init()
 {

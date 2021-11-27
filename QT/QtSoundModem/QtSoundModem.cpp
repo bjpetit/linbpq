@@ -83,6 +83,8 @@ extern "C" int multiCore;
 
 extern "C" int refreshModems;
 
+extern "C" int pnt_change[5];
+
 extern "C"
 { 
 	int InitSound(BOOL Report);
@@ -416,8 +418,10 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	if (MintoTray)
 	{
+		char popUp[256];
+		sprintf(popUp, "QtSoundModem %d %d", AGWPort, KISSPort);
 		trayIcon = new QSystemTrayIcon(QIcon(":/QtSoundModem/soundmodem.ico"), this);
-		trayIcon->setToolTip("QtSoundModem");
+		trayIcon->setToolTip(popUp);
 		trayIcon->show();
 
 		connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(TrayActivated(QSystemTrayIcon::ActivationReason)));
@@ -453,12 +457,6 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		ui.modeC->addItem(modes_name[i]);
 		ui.modeD->addItem(modes_name[i]);
 	}
-
-	char Title[128];
-
-	sprintf(Title, "QtSoundModem Version %s", VersionString);
-
-	this->setWindowTitle(Title);
 
 	// Set up Menus
 
@@ -501,22 +499,22 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	DCDLabel[0] = new QLabel(this);
 	DCDLabel[0]->setObjectName(QString::fromUtf8("DCDLedA"));
-	DCDLabel[0]->setGeometry(QRect(240, 31, 12, 12));
-	DCDLabel[0]->setVisible(FALSE);
+	DCDLabel[0]->setGeometry(QRect(238, 31, 12, 12));
+	DCDLabel[0]->setVisible(TRUE);
 
 	DCDLabel[1] = new QLabel(this);
 	DCDLabel[1]->setObjectName(QString::fromUtf8("DCDLedB"));
-	DCDLabel[1]->setGeometry(QRect(514, 31, 12, 12));
-	DCDLabel[1]->setVisible(FALSE);
+	DCDLabel[1]->setGeometry(QRect(488, 31, 12, 12));
+	DCDLabel[1]->setVisible(TRUE);
 
 	DCDLabel[2] = new QLabel(this);
 	DCDLabel[2]->setObjectName(QString::fromUtf8("DCDLedC"));
-	DCDLabel[2]->setGeometry(QRect(240, 61, 12, 12));
+	DCDLabel[2]->setGeometry(QRect(238, 61, 12, 12));
 	DCDLabel[2]->setVisible(FALSE);
 
 	DCDLabel[3] = new QLabel(this);
 	DCDLabel[3]->setObjectName(QString::fromUtf8("DCDLedD"));
-	DCDLabel[3]->setGeometry(QRect(514, 61, 12, 12));
+	DCDLabel[3]->setGeometry(QRect(488, 61, 12, 12));
 	DCDLabel[3]->setVisible(FALSE);
 	
 	DCDLed[0] = new QImage(12, 12, QImage::Format_RGB32);
@@ -547,8 +545,8 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	WaterfallCopy[0] = ui.WaterfallA;
 	WaterfallCopy[1] = ui.WaterfallB;
 
-	initWaterfall(0, Firstwaterfall);
-	initWaterfall(1, Secondwaterfall);
+	initWaterfall(0, 1);
+	initWaterfall(1, 1);
 
 	Header[0]->fill(black);
 	Header[1]->fill(black);
@@ -596,7 +594,15 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	ui.DCDSlider->setValue(dcd_threshold);
 
+
+	char valChar[32];
+	sprintf(valChar, "RX Offset %d", rxOffset);
+	ui.RXOffsetLabel->setText(valChar);
+	ui.RXOffset->setValue(rxOffset);
+
 	connect(ui.DCDSlider, SIGNAL(sliderMoved(int)), this, SLOT(clickedSlotI(int)));
+	connect(ui.RXOffset, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
+
 
 	QObject::connect(t, SIGNAL(sendtoTrace(char *, int)), this, SLOT(sendtoTrace(char *, int)), Qt::QueuedConnection);
 	QObject::connect(t, SIGNAL(updateDCD(int, int)), this, SLOT(doupdateDCD(int, int)), Qt::QueuedConnection);
@@ -627,6 +633,7 @@ void QtSoundModem::TrayActivated(QSystemTrayIcon::ActivationReason reason)
 	if (reason == 3)
 	{
 		showNormal();
+		w->setWindowState((w->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
 	} 
 }
 
@@ -756,6 +763,26 @@ void QtSoundModem::clickedSlotI(int i)
 		return;
 	}
 	
+	if (strcmp(Name, "RXOffset") == 0)
+	{
+		char valChar[32];
+		rxOffset = i;
+		sprintf(valChar, "RX Offset %d",rxOffset);
+		ui.RXOffsetLabel->setText(valChar);
+
+		wf_pointer(soundChannel[0]);
+		wf_pointer(soundChannel[1]);
+
+		pnt_change[0] = 1;
+		pnt_change[1] = 1;
+		pnt_change[2] = 1;
+		pnt_change[3] = 1;
+
+		saveSettings();
+		return;
+	}
+
+
 	QMessageBox msgBox;
 	msgBox.setWindowTitle("MessageBox Title");
 	msgBox.setText("You Clicked " + ((QPushButton*)sender())->objectName());
@@ -1336,29 +1363,7 @@ void QtSoundModem::DualPTTChanged(bool State)
 void QtSoundModem::CATChanged(bool State)
 {
 	UNUSED(State);
-
 	PTTPortChanged(0);
-	/*
-	
-	if (State)
-	{
-		Dev->PTTOnLab->setVisible(true);
-		Dev->PTTOn->setVisible(true);
-		Dev->PTTOff->setVisible(true);
-		Dev->PTTOffLab->setVisible(true);
-		Dev->CATLabel->setVisible(true);
-		Dev->CATSpeed->setVisible(true);
-	}
-	else
-	{
-		Dev->PTTOnLab->setVisible(false);
-		Dev->PTTOn->setVisible(false);
-		Dev->PTTOff->setVisible(false);
-		Dev->PTTOffLab->setVisible(false);
-		Dev->CATLabel->setVisible(false);
-		Dev->CATSpeed->setVisible(false);
-	}
-*/
 }
 
 void QtSoundModem::PTTPortChanged(int Selected)
@@ -1434,6 +1439,7 @@ void QtSoundModem::PTTPortChanged(int Selected)
 			Dev->PTTOn->setText(PTTOnString);
 			Dev->PTTOn->setVisible(true);
 			Dev->PTTOff->setVisible(true);
+			Dev->PTTOff->setText(PTTOffString);
 			Dev->PTTOffLab->setVisible(true);
 			Dev->CATLabel->setVisible(true);
 			Dev->CATSpeed->setVisible(true);
@@ -1479,7 +1485,7 @@ void QtSoundModem::doDevices()
 
 	UI.installEventFilter(resize);
 
-	newSoundMode = -1;
+	newSoundMode = SoundMode;
 	oldSoundMode = SoundMode;
 
 #ifdef WIN32
@@ -1494,7 +1500,7 @@ void QtSoundModem::doDevices()
 		Dev->OSS->setChecked(1);
 	else if (SoundMode == 2)
 		Dev->PULSE->setChecked(1);
-	else
+	else if (SoundMode == 2)
 		Dev->UDP->setChecked(1);
 
 	connect(Dev->ALSA, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
@@ -1631,19 +1637,10 @@ void QtSoundModem::deviceaccept()
 				tr("Can't have UDP sound source and UDP server at same time"));
 			return;
 		}
-		SoundMode = 3;
 	}
 
-	else if (Dev->PULSE->isChecked())
-		SoundMode = 2;
-	else
-		SoundMode = Dev->OSS->isChecked();
-
-	if (oldSoundMode != SoundMode)
+	if (oldSoundMode != newSoundMode)
 	{
-		//		QMessageBox::about(this, tr("Info"),
-		//			tr("Program must restart to change Sound Mode"));
-
 		QMessageBox msgBox;
 
 		msgBox.setText("QtSoundModem must restart to change Sound Mode.\n"
@@ -1668,8 +1665,10 @@ void QtSoundModem::deviceaccept()
 			Dev->ALSA->setChecked(1);
 		else if (oldSoundMode == 1)
 			Dev->OSS->setChecked(1);
-		else
+		else if (oldSoundMode == 2)
 			Dev->PULSE->setChecked(1);
+		else if (oldSoundMode == 3)
+			Dev->UDP->setChecked(1);
 
 		QMessageBox::about(this, tr("Info"),
 			tr("<p align = 'center'>Changes not saved</p>"));
@@ -1806,6 +1805,16 @@ void QtSoundModem::deviceaccept()
 	{
 		InitSound(1);
 	}
+
+	// Reset title and tooltip in case ports changed
+
+	char Title[128];
+	sprintf(Title, "QtSoundModem Version %s Ports %d/%d", VersionString, AGWPort, KISSPort);
+	w->setWindowTitle(Title);
+
+	sprintf(Title, "QtSoundModem %d %d", AGWPort, KISSPort);
+	if (trayIcon)
+		trayIcon->setToolTip(Title);
 
 	QSize newSize(this->size());
 	QSize oldSize(this->size());
@@ -2099,8 +2108,13 @@ void do_pointer(int waterfall)
 
 	for (int i = 0; i < 4; i++)
 	{
-		if (UsingBothChannels == 0 && waterfall == 2)
-			return;
+		if (UsingBothChannels == 0)
+		{
+			// Only One Waterfall. If first chan is 
+
+			if ((waterfall == 0 && soundChannel[i] == RIGHT) || (waterfall == 1 && soundChannel[i] == LEFT))
+				return;
+		}
 
 		if (soundChannel[i] == 0)
 			continue;
@@ -2110,17 +2124,29 @@ void do_pointer(int waterfall)
 			if ((waterfall == 0 && soundChannel[i] == RIGHT) || (waterfall == 1 && soundChannel[i] == LEFT))
 				continue;
 
-		pos1 = roundf((rx_freq[i] - 0.5*rx_shift[i])*x) - 5;
-		pos2 = roundf((rx_freq[i] + 0.5*rx_shift[i])*x) - 5;
-		pos3 = roundf(rx_freq[i] * x);
+		pos1 = roundf(((rxOffset + rx_freq[i]) - 0.5*rx_shift[i])*x) - 5;
+		pos2 = roundf(((rxOffset + rx_freq[i]) + 0.5*rx_shift[i])*x) - 5;
+		pos3 = roundf((rxOffset + rx_freq[i]) * x);
 		x1 = pos1 + 5;
 		x2 = pos2 + 5;
 
+		qPainter.setPen(Qt::white);
 		qPainter.drawLine(x1, k, x2, k);
 		qPainter.drawLine(x1, k - 3, x1, k + 3);
 		qPainter.drawLine(x2, k - 3, x2, k + 3);
 		qPainter.drawLine(pos3, k - 3, pos3, k + 3);
 
+		if (rxOffset != 0)
+		{
+			// Draw TX posn if rxOffset used
+
+			pos3 = roundf(rx_freq[i] * x);
+			qPainter.setPen(Qt::magenta);
+			qPainter.drawLine(pos3, k - 3, pos3, k + 3);
+			qPainter.drawLine(pos3, k - 3, pos3, k + 3);
+			qPainter.drawLine(pos3 - 2, k - 3, pos3 + 2, k - 3);
+
+		}
 	}
 	HeaderCopy[waterfall]->setPixmap(QPixmap::fromImage(*bm));
 }

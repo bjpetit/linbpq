@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.44"
+#define VersionString "0.0.0.47"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -45,8 +45,14 @@
 // .42 Fix some bugs in AGW session handling
 // .43 Include Ross KD5LPB's fixes for MAC
 // .44 Ctrl/[ sends ESC (0x1b)
+// .45 Add VARA support
+// .46 Fix dialog size on VARA setup
+// .47 Move VARA Status indicator. 
+//	   add FLRIG PTT for VARA
 
 #define _CRT_SECURE_NO_WARNINGS
+
+#define UNUSED(x) (void)(x)
 
 #include "QtTermTCP.h"
 #include "TabDialog.h"
@@ -58,10 +64,16 @@
 #include "QTreeWidget"
 #include <QToolBar>
 #include <QLabel>
+#include <QtSerialPort/QSerialPort>
+#include <QtSerialPort/QSerialPortInfo>
 #ifndef WIN32
 #define strtok_s strtok_r
 #endif
-
+#include <fcntl.h>
+#include <errno.h>
+#ifndef WIN32
+#include <unistd.h>
+#endif
 
 #define MAXHOSTS 16
 #define MAXPORTS 32
@@ -135,17 +147,17 @@ int SavedHost = 0;				// from config
 
 char * sessionList = NULL;		// Saved sessions
 
-extern int ChatMode;
-extern int Bells;
-extern int StripLF;
+extern bool ChatMode;
+extern bool Bells;
+extern bool StripLF;
 extern int convUTF8;
 
 extern time_t LastWrite;
 extern int AlertInterval;
-extern int AlertBeep;
+extern bool AlertBeep;
 extern int AlertFreq;
 extern int AlertDuration;
-extern int ConnectBeep;
+extern bool ConnectBeep;
 
 // AGW Host Interface stuff
 
@@ -166,10 +178,78 @@ extern myTcpSocket * AGWSock;
 
 QStringList AGWToCalls;
 
+// VARA Interface
+
+int VARAEnable = 0;
+char VARAHost[128] = "127.0.0.1";
+int VARAPortNum = 8000;
+char VARATermCall[12] = "";
+char VARAPath[256] = "";
+
+int VARA500 = 0;
+int VARA2300 = 1;
+int VARA2750 = 0;
+
+myTcpSocket * VARASock;
+myTcpSocket * VARADataSock;
+
+int VARAConnected = 0;
+int VARAConnecting = 0;
+
 
 extern char YAPPPath[256];
 
 void menuChecked(QAction * Act);
+
+// PTT Stuff
+
+#define PTTRTS		1
+#define PTTDTR		2
+#define PTTCAT		4
+#define PTTCM108	8
+#define PTTHAMLIB	16
+#define PTTFLRIG	32
+
+
+QSerialPort * hPTTDevice = 0;
+char PTTPort[80] = "";			// Port for Hardware PTT - may be same as control port.
+int PTTBAUD = 19200;
+int PTTMode = PTTRTS;			// PTT Control Flags.
+
+char PTTOnString[128] = "";
+char PTTOffString[128] = "";
+
+int CATHex = 1;
+
+unsigned char PTTOnCmd[64];
+int PTTOnCmdLen = 0;
+
+unsigned char  PTTOffCmd[64];
+int PTTOffCmdLen = 0;
+
+int pttGPIOPin = 17;			// Default
+int pttGPIOPinR = 17;
+bool pttGPIOInvert = false;
+bool useGPIO = false;
+bool gotGPIO = false;
+
+int HamLibPort = 4532;
+char HamLibHost[32] = "192.168.1.14";
+
+int FLRigPort = 12345;
+char FLRigHost[32] = "127.0.0.1";
+
+
+char CM108Addr[80] = "";
+
+int VID = 0;
+int PID = 0;
+
+// CM108 Code
+
+char * CM108Device = NULL;
+
+QProcess *process = NULL;
 
 void GetSettings();
 
@@ -180,7 +260,7 @@ QLabel * Status2;
 QLabel * Status3;
 QLabel * Status4;
 
-QAction *actHost[17];
+QAction *actHost[18];
 QAction *actSetup[16];
 
 QAction * TabSingle = NULL;
@@ -804,8 +884,6 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connect(windowMenu, SIGNAL(aboutToShow()), this, SLOT(updateWindowMenu()));
 	windowMenu->setFont(*menufont);
 
-
-
 	newTermAct = new QAction(tr("New Terminal Window"), this);
 	connect(newTermAct, SIGNAL(triggered()), this, SLOT(doNewTerm()));
 
@@ -861,6 +939,14 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connectMenu->addAction(actHost[16]);
 
 	connect(actHost[16], SIGNAL(triggered()), this, SLOT(Connect()));
+
+	actHost[17] = new QAction("VARA Connect", this);
+	actHost[17]->setFont(*menufont);
+	actHost[17]->setVisible(0);
+	connectMenu->addAction(actHost[17]);
+
+	connect(actHost[17], SIGNAL(triggered()), this, SLOT(Connect()));
+
 
 	for (i = 0; i < MAXHOSTS; i++)
 	{
@@ -962,6 +1048,11 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connect(AGWAction, SIGNAL(triggered()), this, SLOT(AGWSlot()));
 	AGWAction->setFont(*menufont);
 
+	VARAAction = new QAction("VARA Setup", this);
+	setupMenu->addAction(VARAAction);
+	connect(VARAAction, SIGNAL(triggered()), this, SLOT(VARASlot()));
+	VARAAction->setFont(*menufont);
+
 	actChatMode = setupMenuLine(setupMenu, (char *)"Chat Terminal Mode", this, ChatMode);
 	actBells = setupMenuLine(setupMenu, (char *)"Enable Bells", this, Bells);
 	actStripLF = setupMenuLine(setupMenu, (char *)"Strip LineFeeds", this, StripLF);
@@ -1057,8 +1148,8 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	Status2 = new QLabel("    ");
 	Status1 = new QLabel("  Disconnected  ");
 
-	Status1->setMinimumWidth(120);
-	Status2->setFixedWidth(100);
+	Status1->setMinimumWidth(100);
+	Status2->setMinimumWidth(100);
 	Status3->setFixedWidth(100);
 	Status4->setFixedWidth(100);
 
@@ -1069,8 +1160,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	statusBar()->addPermanentWidget(Status2);
 	statusBar()->addPermanentWidget(Status1);
 
-	statusBar()->setVisible(AGWEnable);
-
+	statusBar()->setVisible(AGWEnable || VARAEnable);
 	// Restore saved sessions
 
 	if (TermMode == Single)
@@ -1124,6 +1214,9 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connect(_server, SIGNAL(newConnection()), this, SLOT(onNewConnection()));
 
 	setFonts();
+
+	if (VARAEnable)
+		OpenPTTPort();
 }
 
 void QtTermTCP::setFonts()
@@ -1372,16 +1465,15 @@ void QtTermTCP::Connect()
 			break;
 	}
 
-	if (i == 16)
+	if (Act == actHost[16])
 	{
-		// This runs the AGW COnnection dialog
+		// This runs the AGW Connection dialog
 
 		AGWConnect dialog(0);
 		dialog.exec();
 
 		return;
 	}
-
 
 	SavedHost = i;				// Iast used
 
@@ -1413,6 +1505,21 @@ void QtTermTCP::Connect()
 		return;
 
 	Sess->CurrentHost = SavedHost;
+
+	if (Act == actHost[17])
+	{
+		// This runs the VARA Connection dialog
+
+		VARADataSock->Sess = Sess;
+		VARASock->Sess = Sess;
+
+		VARAConnect dialog(0);
+		dialog.exec();
+		WritetoOutputWindow(Sess, (unsigned char *)"Connecting...\r",14);
+
+		return;
+	}
+
 
 	// Set Monitor Params for this host
 
@@ -1482,6 +1589,8 @@ void QtTermTCP::Disconnect()
 
 	if (Sess->AGWSession)
 		Send_AGW_Ds_Frame(Sess->AGWSession);
+	else if (VARASock && VARASock->Sess == Sess)
+		VARASock->write("DISCONNECT\r");
 	else
 	{
 		if (Sess && Sess->clientSocket)
@@ -1772,6 +1881,31 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 			Msgptr = ptr;
 		}
 	}
+
+	else if (VARASock && VARASock->Sess == Sess)
+	{
+		while ((ptr = strchr(Msgptr, '\n')))
+		{
+			*ptr++ = 0;
+
+			Msg = (char *)malloc(strlen(Msgptr) + 10);
+			strcpy(Msg, Msgptr);
+			strcat(Msg, "\r");
+
+			VARADataSock->write(Msg);
+
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
+				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 0);		// Black
+
+//			Sess->termWindow->insertPlainText(Msg);
+
+			free(Msg);
+
+			Msgptr = ptr;
+		}
+
+
+	}
 	else if (Sess->clientSocket && Sess->clientSocket->state() == QAbstractSocket::ConnectedState)
 	{
 		while ((ptr = strchr(Msgptr, '\n')))
@@ -1906,7 +2040,7 @@ extern "C" int SocketSend(Ui_ListenSession * Sess, char * Buffer, int len)
 
 extern "C" int SocketFlush(Ui_ListenSession * Sess)
 {
-	if (Sess->AGWSession)
+	if (Sess->AGWSession || (VARASock && VARASock->Sess == Sess))
 		return 0;
 
 	myTcpSocket* Socket = Sess->clientSocket;
@@ -2304,6 +2438,39 @@ void GetSettings()
 	AGWToCalls = settings.value("AGWToCalls","").toStringList();
 	convUTF8 = settings.value("convUTF8", 0).toInt();
 
+	VARAEnable = settings.value("VARAEnable", 0).toInt();
+	strcpy(VARAHost, settings.value("VARAHost", "127.0.0.1").toString().toUtf8());
+	VARAPortNum = settings.value("VARAPort", 8300).toInt();
+	strcpy(VARAPath, settings.value("VARAPath", "").toString().toUtf8());
+	strcpy(VARATermCall, settings.value("VARATermCall", "").toString().toUtf8());
+	VARA500 = settings.value("VARA500", 0).toInt();
+	VARA2300 = settings.value("VARA2300", 1).toInt();
+	VARA2750 = settings.value("VARA2750", 0).toInt();
+
+	strcpy(PTTPort, settings.value("PTT", "None").toString().toUtf8());
+	PTTMode = settings.value("PTTMode", 19200).toInt();
+	PTTBAUD = settings.value("PTTBAUD", 19200).toInt();
+	CATHex = settings.value("CATHex", 1).toInt();
+
+	strcpy(PTTOnString, settings.value("PTTOnString", "").toString().toUtf8());
+	strcpy(PTTOffString, settings.value("PTTOffString", "").toString().toUtf8());
+
+	pttGPIOPin = settings.value("pttGPIOPin", 17).toInt();
+	pttGPIOPinR = settings.value("pttGPIOPinR", 17).toInt();
+
+#ifdef WIN32
+	strcpy(CM108Addr, settings.value("CM108Addr", "0xD8C:0x08").toString().toUtf8());
+#else
+	strcpy(CM108Addr, settings.value("CM108Addr", "/dev/hidraw0").toString().toUtf8());
+#endif
+
+	HamLibPort = settings.value("HamLibPort", 4532).toInt();
+	strcpy(HamLibHost, settings.value("HamLibHost", "127.0.0.1").toString().toUtf8());
+
+	FLRigPort = settings.value("FLRigPort", 12345).toInt();
+	strcpy(FLRigHost, settings.value("FLRigHost", "127.0.0.1").toString().toUtf8());
+
+
 	strcpy(Param, settings.value("TabType", "1 1 1 1 1 1 1 2 2").toString().toUtf8());
 	sscanf(Param, "%d %d %d %d %d %d %d %d %d %d",
 		&TabType[0], &TabType[1], &TabType[2], &TabType[3], &TabType[4],
@@ -2340,6 +2507,25 @@ extern "C" void SaveSettings()
 	settings.setValue("listenCText", listenCText);
 	settings.setValue("convUTF8", convUTF8);
 
+	settings.setValue("PTT", PTTPort);
+	settings.setValue("PTTBAUD", PTTBAUD);
+	settings.setValue("PTTMode", PTTMode);
+
+	settings.setValue("CATHex", CATHex);
+
+	settings.setValue("PTTOffString", PTTOffString);
+	settings.setValue("PTTOnString", PTTOnString);
+
+	settings.setValue("pttGPIOPin", pttGPIOPin);
+	settings.setValue("pttGPIOPinR", pttGPIOPinR);
+
+	settings.setValue("CM108Addr", CM108Addr);
+	settings.setValue("HamLibPort", HamLibPort);
+	settings.setValue("HamLibHost", HamLibHost);
+	settings.setValue("FLRigPort", FLRigPort);
+	settings.setValue("FLRigHost", FLRigHost);
+
+
 	// Save Sessions
 
 	char SessionString[1024];
@@ -2375,6 +2561,17 @@ extern "C" void SaveSettings()
 	settings.setValue("AGWPaclen", AGWPaclen);
 	settings.setValue("AGWToCalls", AGWToCalls);
 
+
+	settings.setValue("VARAEnable", VARAEnable);
+	settings.setValue("VARATermCall", VARATermCall);
+	settings.setValue("VARAHost", VARAHost);
+	settings.setValue("VARAPort", VARAPortNum);
+	settings.setValue("VARAPath", VARAPath);
+	settings.setValue("VARA500", VARA500);
+	settings.setValue("VARA2300", VARA2300);
+	settings.setValue("VARA2750", VARA2750);
+
+
 	sprintf(Param, "%d %d %d %d %d %d %d %d %d %d",
 		TabType[0], TabType[1], TabType[2], TabType[3], TabType[4], TabType[5], TabType[6], TabType[7], TabType[8], TabType[9]);
 
@@ -2394,8 +2591,14 @@ void QtTermTCP::closeEvent(QCloseEvent *event)
 	if (resBtn != QMessageBox::Yes) {
 		event->ignore();
 	}
-	else {
+	else
+	{
 		event->accept();
+		if (hPTTDevice)
+			hPTTDevice->close();
+
+		if (process)
+			process->close();
 	}
 }
 
@@ -2471,6 +2674,9 @@ void QtTermTCP::MyTimerSlot()
 	if (AGWEnable)
 		AGWTimer();
 
+	if (VARAEnable)
+		VARATimer();
+
 }
 
 extern "C" void Beep()
@@ -2493,6 +2699,208 @@ void QtTermTCP::AGWSlot()
 
 	AGWDialog dialog(0);
 	dialog.exec();
+}
+
+Ui_Dialog * Dev;
+
+QDialog * deviceUI;
+
+
+char NewPTTPort[80];
+
+int newSoundMode = 0;
+int oldSoundMode = 0;
+
+QList<QSerialPortInfo> Ports = QSerialPortInfo::availablePorts();
+
+
+void QtTermTCP::VARASlot()
+{
+	// This runs the VARA Configuration dialog
+
+	char valChar[80];
+
+	Dev = new(Ui_Dialog);
+
+	QDialog UI;
+
+	Dev->setupUi(&UI);
+
+	UI.setFont(*menufont);
+
+	deviceUI = &UI;
+
+	Dev->VARAEnable->setChecked(VARAEnable);
+	Dev->TermCall->setText(VARATermCall);
+	Dev->Host->setText(VARAHost);
+	Dev->Port->setText(QString::number(VARAPortNum));
+	Dev->Path->setText(VARAPath);
+
+	if (VARA500)
+		Dev->VARA500->setChecked(true);
+	else if (VARA2750)
+		Dev->VARA2750->setChecked(true);
+	else
+		Dev->VARA2300->setChecked(true);
+
+	connect(Dev->CAT, SIGNAL(toggled(bool)), this, SLOT(CATChanged(bool)));
+	connect(Dev->PTTPort, SIGNAL(currentIndexChanged(int)), this, SLOT(PTTPortChanged(int)));
+
+	if (PTTMode == PTTCAT)
+		Dev->CAT->setChecked(true);
+	else
+		Dev->RTSDTR->setChecked(true);
+
+	if (CATHex)
+		Dev->CATHex->setChecked(true);
+	else
+		Dev->CATText->setChecked(true);
+
+	sprintf(valChar, "%d", pttGPIOPin);
+	Dev->GPIOLeft->setText(valChar);
+	sprintf(valChar, "%d", pttGPIOPinR);
+	Dev->GPIORight->setText(valChar);
+
+	Dev->VIDPID->setText(CM108Addr);
+
+	QStringList items;
+
+	for (const QSerialPortInfo &info : Ports)
+	{
+		items.append(info.portName());
+	}
+
+	items.sort();
+
+	Dev->PTTPort->addItem("None");
+	Dev->PTTPort->addItem("CM108");
+
+#ifdef __ARM_ARCH
+
+//	Dev->PTTPort->addItem("GPIO");
+
+#endif
+
+	Dev->PTTPort->addItem("FLRIG");
+	Dev->PTTPort->addItem("HAMLIB");
+
+	for (const QString &info : items)
+	{
+		Dev->PTTPort->addItem(info);
+	}
+
+	Dev->PTTPort->setCurrentIndex(Dev->PTTPort->findText(PTTPort, Qt::MatchFixedString));
+
+	PTTPortChanged(0);				// Force reevaluation
+
+	QObject::connect(Dev->okButton, SIGNAL(clicked()), this, SLOT(deviceaccept()));
+	QObject::connect(Dev->cancelButton, SIGNAL(clicked()), this, SLOT(devicereject()));
+
+	UI.exec();
+
+}
+
+extern QProcess *process;
+
+void ClosePTTPort();
+
+void QtTermTCP::deviceaccept()
+{
+	QVariant Q;
+
+	int OldEnable = VARAEnable;
+	int OldPort = VARAPortNum;
+	char oldHost[128];
+	strcpy(oldHost, VARAHost);
+
+	VARAEnable = Dev->VARAEnable->isChecked();
+
+	strcpy(VARATermCall, Dev->TermCall->text().toUtf8().toUpper());
+
+	Q = Dev->Port->text();
+	VARAPortNum = Q.toInt();
+
+	strcpy(VARAHost, Dev->Host->text().toUtf8().toUpper());
+	strcpy(VARAPath, Dev->Path->text().toUtf8().toUpper());
+
+	VARA500 = Dev->VARA500->isChecked();
+	VARA2300 = Dev->VARA2300->isChecked();
+	VARA2750 = Dev->VARA2750->isChecked();
+
+
+	Q = Dev->PTTPort->currentText();
+	strcpy(PTTPort, Q.toString().toUtf8());
+
+	if (Dev->CAT->isChecked())
+		PTTMode = PTTCAT;
+	else
+		PTTMode = PTTRTS;
+
+	if (Dev->CATHex->isChecked())
+		CATHex = 1;
+	else
+		CATHex = 0;
+
+	Q = Dev->PTTOn->text();
+	strcpy(PTTOnString, Q.toString().toUtf8());
+	Q = Dev->PTTOff->text();
+	strcpy(PTTOffString, Q.toString().toUtf8());
+
+	Q = Dev->CATSpeed->text();
+	PTTBAUD = Q.toInt();
+
+	Q = Dev->GPIOLeft->text();
+	pttGPIOPin = Q.toInt();
+
+	Q = Dev->GPIORight->text();
+	pttGPIOPinR = Q.toInt();
+
+	Q = Dev->VIDPID->text();
+
+	if (strcmp(PTTPort, "CM108") == 0)
+		strcpy(CM108Addr, Q.toString().toUtf8());
+	else if (strcmp(PTTPort, "HAMLIB") == 0)
+	{
+		HamLibPort = Q.toInt();
+		Q = Dev->PTTOn->text();
+		strcpy(HamLibHost, Q.toString().toUtf8());
+	}
+
+	if (VARAEnable != OldEnable || VARAPortNum != OldPort || strcmp(oldHost, VARAHost) != 0)
+	{
+		// (re)start connection
+
+		if (OldEnable && VARASock && VARASock->ConnectedState == QAbstractSocket::ConnectedState)
+		{
+			VARASock->disconnectFromHost();
+			VARADataSock->disconnectFromHost();
+			Status2->setText("VARA Disconnected");
+		}
+		if (VARAEnable == 0 && (process == nullptr || process->state() == QProcess::Running))
+			process->close();
+	}
+
+	myStatusBar->setVisible(VARAEnable);
+
+	ClosePTTPort();
+	OpenPTTPort();
+
+	delete(Dev);
+	SaveSettings();
+	deviceUI->accept();
+
+	QSize newSize(this->size());
+	QSize oldSize(this->size());
+
+	QResizeEvent *myResizeEvent = new QResizeEvent(newSize, oldSize);
+
+	QCoreApplication::postEvent(this, myResizeEvent);
+}
+
+void QtTermTCP::devicereject()
+{
+	delete(Dev);
+	deviceUI->reject();
 }
 
 // This handles incoming connections
@@ -3004,3 +3412,1080 @@ void QtTermTCP::doMFonts()
 	xx->exec();
 }
 
+void QtTermTCP::ConnecttoVARA()
+{
+
+	delete(VARASock);
+
+	VARASock = new myTcpSocket();
+	
+	connect(VARASock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(VARAdisplayError(QAbstractSocket::SocketError)));
+	connect(VARASock, SIGNAL(readyRead()), this, SLOT(VARAreadyRead()));
+	connect(VARASock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onVARASocketStateChanged(QAbstractSocket::SocketState)));
+
+	VARASock->connectToHost(VARAHost, VARAPortNum);
+
+	Status2->setText("VARA Control Connecting");
+
+	return;
+}
+
+
+void QtTermTCP::VARATimer()
+{
+	// Runs every 10 Seconds
+
+	if (VARAConnected == 0 && VARAConnecting == 0)
+	{
+		if (process == nullptr || process->state() == QProcess::NotRunning)
+		{
+			if (VARAPath[0])
+			{
+				process = new QProcess(this);
+				QString file = VARAPath;
+				process->start(file);
+			}
+		}
+		QThread::msleep(1000);
+		VARAConnecting = true;
+		ConnecttoVARA();
+	}
+}
+
+
+
+void QtTermTCP::VARAdisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+		QMessageBox::information(this, tr("QtTermTCP"),
+			tr("VARA host was not found. Please check the "
+				"host name and port settings."));
+
+		Status2->setText("VARA Connection Failed");
+
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		Status2->setText("VARAConnection Refused");
+		break;
+
+	default:
+
+		Status2->setText("VARA Connection Failed");
+	}
+
+	VARAConnecting = 0;
+	VARAConnected = 0;
+}
+
+void QtTermTCP::VARAreadyRead()
+{
+	int Read;
+	char Buffer[4096];
+	char * ptr;
+	char * Msg;
+	myTcpSocket* Socket = static_cast<myTcpSocket*>(QObject::sender());
+
+	// read the data from the socket
+
+	Read = Socket->read((char *)Buffer, 4095);
+
+	Buffer[Read] = 0;
+
+	Msg = Buffer;
+
+	ptr = strchr(Msg, 0x0d);
+
+	while (ptr)
+	{
+		*ptr++ = 0;
+
+		if (strcmp(Msg, "IAMALIVE") == 0)
+		{
+		}
+		else if (strcmp(Msg, "PTT ON") == 0)
+		{
+			RadioPTT(1);
+		}
+		else if (strcmp(Msg, "PTT OFF") == 0)
+		{
+			RadioPTT(0);
+		}
+		else if (strcmp(Msg, "PENDING") == 0)
+		{
+		}
+		else if (strcmp(Msg, "CANCELPENDING") == 0)
+		{
+		}
+		else if (strcmp(Msg, "OK") == 0)
+		{
+		}
+		else if (memcmp(Msg, "CONNECTED ", 10) == 0)
+		{
+			Ui_ListenSession * Sess = (Ui_ListenSession *)VARASock->Sess;
+			char Title[128] = "";
+			char CallFrom[64] = "";
+			char CallTo[64] = "";
+			char Mode[64] = "";
+			char Message[128];
+			int n;
+
+
+			sscanf(&Msg[10], "%s %s %s", CallFrom, CallTo, Mode);
+		
+			if (Sess)
+			{
+				if (Mode[0])
+					sprintf(Title, "Connected to %s %s Mode", CallTo, Mode);
+				else
+					sprintf(Title, "Connected to %s", CallTo);
+
+				n = sprintf(Message, "%s\r\n", Title);
+				WritetoOutputWindow(Sess, (unsigned char *)Message, n);
+
+				if (TermMode == MDI)
+					Sess->setWindowTitle(Title);
+				else if (TermMode == Tabbed)
+					tabWidget->setTabText(Sess->Tab, CallTo);
+				else if (TermMode == Single)
+					mythis->setWindowTitle(Title);
+
+				setMenus(true);
+			}
+			else
+			{
+				// Incoming Call
+
+				Ui_ListenSession * S;
+				int i = 0;
+
+				if (TermMode == MDI)
+				{
+					// See if an old session can be reused
+
+					for (int i = 0; i < _sessions.size(); ++i)
+					{
+						S = _sessions.at(i);
+
+						//	for (Ui_ListenSession * S: _sessions)
+						//	{
+						if ((S->SessionType & Listen) && S->clientSocket == NULL)
+						{
+							Sess = S;
+							break;
+						}
+					}
+
+					// Create a window if none found, else reuse old
+
+					if (Sess == NULL)
+					{
+						Sess = newWindow(this, Listen);
+					}
+				}
+				else
+				{
+					// Single or Tabbed - look for free session
+
+					for (i = 0; i < _sessions.size(); ++i)
+					{
+						S = _sessions.at(i);
+
+						if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
+						{
+							Sess = S;
+							break;
+						}
+					}
+				}
+
+				if (Sess == NULL)
+				{
+					// Clear connection
+
+					VARASock->write("DISCONNECT\r");
+				}
+				else
+				{
+					if (Mode[0])
+					{
+						sprintf(Title, "Connected to %s Mode %s", CallFrom, Mode);
+						n = sprintf(Message, "Incoming Connected from %s %s Mode\r\n", CallFrom, Mode);
+					}
+					else
+					{
+						sprintf(Title, "Connected to %s", CallFrom);
+						n = sprintf(Message, "Incoming Connected from %s\r\n", CallFrom);
+					}
+
+					WritetoOutputWindow(Sess, (unsigned char *)Message, n);
+
+					VARASock->Sess = Sess;
+					VARADataSock->Sess = Sess;
+
+					if (TermMode == MDI)
+						Sess->setWindowTitle(Title);
+					else if (TermMode == Tabbed)
+						tabWidget->setTabText(Sess->Tab, CallFrom);
+					else if (TermMode == Single)
+						mythis->setWindowTitle(Title);
+
+					setMenus(true);
+
+				}
+			}
+		}
+		else if (strcmp(Msg, "DISCONNECTED") == 0)
+		{
+			Ui_ListenSession * Sess = (Ui_ListenSession *)VARASock->Sess;
+
+			if (Sess)
+			{
+				WritetoOutputWindow(Sess, (unsigned char *)"Disconnected\r\n", 14);
+				VARASock->Sess = 0;
+				VARADataSock->Sess = 0;
+
+				if (TermMode == MDI)
+				{
+					if (Sess->SessionType == Mon)			// Mon Only
+						Sess->setWindowTitle("Monitor Session Disconnected");
+					else
+						Sess->setWindowTitle("Disconnected");
+				}
+				else if (TermMode == Tabbed)
+				{
+					if (Sess->SessionType == Mon)			// Mon Only
+						tabWidget->setTabText(Sess->Tab, "Monitor");
+					else
+					{
+						char Label[16];
+						sprintf(Label, "Sess %d", Sess->Tab + 1);
+						tabWidget->setTabText(Sess->Tab, Label);
+					}
+				}
+				else if (TermMode == Single)
+				{
+					if (Sess->AGWMonSession)
+						mythis->setWindowTitle("AGW Monitor Window");
+					else
+					{
+						if (Sess->SessionType == Mon)			// Mon Only
+							this->setWindowTitle("Monitor Session Disconnected");
+						else
+							this->setWindowTitle("Disconnected");
+					}
+				}
+
+				setMenus(false);
+			}
+		}
+
+		Msg = ptr;
+
+		ptr = strchr(Msg, 0x0d);
+	}
+
+
+
+}
+
+void QtTermTCP::onVARASocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+//	myTcpSocket* sender = static_cast<myTcpSocket*>(QObject::sender());
+
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+
+		Status2->setText("VARA Disconnected");
+		actHost[17]->setVisible(0);
+
+		VARAConnecting = VARAConnected = 0;
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		// Connect Data Session. Leave Connecting till that completes
+
+		VARADataSock = new myTcpSocket();
+
+		connect(VARADataSock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(VARADatadisplayError(QAbstractSocket::SocketError)));
+		connect(VARADataSock, SIGNAL(readyRead()), this, SLOT(VARADatareadyRead()));
+		connect(VARADataSock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onVARADataSocketStateChanged(QAbstractSocket::SocketState)));
+
+		VARADataSock->connectToHost(VARAHost, VARAPortNum + 1);
+		Status2->setText("VARA Data Connecting");
+	}
+}
+
+
+void QtTermTCP::VARADatadisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+		QMessageBox::information(this, tr("QtTermTCP"),
+			tr("VARA host was not found. Please check the "
+				"host name and port settings."));
+
+		Status2->setText("VARA Connection Failed");
+
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		Status2->setText("VARAConnection Refused");
+		break;
+
+	default:
+
+		Status2->setText("VARA Connection Failed");
+	}
+
+	VARAConnecting = 0;
+	VARAConnected = 0;
+}
+
+void QtTermTCP::VARADatareadyRead()
+{
+	int Read;
+	unsigned char Buffer[4096];
+	myTcpSocket* Socket = static_cast<myTcpSocket*>(QObject::sender());
+
+	Ui_ListenSession * Sess = (Ui_ListenSession *)Socket->Sess;
+
+	// read the data from the socket
+
+	Read = Socket->read((char *)Buffer, 2047);
+
+	while (Read > 0)
+	{
+		//		if (InputMode == 'Y')			// Yapp
+		//		{
+		//			QString myString = QString::fromUtf8((char*)Buffer, Read);
+		//			QByteArray ptr = myString.toLocal8Bit();
+		//			memcpy(Buffer, ptr.data(), ptr.length());
+		//			Read = ptr.length();
+		//		}
+
+		ProcessReceivedData(Sess, Buffer, Read);
+
+		QString myString = QString::fromUtf8((char*)Buffer);
+		//		qDebug() << myString;
+		Read = Socket->read((char *)Buffer, 2047);
+	}
+}
+
+
+void QtTermTCP::onVARADataSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+//	myTcpSocket* sender = static_cast<myTcpSocket*>(QObject::sender());
+
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+
+		Status2->setText("VARA Disconnected");
+		actHost[17]->setVisible(0);
+
+		VARAConnecting = VARAConnected = 0;
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		char MyCall[32];
+		
+		VARAConnected = 1;
+		VARAConnecting = 0;
+
+		Status2->setText("VARA Connected");
+
+		actHost[17]->setVisible(1);			// Enable VARA Connect Line
+
+		sprintf(MyCall, "MYCALL %s\r", VARATermCall);
+		VARASock->write(MyCall);
+
+		if (VARA500)
+			VARASock->write("BW500\r");
+		else if (VARA2300)
+			VARASock->write("BW2300\r");
+		else if (VARA2750)
+			VARASock->write("BW2750\r");
+
+		VARASock->write("COMPRESSION FILES\r");
+
+		if (listenEnable)
+			VARASock->write("LISTEN ON\r");
+	}
+}
+
+// PTT Stuff
+
+#include "hidapi.h"
+
+// Serial Port Stuff
+
+
+QTcpSocket * HAMLIBsock;
+int HAMLIBConnected = 0;
+int HAMLIBConnecting = 0;
+
+void QtTermTCP::HAMLIBdisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+			QMessageBox::information(nullptr, tr("QtSM"),
+				"HAMLIB host was not found. Please check the "
+					"host name and port settings.");
+		
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		qDebug() << "HAMLIB Connection Refused";
+		break;
+
+	default:
+
+		qDebug() << "HAMLIB Connection Failed";
+		break;
+
+	}
+
+	HAMLIBConnecting = 0;
+	HAMLIBConnected = 0;
+}
+
+void QtTermTCP::HAMLIBreadyRead()
+{
+	unsigned char Buffer[4096];
+	QTcpSocket* Socket = static_cast<QTcpSocket*>(QObject::sender());
+
+	// read the data from the socket. Don't do anyhing with it at the moment
+
+	Socket->read((char *)Buffer, 4095);
+}
+
+void QtTermTCP::onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+
+		HAMLIBConnected = 0;
+		HAMLIBConnecting = 0;
+
+	//	delete (HAMLIBsock);
+	//	HAMLIBsock = 0;
+
+		qDebug() << "HAMLIB Connection Closed";
+
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		HAMLIBConnected = 1;
+		HAMLIBConnecting = 0;
+		qDebug() << "HAMLIB Connected";
+	}
+}
+
+
+void QtTermTCP::ConnecttoHAMLIB()
+{
+	delete(HAMLIBsock);
+
+	HAMLIBConnected = 0;
+	HAMLIBConnecting = 1;
+
+	HAMLIBsock = new QTcpSocket();
+
+	connect(HAMLIBsock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(HAMLIBdisplayError(QAbstractSocket::SocketError)));
+	connect(HAMLIBsock, SIGNAL(readyRead()), this, SLOT(HAMLIBreadyRead()));
+	connect(HAMLIBsock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onHAMLIBSocketStateChanged(QAbstractSocket::SocketState)));
+
+	HAMLIBsock->connectToHost(HamLibHost, HamLibPort);
+
+	return;
+}
+
+void QtTermTCP::HAMLIBSetPTT(int PTTState)
+{
+	char Msg[16];
+
+	if (HAMLIBsock == nullptr || HAMLIBsock->state() != QAbstractSocket::ConnectedState)
+		ConnecttoHAMLIB();
+
+	if (HAMLIBsock == nullptr || HAMLIBsock->state() != QAbstractSocket::ConnectedState)
+		return;
+
+	sprintf(Msg, "T %d\r\n", PTTState);
+	HAMLIBsock->write(Msg);
+
+	HAMLIBsock->waitForBytesWritten(3000);
+
+	QByteArray datas = HAMLIBsock->readAll();
+
+	qDebug(datas.data());
+}
+
+QTcpSocket * FLRigsock;
+int FLRigConnected = 0;
+int FLRigConnecting = 0;
+
+void QtTermTCP::FLRigdisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+		QMessageBox::information(nullptr, tr("QtSM"),
+			"FLRig host was not found. Please check the "
+			"host name and port settings.");
+
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		qDebug() << "FLRig Connection Refused";
+		break;
+
+	default:
+
+		qDebug() << "FLRig Connection Failed";
+		break;
+
+	}
+
+	FLRigConnecting = 0;
+	FLRigConnected = 0;
+}
+
+void QtTermTCP::FLRigreadyRead()
+{
+	unsigned char Buffer[4096];
+	QTcpSocket* Socket = static_cast<QTcpSocket*>(QObject::sender());
+
+	// read the data from the socket. Don't do anyhing with it at the moment
+
+	Socket->read((char *)Buffer, 4095);
+}
+
+void QtTermTCP::onFLRigSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+
+		FLRigConnected = 0;
+		FLRigConnecting = 0;
+
+	//	delete (FLRigsock);
+	//	FLRigsock = 0;
+
+		qDebug() << "FLRig Connection Closed";
+
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		FLRigConnected = 1;
+		FLRigConnecting = 0;
+		qDebug() << "FLRig Connected";
+	}
+}
+
+
+void QtTermTCP::ConnecttoFLRig()
+{
+	delete(FLRigsock);
+
+	FLRigConnected = 0;
+	FLRigConnecting = 1;
+
+	FLRigsock = new QTcpSocket();
+
+	connect(FLRigsock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(FLRigdisplayError(QAbstractSocket::SocketError)));
+	connect(FLRigsock, SIGNAL(readyRead()), this, SLOT(FLRigreadyRead()));
+	connect(FLRigsock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onFLRigSocketStateChanged(QAbstractSocket::SocketState)));
+
+	FLRigsock->connectToHost(FLRigHost, FLRigPort);
+
+	return;
+}
+
+static char MsgHddr[] = "POST /RPC2 HTTP/1.1\r\n"
+"User-Agent: XMLRPC++ 0.8\r\n"
+"Host: 127.0.0.1:7362\r\n"
+"Content-Type: text/xml\r\n"
+"Content-length: %d\r\n"
+"\r\n%s";
+
+static char Req[] = "<?xml version=\"1.0\"?>\r\n"
+		"<methodCall><methodName>%s</methodName>\r\n"
+		"%s"
+		"</methodCall>\r\n";
+
+void QtTermTCP::FLRigSetPTT(int PTTState)
+{
+	int Len;
+	char ReqBuf[512];
+	char SendBuff[512];
+	char ValueString[256] = "";
+
+	sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", PTTState);
+
+	Len = sprintf(ReqBuf, Req, "rig.set_ptt", ValueString);
+	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+	if (FLRigsock == nullptr || FLRigsock->state() != QAbstractSocket::ConnectedState)
+		ConnecttoFLRig();
+
+	if (FLRigsock == nullptr || FLRigsock->state() != QAbstractSocket::ConnectedState)
+		return;
+
+	FLRigsock->write(SendBuff);
+
+	FLRigsock->waitForBytesWritten(3000);
+
+	QByteArray datas = FLRigsock->readAll();
+
+	qDebug(datas.data());
+}
+
+
+	
+void QtTermTCP::CATChanged(bool State)
+{
+	UNUSED(State);
+	PTTPortChanged(0);
+}
+
+void QtTermTCP::PTTPortChanged(int Selected)
+{
+	UNUSED(Selected);
+
+	QVariant Q = Dev->PTTPort->currentText();
+	strcpy(NewPTTPort, Q.toString().toUtf8());
+
+	Dev->RTSDTR->setVisible(false);
+	Dev->CAT->setVisible(false);
+
+	Dev->PTTOnLab->setVisible(false);
+	Dev->PTTOn->setVisible(false);
+	Dev->PTTOff->setVisible(false);
+	Dev->PTTOffLab->setVisible(false);
+	Dev->CATLabel->setVisible(false);
+	Dev->CATSpeed->setVisible(false);
+	Dev->CATHex->setVisible(false);
+	Dev->CATText->setVisible(false);
+
+	Dev->GPIOLab->setVisible(false);
+	Dev->GPIOLeft->setVisible(false);
+	Dev->GPIORight->setVisible(false);
+	Dev->GPIOLab2->setVisible(false);
+
+	Dev->CM108Label->setVisible(false);
+	Dev->VIDPID->setVisible(false);
+
+	if (strcmp(NewPTTPort, "None") == 0)
+	{
+	}
+	else if (strcmp(NewPTTPort, "GPIO") == 0)
+	{
+		Dev->GPIOLab->setVisible(true);
+		Dev->GPIOLeft->setVisible(true);
+	}
+
+	else if (strcmp(NewPTTPort, "CM108") == 0)
+	{
+		Dev->CM108Label->setVisible(true);
+		//#ifdef __ARM_ARCHX
+		Dev->CM108Label->setText("CM108 Device");
+		//#else
+		//		Dev->CM108Label->setText("CM108 VID/PID");
+		//#endif
+		Dev->VIDPID->setText(CM108Addr);
+		Dev->VIDPID->setVisible(true);
+	}
+	else if (strcmp(NewPTTPort, "HAMLIB") == 0)
+	{
+		Dev->CM108Label->setVisible(true);
+		Dev->CM108Label->setText("rigctrld Port");
+		Dev->VIDPID->setText(QString::number(HamLibPort));
+		Dev->VIDPID->setVisible(true);
+		Dev->PTTOnLab->setText("rigctrld Host");
+		Dev->PTTOnLab->setVisible(true);
+		Dev->PTTOn->setText(HamLibHost);
+		Dev->PTTOn->setVisible(true);
+	}
+	else if (strcmp(NewPTTPort, "FLRIG") == 0)
+	{
+		Dev->CM108Label->setVisible(true);
+		Dev->CM108Label->setText("FLRig Port");
+		Dev->VIDPID->setText(QString::number(FLRigPort));
+		Dev->VIDPID->setVisible(true);
+		Dev->PTTOnLab->setText("FLRig Host");
+		Dev->PTTOnLab->setVisible(true);
+		Dev->PTTOn->setText(FLRigHost);
+		Dev->PTTOn->setVisible(true);
+	}
+
+	else
+	{
+		Dev->RTSDTR->setVisible(true);
+		Dev->CAT->setVisible(true);
+
+		if (Dev->CAT->isChecked())
+		{
+			Dev->CATHex->setVisible(true);
+			Dev->CATText->setVisible(true);
+			Dev->PTTOnLab->setVisible(true);
+			Dev->PTTOnLab->setText("PTT On String");
+			Dev->PTTOn->setText(PTTOnString);
+			Dev->PTTOn->setVisible(true);
+			Dev->PTTOff->setVisible(true);
+			Dev->PTTOffLab->setVisible(true);
+			Dev->PTTOff->setVisible(true);
+			Dev->PTTOff->setText(PTTOffString);
+			Dev->CATLabel->setVisible(true);
+			Dev->CATSpeed->setVisible(true);
+			Dev->CATSpeed->setText(QString::number(PTTBAUD));
+		}
+	}
+}
+
+
+
+void DecodeCM108(char * ptr)
+{
+	// Called if Device Name or PTT = Param is CM108
+
+#ifdef WIN32
+
+	// Next Param is VID and PID - 0xd8c:0x8 or Full device name
+	// On Windows device name is very long and difficult to find, so 
+	//	easier to use VID/PID, but allow device in case more than one needed
+
+	char * next;
+	long VID = 0, PID = 0;
+	char product[256] = "Unknown";
+
+	struct hid_device_info *devs, *cur_dev;
+	const char *path_to_open = NULL;
+	hid_device *handle = NULL;
+
+	if (strlen(ptr) > 16)
+		CM108Device = _strdup(ptr);
+	else
+	{
+		VID = strtol(ptr, &next, 0);
+		if (next)
+			PID = strtol(++next, &next, 0);
+
+		// Look for Device
+
+		devs = hid_enumerate((unsigned short)VID, (unsigned short)PID);
+		cur_dev = devs;
+
+		while (cur_dev)
+		{
+			if (cur_dev->product_string)
+				wcstombs(product, cur_dev->product_string, 255);
+
+			printf("HID Device %s VID %X PID %X", product, cur_dev->vendor_id, cur_dev->product_id);
+			if (cur_dev->vendor_id == VID && cur_dev->product_id == PID)
+			{
+				path_to_open = cur_dev->path;
+				break;
+			}
+			cur_dev = cur_dev->next;
+		}
+
+		if (path_to_open)
+		{
+			handle = hid_open_path(path_to_open);
+
+			if (handle)
+			{
+				hid_close(handle);
+				CM108Device = _strdup(path_to_open);
+			}
+			else
+			{
+				printf("Unable to open CM108 device %x %x", VID, PID);
+			}
+		}
+		else
+			printf("Couldn't find CM108 device %x %x", VID, PID);
+
+		hid_free_enumeration(devs);
+	}
+#else
+
+	// Linux - Next Param HID Device, eg /dev/hidraw0
+
+	CM108Device = strdup(ptr);
+#endif
+}
+
+
+void QtTermTCP::OpenPTTPort()
+{
+	PTTMode &= ~PTTCM108;
+	PTTMode &= ~PTTHAMLIB;
+	PTTMode &= ~PTTFLRIG;
+
+	if (PTTPort[0] && strcmp(PTTPort, "None") != 0)
+	{
+		if (PTTMode == PTTCAT)
+		{
+			// convert config strings from Hex
+
+			if (CATHex == 0)		// Ascii Strings
+			{
+				strcpy((char *)PTTOffCmd, PTTOffString);
+				PTTOffCmdLen = strlen(PTTOffString);
+
+				strcpy((char *)PTTOnCmd, PTTOnString);
+				PTTOnCmdLen = strlen(PTTOnString);
+			}
+			else
+			{
+				char * ptr1 = PTTOffString;
+				unsigned char * ptr2 = PTTOffCmd;
+				char c;
+				int val;
+
+				while (c = *(ptr1++))
+				{
+					val = c - 0x30;
+					if (val > 15) val -= 7;
+					val <<= 4;
+					c = *(ptr1++) - 0x30;
+					if (c > 15) c -= 7;
+					val |= c;
+					*(ptr2++) = val;
+				}
+
+				PTTOffCmdLen = ptr2 - PTTOffCmd;
+
+				ptr1 = PTTOnString;
+				ptr2 = PTTOnCmd;
+
+				while (c = *(ptr1++))
+				{
+					val = c - 0x30;
+					if (val > 15) val -= 7;
+					val <<= 4;
+					c = *(ptr1++) - 0x30;
+					if (c > 15) c -= 7;
+					val |= c;
+					*(ptr2++) = val;
+				}
+
+				PTTOnCmdLen = ptr2 - PTTOnCmd;
+			}
+		}
+
+		if (strcmp(PTTPort, "GPIO") == 0)
+		{
+			// Initialise GPIO for PTT if available
+
+#ifdef __ARM_ARCH
+
+//			if (gpioInitialise() == 0)
+//			{
+//				printf("GPIO interface for PTT available\n");
+//				gotGPIO = TRUE;
+
+//				SetupGPIOPTT();
+//			}
+//			else
+//				printf("Couldn't initialise GPIO interface for PTT\n");
+//
+#else
+			printf("GPIO interface for PTT not available on this platform\n");
+#endif
+
+		}
+		else if (strcmp(PTTPort, "CM108") == 0)
+		{
+			DecodeCM108(CM108Addr);
+			PTTMode |= PTTCM108;
+		}
+
+		else if (strcmp(PTTPort, "HAMLIB") == 0)
+		{
+			PTTMode |= PTTHAMLIB;
+			HAMLIBSetPTT(0);			// to open port
+			return;
+		}
+
+		else if (strcmp(PTTPort, "FLRIG") == 0)
+		{
+			PTTMode |= PTTFLRIG;
+			FLRigSetPTT(0);			// to open port
+			return;
+		}
+
+		else		//  Serial Port
+		{
+			hPTTDevice = new QSerialPort(this);
+			hPTTDevice->setPortName(PTTPort);
+			hPTTDevice->setBaudRate(PTTBAUD );
+			hPTTDevice->setDataBits(QSerialPort::Data8);
+			hPTTDevice->setParity(QSerialPort::NoParity);
+			hPTTDevice->setStopBits(QSerialPort::OneStop);
+			hPTTDevice->setFlowControl(QSerialPort::NoFlowControl);
+			if (hPTTDevice->open(QIODevice::ReadWrite))
+			{
+				qDebug() << "PTT Port Opened";
+			}
+			else
+			{
+				qDebug() << "PTT Port Open failed";
+				delete(hPTTDevice);
+				hPTTDevice = 0;
+			}
+		}
+	}
+}
+
+void ClosePTTPort()
+{
+	if (hPTTDevice)
+		hPTTDevice->close();
+	hPTTDevice = 0;
+}
+
+
+void CM108_set_ptt(int PTTState)
+{
+	unsigned char io[5];
+	hid_device *handle;
+	int n;
+
+	io[0] = 0;
+	io[1] = 0;
+	io[2] = 1 << (3 - 1);
+	io[3] = PTTState << (3 - 1);
+	io[4] = 0;
+
+	if (CM108Device == NULL)
+		return;
+
+#ifdef WIN32
+	handle = hid_open_path(CM108Device);
+
+	if (!handle) {
+		printf("unable to open device\n");
+		return;
+	}
+
+	n = hid_write(handle, io, 5);
+	if (n < 0)
+	{
+		printf("Unable to write()\n");
+		printf("Error: %ls\n", hid_error(handle));
+	}
+
+	hid_close(handle);
+
+#else
+
+	int fd;
+
+	fd = open(CM108Device, O_WRONLY);
+
+	if (fd == -1)
+	{
+		printf("Could not open %s for write, errno=%d\n", CM108Device, errno);
+		return;
+	}
+
+	io[0] = 0;
+	io[1] = 0;
+	io[2] = 1 << (3 - 1);
+	io[3] = PTTState << (3 - 1);
+	io[4] = 0;
+
+	n = write(fd, io, 5);
+	if (n != 5)
+	{
+		printf("Write to %s failed, n=%d, errno=%d\n", CM108Device, n, errno);
+	}
+
+	close(fd);
+#endif
+	return;
+
+}
+
+
+
+void QtTermTCP::RadioPTT(bool PTTState)
+{
+#ifdef __ARM_ARCH
+	if (useGPIO)
+	{
+//		gpioWrite(pttGPIOPin, (pttGPIOInvert ? (1 - PTTState) : (PTTState)));
+//		return;
+	}
+
+#endif
+
+	if ((PTTMode & PTTCM108))
+	{
+		CM108_set_ptt(PTTState);
+		return;
+	}
+
+	if ((PTTMode & PTTHAMLIB))
+	{
+		HAMLIBSetPTT(PTTState);
+		return;
+	}
+
+	if ((PTTMode & PTTFLRIG))
+	{
+		FLRigSetPTT(PTTState);
+		return;
+	}
+
+	if (hPTTDevice == 0)
+		return;
+
+	if ((PTTMode & PTTCAT))
+	{
+		int ret;
+
+		if (PTTState)
+			ret = hPTTDevice->write((char *)PTTOnCmd, PTTOnCmdLen);
+		else
+			ret = hPTTDevice->write((char *)PTTOffCmd, PTTOffCmdLen);
+
+		ret = hPTTDevice->flush();
+		ret = hPTTDevice->error();
+		return;
+
+	}
+
+
+	if ((PTTMode & PTTRTS))
+	{
+		hPTTDevice->setRequestToSend(PTTState);
+	}
+
+}
