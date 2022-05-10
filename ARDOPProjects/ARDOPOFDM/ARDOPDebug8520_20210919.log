@@ -1,0 +1,147 @@
+06:37:32.355 ARDOP TNC Version 2.0.3.41-BPQ-OFDM
+06:37:39.622 Using CM108 device \\?\hid#vid_0d8c&pid_0008&mi_03#7&9d49a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} for PTT
+06:37:39.622 Capture Devices
+06:37:39.860 0 Microphone (C-Media USB Audio D
+06:37:39.875 1 CABLE-D Output (VB-Audio Cable 
+06:37:39.891 2 CABLE-C Output (VB-Audio Cable 
+06:37:39.922 3 Stereo Mix (Realtek High Defini
+06:37:39.938 4 CABLE Output (VB-Audio Virtual 
+06:37:39.953 5 CABLE-A Output (VB-Audio Cable 
+06:37:39.968 6 CABLE-B Output (VB-Audio Cable 
+06:37:39.969 Playback Devices
+06:37:39.995 0 Speakers (C-Media USB Audio Dev
+06:37:40.007 1 CABLE Input (VB-Audio Virtual C
+06:37:40.020 2 CABLE-A Input (VB-Audio Cable A
+06:37:40.032 3 CABLE-D Input (VB-Audio Cable D
+06:37:40.045 4 CABLE-B Input (VB-Audio Cable B
+06:37:40.057 5 CABLE-C Input (VB-Audio Cable C
+06:37:40.095 6 Speakers (Realtek High Definiti
+06:37:40.110 Opened WaveOut Device Speakers (C-Media USB Audio Dev
+06:37:40.114 Opened WaveIn Device Microphone (C-Media USB Audio D
+06:37:40.130 ARDOPC listening on port 8520
+06:37:40.160 Input peaks = -89, 0
+06:37:49.141 Host Control Session Connected
+06:37:49.141 Host Data Session Connected
+06:37:50.226 Input peaks = -93, 0
+06:37:50.226  Command Trace TO Host INPUTPEAKS -93 0
+06:37:52.200 [Command Trace FROM host: INITIALIZE
+06:37:52.200  Command Trace TO Host BUFFER 0
+06:37:52.200  Command Trace TO Host INITIALIZE
+06:37:52.201 [Command Trace FROM host: VERSION
+06:37:52.203  Command Trace TO Host VERSION ARDOP TNC_2.0.3.41-BPQ-OFDM
+06:37:52.204 [Command Trace FROM host: CWID FALSE
+06:37:52.205  Command Trace TO Host CWID now FALSE
+06:37:52.208 [Command Trace FROM host: PROTOCOLMODE ARQ
+06:37:52.209  Command Trace TO Host PROTOCOLMODE now ARQ
+06:37:52.212 [Command Trace FROM host: ARQTIMEOUT 90
+06:37:52.213  Command Trace TO Host ARQTIMEOUT now 90
+06:37:52.215 [Command Trace FROM host: DEBUGLOG TRUE
+06:37:52.216  Command Trace TO Host DEBUGLOG now TRUE
+06:37:52.218 [Command Trace FROM host: CMDTRACE TRUE
+06:37:52.219  Command Trace TO Host CMDTRACE now TRUE
+06:37:52.220 [Command Trace FROM host: CWID FALSE
+06:37:52.227  Command Trace TO Host CWID now FALSE
+06:37:52.229 [Command Trace FROM host: DRIVELEVEL 100
+06:37:52.230  Command Trace TO Host DRIVELEVEL now 100
+06:37:52.231 [Command Trace FROM host: GRIDSQUARE IO68VL
+06:37:52.232  Command Trace TO Host GRIDSQUARE now IO68VL
+06:37:52.233 [Command Trace FROM host: FECREPEATS 0
+06:37:52.234  Command Trace TO Host FECREPEATS now 0
+06:37:52.235 [Command Trace FROM host: FASTSTART TRUE
+06:37:52.235  Command Trace TO Host FASTSTART now TRUE
+06:37:52.236 [Command Trace FROM host: CONSOLELOG 7
+06:37:52.240  Command Trace TO Host CONSOLELOG now 7
+06:37:52.241 [Command Trace FROM host: MYCALL G8BPQ-2
+06:37:52.241  Command Trace TO Host MYCALL now G8BPQ-2
+06:37:52.241 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+06:37:52.242  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:29:38.803 ARDOP TNC Version 2.0.3.41-BPQ-OFDM
+08:29:38.813 Using CM108 device \\?\hid#vid_0d8c&pid_0008&mi_03#7&9d49a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} for PTT
+08:29:38.813 Capture Devices
+08:29:39.045 0 Microphone (C-Media USB Audio D
+08:29:39.060 1 CABLE-D Output (VB-Audio Cable 
+08:29:39.074 2 CABLE-C Output (VB-Audio Cable 
+08:29:39.106 3 Stereo Mix (Realtek High Defini
+08:29:39.120 4 CABLE Output (VB-Audio Virtual 
+08:29:39.133 5 CABLE-A Output (VB-Audio Cable 
+08:29:39.146 6 CABLE-B Output (VB-Audio Cable 
+08:29:39.146 Playback Devices
+08:29:39.171 0 Speakers (C-Media USB Audio Dev
+08:29:39.185 1 CABLE Input (VB-Audio Virtual C
+08:29:39.198 2 CABLE-A Input (VB-Audio Cable A
+08:29:39.212 3 CABLE-D Input (VB-Audio Cable D
+08:29:39.225 4 CABLE-B Input (VB-Audio Cable B
+08:29:39.239 5 CABLE-C Input (VB-Audio Cable C
+08:29:39.275 6 Speakers (Realtek High Definiti
+08:29:39.291 Opened WaveOut Device Speakers (C-Media USB Audio Dev
+08:29:39.294 Opened WaveIn Device Microphone (C-Media USB Audio D
+08:29:39.310 ARDOPC listening on port 8520
+08:29:39.341 Input peaks = -95, 0
+08:29:41.044 Host Control Session Connected
+08:29:41.044 Host Data Session Connected
+08:29:44.105 [Command Trace FROM host: INITIALIZE
+08:29:44.106  Command Trace TO Host BUFFER 0
+08:29:44.106  Command Trace TO Host INITIALIZE
+08:29:44.106 [Command Trace FROM host: VERSION
+08:29:44.107  Command Trace TO Host VERSION ARDOP TNC_2.0.3.41-BPQ-OFDM
+08:29:44.107 [Command Trace FROM host: CWID FALSE
+08:29:44.108  Command Trace TO Host CWID now FALSE
+08:29:44.114 [Command Trace FROM host: PROTOCOLMODE ARQ
+08:29:44.115  Command Trace TO Host PROTOCOLMODE now ARQ
+08:29:44.116 [Command Trace FROM host: ARQTIMEOUT 90
+08:29:44.117  Command Trace TO Host ARQTIMEOUT now 90
+08:29:44.117 [Command Trace FROM host: DEBUGLOG TRUE
+08:29:44.119  Command Trace TO Host DEBUGLOG now TRUE
+08:29:44.119 [Command Trace FROM host: CMDTRACE TRUE
+08:29:44.120  Command Trace TO Host CMDTRACE now TRUE
+08:29:44.120 [Command Trace FROM host: CWID FALSE
+08:29:44.121  Command Trace TO Host CWID now FALSE
+08:29:44.122 [Command Trace FROM host: DRIVELEVEL 100
+08:29:44.123  Command Trace TO Host DRIVELEVEL now 100
+08:29:44.123 [Command Trace FROM host: GRIDSQUARE IO68VL
+08:29:44.123  Command Trace TO Host GRIDSQUARE now IO68VL
+08:29:44.124 [Command Trace FROM host: FECREPEATS 0
+08:29:44.125  Command Trace TO Host FECREPEATS now 0
+08:29:44.125 [Command Trace FROM host: FASTSTART TRUE
+08:29:44.126  Command Trace TO Host FASTSTART now TRUE
+08:29:44.126 [Command Trace FROM host: CONSOLELOG 7
+08:29:44.126  Command Trace TO Host CONSOLELOG now 7
+08:29:44.127 [Command Trace FROM host: MYCALL G8BPQ-2
+08:29:44.127  Command Trace TO Host MYCALL now G8BPQ-2
+08:29:44.127 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:29:44.127  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:29:49.402 Input peaks = -104, 0
+08:29:49.403  Command Trace TO Host INPUTPEAKS -104 0
+08:29:50.307 [Command Trace FROM host: STATE
+08:29:50.310  Command Trace TO Host STATE DISC
+08:29:52.483 GUI Connected from Address 127.0.0.1
+08:29:59.434 Input peaks = -99, 0
+08:29:59.437  Command Trace TO Host INPUTPEAKS -99 0
+08:30:07.492 GUI Connection lost
+08:30:09.495 Input peaks = -102, 0
+08:30:09.496  Command Trace TO Host INPUTPEAKS -102 0
+08:30:19.572 Input peaks = -104, 0
+08:30:19.572  Command Trace TO Host INPUTPEAKS -104 0
+08:57:24.752 ARDOP TNC Version 2.0.3.41-BPQ-OFDM
+08:57:24.759 Using CM108 device \\?\hid#vid_0d8c&pid_0008&mi_03#7&9d49a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} for PTT
+08:57:24.759 Capture Devices
+08:57:24.981 0 Microphone (C-Media USB Audio D
+08:57:24.996 1 CABLE-D Output (VB-Audio Cable 
+08:57:25.012 2 CABLE-C Output (VB-Audio Cable 
+08:57:25.042 3 Stereo Mix (Realtek High Defini
+08:57:25.057 4 CABLE Output (VB-Audio Virtual 
+08:57:25.072 5 CABLE-A Output (VB-Audio Cable 
+08:57:25.087 6 CABLE-B Output (VB-Audio Cable 
+08:57:25.087 Playback Devices
+08:57:25.112 0 Speakers (C-Media USB Audio Dev
+08:57:25.125 1 CABLE Input (VB-Audio Virtual C
+08:57:25.136 2 CABLE-A Input (VB-Audio Cable A
+08:57:25.149 3 CABLE-D Input (VB-Audio Cable D
+08:57:25.162 4 CABLE-B Input (VB-Audio Cable B
+08:57:25.174 5 CABLE-C Input (VB-Audio Cable C
+08:57:25.210 6 Speakers (Realtek High Definiti
+08:57:25.225 Opened WaveOut Device Speakers (C-Media USB Audio Dev
+08:57:25.229 Opened WaveIn Device Microphone (C-Media USB Audio D
+08:57:25.247 ARDOPC listening on port 8520
+08:57:25.280 Input peaks = -88, 0
+08:57:28.783 GUI Connected from Address 127.0.0.1

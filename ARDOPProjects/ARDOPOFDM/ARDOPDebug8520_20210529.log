@@ -1,0 +1,1242 @@
+18:11:00.519 ARDOP TNC Version 2.0.3.40-BPQ-OFDM
+18:11:00.520 Capture Devices
+18:11:00.777 0 Stereo Mix (Realtek High Defini
+18:11:00.785 1 CABLE-D Output (VB-Audio Cable 
+18:11:00.792 2 CABLE-C Output (VB-Audio Cable 
+18:11:00.799 3 CABLE Output (VB-Audio Virtual 
+18:11:00.806 4 CABLE-A Output (VB-Audio Cable 
+18:11:00.813 5 CABLE-B Output (VB-Audio Cable 
+18:11:00.813 Playback Devices
+18:11:00.841 0 Speakers (Realtek High Definiti
+18:11:00.854 1 CABLE Input (VB-Audio Virtual C
+18:11:00.868 2 CABLE-A Input (VB-Audio Cable A
+18:11:00.881 3 CABLE-D Input (VB-Audio Cable D
+18:11:00.895 4 CABLE-B Input (VB-Audio Cable B
+18:11:00.909 5 CABLE-C Input (VB-Audio Cable C
+18:11:00.923 Opened WaveOut Device Speakers (Realtek High Definiti
+18:11:00.930 Opened WaveIn Device Stereo Mix (Realtek High Defini
+18:11:00.966 ARDOPC listening on port 8520
+18:11:00.974 Input peaks = -1, 2
+18:11:04.125 Host Control Session Connected
+18:11:04.126 Host Data Session Connected
+18:11:07.171 [Command Trace FROM host: INITIALIZE
+18:11:07.172  Command Trace TO Host BUFFER 0
+18:11:07.172  Command Trace TO Host INITIALIZE
+18:11:07.172 [Command Trace FROM host: VERSION
+18:11:07.173  Command Trace TO Host VERSION ARDOP TNC_2.0.3.40-BPQ-OFDM
+18:11:07.173 [Command Trace FROM host: CWID FALSE
+18:11:07.173  Command Trace TO Host CWID now FALSE
+18:11:07.173 [Command Trace FROM host: PROTOCOLMODE ARQ
+18:11:07.173  Command Trace TO Host PROTOCOLMODE now ARQ
+18:11:07.173 [Command Trace FROM host: ARQTIMEOUT 90
+18:11:07.174  Command Trace TO Host ARQTIMEOUT now 90
+18:11:07.174 [Command Trace FROM host: DEBUGLOG TRUE
+18:11:07.174  Command Trace TO Host DEBUGLOG now TRUE
+18:11:07.175 [Command Trace FROM host: CMDTRACE TRUE
+18:11:07.175  Command Trace TO Host CMDTRACE now TRUE
+18:11:07.175 [Command Trace FROM host: CWID FALSE
+18:11:07.175  Command Trace TO Host CWID now FALSE
+18:11:07.176 [Command Trace FROM host: DRIVELEVEL 100
+18:11:07.176  Command Trace TO Host DRIVELEVEL now 100
+18:11:07.176 [Command Trace FROM host: GRIDSQUARE IO68VL
+18:11:07.177  Command Trace TO Host GRIDSQUARE now IO68VL
+18:11:07.178 [Command Trace FROM host: FECREPEATS 0
+18:11:07.178  Command Trace TO Host FECREPEATS now 0
+18:11:07.178 [Command Trace FROM host: FASTSTART TRUE
+18:11:07.179  Command Trace TO Host FASTSTART now TRUE
+18:11:07.179 [Command Trace FROM host: CONSOLELOG 7
+18:11:07.179  Command Trace TO Host CONSOLELOG now 7
+18:11:07.180 [Command Trace FROM host: MYCALL G8BPQ-2
+18:11:07.180  Command Trace TO Host MYCALL now G8BPQ-2
+18:11:07.181 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+18:11:07.181  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+18:11:11.041 Input peaks = -3, 3
+18:11:11.042  Command Trace TO Host INPUTPEAKS -3 3
+18:11:21.085 Input peaks = -2, 2
+18:11:21.086  Command Trace TO Host INPUTPEAKS -2 2
+18:11:28.775 [Command Trace FROM host: STATE
+18:11:28.776  Command Trace TO Host STATE DISC
+18:11:31.128 Input peaks = -2, 3
+18:11:31.129  Command Trace TO Host INPUTPEAKS -2 3
+18:11:41.185 Input peaks = -2, 2
+18:11:41.188  Command Trace TO Host INPUTPEAKS -2 2
+18:11:51.266 Input peaks = -3, 3
+18:11:51.268  Command Trace TO Host INPUTPEAKS -3 3
+18:12:01.342 Input peaks = -2, 2
+18:12:01.343  Command Trace TO Host INPUTPEAKS -2 2
+18:12:11.389 Input peaks = -2, 3
+18:12:11.390  Command Trace TO Host INPUTPEAKS -2 3
+18:12:21.441 Input peaks = -3, 2
+18:12:21.442  Command Trace TO Host INPUTPEAKS -3 2
+18:12:31.485 Input peaks = -2, 2
+18:12:31.487  Command Trace TO Host INPUTPEAKS -2 2
+18:12:35.011 [Command Trace FROM host: STATE
+18:12:35.014  Command Trace TO Host STATE DISC
+18:12:41.526 Input peaks = -2, 2
+18:12:41.527  Command Trace TO Host INPUTPEAKS -2 2
+18:12:51.605 Input peaks = -3, 2
+18:12:51.609  Command Trace TO Host INPUTPEAKS -3 2
+18:13:01.684 Input peaks = -2, 2
+18:13:01.686  Command Trace TO Host INPUTPEAKS -2 2
+18:13:11.765 Input peaks = -2, 2
+18:13:11.767  Command Trace TO Host INPUTPEAKS -2 2
+18:13:21.830 Input peaks = -3, 2
+18:13:21.830  Command Trace TO Host INPUTPEAKS -3 2
+18:13:31.904 Input peaks = -2, 2
+18:13:31.905  Command Trace TO Host INPUTPEAKS -2 2
+18:13:41.197 [Command Trace FROM host: STATE
+18:13:41.198  Command Trace TO Host STATE DISC
+18:13:41.971 Input peaks = -3, 2
+18:13:41.972  Command Trace TO Host INPUTPEAKS -3 2
+18:13:52.009 Input peaks = -2, 3
+18:13:52.012  Command Trace TO Host INPUTPEAKS -2 3
+18:14:02.092 Input peaks = -3, 3
+18:14:02.093  Command Trace TO Host INPUTPEAKS -3 3
+18:14:12.165 Input peaks = -2, 3
+18:14:12.166  Command Trace TO Host INPUTPEAKS -2 3
+18:14:22.225 Input peaks = -2, 3
+18:14:22.226  Command Trace TO Host INPUTPEAKS -2 3
+18:14:32.293 Input peaks = -3, 3
+18:14:32.294  Command Trace TO Host INPUTPEAKS -3 3
+18:14:42.372 Input peaks = -2, 3
+18:14:42.373  Command Trace TO Host INPUTPEAKS -2 3
+18:14:47.397 [Command Trace FROM host: STATE
+18:14:47.398  Command Trace TO Host STATE DISC
+18:14:52.449 Input peaks = -2, 3
+18:14:52.450  Command Trace TO Host INPUTPEAKS -2 3
+18:15:02.508 Input peaks = -2, 3
+18:15:02.510  Command Trace TO Host INPUTPEAKS -2 3
+18:15:12.570 Input peaks = -2, 3
+18:15:12.570  Command Trace TO Host INPUTPEAKS -2 3
+18:15:22.613 Input peaks = -3, 2
+18:15:22.614  Command Trace TO Host INPUTPEAKS -3 2
+18:15:32.653 Input peaks = -2, 2
+18:15:32.654  Command Trace TO Host INPUTPEAKS -2 2
+18:15:42.690 Input peaks = -3, 3
+18:15:42.693  Command Trace TO Host INPUTPEAKS -3 3
+18:15:52.747 Input peaks = -3, 2
+18:15:52.748  Command Trace TO Host INPUTPEAKS -3 2
+18:15:53.589 [Command Trace FROM host: STATE
+18:15:53.592  Command Trace TO Host STATE DISC
+18:16:02.809 Input peaks = -2, 3
+18:16:02.810  Command Trace TO Host INPUTPEAKS -2 3
+18:16:12.853 Input peaks = -2, 2
+18:16:12.854  Command Trace TO Host INPUTPEAKS -2 2
+18:16:22.894 Input peaks = -2, 2
+18:16:22.894  Command Trace TO Host INPUTPEAKS -2 2
+18:16:32.956 Input peaks = -2, 2
+18:16:32.957  Command Trace TO Host INPUTPEAKS -2 2
+18:16:43.011 Input peaks = -2, 2
+18:16:43.012  Command Trace TO Host INPUTPEAKS -2 2
+18:16:53.074 Input peaks = -3, 2
+18:16:53.074  Command Trace TO Host INPUTPEAKS -3 2
+18:16:59.755 [Command Trace FROM host: STATE
+18:16:59.756  Command Trace TO Host STATE DISC
+18:17:03.136 Input peaks = -2, 3
+18:17:03.137  Command Trace TO Host INPUTPEAKS -2 3
+18:17:13.210 Input peaks = -3, 2
+18:17:13.211  Command Trace TO Host INPUTPEAKS -3 2
+18:17:23.278 Input peaks = -3, 3
+18:17:23.280  Command Trace TO Host INPUTPEAKS -3 3
+18:17:33.336 Input peaks = -3, 3
+18:17:33.337  Command Trace TO Host INPUTPEAKS -3 3
+18:17:43.378 Input peaks = -2, 2
+18:17:43.378  Command Trace TO Host INPUTPEAKS -2 2
+18:17:53.418 Input peaks = -3, 3
+18:17:53.420  Command Trace TO Host INPUTPEAKS -3 3
+18:18:03.472 Input peaks = -3, 2
+18:18:03.474  Command Trace TO Host INPUTPEAKS -3 2
+18:18:06.057 [Command Trace FROM host: STATE
+18:18:06.057  Command Trace TO Host STATE DISC
+18:18:13.557 Input peaks = -2, 2
+18:18:13.558  Command Trace TO Host INPUTPEAKS -2 2
+18:18:23.631 Input peaks = -2, 3
+18:18:23.634  Command Trace TO Host INPUTPEAKS -2 3
+18:18:33.694 Input peaks = -2, 2
+18:18:33.695  Command Trace TO Host INPUTPEAKS -2 2
+18:18:43.757 Input peaks = -3, 3
+18:18:43.758  Command Trace TO Host INPUTPEAKS -3 3
+18:18:53.834 Input peaks = -3, 3
+18:18:53.835  Command Trace TO Host INPUTPEAKS -3 3
+18:19:03.897 Input peaks = -3, 2
+18:19:03.898  Command Trace TO Host INPUTPEAKS -3 2
+18:19:12.297 [Command Trace FROM host: STATE
+18:19:12.299  Command Trace TO Host STATE DISC
+18:19:13.959 Input peaks = -3, 3
+18:19:13.960  Command Trace TO Host INPUTPEAKS -3 3
+18:19:24.022 Input peaks = -2, 2
+18:19:24.023  Command Trace TO Host INPUTPEAKS -2 2
+18:19:34.079 Input peaks = -2, 3
+18:19:34.080  Command Trace TO Host INPUTPEAKS -2 3
+18:19:44.134 Input peaks = -3, 2
+18:19:44.135  Command Trace TO Host INPUTPEAKS -3 2
+18:19:54.201 Input peaks = -3, 2
+18:19:54.202  Command Trace TO Host INPUTPEAKS -3 2
+18:20:04.244 Input peaks = -2, 3
+18:20:04.247  Command Trace TO Host INPUTPEAKS -2 3
+18:20:14.320 Input peaks = -3, 3
+18:20:14.321  Command Trace TO Host INPUTPEAKS -3 3
+18:20:18.429 [Command Trace FROM host: STATE
+18:20:18.429  Command Trace TO Host STATE DISC
+18:20:24.383 Input peaks = -3, 2
+18:20:24.384  Command Trace TO Host INPUTPEAKS -3 2
+18:20:34.438 Input peaks = -2, 2
+18:20:34.439  Command Trace TO Host INPUTPEAKS -2 2
+18:20:44.515 Input peaks = -3, 3
+18:20:44.516  Command Trace TO Host INPUTPEAKS -3 3
+18:20:54.556 Input peaks = -2, 2
+18:20:54.557  Command Trace TO Host INPUTPEAKS -2 2
+18:21:04.624 Input peaks = -3, 3
+18:21:04.625  Command Trace TO Host INPUTPEAKS -3 3
+18:21:14.685 Input peaks = -2, 2
+18:21:14.689  Command Trace TO Host INPUTPEAKS -2 2
+18:21:24.656 [Command Trace FROM host: STATE
+18:21:24.657  Command Trace TO Host STATE DISC
+18:21:24.720 Input peaks = -2, 3
+18:21:24.721  Command Trace TO Host INPUTPEAKS -2 3
+18:21:34.765 Input peaks = -2, 2
+18:21:34.766  Command Trace TO Host INPUTPEAKS -2 2
+18:21:44.820 Input peaks = -3, 3
+18:21:44.821  Command Trace TO Host INPUTPEAKS -3 3
+18:21:54.877 Input peaks = -2, 3
+18:21:54.878  Command Trace TO Host INPUTPEAKS -2 3
+18:22:04.941 Input peaks = -2, 3
+18:22:04.942  Command Trace TO Host INPUTPEAKS -2 3
+18:22:14.999 Input peaks = -2, 3
+18:22:15.000  Command Trace TO Host INPUTPEAKS -2 3
+18:22:25.062 Input peaks = -2, 2
+18:22:25.063  Command Trace TO Host INPUTPEAKS -2 2
+18:22:30.744 [Command Trace FROM host: STATE
+18:22:30.745  Command Trace TO Host STATE DISC
+18:22:35.146 Input peaks = -3, 2
+18:22:35.147  Command Trace TO Host INPUTPEAKS -3 2
+18:22:45.206 Input peaks = -2, 2
+18:22:45.207  Command Trace TO Host INPUTPEAKS -2 2
+18:22:55.260 Input peaks = -3, 2
+18:22:55.263  Command Trace TO Host INPUTPEAKS -3 2
+18:23:05.323 Input peaks = -2, 3
+18:23:05.324  Command Trace TO Host INPUTPEAKS -2 3
+18:23:15.389 Input peaks = -3, 2
+18:23:15.392  Command Trace TO Host INPUTPEAKS -3 2
+18:23:25.466 Input peaks = -2, 2
+18:23:25.466  Command Trace TO Host INPUTPEAKS -2 2
+18:23:35.548 Input peaks = -3, 3
+18:23:35.549  Command Trace TO Host INPUTPEAKS -3 3
+18:23:36.917 [Command Trace FROM host: STATE
+18:23:36.918  Command Trace TO Host STATE DISC
+18:23:45.604 Input peaks = -3, 2
+18:23:45.605  Command Trace TO Host INPUTPEAKS -3 2
+18:23:55.663 Input peaks = -2, 3
+18:23:55.665  Command Trace TO Host INPUTPEAKS -2 3
+18:24:05.704 Input peaks = -2, 3
+18:24:05.707  Command Trace TO Host INPUTPEAKS -2 3
+18:24:15.750 Input peaks = -2, 2
+18:24:15.752  Command Trace TO Host INPUTPEAKS -2 2
+18:24:25.810 Input peaks = -3, 2
+18:24:25.811  Command Trace TO Host INPUTPEAKS -3 2
+18:24:35.886 Input peaks = -2, 2
+18:24:35.891  Command Trace TO Host INPUTPEAKS -2 2
+18:24:43.129 [Command Trace FROM host: STATE
+18:24:43.130  Command Trace TO Host STATE DISC
+18:24:45.946 Input peaks = -2, 3
+18:24:45.947  Command Trace TO Host INPUTPEAKS -2 3
+18:24:56.012 Input peaks = -2, 3
+18:24:56.014  Command Trace TO Host INPUTPEAKS -2 3
+18:25:06.089 Input peaks = -3, 2
+18:25:06.090  Command Trace TO Host INPUTPEAKS -3 2
+18:25:16.148 Input peaks = -2, 3
+18:25:16.149  Command Trace TO Host INPUTPEAKS -2 3
+18:25:26.190 Input peaks = -3, 3
+18:25:26.191  Command Trace TO Host INPUTPEAKS -3 3
+18:25:36.231 Input peaks = -3, 2
+18:25:36.232  Command Trace TO Host INPUTPEAKS -3 2
+18:25:46.310 Input peaks = -2, 2
+18:25:46.313  Command Trace TO Host INPUTPEAKS -2 2
+18:25:49.363 [Command Trace FROM host: STATE
+18:25:49.364  Command Trace TO Host STATE DISC
+18:25:56.386 Input peaks = -3, 2
+18:25:56.387  Command Trace TO Host INPUTPEAKS -3 2
+18:26:06.433 Input peaks = -3, 3
+18:26:06.434  Command Trace TO Host INPUTPEAKS -3 3
+18:26:16.495 Input peaks = -2, 3
+18:26:16.498  Command Trace TO Host INPUTPEAKS -2 3
+18:26:26.534 Input peaks = -2, 2
+18:26:26.535  Command Trace TO Host INPUTPEAKS -2 2
+18:26:36.593 Input peaks = -2, 3
+18:26:36.594  Command Trace TO Host INPUTPEAKS -2 3
+18:26:46.634 Input peaks = -2, 2
+18:26:46.635  Command Trace TO Host INPUTPEAKS -2 2
+18:26:55.546 [Command Trace FROM host: STATE
+18:26:55.548  Command Trace TO Host STATE DISC
+18:26:56.712 Input peaks = -3, 2
+18:26:56.713  Command Trace TO Host INPUTPEAKS -3 2
+18:27:06.753 Input peaks = -2, 2
+18:27:06.754  Command Trace TO Host INPUTPEAKS -2 2
+18:27:16.816 Input peaks = -3, 2
+18:27:16.817  Command Trace TO Host INPUTPEAKS -3 2
+18:27:26.875 Input peaks = -2, 2
+18:27:26.876  Command Trace TO Host INPUTPEAKS -2 2
+18:27:36.952 Input peaks = -2, 2
+18:27:36.956  Command Trace TO Host INPUTPEAKS -2 2
+18:27:47.034 Input peaks = -2, 2
+18:27:47.036  Command Trace TO Host INPUTPEAKS -2 2
+18:27:57.114 Input peaks = -2, 2
+18:27:57.115  Command Trace TO Host INPUTPEAKS -2 2
+18:28:01.684 [Command Trace FROM host: STATE
+18:28:01.685  Command Trace TO Host STATE DISC
+18:28:07.157 Input peaks = -3, 3
+18:28:07.158  Command Trace TO Host INPUTPEAKS -3 3
+18:28:17.212 Input peaks = -3, 2
+18:28:17.213  Command Trace TO Host INPUTPEAKS -3 2
+18:28:27.255 Input peaks = -2, 2
+18:28:27.256  Command Trace TO Host INPUTPEAKS -2 2
+18:28:37.335 Input peaks = -2, 3
+18:28:37.336  Command Trace TO Host INPUTPEAKS -2 3
+18:28:47.392 Input peaks = -2, 2
+18:28:47.395  Command Trace TO Host INPUTPEAKS -2 2
+18:28:57.475 Input peaks = -3, 2
+18:28:57.476  Command Trace TO Host INPUTPEAKS -3 2
+18:29:07.555 Input peaks = -2, 2
+18:29:07.558  Command Trace TO Host INPUTPEAKS -2 2
+18:29:07.773 [Command Trace FROM host: STATE
+18:29:07.774  Command Trace TO Host STATE DISC
+18:29:17.614 Input peaks = -2, 3
+18:29:17.618  Command Trace TO Host INPUTPEAKS -2 3
+18:29:27.696 Input peaks = -3, 2
+18:29:27.697  Command Trace TO Host INPUTPEAKS -3 2
+18:29:37.759 Input peaks = -2, 2
+18:29:37.760  Command Trace TO Host INPUTPEAKS -2 2
+18:29:47.819 Input peaks = -3, 2
+18:29:47.820  Command Trace TO Host INPUTPEAKS -3 2
+18:29:57.894 Input peaks = -2, 2
+18:29:57.895  Command Trace TO Host INPUTPEAKS -2 2
+18:30:07.957 Input peaks = -3, 2
+18:30:07.958  Command Trace TO Host INPUTPEAKS -3 2
+18:30:13.925 [Command Trace FROM host: STATE
+18:30:13.926  Command Trace TO Host STATE DISC
+18:30:18.037 Input peaks = -3, 2
+18:30:18.038  Command Trace TO Host INPUTPEAKS -3 2
+18:30:28.121 Input peaks = -3, 2
+18:30:28.121  Command Trace TO Host INPUTPEAKS -3 2
+18:30:38.180 Input peaks = -3, 2
+18:30:38.183  Command Trace TO Host INPUTPEAKS -3 2
+18:30:48.236 Input peaks = -2, 2
+18:30:48.237  Command Trace TO Host INPUTPEAKS -2 2
+18:30:58.278 Input peaks = -3, 2
+18:30:58.280  Command Trace TO Host INPUTPEAKS -3 2
+18:31:08.338 Input peaks = -2, 2
+18:31:08.340  Command Trace TO Host INPUTPEAKS -2 2
+18:31:18.381 Input peaks = -3, 2
+18:31:18.383  Command Trace TO Host INPUTPEAKS -3 2
+18:31:20.161 [Command Trace FROM host: STATE
+18:31:20.162  Command Trace TO Host STATE DISC
+18:31:28.460 Input peaks = -3, 3
+18:31:28.462  Command Trace TO Host INPUTPEAKS -3 3
+18:31:38.524 Input peaks = -3, 3
+18:31:38.525  Command Trace TO Host INPUTPEAKS -3 3
+18:31:48.602 Input peaks = -2, 2
+18:31:48.603  Command Trace TO Host INPUTPEAKS -2 2
+18:31:58.677 Input peaks = -3, 3
+18:31:58.678  Command Trace TO Host INPUTPEAKS -3 3
+18:32:08.745 Input peaks = -2, 3
+18:32:08.746  Command Trace TO Host INPUTPEAKS -2 3
+18:32:18.802 Input peaks = -3, 3
+18:32:18.803  Command Trace TO Host INPUTPEAKS -3 3
+18:32:26.274 [Command Trace FROM host: STATE
+18:32:26.275  Command Trace TO Host STATE DISC
+18:32:28.863 Input peaks = -2, 2
+18:32:28.864  Command Trace TO Host INPUTPEAKS -2 2
+18:32:38.938 Input peaks = -2, 3
+18:32:38.938  Command Trace TO Host INPUTPEAKS -2 3
+18:32:49.003 Input peaks = -2, 3
+18:32:49.004  Command Trace TO Host INPUTPEAKS -2 3
+18:32:59.066 Input peaks = -2, 2
+18:32:59.068  Command Trace TO Host INPUTPEAKS -2 2
+18:33:09.136 Input peaks = -2, 2
+18:33:09.137  Command Trace TO Host INPUTPEAKS -2 2
+18:33:19.206 Input peaks = -2, 3
+18:33:19.208  Command Trace TO Host INPUTPEAKS -2 3
+18:33:29.244 Input peaks = -3, 3
+18:33:29.246  Command Trace TO Host INPUTPEAKS -3 3
+18:33:32.446 [Command Trace FROM host: STATE
+18:33:32.447  Command Trace TO Host STATE DISC
+18:33:39.319 Input peaks = -3, 2
+18:33:39.322  Command Trace TO Host INPUTPEAKS -3 2
+18:33:49.399 Input peaks = -3, 3
+18:33:49.402  Command Trace TO Host INPUTPEAKS -3 3
+18:33:59.485 Input peaks = -2, 2
+18:33:59.486  Command Trace TO Host INPUTPEAKS -2 2
+18:34:09.521 Input peaks = -2, 3
+18:34:09.522  Command Trace TO Host INPUTPEAKS -2 3
+18:34:19.563 Input peaks = -2, 3
+18:34:19.564  Command Trace TO Host INPUTPEAKS -2 3
+18:34:29.622 Input peaks = -2, 3
+18:34:29.624  Command Trace TO Host INPUTPEAKS -2 3
+18:34:38.654 [Command Trace FROM host: STATE
+18:34:38.657  Command Trace TO Host STATE DISC
+18:34:39.663 Input peaks = -2, 2
+18:34:39.664  Command Trace TO Host INPUTPEAKS -2 2
+18:34:49.747 Input peaks = -2, 2
+18:34:49.748  Command Trace TO Host INPUTPEAKS -2 2
+18:34:59.826 Input peaks = -3, 3
+18:34:59.828  Command Trace TO Host INPUTPEAKS -3 3
+18:35:09.903 Input peaks = -3, 3
+18:35:09.904  Command Trace TO Host INPUTPEAKS -3 3
+18:35:19.988 Input peaks = -2, 2
+18:35:19.989  Command Trace TO Host INPUTPEAKS -2 2
+18:35:30.044 Input peaks = -2, 2
+18:35:30.046  Command Trace TO Host INPUTPEAKS -2 2
+18:35:40.091 Input peaks = -2, 2
+18:35:40.092  Command Trace TO Host INPUTPEAKS -2 2
+18:35:44.804 [Command Trace FROM host: STATE
+18:35:44.806  Command Trace TO Host STATE DISC
+18:35:50.163 Input peaks = -3, 2
+18:35:50.164  Command Trace TO Host INPUTPEAKS -3 2
+18:36:00.232 Input peaks = -3, 3
+18:36:00.233  Command Trace TO Host INPUTPEAKS -3 3
+18:36:10.309 Input peaks = -2, 3
+18:36:10.310  Command Trace TO Host INPUTPEAKS -2 3
+18:36:20.386 Input peaks = -796, 827
+18:36:20.387  Command Trace TO Host INPUTPEAKS -796 827
+18:36:20.430  Command Trace TO Host BUSY TRUE
+18:36:27.585  Command Trace TO Host BUSY FALSE
+18:36:30.427 Input peaks = -2, 2
+18:36:30.428  Command Trace TO Host INPUTPEAKS -2 2
+18:36:40.493 Input peaks = -2, 2
+18:36:40.498  Command Trace TO Host INPUTPEAKS -2 2
+18:36:50.569 Input peaks = -2, 3
+18:36:50.570  Command Trace TO Host INPUTPEAKS -2 3
+18:36:51.105 [Command Trace FROM host: STATE
+18:36:51.107  Command Trace TO Host STATE DISC
+18:37:00.627 Input peaks = -2, 2
+18:37:00.628  Command Trace TO Host INPUTPEAKS -2 2
+18:37:10.668 Input peaks = -2, 2
+18:37:10.669  Command Trace TO Host INPUTPEAKS -2 2
+18:37:20.713 Input peaks = -2, 2
+18:37:20.714  Command Trace TO Host INPUTPEAKS -2 2
+18:37:30.790 Input peaks = -2, 3
+18:37:30.792  Command Trace TO Host INPUTPEAKS -2 3
+18:37:40.834 Input peaks = -2, 2
+18:37:40.836  Command Trace TO Host INPUTPEAKS -2 2
+18:37:50.890 Input peaks = -3, 2
+18:37:50.891  Command Trace TO Host INPUTPEAKS -3 2
+18:37:57.252 [Command Trace FROM host: STATE
+18:37:57.254  Command Trace TO Host STATE DISC
+18:38:00.952 Input peaks = -3, 2
+18:38:00.952  Command Trace TO Host INPUTPEAKS -3 2
+18:38:11.028 Input peaks = -3, 2
+18:38:11.030  Command Trace TO Host INPUTPEAKS -3 2
+18:38:21.086 Input peaks = -2, 2
+18:38:21.087  Command Trace TO Host INPUTPEAKS -2 2
+18:38:31.114 Input peaks = -3, 3
+18:38:31.115  Command Trace TO Host INPUTPEAKS -3 3
+18:38:41.171 Input peaks = -2, 2
+18:38:41.174  Command Trace TO Host INPUTPEAKS -2 2
+18:38:51.249 Input peaks = -2, 3
+18:38:51.250  Command Trace TO Host INPUTPEAKS -2 3
+18:39:01.309 Input peaks = -2, 2
+18:39:01.310  Command Trace TO Host INPUTPEAKS -2 2
+18:39:03.383 [Command Trace FROM host: STATE
+18:39:03.384  Command Trace TO Host STATE DISC
+18:39:11.350 Input peaks = -2, 3
+18:39:11.351  Command Trace TO Host INPUTPEAKS -2 3
+18:39:21.391 Input peaks = -3, 2
+18:39:21.392  Command Trace TO Host INPUTPEAKS -3 2
+18:39:31.453 Input peaks = -2, 2
+18:39:31.454  Command Trace TO Host INPUTPEAKS -2 2
+18:39:41.515 Input peaks = -2, 2
+18:39:41.516  Command Trace TO Host INPUTPEAKS -2 2
+18:39:51.591 Input peaks = -2, 3
+18:39:51.592  Command Trace TO Host INPUTPEAKS -2 3
+18:40:01.653 Input peaks = -2, 3
+18:40:01.654  Command Trace TO Host INPUTPEAKS -2 3
+18:40:09.529 [Command Trace FROM host: STATE
+18:40:09.530  Command Trace TO Host STATE DISC
+18:40:11.730 Input peaks = -3, 2
+18:40:11.731  Command Trace TO Host INPUTPEAKS -3 2
+18:40:21.792 Input peaks = -2, 2
+18:40:21.793  Command Trace TO Host INPUTPEAKS -2 2
+18:40:31.836 Input peaks = -2, 3
+18:40:31.838  Command Trace TO Host INPUTPEAKS -2 3
+18:40:41.895 Input peaks = -3, 2
+18:40:41.896  Command Trace TO Host INPUTPEAKS -3 2
+18:40:51.957 Input peaks = -2, 2
+18:40:51.960  Command Trace TO Host INPUTPEAKS -2 2
+18:41:02.001 Input peaks = -3, 2
+18:41:02.002  Command Trace TO Host INPUTPEAKS -3 2
+18:41:12.079 Input peaks = -2, 3
+18:41:12.081  Command Trace TO Host INPUTPEAKS -2 3
+18:41:15.847 [Command Trace FROM host: STATE
+18:41:15.848  Command Trace TO Host STATE DISC
+18:41:22.142 Input peaks = -2, 2
+18:41:22.143  Command Trace TO Host INPUTPEAKS -2 2
+18:41:32.214 Input peaks = -2, 2
+18:41:32.215  Command Trace TO Host INPUTPEAKS -2 2
+18:41:42.281 Input peaks = -2, 3
+18:41:42.282  Command Trace TO Host INPUTPEAKS -2 3
+18:41:52.355 Input peaks = -3, 2
+18:41:52.361  Command Trace TO Host INPUTPEAKS -3 2
+18:42:02.422 Input peaks = -2, 2
+18:42:02.425  Command Trace TO Host INPUTPEAKS -2 2
+18:42:12.499 Input peaks = -3, 2
+18:42:12.500  Command Trace TO Host INPUTPEAKS -3 2
+18:42:22.066 [Command Trace FROM host: STATE
+18:42:22.066  Command Trace TO Host STATE DISC
+18:42:22.538 Input peaks = -3, 3
+18:42:22.539  Command Trace TO Host INPUTPEAKS -3 3
+18:42:32.599 Input peaks = -2, 3
+18:42:32.601  Command Trace TO Host INPUTPEAKS -2 3
+18:42:42.656 Input peaks = -3, 3
+18:42:42.657  Command Trace TO Host INPUTPEAKS -3 3
+18:42:52.716 Input peaks = -3, 2
+18:42:52.717  Command Trace TO Host INPUTPEAKS -3 2
+18:43:02.758 Input peaks = -3, 2
+18:43:02.761  Command Trace TO Host INPUTPEAKS -3 2
+18:43:12.839 Input peaks = -3, 3
+18:43:12.840  Command Trace TO Host INPUTPEAKS -3 3
+18:43:22.897 Input peaks = -2, 2
+18:43:22.898  Command Trace TO Host INPUTPEAKS -2 2
+18:43:28.387 [Command Trace FROM host: STATE
+18:43:28.390  Command Trace TO Host STATE DISC
+18:43:32.940 Input peaks = -2, 3
+18:43:32.941  Command Trace TO Host INPUTPEAKS -2 3
+18:43:43.024 Input peaks = -3, 3
+18:43:43.025  Command Trace TO Host INPUTPEAKS -3 3
+18:43:53.077 Input peaks = -2, 2
+18:43:53.078  Command Trace TO Host INPUTPEAKS -2 2
+18:43:55.141 Ldr; S:N(3KHz) Avg= 22.170250 dB, Offset== -0.062226 Hz
+18:43:55.188 EnvelopeCorrelator CorMax:MaxProd= 60.032306  J= 456
+18:43:55.191 [Acquire2ToneLeaderSymbolFraming] intIatMinError= -2, Leader Length 47 mS
+18:43:55.203 Got Frame Sync 146075903
+18:43:55.343  Command Trace TO Host BUSY TRUE
+18:43:55.366 Frame Decode type 3a 3a 5 Dist 0.00 0.00 0.00 Sess 3f pend 0 conn 0 lastsess 0
+18:43:55.366 [Frame Type Decode OK  ]  MD Decode;2 ID=H3F, Type=H3A:PktFrameHeader, D1= 0.00, D2= 0.00
+18:43:55.367 MEMARQ Flags 0
+18:43:55.646 Qual = 94
+18:43:55.650 MEMARQ Flags 0
+18:43:55.653 [CorrectRawDataWithRS] Carrier 0 OK without RS, Len = 2
+18:43:55.656 Pkt Frame Header Type 4PSK/200 Len 49
+18:43:58.222 [CorrectRawDataWithRS] Carrier 0 OK without RS, Len = 49
+18:43:58.224 Qual = 96
+18:43:58.227 [DecodeFrame] Frame: PktFrameData Decode PASS,   Constellation Quality= 96
+18:44:03.138 Input peaks = -2, 3
+18:44:03.139  Command Trace TO Host INPUTPEAKS -2 3
+18:44:03.301  Command Trace TO Host BUSY FALSE
+18:44:13.202 Input peaks = -3, 2
+18:44:13.205  Command Trace TO Host INPUTPEAKS -3 2
+18:44:23.278 Input peaks = -3, 3
+18:44:23.279  Command Trace TO Host INPUTPEAKS -3 3
+18:44:33.324 Input peaks = -3, 3
+18:44:33.328  Command Trace TO Host INPUTPEAKS -3 3
+18:44:34.829 [Command Trace FROM host: STATE
+18:44:34.830  Command Trace TO Host STATE DISC
+18:44:43.384 Input peaks = -2, 2
+18:44:43.385  Command Trace TO Host INPUTPEAKS -2 2
+18:44:53.425 Input peaks = -3, 3
+18:44:53.426  Command Trace TO Host INPUTPEAKS -3 3
+18:45:03.487 Input peaks = -2, 2
+18:45:03.491  Command Trace TO Host INPUTPEAKS -2 2
+18:45:13.541 Input peaks = -3, 3
+18:45:13.542  Command Trace TO Host INPUTPEAKS -3 3
+18:45:23.567 Input peaks = -2, 2
+18:45:23.569  Command Trace TO Host INPUTPEAKS -2 2
+18:45:33.620 Input peaks = -2, 3
+18:45:33.621  Command Trace TO Host INPUTPEAKS -2 3
+18:45:40.953 [Command Trace FROM host: STATE
+18:45:40.954  Command Trace TO Host STATE DISC
+18:45:43.681 Input peaks = -3, 2
+18:45:43.684  Command Trace TO Host INPUTPEAKS -3 2
+18:45:53.746 Input peaks = -2, 2
+18:45:53.747  Command Trace TO Host INPUTPEAKS -2 2
+18:46:03.803 Input peaks = -3, 3
+18:46:03.804  Command Trace TO Host INPUTPEAKS -3 3
+18:46:13.848 Input peaks = -2, 2
+18:46:13.849  Command Trace TO Host INPUTPEAKS -2 2
+18:46:23.908 Input peaks = -3, 3
+18:46:23.909  Command Trace TO Host INPUTPEAKS -3 3
+18:46:33.983 Input peaks = -3, 2
+18:46:33.984  Command Trace TO Host INPUTPEAKS -3 2
+18:46:44.009 Input peaks = -2, 2
+18:46:44.010  Command Trace TO Host INPUTPEAKS -2 2
+18:46:47.060 [Command Trace FROM host: STATE
+18:46:47.061  Command Trace TO Host STATE DISC
+18:46:54.063 Input peaks = -2, 3
+18:46:54.064  Command Trace TO Host INPUTPEAKS -2 3
+18:47:04.129 Input peaks = -2, 2
+18:47:04.130  Command Trace TO Host INPUTPEAKS -2 2
+18:47:14.185 Input peaks = -3, 2
+18:47:14.186  Command Trace TO Host INPUTPEAKS -3 2
+18:47:24.264 Input peaks = -3, 2
+18:47:24.268  Command Trace TO Host INPUTPEAKS -3 2
+18:47:34.330 Input peaks = -2, 2
+18:47:34.332  Command Trace TO Host INPUTPEAKS -2 2
+18:47:39.385  Command Trace TO Host BUSY TRUE
+18:47:44.389 Input peaks = -2, 2
+18:47:44.394  Command Trace TO Host INPUTPEAKS -2 2
+18:47:46.469  Command Trace TO Host BUSY FALSE
+18:47:53.205 [Command Trace FROM host: STATE
+18:47:53.218  Command Trace TO Host STATE DISC
+18:47:54.427 Input peaks = -3, 2
+18:47:54.428  Command Trace TO Host INPUTPEAKS -3 2
+18:48:04.525 Input peaks = -2, 3
+18:48:04.527  Command Trace TO Host INPUTPEAKS -2 3
+18:48:14.572 Input peaks = -3, 2
+18:48:14.573  Command Trace TO Host INPUTPEAKS -3 2
+18:48:24.646 Input peaks = -3, 3
+18:48:24.647  Command Trace TO Host INPUTPEAKS -3 3
+18:48:34.687 Input peaks = -2, 3
+18:48:34.688  Command Trace TO Host INPUTPEAKS -2 3
+18:48:44.753 Input peaks = -2, 2
+18:48:44.758  Command Trace TO Host INPUTPEAKS -2 2
+18:48:54.829 Input peaks = -2, 2
+18:48:54.830  Command Trace TO Host INPUTPEAKS -2 2
+18:48:59.373 [Command Trace FROM host: STATE
+18:48:59.374  Command Trace TO Host STATE DISC
+18:49:04.893 Input peaks = -2, 3
+18:49:04.894  Command Trace TO Host INPUTPEAKS -2 3
+18:49:14.972 Input peaks = -3, 3
+18:49:14.972  Command Trace TO Host INPUTPEAKS -3 3
+18:49:25.029 Input peaks = -3, 2
+18:49:25.030  Command Trace TO Host INPUTPEAKS -3 2
+18:49:35.094 Input peaks = -2, 2
+18:49:35.097  Command Trace TO Host INPUTPEAKS -2 2
+18:49:45.170 Input peaks = -2, 2
+18:49:45.171  Command Trace TO Host INPUTPEAKS -2 2
+18:49:55.230 Input peaks = -3, 2
+18:49:55.248  Command Trace TO Host INPUTPEAKS -3 2
+18:50:05.295 Input peaks = -3, 3
+18:50:05.296  Command Trace TO Host INPUTPEAKS -3 3
+18:50:05.702 [Command Trace FROM host: STATE
+18:50:05.703  Command Trace TO Host STATE DISC
+18:50:15.350 Input peaks = -3, 3
+18:50:15.351  Command Trace TO Host INPUTPEAKS -3 3
+18:50:25.414 Input peaks = -2, 3
+18:50:25.415  Command Trace TO Host INPUTPEAKS -2 3
+18:50:35.458 Input peaks = -2, 3
+18:50:35.459  Command Trace TO Host INPUTPEAKS -2 3
+18:50:45.512 Input peaks = -3, 2
+18:50:45.513  Command Trace TO Host INPUTPEAKS -3 2
+18:50:55.553 Input peaks = -2, 2
+18:50:55.555  Command Trace TO Host INPUTPEAKS -2 2
+18:51:05.615 Input peaks = -2, 3
+18:51:05.617  Command Trace TO Host INPUTPEAKS -2 3
+18:51:11.976 [Command Trace FROM host: STATE
+18:51:11.977  Command Trace TO Host STATE DISC
+18:51:15.669 Input peaks = -3, 2
+18:51:15.670  Command Trace TO Host INPUTPEAKS -3 2
+18:51:25.711 Input peaks = -3, 2
+18:51:25.712  Command Trace TO Host INPUTPEAKS -3 2
+18:51:35.778 Input peaks = -3, 3
+18:51:35.780  Command Trace TO Host INPUTPEAKS -3 3
+18:51:45.818 Input peaks = -3, 2
+18:51:45.819  Command Trace TO Host INPUTPEAKS -3 2
+18:51:55.855 Input peaks = -3, 2
+18:51:55.857  Command Trace TO Host INPUTPEAKS -3 2
+18:52:05.896 Input peaks = -3, 3
+18:52:05.897  Command Trace TO Host INPUTPEAKS -3 3
+18:52:15.960 Input peaks = -3, 2
+18:52:15.961  Command Trace TO Host INPUTPEAKS -3 2
+18:52:18.175 [Command Trace FROM host: STATE
+18:52:18.176  Command Trace TO Host STATE DISC
+18:52:26.017 Input peaks = -3, 3
+18:52:26.018  Command Trace TO Host INPUTPEAKS -3 3
+18:52:36.073 Input peaks = -3, 2
+18:52:36.074  Command Trace TO Host INPUTPEAKS -3 2
+18:52:46.137 Input peaks = -3, 2
+18:52:46.138  Command Trace TO Host INPUTPEAKS -3 2
+18:52:56.197 Input peaks = -3, 2
+18:52:56.197  Command Trace TO Host INPUTPEAKS -3 2
+18:53:06.277 Input peaks = -2, 2
+18:53:06.278  Command Trace TO Host INPUTPEAKS -2 2
+18:53:16.320 Input peaks = -2, 3
+18:53:16.321  Command Trace TO Host INPUTPEAKS -2 3
+18:53:24.478 [Command Trace FROM host: STATE
+18:53:24.479  Command Trace TO Host STATE DISC
+18:53:26.378 Input peaks = -3, 3
+18:53:26.379  Command Trace TO Host INPUTPEAKS -3 3
+18:53:36.420 Input peaks = -2, 2
+18:53:36.420  Command Trace TO Host INPUTPEAKS -2 2
+18:53:46.500 Input peaks = -2, 3
+18:53:46.501  Command Trace TO Host INPUTPEAKS -2 3
+18:53:56.559 Input peaks = -3, 2
+18:53:56.560  Command Trace TO Host INPUTPEAKS -3 2
+18:54:06.618 Input peaks = -2, 2
+18:54:06.622  Command Trace TO Host INPUTPEAKS -2 2
+18:54:16.682 Input peaks = -3, 3
+18:54:16.683  Command Trace TO Host INPUTPEAKS -3 3
+18:54:26.723 Input peaks = -3, 2
+18:54:26.724  Command Trace TO Host INPUTPEAKS -3 2
+18:54:31.129 [Command Trace FROM host: STATE
+18:54:31.130  Command Trace TO Host STATE DISC
+18:54:36.782 Input peaks = -2, 2
+18:54:36.782  Command Trace TO Host INPUTPEAKS -2 2
+18:54:46.805 Input peaks = -3, 2
+18:54:46.806  Command Trace TO Host INPUTPEAKS -3 2
+18:54:56.901 Input peaks = -2, 3
+18:54:56.902  Command Trace TO Host INPUTPEAKS -2 3
+18:55:06.963 Input peaks = -3, 3
+18:55:06.965  Command Trace TO Host INPUTPEAKS -3 3
+18:55:17.017 Input peaks = -3, 2
+18:55:17.018  Command Trace TO Host INPUTPEAKS -3 2
+18:55:27.046 Input peaks = -2, 2
+18:55:27.047  Command Trace TO Host INPUTPEAKS -2 2
+18:55:37.103 Input peaks = -3, 3
+18:55:37.104  Command Trace TO Host INPUTPEAKS -3 3
+18:55:37.309 [Command Trace FROM host: STATE
+18:55:37.310  Command Trace TO Host STATE DISC
+18:55:47.160 Input peaks = -2, 2
+18:55:47.162  Command Trace TO Host INPUTPEAKS -2 2
+18:55:57.223 Input peaks = -2, 2
+18:55:57.225  Command Trace TO Host INPUTPEAKS -2 2
+18:56:07.306 Input peaks = -3, 2
+18:56:07.308  Command Trace TO Host INPUTPEAKS -3 2
+18:56:17.348 Input peaks = -3, 2
+18:56:17.349  Command Trace TO Host INPUTPEAKS -3 2
+18:56:27.406 Input peaks = -2, 2
+18:56:27.407  Command Trace TO Host INPUTPEAKS -2 2
+18:56:37.481 Input peaks = -2, 2
+18:56:37.482  Command Trace TO Host INPUTPEAKS -2 2
+18:56:43.427 [Command Trace FROM host: STATE
+18:56:43.428  Command Trace TO Host STATE DISC
+18:56:47.564 Input peaks = -3, 3
+18:56:47.565  Command Trace TO Host INPUTPEAKS -3 3
+18:56:57.623 Input peaks = -3, 2
+18:56:57.624  Command Trace TO Host INPUTPEAKS -3 2
+18:57:07.703 Input peaks = -2, 2
+18:57:07.704  Command Trace TO Host INPUTPEAKS -2 2
+18:57:17.762 Input peaks = -2, 3
+18:57:17.763  Command Trace TO Host INPUTPEAKS -2 3
+18:57:27.844 Input peaks = -2, 2
+18:57:27.845  Command Trace TO Host INPUTPEAKS -2 2
+18:57:37.910 Input peaks = -3, 2
+18:57:37.911  Command Trace TO Host INPUTPEAKS -3 2
+18:57:47.969 Input peaks = -3, 2
+18:57:47.970  Command Trace TO Host INPUTPEAKS -3 2
+18:57:49.573 [Command Trace FROM host: STATE
+18:57:49.574  Command Trace TO Host STATE DISC
+18:57:58.046 Input peaks = -2, 2
+18:57:58.049  Command Trace TO Host INPUTPEAKS -2 2
+18:58:08.109 Input peaks = -2, 3
+18:58:08.110  Command Trace TO Host INPUTPEAKS -2 3
+18:58:18.162 Input peaks = -2, 3
+18:58:18.163  Command Trace TO Host INPUTPEAKS -2 3
+18:58:28.209 Input peaks = -3, 2
+18:58:28.211  Command Trace TO Host INPUTPEAKS -3 2
+18:58:38.283 Input peaks = -2, 2
+18:58:38.284  Command Trace TO Host INPUTPEAKS -2 2
+18:58:48.326 Input peaks = -2, 2
+18:58:48.327  Command Trace TO Host INPUTPEAKS -2 2
+18:58:55.826 [Command Trace FROM host: STATE
+18:58:55.829  Command Trace TO Host STATE DISC
+18:58:58.409 Input peaks = -2, 2
+18:58:58.410  Command Trace TO Host INPUTPEAKS -2 2
+18:59:08.473 Input peaks = -2, 2
+18:59:08.474  Command Trace TO Host INPUTPEAKS -2 2
+18:59:18.566 Input peaks = -2, 3
+18:59:18.567  Command Trace TO Host INPUTPEAKS -2 3
+18:59:28.630 Input peaks = -2, 3
+18:59:28.631  Command Trace TO Host INPUTPEAKS -2 3
+18:59:38.706 Input peaks = -2, 3
+18:59:38.707  Command Trace TO Host INPUTPEAKS -2 3
+18:59:48.768 Input peaks = -3, 2
+18:59:48.769  Command Trace TO Host INPUTPEAKS -3 2
+18:59:58.851 Input peaks = -2, 3
+18:59:58.852  Command Trace TO Host INPUTPEAKS -2 3
+19:00:01.968 [Command Trace FROM host: STATE
+19:00:01.971  Command Trace TO Host STATE DISC
+19:00:08.909 Input peaks = -3, 3
+19:00:08.910  Command Trace TO Host INPUTPEAKS -3 3
+19:00:18.988 Input peaks = -2, 2
+19:00:18.989  Command Trace TO Host INPUTPEAKS -2 2
+19:00:29.033 Input peaks = -2, 2
+19:00:29.034  Command Trace TO Host INPUTPEAKS -2 2
+19:00:39.075 Input peaks = -2, 2
+19:00:39.076  Command Trace TO Host INPUTPEAKS -2 2
+19:00:49.153 Input peaks = -3, 2
+19:00:49.154  Command Trace TO Host INPUTPEAKS -3 2
+19:00:59.195 Input peaks = -2, 2
+19:00:59.196  Command Trace TO Host INPUTPEAKS -2 2
+19:01:08.183 [Command Trace FROM host: STATE
+19:01:08.184  Command Trace TO Host STATE DISC
+19:01:09.256 Input peaks = -2, 2
+19:01:09.257  Command Trace TO Host INPUTPEAKS -2 2
+19:01:19.329 Input peaks = -2, 2
+19:01:19.331  Command Trace TO Host INPUTPEAKS -2 2
+19:01:29.374 Input peaks = -2, 2
+19:01:29.377  Command Trace TO Host INPUTPEAKS -2 2
+19:01:39.414 Input peaks = -3, 3
+19:01:39.415  Command Trace TO Host INPUTPEAKS -3 3
+19:01:49.474 Input peaks = -3, 3
+19:01:49.474  Command Trace TO Host INPUTPEAKS -3 3
+19:01:59.519 Input peaks = -2, 3
+19:01:59.522  Command Trace TO Host INPUTPEAKS -2 3
+19:02:09.591 Input peaks = -2, 3
+19:02:09.592  Command Trace TO Host INPUTPEAKS -2 3
+19:02:14.335 [Command Trace FROM host: STATE
+19:02:14.336  Command Trace TO Host STATE DISC
+19:02:19.630 Input peaks = -2, 3
+19:02:19.631  Command Trace TO Host INPUTPEAKS -2 3
+19:02:29.672 Input peaks = -2, 2
+19:02:29.673  Command Trace TO Host INPUTPEAKS -2 2
+19:02:39.713 Input peaks = -3, 3
+19:02:39.714  Command Trace TO Host INPUTPEAKS -3 3
+19:02:49.777 Input peaks = -2, 2
+19:02:49.778  Command Trace TO Host INPUTPEAKS -2 2
+19:02:59.812 Input peaks = -3, 2
+19:02:59.813  Command Trace TO Host INPUTPEAKS -3 2
+19:03:09.878 Input peaks = -2, 3
+19:03:09.879  Command Trace TO Host INPUTPEAKS -2 3
+19:03:19.900 Input peaks = -2, 3
+19:03:19.901  Command Trace TO Host INPUTPEAKS -2 3
+19:03:20.679 [Command Trace FROM host: STATE
+19:03:20.681  Command Trace TO Host STATE DISC
+19:03:29.981 Input peaks = -3, 3
+19:03:29.982  Command Trace TO Host INPUTPEAKS -3 3
+19:03:40.035 Input peaks = -3, 3
+19:03:40.036  Command Trace TO Host INPUTPEAKS -3 3
+19:03:50.102 Input peaks = -2, 3
+19:03:50.105  Command Trace TO Host INPUTPEAKS -2 3
+19:04:00.173 Input peaks = -3, 3
+19:04:00.174  Command Trace TO Host INPUTPEAKS -3 3
+19:04:10.219 Input peaks = -2, 3
+19:04:10.222  Command Trace TO Host INPUTPEAKS -2 3
+19:04:20.277 Input peaks = -2, 3
+19:04:20.278  Command Trace TO Host INPUTPEAKS -2 3
+19:04:26.875 [Command Trace FROM host: STATE
+19:04:26.876  Command Trace TO Host STATE DISC
+19:04:30.358 Input peaks = -2, 2
+19:04:30.362  Command Trace TO Host INPUTPEAKS -2 2
+19:04:40.436 Input peaks = -3, 3
+19:04:40.437  Command Trace TO Host INPUTPEAKS -3 3
+19:04:50.496 Input peaks = -3, 3
+19:04:50.497  Command Trace TO Host INPUTPEAKS -3 3
+19:05:00.580 Input peaks = -2, 2
+19:05:00.587  Command Trace TO Host INPUTPEAKS -2 2
+19:05:10.619 Input peaks = -3, 3
+19:05:10.620  Command Trace TO Host INPUTPEAKS -3 3
+19:05:20.662 Input peaks = -3, 2
+19:05:20.665  Command Trace TO Host INPUTPEAKS -3 2
+19:05:30.718 Input peaks = -2, 2
+19:05:30.719  Command Trace TO Host INPUTPEAKS -2 2
+19:05:33.248 [Command Trace FROM host: STATE
+19:05:33.249  Command Trace TO Host STATE DISC
+19:05:40.796 Input peaks = -3, 3
+19:05:40.797  Command Trace TO Host INPUTPEAKS -3 3
+19:05:50.856 Input peaks = -2, 3
+19:05:50.857  Command Trace TO Host INPUTPEAKS -2 3
+19:06:00.922 Input peaks = -3, 3
+19:06:00.923  Command Trace TO Host INPUTPEAKS -3 3
+19:06:10.980 Input peaks = -2, 2
+19:06:10.982  Command Trace TO Host INPUTPEAKS -2 2
+19:06:21.060 Input peaks = -2, 2
+19:06:21.061  Command Trace TO Host INPUTPEAKS -2 2
+19:06:31.098 Input peaks = -2, 3
+19:06:31.100  Command Trace TO Host INPUTPEAKS -2 3
+19:06:39.441 [Command Trace FROM host: STATE
+19:06:39.442  Command Trace TO Host STATE DISC
+19:06:41.164 Input peaks = -2, 2
+19:06:41.165  Command Trace TO Host INPUTPEAKS -2 2
+19:06:51.220 Input peaks = -3, 3
+19:06:51.222  Command Trace TO Host INPUTPEAKS -3 3
+19:07:01.284 Input peaks = -2, 3
+19:07:01.285  Command Trace TO Host INPUTPEAKS -2 3
+19:07:11.346 Input peaks = -3, 3
+19:07:11.347  Command Trace TO Host INPUTPEAKS -3 3
+19:07:21.379 Input peaks = -3, 3
+19:07:21.380  Command Trace TO Host INPUTPEAKS -3 3
+19:07:23.261  Command Trace TO Host BUSY TRUE
+19:07:30.409  Command Trace TO Host BUSY FALSE
+19:07:31.444 Input peaks = -2, 2
+19:07:31.445  Command Trace TO Host INPUTPEAKS -2 2
+19:07:41.466 Input peaks = -2, 3
+19:07:41.468  Command Trace TO Host INPUTPEAKS -2 3
+19:07:45.714 [Command Trace FROM host: STATE
+19:07:45.716  Command Trace TO Host STATE DISC
+19:07:51.524 Input peaks = -2, 3
+19:07:51.525  Command Trace TO Host INPUTPEAKS -2 3
+19:08:01.581 Input peaks = -2, 2
+19:08:01.582  Command Trace TO Host INPUTPEAKS -2 2
+19:08:11.645 Input peaks = -3, 3
+19:08:11.646  Command Trace TO Host INPUTPEAKS -3 3
+19:08:21.723 Input peaks = -2, 3
+19:08:21.724  Command Trace TO Host INPUTPEAKS -2 3
+19:08:31.749 Input peaks = -2, 2
+19:08:31.750  Command Trace TO Host INPUTPEAKS -2 2
+19:08:41.809 Input peaks = -3, 3
+19:08:41.809  Command Trace TO Host INPUTPEAKS -3 3
+19:08:51.849 Input peaks = -2, 2
+19:08:51.851  Command Trace TO Host INPUTPEAKS -2 2
+19:08:52.058 [Command Trace FROM host: STATE
+19:08:52.059  Command Trace TO Host STATE DISC
+19:09:01.889 Input peaks = -3, 3
+19:09:01.890  Command Trace TO Host INPUTPEAKS -3 3
+19:09:11.950 Input peaks = -2, 2
+19:09:11.952  Command Trace TO Host INPUTPEAKS -2 2
+19:09:22.027 Input peaks = -2, 2
+19:09:22.028  Command Trace TO Host INPUTPEAKS -2 2
+19:09:32.090 Input peaks = -2, 2
+19:09:32.091  Command Trace TO Host INPUTPEAKS -2 2
+19:09:42.162 Input peaks = -2, 3
+19:09:42.165  Command Trace TO Host INPUTPEAKS -2 3
+19:09:52.193 Input peaks = -2, 3
+19:09:52.195  Command Trace TO Host INPUTPEAKS -2 3
+19:09:58.218 [Command Trace FROM host: STATE
+19:09:58.220  Command Trace TO Host STATE DISC
+19:10:02.271 Input peaks = -2, 3
+19:10:02.273  Command Trace TO Host INPUTPEAKS -2 3
+19:10:12.330 Input peaks = -2, 2
+19:10:12.331  Command Trace TO Host INPUTPEAKS -2 2
+19:10:22.391 Input peaks = -2, 2
+19:10:22.393  Command Trace TO Host INPUTPEAKS -2 2
+19:10:32.431 Input peaks = -2, 3
+19:10:32.431  Command Trace TO Host INPUTPEAKS -2 3
+19:10:42.488 Input peaks = -3, 3
+19:10:42.488  Command Trace TO Host INPUTPEAKS -3 3
+19:10:52.572 Input peaks = -2, 3
+19:10:52.573  Command Trace TO Host INPUTPEAKS -2 3
+19:11:02.630 Input peaks = -2, 2
+19:11:02.631  Command Trace TO Host INPUTPEAKS -2 2
+19:11:04.322 [Command Trace FROM host: STATE
+19:11:04.325  Command Trace TO Host STATE DISC
+19:11:12.709 Input peaks = -2, 3
+19:11:12.710  Command Trace TO Host INPUTPEAKS -2 3
+19:11:21.756  Command Trace TO Host BUSY TRUE
+19:11:22.770 Input peaks = -798, 822
+19:11:22.771  Command Trace TO Host INPUTPEAKS -798 822
+19:11:28.752  Command Trace TO Host BUSY FALSE
+19:11:32.827 Input peaks = -2, 2
+19:11:32.828  Command Trace TO Host INPUTPEAKS -2 2
+19:11:42.889 Input peaks = -3, 2
+19:11:42.890  Command Trace TO Host INPUTPEAKS -3 2
+19:11:52.970 Input peaks = -2, 3
+19:11:52.971  Command Trace TO Host INPUTPEAKS -2 3
+19:12:03.034 Input peaks = -3, 3
+19:12:03.035  Command Trace TO Host INPUTPEAKS -3 3
+19:12:10.635 [Command Trace FROM host: STATE
+19:12:10.638  Command Trace TO Host STATE DISC
+19:12:13.112 Input peaks = -2, 3
+19:12:13.112  Command Trace TO Host INPUTPEAKS -2 3
+19:12:23.173 Input peaks = -3, 2
+19:12:23.175  Command Trace TO Host INPUTPEAKS -3 2
+19:12:33.234 Input peaks = -2, 2
+19:12:33.236  Command Trace TO Host INPUTPEAKS -2 2
+19:12:43.294 Input peaks = -2, 2
+19:12:43.295  Command Trace TO Host INPUTPEAKS -2 2
+19:12:53.378 Input peaks = -2, 2
+19:12:53.379  Command Trace TO Host INPUTPEAKS -2 2
+19:13:03.448 Input peaks = -2, 3
+19:13:03.449  Command Trace TO Host INPUTPEAKS -2 3
+19:13:13.498 Input peaks = -3, 3
+19:13:13.499  Command Trace TO Host INPUTPEAKS -3 3
+19:13:16.797 [Command Trace FROM host: STATE
+19:13:16.798  Command Trace TO Host STATE DISC
+19:13:23.557 Input peaks = -2, 2
+19:13:23.560  Command Trace TO Host INPUTPEAKS -2 2
+19:13:33.633 Input peaks = -2, 2
+19:13:33.634  Command Trace TO Host INPUTPEAKS -2 2
+19:13:43.698 Input peaks = -2, 2
+19:13:43.699  Command Trace TO Host INPUTPEAKS -2 2
+19:13:53.755 Input peaks = -2, 3
+19:13:53.756  Command Trace TO Host INPUTPEAKS -2 3
+19:14:03.813 Input peaks = -3, 3
+19:14:03.814  Command Trace TO Host INPUTPEAKS -3 3
+19:14:13.878 Input peaks = -3, 3
+19:14:13.879  Command Trace TO Host INPUTPEAKS -3 3
+19:14:23.003 [Command Trace FROM host: STATE
+19:14:23.006  Command Trace TO Host STATE DISC
+19:14:23.952 Input peaks = -2, 3
+19:14:23.953  Command Trace TO Host INPUTPEAKS -2 3
+19:14:34.015 Input peaks = -2, 3
+19:14:34.016  Command Trace TO Host INPUTPEAKS -2 3
+19:14:44.078 Input peaks = -2, 3
+19:14:44.079  Command Trace TO Host INPUTPEAKS -2 3
+19:14:54.114 Input peaks = -3, 2
+19:14:54.115  Command Trace TO Host INPUTPEAKS -3 2
+19:15:04.162 Input peaks = -3, 2
+19:15:04.165  Command Trace TO Host INPUTPEAKS -3 2
+19:15:14.240 Input peaks = -2, 2
+19:15:14.241  Command Trace TO Host INPUTPEAKS -2 2
+19:15:24.296 Input peaks = -3, 2
+19:15:24.298  Command Trace TO Host INPUTPEAKS -3 2
+19:15:29.116 [Command Trace FROM host: STATE
+19:15:29.117  Command Trace TO Host STATE DISC
+19:15:34.341 Input peaks = -3, 2
+19:15:34.342  Command Trace TO Host INPUTPEAKS -3 2
+19:15:44.402 Input peaks = -3, 3
+19:15:44.402  Command Trace TO Host INPUTPEAKS -3 3
+19:15:54.474 Input peaks = -2, 3
+19:15:54.475  Command Trace TO Host INPUTPEAKS -2 3
+19:16:04.540 Input peaks = -2, 3
+19:16:04.543  Command Trace TO Host INPUTPEAKS -2 3
+19:16:14.583 Input peaks = -3, 3
+19:16:14.585  Command Trace TO Host INPUTPEAKS -3 3
+19:16:24.655 Input peaks = -2, 2
+19:16:24.656  Command Trace TO Host INPUTPEAKS -2 2
+19:16:34.723 Input peaks = -2, 3
+19:16:34.724  Command Trace TO Host INPUTPEAKS -2 3
+19:16:35.292 [Command Trace FROM host: STATE
+19:16:35.292  Command Trace TO Host STATE DISC
+19:16:44.783 Input peaks = -2, 2
+19:16:44.786  Command Trace TO Host INPUTPEAKS -2 2
+19:16:54.859 Input peaks = -3, 2
+19:16:54.860  Command Trace TO Host INPUTPEAKS -3 2
+19:16:55.518 Ldr; S:N(3KHz) Avg= 26.235540 dB, Offset== 0.007215 Hz
+19:16:55.562 EnvelopeCorrelator CorMax:MaxProd= 59.970565  J= 527
+19:16:55.563 [Acquire2ToneLeaderSymbolFraming] intIatMinError= 2, Leader Length 45 mS
+19:16:55.595 Got Frame Sync 1980331
+19:16:55.703  Command Trace TO Host BUSY TRUE
+19:16:55.759 Frame Decode type 3a 3a 5 Dist 0.00 0.00 0.00 Sess 3f pend 0 conn 0 lastsess 0
+19:16:55.763 [Frame Type Decode OK  ]  MD Decode;2 ID=H3F, Type=H3A:PktFrameHeader, D1= 0.00, D2= 0.00
+19:16:55.765 MEMARQ Flags 0
+19:16:56.041 Qual = 97
+19:16:56.042 MEMARQ Flags 0
+19:16:56.045 [CorrectRawDataWithRS] Carrier 0 OK without RS, Len = 2
+19:16:56.046 Pkt Frame Header Type 4PSK/200 Len 49
+19:16:58.602 [CorrectRawDataWithRS] Carrier 0 OK without RS, Len = 49
+19:16:58.605 Qual = 96
+19:16:58.606 [DecodeFrame] Frame: PktFrameData Decode PASS,   Constellation Quality= 96
+19:17:03.684  Command Trace TO Host BUSY FALSE
+19:17:04.902 Input peaks = -2, 2
+19:17:04.903  Command Trace TO Host INPUTPEAKS -2 2
+19:17:15.000 Input peaks = -3, 3
+19:17:15.001  Command Trace TO Host INPUTPEAKS -3 3
+19:17:25.018  Command Trace TO Host BUSY TRUE
+19:17:25.039 Input peaks = -795, 826
+19:17:25.039  Command Trace TO Host INPUTPEAKS -795 826
+19:17:32.181  Command Trace TO Host BUSY FALSE
+19:17:35.105 Input peaks = -3, 2
+19:17:35.107  Command Trace TO Host INPUTPEAKS -3 2
+19:17:41.566 [Command Trace FROM host: STATE
+19:17:41.567  Command Trace TO Host STATE DISC
+19:17:45.180 Input peaks = -3, 2
+19:17:45.181  Command Trace TO Host INPUTPEAKS -3 2
+19:17:55.242 Input peaks = -2, 2
+19:17:55.242  Command Trace TO Host INPUTPEAKS -2 2
+19:18:05.305 Input peaks = -3, 2
+19:18:05.306  Command Trace TO Host INPUTPEAKS -3 2
+19:18:15.361 Input peaks = -3, 2
+19:18:15.365  Command Trace TO Host INPUTPEAKS -3 2
+19:18:25.445 Input peaks = -3, 2
+19:18:25.446  Command Trace TO Host INPUTPEAKS -3 2
+19:18:35.500 Input peaks = -2, 2
+19:18:35.501  Command Trace TO Host INPUTPEAKS -2 2
+19:18:45.544 Input peaks = -2, 2
+19:18:45.544  Command Trace TO Host INPUTPEAKS -2 2
+19:18:47.735 [Command Trace FROM host: STATE
+19:18:47.736  Command Trace TO Host STATE DISC
+19:18:55.622 Input peaks = -2, 3
+19:18:55.624  Command Trace TO Host INPUTPEAKS -2 3
+19:19:05.708 Input peaks = -2, 2
+19:19:05.709  Command Trace TO Host INPUTPEAKS -2 2
+19:19:15.768 Input peaks = -3, 2
+19:19:15.769  Command Trace TO Host INPUTPEAKS -3 2
+19:19:25.809 Input peaks = -2, 2
+19:19:25.812  Command Trace TO Host INPUTPEAKS -2 2
+19:19:35.864 Input peaks = -3, 3
+19:19:35.865  Command Trace TO Host INPUTPEAKS -3 3
+19:19:45.922 Input peaks = -2, 2
+19:19:45.923  Command Trace TO Host INPUTPEAKS -2 2
+19:19:53.848 [Command Trace FROM host: STATE
+19:19:53.850  Command Trace TO Host STATE DISC
+19:19:55.985 Input peaks = -2, 2
+19:19:55.986  Command Trace TO Host INPUTPEAKS -2 2
+19:20:06.050 Input peaks = -2, 3
+19:20:06.051  Command Trace TO Host INPUTPEAKS -2 3
+19:20:16.123 Input peaks = -3, 3
+19:20:16.124  Command Trace TO Host INPUTPEAKS -3 3
+19:20:26.190 Input peaks = -3, 2
+19:20:26.191  Command Trace TO Host INPUTPEAKS -3 2
+19:20:36.227 Input peaks = -2, 2
+19:20:36.229  Command Trace TO Host INPUTPEAKS -2 2
+19:20:46.266 Input peaks = -2, 3
+19:20:46.269  Command Trace TO Host INPUTPEAKS -2 3
+19:20:56.309 Input peaks = -3, 2
+19:20:56.310  Command Trace TO Host INPUTPEAKS -3 2
+19:21:00.088 [Command Trace FROM host: STATE
+19:21:00.089  Command Trace TO Host STATE DISC
+19:21:06.370 Input peaks = -2, 2
+19:21:06.371  Command Trace TO Host INPUTPEAKS -2 2
+19:21:16.431 Input peaks = -2, 2
+19:21:16.433  Command Trace TO Host INPUTPEAKS -2 2
+19:21:26.493 Input peaks = -3, 3
+19:21:26.494  Command Trace TO Host INPUTPEAKS -3 3
+19:21:36.548 Input peaks = -3, 3
+19:21:36.551  Command Trace TO Host INPUTPEAKS -3 3
+19:21:46.593 Input peaks = -2, 2
+19:21:46.594  Command Trace TO Host INPUTPEAKS -2 2
+19:21:56.647 Input peaks = -2, 2
+19:21:56.650  Command Trace TO Host INPUTPEAKS -2 2
+19:22:06.248 [Command Trace FROM host: STATE
+19:22:06.249  Command Trace TO Host STATE DISC
+19:22:06.694 Input peaks = -2, 2
+19:22:06.695  Command Trace TO Host INPUTPEAKS -2 2
+19:22:16.750 Input peaks = -3, 2
+19:22:16.751  Command Trace TO Host INPUTPEAKS -3 2
+19:22:26.794 Input peaks = -3, 2
+19:22:26.796  Command Trace TO Host INPUTPEAKS -3 2
+19:22:36.833 Input peaks = -3, 3
+19:22:36.836  Command Trace TO Host INPUTPEAKS -3 3
+19:22:46.934 Input peaks = -3, 3
+19:22:46.935  Command Trace TO Host INPUTPEAKS -3 3
+19:22:56.976 Input peaks = -3, 2
+19:22:56.977  Command Trace TO Host INPUTPEAKS -3 2
+19:23:07.032 Input peaks = -3, 3
+19:23:07.033  Command Trace TO Host INPUTPEAKS -3 3
+19:23:12.647 [Command Trace FROM host: STATE
+19:23:12.649  Command Trace TO Host STATE DISC
+19:23:17.075 Input peaks = -3, 2
+19:23:17.076  Command Trace TO Host INPUTPEAKS -3 2
+19:23:27.150 Input peaks = -3, 3
+19:23:27.151  Command Trace TO Host INPUTPEAKS -3 3
+19:23:37.236 Input peaks = -2, 3
+19:23:37.237  Command Trace TO Host INPUTPEAKS -2 3
+19:23:47.294 Input peaks = -2, 2
+19:23:47.295  Command Trace TO Host INPUTPEAKS -2 2
+19:23:57.374 Input peaks = -2, 3
+19:23:57.375  Command Trace TO Host INPUTPEAKS -2 3
+19:24:07.469 Input peaks = -2, 3
+19:24:07.470  Command Trace TO Host INPUTPEAKS -2 3
+19:24:17.535 Input peaks = -3, 2
+19:24:17.536  Command Trace TO Host INPUTPEAKS -3 2
+19:24:18.739 [Command Trace FROM host: STATE
+19:24:18.740  Command Trace TO Host STATE DISC
+19:24:27.596 Input peaks = -2, 3
+19:24:27.597  Command Trace TO Host INPUTPEAKS -2 3
+19:24:37.656 Input peaks = -2, 2
+19:24:37.657  Command Trace TO Host INPUTPEAKS -2 2
+19:24:47.719 Input peaks = -3, 2
+19:24:47.720  Command Trace TO Host INPUTPEAKS -3 2
+19:24:57.795 Input peaks = -2, 3
+19:24:57.796  Command Trace TO Host INPUTPEAKS -2 3
+19:25:07.838 Input peaks = -2, 2
+19:25:07.839  Command Trace TO Host INPUTPEAKS -2 2
+19:25:17.937 Input peaks = -3, 3
+19:25:17.938  Command Trace TO Host INPUTPEAKS -3 3
+19:25:25.043 [Command Trace FROM host: STATE
+19:25:25.044  Command Trace TO Host STATE DISC
+19:25:28.012 Input peaks = -3, 2
+19:25:28.013  Command Trace TO Host INPUTPEAKS -3 2
+19:25:38.060 Input peaks = -2, 3
+19:25:38.076  Command Trace TO Host INPUTPEAKS -2 3
+19:25:48.136 Input peaks = -2, 2
+19:25:48.137  Command Trace TO Host INPUTPEAKS -2 2
+19:25:58.179 Input peaks = -2, 3
+19:25:58.179  Command Trace TO Host INPUTPEAKS -2 3
+19:26:08.236 Input peaks = -2, 2
+19:26:08.237  Command Trace TO Host INPUTPEAKS -2 2
+19:26:18.257 Input peaks = -3, 2
+19:26:18.260  Command Trace TO Host INPUTPEAKS -3 2
+19:26:28.298 Input peaks = -2, 3
+19:26:28.298  Command Trace TO Host INPUTPEAKS -2 3
+19:26:31.251 [Command Trace FROM host: STATE
+19:26:31.252  Command Trace TO Host STATE DISC
+19:26:38.377 Input peaks = -3, 3
+19:26:38.378  Command Trace TO Host INPUTPEAKS -3 3
+19:26:48.436 Input peaks = -2, 2
+19:26:48.437  Command Trace TO Host INPUTPEAKS -2 2
+19:26:58.493 Input peaks = -3, 2
+19:26:58.494  Command Trace TO Host INPUTPEAKS -3 2
+19:27:08.542 Input peaks = -2, 3
+19:27:08.543  Command Trace TO Host INPUTPEAKS -2 3
+19:27:18.634 Input peaks = -3, 3
+19:27:18.635  Command Trace TO Host INPUTPEAKS -3 3
+19:27:28.696 Input peaks = -2, 3
+19:27:28.697  Command Trace TO Host INPUTPEAKS -2 3
+19:27:37.616 [Command Trace FROM host: STATE
+19:27:37.617  Command Trace TO Host STATE DISC
+19:27:38.759 Input peaks = -3, 3
+19:27:38.760  Command Trace TO Host INPUTPEAKS -3 3
+19:27:48.824 Input peaks = -3, 3
+19:27:48.827  Command Trace TO Host INPUTPEAKS -3 3
+19:27:58.883 Input peaks = -2, 2
+19:27:58.884  Command Trace TO Host INPUTPEAKS -2 2
+19:28:08.955 Input peaks = -2, 2
+19:28:08.955  Command Trace TO Host INPUTPEAKS -2 2
+19:28:18.981 Input peaks = -2, 3
+19:28:18.982  Command Trace TO Host INPUTPEAKS -2 3
+19:28:29.064 Input peaks = -2, 3
+19:28:29.066  Command Trace TO Host INPUTPEAKS -2 3
+19:28:39.121 Input peaks = -2, 3
+19:28:39.122  Command Trace TO Host INPUTPEAKS -2 3
+19:28:43.919 [Command Trace FROM host: STATE
+19:28:43.922  Command Trace TO Host STATE DISC
+19:28:49.163 Input peaks = -2, 2
+19:28:49.166  Command Trace TO Host INPUTPEAKS -2 2
+19:28:59.220 Input peaks = -2, 3
+19:28:59.221  Command Trace TO Host INPUTPEAKS -2 3
+19:29:09.282 Input peaks = -3, 3
+19:29:09.285  Command Trace TO Host INPUTPEAKS -3 3
+19:29:19.367 Input peaks = -3, 2
+19:29:19.368  Command Trace TO Host INPUTPEAKS -3 2
+19:29:29.426 Input peaks = -2, 2
+19:29:29.428  Command Trace TO Host INPUTPEAKS -2 2
+19:29:39.501 Input peaks = -2, 3
+19:29:39.502  Command Trace TO Host INPUTPEAKS -2 3
+19:29:49.547 Input peaks = -2, 2
+19:29:49.548  Command Trace TO Host INPUTPEAKS -2 2
+19:29:50.259 [Command Trace FROM host: STATE
+19:29:50.259  Command Trace TO Host STATE DISC
+19:29:59.601 Input peaks = -2, 2
+19:29:59.606  Command Trace TO Host INPUTPEAKS -2 2
+19:30:09.683 Input peaks = -3, 2
+19:30:09.684  Command Trace TO Host INPUTPEAKS -3 2
+19:30:19.748 Input peaks = -2, 3
+19:30:19.749  Command Trace TO Host INPUTPEAKS -2 3
+19:30:29.807 Input peaks = -3, 2
+19:30:29.808  Command Trace TO Host INPUTPEAKS -3 2
+19:30:39.887 Input peaks = -2, 2
+19:30:39.887  Command Trace TO Host INPUTPEAKS -2 2
+19:30:49.963 Input peaks = -2, 3
+19:30:49.964  Command Trace TO Host INPUTPEAKS -2 3
+19:30:56.502 [Command Trace FROM host: STATE
+19:30:56.503  Command Trace TO Host STATE DISC
+19:31:00.025 Input peaks = -2, 2
+19:31:00.029  Command Trace TO Host INPUTPEAKS -2 2
+19:31:10.083 Input peaks = -2, 3
+19:31:10.089  Command Trace TO Host INPUTPEAKS -2 3
+19:31:20.142 Input peaks = -3, 2
+19:31:20.143  Command Trace TO Host INPUTPEAKS -3 2
+19:31:30.168 Input peaks = -2, 3
+19:31:30.169  Command Trace TO Host INPUTPEAKS -2 3
+19:31:40.230 Input peaks = -2, 2
+19:31:40.231  Command Trace TO Host INPUTPEAKS -2 2
+19:31:50.292 Input peaks = -2, 3
+19:31:50.293  Command Trace TO Host INPUTPEAKS -2 3
+19:32:00.348 Input peaks = -2, 3
+19:32:00.350  Command Trace TO Host INPUTPEAKS -2 3
+19:32:02.700 [Command Trace FROM host: STATE
+19:32:02.701  Command Trace TO Host STATE DISC
+19:32:10.425 Input peaks = -2, 3
+19:32:10.426  Command Trace TO Host INPUTPEAKS -2 3
+19:32:20.483 Input peaks = -3, 2
+19:32:20.486  Command Trace TO Host INPUTPEAKS -3 2
+19:32:30.553 Input peaks = -3, 2
+19:32:30.554  Command Trace TO Host INPUTPEAKS -3 2
+19:32:40.632 Input peaks = -3, 3
+19:32:40.634  Command Trace TO Host INPUTPEAKS -3 3
+19:32:50.713 Input peaks = -3, 2
+19:32:50.717  Command Trace TO Host INPUTPEAKS -3 2
+19:33:00.786 Input peaks = -2, 3
+19:33:00.787  Command Trace TO Host INPUTPEAKS -2 3
+19:33:09.127 [Command Trace FROM host: STATE
+19:33:09.128  Command Trace TO Host STATE DISC
+19:33:10.853 Input peaks = -2, 2
+19:33:10.854  Command Trace TO Host INPUTPEAKS -2 2
+19:33:20.908 Input peaks = -2, 3
+19:33:20.909  Command Trace TO Host INPUTPEAKS -2 3
+19:33:30.991 Input peaks = -3, 2
+19:33:30.992  Command Trace TO Host INPUTPEAKS -3 2
+19:33:41.088 Input peaks = -2, 2
+19:33:41.089  Command Trace TO Host INPUTPEAKS -2 2
+19:33:51.134 Input peaks = -3, 2
+19:33:51.137  Command Trace TO Host INPUTPEAKS -3 2
+19:34:01.209 Input peaks = -3, 3
+19:34:01.210  Command Trace TO Host INPUTPEAKS -3 3
+19:34:11.267 Input peaks = -2, 3
+19:34:11.274  Command Trace TO Host INPUTPEAKS -2 3
+19:34:15.382 [Command Trace FROM host: STATE
+19:34:15.383  Command Trace TO Host STATE DISC
+19:34:21.332 Input peaks = -3, 3
+19:34:21.334  Command Trace TO Host INPUTPEAKS -3 3
+19:34:31.381 Input peaks = -2, 3
+19:34:31.384  Command Trace TO Host INPUTPEAKS -2 3

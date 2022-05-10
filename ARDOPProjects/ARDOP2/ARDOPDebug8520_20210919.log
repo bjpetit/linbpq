@@ -1,0 +1,780 @@
+08:22:03.767 ARDOP TNC Version 2.0.3.10-BPQ
+08:22:03.777 Using CM108 device \\?\hid#vid_0d8c&pid_0008&mi_03#7&9d49a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} for PTT
+08:22:12.795 Capture Devices
+08:22:13.035 0 Microphone (C-Media USB Audio D
+08:22:13.051 1 CABLE-D Output (VB-Audio Cable 
+08:22:13.066 2 CABLE-C Output (VB-Audio Cable 
+08:22:13.099 3 Stereo Mix (Realtek High Defini
+08:22:13.114 4 CABLE Output (VB-Audio Virtual 
+08:22:13.129 5 CABLE-A Output (VB-Audio Cable 
+08:22:13.144 6 CABLE-B Output (VB-Audio Cable 
+08:22:13.145 Playback Devices
+08:22:13.171 0 Speakers (C-Media USB Audio Dev
+08:22:13.183 1 CABLE Input (VB-Audio Virtual C
+08:22:13.195 2 CABLE-A Input (VB-Audio Cable A
+08:22:13.206 3 CABLE-D Input (VB-Audio Cable D
+08:22:13.218 4 CABLE-B Input (VB-Audio Cable B
+08:22:13.230 5 CABLE-C Input (VB-Audio Cable C
+08:22:13.267 6 Speakers (Realtek High Definiti
+08:22:13.282 Opened WaveOut Device Speakers (C-Media USB Audio Dev
+08:22:13.288 Opened WaveIn Device Microphone (C-Media USB Audio D
+08:22:13.330 ARDOPC listening on port 8520
+08:22:18.358 Input peaks = -91, 0
+08:22:19.078 Host Control Session Connected
+08:22:19.078 Host Data Session Connected
+08:22:25.975 [Command Trace FROM host: INITIALIZE
+08:22:25.976  Command Trace TO Host BUFFER 0
+08:22:25.976  Command Trace TO Host INITIALIZE
+08:22:25.976 [Command Trace FROM host: VERSION
+08:22:25.976  Command Trace TO Host VERSION ARDOP TNC_2.0.3.10-BPQ
+08:22:25.976 [Command Trace FROM host: CWID FALSE
+08:22:25.976  Command Trace TO Host CWID now FALSE
+08:22:25.977 [Command Trace FROM host: PROTOCOLMODE ARQ
+08:22:25.977  Command Trace TO Host PROTOCOLMODE now ARQ
+08:22:25.977 [Command Trace FROM host: ARQTIMEOUT 90
+08:22:25.978  Command Trace TO Host ARQTIMEOUT now 90
+08:22:25.978 [Command Trace FROM host: DEBUGLOG TRUE
+08:22:25.978  Command Trace TO Host DEBUGLOG now TRUE
+08:22:25.979 [Command Trace FROM host: CMDTRACE TRUE
+08:22:25.979  Command Trace TO Host CMDTRACE now TRUE
+08:22:25.979 [Command Trace FROM host: CWID FALSE
+08:22:25.979  Command Trace TO Host CWID now FALSE
+08:22:25.980 [Command Trace FROM host: DRIVELEVEL 100
+08:22:25.980  Command Trace TO Host DRIVELEVEL now 100
+08:22:25.980 [Command Trace FROM host: GRIDSQUARE IO68VL
+08:22:25.981  Command Trace TO Host GRIDSQUARE now IO68VL
+08:22:25.981 [Command Trace FROM host: FECREPEATS 0
+08:22:25.981  Command Trace TO Host FECREPEATS now 0
+08:22:25.982 [Command Trace FROM host: FASTSTART TRUE
+08:22:25.982  Command Trace TO Host FASTSTART now TRUE
+08:22:25.982 [Command Trace FROM host: CONSOLELOG 7
+08:22:25.983  Command Trace TO Host CONSOLELOG now 7
+08:22:25.983 [Command Trace FROM host: MYCALL G8BPQ-2
+08:22:25.983  Command Trace TO Host MYCALL now G8BPQ-2
+08:22:25.984 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:22:25.984  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:22:30.030 Input peaks = -100, 0
+08:22:30.034  Command Trace TO Host INPUTPEAKS -100 0
+08:22:34.499 [Command Trace FROM host: LISTEN FALSE
+08:22:34.500  Command Trace TO Host LISTEN now FALSE
+08:22:40.080 Input peaks = -103, 0
+08:22:40.086  Command Trace TO Host INPUTPEAKS -103 0
+08:22:41.124 [Command Trace FROM host: SENDID
+08:22:41.125  Command Trace TO Host SENDID
+08:22:41.136 [AddTagToDataAndSendToHost] bytes=18 Tag IDF
+08:22:41.137 Sending Frame Type IDFrame
+08:22:58.078 [Main.KeyPTT]  PTT-TRUE
+08:22:58.079 Input peaks = -100, 0
+08:22:58.079  Command Trace TO Host INPUTPEAKS -100 0
+08:22:59.779 [Main.KeyPTT]  PTT-FALSE
+08:23:09.562 Input peaks = -101, 0
+08:23:09.572  Command Trace TO Host INPUTPEAKS -101 0
+08:23:12.371 [Command Trace FROM host: STATE
+08:23:12.375  Command Trace TO Host STATE DISC
+08:23:19.624 Input peaks = -99, 0
+08:23:19.625  Command Trace TO Host INPUTPEAKS -99 0
+08:23:29.662 Input peaks = -98, 0
+08:23:29.667  Command Trace TO Host INPUTPEAKS -98 0
+08:23:39.701 Input peaks = -101, 0
+08:23:39.702  Command Trace TO Host INPUTPEAKS -101 0
+08:208:23:57.877 ARDOP TNC Version 2.0.3.10-BPQ
+08:23:57.893 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col02#7&220ce1d9&0&0001#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:23:57.893 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col03#7&220ce1d9&0&0002#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:23:57.893 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col04#7&220ce1d9&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:23:57.893 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col05#7&220ce1d9&0&0004#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:23:57.893 HID Device C-Media USB Audio Device    VID 0d8c PID 0008 \\?\hid#vid_0d8c&pid_0008&mi_03#7&9d49a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:23:57.894 Using CM108 device 0d8c:0008 for PTT
+08:23:57.894 Capture Devices
+08:23:58.096 0 Microphone (C-Media USB Audio D
+08:23:58.113 1 CABLE-D Output (VB-Audio Cable 
+08:23:58.131 2 CABLE-C Output (VB-Audio Cable 
+08:23:58.165 3 Stereo Mix (Realtek High Defini
+08:23:58.181 4 CABLE Output (VB-Audio Virtual 
+08:23:58.198 5 CABLE-A Output (VB-Audio Cable 
+08:23:58.214 6 CABLE-B Output (VB-Audio Cable 
+08:23:58.214 Playback Devices
+08:23:58.236 0 Speakers (C-Media USB Audio Dev
+08:23:58.249 1 CABLE Input (VB-Audio Virtual C
+08:23:58.263 2 CABLE-A Input (VB-Audio Cable A
+08:23:58.275 3 CABLE-D Input (VB-Audio Cable D
+08:23:58.289 4 CABLE-B Input (VB-Audio Cable B
+08:23:58.301 5 CABLE-C Input (VB-Audio Cable C
+08:23:58.341 6 Speakers (Realtek High Definiti
+08:23:58.358 Opened WaveOut Device Speakers (C-Media USB Audio Dev
+08:23:58.363 Opened WaveIn Device Microphone (C-Media USB Audio D
+08:23:58.380 ARDOPC listening on port 8520
+08:23:58.417 Input peaks = -96, 0
+08:24:08.073 Host Control Session Connected
+08:24:08.076 Host Data Session Connected
+08:24:08.494 Input peaks = -102, 0
+08:24:08.494  Command Trace TO Host INPUTPEAKS -102 0
+08:24:11.144 [Command Trace FROM host: INITIALIZE
+08:24:11.144  Command Trace TO Host BUFFER 0
+08:24:11.145  Command Trace TO Host INITIALIZE
+08:24:11.145 [Command Trace FROM host: VERSION
+08:24:11.146  Command Trace TO Host VERSION ARDOP TNC_2.0.3.10-BPQ
+08:24:11.146 [Command Trace FROM host: CWID FALSE
+08:24:11.147  Command Trace TO Host CWID now FALSE
+08:24:11.147 [Command Trace FROM host: PROTOCOLMODE ARQ
+08:24:11.147  Command Trace TO Host PROTOCOLMODE now ARQ
+08:24:11.147 [Command Trace FROM host: ARQTIMEOUT 90
+08:24:11.148  Command Trace TO Host ARQTIMEOUT now 90
+08:24:11.148 [Command Trace FROM host: DEBUGLOG TRUE
+08:24:11.148  Command Trace TO Host DEBUGLOG now TRUE
+08:24:11.149 [Command Trace FROM host: CMDTRACE TRUE
+08:24:11.149  Command Trace TO Host CMDTRACE now TRUE
+08:24:11.149 [Command Trace FROM host: CWID FALSE
+08:24:11.150  Command Trace TO Host CWID now FALSE
+08:24:11.150 [Command Trace FROM host: DRIVELEVEL 100
+08:24:11.150  Command Trace TO Host DRIVELEVEL now 100
+08:24:11.151 [Command Trace FROM host: GRIDSQUARE IO68VL
+08:24:11.151  Command Trace TO Host GRIDSQUARE now IO68VL
+08:24:11.151 [Command Trace FROM host: FECREPEATS 0
+08:24:11.151  Command Trace TO Host FECREPEATS now 0
+08:24:11.151 [Command Trace FROM host: FASTSTART TRUE
+08:24:11.152  Command Trace TO Host FASTSTART now TRUE
+08:24:11.152 [Command Trace FROM host: CONSOLELOG 7
+08:24:11.153  Command Trace TO Host CONSOLELOG now 7
+08:24:11.153 [Command Trace FROM host: MYCALL G8BPQ-2
+08:24:11.153  Command Trace TO Host MYCALL now G8BPQ-2
+08:24:11.153 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:24:11.154  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:24:13.067 [Command Trace FROM host: LISTEN FALSE
+08:24:13.070  Command Trace TO Host LISTEN now FALSE
+08:24:18.186 [Command Trace FROM host: SENDID
+08:24:18.188  Command Trace TO Host SENDID
+08:24:18.199 [AddTagToDataAndSendToHost] bytes=18 Tag IDF
+08:24:18.200 Sending Frame Type IDFrame
+08:24:18.200 [Main.KeyPTT]  PTT-TRUE
+08:24:18.564 Input peaks = -142, 0
+08:24:18.567  Command Trace TO Host INPUTPEAKS -142 0
+08:24:19.074 [Command Trace FROM host: STATE
+08:24:19.077  Command Trace TO Host STATE DISC
+08:24:19.900 [Main.KeyPTT]  PTT-FALSE
+08:27:30.487 ARDOP TNC Version 2.0.3.10-BPQ
+08:27:30.502 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col02#7&220ce1d9&0&0001#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:27:30.502 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col03#7&220ce1d9&0&0002#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:27:30.502 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col04#7&220ce1d9&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:27:30.502 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col05#7&220ce1d9&0&0004#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:27:30.502 HID Device C-Media USB Audio Device    VID 0d8c PID 0008 \\?\hid#vid_0d8c&pid_0008&mi_03#7&9d49a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:27:30.502 Using CM108 device 0d8c:0008 for PTT
+08:27:30.503 Capture Devices
+08:27:30.666 0 Microphone (C-Media USB Audio D
+08:27:30.681 1 CABLE-D Output (VB-Audio Cable 
+08:27:30.698 2 CABLE-C Output (VB-Audio Cable 
+08:27:30.728 3 Stereo Mix (Realtek High Defini
+08:27:30.743 4 CABLE Output (VB-Audio Virtual 
+08:27:30.757 5 CABLE-A Output (VB-Audio Cable 
+08:27:30.772 6 CABLE-B Output (VB-Audio Cable 
+08:27:30.772 Playback Devices
+08:27:30.794 0 Speakers (C-Media USB Audio Dev
+08:27:30.806 1 CABLE Input (VB-Audio Virtual C
+08:27:30.818 2 CABLE-A Input (VB-Audio Cable A
+08:27:30.830 3 CABLE-D Input (VB-Audio Cable D
+08:27:30.842 4 CABLE-B Input (VB-Audio Cable B
+08:27:30.854 5 CABLE-C Input (VB-Audio Cable C
+08:27:30.892 6 Speakers (Realtek High Definiti
+08:27:30.909 Opened WaveOut Device Speakers (C-Media USB Audio Dev
+08:27:30.914 Opened WaveIn Device Microphone (C-Media USB Audio D
+08:27:30.918 ARDOPC listening on port 8520
+08:27:30.961 Input peaks = -98, 0
+08:27:31.066 Host Control Session Connected
+08:27:31.067 Host Data Session Connected
+08:27:34.124 [Command Trace FROM host: INITIALIZE
+08:27:34.125  Command Trace TO Host BUFFER 0
+08:27:34.125  Command Trace TO Host INITIALIZE
+08:27:34.126 [Command Trace FROM host: VERSION
+08:27:34.126  Command Trace TO Host VERSION ARDOP TNC_2.0.3.10-BPQ
+08:27:34.127 [Command Trace FROM host: CWID FALSE
+08:27:34.127  Command Trace TO Host CWID now FALSE
+08:27:34.127 [Command Trace FROM host: PROTOCOLMODE ARQ
+08:27:34.127  Command Trace TO Host PROTOCOLMODE now ARQ
+08:27:34.127 [Command Trace FROM host: ARQTIMEOUT 90
+08:27:34.127  Command Trace TO Host ARQTIMEOUT now 90
+08:27:34.128 [Command Trace FROM host: DEBUGLOG TRUE
+08:27:34.128  Command Trace TO Host DEBUGLOG now TRUE
+08:27:34.128 [Command Trace FROM host: CMDTRACE TRUE
+08:27:34.129  Command Trace TO Host CMDTRACE now TRUE
+08:27:34.129 [Command Trace FROM host: CWID FALSE
+08:27:34.129  Command Trace TO Host CWID now FALSE
+08:27:34.129 [Command Trace FROM host: DRIVELEVEL 100
+08:27:34.130  Command Trace TO Host DRIVELEVEL now 100
+08:27:34.130 [Command Trace FROM host: GRIDSQUARE IO68VL
+08:27:34.130  Command Trace TO Host GRIDSQUARE now IO68VL
+08:27:34.130 [Command Trace FROM host: FECREPEATS 0
+08:27:34.130  Command Trace TO Host FECREPEATS now 0
+08:27:34.130 [Command Trace FROM host: FASTSTART TRUE
+08:27:34.131  Command Trace TO Host FASTSTART now TRUE
+08:27:34.131 [Command Trace FROM host: CONSOLELOG 7
+08:27:34.131  Command Trace TO Host CONSOLELOG now 7
+08:27:34.131 [Command Trace FROM host: MYCALL G8BPQ-2
+08:27:34.131  Command Trace TO Host MYCALL now G8BPQ-2
+08:27:34.132 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:27:34.132  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:27:34.316 GUI Connected from Address 127.0.0.1
+08:27:37.537 [Command Trace FROM host: STATE
+08:27:37.542  Command Trace TO Host STATE DISC
+08:27:41.008 Input peaks = -99, 0
+08:27:41.009  Command Trace TO Host INPUTPEAKS -99 0
+08:27:46.837 [AddTagToDataAndSendToHost] bytes=18 Tag IDF
+08:27:46.837 Sending Frame Type IDFrame
+08:27:46.837 [Main.KeyPTT]  PTT-TRUE
+08:27:48.539 [Main.KeyPTT]  PTT-FALSE
+08:27:51.008:55:54.451 ARDOP TNC Version 2.0.3.10-BPQ
+08:55:54.468 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col02#7&220ce1d9&0&0001#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:55:54.468 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col03#7&220ce1d9&0&0002#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:55:54.468 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col04#7&220ce1d9&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:55:54.468 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col05#7&220ce1d9&0&0004#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:55:54.469 HID Device C-Media USB Audio Device    VID 0d8c PID 0008 \\?\hid#vid_0d8c&pid_0008&mi_03#7&9d49a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}
+08:55:54.469 Using CM108 device 0d8c:0008 for PTT
+08:55:54.469 Capture Devices
+08:55:54.628 0 Microphone (C-Media USB Audio D
+08:55:54.643 1 CABLE-D Output (VB-Audio Cable 
+08:55:54.658 2 CABLE-C Output (VB-Audio Cable 
+08:55:54.696 3 Stereo Mix (Realtek High Defini
+08:55:54.712 4 CABLE Output (VB-Audio Virtual 
+08:55:54.726 5 CABLE-A Output (VB-Audio Cable 
+08:55:54.741 6 CABLE-B Output (VB-Audio Cable 
+08:55:54.741 Playback Devices
+08:55:54.764 0 Speakers (C-Media USB Audio Dev
+08:55:54.776 1 CABLE Input (VB-Audio Virtual C
+08:55:54.788 2 CABLE-A Input (VB-Audio Cable A
+08:55:54.801 3 CABLE-D Input (VB-Audio Cable D
+08:55:54.815 4 CABLE-B Input (VB-Audio Cable B
+08:55:54.828 5 CABLE-C Input (VB-Audio Cable C
+08:55:54.866 6 Speakers (Realtek High Definiti
+08:55:54.883 Opened WaveOut Device Speakers (C-Media USB Audio Dev
+08:55:54.888 Opened WaveIn Device Microphone (C-Media USB Audio D
+08:55:54.904 ARDOPC listening on port 8520
+08:55:54.940 Input peaks = -94, 0
+08:55:55.011 Host Control Session Connected
+08:55:55.014 Host Data Session Connected
+08:55:58.050 [Command Trace FROM host: INITIALIZE
+08:55:58.051  Command Trace TO Host BUFFER 0
+08:55:58.051  Command Trace TO Host INITIALIZE
+08:55:58.051 [Command Trace FROM host: VERSION
+08:55:58.052  Command Trace TO Host VERSION ARDOP TNC_2.0.3.10-BPQ
+08:55:58.052 [Command Trace FROM host: CWID FALSE
+08:55:58.052  Command Trace TO Host CWID now FALSE
+08:55:58.053 [Command Trace FROM host: PROTOCOLMODE ARQ
+08:55:58.053  Command Trace TO Host PROTOCOLMODE now ARQ
+08:55:58.053 [Command Trace FROM host: ARQTIMEOUT 90
+08:55:58.054  Command Trace TO Host ARQTIMEOUT now 90
+08:55:58.054 [Command Trace FROM host: DEBUGLOG TRUE
+08:55:58.054  Command Trace TO Host DEBUGLOG now TRUE
+08:55:58.054 [Command Trace FROM host: CMDTRACE TRUE
+08:55:58.055  Command Trace TO Host CMDTRACE now TRUE
+08:55:58.055 [Command Trace FROM host: CWID FALSE
+08:55:58.055  Command Trace TO Host CWID now FALSE
+08:55:58.055 [Command Trace FROM host: DRIVELEVEL 100
+08:55:58.056  Command Trace TO Host DRIVELEVEL now 100
+08:55:58.056 [Command Trace FROM host: GRIDSQUARE IO68VL
+08:55:58.056  Command Trace TO Host GRIDSQUARE now IO68VL
+08:55:58.056 [Command Trace FROM host: FECREPEATS 0
+08:55:58.057  Command Trace TO Host FECREPEATS now 0
+08:55:58.057 [Command Trace FROM host: FASTSTART TRUE
+08:55:58.057  Command Trace TO Host FASTSTART now TRUE
+08:55:58.057 [Command Trace FROM host: CONSOLELOG 7
+08:55:58.058  Command Trace TO Host CONSOLELOG now 7
+08:55:58.058 [Command Trace FROM host: MYCALL G8BPQ-2
+08:55:58.058  Command Trace TO Host MYCALL now G8BPQ-2
+08:55:58.059 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:55:58.059  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+08:56:00.790 GUI Connected from Address 127.0.0.1
+08:56:04.984 Input peaks = -102, 0
+08:56:04.984  Command Trace TO Host INPUTPEAKS -102 0
+08:56:09.991 [AddTagToDataAndSendToHost] bytes=18 Tag IDF
+08:56:09.992 Sending Frame Type IDFrame
+08:56:09.992 [Main.KeyPTT]  PTT-TRUE
+08:56:11.695 [Main.KeyPTT]  PTT-FALSE
+08:56:15.064 Input peaks = -98, 0
+08:56:15.065  Command Trace TO Host INPUTPEAKS -98 0
+08:56:19.583 [Command Trace FROM host: STATE
+08:56:19.585  Command Trace TO Host STATE DISC
+08:56:25.127 Input peaks = -99, 0
+08:56:25.133  Command Trace TO Host INPUTPEAKS -99 0
+08:56:35.174 Input peaks = -98, 0
+08:56:35.180  Command Trace TO Host INPUTPEAKS -98 0
+20:46:44.247 ARDOP TNC Version 2.0.3.10-BPQ
+20:46:44.261 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col02#7&220ce1d9&0&0001#{4d1e55b2-f16f-11cf-88cb-001111000030}
+20:46:44.261 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col03#7&220ce1d9&0&0002#{4d1e55b2-f16f-11cf-88cb-001111000030}
+20:46:44.261 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col04#7&220ce1d9&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}
+20:46:44.261 HID Device USB Receiver VID 046d PID c534 \\?\hid#vid_046d&pid_c534&mi_01&col05#7&220ce1d9&0&0004#{4d1e55b2-f16f-11cf-88cb-001111000030}
+20:46:44.261 Capture Devices
+20:46:44.479 0 Stereo Mix (Realtek High Defini
+20:46:44.496 1 CABLE-D Output (VB-Audio Cable 
+20:46:44.511 2 CABLE-C Output (VB-Audio Cable 
+20:46:44.526 3 CABLE Output (VB-Audio Virtual 
+20:46:44.541 4 CABLE-A Output (VB-Audio Cable 
+20:46:44.557 5 CABLE-B Output (VB-Audio Cable 
+20:46:44.557 Playback Devices
+20:46:44.608 0 Speakers (Realtek High Definiti
+20:46:44.622 1 CABLE Input (VB-Audio Virtual C
+20:46:44.634 2 CABLE-A Input (VB-Audio Cable A
+20:46:44.646 3 CABLE-D Input (VB-Audio Cable D
+20:46:44.659 4 CABLE-B Input (VB-Audio Cable B
+20:46:44.671 5 CABLE-C Input (VB-Audio Cable C
+20:46:44.702 Opened WaveOut Device Speakers (Realtek High Definiti
+20:46:44.709 Opened WaveIn Device Stereo Mix (Realtek High Defini
+20:46:44.715 ARDOPC listening on port 8520
+20:46:44.748 Input peaks = -5, 10
+20:46:51.048 Host Control Session Connected
+20:46:51.048 Host Data Session Connected
+20:46:54.108 [Command Trace FROM host: INITIALIZE
+20:46:54.111  Command Trace TO Host BUFFER 0
+20:46:54.113  Command Trace TO Host INITIALIZE
+20:46:54.114 [Command Trace FROM host: VERSION
+20:46:54.115  Command Trace TO Host VERSION ARDOP TNC_2.0.3.10-BPQ
+20:46:54.117 [Command Trace FROM host: CWID FALSE
+20:46:54.122  Command Trace TO Host CWID now FALSE
+20:46:54.122 [Command Trace FROM host: PROTOCOLMODE ARQ
+20:46:54.123  Command Trace TO Host PROTOCOLMODE now ARQ
+20:46:54.123 [Command Trace FROM host: ARQTIMEOUT 90
+20:46:54.123  Command Trace TO Host ARQTIMEOUT now 90
+20:46:54.123 [Command Trace FROM host: DEBUGLOG TRUE
+20:46:54.124  Command Trace TO Host DEBUGLOG now TRUE
+20:46:54.124 [Command Trace FROM host: CMDTRACE TRUE
+20:46:54.124  Command Trace TO Host CMDTRACE now TRUE
+20:46:54.125 [Command Trace FROM host: CWID FALSE
+20:46:54.125  Command Trace TO Host CWID now FALSE
+20:46:54.125 [Command Trace FROM host: DRIVELEVEL 100
+20:46:54.126  Command Trace TO Host DRIVELEVEL now 100
+20:46:54.126 [Command Trace FROM host: GRIDSQUARE IO68VL
+20:46:54.126  Command Trace TO Host GRIDSQUARE now IO68VL
+20:46:54.126 [Command Trace FROM host: FECREPEATS 0
+20:46:54.127  Command Trace TO Host FECREPEATS now 0
+20:46:54.127 [Command Trace FROM host: FASTSTART TRUE
+20:46:54.127  Command Trace TO Host FASTSTART now TRUE
+20:46:54.128 [Command Trace FROM host: CONSOLELOG 7
+20:46:54.128  Command Trace TO Host CONSOLELOG now 7
+20:46:54.128 [Command Trace FROM host: MYCALL G8BPQ-2
+20:46:54.128  Command Trace TO Host MYCALL now G8BPQ-2
+20:46:54.129 [Command Trace FROM host: MYAUX G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+20:46:54.129  Command Trace TO Host MYAUX now G8BPQ,G8BPQ-1,G8BPQ-10,G8BPQ-12,G8BPQ-14,G8BPQ-11,G8BPQ-5
+20:46:54.373 [Command Trace FROM host: LISTEN FALSE
+20:46:54.376  Command Trace TO Host LISTEN now FALSE
+20:46:54.788 Input peaks = -7, 8
+20:46:54.789  Command Trace TO Host INPUTPEAKS -7 8
+20:46:55.791 [Command Trace FROM host: SENDID
+20:46:55.795  Command Trace TO Host SENDID
+20:46:55.809 [AddTagToDataAndSendToHost] bytes=18 Tag IDF
+20:46:55.810 Sending Frame Type IDFrame
+20:46:55.812  Command Trace TO Host PTT TRUE
+20:46:55.813 [Main.KeyPTT]  PTT-TRUE
+20:46:57.510  Command Trace TO Host PTT FALSE
+20:46:57.517 [Main.KeyPTT]  PTT-FALSE
+20:47:04.849 Input peaks = -8, 8
+20:47:04.850  Command Trace TO Host INPUTPEAKS -8 8
+20:47:14.890 Input peaks = -7, 8
+20:47:14.895  Command Trace TO Host INPUTPEAKS -7 8
+20:47:17.701 [Command Trace FROM host: STATE
+20:47:17.704  Command Trace TO Host STATE DISC
+20:47:19.249  Command Trace TO Host BUSY TRUE
+20:47:22.930 [Command Trace FROM host: SENDID
+20:47:22.931  Command Trace TO Host SENDID
+20:47:22.942 [AddTagToDataAndSendToHost] bytes=18 Tag IDF
+20:47:22.942 Sending Frame Type IDFrame
+20:47:22.943  Command Trace TO Host PTT TRUE
+20:47:22.943 [Main.KeyPTT]  PTT-TRUE
+20:47:24.637  Command Trace TO Host PTT FALSE
+20:47:24.637 [Main.KeyPTT]  PTT-FALSE
+20:47:24.932 Input peaks = -3923, 3870
+20:47:24.935  Command Trace TO Host INPUTPEAKS -3923 3870
+20:47:26.388  Command Trace TO Host BUSY FALSE
+20:47:31.970 [Command Trace FROM host: SENDID
+20:47:31.973  Command Trace TO Host SENDID
+20:47:31.986 [AddTagToDataAndSendToHost] bytes=18 Tag IDF
+20:47:31.988 Sending Frame Type IDFrame
+20:47:31.989  Command Trace TO Host PTT TRUE
+20:47:31.991 [Main.KeyPTT]  PTT-TRUE
+20:47:33.687  Command Trace TO Host PTT FALSE
+20:47:33.692 [Main.KeyPTT]  PTT-FALSE
+20:47:34.970 Input peaks = -3287, 3305
+20:47:34.972  Command Trace TO Host INPUTPEAKS -3287 3305
+20:47:41.060 [Command Trace FROM host: ARQCALL G8XXX 5
+20:47:41.063  Command Trace TO Host ARQCALL G8XXX 5
+20:47:41.076  Command Trace TO Host NEWSTATE ISS 
+20:47:41.078 [SendARQConnectRequest] strMycall=G8BPQ-2  strTargetCall=G8XXX bytPendingSessionID=22
+20:47:41.079 Sending Frame Type ConReq2500
+20:47:41.081  Command Trace TO Host PTT TRUE
+20:47:41.082 [Main.KeyPTT]  PTT-TRUE
+20:47:42.138  Command Trace TO Host PTT FALSE
+20:47:42.141 [Main.KeyPTT]  PTT-FALSE
+20:47:44.149 Repeating Last Frame
+20:47:44.151 Sending Frame Type ConReq2500
+20:47:44.152  Command Trace TO Host PTT TRUE
+20:47:44.152 [Main.KeyPTT]  PTT-TRUE
+20:47:45.006 Input peaks = -3922, 3954
+20:47:45.009  Command Trace TO Host INPUTPEAKS -3922 3954
+20:47:45.201  Command Trace TO Host PTT FALSE
+20:47:45.202 [Main.KeyPTT]  PTT-FALSE
+20:47:47.206 Repeating Last Frame
+20:47:47.207 Sending Frame Type ConReq2500
+20:47:47.208  Command Trace TO Host PTT TRUE
+20:47:47.208 [Main.KeyPTT]  PTT-TRUE
+20:47:48.267  Command Trace TO Host PTT FALSE
+20:47:48.270 [Main.KeyPTT]  PTT-FALSE
+20:47:50.274 Repeating Last Frame
+20:47:50.277 Sending Frame Type ConReq2500
+20:47:50.279  Command Trace TO Host PTT TRUE
+20:47:50.280 [Main.KeyPTT]  PTT-TRUE
+20:47:51.339  Command Trace TO Host PTT FALSE
+20:47:51.340 [Main.KeyPTT]  PTT-FALSE
+20:47:53.339 Repeating Last Frame
+20:47:53.342 Sending Frame Type ConReq2500
+20:47:53.344  Command Trace TO Host PTT TRUE
+20:47:53.345 [Main.KeyPTT]  PTT-TRUE
+20:47:54.402  Command Trace TO Host PTT FALSE
+20:47:54.405 [Main.KeyPTT]  PTT-FALSE
+20:47:55.064 Input peaks = -3921, 3955
+20:47:55.067  Command Trace TO Host INPUTPEAKS -3921 3955
+20:47:56.409  Command Trace TO Host BUFFER 0
+20:47:56.413  Command Trace TO Host BUFFER 0
+20:47:56.415  Command Trace TO Host NEWSTATE DISC 
+20:47:56.415  Command Trace TO Host STATUS CONNECT TO G8XXX FAILED!
+20:48:05.113 Input peaks = -7, 7
+20:48:05.119  Command Trace TO Host INPUTPEAKS -7 7
+20:48:15.171 Input peaks = -7, 8
+20:48:15.175  Command Trace TO Host INPUTPEAKS -7 8
+06:31:28.828 Input peaks = -8, 7
+06:31:28.829  Command Trace TO Host INPUTPEAKS -8 7
+06:31:31.243 [Command Trace FROM host: STATE
+06:31:31.243  Command Trace TO Host STATE DISC
+06:31:38.900 Input peaks = 0, 0
+06:31:38.901  Command Trace TO Host INPUTPEAKS 0 0
+06:31:48.974 Input peaks = 0, 0
+06:31:48.975  Command Trace TO Host INPUTPEAKS 0 0
+06:31:59.035 Input peaks = 0, 0
+06:31:59.036  Command Trace TO Host INPUTPEAKS 0 0
+06:32:09.118 Input peaks = -8, 7
+06:32:09.119  Command Trace TO Host INPUTPEAKS -8 7
+06:32:10.721  Command Trace TO Host BUSY TRUE
+06:32:16.641  Command Trace TO Host BUSY FALSE
+06:32:19.201 Input peaks = -8, 7
+06:32:19.202  Command Trace TO Host INPUTPEAKS -8 7
+06:32:29.294 Input peaks = -13, 11
+06:32:29.295  Command Trace TO Host INPUTPEAKS -13 11
+06:32:29.601  Command Trace TO Host BUSY TRUE
+06:32:35.551  Command Trace TO Host BUSY FALSE
+06:32:38.005 [Command Trace FROM host: STATE
+06:32:38.005  Command Trace TO Host STATE DISC
+06:32:39.360 Input peaks = -7, 7
+06:32:39.362  Command Trace TO Host INPUTPEAKS -7 7
+06:32:49.422 Input peaks = -8, 9
+06:32:49.423  Command Trace TO Host INPUTPEAKS -8 9
+06:32:59.499 Input peaks = -7, 9
+06:32:59.500  Command Trace TO Host INPUTPEAKS -7 9
+06:33:09.542 Input peaks = -7, 7
+06:33:09.543  Command Trace TO Host INPUTPEAKS -7 7
+06:33:19.622 Input peaks = -8, 7
+06:33:19.623  Command Trace TO Host INPUTPEAKS -8 7
+06:33:29.680 Input peaks = -8, 8
+06:33:29.680  Command Trace TO Host INPUTPEAKS -8 8
+06:33:39.723 Input peaks = -6, 7
+06:33:39.724  Command Trace TO Host INPUTPEAKS -6 7
+06:33:44.258 [Command Trace FROM host: STATE
+06:33:44.263  Command Trace TO Host STATE DISC
+06:33:49.776 Input peaks = -7, 7
+06:33:49.776  Command Trace TO Host INPUTPEAKS -7 7
+06:33:59.854 Input peaks = -7, 8
+06:33:59.854  Command Trace TO Host INPUTPEAKS -7 8
+06:34:09.918 Input peaks = -9, 7
+06:34:09.918  Command Trace TO Host INPUTPEAKS -9 7
+06:34:19.961 Input peaks = -8, 7
+06:34:19.962  Command Trace TO Host INPUTPEAKS -8 7
+06:34:30.005 Input peaks = -7, 8
+06:34:30.005  Command Trace TO Host INPUTPEAKS -7 8
+06:34:40.081 Input peaks = -8, 7
+06:34:40.082  Command Trace TO Host INPUTPEAKS -8 7
+06:34:50.142 Input peaks = -8, 8
+06:34:50.143  Command Trace TO Host INPUTPEAKS -8 8
+06:34:50.675 [Command Trace FROM host: STATE
+06:34:50.677  Command Trace TO Host STATE DISC
+06:35:00.223 Input peaks = -8, 8
+06:35:00.223  Command Trace TO Host INPUTPEAKS -8 8
+06:35:10.320 Input peaks = -7, 7
+06:35:10.321  Command Trace TO Host INPUTPEAKS -7 7
+06:35:20.406 Input peaks = -7, 8
+06:35:20.407  Command Trace TO Host INPUTPEAKS -7 8
+06:35:30.479 Input peaks = -8, 9
+06:35:30.484  Command Trace TO Host INPUTPEAKS -8 9
+06:35:40.525 Input peaks = -7, 6
+06:35:40.526  Command Trace TO Host INPUTPEAKS -7 6
+06:35:50.581 Input peaks = -8, 7
+06:35:50.584  Command Trace TO Host INPUTPEAKS -8 7
+06:35:57.140 [Command Trace FROM host: STATE
+06:35:57.144  Command Trace TO Host STATE DISC
+06:36:00.648 Input peaks = -7, 7
+06:36:00.648  Command Trace TO Host INPUTPEAKS -7 7
+06:36:10.684 Input peaks = -9, 8
+06:36:10.688  Command Trace TO Host INPUTPEAKS -9 8
+06:36:20.743 Input peaks = -7, 7
+06:36:20.747  Command Trace TO Host INPUTPEAKS -7 7
+06:36:30.845 Input peaks = -8, 8
+06:36:30.849  Command Trace TO Host INPUTPEAKS -8 8
+06:36:40.946 Input peaks = -7, 7
+06:36:40.948  Command Trace TO Host INPUTPEAKS -7 7
+06:36:51.006 Input peaks = -7, 7
+06:36:51.007  Command Trace TO Host INPUTPEAKS -7 7
+06:37:01.061 Input peaks = -8, 8
+06:37:01.062  Command Trace TO Host INPUTPEAKS -8 8
+06:37:03.799 [Command Trace FROM host: STATE
+06:37:03.802  Command Trace TO Host STATE DISC
+06:37:11.107 Input peaks = -7, 7
+06:37:11.111  Command Trace TO Host INPUTPEAKS -7 7
+06:37:21.167 Input peaks = -8, 7
+06:37:21.170  Command Trace TO Host INPUTPEAKS -8 7
+06:37:31.245 Input peaks = -7, 7
+06:37:31.250  Command Trace TO Host INPUTPEAKS -7 7
+06:37:41.305 Input peaks = -7, 7
+06:37:41.310  Command Trace TO Host INPUTPEAKS -7 7
+06:37:51.370 Input peaks = -7, 8
+06:37:51.374  Command Trace TO Host INPUTPEAKS -7 8
+06:38:01.429 Input peaks = -8, 7
+06:38:01.430  Command Trace TO Host INPUTPEAKS -8 7
+06:38:10.577 [Command Trace FROM host: STATE
+06:38:10.580  Command Trace TO Host STATE DISC
+06:38:11.528 Input peaks = -8, 7
+06:38:11.529  Command Trace TO Host INPUTPEAKS -8 7
+06:38:21.604 Input peaks = -7, 7
+06:38:21.605  Command Trace TO Host INPUTPEAKS -7 7
+06:38:31.671 Input peaks = -8, 7
+06:38:31.675  Command Trace TO Host INPUTPEAKS -8 7
+06:38:41.731 Input peaks = -8, 7
+06:38:41.732  Command Trace TO Host INPUTPEAKS -8 7
+06:38:51.830 Input peaks = -7, 8
+06:38:51.834  Command Trace TO Host INPUTPEAKS -7 8
+06:39:01.887 Input peaks = -7, 7
+06:39:01.890  Command Trace TO Host INPUTPEAKS -7 7
+06:39:11.950 Input peaks = -7, 7
+06:39:11.953  Command Trace TO Host INPUTPEAKS -7 7
+06:39:17.316 [Command Trace FROM host: STATE
+06:39:17.317  Command Trace TO Host STATE DISC
+06:39:22.008 Input peaks = -7, 6
+06:39:22.013  Command Trace TO Host INPUTPEAKS -7 6
+06:39:32.073 Input peaks = -8, 7
+06:39:32.074  Command Trace TO Host INPUTPEAKS -8 7
+06:39:42.132 Input peaks = -7, 7
+06:39:42.135  Command Trace TO Host INPUTPEAKS -7 7
+06:39:52.171 Input peaks = -7, 8
+06:39:52.173  Command Trace TO Host INPUTPEAKS -7 8
+06:40:02.231 Input peaks = -7, 7
+06:40:02.232  Command Trace TO Host INPUTPEAKS -7 7
+06:40:12.287 Input peaks = -7, 6
+06:40:12.288  Command Trace TO Host INPUTPEAKS -7 6
+06:40:22.352 Input peaks = -8, 8
+06:40:22.357  Command Trace TO Host INPUTPEAKS -8 8
+06:40:24.135 [Command Trace FROM host: STATE
+06:40:24.139  Command Trace TO Host STATE DISC
+06:40:32.432 Input peaks = -8, 7
+06:40:32.437  Command Trace TO Host INPUTPEAKS -8 7
+06:40:42.490 Input peaks = -7, 7
+06:40:42.494  Command Trace TO Host INPUTPEAKS -7 7
+06:40:52.568 Input peaks = -7, 8
+06:40:52.568  Command Trace TO Host INPUTPEAKS -7 8
+06:41:02.617 Input peaks = -8, 7
+06:41:02.618  Command Trace TO Host INPUTPEAKS -8 7
+06:41:12.676 Input peaks = -8, 7
+06:41:12.677  Command Trace TO Host INPUTPEAKS -8 7
+06:41:22.711 Input peaks = -8, 8
+06:41:22.712  Command Trace TO Host INPUTPEAKS -8 8
+06:41:28.852 [Command Trace FROM host: STATE
+06:41:28.855  Command Trace TO Host STATE DISC
+06:41:30.605 Input peaks = -7, 8
+06:41:30.609  Command Trace TO Host INPUTPEAKS -7 8
+06:41:40.664 Input peaks = -6, 8
+06:41:40.671  Command Trace TO Host INPUTPEAKS -6 8
+06:41:50.727 Input peaks = -8, 7
+06:41:50.728  Command Trace TO Host INPUTPEAKS -8 7
+06:42:00.805 Input peaks = -7, 7
+06:42:00.808  Command Trace TO Host INPUTPEAKS -7 7
+06:42:10.863 Input peaks = -7, 7
+06:42:10.863  Command Trace TO Host INPUTPEAKS -7 7
+06:42:20.962 Input peaks = -7, 9
+06:42:20.962  Command Trace TO Host INPUTPEAKS -7 9
+06:42:31.001 Input peaks = -7, 7
+06:42:31.005  Command Trace TO Host INPUTPEAKS -7 7
+06:42:35.512 [Command Trace FROM host: STATE
+06:42:35.516  Command Trace TO Host STATE DISC
+06:42:41.046 Input peaks = -7, 7
+06:42:41.049  Command Trace TO Host INPUTPEAKS -7 7
+06:42:51.125 Input peaks = -7, 7
+06:42:51.128  Command Trace TO Host INPUTPEAKS -7 7
+06:43:01.206 Input peaks = -7, 6
+06:43:01.210  Command Trace TO Host INPUTPEAKS -7 6
+06:43:11.283 Input peaks = -7, 7
+06:43:11.286  Command Trace TO Host INPUTPEAKS -7 7
+06:43:21.369 Input peaks = -7, 9
+06:43:21.370  Command Trace TO Host INPUTPEAKS -7 9
+06:43:31.425 Input peaks = -7, 8
+06:43:31.429  Command Trace TO Host INPUTPEAKS -7 8
+06:43:41.468 Input peaks = -6, 7
+06:43:41.468  Command Trace TO Host INPUTPEAKS -6 7
+06:43:42.363 [Command Trace FROM host: STATE
+06:43:42.363  Command Trace TO Host STATE DISC
+06:43:51.524 Input peaks = -8, 7
+06:43:51.525  Command Trace TO Host INPUTPEAKS -8 7
+06:44:01.606 Input peaks = -8, 7
+06:44:01.607  Command Trace TO Host INPUTPEAKS -8 7
+06:44:11.668 Input peaks = -8, 7
+06:44:11.670  Command Trace TO Host INPUTPEAKS -8 7
+06:44:21.727 Input peaks = -7, 7
+06:44:21.730  Command Trace TO Host INPUTPEAKS -7 7
+06:44:31.769 Input peaks = -7, 7
+06:44:31.772  Command Trace TO Host INPUTPEAKS -7 7
+06:44:41.844 Input peaks = -7, 8
+06:44:41.851  Command Trace TO Host INPUTPEAKS -7 8
+06:44:49.128 [Command Trace FROM host: STATE
+06:44:49.133  Command Trace TO Host STATE DISC
+06:44:51.906 Input peaks = -7, 7
+06:44:51.909  Command Trace TO Host INPUTPEAKS -7 7
+06:45:01.973 Input peaks = -6, 7
+06:45:01.975  Command Trace TO Host INPUTPEAKS -6 7
+06:45:12.031 Input peaks = -7, 7
+06:45:12.032  Command Trace TO Host INPUTPEAKS -7 7
+06:45:22.073 Input peaks = -7, 6
+06:45:22.077  Command Trace TO Host INPUTPEAKS -7 6
+06:45:32.108 Input peaks = -8, 7
+06:45:32.112  Command Trace TO Host INPUTPEAKS -8 7
+06:45:42.168 Input peaks = -7, 8
+06:45:42.169  Command Trace TO Host INPUTPEAKS -7 8
+06:45:52.254 Input peaks = -7, 7
+06:45:52.255  Command Trace TO Host INPUTPEAKS -7 7
+06:45:55.911 [Command Trace FROM host: STATE
+06:45:55.916  Command Trace TO Host STATE DISC
+06:46:02.333 Input peaks = -8, 6
+06:46:02.334  Command Trace TO Host INPUTPEAKS -8 6
+06:46:12.390 Input peaks = -7, 7
+06:46:12.393  Command Trace TO Host INPUTPEAKS -7 7
+06:46:22.450 Input peaks = -7, 7
+06:46:22.454  Command Trace TO Host INPUTPEAKS -7 7
+06:46:32.497 Input peaks = -8, 8
+06:46:32.501  Command Trace TO Host INPUTPEAKS -8 8
+06:46:42.556 Input peaks = -8, 7
+06:46:42.564  Command Trace TO Host INPUTPEAKS -8 7
+06:46:52.632 Input peaks = -8, 7
+06:46:52.635  Command Trace TO Host INPUTPEAKS -8 7
+06:47:02.692 Input peaks = -7, 8
+06:47:02.695  Command Trace TO Host INPUTPEAKS -7 8
+06:47:02.753 [Command Trace FROM host: STATE
+06:47:02.759  Command Trace TO Host STATE DISC
+06:47:12.730 Input peaks = -8, 7
+06:47:12.733  Command Trace TO Host INPUTPEAKS -8 7
+06:47:22.772 Input peaks = -7, 7
+06:47:22.777  Command Trace TO Host INPUTPEAKS -7 7
+06:47:32.815 Input peaks = -7, 7
+06:47:32.817  Command Trace TO Host INPUTPEAKS -7 7
+06:47:39.396 [Command Trace FROM host: LISTEN TRUE
+06:47:39.397  Command Trace TO Host LISTEN now TRUE
+06:47:42.893 Input peaks = -7, 7
+06:47:42.897  Command Trace TO Host INPUTPEAKS -7 7
+06:47:52.938 Input peaks = -7, 7
+06:47:52.939  Command Trace TO Host INPUTPEAKS -7 7
+06:48:02.999 Input peaks = -8, 8
+06:48:03.001  Command Trace TO Host INPUTPEAKS -8 8
+06:48:09.579 [Command Trace FROM host: STATE
+06:48:09.579  Command Trace TO Host STATE DISC
+06:48:13.073 Input peaks = -8, 7
+06:48:13.077  Command Trace TO Host INPUTPEAKS -8 7
+06:48:23.133 Input peaks = -8, 7
+06:48:23.137  Command Trace TO Host INPUTPEAKS -8 7
+06:48:33.199 Input peaks = -7, 8
+06:48:33.207  Command Trace TO Host INPUTPEAKS -7 8
+06:48:43.251 Input peaks = -7, 7
+06:48:43.254  Command Trace TO Host INPUTPEAKS -7 7
+06:48:53.297 Input peaks = -7, 8
+06:48:53.299  Command Trace TO Host INPUTPEAKS -7 8
+06:49:03.376 Input peaks = -7, 7
+06:49:03.382  Command Trace TO Host INPUTPEAKS -7 7
+06:49:13.434 Input peaks = -7, 7
+06:49:13.435  Command Trace TO Host INPUTPEAKS -7 7
+06:49:16.404 [Command Trace FROM host: STATE
+06:49:16.407  Command Trace TO Host STATE DISC
+06:49:23.519 Input peaks = -8, 7
+06:49:23.529  Command Trace TO Host INPUTPEAKS -8 7
+06:49:33.558 Input peaks = -7, 7
+06:49:33.561  Command Trace TO Host INPUTPEAKS -7 7
+06:49:43.640 Input peaks = -6, 7
+06:49:43.641  Command Trace TO Host INPUTPEAKS -6 7
+06:49:53.696 Input peaks = -7, 7
+06:49:53.701  Command Trace TO Host INPUTPEAKS -7 7
+06:50:03.742 Input peaks = -9, 8
+06:50:03.746  Command Trace TO Host INPUTPEAKS -9 8
+06:50:13.797 Input peaks = -9, 8
+06:50:13.802  Command Trace TO Host INPUTPEAKS -9 8
+06:50:23.144 [Command Trace FROM host: STATE
+06:50:23.149  Command Trace TO Host STATE DISC
+06:50:23.843 Input peaks = -6, 6
+06:50:23.846  Command Trace TO Host INPUTPEAKS -6 6
+06:50:33.902 Input peaks = -8, 7
+06:50:33.905  Command Trace TO Host INPUTPEAKS -8 7
+06:50:43.961 Input peaks = -7, 7
+06:50:43.966  Command Trace TO Host INPUTPEAKS -7 7
+06:50:54.018 Input peaks = -7, 8
+06:50:54.020  Command Trace TO Host INPUTPEAKS -7 8
+06:51:04.098 Input peaks = -8, 8
+06:51:04.098  Command Trace TO Host INPUTPEAKS -8 8
+06:51:14.161 Input peaks = -8, 8
+06:51:14.162  Command Trace TO Host INPUTPEAKS -8 8
+06:51:24.223 Input peaks = -8, 7
+06:51:24.228  Command Trace TO Host INPUTPEAKS -8 7
+06:51:29.912 [Command Trace FROM host: STATE
+06:51:29.913  Command Trace TO Host STATE DISC
+06:51:34.261 Input peaks = -7, 8
+06:51:34.261  Command Trace TO Host INPUTPEAKS -7 8
+06:51:39.703  Command Trace TO Host BUSY TRUE
+06:51:44.358 Input peaks = -9, 7
+06:51:44.358  Command Trace TO Host INPUTPEAKS -9 7
+06:51:45.686  Command Trace TO Host BUSY FALSE
+06:51:54.445 Input peaks = -8, 7
+06:51:54.449  Command Trace TO Host INPUTPEAKS -8 7
+06:52:04.520 Input peaks = -8, 8
+06:52:04.523  Command Trace TO Host INPUTPEAKS -8 8
+06:52:14.580 Input peaks = -7, 9
+06:52:14.582  Command Trace TO Host INPUTPEAKS -7 9
+06:52:24.626 Input peaks = -8, 7
+06:52:24.629  Command Trace TO Host INPUTPEAKS -8 7
+06:52:34.663 Input peaks = -8, 7
+06:52:34.672  Command Trace TO Host INPUTPEAKS -8 7
+06:52:36.813 [Command Trace FROM host: STATE
+06:52:36.814  Command Trace TO Host STATE DISC
+06:52:44.722 Input peaks = -7, 8
+06:52:44.723  Command Trace TO Host INPUTPEAKS -7 8
+06:52:54.765 Input peaks = -7, 9
+06:52:54.768  Command Trace TO Host INPUTPEAKS -7 9
+06:53:04.821 Input peaks = -7, 8
+06:53:04.824  Command Trace TO Host INPUTPEAKS -7 8
+06:53:14.882 Input peaks = -7, 8
+06:53:14.886  Command Trace TO Host INPUTPEAKS -7 8
+06:53:24.967 Input peaks = -7, 7
+06:53:24.970  Command Trace TO Host INPUTPEAKS -7 7
+06:53:35.049 Input peaks = -7, 7
+06:53:35.050  Command Trace TO Host INPUTPEAKS -7 7
+06:53:43.437 [Command Trace FROM host: STATE
+06:53:43.439  Command Trace TO Host STATE DISC
+06:53:45.101 Input peaks = -7, 8
+06:53:45.102  Command Trace TO Host INPUTPEAKS -7 8
+06:53:55.129 Input peaks = -7, 7
+06:53:55.132  Command Trace TO Host INPUTPEAKS -7 7
+06:54:05.207 Input peaks = -7, 6
+06:54:05.208  Command Trace TO Host INPUTPEAKS -7 6
+06:54:15.264 Input peaks = -7, 7
+06:54:15.265  Command Trace TO Host INPUTPEAKS -7 7
+06:54:25.311 Input peaks = -7, 9
+06:54:25.314  Command Trace TO Host INPUTPEAKS -7 9
+06:54:35.363 Input peaks = -8, 7
+06:54:35.364  Command Trace TO Host INPUTPEAKS -8 7
+06:54:45.431 Input peaks = -8, 7
+06:54:45.432  Command Trace TO Host INPUTPEAKS -8 7
+06:54:50.198 [Command Trace FROM host: STATE
+06:54:50.204  Command Trace TO Host STATE DISC
+06:54:55.504 Input peaks = -7, 6
+06:54:55.504  Command Trace TO Host INPUTPEAKS -7 6
+06:55:05.545 Input peaks = -7, 7
+06:55:05.548  Command Trace TO Host INPUTPEAKS -7 7
+06:55:15.625 Input peaks = -7, 7
+06:55:15.626  Command Trace TO Host INPUTPEAKS -7 7
+06:55:25.684 Input peaks = -7, 7
+06:55:25.688  Command Trace TO Host INPUTPEAKS -7 7
+06:55:35.747 Input peaks = -8, 7
+06:55:35.748  Command Trace TO Host INPUTPEAKS -8 7

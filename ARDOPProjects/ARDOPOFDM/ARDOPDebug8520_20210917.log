@@ -1,0 +1,19 @@
+07:45:03.663 ARDOP TNC Version 2.0.3.40-BPQ-OFDM
+07:45:03.665 Capture Devices
+07:45:03.942 0 Stereo Mix (Realtek High Defini
+07:45:03.959 1 CABLE-D Output (VB-Audio Cable 
+07:45:03.975 2 CABLE-C Output (VB-Audio Cable 
+07:45:03.990 3 CABLE Output (VB-Audio Virtual 
+07:45:04.006 4 CABLE-A Output (VB-Audio Cable 
+07:45:04.021 5 CABLE-B Output (VB-Audio Cable 
+07:45:04.021 Playback Devices
+07:45:04.072 0 Speakers (Realtek High Definiti
+07:45:04.089 1 CABLE Input (VB-Audio Virtual C
+07:45:04.101 2 CABLE-A Input (VB-Audio Cable A
+07:45:04.113 3 CABLE-D Input (VB-Audio Cable D
+07:45:04.126 4 CABLE-B Input (VB-Audio Cable B
+07:45:04.139 5 CABLE-C Input (VB-Audio Cable C
+07:45:04.169 Opened WaveOut Device Speakers (Realtek High Definiti
+07:45:04.175 Opened WaveIn Device Stereo Mix (Realtek High Defini
+07:45:04.218 ARDOPC listening on port 8520
+07:45:04.231 Input peaks = -7365, 4549
