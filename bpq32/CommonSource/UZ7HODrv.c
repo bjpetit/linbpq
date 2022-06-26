@@ -60,7 +60,7 @@ extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 //int ResetExtDriver(int num);
 extern char * PortConfig[33];
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 void ConnecttoUZ7HOThread(void * portptr);
 
@@ -337,16 +337,16 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		{
 			// Only on first port using a host
 
-			time( &ltime );
-			
+			time(&ltime);
+
 			if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
 			{
 				//	See if time to reconnect
-		
-				if (ltime-lasttime[port] >9 )
+
+				if (ltime - lasttime[port] > 9)
 				{
 					ConnecttoUZ7HO(port);
-					lasttime[port]=ltime;
+					lasttime[port] = ltime;
 				}
 			}
 			else
@@ -364,22 +364,22 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					}
 				}
 			}
-		
-			FD_ZERO(&readfs);
-			
-			if (TNC->CONNECTED) FD_SET(TNC->TCPSock,&readfs);
 
-			
+			FD_ZERO(&readfs);
+
+			if (TNC->CONNECTED) FD_SET(TNC->TCPSock, &readfs);
+
+
 			FD_ZERO(&writefs);
 
-			if (TNC->CONNECTING) FD_SET(TNC->TCPSock,&writefs);	// Need notification of Connect
+			if (TNC->CONNECTING) FD_SET(TNC->TCPSock, &writefs);	// Need notification of Connect
 
-			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPSock,&writefs);	// Need notification of busy clearing
+			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPSock, &writefs);	// Need notification of busy clearing
 
 
 			FD_ZERO(&errorfs);
-		
-			if (TNC->CONNECTING || TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
+
+			if (TNC->CONNECTING || TNC->CONNECTED) FD_SET(TNC->TCPSock, &errorfs);
 
 			timeout.tv_sec = 0;
 			timeout.tv_usec = 0;
@@ -388,14 +388,14 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			{
 				//	See what happened
 
-				if (FD_ISSET(TNC->TCPSock,&readfs))
-				{			
+				if (FD_ISSET(TNC->TCPSock, &readfs))
+				{
 					// data available
-			
+
 					ProcessReceivedData(port);
 				}
 
-				if (FD_ISSET(TNC->TCPSock,&writefs))
+				if (FD_ISSET(TNC->TCPSock, &writefs))
 				{
 					if (BPQtoUZ7HO_Q[port] == 0)
 					{
@@ -415,46 +415,46 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						TNC->CONNECTED = TRUE;
 						TNC->CONNECTING = FALSE;
 
-						sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");		
+						sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");
 						MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 						// If required, send signon
 
 						if (UZ7HOSignon[port])
-							send(TNC->TCPSock,UZ7HOSignon[port],546,0);
+							send(TNC->TCPSock, UZ7HOSignon[port], 546, 0);
 
 						// Request Raw Frames
 
-						AGW->TXHeader.Port=0;
-						AGW->TXHeader.DataKind='k';		// Raw Frames
-						AGW->TXHeader.DataLength=0;
-						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+						AGW->TXHeader.Port = 0;
+						AGW->TXHeader.DataKind = 'k';		// Raw Frames
+						AGW->TXHeader.DataLength = 0;
+						send(TNC->TCPSock, (const char FAR *)&AGW->TXHeader, AGWHDDRLEN, 0);
 
-						AGW->TXHeader.DataKind='m';		// Monitor Frames
-						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
-		
-						AGW->TXHeader.DataKind='R';		// Version
-						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
-		
-						AGW->TXHeader.DataKind='g';		// Port Capabilities
-						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
-		
+						AGW->TXHeader.DataKind = 'm';		// Monitor Frames
+						send(TNC->TCPSock, (const char FAR *)&AGW->TXHeader, AGWHDDRLEN, 0);
+
+						AGW->TXHeader.DataKind = 'R';		// Version
+						send(TNC->TCPSock, (const char FAR *)&AGW->TXHeader, AGWHDDRLEN, 0);
+
+						AGW->TXHeader.DataKind = 'g';		// Port Capabilities
+						send(TNC->TCPSock, (const char FAR *)&AGW->TXHeader, AGWHDDRLEN, 0);
+
 						// Register all applcalls
 
-						AGW->TXHeader.DataKind='X';		// Register
+						AGW->TXHeader.DataKind = 'X';		// Register
 						memset(AGW->TXHeader.callfrom, 0, 10);
 						strcpy(AGW->TXHeader.callfrom, TNC->NodeCall);
-						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
-					
+						send(TNC->TCPSock, (const char FAR *)&AGW->TXHeader, AGWHDDRLEN, 0);
+
 						memset(AGW->TXHeader.callfrom, 0, 10);
 						strcpy(AGW->TXHeader.callfrom, NodeCall);
-						send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+						send(TNC->TCPSock, (const char FAR *)&AGW->TXHeader, AGWHDDRLEN, 0);
 
 						for (App = 0; App < 32; App++)
 						{
-							APPL=&APPLCALLTABLE[App];
+							APPL = &APPLCALLTABLE[App];
 							memcpy(Appl, APPL->APPLCALL_TEXT, 10);
-							ptr=strchr(Appl, ' ');
+							ptr = strchr(Appl, ' ');
 
 							if (ptr)
 								*ptr = 0;
@@ -463,7 +463,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 							{
 								memset(AGW->TXHeader.callfrom, 0, 10);
 								strcpy(AGW->TXHeader.callfrom, Appl);
-								send(TNC->TCPSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
+								send(TNC->TCPSock, (const char FAR *)&AGW->TXHeader, AGWHDDRLEN, 0);
 							}
 						}
 #ifndef LINBPQ
@@ -480,15 +480,15 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 						memcpy(txbuff, buffptr->Data, txlen);
 
-						bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
-					
+						bytes = send(TNC->TCPSock, (const char FAR *)&txbuff, txlen, 0);
+
 						ReleaseBuffer(buffptr);
 
 					}
 
 				}
-					
-				if (FD_ISSET(TNC->TCPSock,&errorfs))
+
+				if (FD_ISSET(TNC->TCPSock, &errorfs))
 				{
 
 					//	if connecting, then failed, if connected then has just disconnected
@@ -500,9 +500,9 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 //						WritetoConsole(ErrMsg);
 //					}
 
-					CONNECTING[port]=FALSE;
-					CONNECTED[port]=FALSE;
-				
+					CONNECTING[port] = FALSE;
+					CONNECTED[port] = FALSE;
+
 				}
 
 			}
@@ -520,7 +520,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (STREAM->Connecting)
 			{
 				STREAM->Connecting--;
-			
+
 				if (STREAM->Connecting == 0)
 				{
 					// Report Connect Failed, and drop back to command mode
@@ -532,7 +532,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						buffptr->Len = sprintf(buffptr->Data, "UZ7HO} Failure with %s\r", STREAM->RemoteCall);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
-	
+
 					STREAM->Connected = FALSE;		// Back to Command Mode
 					STREAM->DiscWhenAllSent = 10;
 
@@ -541,7 +541,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					TidyClose(TNC, Stream);
 				}
 			}
-			
+
 			if (STREAM->Attached)
 				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
 
@@ -564,11 +564,11 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				if (AGW->PollDelay > 10)
 				{
 					char * Key = &STREAM->AGWKey[0];
-				
+
 					AGW->PollDelay = 0;
 
 					AGW->TXHeader.Port = Key[0] - '1';
-					AGW->TXHeader.DataKind='Y';
+					AGW->TXHeader.DataKind = 'Y';
 					strcpy(AGW->TXHeader.callfrom, &Key[11]);
 					strcpy(AGW->TXHeader.callto, &Key[1]);
 					AGW->TXHeader.DataLength = 0;
@@ -576,7 +576,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					send(TNCInfo[MasterPort[port]]->TCPSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 				}
 			}
-	
+
 			if (STREAM->PACTORtoBPQ_Q == 0)
 			{
 				if (STREAM->DiscWhenAllSent)
@@ -589,8 +589,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			else
 			{
 				int datalen;
-			
-				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
+
+				buffptr = Q_REM(&STREAM->PACTORtoBPQ_Q);
 
 				datalen = (int)buffptr->Len;
 
@@ -603,7 +603,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 
 				ReleaseBuffer(buffptr);
-	
+
 				return (1);
 			}
 		}
@@ -611,11 +611,11 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		if (TNC->PortRecord->UI_Q)
 		{
 			struct AGWINFO * AGW = TNC->AGWInfo;
-	
+
 			int MsgLen;
 			struct _MESSAGE * buffptr;
 			char * Buffer;
-			SOCKET Sock;	
+			SOCKET Sock;
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 
 			if (TNC->PortRecord->PORTCONTROL.PortStopped == TRUE)		// Interlock Disabled Port
@@ -625,12 +625,12 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			}
 
 			Sock = TNCInfo[MasterPort[port]]->TCPSock;
-		
+
 			MsgLen = buffptr->LENGTH - 6;	// 7 Header, need extra Null
 			buffptr->LENGTH = 0;				// Need a NULL on front	
 			Buffer = &buffptr->DEST[0];		// Raw Frame
 			Buffer--;						// Need to send an extra byte on front
-	
+
 			AGW->TXHeader.Port = UZ7HOChannel[port];
 			AGW->TXHeader.DataKind = 'K';
 			memset(AGW->TXHeader.callfrom, 0, 10);
@@ -645,8 +645,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			ReleaseBuffer((UINT *)buffptr);
 		}
-			
-	
+
+
 		return (0);
 
 
@@ -659,8 +659,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		if (!TNCInfo[MasterPort[port]]->CONNECTED) return 0;		// Don't try if not connected to TNC
 
 		Stream = buff->PORT;
-		
-		STREAM = &TNC->Streams[Stream]; 
+
+		STREAM = &TNC->Streams[Stream];
 		AGW = TNC->AGWInfo;
 
 		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);		// 1 as no PID
@@ -709,10 +709,10 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
 				int s = 0;
 
-				while(s <= TNC->AGWInfo->MaxSessions)
+				while (s <= TNC->AGWInfo->MaxSessions)
 				{
 					if (s != Stream)
-					{		
+					{
 						if (TNC->PortRecord->ATTACHEDSESSIONS[s])
 						{
 							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Error - In use\r");
@@ -724,7 +724,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				}
 				if (buffptr)
 				{
-					buffptr->Len= sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Ok - Not in use\r");
+					buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Ok - Not in use\r");
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}
 				return 1;
@@ -736,7 +736,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Version %d.%d.%d.%d\r",
 					AGW->Version[0], AGW->Version[1], AGW->Version[2], AGW->Version[3]);
-				
+
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				return 1;
 			}
@@ -758,7 +758,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					}
 					return 1;
 				}
-	
+
 				AGW->CenterFreq = atoi(&buff->L2DATA[5]);
 
 				if (AGW->CenterFreq == 0)
@@ -770,7 +770,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					}
 					return 1;
 				}
-				
+
 				if (TNCInfo[MasterPort[port]]->AGWInfo->isQTSM == 3)
 				{
 					// QtSM so can send Set Freq Command
@@ -799,7 +799,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 					char Freq[16];
 					sprintf(Freq, "%d", AGW->CenterFreq - 1);
-	
+
 					SendMessage(AGW->hFreq, WM_SETTEXT, 0, (LPARAM)Freq);
 					SendMessage(AGW->hSpin, WM_LBUTTONDOWN, 1, 1);
 					SendMessage(AGW->hSpin, WM_LBUTTONUP, 0, 1);
@@ -839,11 +839,11 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem %s\r", AGW->ModemName);
 						else
 							buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "UZ7HO} Modem Number %d\r", AGW->Modem);
-					
+
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
 					return 1;
-				}		
+				}
 				else if (TNCInfo[MasterPort[port]]->AGWInfo->isQTSM == 3)
 				{
 					// Can send modem name to QTSM
@@ -872,19 +872,19 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					send(TNCInfo[MasterPort[port]]->TCPSock, Buffer, MsgLen, 0);
 				}
 #ifdef WIN32
-				else if(AGW->cbinfo.cbSize)
+				else if (AGW->cbinfo.cbSize)
 				{
 					// Real QTSM on Windows
 
 					AGW->Modem = atoi(&buff->L2DATA[6]);
-	
+
 					if (AGW->cbinfo.cbSize && AGW->cbinfo.hwndCombo)
 					{
 						// Set it
 
-						LRESULT ret = SendMessage(AGW->cbinfo.hwndCombo,CB_SETCURSEL, AGW->Modem, 0);
+						LRESULT ret = SendMessage(AGW->cbinfo.hwndCombo, CB_SETCURSEL, AGW->Modem, 0);
 						int pos = 13 * AGW->Modem + 7;
-															
+
 						ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONDOWN, 1, 1);
 						ret = SendMessage(AGW->cbinfo.hwndCombo, WM_LBUTTONUP, 0, 1);
 						ret = SendMessage(AGW->cbinfo.hwndList, WM_LBUTTONDOWN, 1, pos << 16);
@@ -938,7 +938,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					ptr++;
 
 				strcpy(STREAM->RemoteCall, ptr);
-	
+
 				Key[0] = UZ7HOChannel[port] + '1';
 				memset(&Key[1], 0, 20);
 				strcpy(&Key[11], STREAM->MyCall);
@@ -966,18 +966,18 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 							C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 						}
 						STREAM->DiscWhenAllSent = 10;
-			
+
 						return 0;
 					}
 					S++;
-				}		
-			
+				}
+
 				// Not Found
 
 				memcpy(&STREAM->AGWKey[0], &Key[0], 21);
 
 				AGW->TXHeader.Port = UZ7HOChannel[port];
-				AGW->TXHeader.DataKind='C';
+				AGW->TXHeader.DataKind = 'C';
 				memcpy(AGW->TXHeader.callfrom, &STREAM->AGWKey[11], 10);
 				memcpy(AGW->TXHeader.callto, &STREAM->AGWKey[1], 10);
 				AGW->TXHeader.DataLength = 0;
@@ -989,7 +989,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					// we have digis
 
 					viaptr = &ViaList[1];
-		
+
 					if (strcmp(ptr, "V") == 0 || strcmp(ptr, "VIA") == 0)
 						ptr = strtok_s(NULL, " ,\r", &context);
 
@@ -1007,7 +1007,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					AGW->TXHeader.DataLength = Digis * 10 + 1;
 #endif
 
-					AGW->TXHeader.DataKind='v';
+					AGW->TXHeader.DataKind = 'v';
 					ViaList[0] = Digis;
 				}
 
@@ -1021,78 +1021,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 //				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 			}
 		}
-
-/*
-
-		
-		AGW->TXHeader.Port=UZ7HOChannel[port];
-		AGW->TXHeader.DataKind='K';				// raw send
-		AGW->TXHeader.DataLength=txlen;
-
-		memcpy(&txbuff, &AGW->TXHeader, AGWHDDRLEN);
-		memcpy(&txbuff[AGWHDDRLEN],&buff[6],txlen);
-
-		txbuff[AGWHDDRLEN] = 0;
-		txlen+=AGWHDDRLEN;
-
-		bytes=send(TNC->TCPSock,(const char FAR *)&txbuff,txlen,0);
-		
-		if (bytes != txlen)
-		{
-
-			// UZ7HO doesn't seem to recover from a blocked write. For now just reset
-			
-//			if (bytes == SOCKET_ERROR)
-//			{
-				winerr=WSAGetLastError();
-				
-				i=sprintf(ErrMsg, "UZ7HO Write Failed for port %d - error code = %d\r\n", port, winerr);
-				WritetoConsole(ErrMsg);
-					
-	
-//				if (winerr != WSAEWOULDBLOCK)
-//				{
-				
-					closesocket(TNC->TCPSock);
-					
-					TNC->CONNECTED = FALSE;
-
-					return (0);
-//				}
-//				else
-//				{
-//					bytes=0;		// resent whole packet
-//				}
-
-//			}
-
-			// Partial Send or WSAEWOULDBLOCK. Save data, and send once busy clears
-
-			
-			// Get a buffer
-						
-//			buffptr=GetBuff();
-
-//			if (buffptr == 0)
-//			{
-				// No buffers, so can only break connection and try again
-
-//				closesocket(UZ7HOSock[MasterPort[port]]);
-					
-//				CONNECTED[MasterPort[port]]=FALSE;
-
-//				return (0);
-//			}
-	
-//			buffptr[1]=txlen-bytes;			// Bytes still to send
-
-//			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
-
-//			C_Q_ADD(&BPQtoUZ7HO_Q[MasterPort[port]],buffptr);
-*/	
-			return (0);
-		
-
 		return (0);
 
 	case 3:	
@@ -1148,19 +1076,32 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 	return 0;
 }
 
+extern char sliderBit[];
+extern char WebProcTemplate[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
+/*
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
+		"textarea.scrollTop = textarea.scrollHeight;}"
+		"myInt = setInterval('Refresh()', 15000 );\n"
+		"function Refresh( )\n"
+		"{location.reload()}\n"
+		"</script>"
 		"</head><title>UZ7HO Status</title></head><body id=Text onload=\"ScrollOutput()\">"
 		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
 		"'width=440,height=150');\" action=ARDOPAbort?%d>UZ7HO Status"
-		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
+		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 10;top:10;\"></form></h2>",
 		TNC->Port);
+*/
+	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, TNC->Port, "UZ7HO Status", "UZ7HO Status");
+
+
+	if (TNC->TXFreq)
+		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -2208,6 +2149,8 @@ GotStream:
 
 			SuspendOtherPorts(TNC);
 
+			strcpy(TNC->TargetCall, RXHeader->callto);
+
 			ProcessIncommingConnect(TNC, RXHeader->callfrom, Stream, FALSE);
 
 			// if Port CTEXT defined, use it
@@ -2865,7 +2808,7 @@ UZ7HO T GM8BPQ-2 APRS  1:Fm GM8BPQ-2 To APRS Via WIDE2-2 <UI F pid=F0 Len=28 >[1
 */
 
 	
-	AdjMsg = &Monframe;					// Adjusted fir digis
+	AdjMsg = &Monframe;					// Adjusted for digis
 	ptr = strstr(Msg, "Fm ");
 
 	ConvToAX25(&ptr[3], Monframe.ORIGIN);
@@ -3025,7 +2968,7 @@ DigiLoop:
 	else if (AdjMsg->CTL == 0x97)		// FRMR
 	{
 		ptr = strstr(ptr, ">");
-		sscanf(ptr+1, "%x %x %x", &AdjMsg->PID, &AdjMsg->L2DATA[0], &AdjMsg->L2DATA[1]);
+		sscanf(ptr+1, "%hhx %hhx %hhx", &AdjMsg->PID, &AdjMsg->L2DATA[0], &AdjMsg->L2DATA[1]);
 		Monframe.LENGTH += 3;
 	}
 

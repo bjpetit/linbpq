@@ -221,7 +221,7 @@ typedef struct ConnectionInfo_S
 	BOOL SendT;							// Send T messages
 	BOOL SendP;							// Send P messages
 	BOOL SendB;							// Send Bulls
-	BOOL SendWL2KPM;					// send ;PM:
+	BOOL SendWL2KFW;					// send ;FW:
 	int MaxBLen;						// Max Size for this session
 	int MaxPLen;						// Max Size for this session
 	int MaxTLen;						// Max Size for this session
@@ -275,6 +275,10 @@ typedef struct ConnectionInfo_S
 	int SyncXMLLen;
 	int SyncMsgLen;
 
+	// These are used to detect CRLF split over a packet boundary
+	int usingCR;						// Session is (normally) using CR as terminator
+	int lastLineEnd;					// Terminator for current line
+
 	struct ConnectionInfo_S * SysopChatStream;			// Stream sysop is chatting to
 
 } ConnectionInfo, CIRCUIT;
@@ -308,10 +312,11 @@ typedef struct ConnectionInfo_S
 #define	NEEDLF 4096						// Add LF to forward script commands (fro Telnet
 #define	MCASTRX 8192					// Stream in Multicast RX Mode
 #define DISCONNECTING 16384				// Disconnect sent to Node
-#define YAPPTX	32768					// Sending YAPP file
-#define SYSOPCHAT 65536					// Chatting to BBS console
-#define WINLINKRO 131072				// WL2K RO (no J in SID)
-#define SYNCMODE 262144					// RMS RELAY SYNC
+#define YAPPTX	  0x008000				// Sending YAPP file
+#define SYSOPCHAT 0x010000				// Chatting to BBS console
+#define WINLINKRO 0x020000				// WL2K RO (no J in SID)
+#define SYNCMODE  0x040000				// RMS RELAY SYNC
+#define MFJMODE   0x080000				// MFJ PMS
 
 struct FBBRestartData
 {
@@ -658,8 +663,8 @@ typedef struct WPDBASE{	/* 194 bytes */
 	unsigned char Type;
 	unsigned char changed;
 	unsigned short seen;
-	long last_modif;
-	long last_seen;
+	long long last_modif;
+	long long last_seen;
 	char first_homebbs[41];
 	char secnd_homebbs[41];
 	char first_zip[9];
@@ -948,6 +953,12 @@ typedef struct WEBMAILINFO
 	char * FileName[100];		// Attachments
 	char * FileBody[100];
 	int FileLen[100];
+
+	char * Header;
+	int HeaderLen;
+
+	char * Footer;
+	int FooterLen;
 
 	char * Reply;				// put in here to save passing lots of parameters 
 	int * RLen;

@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 // White Pages Database Support Routines
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 int CurrentWPIndex;
 char CurrentWPCall[10];

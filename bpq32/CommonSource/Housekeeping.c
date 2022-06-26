@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 //	Housekeeping Module
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 char * APIENTRY GetBPQDirectory();
 
@@ -741,11 +741,11 @@ BOOL ExpireBIDs()
 {
 	BIDRec * BID;
 	BIDRec ** NewBIDRecPtr;
-	unsigned short now=LOWORD(time(NULL)/86400);
+	unsigned short now = LOWORD(time(NULL)/86400);
 
 	int i, n;
 
-	NewBIDRecPtr = zalloc((NumberofBIDs+1) * sizeof(BIDRec));
+	NewBIDRecPtr = zalloc((NumberofBIDs + 1) * sizeof(BIDRec));
 	NewBIDRecPtr[0] = BIDRecPtr[0];		// Copy Control Record
 
 	i = 0;

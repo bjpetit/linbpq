@@ -25,7 +25,9 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #ifdef WIN32
 
-#define pthread_t unsigned long
+typedef unsigned int       uint32_t;
+
+#define pthread_t uint32_t
 
 int pthread_equal(pthread_t T1, pthread_t T2)
 {
@@ -45,10 +47,10 @@ int pthread_equal(pthread_t T1, pthread_t T2)
 #define VOID void
 #define UCHAR unsigned char
 #define USHORT unsigned short
-#define ULONG unsigned long
+#define ULONG uint32_t
 #define UINT unsigned int
 #define SHORT short
-#define DWORD long
+#define DWORD int32_t
 
 #define APIENTRY
 

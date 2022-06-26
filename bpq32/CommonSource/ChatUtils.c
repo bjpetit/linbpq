@@ -36,11 +36,13 @@ extern char MonitorSize[32];
 extern char DebugSize[32];
 extern char WindowSize[32];
 
+extern int RunningConnectScript;
 
 INT_PTR CALLBACK InfoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 int GetMultiLineDialog(HWND hDialog, int DLGItem);
+BOOL ProcessChatConnectScript(ChatCIRCUIT * conn, char * Buffer, int len);
 
-int Connected(Stream)
+int Connected(int Stream)
 {
 	int n;
 	ChatCIRCUIT * conn;
@@ -65,9 +67,15 @@ int Connected(Stream)
 				if (conn->rtcflags == p_linkini)
 				{
 					conn->paclen = 236;
-					nprintf(conn, "c %s\r", conn->u.link->call);
+
+					// Run first line of connect script
+
+					ProcessChatConnectScript(conn, ConnectedMsg, 15);
 					return 0;
+
+//					nprintf(conn, "c %s\r", conn->u.link->call);
 				}
+				return 0;
 			}
 	
 			memset(conn, 0, sizeof(ChatCIRCUIT));		// Clear everything
@@ -95,7 +103,7 @@ int Connected(Stream)
 			
 			// Send SID and Prompt
 
-			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+			ChatWriteLogLine(conn, '|',Msg, n, LOG_CHAT);
 			conn->Flags |= CHATMODE;
 
 			nodeprintf(conn, ChatSID, Ver[0], Ver[1], Ver[2], Ver[3]);
@@ -167,7 +175,7 @@ int Connected(Stream)
 	return 0;
 }
 
-int Disconnected (Stream)
+int Disconnected (int Stream)
 {
 	struct UserInfo * user = NULL;
 	ChatCIRCUIT * conn;
@@ -190,20 +198,28 @@ int Disconnected (Stream)
 			ChatClearQueue(conn);
 
 			conn->Active = FALSE;
-			RefreshMainWindow();
 
 			if (conn->Flags & CHATMODE)
 			{
-				if (conn->Flags & CHATLINK)
+				if (conn->Flags & CHATLINK && conn->u.link)
 				{
-					len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Disconnected", conn->u.link->call);
-					WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
+					// if running connect script, clear script active
+
+					if (conn->u.link->flags & p_linkini)
+					{
+						RunningConnectScript = 0;
+						conn->u.link->scriptRunning = 0;
+					}
+
+					len = sprintf_s(Msg, sizeof(Msg), "Chat Node %s Disconnected", conn->u.link->call);
+					ChatWriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 					__try {link_drop(conn);} My__except_Routine("link_drop");
+
 				}
 				else
 				{
 					len=sprintf_s(Msg, sizeof(Msg), "Chat User %s Disconnected", conn->Callsign);
-					WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
+					ChatWriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 					__try
 					{
 						logout(conn);
@@ -216,9 +232,9 @@ int Disconnected (Stream)
 				conn->Flags = 0;
 				conn->u.link = NULL;
 				conn->UserPointer = NULL;	
-				return 0;
 			}
 
+//			RefreshMainWindow();
 			return 0;
 		}
 	}
@@ -290,7 +306,7 @@ int DoReceivedData(int Stream)
 						__try
 						{
 							if (conn->rtcflags == p_linkini)		// Chat Connect
-								ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
+								ProcessChatConnectScript(conn, conn->InputBuffer, conn->InputLen);
 							else
 								ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
 						}
@@ -315,7 +331,7 @@ int DoReceivedData(int Stream)
 						__try
 						{
 							if (conn->rtcflags == p_linkini)
-								ProcessConnecting(conn, Buffer, MsgLen);
+								ProcessChatConnectScript(conn, Buffer, MsgLen);
 							else
 								ProcessLine(conn, user, Buffer, MsgLen);
 						}
@@ -735,8 +751,8 @@ VOID SaveChatConfig(HWND hDlg)
 	BOOL OK1;
 	HKEY hKey=0;
 	int OldChatAppl;
-	char * ptr1, * ptr2;
-	char * Context;
+	char * ptr1;
+	char * Save, * Context;
 
 	OldChatAppl = ChatApplNum;
 	
@@ -768,23 +784,47 @@ VOID SaveChatConfig(HWND hDlg)
 		wsprintf(InfoBoxText, "Warning Program must be restarted to change Chat Appl Num");
 
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-	removelinks();
-	 
+
+	Sleep(2);
+			
+	// Dont call removelinks - they may still be attached to a circuit. Just clear header
+
+	link_hd = NULL;
+
 	// Set up other nodes list. rtlink messes with the string so pass copy
 	
-	ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
+	Save = ptr1 = strtok_s(_strdup(OtherNodesList), "\r\n", &Context);
 
-	while (ptr1)
+	while (ptr1 && ptr1[0])
 	{
-		rtlink(ptr1);			
-		ptr1 = strtok_s(NULL, " ,\r", &Context);
+		rtlink(ptr1);
+		ptr1 = strtok_s(NULL, "\r\n", &Context);
 	}
 
-	free(ptr2);
+
+//	if (strchr(ptr1, '|') == 0)		// No script
+
+//	while (*ptr1)
+//	{
+//		if (*ptr1 == '\r')
+//		{
+//			while (*(ptr1+2) == '\r')			// Blank line
+//				ptr1+=2;
+
+//			*++ptr1 = 32;
+//		}
+//		*ptr2++=*ptr1++;
+//	}
+
+//	*ptr2++ = 0;
+
+
+	free(Save);
 
 	if (user_hd)			// Any Users?
 		makelinks();		// Bring up links
 
 	SaveChatConfigFile(ChatConfigName);				// Commit to file
 	GetChatConfig(ChatConfigName);
+
 }

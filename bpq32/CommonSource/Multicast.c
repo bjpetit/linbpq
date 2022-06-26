@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 //	Support for FLAMP compatible Mulitcast
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 void decodeblock( unsigned char in[4], unsigned char out[3]);  // Base64 Decode
 

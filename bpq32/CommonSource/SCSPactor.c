@@ -85,8 +85,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #ifndef WIN32
 #ifndef MACBPQ
+#ifndef FREEBSD
+
 #include <sys/ioctl.h>
 #include <linux/serial.h>
+#endif
 #endif
 #endif
 
@@ -104,7 +107,7 @@ extern char * PortConfig[33];
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
@@ -200,7 +203,7 @@ static BOOL OpenLogFile(int Flags)
 		T = time(NULL);
 		tm = gmtime(&T);	
 
-		sprintf(FN,"%s/Logs/SCSLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
+		sprintf(FN,"%s/logs/SCSLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
 
 		LogHandle[Flags] = fopen(FN, "ab");
 	
@@ -268,7 +271,7 @@ ConfigLine:
 		}
 		
 		if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
-			WRITELOG = atoi(&buf[8]);
+			WRITELOG = atoi(&buf[9]);
 		else
 		if (_memicmp(buf, "APPL", 4) == 0)
 		{
@@ -383,7 +386,7 @@ char ModeText[8][14] = {"STANDBY", "AMTOR-ARQ",  "PACTOR-ARQ", "AMTOR-FEC", "PAC
 
 char PactorLevelText[5][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR-III", "PACTOR-IV"};
 
-char PleveltoMode[5] = {30, 11, 12, 16, 19};	// WL2K Reporting Modes - RP, P1, P2, P3, P4
+char PleveltoMode[5] = {30, 11, 14, 16, 20};	// WL2K Reporting Modes - RP, P1, P2, P3, P4
 
 
 static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
@@ -430,6 +433,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 #ifndef WIN32
 #ifndef MACBPQ
+#ifndef FREEBSD
 
 		if (TNC->Dragon)
 		{
@@ -458,6 +462,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		}
 #endif
 #endif
+#endif
+
 	}
 ok:
 	switch (fn)
@@ -1017,6 +1023,7 @@ void * SCSExtInit(EXTPORTDATA *  PortEntry)
 
 #ifndef WIN32
 #ifndef MACBPQ
+#ifndef FREEBSD
 
 	if (TNC->Dragon)
 	{
@@ -1045,7 +1052,7 @@ void * SCSExtInit(EXTPORTDATA *  PortEntry)
 	}
 #endif
 #endif
-
+#endif
 	if (TNC->RobustDefault)
 		SwitchToPacket(TNC);
 
@@ -2015,7 +2022,7 @@ VOID SCSPoll(int Port)
 					Buffer[0] = Buffer[1];		
 					Buffer[1] = ':';
 					memmove(&Buffer[2], &Buffer[3], datalen--);
-					Buffer += 2;
+					//Buffer += 2;
 				}
 
 				memcpy(TNC->Streams[Stream].RemoteCall, Buffer, 9);
@@ -3301,6 +3308,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 					}
 
+					STREAM->ReportDISC = TRUE;		// Tell Node
 					return;
 				}
 					

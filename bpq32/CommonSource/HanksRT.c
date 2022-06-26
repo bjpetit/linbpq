@@ -38,12 +38,16 @@ iconv_t link_toUTF8 = NULL;
 
 #endif
 
+BOOL ProcessChatConnectScript(ChatCIRCUIT * conn, char * Buffer, int len);
 VOID ChatClearQueue(ChatCIRCUIT * conn);
 VOID ChatFlush(ChatCIRCUIT * conn);
 VOID APIENTRY SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen);
 unsigned short int compute_crc(unsigned char *buf,int len);
-
+char * ReadInfoFile(char * File);
+void ChatWriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 extern struct SEM ChatSemaphore;
+UCHAR * APIENTRY GetLogDirectory();
+char * APIENTRY GetBPQDirectory();
 
 extern SOCKADDR_IN Chatreportdest;
 
@@ -104,7 +108,7 @@ static int AutoColours[20] = {0, 4, 9, 11, 13, 16, 17, 42, 45, 50, 61, 64, 66, 7
 extern struct SEM OutputSEM;
 
 int NeedINFO = 1;		// Send INFO Msg after 10 Secs
-
+time_t RunningConnectScript = 0;
 
 //#undef free
 //#define   free(p) 
@@ -213,9 +217,7 @@ VOID * _zalloc_dbg(int len, int type, char * file, int line)
 
 #endif
 
-#ifdef LINBPQ
-
-static VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...)
+VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...)
 
 {
 	// seems to be printf to a socket
@@ -229,17 +231,16 @@ static VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...)
 	nputs(conn, buff);
 }
 
-#endif
 
-static VOID nputc(ChatCIRCUIT * conn, char chr)
+VOID nputc(ChatCIRCUIT * conn, char chr)
 {
 	// Seems to send chr to socket
 
-	WriteLogLine(conn, '>',&chr,  1, LOG_CHAT);
+	ChatWriteLogLine(conn, '>',&chr,  1, LOG_CHAT);
 	ChatQueueMsg(conn, &chr, 1);
 }
 
-static VOID nputs(ChatCIRCUIT * conn, char * buf)
+VOID nputs(ChatCIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
@@ -248,12 +249,15 @@ static VOID nputs(ChatCIRCUIT * conn, char * buf)
 	if (*buf == 0x1b)
 		buf += 2;				// Colour Escape
 	
-	WriteLogLine(conn, '>',buf, (int)strlen(buf), LOG_CHAT);
+	ChatWriteLogLine(conn, '>',buf, (int)strlen(buf), LOG_CHAT);
 }
 
 int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len)
 {
 	// Add Message to queue for this connection
+
+	if (conn->rtcflags & p_linked)
+		conn->u.link->lastMsgReceived = time(NULL);
 
 	//	UCHAR * OutputQueue;		// Messages to user
 	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
@@ -354,7 +358,7 @@ VOID ChatExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG)
 
 	len = RemoveLF(NewMessage, (int)strlen(NewMessage));
 
-	WriteLogLine(conn, '>', NewMessage,  len, LOG);
+	ChatWriteLogLine(conn, '>', NewMessage,  len, LOG);
 	ChatQueueMsg(conn, NewMessage, len);
 }
 
@@ -377,7 +381,7 @@ void chat_link_out (LINK *link)
 			conn->BPQStream = p;
 
 			conn->Active = TRUE;
-			circuit_new(conn,p_linkini);
+			circuit_new(conn, p_linkini);
 			conn->u.link = link;
 			conn->Flags = CHATMODE | CHATLINK;
 
@@ -385,7 +389,13 @@ void chat_link_out (LINK *link)
 
 			strcpy(conn->Callsign, conn->u.link->alias);
 
-			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+			ChatWriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+
+			link->ScriptIndex = -1;
+			RunningConnectScript = time(NULL);
+			link->MoreLines = TRUE;
+			link->scriptRunning = TRUE;
+			link->RTLSent = 0;
 
 			ConnectUsingAppl(conn->BPQStream, ChatApplMask);
 
@@ -537,7 +547,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 #endif
 
 	}
-	WriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
+	ChatWriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
 
 
 	Buffer[len] = 0;
@@ -1053,10 +1063,13 @@ static BOOL CheckforDups(ChatCIRCUIT * circuit, char * Call, char * Msg)
 
 void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 {
-	CHATNODE    *node, *ln;
-	ChatCIRCUIT *ckt_to;
-	USER    *user, *su;
-	char    *ncall, *ucall, *f1, *f2, *buf;
+	CHATNODE * node, *ln;
+	ChatCIRCUIT * ckt_to;
+	USER * user, * su;
+	time_t Now = time(NULL);
+	LINK  * Link = ckt_from->u.link;
+
+	char * ncall, * ucall, * f1, * f2, * buf;
 	int i;
 
 	if (Buffer[FORMAT_O] != FORMAT) return; // Not a control message.
@@ -1096,6 +1109,9 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 
 	node = node_find(ncall);
 	if (!node || matchi(ncall, OurNode)) { free(buf); return; }
+
+	if (ckt_from->rtcflags & p_linked)
+		ckt_from->u.link->lastMsgReceived = Now;
 
 	switch(Buffer[TYPE_O])
 	{
@@ -1190,7 +1206,7 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 			user = user_find(ucall, ncall);
 			if (!user)
 			{
-				Debugprintf("MAILCHAT: Leave for %s from %s when not on list", ucall, ncall);
+				Debugprintf("CHAT: Leave for %s from %s when not on list", ucall, ncall);
 				break;
 			}
 
@@ -1244,12 +1260,12 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 				}
 				else
 				{
-					Debugprintf("MAILCHAT: node %s unlink for %s when not on this link", ncall, ucall);
+					Debugprintf("CHAT: node %s unlink for %s when not on this link", ncall, ucall);
 				}
 			}
 			else
 			{
-				Debugprintf("MAILCHAT: node %s unlink for %s when not on list", ncall, ucall);
+				Debugprintf("CHAT: node %s unlink for %s when not on list", ncall, ucall);
 			}
 
 			break;
@@ -1273,7 +1289,7 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 				// If last join was less the 5 secs ago don't report - probably a "Join/Leave Storm"
 
 				if (time(NULL) - ln->timeconnected > 5)		
-					Debugprintf("MAILCHAT: node %s link for %s when already on list", ncall, ucall);
+					Debugprintf("CHAT: node %s link for %s when already on list", ncall, ucall);
 
 				// update join time
 
@@ -1323,9 +1339,27 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 					if (f1)
 						ln->Version = _strdup(f1);
 			}
+
+			nprintf(ckt_from, "%c%c%s %s\r", FORMAT, id_pollresp, OurNode, Link->call);
 			break;
 
-		default :  break;
+		case id_poll:
+
+			// Send Poll Response
+
+			Link->supportsPolls = Now;
+			nprintf(ckt_from, "%c%c%s %s\r", FORMAT, id_pollresp, OurNode, Link->call);
+			break;
+
+		case id_pollresp:
+
+			Link->supportsPolls = Now;
+			Link->RTT = Now - Link->timePollSent;
+			Link->timePollSent = 0;			// Cancel Timeout
+			break;
+
+		default:
+			break;
 	}
 
 	free(buf);
@@ -1625,7 +1659,7 @@ static void cn_dec(ChatCIRCUIT *circuit, CHATNODE *node)
 {
 	CN *c, *cp;
 
-//	Debugprintf("MAILCHAT: Remove c/n %s ", node->call);
+//	Debugprintf("CHAT: Remove c/n %s ", node->call);
 
 	cp = NULL;
 
@@ -1639,7 +1673,7 @@ static void cn_dec(ChatCIRCUIT *circuit, CHATNODE *node)
 			
 			if (--c->refcnt) 
 			{
-//				Debugprintf("MAILCHAT: Remove c/n Node %s still in use refcount %d", node->call, c->refcnt);
+//				Debugprintf("CHAT: Remove c/n Node %s still in use refcount %d", node->call, c->refcnt);
 				return;			// Still in use
 			}
 
@@ -1662,7 +1696,7 @@ static void cn_dec(ChatCIRCUIT *circuit, CHATNODE *node)
 	
 		// not found??
 	
-		Debugprintf("MAILCHAT: !! Remove c/n Node %s addr %x not found cn chain follows", node->call, node);
+		Debugprintf("CHAT: !! Remove c/n Node %s addr %x not found cn chain follows", node->call, node);
 
 		line[0] = 0;
 
@@ -2141,13 +2175,14 @@ void link_drop(ChatCIRCUIT *circuit)
 		if (circuit->rtcflags == p_linkini)
 			Debugprintf("Chat link %s Link Setup Failed", circuit->u.link->call);
 	
-	if (circuit->u.link)
-		circuit->u.link->flags = p_nil;
-	
+	if (circuit->rtcflags == p_linkini)
+		circuit->u.link->flags = p_linkfailed;
+	else
+		circuit->u.link->flags = 0;
+
 	circuit->rtcflags = p_nil;
 
 // Users connected on the dropped link are no longer connected.
-
 
 	for (user = user_hd; user; user = usernext)
 	{
@@ -2196,6 +2231,38 @@ static void echo(ChatCIRCUIT *fc, CHATNODE *node, char * Buffer)
 	}
 }
 
+char **	SeparateConnectScript(char * MultiString)
+{
+	char * ptr1 = MultiString;
+	char ** Value;
+	int Count = 0;
+	char * ptr;
+
+	// Convert to string array
+
+	Value = zalloc(sizeof(void *));				// always NULL entry on end even if no values
+	Value[0] = NULL;
+
+	ptr = MultiString;
+
+	while (ptr && strlen(ptr))
+	{
+		ptr1 = strchr(ptr, '|');
+			
+		if (ptr1)
+			*(ptr1++) = 0;
+
+		if (strlen(ptr))
+		{
+			Value = realloc(Value, (Count + 2) * sizeof(void *));
+			Value[Count++] = _strdup(ptr);
+		}
+		ptr = ptr1;
+	}
+
+	Value[Count] = NULL;
+	return Value;
+}
 
 // Add an entry to list of link partners
 
@@ -2203,8 +2270,11 @@ int rtlink (char * Call)
 {
 	LINK *link, *temp;
 	char *c;
+	char * script;
 
 	_strupr(Call);
+	script = strlop(Call, '|');
+	
 	c = strlop(Call, ':');
 	if (!c) return FALSE;
 
@@ -2212,6 +2282,22 @@ int rtlink (char * Call)
 
 	link->alias = _strdup(Call);
 	link->call  = _strdup(c);
+
+	if (script)
+	{
+		link->ConnectScript = SeparateConnectScript(script);
+		link->Lines = 0;
+		while (link->ConnectScript[++link->Lines]);
+	}
+	else
+	{
+		// Create Script with one entry to call partner direct;
+
+		link->ConnectScript = zalloc(sizeof(void *) * 2);	// always NULL entry on end 
+		link->ConnectScript[0] = malloc(32);
+		sprintf(link->ConnectScript[0], "C %s", c);
+		link->Lines = 1;
+	}
 
 	if (link_hd == NULL)
 		link_hd = link;
@@ -2234,10 +2320,22 @@ VOID removelinks()
 	for (link = link_hd; link; link = nextlink)
 	{
 		nextlink = link->next;
-		
+
+		if (link->ConnectScript)
+		{
+			int n = 0;
+			while(link->ConnectScript[n])
+				free(link->ConnectScript[n++]);
+
+			free(link->ConnectScript);
+		}
+
 		free(link->alias);
+		link->alias = 0;
 		free(link->call);
+		link->call = 0;
 		free(link);
+		link = 0;
 	}
 	link_hd = NULL;
 }
@@ -2307,7 +2405,7 @@ ChatCIRCUIT *circuit_new(ChatCIRCUIT *circuit, int flags)
 	{
 		if (c == circuit)
 		{
-			Debugprintf("MAILCHAT: Attempting to add Circuit when already on list");
+			Debugprintf("CHAT: Attempting to add Circuit when already on list");
 			return circuit;
 		}
 	}
@@ -2368,7 +2466,7 @@ int rtloginl (ChatCIRCUIT *conn, char * call)
 			if (c->u.link == link)
 			{
 				len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Connect when Connected - Old Connection Closed", call);
-				WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
+				ChatWriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 
 				c->Active = FALSE;			// So we don't try to clear circuit again
 				Disconnect(c->BPQStream);
@@ -2382,12 +2480,12 @@ int rtloginl (ChatCIRCUIT *conn, char * call)
 // Accept the link request.
 
 	circuit_new(conn, p_linked);
-
-	nputs(conn, "OK\r");
 	conn->u.link = link;
+	nputs(conn, "OK\r");
 	link->flags = p_linked;
 	link->delay = 0;			// Dont delay first restart
 	state_tell(conn, NULL);
+	conn->u.link->timePollSent = time(NULL);		// Keepalive is a poll
 	nprintf(conn, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, conn->u.link->call, Verstring);
 
 	NeedStatus = TRUE;
@@ -2671,9 +2769,14 @@ static void show_circuits(ChatCIRCUIT *conn, char Flag)
 	for (link = link_hd; link; link = link->next)
 	{
 		if (link->flags & p_linked )
-			nprintf(conn, "  %-10.10s Open\r", link->call);
+			if (link->supportsPolls)
+				nprintf(conn, "  %-10.10s Open       RTT %d\r", link->call, link->RTT);
+			else
+				nprintf(conn, "  %-10.10s Open\r", link->call);
 		else if (link->flags & (p_linked | p_linkini))
 			nprintf(conn, "  %-10.10s Connecting\r", link->call);
+		else if (link->flags & p_linkfailed)
+			nprintf(conn, "  %-10.10s Connect failed\r", link->call);
 		else
 			nprintf(conn, "  %-10.10s Idle\r", link->call);
 	}
@@ -2764,30 +2867,49 @@ int rt_cmd(ChatCIRCUIT *circuit, char * Buffer)
 
 		case 'h' :
 		case '?' :
-			nputs(circuit, "Commands can be in upper or lower case.\r");
-			nputs(circuit, "/U - Show Users.\r/N - Enter your Name.\r/Q - Enter your QTH.\r/T - Show Topics.\r");
-			nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are not case sensitive\r/P - Show Ports and Links.\r");
-			nprintf(circuit, "/A - Toggle Alert on user join - %s.\r",
-				(user->rtflags & u_bells) ? "Enabled" : "Disabled");
-			nprintf(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal - %s.\r",
-				(user->rtflags & u_colour) ? "Enabled" : "Disabled");
-			nputs(circuit, "/Codepage CPnnnn - Set Codepage to use if UTF-8 is disabled.\r");
-			nprintf(circuit, "/E - Toggle Echo - %s .\r",
-				(user->rtflags & u_echo) ? "Enabled" : "Disabled");
-			nprintf(circuit, "/Keepalive - Toggle sending Keepalive messages every 10 minutes - %s.\r",
-				(user->rtflags & u_keepalive) ? "Enabled" : "Disabled");
-			nprintf(circuit, "/ShowNames - Toggle displaying name as well as call on each message - %s\r",
-				(user->rtflags & u_shownames) ? "Enabled" : "Disabled");
-			nprintf(circuit, "/Auto - Toggle Automatic character set selection - %s.\r",
-				(user->rtflags & u_auto) ? "Enabled" : "Disabled");
-			nprintf(circuit, "/UTF-8 - Character set Selection - %s.\r",
-				(user->rtflags & u_noUTF8) ? "8 Bit" : "UTF-8");
-			nprintf(circuit, "/Time - Toggle displaying timestamp on each message - %s.\r",
-				(user->rtflags & u_showtime) ? "Enabled" : "Disabled");
-			nputs(circuit, "/S CALL Text - Send Text to that station only.\r");
-			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
-			nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");
-			return TRUE;
+		{
+			char * Save;
+			char * MsgBytes = Save = ReadInfoFile("chathelp.txt");
+
+			if (MsgBytes)
+			{
+				int Length;
+
+				// Remove lf chars
+
+				Length = RemoveLF(MsgBytes, (int)strlen(MsgBytes));
+
+				ChatQueueMsg(circuit, MsgBytes, Length);
+				free(Save);
+			}
+			else
+			{
+				nputs(circuit, "Commands can be in upper or lower case.\r");
+				nputs(circuit, "/U - Show Users.\r/N - Enter your Name.\r/Q - Enter your QTH.\r/T - Show Topics.\r");
+				nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are not case sensitive\r/P - Show Ports and Links.\r");
+				nprintf(circuit, "/A - Toggle Alert on user join - %s.\r",
+					(user->rtflags & u_bells) ? "Enabled" : "Disabled");
+				nprintf(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal - %s.\r",
+					(user->rtflags & u_colour) ? "Enabled" : "Disabled");
+				nputs(circuit, "/Codepage CPnnnn - Set Codepage to use if UTF-8 is disabled.\r");
+				nprintf(circuit, "/E - Toggle Echo - %s .\r",
+					(user->rtflags & u_echo) ? "Enabled" : "Disabled");
+				nprintf(circuit, "/Keepalive - Toggle sending Keepalive messages every 10 minutes - %s.\r",
+					(user->rtflags & u_keepalive) ? "Enabled" : "Disabled");
+				nprintf(circuit, "/ShowNames - Toggle displaying name as well as call on each message - %s\r",
+					(user->rtflags & u_shownames) ? "Enabled" : "Disabled");
+				nprintf(circuit, "/Auto - Toggle Automatic character set selection - %s.\r",
+					(user->rtflags & u_auto) ? "Enabled" : "Disabled");
+				nprintf(circuit, "/UTF-8 - Character set Selection - %s.\r",
+					(user->rtflags & u_noUTF8) ? "8 Bit" : "UTF-8");
+				nprintf(circuit, "/Time - Toggle displaying timestamp on each message - %s.\r",
+					(user->rtflags & u_showtime) ? "Enabled" : "Disabled");
+				nputs(circuit, "/S CALL Text - Send Text to that station only.\r");
+				nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
+				nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");
+			}
+		}
+		return TRUE;
 		
 		case 'k' : show_nodes(circuit);                 return TRUE;
 
@@ -2896,18 +3018,51 @@ int rt_cmd(ChatCIRCUIT *circuit, char * Buffer)
 void makelinks(void)
 {
 	LINK *link;
+	ChatCIRCUIT *circuit;
 
-	// Make the links.
+	// Make the links. Called every 10 seconds
+
+	// Make sure previous link has completed or failed
+
+	if (RunningConnectScript)
+	{
+		// Make sure Connect Script isn't taking too long
+
+		if (time(NULL) - RunningConnectScript < 30)
+			return;
+
+		// Running too long - close it
+
+		for (circuit = circuit_hd; circuit; circuit = circuit->next)
+		{
+			// Find the link
+
+			if (circuit->rtcflags & (p_linkini))
+			{
+				link = circuit->u.link;
+				link->flags = p_linkfailed;
+				RunningConnectScript = 0;
+				link->scriptRunning = 0;	// so it doesn't get reentered
+				Logprintf(LOG_CHAT, circuit, '|', "Connect to %s timed out", circuit->Callsign);
+
+				Disconnect(circuit->BPQStream);
+			}
+		}
+		RunningConnectScript = 0;
+	}
 
 	for (link = link_hd; link; link = link->next)
 	{
-	// Is this link already established?
-		if (link->flags & (p_linked | p_linkini)) continue;
+		// Is this link already established?
+		
+		if (link->flags & (p_linked | p_linkini))
+			continue;
 
 		// Already linked through some other node?
 		// If so, making this link would create a loop.
 
-		if (node_find(link->call)) continue;
+		if (node_find(link->call))
+			continue;
 
 		// Fire up the process to handle this link.
 
@@ -2948,8 +3103,11 @@ static void node_keepalive()
 	{
 		for (circuit = circuit_hd; circuit; circuit = circuit->next)
 		{
-			if (circuit->rtcflags & p_linked &&circuit->u.link)
+			if (circuit->rtcflags & p_linked && circuit->u.link)
+			{
 				nprintf(circuit, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call, Verstring);
+				circuit->u.link->timePollSent = time(NULL);		// Also acts as poll
+			}
 		}
 	}
 	else
@@ -2965,10 +3123,11 @@ VOID ChatTimer()
 	// Entered every 10 seconds
 
 	int	i = 0;
+	ChatCIRCUIT *c;
+
 #ifndef LINBPQ
 	int	len;
 	CHATNODE *node;
-	ChatCIRCUIT *c;
 	TOPIC *topic;
 	char Msg[256];
 #endif
@@ -3111,6 +3270,35 @@ VOID ChatTimer()
 	}
 
 #endif
+
+	// if no message on a Node-Node link, send poll
+	
+	for (c = circuit_hd; c; c = c->next)
+	{
+		if (c->rtcflags & p_linked && c->u.link) 
+		{
+			time_t Now = time(NULL);
+			LINK  * Link = c->u.link;
+		
+			if (Now - Link->lastMsgReceived > 60)
+			{
+				// if we have a poll outstanding for ? 30 secs close link
+				// but check other end can handle polls
+				
+				if (Link->supportsPolls && Link->timePollSent && Now - Link->timePollSent > 30)
+				{
+					Logprintf(LOG_CHAT, c, '|', "%s No Poll Response for %d Secs - Dropping Link",
+						c->Callsign, Now - Link->timePollSent);
+
+					Disconnect(c->BPQStream);
+					continue;
+				}
+
+				Link->timePollSent = Now;
+				nprintf(c, "%c%c%s %s\r", FORMAT, id_poll, OurNode, Link->call);
+			}
+		}
+	}
 
 	ChatTmr++;
 
@@ -3348,11 +3536,106 @@ VOID ClearChatLinkStatus()
 	}
 }
 
-int ProcessConnecting(ChatCIRCUIT * circuit, char * Buffer, int Len)
+BOOL ProcessChatConnectScript(ChatCIRCUIT * conn, char * Buffer, int len)
 {
-	WriteLogLine(circuit, '<' ,Buffer, Len-1, LOG_CHAT);
+	LINK * link = conn->u.link;
+	char ** Scripts;
 
-	Buffer = _strupr(Buffer);
+	ChatWriteLogLine(conn, '<', Buffer, len-1, LOG_CHAT);
+
+	Buffer[len] = 0;
+	_strupr(Buffer);
+
+	Scripts = link->ConnectScript;
+
+	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") ||
+		(strstr(Buffer, "DOWNLINK") && strstr(Buffer, "ATTEMPTING") == 0) ||
+		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
+		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - ") ||
+		strstr(Buffer, "UNABLE TO CONNECT") ||  strstr(Buffer, "DISCONNECTED") ||
+		strstr(Buffer, "FAILED TO CONNECT") ||	strstr(Buffer, "REJECTED"))
+	{
+		// Connect Failed
+
+		link->flags = p_linkfailed;
+		RunningConnectScript = 0;
+		link->scriptRunning = 0;	// so it doesn't get reentered
+		Disconnect(conn->BPQStream);
+		return FALSE;
+	}
+
+	// The pointer is only updated when we get the connect, so we can tell when the last line is acked
+	// The first entry is always from Connected event, so don't have to worry about testing entry -1 below
+
+
+	if (link->RTLSent)
+	{
+		RunningConnectScript = 0;	
+		link->scriptRunning = 0;
+		link->RTLSent = 0;
+
+		if (memcmp(Buffer, "OK", 2) == 0)
+		{
+			// Reply to *RTL
+
+			// Make sure node isn't known. There is a window here that could cause a loop
+
+			if (node_find(conn->u.link->call))
+			{
+				Logprintf(LOG_CHAT, conn, '|', "Dropping link with %s to prevent a loop", conn->Callsign);
+				Disconnect(conn->BPQStream);
+				return FALSE;
+			}
+
+			conn->u.link->flags = p_linked;
+			conn->rtcflags = p_linked;
+			state_tell(conn, conn->FBBReplyChars);
+			NeedStatus = TRUE;
+
+			return TRUE;
+		}
+		
+		// Some other response to *RTL - disconnect
+			
+		Logprintf(LOG_CHAT, conn, '|', "Unexpected Response %s to *RTL - Dropping link", conn->Callsign), Buffer;
+		Disconnect(conn->BPQStream);
+		return FALSE;
+
+	}
+	
+	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") || strstr(Buffer, "IDLETIME") ||
+		strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE") || strstr(Buffer, "VIRTUAL CIRCUIT ESTABLISHED"))
+	{
+		char * Cmd;
+
+LoopBack:
+
+		Cmd = Scripts[++link->ScriptIndex];
+
+		// Only Check until script is finished
+
+		if (Cmd == 0 || link->ScriptIndex >= link->Lines)
+		{
+			link->MoreLines = FALSE;
+			return TRUE;
+		}
+
+		if (Cmd && (strcmp(Cmd, " ") == 0 || Cmd[0] == ';' || Cmd[0] == '#'))
+			goto LoopBack;			// Blank line 
+
+		// Replace \ with # so can send commands starting with #
+
+		if (Cmd[0] == '\\')
+		{
+			Cmd[0] = '#';
+			nprintf(conn, "%s\r", Cmd);
+			Cmd[0] = '\\';						// Put \ back in script
+		}
+		else
+			nprintf(conn, "%s\r", Cmd);
+
+		return TRUE;
+	}
 
 	if (memcmp(Buffer, "[BPQCHATSERVER-", 15) == 0)
 	{
@@ -3360,54 +3643,28 @@ int ProcessConnecting(ChatCIRCUIT * circuit, char * Buffer, int Len)
 		if (ptr)
 		{
 			*ptr = 0;
-			strcpy(circuit->FBBReplyChars, &Buffer[15]);
+			strcpy(conn->FBBReplyChars, &Buffer[15]);
 		}
 		else
-			circuit->FBBReplyChars[0] = 0;
+			conn->FBBReplyChars[0] = 0;
 
-		return 0;
-	}
-
-	if (memcmp(Buffer, "OK", 2) == 0)
-	{
-		// Make sure node isn't known. There is a window here that could cause a loop
-
-		if (node_find(circuit->u.link->call))
-		{
-			Logprintf(LOG_CHAT, circuit, '|', "Dropping link with %s to prevent a loop", circuit->Callsign);
-			Disconnect(circuit->BPQStream);
-			return FALSE;
-		}
-
-		circuit->u.link->flags = p_linked;
- 	  	circuit->rtcflags = p_linked;
-		state_tell(circuit, circuit->FBBReplyChars);
-		NeedStatus = TRUE;
-
-		return TRUE;
-	}
-
-	
-	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "LINKED"))
-	{
 		// Connected - Send *RTL 
 		
-		nputs(circuit, "*RTL\r");  // Log in to the remote RT system.
-		nprintf(circuit, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call, Verstring);
+		nputs(conn, "*RTL\r");  // Log in to the remote RT system.
+
+		conn->u.link->timePollSent = time(NULL);		// Keepalive is a poll
+		nprintf(conn, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, conn->u.link->call, Verstring);
+		link->RTLSent = 1;
+		conn->u.link->lastMsgSent = time(NULL);
 
 		return TRUE;
-
 	}
 
-	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK")|| strstr(Buffer, "SORRY"))
-	{
-		link_drop(circuit);
-		Disconnect(circuit->BPQStream);
-	}
-	
-	return FALSE;
+//	Anthing else could be ctext. etc. Ignore
 
+	return TRUE;
 }
+
 
 
 #ifdef LINBPQ
@@ -3451,9 +3708,13 @@ int ChatConnected(int Stream)
 				if (conn->rtcflags == p_linkini)
 				{
 					conn->paclen = 236;
-					nprintf(conn, "c %s\r", conn->u.link->call);
-					return 0;
+		
+					// Run first line of connect script
+
+					ProcessChatConnectScript(conn, ConnectedMsg, 15);
+//					nprintf(conn, "c %s\r", conn->u.link->call);
 				}
+				return 0;
 			}
 	
 			memset(conn, 0, sizeof(ChatCIRCUIT));		// Clear everything
@@ -3484,7 +3745,7 @@ int ChatConnected(int Stream)
 			
 			// Send SID and Prompt
 
-			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+			ChatWriteLogLine(conn, '|',Msg, n, LOG_CHAT);
 			conn->Flags |= CHATMODE;
 
 			nprintf(conn, ChatSID, Ver[0], Ver[1], Ver[2], Ver[3]);
@@ -3573,14 +3834,23 @@ int ChatDisconnected (ChatCIRCUIT * conn)
 	{
 		if (conn->Flags & CHATLINK && conn->u.link)
 		{
+			// if running connect script, clear script active
+
+			if (conn->u.link->flags & p_linkini)
+			{
+				RunningConnectScript = 0;
+				conn->u.link->scriptRunning = 0;
+			}
+
 			len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Disconnected", conn->u.link->call);
-			WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
+			ChatWriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 			link_drop(conn);
+
 		}
 		else
 		{
 			len=sprintf_s(Msg, sizeof(Msg), "Chat User %s Disconnected", conn->Callsign);
-			WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
+			ChatWriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 
 			logout(conn);
 	
@@ -3642,7 +3912,7 @@ loop:
 			// Usual Case - single meg in buffer
 
 				if (conn->rtcflags == p_linkini)		// Chat Connect
-					ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
+					ProcessChatConnectScript(conn, conn->InputBuffer, conn->InputLen);
 				else
 					ProcessChatLine(conn, user, conn->InputBuffer, conn->InputLen);
 			conn->InputLen=0;
@@ -3656,7 +3926,7 @@ loop:
 			memcpy(Buffer, conn->InputBuffer, MsgLen);
 						
 			if (conn->rtcflags == p_linkini)
-				ProcessConnecting(conn, Buffer, MsgLen);
+				ProcessChatConnectScript(conn, Buffer, MsgLen);
 			else
 				ProcessChatLine(conn, user, Buffer, MsgLen);
 						
@@ -3814,13 +4084,28 @@ BOOL ChatInit()
 	ChatApplMask = 1<<(ChatApplNum-1);
 		
 	// Set up other nodes list. rtlink messes with the string so pass copy
-	
-	ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
 
-	while (ptr1)
+	// On first run config will have spaces not newlines
+
+	if (strchr(OtherNodesList, '\r'))	// Has connect script entries
 	{
-		rtlink(ptr1);			
-		ptr1 = strtok_s(NULL, " ,\r", &Context);
+		ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), "\r\n", &Context);
+
+		while (ptr1 && ptr1[0])
+		{
+			rtlink(ptr1);
+			ptr1 = strtok_s(NULL, "\r\n", &Context);
+			}
+	}
+	else
+	{	
+		ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
+
+		while (ptr1)
+		{
+			rtlink(ptr1);			
+			ptr1 = strtok_s(NULL, " ,\r", &Context);
+		}
 	}
 
 	free(ptr2);
@@ -3981,6 +4266,124 @@ VOID SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen)
 
 }
 
+#endif
+
+
+#ifndef WIN32
+#define INVALID_HANDLE_VALUE (void *)-1
+#endif
+
+static FILE * LogHandle[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
+
+static time_t LastLogTime[4] = {0, 0, 0, 0};
+
+static char FilesNames[4][100] = {"", "", "", ""};
+
+static char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
+
+
+BOOL ChatOpenLogfile(int Flags)
+{
+	UCHAR FN[MAX_PATH];
+	time_t LT;
+	struct tm * tm;
+
+	LT = time(NULL);
+	tm = gmtime(&LT);	
+
+	sprintf(FN,"%s/logs/log_%02d%02d%02d_%s.txt", GetLogDirectory(), tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
+
+	LogHandle[Flags] = fopen(FN, "ab");
+		
+#ifndef WIN32
+
+	if (strcmp(FN, &FilesNames[Flags][0]))
+	{
+		UCHAR SYMLINK[MAX_PATH];
+
+		sprintf(SYMLINK,"%s/logLatest_%s.txt", GetBPQDirectory(), Logs[Flags]);
+		unlink(SYMLINK); 
+		strcpy(&FilesNames[Flags][0], FN);
+		symlink(FN, SYMLINK);
+	}
 
 #endif
+
+	return (LogHandle[Flags] != NULL);
+}
+
+void ChatWriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
+{
+	char CRLF[2] = {0x0d,0x0a};
+	struct tm * tm;
+	char Stamp[20];
+	time_t T;
+		
+#ifndef LINBPQ
+
+	if (hMonitor)
+	{
+		if (Flags == LOG_CHAT)
+		{	
+			WritetoMonitorWindow((char *)&Flag, 1);
+
+			if (conn && conn->Callsign[0])
+			{
+				char call[20];
+				sprintf(call, "%s          ", conn->Callsign);
+				WritetoMonitorWindow(call, 10);
+			}
+			else
+				WritetoMonitorWindow("          ", 10);
+
+			WritetoMonitorWindow(Msg, MsgLen);
+			if (Msg[MsgLen-1] != '\r')
+				WritetoMonitorWindow(CRLF , 1);
+		}
+		else if (Flags == LOG_DEBUGx)
+		{	
+			WritetoMonitorWindow((char *)&Flag, 1);
+			WritetoMonitorWindow(Msg, MsgLen);
+			WritetoMonitorWindow(CRLF , 1);
+		}
+
+	}
+
+#endif
+
+	if (Flags == LOG_CHAT && !LogCHAT)
+		return;
+
+	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) ChatOpenLogfile(Flags);
+
+	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) return;
+	
+	T = time(NULL);
+	tm = gmtime(&T);	
+	
+	sprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d %c",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, Flag);
+
+	fwrite(Stamp, 1, strlen(Stamp), LogHandle[Flags]);
+
+	if (conn && conn->Callsign[0])
+	{
+		char call[20];
+		sprintf(call, "%s          ", conn->Callsign);
+		fwrite(call, 1, 10, LogHandle[Flags]);
+	}
+	else
+		fwrite("          ", 1, 10, LogHandle[Flags]);
+
+	fwrite(Msg, 1, MsgLen, LogHandle[Flags]);
+
+	if (Flags == LOG_CHAT && Msg[MsgLen-1] == '\r')
+		fwrite(&CRLF[1], 1, 1, LogHandle[Flags]);
+	else
+		fwrite(CRLF, 1, 2, LogHandle[Flags]);
+
+	fclose(LogHandle[Flags]);
+	LogHandle[Flags] = INVALID_HANDLE_VALUE;
+}
+
 

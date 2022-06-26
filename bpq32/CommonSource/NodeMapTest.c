@@ -536,6 +536,7 @@ int main(int argc, char * argv[])
 	struct timeval timeout;
 	int retval;
 	char * ptr;
+	time_t restartTime = 0;
 
 #ifdef WIN32
 	WSADATA WsaData;            // receives data from WSAStartup
@@ -544,6 +545,7 @@ int main(int argc, char * argv[])
 
 	timeout.tv_sec = 60;
 	timeout.tv_usec = 0;
+
 
 	logFile = fopen("nodelog.txt","ab");
 
@@ -947,6 +949,12 @@ int main(int argc, char * argv[])
 
 	if (HostEnt1)
 		memcpy(&txaddr.sin_addr.s_addr,HostEnt1->h_addr,4);
+	else
+	{
+		perror("Resolve");
+		printf("Resolve %s Failed\r\n", "guardian.no-ip.org.");
+		restartTime = time(NULL) + 120;		// Restart in 2 mins
+	}
 
 	HostEnt2 = gethostbyname ("10.8.0.38");
 
@@ -977,6 +985,9 @@ int main(int argc, char * argv[])
 	while (1)
 	{
 		int ret = 0;
+
+		if (time(NULL) > restartTime)
+			return 0;
 
 		FD_ZERO(&readfd);
 		FD_ZERO(&writefd);
@@ -1041,7 +1052,7 @@ int main(int argc, char * argv[])
 		{
 			if (HostEnt1)
 			{
-		//		ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr, sizeof(txaddr));
+				ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr, sizeof(txaddr));
 				if (ret == -1)
 					perror("sendto 1");
 			}

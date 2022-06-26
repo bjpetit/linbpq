@@ -262,6 +262,8 @@ VOID APIENTRY SendChatReport(UINT_PTR ChatReportSocket, char * buff, int txlen);
 
 int APIENTRY CountFramesQueuedOnStream(int Stream);
 
+char * APIENTRY GetLOC();
+
 #else
 
 struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntryFromPortNum) (int portnum);
@@ -476,6 +478,8 @@ int (FAR WINAPI * CheckTimer)();
 
 int (FAR WINAPI * CloseBPQ32)();
 
+char (FAR WINAPI * GetLOC)();
+
 HMODULE ExtDriver;
 
 BOOL GetAPI()
@@ -569,6 +573,7 @@ BOOL GetAPI()
 	WritetoConsole = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_WritetoConsole@4");
 	CheckTimer = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CheckTimer@0");
 	CloseBPQ32 = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CloseBPQ32@0");
+	GetLOC = (char * (__stdcall *)(char *))GetProcAddress(ExtDriver,"_GetLOC@0");
 	return TRUE;
 }
 
@@ -582,7 +587,7 @@ BOOL GetAPI()
 #define BPQWINMSG
 
 static char BPQWinMsg[] = "BPQWindowMessage";
-UINT BPQMsg;
+extern UINT BPQMsg;
 
 //
 //	Values returned in lParam of Windows Message

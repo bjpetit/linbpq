@@ -56,7 +56,7 @@ extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 //int ResetExtDriver(int num);
 extern char * PortConfig[33];
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static void ConnecttoMPSKThread(void * portptr);
 
@@ -447,7 +447,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 			{
 				buff->L2DATA[txlen - 1] = 0;	// Remove CR
 				
-				len = sprintf(Command,"%cDIGITAL MODE %s\x1b", '\x1a', &buff[13]);
+				len = sprintf(Command,"%cDIGITAL MODE %s\x1b", '\x1a', &buff->L2DATA[5]);
 	
 				if (TNC->MPSKInfo->TX)
 					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
@@ -521,7 +521,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 			buff->L2DATA[txlen - 1] = 0;
 			_strupr(buff->L2DATA);
 
-			len = sprintf(Command,"%c%s\x1b", '\x1a', &buff[8]);
+			len = sprintf(Command,"%c%s\x1b", '\x1a', buff->L2DATA);
 		
 			if (TNC->MPSKInfo->TX)
 				TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting

@@ -141,7 +141,8 @@ struct CONFIGTABLE
 	UCHAR C_BTEXT[120];			// 121
 	char C_VERSTRING[10];		// 241 Version String from Config File
 	UCHAR C_ADIF;
-	UCHAR Spare3[3];			// 252 - 4
+	UCHAR C_LogAllConnects;		
+	UCHAR Spare3[2];			// 252 - 4
 	UCHAR C_VERSION;			// CONFIG PROG VERSION
 //	Reuse C_APPLICATIONS - no longer used
 	char C_NETROMCALL[10];

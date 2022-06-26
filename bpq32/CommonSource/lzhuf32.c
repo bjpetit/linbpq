@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 // lzhuf Routines
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 BOOL isAMPRMsg(char * Addr);
 
@@ -109,9 +109,9 @@ static unsigned short crctab[256] = {
 
 #define updcrc(cp, crc) ((crc << 8) ^ crctab[(cp & 0xff) ^ (crc >> 8)])
 
-unsigned	long 	textsize = 0, codesize = 0;
-unsigned	short	crc;
-int					version_1;
+uint32_t textsize = 0, codesize = 0;
+unsigned short crc;
+int	version_1;
 char wterr[] = "Can't write.";
 
 void Error(char *message)
@@ -609,7 +609,7 @@ int DecodePosition(void)
 
 /* compression */
 
-long Encode(char * in, char * out, long inlen, BOOL B1Protocol, int Compress)
+int32_t Encode(char * in, char * out, int32_t inlen, BOOL B1Protocol, int Compress)
 {
 	int  i, c, len, r, s, last_match_length;
 	unsigned char *ptr;
@@ -710,7 +710,7 @@ long Encode(char * in, char * out, long inlen, BOOL B1Protocol, int Compress)
 	}
 	else
 	{
-		long n = inlen;
+		int32_t  n = inlen;
 		while (n--)
 			crc_fputc(*(infile++));
 	
@@ -780,7 +780,7 @@ void Decode(CIRCUIT * conn, int FromSync)
 	char * StartofMsg;
 	short  i, j, k, r;
 	short c;
-	unsigned long count;
+	uint32_t count;
 	unsigned short  crc_read;
 	int Index = 0;
 	struct FBBHeaderLine * FBBHeader= &conn->FBBHeaders[0];	// The Headers from an FFB forward block
@@ -798,7 +798,7 @@ void Decode(CIRCUIT * conn, int FromSync)
 	if (conn->BBSFlags & FBBB1Mode)
 	{
 		short val;
-		long n;
+		uint32_t n;
 			
 		crc_read = infile[0];
 		crc_read |= infile[1] << 8;

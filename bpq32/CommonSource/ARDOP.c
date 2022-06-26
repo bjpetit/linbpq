@@ -36,6 +36,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define NOI2C
 #endif
 
+#ifdef FREEBSD
+#define NOI2C
+#endif
+
 #ifndef NOI2C
 #include "i2c-dev.h"
 #endif
@@ -115,7 +119,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
@@ -1879,10 +1883,14 @@ VOID ARDOPReleasePort(struct TNCINFO * TNC)
 }
 
 extern char WebProcTemplate[];
+extern char sliderBit[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, "ARDOP Status", "ARDOP Status");
+	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, TNC->Port, "ARDOP Status", "ARDOP Status");
+
+	if (TNC->TXFreq)
+		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 

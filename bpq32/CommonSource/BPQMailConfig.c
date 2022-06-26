@@ -3,7 +3,7 @@
 //
 //	Configuration Module
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 
 #define C_PAGES 7
@@ -987,7 +987,7 @@ void SetForwardingPage(HWND hDlg, struct UserInfo * user)
 
 	struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
 	char ** Calls;
-	char Text[10000]="";
+	char Text[100000]="";
 
 	Calls = ForwardingInfo->TOCalls;
 
@@ -2207,7 +2207,7 @@ VOID * GetMultiLineDialogParam(HWND hDialog, int DLGItem)
 		if (ptr[0] == 0)		// Just had a | (empty string)
 			break;
 
-		Value = realloc(Value, (Count+2)*4);
+		Value = realloc(Value, (Count+2) * sizeof(void *));
 			
 		Value[Count++] = _strdup(ptr);
 		ptr = ptr1;
@@ -2945,7 +2945,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			Count = SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0);
 
-			Indexes = malloc(Count * 4);
+			Indexes = malloc(Count * sizeof(void *));
 
 			SendDlgItemMessage(hDlg, 0, LB_GETSELITEMS , Count, (LPARAM)&Indexes[0]);
 
@@ -3112,7 +3112,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			Count = SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0);
 
-			Indexes = malloc(Count * 4);
+			Indexes = malloc(Count * sizeof(void *));
 
 			SendDlgItemMessage(hDlg, 0, LB_GETSELITEMS , Count, (LPARAM)&Indexes[0]);
 

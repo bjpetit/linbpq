@@ -15,6 +15,8 @@
 #define BPQICON 2
 
 #define BUFFLEN	400
+#define BUFFALLOC 464		// Actual size of buffer. Extra 64 bytes for a source code tag to help find buffer leaks
+
 
 //#define ApplStringLen 48	// Length of each config entry
 #define NumberofAppls 32	// Max APPLICATIONS= values
@@ -803,6 +805,7 @@ typedef struct _HDLCDATA
 	UCHAR WR10	;				// NRZ/NRZI FLAG
 
 	int	IRQHand;
+	int fd;						// file descriptor for LKM
 
 	ULONG IOLEN;				// Number of bytes in IO Space
 
@@ -1154,7 +1157,7 @@ struct TNCDATA
 	BOOL BBSMON;			//  SPECIAL SHORT MONITOR FOR BBS
 	BOOL MTX;				//  MONITOR TRANSMITTED FRAMES
 	BOOL MTXFORCE;			//  MONITOR TRANSMITTED FRAMES EVEN IF M OFF
-	UINT MMASK;				//  MONITOR PORT MASK
+	unsigned long long MMASK;				//  MONITOR PORT MASK
 	BOOL HEADERLN;			//  PUT MONITORED DATA ON NEW LINE FLAG
 	BOOL InEscape;			//  PASS Char received (treat next char as normal char not ctrl char)
 	BOOL InStreamSW;		//  StreamSW Char received (treat next char as new stream)

@@ -71,7 +71,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #define PNG_SKIP_SETJMP_CHECK
 
-#include "png.h"
+#include <png.h>
 
 #define VOID void
 #define UCHAR unsigned char
@@ -80,6 +80,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define UINT unsigned int
 #define TRUE 1
 #define FALSE 0
+
+
+#undef PNG_NO_STDIO
 
 int multiple = 0;
 
@@ -874,6 +877,15 @@ VOID OSMThread()
 		//
 		//	Neither available or connect failed to both
 		//
+		
+		//  Reduce retry timers
+
+		if (Host1Down > 60 && Host2Down > 60)
+		{
+			Host1Down = 60;
+			Host2Down = 60;
+		}
+
 		break;
 	
 ConnectOK:
@@ -4397,7 +4409,9 @@ BOOL PngLoadImage (char * pstrFileName, png_byte **ppbImageData,
     // first check the eight byte PNG signature
 
     fread(pbSig, 1, 8, pfFile);
-    if (!png_check_sig(pbSig, 8))
+	
+	if(png_sig_cmp(pbSig, 0, 8) != 0)
+	//if (!png_check_sig(pbSig, 8))
     {
         *ppbImageData = pbImageData = NULL;
 

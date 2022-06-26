@@ -83,7 +83,7 @@ TODo	?Multiple Adapters
 
 #include "CHeaders.h"
 
-#include "IPCode.h"
+#include "ipcode.h"
 
 #ifdef WIN32
 #include <io.h>
@@ -117,22 +117,22 @@ VOID AddToRoutes(PARPDATA Arp, UINT IPAddr, char Type);
 
 VOID ProcessTunnelMsg(PIPMSG IPptr);
 VOID ProcessRIP44Message(PIPMSG IPptr);
-PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found);
+PROUTEENTRY LookupRoute(uint32_t IPADDR, uint32_t Mask, BOOL Add, BOOL * Found);
 BOOL ProcessROUTELine(char * buf, BOOL Locked);
 VOID DoRouteTimer();
-PROUTEENTRY FindRoute(ULONG IPADDR);
-VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap);
+PROUTEENTRY FindRoute(uint32_t IPADDR);
+VOID SendIPtoEncap(PIPMSG IPptr, uint32_t Encap);
 USHORT Generate_CHECKSUM(VOID * ptr1, int Len);
 VOID RecalcTCPChecksum(PIPMSG IPptr);
 VOID RecalcUDPChecksum(PIPMSG IPptr);
 BOOL Send_ETH(VOID * Block, DWORD len, BOOL SendToTAP);
 VOID ProcessEthARPMsg(PETHARP arpptr, BOOL FromTAP);
 VOID WriteIPRLine(PROUTEENTRY RouteRecord, FILE * file);
-int CountBits(unsigned long in);
+int CountBits(uint64_t in);
 VOID SendARPMsg(PARPDATA ARPptr, BOOL ToTAP);;
 BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR * AXCalls);
 int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
-int CountBits(unsigned long in);
+int CountBits(uint64_t in);
 
 #define ARPTIMEOUT 3600
 
@@ -156,20 +156,20 @@ time_t LastRIP44Msg = 0;
 
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
-ULONG OurIPAddr = 0;
+uint32_t OurIPAddr = 0;
 char IPAddrText[20];			// Text form of Our Address
 
-ULONG EncapAddr = INADDR_NONE;	// Virtual Host for IPIP PCAP Mode.
+uint32_t EncapAddr = INADDR_NONE;	// Virtual Host for IPIP PCAP Mode.
 char EncapAddrText[20];			// Text form of Our Address
 
 UCHAR RouterMac[6] = {0};		// Mac Address of our Internet Gateway.
 
-//ULONG HostIPAddr = INADDR_NONE;	// Makes more sense to use same addr for host
+//uint32_t HostIPAddr = INADDR_NONE;	// Makes more sense to use same addr for host
 
-ULONG HostNATAddr = INADDR_NONE;	// LAN address (not 44 net) of our host
+uint32_t HostNATAddr = INADDR_NONE;	// LAN address (not 44 net) of our host
 char HostNATAddrText[20];
 
-ULONG OurNetMask = 0xffffffff;
+uint32_t OurNetMask = 0xffffffff;
 
 BOOL WantTAP = FALSE;
 BOOL WantEncap = 0;				// Run RIP44 and Net44 Encap
@@ -207,7 +207,7 @@ static int nat_table_len = 0;
 static struct nat_table_entry nat_table[MAX_ENTRIES];
 
 
-ULONG UCSD44 = 0;		// RIP SOurce - Normally 44.0.0.1
+uint32_t UCSD44 = 0;		// RIP SOurce - Normally 44.0.0.1
 
 // Following two fields used by stats to get round shared memmory problem
 
@@ -376,7 +376,7 @@ BOOL Setup44Route(int Interface, char * Gateway)
 
 char FormatIPWork[20];
 
-char * FormatIP(ULONG Addr)
+char * FormatIP(uint32_t Addr)
 {
 	unsigned char work[4];
 
@@ -413,8 +413,8 @@ int CompareMasks (const VOID * a, const VOID * b)
 	PROUTEENTRY x;
 	PROUTEENTRY y;
 
-	unsigned long m1, m2;
-	unsigned long r1, r2;
+	uint32_t m1, m2;
+	uint32_t r1, r2;
 
 	x = * (PROUTEENTRY const *) a;
 	y = * (PROUTEENTRY const *) b;
@@ -565,6 +565,7 @@ Dll BOOL APIENTRY Init_IP()
 	// the local host, whereas on Windows you can.
 
 #ifndef MACBPQ
+#ifndef FREEBSD
 	{
 		pcap_if_t * ifs = NULL, * saveifs;
 		char Line[80];
@@ -626,7 +627,7 @@ Dll BOOL APIENTRY Init_IP()
 		}
 				
 #endif
-
+#endif
     //
     // Open PCAP Driver
 
@@ -654,12 +655,15 @@ Dll BOOL APIENTRY Init_IP()
 
 #ifndef WIN32
 #ifndef MACBPQ
+#ifndef FREEBSD
 
 	if (WantTAP)
 		OpenTAP();
 
 #endif
 #endif
+#endif
+
 
 	ReadARP();
 	ReadIPRoutes();
@@ -1632,7 +1636,7 @@ AlreadyThere:
 
 		if (arpptr->TARGETIPADDR == OurIPAddr || arpptr->TARGETIPADDR == EncapAddr)
 		{
-			ULONG Save = arpptr->TARGETIPADDR;
+			uint32_t Save = arpptr->TARGETIPADDR;
  
 			arpptr->ARPOPCODE = 0x0200;
 			memcpy(arpptr->TARGETHWADDR, arpptr->SENDHWADDR ,6);
@@ -2047,7 +2051,7 @@ SendBack:
 
 VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 {
-	ULONG Dest;
+	uint32_t Dest;
 	PARPDATA Arp;
 	PROUTEENTRY Route;
 	BOOL Found;
@@ -2172,7 +2176,7 @@ ForUs:
 
 unsigned short cksum(unsigned short *ip, int len)
 {
-	long sum = 0;  /* assume 32 bit long, 16 bit short */
+	uint32_t sum = 0;  /* assume 32 bit long, 16 bit short */
 	unsigned short copy [2048];
 
 	// if not word aligned copy
@@ -2586,7 +2590,7 @@ VOID SendICMPTimeExceeded(PIPMSG IPptr)
 	return;
 }
 
-VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
+VOID SendIPtoEncap(PIPMSG IPptr, uint32_t Encap)
 {
 	union
 	{
@@ -3045,7 +3049,7 @@ PARPDATA AllocARPEntry()
 	}
  }
 
-PROUTEENTRY FindRoute(ULONG IPADDR)
+PROUTEENTRY FindRoute(uint32_t IPADDR)
 {
 	PROUTEENTRY Route = NULL;
 	int i;
@@ -3062,7 +3066,7 @@ PROUTEENTRY FindRoute(ULONG IPADDR)
 
 
 
-PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found)
+PROUTEENTRY LookupRoute(uint32_t IPADDR, uint32_t Mask, BOOL Add, BOOL * Found)
 {
 	PROUTEENTRY Route = NULL;
 	int i;
@@ -3091,7 +3095,7 @@ PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found)
 		return NULL;
 }
 
-PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found)
+PARPDATA LookupARP(uint32_t IPADDR, BOOL Add, BOOL * Found)
 {
 	PARPDATA Arp = NULL;
 	int i;
@@ -3395,7 +3399,7 @@ static int ProcessLine(char * buf)
 
 		if (p_mask)
 		{
-			ULONG IPMask;
+			uint32_t IPMask;
 			int Bits = atoi(p_mask);
 
 			if (Bits > 32)
@@ -3462,8 +3466,7 @@ static int ProcessLine(char * buf)
 		return TRUE;
 	}
 
-	// ARP 44.131.4.18 GM8BPQ-7 1 D
-
+	// ARP 44.131.4.18 GM8BPQ-7 1 
 	if (_stricmp(ptr,"ARP") == 0)
 	{
 		p_value[strlen(p_value)] = ' ';		// put back together
@@ -3791,7 +3794,7 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	char Mac[7];
 	char AXCall[64];
 	BOOL Stay, Spy;
-	ULONG IPAddr;
+	uint32_t IPAddr;
 	int a,b,c,d,e,f,num;		
 	struct PORTCONTROL * PORT;
 	
@@ -3954,7 +3957,7 @@ int CountDots(char * Addr)
 BOOL ProcessROUTELine(char * buf, BOOL Locked)
 {
 	char * p_ip, * p_type, * p_mask, * p_gateway, * p_port;
-	ULONG IPAddr, IPMask, IPGateway;
+	uint32_t IPAddr, IPMask, IPGateway;
 	char Type =  ' ';
 	int n, Port;	
 	PROUTEENTRY Route;
@@ -4157,7 +4160,7 @@ VOID ReadIPRoutes()
 
 	char Line[256];
 
-	ULONG IPAddr, IPMask = 0xffffffff, IPGateway;
+	uint32_t IPAddr, IPMask = 0xffffffff, IPGateway;
 
 	BOOL Found;
 
@@ -4420,7 +4423,7 @@ VOID RecalcUDPChecksum(PIPMSG IPptr)
 
 #ifndef WIN32
 #ifndef MACBPQ
-
+#ifndef FREEBSD
 #include <net/if.h>
 #include <linux/if_tun.h>
 
@@ -4658,6 +4661,7 @@ void OpenTAP()
 }
 #endif
 #endif
+#endif
 
 extern struct DATAMESSAGE * REPLYBUFFER;
 char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
@@ -4666,7 +4670,7 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 {
 	// Send ICMP Echo Request
 
-	ULONG PingAddr;
+	uint32_t PingAddr;
 	UCHAR Msg[120] = "";
 	PIPMSG IPptr = (PIPMSG)&Msg[40];		// Space for frame header (not used)
 	PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
@@ -4852,7 +4856,7 @@ VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
-int CountBits(unsigned long in)
+int CountBits(uint64_t in)
 {
 	int n = 0;
 	while (in)

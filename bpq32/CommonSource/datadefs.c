@@ -46,7 +46,7 @@ int HFCTEXTLEN = 0;
 
 char LOCATOR[80] = "";			// Locator for Reporting - may be Maidenhead or LAT:LON
 char MAPCOMMENT[250] = "";
-char LOC[7] = "";				// Maidenhead Locator for Reporting
+char LOC[7] = "";				// Must be in shared mem// Maidenhead Locator for Reporting
 char ReportDest[7];
 
 UCHAR BPQDirectory[260] = ".";

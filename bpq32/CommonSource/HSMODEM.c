@@ -116,7 +116,7 @@ int KillTNC(struct TNCINFO * TNC);
 int RestartTNC(struct TNCINFO * TNC);
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
-int (WINAPI FAR *EnumProcessesPtr)();
+extern int (WINAPI FAR *EnumProcessesPtr)();
 
 #include "bpq32.h"
 
@@ -154,7 +154,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 

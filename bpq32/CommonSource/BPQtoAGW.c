@@ -319,63 +319,18 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 
 			// AGW doesn't seem to recover from a blocked write. For now just reset
 			
-//			if (bytes == SOCKET_ERROR)
-//			{
-				winerr=WSAGetLastError();
+			winerr = WSAGetLastError();
 				
-				i=sprintf(ErrMsg, "AGW Write Failed for port %d - error code = %d\n", port, winerr);
-				WritetoConsole(ErrMsg);
+			i = sprintf(ErrMsg, "AGW Write Failed for port %d - error code = %d\n", port, winerr);
+			WritetoConsole(ErrMsg);
 					
-	
-//				if (winerr != WSAEWOULDBLOCK)
-//				{
-				
-					closesocket(AGWSock[MasterPort[port]]);
-					
-					CONNECTED[MasterPort[port]]=FALSE;
-
-					return (0);
-//				}
-//				else
-//				{
-//					bytes=0;		// resent whole packet
-//				}
-
-//			}
-
-			// Partial Send or WSAEWOULDBLOCK. Save data, and send once busy clears
-
-			
-			// Get a buffer
-						
-//			buffptr=GetBuff();
-
-//			if (buffptr == 0)
-//			{
-				// No buffers, so can only break connection and try again
-
-//				closesocket(AGWSock[MasterPort[port]]);
-					
-//				CONNECTED[MasterPort[port]]=FALSE;
-
-//				return (0);
-//			}
-	
-//			buffptr[1]=txlen-bytes;			// Bytes still to send
-
-//			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
-
-//			C_Q_ADD(&BPQtoAGW_Q[MasterPort[port]],buffptr);
-	
-//			return (0);
+			closesocket(AGWSock[MasterPort[port]]);		
+			CONNECTED[MasterPort[port]] = FALSE;
+			return (0);
 		}
-
-
 		return (0);
 
 	
-
-
 	case 3:				// CHECK IF OK TO SEND
 
 		return (0);		// OK
@@ -516,7 +471,6 @@ static int ProcessLine(char * buf, int Port, BOOL CheckPort)
 	char * ptr,* p_user,* p_password;
 	char * p_ipad;
 	char * p_udpport;
-//	unsigned long ipad;
 	unsigned short AGWport;
 	int BPQport;
 	int len=510;

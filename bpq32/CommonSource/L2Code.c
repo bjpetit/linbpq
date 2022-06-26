@@ -101,10 +101,11 @@ BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg);
 VOID L2SENDINVALIDCTRL(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL);
 UCHAR * SETUPADDRESSES(struct _LINKTABLE * LINK, PMESSAGE Msg);
 VOID ProcessXIDCommand(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL, UCHAR MSGFLAG);
-int CountBits(unsigned long in);
+int CountBits(uint32_t in);
 void AttachKISSHF(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 void DetachKISSHF(struct PORTCONTROL * PORT);
 void KISSHFConnected(struct PORTCONTROL * PORT, struct _LINKTABLE * LINK);
+void WriteConnectLog(char * fromcall, char * tocall, UCHAR * Mode);
 
 extern int REALTIMETICKS;
 
@@ -131,7 +132,9 @@ extern UCHAR * ALIASPTR;
 UCHAR QSTCALL[7] = {'Q'+'Q','S'+'S','T'+'T',0x40,0x40,0x40,0xe0};	// QST IN AX25
 UCHAR NODECALL[7] = {0x9C, 0x9E, 0x88, 0x8A, 0xA6, 0x40, 0xE0};		// 'NODES' IN AX25 FORMAT
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+
+extern BOOL LogAllConnects;
 
 APPLCALLS * APPL;
 
@@ -1161,8 +1164,17 @@ VOID L2SABM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 		if (PORT->TNC && PORT->TNC->Hardware == H_KISSHF)
 			AttachKISSHF(PORT, Buffer);
 
-		L2SENDUA(PORT, Buffer, ADJBUFFER);
+
+		if (LogAllConnects)
+		{		
+			char toCall[12], fromCall[12];
+			toCall[ConvFromAX25(ADJBUFFER->DEST, toCall)] = 0;
+			fromCall[ConvFromAX25(ADJBUFFER->ORIGIN, fromCall)] = 0;
+			WriteConnectLog(fromCall, toCall, "AX.25");
+		}
 		
+		L2SENDUA(PORT, Buffer, ADJBUFFER);
+
 		if (NO_CTEXT == 1)
 			return;
 
@@ -1269,6 +1281,14 @@ VOID L2SABM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 		if (PORT->TNC && PORT->TNC->Hardware == H_KISSHF)
 			AttachKISSHF(PORT, Buffer);
 
+		if (LogAllConnects)
+		{		
+			char toCall[12], fromCall[12];
+			toCall[ConvFromAX25(ADJBUFFER->DEST, toCall)] = 0;
+			fromCall[ConvFromAX25(ADJBUFFER->ORIGIN, fromCall)] = 0;
+			WriteConnectLog(fromCall, toCall, "AX.25");
+		}
+
 		L2SENDUA(PORT, Buffer, ADJBUFFER);
 
 		Msg = GetBuff();
@@ -1302,6 +1322,13 @@ VOID L2SABM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 	if (PORT->TNC && PORT->TNC->Hardware == H_KISSHF)
 		AttachKISSHF(PORT, Buffer);
 
+	if (LogAllConnects)
+	{		
+		char toCall[12], fromCall[12];
+		toCall[ConvFromAX25(ADJBUFFER->DEST, toCall)] = 0;
+		fromCall[ConvFromAX25(ADJBUFFER->ORIGIN, fromCall)] = 0;
+		WriteConnectLog(fromCall, toCall, "AX.25");
+	}
 	L2SENDUA(PORT, Buffer, ADJBUFFER);
 }
 

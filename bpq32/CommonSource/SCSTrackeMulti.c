@@ -49,7 +49,7 @@ extern char * PortConfig[33];
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
@@ -118,7 +118,7 @@ ConfigLine:
 //			TNC->UseAPPLCalls = TRUE;
 		}
 		else if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
-			TNC->WRITELOG = atoi(&buf[8]);	
+			TNC->WRITELOG = atoi(&buf[9]);	
 		else
 		if (_memicmp(buf, "DEFAULT ROBUST", 14) == 0)
 		{

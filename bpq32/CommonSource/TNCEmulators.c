@@ -59,7 +59,7 @@ VOID DOMONITORING(int NeedTrace);
 int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp);
 time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
 BOOL TfPut(struct TNCDATA * TNC, UCHAR character);
-int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, unsigned long long Mask, BOOL APRS, BOOL MCTL);
 int DATAPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 int STATUSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 int DEDPROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC);
@@ -231,11 +231,11 @@ typedef struct _SERIAL_STATUS {
 #ifndef WIN32
 //	#include <pty.h>
 
-extern int posix_openpt (int __oflag) __wur;
-extern int grantpt (int __fd) __THROW;
-extern int unlockpt (int __fd) __THROW;
-extern char *ptsname (int __fd) __THROW __wur;
-extern int ptsname_r (int __fd, char *__buf, size_t __buflen) __THROW __nonnull ((2));
+extern int posix_openpt (int __oflag);
+extern int grantpt (int __fd);
+extern int unlockpt (int __fd);
+extern char *ptsname (int __fd);
+extern int ptsname_r (int __fd, char *__buf, size_t __buflen);
 extern int getpt (void);
 
 HANDLE LinuxOpenPTY(char * Name)
@@ -259,10 +259,24 @@ HANDLE LinuxOpenPTY(char * Name)
 	 
 	hDevice = posix_openpt(O_RDWR|O_NOCTTY);
 
-	if (hDevice == -1 || grantpt (hDevice) == -1 || unlockpt (hDevice) == -1 ||
-		 ptsname_r(hDevice, slavedevice, 80) != 0)
+	if (hDevice == -1)
 	{
-		perror("Create PTY pair failed");
+		perror("posix_openpt Create PTY pair failed");
+		return -1;
+	} 
+	if (grantpt (hDevice) == -1)
+	{
+		perror("grantpt Create PTY pair failed");
+		return -1;
+	} 
+	if (unlockpt (hDevice) == -1)
+	{
+		perror("unlockpt Create PTY pair failed");
+		return -1;
+	} 
+	if (ptsname_r(hDevice, slavedevice, 80) != 0)
+	{
+		perror("ptsname_r Create PTY pair failed");
 		return -1;
 	} 
 
@@ -2967,16 +2981,18 @@ VOID CONNECTTONODE(struct TNCDATA * TNC)
 {
 	char AXCALL[7];
 	struct TNC2StreamInfo * TNCStream = TNC->TNC2Stream[TNC->TXStream];
+	int SaveAuthProg = AuthorisedProgram;
+	
+	AuthorisedProgram = 1;
+	SessionControl(TNCStream->BPQPort, 1, TNC->APPLICATION);
+	AuthorisedProgram = SaveAuthProg;
 	
 	ConvToAX25(TNC->MYCALL, AXCALL);
-		
-	SessionControl(TNCStream->BPQPort, 1, TNC->APPLICATION);
 	ChangeSessionCallsign(TNCStream->BPQPort, AXCALL);
 
 	// Set default Paclen
 
 	TNCStream->TPACLEN = TNC->TPACLEN;
-
 }
 	
 
@@ -3302,6 +3318,7 @@ int DEDPROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC)
 	int State, Change, Count;
 	TRANSPORTENTRY * L4 = NULL;
 	unsigned char * MONCURSOR=0;
+	int SaveAuthProg = 0;
 
 	TXBUFFERPTR = &TNC->DEDTXBUFFER[0];
 
@@ -3581,7 +3598,10 @@ REALCALL:
 
 	Debugprintf("CCMD %d %s", TNC->MSGCHANNEL, TXBUFFERPTR);
 
+	SaveAuthProg = AuthorisedProgram;
+	AuthorisedProgram =1;
 	Connect(Channel->BPQStream);
+	AuthorisedProgram = SaveAuthProg;
 
 //	CONNECT WILL BE REPORTED VIA NORMAL STATUS CHANGE
 
@@ -5189,7 +5209,12 @@ VOID ProcessKNormCommand(struct TNCDATA * conn, UCHAR * rxbuffer)
 
 	if (_stricmp(Command, "K") == 0)
 	{
+		int SaveAuthProg = AuthorisedProgram;
+	
+		AuthorisedProgram = 1;
 		SessionControl(conn->Channels[1]->BPQStream, 1, 0);
+		AuthorisedProgram = SaveAuthProg;
+
 		return;
 	}
 

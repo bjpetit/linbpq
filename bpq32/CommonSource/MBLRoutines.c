@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 // MBL-Style Forwarding Routines
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {
@@ -50,7 +50,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 	if (Buffer[0] == 6 && Buffer[1] == 5)
 	{
-		// ?? Sally send there after a failed tranfer
+		// ?? Sally send these after a failed tranfer
 
 		memmove(Buffer, &Buffer[2], len);
 		len-=2;
@@ -307,8 +307,15 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
 
 			Msg = conn->FwdMsg;
-		
-			nodeprintfEx(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+
+			if (conn->BBSFlags & MFJMODE)
+			{
+				// No @ BBS to MFJ TNC
+
+				nodeprintfEx(conn, "S%c %s < %s $%s\r", Msg->type, Msg->to, Msg->from, Msg->bid);
+			}
+			else
+				nodeprintfEx(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
 					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
 					Msg->from, Msg->bid);
 
@@ -325,7 +332,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 	if (Buffer[len-2] == '>')
 	{
-		// If we have just sent a nessage, Flag it as sent
+		// If we have just sent a message, Flag it as sent
 
 		if (conn->FBBMsgsSent)
 		{

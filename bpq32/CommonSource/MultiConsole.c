@@ -2,7 +2,7 @@
 //
 //	Console Window Module
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 extern BOOL WINE;
 

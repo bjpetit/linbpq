@@ -219,7 +219,10 @@ struct UserRec
 #define id_send   'S'    // Data for one user.
 #define id_topic  'T'    // User changes topic.
 #define id_user   'I'    // User login information.
-#define id_keepalive   'K'    // Node-Node Keepalive.
+#define id_keepalive 'K' // Node-Node Keepalive.
+#define id_poll	  'P'	 //Link Validation Poll
+#define id_pollresp 'R'	 //Link Validation Poll Response
+
 
 #define o_all    1  // To all users.
 #define o_one    2  // To a specific user.
@@ -260,8 +263,20 @@ typedef struct link_t
 	struct link_t *next;
 	char *alias;
 	char *call;
-	int  flags; // See circuit flags.
-	int delay;	// Limit connects when failing
+	int  flags;				// See circuit flags.
+	int delay;				// Limit connects when failing
+	char ** ConnectScript;	// Main Connect Script
+	int ScriptIndex;		// Next line in script
+	int Lines;				// Lines in Script
+	BOOL MoreLines;			// Set until script is finsihed
+	int scriptRunning;
+	int RTLSent;
+	time_t lastMsgSent;		// So we can send poll if no traffic
+	time_t lastMsgReceived;	// So can send poll if idle too long
+	time_t timePollSent;	// Poll response timer
+	time_t supportsPolls;   // So we know other end supports polls
+
+	int RTT;				// Last Poll response time
 
 } LINK;
 
@@ -322,11 +337,12 @@ typedef struct cn_t
 
 // Bits for circuit flags and link flags.
 
-#define p_nil     0x00    // Circuit is being shut down.
-#define p_user    0x01    // User connected.
-#define p_linked  0x02    // Active link with another RT.
-#define p_linkini 0x04    // Outgoing link setup with another RT.
-#define p_linkwait 0x08   // Incoming link setup - waiting for *RTL
+#define p_nil        0x00    // Circuit is being shut down.
+#define p_user       0x01    // User connected.
+#define p_linked     0x02    // Active link with another RT.
+#define p_linkini    0x04    // Outgoing link setup with another RT.
+#define p_linkwait   0x08    // Incoming link setup - waiting for *RTL
+#define p_linkfailed 0x10    // Outward attempt failed
 
 
 // Users. Could be connected at any node.
@@ -627,7 +643,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, i
 VOID SendPrompt(ChatCIRCUIT * conn, struct UserInfo * user);
 int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len);
 VOID SendUnbuffered(int stream, char * msg, int len);
-void WriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
+void ChatWriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 
 void ChatFlush(ChatCIRCUIT * conn);
 VOID ChatClearQueue(ChatCIRCUIT * conn);

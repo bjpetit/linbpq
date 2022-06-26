@@ -378,7 +378,7 @@ extern char PACTORCALL[];
 extern UCHAR MCOM;
 extern UCHAR MUIONLY;
 extern UCHAR MTX;
-extern ULONG MMASK;
+extern unsigned long long MMASK;
 
 extern UCHAR NODECALL[];			//  NODES in ax.25
 

@@ -52,10 +52,10 @@ typedef struct _AXARP
 	USHORT	ARPOPCODE;       //      200H            ; REQUEST/REPLY
 
 	UCHAR	SENDHWADDR[7];
-	ULONG	SENDIPADDR;
+	uint32_t	SENDIPADDR;
 
 	UCHAR	TARGETHWADDR[7];
-	ULONG	TARGETIPADDR;
+	uint32_t	TARGETIPADDR;
 
 } AXARP, *PAXARP;
 
@@ -73,10 +73,10 @@ typedef struct _ETHARP
 	USHORT	ARPOPCODE;       //      200H            ; REQUEST/REPLY
 
 	UCHAR	SENDHWADDR[6];
-	ULONG	SENDIPADDR;
+	uint32_t	SENDIPADDR;
 
 	UCHAR	TARGETHWADDR[6];
-	ULONG	TARGETIPADDR;
+	uint32_t	TARGETIPADDR;
 
 } ETHARP, *PETHARP;
 
@@ -91,9 +91,9 @@ typedef struct _RIP2ENTRY
 {
 	USHORT	AddrFamily;
 	USHORT	RouteTAG;
-	ULONG	IPAddress;
-	ULONG	Mask;
-	ULONG	NextHop;
+	uint32_t IPAddress;
+	uint32_t Mask;
+	uint32_t NextHop;
 	// Metric Defined as 32 bits, but sent in network order and limited to 16, so just use last byte
 	UCHAR	Pad1;
 	UCHAR	Pad2;
@@ -111,10 +111,10 @@ typedef struct _ARPDATA
 {
 //       KEEP IP ADDR AT FRONT
 
-	ULONG	IPADDR;
+	uint32_t IPADDR;
 	UCHAR	HWADDR[64];				// ETHERNET/ax.25 ADDR, maybe with digis
 	BOOL	ARPVALID;				// NONZERO IF ADDRESS HAS BEEN RESOLVED
-	ULONG	ARPTIMER;
+	uint32_t ARPTIMER;
 	UCHAR	ARPINTERFACE;			// Port to use. 0= NETROM, 0xff Ethernet
 	UCHAR	ARPTYPE;				// NETROM/VC/DG/ETH
 	BOOL	LOCKED;					// Locked entry from config file
@@ -125,10 +125,10 @@ typedef struct _ARPDATA
 
 typedef struct _ROUTEENTRY
 {
-	ULONG	NETWORK;	// NETWORK 
-	ULONG	SUBNET;		// SUBNET MASK
-	ULONG	GATEWAY;	// GATEWAY IP ADDRESS
-	ULONG	Encap;		// Encap if a Tunnelled 44 address
+	uint32_t NETWORK;	// NETWORK 
+	uint32_t SUBNET;		// SUBNET MASK
+	uint32_t GATEWAY;	// GATEWAY IP ADDRESS
+	uint32_t Encap;		// Encap if a Tunnelled 44 address
 	int		FRAMECOUNT; // FRAMES SENT TO THIS NETWORK
 	UCHAR	TYPE;		// TYPE (NETROM/VC/DG/ETH)
 	UCHAR	METRIC;		// FOR RIP 
@@ -204,7 +204,7 @@ BOOL RouteIPMsg(PIPMSG IPptr);
 VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR);
 VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode);
 PARPDATA AllocARPEntry();
-PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found);
+PARPDATA LookupARP(uint32_t IPADDR, BOOL Add, BOOL * Found);
 static BOOL ReadConfigFile();
 static int ProcessLine(char * buf);
 VOID DoARPTimer();

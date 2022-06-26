@@ -67,7 +67,7 @@ extern char Position[81];
 extern char PopupText[251];
 extern int PopupMode;
 
-#include "HTTPConnectionInfo.h"
+#include "httpconnectioninfo.h"
 
 static struct HTTPConnectionInfo * SessionList;	// active bbs config sessions
 
@@ -299,7 +299,7 @@ VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Rep
 	char * input;
 	struct UserInfo * USER = NULL;
 	char Temp[80];
-	char Nodes[1000] = "";
+	char Nodes[10000] = "";
 	char * ptr1, * ptr2;
 
 	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -323,6 +323,10 @@ VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Rep
 		ptr1 = Nodes;
 		ptr2 = OtherNodesList;
 
+		// Now we just save with crlf in place
+
+		strcpy(OtherNodesList, Nodes);
+	/*
 		while (*ptr1)
 		{
 			if ((*ptr1) == 13)
@@ -333,9 +337,8 @@ VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Rep
 			else
 				*(ptr2++) = *(ptr1++);
 		}
-
 		*ptr2 = 0;
-
+*/
 		GetParam(input, "Posn=", Position);
 		GetParam(input, "MapText=", PopupText);
 		GetParam(input, "welcome=", ChatWelcomeMsg);
@@ -372,12 +375,12 @@ VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Rep
 	 
 			// Set up other nodes list. rtlink messes with the string so pass copy
 	
-			ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
+			ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), "\r\n", &Context);
 
 			while (ptr1)
 			{
 				rtlink(ptr1);			
-				ptr1 = strtok_s(NULL, " ,\r", &Context);
+				ptr1 = strtok_s(NULL, "\r\n", &Context);
 			}
 
 			free(ptr2);
@@ -427,7 +430,7 @@ VOID ProcessChatDisUser(struct HTTPConnectionInfo * Session, char * MsgPtr, char
 VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key)
 {
 	int Len;
-	char Nodes[1000];
+	char Nodes[10000];
 	char Text[1000];
 	char * ptr1, * ptr2;
 
@@ -436,19 +439,28 @@ VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key)
 	ptr1 = OtherNodesList;
 	ptr2 = Nodes;
 
-	while (*ptr1)
+	if (strchr(OtherNodesList, 13))	// New format maybe with connect scripts
 	{
-		if ((*ptr1) == ' ')
-		{
-			*(ptr2++) = 13;
-			*(ptr2++) = 10;
-			ptr1++ ;
-		}
-		else
-			*(ptr2++) = *(ptr1++);
-	}
+		// OtherNodesList alresdy has crlf
 
-	*ptr2 = 0;
+		strcpy(Nodes, OtherNodesList);
+	}
+	else
+	{
+		while (*ptr1)
+		{
+			if ((*ptr1) == ' ')
+			{
+				*(ptr2++) = 13;
+				*(ptr2++) = 10;
+				ptr1++ ;
+			}
+			else
+				*(ptr2++) = *(ptr1++);
+		}
+
+		*ptr2 = 0;
+	}
 
 	// Replace " in Text with &quot; 
 		
@@ -541,9 +553,14 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 	for (link = link_hd; link; link = link->next)
 	{
 		if (link->flags & p_linked )
-			Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Open</td></tr>", link->call);
+			if (link->supportsPolls)
+				Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Open &nbsp RTT %d</td></tr>", link->call, link->RTT);
+			else
+				Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Open</td></tr>", link->call);
 		else if (link->flags & (p_linked | p_linkini))
 			Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Connecting</td></tr>", link->call);
+		else if (link->flags & p_linkfailed)
+			Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Connect failed</td></tr>", link->call);
 		else
 			Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Idle</td></tr>", link->call);
 	}

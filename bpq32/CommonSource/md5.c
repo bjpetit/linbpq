@@ -77,7 +77,7 @@ static cvs_uint32
 getu32 (addr)
      const unsigned char *addr;
 {
-	return (((((unsigned long)addr[3] << 8) | addr[2]) << 8)
+	return (((((uint32_t)addr[3] << 8) | addr[2]) << 8)
 		| addr[1]) << 8 | addr[0];
 }
 

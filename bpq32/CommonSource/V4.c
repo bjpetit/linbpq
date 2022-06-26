@@ -72,7 +72,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
@@ -716,57 +716,15 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			// WINMOR doesn't seem to recover from a blocked write. For now just reset
 			
-//			if (bytes == SOCKET_ERROR)
-//			{
-				winerr=WSAGetLastError();
+			winerr = WSAGetLastError();
 				
-				i=sprintf(ErrMsg, "V4 Write Failed for port %d - error code = %d\n", port, winerr);
-				WritetoConsole(ErrMsg);
-					
-	
-//				if (winerr != WSAEWOULDBLOCK)
-//				{
-				closesocket(TNC->TCPSock);
-					
-					TNC->CONNECTED = FALSE;
+			sprintf(ErrMsg, "V4 Write Failed for port %d - error code = %d\n", port, winerr);
+			WritetoConsole(ErrMsg);
+			closesocket(TNC->TCPSock);	
+			TNC->CONNECTED = FALSE;
 
-					return (0);
-//				}
-//				else
-//				{
-//					bytes=0;		// resent whole packet
-//				}
-
-//			}
-
-			// Partial Send or WSAEWOULDBLOCK. Save data, and send once busy clears
-
-			
-			// Get a buffer
-						
-//			buffptr=GetBuff();
-
-//			if (buffptr == 0)
-//			{
-				// No buffers, so can only break connection and try again
-
-//				closesocket(TCPSock[MasterPort[port]]);
-					
-//				CONNECTED[MasterPort[port]]=FALSE;
-
-//				return (0);
-//			}
-	
-//			buffptr->Len=txlen-bytes;			// Bytes still to send
-
-//			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
-
-//			C_Q_ADD(&BPQtoWINMOR_Q[MasterPort[port]],buffptr);
-	
-//			return (0);
+			return (0);
 		}
-
-
 		return (0);
 
 	case 3:	

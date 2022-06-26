@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 //	Utility Routines
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 #ifdef WIN32
 #include "Winspool.h"
 #else
@@ -45,6 +45,8 @@ BOOL OpenMon;
 
 extern struct ConsoleInfo BBSConsole;
 
+extern char LOC[7];
+
 //#define BBSIDLETIME 120
 //#define USERIDLETIME 300
 
@@ -58,6 +60,9 @@ UCHAR * GetLogDirectory();
 DllExport int APIENTRY SessionStateNoAck(int stream, int * state);
 #else
 __declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
+typedef char * (WINAPI FAR *FARPROCZ)();
+FARPROCZ pGetLOC;
+
 #endif
 
 Dll BOOL APIENTRY APISendAPRSMessage(char * Text, char * ToCall);
@@ -197,6 +202,26 @@ BOOL UserCantKillT = FALSE;
 
 extern BPQVECSTRUC BPQHOSTVECTOR[BPQHOSTSTREAMS + 5];
 
+#ifdef LINBPQ
+extern BPQVECSTRUC ** BPQHOSTVECPTR;
+extern char WL2KModes [54][18];
+#else
+__declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
+
+
+char WL2KModes [54][18] = {
+	"Packet 1200", "Packet 2400", "Packet 4800", "Packet 9600", "Packet 19200", "Packet 38400", "High Speed Packet", "", "", "", "",
+	"", "Pactor 1", "", "", "Pactor 2", "", "Pactor 3", "", "", "Pactor 4", // 10 - 20
+	"Winmor 500", "Winmor 1600", "", "", "", "", "", "", "",				// 21 - 29
+	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
+	"ARDOP 200", "ARDOP 500", "ARDOP 1000", "ARDOP 2000", "ARDOP 2000 FM", "", "", "", "", "",	// 40 - 49
+	"VARA", "VARA FM", "VARA FM WIDE", "VARA 500"};
+#endif
+
+
+
+
+
 FILE * LogHandle[4] = {NULL, NULL, NULL, NULL};
 
 time_t LastLogTime[4] = {0, 0, 0, 0};
@@ -204,6 +229,7 @@ time_t LastLogTime[4] = {0, 0, 0, 0};
 char FilesNames[4][100] = {"", "", "", ""};
 
 char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
+
 
 BOOL OpenLogfile(int Flags)
 {
@@ -235,6 +261,10 @@ BOOL OpenLogfile(int Flags)
 	return (LogHandle[Flags] != NULL);
 }
 
+typedef  int (WINAPI FAR *FARPROCX)();
+
+extern FARPROCX pDllBPQTRACE;
+
 struct SEM LogSEM = {0, 0};
 
 void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
@@ -245,10 +275,36 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 	time_t LT;
 //	struct _EXCEPTION_POINTERS exinfo;
 
+	// Write to Node BPQTRACE system
+
+	if ((Flags == LOG_BBS || Flags == LOG_DEBUG_X) && MsgLen < 250)
+	{
+		MESSAGE Monframe;
+		memset(&Monframe, 0, sizeof(Monframe));
+
+		Monframe.PORT = 33;	
+		Monframe.LENGTH = 12 + MsgLen;
+		Monframe.DEST[0] = 1;			// Plain Text Monitor
+
+		memcpy(&Monframe.DEST[1], Msg, MsgLen);
+		Monframe.DEST[1 + MsgLen] = 0;
+
+		time(&Monframe.Timestamp);
+#ifdef LINBPQ
+		GetSemaphore(&Semaphore, 88);
+		BPQTRACE(&Monframe, FALSE);
+		FreeSemaphore(&Semaphore);
+#else
+		if (pDllBPQTRACE)
+			pDllBPQTRACE(&Monframe, FALSE);
+#endif
+	}
 #ifndef LINBPQ
 	__try
 	{
 #endif
+
+
 
 #ifndef LINBPQ
 
@@ -298,7 +354,6 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 			WritetoMonitorWindow(Msg, MsgLen);
 			WritetoMonitorWindow(CRLF , 1);
 		}
-
 	}
 #endif
 
@@ -461,7 +516,7 @@ BIDRec * AllocateBIDRecord()
 	
 	GetSemaphore(&AllocSemaphore, 0);
 
-	BIDRecPtr=realloc(BIDRecPtr,(++NumberofBIDs+1) * sizeof(void *));
+	BIDRecPtr = realloc(BIDRecPtr,(++NumberofBIDs+1) * sizeof(void *));
 	BIDRecPtr[NumberofBIDs] = BID;
 
 	FreeSemaphore(&AllocSemaphore);
@@ -1618,7 +1673,6 @@ VOID CopyBIDDatabase()
 
 VOID SaveBIDDatabase()
 {
-
 	FILE * Handle;
 	size_t WriteLen;
 	int i;
@@ -1679,7 +1733,7 @@ VOID RemoveTempBIDS(CIRCUIT * conn)
 	else
 	{
 		BIDRec * ptr = NULL;
-		BIDRec ** NewTempBIDRecPtr = zalloc((NumberofTempBIDs+1) * 4);
+		BIDRec ** NewTempBIDRecPtr = zalloc((NumberofTempBIDs+1) * sizeof(void *));
 		int i = 0, n;
 
 		GetSemaphore(&AllocSemaphore, 0);
@@ -2039,7 +2093,8 @@ BOOL CheckValidCall(char * From)
 	if (DontCheckFromCall)
 		return TRUE;
 	
-	if (strcmp(From, "SYSOP") == 0 || strcmp(From, "SYSTEM") == 0 || strcmp(From, "IMPORT") == 0 || strcmp(From, "SMTP:") == 0)
+	if (strcmp(From, "SYSOP") == 0 || strcmp(From, "SYSTEM") == 0 || 
+		strcmp(From, "IMPORT") == 0 || strcmp(From, "SMTP:") == 0 || strcmp(From, "RMS:") == 0)
 		return TRUE;
 
 	for (i = 1; i < strlen(From); i++)		// skip first which may also be digit
@@ -6022,32 +6077,17 @@ nextline:
 			HoldReason = "Message may be looping";
 
 		}
+	}
 
-		if (strcmp(Msg->to, "WP") == 0)
-		{
-			// If Reject WP Bulls is set, Kill message here.
-			// It should only get here if B2 - otherwise it should be
-			// rejected earlier
+	if (strcmp(Msg->to, "WP") == 0)
+	{
+		// If Reject WP Bulls is set, Kill message here.
+		// It should only get here if B2 - otherwise it should be
+		// rejected earlier
 
-			if (Msg->type == 'B' && FilterWPBulls)
-				Msg->status = 'K';
+		if (Msg->type == 'B' && FilterWPBulls)
+			Msg->status = 'K';
 
-			if (Msg->status == 'N')
-			{
-				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
-
-				if (Msg->type == 'P')			// Kill any processed private WP messages.
-				{
-					char VIA[80];
-
-					strcpy(VIA, Msg->via);
-					strlop(VIA, '.');
-
-					if (strcmp(VIA, BBSName) == 0)
-						Msg->status = 'K';
-				}
-			}
-		}
 	}
 
 	conn->MailBuffer[Msg->length] = 0;
@@ -6070,6 +6110,27 @@ nextline:
 		HoldReason = "Probable Invalid From Call";
 	}
 
+	// Process any WP Messages
+	
+	if (strcmp(Msg->to, "WP") == 0)
+	{	
+		if (Msg->status == 'N')
+		{
+			ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
+
+			if (Msg->type == 'P')			// Kill any processed private WP messages.
+			{
+				char VIA[80];
+
+				strcpy(VIA, Msg->via);
+				strlop(VIA, '.');
+
+				if (strcmp(VIA, BBSName) == 0)
+					Msg->status = 'K';
+			}
+		}
+	}
+	
 	CreateMessageFile(conn, Msg);
 
 	BIDRec = AllocateBIDRecord();
@@ -6374,7 +6435,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 			conn->PacLinkCalls = zalloc(30);
 
 			ptr1 = (char *)conn->PacLinkCalls;
-			ptr1 += 10;
+			ptr1 += 16;		// Must be room for a null pointer on end (64 bit bug)
 			strcpy(ptr1, user->Call);
 
 			conn->PacLinkCalls[0] = ptr1;
@@ -8118,11 +8179,11 @@ InBand:
 				goto CheckForEnd;
 			}
 
-			if (_memicmp(Cmd, "SendWL2KPM", 10) == 0)
+			if (_memicmp(Cmd, "SendWL2KPM", 10) == 0|| _memicmp(Cmd, "SendWL2KFW", 10) == 0)
 			{
-				// Remote Node sends Connected in CTEXT - we need to swallow it
+				// Send ;FW: command
 
-				conn->SendWL2KPM = TRUE;
+				conn->SendWL2KFW = TRUE;
 				goto CheckForEnd;
 			}
 
@@ -8483,7 +8544,7 @@ CheckForSID:
 			return TRUE;
 		}
 
-		if (strcmp(conn->Callsign, "RMS") == 0 || conn->SendWL2KPM)
+		if (strcmp(conn->Callsign, "RMS") == 0 || conn->SendWL2KFW)
 		{
 			// Build a ;FW: line with all calls with PollRMS Set
 
@@ -8585,9 +8646,8 @@ CheckForSID:
 
 			user = LookupCall(BBSName);
 
-			if (user)
-				nodeprintf(conn, "; WL2K DE %s (%s)\r", BBSName, user->ZIP);
-
+			if (LOC && LOC[0])
+				nodeprintf(conn, "; WL2K DE %s (%s)\r", BBSName, LOC);
 		}
 
 		if (conn->BPQBBS && conn->MSGTYPES[0])
@@ -8663,6 +8723,11 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 	{
 		conn->WL2K = TRUE;
 		conn->BBSFlags |= WINLINKRO;
+	}
+
+	if (strstr(SID, "MFJ-"))
+	{
+		conn->BBSFlags |= MFJMODE;
 	}
 
 	if (_memicmp(SID, "OpenBCM", 7) == 0)
@@ -9148,7 +9213,7 @@ VOID SaveMultiStringValue(config_setting_t * group, char * name, char ** values)
 {
 	config_setting_t *setting;
 	char ** Calls;
-	char Multi[10000];
+	char Multi[100000];
 	char * ptr = &Multi[1];
 
 	*ptr = 0;
@@ -9726,7 +9791,11 @@ BOOL GetConfig(char * ConfigName)
 		return(EXIT_FAILURE);
 	}
 
+#ifdef FREEBSD
+	config_set_option(&cfg, CONFIG_OPTION_AUTOCONVERT, 1);
+#else
 	config_set_auto_convert (&cfg, 1);
+#endif
 
 	group = config_lookup (&cfg, "main");
 
@@ -10007,23 +10076,6 @@ BOOL GetConfig(char * ConfigName)
 
 	return EXIT_SUCCESS;
 }
-
-#ifdef LINBPQ
-extern BPQVECSTRUC ** BPQHOSTVECPTR;
-extern char WL2KModes [54][18];
-#else
-__declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
-
-char WL2KModes [54][18] = {
-	"Packet 1200", "Packet 2400", "Packet 4800", "Packet 9600", "Packet 19200", "Packet 38400", "High Speed Packet", "", "", "", "",
-	"", "Pactor 1", "", "", "Pactor 2", "", "Pactor 3", "", "", "Pactor 4", // 10 - 20
-	"Winmor 500", "Winmor 1600", "", "", "", "", "", "", "",				// 21 - 29
-	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
-	"ARDOP 200", "ARDOP 500", "ARDOP 1000", "ARDOP 2000", "ARDOP 2000 FM", "", "", "", "", "",	// 40 - 49
-	"VARA", "VARA FM", "VARA FM WIDE", "VARA 500"};
-#endif
-
-
 
 
 int Connected(int Stream)
@@ -10585,27 +10637,48 @@ int DoReceivedData(int Stream)
 					continue;
 				}
 
+				// This looks for CR, CRLF, LF or CR/Null and removes any LF or NULL,
+				// but this relies on both arriving in same packet.
+				// Need to check for LF and start of packet and ignore it
+				// But what if client is only using LF??
+				// (WLE sends SID with CRLF, other packets with CR only)
+
+				// We don't get here on the data part of a binary transfer, so
+				// don't need to worry about messing up binary data.
+
 				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
 				ptr2 = memchr(conn->InputBuffer, '\n', conn->InputLen);
+
+				if (ptr)
+					conn->usingCR = 1;
 				
 				if ((ptr2 && ptr2 < ptr) || ptr == 0)		// LF before CR, or no CR
 					ptr = ptr2;								// Use LF
 
-				if (ptr)				// CR ot LF in buffer
+				if (ptr)				// CR or LF in buffer
 				{
+					conn->lastLineEnd = *(ptr);
+
 					*(ptr) = '\r';		// In case was LF
 				
 					ptr2 = &conn->InputBuffer[conn->InputLen];
 					
 					if (++ptr == ptr2)
 					{
-						// Usual Case - single meg in buffer
+						// Usual Case - single msg in buffer
 
+						// if Length is 1 and Term is LF and normal line end is CR
+						// this is from a split CRLF - Ignore it
+
+						if (conn->InputLen == 1 && conn->lastLineEnd == 0x0a && conn->usingCR)
+							Debugprintf("BPQMail split Line End Detected");
+						else
+						{
 							if (conn->BBSFlags & RunningConnectScript)
 								ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
 							else
 								ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
-					
+						}
 						conn->InputLen=0;
 					}
 					else
@@ -10618,12 +10691,18 @@ int DoReceivedData(int Stream)
 
 						memcpy(Buffer, conn->InputBuffer, MsgLen);
 					
+						// if Length is 1 and Term is LF and normal line end is CR
+						// this is from a split CRLF - Ignore it
+
+						if (MsgLen == 1 && conn->lastLineEnd == 0x0a && conn->usingCR)
+							Debugprintf("BPQMail split Line End Detected");
+						else
+						{
 							if (conn->BBSFlags & RunningConnectScript)
 								ProcessBBSConnectScript(conn, Buffer, (int)MsgLen);
 							else
 								ProcessLine(conn, user, Buffer, (int)MsgLen);
-						
-
+						}						
 						free(Buffer);
 
 						if (*ptr == 0 || *ptr == '\n')
@@ -11248,6 +11327,21 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	}
 
 	WriteLogLine(conn, '<', Buffer, len-1, LOG_BBS);
+
+	// A few messages should be trapped here and result in an immediate disconnect, whatever mode I think the session is in (it could be wrong)
+
+	// *** Protocol Error
+	// Already Connected
+	// Invalid Command
+
+	if (_memicmp(Buffer, "Already Connected", 17) == 0 ||
+		_memicmp(Buffer, "Invalid Command", 15) == 0 ||
+		_memicmp(Buffer, "*** Protocol Error", 18) == 0)
+	{
+		conn->BBSFlags |= DISCONNECTING;
+		Disconnect(conn->BPQStream);
+		return;
+	}
 
 	if (conn->BBSFlags & FBBForwarding)
 	{
@@ -12087,7 +12181,7 @@ int DeleteRedundantMessages()
 
 int MsgFilter(const struct dirent * dir)
 {
-	return (int)strstr(dir->d_name, ".mes");
+	return (strstr(dir->d_name, ".mes") != 0);
 }
 
 int DeleteRedundantMessages()
@@ -13731,7 +13825,6 @@ int ReformatSyncMessage(CIRCUIT * conn)
 	char Type[16] = "Private";
 	char * part[100];
 	int partLen[100];
-	char * partName[100];
 
 	// Message has an XML header which I don't think we need, then the message
 	/*

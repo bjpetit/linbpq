@@ -33,7 +33,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "tncinfo.h"
 
-#include "BPQAPRS.h"
+#include "bpqaprs.h"
 
 #ifndef WIN32
 
@@ -47,6 +47,7 @@ socklen_t peer_addr_size;
 
 
 #endif
+
 
 #define MAXAGE 3600 * 12	  // 12 Hours
 #define MAXCALLS 20			  // Max Flood, Trace and Digi
@@ -96,6 +97,8 @@ char * GetStandardPage(char * FN, int * Len);
 VOID WriteMiniDump();
 BOOL ProcessConfig();
 int ProcessAISMessage(char * msg, int len);
+int read_png(unsigned char *bytes);
+VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
 
 extern int SemHeldByAPI;
 extern int APRSMONDECODE();
@@ -241,6 +244,8 @@ BOOL DefaultDistKM = FALSE;
 int multiple = 0;						// Allows multiple copies of LinBPQ/APRS on one machine
 
 extern BOOL needAIS;
+
+extern unsigned long long IconData[];  // Symbols as a png image.
 
 typedef struct _ISDELAY
 {
@@ -665,7 +670,7 @@ Dll BOOL APIENTRY Init_APRS()
 		strlop(APRSCall, ' ');
 		strcpy(LoppedAPRSCall, APRSCall);
 		memcpy(CallPadded, APRSCall, (int)strlen(APRSCall));	// Call Padded to 9 chars for APRS Messaging
-		return ConvToAX25(APRSCall, AXCall);
+		ConvToAX25(APRSCall, AXCall);
 	}
 
 	if (WXCall[0] == 0)
@@ -747,6 +752,7 @@ Dll BOOL APIENTRY Init_APRS()
 	{
 		printf("APRS not using shared memory\n");
 		Shared = malloc(SharedMemorySize);
+		printf("APRS Non-Shared Memory Allocated at %x\n", Shared);
 	}
 
 #else
@@ -949,6 +955,8 @@ Dll BOOL APIENTRY Init_APRS()
 	WritetoConsole("APRS Digi/Gateway Enabled\n");
 
 	APRSWeb = TRUE;
+
+	read_png((unsigned char *)IconData);
 
 	// If a Run parameter was supplied, run the program
 
@@ -4103,7 +4111,7 @@ static VOID ProcessReceivedData(SOCKET TCPSock)
 	char UDPMsg[8192];
 	char Buffer[65536];
 
-	int len = recv(TCPSock, Buffer, 65536, 0);
+	int len = recv(TCPSock, Buffer, 65500, 0);
 
 	char * ptr;
 	char * Lastptr;
@@ -4125,6 +4133,9 @@ static VOID ProcessReceivedData(SOCKET TCPSock)
 		if (ptr)
 		{
 			size_t Len = ptr - Lastptr -1;
+
+			if (Len > 8100)
+				return;
 		
 			memcpy(UDPMsg, Lastptr, Len);
 			UDPMsg[Len++] = 13;
@@ -4754,6 +4765,30 @@ BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
 				return FALSE;
 	}
 
+	Station->Symbol = SymChar;
+
+	if (SymChar > ' ' && SymChar < 0x7f)
+		SymChar -= '!';
+	else
+		SymChar = 0;
+
+	Station->IconOverlay = 0;
+
+	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
+	{
+		SymChar += 96;
+		Station->IconOverlay = SymSet;
+	}
+	else
+		if (SymSet == '\\')
+			SymChar += 96;
+
+	Station->iconRow = SymChar >> 4;
+	Station->iconCol = SymChar & 15;
+
+	if (NewLat > 90 || NewLat < -90 || NewLon > 180 || NewLon < -180)
+		return TRUE;
+
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
 		time_t NOW = time(NULL);
@@ -4784,26 +4819,6 @@ BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
 		Station->Approx = 0;
 	}
 
-	Station->Symbol = SymChar;
-
-	if (SymChar > ' ' && SymChar < 0x7f)
-		SymChar -= '!';
-	else
-		SymChar = 0;
-
-	Station->IconOverlay = 0;
-
-	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
-	{
-		SymChar += 96;
-		Station->IconOverlay = SymSet;
-	}
-	else
-		if (SymSet == '\\')
-			SymChar += 96;
-
-	Station->iconRow = SymChar >> 4;
-	Station->iconCol = SymChar & 15;
 
 	return TRUE;
 }
@@ -5133,6 +5148,7 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 	if (EW == 'W')				// West
 		NewLon = -NewLon;
 
+
 	SP = Payload[4] - 28;
 	DC = Payload[5] - 28;
 	SE = Payload[6] - 28;		// Course 100 and 10 degs
@@ -5154,6 +5170,28 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 	Station->Speed = Speed * 1.15077945;	// MPH
 
 //	Debugprintf("MIC-E Course/Speed %s %d %d", Station->Callsign, Course, Speed);
+
+	SymChar = Payload[7];			// Symbol
+	SymSet = Payload[8];			// Symbol
+
+	SymChar -= '!';
+
+	Station->IconOverlay = 0;
+
+	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
+	{
+		SymChar += 96;
+		Station->IconOverlay = SymSet;
+	}
+	else
+		if (SymSet == '\\')
+			SymChar += 96;
+
+	Station->iconRow = SymChar >> 4;
+	Station->iconCol = SymChar & 15;
+
+	if (NewLat > 90 || NewLat < -90 || NewLon > 180 || NewLon < -180)
+		return;
 
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
@@ -5182,26 +5220,6 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 		Station->Lon = NewLon;
 		Station->Approx = 0;
 	}
-
-
-	SymChar = Payload[7];			// Symbol
-	SymSet = Payload[8];			// Symbol
-
-	SymChar -= '!';
-
-	Station->IconOverlay = 0;
-
-	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
-	{
-		SymChar += 96;
-		Station->IconOverlay = SymSet;
-	}
-	else
-		if (SymSet == '\\')
-			SymChar += 96;
-
-	Station->iconRow = SymChar >> 4;
-	Station->iconCol = SymChar & 15;
 
 	return;
 
@@ -6858,12 +6876,13 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	BOOL Special = FALSE;
 	int HeaderLen;
 	char Header[256];
-	char * Param;
+	char * Param = 0;
 	struct stat STAT;
 	int Sent;
 	char * ptr;
 
-	FN = strtok_s(FN, "?", &Param);
+	if (strchr(FN, '?'))
+		strtok_s(FN, "?", &Param);
 
 	UndoTransparency(FN);
 
@@ -6942,13 +6961,17 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 		char * StationList;
 		BOOL KM = DefaultDistKM;
 
-		_strlwr(Param);
+		if (Param == 0)
+			Param ="";
+		else
+			_strlwr(Param);
 		
 		if (strstr(Param, "dist=km"))
 			KM = TRUE;
 		else if (strstr(Param, "dist=miles"))
 			KM = FALSE;
-		
+	
+
 		StationList = CreateStationList(RFOnly, WX, Mobile, Objects, &Count, Param, KM);
 
 		APRSProcessSpecialPage(sockptr, MsgBytes, FileSize, StationList, Count, WX, KM); 
@@ -6995,6 +7018,7 @@ char WebHeader[] = "<HTML><HEAD><meta http-equiv=\"expires\" content=\"-1\">"
 	"<TITLE>APRS Messaging</TITLE></HEAD>"
 	"<BODY alink=\"#008000\" bgcolor=\"#F5F5DC\" link=\"#0000FF\" vlink=\"#000080\"  background=/background.jpg>"
 	"<table  align=center border=2 cellpadding=2 cellspacing=2 bgcolor=white><tr>"
+	"<td align=center><a href=/aprs.html>APRS Map</a></td>"
 	"<td align=center><a href=/aprs/msgs>Received Messages</a></td>"
 	"<td align=center><a href=/aprs/txmsgs>Sent Messages</a></td>"
 	"<td align=center><a href=/aprs/msgs/entermsg>Send Message</a></td>"
@@ -7009,6 +7033,7 @@ char WebTXHeader[] = "<HTML><HEAD><meta http-equiv=\"expires\" content=\"-1\">"
 	"<TITLE>APRS Messaging</TITLE></HEAD>"
 	"<BODY alink=\"#008000\" bgcolor=\"#F5F5DC\" link=\"#0000FF\" vlink=\"#000080\"  background=/background.jpg>"
 	"<table align=center border=2 cellpadding=2 cellspacing=2 bgcolor=white><tr>"
+	"<td align=center><a href=/aprs.html>APRS Map</a></td>"
 	"<td align=center><a href=/aprs/msgs>Received Messages</a></td>"
 	"<td align=center><a href=/aprs/txmsgs>Sent Messages</a></td>"
 	"<td align=center><a href=/aprs/msgs/entermsg>Send Message</a></td>"
@@ -7039,6 +7064,7 @@ char APRSIndexPage[] = "<html><head><title>BPQ32 Web Server APRS Pages</title></
 	"<body background=/background.jpg><P align=center>"
 	"<h2 align=center>BPQ32 APRS Server</h2><P align=center>"
 	"<table border=2 cellpadding=2 cellspacing=2 bgcolor=white><tr>"
+	"<td align=center><a href=/aprs.html>APRS Map</a></td>"
 	"<td align=center><a href=/aprs/msgs>Received Messages</a></td>"
 	"<td align=center><a href=/aprs/txmsgs>Sent Messages</a></td>"
 	"<td align=center><a href=/aprs/msgs/entermsg>Send Message</a></td>"
@@ -7314,8 +7340,9 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 			OutputLen += sprintf(&OutBuffer[OutputLen], WebTrailer);
 
 			HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
-			send(sockptr->sock, Header, HeaderLen, 0); 
-			send(sockptr->sock, OutBuffer, OutputLen, 0); 
+			sendandcheck(sock, Header, HeaderLen);
+			sendandcheck(sock, OutBuffer, OutputLen);
+
 			return;
 		
 	}
@@ -7358,8 +7385,9 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 			OutputLen += sprintf(&OutBuffer[OutputLen], WebTrailer);
 
 			HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
-			send(sockptr->sock, Header, HeaderLen, 0); 
-			send(sockptr->sock, OutBuffer, OutputLen, 0); 
+			sendandcheck(sock, Header, HeaderLen);
+			sendandcheck(sock, OutBuffer, OutputLen);
+
 			return;
 		
 	}
@@ -7444,6 +7472,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 			sockptr->SelCall = stn;
 	}
 
+	
 	strcpy(sockptr->Callsign, Key);
 
 	APRSSendMessageFile(sockptr, URL);
@@ -8016,3 +8045,706 @@ int GetPosnFromAPRS(char * Call, double * Lat, double * Lon)
 
 	return 0;
 }
+
+// Station Name Font
+
+const unsigned char ASCII[][5] = {
+//const u08 ASCII[][5]  = {
+  {0x00, 0x00, 0x00, 0x00, 0x00} // 20  
+  ,{0x00, 0x00, 0x5f, 0x00, 0x00} // 21 !
+  ,{0x00, 0x07, 0x00, 0x07, 0x00} // 22 "
+  ,{0x14, 0x7f, 0x14, 0x7f, 0x14} // 23 #
+  ,{0x24, 0x2a, 0x7f, 0x2a, 0x12} // 24 $
+  ,{0x23, 0x13, 0x08, 0x64, 0x62} // 25 %
+  ,{0x36, 0x49, 0x55, 0x22, 0x50} // 26 &
+  ,{0x00, 0x05, 0x03, 0x00, 0x00} // 27 '
+  ,{0x00, 0x1c, 0x22, 0x41, 0x00} // 28 (
+  ,{0x00, 0x41, 0x22, 0x1c, 0x00} // 29 )
+  ,{0x14, 0x08, 0x3e, 0x08, 0x14} // 2a *
+  ,{0x08, 0x08, 0x3e, 0x08, 0x08} // 2b +
+  ,{0x00, 0x50, 0x30, 0x00, 0x00} // 2c ,
+  ,{0x08, 0x08, 0x08, 0x08, 0x08} // 2d -
+  ,{0x00, 0x60, 0x60, 0x00, 0x00} // 2e .
+  ,{0x20, 0x10, 0x08, 0x04, 0x02} // 2f /
+  ,{0x3e, 0x51, 0x49, 0x45, 0x3e} // 30 0
+  ,{0x00, 0x42, 0x7f, 0x40, 0x00} // 31 1
+  ,{0x42, 0x61, 0x51, 0x49, 0x46} // 32 2
+  ,{0x21, 0x41, 0x45, 0x4b, 0x31} // 33 3
+  ,{0x18, 0x14, 0x12, 0x7f, 0x10} // 34 4
+  ,{0x27, 0x45, 0x45, 0x45, 0x39} // 35 5
+  ,{0x3c, 0x4a, 0x49, 0x49, 0x30} // 36 6
+  ,{0x01, 0x71, 0x09, 0x05, 0x03} // 37 7
+  ,{0x36, 0x49, 0x49, 0x49, 0x36} // 38 8
+  ,{0x06, 0x49, 0x49, 0x29, 0x1e} // 39 9
+  ,{0x00, 0x36, 0x36, 0x00, 0x00} // 3a :
+  ,{0x00, 0x56, 0x36, 0x00, 0x00} // 3b ;
+  ,{0x08, 0x14, 0x22, 0x41, 0x00} // 3c <
+  ,{0x14, 0x14, 0x14, 0x14, 0x14} // 3d =
+  ,{0x00, 0x41, 0x22, 0x14, 0x08} // 3e >
+  ,{0x02, 0x01, 0x51, 0x09, 0x06} // 3f ?
+  ,{0x32, 0x49, 0x79, 0x41, 0x3e} // 40 @
+  ,{0x7e, 0x11, 0x11, 0x11, 0x7e} // 41 A
+  ,{0x7f, 0x49, 0x49, 0x49, 0x36} // 42 B
+  ,{0x3e, 0x41, 0x41, 0x41, 0x22} // 43 C
+  ,{0x7f, 0x41, 0x41, 0x22, 0x1c} // 44 D
+  ,{0x7f, 0x49, 0x49, 0x49, 0x41} // 45 E
+  ,{0x7f, 0x09, 0x09, 0x09, 0x01} // 46 F
+  ,{0x3e, 0x41, 0x49, 0x49, 0x7a} // 47 G
+  ,{0x7f, 0x08, 0x08, 0x08, 0x7f} // 48 H
+  ,{0x00, 0x41, 0x7f, 0x41, 0x00} // 49 I
+  ,{0x20, 0x40, 0x41, 0x3f, 0x01} // 4a J
+  ,{0x7f, 0x08, 0x14, 0x22, 0x41} // 4b K
+  ,{0x7f, 0x40, 0x40, 0x40, 0x40} // 4c L
+  ,{0x7f, 0x02, 0x0c, 0x02, 0x7f} // 4d M
+  ,{0x7f, 0x04, 0x08, 0x10, 0x7f} // 4e N
+  ,{0x3e, 0x41, 0x41, 0x41, 0x3e} // 4f O
+  ,{0x7f, 0x09, 0x09, 0x09, 0x06} // 50 P
+  ,{0x3e, 0x41, 0x51, 0x21, 0x5e} // 51 Q
+  ,{0x7f, 0x09, 0x19, 0x29, 0x46} // 52 R
+  ,{0x46, 0x49, 0x49, 0x49, 0x31} // 53 S
+  ,{0x01, 0x01, 0x7f, 0x01, 0x01} // 54 T
+  ,{0x3f, 0x40, 0x40, 0x40, 0x3f} // 55 U
+  ,{0x1f, 0x20, 0x40, 0x20, 0x1f} // 56 V
+  ,{0x3f, 0x40, 0x38, 0x40, 0x3f} // 57 W
+  ,{0x63, 0x14, 0x08, 0x14, 0x63} // 58 X
+  ,{0x07, 0x08, 0x70, 0x08, 0x07} // 59 Y
+  ,{0x61, 0x51, 0x49, 0x45, 0x43} // 5a Z
+  ,{0x00, 0x7f, 0x41, 0x41, 0x00} // 5b [
+  ,{0x02, 0x04, 0x08, 0x10, 0x20} // 5c 
+  ,{0x00, 0x41, 0x41, 0x7f, 0x00} // 5d ]
+  ,{0x04, 0x02, 0x01, 0x02, 0x04} // 5e ^
+  ,{0x40, 0x40, 0x40, 0x40, 0x40} // 5f _
+  ,{0x00, 0x01, 0x02, 0x04, 0x00} // 60 `
+  ,{0x20, 0x54, 0x54, 0x54, 0x78} // 61 a
+  ,{0x7f, 0x48, 0x44, 0x44, 0x38} // 62 b
+  ,{0x38, 0x44, 0x44, 0x44, 0x20} // 63 c
+  ,{0x38, 0x44, 0x44, 0x48, 0x7f} // 64 d
+  ,{0x38, 0x54, 0x54, 0x54, 0x18} // 65 e
+  ,{0x08, 0x7e, 0x09, 0x01, 0x02} // 66 f
+  ,{0x0c, 0x52, 0x52, 0x52, 0x3e} // 67 g
+  ,{0x7f, 0x08, 0x04, 0x04, 0x78} // 68 h
+  ,{0x00, 0x44, 0x7d, 0x40, 0x00} // 69 i
+  ,{0x20, 0x40, 0x44, 0x3d, 0x00} // 6a j 
+  ,{0x7f, 0x10, 0x28, 0x44, 0x00} // 6b k
+  ,{0x00, 0x41, 0x7f, 0x40, 0x00} // 6c l
+  ,{0x7c, 0x04, 0x18, 0x04, 0x78} // 6d m
+  ,{0x7c, 0x08, 0x04, 0x04, 0x78} // 6e n
+  ,{0x38, 0x44, 0x44, 0x44, 0x38} // 6f o
+  ,{0x7c, 0x14, 0x14, 0x14, 0x08} // 70 p
+  ,{0x08, 0x14, 0x14, 0x18, 0x7c} // 71 q
+  ,{0x7c, 0x08, 0x04, 0x04, 0x08} // 72 r
+  ,{0x48, 0x54, 0x54, 0x54, 0x20} // 73 s
+  ,{0x04, 0x3f, 0x44, 0x40, 0x20} // 74 t
+  ,{0x3c, 0x40, 0x40, 0x20, 0x7c} // 75 u
+  ,{0x1c, 0x20, 0x40, 0x20, 0x1c} // 76 v
+  ,{0x3c, 0x40, 0x30, 0x40, 0x3c} // 77 w
+  ,{0x44, 0x28, 0x10, 0x28, 0x44} // 78 x
+  ,{0x0c, 0x50, 0x50, 0x50, 0x3c} // 79 y
+  ,{0x44, 0x64, 0x54, 0x4c, 0x44} // 7a z
+  ,{0x00, 0x08, 0x36, 0x41, 0x00} // 7b {
+  ,{0x00, 0x00, 0x7f, 0x00, 0x00} // 7c |
+  ,{0x00, 0x41, 0x36, 0x08, 0x00} // 7d }
+  ,{0x10, 0x08, 0x08, 0x10, 0x08} // 7e ~
+  ,{0x78, 0x46, 0x41, 0x46, 0x78} // 7f DEL
+};
+
+
+// APRS Web Map Code
+
+// Not sure yet what is best way to do station icons but for now build and cache any needed icons
+
+extern int IconDataLen;
+extern unsigned long long IconData[];  // Symbols as a png image.&
+
+// IconData is a png image, so needs to be uncompressed to an RGB array
+
+
+// Will key cached icons by IconRow, IconCol, Overlay Char - xxxxA
+
+int cachedIconCount = 0;
+
+// We need key, icon data, icon len for each. Maybe a simple linked list - we never remove any
+
+struct iconCacheEntry
+{
+	struct iconCacheEntry * Next;
+	char key[8];
+	int pngimagelen;
+	int pngmalloclen;
+	unsigned char * pngimage;
+};
+
+struct iconCacheEntry * iconCache = NULL;
+
+
+// Each icon has to be created as an RGB array, then converted to a png image, as
+// Leaflet icons need a png file
+
+#include "mypng.h"
+
+
+struct png_info_struct * info_ptr = NULL;
+
+unsigned char * PngEncode (png_byte *pDiData, int iWidth, int iHeight, struct iconCacheEntry * Icon);
+	
+void createIcon(char * Key, int iconRow, int iconCol, char Overlay)
+{
+	int i, j, index, mask;
+	int row;
+	int col;			// First row
+	unsigned char * rgbData = malloc(68 * 22); // 1323
+	unsigned char * ptr = rgbData;
+	png_color colour = {0, 0, 0};
+	int Pointer;
+	char c;
+	int bit;
+	struct iconCacheEntry * Icon = zalloc(sizeof(struct iconCacheEntry));
+
+	strcpy(Icon->key, Key);
+
+	// icon data is in info_ptr->row_pointers (we have 255 of them)
+
+	row = iconRow * 21;
+	col = iconCol * 21 * 3;
+
+	for (j = 0; j < 22; j++)
+	{
+		memcpy(ptr, info_ptr->row_pointers[row + j] + col, 22 * 3);		// One scan line
+		ptr += 68;		// Rounded up to mod 4
+	}
+
+
+	// This code seems to assume an icon is 16 pixels, but image is 22 x 22 ???
+
+//	j = ptr->iconRow * 21 * 337 * 3 + ptr->iconCol * 21 * 3 + 9 + 337 * 9;
+//	for (i = 0; i < 16; i++)
+//	{
+//		memcpy(nptr, &iconImage[j], 16 * 3);
+//		nptr += 6144;
+//		j += 337 * 3;
+//	}
+
+
+	// If an overlay is specified, add it
+
+	if (Overlay)
+	{
+		Pointer = 68 * 7 + 7 * 3;		// 7th row, 7th col
+		mask = 1;
+
+		for (index = 0 ; index < 7 ; index++)
+		{
+			rgbData[Pointer++] = 255;				// Blank line above chars 
+			rgbData[Pointer++] = 255;
+			rgbData[Pointer++] = 255;
+		}
+		
+		Pointer = 68 * 8 + 7 * 3;		// 8th row, 7th col
+
+		for (i = 0; i < 7; i++)
+		{
+			rgbData[Pointer++] = 255;				// Blank col 
+			rgbData[Pointer++] = 255;
+			rgbData[Pointer++] = 255;
+
+			for (index = 0 ; index < 5 ; index++)
+			{
+				c = ASCII[Overlay - 0x20][index];	// Font data
+				bit = c & mask;
+
+				if (bit)
+				{
+					rgbData[Pointer++] = 0;
+					rgbData[Pointer++] = 0;
+					rgbData[Pointer++] = 0;
+				}
+				else
+				{
+					rgbData[Pointer++] = 255;
+					rgbData[Pointer++] = 255;
+					rgbData[Pointer++] = 255;
+				}
+			}
+			
+			rgbData[Pointer++] = 255;				// Blank col 
+			rgbData[Pointer++] = 255;
+			rgbData[Pointer++] = 255;
+
+			mask <<= 1;
+			Pointer += 47;
+		}
+		for (index = 0 ; index < 7 ; index++)
+		{
+			rgbData[Pointer++] = 255;				// Blank line above chars 
+			rgbData[Pointer++] = 255;
+			rgbData[Pointer++] = 255;
+		}
+	}
+
+	// Encode
+
+	PngEncode(rgbData, 22, 22, Icon);
+
+	if (iconCache)
+		Icon->Next = iconCache;
+		
+	iconCache = Icon;
+
+}
+
+int GetAPRSIcon(unsigned char * _REPLYBUFFER, char * NodeURL)
+{
+	char Key[8] = "";
+	struct iconCacheEntry * Icon = iconCache;
+
+	memcpy(Key, &NodeURL[5], 5);
+
+	while (Icon)
+	{
+		if (strcmp(Icon->key, Key) == 0)		// Have it
+		{
+			memcpy(_REPLYBUFFER, Icon->pngimage, Icon->pngimagelen);
+			return Icon->pngimagelen;
+		}
+		Icon = Icon->Next;
+	}
+
+	return 0;
+}
+
+char * doHTMLTransparency(char * string)
+{
+	// Make sure string doesn't contain forbidden XML chars (<>"'&)
+
+	char * newstring = malloc(5 * strlen(string) + 1);		// If len is zero still need null terminator
+
+	char * in = string;
+	char * out = newstring;
+	char c;
+
+	c = *(in++);
+
+	while (c)
+	{
+		switch (c)
+		{
+		case '<':
+
+			strcpy(out, "&lt;");
+			out += 4;
+			break;
+
+		case '>':
+
+			strcpy(out, "&gt;");
+			out += 4;
+			break;
+
+		case '"':
+
+			strcpy(out, "&quot;");
+			out += 6;
+			break;
+
+		case '\'':
+
+			strcpy(out, "&apos;");
+			out += 6;
+			break;
+
+		case '&':
+
+			strcpy(out, "&amp;");
+			out += 5;
+			break;
+
+		case ',':
+
+			strcpy(out, "&#44;");
+			out += 5;
+			break;
+		
+		case '|':
+
+			strcpy(out, "&#124;");
+			out += 5;
+			break;
+		
+		default:
+
+			*(out++) = c;
+		}
+		c = *(in++);
+	}
+
+	*(out++) = 0;
+	return newstring;
+}
+
+int GetAPRSPageInfo(char * Buffer, double N, double S, double W, double E, int aprs, int ais, int adsb)
+{
+	struct STATIONRECORD * ptr = *StationRecords;
+	int n = 0, Len = 0;
+	struct tm * TM;
+	time_t NOW = time(NULL);
+	char popup[65536] = "";
+	char Msg[2048];
+	int LocalTime = 0;
+	int KM = DefaultDistKM; 
+	char * ptr1;
+
+	while (ptr && aprs)
+	{
+		if (ptr->Lat != 0.0 && ptr->Lon != 0.0)
+		{
+			if (ptr->Lat > S && ptr->Lat < N && ptr->Lon > W && ptr->Lon < E)
+			{
+				// See if we have the Icon - if not build
+
+				char IconKey[6];
+				struct iconCacheEntry * Icon = iconCache;
+
+				sprintf(IconKey, "%02X%02X ", ptr->iconRow, ptr->iconCol);
+				
+				if (ptr->IconOverlay)
+					IconKey[4] = ptr->IconOverlay;
+				else
+					IconKey[4] = '@';
+
+				while (Icon)
+				{
+					if (strcmp(Icon->key, IconKey) == 0)		// Have it
+						break;
+
+					Icon = Icon->Next;
+				}
+
+				if (Icon == NULL)
+					createIcon(IconKey, ptr->iconRow, ptr->iconCol, ptr->IconOverlay);
+
+				popup[0] = 0;
+
+				if (ptr->Approx)
+				{
+					sprintf(Msg, "Approximate Position From Locator<br>");
+					strcat(popup, Msg);
+				}
+				ptr1 = doHTMLTransparency(ptr->Path);
+				sprintf(Msg, "%s<br>", ptr1);
+				strcat(popup, Msg);
+				free(ptr1);
+				ptr1 = doHTMLTransparency(ptr->LastPacket);
+				sprintf(Msg, "%s<br>", ptr1);
+				strcat(popup, Msg);
+				free(ptr1);
+				ptr1 = doHTMLTransparency(ptr->Status);
+				sprintf(Msg, "%s<br>", ptr1);
+				strcat(popup, Msg);
+				free(ptr1);
+				if (LocalTime)
+					TM = localtime(&ptr->TimeLastUpdated);
+				else
+					TM = gmtime(&ptr->TimeLastUpdated);
+
+				sprintf(Msg, "Last Heard: %.2d:%.2d:%.2d on Port %d<br>",
+					TM->tm_hour, TM->tm_min, TM->tm_sec, ptr->LastPort);
+
+				strcat(popup, Msg);
+
+				sprintf(Msg, "Distance %6.1f Bearing %3.0f Course %1.0f&deg; Speed %3.1f<br>",
+					myDistance(ptr->Lat, ptr->Lon, KM),
+					myBearing(ptr->Lat, ptr->Lon), ptr->Course, ptr->Speed);
+				strcat(popup, Msg);
+
+				if (ptr->LastWXPacket[0])
+				{
+					//display wx info
+
+					struct APRSConnectionInfo temp;
+
+					memset(&temp, 0, sizeof(temp));
+
+					DecodeWXReport(&temp, ptr->LastWXPacket);
+
+					sprintf(Msg, "Wind Speed %d MPH<br>", temp.WindSpeed);
+					strcat(popup, Msg);
+
+					sprintf(Msg, "Wind Gust %d MPH<br>", temp.WindGust);
+					strcat(popup, Msg);
+
+					sprintf(Msg, "Wind Direction %d\xC2\xB0<br>", temp.WindDirn);
+					strcat(popup, Msg);
+
+					sprintf(Msg, "Temperature %d\xC2\xB0 F<br>", temp.Temp);
+					strcat(popup, Msg);
+
+					sprintf(Msg, "Pressure %05.1f<br>", temp.Pressure / 10.0);
+					strcat(popup, Msg);
+
+					sprintf(Msg, "Humidity %d%%<br>", temp.Humidity);
+					strcat(popup, Msg);
+
+					sprintf(Msg, "Rainfall Last Hour/Last 24H/Today %5.2f, %5.2f, %5.2f (inches)",
+						temp.RainLastHour / 100.0, temp.RainLastDay / 100.0, temp.RainToday / 100.0);
+
+					ptr1 = doHTMLTransparency(Msg);
+					sprintf(Msg, "%s<br>", ptr1);
+					strcat(popup, Msg);
+					free(ptr1);
+				}
+
+				Len += sprintf(&Buffer[Len],"A,%.4f,%.4f,%s,%s,%s,%d\r\n|",
+					ptr->Lat, ptr->Lon, ptr->Callsign, popup, IconKey,
+					NOW - ptr->TimeLastUpdated);
+
+				if (ptr->TrackTime[0] && ptr->TrackTime[1])	// Have trackpoints
+				{
+					int n = ptr->Trackptr;
+					int i;
+					double lastLat = 0;
+
+					// We read from next track point (oldest) for TRACKPOINT records, ignoring zeros
+
+					Len += sprintf(&Buffer[Len],"T,");
+
+					for (i = 0; i < TRACKPOINTS; i++)
+					{
+						if (ptr->TrackTime[n])
+						{
+							Len += sprintf(&Buffer[Len],"%.4f,%.4f,", ptr->LatTrack[n], ptr->LonTrack[n]);
+							lastLat = ptr->LatTrack[n];
+						}
+
+						n++;
+						if (n == TRACKPOINTS)
+							n = 0;
+					}
+					if (lastLat != ptr->Lat)
+						Len += sprintf(&Buffer[Len],"%.4f,%.4f,\r\n|", ptr->Lat, ptr->Lon);		//Add current position to end of track
+					else
+						Len += sprintf(&Buffer[Len],"\r\n|", ptr->Lat, ptr->Lon);
+				}
+			}
+		}
+
+		ptr = ptr->Next;		
+	}
+	return Len;
+}
+
+
+
+
+ /* The png_jmpbuf() macro, used in error handling, became available in
+  * libpng version 1.0.6.  If you want to be able to run your code with older
+  * versions of libpng, you must define the macro yourself (but only if it
+  * is not already defined by libpng!).
+  */
+#ifndef png_jmpbuf
+#  define png_jmpbuf(png_ptr) ((png_ptr)->png_jmpbuf)
+#endif
+/* Check to see if a file is a PNG file using png_sig_cmp().  png_sig_cmp()
+ * returns zero if the image is a PNG and nonzero if it isn't a PNG.
+ *
+ * The function check_if_png() shown here, but not used, returns nonzero (true)
+ * if the file can be opened and is a PNG, 0 (false) otherwise.
+ *
+ * If this call is successful, and you are going to keep the file open,
+ * you should call png_set_sig_bytes(png_ptr, PNG_BYTES_TO_CHECK); once
+ * you have created the png_ptr, so that libpng knows your application
+ * has read that many bytes from the start of the file.  Make sure you
+ * don't call png_set_sig_bytes() with more than 8 bytes read or give it
+ * an incorrect number of bytes read, or you will either have read too
+ * many bytes (your fault), or you are telling libpng to read the wrong
+ * number of magic bytes (also your fault).
+ *
+ * Many applications already read the first 2 or 4 bytes from the start
+ * of the image to determine the file type, so it would be easiest just
+ * to pass the bytes to png_sig_cmp() or even skip that if you know
+ * you have a PNG file, and call png_set_sig_bytes().
+ */
+
+unsigned char * user_io_ptr = 0;
+
+void __cdecl user_read_fn(png_struct * png, png_bytep Buffer, png_size_t Len)
+{
+	unsigned char ** ptr = png->io_ptr;
+	unsigned char * ptr1;
+	
+	ptr1 = ptr[0];
+
+	memcpy(Buffer, ptr1, Len);
+	ptr[0]+= Len;
+}
+
+
+// This is based on example https://www1.udel.edu/CIS/software/dist/libpng-1.2.8/example.c
+
+// This decodes a png encoded image from memory
+
+int read_png(unsigned char *bytes)
+{
+   png_structp png_ptr;
+   unsigned int sig_read = 0;
+ 
+   /* Create and initialize the png_struct with the desired error handler
+    * functions.  If you want to use the default stderr and longjump method,
+    * you can supply NULL for the last three parameters.  We also supply the
+    * the compiler header file version, so that we know if the application
+    * was compiled with a compatible version of the library.  REQUIRED
+    */
+   png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  
+   if (png_ptr == NULL)
+   {
+      return (0);
+   }
+   /* Allocate/initialize the memory for image information.  REQUIRED. */
+   info_ptr = png_create_info_struct(png_ptr);
+   if (info_ptr == NULL)
+   {
+      png_destroy_read_struct(&png_ptr, NULL, NULL);
+      return (0);
+   }
+   /* Set error handling if you are using the setjmp/longjmp method (this is
+    * the normal method of doing things with libpng).  REQUIRED unless you
+    * set up your own error handlers in the png_create_read_struct() earlier.
+    */
+
+   user_io_ptr = (unsigned char *)&IconData;
+
+   png_set_read_fn(png_ptr, (void *)&user_io_ptr,(png_rw_ptr)user_read_fn);
+
+   png_set_sig_bytes(png_ptr, sig_read);
+
+   png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_EXPAND, NULL);
+
+   // Data is in info->row_pointers. Can we use it from there ??
+
+//   printf("%d  %d  %d\n", info_ptr->width, info_ptr->height, info_ptr->valid);
+
+   return TRUE;
+}
+
+void Myabort()
+{}
+
+// This is based on pngfile.c
+
+//-------------------------------------
+//  PNGFILE.C -- Image File Functions
+//-------------------------------------
+
+// Copyright 2000, Willem van Schaik.  For conditions of distribution and
+// use, see the copyright/license/disclaimer notice in png.h
+
+// Encodes pDiData to png format in memory
+
+
+
+void my_png_write_data(struct png_struct_def * png_ptr, png_bytep data, png_size_t length)
+{
+	struct iconCacheEntry * Icon = png_ptr->io_ptr;
+
+	if (Icon->pngimagelen + (int)length > Icon->pngmalloclen)
+	{
+		Icon->pngmalloclen += length;
+		Icon->pngimage = realloc(Icon->pngimage, Icon->pngmalloclen);
+	}
+
+	memcpy(&Icon->pngimage[Icon->pngimagelen], data, length);
+	Icon->pngimagelen += length;
+}
+
+  //  io_ptr = (FILE *)CVT_PTR((png_ptr->io_ptr));
+  // Area png_uint_32 check;
+
+
+
+static void png_flush(png_structp png_ptr)
+{
+}
+
+unsigned char * PngEncode (png_byte *pDiData, int iWidth, int iHeight, struct iconCacheEntry * Icon)
+{
+    const int           ciBitDepth = 8;
+    const int           ciChannels = 3;
+	png_structp png_ptr;
+	png_infop info_ptr = NULL;
+    png_uint_32         ulRowBytes;
+    static png_byte   **ppbRowPointers = NULL;
+    int                 i;
+
+	// Set up image array and pointer. First allocate a buffer as big as the original
+	// in the unlikely event of it being too small write_data will realloc it
+
+	Icon->pngmalloclen = iWidth * iHeight * 3;
+	Icon->pngimage = malloc(Icon->pngmalloclen);
+	Icon->pngimagelen = 0;
+
+    // prepare the standard PNG structures
+
+    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+    if (!png_ptr)
+    {
+        return FALSE;
+    }
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr)
+	{
+        png_destroy_write_struct(&png_ptr, (png_infopp) NULL);
+        return FALSE;
+    }
+
+    {
+        // initialize the png structure
+        
+        png_set_write_fn(png_ptr, Icon, my_png_write_data, png_flush);
+       
+        png_set_IHDR(png_ptr, info_ptr, iWidth, iHeight, ciBitDepth,
+            PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE,
+            PNG_FILTER_TYPE_BASE);
+        
+        // write the file header information
+        
+        png_write_info(png_ptr, info_ptr);
+               
+        // row_bytes is the width x number of channels
+        
+        ulRowBytes = iWidth * ciChannels;
+        
+        // we can allocate memory for an array of row-pointers
+        
+        if ((ppbRowPointers = (png_bytepp) malloc(iHeight * sizeof(png_bytep))) == NULL)
+            Debugprintf( "Visualpng: Out of memory");
+        
+        // set the individual row-pointers to point at the correct offsets
+        
+        for (i = 0; i < iHeight; i++)
+            ppbRowPointers[i] = pDiData + i * (((ulRowBytes + 3) >> 2) << 2);
+        
+        // write out the entire image data in one call
+        
+        png_write_image (png_ptr, ppbRowPointers);
+        
+        // write the additional chunks to the PNG file (not really needed)
+        
+        png_write_end(png_ptr, info_ptr);
+        
+        // and we're done
+        
+        free (ppbRowPointers);
+        ppbRowPointers = NULL;
+        
+        // clean up after the write, and free any memory allocated
+        
+        png_destroy_write_struct(&png_ptr, (png_infopp) NULL);
+        
+        // yepp, done
+    }
+
+    return Icon->pngimage;
+}
+

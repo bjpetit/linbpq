@@ -316,25 +316,25 @@ int HDLCTXCHECK(PHDLCDATA PORTVEC)
 
 
 
-VOID HDLCTX(PHDLCDATA PORTVEC,UCHAR * Buffer)
+VOID HDLCTX(PHDLCDATA PORTVEC, PMESSAGE Buffer)
 {
 	struct _LINKTABLE * LINK;
 	
-	LINK = (struct _LINKTABLE *)Buffer[(BUFFLEN-4)/4];
+	LINK = Buffer->Linkptr;
 
 	if (LINK)
 	{
 		if (LINK->L2TIMER)
 			LINK->L2TIMER = LINK->L2TIME;
 
-		Buffer[(BUFFLEN-4)/4] = 0;	// CLEAR FLAG FROM BUFFER
+		Buffer->Linkptr = 0;	// CLEAR FLAG FROM BUFFER
 	}
 
 
 	if (Win98)
-		HDLCTX98(PORTVEC, Buffer);
+		HDLCTX98(PORTVEC, (UCHAR *)Buffer);
 	else
-		HDLCTX2K(PORTVEC, Buffer);
+		HDLCTX2K(PORTVEC, (UCHAR *)Buffer);
 	
 	C_Q_ADD(&TRACE_Q, (UINT *)Buffer);
 
@@ -442,7 +442,6 @@ int Init98(HDLCDATA * PORTVEC)
 	return (TRUE);
 		
 }
-
 
 int PC120INIT(PHDLCDATA PORTVEC)
 {
@@ -1142,18 +1141,130 @@ int INITPORT(PHDLCDATA PORTVEC)
 }
 #endif
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+
+
+#ifdef WIN32
+#include <io.h>
+#define read _read
+#define write _write
+#define close _close
+#define open _open
+#else
+#endif
+
+
 // Linux HDLC Kernel Module Support
+
+#define TIOCMGET   0x5415
+
+PHDLCDATA FIRSTHDLCPORT = 0;
 
 int KHDLCINIT(PHDLCDATA PORTVEC)
 {
+	int ret, status = 65;
+	char Msg[64] = "HDLC Params";
+
+	// Only open device for first port - all ports share a kernel driver
+
+	if (FIRSTHDLCPORT == 0)
+	{
+		// for now just open /dev/bpqhdlc. Needs to be a param somewhere
+
+		PORTVEC->fd = open("/dev/bpqhdlc", O_RDWR);             // Open the device with read/write access
+
+		FIRSTHDLCPORT = PORTVEC;
+
+		if (PORTVEC->fd < 0)
+		{
+			WritetoConsole("HDLC - Failed to open /dev/bpqhdlc\n");
+			return errno;
+		}
+
+	}
+
+	ret =  ioctl(FIRSTHDLCPORT->fd, 1, Msg);
+
+	Consoleprintf("HDLC Channel %c", PORTVEC->PORTCONTROL.CHANNELNUM);
+
 	return 0;
 }
 
-void KHDLCTX(struct KISSINFO * KISS, PMESSAGE Buffer)
-{}
+void KHDLCTX(PHDLCDATA PORTVEC, PMESSAGE Buffer)
+{
+	int fd = FIRSTHDLCPORT->fd;
+	struct _LINKTABLE * LINK;
+	unsigned char Message[512];
+	
+	if (fd != -1)
+	{
+		int len = GetLengthfromBuffer((PDATAMESSAGE)Buffer) - (3 + sizeof(void *));
+		int ret;
+
+		Message[0] = (PORTVEC->PORTCONTROL.CHANNELNUM - ('A' << 4));		// KISS Control
+		memcpy(&Message[1], Buffer->DEST, len);
+
+		ret = write(fd, Message, len + 1);
+
+		if (ret < 0)
+		{
+			Debugprintf("Failed to write the message to the device.");
+			return;
+		}
+	}
+
+	LINK = Buffer->Linkptr;
+
+	if (LINK)
+	{
+		if (LINK->L2TIMER)
+			LINK->L2TIMER = LINK->L2TIME;
+
+		Buffer->Linkptr = 0;	// CLEAR FLAG FROM BUFFER
+	}
+
+
+	// Pass buffer to trace routines
+
+	C_Q_ADD(&TRACE_Q, Buffer);
+}
 
 int KHDLCRX(PHDLCDATA PORTVEC)
 {
+	int len;
+	PMESSAGE Buffer;
+	unsigned char packet[512] = "";
+	int fd = FIRSTHDLCPORT->fd;
+
+	if (fd == -1)
+		return 0;
+
+	packet[0] = (PORTVEC->PORTCONTROL.CHANNELNUM - ('A' << 4));		// KISS Control
+
+	len = read(fd, packet, 512);        // Read the response from the LKM
+
+	while (len)
+	{
+		if (len < 0)
+		{
+			Debugprintf("bpqhdlc read failed");
+			return errno;
+		}
+		Buffer = GetBuff();
+
+		if (Buffer)
+		{
+			memcpy(&Buffer->DEST, packet + 1, len - 1);	// Has KISS control on front
+			len += (3 + sizeof(void *));
+
+			PutLengthinBuffer((PDATAMESSAGE)Buffer, len - 1);		// Needed for arm5 portability
+
+			C_Q_ADD(&PORTVEC->PORTCONTROL.PORTRX_Q, Buffer);
+		}
+		len = read(fd, packet, 512);        // Read the response from the LKM
+	}
 	return 0;
 }
 
@@ -1161,9 +1272,14 @@ void KHDLCTIMER(PHDLCDATA PORTVEC)
 {}
 
 void KHDLCCLOSE(PHDLCDATA PORTVEC)
-{}
+{
+	int fd = PORTVEC->fd;
 
-BOOL KHDLCTXCHECK()
+	if (fd != -1)
+		close(fd);
+}
+
+BOOL KHDLCTXCHECK(PHDLCDATA PORTVEC)
 {
 	return 0;
 }

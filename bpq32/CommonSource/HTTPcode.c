@@ -34,12 +34,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 // This is needed to link with a lib built from source
 
-#define ZEXPORT WINAPI
+#ifdef WIN32
+#define ZEXPORT __stdcall
+#endif
 
 #include "zlib.h"
 
 #define CKernel
-#include "HTTPConnectionInfo.h"
+#include "httpconnectioninfo.h"
 
 extern int MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS, L3FRAMES;
 extern int NUMBEROFNODES, MAXDESTS, L4CONNECTSOUT, L4CONNECTSIN, L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES;
@@ -51,7 +53,7 @@ extern char VersionString[];
 VOID FormatTime3(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 VOID SaveUIConfig();
-int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL);
 VOID SetupUI(int Port);
 VOID SendUIBeacon(int Port);
 VOID GetParam(char * input, char * key, char * value);
@@ -59,9 +61,12 @@ VOID ARDOPAbort(struct TNCINFO * TNC);
 VOID WriteMiniDump();
 BOOL KillTNC(struct TNCINFO * TNC);
 BOOL RestartTNC(struct TNCINFO * TNC);
-int GetAISPageInfo(char * Buffer);
+int GetAISPageInfo(char * Buffer, int ais, int adsb);
+int GetAPRSPageInfo(char * Buffer, double N, double S, double W, double E, int aprs, int ais, int adsb);
 unsigned char * Compressit(unsigned char * In, int Len, int * OutLen);
 char * stristr (char *ch1, char *ch2);
+int GetAPRSIcon(unsigned char * _REPLYBUFFER, char * NodeURL);
+char * GetStandardPage(char * FN, int * Len);
 
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
@@ -95,6 +100,8 @@ extern HKEY REGTREE;
 
 extern BOOL APRSActive;
 
+extern UCHAR LogDirectory[];
+
 char * strlop(char * buf, char delim);
 VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
 int CompareNode(const void *a, const void *b);
@@ -102,10 +109,10 @@ int CompareAlias(const void *a, const void *b);
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen);
 void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
-int SetupNodeMenu(char * Buff);
+int SetupNodeMenu(char * Buff, int SYSOP);
 int StatusProc(char * Buff);
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail);
-int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL);
 VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr, BOOL LOCAL, BOOL COOKIE);
 
 
@@ -124,12 +131,11 @@ char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P 
 char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
 "<html><head></head><body></body></html>";
 
-char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
+//char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
 
-char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
-"<td><a href=/Webmail>WebMail</a></td>";
-char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
-
+//char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
+//				 "<td><a href=/Webmail>WebMail</a></td>";
+//char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
 
 char Tail[] = "</body></html>";
 
@@ -793,7 +799,7 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 }
 
 
-void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
+void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LOCAL)
 {
 	char _REPLYBUFFER[8192];
 	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, "");
@@ -806,7 +812,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 		Session->KillTimer = 99999;
 	}
 
-	ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+	ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
 
 	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 		"\r\n", ReplyLen + (int)strlen(Tail));
@@ -815,7 +821,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 	send(sock, Tail, (int)strlen(Tail), 0);
 }
 
-int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen)
+int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen,  int LOCAL)
 {
 	char _REPLYBUFFER[8192];
 	int ReplyLen;
@@ -835,7 +841,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
 			goto Sendit;
 		}
 		user = strtok_s(&input[9], "&", &Context);
@@ -884,7 +890,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 				}
 				else
 				{
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
 
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
 				}
@@ -1033,7 +1039,7 @@ loop:
 
 int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 {
-	int FileSize, Sent, Loops = 0;
+	int FileSize = 0, Sent, Loops = 0;
 	char * MsgBytes;
 	char MsgFile[512];
 	FILE * hFile;
@@ -1042,7 +1048,6 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 	int Len;
 	int HeaderLen;
 	char Header[256];
-	time_t ctime;
 	char TimeString[64];
 	char FileTimeString[64];
 	struct stat STAT;
@@ -1081,52 +1086,59 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 		else
 			sprintf(MsgFile, "%s/HTML%s", BPQDirectory, FN);
 
-		if (stat(MsgFile, &STAT) == -1)
+
+		// First see if file exists so we can override standard ones in code
+
+		if (stat(MsgFile, &STAT) == 0 && (hFile = fopen(MsgFile, "rb")))
 		{
-			if (OnlyifExists)					// Set if we dont want an error response if missing
-				return -1;
+			FileSize = STAT.st_size;
 
-			Len = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
-			send(sock, Header, Len, 0);
-			return 0;
+			MsgBytes = zalloc(FileSize + 1);
+
+			ReadLen = (int)fread(MsgBytes, 1, FileSize, hFile);
+
+			fclose(hFile);
+
+			//	ft.QuadPart -=  116444736000000000;
+			//	ft.QuadPart /= 10000000;
+
+			//	ctime = ft.LowPart;
+
+			FormatTime3(FileTimeString, STAT.st_ctime);
 		}
-
-		hFile = fopen(MsgFile, "rb");
-
-		if (hFile == 0)
+		else
 		{
-			if (OnlyifExists)					// Set if we dont want an error response if missing
-				return -1;
+			// See if it is a hard coded file
 
-			Len = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
-			send(sock, Header, Len, 0);
-			return 0;
+			MsgBytes = GetStandardPage(&FN[1], &FileSize);
+
+			if (MsgBytes)
+			{
+				if (FileSize == 0)
+					FileSize = strlen(MsgBytes);
+
+				FormatTime3(FileTimeString, 0);
+			}
+			else
+			{
+				if (OnlyifExists)					// Set if we dont want an error response if missing
+					return -1;
+
+				Len = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+				send(sock, Header, Len, 0);
+				return 0;
+			}
 		}
-
-		FileSize = STAT.st_size;
-
-		MsgBytes = zalloc(FileSize + 1);
-
-		ReadLen = (int)fread(MsgBytes, 1, FileSize, hFile);
-
-		fclose(hFile);
-
-		//	ft.QuadPart -=  116444736000000000;
-		//	ft.QuadPart /= 10000000;
-
-		//	ctime = ft.LowPart;
-
-		FormatTime3(TimeString, STAT.st_ctime);
 
 		// if HTML file, look for ##...## substitutions
 
 		if ((strcmp(FN, "/") == 0 || strstr(FN, "htm" ) || strstr(FN, "HTM")) &&  strstr(MsgBytes, "##" ))
 		{
 			FileSize = ProcessSpecialPage(MsgBytes, FileSize); 
-			ctime = time(NULL);
+			FormatTime3(FileTimeString, time(NULL));
+
 		}
 
-		FormatTime3(FileTimeString, STAT.st_ctime);
 		FormatTime3(TimeString, time(NULL));
 
 		ptr = FN;
@@ -1139,6 +1151,9 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 
 		if (_stricmp(ptr, "js") == 0)
 			strcpy(Type, "Content-Type: text/javascript\r\n");
+
+		if (_stricmp(ptr, "pdf") == 0)
+			strcpy(Type, "Content-Type: application/pdf\r\n");
 
 		if (allowDeflate)
 		{
@@ -1167,14 +1182,17 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 		{	
 			if (Sent > 0)					// something sent
 			{
+//				Debugprintf("%d out of %d sent", Sent, FileSize);
 				FileSize -= Sent;
-				memmove(MsgBytes, &MsgBytes[Sent], FileSize);
+				memmove(Compressed, &Compressed[Sent], FileSize);
 			}
 
 			Sleep(30);
-			Sent = send(sock, MsgBytes, FileSize, 0);
-			//		Debugprintf("%d out of %d sent", Sent, FileSize);
+			Sent = send(sock, Compressed, FileSize, 0);
 		}
+
+//		Debugprintf("%d out of %d sent %d loops", Sent, FileSize, Loops);
+
 
 		free (MsgBytes);
 		if (allowDeflate)
@@ -1267,16 +1285,49 @@ int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session,
 }
 
 
-struct TNCINFO * TNCInfo[41];	
+extern struct TNCINFO * TNCInfo[41];	
 
-int SetupNodeMenu(char * Buff)
+int SetupNodeMenu(char * Buff, int LOCAL)
 {
 	int Len = 0, i;
 	struct TNCINFO * TNC;
 	int top = 0, left = 0;
 
-	char NodeMenuHeader[] = "<html><head><title>%s's BPQ32 Web Server</title><script>"
-		"function dev_win(URL,w,h,top,left){"
+	char NodeMenuHeader[] = "<html id=body><head><title>%s's BPQ32 Web Server</title>"
+	"<style type=\"text/css\">"
+	// The container <div> - needed to position the dropdown content
+	".dropdown {position: relative; display: inline-block;}"
+	// Dropdown Content (Hidden by Default)
+	".dropdown-content {display: none; position: absolute; left: -100px; background-color: #f1f1f1;"
+	" min-width: 120px; border: 1px solid; padding: 4px; z-index: 1;}"
+	// Links inside the dropdown
+	".dropdown-content a {color: black; padding: 2px 2px; display: block;}"
+	// Change color of dropdown links on hover 
+	".dropdown-content a:hover {background-color: #ddd}"
+	// Show the dropdown menu (use JS to add this class to the .dropdown-content container when the user clicks on the dropdown button)
+	".show {display:block;}</style>"
+	
+	"<script>\r\n"
+
+
+// Close the dropdown menu if the user clicks outside of it
+	"window.onclick = function(event) {console.log(event.target.id);"
+	" if (event.target.id == 'body') {"
+	"  var dropdowns = document.getElementsByClassName('dropdown-content');"
+	"  var i;\r\n"
+	" for (i = 0; i < dropdowns.length; i++) {"
+    "  var openDropdown = dropdowns[i];"
+    "  if (openDropdown.classList.contains('show')) {"
+	"   openDropdown.classList.remove('show');"
+    "  }}}}\r\n"
+
+	"function myShow() {document.getElementById('myDropdown').classList.add('show');}"
+//	"function myHide() {"
+//	" if (event.target.matches('.HTMLBodyElement'))"
+//	"{document.getElementById('myDropdown').classList.remove('show');}}"
+
+
+	"function dev_win(URL,w,h,top,left){"
 		"var ww = \"width=\" + w;"
 		"var xx = \",height=\" + h;"
 		"var yy = \",top=\" + top;"
@@ -1284,13 +1335,14 @@ int SetupNodeMenu(char * Buff)
 		"var param = \"toolbar=no, location=no, directories=no, status=no, "
 		"menubar=no, scrollbars=no, resizable=no, titlebar=no, toobar=no, \" + ww + xx + yy + zz;"
 		"window.open(URL,\"_blank\",param);"
-		"}"
-		"function open_win(){";
+		"}\r\n"
+	
+	"function open_win(){";
 
 	char NodeMenuLine[] = "dev_win(\"/Node/Port?%d\",%d,%d,%d,%d);";
 
 	char NodeMenuRest[] = "}</script></head>"
-		"<body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
+		"<body id=body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
 		"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
 		"<td><a href=/Node/Routes.html>Routes</a></td>"
 		"<td><a href=/Node/Nodes.html>Nodes</a></td>"
@@ -1298,7 +1350,7 @@ int SetupNodeMenu(char * Buff)
 		"<td><a href=/Node/Links.html>Links</a></td>"
 		"<td><a href=/Node/Users.html>Users</a></td>"
 		"<td><a href=/Node/Stats.html>Stats</a></td>"
-		"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s";
+		"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s%s";
 
 	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
 		"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a></td>";
@@ -1309,10 +1361,26 @@ int SetupNodeMenu(char * Buff)
 		"<td><a href=/Webmail>WebMail</a></td>";
 
 	char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
+	char SigninBit[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>";
 
-	char NodeTail[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>" 
+	char NodeTail[] = 
 		"<td><a href=/Node/EditCfg.html>Edit Config</a></td>"
-		"</tr></table>";
+		"<td><div onmouseover=myShow() class='dropdown'>"
+		"<button class=\"dropbtn\">View Logs</button>"
+		"<div id=\"myDropdown\" class=\"dropdown-content\">"
+		"<form id = doDate form action='/node/ShowLog.html'><label>"
+		"Select Date: <input type='date' name='date' id=e>"
+		"<script>"
+		"document.getElementById('e').value = new Date().toISOString().substring(0, 10);"
+		"</script></label>"
+		"<input type=submit name='BBS' value='BBS Log'></br>"
+		"<input type=submit name='Debug' value='BBS Debug Log'></br>"
+		"<input type=submit name='Telnet' value='Telnet Log'></br>"
+		"<input type=submit name='CMS' value='CMS Log'></br>"
+		"<input type=submit name='Chat' value='Chat Log'></br>"
+		"</form></div>"
+		"</div>"		
+		"</td></tr></table>";
 
 
 	Len = sprintf(Buff, NodeMenuHeader, Mycall);
@@ -1334,12 +1402,12 @@ int SetupNodeMenu(char * Buff)
 	Len += sprintf(&Buff[Len], NodeMenuRest, Mycall,
 		DriverBit,
 		(APRSWeb)?APRSBit:"",
-		(IncludesMail)?MailBit:"", (IncludesChat)?ChatBit:"", NodeTail);
+		(IncludesMail)?MailBit:"", (IncludesChat)?ChatBit:"", (LOCAL)?"":SigninBit, NodeTail);
 
 	return Len;
 }
 
-VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
+VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * ptr, * ptr1, * ptr2, *input;
@@ -1361,7 +1429,7 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
 	{
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply);
+			ReplyLen = SetupNodeMenu(Reply, LOCAL);
 			//			ReplyLen = sprintf(Reply, "%s", "<html><script>window.close();</script></html>");
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 			send(sock, Header, HeaderLen, 0);
@@ -1524,6 +1592,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char * encPtr = 0;
 	int allowDeflate = 0;
 	char * Compressed = 0;
+	char * HostPtr = 0;
 
 	char * Context, * Method, * NodeURL, * Key;
 	char _REPLYBUFFER[250000];
@@ -1572,8 +1641,38 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		strcpy(URL, MsgPtr);
 
-		if (strstr(MsgPtr, "Host: 127.0.0.1"))
-			LOCAL = TRUE;
+		HostPtr = strstr(MsgPtr, "Host: ");
+		
+		if (HostPtr)
+		{
+			uint32_t Host;
+			char Hostname[32]= "";
+			struct LOCALNET * LocalNet = conn->TNC->TCPInfo->LocalNets;
+			
+			HostPtr += 6;
+			memcpy(Hostname, HostPtr, 31);
+			strlop(Hostname, ':');
+			Host = inet_addr(Hostname);
+
+			if (strcmp(Hostname, "127.0.0.1") == 0)
+				LOCAL = TRUE;
+			else
+			{
+				if (conn->sin.sin_family != AF_INET6)
+				{
+					while(LocalNet)
+					{
+						uint32_t MaskedHost = conn->sin.sin_addr.s_addr & LocalNet->Mask;
+						if (MaskedHost == LocalNet->Network)
+						{				
+							LOCAL = 1;
+							break;
+						}
+						LocalNet = LocalNet->Next;
+					}
+				}
+			}
+		}
 
 		encPtr = stristr(MsgPtr, "Accept-Encoding:");
 
@@ -1634,7 +1733,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			NodeURL = strtok_s(Context, "?", &IContext);
 			Key = strtok_s(NULL, "?", &IContext);
 
-			ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session);
+			ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session, LOCAL);
 			return 0;
 
 		}
@@ -1656,7 +1755,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 			if (_stricmp(NodeURL, "/Mail/Signon") == 0)
 			{
-				ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session, FALSE);
+				ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session, FALSE, LOCAL);
 
 				if (ReplyLen)
 				{
@@ -1677,7 +1776,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply);
+					ReplyLen = SetupNodeMenu(Reply, LOCAL);
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -1704,7 +1803,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply);
+						ReplyLen = SetupNodeMenu(Reply, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					RLen = ReplyLen;
@@ -1737,15 +1836,46 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			char * IContext;
 
 
-			if (strstr(MsgPtr, "Host: 127.0.0.1"))
-				LOCAL = TRUE;
+			HostPtr = strstr(MsgPtr, "Host: ");
+
+			if (HostPtr)
+			{
+				uint32_t Host;
+				char Hostname[32]= "";
+				struct LOCALNET * LocalNet = conn->TNC->TCPInfo->LocalNets;
+
+				HostPtr += 6;
+				memcpy(Hostname, HostPtr, 31);
+				strlop(Hostname, ':');
+				Host = inet_addr(Hostname);
+
+				if (strcmp(Hostname, "127.0.0.1") == 0)
+					LOCAL = TRUE;
+				else while(LocalNet)
+				{
+					uint32_t MaskedHost = Host & LocalNet->Mask;
+					if (MaskedHost == LocalNet->Network)
+					{				
+						char * rest;
+						LOCAL = 1;
+						rest = strchr(HostPtr, 13);
+						if (rest)
+						{
+							memmove(HostPtr + 9, rest, strlen(rest) + 1);
+							memcpy(HostPtr, "127.0.0.1", 9);
+							break;
+						}
+					}
+					LocalNet = LocalNet->Next;
+				}
+			}
 
 			NodeURL = strtok_s(Context, "?", &IContext);
 			Key = strtok_s(NULL, "?", &IContext);
 
 			if (_stricmp(NodeURL, "/Chat/Signon") == 0)
 			{
-				ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, &Session);
+				ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, &Session, LOCAL);
 
 				if (ReplyLen)
 				{
@@ -1766,7 +1896,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply);
+					ReplyLen = SetupNodeMenu(Reply, LOCAL);
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -1788,12 +1918,12 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 					if (Session)
 					{
-						strcpy(Context, "/CHat/Header");
+						strcpy(Context, "/Chat/Header");
 						goto doHeader;
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply);
+						ReplyLen = SetupNodeMenu(Reply, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					RLen = ReplyLen;
@@ -1873,6 +2003,8 @@ doHeader:
 
 			if (Session == 0)
 				Session = &Dummy;
+
+			Session->TNC = LOCAL;		// TNC only used for Web Terminal Sessions
 
 			ProcessMailHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen, MsgLen);
 
@@ -1999,6 +2131,8 @@ doHeader:
 				if (Session == 0)
 					Session = &Dummy;
 
+				Session->TNC = LOCAL;		// TNC is only used on Web Terminal Sessions 
+
 				WriteFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
 				WriteFile(hPipe, MsgPtr, MsgLen, &InputLen, NULL);
 
@@ -2063,6 +2197,34 @@ doHeader:
 
 		if (strcmp(Method, "POST") == 0)
 		{
+			if (_stricmp(NodeURL, "/Node/freqOffset") == 0)
+			{
+				char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+				int port = atoi(Context);
+
+				if (input == 0)
+					return 1;
+
+				input += 4;
+	
+				if (port > 0 && port < 33)
+				{
+					struct TNCINFO * TNC = TNCInfo[port];
+					char value[6];
+
+					if (TNC == 0)
+						return 1;
+
+					TNC->TXOffset = atoi(input);
+#ifdef WIN32
+					sprintf(value, "%d", TNC->TXOffset);
+					MySetWindowText(TNC->xIDC_TXTUNEVAL, value);
+					SendMessage(TNC->xIDC_TXTUNE, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) TNC->TXOffset);  // min. & max. positions
+
+#endif
+				}
+				return 1;
+			}
 
 			if (_stricmp(NodeURL, "/Node/PortAction") == 0)
 			{
@@ -2110,18 +2272,18 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/TermSignon") == 0)
 			{
-				ProcessTermSignon(conn->TNC, sock, MsgPtr, MsgLen);
+				ProcessTermSignon(conn->TNC, sock, MsgPtr, MsgLen, LOCAL);
 			}
 
 			if (_stricmp(NodeURL, "/Node/Signon") == 0)
 			{
-				ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session);
+				ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session, LOCAL);
 				return 0;
 			}
 
 			if (_stricmp(NodeURL, "/Node/TermClose") == 0)
 			{
-				ProcessTermClose(sock, MsgPtr, MsgLen, Context);
+				ProcessTermClose(sock, MsgPtr, MsgLen, Context, LOCAL);
 				return 0;
 			}
 
@@ -2145,7 +2307,7 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -2157,7 +2319,7 @@ doHeader:
 
 				if (strstr(input, "Cancel=Cancel"))
 				{
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
@@ -2233,7 +2395,7 @@ doHeader:
 					SendUIBeacon(Slot);
 
 
-				ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, Port,		
 					Interval[Slot], &UIUIDEST[Slot][0], &UIUIDigi[Slot][0], &FN[Slot][0], &Message[Slot][0], Port);
 
@@ -2249,9 +2411,21 @@ doHeader:
 			{
 				//	Save Config File
 
-				SaveConfigFile(sock, MsgPtr, Key);
+				SaveConfigFile(sock, MsgPtr, Key, LOCAL);
 				return 0;
 			}
+
+			if (_stricmp(NodeURL, "/Node/LogAction") == 0)
+			{
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				send(sock, Header, HeaderLen, 0);
+				send(sock, _REPLYBUFFER, ReplyLen, 0);
+				send(sock, Tail, (int)strlen(Tail), 0);
+
+				return 1;
+			}
+
 
 			if (_stricmp(NodeURL, "/Node/ARDOPAbort") == 0)
 			{
@@ -2330,7 +2504,7 @@ doHeader:
 		else if (_memicmp(NodeURL, "/aisdata.txt", 12) == 0)
 		{
 			char * Compressed;
-			ReplyLen = GetAISPageInfo(_REPLYBUFFER);
+			ReplyLen = GetAISPageInfo(_REPLYBUFFER, 1, 1);
 
 			if (allowDeflate)
 				Compressed = Compressit(_REPLYBUFFER, ReplyLen, &ReplyLen);
@@ -2347,6 +2521,74 @@ doHeader:
 			return 0;
 		}
 
+		else if (_memicmp(NodeURL, "/aprsdata.txt", 13) == 0)
+		{
+			char * Compressed;
+			char * ptr;
+			double N, S, W, E;
+			int aprs = 1, ais = 1, adsb = 1;
+
+			ptr = &NodeURL[14];
+			
+			N = atof(ptr);
+			ptr = strlop(ptr, '|');
+			S = atof(ptr);
+			ptr = strlop(ptr, '|');
+			W = atof(ptr);
+			ptr = strlop(ptr, '|');
+			E = atof(ptr);
+			ptr = strlop(ptr, '|');	
+			if (ptr)
+			{
+			aprs = atoi(ptr);
+			ptr = strlop(ptr, '|');		
+			ais = atoi(ptr);
+			ptr = strlop(ptr, '|');		
+			adsb = atoi(ptr);
+			}
+			ReplyLen = GetAPRSPageInfo(_REPLYBUFFER, N, S, W, E, aprs, ais, adsb);
+
+			ReplyLen += GetAISPageInfo(&_REPLYBUFFER[ReplyLen], ais, adsb);
+
+			if (allowDeflate)
+				Compressed = Compressit(_REPLYBUFFER, ReplyLen, &ReplyLen);
+			else
+				Compressed = _REPLYBUFFER;
+
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: Text\r\n%s\r\n", ReplyLen, Encoding);
+			sendandcheck(sock, Header, HeaderLen);
+			sendandcheck(sock, Compressed, ReplyLen);
+
+			if (allowDeflate)
+				free (Compressed);
+
+			return 0;
+		}
+
+		else if (_memicmp(NodeURL, "/Icon", 5) == 0 && _memicmp(&NodeURL[10], ".png", 4) == 0)
+		{
+			// APRS internal Icon
+
+			char * Compressed;
+				
+			ReplyLen = GetAPRSIcon(_REPLYBUFFER, NodeURL);
+
+			if (allowDeflate)
+				Compressed = Compressit(_REPLYBUFFER, ReplyLen, &ReplyLen);
+			else
+				Compressed = _REPLYBUFFER;
+
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: Text\r\n%s\r\n", ReplyLen, Encoding);
+			sendandcheck(sock, Header, HeaderLen);
+			sendandcheck(sock, Compressed, ReplyLen);
+
+			if (allowDeflate)
+				free (Compressed);
+
+			return 0;
+
+		}
+
 		else if (_memicmp(NodeURL, "/NODE/", 6))
 		{
 			// Not Node, See if a local file
@@ -2359,7 +2601,7 @@ doHeader:
 
 		{
 
-			ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
 
 			if (_stricmp(NodeURL, "/Node/webproc.css") == 0)
 			{
@@ -2450,6 +2692,159 @@ doHeader:
 					"L3 Frames Relayed", L3FRAMES);
 
 			}
+			else if (_stricmp(NodeURL, "/Node/ShowLog.html") == 0)
+			{
+				char ShowLogPage[] =
+					"<html><script>"
+					"function myResize() {"
+					" var h = document.getElementById('outer').clientHeight;"
+					" var offsets = document.getElementById('log').getBoundingClientRect();"
+					" document.getElementById('log').style.height = h - offsets.top;}"
+					"</script>"
+					"<head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
+					"<title>Log Display</title></head>"
+					"<body style=\"margin: 4;\" background=/background.jpg onload='myResize()' onresize='myResize()'>"
+					"<div id=outer style=\"width: 100%%; height: 100%%;\">"
+					"<form id = form><input name=input value=Back type=submit>"
+//					"<form id = doDate><input type=date value=Date name='date'><input type='submit'>"
+					"</form>"
+					"<textarea id=log style=\"box-sizing: border-box; overflow: auto; white-space: pre; width: 100%%; height: auto\" name=Msg>%s</textarea>"
+					"</div>";
+
+				char * _REPLYBUFFER;
+				int ReplyLen;
+				char Header[256];
+				int HeaderLen;
+				char * CfgBytes;
+				int CfgLen;
+				char inputname[250];
+				FILE *fp1;
+				struct stat STAT;
+				char DummyKey[] = "DummyKey";
+				time_t T;
+				struct tm * tm;
+				char Name[64] = "";
+
+				T = time(NULL);
+				tm = gmtime(&T);
+
+				if (LOCAL == FALSE && COOKIE == FALSE)
+				{
+					//	Send Not Authorized
+
+					char _REPLYBUFFER[4096];	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					send(sock, Header, HeaderLen, 0);
+					send(sock, _REPLYBUFFER, ReplyLen, 0);
+					send(sock, Tail, (int)strlen(Tail), 0);
+					return 1;
+				}
+
+				if (COOKIE == FALSE)
+					Key = DummyKey;
+
+				if (memcmp(Context, "date=", 5) == 0)
+				{
+					memset(tm, 0, sizeof(struct tm));
+					tm->tm_year = atoi(&Context[5]) - 1900;
+					tm->tm_mon = atoi(&Context[10]) - 1;
+					tm->tm_mday = atoi(&Context[13]);
+				}
+
+
+
+				if (strcmp(Context, "input=Back") == 0)
+				{
+					ReplyLen = SetupNodeMenu(Reply, LOCAL);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					send(sock, Header, HeaderLen, 0);
+					send(sock, Reply, ReplyLen, 0);
+					send(sock, Tail, (int)strlen(Tail), 0);
+					return 1;
+				}
+
+				if (LogDirectory[0] == 0)
+				{
+					strcpy(inputname, "logs/");
+				}
+				else
+				{
+					strcpy(inputname,LogDirectory);
+					strcat(inputname,"/");
+					strcat(inputname, "/logs/");
+				}
+
+				if (strstr(Context, "CMS"))
+				{
+					sprintf(Name, "CMSAccess_%04d%02d%02d.log",
+						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+				}
+				else if (strstr(Context, "Debug"))
+				{
+					sprintf(Name, "log_%02d%02d%02d_DEBUG.txt",
+						tm->tm_year - 100, tm->tm_mon+1, tm->tm_mday);
+				}
+				else if (strstr(Context, "BBS"))
+				{
+					sprintf(Name, "log_%02d%02d%02d_BBS.txt",
+						tm->tm_year - 100, tm->tm_mon+1, tm->tm_mday);
+				}
+				else if (strstr(Context, "Chat"))
+				{
+					sprintf(Name, "log_%02d%02d%02d_CHAT.txt",
+						tm->tm_year - 100, tm->tm_mon+1, tm->tm_mday);
+				}
+				else if (strstr(Context, "Telnet"))
+				{
+					sprintf(Name, "Telnet_%02d%02d%02d.log",
+						tm->tm_year - 100, tm->tm_mon+1, tm->tm_mday);
+				}
+
+				strcat(inputname, Name);
+
+				if (stat(inputname, &STAT) == -1)
+				{
+					CfgBytes = malloc(256);
+					sprintf(CfgBytes, "Log %s not found", inputname);
+					CfgLen = strlen(CfgBytes);
+				}
+				else
+				{
+					fp1 = fopen(inputname, "rb");
+
+					if (fp1 == 0)
+					{
+						CfgBytes = malloc(256);
+						sprintf(CfgBytes, "Log %s not found", inputname);
+						CfgLen = strlen(CfgBytes);
+					}
+					else
+					{	
+						CfgLen = STAT.st_size;
+
+						CfgBytes = malloc(CfgLen + 1);
+
+						CfgLen = (int)fread(CfgBytes, 1, CfgLen, fp1);
+						CfgBytes[CfgLen] = 0;
+					}		
+				}
+
+				_REPLYBUFFER = malloc(CfgLen + 1000);
+
+				ReplyLen = sprintf(_REPLYBUFFER, ShowLogPage, CfgBytes);
+				free (CfgBytes);
+
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				sendandcheck(sock, Header, HeaderLen);
+				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
+				sendandcheck(sock, Tail, (int)strlen(Tail));
+				free (_REPLYBUFFER);
+
+				return 1;
+			}
+
 			else if (_stricmp(NodeURL, "/Node/EditCfg.html") == 0)
 			{
 				char * _REPLYBUFFER;
@@ -2467,8 +2862,8 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					char _REPLYBUFFER[2000];	
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+					char _REPLYBUFFER[4096];	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -2528,6 +2923,8 @@ doHeader:
 
 				return 1;
 			}
+
+
 
 			if (_stricmp(NodeURL, "/Node/PortBeacons") == 0)
 			{
@@ -3222,7 +3619,7 @@ CMDS60:
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+						ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
 					}
 				}
@@ -3432,7 +3829,7 @@ int StatusProc(char * Buff)
 	return Len;
 }
 
-int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session)
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -3451,7 +3848,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen =  SetupNodeMenu(Reply);
+			ReplyLen =  SetupNodeMenu(Reply, LOCAL);
 
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 				"\r\n", (int)(ReplyLen + strlen(Tail)));	
@@ -3476,7 +3873,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 					Sess = *Session = AllocateSession(sock, 'N');
 					Sess->USER = USER;
 
-					ReplyLen =  SetupNodeMenu(Reply);
+					ReplyLen =  SetupNodeMenu(Reply, LOCAL);
 
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 						"Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
@@ -3507,7 +3904,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 
 
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail)
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -3523,7 +3920,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply);
+			ReplyLen = SetupNodeMenu(Reply, LOCAL);
 			return ReplyLen;
 		}
 		user = strtok_s(&input[9], "&", &Key);
@@ -3552,7 +3949,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 					}
 					else
 					{
-						ReplyLen =  SetupNodeMenu(Reply);
+						ReplyLen =  SetupNodeMenu(Reply, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;
@@ -3568,7 +3965,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 }
 
 
-int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session)
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -3583,7 +3980,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply);
+			ReplyLen = SetupNodeMenu(Reply, LOCAL);
 			return ReplyLen;
 		}
 
@@ -3610,7 +4007,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply);
+						ReplyLen = SetupNodeMenu(Reply, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;
@@ -3624,499 +4021,4 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 	return ReplyLen;
 
-}
-
-
-/* zpipe.c: example of proper use of zlib's inflate() and deflate()
-   Not copyrighted -- provided to the public domain
-   Version 1.4  11 December 2005  Mark Adler */
-
-/* Version history:
-   1.0  30 Oct 2004  First version
-   1.1   8 Nov 2004  Add void casting for unused return values
-                     Use switch statement for inflate() return values
-   1.2   9 Nov 2004  Add assertions to document zlib guarantees
-   1.3   6 Apr 2005  Remove incorrect assertion in inf()
-   1.4  11 Dec 2005  Add hack to avoid MSDOS end-of-line conversions
-                     Avoid some compiler warnings for input and output buffers
- */
-
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
-#include "zlib.h"
-
-#if defined(MSDOS) || defined(OS2) || defined(WIN32) || defined(__CYGWIN__)
-#  include <fcntl.h>
-#  include <io.h>
-#  define SET_BINARY_MODE(file) setmode(fileno(file), O_BINARY)
-#else
-#  define SET_BINARY_MODE(file)
-#endif
-
-#define CHUNK 16384
-
-/* Compress from file source to file dest until EOF on source.
-   def() returns Z_OK on success, Z_MEM_ERROR if memory could not be
-   allocated for processing, Z_STREAM_ERROR if an invalid compression
-   level is supplied, Z_VERSION_ERROR if the version of zlib.h and the
-   version of the library linked do not match, or Z_ERRNO if there is
-   an error reading or writing the files. */
-int def(FILE *source, FILE *dest, int level)
-{
-    int ret, flush;
-    unsigned have;
-    z_stream strm;
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
-
-    /* allocate deflate state */
-    strm.zalloc = Z_NULL;
-    strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL;
-    ret = deflateInit(&strm, level);
-    if (ret != Z_OK)
-        return ret;
-
-    /* compress until end of file */
-    do {
-        strm.avail_in = fread(in, 1, CHUNK, source);
-        if (ferror(source)) {
-            (void)deflateEnd(&strm);
-            return Z_ERRNO;
-        }
-        flush = feof(source) ? Z_FINISH : Z_NO_FLUSH;
-        strm.next_in = in;
-
-        /* run deflate() on input until output buffer not full, finish
-           compression if all of source has been read in */
-        do {
-            strm.avail_out = CHUNK;
-            strm.next_out = out;
-            ret = deflate(&strm, flush);    /* no bad return value */
-            assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
-            have = CHUNK - strm.avail_out;
-            if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
-                (void)deflateEnd(&strm);
-                return Z_ERRNO;
-            }
-        } while (strm.avail_out == 0);
-        assert(strm.avail_in == 0);     /* all input will be used */
-
-        /* done when last data in file processed */
-    } while (flush != Z_FINISH);
-    assert(ret == Z_STREAM_END);        /* stream will be complete */
-
-    /* clean up and return */
-    (void)deflateEnd(&strm);
-    return Z_OK;
-}
-
-/* Decompress from file source to file dest until stream ends or EOF.
-   inf() returns Z_OK on success, Z_MEM_ERROR if memory could not be
-   allocated for processing, Z_DATA_ERROR if the deflate data is
-   invalid or incomplete, Z_VERSION_ERROR if the version of zlib.h and
-   the version of the library linked do not match, or Z_ERRNO if there
-   is an error reading or writing the files. */
-char in[] = { /* Packet 1 */
-0xa5, 0x58, 0x7f, 
-0x4f, 0xdb, 0x4c, 0x12, 0xfe, 0xdb, 0x48, 0x7c, 
-0x87, 0xbd, 0xbc, 0x6a, 0xb0, 0x89, 0x09, 0x71, 
-0x1a, 0x38, 0xb8, 0x14, 0xa4, 0x90, 0x1f, 0xef, 
-0xa1, 0x86, 0x04, 0x05, 0x50, 0xfb, 0x8a, 0x8b, 
-0x22, 0x63, 0x6f, 0xc8, 0xaa, 0x8e, 0xed, 0xb3, 
-0x1d, 0x4a, 0x7b, 0xe5, 0xbb, 0xdf, 0xcc, 0xec, 
-0xae, 0xed, 0x90, 0x50, 0xb5, 0x77, 0x55, 0x15, 
-0xb2, 0xbb, 0x33, 0xcf, 0xcc, 0xce, 0x3c, 0x3b, 
-0x3b, 0x9b, 0xee, 0xc2, 0xcd, 0xee, 0x62, 0xdf, 
-0xcd, 0x78, 0xdd, 0xfb, 0xe3, 0xf0, 0x90, 0xe1, 
-0x78, 0x10, 0x25, 0x5f, 0xdd, 0xc4, 0xaf, 0x7b, 
-0x71, 0xcc, 0xfe, 0xc1, 0x7a, 0x7c, 0x2e, 0x42, 
-0x9e, 0xb2, 0x6c, 0xc1, 0x19, 0x0f, 0xb3, 0xe4, 
-0x1b, 0x8b, 0x23, 0x11, 0x66, 0x6c, 0x1e, 0x25, 
-0x34, 0xe7, 0x45, 0x61, 0x1a, 0x05, 0x9c, 0xb9, 
-0x71, 0x1c, 0x08, 0xcf, 0xcd, 0x44, 0x14, 0xd6, 
-0x77, 0x77, 0x0e, 0x0f, 0x77, 0x77, 0x76, 0x77, 
-0xfe, 0xf0, 0x49, 0x99, 0xcd, 0xba, 0x93, 0xdb, 
-0xd9, 0x4d, 0xbf, 0x7b, 0x37, 0xe9, 0xcf, 0x46, 
-0xe3, 0x59, 0xaf, 0x7f, 0x3d, 0xe9, 0x77, 0x3b, 
-0xb7, 0x7d, 0x92, 0x11, 0xa1, 0x17, 0xac, 0x7c, 
-0xce, 0x3e, 0xa4, 0x99, 0x2f, 0xa2, 0xfa, 0xe2, 
-0x5c, 0xce, 0xce, 0x41, 0x97, 0x7d, 0xba, 0x1c, 
-0xbd, 0x6f, 0x96, 0x64, 0x2a, 0x5f, 0x05, 0x58, 
-0xf3, 0xbe, 0xd4, 0x17, 0x95, 0x02, 0x5d, 0x44, 
-0x5e, 0x16, 0xc8, 0x4f, 0x5c, 0xe3, 0x19, 0x2c, 
-0xf1, 0x20, 0xe5, 0x85, 0xc4, 0xcd, 0xb8, 0xfb, 
-0xb1, 0x7f, 0xcb, 0xc0, 0x6d, 0x5c, 0x0a, 0x7d, 
-0x31, 0x47, 0x1b, 0x69, 0x96, 0xac, 0xbc, 0x8c, 
-0xb6, 0x3c, 0x8a, 0x7c, 0xde, 0x73, 0x33, 0x77, 
-0x77, 0xe7, 0x3f, 0xbb, 0x3b, 0x86, 0xb7, 0x70, 
-0x13, 0xd6, 0x75, 0x83, 0x20, 0x15, 0x8f, 0xe1, 
-0xbd, 0xd3, 0x98, 0xb6, 0xf5, 0xe4, 0xa8, 0x13, 
-0x08, 0x37, 0xd5, 0x53, 0x7e, 0xb4, 0x7a, 0x80, 
-0x9d, 0x0f, 0xdd, 0xac, 0x3c, 0x8a, 0x42, 0x1c, 
-0x61, 0x88, 0xae, 0xa3, 0x78, 0x15, 0x5f, 0x01, 
-0x74, 0xae, 0xdf, 0x8d, 0x96, 0x4b, 0x08, 0xe2, 
-0x7d, 0xf3, 0xe8, 0x78, 0xaa, 0xa5, 0xba, 0xd1, 
-0x2a, 0xcc, 0xf4, 0xa0, 0xc7, 0x03, 0x9e, 0x71, 
-0x5f, 0x0f, 0x3f, 0x8a, 0x20, 0xb8, 0x15, 0x4b, 
-0x9e, 0xc0, 0xc4, 0x4b, 0xfb, 0x95, 0xd3, 0x43, 
-0x11, 0x7e, 0x79, 0xe5, 0xb0, 0xb3, 0xe6, 0x2d, 
-0xce, 0x34, 0xf5, 0x0c, 0x99, 0x42, 0x91, 0x9b, 
-0x0c, 0xb2, 0x5d, 0x9e, 0x69, 0xae, 0xcd, 0xa0, 
-0xb9, 0x68, 0x95, 0x39, 0xaf, 0xc6, 0xcd, 0x5f, 
-0x72, 0x49, 0xc7, 0x91, 0xed, 0xef, 0xe7, 0xe3, 
-0x94, 0x9d, 0xb1, 0xd1, 0xdd, 0x70, 0x48, 0xb2, 
-0x2a, 0x13, 0x98, 0x27, 0x1a, 0x3f, 0x45, 0xc2, 
-0x67, 0xd7, 0x49, 0xe4, 0xf1, 0x34, 0x45, 0x85, 
-0x09, 0xf7, 0xa2, 0xc4, 0x37, 0xc9, 0xfd, 0x7d, 
-0x36, 0x48, 0xa2, 0xa5, 0xcd, 0xd4, 0xe0, 0x62, 
-0x35, 0x9f, 0xf3, 0xc4, 0x02, 0x35, 0x19, 0xb5, 
-0xf0, 0x09, 0x97, 0x3b, 0x9f, 0x9b, 0x47, 0xe6, 
-0x2a, 0xc4, 0x4c, 0x71, 0x5f, 0x8b, 0x02, 0x5d, 
-0x60, 0x5f, 0xb9, 0x26, 0xb8, 0x8f, 0x63, 0x54, 
-0xdd, 0xea, 0x2b, 0x1b, 0x88, 0xd0, 0xd7, 0x53, 
-0xda, 0x76, 0x57, 0x69, 0xa0, 0x31, 0x34, 0x34, 
-0x1c, 0x77, 0xf5, 0xd2, 0x30, 0x02, 0x9e, 0x47, 
-0x89, 0xcd, 0x54, 0xca, 0xf7, 0x59, 0x0c, 0x1c, 
-0x58, 0x1b, 0x46, 0xa1, 0x45, 0xfb, 0xe3, 0xcf, 
-0x19, 0x4f, 0x42, 0x22, 0x60, 0xa7, 0xd7, 0x9b, 
-0xcc, 0x2e, 0x47, 0x64, 0x3b, 0xe1, 0x71, 0x94, 
-0x64, 0x10, 0x9b, 0x8c, 0xa4, 0xa4, 0x95, 0xa5, 
-0x2b, 0x42, 0x13, 0xbf, 0xb8, 0xc9, 0xa3, 0x97, 
-0x3b, 0x0f, 0x83, 0xa7, 0xfb, 0xa9, 0x05, 0x89, 
-0x96, 0x49, 0x9d, 0x7c, 0xbe, 0xb8, 0x1b, 0x0c, 
-0xfa, 0x93, 0xfb, 0x23, 0xa7, 0x39, 0x25, 0x6d, 
-0x43, 0x6d, 0x0a, 0x83, 0xea, 0xfa, 0x7e, 0x32, 
-0x13, 0x21, 0x4b, 0x9e, 0xf1, 0x9b, 0xcd, 0x32, 
-0xfa, 0xab, 0x73, 0x87, 0xdf, 0x03, 0x1e, 0x42, 
-0x42, 0x52, 0xf1, 0x9d, 0x47, 0x73, 0x73, 0x53, 
-0x13, 0xdd, 0x36, 0x56, 0xb3, 0x20, 0x0a, 0x1f, 
-0x59, 0xec, 0x26, 0xee, 0xf2, 0x8c, 0x98, 0x70, 
-0x31, 0x1e, 0x0f, 0xd9, 0x83, 0x17, 0xc5, 0xd9, 
-0xd9, 0xed, 0xe4, 0xae, 0xdf, 0xde, 0x6e, 0x35, 
-0x15, 0xe1, 0xb3, 0xb6, 0x15, 0x0e, 0x79, 0xf8, 
-0x98, 0x2d, 0x70, 0xf8, 0xe9, 0xa6, 0xd3, 0xeb, 
-0xdc, 0x76, 0xd8, 0xa7, 0xd4, 0xc5, 0x80, 0xb7, 
-0x59, 0xe9, 0x1f, 0xd4, 0x9c, 0x84, 0x7b, 0x5c, 
-0x3c, 0x01, 0x4f, 0x7c, 0xcc, 0xc6, 0x1c, 0x62, 
-0xcd, 0x40, 0x03, 0x48, 0x99, 0x64, 0xab, 0xb8, 
-0x30, 0xb4, 0x88, 0xd2, 0x0c, 0xce, 0x0e, 0x84, 
-0xe4, 0x9f, 0xf0, 0xad, 0x1f, 0x12, 0x25, 0x5f, 
-0x57, 0x0a, 0xa3, 0xd0, 0x34, 0xaf, 0x3a, 0x1f, 
-0xfb, 0x9f, 0xc6, 0x93, 0x9e, 0xd9, 0xb4, 0x59, 
-0xc3, 0xb2, 0x59, 0x55, 0xd9, 0xc7, 0x2d, 0xea, 
-0x2a, 0x60, 0xa0, 0xfb, 0x18, 0x0f, 0x2a, 0x1c, 
-0x66, 0x67, 0x00, 0x19, 0xea, 0xdf, 0xda, 0x98, 
-0xaf, 0x59, 0xef, 0xcf, 0x49, 0xe7, 0xca, 0x6e, 
-0xa0, 0xf8, 0xe1, 0xa1, 0x41, 0xf5, 0xc5, 0x44, 
-0x39, 0x9b, 0x0d, 0x2e, 0xc7, 0xa3, 0x8b, 0xcb, 
-0x31, 0x40, 0x52, 0x88, 0x2c, 0x95, 0x06, 0x9e, 
-0xe1, 0x32, 0xc4, 0x48, 0x89, 0xdd, 0x8c, 0x87, 
-0x33, 0x49, 0x78, 0xfc, 0x3e, 0xbb, 0x98, 0x8c, 
-0x3b, 0xbd, 0x6e, 0xe7, 0x06, 0x46, 0x26, 0x56, 
-0xcd, 0x4c, 0xa6, 0x78, 0xd0, 0x99, 0xb0, 0x7d, 
-0xab, 0x4a, 0xc1, 0xb5, 0x5b, 0x1a, 0x0b, 0x22, 
-0x59, 0x87, 0x8f, 0xd9, 0xdc, 0x5d, 0x8a, 0xe0, 
-0x1b, 0x78, 0xa8, 0x5c, 0x6b, 0x97, 0x17, 0x31, 
-0xee, 0xf5, 0x94, 0xfe, 0x80, 0xc4, 0xe5, 0x88, 
-0x28, 0xd6, 0x19, 0xfd, 0xd5, 0x36, 0x8c, 0xb2, 
-0x18, 0x72, 0x0d, 0xd6, 0x17, 0x19, 0x18, 0x35, 
-0x9d, 0x46, 0xe3, 0xb4, 0xa1, 0xac, 0x48, 0x76, 
-0xbc, 0x69, 0xa7, 0xb4, 0xfc, 0x73, 0x4b, 0x25, 
-0xc1, 0x35, 0x5b, 0x27, 0x8e, 0x32, 0x04, 0xf1, 
-0x9b, 0x70, 0xb8, 0x26, 0x9e, 0x38, 0x0b, 0xdd, 
-0x25, 0x67, 0x59, 0x44, 0x5c, 0x84, 0x43, 0x4f, 
-0xcb, 0x71, 0x02, 0x8c, 0x99, 0x9b, 0x15, 0x29, 
-0x23, 0x80, 0x7a, 0xef, 0xd2, 0x7f, 0x85, 0x15, 
-0x9b, 0x55, 0x1e, 0x57, 0x70, 0x13, 0x09, 0x37, 
-0xac, 0x87, 0xd1, 0x81, 0x88, 0xeb, 0x51, 0xf2, 
-0x58, 0xaf, 0x10, 0x45, 0x35, 0x07, 0xc0, 0xd6, 
-0x23, 0xcf, 0x90, 0x1b, 0x0f, 0xdf, 0x08, 0xda, 
-0x7c, 0x53, 0x07, 0x9c, 0xf8, 0x99, 0x9a, 0x73, 
-0xda, 0xac, 0x3b, 0xc7, 0x27, 0x75, 0xa7, 0x7e, 
-0xdc, 0xaa, 0x28, 0xbf, 0xc5, 0x9c, 0x99, 0x5a, 
-0x05, 0x8e, 0xa0, 0x61, 0x2c, 0xf9, 0xd2, 0x8b, 
-0xbf, 0x99, 0xd5, 0xed, 0xa1, 0xb1, 0xb5, 0xec, 
-0xc1, 0xf9, 0x42, 0x4e, 0xb4, 0x4a, 0x40, 0x0f, 
-0x50, 0x65, 0x14, 0x33, 0x5e, 0x1f, 0x3c, 0x20, 
-0x00, 0xab, 0x62, 0xbe, 0xec, 0xfc, 0x64, 0xc2, 
-0xc0, 0xb2, 0xd8, 0xdf, 0xce, 0x58, 0x83, 0xa1, 
-0x65, 0x2c, 0xf3, 0x18, 0xc6, 0x0b, 0x00, 0x61, 
-0x03, 0x57, 0x04, 0xdc, 0x27, 0x60, 0x3a, 0x6b, 
-0x3c, 0xc1, 0xac, 0xfc, 0xc9, 0xb3, 0xa1, 0x0b, 
-0xf6, 0x93, 0x24, 0x4a, 0x4c, 0x0a, 0x52, 0x1e, 
-0xd8, 0x92, 0x16, 0x5d, 0xdc, 0x77, 0xbd, 0x6b, 
-0x46, 0x99, 0x7a, 0xe7, 0xb3, 0x03, 0x54, 0x87, 
-0x39, 0x0f, 0x8a, 0x1f, 0xa0, 0xbc, 0xf3, 0x21, 
-0xee, 0x44, 0x12, 0x1b, 0x17, 0x08, 0xe7, 0x85, 
-0x4c, 0x7d, 0x5d, 0x80, 0x3e, 0x33, 0x9d, 0xdc, 
-0x1d, 0x75, 0xc4, 0x41, 0x09, 0x8e, 0xf0, 0x13, 
-0x1e, 0x5c, 0xb5, 0x3d, 0x5d, 0xa3, 0x6c, 0x06, 
-0x45, 0x0a, 0x0e, 0xdf, 0xd6, 0x0d, 0x57, 0x75, 
-0x8d, 0xaa, 0xaa, 0xb2, 0xa4, 0x42, 0x45, 0xb1, 
-0xd2, 0xd0, 0x1f, 0xe0, 0xe4, 0xe2, 0x1c, 0xd9, 
-0x2b, 0xed, 0x15, 0x8e, 0xf9, 0x96, 0xed, 0x62, 
-0x80, 0xa4, 0x3e, 0x4a, 0x41, 0xec, 0x1c, 0x72, 
-0x56, 0xcd, 0xe7, 0xd1, 0xf8, 0x78, 0x79, 0x73, 
-0xc3, 0x48, 0x0f, 0xf7, 0xff, 0xce, 0x27, 0xaa, 
-0x29, 0x8b, 0xc5, 0xa6, 0xcb, 0xfb, 0x6b, 0xd0, 
-0xc4, 0x8b, 0xe4, 0x90, 0xec, 0x2d, 0x08, 0xb2, 
-0x90, 0x48, 0xa1, 0xa0, 0x64, 0xd1, 0xc6, 0xfe, 
-0x73, 0x54, 0x8c, 0xc1, 0xf0, 0x5a, 0xdf, 0x03, 
-0x96, 0x22, 0x50, 0x9e, 0x6e, 0x39, 0xb4, 0x74, 
-0x08, 0xf2, 0x22, 0xaf, 0x0d, 0x1c, 0xb0, 0xf7, 
-0x53, 0xb0, 0xe2, 0x48, 0x47, 0xb6, 0x2c, 0x37, 
-0xa7, 0xca, 0x4d, 0x1d, 0xc1, 0x5c, 0xc6, 0x69, 
-0xc1, 0xd2, 0x19, 0x7b, 0x6f, 0x51, 0x1c, 0xd8, 
-0xdd, 0x65, 0x11, 0x4f, 0x59, 0x7f, 0x20, 0x6f, 
-0xd8, 0x24, 0xd8, 0xec, 0x36, 0x52, 0xcd, 0x02, 
-0x2d, 0xd2, 0xfc, 0xda, 0x35, 0xfb, 0xfa, 0x9e, 
-0xb5, 0xaa, 0xb9, 0x91, 0xbf, 0x83, 0x3a, 0xca, 
-0x59, 0xd3, 0x3c, 0x5a, 0x06, 0xc0, 0xfd, 0xaa, 
-0xba, 0xb4, 0x6e, 0x95, 0xf7, 0x90, 0x67, 0xeb, 
-0x5d, 0xca, 0xe8, 0x7f, 0x45, 0x5a, 0x40, 0x41, 
-0xe0, 0x4c, 0xb1, 0xbd, 0xe3, 0xa9, 0x8e, 0x1a, 
-0xed, 0x1b, 0x88, 0xe6, 0x2d, 0x63, 0x13, 0x85, 
-0x2a, 0xbd, 0xbb, 0xab, 0xab, 0xbf, 0x2a, 0x16, 
-0x6e, 0x5f, 0xd2, 0x48, 0xed, 0xdb, 0xd8, 0xec, 
-0x38, 0x24, 0xf4, 0x06, 0xac, 0x41, 0x59, 0x97, 
-0x1f, 0x74, 0x0a, 0x5e, 0xf4, 0x6d, 0x3d, 0x5a, 
-0x2d, 0x1f, 0x78, 0x12, 0xcd, 0xcb, 0x6d, 0x8e, 
-0xf4, 0x9d, 0x7a, 0x9a, 0x7d, 0xf6, 0x1d, 0x1a, 
-0x88, 0xc8, 0xa3, 0x0b, 0x1d, 0xc9, 0x2d, 0x3b, 
-0x35, 0x48, 0xc0, 0x92, 0xe6, 0x99, 0x0b, 0x27, 
-0xd2, 0x0b, 0xb8, 0x9b, 0x90, 0xef, 0x4a, 0x27, 
-0xce, 0x12, 0xb9, 0x17, 0xf8, 0x02, 0x78, 0x52, 
-0xd4, 0x2c, 0xce, 0x06, 0x6e, 0x10, 0x96, 0x74, 
-0x29, 0x82, 0x1b, 0x07, 0x87, 0xc4, 0xae, 0x42, 
-0x28, 0xe1, 0xd9, 0x0a, 0x7a, 0x0e, 0x89, 0x45, 
-0xfe, 0xaa, 0x56, 0x02, 0x42, 0x13, 0x44, 0xb1, 
-0xee, 0x62, 0x1e, 0x56, 0x73, 0xd5, 0x64, 0xf8, 
-0x3c, 0x10, 0xcb, 0xc2, 0xc1, 0x5b, 0x9e, 0x2c, 
-0x45, 0x08, 0x2d, 0x21, 0x8a, 0x30, 0x37, 0x93, 
-0xeb, 0x36, 0x79, 0xac, 0xb0, 0xa1, 0x72, 0x67, 
-0x2c, 0x9a, 0x23, 0x22, 0x54, 0x6b, 0xb2, 0xaa, 
-0x50, 0xa5, 0xe3, 0x98, 0x84, 0x45, 0x62, 0x92, 
-0x09, 0x89, 0xbe, 0xe6, 0x3f, 0x26, 0x04, 0x5b, 
-0x42, 0x4b, 0xe3, 0xe5, 0xfd, 0xa1, 0xb1, 0x4f, 
-0xfb, 0xab, 0xd5, 0xce, 0x1a, 0x6f, 0x6d, 0xe6, 
-0xb7, 0x9b, 0x38, 0xb9, 0x31, 0xb6, 0x5d, 0x4b, 
-0x0f, 0x31, 0xd7, 0xf8, 0x40, 0x60, 0x42, 0xda, 
-0xa5, 0x32, 0x69, 0x0a, 0x4a, 0x2a, 0x13, 0x50, 
-0x87, 0x36, 0xf2, 0x0d, 0xd3, 0xb5, 0x1a, 0x66, 
-0x82, 0x11, 0xa9, 0x72, 0x24, 0x50, 0xc9, 0x65, 
-0xee, 0x85, 0x3e, 0x4e, 0xac, 0xc4, 0x4d, 0xbd, 
-0x7c, 0x70, 0xae, 0x1f, 0x19, 0xb6, 0xf4, 0xb4, 
-0x44, 0x54, 0x1d, 0x99, 0x35, 0xff, 0x64, 0x1d, 
-0xc6, 0x9e, 0x69, 0x14, 0xe1, 0x0b, 0x6c, 0x05, 
-0x19, 0x49, 0xe9, 0x2a, 0x95, 0x0b, 0x68, 0x63, 
-0xb4, 0xc9, 0x4b, 0x0d, 0xba, 0xd6, 0x92, 0x9b, 
-0xdb, 0xdb, 0x76, 0x4b, 0x71, 0x4e, 0xd5, 0x25, 
-0xc9, 0x4b, 0xaa, 0x4b, 0x06, 0x93, 0x85, 0xef, 
-0x17, 0x71, 0x12, 0x2e, 0x81, 0x72, 0x59, 0x7b, 
-0x8b, 0x6f, 0x35, 0xc7, 0x42, 0x5e, 0x6e, 0xd8, 
-0x42, 0x6b, 0xa5, 0x78, 0x6e, 0xb7, 0x61, 0x7d, 
-0x5f, 0x73, 0x75, 0x8b, 0xcc, 0x06, 0x56, 0x7a, 
-0xbf, 0xe1, 0xc2, 0xb4, 0x94, 0x2f, 0x25, 0x8d, 
-0x69, 0x82, 0x4b, 0xfe, 0xcd, 0x34, 0x29, 0xb1, 
-0x0d, 0xa8, 0x5a, 0x4d, 0xad, 0x6c, 0xe6, 0xee, 
-0x25, 0x2f, 0x0c, 0xd7, 0x6f, 0x3d, 0x76, 0xba, 
-0xe5, 0x27, 0x8b, 0x7a, 0xec, 0x48, 0xea, 0xa6, 
-0x3f, 0x65, 0x2e, 0x83, 0x0d, 0xac, 0x71, 0xbf, 
-0xe4, 0x23, 0x12, 0x02, 0x5b, 0x16, 0x20, 0x9d, 
-0x44, 0x84, 0xa2, 0x78, 0x39, 0x1a, 0x8c, 0x19, 
-0x14, 0xd3, 0xa3, 0x82, 0x6e, 0x44, 0x60, 0x65, 
-0xf9, 0x3a, 0x4a, 0xf1, 0x81, 0x50, 0x95, 0xf2, 
-0xf7, 0x47, 0xf4, 0x78, 0xd4, 0x8b, 0x57, 0xe9, 
-0xa3, 0x3c, 0xdd, 0x58, 0x47, 0x50, 0xd2, 0x66, 
-0x7b, 0x3f, 0xf6, 0xac, 0xb2, 0xc8, 0x20, 0x70, 
-0x4b, 0x32, 0xa0, 0x50, 0x12, 0x29, 0x1e, 0xcc, 
-0x78, 0xae, 0xea, 0x50, 0xb5, 0xe0, 0xa1, 0x24, 
-0xbf, 0x96, 0x6e, 0x2e, 0x54, 0xe5, 0x21, 0xc1, 
-0x93, 0x8b, 0xc7, 0xa5, 0x0e, 0x40, 0xbf, 0xc4, 
-0xa4, 0xed, 0x2a, 0x3d, 0xbb, 0xaa, 0xf9, 0x6b, 
-0x4b, 0x5d, 0x01, 0x84, 0x4f, 0xa8, 0xac, 0x5a, 
-0x95, 0x26, 0x68, 0x24, 0x4f, 0x96, 0x2a, 0x29, 
-0xe4, 0x10, 0xd5, 0x76, 0x4d, 0xeb, 0xd2, 0x9d, 
-0x08, 0x61, 0x08, 0xc8, 0x49, 0xb4, 0xd3, 0x5e, 
-0x9f, 0x27, 0x8f, 0x75, 0x08, 0x02, 0x74, 0x60, 
-0x8f, 0xed, 0xe5, 0xf6, 0xe5, 0xde, 0xe0, 0x79, 
-0x38, 0xa7, 0x45, 0x75, 0x87, 0xa0, 0x57, 0xa8, 
-0xa9, 0x3c, 0x90, 0xbb, 0x56, 0x42, 0xd2, 0x79, 
-0x43, 0x35, 0x59, 0x46, 0xc1, 0x3a, 0x09, 0xa5, 
-0x7e, 0x5d, 0x28, 0xcf, 0x93, 0xb6, 0xfa, 0x9d, 
-0xc1, 0xd8, 0x24, 0xab, 0xfc, 0x8d, 0xc1, 0xc6, 
-0x64, 0x59, 0xaf, 0x54, 0xf3, 0x5f, 0x24, 0x90, 
-0x33, 0x90, 0xa8, 0xfb, 0xfc, 0xba, 0x2f, 0x82, 
-0xf2, 0x52, 0xba, 0xe4, 0xfe, 0x97, 0x57, 0xb6, 
-0xe4, 0x2c, 0x95, 0xd2, 0xd0, 0x86, 0x49, 0xaa, 
-0xe4, 0xc6, 0xba, 0x32, 0x5c, 0x0e, 0xd2, 0xae, 
-0xba, 0xc4, 0x94, 0xae, 0xdd, 0x78, 0x6e, 0x36, 
-0x6c, 0x47, 0x3f, 0x4f, 0x64, 0x09, 0x0e, 0x01, 
-0x40, 0x84, 0x1f, 0x8e, 0xe1, 0x43, 0xd6, 0x5b, 
-0xc5, 0xd6, 0xe4, 0x4c, 0x3a, 0x70, 0x2f, 0x42, 
-0xc9, 0x51, 0x0c, 0x32, 0x4c, 0x53, 0xb2, 0x9f, 
-0x5b, 0x2a, 0xdb, 0x0f, 0x50, 0x87, 0xbe, 0x28, 
-0x7e, 0x26, 0xec, 0xfc, 0x1c, 0x7a, 0x28, 0x1a, 
-0x29, 0x8b, 0xf7, 0xf0, 0xb7, 0x56, 0x9b, 0x9e, 
-0x49, 0x87, 0x54, 0x0e, 0x4a, 0xd8, 0xc7, 0xd3, 
-0x36, 0x26, 0x0c, 0x2a, 0x6e, 0x9a, 0x0a, 0x3f, 
-0x3f, 0x53, 0x85, 0x99, 0x66, 0xee, 0xd1, 0x2b, 
-0xc4, 0xbd, 0x83, 0xbd, 0x6d, 0x86, 0xf6, 0x6e, 
-0xe5, 0xb4, 0x2a, 0x11, 0x30, 0x5b, 0xd8, 0x5d, 
-0x47, 0x6e, 0xfd, 0x2e, 0xf2, 0xe4, 0x6d, 0xe4, 
-0xb5, 0xbd, 0xc3, 0xc0, 0xa8, 0xc2, 0xf7, 0xa3, 
-0xf6, 0x9a, 0xd5, 0xf3, 0x52, 0x2d, 0x88, 0xb6, 
-0x5b, 0x2c, 0x44, 0x4f, 0x4b, 0x67, 0x12, 0x66, 
-0x0e, 0xce, 0x54, 0x67, 0xba, 0xa1, 0xe9, 0xec, 
-0x15, 0x07, 0x0d, 0x04, 0x6b, 0x67, 0xad, 0x93, 
-0xf6, 0x4f, 0xe3, 0xaf, 0xfd, 0x47, 0x4e, 0x20, 
-0x0f, 0xd4, 0x9d, 0xff, 0x7f, 0xfc, 0x10, 0x53, 
-0x22, 0x24, 0xda, 0x28, 0x8a, 0x90, 0xad, 0x0e, 
-0x11, 0x4c, 0xce, 0xb0, 0xc6, 0xc6, 0x89, 0xa9, 
-0x10, 0x15, 0x01, 0xf7, 0x63, 0x55, 0x9f, 0xda, 
-0x72, 0x20, 0xeb, 0x56, 0x5b, 0x12, 0x42, 0x84, 
-0xcc, 0x73, 0x53, 0x0e, 0x7f, 0x9f, 0xdc, 0x40, 
-0x72, 0x63, 0x57, 0xf6, 0x4f, 0x0b, 0xce, 0xe6, 
-0x22, 0x81, 0x0e, 0x29, 0x76, 0x05, 0x30, 0xd8, 
-0x85, 0x11, 0x0f, 0x7c, 0x8b, 0xf1, 0xd0, 0xa3, 
-0x4b, 0xf3, 0xab, 0x80, 0x96, 0xfd, 0x01, 0x75, 
-0x9d, 0x13, 0xea, 0xaa, 0xf0, 0x77, 0xd4, 0x80, 
-0x67, 0x19, 0x4f, 0x52, 0x56, 0xe9, 0x54, 0xf0, 
-0x79, 0x5c, 0x99, 0x54, 0xea, 0x05, 0x5c, 0x0a, 
-0x37, 0x05, 0xc8, 0x49, 0xbc, 0xf4, 0xdf, 0xf0, 
-0xc0, 0xe5, 0x5b, 0xe1, 0x1a, 0x39, 0x9c, 0x2f, 
-0x1e, 0x45, 0x06, 0x68, 0x0d, 0x89, 0x76, 0x5a, 
-0x46, 0xcb, 0x16, 0x22, 0xc9, 0xc1, 0x56, 0x0f, 
-0x6f, 0xe3, 0x35, 0x5b, 0x9b, 0xee, 0xb9, 0x12, 
-0xf0, 0x19, 0x01, 0x31, 0xac, 0x54, 0x8a, 0x28, 
-0x68, 0x79, 0x31, 0x41, 0x9a, 0x60, 0xcb, 0xb4, 
-0xd7, 0xd9, 0x63, 0x3f, 0x7e, 0x40, 0xf7, 0x74, 
-0xce, 0x80, 0x9c, 0x56, 0x89, 0x9c, 0xaa, 0xdc, 
-0xcb, 0xe8, 0x82, 0xec, 0x01, 0x3b, 0x3e, 0xc2, 
-0x4e, 0xa0, 0xa9, 0x16, 0xca, 0xa8, 0x4d, 0xf9, 
-0xf3, 0xa5, 0xc6, 0x6c, 0x14, 0x98, 0xa7, 0x6f, 
-0x63, 0xe2, 0x67, 0x4d, 0x22, 0xb7, 0x4e, 0x08, 
-0x79, 0x13, 0xb8, 0xb5, 0x0e, 0x5c, 0x72, 0xf6, 
-0xf3, 0x2f, 0x01, 0x1f, 0x1f, 0xc1, 0x95, 0xc2, 
-0x0e, 0x99, 0xd3, 0xac, 0x6f, 0x71, 0xdb, 0x79, 
-0x13, 0x7d, 0x7b, 0x28, 0x88, 0x5b, 0xa5, 0x50, 
-0x38, 0x5b, 0x30, 0xdf, 0xff, 0x66, 0x28, 0xf4, 
-0x05, 0x52, 0x0a, 0xc5, 0x26, 0xe8, 0xd1, 0x6f, 
-0x86, 0xe1, 0x35, 0xa8, 0x0e, 0x43, 0xb3, 0x95, 
-0x87, 0x01, 0xef, 0x60, 0x88, 0x13, 0x3c, 0xde, 
-0x11, 0x0b, 0xbf, 0x9e, 0xb3, 0xf7, 0xc7, 0xb2, 
-0x22, 0xcb, 0x30, 0x3a, 0x27, 0x0d, 0x6d, 0x15, 
-0xa1, 0xb4, 0x24, 0x7c, 0x3d, 0xc7, 0x35, 0x29, 
-0x49, 0x96, 0x4e, 0x1b, 0xeb, 0x67, 0x11, 0x3f, 
-0x0f, 0xb4, 0xbe, 0x3e, 0x93, 0xf8, 0x79, 0x90, 
-0x8b, 0x2a, 0x87, 0x1d, 0x55, 0x3d, 0x76, 0xfe, 
-0x0b };
-
-int inf()
-{
-    int ret;
-    unsigned have;
-    z_stream strm;
-    unsigned char * out = zalloc(65536);
-
-    /* allocate inflate state */
-    strm.zalloc = Z_NULL;
-    strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL;
-    strm.avail_in = 0;
-    strm.next_in = Z_NULL;
-    ret = inflateInit(&strm);
-    if (ret != Z_OK)
-        return ret;
-
-    /* decompress until deflate stream ends or end of file */
-    do {
-		strm.avail_in = 2340;
-
-        if (strm.avail_in == 0)
-            break;
-        strm.next_in = in;
-
-        /* run inflate() on input until output buffer not full */
-        do {
-            strm.avail_out = 65536;
-            strm.next_out = out;
-            ret = inflate(&strm, Z_NO_FLUSH);
-            assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
-            switch (ret) {
-            case Z_NEED_DICT:
-                ret = Z_DATA_ERROR;     /* and fall through */
-            case Z_DATA_ERROR:
-            case Z_MEM_ERROR:
-                (void)inflateEnd(&strm);
-                return ret;
-            }
-            have = 65536 - strm.avail_out;
-          } while (strm.avail_out == 0);
-
-        /* done when inflate() says it's done */
-    } while (ret != Z_STREAM_END);
-
-    /* clean up and return */
-    (void)inflateEnd(&strm);
-    return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
-}
-
-/* report a zlib or i/o error */
-void zerr(int ret)
-{
-    fputs("zpipe: ", stderr);
-    switch (ret) {
-    case Z_ERRNO:
-        if (ferror(stdin))
-            fputs("error reading stdin\n", stderr);
-        if (ferror(stdout))
-            fputs("error writing stdout\n", stderr);
-        break;
-    case Z_STREAM_ERROR:
-        fputs("invalid compression level\n", stderr);
-        break;
-    case Z_DATA_ERROR:
-        fputs("invalid or incomplete deflate data\n", stderr);
-        break;
-    case Z_MEM_ERROR:
-        fputs("out of memory\n", stderr);
-        break;
-    case Z_VERSION_ERROR:
-        fputs("zlib version mismatch!\n", stderr);
-    }
-}
-
-/* compress or decompress from stdin to stdout */
-int zmain(int argc, char **argv)
-{
-    int ret;
-
-    /* avoid end-of-line conversions */
-    SET_BINARY_MODE(stdin);
-    SET_BINARY_MODE(stdout);
-
-    /* do compression if no arguments */
-    if (argc == 1) {
-        ret = def(stdin, stdout, Z_DEFAULT_COMPRESSION);
-        if (ret != Z_OK)
-            zerr(ret);
-        return ret;
-    }
-
-    /* do decompression if -d specified */
-    else if (argc == 2 && strcmp(argv[1], "-d") == 0) {
-        ret = inf(stdin, stdout);
-        if (ret != Z_OK)
-            zerr(ret);
-        return ret;
-    }
-
-    /* otherwise, report usage */
-    else {
-        fputs("zpipe usage: zpipe [-d] < source > dest\n", stderr);
-        return 1;
-    }
 }

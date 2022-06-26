@@ -140,6 +140,9 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK FrameWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
+
+extern RECT FRect;	// Frame 
+
 int NewLine();
 
 int	ProcessBuff(char * readbuff,int len);
@@ -1605,12 +1608,23 @@ LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		 
 		if (lParam == (LPARAM) hWnd)
 		{
+			RECT Rect;
 			RemoveMenu(hBaseMenu, 1, MF_BYPOSITION);
 			AppendMenu(hBaseMenu, MF_STRING + MF_POPUP, (UINT)hMonCfgMenu, "Config");
 			AppendMenu(hBaseMenu, MF_STRING + MF_POPUP, (UINT)hMonEdtMenu, "Edit");
 			AppendMenu(hBaseMenu, MF_STRING + MF_POPUP, (UINT)hMonHlpMenu, "Help");
 
-			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hBaseMenu, (LPARAM)hWndMenu);		 
+			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hBaseMenu, (LPARAM)hWndMenu);
+
+			// Check Window is visible
+
+			GetWindowRect(FrameWnd, &FRect);
+
+			if (GetWindowRect(hWnd, &Rect))
+			{
+				if (Rect.top > FRect.bottom || Rect.left > FRect.right)
+					MoveWindow(hWnd, FRect.top + 100, FRect.left+ 100, 300, 200, 1);
+			}
 		}
 		else
 		{
@@ -4762,6 +4776,13 @@ BOOL CreateMonitorWindow(char * MonSize)
 	{
 		Rect.right = 400;
 		Rect.bottom = 400;
+	}
+
+	if (Rect.top < OffsetH)			// Make sure not off top of MDI frame
+	{
+		int Error = OffsetH - Rect.top;
+		Rect.top += Error;
+		Rect.bottom += Error;
 	}
 
 	ChildWnd =  CreateMDIWindow("MonWnd", "Monitor", 0,

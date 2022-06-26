@@ -62,7 +62,7 @@ TODo	?Multiple Adapters
 
 #include "CHeaders.h"
 
-#include "IPCode.h"
+#include "ipcode.h"
 
 #ifdef WIN32
 #include "pcap.h"
@@ -85,11 +85,11 @@ VOID RemoveARP(PARPDATA Arp);
 
 VOID ProcessTunnelMsg(PIPMSG IPptr);
 VOID ProcessRIP44Message(PIPMSG IPptr);
-PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found);
+PROUTEENTRY LookupRoute(uint32_t IPADDR, uint32_t Mask, BOOL Add, BOOL * Found);
 BOOL ProcessROUTELine(char * buf, BOOL Locked);
 VOID DoRouteTimer();
-PROUTEENTRY FindRoute(ULONG IPADDR);
-VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap);
+PROUTEENTRY FindRoute(uint32_t IPADDR);
+VOID SendIPtoEncap(PIPMSG IPptr, uint32_t Encap);
 USHORT Generate_CHECKSUM(VOID * ptr1, int Len);
 
 static VOID MapRouteIPMsg(PIPMSG IPptr);
@@ -118,10 +118,10 @@ static int NumberofRoutes = 0;
 
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
-static ULONG OurIPAddr = 0;
+static uint32_t OurIPAddr = 0;
 
-static ULONG OurIPBroadcast = 0;
-static ULONG OurNetMask = 0xffffffff;
+static uint32_t OurIPBroadcast = 0;
+static uint32_t OurNetMask = 0xffffffff;
 
 static BOOL WantTAP = FALSE;
 static BOOL WantEncap = 0;			// Run RIP44 and Net44 Encap
@@ -357,7 +357,7 @@ Dll BOOL APIENTRY Init_PM()
 			Vallen=80;
 
 			retCode = RegQueryValueEx(hKey,"IPResSize",0,			
-				(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+				(uint32_t *)&Type,(UCHAR *)&Size,(uint32_t *)&Vallen);
 
 			if (retCode == ERROR_SUCCESS)
 				sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &IPMinimized);
@@ -653,7 +653,7 @@ AlreadyThere:
 
 		if (arpptr->TARGETIPADDR == OurIPAddr)
 		{
-			ULONG Save = arpptr->TARGETIPADDR;
+			uint32_t Save = arpptr->TARGETIPADDR;
  
 			arpptr->ARPOPCODE = 0x0200;
 			memcpy(arpptr->TARGETHWADDR, arpptr->SENDHWADDR ,6);
@@ -738,7 +738,7 @@ static int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len)
 
 static VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 {
-	ULONG Dest;
+	uint32_t Dest;
 	PARPDATA Arp;
 	BOOL Found;
 	int index, Len;
@@ -1018,9 +1018,9 @@ static PROUTEENTRY AllocRouteEntry()
 
 	if (NumberofRoutes == 0)
 
-		RouteRecords = malloc(4);
+		RouteRecords = malloc(sizeof(void *));
 	else
-		RouteRecords = realloc(RouteRecords,(NumberofRoutes + 1) * 4);
+		RouteRecords = realloc(RouteRecords,(NumberofRoutes + 1) * sizeof(void *));
 
 	Routeptr = zalloc(sizeof(ROUTEENTRY));
 
@@ -1038,9 +1038,9 @@ static PARPDATA AllocARPEntry()
 
 	if (NumberofARPEntries == 0)
 
-		ARPRecords = malloc(4);
+		ARPRecords = malloc(sizeof(void *));
 	else
-		ARPRecords = realloc(ARPRecords, (NumberofARPEntries+1)*4);
+		ARPRecords = realloc(ARPRecords, (NumberofARPEntries+1)*sizeof(void *));
 
 	ARPptr = malloc(sizeof(ARPDATA));
 
@@ -1075,7 +1075,7 @@ static PARPDATA AllocARPEntry()
 	return;
  }
 
-static PROUTEENTRY FindRoute(ULONG IPADDR)
+static PROUTEENTRY FindRoute(uint32_t IPADDR)
 {
 	PROUTEENTRY Route = NULL;
 	int i;
@@ -1092,7 +1092,7 @@ static PROUTEENTRY FindRoute(ULONG IPADDR)
 
 
 
-static PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found)
+static PROUTEENTRY LookupRoute(uint32_t IPADDR, uint32_t Mask, BOOL Add, BOOL * Found)
 {
 	PROUTEENTRY Route = NULL;
 	int i;
@@ -1121,7 +1121,7 @@ static PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found)
 		return NULL;
 }
 
-static PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found)
+static PARPDATA LookupARP(uint32_t IPADDR, BOOL Add, BOOL * Found)
 {
 	PARPDATA Arp = NULL;
 	int i;

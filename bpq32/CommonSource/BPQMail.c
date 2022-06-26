@@ -1073,6 +1073,7 @@
 //	Move User config to main config file.
 //	Update message status whne reading a Forms Webmail message
 //	Speed up killing multiple messages
+//	Allow SendWL2KFW as well as the (incorrect)SendWL2KPM command
 
 //  6.0.23.1  ?????????
 
@@ -1085,15 +1086,30 @@
 //	Add SendWL2KPM command to connect script to allow users other than RMS to send ;FW: string to RMS Relay
 //	Fix B2 Header Date in Webmail message with sttachments.
 //	Fix bug when using YAPP with VARA (.27)
+//	Allow SendWL2KFW as well as the (incorrect)SendWL2KPM command
+//	Add mechsnism to send bbs log records to qttermtcp. (32)
+//	Add MFJ forwarding Mode (No @BBS on send)
+//	Fix handling CR/LF split over packet boundaries
+//	Add Header and Footers for Webmail Send (42)
+//	Fix Maintenance Interval in LinBPQ (53)
+//	Add RMS: to valid from addresses (.56)
+//	Fix Web management on Android deviced (.58)
+//	Disconnect immediately if "Invalid Command" "*** Protocol Error" or "Already Connected" received (.70)
+//	Check Badword and Reject filters before processing WP Messages
 
-
-#include "BPQMail.h"
+#include "bpqmail.h"
 #define MAIL
 #include "Versions.h"
 
 #include "GetVersion.h"
 
 #define MAX_LOADSTRING 100
+
+typedef int (WINAPI FAR *FARPROCX)();
+typedef int (WINAPI FAR *FARPROCZ)();
+
+FARPROCX pDllBPQTRACE;
+FARPROCZ pGetLOC;
 
 BOOL WINE = FALSE;
 
@@ -1113,6 +1129,8 @@ TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 
 extern int LastVer[4];							// In case we need to do somthing the first time a version is run
+
+UINT BPQMsg;
 
 HWND MainWnd;
 HWND hWndSess;
@@ -1581,6 +1599,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	Logprintf(LOG_BBS, NULL, '!', "BPQMail Starting");
 	Debugprintf("BPQMail Starting");
 
+	if (pDllBPQTRACE == 0)
+		Logprintf(LOG_BBS, NULL, '!', "Remote Monitor Log not available - update BPQ32.dll to enable");
+
+
 	} My__except_Routine("Init");
 
 	while (GetMessage(&msg, NULL, 0, 0))
@@ -1832,6 +1854,8 @@ HWND hWnd;
 
 int AXIPPort = 0;
 
+char LOC[7] = "";
+
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	char Title[80];
@@ -1843,7 +1867,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	RECT SessRect;
 	struct _EXCEPTION_POINTERS exinfo;
 
-	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
+	HMODULE ExtDriver = LoadLibrary("bpq32.dll");
+
+	if (ExtDriver)
+	{
+		pDllBPQTRACE = GetProcAddress(ExtDriver,"_DllBPQTRACE@8");
+		pGetLOC = GetProcAddress(ExtDriver,"_GetLOC@0");
+
+		if (pGetLOC)
+		{
+			char * pLOC = (char *)pGetLOC();
+			memcpy(LOC, pLOC, 6);
+		}
+	}
 
 	// See if running under WINE
 

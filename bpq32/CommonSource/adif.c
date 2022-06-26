@@ -360,8 +360,8 @@ BandLimits Bands[] =
 int FreqCount = sizeof(Bands)/sizeof(struct BandLimits);
 
 char ADIFModes [55][18] = {
-	"PKT", "PKT", "PKT", "PKT", "PKT", "PKT", "PKT", "", "", "", "",
-	"", "PAC", "", "", "PAC/PAC2", "", "PAC/PAC3", "", "", "PAC/PAK4", // 10 - 20
+	"PKT", "PKT", "PKT", "PKT", "PKT", "PKT", "PKT", "", "", "", // 0 - 9
+	"", "PAC", "", "", "PAC/PAC2", "", "PAC/PAC3", "", "", "", "PAC/PAK4", // 10 - 20
 	"WINMOR", "WINMOR", "", "", "", "", "", "", "",				// 21 - 29
 	"Robust Packet", "", "", "", "", "", "", "", "", "",					// 30 - 39
 	"ARDOP", "ARDOP", "ARDOP", "ARDOP", "ARDOP", "", "", "", "", "",	// 40 - 49

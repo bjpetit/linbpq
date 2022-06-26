@@ -53,6 +53,12 @@
 // October 2021 1.0.11.2
 //	Recompiled for Web Interface changes in Node
 
+// February 2022 1.0.12.3 Renumbered to 6.0.23.1 to match Node
+//	Add option for user defined help file
+//  Add Connect Scripts
+//	Improve connect timeouts and add link validation polls
+
+
 
 #include "BPQChat.h"
 #include "Dbghelp.h"
@@ -68,7 +74,7 @@
 #define MAX_LOADSTRING 100
 
 BOOL WINE = FALSE;
-
+UINT BPQMsg;
 
 HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
 char * REGTREETEXT = "HKEY_LOCAL_MACHINE";
@@ -194,11 +200,8 @@ INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK ChatColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-unsigned long _beginthread( void( *start_address )(VOID * DParam),
-				unsigned stack_size, VOID * DParam);
-
 VOID SaveWindowConfig();
-void WriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
+void ChatWriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 char * lookupuser(char * call);
 BOOL GetChatConfig(char * ConfigName);
 BOOL SaveChatConfigFile(char * ConfigName);
@@ -1176,9 +1179,15 @@ int RefreshMainWindow()
 		{
 			if (conn->Flags & CHATLINK)
 			{
-				i=sprintf_s(msg, sizeof(msg), "%-10s %-10s %2d %-10s%5d",
+				if (conn->u.link->supportsPolls)
+					i=sprintf_s(msg, sizeof(msg), "%-10s %-10s %2d %-10s%5d %4d",
+						"Chat Link", conn->u.link->alias, conn->BPQStream, 
+						"", conn->OutputQueueLength - conn->OutputGetPointer, conn->u.link->RTT);
+				else
+					i=sprintf_s(msg, sizeof(msg), "%-10s %-10s %2d %-10s%5d",
 					"Chat Link", conn->u.link->alias, conn->BPQStream,
 					"", conn->OutputQueueLength - conn->OutputGetPointer);
+
 			}
 			else
 			if ((conn->Flags & CHATMODE)  && conn->topic)
@@ -1281,7 +1290,7 @@ Retry:
 	if (ChatApplNum)
 	{
 		char * ptr1 = GetApplCall(ChatApplNum);
-		char * ptr2;
+		char * Save;
 
 		if (*ptr1 > 0x20)
 		{
@@ -1299,17 +1308,31 @@ Retry:
 			ChatApplMask = 1<<(ChatApplNum-1);
 		
 			// Set up other nodes list. rtlink messes with the string so pass copy
-	
-			ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
 
-			while (ptr1)
+			// New format can have connect scrips and separates lines with crlf, not space
+
+
+			if (strchr(OtherNodesList, '\r'))	// Has connect script entries
 			{
-				rtlink(ptr1);			
-				ptr1 = strtok_s(NULL, " ,\r", &Context);
+				Save = ptr1 = strtok_s(_strdup(OtherNodesList), "\r\n", &Context);
+
+				while (ptr1 && ptr1[0])
+				{
+					rtlink(ptr1);
+					ptr1 = strtok_s(NULL, "\r\n", &Context);
+					}
 			}
+			else
+			{
+				Save = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
 
-			free(ptr2);
-
+				while (ptr1)
+				{
+					rtlink(ptr1);			
+					ptr1 = strtok_s(NULL, " ,\r", &Context);
+				}
+			}
+			free(Save);
 			SetupChat();
 		}
 	}
@@ -1427,32 +1450,15 @@ INT_PTR CALLBACK InfoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 int GetMultiLineDialog(HWND hDialog, int DLGItem)
 {
 	char Text[10000];
-	char * ptr1, * ptr2;
-
+	
 	GetDlgItemText(hDialog, DLGItem, Text, 10000);
 
-	// replace crlf with single space
+	// We can now have connect scripts for each node, so leave cr/lf
 
 	if (Text[strlen(Text)-1] != '\n')			// no terminating crlf?
 		strcat(Text, "\r\n");
 
-	ptr1 = Text;
-	ptr2 = OtherNodesList;
-		
-	while (*ptr1)
-	{
-		if (*ptr1 == '\r')
-		{
-			while (*(ptr1+2) == '\r')			// Blank line
-				ptr1+=2;
-
-			*++ptr1 = 32;
-		}
-		*ptr2++=*ptr1++;
-	}
-
-	*ptr2++ = 0;
-
+	strcpy(OtherNodesList, Text);
 	return TRUE;
 }
 
@@ -1467,17 +1473,35 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 
 	case WM_INITDIALOG:
 
-		ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
-
-		while (ptr1)
+		if (strchr(OtherNodesList, 13))		// New format with connect scripts?
 		{
-			strcat(Text, ptr1);	
-			strcat(Text, "\r\n");	
-			ptr1 = strtok_s(NULL, " ,\r", &Context);
+			strcpy(Text, OtherNodesList);
+		/*
+			ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), "\r", &Context);
+
+			while (ptr1 && ptr1[0])
+			{
+				strcat(Text, ptr1);	
+				strcat(Text, "\r\n");	
+				ptr1 = strtok_s(NULL, "\r", &Context);
+
+				if (*(ptr1) == 10)
+					ptr1++;
+			}
+		*/
 		}
+		else
+		{
+			ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
 
-		free(ptr2);
-
+			while (ptr1)
+			{
+				strcat(Text, ptr1);	
+				strcat(Text, "\r\n");	
+				ptr1 = strtok_s(NULL, " ,\r", &Context);
+			}
+			free(ptr2);
+		}
 		SetDlgItemInt(hDlg, ID_CHATAPPL, ChatApplNum, FALSE);
 		SetDlgItemInt(hDlg, ID_STREAMS, MaxChatStreams, FALSE);
 		SetDlgItemText(hDlg, ID_CHATNODES, Text);
@@ -1569,31 +1593,5 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 	return (INT_PTR)FALSE;
 }
 
-
-
-VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...)
-{
-	// seems to be printf to a socket
-
-	char buff[600];
-	va_list(arglist);
-	
-	va_start(arglist, format);
-	vsprintf(buff, format, arglist);
-
-	nputs(conn, buff);
-}
-
-VOID nputs(ChatCIRCUIT * conn, char * buf)
-{
-	// Seems to send buf to socket
-
-	ChatQueueMsg(conn, buf, strlen(buf));
-
-	if (*buf == 0x1b)
-		buf += 2;				// Colour Escape
-	
-	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
-}
 
 

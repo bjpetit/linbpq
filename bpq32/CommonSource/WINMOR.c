@@ -122,7 +122,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
@@ -1161,56 +1161,14 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			// WINMOR doesn't seem to recover from a blocked write. For now just reset
 			
-//			if (bytes == SOCKET_ERROR)
-//			{
-				winerr=WSAGetLastError();
-				
-				i=sprintf(ErrMsg, "WINMOR Write Failed for port %d - error code = %d\r\n", port, winerr);
-				WritetoConsole(ErrMsg);
-					
-	
-//				if (winerr != WSAEWOULDBLOCK)
-//				{
-				closesocket(TNC->TCPSock);
-					
-					TNC->CONNECTED = FALSE;
+			winerr = WSAGetLastError();
+			sprintf(ErrMsg, "WINMOR Write Failed for port %d - error code = %d\r\n", port, winerr);
+			WritetoConsole(ErrMsg);	
+			closesocket(TNC->TCPSock);	
+			TNC->CONNECTED = FALSE;
 
-					return (0);
-//				}
-//				else
-//				{
-//					bytes=0;		// resent whole packet
-//				}
-
-//			}
-
-			// Partial Send or WSAEWOULDBLOCK. Save data, and send once busy clears
-
-			
-			// Get a buffer
-						
-//			buffptr=GetBuff();
-
-//			if (buffptr == 0)
-//			{
-				// No buffers, so can only break connection and try again
-
-//				closesocket(TCPSock[MasterPort[port]]);
-					
-//				CONNECTED[MasterPort[port]]=FALSE;
-
-//				return (0);
-//			}
-	
-//			buffptr[1]=txlen-bytes;			// Bytes still to send
-
-//			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
-
-//			C_Q_ADD(&BPQtoWINMOR_Q[MasterPort[port]],buffptr);
-	
-//			return (0);
+			return (0);
 		}
-
 
 		return (0);
 
@@ -1447,11 +1405,15 @@ VOID WinmorReleasePort(struct TNCINFO * TNC)
 }
 
 extern char WebProcTemplate[];
-
+extern char sliderBit[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, "WINMOR Status", "WINMOR Status");
+	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, TNC->Port, "WINMOR Status", "WINMOR Status");
+
+	if (TNC->TXFreq)
+		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
+
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);

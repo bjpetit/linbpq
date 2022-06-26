@@ -21,9 +21,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 // FBB Forwarding Routines
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
-long Encode(char * in, char * out, long inlen, BOOL B1Protocol, int Compress);
+int32_t Encode(char * in, char * out, int32_t inlen, BOOL B1Protocol, int Compress);
 
 
 int MaxRXSize = 99999;

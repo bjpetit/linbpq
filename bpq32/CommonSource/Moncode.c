@@ -65,7 +65,7 @@ UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen);
 char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen);
 UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen);
 char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output);
-int CountBits(unsigned long in);
+int CountBits(uint64_t in);
 
 DllExport int APIENTRY SetTraceOptions(int mask, int mtxparam, int mcomparam)
 {
@@ -101,7 +101,24 @@ DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, 
 	return 0;
 }
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
+int IntSetTraceOptionsEx(uint64_t mask, int mtxparam, int mcomparam, int monUIOnly)
+{
+
+//	Sets the tracing options for DecodeFrame. Mask is a bit
+//	mask of ports to monitor (ie 101 binary will monitor ports
+//	1 and 3). MTX enables monitoring on transmitted frames. MCOM
+//	enables monitoring of protocol control frames (eg SABM, UA, RR),
+//	as well as info frames.
+
+
+	MMASK = mask;
+	MTX = mtxparam;
+	MCOM = mcomparam;
+	MUIONLY = monUIOnly;
+
+	return 0;
+}
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, unsigned long long Mask, BOOL APRS, BOOL MCTL);
 
 int APRSDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask)
 {
@@ -112,7 +129,7 @@ DllExport int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, int Stamp)
 	return IntDecodeFrame(msg, buffer, Stamp, MMASK, FALSE, FALSE);
 }
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MINI)
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, unsigned long long Mask, BOOL APRS, BOOL MINI)
 {
 	UCHAR * ptr;
 	int n;
@@ -160,7 +177,7 @@ KC6OAR*>ID:
 
 	Port &= 0x7F;
 
-	if (((1 << (Port - 1)) & Mask) == 0)		// Check MMASK
+	if (((1ll << (Port - 1)) & Mask) == 0)		// Check MMASK
 		return 0;
 	
 
@@ -184,8 +201,7 @@ KC6OAR*>ID:
 
 		SS = (int)(Stamp - MM * 60);
 
-		// Add Port: if MINI mode and monitoring more than one port
-
+		// Add Port: unless Mail Mon (port 33)
 
 		Output += sprintf((char *)Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
 
@@ -195,8 +211,11 @@ KC6OAR*>ID:
 		if (buffer[strlen(buffer) -1] == '\r')
 			Output--;
 
-		Output += sprintf((char *)Output, " Port=%d\r", Port);
-
+		if (Port == 33)
+			Output += sprintf((char *)Output, " \r");
+		else
+			Output += sprintf((char *)Output, " Port=%d\r", Port);
+		
 		return (int)strlen(buffer);
 	}
 

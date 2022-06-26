@@ -32,8 +32,9 @@ struct ConnectionInfo
 	BOOL FBBMode;				// Pure TCP for FBB forwarding
 	BOOL NeedLF;				// FBB mode, but with cr > crlf outbound
 	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
-	BOOL HTTPMode;				// HTML Terminal Emulator
+	BOOL DRATSMode;				// HTML Terminal Emulator
 	BOOL SyncMode;				// RMS Relay Sync
+	BOOL HTTPMode;				// DRATS Reflector Emulator
 	BOOL TriMode;				// Trimode emulation
 	BOOL TriModeConnected;		// Set when remote session is connected - now send data to DataSock
 	SOCKET TriModeDataSock;		// Data Socket
@@ -41,7 +42,7 @@ struct ConnectionInfo
 	BOOL BPQTermMode;			// Set if connected to BPQTermTCP
 	BOOL ClientSession;			// Set if acting as a client (ie Linux HOST Mode)
 	BOOL MonitorNODES;			// Monitor Control Flags
-	UINT MMASK;
+	unsigned long long MMASK;
 	BOOL MCOM;
 	BOOL MonitorColour;
 	BOOL MTX;
@@ -67,6 +68,7 @@ struct ConnectionInfo
 
 	struct ADIF * ADIF;				// ADIF Logging info
 };
+
 
 #define Disconnect(stream) SessionControl(stream,2,0)
 #define Connect(stream) SessionControl(stream,1,0)

@@ -132,8 +132,10 @@ int NODE = 1;					// INCLUDE SWITCH SUPPORT
 int FULL_CTEXT = 1;				// CTEXT ON ALL CONNECTS IF NZ
 
 BOOL LogL4Connects = FALSE;
+BOOL LogAllConnects = FALSE;
 BOOL AUTOSAVEMH = TRUE;
 extern BOOL ADIFLogEnabled;
+extern UCHAR LogDirectory[260];
 
 //TNCTABLE	DD	0
 //NUMBEROFSTREAMS	DD	0
@@ -237,7 +239,7 @@ char BridgeMap[33][33] = {0};
 
 // Keep Buffers at end
 	
-#define DATABYTES 500000	// WAS 320000
+#define DATABYTES 600000	// WAS 320000
 
 UCHAR DATAAREA[DATABYTES] = "";
 
@@ -256,7 +258,7 @@ extern int NUMBEROFTNCPORTS;
 
 extern APPLCALLS APPLCALLTABLE[];
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MINI);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, unsigned long long Mask, BOOL APRS, BOOL MINI);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 
 //	LOOPBACK PORT ROUTINES
@@ -518,6 +520,7 @@ void KHDLCTIMER(PHDLCDATA PORTVEC);
 void KHDLCCLOSE(PHDLCDATA PORTVEC);
 BOOL KHDLCTXCHECK();
 
+
 #else
 
 extern VOID PC120INIT(), DRSIINIT(), TOSHINIT();
@@ -752,6 +755,7 @@ BOOL Start()
 	HIDENODES = cfg->C_HIDENODES;
 
 	LogL4Connects = cfg->C_LogL4Connects;
+	LogAllConnects = cfg->C_LogAllConnects;
 	AUTOSAVEMH = cfg->C_SaveMH;
 	ADIFLogEnabled = cfg->C_ADIF;
 
@@ -1313,12 +1317,12 @@ BOOL Start()
 
 	NUMBEROFBUFFERS = 0;
 
-	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - (BUFFLEN + 8192)))	// Keep 8K free for anything that needs shared memory
+	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - (512 + 8192)))	// Keep 8K free for anything that needs shared memory
 	{
 		Bufferlist[NUMBEROFBUFFERS] = (void **)NEXTFREEDATA;
 
 		ReleaseBuffer((UINT *)NEXTFREEDATA);
-		NEXTFREEDATA += BUFFLEN;			// was BUFFLEN
+		NEXTFREEDATA += BUFFALLOC;		// was BUFFLEN
 
 		NUMBEROFBUFFERS++;
 		MAXBUFFS++;
@@ -2043,7 +2047,7 @@ VOID TIMERINTERRUPT()
 
 	for (i = 0; i < NUMBEROFPORTS; i++)
 	{	
-		int Sent;
+		int Sent = 0;
 
 		CURRENTPORT = PORT->PORTNUMBER;		 // PORT NUMBER
 		CURRENTPORTPTR = PORT;
@@ -2053,6 +2057,8 @@ VOID TIMERINTERRUPT()
 		while (Buffer)
 		{
 			Message = (struct _MESSAGE *) Buffer;
+			if (CURRENTPORT == 30)
+				Sent = Sent;
 
 			if (PORT->PROTOCOL == 10)
 			{
@@ -2323,7 +2329,7 @@ ENDOFLIST:
 
 VOID DoListenMonitor(TRANSPORTENTRY * L4, MESSAGE * Msg)
 {
-	ULONG SaveMMASK = MMASK;
+	unsigned long long SaveMMASK = MMASK;
 	BOOL SaveMTX = MTX;
 	BOOL SaveMCOM = MCOM;
 	BOOL SaveMUI = MUIONLY;
@@ -2368,6 +2374,14 @@ VOID DoListenMonitor(TRANSPORTENTRY * L4, MESSAGE * Msg)
 	}
 }
 
+DllExport int APIENTRY DllBPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
+{
+	int ret;
+	GetSemaphore(&Semaphore, 88);
+	ret = BPQTRACE(Msg, TOAPRS);
+	FreeSemaphore(&Semaphore);
+	return ret;
+}
 
 int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 {
@@ -2536,7 +2550,7 @@ VOID FindLostBuffers()
 	for (i = 0; i < NUMBEROFBUFFERS; i++)
 	{
 		Bufferlist[n++] = Buff;
-		Buff += (BUFFLEN / 4);
+		Buff += (BUFFALLOC / sizeof(void *));
 	}
 
 	Buff = FREE_Q;
@@ -2561,6 +2575,7 @@ VOID FindLostBuffers()
 	{
 		if (Bufferlist[n])
 		{
+			char * fileptr = (char *)Bufferlist[n];
 			MESSAGE * Msg = (MESSAGE *)Bufferlist[n];
 
 			memcpy(CodeDump, Bufferlist[n], 64);
@@ -2573,14 +2588,15 @@ VOID FindLostBuffers()
 				rev |= (CodeDump[i] & 0xff000000) >> 24;
 
 				CodeDump[i] = rev;
-		}
+			}
 
-		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
-			Bufferlist[n], CodeDump[0], CodeDump[1], CodeDump[2], CodeDump[3], CodeDump[4], CodeDump[5], CodeDump[6], CodeDump[7]);
+			Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+				Bufferlist[n], CodeDump[0], CodeDump[1], CodeDump[2], CodeDump[3], CodeDump[4], CodeDump[5], CodeDump[6], CodeDump[7]);
 
-		Debugprintf("         %08x %08x %08x %08x %08x %08x %08x %08x %d",
-			CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15], Msg->Process);
-
+			Debugprintf("         %08x %08x %08x %08x %08x %08x %08x %08x %d",
+				CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15], Msg->Process);
+		
+			Debugprintf("         %s", &fileptr[400]);
 		}
 	}
 
@@ -2591,6 +2607,34 @@ VOID FindLostBuffers()
 	for (i = 0; i < NUMBEROFBUFFERS; i++)
 	{
 		Bufferlist[n++] = Buff;
-		Buff += (BUFFLEN / 4);
+		Buff += (BUFFALLOC / sizeof(void *));
 	}
 }
+
+void WriteConnectLog(char * fromCall, char * toCall, UCHAR * Mode)
+{
+	UCHAR FN[MAX_PATH];
+	FILE * LogHandle;
+	time_t T;
+	struct tm * tm;
+	char LogMsg[256];	
+	int MsgLen;
+
+	T = time(NULL);
+	tm = gmtime(&T);	
+
+	sprintf(FN,"%s/logs/ConnectLog_%02d%02d%02d.log", LogDirectory, tm->tm_year - 100, tm->tm_mon + 1, tm->tm_mday);
+
+	LogHandle = fopen(FN, "ab");
+
+	if (LogHandle == NULL)
+		return;
+
+	MsgLen = sprintf(LogMsg, "%02d:%02d:%02d Call from %s to %s Mode %s\r\n", tm->tm_hour, tm->tm_min, tm->tm_sec, fromCall, toCall, Mode);
+
+	fwrite(LogMsg , 1, MsgLen, LogHandle);
+	fclose(LogHandle);
+}
+
+
+

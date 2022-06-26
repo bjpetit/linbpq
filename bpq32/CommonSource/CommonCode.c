@@ -49,7 +49,7 @@ extern struct CONFIGTABLE xxcfg;
 
 #endif
 
-extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 extern int ReportTimer;
 
@@ -67,8 +67,8 @@ VOID COMClearRTS(HANDLE fd);
 VOID WriteMiniDump();
 void printStack(void);
 char * FormatMH(PMHSTRUC MH, char Format);
-
-
+void WriteConnectLog(char * fromCall, char * toCall, UCHAR * Mode);
+extern BOOL LogAllConnects;
 
 //	Read/Write length field in a buffer header
 
@@ -420,7 +420,7 @@ int C_Q_COUNT(VOID *PQ)
 		count++;
 		if ((count + QCOUNT) > MAXBUFFS)
 		{
-			Debugprintf("C_Q_COUNT Detected corrupt Q %p len %d", PQ, count);
+ 			Debugprintf("C_Q_COUNT Detected corrupt Q %p len %d", PQ, count);
 			return count;
 		}
 		Q = *Q;
@@ -434,6 +434,7 @@ VOID * _GetBuff(char * File, int Line)
 	UINT * Temp;
 	MESSAGE * Msg;
 	char * fptr = 0;
+	unsigned char * byteaddr;
 
 	Temp = Q_REM(&FREE_Q);
 
@@ -455,8 +456,14 @@ VOID * _GetBuff(char * File, int Line)
 			fptr--;
 		fptr++;
 
-		memset((void *)Msg, 0, 64);		// simplify debugging lost buffers
-		sprintf(&Msg->DEST[1], "%s %d", fptr, Line);
+		// Buffer Length is BUFFLEN, but buffers are allocated 512
+		// So add file info in gap between
+
+		byteaddr = (unsigned char *)Msg;
+
+
+		memset(&byteaddr[400], 0, 64);		// simplify debugging lost buffers
+		sprintf(&byteaddr[400], "%s %d", fptr, Line);
 
 		Msg->Process = (short)GetCurrentProcessId();
 		Msg->Linkptr = NULL;
@@ -543,7 +550,7 @@ VOID DISPLAYCIRCUIT(TRANSPORTENTRY * L4, char * Buffer)
 		ConvFromAX25(L4->L4USER, Normcall);
 		strlop(Normcall, ' ');
 
-		if (LINK)
+		if (LINK &&LINK->LINKPORT)
 			sprintf(Buffer, "%s %d(%s)", "Uplink", LINK->LINKPORT->PORTNUMBER, Normcall);
 
 		return;
@@ -796,7 +803,12 @@ VOID SetApplPorts()
 }
 
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+
+
+char Modenames[19][10] = {"WINMOR", "SCS", "KAM", "AEA", "HAL", "TELNET", "TRK",
+	"V4", "UZ7HO", "MPSK", "FLDIGI", "UIARQ", "ARDOP", "VARA",
+	"SERIAL", "KISSHF", "WINRPR", "HSMODEM", "FREEDATA"};
 
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT)
 {
@@ -867,6 +879,15 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 	Session->KAMSESSION = Stream;
 
 	TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
+
+
+	if (LogAllConnects)
+	{
+		if (TNC->TargetCall[0])
+			WriteConnectLog(Call, TNC->TargetCall, Modenames[TNC->Hardware - 1]);
+		else
+			WriteConnectLog(Call, MYNODECALL, Modenames[TNC->Hardware - 1]);
+	}
 
 	if (SENDCTEXT == 0)
 		return TRUE;
@@ -1170,7 +1191,19 @@ DllExport int APIENTRY SessionControl(int stream, int command, int Mask)
 	return 0;					// ALREADY CONNECTED
 }
 
+int FindFreeStreamEx(int GetSem);
+
+int FindFreeStreamNoSem()
+{
+	return FindFreeStreamEx(0);
+}
+
 DllExport int APIENTRY FindFreeStream()
+{
+	return FindFreeStreamEx(1);
+}
+
+int FindFreeStreamEx(int GetSem)
 {
 	int stream, n;
 	BPQVECSTRUC * PORTVEC;
@@ -1189,7 +1222,8 @@ DllExport int APIENTRY FindFreeStream()
 	if (InitDone == -1)			// Init failed
 		exit(0);
 
-	GetSemaphore(&Semaphore, 9);
+	if (GetSem)
+		GetSemaphore(&Semaphore, 9);
 
 	stream = 0;
 	n = 64;
@@ -1202,11 +1236,15 @@ DllExport int APIENTRY FindFreeStream()
 			PORTVEC->STREAMOWNER=GetCurrentProcessId();
 			PORTVEC->HOSTFLAGS = 128; // SET ALLOCATED BIT, clear others
 			memcpy(&PORTVEC->PgmName[0], pgm, 31);
-			FreeSemaphore(&Semaphore);
+			if (GetSem)
+				FreeSemaphore(&Semaphore);
 			return stream;
 		}
 	}
-	FreeSemaphore(&Semaphore);
+
+	if (GetSem)
+		FreeSemaphore(&Semaphore);
+
 	return 255;
 }
 
@@ -3151,6 +3189,9 @@ VOID SendLocation()
 #ifdef MACBPQ
 	Len = sprintf(Msg, "%s M%s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
 #endif
+#ifdef FREEBSD
+	Len = sprintf(Msg, "%s F%s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
+#endif
 
 	if (Len > 256)
 		Len = 256;
@@ -3282,7 +3323,7 @@ DllExport char * APIENTRY GetApplAlias(int Appl)
 	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLALIAS_TEXT);
 }
 
-DllExport long APIENTRY GetApplQual(int Appl)
+DllExport int32_t APIENTRY GetApplQual(int Appl)
 {
 	if (Appl < 1 || Appl > NumberofAppls ) return 0;
 

@@ -68,7 +68,7 @@ char OverMsg[3] = " \x1a";
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 
 

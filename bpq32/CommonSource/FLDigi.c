@@ -26,7 +26,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "CHeaders.h"
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
-int (WINAPI FAR *EnumProcessesPtr)();
+extern int (WINAPI FAR *EnumProcessesPtr)();
 
 
 #include <stdio.h>
@@ -65,7 +65,7 @@ extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 extern char * PortConfig[33];
 int SemHeldByAPI;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static void ConnecttoFLDigiThread(void * portptr);
 

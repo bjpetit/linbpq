@@ -35,7 +35,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
-int (WINAPI FAR *EnumProcessesPtr)();
+extern int (WINAPI FAR *EnumProcessesPtr)();
 
 #include "tncinfo.h"
 
@@ -56,7 +56,7 @@ extern char LOC[];
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
@@ -396,7 +396,7 @@ static int ProcessLine(char * buf, int Port)
 			#pragma warning(pop)
 		}
 		if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
-			TNC->WRITELOG = atoi(&buf[8]);
+			TNC->WRITELOG = atoi(&buf[9]);
 		else if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
 			TNC->RPBEACON = TRUE;
 		else

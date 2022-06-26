@@ -67,7 +67,7 @@ static BOOL OpenSockets(struct TNCINFO * TNC);
 static BOOL OpenSockets6(struct TNCINFO * TNC);
 void ProcessHTTPMessage(void * conn);
 static VOID SetupListenSet(struct TNCINFO * TNC);
-int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, time_t Stamp, unsigned long long Mask, BOOL APRS, BOOL MCTL);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
 BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr, struct ADIF * ADIF);
@@ -83,6 +83,10 @@ extern BPQVECSTRUC * TELNETMONVECPTR;
 BOOL SendWL2KSessionRecord(ADIF * ADIF, int BytesSent, int BytesReceived);
 int DataSocket_ReadSync(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
 VOID SendWL2KRegisterHybrid(struct TNCINFO * TNC);
+int IntSetTraceOptionsEx(uint64_t mask, int mtxparam, int mcomparam, int monUIOnly);
+int DataSocket_ReadDRATS(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
+void processDRATSFrame(unsigned char * Message, int Len, struct ConnectionInfo * sockptr);
+void DRATSConnectionLost(struct ConnectionInfo * sockptr);
 
 #ifndef LINBPQ
 extern HKEY REGTREE;
@@ -117,6 +121,7 @@ static char BlankCall[]="         ";
 
 BOOL LogEnabled = FALSE;
 BOOL CMSLogEnabled = TRUE;
+extern BOOL IncludesMail;
 
 static	HMENU hMenu, hPopMenu, hPopMenu2, hPopMenu3;		// handle of menu 
 
@@ -141,7 +146,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
 int DataSocket_Write(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET TCPSock);
 int DataSocket_Disconnect(struct TNCINFO * TNC, struct ConnectionInfo * sockptr);
-BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len);
+BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int * Len);
 int ShowConnections(struct TNCINFO * TNC);
 int Terminate();
 int SendtoSocket(SOCKET TCPSock,char * Msg);
@@ -166,11 +171,22 @@ VOID ProcessTrimodeResponse(struct TNCINFO * TNC, struct STREAMINFO * STREAM, un
 VOID ProcessTriModeDataMessage(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
 
 
-static int LogAge = 14;
+static int LogAge = 13;
+
+
 
 #ifdef WIN32
 
-int DeleteTelnetLogFiles()
+int DeleteLogFile(char * Log);
+
+void DeleteTelnetLogFiles()
+{
+	DeleteLogFile("/logs/Telnet*.log");
+	DeleteLogFile("/logs/CMSAccess_*.log");
+	DeleteLogFile("/logs/ConnectLog_*.log");
+}
+
+int DeleteLogFile(char * Log)
 {
    WIN32_FIND_DATA ffd;
 
@@ -186,7 +202,7 @@ int DeleteTelnetLogFiles()
    // string to a buffer, then append '\*' to the directory name.
 
    strcpy(szDir, GetLogDirectory());
-   strcat(szDir, "/logs/Telnet*.log");
+   strcat(szDir, Log);
 
    // Find the first file in the directory.
 
@@ -222,45 +238,6 @@ int DeleteTelnetLogFiles()
       }
    }
    while (FindNextFile(hFind, &ffd) != 0);
- 
-   strcpy(szDir, GetLogDirectory());
-   strcat(szDir, "/logs/CMSAccess_*.log");
-
-   // Find the first file in the directory.
-
-   hFind = FindFirstFile(szDir, &ffd);
-
-   if (INVALID_HANDLE_VALUE == hFind) 
-      return dwError;
-
-   // List all the files in the directory with some info about them.
-
-   do
-   {
-      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-      {
-         OutputDebugString(ffd.cFileName);
-      }
-      else
-      {
-         ft.HighPart = ffd.ftCreationTime.dwHighDateTime;
-         ft.LowPart = ffd.ftCreationTime.dwLowDateTime;
-
-		 ft.QuadPart -=  116444736000000000;
-		 ft.QuadPart /= 10000000;
-
-		 Age = (int)((now - ft.LowPart) / 86400); 
-
-		 if (Age > LogAge)
-		 {
-			 sprintf(File, "%s/logs/%s%c", GetLogDirectory(), ffd.cFileName, 0);
-			 Debugprintf("Deleting %s", File);
-			 DeleteFile(File);
-		 }
-      }
-   }
-   while (FindNextFile(hFind, &ffd) != 0);
-   dwError = GetLastError();
 
    FindClose(hFind);
    return dwError;
@@ -272,7 +249,10 @@ int DeleteTelnetLogFiles()
 
 int TelFilter(const struct dirent * dir)
 {
-	return (memcmp(dir->d_name, "CMSAccess", 9) == 0 || memcmp(dir->d_name, "Telnet", 6) == 0) && strstr(dir->d_name, ".log");
+	return (memcmp(dir->d_name, "CMSAccess", 9) == 0
+		|| memcmp(dir->d_name, "Telnet", 6) == 0
+		|| memcmp(dir->d_name, "ConnectLog", 6) == 0)
+		&& strstr(dir->d_name, ".log");
 }
 
 int DeleteTelnetLogFiles()
@@ -363,7 +343,7 @@ BOOL SendAndCheck(struct ConnectionInfo * sockptr, unsigned char * MsgPtr, int l
 	return FALSE;
 }
 
-VOID SendPortsForMonitor(SOCKET sock)
+VOID SendPortsForMonitor(SOCKET sock, int Secure)
 {
 	UCHAR PortInfo[1500] = {0xff, 0xff};
 	UCHAR * ptr = &PortInfo[2];
@@ -375,7 +355,16 @@ VOID SendPortsForMonitor(SOCKET sock)
 
 	p = GetNumberofPorts();
 
+	if (IncludesMail && Secure)
+		p++;
+
 	ptr += sprintf(ptr, "%d|", p);
+
+	if (IncludesMail && Secure)
+	{
+		p--;
+		ptr += sprintf(ptr,"0 Mail Monitor|");
+	}
 
 	for (n=1; n <= p; n++)
 	{
@@ -393,6 +382,8 @@ VOID SendPortsForMonitor(SOCKET sock)
 
 		ptr += sprintf(ptr,"%d %s|", PORT->PORTNUMBER, ID);
 	}
+
+
 	send(sock, PortInfo, (int)(ptr - PortInfo), 0);
 }
 
@@ -537,6 +528,9 @@ int ProcessLine(char * buf, int Port)
 	else if (_stricmp(param,"TCPPORT") == 0)
 		TCP->TCPPort = atoi(value);
 
+	else if (_stricmp(param,"DRATSPORT") == 0)
+		TCP->DRATSPort = atoi(value);
+
 	else if (_stricmp(param,"TRIMODEPORT") == 0)
 		TCP->TriModePort = atoi(value);
 	
@@ -673,6 +667,50 @@ scanCTEXT:
 			goto scanCTEXT;
 		}  
 	}
+
+	else if (_stricmp(param,"LOCALNET") == 0)
+	{
+		uint32_t Network, Mask;
+		uint32_t IPMask;
+		char * Netptr, * MaskPtr, *Context;
+		struct LOCALNET * LocalNet;
+		int Bits = 24;
+
+		Netptr = strtok_s(value, " /;", &Context);
+
+		if (Netptr)
+		{
+			Network = inet_addr(Netptr);
+			MaskPtr = strtok_s(NULL, " /;", &Context);
+
+			if (MaskPtr)
+			{
+				Bits = atoi(MaskPtr);
+
+				if (Bits > 32)
+					Bits = 32;
+			}
+
+			if (Bits == 0)
+				IPMask = 0;
+			else
+				IPMask = (0xFFFFFFFF) << (32 - Bits);
+
+			Mask = htonl(IPMask);			// Needs to be Network order
+
+			LocalNet = (struct LOCALNET *)zalloc(sizeof(struct LOCALNET)); 
+
+			LocalNet->Network = Network;
+			LocalNet->Mask = Mask;
+			LocalNet->Next = TNC->TCPInfo->LocalNets;
+
+			TNC->TCPInfo->LocalNets = LocalNet;
+	
+		}
+	}
+
+
+
 
 	else if (_stricmp(param,"USER") == 0)
 	{
@@ -1277,6 +1315,12 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 					Tel_Format_Addr(sockptr, Addr);
 					sprintf(msg,"<tr><td>HTTP<%s</td><td>&nbsp;</td><td>&nbsp;</td></tr>", Addr);
 				}
+				else if (sockptr->DRATSMode)
+				{
+					char Addr[100];
+					Tel_Format_Addr(sockptr, Addr);
+					sprintf(msg,"<tr><td>DRATS<%s</td><td>&nbsp;</td><td>&nbsp;</td></tr>", Addr);
+				}
 				else
 					strcpy(msg,"<tr><td>Logging in</td><td>&nbsp;</td><td>&nbsp;</td></tr>");
 			}
@@ -1611,6 +1655,9 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 	if (TCP->SyncPort)
 		TCP->Syncsock = OpenSocket4(TNC, TCP->SyncPort);
 
+	if (TCP->DRATSPort)
+		TCP->DRATSsock = OpenSocket4(TNC, TCP->DRATSPort);
+
 	CMSUser.UserName = _strdup("CMS");
 
 	TriModeUser.Secure = TRUE;
@@ -1720,6 +1767,10 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 	if (TCP->SyncPort)
 		TCP->Syncsock6 = OpenSocket6(TNC, TCP->SyncPort);
 
+	if (TCP->DRATSPort)
+		TCP->DRATSsock6 = OpenSocket6(TNC, TCP->DRATSPort);
+
+
 	CMSUser.UserName = _strdup("CMS");
 
 	return TRUE;
@@ -1781,6 +1832,14 @@ static VOID SetupListenSet(struct TNCINFO * TNC)
 			maxsock = sock;
 	}
 
+	sock = TCP->DRATSsock;
+	if (sock)
+	{
+		FD_SET(sock, readfd);
+		if (sock > maxsock)
+			maxsock = sock;
+	}
+
 	sock = TCP->TriModeSock;
 	if (sock)
 	{
@@ -1832,6 +1891,14 @@ static VOID SetupListenSet(struct TNCINFO * TNC)
 			maxsock = sock;
 	}
 
+	sock = TCP->DRATSsock6;
+
+	if (sock)
+	{
+		FD_SET(sock, readfd);
+		if (sock > maxsock)
+			maxsock = sock;
+	}
 	TCP->maxsock = maxsock;
 }
 
@@ -1918,6 +1985,13 @@ VOID TelnetPoll(int Port)
 				Socket_Accept(TNC, sock, TCP->HTTPPort);
 		}
 
+		sock = TCP->DRATSsock;
+		if (sock)
+		{
+			if (FD_ISSET(sock, &readfd))
+				Socket_Accept(TNC, sock, TCP->DRATSPort);
+		}
+
 		sock = TCP->Syncsock;
 		if (sock)
 		{
@@ -1956,6 +2030,13 @@ VOID TelnetPoll(int Port)
 		{
 			if (FD_ISSET(sock, &readfd))
 				Socket_Accept(TNC, sock, TCP->HTTPPort);
+		}
+
+		sock = TCP->DRATSsock6;
+		if (sock)
+		{
+			if (FD_ISSET(sock, &readfd))
+				Socket_Accept(TNC, sock, TCP->DRATSPort);
 		}
 	}
 
@@ -2057,6 +2138,8 @@ VOID TelnetPoll(int Port)
 								DataSocket_ReadSync(TNC, sockptr, sock, n);
 							else if (sockptr->FBBMode)
 								DataSocket_ReadFBB(TNC, sockptr, sock, n);
+							else if (sockptr->DRATSMode)
+								DataSocket_ReadDRATS(TNC, sockptr, sock, n);
 							else
 								DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
 						}
@@ -2118,12 +2201,12 @@ nosocks:
 					}
 					else
 					{
-						ULONG SaveMMASK = MMASK;
+						unsigned long long SaveMMASK = MMASK;
 						BOOL SaveMTX = MTX;
 						BOOL SaveMCOM = MCOM;
 						BOOL SaveMUI = MUIONLY;
 
-						SetTraceOptionsEx(sockptr->MMASK, sockptr->MTX, sockptr->MCOM, sockptr->MUIOnly);
+						IntSetTraceOptionsEx(sockptr->MMASK, sockptr->MTX, sockptr->MCOM, sockptr->MUIOnly);
 						len = IntDecodeFrame((MESSAGE *)monbuff, &buffer[3], stamp, sockptr->MMASK, FALSE, FALSE);
 						SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
@@ -2497,7 +2580,7 @@ nosocks:
 		
 					if (_stricmp(Host, "CMS") == 0)
 					{
-						if (!TCP->CMSOK)
+						if (TCP->CMS == 0 || !TCP->CMSOK)
 						{
 							if (TCP->RELAYHOST[0] && TCP->FallbacktoRelay && STREAM->NoCMSFallback == 0)
 							{
@@ -2575,29 +2658,36 @@ nosocks:
 
 						STREAM->ConnectionInfo->FBBMode = TRUE;
 
-						if (_stricmp(P3, "NEEDLF") == 0 || STREAM->ConnectionInfo->NeedLF)
+						if (_stricmp(P3, "NOCALL") == 0 || _stricmp(P4, "NOCALL") == 0 || _stricmp(P5, "NOCALL") == 0 || _stricmp(P6, "NOCALL") == 0)
 						{
-							// Send LF after each param
-						
-							if (P6[0])
-								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n%s\r\n", P4, P5, P6);
-							else
-							if (P5[0])
-								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n", P4, P5);
-							else
-							if (P4[0])
-								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n", P4);
+							STREAM->ConnectionInfo->NoCallsign = TRUE;
 						}
 						else
 						{
-							if (P5[0])
-								sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r%s\r", P3, P4, P5);
+							if (_stricmp(P3, "NEEDLF") == 0 || STREAM->ConnectionInfo->NeedLF)
+							{
+								// Send LF after each param
+
+								if (P6[0])
+									sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n%s\r\n", P4, P5, P6);
+								else
+									if (P5[0])
+										sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n", P4, P5);
+									else
+										if (P4[0])
+											sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n", P4);
+							}
 							else
-							if (P4[0])
-								sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r", P3, P4);
-							else
-							if (P3[0])
-								sprintf(STREAM->ConnectionInfo->Signon, "%s\r", P3);
+							{
+								if (P5[0])
+									sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r%s\r", P3, P4, P5);
+								else
+									if (P4[0])
+										sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r", P3, P4);
+									else
+										if (P3[0])
+											sprintf(STREAM->ConnectionInfo->Signon, "%s\r", P3);
+							}
 						}
 
 						TCPConnect(TNC, TCP, STREAM, Host, Port, useFBBMode);
@@ -3107,6 +3197,7 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 			TNC->Streams[n].FramesQueued = 0;
 
 			sockptr->HTTPMode = FALSE;	
+			sockptr->DRATSMode = FALSE;	
 			sockptr->FBBMode = FALSE;	
 			sockptr->RelayMode = FALSE;
 			sockptr->ClientSession = FALSE;
@@ -3122,6 +3213,9 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 				sockptr->HTTPMode = TRUE;
 			else if (SocketId == TCP->Syncsock || SocketId == TCP->Syncsock6)
 				sockptr->SyncMode = TRUE;
+			else if (SocketId == TCP->DRATSsock || SocketId == TCP->DRATSsock6)
+				sockptr->DRATSMode = TRUE;
+
 			else if (SocketId == TCP->Relaysock || SocketId == TCP->Relaysock6)
 			{
 				sockptr->RelayMode = TRUE;
@@ -3145,6 +3239,13 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 
 			if (sockptr->HTTPMode)
 				return 0;
+
+			if (sockptr->DRATSMode)
+			{
+				send(sock, "100 Authentication not required\n", 33, 0);
+				sockptr->LoginState = 2;
+				return 0;
+			}
 
 			if (sockptr->SyncMode)
 			{
@@ -3304,21 +3405,21 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 	C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 }
 
+int InnerProcessData(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM, int len);
+
 
 int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM)
 {
-	int len=0, maxlen, InputLen, MsgLen, i, n,charsAfter;
+	int len=0, maxlen;
 	char NLMsg[3]={13,10,0};
 	byte * IACptr;
-	byte * CRPtr;
-	byte * LFPtr;
-	byte * BSptr;
-	byte * MsgPtr;
 	BOOL wait;
-	char logmsg[1000];
-	struct UserRec * USER;
+
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	int SendIndex = 0;
+	byte * TelCommand;
+	int beforeIAC = 0;
+	int rest = 0;
 
 	ioctl(sock,FIONREAD,&len);
 
@@ -3337,17 +3438,92 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 		return 0;
 	}
 
+	// If message contains Telnet Commands we should process the data in the buffer first
+	// and not echo the commands!
+
+
+	IACptr = memchr(sockptr->InputBuffer, IAC, sockptr->InputLen + len);
+
+	if (IACptr)
+	{
+		beforeIAC = IACptr - sockptr->InputBuffer;
+		rest = (sockptr->InputLen + len) - beforeIAC;
+		
+		if (beforeIAC)
+		{
+			TelCommand = malloc(rest);
+			memcpy(TelCommand, IACptr, rest);
+			InnerProcessData(TNC, sockptr, sock, STREAM, beforeIAC);
+
+			// There may still be data in buffer, but it may be less than before
+			// Put IAC and following into buffer
+
+			memcpy(&sockptr->InputBuffer[sockptr->InputLen], TelCommand, rest);
+			len -= sockptr->InputLen;
+			free(TelCommand);
+		}
+	}
+
+IACLoop:
+
+	IACptr = memchr(sockptr->InputBuffer, IAC, sockptr->InputLen + len);
+
+	if (IACptr)
+	{
+		// There still may be data in the buffer. 
+
+		wait = ProcessTelnetCommand(sockptr, IACptr, &rest);
+
+		if (wait)
+		{
+			// Need more.
+			
+			sockptr->InputLen += len;
+			return 0;					// wait for more chars
+		}
+
+		// If ProcessTelnet Command returns FALSE, then it has removed the IAC and its
+		// params from the buffer. There may still be more to process.
+		
+		if (rest == 0)
+			return 0;	// Nothing Left
+
+		memmove(&sockptr->InputBuffer[sockptr->InputLen], IACptr + len - rest, rest);
+		len = rest;
+	
+		goto IACLoop;					// There may be more
+	}
+
+	return InnerProcessData(TNC, sockptr, sock, STREAM, len);
+}
+
+
+int InnerProcessData(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM, int len)
+{
+	int InputLen, MsgLen, i, n,charsAfter;
+	char NLMsg[3]={13,10,0};
+	byte * CRPtr;
+	byte * LFPtr;
+	byte * BSptr;
+	byte * MsgPtr;
+	char logmsg[1000];
+	struct UserRec * USER;
+	struct TCPINFO * TCP = TNC->TCPInfo;
+	int SendIndex = 0;
+			
 	// echo data just read
 
 	if (sockptr->DoEcho && sockptr->LoginState != 1)  // Password
-		send(sockptr->socket,&sockptr->InputBuffer[sockptr->InputLen],len,0);
+		send(sockptr->socket,&sockptr->InputBuffer[sockptr->InputLen], len, 0);
+
+	sockptr->InputLen += len;
 
 	// look for backspaces in data just read
 	
-	BSptr = memchr(&sockptr->InputBuffer[sockptr->InputLen], 8, len);
-	
+	BSptr = memchr(&sockptr->InputBuffer[0], 8, sockptr->InputLen);
+
 	if (BSptr == NULL)
-		BSptr = memchr(&sockptr->InputBuffer[sockptr->InputLen], 127, len);
+		BSptr = memchr(&sockptr->InputBuffer[0], 127, sockptr->InputLen);
 
     if (BSptr != 0)
 	{
@@ -3355,22 +3531,23 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 
 		int n;
 		
-		charsAfter = len - (int)((BSptr-&sockptr->InputBuffer[sockptr->InputLen])) - 1;
+		charsAfter = sockptr->InputLen - (int)((BSptr-&sockptr->InputBuffer[0])) - 1;
 
 		if (charsAfter == 0)
 		{
-			sockptr->InputLen+=(len-1);
-			if (sockptr->InputLen > 0) sockptr->InputLen--; //Remove last char
-			return 0;
-		}
+			sockptr->InputLen--;
+			if (sockptr->InputLen > 0)
+				sockptr->InputLen--; //Remove last char
 
+			goto noBS;
+		}
 		// more than single char. Copy stuff after bs over char before
 
 		memmove(BSptr-1, BSptr+1, charsAfter);
 
 		n = sockptr->InputLen;
 	
-		sockptr->InputLen+=(len-2);		// drop bs and char before
+		sockptr->InputLen -= 2;		// drop bs and char before
 
 		// see if more bs chars
 BSCheck:
@@ -3380,16 +3557,16 @@ BSCheck:
 			BSptr = memchr(&sockptr->InputBuffer[0], 127, sockptr->InputLen);
 
 		if (BSptr == NULL)
-			goto IACLoop;
+			goto noBS;
 
-		n = sockptr->InputLen;
 		charsAfter = sockptr->InputLen - (int)((BSptr-&sockptr->InputBuffer[0])) - 1;
 
 		if (charsAfter == 0)
 		{
 			sockptr->InputLen--;		// Remove BS
-			if (sockptr->InputLen > 0) sockptr->InputLen--; //Remove last char if not at start
-			return 0;
+			if (sockptr->InputLen > 0)
+				sockptr->InputLen--; //Remove last char if not at start
+			goto noBS;
 		}
 
 		memmove(BSptr-1, BSptr+1, charsAfter);
@@ -3397,30 +3574,9 @@ BSCheck:
 		if (sockptr->InputLen > 0) sockptr->InputLen--; //Remove last char if not at start
 
 		goto BSCheck;					// may be more bs chars
-
-	}
-	else
-	{
-		sockptr->InputLen+=len;
 	}
 
-IACLoop:
-
-	IACptr=memchr(sockptr->InputBuffer, IAC, sockptr->InputLen);
-
-	if (IACptr)
-	{
-		wait = ProcessTelnetCommand(sockptr, IACptr, sockptr->InputLen + (int)(IACptr-&sockptr->InputBuffer[0]));
-
-		if (wait) return 0;				// need more chars
-
-		// If ProcessTelnet Command returns FALSE, then it has removed the IAC and its
-		// params from the buffer. There may still be more to process.
-		
-		if (sockptr->InputLen == 0) return 0;	// Nothing Left
-	
-		goto IACLoop;					// There may be more
-	}
+noBS:
 
 	// Extract lines from input stream
 
@@ -4193,7 +4349,7 @@ MsgLoop:
 
 				int P8 = 0;
 				
-				int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x %x",
+				int n = sscanf(&MsgPtr[4], "%llx %x %x %x %x %x %x %x",
 					&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES,
 					&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8, &P8);
 
@@ -4204,9 +4360,8 @@ MsgLoop:
 					sockptr->UTF8 = 0;
 
 				if (P8 == 1)
-					SendPortsForMonitor(sock);
-
-				sockptr->InputLen = 0;
+					SendPortsForMonitor(sock, sockptr->UserPointer->Secure);
+					sockptr->InputLen = 0;
 				return 0;
 			}
 		}
@@ -4390,7 +4545,7 @@ MsgLoop:
 
 			sprintf(RespString, "%010d", Response);
 
-			Len = sprintf(Msg, ";SR: %s %d %d\r", &RespString[2], Freq, Mode);			
+			Len = sprintf(Msg, ";SR: %s %lld %d\r", &RespString[2], Freq, Mode);			
 			
 			send(sock, Msg, Len,0);
 			sprintf(logmsg,"%d %s\n", Stream, Msg);
@@ -4641,7 +4796,7 @@ MsgLoop:
 						{
 							// Monitor Control
 
-							int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x %x",
+							int n = sscanf(&MsgPtr[4], "%llx %x %x %x %x %x %x %x",
 								&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES,
 								&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8, &P8);
 
@@ -4652,11 +4807,10 @@ MsgLoop:
 								sockptr->UTF8 = 0;
 
 							if (P8 == 1)
-								SendPortsForMonitor(sock);
+								SendPortsForMonitor(sock, sockptr->UserPointer->Secure);
 
 
 							sockptr->InputLen = 0;
-							return 0;
 						}
 					}
 				}
@@ -4762,6 +4916,34 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 	return 0;
 }
 
+int DataSocket_ReadDRATS(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream)
+{
+	int len=0, maxlen;
+	
+	ioctl(sock,FIONREAD,&len);
+
+	maxlen = InputBufferLen - sockptr->InputLen;
+	
+	if (len > maxlen) len = maxlen;
+
+	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
+
+	if (len == SOCKET_ERROR || len == 0)
+	{
+		// Failed or closed - clear connection
+
+		DRATSConnectionLost(sockptr);
+		DataSocket_Disconnect(TNC, sockptr);	
+		return 0;
+	}
+
+	// Make sure request is complete - should end [EOB]
+
+	processDRATSFrame(&sockptr->InputBuffer[sockptr->InputLen], len, sockptr);
+	return 0;
+}
+
+
 int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr)
 {
 	int n;
@@ -4808,6 +4990,12 @@ int ShowConnections(struct TNCINFO * TNC)
 					Tel_Format_Addr(sockptr, Addr);
 					sprintf(msg, "HTTP From %s", Addr);
 				}
+				else if (sockptr->DRATSMode)
+				{
+					char Addr[100];
+					Tel_Format_Addr(sockptr, Addr);
+					sprintf(msg, "DRATS From %s", Addr);
+				}
 				else
 					strcpy(msg,"Logging in");
 			}
@@ -4829,24 +5017,24 @@ byte * EncodeCall(byte * Call)
 	ConvToAX25(Call, axcall);
 	return &axcall[0];
 }
-BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len)
+BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int * Len)
 {
 	int cmd, TelOption;
 	int used;
 	char WillSupGA[3]={IAC,WILL,suppressgoahead};
 	char WillEcho[3]={IAC,WILL,echo};
 	char Wont[3]={IAC,WONT,echo};
-
+	char Dont[3]={IAC,DONT,echo};
 
 	//	Note Msg points to the IAC, which may not be at the start of the receive buffer
 	//	Len is number of bytes left in buffer including the IAC
 
-	if (Len < 2) return TRUE;		//' Wait for more
+	if (*Len < 2) return TRUE;		//' Wait for more
 
 	cmd = Msg[1];
 	
 	if (cmd == DOx || cmd == DONT || cmd == WILL || cmd == WONT)
-		if (Len < 3) return TRUE;		//' wait for option
+		if (*Len < 3) return TRUE;		//' wait for option
     
 	TelOption = Msg[2];
 
@@ -4887,6 +5075,9 @@ BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len)
 			break;
 		}
 
+		Wont[2] = TelOption;
+		send(sockptr->socket,Wont,3,0);
+
 		used=3;
    
 		break;
@@ -4895,8 +5086,11 @@ BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len)
 
  //       Debug.Print "WILL"; TelOption
         
-        if (TelOption == echo) sockptr->DoEcho = TRUE;
-        
+//        if (TelOption == echo) sockptr->DoEcho = TRUE;
+  
+		Dont[2] = TelOption;
+		send(sockptr->socket, Dont, 3, 0);
+
 		used=3;
 
 		break;
@@ -4917,9 +5111,7 @@ BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len)
    
 	// remove the processed command from the buffer
 
-	memmove(Msg,&Msg[used],Len-used);
-
-	sockptr->InputLen-=used;
+	*Len -= used;
 
 	return FALSE;
 }
@@ -5118,18 +5310,25 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 		sockptr->RelayMode = FALSE;
 		sockptr->ClientSession = FALSE;
 	
-		SaveCMSHostInfo(TNC->Port, TNC->TCPInfo, sockptr->CMSIndex);
+		if (TCP->CMS)
+			SaveCMSHostInfo(TNC->Port, TNC->TCPInfo, sockptr->CMSIndex);
 
 		if (CMSLogEnabled)
 		{
 			char logmsg[120];
-			sprintf(logmsg,"%d %s Connected to CMS\r\n",
-				sockptr->Number, TNC->Streams[Stream].MyCall);
+
+			if (sockptr->RelaySession)
+				sprintf(logmsg,"%d %s Connected to RELAY\r\n", sockptr->Number, TNC->Streams[Stream].MyCall);
+			else
+				sprintf(logmsg,"%d %s Connected to CMS\r\n", sockptr->Number, TNC->Streams[Stream].MyCall);
 
 			WriteCMSLog (logmsg);
 		}
 		
-		buffptr->Len  = sprintf(&buffptr->Data[0], "*** %s Connected to CMS\r", TNC->Streams[Stream].MyCall);;
+		if (sockptr->RelaySession)
+			buffptr->Len  = sprintf(&buffptr->Data[0], "*** %s Connected to RELAY\r", TNC->Streams[Stream].MyCall);
+		else
+			buffptr->Len  = sprintf(&buffptr->Data[0], "*** %s Connected to CMS\r", TNC->Streams[Stream].MyCall);
 	}
 	else
 	{
@@ -5243,10 +5442,25 @@ void CheckCMSThread(void * TNCPtr)
 	BOOL INETOK = FALSE;
 	struct addrinfo hints, *res = 0, *saveres;
 	int n;
-
-	// First make sure we have a functioning DNS
+	unsigned long cms;
 
 	TCP->UseCachedCMSAddrs = FALSE;
+
+	// if TCP->CMSServer is an ip address use it
+
+	cms = inet_addr(TCP->CMSServer);
+	
+	if (cms != INADDR_NONE)
+	{
+		Debugprintf("Using %s for CMS Server", TCP->CMSServer);
+		TCP->CMSAddr[0].s_addr = cms;
+		TCP->CMSFailed[0] = FALSE;
+		TCP->CMSName[0] = _strdup(TCP->CMSServer);			// Save Host Name
+		TCP->NumberofCMSAddrs = 1;
+		goto CheckServers;
+	}
+
+	// First make sure we have a functioning DNS
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET6;  // use IPv4 or IPv6, whichever
@@ -5347,6 +5561,8 @@ resok:
 					Debugprintf("CMS - Host not found");
 				else if (dwError == NO_DATA)
 					Debugprintf("CMS No data record found");
+				else
+					Debugprintf("CMS Gethost failed %d", dwError);
 			}
 	   }
 	   else
@@ -5363,13 +5579,15 @@ resok:
 		i++;
 	}
 
+	TCP->NumberofCMSAddrs = i;
+
 CheckServers:
 #ifndef LINBPQ
 	CheckMenuItem(TNC->TCPInfo->hActionMenu, 4, MF_BYPOSITION | TCP->UseCachedCMSAddrs<<3);
 #endif
 	if (TCP->UseCachedCMSAddrs)
 	{
-		// Get Cached Servers from Registry - Names are in RegTree\G8BPQ\BPQ32\PACTOR\PORTn\CMSInfo
+		// Get Cached Servers from CMSInfo.txt
 
 		GetCMSCachedInfo(TNC);
 	}
@@ -5504,6 +5722,8 @@ BOOL CMSCheck(struct TNCINFO * TNC, struct TCPINFO * TCP)
 
 		// Failed - try next
 
+		if (TCP->CMSName[n])
+			Debugprintf("Check CMS Failed for %s", TCP->CMSName[n]);
 		closesocket(sock);
 	}
 	return FALSE;
@@ -5683,7 +5903,10 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 	char Buffer[2048];
 	char *buf = Buffer;
 
-	if (CMSNo > 9)
+	if (TCP->CMS == 0)
+		return;
+
+	if (CMSNo > 9 || CMSNo < 0 || TCP->CMSName[CMSNo] == 0)
 	{
 		Debugprintf("SaveCMSHostInfo invalid CMS Number %d", CMSNo);
 		return;
@@ -5746,11 +5969,14 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 		char ip[256];
 		int n;
 
-		n = sscanf(buf,"%s %d %s", addr, &t, ip);
+	if (sizeof(time_t) == 4)
+		n = sscanf(buf,"%s %d %s", addr, (int *)&t, ip);
+	else
+		n = sscanf(buf, "%s %lld %s", addr, &t, ip);
 
 		if (n == 3)
 		{
-			int age = time(NULL) - t;
+			time_t age = time(NULL) - t;
 
 			// if not current server and not too old, copy across
 
@@ -6518,6 +6744,12 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 					Tel_Format_Addr(sockptr, Addr);
 					sprintf(msg, "HTTP From %s", Addr);
 				}
+				else if (sockptr->DRATSMode)
+				{
+					char Addr[100];
+					Tel_Format_Addr(sockptr, Addr);
+					sprintf(msg, "DRATS From %s", Addr);
+				}
 				else
 					strcpy(msg,"Logging in");
 			}
@@ -6532,4 +6764,3 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
-

@@ -27,19 +27,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <stdio.h>
 #include <time.h>
 
-#ifndef WIN32
-#ifndef MACBPQ
-#include <sys/ioctl.h>
-#include <linux/serial.h>
-#endif
-#endif
-
-
 #include "CHeaders.h"
 
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
-int (WINAPI FAR *EnumProcessesPtr)();
+extern int (WINAPI FAR *EnumProcessesPtr)();
 
 #include "bpq32.h"
 
@@ -81,7 +73,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 

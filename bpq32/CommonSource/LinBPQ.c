@@ -22,14 +22,16 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "CHeaders.h"
-#include "BPQMail.h"
+#include "bpqmail.h"
 #ifdef WIN32
 #include <Iphlpapi.h>
 //#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
 #else
 #include <iconv.h>
 #ifndef MACBPQ
+#ifndef FREEBSD
 #include <sys/prctl.h>
+#endif
 #endif
 #endif
 
@@ -71,6 +73,7 @@ VOID SaveMH();
 int upnpClose();
 void SaveAIS();
 void initAIS();
+void DRATSPoll();
 
 BOOL IncludesMail = FALSE;
 BOOL IncludesChat = FALSE;
@@ -483,7 +486,7 @@ int SESSHDDRLEN = 0;
 UCHAR MCOM;
 UCHAR MUIONLY;
 UCHAR MTX;
-ULONG MMASK;
+unsigned long long  MMASK;
 
 
 UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
@@ -547,7 +550,9 @@ int main(int argc, char * argv[])
 	struct sigaction act;
  	openlog("LINBPQ", LOG_PID, LOG_DAEMON);
 #ifndef MACBPQ
+#ifndef FREEBSD
 	prctl(PR_SET_DUMPABLE, 1);					// Enable Core Dumps even with setcap
+#endif
 #endif
 #endif
 
@@ -605,11 +610,15 @@ int main(int argc, char * argv[])
 			return (0);
 	}
 
+	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for Linux (", TextVerstring);
+
 #ifdef MACBPQ
 	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for MAC (", TextVerstring);
-#else
-	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for Linux (", TextVerstring);
 #endif
+#ifdef FREEBSD
+	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for FreeBSD (", TextVerstring);
+#endif
+
 
 	GetSemaphore(&Semaphore, 0);
 
@@ -944,19 +953,18 @@ int main(int argc, char * argv[])
 
 		MaintClock = mktime(tm) - (time_t)_MYTIMEZONE;
 
-		if (MaintClock < now)
-			MaintClock += 86400;
+		while (MaintClock < now)
+			MaintClock += MaintInterval * 3600;
 
-		Debugprintf("Maint Clock %d NOW %d Time to HouseKeeping %d", MaintClock, now, MaintClock - now);
+		Debugprintf("Maint Clock %lld NOW %lld Time to HouseKeeping %lld", (long long)MaintClock, (long long)now, (long long)(MaintClock - now));
 
 		if (LastHouseKeepingTime)
 		{
-			if ((MaintClock - LastHouseKeepingTime) > 86400)
+			if ((now - LastHouseKeepingTime) > MaintInterval * 3600)
 			{
 				DoHouseKeeping(FALSE);
 			}
 		}
-
 		for (i = 1; i < argc; i++)
 		{
 			if (_stricmp(argv[i], "tidymail") == 0)
@@ -1210,6 +1218,8 @@ int main(int argc, char * argv[])
 		if (AGWActive)
 			Poll_AGW();
 
+		DRATSPoll();
+
 		HTTPTimer();
 
 		if (ReportTimer)
@@ -1252,11 +1262,12 @@ int main(int argc, char * argv[])
 				if (MaintClock < NOW)
 				{
 					while (MaintClock < NOW)		// in case large time step
-						MaintClock += 86400;
+						MaintClock += MaintInterval * 3600;
 
 					Debugprintf("|Enter HouseKeeping");
 					DoHouseKeeping(FALSE);
 				}
+
 				tm = gmtime(&NOW);
 
 				if (tm->tm_wday == 0)		// Sunday
@@ -1366,6 +1377,7 @@ void * VARAExtInit(EXTPORTDATA * PortEntry);
 void * SerialExtInit(EXTPORTDATA * PortEntry);
 void * WinRPRExtInit(EXTPORTDATA * PortEntry);
 void * HSMODEMExtInit(EXTPORTDATA * PortEntry);
+void * FreeDataExtInit(EXTPORTDATA * PortEntry);
 
 void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
@@ -1377,9 +1389,10 @@ void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	_strupr(Value);
 
+#ifndef FREEBSD
 	if (strstr(Value, "BPQETHER"))
 		return ETHERExtInit;
-
+#endif
 	if (strstr(Value, "BPQAXIP"))
 		return AXIPExtInit;
 
@@ -1449,6 +1462,9 @@ void * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "HSMODEM"))
 		return HSMODEMExtInit;
+
+	if (strstr(Value, "FREEDATA"))
+		return FreeDataExtInit;
 
 	return(0);
 }
@@ -1733,6 +1749,17 @@ int V4ProcessReceivedData(struct TNCINFO * TNC)
 	return 0;
 }
 #endif
+
+#ifdef FREEBSD
+
+char * gcvt(double _Val, int _NumOfDigits, char * _DstBuf)
+{
+	sprintf(_DstBuf, "%f", _Val);
+	return _DstBuf;
+}
+
+#endif
+
 
 
 

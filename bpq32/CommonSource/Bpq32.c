@@ -1047,6 +1047,44 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix bugs in AGW Emulator (.25)
 //	Add more PTT_Sets_Freq options for split frequency working (.26)
 //	Allow RIGCONTROL using Radio Number (Rnn) as well as Port (.26)
+//	Fix Telnet negotiation and backspace processing (.29)
+//	Fix VARA Mode change when scanning (.30)
+//	Add Web Mgmt Log Display (.33)
+//	Fix crash when connecting to RELAY when CMS=0 (.36)
+//	Send OK to user for manual freq changes with hamlib or flrig
+//	Fix Rigcontrol leaving port disabled when using an empty timeband
+//	Fix processing of backspace in Telnet character processing (.40)
+//	Increase max size of connect script
+//	Fix HAMLIB Slave Thread control
+//	Add processing of VARA mode responses and display of VARA Mode (41)
+//	Fix crash when VARA session aborted on LinBPQ (43)
+//	Fix handling port selector (2:call or p2 call) on SCS PTC packet ports (44)
+//	Include APRS Map web page
+//	Add Enable/Disable to KAMPACTOR scan control (use P0 or P1) (45)
+//	Add Basic DRATS interface (46)
+//	Fix MYCALLS on VARA (49)
+//	Add FreeData driver (51)
+//	Add additonal Rigcontrol options for QO100 (51)
+//	Set Content-Type: application/pdf for pdf files downloaded via web interface (51)
+//	Fix sending large compressed web messages (52)
+//	Fix freq display when using flrig or hamlib backends to rigcontrol
+//	Change VARA Driver to send ABORT when Session Time limit expires
+//	Add Chat Log to Web Logs display
+//	Fix possible buffer loss in RigControl
+//	Allow hosts on local lan to be treated as secure
+//	Improve validation of data sent to Winlink SessionAdd API call
+//	Add support for FreeDATA modem.
+//	Add GetLOC API Call
+//	Change Leaflet link in aprs map.
+//	Add Connect Log (64)
+//	Fix crash when Resolve CMS Servers returns ipv6 addresses
+//	Fix Reporting P4 sessions to Winlink (68)
+//	Add support for FreeBSD (68)
+//	Fix Rigcontrol PTCPORT (69)
+//	Set TNC Emulator sessions as secure (72)
+//	Fix not always detecting loss of FLRIG (73)
+//	Add ? and * wildcards to NODES command (74)
+//  Add Port RADIO config parameter (74)
 
 #define CKernel
 
@@ -1139,6 +1177,7 @@ void * VARAExtInit(EXTPORTDATA * PortEntry);
 void * KISSHFExtInit(EXTPORTDATA * PortEntry);
 void * WinRPRExtInit(EXTPORTDATA * PortEntry);
 void * HSMODEMExtInit(EXTPORTDATA * PortEntry);
+void * FreeDataExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -1242,6 +1281,7 @@ DllExport int APIENTRY MONCount(int Stream);
 DllExport int APIENTRY GetCallsign(int stream, char * callsign);
 DllExport VOID APIENTRY RelBuff(VOID * Msg);
 void SaveMH();
+void DRATSPoll();
 
 #define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__);
 int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line);
@@ -1275,6 +1315,7 @@ VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Consoleprintf(const char * format, ...);
 
 DllExport int APIENTRY CloseBPQ32();
+DllExport char * APIENTRY GetLOC();
 DllExport int APIENTRY SessionControl(int stream, int command, int param);
 
 
@@ -1357,7 +1398,7 @@ HANDLE OpenConfigFile(char * file);
 VOID SetupBPQDirectory();
 VOID SendLocation();
 
-uintptr_t _beginthread(void(*start_address)(), unsigned stack_size, int arglist);
+//uintptr_t _beginthread(void(*start_address)(), unsigned stack_size, int arglist);
 
 #define TRAY_ICON_ID	      1		    //		ID number for the Notify Icon
 #define MY_TRAY_ICON_MESSAGE  WM_APP	//		the message ID sent to our window
@@ -1386,7 +1427,7 @@ UINT * WINMORTraceQ = NULL;
 UINT * SetWindowTextQ = NULL;
 
 static RECT Rect = {100,100,400,400};	// Console Window Position
-static RECT FRect = {100,100,800,600};	// Frame 
+RECT FRect = {100,100,800,600};	// Frame 
 static RECT StatusRect = {100,100,850,500};	// Status Window
 
 DllExport int APIENTRY DumpSystem();
@@ -1672,7 +1713,7 @@ VOID MonitorThread(int x)
 
 		LastSemGets = Semaphore.Gets;
 
-		Sleep(30000);
+		Sleep(30000);	
 		CheckforLostProcesses();
 
 	} while (TRUE);
@@ -2077,6 +2118,8 @@ VOID TimerProcX()
 
 		if (AGWActive)
 			Poll_AGW();
+
+		DRATSPoll();
 
 		CheckGuardZone();
 
@@ -3737,6 +3780,9 @@ VOID * InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "HSMODEM"))
 		return HSMODEMExtInit;
 
+	if (strstr(Value, "FREEDATA"))
+		return FreeDataExtInit;
+
 	ExtDriver = LoadLibrary(Value);
 
 	if (ExtDriver == NULL)
@@ -3931,7 +3977,7 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd);
 
 VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value);
 SOCKET OpenWL2KHTTPSock();
-VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return);
+SendHTTPRequest(SOCKET sock, char * Request, char * Params, int Len, char * Return);
 
 BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER);
 BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL);
@@ -4064,7 +4110,7 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 				{
 					char * ptr;
 					
-					SendHTTPRequest(sock, "api.winlink.org", 80, 
+					SendHTTPRequest(sock, 
 						"/sysop/add", Message, Len, Reply);
 
 					ptr = strstr(Reply, "\"ErrorCode\":");
@@ -4419,13 +4465,6 @@ int SetupConsoleWindow()
 			StatusRect.bottom = 500;
 		}
 
-		if (StatusRect.top < OffsetH)			// Make sure not off top of MDI frame
-		{
-			int Error = OffsetH - StatusRect.top;
-			StatusRect.top += Error;
-			StatusRect.bottom += Error;
-		}
-
 
 		// Get StartMinimized and MinimizetoTray flags
 
@@ -4555,6 +4594,13 @@ int SetupConsoleWindow()
 
 	i=RegisterClass(&wc);
 
+	if (StatusRect.top < OffsetH)			// Make sure not off top of MDI frame
+	{
+		int Error = OffsetH - StatusRect.top;
+		StatusRect.top += Error;
+		StatusRect.bottom += Error;
+	}
+
 	StatusWnd =  CreateMDIWindow("Status", "Stream Status", 0,
 		  StatusRect.left,	StatusRect.top, StatusRect.right - StatusRect.left,
 		  StatusRect.bottom - StatusRect.top, ClientWnd, hInstance, 1234);
@@ -4646,8 +4692,6 @@ int SetupConsoleWindow()
 			ShowWindow(FrameWnd, SW_SHOWMINIMIZED);	
 	else
 		ShowWindow(FrameWnd, SW_RESTORE);
-
-	"BPQTermMDI", "MonSize",
 	
 	CreateMonitorWindow(Size);
 
@@ -5459,7 +5503,6 @@ DllExport VOID APIENTRY SendChatReport(SOCKET ChatReportSocket, char * buff, int
 	buff[txlen++] = (crc>>8);
 
 	sendto(ChatReportSocket, buff, txlen, 0, (LPSOCKADDR)&Chatreportdest, sizeof(Chatreportdest));
-
 }
 
 VOID CreateRegBackup()
@@ -6391,6 +6434,11 @@ int GetListeningPortsPID(int Port)
 		}
 	}
 	return 0;			// Not found
+}
+
+DllExport char *  APIENTRY GetLOC()
+{
+	return LOC;
 }
 
 // UZ7HO Dll PTT interface

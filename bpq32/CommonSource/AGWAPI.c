@@ -59,7 +59,7 @@ struct AGWSocketConnectionInfo
     unsigned char CallSign2[10];
     BOOL GotHeader;
     int MsgDataLength;
-    struct AGWHeader AGWRXHeader;   
+    struct AGWHeader AGWRXHeader; 
 };
 
 struct BPQConnectionInfo
@@ -134,7 +134,6 @@ int ShowApps();
 int Terminate();
 int SendtoSocket(SOCKET sock,char * Msg);
 char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char * format, ...);
-
 
 VOID Poll_AGW()
 {
@@ -1295,10 +1294,10 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
 	case 'K':
 
         // Send Raw Frame
- 
-		SendRaw(sockptr->AGWRXHeader.Port+1,&AGWMessage[1], sockptr->MsgDataLength - 1);
-        return 0;
 
+		SendRaw(sockptr->AGWRXHeader.Port+1,&AGWMessage[1], sockptr->MsgDataLength - 1);
+        
+		return 0;
 
 	case 'm':
      

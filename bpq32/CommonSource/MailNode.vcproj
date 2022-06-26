@@ -216,11 +216,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\APRSIconData.c"
+				>
+			</File>
+			<File
 				RelativePath=".\APRSStdPages.c"
 				>
 			</File>
 			<File
 				RelativePath="..\CommonSource\ARDOP.c"
+				>
+			</File>
+			<File
+				RelativePath=".\base64.c"
 				>
 			</File>
 			<File
@@ -309,11 +317,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\DRATS.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\FBBRoutines.c"
 				>
 			</File>
 			<File
 				RelativePath="..\CommonSource\FLDigi.c"
+				>
+			</File>
+			<File
+				RelativePath=".\FreeDATA.c"
 				>
 			</File>
 			<File
@@ -442,6 +458,78 @@
 			</File>
 			<File
 				RelativePath="..\CommonSource\pibits.c"
+				>
+			</File>
+			<File
+				RelativePath=".\png.c"
+				>
+			</File>
+			<File
+				RelativePath=".\png.h"
+				>
+			</File>
+			<File
+				RelativePath=".\pngerror.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pnggccrd.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngget.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngmem.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngpread.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngread.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngrio.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngrtran.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngrutil.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngset.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngtrans.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngvcrd.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngwio.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngwrite.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngwtran.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pngwutil.c"
 				>
 			</File>
 			<File

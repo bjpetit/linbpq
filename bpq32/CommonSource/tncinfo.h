@@ -86,6 +86,14 @@ struct UserRec
 	BOOL Secure;				// Authorised User
 };
 
+struct LOCALNET 
+{
+	struct LOCALNET * Next;
+	uint32_t Network;
+	uint32_t Mask;
+};
+
+
 #define MaxCMS	10				// Number of addresses we can keep - currently 4 are used.
 
 struct TCPINFO
@@ -104,6 +112,7 @@ struct TCPINFO
 	int HTTPPort;
 	int TriModePort;
 	int SyncPort;
+	int DRATSPort;
 	int CMDPort[33];
 	char RELAYHOST[64];
 	char CMSServer[64];
@@ -153,12 +162,15 @@ struct TCPINFO
 	SOCKET TriModeSock;
 	SOCKET TriModeDataSock;
 	SOCKET Syncsock;
+	SOCKET DRATSsock;
+
 	struct ConnectionInfo * TriModeControlSession;
 	SOCKET sock6;
 	SOCKET FBBsock6[100];
 	SOCKET Relaysock6;
 	SOCKET HTTPsock6;
 	SOCKET Syncsock6;
+	SOCKET DRATSsock6;
 
 	fd_set ListenSet;
 	SOCKET maxsock;
@@ -172,6 +184,7 @@ struct TCPINFO
 	int ReportRelayTraffic;			// Send WL2K Reports for Relay Traffic
 
 	char * WebTermCSS;				// css override for web terminal
+	struct LOCALNET * LocalNets;
 
 };
 
@@ -353,6 +366,30 @@ typedef struct MPSKINFO
 	int MaxSessions;
 } *MPSKINFO;
 
+struct FreeDataINFO
+{
+	int startingTNC;
+	int TNCRunning;
+	int Conecting;
+	int Connected;
+	char ourCall[10];
+	char toCall[10];
+	char farCall[10];			// TNC Call
+	char useBaseCall;			// Use base call (without ssid) for TNC Call
+	char * Capture;				// Capture Device Name
+	char * Playback;			// Playback Device Name
+	char * hamlibHost;
+	int hamlibPort;
+
+	unsigned char toSendData[8192]; // Buffer data from node for more efficiency
+	int toSendCount;
+	int toSendTimeout;
+	unsigned char toSendMsg[256]; // Buffer data from node for more efficiency
+	int toSendMsgCount;
+	int toSendMsgTimeout;
+	char * RXDir;				// Directory for Received Files
+	int CONOK;					// Virtual Lisren Flag
+};
 
 
 
@@ -393,6 +430,7 @@ typedef struct TNCINFO
 #define H_KISSHF 16
 #define H_WINRPR 17
 #define H_HSMODEM 18
+#define H_FREEDATA 19
 
 
 	int Port;					// BPQ Port Number
@@ -466,6 +504,11 @@ typedef struct TNCINFO
 	BOOL DATACONNECTING;
 	BOOL DATACONNECTED;
 
+	BOOL TNCCONNECTING;			// For FreeData
+	BOOL TNCCONNECTED;
+	BOOL DAEMONCONNECTING;
+	BOOL DAEMONCONNECTED;
+
 	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
 	char CurrentMYC[10];			// Save current call so we don't change it unnecessarily
 	char * LISTENCALLS;				// Calls TNC will respond to (currently only for VARA)
@@ -488,6 +531,7 @@ typedef struct TNCINFO
 
 	long long int TXFreq;			// Freq to set on tx before ptt
 	long long int DefaultFreq;		// Freq to set on tx after ptt 
+	int TXOffset;					// Correction to TXFreq
 
 	int PID;						// Process ID for Software TNC
 	HWND hWnd;						// Main window handle for Software TNC
@@ -702,6 +746,8 @@ typedef struct TNCINFO
 	HWND xIDC_RESTARTTIME;
 	HWND xIDC_RESTARTS;
 	HWND xIDC_PACTORLEVEL;
+	HWND xIDC_TXTUNE;
+	HWND xIDC_TXTUNEVAL;
 
 	char * WEB_TNCSTATE; 
 	char * WEB_COMMSSTATE;
@@ -754,9 +800,12 @@ typedef struct TNCINFO
 									// split over 2 packets
 
 	struct HSMODEMINFO * HSModemInfo;
+	struct FreeDataINFO * FreeDataInfo;
 
 	int DontRestart;				// Don't automatically restart failed TNC
 	int SendTandRtoRelay;			// Send T and R suffix messages to RELAY instead of CMS
+
+	double SNR;						// S/N Ratio (VARA)
 
 } *PTNCINFO;
 

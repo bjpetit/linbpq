@@ -62,7 +62,7 @@ char *fcvt(double number, int ndigits, int *decpt, int *sign);
 
 #include "hidapi.h"
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 int Row = -20;
 
@@ -179,7 +179,8 @@ int NumberofPorts = 0;
 
 BOOL EndPTTCATThread = FALSE;
 
-int HAMLIBRunning = 0;
+int HAMLIBMasterRunning = 0;
+int HAMLIBSlaveRunning = 0;
 int FLRIGRunning = 0;
 
 struct RIGPORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
@@ -278,7 +279,7 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 				long long txfreq = 0;
 
 				if (TNC->TXFreq)
-					txfreq = TNC->TXFreq;
+					txfreq = TNC->TXFreq + TNC->TXOffset;
 				else if (TNC->RIG && TNC->RIG->txFreq)
 					txfreq = RIG->txFreq;		// Used if not associated with a TNC port - eg HAMLIB + WSJT
 				else if (TNC->RIG && TNC->RIG->RigFreq != 0.0)
@@ -578,6 +579,21 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 		RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
 	}
 }
+
+void saveNewFreq(struct RIGINFO * RIG, double Freq, char * Mode)
+{
+	_gcvt((Freq + RIG->rxOffset) / 1000000.0, 9, RIG->Valchar);
+	strcpy(RIG->WEB_FREQ, RIG->Valchar);
+	MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+
+	if (Mode[0])
+	{
+		strcpy(RIG->ModeString, Mode);
+		MySetWindowText(RIG->hMODE, Mode);
+	}
+
+}
+
 // Need version that doesn't need Port Number
 
 int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, char * Command);
@@ -780,13 +796,15 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		return FALSE;
 	}
 
-	if (RIG->RIGOK == 0 && Session != -1)
+	if (RIG->RIGOK == 0)
 	{
-		if (PORT->Closed)
-			sprintf(Command, "Sorry - Radio port closed\r");
-		else
-			sprintf(Command, "Sorry - Radio not responding\r");
-	
+		if (Session != -1)
+		{
+			if (PORT->Closed)
+				sprintf(Command, "Sorry - Radio port closed\r");
+			else
+				sprintf(Command, "Sorry - Radio not responding\r");
+	}
 		return FALSE;
 	}
 
@@ -1149,22 +1167,10 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			return FALSE;
 		}
 	}
+
 	Freq = Freq * 1000000.0;
 
-	Valchar = _fcvt(Freq, 0, &dec, &sign);
-//	_gcvt(Freq, 0, Valchar);
-
-	if (dec == 9)	// 10-100
-		sprintf(FreqString, "%s", Valchar);
-	else
-	if (dec == 8)	// 10-100
-		sprintf(FreqString, "0%s", Valchar);
-	else
-	if (dec == 7)	// 1-10
-		sprintf(FreqString, "00%s", Valchar);
-	else
-	if (dec == 6)	// 0 - 1
-		sprintf(FreqString, "000%s", Valchar);
+	sprintf(FreqString, "%09.0f", Freq);
 
 	if (PORT->PortType != ICOM)
 		strcpy(Data, FilterString);			// Others don't have a filter.
@@ -1795,7 +1801,11 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			FreqString, Mode, atoi(Data));
 	
 		send(PORT->remoteSock, cmd, len, 0);
-		return TRUE;
+		sprintf(Command, "Ok\r");
+		
+		saveNewFreq(RIG, Freq, Mode);
+
+		return FALSE;
 	}
 
 	case FLRIG:
@@ -1810,6 +1820,8 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		PORT->AutoPoll = 0;
 
 		FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
+
+		saveNewFreq(RIG, Freq, Mode);
 		return TRUE;
 	}
 
@@ -1846,6 +1858,8 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 			cmd[0] = 1;
 			len = sendto(PORT->remoteSock, cmd, 5,  0, &PORT->remoteDest, sizeof(struct sockaddr));
 		}
+
+		saveNewFreq(RIG, Freq, Mode);
 
 		sprintf(Command, "Ok\r");
 		return FALSE;
@@ -1952,6 +1966,27 @@ DllExport BOOL APIENTRY Rig_Init()
 
 			RIG->Interlock = Interlock;
 
+			if (RIG->PORT->IOBASE[0] == 0)
+			{
+				// We have to find the SCS TNC in this scan group as TNC is now a dummy
+
+				struct TNCINFO * PTCTNC;
+				int n;
+
+				for (n = 1; n < 33; n++)
+				{
+					PTCTNC = TNCInfo[n];
+
+					if (PTCTNC == NULL || (PTCTNC->Hardware != H_SCS && PTCTNC->Hardware != H_ARDOP))
+						continue;
+
+					if (PTCTNC->RXRadio != Interlock)
+						continue;
+
+					RIG->PORT->PTC = PTCTNC;
+				}
+			}
+
 #ifndef LINBPQ
 
 			// Create line for this rig
@@ -2006,7 +2041,7 @@ DllExport BOOL APIENTRY Rig_Init()
 
 		if (PORT->PortType == HAMLIB)
 		{
-			HAMLIBRunning = 1;
+			HAMLIBMasterRunning = 1;
 			ConnecttoHAMLIB(PORT);
 		}
 		else if (PORT->PortType == FLRIG)
@@ -2162,7 +2197,8 @@ DllExport BOOL APIENTRY Rig_Close()
 	struct TNCINFO * TNC;
 	int n, p;
 
-	HAMLIBRunning = 0;					// Close HAMLIB thread(s)
+	HAMLIBMasterRunning = 0;			// Close HAMLIB thread(s)
+	HAMLIBSlaveRunning = 0;			// Close HAMLIB thread(s)
 	FLRIGRunning = 0;					// Close FLRIG thread(s)
 
 	for (p = 0; p < NumberofPorts; p++)
@@ -2183,7 +2219,7 @@ DllExport BOOL APIENTRY Rig_Close()
 			Sleep(200);
 		}
 
-		if (PORT->PortType != HAMLIB && PORT->PortType != RTLUDP && PORT->PortType != FLRIG)
+		if (PORT->PortType != HAMLIB && PORT->PortType != RTLUDP && PORT->PortType != FLRIG && strcmp(PORT->IOBASE, "RAWHID") != 0)
 		{
 			if (PORT->hPTTDevice != PORT->hDevice)
 				CloseCOMPort(PORT->hPTTDevice);
@@ -2457,6 +2493,13 @@ void CheckRX(struct RIGPORTINFO * PORT)
 	char NMEAMsg[100];
 	unsigned char * ptr;
 	int len;
+
+	if (PORT->PortType == FLRIG)
+	{
+		// Data received in thread
+		
+		return;
+	}
 
 	if (PORT->PortType == HAMLIB)
 	{
@@ -2852,14 +2895,16 @@ CheckOtherPorts:
 		{
 			// 1 means can't change - release all
 
-			if (RIG->RIG_DEBUG)
+			if (RIG->RIG_DEBUG && PORT->FreqPtr)
 				Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
 						PortRecord->PORT_DLL_NAME, PORT->FreqPtr->Dwell); 
 
 			RIG->WaitingForPermission = FALSE;
 			MySetWindowText(RIG->hSCAN, "-");
 			RIG->WEB_SCAN = '-';
-			RIG->ScanCounter = PORT->FreqPtr->Dwell;
+
+			if (PORT->FreqPtr)
+				RIG->ScanCounter = PORT->FreqPtr->Dwell;
 
 			if (RIG->ScanCounter == 0)		// ? After manual change
 				RIG->ScanCounter = 50; 
@@ -2895,9 +2940,10 @@ CheckOtherPorts:
 	
 		if (ptr[0] == (struct ScanEntry *)0)
 		{
-			// Empty Timeband - delay 15 secs
+			// Empty Timeband - delay 60 secs (we need to check for timeband change sometimes)
 
-			RIG->ScanCounter = 150;
+			RIG->ScanCounter = 600;
+			ReleasePermission(RIG);
 			return FALSE;
 		}
 	}
@@ -2927,7 +2973,7 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 	struct _EXTPORTDATA * PortRecord;
 
 	if (ptr->Bandwidth || ptr->RPacketMode || ptr->HFPacketMode 
-		|| ptr->PMaxLevel || ptr->ARDOPMode[0])
+		|| ptr->PMaxLevel || ptr->ARDOPMode[0] || ptr->VARAMode)
 	{
 		i = 0;
 
@@ -4688,7 +4734,7 @@ void DecodeCM108(int Port, char * ptr)
 	//	easier to use VID/PID, but allow device in case more than one needed
 
 	char * next;
-	long VID = 0, PID = 0;
+	int32_t  VID = 0, PID = 0;
 	char product[256];
 
 	struct hid_device_info *devs, *cur_dev;
@@ -4848,7 +4894,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		PORT->ConfiguredRigs = 1;
 		RIG = &PORT->Rigs[0];
 		RIG->RIGOK = TRUE;
-
+		RIG->PORT = PORT;
 
 		strcpy(PORT->IOBASE, ptr);
 		strcpy(RIG->RigName, "FLRIG");
@@ -4881,7 +4927,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		PORT->ConfiguredRigs = 1;
 		RIG = &PORT->Rigs[0];
 		RIG->RIGOK = TRUE;
-
+		RIG->PORT = PORT;
 
 		strcpy(PORT->IOBASE, ptr);
 		strcpy(RIG->RigName, "HAMLIB");
@@ -4914,7 +4960,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		PORT->ConfiguredRigs = 1;
 		RIG = &PORT->Rigs[0];
 		RIG->RIGOK = TRUE;
-
+		RIG->PORT = PORT;
 
 		strcpy(PORT->IOBASE, ptr);
 		strcpy(RIG->RigName, "RTLUDP");
@@ -4933,7 +4979,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 	if ((_memicmp(ptr, "VCOM", 4) == 0) && TNC->Hardware == H_SCS)		// Using Radio Port on PTC
 		COMPort = 0;
-	else if ((_memicmp(ptr, "PTCPORT", 7) == 0) && (TNC->Hardware == H_SCS || TNC->Hardware == H_ARDOP))
+	else if (_memicmp(ptr, "PTCPORT", 7) == 0)
 		COMPort = 0;
 	else
 		COMPort = ptr;
@@ -4942,7 +4988,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 	// Unless CM108 - they must be on separate Ports
 
-	if (_stricmp("CM108", COMPort) != 0)
+	if (COMPort && _stricmp("CM108", COMPort) != 0)
 	{
 		for (i = 0; i < NumberofPorts; i++)
 		{
@@ -4964,8 +5010,6 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 	if (COMPort)
 		strcpy(PORT->IOBASE, COMPort);
-	else
-		PORT->PTC = TNC;
 
 PortFound:
 
@@ -5171,6 +5215,7 @@ RigFound:
 	}
 
 	RIG->RIG_DEBUG = RIG_DEBUG;
+	RIG->PORT = PORT;
 
 	strcpy(RIG->RigName, RigName);
 
@@ -6046,27 +6091,9 @@ CheckScan:
 
 		Freq = Freq * 1000000.0;
 
-
-		Valchar = _fcvt(Freq, 0, &dec, &sign);
-		//		_gcvt(Freq, 0, Valchar);
+		sprintf(FreqString, "%09.0f", Freq);
 
 		FreqInt = Freq;
-
-
-		if (dec == 9)	// 10-100
-			sprintf(FreqString, "%s", Valchar);
-		else
-			if (dec == 8)	// 10-100
-				sprintf(FreqString, "0%s", Valchar);		
-			else
-				if (dec == 7)	// 1-10
-					sprintf(FreqString, "00%s", Valchar);
-				else
-					if (dec == 6)	// 0.1 - 1
-						sprintf(FreqString, "000%s", Valchar);
-					else
-						if (dec == 5)	// 0.01 - .1
-							sprintf(FreqString, "000%s", Valchar);
 
 		FreqPtr[0] = malloc(sizeof(struct ScanEntry));
 		memset(FreqPtr[0], 0, sizeof(struct ScanEntry));
@@ -6911,6 +6938,8 @@ void HAMLIBProcessMessage(struct RIGPORTINFO * PORT)
 		if (PORT->remoteSock)
 			closesocket(PORT->remoteSock);
 
+		PORT->remoteSock = 0;
+
 		PORT->CONNECTED = FALSE;
 		PORT->hDevice = 0;
 		return;					
@@ -6929,6 +6958,8 @@ void FLRIGProcessMessage(struct RIGPORTINFO * PORT)
 	{
 		if (PORT->remoteSock)
 			closesocket(PORT->remoteSock);
+
+		PORT->remoteSock = 0;
 
 		PORT->CONNECTED = FALSE;
 		PORT->hDevice = 0;
@@ -7054,6 +7085,7 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 				{
 					sprintf(cmd, "<string>%s</string>", PORT->ScanEntry.Cmd2Msg);
 					FLRIGSendCommand(PORT, "rig.set_mode", cmd);
+					strcpy(RIG->ModeString, PORT->ScanEntry.Cmd2Msg);
 				}
 				else
 				{
@@ -7452,7 +7484,7 @@ VOID HAMLIBThread(struct RIGPORTINFO * PORT);
 
 VOID ConnecttoHAMLIB(struct RIGPORTINFO * PORT)
 {
-	if (HAMLIBRunning)
+	if (HAMLIBMasterRunning)
 		_beginthread(HAMLIBThread, 0, (void *)PORT);
 
 	return ;
@@ -7538,7 +7570,7 @@ VOID HAMLIBThread(struct RIGPORTINFO * PORT)
 		
 		ret = select((int)PORT->remoteSock + 1, &readfs, NULL, &errorfs, &timeout);
 
-		if (HAMLIBRunning == 0)
+		if (HAMLIBMasterRunning == 0)
 			return;
 
 		if (ret == SOCKET_ERROR)
@@ -7594,11 +7626,15 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 	int ret;
 	unsigned int maxsock;
 
-	while (HAMLIBRunning)
+	HAMLIBSlaveRunning = 1;
+
+	Consoleprintf("HAMLIB Slave Thread %d Running", RIG->HAMLIBPORT);
+
+	while (HAMLIBSlaveRunning)
 	{
 		struct HAMLIBSOCK * Entry = RIG->Sockets;
 		struct HAMLIBSOCK * Prev;
-
+	
 		FD_ZERO(&readfs);	
 		FD_ZERO(&errorfs);
 
@@ -7607,7 +7643,7 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 	
 		maxsock = RIG->ListenSocket;
 
-		while (Entry && HAMLIBRunning)
+		while (Entry && HAMLIBSlaveRunning)
 		{
 			FD_SET(Entry->Sock, &readfs);
 			FD_SET(Entry->Sock, &errorfs);
@@ -7623,7 +7659,7 @@ void HAMLIBSlaveThread(struct RIGINFO * RIG)
 
 		ret = select(maxsock + 1, &readfs, NULL, &errorfs, &timeout);
 
-		if (HAMLIBRunning == 0)
+		if (HAMLIBSlaveRunning == 0)
 			return;
 
 		if (ret == -1)
@@ -7744,6 +7780,7 @@ Loop:
 			}
 		}
 	}
+	Consoleprintf("HAMLIB Slave Thread %d Exited", RIG->HAMLIBPORT);
 }
 
 
@@ -7831,7 +7868,19 @@ VOID FLRIGPoll(struct RIGPORTINFO * PORT)
 	Len = sprintf(ReqBuf, Req, Poll, "");
 	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
 
-	send(PORT->remoteSock, SendBuff, Len, 0);
+	if (PORT->CONNECTED)
+	{
+		if (send(PORT->remoteSock, SendBuff, Len, 0) != Len)
+		{
+			if (PORT->remoteSock)
+				closesocket(PORT->remoteSock);
+
+			PORT->remoteSock = 0;
+			PORT->CONNECTED = FALSE;
+			PORT->hDevice = 0;	
+			return;
+		}
+	}
 
 	PORT->Timeout = 10;
 	PORT->CmdSent = 0;
@@ -7856,7 +7905,16 @@ VOID FLRIGSendCommand(struct RIGPORTINFO * PORT, char * Command, char * Value)
 	strcpy(PORT->TXBuffer, Command);
 	Len = sprintf(ReqBuf, Req, PORT->TXBuffer, ValueString);
 	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
-	send(PORT->remoteSock, SendBuff, Len, 0); 
+	if (send(PORT->remoteSock, SendBuff, Len, 0) != Len)
+	{
+		if (PORT->remoteSock)
+			closesocket(PORT->remoteSock);
+
+		PORT->remoteSock = 0;
+		PORT->CONNECTED = FALSE;
+		PORT->hDevice = 0;				
+	}
+
 	return;
 }
 
@@ -7983,8 +8041,6 @@ Lost:
 				PORT->remoteSock = 0;
 				return;
 			}
-
-
 			continue;
 		}
 		else
@@ -8028,7 +8084,6 @@ int HID_Read_Block(struct RIGPORTINFO * PORT)
 		if (Len < 64)		// Max in HID Packet
 		{
 			memcpy(&PORT->RXBuffer[PORT->RXLen], Msg + 1, Len);
-			Debugprintf("HID Read %d\n", Len);
 			return Len;
 		}
 	}

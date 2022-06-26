@@ -20,15 +20,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "CHeaders.h"
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 #ifdef WIN32
 //#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
 #else
 #include <iconv.h>
-#ifndef MACBPQ
-#include <sys/prctl.h>
-#endif
 #endif
 
 extern char NodeTail[];
@@ -41,8 +38,8 @@ extern char LTATString[2048];
 //static UCHAR BPQDirectory[260];
 
 extern ConnectionInfo Connections[];
-extern int	NumberofStreams;
-
+extern int NumberofStreams;
+extern time_t MaintClock;						// Time to run housekeeping
 
 extern int SMTPMsgs;
 
@@ -60,7 +57,7 @@ struct UserInfo * BBSLIST[NBBBS + 1];
 int MaxBBS = 0;
 
 #define MAIL
-#include "HTTPConnectionInfo.h"
+#include "httpconnectioninfo.h"
 
 struct TCPINFO * TCP;
 
@@ -437,6 +434,9 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		return;
 
 	if (strstr(input, "Host: 127.0.0.1"))
+		LOCAL = TRUE;
+
+	if (Session->TNC == 1)
 		LOCAL = TRUE;
 
 	NodeURL = strtok_s(URL, "?", &Context);
@@ -1411,7 +1411,9 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 	int ReplyLen = 0;
 	char * input;
 	char Temp[80];
-
+	struct tm *tm;
+	time_t now;
+	
 	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 
 	if (input)
@@ -1482,6 +1484,24 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
  
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
+
+		// Calulate time to run Housekeeping
+	
+		now = time(NULL);
+
+		tm = gmtime(&now);
+
+		tm->tm_hour = MaintTime / 100;
+		tm->tm_min = MaintTime % 100;
+		tm->tm_sec = 0;
+
+//		MaintClock = _mkgmtime(tm);
+		MaintClock = mktime(tm) - (time_t)_MYTIMEZONE;
+
+		while (MaintClock < now)
+			MaintClock += MaintInterval * 3600;
+
+		Debugprintf("Maint Clock %d NOW %d Time to HouseKeeping %d", MaintClock, now, MaintClock - now);
 	}
 	SendHouseKeeping(Reply, RLen, Key);
 	return;
@@ -2369,7 +2389,7 @@ VOID SendFwdDetails(struct UserInfo * User, char * Reply, int * ReplyLen, char *
 	char TO[2048] = "";
 	char AT[2048] = "";
 	char TIMES[2048] = "";
-	char FWD[2048] = "";
+	char FWD[100000] = "";
 	char HRB[2048] = "";
 	char HRP[2048] = "";
 

@@ -28,8 +28,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #ifndef WIN32
 #ifndef MACBPQ
+#ifndef FREEBSD
 #include <sys/ioctl.h>
 #include <linux/serial.h>
+#endif
 #endif
 #endif
 
@@ -38,7 +40,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
-int (WINAPI FAR *EnumProcessesPtr)();
+extern int (WINAPI FAR *EnumProcessesPtr)();
 
 #include "bpq32.h"
 
@@ -73,7 +75,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port);
 
@@ -273,6 +275,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 #ifndef WIN32
 #ifndef MACBPQ
+#ifndef FREEBSD
 
 		if (TNC->Dragon)
 		{
@@ -299,6 +302,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					Debugprintf("Dragon custom baud rate set\n");
 			}
 		}
+#endif
 #endif
 #endif
 		SendInitScript(TNC);
@@ -844,6 +848,7 @@ VOID * SerialExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef WIN32
 #ifndef MACBPQ
+#ifndef FREEBSD
 
 	if (TNC->Dragon)
 	{
@@ -870,6 +875,7 @@ VOID * SerialExtInit(EXTPORTDATA * PortEntry)
 				Debugprintf("Dragon custom baud rate set\n");
 		}
 	}
+#endif
 #endif
 #endif
 

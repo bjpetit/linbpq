@@ -64,10 +64,12 @@ VOID CHECKNEIGHBOUR(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * Msg);
 VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port);
 VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff, int Len, int Port);
 VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask, UCHAR * ApplCall);
+void WriteConnectLog(char * fromCall, char * toCall, UCHAR * Mode);
 
 extern UINT APPLMASK;
 
 extern BOOL LogL4Connects;
+extern BOOL LogAllConnects;
 
 // L4 Flags Values
 
@@ -1280,7 +1282,6 @@ void WriteL4LogLine(UCHAR * mycall, UCHAR * call, UCHAR * node)
 	fclose(L4LogHandle);
 }
 
-
 VOID CONNECTREQUEST(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, UINT ApplMask, UCHAR * ApplCall)
 {
 	//	CONNECT REQUEST - SEE IF EXISTING SESSION
@@ -1388,6 +1389,20 @@ VOID SendConACK(struct _LINKTABLE * LINK, TRANSPORTENTRY * L4, L3MESSAGEBUFFER *
 
 	if (LogL4Connects)
 		WriteL4LogLine(ApplCall, L4->L4USER, L3MSG->L3SRCE);
+
+	if (LogAllConnects)
+	{
+		char From[64];
+		char toCall[12], fromCall[12], atCall[12];
+
+		toCall[ConvFromAX25(ApplCall, toCall)] = 0;
+		fromCall[ConvFromAX25(L4->L4USER, fromCall)] = 0;
+		atCall[ConvFromAX25(L3MSG->L3SRCE, atCall)] = 0;
+
+		sprintf(From, "%s at Node %s", fromCall, atCall);
+		WriteConnectLog(From, toCall, "NETROM");
+	}
+
 
 	if (CTEXTLEN && (Applmask == 0) && FULL_CTEXT)	// Any connect, or call to alias
 	{

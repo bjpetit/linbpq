@@ -229,7 +229,7 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
 	u_long param=1;
     struct ifreq buffer;
 
-	WritetoConsoleLocal("BPQEther ");
+	WritetoConsoleLocal("LinEther ");
 
 	//
 	//	Read config 

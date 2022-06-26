@@ -49,6 +49,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define NOI2C
 #endif
 
+#ifdef FREEBSD
+#define NOI2C
+#endif
+
 #ifdef NOI2C
 int i2c_smbus_write_byte()
 {
@@ -97,6 +101,8 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO);
 #define FLDIGI 256				// Support FLDIGI COmmand Frames
 #define TRACKER 512				// SCS Tracker. Need to set KISS Mode 
 #define FASTI2C 1024			// Use BLocked I2C Reads (like ARDOP)
+#define DRATS 2048
+
 
 int WritetoConsoleLocal(char * buff);
 VOID INITCOMMON(struct KISSINFO * PORT);
@@ -107,6 +113,7 @@ int ConnecttoTCP(NPASYINFO ASY);
 int KISSGetTCPMessage(NPASYINFO ASY);
 VOID CloseKISSPort(struct PORTCONTROL * PortVector);
 int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
+void processDRATSFrame(unsigned char * Message, int Len);
 
 extern struct PORTCONTROL * PORTTABLE;
 extern int	NUMBEROFPORTS;
@@ -1503,11 +1510,13 @@ SeeifMore:
 		struct _LINKTABLE * LINK;
 		UINT ACKWORD = Port->RXMSG[1] | Port->RXMSG[2] << 8;
 
-		LINK = LINKS + ACKWORD;
+		if (ACKWORD < MAXLINKS)
+		{
+			LINK = LINKS + ACKWORD;
 
-		if (LINK->L2TIMER)
-			LINK->L2TIMER = LINK->L2TIME;
-
+			if (LINK->L2TIMER)
+				LINK->L2TIMER = LINK->L2TIME;
+		}
 		return 0;
 	}
 
@@ -1579,6 +1588,12 @@ SeeifMore:
 	}
 
 	//	checksum if necessary
+
+	if (KISS->PORT.KISSFLAGS & DRATS)
+	{
+		processDRATSFrame(&Port->RXMSG[1], len - 2);
+		return 0;
+	}
 
 	if (len < 15)
 		return 0;					// too short for AX25

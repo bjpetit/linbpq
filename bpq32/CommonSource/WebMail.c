@@ -20,18 +20,15 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_DEPRECATE 
 
 #include "CHeaders.h"
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 #define MAIL
-#include "HTTPConnectionInfo.h"
+#include "httpconnectioninfo.h"
 
 #ifdef WIN32
 //#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
 #else
 #include <iconv.h>
-#ifndef MACBPQ
-#include <sys/prctl.h>
-#endif
 #include <dirent.h>
 #endif
 
@@ -116,7 +113,7 @@ struct HtmlFormDir
 };
 
 
-char FormDirList[4][MAX_PATH] = {"Standard_Templates", "Local_Templates"};
+char FormDirList[4][MAX_PATH] = {"Standard_Templates", "Standard Templates", "Local_Templates"};
 
 static char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
 static char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
@@ -142,11 +139,13 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=UTF
 	"Subject <input size=60 id='Subj' name='Subj' value='%s'> &nbsp; &nbsp; &nbsp;"
 //	"<button onclick='document.getElementById('getFile').click()'>Attach Files</button>"
 //	"<input type='file' id='getFile' name='myFile[]' multiple style='display:none'><br>"
-	"<input type='file' name='myFile[]' multiple>"
+	"<label for='myfile'>Attachments </label><input type='file' name='myFile[]' multiple>"
 	"<br>Type &nbsp;&nbsp;&nbsp;"
 	"<select tabindex=1 size=1 name=Type><option value=P>P</option>"
 	"<option value=B>B</option><option value=T>T</option></select>"
-	" BID <input name=BID><br><br>"
+	" BID <input name=BID><br><label for='myfile2'>Header &nbsp;</label>"
+	"<input type='file' name='myFile2[]' style='width: 220px'>"
+	"<label for='myfile3'> Footer </label><input type='file' name='myFile3[]'>"
 	"</span></div>"
 	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
 	"<input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form>";
@@ -502,6 +501,57 @@ int SaveInputValue(WebMailInfo * WebMail, char * Name, char * Value, int ValLeng
 			}
 		}
 	}
+
+	else if (_memicmp(Name, "myFile2[]", 8) == 0)
+	{
+		// Get File Name from param string - myFile[]"; filename="exiftool.txt" \r\nContent-Type: text/plain
+
+		char * fn = strstr(Name, "filename=");
+		char * endfn;
+		if (fn)
+		{
+			fn += 10;
+
+			endfn = strchr(fn, '"');
+			if (endfn)
+			{
+				*endfn = 0;
+
+				if (strlen(fn))
+				{
+					WebMail->Header = malloc(ValLength + 1);
+					memcpy(WebMail->Header, Value, ValLength + 1);
+					WebMail->HeaderLen = RemoveLF(WebMail->Header, ValLength);
+				}
+			}
+		}
+	}
+
+	else if (_memicmp(Name, "myFile3[]", 8) == 0)
+	{
+		// Get File Name from param string - myFile[]"; filename="exiftool.txt" \r\nContent-Type: text/plain
+
+		char * fn = strstr(Name, "filename=");
+		char * endfn;
+		if (fn)
+		{
+			fn += 10;
+
+			endfn = strchr(fn, '"');
+			if (endfn)
+			{
+				*endfn = 0;
+
+				if (strlen(fn))
+				{
+					WebMail->Footer = malloc(ValLength + 1);
+					memcpy(WebMail->Footer, Value, ValLength + 1);
+					WebMail->FooterLen = RemoveLF(WebMail->Footer, ValLength);
+				}
+			}
+		}
+	}
+
 	return TRUE;
 }
 
@@ -719,6 +769,7 @@ int GetHTMLFormSet(char * FormSet)
 
 	if (INVALID_HANDLE_VALUE == hFind) 
 	{
+		// Accept either 
 		return 0;
 	}
 
@@ -1338,6 +1389,11 @@ void FreeWebMailFields(WebMailInfo * WebMail)
 		free(WebMail->FileBody[i]);
 		free(WebMail->FileName[i]);
 	}
+
+	if (WebMail->Header)
+		free(WebMail->Header);
+	if (WebMail->Footer)
+		free(WebMail->Footer);
 
 	SaveReply = WebMail->Reply;
 	SaveRlen = WebMail->RLen;
@@ -2537,7 +2593,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		BIDRec->u.msgno = LOWORD(Msg->number);
 		BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
 
-		Msg->length = (int)MsgLen;
+		Msg->length = (int)MsgLen + WebMail->HeaderLen + WebMail->FooterLen;
 
 		sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
 
@@ -2554,7 +2610,9 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 			if (hFile)
 			{
 				WriteLen = fwrite(B2Header, 1, strlen(B2Header), hFile); 
-				WriteLen += fwrite(WebMail->Body, 1, Msg->length, hFile); 
+				WriteLen += fwrite(WebMail->Header, 1, WebMail->HeaderLen, hFile); 
+				WriteLen += fwrite(WebMail->Body, 1, MsgLen, hFile); 
+				WriteLen += fwrite(WebMail->Footer, 1, WebMail->FooterLen, hFile); 
 				WriteLen += fwrite("\r\n", 1, 2, hFile); 
 
 				for (i = 0; i < WebMail->Files; i++)
@@ -2574,7 +2632,9 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 
 			if (hFile)
 			{
-				WriteLen = fwrite(WebMail->Body, 1, Msg->length, hFile); 
+				WriteLen += fwrite(WebMail->Header, 1, WebMail->HeaderLen, hFile); 
+				WriteLen += fwrite(WebMail->Body, 1, MsgLen, hFile); 
+				WriteLen += fwrite(WebMail->Footer, 1, WebMail->FooterLen, hFile); 
 				fclose(hFile);
 			}
 		}

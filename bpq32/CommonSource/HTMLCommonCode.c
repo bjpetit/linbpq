@@ -29,7 +29,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "CHeaders.h"
 
-#include "TemplateDefs.c"				// Inline definitions from HTLMPages
+#include "templatedefs.c"				// Inline definitions from HTLMPages
 
 
 char * GetTemplateFromFile(int Version, char * FN)

@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 //	TCP access module - POP and SMTP
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 VOID ReleaseSock(SOCKET sock);
 void Base64EncodeAndSend(SocketConn * sockptr, UCHAR * Msg, int Len);

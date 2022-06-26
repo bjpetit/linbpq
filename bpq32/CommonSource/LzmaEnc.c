@@ -88,7 +88,7 @@ LZ_UInt32 LzmaEncProps_GetDictSize(const CLzmaEncProps *props2)
 
 #define kDicLogSizeMaxCompress 30
 
-#define BSR2_RET(pos, res) { unsigned long i; _BitScanReverse(&i, (pos)); res = (i + i) + ((pos >> (i - 1)) & 1); }
+#define BSR2_RET(pos, res) { uint32_t i; _BitScanReverse(&i, (pos)); res = (i + i) + ((pos >> (i - 1)) & 1); }
 
 LZ_UInt32 GetPosSlot1(LZ_UInt32 pos)
 {

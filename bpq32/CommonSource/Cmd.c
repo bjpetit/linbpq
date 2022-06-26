@@ -36,7 +36,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //#include "SHELLAPI.H"
 
 #include "CHeaders.h"
-#include "BPQAPRS.h"
+#include "bpqaprs.h"
 
 #pragma pack()
 
@@ -75,7 +75,7 @@ UCHAR SAVEDAPPLFLAGS = 0;
 
 UCHAR ALIASINVOKED = 0;
 
-struct TNCINFO * TNCInfo[41];	
+extern struct TNCINFO * TNCInfo[41];	
 
 VOID * CMDPTR = 0;
 
@@ -818,7 +818,11 @@ VOID CMDI00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	
 VOID CMDV00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
-	Bufferptr = Cmdprintf(Session, Bufferptr, "Version %s\r", VersionString);
+	if (sizeof(void *) == 4)
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Version %s\r", VersionString);
+	else
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Version %s (64 bit)\r", VersionString);
+		
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
@@ -2123,6 +2127,8 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	int TextCallLen;
 	char PortString[10];
 	char cmdCopy[256];
+	struct _EXTPORTDATA * EXTPORT = (struct _EXTPORTDATA *)PORT;;
+
 
 #ifdef EXCLUDEBITS
 
@@ -2190,6 +2196,8 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 			return;
 		}
 
+		EXTPORT = (struct _EXTPORTDATA *)PORT;
+
 		ptr = strtok_s(NULL, " ", &Context);
 
 		if (ptr == 0)
@@ -2225,11 +2233,36 @@ NoPort:
 		goto Downlink;
 	}
 
-	if (DecodeCallString(ptr, &Stay, &Spy, &axcalls[0]) == 0)
+	// Skip call validation if using a ptc to allow 1:call, 2:call format
+
+	if (PORT->PROTOCOL == 10 && memcmp(EXTPORT->PORT_DLL_NAME, "SCSPACTOR", 9) == 0)
 	{
-		Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Call\r");
-		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-		return;
+		char * p;
+
+		if (p = strstr(cmdCopy, " S "))
+		{
+			Stay = TRUE;
+			p++;
+			*p = ' ';
+		}
+
+		if (p = strstr(cmdCopy, " Z "))
+		{
+			Spy = TRUE;
+			p++;
+			*p = ' ';
+		}
+		
+		goto Downlink;
+	}
+	else
+	{
+		if (DecodeCallString(ptr, &Stay, &Spy, &axcalls[0]) == 0)
+		{
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Invalid Call\r");
+			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+			return;
+		}
 	}
 
 	Session->STAYFLAG = Stay;
@@ -2343,7 +2376,6 @@ Downlink:
 
 	if (PORT->PROTOCOL >= 10)			// Pactor=-style port?
 	{
-		struct _EXTPORTDATA * EXTPORT = (struct _EXTPORTDATA *)PORT;
 		int count;
 
 		// 	if Via PACTOR ARDOP WINMOR or VARA, convert to attach and call = Digi's are in AX25STRING (+7)
@@ -2474,7 +2506,9 @@ noFlip:
 
 				// if on Telnet Port convert use original cmd tail
 
-				if (memcmp(EXTPORT->PORT_DLL_NAME, "TELNET", 6) == 0)
+				// Why just on telnet - what not all ports?? 
+
+				if (memcmp(EXTPORT->PORT_DLL_NAME, "TELNET", 6) == 0 || memcmp(EXTPORT->PORT_DLL_NAME, "SCSPACTOR", 9) == 0)
 				{
 					NewSess->Secure_Session = Session->Secure_Session;
 					len = sprintf(Callstring,"C %s", cmdCopy);
@@ -2870,6 +2904,28 @@ int DoINP3ViaEntry(struct DEST_LIST * Dest, int n, char * line, int cursor)
 	return cursor;
 }
 
+int WildCmp(char * pattern, char * string)
+{
+	// Check if string is at end or not.
+	
+	if (*pattern == '\0')
+		return *string == '\0';
+
+	// Check for single character missing or match
+
+	if (*pattern == '?' || *pattern == *string)
+		return *string != '\0' && WildCmp(pattern + 1, string + 1);
+
+	if (*pattern == '*')
+	{
+		// Check for multiple character missing
+
+		return WildCmp(pattern + 1, string) || (*string != '\0' && WildCmp(pattern, string + 1));
+	}
+
+	return 0;
+}
+
 VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	struct DEST_LIST * Dest = DESTS;
@@ -2880,7 +2936,7 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	int x = 0, n = 0;
 	struct DEST_LIST * List[1000];
 	char Param = 0;
-	char * ptr, * Context;
+	char * ptr, * param2,* Context;
 	char Nodeline[21];
 	char AXCALL[7];
 	char * Call;
@@ -2891,9 +2947,11 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	UCHAR axcall[7];
 	int SavedOBSINIT = OBSINIT;
 	struct ROUTE * ROUTE = NULL;
-
+	char Pattern[80] = "";
+	char * firststar;
 
 	ptr = strtok_s(CmdTail, " ", &Context);
+	param2 = strtok_s(NULL, " ", &Context);
 
 	if (ptr)
 	{
@@ -2908,30 +2966,52 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	}
 	
 	if (ptr)
-		Param = ptr[0];
-
-	if (ptr && (int)strlen(ptr) > 1)
 	{
-		//	NODE CALL command
+		// Could be C or a pattern. Accept C pattern or pattern C
+
+		if ((int)strlen(ptr) > 1)
+		{
+			strcpy(Pattern, ptr);
+			if (param2 && param2[0] == 'C')
+				Param = 'C';
+		}
+		else
+		{
+			Param = ptr[0];
+			if (param2)
+				strcpy(Pattern, param2);
+		}
+	}
+
+	// We need to pick out CALL or CALL* from other patterns (as call use detail display)
+
+	firststar = strchr(Pattern, '*');
+
+	if ((firststar && *(firststar + 1) != 0)|| strchr(Pattern, '?'))  //(* not on end)
+
+		// definitely pattern
+
+		goto DoNodePattern;
+
+	// If it works as CALL*, process, else drop through 
 	
+	if (Pattern[0])
+	{
 		UCHAR AXCall[8];
 		int count;
-		char * wildcard = strchr(ptr, '*');
 		int paramlen = (int)strlen(ptr);
 		char parampadded[20];
+		int n = 0;
 
 		Alias[8] = 0;
-		strcpy(parampadded, ptr);
+		strcpy(parampadded, Pattern);
 		strcat(parampadded, "     ");
 
-		if (wildcard)
-			*wildcard = 0;
-
-		ConvToAX25(ptr, AXCall);
+		ConvToAX25(Pattern, AXCall);
 
 		//	if * on end, list all ssids
 
-		if (wildcard)
+		if (firststar)
 		{
 			AXCall[6] = 0;
 
@@ -2953,35 +3033,50 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 				if (count < MAXDESTS)
 				{
 					Bufferptr = DoOneNode(Session, Bufferptr, Dest);
+					n++;
 				}
 
 				AXCall[6] += 2;
 			}
-			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-			return;
-		}
 
-		for (count = 0; count < MAXDESTS; count++)
-		{
-			if (memcmp(Dest->DEST_ALIAS, parampadded, 6) == 0 || CompareCalls(Dest->DEST_CALL, AXCall))
+			if (n)		// Found Some
 			{
-				break;
+				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+				return;
 			}
-			Dest++;
+
+			Dest = DESTS;				// Reset
+
+			// Drop through to try as pattern
 		}
-		
-		if (count == MAXDESTS)
+		else
 		{
-			Bufferptr = Cmdprintf(Session, Bufferptr, "Not found\r");
+			// process as just call
+
+			for (count = 0; count < MAXDESTS; count++)
+			{
+				if (memcmp(Dest->DEST_ALIAS, parampadded, 6) == 0 || CompareCalls(Dest->DEST_CALL, AXCall))
+				{
+					break;
+				}
+				Dest++;
+			}
+
+			if (count == MAXDESTS)
+			{
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Not found\r");
+				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+				return;
+			}
+
+			Bufferptr = DoOneNode(Session, Bufferptr, Dest);
+
 			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 			return;
 		}
-
-		Bufferptr = DoOneNode(Session, Bufferptr, Dest);
-
-		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
-		return;
 	}
+
+DoNodePattern:
 
 	Bufferptr = Cmdprintf(Session, Bufferptr, "Nodes\r");
 
@@ -2998,15 +3093,12 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 		Dest++;
 	}
+
+	if (Param == 'C') 
+		qsort(List, n, sizeof(void *), CompareNode);
+	else
+		qsort(List, n, sizeof(void *), CompareAlias);
 	
-	if (n > 1)
-	{
-		if (Param == 'C') 
-			qsort(List, n, sizeof(void *), CompareNode);
-		else
-			qsort(List, n, sizeof(void *), CompareAlias);
-	}
-		
 
 	for (i = 0; i < n; i++)
 	{
@@ -3022,6 +3114,10 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 		if (Alias[0] == '#' && HIDENODES == 1 && Param != '*')	// Hidden Node and not N * command
 			continue;
+
+		if (Pattern[0])
+			if (!WildCmp(Pattern, Normcall))
+				continue;
 
 		if (Param == 'T')
 		{
@@ -4755,7 +4851,7 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 
 #pragma pack()
 
-struct TNCINFO * TNCInfo[41];	
+extern struct TNCINFO * TNCInfo[41];	
 
 extern char WL2KCall[10];
 extern char WL2KLoc[7];

@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 struct MsgInfo * GetMsgFromNumber(int msgno);

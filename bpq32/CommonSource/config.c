@@ -143,6 +143,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define FLDIGI 256				// Support FLDIGI COmmand Frames
 #define TRACKER 512				// SCS Tracker. Need to set KISS Mode 
 #define FASTI2C 1024			// Use BLocked I2C Reads (like ARDOP)
+#define DRATS 2048
 
 
 
@@ -298,7 +299,7 @@ static char *keywords[] =
 "APPL1QUAL", "APPL2QUAL", "APPL3QUAL", "APPL4QUAL",
 "APPL5QUAL", "APPL6QUAL", "APPL7QUAL", "APPL8QUAL",
 "BTEXT:", "NETROMCALL", "C_IS_CHAT", "MAXRTT", "MAXHOPS",		// IPGATEWAY= no longer allowed
-"LogL4Connects", "SAVEMH", "ENABLEADIFLOG"
+"LogL4Connects", "LogAllConnects", "SAVEMH", "ENABLEADIFLOG"
 };           /* parameter keywords */
 
 static void * offset[] =
@@ -318,7 +319,7 @@ static void * offset[] =
 &xxcfg.C_APPL[0].ApplQual, &xxcfg.C_APPL[1].ApplQual, &xxcfg.C_APPL[2].ApplQual, &xxcfg.C_APPL[3].ApplQual,
 &xxcfg.C_APPL[4].ApplQual, &xxcfg.C_APPL[5].ApplQual, &xxcfg.C_APPL[6].ApplQual, &xxcfg.C_APPL[7].ApplQual,
 &xxcfg.C_BTEXT, &xxcfg.C_NETROMCALL, &xxcfg.C_C, &xxcfg.C_MAXRTT, &xxcfg.C_MAXHOPS,		// IPGATEWAY= no longer allowed
-&xxcfg.C_LogL4Connects, &xxcfg.C_SaveMH, &xxcfg.C_ADIF};		/* offset for corresponding data in config file */
+&xxcfg.C_LogL4Connects, &xxcfg.C_LogAllConnects, &xxcfg.C_SaveMH, &xxcfg.C_ADIF};		/* offset for corresponding data in config file */
 
 static int routine[] = 
 {
@@ -337,7 +338,7 @@ static int routine[] =
 14, 14, 14, 14,
 14, 14 ,14, 14,
 15, 0, 2, 9, 9,
-2, 2, 2} ;			// Routine to process param
+2, 2, 2, 2} ;			// Routine to process param
 
 int PARAMLIM = sizeof(routine)/sizeof(int);
 //int NUMBEROFKEYWORDS = sizeof(routine)/sizeof(int);
@@ -580,8 +581,9 @@ BOOL ProcessConfig()
 	paramok[72]=1;			// MAXRTT optional
 	paramok[73]=1;			// MAXHOPS optional
 	paramok[74]=1;			// LogL4Connects optional
-	paramok[75]=1;			// SAVEMH optional
-	paramok[76]=1;			// ENABLEADIFLOG optional
+	paramok[75]=1;			// LogAllConnects optional
+	paramok[76]=1;			// SAVEMH optional
+	paramok[77]=1;			// ENABLEADIFLOG optional
 
 	for (i=0; i < PARAMLIM; i++)
 	{
@@ -1145,6 +1147,7 @@ NextAPRS:
 	   Consoleprintf("bpq32.cfg line no %d not recognised - Ignored: %s" ,LineNo, rec);
 	else
 	{
+
 		switch (routine[i])
 		{
 		case 0:
@@ -1218,7 +1221,7 @@ NextAPRS:
 			break;
 	     }
 
-	   paramok[i] = cn;
+		paramok[i] = cn;
 	}
 
 	return 0;
@@ -1926,7 +1929,7 @@ int decode_port_rec(char * rec)
 {
 	int i;
 	int cn = 1;			/* RETURN CODE FROM ROUTINES */
-	unsigned long IPADDR;
+	uint32_t IPADDR;
 #ifdef WIN32
 	WSADATA	WsaData;	// receives data from WSAStartupproblem
 #endif
@@ -2717,6 +2720,7 @@ int decode_tnc_rec(char * rec)
 	return 0;
 }
 
+
 int do_kiss (char * value,char * rec)
 {
 	int err=255;
@@ -2724,52 +2728,52 @@ int do_kiss (char * value,char * rec)
 	if (_stricmp(value,"POLLED") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 2;
+		kissflags=kissflags | POLLINGKISS;
 	}
 	else if (_stricmp(value,"CHECKSUM") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 1;
+		kissflags=kissflags | CHECKSUM;
 	}
 	else if (_stricmp(value,"D700") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 16;
+		kissflags=kissflags | D700;
 	}
 	else if (_stricmp(value,"TNCX") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 32;
+		kissflags=kissflags | TNCX;
 	}
 	else if (_stricmp(value,"PITNC") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 64;
+		kissflags=kissflags | PITNC;
 	}
 	else if (_stricmp(value,"TRACKER") == 0)
 	{
 		err=0;
-		kissflags |= 512;
+		kissflags |= TRACKER;
 	}
 	else if (_stricmp(value,"NOPARAMS") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 128;
+		kissflags=kissflags | NOPARAMS;
 	}
 	else if (_stricmp(value,"ACKMODE") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 4;
+		kissflags=kissflags | ACKMODE;
 	}
 	else if (_stricmp(value,"SLAVE") == 0)
 	{
 		err=0;
-		kissflags=kissflags | 8;
+		kissflags=kissflags | POLLEDKISS;
 	}
 	else if (_stricmp(value,"FLDIGI") == 0)
 	{
 		err=0;
-		kissflags |= 256;
+		kissflags |= FLDIGI;
 	}
 	else if (_stricmp(value,"FASTI2C") == 0)
 	{
@@ -2777,9 +2781,15 @@ int do_kiss (char * value,char * rec)
 		kissflags |= FASTI2C;
 	}
 
+	else if (_stricmp(value,"DRATS") == 0)
+	{
+		err=0;
+		kissflags |= DRATS;
+	}
+
 	if (err == 255)
 	{
-	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE TNCX PITNC NOPARAMS FASTI2C)");
+	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE TNCX PITNC NOPARAMS FASTI2C DRATS)");
 	   Consoleprintf("%s\r\n",rec);
 	}
 	return (err);

@@ -35,7 +35,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #endif
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
-int (WINAPI FAR *EnumProcessesPtr)();
+extern int (WINAPI FAR *EnumProcessesPtr)();
 
 #define SD_RECEIVE      0x00
 #define SD_SEND         0x01
@@ -86,7 +86,7 @@ extern int SemHeldByAPI;
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 static int ProcessLine(char * buf, int Port)
 {
@@ -286,7 +286,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		{
 			if (TNC->SessionTimeLimit && STREAM->ConnectTime && time(NULL) > (TNC->SessionTimeLimit + STREAM->ConnectTime))
 			{
-				VARASendCommand(TNC, "DISCONNECT\r", TRUE);
+				VARASendCommand(TNC, "ABORT\r", TRUE);
 				STREAM->Disconnecting = TRUE;
 			}
 		}
@@ -812,7 +812,7 @@ void CountRestarts(struct TNCINFO * TNC)
 	MySetWindowText(TNC->xIDC_RESTARTS, Time);
 	strcpy(TNC->WEB_RESTARTS, Time);
 }
-
+/*
 char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<link rel='stylesheet' href='webproc.css'>\r\n"
 		"<script type=\"text/javascript\">\r\n"
@@ -828,16 +828,56 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-eq
 		"<span class='dropdown'>"
 		"<button class='dropbtn'>Actions</button><span style=\"margin-left:120px;font-size:16px\"><b>%s</b></span>"
 		"<div class='dropdown-content'>"
-//		"<a href='javascript:alert(\"hello world!\");'>Click me</a>"
 		"<a href='javascript:xxx(\"Abort\");'>Abort Session</a>"
 		"<a href='javascript:xxx(\"Kill\");'>Kill TNC</a>"
 		"<a href='javascript:xxx(\"KillRestart\");'>Kill and Restart TNC</a>"
 		"</div></span>";
+*/
+char WebProcTemplate[] = "<html><meta http-equiv=expires content=0>"
+		"<link rel='stylesheet' href='webproc.css'>\r\n"
+		"<script type=\"text/javascript\">\r\n"
+		"function ScrollOutput()\r\n"
+		"{var textarea = document.getElementById('textarea');"
+		"textarea.scrollTop = textarea.scrollHeight;}\r\n"
+		"function xxx(data){\r\n"
+		"req = new XMLHttpRequest();\r\n"
+		"req.open('POST', 'PortAction?%d', true);\r\n"
+		"req.send(data);alert(data + ' Sent');}\r\n"
+		"function yyy(data){\r\n"
+		"req = new XMLHttpRequest();\r\n"
+		"req.open('POST', 'freqOffset?%d', true);\r\n"
+		"req.send(data);}\r\n"
+		"myInt = setInterval('Refresh()', 15000 );\n"
+		"function Refresh( )\n"
+		"{location.reload()}\n"
+		"</script>\r\n"
+		"</head><title>%s</title></head><body id=Text onload=\"ScrollOutput()\">\r\n"
+		"<h2 style=\"margin-bottom: 0.2em; text-align:center\">%s</h2>"
+		"<span class='dropdown' style=\"position: absolute; left: 10;top: 12;\">"
+		"<button class='dropbtn'>Actions</button>\r\n"
+		"<span class='dropdown-content'>"
+		"<a href='javascript:xxx(\"Abort\");'>Abort Session</a>"
+		"<a href='javascript:xxx(\"Kill\");'>Kill TNC</a>"
+		"<a href='javascript:xxx(\"KillRestart\");'>Kill and Restart TNC</a>"
+		"</span></span>";
 
+char sliderBit[] = "<span style=\"position: absolute; left: 380;top: 2;\"> TX Offset <span id='val'>%d</span></span>"
+		"<span style=\"position: absolute; left: 350;top: 22;\"><input type='range' min=-200 max=200 value=%d class='slider' id='myRange'></span>\r\n"
+		"<script>\r\n"
+		"var slider = document.getElementById('myRange');"
+		"var output = document.getElementById('val');"
+		"slider.oninput = function() {output.innerHTML = this.value;}\r\n"
+		"slider.onmouseout = function() {myInt = setInterval('Refresh()', 15000 );"
+		"output.innerHTML = this.value;yyy(this.value);}\r\n"
+		"slider.onmouseover = function() {clearInterval(myInt)};"
+		"</script>\r\n";
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, "VARA Status", "VARA Status");
+	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, TNC->Port, "VARA Status", "VARA Status");
+
+	if (TNC->TXFreq)
+		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -845,7 +885,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
 	Len += sprintf(&Buff[Len], "<tr><td>Channel State</td><td>%s</td></tr>", TNC->WEB_CHANSTATE);
-	Len += sprintf(&Buff[Len], "<tr><td>Proto State</td><td>%s</td></tr>", TNC->WEB_PROTOSTATE);
+	Len += sprintf(&Buff[Len], "<tr><td>S/N</td><td>%s</td></tr>", TNC->WEB_PROTOSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 //	Len += sprintf(&Buff[Len], "<tr><td>TNC Restarts</td><td></td></tr>", TNC->WEB_RESTARTS);
 	Len += sprintf(&Buff[Len], "</table>");
@@ -877,6 +917,7 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 	int AuxCount = 0;
 	char Appl[11];
 	char * TempScript;
+	int line;
 	struct PORTCONTROL * PORT = &PortEntry->PORTCONTROL;
 	//
 	//	Will be called once for each VARA port 
@@ -963,7 +1004,6 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 	}
 	else
 	{
-
 		sprintf(Msg, "MYCALL %s", TNC->NodeCall);
 
 		for (i = 0; i < 32; i++)
@@ -1055,34 +1095,58 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
+	line = 6;
 
-	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,6,386,20, TNC->hDlg, NULL, hInstance, NULL);
+	if (TNC->TXFreq)
+	{
+		CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow + 22, PacWndProc, 500, 450, ForcedClose);
+
+		InitCommonControls(); // loads common control's DLL 
+
+		CreateWindowEx(0, "STATIC", "TX Tune", WS_CHILD | WS_VISIBLE, 10,line,120,20, TNC->hDlg, NULL, hInstance, NULL);
+		TNC->xIDC_TXTUNE = CreateWindowEx(0, TRACKBAR_CLASS, "", WS_CHILD | WS_VISIBLE, 116,line,200,20, TNC->hDlg, NULL, hInstance, NULL);
+		TNC->xIDC_TXTUNEVAL = CreateWindowEx(0, "STATIC", "0", WS_CHILD | WS_VISIBLE, 320,line,30,20, TNC->hDlg, NULL, hInstance, NULL);
+
+		SendMessage(TNC->xIDC_TXTUNE, TBM_SETRANGE, (WPARAM) TRUE, (LPARAM) MAKELONG(-200, 200));  // min. & max. positions
+        
+		line += 22;
+	}
+	else
+		CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 450, ForcedClose);
+
+	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,line,120,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_COMMSSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,line,386,20, TNC->hDlg, NULL, hInstance, NULL);
 	
-	CreateWindowEx(0, "STATIC", "TNC State", WS_CHILD | WS_VISIBLE, 10,28,106,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_TNCSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,28,520,20, TNC->hDlg, NULL, hInstance, NULL);
+	line += 22;
+	CreateWindowEx(0, "STATIC", "TNC State", WS_CHILD | WS_VISIBLE, 10,line,106,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_TNCSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,line,520,20, TNC->hDlg, NULL, hInstance, NULL);
 
-	CreateWindowEx(0, "STATIC", "Mode", WS_CHILD | WS_VISIBLE, 10,50,80,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_MODE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,50,200,20, TNC->hDlg, NULL, hInstance, NULL);
+	line += 22;
+	CreateWindowEx(0, "STATIC", "Mode", WS_CHILD | WS_VISIBLE, 10,line,100,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_MODE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,line,200,20, TNC->hDlg, NULL, hInstance, NULL);
  
-	CreateWindowEx(0, "STATIC", "Channel State", WS_CHILD | WS_VISIBLE, 10,72,110,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_CHANSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,72,144,20, TNC->hDlg, NULL, hInstance, NULL);
+	line += 22;
+	CreateWindowEx(0, "STATIC", "Channel State", WS_CHILD | WS_VISIBLE, 10,line,110,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_CHANSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 116,line,144,20, TNC->hDlg, NULL, hInstance, NULL);
  
- 	CreateWindowEx(0, "STATIC", "Proto State", WS_CHILD | WS_VISIBLE,10,94,80,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_PROTOSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE,116,94,374,20 , TNC->hDlg, NULL, hInstance, NULL);
+ 	line += 22;
+	CreateWindowEx(0, "STATIC", "S/N", WS_CHILD | WS_VISIBLE,10,line,80,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_PROTOSTATE = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE,116,line,374,20 , TNC->hDlg, NULL, hInstance, NULL);
  
-	CreateWindowEx(0, "STATIC", "Traffic", WS_CHILD | WS_VISIBLE,10,116,80,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_TRAFFIC = CreateWindowEx(0, "STATIC", "0 0 0 0", WS_CHILD | WS_VISIBLE,116,116,374,20 , TNC->hDlg, NULL, hInstance, NULL);
+	line += 22;
+	CreateWindowEx(0, "STATIC", "Traffic", WS_CHILD | WS_VISIBLE,10,line,80,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_TRAFFIC = CreateWindowEx(0, "STATIC", "0 0 0 0", WS_CHILD | WS_VISIBLE,line,116,374,20 , TNC->hDlg, NULL, hInstance, NULL);
 
-	CreateWindowEx(0, "STATIC", "TNC Restarts", WS_CHILD | WS_VISIBLE,10,138,100,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_RESTARTS = CreateWindowEx(0, "STATIC", "0", WS_CHILD | WS_VISIBLE,116,138,20,20 , TNC->hDlg, NULL, hInstance, NULL);
-	CreateWindowEx(0, "STATIC", "Last Restart", WS_CHILD | WS_VISIBLE,140,138,100,20, TNC->hDlg, NULL, hInstance, NULL);
-	TNC->xIDC_RESTARTTIME = CreateWindowEx(0, "STATIC", "Never", WS_CHILD | WS_VISIBLE,250,138,200,20, TNC->hDlg, NULL, hInstance, NULL);
+	line += 22;
+	CreateWindowEx(0, "STATIC", "TNC Restarts", WS_CHILD | WS_VISIBLE,10,line,100,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_RESTARTS = CreateWindowEx(0, "STATIC", "0", WS_CHILD | WS_VISIBLE,116,line,20,20 , TNC->hDlg, NULL, hInstance, NULL);
+	CreateWindowEx(0, "STATIC", "Last Restart", WS_CHILD | WS_VISIBLE,140,line,100,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_RESTARTTIME = CreateWindowEx(0, "STATIC", "Never", WS_CHILD | WS_VISIBLE,250,line,200,20, TNC->hDlg, NULL, hInstance, NULL);
 
+	line += 22;
 	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
             LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
-			0,170,250,300, TNC->hDlg, NULL, hInstance, NULL);
+			0,line,250,300, TNC->hDlg, NULL, hInstance, NULL);
 
 	TNC->ClientHeight = 450;
 	TNC->ClientWidth = 500;
@@ -1129,7 +1193,7 @@ VOID VARAThread(void * portptr)
 	struct timeval timeout;
 	char * ptr1;
 	char * ptr2;
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 
 	if (TNC->HostName == NULL)
 		return;
@@ -1575,6 +1639,15 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
+	if (_memicmp(Buffer, "SN ", 3) == 0)
+	{
+		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[3]);
+		MySetWindowText(TNC->xIDC_PROTOSTATE, TNC->WEB_PROTOSTATE);
+
+		TNC->SNR = atof(&Buffer[3]);
+		return;
+	}
+
 	if (_stricmp(Buffer, "BUSY ON") == 0)
 	{	
 		TNC->BusyFlags |= CDBusy;
@@ -1699,11 +1772,35 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		STREAM->ConnectTime = time(NULL); 
 		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
 
-		if (strstr(Buffer, "NARROW"))
-			Speed = 51;
-		else if (strstr(Buffer, "WIDE"))
-			Speed = 52;
+		strcpy(TNC->WEB_MODE, "");
 
+		if (strstr(Buffer, "2300"))
+		{
+			Speed = 50;
+			strcpy(TNC->WEB_MODE, "2300");
+		}
+		else if (strstr(Buffer, "NARROW"))
+		{
+			Speed = 51;
+			strcpy(TNC->WEB_MODE, "NARROW");
+		}
+		else if (strstr(Buffer, "WIDE"))
+		{
+			Speed = 52;
+			strcpy(TNC->WEB_MODE, "WIDE");
+		}
+		else if (strstr(Buffer, "500"))
+		{
+			Speed = 53;
+			strcpy(TNC->WEB_MODE, "500");
+		}
+		else if (strstr(Buffer, "2750"))
+		{
+			Speed = 54;
+			strcpy(TNC->WEB_MODE, "2750");
+		}
+
+		MySetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
 		memcpy(Call, &Buffer[10], 10);
 
 		ptr = strchr(Call, ' ');	
@@ -1956,6 +2053,8 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
+			sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
+			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			if (TNC->RestartAfterFailure)
 			{
@@ -2021,13 +2120,17 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "REGISTERED", 9) == 0)
 	{
-		strcat(Buffer, "\n");
-		WritetoTrace(TNC, Buffer, strlen(Buffer));
+		strcat(Buffer, "\r");
+		WritetoTrace(TNC, Buffer, (int)strlen(Buffer));
 		return;
 	}
 
-
-
+	if (_memicmp(Buffer, "MISSING SOUNDCARD", 17) == 0)
+	{
+		strcat(Buffer, "\r");
+		WritetoTrace(TNC, Buffer, (int)strlen(Buffer));
+		return;
+	}
 
 	// Others should be responses to commands
 
@@ -2230,8 +2333,10 @@ static VOID TidyClose(struct TNCINFO * TNC, int Stream)
 
 static VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 {
-	VARASendCommand(TNC, "ABORT\r", TRUE);
-	WritetoTrace(TNC, "ABORT", 5);
+	char Abort[] = "ABORT\r";
+		
+	VARASendCommand(TNC, Abort, TRUE);
+	WritetoTrace(TNC, Abort, 5);
 }
 
 static VOID CloseComplete(struct TNCINFO * TNC, int Stream)

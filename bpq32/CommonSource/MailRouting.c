@@ -34,7 +34,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define TWOCHARCONT
 
 
-#include "BPQMail.h"
+#include "bpqmail.h"
 
 char WW[] = "WW";
 

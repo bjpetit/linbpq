@@ -19,7 +19,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
-	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUGx);
+	ChatWriteLogLine(NULL, '!',Mess, Len, LOG_DEBUGx);
 //	#ifdef _DEBUG 
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
@@ -34,7 +34,7 @@ VOID __cdecl Logprintf(int LogMode, ChatCIRCUIT * conn, int InOut, const char * 
 
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
-	WriteLogLine(conn, InOut, Mess, Len, LogMode);
+	ChatWriteLogLine(conn, InOut, Mess, Len, LogMode);
 
 	return;
 }
@@ -95,7 +95,7 @@ VOID __cdecl nodeprintf(ChatCIRCUIT * conn, const char * format, ...)
 
 	ChatQueueMsg(conn, Mess, len);
 
-	WriteLogLine(conn, '>',Mess, len-1, LOG_CHAT);
+	ChatWriteLogLine(conn, '>',Mess, len-1, LOG_CHAT);
 
 	return;
 }
@@ -164,7 +164,7 @@ VOID ExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG)
 
 	len = RemoveLF(NewMessage, strlen(NewMessage));
 
-	WriteLogLine(conn, '>', NewMessage,  len, LOG);
+	ChatWriteLogLine(conn, '>', NewMessage,  len, LOG);
 	ChatQueueMsg(conn, NewMessage, len);
 }
 
@@ -311,4 +311,53 @@ int RemoveLF(char * Message, int len)
 	}
 
 	return (ptr2 - Message);
+}
+
+char * ReadInfoFile(char * File)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	char * MsgBytes;
+	struct stat STAT;
+	char * ptr1 = 0;
+ 
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s", GetBPQDirectory(), File);
+
+	if (stat(MsgFile, &STAT) == -1)
+		return NULL;
+
+	FileSize = STAT.st_size;
+
+	hFile = fopen(MsgFile, "rb");
+
+	if (hFile == NULL)
+		return NULL;
+
+	MsgBytes=malloc(FileSize+1);
+
+	fread(MsgBytes, 1, FileSize, hFile); 
+
+	fclose(hFile);
+
+	MsgBytes[FileSize]=0;
+
+#ifndef WIN32
+
+	// Replace LF with CR
+
+	// Remove lf chars
+
+	ptr1 = MsgBytes;
+
+	while (*ptr1)
+	{
+		if (*ptr1 == '\n')
+			*(ptr1) = '\r';
+
+		ptr1++;
+	}
+#endif
+
+	return MsgBytes;
 }

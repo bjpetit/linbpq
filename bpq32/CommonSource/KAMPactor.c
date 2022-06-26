@@ -68,7 +68,7 @@ static int RigControlRow = 165;
 extern UCHAR LogDirectory[];
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
@@ -145,7 +145,7 @@ static BOOL OpenLogFile(int Flags)
 		T = time(NULL);
 		tm = gmtime(&T);	
 
-		sprintf(FN,"%s/Logs/KAMLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
+		sprintf(FN,"%s/logs/KAMLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
 
 		LogHandle[Flags] = fopen(FN, "ab");
 	
@@ -216,7 +216,7 @@ ConfigLine:
 		}
 		
 		if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
-			WRITELOG = atoi(&buf[8]);
+			WRITELOG = atoi(&buf[9]);
 	
 		else if (_memicmp(buf, "APPL", 4) == 0)
 		{
@@ -280,14 +280,18 @@ VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 static int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 static int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-static size_t ExtProc(int fn, int port, unsigned char * buff)
+static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 {
-	int txlen = 0;
-	UINT * buffptr;
+	int txlen;
+	PMSGWITHLEN buffptr;
+
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct STREAMINFO * STREAM;
 
 	int Stream;
+
+	size_t Param;
+	struct ScanEntry * Scan;
 
 	if (TNC == NULL)
 		return 0;
@@ -349,7 +353,7 @@ ok:
 			if (STREAM->ReportDISC)
 			{
 				STREAM->ReportDISC = FALSE;
-				buff[4] = Stream;
+				buff->PORT = Stream;
 
 				return -1;
 			}
@@ -365,18 +369,15 @@ ok:
 			
 				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
 
-				datalen=buffptr[1];
+				datalen = (int)buffptr->Len;
 
-				buff[4] = Stream;
-				buff[7] = 0xf0;
-				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
-				datalen+=8;
+				buff->PORT = Stream;
+				buff->PID= 0xf0;
+				memcpy(buff->L2DATA, buffptr->Data, datalen);		// Data goes to +7, but we have an extra byte
+				datalen += (MSGHDDRLEN + 1);
 
-				PutLengthinBuffer((PDATAMESSAGE)buff, datalen);
+				PutLengthinBuffer(buff, datalen);
 
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
-	
 				ReleaseBuffer(buffptr);
 	
 				return (1);
@@ -393,25 +394,24 @@ ok:
 
 		// Find TNC Record
 
-		Stream = buff[4];
+		Stream = buff->PORT;
 		STREAM = &TNC->Streams[Stream];
 		
 		if (!TNC->TNCOK)
 		{
 			// Send Error Response
 
-			buffptr[1] = 36;
-			memcpy(buffptr+2, "No Connection to PACTOR TNC\r", 36);
+			buffptr->Len = sprintf(buffptr->Data, "No Connection to PACTOR TNC\r");
 
 			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 			
 			return 0;
 		}
 
-		txlen = GetLengthfromBuffer((PDATAMESSAGE)buff) - 8;
+		txlen = GetLengthfromBuffer(buff) - (MSGHDDRLEN + 1);
 
-		buffptr[1] = txlen;
-		memcpy(buffptr+2, &buff[8], txlen);
+		buffptr->Len = txlen;
+		memcpy(buffptr->Data, buff->L2DATA, txlen);
 
 		C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 
@@ -427,7 +427,7 @@ ok:
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 		
-		Stream = (int)buff;
+		Stream = (int)(size_t)buff;
 	
 		STREAM = &TNC->Streams[Stream];
 
@@ -467,11 +467,51 @@ ok:
 
 	case 6:				// Scan Control
 
-		return 0;		// None Yet
+		// Use P0 to Disable Pactor, P1 to enable
 
+		Param = (size_t)buff;
+
+		if (Param == 2)		// Check  Permission (shouldn't happen)
+		{
+			return 1;		// OK to change
+		}
+
+		if (!TNC->HostMode)
+			return 0;		// No connection so no interlock
+	
+		if (Param == 1)		// Request Permission
+			return 0;		// OK to Change					// Dont want to mess with disabling it
+	
+		if (Param == 3)		// Release Permission
+			return 0;
+
+		// Param is Address of a struct ScanEntry
+
+		Scan = (struct ScanEntry *)buff;
+
+		if (Scan->PMaxLevel >= '0' && Scan->PMaxLevel < '5')		// 1 - 4 
+		{
+			if (TNC->Bandwidth != Scan->PMaxLevel)
+			{
+				// Enable or disable by setting mycall
+
+				TNC->Bandwidth = Scan->PMaxLevel;
+				
+				if (Scan->PMaxLevel == '0')
+				{
+					EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
+					return 0;
+				}
+				if (TNC->OldMode)
+					EncodeAndSend(TNC, "C20PACTOR", 9);			// Back to Listen
+				else
+					EncodeAndSend(TNC, "C20TOR", 6);			// Back to Listen
+				
+				TNC->InternalCmd = 'T';
+			}
+		}
 	}
 	return 0;
-
 }
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
@@ -504,13 +544,6 @@ void * KAMExtInit(EXTPORTDATA * PortEntry)
 	int port;
 	char * ptr;
 	char * TempScript;
-
-	//
-	//	Will be called once for each Pactor Port
-	//	The COM port number is in IOBASE
-	//
-
-	Debugprintf("KAM Extinit %x", KAMExtInit);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
@@ -784,7 +817,7 @@ VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
 		
 	// Process the first Packet in the buffer
 
-	NewLen =  FendPtr - rxbuffer -1;
+	NewLen = (int)(FendPtr - rxbuffer - 1);
 
 	ProcessKHOSTPacket(TNC, &rxbuffer[1], NewLen);
 	
@@ -900,7 +933,7 @@ VOID KAMPoll(int Port)
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
-			UINT * buffptr;
+			PMSGWITHLEN buffptr;
 			
 			STREAM = &TNC->Streams[Stream];
 
@@ -951,7 +984,7 @@ VOID KAMPoll(int Port)
 		{
 			// No, so send
 
-			EncodeAndSend(TNC, TNC->ConnectCmd, strlen(TNC->ConnectCmd));
+			EncodeAndSend(TNC, TNC->ConnectCmd, (int)strlen(TNC->ConnectCmd));
 			free(TNC->ConnectCmd);
 
 			TNC->Timeout = 50;
@@ -976,12 +1009,11 @@ VOID KAMPoll(int Port)
 			{
 				// Timed out - Send Error Response
 
-				UINT * buffptr = GetBuff();
+				PMSGWITHLEN buffptr = GetBuff();
 
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1]=39;
-				memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
+				buffptr->Len = sprintf(buffptr->Data, "Sorry, Can't Connect - Channel is busy\r");
 
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 
@@ -1046,7 +1078,7 @@ VOID KAMPoll(int Port)
 		{
 			int datalen;
 			UCHAR TXMsg[1000] = "D20";
-			int * buffptr;
+			PMSGWITHLEN buffptr;
 			UCHAR * MsgPtr;
 			char Status[80];
 
@@ -1083,8 +1115,8 @@ VOID KAMPoll(int Port)
 				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
 				STREAM->FramesQueued--;
 
-				datalen=buffptr[1];
-				MsgPtr = (UCHAR *)&buffptr[2];
+				datalen = buffptr->Len;
+				MsgPtr = buffptr->Data;
 
 				if (TNC->SwallowSignon && Stream == 0)
 				{
@@ -1144,9 +1176,9 @@ VOID KAMPoll(int Port)
 			}
 			else // Not Connected
 			{
-				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
-				datalen=buffptr[1];
-				MsgPtr = (UCHAR *)&buffptr[2];
+				buffptr = Q_REM(&STREAM->BPQtoPACTOR_Q);
+				datalen = buffptr->Len;
+				MsgPtr = buffptr->Data;
 
 				// Command. Do some sanity checking and look for things to process locally
 
@@ -1163,7 +1195,7 @@ VOID KAMPoll(int Port)
 					}
 					else
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &MsgPtr[40]);
+						buffptr->Len = sprintf(buffptr->Data, "%s", &MsgPtr[40]);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
 					return;
@@ -1178,7 +1210,7 @@ VOID KAMPoll(int Port)
 				if ((Stream == 0) && memcmp(MsgPtr, "HFPACKET", 8) == 0)
 				{
 					TNC->HFPacket = TRUE;
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "KAM} OK\r");
+					buffptr->Len = sprintf(buffptr->Data, "KAM} OK\r");
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					return;
 				}
@@ -1356,7 +1388,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 		}
 		
 		end = strchr(start, 13);
-		len = ++end - start;
+		len = (int)(++end - start);
 		TNC->InitPtr = end;
 		memcpy(Poll, start, len);
 
@@ -1462,7 +1494,7 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 
 VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
-	UINT * buffptr;
+	PMSGWITHLEN buffptr;
 	char * Buffer = &Msg[3];			// Data portion of frame
 	char * Call;
 	char Status[80];
@@ -1519,9 +1551,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		Len-=3;							// Remove Header
 
-		buffptr[1] = Len;				// Length
+		buffptr->Len = Len;				// Length
 		STREAM->BytesRXed += Len;
-		memcpy(&buffptr[2], Buffer, Len);
+		memcpy(buffptr->Data, Buffer, Len);
 
 		C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
@@ -1618,7 +1650,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 
-		buffptr[1] = sprintf((UCHAR *)&buffptr[2],"KAM} %s", Buffer);
+		buffptr->Len = sprintf(buffptr->Data,"KAM} %s", Buffer);
 
 		C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
@@ -1680,7 +1712,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", STREAM->RemoteCall);
+				buffptr->Len  = sprintf(buffptr->Data, "*** Failure with %s\r", STREAM->RemoteCall);
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 	
@@ -1800,7 +1832,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						buffptr = GetBuff();
 						if (buffptr == 0) return;			// No buffers, so ignore
 
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", FreqAppl);
+						buffptr->Len = sprintf(buffptr->Data, "%s\r", FreqAppl);
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 						TNC->SwallowSignon = TRUE;
 						return;
@@ -1811,7 +1843,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						buffptr = GetBuff();
 						if (buffptr == 0) return;			// No buffers, so ignore
 
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
+						buffptr->Len = sprintf(buffptr->Data, "%s\r", TNC->ApplCmd);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
 						TNC->SwallowSignon = TRUE;
@@ -1851,7 +1883,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
-				buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", Call);;
+				buffptr->Len  = sprintf(buffptr->Data, "*** Connected to %s\r", Call);;
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 	

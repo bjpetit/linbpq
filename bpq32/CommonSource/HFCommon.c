@@ -68,7 +68,7 @@ int GetPosnFromAPRS(char * Call, double * Lat, double * Lon);
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_DATA WM_USER + 2
@@ -309,6 +309,26 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			return (LONG)bgBrush;
 	}
 
+	case WM_HSCROLL:
+	{ 
+		DWORD dwPos;    // current position of slider 
+		char value[16];
+
+		switch (LOWORD(wParam))
+		{     
+		case TB_ENDTRACK:
+		case TB_THUMBTRACK:
+
+			TNC->TXOffset = SendMessage(TNC->xIDC_TXTUNE, TBM_GETPOS, 0, 0); 
+			sprintf(value, "%d", TNC->TXOffset);
+			MySetWindowText(TNC->xIDC_TXTUNEVAL, value);
+
+            break;
+		}
+
+		default: 
+			break; 
+	}
 	case WM_DESTROY:
 		
 		break;
@@ -357,7 +377,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	if (TNC->PortRecord)
 		sprintf(Title, "%s Status - Port %d %s", WindowTitle, TNC->Port, TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
 	else
-		sprintf(Title, "Rigcontrol", WindowTitle);
+		sprintf(Title, "Rigcontrol");
 	
 	if (TNC->Hardware == H_MPSK)
 		sprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
@@ -745,7 +765,7 @@ IdTag (random alphanumeric, 12 chars)
 		}
 	}
 
-	if (ADIF == NULL)
+	if (ADIF == NULL || ADIF->LOC[0] == 0)
 		return TRUE;
 
 	if (ADIF->StartTime == 0 || ADIF->ServerSID[0] == 0)
@@ -870,6 +890,7 @@ VOID SendHTTPRequest(SOCKET sock, char * Request, char * Params, int Len, char *
 					else
 					{
 						strlop(Buffer, 13);
+						Debugprintf("WL2K Update Params - %s", Params);
 						Debugprintf("WL2K Update failed - %s", Buffer);
 					}
 					return;
@@ -1828,11 +1849,16 @@ int standardParams(struct TNCINFO * TNC, char * buf)
 	else if (_memicmp(buf, "DEFAULTRADIOCOMMAND", 19) == 0)
 		TNC->DefaultRadioCmd = _strdup(&buf[20]);
 	else if (_memicmp(buf, "MYCALLS", 7) == 0)
+	{
 		TNC->LISTENCALLS = _strdup(&buf[8]);
+		strlop(TNC->LISTENCALLS, '\r');
+	}
 	else if (_memicmp(buf, "FREQUENCY", 9) == 0)
 		TNC->Frequency = _strdup(&buf[10]);
 	else if (_memicmp(buf, "SendTandRtoRelay", 16) == 0)
 		TNC->SendTandRtoRelay = atoi(&buf[17]);
+	else if (_memicmp(buf, "Radio", 5) == 0)		// Rig Control RADIO for TX amd RX (Equiv to INTERLOCK)
+		TNC->RXRadio = TNC->TXRadio = atoi(&buf[6]);
 	else if (_memicmp(buf, "TXRadio", 7) == 0)		// Rig Control RADIO for TX
 		TNC->TXRadio = atoi(&buf[8]);
 	else if (_memicmp(buf, "RXRadio", 7) == 0)		// Rig Control RADIO for RX
