@@ -1,6 +1,6 @@
 // Qt Version of BPQTermTCP
 
-#define VersionString "0.0.0.47"
+#define VersionString "0.0.0.55"
 
 // .12 Save font weight
 // .13 Display incomplete lines (ie without CR)
@@ -45,14 +45,27 @@
 // .42 Fix some bugs in AGW session handling
 // .43 Include Ross KD5LPB's fixes for MAC
 // .44 Ctrl/[ sends ESC (0x1b)
-// .45 Add VARA support
+// .45 Add VARA support							Nov 2021
 // .46 Fix dialog size on VARA setup
 // .47 Move VARA Status indicator. 
-//	   add FLRIG PTT for VARA
+//	   Add FLRIG PTT for VARA
+// .48 Check that YAPP Receive Directory has been set
+//	   Save separate configs for VARA, VARAFM and VARASAT
+// .49 Add BBS Monitor							Dec 2021
+// .50 Make Serial port support optional for Android Version
+// .51 Add KISS TNC Support						May 2022
+// .52 Save partially typed lines on cursor up	May 2022
+// .53 Add UI Mode for KISS Sessions			May 2022
+//     Fix saving KISS Paclen (b)
+//	   Fix Keepalive  (c)
+// .54 Add option to change screen colours		June 2022
+// .55 Build without optimisation
 
 #define _CRT_SECURE_NO_WARNINGS
 
 #define UNUSED(x) (void)(x)
+
+#define USESERIAL
 
 #include "QtTermTCP.h"
 #include "TabDialog.h"
@@ -64,8 +77,12 @@
 #include "QTreeWidget"
 #include <QToolBar>
 #include <QLabel>
+#include <QActionGroup>
+#include <QtWidgets>
+#ifdef USESERIAL
 #include <QtSerialPort/QSerialPort>
 #include <QtSerialPort/QSerialPortInfo>
+#endif
 #ifndef WIN32
 #define strtok_s strtok_r
 #endif
@@ -74,6 +91,8 @@
 #ifndef WIN32
 #include <unistd.h>
 #endif
+
+#include "ax25.h"
 
 #define MAXHOSTS 16
 #define MAXPORTS 32
@@ -95,13 +114,30 @@ int ListenPort = 8015;
 
 // Presentation - Single Window, MDI or Tabbed
 
-int TermMode = 1;
+int TermMode = 0;
 
 #define Single 0
 #define MDI 1
 #define Tabbed 2
 
 int singlemodeFormat = Mon + Term;
+
+char monStyleSheet[128] = "background-color: rgb(0,255,255)";
+char termStyleSheet[128] = "background-color: rgb(255,0,255);";
+char inputStyleSheet[128] = "color: rgb(255, 0, 0); background-color: rgb(255,255,0);";
+
+
+QColor monBackground = qRgb(0, 255, 255);
+QColor monRxText = qRgb(0, 0, 255);
+QColor monTxText = qRgb(255, 0, 0);
+QColor monOtherText = qRgb(0, 0, 0);
+
+QColor termBackground = qRgb(255, 0, 255);
+QColor outputText = qRgb(0, 0, 0);
+QColor EchoText = qRgb(0, 0, 255);
+QColor WarningText = qRgb(255, 0, 0);
+QColor inputBackground = qRgb(255, 255, 0);
+QColor inputText = qRgb(0, 0, 255);
 
 
 // There is something odd about this. It doesn't match BPQTERMTCP though it looks the same
@@ -110,6 +146,9 @@ int singlemodeFormat = Mon + Term;
 //{ 0, 4, 9, 11, 13, 16, 17, 42, 45, 50, 61, 64, 66, 72, 81, 84, 85, 86, 87, 89 };
 
 // As we have a white background we need dark colours
+
+// 0 is black. 23 is normal output (blue) 81 is red (used by AGW Mon)
+// for monitor in colour, host sends 17 for RX Text, 81 for TX Text but code converts to monRx/TxText qrgb values
 
 QRgb Colours[256] = { 0,
 		qRgb(0,0,0), qRgb(0,0,128), qRgb(0,0,192), qRgb(0,0,255),				// 1 - 4
@@ -130,34 +169,36 @@ QRgb Colours[256] = { 0,
 		qRgb(128,192,0), qRgb(128,192,128), qRgb(128,192,192), qRgb(128,192,255),
 		qRgb(128,255,0), qRgb(128,255,128), qRgb(128,255,192), qRgb(128,255,255),
 
-		qRgb(192,0,0), qRgb(192,0,128), qRgb(192,0,192), qRgb(192,0,255),				// 61
+		qRgb(192,0,0), qRgb(192,0,128), qRgb(192,0,192), qRgb(192,0,255),				// 61 - 80
 		qRgb(192,64,0), qRgb(192,64,128), qRgb(192,64,192), qRgb(192,64,255),
 		qRgb(192,128,0), qRgb(192,128,128), qRgb(192,128,192), qRgb(192,128,255),
 		qRgb(192,192,0), qRgb(192,192,128), qRgb(192,192,192), qRgb(192,192,255),
 		qRgb(192,255,0), qRgb(192,255,128), qRgb(192,255,192), qRgb(192,255,255),
 
-		qRgb(255,0,0), qRgb(255,0,128), qRgb(255,0,192), qRgb(255,0,255),				// 81
+		qRgb(255,0,0), qRgb(255,0,128), qRgb(255,0,192), qRgb(255,0,255),				// 81 - 100
 		qRgb(255,64,0), qRgb(255,64,128), qRgb(255,64,192), qRgb(255,64,255),
 		qRgb(255,128,0), qRgb(255,128,128), qRgb(255,128,192), qRgb(255,128,255),
 		qRgb(255,192,0), qRgb(255,192,128), qRgb(255,192,192), qRgb(255,192,255),
 		qRgb(255,255,0), qRgb(255,255,128), qRgb(255,255,192), qRgb(255,255,255)
 };
 
+
+
 int SavedHost = 0;				// from config
 
 char * sessionList = NULL;		// Saved sessions
 
-extern bool ChatMode;
-extern bool Bells;
-extern bool StripLF;
+extern int ChatMode;
+extern int Bells;
+extern int StripLF;
 extern int convUTF8;
 
 extern time_t LastWrite;
 extern int AlertInterval;
-extern bool AlertBeep;
+extern int AlertBeep;
 extern int AlertFreq;
 extern int AlertDuration;
-extern bool ConnectBeep;
+extern int ConnectBeep;
 
 // AGW Host Interface stuff
 
@@ -178,17 +219,52 @@ extern myTcpSocket * AGWSock;
 
 QStringList AGWToCalls;
 
+// KISS Interface
+
+int KISSEnable = 0;
+char SerialPort[80] = "";
+char KISSHost[128] = "127.0.0.1";
+int KISSPortNum = 1000;
+int KISSBAUD = 19200;
+char MYCALL[32];
+
+int KISSMode = 0;			// Connected (0) or UI (1)
+
+myTcpSocket * KISSSock;
+
+extern "C" void * KISSSockCopy[4];
+
+int KISSConnected = 0;
+int KISSConnecting = 0;
+
+Ui_ListenSession * KISSMonSess;
+
+QSerialPort * m_serial = nullptr;
+
 // VARA Interface
 
 int VARAEnable = 0;
 char VARAHost[128] = "127.0.0.1";
+char VARAHostHF[128] = "127.0.0.1";
+char VARAHostFM[128] = "127.0.0.1";
+char VARAHostSAT[128] = "127.0.0.1";
 int VARAPortNum = 8000;
+int VARAPortHF = 8000;
+int VARAPortFM = 8000;
+int VARAPortSAT = 8000;
 char VARATermCall[12] = "";
 char VARAPath[256] = "";
+char VARAPathHF[256] = "";
+char VARAPathFM[256] = "";
+char VARAPathSAT[256] = "";
 
 int VARA500 = 0;
 int VARA2300 = 1;
 int VARA2750 = 0;
+
+int VARAHF = 1;
+int VARAFM = 0;
+int VARASAT = 0;
 
 myTcpSocket * VARASock;
 myTcpSocket * VARADataSock;
@@ -210,8 +286,13 @@ void menuChecked(QAction * Act);
 #define PTTHAMLIB	16
 #define PTTFLRIG	32
 
+#ifdef USESERIAL
 
 QSerialPort * hPTTDevice = 0;
+#else
+
+
+#endif
 char PTTPort[80] = "";			// Port for Hardware PTT - may be same as control port.
 int PTTBAUD = 19200;
 int PTTMode = PTTRTS;			// PTT Control Flags.
@@ -260,7 +341,7 @@ QLabel * Status2;
 QLabel * Status3;
 QLabel * Status4;
 
-QAction *actHost[18];
+QAction *actHost[19];
 QAction *actSetup[16];
 
 QAction * TabSingle = NULL;
@@ -277,7 +358,7 @@ QAction *MonSup;
 QAction *MonNodes;
 QAction *MonUI;
 QAction *MonColour;
-QAction *MonPort[32];
+QAction *MonPort[33];
 QAction *actChatMode;
 QAction *actBells;
 QAction *actStripLF;
@@ -291,6 +372,7 @@ QAction *actCP437;
 
 QAction *actFonts;
 QAction *actmenuFont;
+QAction *actColours;
 QAction *actmyFonts;
 QAction *YAPPSend;
 QAction *YAPPSetRX;
@@ -330,9 +412,8 @@ QList<Ui_ListenSession *> _sessions;
 int TabType[10] = { Term, Term + Mon, Term, Term, Term, Term, Mon, Mon, Mon };
 
 int listenPort = 8015;
-bool listenEnable = false;
+extern "C" int listenEnable;
 char listenCText[4096] = "";
-
 
 int ConfigHost = 0;
 
@@ -350,6 +431,8 @@ void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char *
 void AGW_AX25_data_in(void * AX25Sess, unsigned char * data, int Len);
 void AGWMonWindowClosing(Ui_ListenSession *Sess);
 void AGWWindowClosing(Ui_ListenSession *Sess);
+extern "C" void KISSDataReceived(void * socket, unsigned char * data, int length);
+void closeSerialPort();
 
 extern void initUTF8();
 int checkUTF8(unsigned char * Msg, int Len, unsigned char * out);
@@ -430,11 +513,13 @@ void DecodeSettingsLine(int n, char * String)
 	return;
 }
 
-#ifdef ANDROID
-#define inputheight 60
-#else
+//#ifdef ANDROID
+//#define inputheight 60
+//#else
 #define inputheight 25
-#endif
+//#endif
+
+extern "C" void SendtoAX25(void * conn, unsigned char * Msg, int Len);
 
 bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 {
@@ -460,7 +545,8 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 				// This only closed mon sessinos
 
 				if (Sess->AGWMonSession)
-					AGWMonWindowClosing(Sess);
+//					AGWMonWindowClosing(Sess);
+					AGWWindowClosing(Sess);
 
 				if (Sess->AGWSession)
 					AGWWindowClosing(Sess);
@@ -473,6 +559,7 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 						QThread::msleep(10);
 				}
 				_sessions.removeOne(Sess);
+				return QMainWindow::eventFilter(obj, event);
 			}
 
 			if (event->type() == QEvent::Resize)
@@ -556,8 +643,13 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 
 					if (Msg[0])
 					{
+						if (Sess->KISSSession)
+						{
+							// Send to ax.25 code
 
-						if (Sess->AGWSession)
+							SendtoAX25(Sess->KISSSession, (unsigned char *)Msg, (int)strlen(Msg));
+						}
+						else if (Sess->AGWSession)
 						{
 							// Terminal is in AGWPE mode - send as AGW frame
 
@@ -579,6 +671,24 @@ bool QtTermTCP::eventFilter(QObject* obj, QEvent *event)
 
 					if (Sess->KbdStack[Sess->StackIndex] == NULL)
 						return true;
+
+					// If anything typed, stack part command
+
+					QByteArray stringData = Sess->inputWindow->text().toUtf8();
+
+					if (stringData.length() && Sess->StackIndex == 0)
+					{
+						if (Sess->KbdStack[49])
+							free(Sess->KbdStack[49]);
+
+						for (int i = 48; i >= 0; i--)
+						{
+							Sess->KbdStack[i + 1] = Sess->KbdStack[i];
+						}
+
+						Sess->KbdStack[0] = qstrdup(stringData.data());
+						Sess->StackIndex++;
+					}
 
 					Sess->inputWindow->setText(Sess->KbdStack[Sess->StackIndex]);
 					Sess->inputWindow->cursorForward(strlen(Sess->KbdStack[Sess->StackIndex]));
@@ -657,7 +767,7 @@ QAction * setupMenuLine(QMenu * Menu, char * Label, QObject * parent, int State)
 
 // This now creates all window types - Term, Mon, Combined, Listen
 
-int Count = 0;
+int xCount = 0;
 
 Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 {
@@ -693,6 +803,8 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 	Sess->clientSocket = NULL;
 	Sess->AGWSession = NULL;
 	Sess->AGWMonSession = NULL;
+	Sess->KISSSession = NULL;
+	Sess->KISSMode = 0;
 
 	_sessions.push_back(Sess);
 
@@ -707,7 +819,7 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 	}
 	else if (TermMode == Tabbed)
 	{
-		Sess->Tab = Count++;
+		Sess->Tab = xCount++;
 
 		if (Type == Mon)
 			tabWidget->addTab(Sess, "Monitor");
@@ -719,9 +831,15 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 
 	QSettings settings(GetConfPath(), QSettings::IniFormat);
 
-	QFont font = QFont(settings.value("FontFamily", "Courier New").value<QString>(),
-		settings.value("PointSize", 10).toInt(),
-		settings.value("Weight", 50).toInt());
+#ifdef ANDROID
+		QFont font = QFont(settings->value("FontFamily", "Driod Sans Mono").value<QString>(),
+			settings->value("PointSize", 12).toInt(),
+			settings->value("Weight", 50).toInt());
+#else
+		QFont font = QFont(settings.value("FontFamily", "Courier New").value<QString>(),
+			settings.value("PointSize", 10).toInt(),
+			settings.value("Weight", 50).toInt());
+#endif
 
 	if ((Type & Mon))
 	{
@@ -729,6 +847,7 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 		Sess->monWindow->setReadOnly(1);
 		Sess->monWindow->document()->setMaximumBlockCount(10000);
 		Sess->monWindow->setFont(font);
+		Sess->monWindow->setStyleSheet(monStyleSheet);
 		mythis->connect(Sess->monWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
 	}
 
@@ -738,11 +857,14 @@ Ui_ListenSession * newWindow(QObject * parent, int Type, const char * Label)
 		Sess->termWindow->setReadOnly(1);
 		Sess->termWindow->document()->setMaximumBlockCount(10000);
 		Sess->termWindow->setFont(font);
+		Sess->termWindow->setStyleSheet(termStyleSheet);
+
 		mythis->connect(Sess->termWindow, SIGNAL(selectionChanged()), parent, SLOT(onTEselectionChanged()));
 
 		Sess->inputWindow = new QLineEdit(Sess);
 		Sess->inputWindow->installEventFilter(parent);
 		Sess->inputWindow->setFont(font);
+		Sess->inputWindow->setStyleSheet(inputStyleSheet);
 		Sess->inputWindow->setContextMenuPolicy(Qt::PreventContextMenu);
 
 		mythis->connect(Sess->inputWindow, SIGNAL(selectionChanged()), parent, SLOT(onLEselectionChanged()));
@@ -816,7 +938,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	toolBar = new QToolBar(this);
 	toolBar->setObjectName("mainToolbar");
-	addToolBar(Qt::TopToolBarArea, toolBar);
+	addToolBar(Qt::BottomToolBarArea, toolBar);
 
 	QSettings mysettings(GetConfPath(), QSettings::IniFormat);
 
@@ -825,10 +947,29 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	GetSettings();
 
+	// Set background colours
+
+	sprintf(monStyleSheet, "background-color: rgb(%d, %d, %d);",
+		monBackground.red(), monBackground.green(), monBackground.blue());
+
+	sprintf(termStyleSheet, "background-color: rgb(%d, %d, %d);",
+		termBackground.red(), termBackground.green(), termBackground.blue());
+
+	sprintf(inputStyleSheet, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		inputText.red(), inputText.green(), inputText.blue(),
+		inputBackground.red(), inputBackground.green(), inputBackground.blue());
+
+
+#ifdef ANDROID
+	menufont = new QFont(mysettings.value("MFontFamily", "Driod Sans").value<QString>(),
+		mysettings.value("MPointSize", 12).toInt(),
+		mysettings.value("MWeight", 50).toInt());
+#else
 	menufont = new QFont(mysettings.value("MFontFamily", "Aerial").value<QString>(),
 		mysettings.value("MPointSize", 10).toInt(),
 		mysettings.value("MWeight", 50).toInt());
 
+#endif
 	if (TermMode == MDI)
 	{
 		mdiArea = new QMdiArea(ui.centralWidget);
@@ -918,8 +1059,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 		previousAct = new QAction(tr("Pre&vious"), this);
 		previousAct->setShortcuts(QKeySequence::PreviousChild);
-		previousAct->setStatusTip(tr("Move the focus to the previous "
-			"window"));
+		previousAct->setStatusTip(tr("Move the focus to the previous window"));
 		connect(previousAct, SIGNAL(triggered()), mdiArea, SLOT(activatePreviousSubWindow()));
 	}
 	
@@ -947,7 +1087,13 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	connect(actHost[17], SIGNAL(triggered()), this, SLOT(Connect()));
 
+	actHost[18] = new QAction("KISS Connect", this);
+	actHost[18]->setFont(*menufont);
+	actHost[18]->setVisible(KISSEnable);
+	actHost[18]->setEnabled(0);
+	connectMenu->addAction(actHost[18]);
 
+	connect(actHost[18], SIGNAL(triggered()), this, SLOT(Connect()));
 	for (i = 0; i < MAXHOSTS; i++)
 	{
 		actHost[i] = new QAction(Host[i], this);
@@ -1030,7 +1176,6 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	setupMenu->addAction(MDIAct);
 	setupMenu->addAction(tabbedAct);
 
-
 	setupMenu->addSeparator();
 
     actFonts = new QAction("Terminal Font", this);
@@ -1043,6 +1188,11 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connect(actmenuFont, SIGNAL(triggered()), this, SLOT(doMFonts()));
 	actmenuFont->setFont(*menufont);
 
+	actColours = new QAction("Choose Colours", this);
+	setupMenu->addAction(actColours);
+	connect(actColours, SIGNAL(triggered()), this, SLOT(doColours()));
+	actColours->setFont(*menufont);
+
 	AGWAction = new QAction("AGW Setup", this);
 	setupMenu->addAction(AGWAction);
 	connect(AGWAction, SIGNAL(triggered()), this, SLOT(AGWSlot()));
@@ -1053,9 +1203,15 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	connect(VARAAction, SIGNAL(triggered()), this, SLOT(VARASlot()));
 	VARAAction->setFont(*menufont);
 
+	KISSAction = new QAction("KISS Setup", this);
+	setupMenu->addAction(KISSAction);
+	connect(KISSAction, SIGNAL(triggered()), this, SLOT(KISSSlot()));
+	KISSAction->setFont(*menufont);
+
+
 	actChatMode = setupMenuLine(setupMenu, (char *)"Chat Terminal Mode", this, ChatMode);
 	actBells = setupMenuLine(setupMenu, (char *)"Enable Bells", this, Bells);
-	actStripLF = setupMenuLine(setupMenu, (char *)"Strip LineFeeds", this, StripLF);
+	actStripLF = setupMenuLine(setupMenu, (char *)"Strip Line Feeds", this, StripLF);
 	actIntervalBeep = setupMenuLine(setupMenu, (char *)"Beep after inactivity", this, AlertBeep);
 	actConnectBeep = setupMenuLine(setupMenu, (char *)"Beep on inbound connect", this, ConnectBeep);
 
@@ -1090,7 +1246,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	MonNodes = setupMenuLine(monitorMenu, (char *)"Monitor NODES Broadcasts", this, 0);
 	MonColour = setupMenuLine(monitorMenu, (char *)"Enable Colour", this, 1);
 
-	for (i = 0; i < MAXPORTS; i++)
+	for (i = 0; i < MAXPORTS + 1; i++)
 	{
 		MonPort[i] = setupMenuLine(monitorMenu, (char *)"Port", this, 0);
 		MonPort[i]->setVisible(false);
@@ -1150,8 +1306,8 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 	Status1->setMinimumWidth(100);
 	Status2->setMinimumWidth(100);
-	Status3->setFixedWidth(100);
-	Status4->setFixedWidth(100);
+	Status3->setMinimumWidth(100);
+	Status4->setMinimumWidth(100);
 
 	myStatusBar = statusBar();
 
@@ -1160,7 +1316,7 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	statusBar()->addPermanentWidget(Status2);
 	statusBar()->addPermanentWidget(Status1);
 
-	statusBar()->setVisible(AGWEnable || VARAEnable);
+	statusBar()->setVisible(AGWEnable | VARAEnable | KISSEnable);
 	// Restore saved sessions
 
 	if (TermMode == Single)
@@ -1169,6 +1325,10 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 
 		ActiveSession = Sess;
 		ui.verticalLayout->addWidget(Sess);
+
+		connectMenu->setEnabled(true);
+		discAction->setEnabled(false);
+		YAPPSend->setEnabled(false);
 	}
 
 	if (TermMode == MDI)
@@ -1203,6 +1363,10 @@ QtTermTCP::QtTermTCP(QWidget *parent) : QMainWindow(parent)
 	QTimer *timer = new QTimer(this);
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(10000);
+
+	QTimer *timer2 = new QTimer(this);
+	connect(timer2, SIGNAL(timeout()), this, SLOT(KISSTimerSlot()));
+	timer2->start(100);
 
 	// Run timer now to connect to AGW if configured
 
@@ -1306,6 +1470,11 @@ void QtTermTCP::showContextMenuT(const QPoint &pt)				// Term Window
 	QTextEdit* sender = static_cast<QTextEdit*>(QObject::sender());
 
 	QMenu *menu = sender->createStandardContextMenu();
+
+	QString style = "QMenu {border-radius:15px; background-color: white;margin: 2px; border: 1px solid rgb(58, 80, 116); color:  rgb(58, 80, 116);}QMenu::separator {height: 2px;background: rgb(58, 80, 116);margin-left: 10px;margin-right: 5px;}";
+	menu->setStyleSheet(style);
+
+
 	QAction * actSplit = new QAction("Set Monitor/Output Split", sender);
 
 	menu->addAction(actSplit);
@@ -1323,6 +1492,9 @@ void QtTermTCP::showContextMenuM(const QPoint &pt)				// Mon Window
 	QTextEdit* sender = static_cast<QTextEdit*>(QObject::sender());
 
 	QMenu *menu = sender->createStandardContextMenu();
+	QString style = "QMenu {border-radius:15px; background-color: white;margin: 2px; border: 1px solid rgb(58, 80, 116); color:  rgb(58, 80, 116);}";
+	menu->setStyleSheet(style);
+
 	QAction * actSplit = new QAction("Set Monitor/Output Split", sender);
 
 	menu->addAction(actSplit);
@@ -1335,7 +1507,7 @@ void QtTermTCP::showContextMenuM(const QPoint &pt)				// Mon Window
 	delete menu;
 }
 
-void setMenus(int State)
+extern "C" void setMenus(int State)
 {
 	// Sets Connect, Disconnect and YAPP Send  enable flags to match connection state
 
@@ -1353,6 +1525,47 @@ void setMenus(int State)
 	}
 }
 
+extern "C" void SetSessLabel(Ui_ListenSession * Sess, char * label)
+{
+	if (TermMode == MDI)
+		Sess->setWindowTitle(label);
+	else if (TermMode == Tabbed)
+		tabWidget->setTabText(Sess->Tab, label);
+	else if (TermMode == Single)
+		mythis->setWindowTitle(label);
+}
+
+
+extern "C" void ClearSessLabel(Ui_ListenSession * Sess)
+{
+	if (TermMode == MDI)
+	{
+		if (Sess->SessionType == Mon)			// Mon Only
+			Sess->setWindowTitle("Monitor Session Disconnected");
+		else if (Sess->SessionType == Listen)			// Mon Only
+			Sess->setWindowTitle("Listen Window Disconnected");
+		else
+			Sess->setWindowTitle("Disconnected");
+	}
+	else if (TermMode == Tabbed)
+	{
+		if (Sess->SessionType == Mon)			// Mon Only
+			tabWidget->setTabText(Sess->Tab, "Monitor");
+		else
+		{
+			char Label[16];
+			sprintf(Label, "Sess %d", Sess->Tab + 1);
+			tabWidget->setTabText(Sess->Tab, Label);
+		}
+	}
+	else if (TermMode == Single)
+	{
+		if (Sess->SessionType == Mon)			// Mon Only
+			mythis->setWindowTitle("Monitor Session Disconnected");
+		else
+			mythis->setWindowTitle("Disconnected");
+	}
+}
 
 void QtTermTCP::tabSelected(int Current)
 {
@@ -1367,7 +1580,7 @@ void QtTermTCP::tabSelected(int Current)
 
 		ActiveSession = Sess;
 
-		if (Sess->clientSocket || Sess->AGWSession)
+		if (Sess->clientSocket || Sess->AGWSession || Sess->KISSSession || Sess->KISSMode)
 		{
 			connectMenu->setEnabled(false);
 			discAction->setEnabled(true);
@@ -1390,7 +1603,7 @@ void QtTermTCP::tabSelected(int Current)
 			int NumberofPorts = atoi((char *)&ptr[2]);
 			char *p, *Context;
 			char msg[80];
-			int portnum;
+			int portnum, m;
 			char delim[] = "|";
 
 			// Remove old Monitor menu
@@ -1408,11 +1621,14 @@ void QtTermTCP::tabSelected(int Current)
 				if (p == NULL)
 					break;
 
-				portnum = atoi(p);
+				m = portnum = atoi(p);
 
 				sprintf(msg, "Port %s", p);
 
-				if (Sess->portmask & (1 << (portnum - 1)))
+				if (m == 0)
+					m = 33;
+
+				if (Sess->portmask & (1ll << (m - 1)))
 					SetPortMonLine(portnum, msg, 1, 1);
 				else
 					SetPortMonLine(portnum, msg, 1, 0);
@@ -1450,7 +1666,6 @@ void QtTermTCP::SetupHosts()
 }
 
 
-
 void QtTermTCP::Connect()
 {
 	QMdiSubWindow * UI;
@@ -1465,17 +1680,7 @@ void QtTermTCP::Connect()
 			break;
 	}
 
-	if (Act == actHost[16])
-	{
-		// This runs the AGW Connection dialog
-
-		AGWConnect dialog(0);
-		dialog.exec();
-
-		return;
-	}
-
-	SavedHost = i;				// Iast used
+	SavedHost = i;				// Last used
 
 	if (TermMode == MDI)
 	{
@@ -1506,10 +1711,22 @@ void QtTermTCP::Connect()
 
 	Sess->CurrentHost = SavedHost;
 
+	if (Act == actHost[16])
+	{
+		// This runs the AGW Connection dialog
+
+		Sess->CurrentHost = 16;				// Iast used
+		AGWConnect dialog(0);
+		dialog.exec();
+		return;
+	}
+
+
 	if (Act == actHost[17])
 	{
 		// This runs the VARA Connection dialog
 
+		Sess->CurrentHost = 17;				// Iast used
 		VARADataSock->Sess = Sess;
 		VARASock->Sess = Sess;
 
@@ -1520,10 +1737,20 @@ void QtTermTCP::Connect()
 		return;
 	}
 
+	if (Act == actHost[18])
+	{
+		// This runs the KISS Connection dialog
+
+		Sess->CurrentHost = 18;				// Iast used
+
+		KISSConnect dialog(0);
+		dialog.exec();
+		return;
+	}
 
 	// Set Monitor Params for this host
 
-	sscanf(MonParams[Sess->CurrentHost], "%x %x %x %x %x %x",
+	sscanf(MonParams[Sess->CurrentHost], "%llx %x %x %x %x %x",
 		&Sess->portmask, &Sess->mtxparam, &Sess->mcomparam,
 		&Sess->MonitorNODES, &Sess->MonitorColour, &Sess->monUI);
 
@@ -1553,6 +1780,8 @@ void QtTermTCP::Connect()
 	return;
 }
 
+extern "C" void rst_timer(TAX25Port * AX25Sess);
+extern "C" void set_unlink(TAX25Port * AX25Sess, Byte * path);
 
 void QtTermTCP::Disconnect()
 {
@@ -1591,7 +1820,31 @@ void QtTermTCP::Disconnect()
 		Send_AGW_Ds_Frame(Sess->AGWSession);
 	else if (VARASock && VARASock->Sess == Sess)
 		VARASock->write("DISCONNECT\r");
+	else if (Sess->KISSSession)
+	{
+		if (Sess->KISSMode == 0)
+		{
+			TAX25Port * Port = (TAX25Port *)Sess->KISSSession;
+		
+			rst_timer(Port);
+			set_unlink(Port, Port->Path);
+		}
+		else
+		{
+			// KISS UI Mode
+
+			char Msg[128];
+			int Len = sprintf(Msg, "Disconnected\r");
+
+			Sess->KISSMode = 0;
+			SendtoTerm(Sess, Msg, Len);
+			ClearSessLabel(Sess);
+			setMenus(0);
+			Sess->KISSSession = NULL;
+		}
+	}
 	else
+
 	{
 		if (Sess && Sess->clientSocket)
 			Sess->clientSocket->disconnectFromHost();
@@ -1684,7 +1937,7 @@ void QtTermTCP::menuChecked()
 
 	if (Act == TabSingle || Act == TabBoth || Act == TabMon)
 	{
-		// Tebbed Window format had changed
+		// Tabbed Window format had changed
 
 		int i = tabWidget->currentIndex();
 
@@ -1772,12 +2025,17 @@ void QtTermTCP::menuChecked()
 		{
 			if (Act == MonPort[i])
 			{
-				unsigned int mask = 0x1 << (i - 1);
+				unsigned long long mmask;
+				
+				if (i == 0)				// BBS Mon - use bit 32
+					mmask = 1ll << 32;
+				else
+					mmask = 1ll << (i - 1);
 
 				if (state)
-					ActiveSession->portmask |= mask;
+					ActiveSession->portmask |= mmask;
 				else
-					ActiveSession->portmask &= ~mask;
+					ActiveSession->portmask &= ~mmask;
 				break;
 			}
 		}
@@ -1835,7 +2093,6 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 
 	// Stack it
 
-
 	Sess->StackIndex = 0;
 
 	if (Sess->KbdStack[49])
@@ -1856,8 +2113,54 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 		*ptr++ = 10;
 
 	LastWrite = time(NULL);				// Stop initial beep
+	Sess->SlowTimer = 0;
 
-	if (Sess->AGWSession)
+	if (Sess->KISSMode == 1)
+	{
+		// UI session. Send as UI Message
+
+		while ((ptr = strchr(Msgptr, '\n')))
+		{
+			*ptr++ = 0;
+
+			Msg = (char *)malloc(strlen(Msgptr) + 10);
+			strcpy(Msg, Msgptr);
+			strcat(Msg, "\r");
+
+			Send_UI(0, 0xF0, MYCALL, Sess->UIDEST, (unsigned char *)Msg, (int)strlen(Msg));
+
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
+				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, EchoText);		// Black
+
+			free(Msg);
+
+			Msgptr = ptr;
+		}
+	}
+	else if (Sess->KISSSession)
+	{
+		// Send to ax.25 code
+
+		while ((ptr = strchr(Msgptr, '\n')))
+		{
+			*ptr++ = 0;
+
+			Msg = (char *)malloc(strlen(Msgptr) + 10);
+			strcpy(Msg, Msgptr);
+			strcat(Msg, "\r");
+
+			SendtoAX25(Sess->KISSSession, (unsigned char *)Msg, (int)strlen(Msg));
+
+			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
+				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, EchoText);		// Black
+
+			free(Msg);
+
+			Msgptr = ptr;
+		}
+	}
+
+	else if (Sess->AGWSession)
 	{
 		// Terminal is in AGWPE mode - send as AGW frame
 
@@ -1872,7 +2175,7 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 			AGW_AX25_data_in(Sess->AGWSession, (unsigned char *)Msg, (int)strlen(Msg));
 
 			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
-				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 0);		// Black
+				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, EchoText);		// Black
 
 //			Sess->termWindow->insertPlainText(Msg);
 
@@ -1895,7 +2198,7 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 			VARADataSock->write(Msg);
 
 			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
-				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 0);		// Black
+				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, EchoText);		// Black
 
 //			Sess->termWindow->insertPlainText(Msg);
 
@@ -1919,7 +2222,7 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 			Sess->clientSocket->write(Msg);
 
 			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
-				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 0);		// Black
+				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, EchoText);		// Black
 
 //			Sess->termWindow->insertPlainText(Msg);
 
@@ -1932,24 +2235,63 @@ void QtTermTCP::LreturnPressed(Ui_ListenSession * Sess)
 	{
 			// Not Connected 
 
-		if(Sess->SessionType != Listen)
+		if (Sess->SessionType != Listen)
 		{
-			char Msg[] = "Connecting....\r";
+			if (Sess->CurrentHost < MAXHOSTS)
+			{
+				// Last connect was TCP
 
-			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
-					Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
+				char Msg[] = "Connecting....\r";
 
-			delete(Sess->clientSocket);
+				WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
+					Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, WarningText);		// Red
 
-			Sess->clientSocket = new myTcpSocket();
-			Sess->clientSocket->Sess = Sess;
+				delete(Sess->clientSocket);
 
-			connect(Sess->clientSocket,  SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(displayError(QAbstractSocket::SocketError)));
-			
-			connect(Sess->clientSocket, SIGNAL(readyRead()), this, SLOT(readyRead()));
-			connect(Sess->clientSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onSocketStateChanged(QAbstractSocket::SocketState)));
+				Sess->clientSocket = new myTcpSocket();
+				Sess->clientSocket->Sess = Sess;
 
-			Sess->clientSocket->connectToHost(&Host[Sess->CurrentHost][0], Port[Sess->CurrentHost]);
+				connect(Sess->clientSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(displayError(QAbstractSocket::SocketError)));
+				connect(Sess->clientSocket, SIGNAL(readyRead()), this, SLOT(readyRead()));
+				connect(Sess->clientSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onSocketStateChanged(QAbstractSocket::SocketState)));
+
+				Sess->clientSocket->connectToHost(&Host[Sess->CurrentHost][0], Port[Sess->CurrentHost]);
+			}
+
+			else if (Sess->CurrentHost == 16)		// AGW
+			{
+				// Invoke AGW connect dialog 
+
+				AGWConnect dialog(0);
+				dialog.exec();
+
+				WritetoOutputWindow(Sess, (unsigned char *)"Connecting...\r", 14);
+				return;
+			}
+
+			else if (Sess->CurrentHost == 17)		// VARA
+			{
+				// Invoke VARA connect dialog 
+
+				VARAConnect dialog(0);
+				dialog.exec();
+
+				WritetoOutputWindow(Sess, (unsigned char *)"Connecting...\r", 14);
+				return;
+			}
+
+			else if (Sess->CurrentHost == 18)		// KISS
+			{
+				// Do we send as UI or invoke kiss connect dialog ??
+
+				// Try Connect Dialog for now - may make a menu option
+
+				KISSConnect dialog(0);
+				dialog.exec();
+
+				WritetoOutputWindow(Sess, (unsigned char *)"Connecting...\r", 14);
+				return;
+			}
 		}
 		else
 		{
@@ -1981,7 +2323,7 @@ void QtTermTCP::displayError(QAbstractSocket::SocketError socketError)
 	case QAbstractSocket::HostNotFoundError:
 		QMessageBox::information(this, tr("QtTermTCP"),
 			tr("The host was not found. Please check the "
-				"host name and port settings."));
+				"host name and portsettings->"));
 		break;
 
 	case QAbstractSocket::ConnectionRefusedError:
@@ -2040,18 +2382,18 @@ extern "C" int SocketSend(Ui_ListenSession * Sess, char * Buffer, int len)
 
 extern "C" int SocketFlush(Ui_ListenSession * Sess)
 {
-	if (Sess->AGWSession || (VARASock && VARASock->Sess == Sess))
+	if (Sess->AGWSession || Sess->KISSSession || (VARASock && VARASock->Sess == Sess))
 		return 0;
 
 	myTcpSocket* Socket = Sess->clientSocket;
 
-	if (Socket->state() == QAbstractSocket::ConnectedState)
+	if (Socket && Socket->state() == QAbstractSocket::ConnectedState)
 		return Socket->flush();
 
 	return 0;
 }
 
-extern "C" void Sleep(int ms)
+extern "C" void mySleep(int ms)
 {
 	QThread::msleep(ms);
 }
@@ -2065,15 +2407,15 @@ extern "C" void SetPortMonLine(int i, char * Text, int visible, int enabled)
 
 bool scrollbarAtBottom = 0;
 
-extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int * OutputSaveLen, char * OutputSave, int Colour);
+extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int * OutputSaveLen, char * OutputSave, QColor Colour);
 
 extern "C" void WritetoOutputWindow(Ui_ListenSession * Sess, unsigned char * Buffer, int len)
 {
-	WritetoOutputWindowEx(Sess, Buffer, len, Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 23);
+	WritetoOutputWindowEx(Sess, Buffer, len, Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, outputText);
 }
 
 
-extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int * OutputSaveLen, char * OutputSave, int Colour)
+extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int * OutputSaveLen, char * OutputSave, QColor Colour)
 {
 	unsigned char Copy[8192];
 	unsigned char * ptr1, *ptr2;
@@ -2093,7 +2435,7 @@ extern "C" void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * B
 	if (AlertInterval && (NOW - LastWrite) > AlertInterval)
 	{
 		if (AlertBeep)
-			Beep();
+			myBeep();
 	}
 
 	LastWrite = NOW;
@@ -2184,7 +2526,7 @@ lineloop:
 		}
 		else
 		{
-			termWindow->setTextColor(Colours[23]);
+			termWindow->setTextColor(Colour);
 			termWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
 		}
 
@@ -2220,7 +2562,7 @@ lineloop:
 			if (ptr)
 			{
 				*(ptr) = 32;
-				Beep();
+				myBeep();
 			}
 		} while (ptr);
 	}
@@ -2245,7 +2587,7 @@ lineloop:
 	}
 	else
 	{
-		termWindow->setTextColor(Colours[Colour]);
+		termWindow->setTextColor(Colour);
 
 		outlen = checkUTF8(Line, num, out);
 		out[outlen] = 0;
@@ -2283,6 +2625,8 @@ extern "C" void WritetoMonWindow(Ui_ListenSession * Sess, unsigned char * Msg, i
 
 	if (Sess->monWindow == nullptr)
 		return;
+
+	Sess->monWindow->setStyleSheet(monStyleSheet);
 
 	const QTextCursor old_cursor = Sess->monWindow->textCursor();
 	const int old_scrollbar_value = Sess->monWindow->verticalScrollBar()->value();
@@ -2361,26 +2705,113 @@ lineloop:
 		if (Sess->MonitorColour)
 		{
 			if (Line[1] == 17)
-				Sess->monWindow->setTextColor(qRgb(0, 0, 192));
+				Sess->monWindow->setTextColor(monRxText);
 			else
-				Sess->monWindow->setTextColor(QColor(qRgb(192, 0, 0)));
+				Sess->monWindow->setTextColor(monTxText);
 		}
 		else
-			Sess->monWindow->setTextColor(QColor("black"));
-
+			Sess->monWindow->setTextColor(monOtherText);
 
 		Sess->monWindow->textCursor().insertText(QString::fromUtf8((char*)&Line[2]));
 	}
 	else
 	{
 		Sess->monWindow->textCursor().insertText(QString::fromUtf8((char*)Line));
-//		Sess->monWindow->append(QString::fromUtf8((char*)Line));
 	}
 	len -= (ptr2 - ptr1);
 
 	ptr1 = ptr2;
 
 	goto lineloop;
+
+}
+
+int ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
+void QueueMsg(Ui_ListenSession * Sess, char * Msg, int Len);
+
+// YAPP stuff
+
+#define SOH 1
+#define STX 2
+#define ETX 3
+#define EOT 4
+#define ENQ 5
+#define ACK 6
+#define DLE	0x10
+#define NAK 0x15
+#define CAN 0x18
+
+extern "C" void SendtoTerm(Ui_ListenSession * Sess, char * Msg, int Len)
+{
+	Sess->SlowTimer = 0; 
+	
+	if (Sess->InputMode == 'Y')			// Yapp
+	{
+		ProcessYAPPMessage(Sess, (unsigned char *)Msg, Len);
+		return;
+	}
+
+	// Could be a YAPP Header
+
+	if (Len == 2 && Msg[0] == ENQ && Msg[1] == 1)		// YAPP Send_Init
+	{
+		char YAPPRR[2];
+
+		// Turn off monitoring
+
+		Sess->InputMode = 'Y';
+
+		YAPPRR[0] = ACK;
+		YAPPRR[1] = 1;
+		QueueMsg(Sess, YAPPRR, 2);
+
+		return;
+	}
+
+	WritetoOutputWindow(Sess, (unsigned char *)Msg, Len);
+
+}
+
+QSettings* settings;
+
+// This makes geting settings for more channels easier
+
+char Prefix[16] = "AX25_A";
+
+void GetPortSettings(int Chan);
+
+QVariant getAX25Param(const char * key, QVariant Default)
+{
+	char fullKey[64];
+
+	sprintf(fullKey, "%s/%s", Prefix, key);
+	return settings->value(fullKey, Default);
+}
+
+void getAX25Params(int chan)
+{
+	Prefix[5] = chan + 'A';
+	GetPortSettings(chan);
+}
+
+
+void GetPortSettings(int Chan)
+{
+	maxframe[Chan] = getAX25Param("Maxframe", 4).toInt();
+	fracks[Chan] = getAX25Param("Retries", 10).toInt();
+	frack_time[Chan] = getAX25Param("FrackTime", 8).toInt();
+	persist[Chan] = getAX25Param("Persist", 128).toInt();
+	kisspaclen[Chan] = getAX25Param("Paclen", 128).toInt();
+	idletime[Chan] = getAX25Param("IdleTime", 180).toInt();
+	slottime[Chan] = getAX25Param("SlotTime", 100).toInt();
+	resptime[Chan] = getAX25Param("RespTime", 1500).toInt();
+	TXFrmMode[Chan] = getAX25Param("TXFrmMode", 1).toInt();
+	max_frame_collector[Chan] = getAX25Param("FrameCollector", 6).toInt();
+	//exclude_callsigns[Chan]= getAX25Param("ExcludeCallsigns/");
+	//exclude_APRS_frm[Chan]= getAX25Param("ExcludeAPRSFrmType/");
+	KISS_opt[Chan] = getAX25Param("KISSOptimization", false).toInt();;
+	dyn_frack[Chan] = getAX25Param("DynamicFrack", false).toInt();;
+	IPOLL[Chan] = getAX25Param("IPOLL", 80).toInt();
 
 }
 
@@ -2392,138 +2823,211 @@ void GetSettings()
 	char Key[16];
 	char Param[256];
 
-	QSettings settings(GetConfPath(), QSettings::IniFormat);
+	settings = new QSettings(GetConfPath(), QSettings::IniFormat);
 
 	// Get saved session definitions
 
-	sessionList = strdup(settings.value("Sessions", "1|3, 0, 5, 5, 600, 800|").toString().toUtf8());
-
+	sessionList = strdup(settings->value("Sessions", "1|3, 0, 5, 5, 600, 800|").toString().toUtf8());
 
 	for (i = 0; i < MAXHOSTS; i++)
 	{
 		sprintf(Key, "HostParams%d", i);
 
-		qb = settings.value(Key).toByteArray();
+		qb =settings->value(Key).toByteArray();
 
 		DecodeSettingsLine(i, qb.data());
 	}
 
-	Split = settings.value("Split", 50).toInt();
-	ChatMode = settings.value("ChatMode", 1).toInt();
-	Bells = settings.value("Bells", 1).toInt();
-	StripLF = settings.value("StripLF", 1).toInt();
-	AlertBeep = settings.value("AlertBeep", 1).toInt();
-	ConnectBeep = settings.value("ConnectBeep", 1).toInt();
-	SavedHost = settings.value("CurrentHost", 0).toInt();
-	strcpy(YAPPPath, settings.value("YAPPPath", "").toString().toUtf8());
+	Split =settings->value("Split", 50).toInt();
+	ChatMode =settings->value("ChatMode", 1).toInt();
+	Bells =settings->value("Bells", 1).toInt();
+	StripLF =settings->value("StripLF", 1).toInt();
+	AlertBeep =settings->value("AlertBeep", 1).toInt();
+	ConnectBeep =settings->value("ConnectBeep", 1).toInt();
+	SavedHost =settings->value("CurrentHost", 0).toInt();
+	strcpy(YAPPPath,settings->value("YAPPPath", "").toString().toUtf8());
 
-	listenPort = settings.value("listenPort", 8015).toInt();
-	listenEnable = settings.value("listenEnable", false).toBool();
-	strcpy(listenCText, settings.value("listenCText", "").toString().toUtf8());
+	listenPort =settings->value("listenPort", 8015).toInt();
+	listenEnable =settings->value("listenEnable", false).toBool();
+	strcpy(listenCText,settings->value("listenCText", "").toString().toUtf8());
 
-	TermMode = settings.value("TermMode", 0).toInt();
-	singlemodeFormat = settings.value("singlemodeFormat", Term + Mon).toInt();
+	TermMode =settings->value("TermMode", 0).toInt();
+	singlemodeFormat =settings->value("singlemodeFormat", Term + Mon).toInt();
 
-	AGWEnable = settings.value("AGWEnable", 0).toInt();
-	AGWMonEnable = settings.value("AGWMonEnable", 0).toInt();
-	strcpy(AGWTermCall, settings.value("AGWTermCall", "").toString().toUtf8());
-	strcpy(AGWBeaconDest, settings.value("AGWBeaconDest", "").toString().toUtf8());
-	strcpy(AGWBeaconPath, settings.value("AGWBeaconPath", "").toString().toUtf8());
-	AGWBeaconInterval = settings.value("AGWBeaconInterval", 0).toInt();
-	strcpy(AGWBeaconPorts, settings.value("AGWBeaconPorts", "").toString().toUtf8());
-	strcpy(AGWBeaconMsg, settings.value("AGWBeaconText", "").toString().toUtf8());
-	strcpy(AGWHost, settings.value("AGWHost", "127.0.0.1").toString().toUtf8());
-	AGWPortNum = settings.value("AGWPort", 8000).toInt();
-	AGWPaclen = settings.value("AGWPaclen", 80).toInt();
-	AGWToCalls = settings.value("AGWToCalls","").toStringList();
-	convUTF8 = settings.value("convUTF8", 0).toInt();
+	AGWEnable =settings->value("AGWEnable", 0).toInt();
+	AGWMonEnable =settings->value("AGWMonEnable", 0).toInt();
+	strcpy(AGWTermCall,settings->value("AGWTermCall", "").toString().toUtf8());
+	strcpy(AGWBeaconDest,settings->value("AGWBeaconDest", "").toString().toUtf8());
+	strcpy(AGWBeaconPath,settings->value("AGWBeaconPath", "").toString().toUtf8());
+	AGWBeaconInterval =settings->value("AGWBeaconInterval", 0).toInt();
+	strcpy(AGWBeaconPorts,settings->value("AGWBeaconPorts", "").toString().toUtf8());
+	strcpy(AGWBeaconMsg,settings->value("AGWBeaconText", "").toString().toUtf8());
+	strcpy(AGWHost,settings->value("AGWHost", "127.0.0.1").toString().toUtf8());
+	AGWPortNum =settings->value("AGWPort", 8000).toInt();
+	AGWPaclen =settings->value("AGWPaclen", 80).toInt();
+	AGWToCalls =settings->value("AGWToCalls","").toStringList();
+	convUTF8 =settings->value("convUTF8", 0).toInt();
 
-	VARAEnable = settings.value("VARAEnable", 0).toInt();
-	strcpy(VARAHost, settings.value("VARAHost", "127.0.0.1").toString().toUtf8());
-	VARAPortNum = settings.value("VARAPort", 8300).toInt();
-	strcpy(VARAPath, settings.value("VARAPath", "").toString().toUtf8());
-	strcpy(VARATermCall, settings.value("VARATermCall", "").toString().toUtf8());
-	VARA500 = settings.value("VARA500", 0).toInt();
-	VARA2300 = settings.value("VARA2300", 1).toInt();
-	VARA2750 = settings.value("VARA2750", 0).toInt();
+	KISSEnable =settings->value("KISSEnable", 0).toInt();
+	strcpy(MYCALL,settings->value("MYCALL", "").toString().toUtf8());
+	strcpy(KISSHost,settings->value("KISSHost", "127.0.0.1").toString().toUtf8());
+	KISSPortNum = settings->value("KISSPort", 8100).toInt();
+	KISSMode = settings->value("KISSMode", 0).toInt();
 
-	strcpy(PTTPort, settings.value("PTT", "None").toString().toUtf8());
-	PTTMode = settings.value("PTTMode", 19200).toInt();
-	PTTBAUD = settings.value("PTTBAUD", 19200).toInt();
-	CATHex = settings.value("CATHex", 1).toInt();
+	strcpy(SerialPort,settings->value("KISSSerialPort", "None").toString().toUtf8());
+	KISSBAUD =settings->value("KISSBAUD", 19200).toInt();
+	getAX25Params(0);
 
-	strcpy(PTTOnString, settings.value("PTTOnString", "").toString().toUtf8());
-	strcpy(PTTOffString, settings.value("PTTOffString", "").toString().toUtf8());
+	VARAEnable =settings->value("VARAEnable", 0).toInt();
+	strcpy(VARAHost,settings->value("VARAHost", "127.0.0.1").toString().toUtf8());
+	strcpy(VARAHostFM,settings->value("VARAHostFM", "127.0.0.1").toString().toUtf8());
+	strcpy(VARAHostHF,settings->value("VARAHostHF", "127.0.0.1").toString().toUtf8());
+	strcpy(VARAHostSAT,settings->value("VARAHostSAT", "127.0.0.1").toString().toUtf8());
+	VARAPortNum =settings->value("VARAPort", 8300).toInt();
+	VARAPortHF =settings->value("VARAPortHF", 8300).toInt();
+	VARAPortFM =settings->value("VARAPortFM", 8300).toInt();
+	VARAPortSAT =settings->value("VARAPortSAT", 8300).toInt();
+	strcpy(VARAPath,settings->value("VARAPath", "C:\\VARA\\VARA.exe").toString().toUtf8());
+	strcpy(VARAPathHF,settings->value("VARAPathHF", "C:\\VARA\\VARA.exe").toString().toUtf8());
+	strcpy(VARAPathFM,settings->value("VARAPathFM", "C:\\VARA\\VARAFM.exe").toString().toUtf8());
+	strcpy(VARAPathSAT,settings->value("VARAPathSAT", "C:\\VARA\\VARASAT.exe").toString().toUtf8());
+	strcpy(VARATermCall,settings->value("VARATermCall", "").toString().toUtf8());
+	VARA500 =settings->value("VARA500", 0).toInt();
+	VARA2300 =settings->value("VARA2300", 1).toInt();
+	VARA2750 =settings->value("VARA2750", 0).toInt();
+	VARAHF =settings->value("VARAHF", 1).toInt();
+	VARAFM =settings->value("VARAFM", 0).toInt();
+	VARASAT =settings->value("VARASAT", 0).toInt();
 
-	pttGPIOPin = settings.value("pttGPIOPin", 17).toInt();
-	pttGPIOPinR = settings.value("pttGPIOPinR", 17).toInt();
+	strcpy(PTTPort,settings->value("PTT", "None").toString().toUtf8());
+	PTTMode =settings->value("PTTMode", 19200).toInt();
+	PTTBAUD =settings->value("PTTBAUD", 19200).toInt();
+	CATHex =settings->value("CATHex", 1).toInt();
+
+	strcpy(PTTOnString,settings->value("PTTOnString", "").toString().toUtf8());
+	strcpy(PTTOffString,settings->value("PTTOffString", "").toString().toUtf8());
+
+	pttGPIOPin =settings->value("pttGPIOPin", 17).toInt();
+	pttGPIOPinR =settings->value("pttGPIOPinR", 17).toInt();
 
 #ifdef WIN32
-	strcpy(CM108Addr, settings.value("CM108Addr", "0xD8C:0x08").toString().toUtf8());
+	strcpy(CM108Addr,settings->value("CM108Addr", "0xD8C:0x08").toString().toUtf8());
 #else
-	strcpy(CM108Addr, settings.value("CM108Addr", "/dev/hidraw0").toString().toUtf8());
+	strcpy(CM108Addr,settings->value("CM108Addr", "/dev/hidraw0").toString().toUtf8());
 #endif
 
-	HamLibPort = settings.value("HamLibPort", 4532).toInt();
-	strcpy(HamLibHost, settings.value("HamLibHost", "127.0.0.1").toString().toUtf8());
+	HamLibPort =settings->value("HamLibPort", 4532).toInt();
+	strcpy(HamLibHost,settings->value("HamLibHost", "127.0.0.1").toString().toUtf8());
 
-	FLRigPort = settings.value("FLRigPort", 12345).toInt();
-	strcpy(FLRigHost, settings.value("FLRigHost", "127.0.0.1").toString().toUtf8());
+	FLRigPort =settings->value("FLRigPort", 12345).toInt();
+	strcpy(FLRigHost,settings->value("FLRigHost", "127.0.0.1").toString().toUtf8());
 
 
-	strcpy(Param, settings.value("TabType", "1 1 1 1 1 1 1 2 2").toString().toUtf8());
+	strcpy(Param,settings->value("TabType", "1 1 1 1 1 1 1 2 2").toString().toUtf8());
 	sscanf(Param, "%d %d %d %d %d %d %d %d %d %d",
 		&TabType[0], &TabType[1], &TabType[2], &TabType[3], &TabType[4],
 		&TabType[5], &TabType[6], &TabType[7], &TabType[8], &TabType[9]);
 
+	monBackground = settings->value("monBackground", QColor(255,255,255)).value<QColor>();
+	monRxText = settings->value("monRxText", QColor(0, 0, 255)).value<QColor>();
+	monTxText = settings->value("monTxText", QColor(255, 0, 0)).value<QColor>();
+	monOtherText = settings->value("monOtherText", QColor(0, 0, 0)).value<QColor>();
+
+	termBackground = settings->value("termBackground", QColor(255, 255, 255)).value<QColor>();
+	outputText = settings->value("outputText", QColor(0, 0, 255)).value<QColor>();
+	EchoText = settings->value("EchoText", QColor(0, 0, 0)).value<QColor>();
+	WarningText = settings->value("WarningText", QColor(255, 0, 0)).value<QColor>();
+
+	inputBackground = settings->value("inputBackground", QColor(255, 255, 255)).value<QColor>();
+	inputText = settings->value("inputText", QColor(0, 0, 0)).value<QColor>();
+	
+	delete(settings);
+}
+
+void SavePortSettings(int Chan);
+
+void saveAX25Param(const char * key, QVariant Value)
+{
+	char fullKey[64];
+
+	sprintf(fullKey, "%s/%s", Prefix, key);
+
+	settings->setValue(fullKey, Value);
+}
+
+void saveAX25Params(int chan)
+{
+	Prefix[5] = chan + 'A';
+	SavePortSettings(chan);
+}
+
+void SavePortSettings(int Chan)
+{
+	saveAX25Param("Retries", fracks[Chan]);
+	saveAX25Param("Maxframe", maxframe[Chan]);
+	saveAX25Param("Paclen", kisspaclen[Chan]);
+	saveAX25Param("FrackTime", frack_time[Chan]);
+	saveAX25Param("IdleTime", idletime[Chan]);
+	saveAX25Param("SlotTime", slottime[Chan]);
+	saveAX25Param("Persist", persist[Chan]);
+	saveAX25Param("RespTime", resptime[Chan]);
+	saveAX25Param("TXFrmMode", TXFrmMode[Chan]);
+	saveAX25Param("FrameCollector", max_frame_collector[Chan]);
+	saveAX25Param("ExcludeCallsigns", exclude_callsigns[Chan]);
+	saveAX25Param("ExcludeAPRSFrmType", exclude_APRS_frm[Chan]);
+	saveAX25Param("KISSOptimization", KISS_opt[Chan]);
+	saveAX25Param("DynamicFrack", dyn_frack[Chan]);
+	saveAX25Param("BitRecovery", recovery[Chan]);
+	saveAX25Param("IPOLL", IPOLL[Chan]);
+	saveAX25Param("MyDigiCall", MyDigiCall[Chan]);
 }
 
 extern "C" void SaveSettings()
 {
-	QSettings settings(GetConfPath(), QSettings::IniFormat);
 	int i;
 	char Param[512];
 	char Key[16];
 
+	settings = new QSettings(GetConfPath(), QSettings::IniFormat);
 
 	for (i = 0; i < MAXHOSTS; i++)
 	{
 		sprintf(Key, "HostParams%d", i);
 		EncodeSettingsLine(i, Param);
-		settings.setValue(Key, Param);
+		settings->setValue(Key, Param);
 	}
 
-	settings.setValue("Split", Split);
-	settings.setValue("ChatMode", ChatMode);
-	settings.setValue("Bells", Bells);
-	settings.setValue("StripLF", StripLF);
-	settings.setValue("AlertBeep", AlertBeep);
-	settings.setValue("ConnectBeep", ConnectBeep);
-	settings.setValue("CurrentHost", SavedHost);
+	settings->setValue("Split", Split);
+	settings->setValue("ChatMode", ChatMode);
+	settings->setValue("Bells", Bells);
+	settings->setValue("StripLF", StripLF);
+	settings->setValue("AlertBeep", AlertBeep);
+	settings->setValue("ConnectBeep", ConnectBeep);
+	settings->setValue("CurrentHost", SavedHost);
 
-	settings.setValue("YAPPPath", YAPPPath);
-	settings.setValue("listenPort", listenPort);
-	settings.setValue("listenEnable", listenEnable);
-	settings.setValue("listenCText", listenCText);
-	settings.setValue("convUTF8", convUTF8);
+	settings->setValue("YAPPPath", YAPPPath);
+	settings->setValue("listenPort", listenPort);
+	settings->setValue("listenEnable", listenEnable);
+	settings->setValue("listenCText", listenCText);
+	settings->setValue("convUTF8", convUTF8);
 
-	settings.setValue("PTT", PTTPort);
-	settings.setValue("PTTBAUD", PTTBAUD);
-	settings.setValue("PTTMode", PTTMode);
+	settings->setValue("PTT", PTTPort);
+	settings->setValue("PTTBAUD", PTTBAUD);
+	settings->setValue("PTTMode", PTTMode);
 
-	settings.setValue("CATHex", CATHex);
+	settings->setValue("CATHex", CATHex);
 
-	settings.setValue("PTTOffString", PTTOffString);
-	settings.setValue("PTTOnString", PTTOnString);
+	settings->setValue("PTTOffString", PTTOffString);
+	settings->setValue("PTTOnString", PTTOnString);
 
-	settings.setValue("pttGPIOPin", pttGPIOPin);
-	settings.setValue("pttGPIOPinR", pttGPIOPinR);
+	settings->setValue("pttGPIOPin", pttGPIOPin);
+	settings->setValue("pttGPIOPinR", pttGPIOPinR);
 
-	settings.setValue("CM108Addr", CM108Addr);
-	settings.setValue("HamLibPort", HamLibPort);
-	settings.setValue("HamLibHost", HamLibHost);
-	settings.setValue("FLRigPort", FLRigPort);
-	settings.setValue("FLRigHost", FLRigHost);
+	settings->setValue("CM108Addr", CM108Addr);
+	settings->setValue("HamLibPort", HamLibPort);
+	settings->setValue("HamLibHost", HamLibHost);
+	settings->setValue("FLRigPort", FLRigPort);
+	settings->setValue("FLRigHost", FLRigHost);
 
 
 	// Save Sessions
@@ -2545,39 +3049,74 @@ extern "C" void SaveSettings()
 				"%d, %d, %d, %d, %d, %d|", Sess->SessionType, Sess->CurrentHost, r.top(), r.left(), r.bottom(), r.right());
 		}
 
-		settings.setValue("Sessions", SessionString);
+		settings->setValue("Sessions", SessionString);
 	}
 
-	settings.setValue("AGWEnable", AGWEnable);
-	settings.setValue("AGWMonEnable", AGWMonEnable);
-	settings.setValue("AGWTermCall", AGWTermCall);
-	settings.setValue("AGWBeaconDest", AGWBeaconDest);
-	settings.setValue("AGWBeaconPath", AGWBeaconPath);
-	settings.setValue("AGWBeaconInterval", AGWBeaconInterval);
-	settings.setValue("AGWBeaconPorts", AGWBeaconPorts);
-	settings.setValue("AGWBeaconText", AGWBeaconMsg);
-	settings.setValue("AGWHost", AGWHost);
-	settings.setValue("AGWPort", AGWPortNum);
-	settings.setValue("AGWPaclen", AGWPaclen);
-	settings.setValue("AGWToCalls", AGWToCalls);
+	settings->setValue("AGWEnable", AGWEnable);
+	settings->setValue("AGWMonEnable", AGWMonEnable);
+	settings->setValue("AGWTermCall", AGWTermCall);
+	settings->setValue("AGWBeaconDest", AGWBeaconDest);
+	settings->setValue("AGWBeaconPath", AGWBeaconPath);
+	settings->setValue("AGWBeaconInterval", AGWBeaconInterval);
+	settings->setValue("AGWBeaconPorts", AGWBeaconPorts);
+	settings->setValue("AGWBeaconText", AGWBeaconMsg);
+	settings->setValue("AGWHost", AGWHost);
+	settings->setValue("AGWPort", AGWPortNum);
+	settings->setValue("AGWPaclen", AGWPaclen);
+	settings->setValue("AGWToCalls", AGWToCalls);
 
 
-	settings.setValue("VARAEnable", VARAEnable);
-	settings.setValue("VARATermCall", VARATermCall);
-	settings.setValue("VARAHost", VARAHost);
-	settings.setValue("VARAPort", VARAPortNum);
-	settings.setValue("VARAPath", VARAPath);
-	settings.setValue("VARA500", VARA500);
-	settings.setValue("VARA2300", VARA2300);
-	settings.setValue("VARA2750", VARA2750);
+	settings->setValue("KISSEnable", KISSEnable);
+	settings->setValue("MYCALL", MYCALL);
+	settings->setValue("KISSHost", KISSHost);
+	settings->setValue("KISSMode", KISSMode);
+	settings->setValue("KISSPort", KISSPortNum);
+	settings->setValue("KISSSerialPort", SerialPort);
+	settings->setValue("KISSBAUD", KISSBAUD);
+	saveAX25Params(0);
+
+	settings->setValue("VARAEnable", VARAEnable);
+	settings->setValue("VARATermCall", VARATermCall);
+	settings->setValue("VARAHost", VARAHost);
+	settings->setValue("VARAPort", VARAPortNum);
+	settings->setValue("VARAPath", VARAPath);
+	settings->setValue("VARAHostHF", VARAHostHF);
+	settings->setValue("VARAPortHF", VARAPortHF);
+	settings->setValue("VARAPathHF", VARAPathHF);
+	settings->setValue("VARAHostFM", VARAHostFM);
+	settings->setValue("VARAPortFM", VARAPortFM);
+	settings->setValue("VARAPathFM", VARAPathFM);
+	settings->setValue("VARAHostSAT", VARAHostSAT);
+	settings->setValue("VARAPortSAT", VARAPortSAT);
+	settings->setValue("VARAPathSAT", VARAPathSAT);
+	settings->setValue("VARA500", VARA500);
+	settings->setValue("VARA2300", VARA2300);
+	settings->setValue("VARA2750", VARA2750);
+	settings->setValue("VARAHF", VARAHF);
+	settings->setValue("VARAFM", VARAFM);
+	settings->setValue("VARASAT", VARASAT);
 
 
 	sprintf(Param, "%d %d %d %d %d %d %d %d %d %d",
 		TabType[0], TabType[1], TabType[2], TabType[3], TabType[4], TabType[5], TabType[6], TabType[7], TabType[8], TabType[9]);
 
-	settings.setValue("TabType", Param);
+	settings->setValue("TabType", Param);
 
-	settings.sync();
+	settings->setValue("monBackground", monBackground);
+	settings->setValue("monRxText", monRxText);
+	settings->setValue("monTxText", monTxText);
+	settings->setValue("monOtherText", monOtherText);
+
+	settings->setValue("termBackground", termBackground);
+	settings->setValue("outputText", outputText);
+	settings->setValue("EchoText", EchoText);
+	settings->setValue("WarningText", WarningText);
+
+	settings->setValue("inputBackground", inputBackground);
+	settings->setValue("inputText", inputText);
+
+	settings->sync();
+	delete(settings);
 }
 
 #include <QCloseEvent>
@@ -2594,9 +3133,10 @@ void QtTermTCP::closeEvent(QCloseEvent *event)
 	else
 	{
 		event->accept();
+#ifdef USESERIAL
 		if (hPTTDevice)
 			hPTTDevice->close();
-
+#endif
 		if (process)
 			process->close();
 	}
@@ -2624,6 +3164,7 @@ QtTermTCP::~QtTermTCP()
 	{
 		int loops = 100;
 		AGWSock->disconnectFromHost();
+		QThread::msleep(10);
 		while (AGWSock && loops-- && AGWSock->state() != QAbstractSocket::UnconnectedState)
 			QThread::msleep(10);
 	}
@@ -2640,6 +3181,14 @@ QtTermTCP::~QtTermTCP()
 	SaveSettings();
 }
 
+extern "C" void timer_event();
+
+void QtTermTCP::KISSTimerSlot()
+{
+	// Runs every 100 mS
+
+	timer_event();
+}
 
 void QtTermTCP::MyTimerSlot()
 {
@@ -2650,36 +3199,51 @@ void QtTermTCP::MyTimerSlot()
 	for (int i = 0; i < _sessions.size(); ++i)
 	{
 		Sess = _sessions.at(i);
-		
-//	for (Ui_ListenSession * Sess : _sessions)
-//	{
-		if (Sess == NULL || Sess->clientSocket == NULL)
-			continue;
-		
-		if (Sess && Sess->clientSocket && Sess->clientSocket->state() != QAbstractSocket::ConnectedState)
+
+		//	for (Ui_ListenSession * Sess : _sessions)
+		//	{
+		if (Sess == NULL)
 			continue;
 
 		if (!ChatMode)
 			continue;
 
-		Sess->SlowTimer++;
-
-		if (Sess->SlowTimer > 54)				// About 9 mins
+		if (Sess->KISSSession ||
+			(Sess->clientSocket && Sess->clientSocket->state() == QAbstractSocket::ConnectedState))
 		{
-			Sess->SlowTimer = 0;
-			Sess->clientSocket->write("\0", 1);
+			Sess->SlowTimer++;
+
+			if (Sess->SlowTimer > 54)				// About 9 mins
+			{
+				unsigned char Msg[2] = "";
+
+				Sess->SlowTimer = 0;
+
+				if (Sess->KISSSession)
+				{
+					TAX25Port * ax25 = (TAX25Port *)Sess->KISSSession;
+
+					if (ax25->status == STAT_LINK)
+						SendtoAX25(Sess->KISSSession, Msg, 1);
+				}
+				else
+					Sess->clientSocket->write("\0", 1);
+			}
 		}
 	}
-
+	
 	if (AGWEnable)
 		AGWTimer();
 
 	if (VARAEnable)
 		VARATimer();
 
+	if (KISSEnable)
+		KISSTimer();
+
 }
 
-extern "C" void Beep()
+extern "C" void myBeep()
 {
 	QApplication::beep();
 }
@@ -2703,6 +3267,9 @@ void QtTermTCP::AGWSlot()
 
 Ui_Dialog * Dev;
 
+static Ui_KISSDialog * KISS;
+static Ui_ColourDialog * COLOURS;
+
 QDialog * deviceUI;
 
 
@@ -2711,7 +3278,147 @@ char NewPTTPort[80];
 int newSoundMode = 0;
 int oldSoundMode = 0;
 
+#ifdef USESERIAL
 QList<QSerialPortInfo> Ports = QSerialPortInfo::availablePorts();
+#endif
+
+
+void QtTermTCP::KISSSlot()
+{
+	// This runs the KISS Configuration dialog
+
+	KISS = new(Ui_KISSDialog);
+
+	QDialog UI;
+
+	KISS->setupUi(&UI);
+
+	UI.setFont(*menufont);
+
+	deviceUI = &UI;
+	KISS->KISSEnable->setChecked(KISSEnable);
+	KISS->MYCALL->setText(MYCALL);
+
+//	connect(KISS->SerialPort, SIGNAL(currentIndexChanged(int)), this, SLOT(PTTPortChanged(int)));
+
+	QStringList items;
+
+#ifdef USESERIAL
+
+	for (const QSerialPortInfo &info : Ports)
+	{
+		items.append(info.portName());
+	}
+
+	items.sort();
+	items.insert(0, "TCP");
+
+#endif
+
+	for (const QString &info : items)
+	{
+		KISS->SerialPort->addItem(info);
+	}
+
+	KISS->SerialPort->setCurrentIndex(KISS->SerialPort->findText(SerialPort, Qt::MatchFixedString));
+	KISS->Speed->setText(QString::number(KISSBAUD));
+	KISS->Host->setText(KISSHost);
+	KISS->Port->setText(QString::number(KISSPortNum));
+
+	KISS->Paclen->setText(QString::number(kisspaclen[0]));
+	KISS->Maxframe->setText(QString::number(maxframe[0]));
+	KISS->Frack->setText(QString::number(frack_time[0]));
+	KISS->Retries->setText(QString::number(fracks[0]));
+
+	QObject::connect(KISS->okButton, SIGNAL(clicked()), this, SLOT(KISSaccept()));
+	QObject::connect(KISS->cancelButton, SIGNAL(clicked()), this, SLOT(KISSreject()));
+
+	UI.exec();
+
+}
+
+
+void QtTermTCP::KISSaccept()
+{
+	QVariant Q;
+	int OldEnable = KISSEnable;
+	char oldSerialPort[64];
+	int OldPort = KISSPortNum;
+	char oldHost[128];
+
+	strcpy(oldSerialPort, SerialPort);
+	strcpy(oldHost, KISSHost);
+
+	KISSEnable = KISS->KISSEnable->isChecked();
+	actHost[18]->setVisible(KISSEnable);			// Show KISS Connect Line
+
+	strcpy(MYCALL, KISS->MYCALL->text().toUtf8().toUpper());
+
+	Q = KISS->Port->text();
+	KISSPortNum = Q.toInt();
+
+	Q = KISS->Speed->text();
+	KISSBAUD = Q.toInt();
+
+	strcpy(KISSHost, KISS->Host->text().toUtf8().toUpper());
+
+	Q = KISS->SerialPort->currentText();
+	strcpy(SerialPort, Q.toString().toUtf8());
+
+	Q = KISS->Paclen->text();
+	kisspaclen[0] = Q.toInt();
+	Q = KISS->Maxframe->text();
+	maxframe[0] = Q.toInt();
+	Q = KISS->Frack->text();
+	frack_time[0] = Q.toInt();
+	Q = KISS->Retries->text();
+	fracks[0] = Q.toInt();
+
+	myStatusBar->setVisible(AGWEnable | VARAEnable | KISSEnable);
+
+
+	if (KISSEnable != OldEnable || KISSPortNum != OldPort ||
+		strcmp(oldHost, KISSHost) != 0 ||
+		strcmp(oldSerialPort, SerialPort) != 0)
+	{
+		// (re)start connection
+
+		if (OldEnable)
+		{
+			if (KISSEnable)
+				Status3->setText("KISS Closed");
+			else
+				Status3->setText("KISS Disabled");
+
+			KISSConnected = 0;
+
+			if (KISSSock && KISSSock->ConnectedState == QAbstractSocket::ConnectedState)
+				KISSSock->disconnectFromHost();
+			else if (m_serial)
+				closeSerialPort();
+		}
+	}
+
+	delete(KISS);
+	SaveSettings();
+	deviceUI->accept();
+
+//	QSize newSize(this->size());
+//	QSize oldSize(this->size());
+
+//	QResizeEvent *myResizeEvent = new QResizeEvent(newSize, oldSize);
+
+//	QCoreApplication::postEvent(this, myResizeEvent);
+}
+
+void QtTermTCP::KISSreject()
+{
+	delete(KISS);
+	deviceUI->reject();
+}
+
+
+
 
 
 void QtTermTCP::VARASlot()
@@ -2732,9 +3439,12 @@ void QtTermTCP::VARASlot()
 
 	Dev->VARAEnable->setChecked(VARAEnable);
 	Dev->TermCall->setText(VARATermCall);
-	Dev->Host->setText(VARAHost);
-	Dev->Port->setText(QString::number(VARAPortNum));
-	Dev->Path->setText(VARAPath);
+
+	SetVARAParams();
+
+	connect(Dev->VARAHF, SIGNAL(toggled(bool)), this, SLOT(VARAHFChanged(bool)));
+	connect(Dev->VARAFM, SIGNAL(toggled(bool)), this, SLOT(VARAFMChanged(bool)));
+	connect(Dev->VARASAT, SIGNAL(toggled(bool)), this, SLOT(VARASATChanged(bool)));
 
 	if (VARA500)
 		Dev->VARA500->setChecked(true);
@@ -2742,6 +3452,16 @@ void QtTermTCP::VARASlot()
 		Dev->VARA2750->setChecked(true);
 	else
 		Dev->VARA2300->setChecked(true);
+
+	if (VARAHF)
+		Dev->VARAHF->setChecked(true);
+	else if (VARAFM)
+		Dev->VARAFM->setChecked(true);
+	else if (VARASAT)
+		Dev->VARASAT->setChecked(true);
+
+	if (VARAHF == 0)
+		Dev->HFMode->setVisible(false);
 
 	connect(Dev->CAT, SIGNAL(toggled(bool)), this, SLOT(CATChanged(bool)));
 	connect(Dev->PTTPort, SIGNAL(currentIndexChanged(int)), this, SLOT(PTTPortChanged(int)));
@@ -2763,7 +3483,10 @@ void QtTermTCP::VARASlot()
 
 	Dev->VIDPID->setText(CM108Addr);
 
+
 	QStringList items;
+
+#ifdef USESERIAL
 
 	for (const QSerialPortInfo &info : Ports)
 	{
@@ -2772,12 +3495,14 @@ void QtTermTCP::VARASlot()
 
 	items.sort();
 
+#endif
+
 	Dev->PTTPort->addItem("None");
 	Dev->PTTPort->addItem("CM108");
 
 #ifdef __ARM_ARCH
 
-//	Dev->PTTPort->addItem("GPIO");
+	//	Dev->PTTPort->addItem("GPIO");
 
 #endif
 
@@ -2811,22 +3536,47 @@ void QtTermTCP::deviceaccept()
 	int OldEnable = VARAEnable;
 	int OldPort = VARAPortNum;
 	char oldHost[128];
+	char oldPath[256];
+
 	strcpy(oldHost, VARAHost);
+	strcpy(oldPath, VARAPath);
 
 	VARAEnable = Dev->VARAEnable->isChecked();
 
 	strcpy(VARATermCall, Dev->TermCall->text().toUtf8().toUpper());
 
 	Q = Dev->Port->text();
-	VARAPortNum = Q.toInt();
 
+	VARAPortNum = Q.toInt();
 	strcpy(VARAHost, Dev->Host->text().toUtf8().toUpper());
-	strcpy(VARAPath, Dev->Path->text().toUtf8().toUpper());
+	strcpy(VARAPath, Dev->Path->text().toUtf8());
 
 	VARA500 = Dev->VARA500->isChecked();
 	VARA2300 = Dev->VARA2300->isChecked();
 	VARA2750 = Dev->VARA2750->isChecked();
 
+	VARAHF = Dev->VARAHF->isChecked();
+	VARAFM = Dev->VARAFM->isChecked();
+	VARASAT = Dev->VARASAT->isChecked();
+
+	if (VARAHF)
+	{
+		strcpy(VARAHostHF, VARAHost);
+		strcpy(VARAPathHF, VARAPath);
+		VARAPortHF = VARAPortNum;
+	}
+	else if (VARAFM)
+	{
+		strcpy(VARAHostFM, VARAHost);
+		strcpy(VARAPathFM, VARAPath);
+		VARAPortFM = VARAPortNum;
+	}
+	else if (VARASAT)
+	{
+		strcpy(VARAHostSAT, VARAHost);
+		strcpy(VARAPathSAT, VARAPath);
+		VARAPortSAT = VARAPortNum;
+	}
 
 	Q = Dev->PTTPort->currentText();
 	strcpy(PTTPort, Q.toString().toUtf8());
@@ -2873,14 +3623,17 @@ void QtTermTCP::deviceaccept()
 		if (OldEnable && VARASock && VARASock->ConnectedState == QAbstractSocket::ConnectedState)
 		{
 			VARASock->disconnectFromHost();
-			VARADataSock->disconnectFromHost();
+			if (VARADataSock)
+				VARADataSock->disconnectFromHost();
 			Status2->setText("VARA Disconnected");
 		}
-		if (VARAEnable == 0 && (process == nullptr || process->state() == QProcess::Running))
-			process->close();
 	}
 
-	myStatusBar->setVisible(VARAEnable);
+	if (process && process->state() == QProcess::Running)
+		if ((VARAEnable == 0 || strcmp(oldPath, VARAPath) != 0))
+			process->close();
+
+	myStatusBar->setVisible(AGWEnable | VARAEnable | KISSEnable);
 
 	ClosePTTPort();
 	OpenPTTPort();
@@ -2953,7 +3706,7 @@ void QtTermTCP::onNewConnection()
 		{
 			S = _sessions.at(i);
 
-			if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
+			if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL && S->KISSSession == NULL)
 			{
 				Sess = S;
 				break;
@@ -3028,7 +3781,7 @@ void QtTermTCP::onNewConnection()
 	WritetoOutputWindow(Sess, (unsigned char *)Msg, (int)strlen(Msg)); 
 
 	if (ConnectBeep)
-		Beep();
+		myBeep();
 }
 
 void QtTermTCP::onSocketStateChanged(QAbstractSocket::SocketState socketState)
@@ -3041,7 +3794,7 @@ void QtTermTCP::onSocketStateChanged(QAbstractSocket::SocketState socketState)
 		char Msg[] = "Disconnected\r";
 
 		WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
-			Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
+			Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, WarningText);		// Red
 
 		if (TermMode == MDI)
 		{
@@ -3224,7 +3977,7 @@ extern "C" void SendTraceOptions(Ui_ListenSession * Sess)
 		return;
 	
 	char Buffer[80];
-	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x %x\r", Sess->portmask, Sess->mtxparam, Sess->mcomparam, 
+	int Len = sprintf(Buffer, "\\\\\\\\%llx %x %x %x %x %x %x %x\r", Sess->portmask, Sess->mtxparam, Sess->mcomparam, 
 		Sess->MonitorNODES, Sess->MonitorColour, Sess->monUI, 0, 1);
 
 	strcpy(&MonParams[Sess->CurrentHost][0], &Buffer[4]);
@@ -3327,9 +4080,9 @@ void QtTermTCP::xon_mdiArea_changed()
 				YAPPSend->setEnabled(false);
 				connectMenu->setEnabled(false);
 			}
-			else if (Sess->AGWSession)
+			else if (Sess->AGWSession || Sess->KISSSession)
 			{
-				// Connected AGW Terminal Session
+				// Connected AGW or KISS Terminal Session
 
 				discAction->setEnabled(true);
 				YAPPSend->setEnabled(true);
@@ -3380,7 +4133,10 @@ void QtTermTCP::xon_mdiArea_changed()
 
 					sprintf(msg, "Port %s", p);
 
-					if (Sess->portmask & (1 << (portnum - 1)))
+					if (portnum == 0)
+						portnum = 33;
+
+					if (Sess->portmask & (1ll << (portnum - 1)))
 						SetPortMonLine(portnum, msg, 1, 1);
 					else
 						SetPortMonLine(portnum, msg, 1, 0);
@@ -3411,6 +4167,215 @@ void QtTermTCP::doMFonts()
 	fontDialog  * xx = new fontDialog(1);
 	xx->exec();
 }
+
+QColor TempmonBackground = monBackground;
+QColor TemptermBackground = termBackground;
+QColor TempinputBackground = inputBackground;
+
+QColor TempmonRxText = monRxText;
+QColor TempmonTxText = monTxText;
+QColor TempmonOtherText = monOtherText;
+
+QColor TempoutputText = outputText;
+QColor TempEchoText = EchoText;
+QColor TempWarningText = WarningText;
+
+
+QColor TempinputText = inputText;
+
+
+void setDialogColours()
+{
+	char monStyle[128];
+
+	sprintf(monStyle, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		TempmonOtherText.red(), TempmonOtherText.green(), TempmonOtherText.blue(),
+		TempmonBackground.red(), TempmonBackground.green(), TempmonBackground.blue());
+
+	COLOURS->MonitorBG->setStyleSheet(monStyle);
+	COLOURS->MonOther->setStyleSheet(monStyle);
+
+	sprintf(monStyle, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		TempmonTxText.red(), TempmonTxText.green(), TempmonTxText.blue(),
+		TempmonBackground.red(), TempmonBackground.green(), TempmonBackground.blue());
+	COLOURS->MonTX->setStyleSheet(monStyle);
+
+	sprintf(monStyle, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		TempmonRxText.red(), TempmonRxText.green(), TempmonRxText.blue(),
+		TempmonBackground.red(), TempmonBackground.green(), TempmonBackground.blue());
+
+	COLOURS->MonRX->setStyleSheet(monStyle);
+
+	sprintf(monStyle, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		TempoutputText.red(), TempoutputText.green(), TempoutputText.blue(),
+		TemptermBackground.red(), TemptermBackground.green(), TemptermBackground.blue());
+
+	COLOURS->TermBG->setStyleSheet(monStyle);
+	COLOURS->TermNormal->setStyleSheet(monStyle);
+
+	sprintf(monStyle, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		TempEchoText.red(), TempEchoText.green(), TempEchoText.blue(),
+		TemptermBackground.red(), TemptermBackground.green(), TemptermBackground.blue());
+
+	COLOURS->Echoed->setStyleSheet(monStyle);
+
+	sprintf(monStyle, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		TempWarningText.red(), TempWarningText.green(), TempWarningText.blue(),
+		TemptermBackground.red(), TemptermBackground.green(), TemptermBackground.blue());
+
+	COLOURS->Warning->setStyleSheet(monStyle);
+
+	sprintf(monStyle, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		TempinputText.red(), TempinputText.green(), TempinputText.blue(),
+		TempinputBackground.red(), TempinputBackground.green(), TempinputBackground.blue());
+
+	COLOURS->InputBG->setStyleSheet(monStyle);
+	COLOURS->InputColour->setStyleSheet(monStyle);
+
+}
+
+void QtTermTCP::doColours()
+{
+	COLOURS = new(Ui_ColourDialog);
+
+	QDialog UI;
+
+	COLOURS->setupUi(&UI);
+
+	UI.setFont(*menufont);
+
+	deviceUI = &UI;
+
+	TempmonBackground = monBackground;
+	TempmonRxText = monRxText;
+	TempmonTxText = monTxText;
+	TempmonOtherText = monOtherText;
+
+	TemptermBackground = termBackground;
+	TempoutputText = outputText;
+	TempEchoText = EchoText;
+	TempWarningText = WarningText;
+
+	TempinputBackground = inputBackground;
+	TempinputText = inputText;
+
+	setDialogColours();
+
+	QObject::connect(COLOURS->MonitorBG, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->TermBG, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->InputBG, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->MonRX, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->MonTX, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->MonOther, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->TermNormal, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->Echoed, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->Warning, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+	QObject::connect(COLOURS->InputColour, SIGNAL(clicked()), this, SLOT(ColourPressed()));
+
+	QObject::connect(COLOURS->okButton, SIGNAL(clicked()), this, SLOT(Colouraccept()));
+	QObject::connect(COLOURS->cancelButton, SIGNAL(clicked()), this, SLOT(Colourreject()));
+
+	UI.exec();
+
+}
+
+void QtTermTCP::ColourPressed()
+{
+	char Name[32];
+
+	strcpy(Name, sender()->objectName().toUtf8());
+
+	if (strcmp(Name, "MonitorBG") == 0)
+		TempmonBackground = setColor(TempmonBackground);
+
+	else if (strcmp(Name, "MonTX") == 0)
+		TempmonTxText = setColor(TempmonTxText);
+
+	else if (strcmp(Name, "MonRX") == 0)
+		TempmonRxText = setColor(TempmonRxText);
+
+	else if (strcmp(Name, "MonOther") == 0)
+		TempmonOtherText = setColor(TempmonOtherText);
+
+	else if (strcmp(Name, "TermBG") == 0)
+		TemptermBackground = setColor(TemptermBackground);
+	
+	else if (strcmp(Name, "InputBG") == 0)
+		TempinputBackground = setColor(TempinputBackground);
+	
+	else if (strcmp(Name, "InputColour") == 0)
+		TempinputText = setColor(TempinputText);
+
+	else if (strcmp(Name, "TermNormal") == 0)
+		TempoutputText = setColor(TempoutputText);
+
+	else if (strcmp(Name, "Echoed") == 0)
+		TempEchoText = setColor(TempEchoText);
+
+	else if (strcmp(Name, "Warning") == 0)
+		TempWarningText = setColor(TempWarningText);
+
+	setDialogColours();
+}
+
+
+void QtTermTCP::Colouraccept()
+{
+	monBackground = TempmonBackground;
+	monRxText = TempmonRxText;
+	monTxText = TempmonTxText;
+	monOtherText = TempmonOtherText;
+
+	termBackground = TemptermBackground;
+	EchoText = TempEchoText;
+	WarningText = TempWarningText;
+	outputText = TempoutputText;
+
+	inputBackground = TempinputBackground;
+	inputText = TempinputText;
+
+	// Set background colour for new windows
+
+	sprintf(monStyleSheet, "background-color: rgb(%d, %d, %d);",
+		monBackground.red(), monBackground.green(), monBackground.blue());
+
+	sprintf(termStyleSheet, "background-color: rgb(%d, %d, %d);",
+		termBackground.red(), termBackground.green(), termBackground.blue());
+
+	sprintf(inputStyleSheet, "color: rgb(%d, %d, %d); background-color: rgb(%d, %d, %d);",
+		inputText.red(), inputText.green(), inputText.blue(),
+		inputBackground.red(), inputBackground.green(), inputBackground.blue());
+
+	// Update existing windows
+
+	for (int i = 0; i < _sessions.size(); ++i)
+	{
+		Ui_ListenSession * S = _sessions.at(i);
+
+		if (S->monWindow)
+			S->monWindow->setStyleSheet(monStyleSheet);
+
+		if (S->termWindow)
+			S->termWindow->setStyleSheet(termStyleSheet);
+
+		if (S->inputWindow)
+			S->inputWindow->setStyleSheet(inputStyleSheet);
+
+	}
+
+
+	delete(COLOURS);
+
+	SaveSettings();
+	deviceUI->accept();
+}
+
+void QtTermTCP::Colourreject()
+{
+	delete(COLOURS);
+	deviceUI->reject();
+}
+
 
 void QtTermTCP::ConnecttoVARA()
 {
@@ -3453,7 +4418,6 @@ void QtTermTCP::VARATimer()
 }
 
 
-
 void QtTermTCP::VARAdisplayError(QAbstractSocket::SocketError socketError)
 {
 	switch (socketError)
@@ -3464,7 +4428,7 @@ void QtTermTCP::VARAdisplayError(QAbstractSocket::SocketError socketError)
 	case QAbstractSocket::HostNotFoundError:
 		QMessageBox::information(this, tr("QtTermTCP"),
 			tr("VARA host was not found. Please check the "
-				"host name and port settings."));
+				"host name and portsettings->"));
 
 		Status2->setText("VARA Connection Failed");
 
@@ -3472,7 +4436,7 @@ void QtTermTCP::VARAdisplayError(QAbstractSocket::SocketError socketError)
 
 	case QAbstractSocket::ConnectionRefusedError:
 
-		Status2->setText("VARAConnection Refused");
+		Status2->setText("VARA Connection Refused");
 		break;
 
 	default:
@@ -3597,7 +4561,7 @@ void QtTermTCP::VARAreadyRead()
 					{
 						S = _sessions.at(i);
 
-						if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
+						if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL && S->KISSSession == NULL)
 						{
 							Sess = S;
 							break;
@@ -3734,7 +4698,7 @@ void QtTermTCP::VARADatadisplayError(QAbstractSocket::SocketError socketError)
 	case QAbstractSocket::HostNotFoundError:
 		QMessageBox::information(this, tr("QtTermTCP"),
 			tr("VARA host was not found. Please check the "
-				"host name and port settings."));
+				"host name and portsettings->"));
 
 		Status2->setText("VARA Connection Failed");
 
@@ -3742,7 +4706,7 @@ void QtTermTCP::VARADatadisplayError(QAbstractSocket::SocketError socketError)
 
 	case QAbstractSocket::ConnectionRefusedError:
 
-		Status2->setText("VARAConnection Refused");
+		Status2->setText("VARA Connection Refused");
 		break;
 
 	default:
@@ -3847,7 +4811,7 @@ void QtTermTCP::HAMLIBdisplayError(QAbstractSocket::SocketError socketError)
 	case QAbstractSocket::HostNotFoundError:
 			QMessageBox::information(nullptr, tr("QtSM"),
 				"HAMLIB host was not found. Please check the "
-					"host name and port settings.");
+					"host name and portsettings->");
 		
 		break;
 
@@ -3953,7 +4917,7 @@ void QtTermTCP::FLRigdisplayError(QAbstractSocket::SocketError socketError)
 	case QAbstractSocket::HostNotFoundError:
 		QMessageBox::information(nullptr, tr("QtSM"),
 			"FLRig host was not found. Please check the "
-			"host name and port settings.");
+			"host name and portsettings->");
 
 		break;
 
@@ -4072,6 +5036,48 @@ void QtTermTCP::CATChanged(bool State)
 	PTTPortChanged(0);
 }
 
+void QtTermTCP::VARAHFChanged(bool State)
+{
+	Dev->HFMode->setVisible(State);
+
+	if (State)
+	{
+		Dev->TNCInfo->setTitle("VARA HF Paramters");
+		Dev->Host->setText(VARAHostHF);
+		Dev->Port->setText(QString::number(VARAPortHF));
+		Dev->Path->setText(VARAPathHF);
+	}
+}
+
+void QtTermTCP::VARAFMChanged(bool State)
+{
+	if (State)
+	{
+		Dev->TNCInfo->setTitle("VARA FM Paramters");
+		Dev->Host->setText(VARAHostFM);
+		Dev->Port->setText(QString::number(VARAPortFM));
+		Dev->Path->setText(VARAPathFM);
+	}
+}
+
+void QtTermTCP::VARASATChanged(bool State)
+{
+	if (State)
+	{
+		Dev->TNCInfo->setTitle("VARA SAT Paramters");
+		Dev->Host->setText(VARAHostSAT);
+		Dev->Port->setText(QString::number(VARAPortSAT));
+		Dev->Path->setText(VARAPathSAT);
+	}
+}
+
+void QtTermTCP::SetVARAParams()
+{
+	Dev->Host->setText(VARAHost);
+	Dev->Port->setText(QString::number(VARAPortNum));
+	Dev->Path->setText(VARAPath);
+}
+
 void QtTermTCP::PTTPortChanged(int Selected)
 {
 	UNUSED(Selected);
@@ -4111,11 +5117,11 @@ void QtTermTCP::PTTPortChanged(int Selected)
 	else if (strcmp(NewPTTPort, "CM108") == 0)
 	{
 		Dev->CM108Label->setVisible(true);
-		//#ifdef __ARM_ARCHX
+	#ifdef WIN32
+		Dev->CM108Label->setText("CM108 VID/PID");
+	#else
 		Dev->CM108Label->setText("CM108 Device");
-		//#else
-		//		Dev->CM108Label->setText("CM108 VID/PID");
-		//#endif
+	#endif
 		Dev->VIDPID->setText(CM108Addr);
 		Dev->VIDPID->setVisible(true);
 	}
@@ -4268,7 +5274,7 @@ void QtTermTCP::OpenPTTPort()
 				char c;
 				int val;
 
-				while (c = *(ptr1++))
+				while ((c = *(ptr1++)))
 				{
 					val = c - 0x30;
 					if (val > 15) val -= 7;
@@ -4284,7 +5290,7 @@ void QtTermTCP::OpenPTTPort()
 				ptr1 = PTTOnString;
 				ptr2 = PTTOnCmd;
 
-				while (c = *(ptr1++))
+				while ((c = *(ptr1++)))
 				{
 					val = c - 0x30;
 					if (val > 15) val -= 7;
@@ -4342,6 +5348,7 @@ void QtTermTCP::OpenPTTPort()
 
 		else		//  Serial Port
 		{
+#ifdef USESERIAL
 			hPTTDevice = new QSerialPort(this);
 			hPTTDevice->setPortName(PTTPort);
 			hPTTDevice->setBaudRate(PTTBAUD );
@@ -4355,26 +5362,31 @@ void QtTermTCP::OpenPTTPort()
 			}
 			else
 			{
+				QMessageBox msgBox;
+				msgBox.setText("PTT COM Port Open Failed.");
+				msgBox.exec(); 
 				qDebug() << "PTT Port Open failed";
 				delete(hPTTDevice);
 				hPTTDevice = 0;
 			}
+#endif
 		}
 	}
 }
 
 void ClosePTTPort()
 {
+#ifdef USESERIAL
 	if (hPTTDevice)
 		hPTTDevice->close();
 	hPTTDevice = 0;
+#endif
 }
 
 
 void CM108_set_ptt(int PTTState)
 {
 	unsigned char io[5];
-	hid_device *handle;
 	int n;
 
 	io[0] = 0;
@@ -4387,6 +5399,8 @@ void CM108_set_ptt(int PTTState)
 		return;
 
 #ifdef WIN32
+	hid_device *handle;
+
 	handle = hid_open_path(CM108Device);
 
 	if (!handle) {
@@ -4464,20 +5478,20 @@ void QtTermTCP::RadioPTT(bool PTTState)
 		return;
 	}
 
+#ifdef USESERIAL
+
 	if (hPTTDevice == 0)
 		return;
 
 	if ((PTTMode & PTTCAT))
 	{
-		int ret;
-
 		if (PTTState)
-			ret = hPTTDevice->write((char *)PTTOnCmd, PTTOnCmdLen);
+			hPTTDevice->write((char *)PTTOnCmd, PTTOnCmdLen);
 		else
-			ret = hPTTDevice->write((char *)PTTOffCmd, PTTOffCmdLen);
+			hPTTDevice->write((char *)PTTOffCmd, PTTOffCmdLen);
 
-		ret = hPTTDevice->flush();
-		ret = hPTTDevice->error();
+		hPTTDevice->flush();
+//		hPTTDevice->error();
 		return;
 
 	}
@@ -4485,7 +5499,648 @@ void QtTermTCP::RadioPTT(bool PTTState)
 
 	if ((PTTMode & PTTRTS))
 	{
-		hPTTDevice->setRequestToSend(PTTState);
+		int n = hPTTDevice->setRequestToSend(PTTState);
+		n = n;
+	}
+
+#endif
+
+}
+
+
+
+extern "C" void WriteDebugLog(char * Mess)
+{
+	qDebug() << Mess;
+}
+
+void QtTermTCP::ConnecttoKISS()
+{
+	if (strcmp(SerialPort, "TCP") == 0)
+	{
+		delete(KISSSock);
+
+		KISSSock = new myTcpSocket();
+		KISSSockCopy[0] = (void *)KISSSock;
+
+
+		connect(KISSSock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(KISSdisplayError(QAbstractSocket::SocketError)));
+		connect(KISSSock, SIGNAL(readyRead()), this, SLOT(KISSreadyRead()));
+		connect(KISSSock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onKISSSocketStateChanged(QAbstractSocket::SocketState)));
+
+		KISSSock->connectToHost(KISSHost, KISSPortNum);
+
+		Status3->setText("KISS Connecting");
+	}
+	else
+		openSerialPort();
+
+	return;
+}
+
+
+void QtTermTCP::KISSTimer()
+{
+	// Runs every 10 Seconds
+
+	if (KISSConnected == 0 && KISSConnecting == 0)
+	{
+		ConnecttoKISS();
+	}
+	else
+	{
+		// Verify Serial port is still ok
+
+		if (m_serial && KISSConnected)
+		{	
+			m_serial->clearError();
+			m_serial->isDataTerminalReady();
+
+			if (m_serial->error())
+			{
+				Debugprintf("Serial Port Lost - isOpen %d Error %d", m_serial->isOpen(), m_serial->error());
+				closeSerialPort();
+			}
+		}
+	}
+}
+
+
+
+void QtTermTCP::KISSdisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+		QMessageBox::information(this, tr("QtTermTCP"),
+			tr("KISS host was not found. Please check the "
+				"host name and portsettings->"));
+
+		Status3->setText("KISS Connection Failed");
+
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		Status3->setText("KISS Connection Refused");
+		break;
+
+	default:
+
+		Status3->setText("KISS Connection Failed");
+	}
+
+	KISSConnecting = 0;
+	KISSConnected = 0;
+}
+
+
+extern "C" void KISSSendtoServer(myTcpSocket* Socket, char * Data, int Length)
+{
+	if (m_serial)
+	{
+		if (m_serial->isOpen())
+		{
+			m_serial->clearError();
+
+			int n = m_serial->write(Data, Length);
+
+			n = m_serial->flush();
+
+			if (m_serial->error())
+			{
+				Debugprintf("Serial Flush Error - Requested = %d Actual %d Error %d", Length, n, m_serial->error());
+				closeSerialPort();
+			}
+		}
+	}
+	else if (Socket)
+		Socket->write(Data, Length);
+}
+
+
+
+void QtTermTCP::KISSreadyRead()
+{
+	int Read;
+	unsigned char Buffer[4096];	myTcpSocket* Socket = static_cast<myTcpSocket*>(QObject::sender());
+
+	// read the data from the socket
+
+	Read = Socket->read((char *)Buffer, 4095);
+
+	KISSDataReceived(Socket, Buffer, Read);
+
+}
+
+extern "C" void KISS_del_socket(void * socket);
+extern "C" void KISS_add_stream(void * Socket);
+
+void QtTermTCP::onKISSSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	//	myTcpSocket* sender = static_cast<myTcpSocket*>(QObject::sender());
+		
+	QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
+
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+	
+		Ui_ListenSession * Sess = NULL;
+
+		Status3->setText("KISS Disconnected");
+		actHost[18]->setEnabled(0);
+
+		KISSConnecting = KISSConnected = 0;
+
+		// Free the monitor Window
+
+		if (KISSMonSess)
+		{
+			Sess = KISSMonSess;
+
+			if (TermMode == MDI)
+				Sess->setWindowTitle("Monitor Session Disconnected");
+
+			else if (TermMode == Tabbed)
+				tabWidget->setTabText(Sess->Tab, "Monitor");
+
+			KISSMonSess = nullptr;
+		}
+
+		KISS_del_socket(sender);
+		KISSSock = NULL;
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		int i;
+	
+		KISSConnected = 1;
+		KISSConnecting = 0;
+
+		Status3->setText("KISS Connected");
+		actHost[18]->setEnabled(1);			// Enable KISS Connect Line
+
+		KISS_add_stream(sender);
+
+		// Attach a Monitor Window if available
+
+		Ui_ListenSession * Sess = NULL;
+		Ui_ListenSession * S;
+
+		if (TermMode == MDI)
+		{
+			// See if an old session can be reused
+
+			for (int i = 0; i < _sessions.size(); ++i)
+			{
+				S = _sessions.at(i);
+
+				//	for (Ui_ListenSession * S: _sessions)
+				//	{
+				if ((S->SessionType == Mon) && S->clientSocket == NULL && S->KISSSession == NULL)
+				{
+					Sess = S;
+					break;
+				}
+			}
+
+			// Create a window if none found, else reuse old
+
+			if (Sess == NULL)
+			{
+				Sess = newWindow((QObject *)mythis, Mon, "");
+			}
+		}
+		else if (TermMode == Tabbed)
+		{
+			// Tabbed - look for free session
+
+			for (i = 8; i; i--)
+			{
+				S = _sessions.at(i);
+
+				if (S->clientSocket == NULL && S->KISSSession == NULL)
+				{
+					Sess = S;
+					break;
+				}
+			}
+		}
+		else if (TermMode == Single && (singlemodeFormat & Mon))
+		{
+			S = _sessions.at(0);
+
+			if (S->clientSocket == NULL && S->KISSSession == NULL)
+				Sess = S;
+
+		}
+
+		if (Sess)
+		{
+			KISSMonSess = Sess;			// Flag as in use
+
+			if (TermMode == MDI)
+				Sess->setWindowTitle("KISS Monitor Window");
+			else if (TermMode == Tabbed)
+				tabWidget->setTabText(Sess->Tab, "KISS Mon");
+			else if (TermMode == Single)
+				mythis->setWindowTitle("KISS Monitor Window");
+
+//			if (TermMode == Single)	
+//			{
+//				discAction->setEnabled(false);
+//				YAPPSend->setEnabled(false);
+//				connectMenu->setEnabled(false);
+//			}
+		}
+	}
+}
+
+
+extern "C" char * frame_monitor(string * frame, char * code, bool tx_stat);
+extern "C" char * ShortDateTime();
+
+extern "C" void monitor_frame(int snd_ch, string * frame, char * code, int  tx, int excluded)
+{
+	UNUSED(excluded);
+	UNUSED(snd_ch);
+
+	int Len;
+	char Msg[1024];
+	
+	if (tx)
+		sprintf(Msg, "\x1b\x10%s", frame_monitor(frame, code, tx));
+	else
+		sprintf(Msg, "\x1b\x11%s", frame_monitor(frame, code, tx));
+
+	Len = strlen(Msg);
+
+	if (Msg[Len - 1] != '\r')
+	{
+		Msg[Len++] = '\r';
+		Msg[Len] = 0;
+	}
+
+	if (KISSMonSess)
+		WritetoMonWindow(KISSMonSess, (unsigned char *)Msg, Len);
+
+}
+
+extern "C" Ui_ListenSession * ax25IncommingConnect(TAX25Port * AX25Sess)
+{
+	// Look for/create Terminal Window for connection
+
+	Ui_ListenSession * Sess = NULL;
+	Ui_ListenSession * S;
+	char Title[80];
+	int i = 0;
+
+	if (TermMode == MDI)
+	{
+		// See if an old session can be reused
+
+		for (int i = 0; i < _sessions.size(); ++i)
+		{
+			S = _sessions.at(i);
+
+			if ((S->SessionType & Listen) && S->clientSocket == NULL && S->AGWSession == NULL && S->KISSSession == NULL)
+			{
+				Sess = S;
+				break;
+			}
+		}
+
+		// Create a window if none found, else reuse old
+
+		if (Sess == NULL)
+		{
+			Sess = newWindow((QObject *)mythis, Listen, "");
+		}
+	}
+	else
+	{
+		// Single or Tabbed - look for free session
+
+
+		for (i = 0; i < _sessions.size(); ++i)
+		{
+			S = _sessions.at(i);
+
+			if (S->clientSocket == NULL && S->AGWSession == NULL && S->KISSSession == NULL)
+			{
+				Sess = S;
+				break;
+			}
+		}
+
+		if (Sess == NULL)
+		{
+			// Clear connection
+
+			return NULL;
+		}
+	}
+
+	if (Sess)
+	{
+		sprintf(Title, "Connected to %s", AX25Sess->corrcall);
+
+		if (TermMode == MDI)
+		{
+			Sess->setWindowTitle(Title);
+		}
+		else if (TermMode == Tabbed)
+		{
+			tabWidget->setTabText(i, AX25Sess->corrcall);
+		}
+		else if (TermMode == Single)
+			mythis->setWindowTitle(Title);
+
+		AX25Sess->port = 0;
+		AX25Sess->Sess = Sess;				// Crosslink AGW and Term Sessions
+		AX25Sess->PID = 240;;
+
+		Sess->KISSSession = AX25Sess;
+
+		setMenus(true);
+
+		if (ConnectBeep)
+			myBeep();
+
+		// Send CText if defined
+
+		if (listenCText[0])
+			SendtoAX25(Sess->KISSSession, (unsigned char *)listenCText, (int)strlen(listenCText));
+	}
+	return Sess;
+}
+
+
+extern "C" void AX25_disc(TAX25Port * AX25Sess, Byte mode)
+{
+	char Msg[128];
+	int Len = 0;
+	Ui_ListenSession * Sess = (Ui_ListenSession *)AX25Sess->Sess;
+
+	if (AX25Sess->status == STAT_TRY_LINK)
+	{
+		// Connect failed
+
+		Len = sprintf(Msg, "Connection to %s failed\r", AX25Sess->corrcall);
+	}
+	else
+	{
+		switch (mode)
+		{
+		case MODE_OTHER:
+		case MODE_OUR:
+
+			Len = sprintf(Msg, "Disconnected from %s\r", AX25Sess->corrcall);
+			break;
+
+		case MODE_RETRY:
+
+			Len = sprintf(Msg, "Disconnected from %s - Retry count exceeded\r", AX25Sess->corrcall);
+			break;
+
+		};
+	}
+
+	SendtoTerm(Sess, Msg, Len);
+	ClearSessLabel(Sess);
+	Sess->KISSSession = NULL;
+	AX25Sess->Sess = 0;
+
+	setMenus(0);
+};
+
+int QtTermTCP::openSerialPort()
+{
+	if (m_serial && m_serial->isOpen())
+	{
+		m_serial->close();
+	}
+
+	m_serial = nullptr;
+	m_serial = new QSerialPort(this);
+
+	m_serial->setPortName(SerialPort);
+	m_serial->setBaudRate(KISSBAUD);
+
+	if (m_serial->open(QIODevice::ReadWrite))
+	{
+		int i;
+		connect(m_serial, &QSerialPort::readyRead, this, &QtTermTCP::readSerialData);
+//		connect(m_serial, &QSerialPort::errorOccurred, this, &QtTermTCP::handleError);
+
+		KISSConnected = 1;
+		KISSConnecting = 0;
+
+		Status3->setText("KISS Connected");
+		actHost[18]->setEnabled(1);			// Enable KISS Connect Line
+
+		KISS_add_stream(m_serial);
+
+		// Attach a Monitor Window if available
+
+		Ui_ListenSession * Sess = NULL;
+		Ui_ListenSession * S;
+
+		if (TermMode == MDI)
+		{
+			// See if an old session can be reused
+
+			for (int i = 0; i < _sessions.size(); ++i)
+			{
+				S = _sessions.at(i);
+
+				//	for (Ui_ListenSession * S: _sessions)
+				//	{
+				if ((S->SessionType == Mon) && S->clientSocket == NULL && S->KISSSession == NULL)
+				{
+					Sess = S;
+					break;
+				}
+			}
+
+			// Create a window if none found, else reuse old
+
+			if (Sess == NULL)
+			{
+				Sess = newWindow((QObject *)mythis, Mon, "");
+			}
+		}
+		else if (TermMode == Tabbed)
+		{
+			// Tabbed - look for free session
+
+			for (i = 8; i; i--)
+			{
+				S = _sessions.at(i);
+
+				if (S->clientSocket == NULL && S->KISSSession == NULL)
+				{
+					Sess = S;
+					break;
+				}
+			}
+		}
+		else if (TermMode == Single && (singlemodeFormat & Mon))
+		{
+			S = _sessions.at(0);
+
+			if (S->clientSocket == NULL && S->KISSSession == NULL)
+				Sess = S;
+
+		}
+
+		if (Sess)
+		{
+			KISSMonSess = Sess;			// Flag as in use
+
+			if (TermMode == MDI)
+				Sess->setWindowTitle("KISS Monitor Window");
+			else if (TermMode == Tabbed)
+				tabWidget->setTabText(Sess->Tab, "KISS Mon");
+			else if (TermMode == Single)
+				mythis->setWindowTitle("KISS Monitor Window");
+
+			//			if (TermMode == Single)	
+			//			{
+			//				discAction->setEnabled(false);
+			//				YAPPSend->setEnabled(false);
+			//				connectMenu->setEnabled(false);
+			//			}
+		}
+
+
+
+		return 1;
+	}
+	else
+	{
+		Status3->setText("KISS Open Failed");
+		KISSConnected = 0;
+		KISSConnecting = 0;
+		return 0;
+	}
+}
+
+
+
+void closeSerialPort()
+{
+	if (m_serial && m_serial->isOpen())
+	{
+		m_serial->close();
+		m_serial = nullptr;
+	}
+
+	m_serial = nullptr;
+	
+	KISSConnected = 0;
+	KISSConnecting = 0;
+
+	Status3->setText("KISS Closed");
+	actHost[18]->setEnabled(0);			// Enable KISS Connect Line
+}
+
+void QtTermTCP::readSerialData()
+{
+	int Read;
+	unsigned char Buffer[8192];
+
+	// read the data from the socket
+
+	m_serial->clearError();
+
+	Read = m_serial->read((char *)Buffer, 2047);
+
+	if (m_serial->error())
+	{
+		Debugprintf("Serial Read Error - RC %d Error %d", Read, m_serial->error());
+		closeSerialPort();
+		return;
+	}
+
+
+	while (Read > 0)
+	{
+		KISSDataReceived(m_serial, Buffer, Read);
+		Read = m_serial->read((char *)Buffer, 2047);
+	}
+}
+
+void QtTermTCP::handleError(QSerialPort::SerialPortError serialPortError)
+{
+	Debugprintf("Serial port Error %d", serialPortError);
+	closeSerialPort();
+}
+
+extern "C" void CheckUIFrame(unsigned char * path, string * data)
+{
+	// If we have KISS enabled and dest is UIDEST look for a KISS window in UI Mode
+
+	if (KISSSock == 0)
+		return;
+
+	char Dest[10];
+	char From[10];
+		
+	Dest[ConvFromAX25(path, Dest)] = 0;
+	From[ConvFromAX25(&path[7], From)] = 0;
+
+	// ok, Find a Kiss Session with this Dest
+
+	Ui_ListenSession * Sess = NULL;
+
+	for (int i = 0; i < _sessions.size(); ++i)
+	{
+		Sess = _sessions.at(i);
+
+		if (Sess->KISSMode == 1 && strcmp(Dest, Sess->UIDEST) == 0)
+		{
+			char Msg[512];
+			int Len;
+
+			data->Data[data->Length] = 0;
+
+			Len = sprintf(Msg, "%s:%s", From, data->Data);
+			SendtoTerm(Sess, Msg, Len);
+			return;
+		}
 	}
 
 }
+
+
+QColor QtTermTCP::setColor(QColor Colour)
+{
+	//    const QColorDialog::ColorDialogOptions options = QFlag(colorDialogOptionsWidget->value());
+
+
+	QColor col = Colour;
+	
+	QColorDialog dialog;
+	dialog.setCurrentColor(Colour);
+	dialog.setOption(QColorDialog::DontUseNativeDialog);
+
+	if (dialog.exec() == QColorDialog::Accepted)
+		col = QVariant(dialog.currentColor()).toString();
+
+
+//	const QColor color = QColorDialog::getColor(Qt::green, this, "Select Color", 0);
+
+	return col;
+}
+
+
+
+
+
+
+

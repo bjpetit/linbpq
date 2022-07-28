@@ -33,7 +33,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #define  FX25_NN 255
 #define  FX25_A0 FX25_NN
 
-byte FX25_ALPHA_TO[256] = {
+Byte FX25_ALPHA_TO[256] = {
 
  0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1d, 0x3a, 0x74, 0xe8, 0xcd, 0x87, 0x13, 0x26,
  0x4c, 0x98, 0x2d, 0x5a, 0xb4, 0x75, 0xea, 0xc9, 0x8f, 0x03, 0x06, 0x0c, 0x18, 0x30, 0x60, 0xc0,
@@ -53,7 +53,7 @@ byte FX25_ALPHA_TO[256] = {
  0x2c, 0x58, 0xb0, 0x7d, 0xfa, 0xe9, 0xcf, 0x83, 0x1b, 0x36, 0x6c, 0xd8, 0xad, 0x47, 0x8e, 0x00
 };
 
-byte FX25_INDEX_OF[256] = {
+Byte FX25_INDEX_OF[256] = {
 
 255,  0,  1, 25,  2, 50, 26,198,  3,223, 51,238, 27,104,199, 75,
   4,100,224, 14, 52,141,239,129, 28,193,105,248,200,  8, 76,113,
@@ -74,19 +74,19 @@ byte FX25_INDEX_OF[256] = {
 };
 
 
-byte FX25_CCSDS_poly_8[9] =
+Byte FX25_CCSDS_poly_8[9] =
 { 29, 188, 142, 221, 118, 206, 52, 168, 0 };
 
-byte FX25_CCSDS_poly_16[17] =
+Byte FX25_CCSDS_poly_16[17] =
 	{136,240,208,195,181,158,201,100, 11, 83,167,107,113,110,106,121, 0 };
 
 
-byte FX25_CCSDS_poly_32[33] = {
+Byte FX25_CCSDS_poly_32[33] = {
  18,251,215, 28, 80,107,248, 53, 84,194, 91, 59,176, 99,203,137,
  43,104,137,  0, 44,149,148,218, 75, 11,173,254,194,109,  8, 11,
 0 };
 
-byte FX25_CCSDS_poly_64[65] = {
+Byte FX25_CCSDS_poly_64[65] = {
  40, 21,218, 23, 48,237, 69,  6, 87, 42, 29,193,160,150,113, 32,
  35,172,241,240,184, 90,188,225, 87,130,254, 41,245,253,184,241,
 188,176, 54, 58,240,226,119,185, 77,150, 48,140,169,160, 96,217,
@@ -96,18 +96,18 @@ byte FX25_CCSDS_poly_64[65] = {
 
 
 integer  FX25_NROOTS ;
-byte FX25_GENPOLY[256];
+Byte FX25_GENPOLY[256];
 
-byte  MODNN(int x)
+Byte  MODNN(int x)
 {
 	return x % 255;
 }
 
 
-void encode_rs(byte * data, byte * parity, int pad)
+void encode_rs(Byte * data, Byte * parity, int pad)
 {
 	int  i, j;
-	byte feedback;
+	Byte feedback;
 
 	memset(parity, 0, FX25_NROOTS);
 
@@ -146,19 +146,19 @@ int FX25_MIN(int a, int b)
 }
 
 
-int decode_rs(byte * data, int * eras_pos, int no_eras, int pad)
+int decode_rs(Byte * data, int * eras_pos, int no_eras, int pad)
 {
 	int  deg_lambda, el, deg_omega;
 	int   i, j, r, k;
-	byte  q, tmp, num1, num2, den, discr_r;
-	byte s[256];
-	byte lambda[256];
-	byte b[256];
-	byte t[256];
-	byte omega[256];
-	byte root[256];
-	byte reg[256];
-	byte loc[256];
+	Byte  q, tmp, num1, num2, den, discr_r;
+	Byte s[256];
+	Byte lambda[256];
+	Byte b[256];
+	Byte t[256];
+	Byte omega[256];
+	Byte root[256];
+	Byte reg[256];
+	Byte loc[256];
 	int syn_error, count = 0;
 
 	if (pad < 0 || pad>238)
@@ -345,7 +345,7 @@ int decode_rs(byte * data, int * eras_pos, int no_eras, int pad)
 }
 
 
-void fx25_encode_rs(byte * data, byte *parity, int pad, int rs_size)
+void fx25_encode_rs(Byte * data, Byte *parity, int pad, int rs_size)
 {
 	switch (rs_size)
 	{
@@ -380,7 +380,7 @@ void fx25_encode_rs(byte * data, byte *parity, int pad, int rs_size)
 	}
 }
 
-int fx25_decode_rs(byte * data, int * eras_pos, int no_eras, int pad, int rs_size)
+int fx25_decode_rs(Byte * data, int * eras_pos, int no_eras, int pad, int rs_size)
 {
 	switch (rs_size)
 	{

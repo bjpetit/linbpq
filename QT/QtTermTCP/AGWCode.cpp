@@ -15,6 +15,13 @@
 
 myTcpSocket * AGWSock;
 
+extern QColor monRxText;
+extern QColor monTxText;
+
+extern QColor outputText;
+extern QColor EchoText;
+extern QColor WarningText;
+
 extern QTabWidget *tabWidget;
 extern QWidget * mythis;
 
@@ -32,7 +39,7 @@ extern int AGWPortNum;
 extern int AGWPaclen;
 
 extern char listenCText[4096];
-extern bool ConnectBeep;
+extern int ConnectBeep;
 
 extern QList<Ui_ListenSession *> _sessions;
 
@@ -45,7 +52,7 @@ extern QMenu *connectMenu;
 extern QAction *discAction;
 extern QAction *YAPPSend;
 
-extern QAction *actHost[18];
+extern QAction *actHost[17];
 
 // Session Type Equates
 
@@ -389,8 +396,6 @@ void QtTermTCP::AGWreadyRead()
 
 }
 
-extern QMdiSubWindow * ActiveSubWindow;
-
 void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState)
 {
 	myTcpSocket* sender = static_cast<myTcpSocket*>(QObject::sender());
@@ -426,7 +431,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 					char Msg[] = "Disconnected\r";
 
 					WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
-						Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
+						Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, WarningText);		// Red
 
 					if (TermMode == MDI)
 					{
@@ -458,12 +463,12 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 					
 					// if Single Split or Monitor leave session allocated to AGW
 
-	//				if (TermMode == Single && (Sess->SessionType & Mon))
-	//				{
-	//					return;
-	//				}
+					if (TermMode == Single && (Sess->SessionType & Mon))
+					{
+						return;
+					}
 
-					Sess->AGWMonSession = nullptr;
+					Sess->AGWSession = nullptr;
 					AGW->Sess = nullptr;
 				}
 			}
@@ -478,7 +483,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 			char Msg[] = "Disconnected\r";
 
 			WritetoOutputWindowEx(Sess, (unsigned char *)Msg, (int)strlen(Msg),
-				Sess->monWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
+				Sess->monWindow, &Sess->OutputSaveLen, Sess->OutputSave, WarningText);		// Red
 
 			if (TermMode == MDI)
 				Sess->setWindowTitle("Monitor Session Disconnected");
@@ -486,15 +491,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 			else if (TermMode == Tabbed)
 				tabWidget->setTabText(Sess->Tab, "Monitor");
 
-			else
-			{
-				// must be single
-
-				if (Sess->AGWMonSession)
-					mythis->setWindowTitle(Msg);
-			}
 			Sess->AGWSession = nullptr;
-			Sess->AGWMonSession = nullptr;
 			AGWUsers->MonSess = nullptr;
 		}
 
@@ -533,7 +530,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 
 				//	for (Ui_ListenSession * S: _sessions)
 				//	{
-				if ((S->SessionType == Mon) && S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
+				if ((S->SessionType == Mon) && S->clientSocket == NULL && S->AGWSession == NULL && S->KISSSession == NULL)
 				{
 					Sess = S;
 					break;
@@ -555,7 +552,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 			{
 				S = _sessions.at(i);
 
-				if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
+				if (S->clientSocket == NULL && S->AGWSession == NULL)
 				{
 					Sess = S;
 					break;
@@ -566,7 +563,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 		{
 			S = _sessions.at(0);
 
-			if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
+			if (S->clientSocket == NULL && S->AGWSession == NULL && S->KISSSession == NULL)
 				Sess = S;
 
 		}
@@ -574,7 +571,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 		if (Sess)
 		{
 			AGWUsers->MonSess = Sess;
-			Sess->AGWMonSession = sender;			// Flag as in use
+			Sess->AGWSession = sender;			// Flag as in use
 
 			if (TermMode == MDI)
 				Sess->setWindowTitle("AGW Monitor Window");
@@ -583,14 +580,7 @@ void QtTermTCP::onAGWSocketStateChanged(QAbstractSocket::SocketState socketState
 			else if (TermMode == Single)
 				mythis->setWindowTitle("AGW Monitor Window");
 
-			if (TermMode == MDI && Sess->sw == ActiveSubWindow)
-			{
-				discAction->setEnabled(false);
-				YAPPSend->setEnabled(false);
-				connectMenu->setEnabled(false);
-			}
-
-			if (TermMode == Tabbed && Sess->Tab == tabWidget->currentIndex())
+			if (TermMode != Tabbed)				// Not ideal, but AGW mon window is unlikely to be active window
 			{
 				discAction->setEnabled(false);
 				YAPPSend->setEnabled(false);
@@ -647,6 +637,7 @@ void QtTermTCP::AGWTimer()
 	}
 }
 
+
 void AGW_del_socket(void * socket)
 {
 	if (AGWUsers->socket == socket)
@@ -668,21 +659,12 @@ void AGW_add_socket(QTcpSocket * socket)
 	AGWUsers = User;
 };
 
-void AGWMonWindowClosing(Ui_ListenSession *Sess)
+void AGWWindowClosing(Ui_ListenSession *Sess)
 {
 	if (AGWUsers && AGWUsers->MonSess == Sess)
 		AGWUsers->MonSess = NULL;
 }
 
-void AGWWindowClosing(Ui_ListenSession *Sess)
-{
-	if (Sess->AGWSession)
-		Send_AGW_Ds_Frame(Sess->AGWSession);
-
-	TAGWPort * AGW = (TAGWPort *)Sess->AGWSession;
-
-	AGW->Sess = nullptr;
-}
 
 
 void AGW_frame_header(UCHAR * Msg, char AGWPort, char DataKind, unsigned char PID, const char * CallFrom, const char * CallTo, int Len)
@@ -1005,23 +987,16 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame, byte * Msg)
 					Sess = newWindow((QObject *)mythis, Listen, "");
 				}
 			}
-			else if (TermMode == Single)
-			{
-				S = _sessions.at(0);
-
-				if (S->clientSocket == NULL && S->AGWSession == NULL) // Monitor may be connected
-					Sess = S;
-			}
 			else
 			{
-				// Tabbed - look for free session
+				// Single or Tabbed - look for free session
 
 
 				for (i = 0; i < _sessions.size(); ++i)
 				{
 					S = _sessions.at(i);
 
-					if (S->clientSocket == NULL && S->AGWSession == NULL && S->AGWMonSession == NULL)
+					if (S->clientSocket == NULL && S->AGWSession == NULL && S->KISSSession == NULL)
 					{
 						Sess = S;
 						break;
@@ -1051,7 +1026,6 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame, byte * Msg)
 				else if (TermMode == Single)
 					mythis->setWindowTitle(Title);
 
-
 				AX25Sess->Active = 1;
 				AX25Sess->port = snd_ch;
 				AX25Sess->Sess = Sess;				// Crosslink AGW and Term Sessions
@@ -1067,7 +1041,7 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame, byte * Msg)
 				setMenus(true);
 
 				if (ConnectBeep)
-					Beep();
+					myBeep();
 
 				// Send CText if defined
 
@@ -1133,10 +1107,10 @@ void on_AGW_Mon_frame(byte * Msg, int Len, char Type)
 	{
 		if (Type == 'T')
 			WritetoOutputWindowEx(AGWUsers->MonSess, Msg, Len,
-				AGWUsers->MonSess->monWindow, &AGWUsers->MonSess->OutputSaveLen, AGWUsers->MonSess->OutputSave, 81);		// Red
+				AGWUsers->MonSess->monWindow, &AGWUsers->MonSess->OutputSaveLen, AGWUsers->MonSess->OutputSave, monTxText);		// Red
 		else
 			WritetoOutputWindowEx(AGWUsers->MonSess, Msg, Len,
-				AGWUsers->MonSess->monWindow, &AGWUsers->MonSess->OutputSaveLen, AGWUsers->MonSess->OutputSave, 23);		// Blue
+				AGWUsers->MonSess->monWindow, &AGWUsers->MonSess->OutputSaveLen, AGWUsers->MonSess->OutputSave, monRxText);		// Blue
 	}
 }
 
@@ -1159,46 +1133,36 @@ void on_AGW_Ds_frame(int AGWChan, char * CallFrom, char * CallTo, struct AGWHead
 	{
 		Ui_ListenSession * Sess = AX25Sess->Sess;
 
-		if (Sess)			// Window could have been closed
+		WritetoOutputWindowEx(Sess, (unsigned char *)Reply, (int)strlen(Reply),
+			Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, WarningText);		// Red
+
+		if (TermMode == MDI)
 		{
-
-			WritetoOutputWindowEx(Sess, (unsigned char *)Reply, (int)strlen(Reply),
-				Sess->termWindow, &Sess->OutputSaveLen, Sess->OutputSave, 81);		// Red
-
-			if (TermMode == MDI)
+			if (Sess->SessionType == Mon)			// Mon Only
+				Sess->setWindowTitle("Monitor Session Disconnected");
+			else
+				Sess->setWindowTitle("Disconnected");
+		}
+		else if (TermMode == Tabbed)
+		{
+			if (Sess->SessionType == Mon)			// Mon Only
+				tabWidget->setTabText(Sess->Tab, "Monitor");
+			else
 			{
-				if (Sess->SessionType == Mon)			// Mon Only
-					Sess->setWindowTitle("Monitor Session Disconnected");
-				else
-					Sess->setWindowTitle("Disconnected");
+				char Label[16];
+				sprintf(Label, "Sess %d", Sess->Tab + 1);
+				tabWidget->setTabText(Sess->Tab, Label);
 			}
-			else if (TermMode == Tabbed)
-			{
-				if (Sess->SessionType == Mon)			// Mon Only
-					tabWidget->setTabText(Sess->Tab, "Monitor");
-				else
-				{
-					char Label[16];
-					sprintf(Label, "Sess %d", Sess->Tab + 1);
-					tabWidget->setTabText(Sess->Tab, Label);
-				}
-			}
-			else if (TermMode == Single)
-			{
-				if (Sess->AGWMonSession)
-					mythis->setWindowTitle("AGW Monitor Window");
-				else
-				{
-					if (Sess->SessionType == Mon)			// Mon Only
-						mythis->setWindowTitle("Monitor Session Disconnected");
-					else
-						mythis->setWindowTitle("Disconnected");
-				}
-			}
-
-			Sess->AGWSession = nullptr;
+		}
+		else if (TermMode == Single)
+		{
+			if (Sess->SessionType == Mon)			// Mon Only
+				mythis->setWindowTitle("Monitor Session Disconnected");
+			else
+				mythis->setWindowTitle("Disconnected");
 		}
 
+		Sess->AGWSession = nullptr;
 		AX25Sess->Sess = nullptr;
 		AX25Sess->Active = 0;
 

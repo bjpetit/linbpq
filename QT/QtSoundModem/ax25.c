@@ -33,9 +33,9 @@ __declspec(dllimport) unsigned short __stdcall ntohs(__in unsigned short hostsho
 #include <stddef.h>
 #endif 
 
-void decode_frame(byte * frame, int len, byte * path, string * data,
-	byte * pid, byte * nr, byte * ns, byte * f_type, byte * f_id,
-	byte *  rpt, byte * pf, byte * cr);
+void decode_frame(Byte * frame, int len, Byte * path, string * data,
+	Byte * pid, Byte * nr, Byte * ns, Byte * f_type, Byte * f_id,
+	Byte *  rpt, Byte * pf, Byte * cr);
 
 /*
 
@@ -220,8 +220,8 @@ word MEMRecovery[5] = { 200,200,200,200 };
 int NonAX25[5] = { 0 };
 
 boolean dyn_frack[4] = { FALSE,FALSE,FALSE,FALSE };
-byte recovery[4] = { 0,0,0,0 };
-byte users[4] = { 0,0,0,0 };
+Byte recovery[4] = { 0,0,0,0 };
+Byte users[4] = { 0,0,0,0 };
 
 short txtail[5] = { 50, 50, 50, 50, 50 };
 short txdelay[5] = { 400, 400, 400, 400, 400 };
@@ -279,7 +279,7 @@ void scrambler(UCHAR * in_buf, int Len)
 {
 	integer i;
 	word  sreg;
-	byte  a = 0, k;
+	Byte  a = 0, k;
 
 	sreg = 0x1ff;
 
@@ -849,7 +849,7 @@ int get_addr(char * Calls, UCHAR * AXCalls)
 	//	CONVERT CALL + OPTIONAL DIGI STRING TO AX25, RETURN 
 	//	CONVERTED STRING IN AXCALLS. Return FALSE if invalied
 
-	byte * axptr = AXCalls;
+	Byte * axptr = AXCalls;
 	char * ptr, *Context;
 	int n = 8;						// Max digis
 
@@ -901,9 +901,9 @@ int get_addr(char * Calls, UCHAR * AXCalls)
 	return axptr - AXCalls;
 }
 
-byte set_ctrl(byte nr, byte ns, byte f_type, byte f_id, boolean pf)
+Byte set_ctrl(Byte nr, Byte ns, Byte f_type, Byte f_id, boolean pf)
 {
-	byte  pf_bit, ctrl;
+	Byte  pf_bit, ctrl;
 
 	ctrl = 0;
 	pf_bit = 0;
@@ -931,15 +931,15 @@ byte set_ctrl(byte nr, byte ns, byte f_type, byte f_id, boolean pf)
 	return ctrl;
 }
 
-string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpr, boolean pf, boolean cr)
+string * make_frame(string * data, Byte * axaddr,  Byte pid, Byte nr, Byte ns, Byte f_type, Byte f_id, boolean rpr, boolean pf, boolean cr)
 {
 	UNUSED(rpr);
 
-	byte ctrl;
+	Byte ctrl;
 
 	string * frame = newString();
 	int addrlen;
-	byte addr[80];
+	Byte addr[80];
 
 	unsigned short CRC;
 	UCHAR CRCString[2];
@@ -964,8 +964,8 @@ string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, b
 	case I_FRM:
 
 		stringAdd(frame, addr, addrlen);
-		stringAdd(frame, (byte *)&ctrl, 1);
-		stringAdd(frame, (byte *)&pid, 1);
+		stringAdd(frame, (Byte *)&ctrl, 1);
+		stringAdd(frame, (Byte *)&pid, 1);
 		stringAdd(frame, data->Data, data->Length);
 
 		break;
@@ -974,7 +974,7 @@ string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, b
 	case S_FRM:
 
 		stringAdd(frame, addr, addrlen);
-		stringAdd(frame, (byte *)&ctrl, 1);
+		stringAdd(frame, (Byte *)&ctrl, 1);
 
 		break;
 
@@ -983,20 +983,20 @@ string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, b
 		if (f_id == U_UI)
 		{
 			stringAdd(frame, addr, addrlen);
-			stringAdd(frame, (byte *)&ctrl, 1);
-			stringAdd(frame, (byte *)&pid, 1);
+			stringAdd(frame, (Byte *)&ctrl, 1);
+			stringAdd(frame, (Byte *)&pid, 1);
 			stringAdd(frame, data->Data, data->Length);
 		}
 		else if (f_id == U_FRMR)
 		{
 			stringAdd(frame, addr, addrlen);
-			stringAdd(frame, (byte *)&ctrl, 1);
+			stringAdd(frame, (Byte *)&ctrl, 1);
 			stringAdd(frame, data->Data, data->Length);
 		}
 		else
 		{
 			stringAdd(frame, addr, addrlen);
-			stringAdd(frame, (byte *)&ctrl, 1);
+			stringAdd(frame, (Byte *)&ctrl, 1);
 		}
 	}
 
@@ -1013,14 +1013,14 @@ string * make_frame(string * data, byte * axaddr,  byte pid, byte nr, byte ns, b
 int add_raw_frames(int snd_ch, string * frame, TStringList * buf)
 {
 	string  *s_data = newString();
-	byte  s_pid, s_nr, s_ns, s_f_type, s_f_id;
-	byte  s_rpt, s_cr, s_pf;
+	Byte  s_pid, s_nr, s_ns, s_f_type, s_f_id;
+	Byte  s_rpt, s_cr, s_pf;
 	string  *d_data = newString();
-	byte  d_pid, d_nr, d_ns, d_f_type, d_f_id;
-	byte  d_rpt, d_cr, d_pf;
+	Byte  d_pid, d_nr, d_ns, d_f_type, d_f_id;
+	Byte  d_rpt, d_cr, d_pf;
 
-	byte d_path[80];
-	byte s_path[80];
+	Byte d_path[80];
+	Byte s_path[80];
 
 	boolean  found_I;
 	int  i;
@@ -1211,7 +1211,7 @@ boolean add_incoming_mycalls(void * socket, char * src_call)
 void del_incoming_mycalls(char * src_call)
 {
 	int i = 0;
-	byte axcall[7];
+	Byte axcall[7];
 	registeredCalls * reg;
 
 	ConvToAX25(src_call, axcall);
@@ -1333,7 +1333,7 @@ end;
 
 
 
-void * in_list_incoming_mycall(byte * path)
+void * in_list_incoming_mycall(Byte * path)
 {
 	// See if to call is in registered calls list
 
@@ -1402,7 +1402,7 @@ end;
 
 // Check if laast digi used
 
-boolean is_last_digi(byte *path)
+boolean is_last_digi(Byte *path)
 {
 	int len = strlen(path);
 
@@ -1462,10 +1462,10 @@ begin
 end;
 */
 
-boolean is_correct_path(byte * path, byte pid)
+boolean is_correct_path(Byte * path, Byte pid)
 {
-	byte networks[] = { 6, 7, 8, 0xc4, 0xcc, 0xcd, 0xce, 0xcf, 0xf0 , 0 };
-	byte call[10];
+	Byte networks[] = { 6, 7, 8, 0xc4, 0xcc, 0xcd, 0xce, 0xcf, 0xf0 , 0 };
+	Byte call[10];
 	int i;
 
 
@@ -1675,9 +1675,9 @@ int number_digi(string path)
 
 
 
-get_monitor_path(byte * path, char * mycall, char * corrcall, char * digi)
+get_monitor_path(Byte * path, char * mycall, char * corrcall, char * digi)
 {
-	byte * digiptr = digi;
+	Byte * digiptr = digi;
 
 	digi[0] = 0;
 
@@ -1737,10 +1737,10 @@ begin
 end;
 */
 
-void reverse_addr(byte * path, byte * revpath, int Len)
+void reverse_addr(Byte * path, Byte * revpath, int Len)
 {
-	byte * ptr = path;
-	byte * copy = revpath;
+	Byte * ptr = path;
+	Byte * copy = revpath;
 	int endbit = Len - 1;
 	int numdigis = (Len - 14) / 7;
 	int i;
@@ -1748,9 +1748,9 @@ void reverse_addr(byte * path, byte * revpath, int Len)
 	if (Len < 14)
 		return;
 
-	byte digis[57];						// 8 * 7 + null terminator
+	Byte digis[57];						// 8 * 7 + null terminator
 	memset(digis, 0, 57);
-	byte * digiptr = digis + 49;			// Last Digi
+	Byte * digiptr = digis + 49;			// Last Digi
 
 	// remove end of address bit
 
@@ -1785,14 +1785,14 @@ void reverse_addr(byte * path, byte * revpath, int Len)
 
 
 
-void decode_frame(byte * frame, int len, byte * path, string * data,
-	byte * pid, byte * nr, byte * ns, byte * f_type, byte * f_id,
-	byte *  rpt, byte * pf, byte * cr)
+void decode_frame(Byte * frame, int len, Byte * path, string * data,
+	Byte * pid, Byte * nr, Byte * ns, Byte * f_type, Byte * f_id,
+	Byte *  rpt, Byte * pf, Byte * cr)
 {
 	int i;
 	int addr_end;
-	byte ctrl;
-	byte * savepath = path;
+	Byte ctrl;
+	Byte * savepath = path;
 
 	i = 0;
 	addr_end = FALSE;

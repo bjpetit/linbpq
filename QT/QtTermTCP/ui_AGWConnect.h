@@ -1,7 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'AGWConnect.ui'
 **
-** Created by: Qt User Interface Compiler version 5.12.6
+** Created by: Qt User Interface Compiler version 5.14.2
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -13,12 +13,13 @@
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDialog>
-#include <QtWidgets/QGroupBox>
+#include <QtWidgets/QFormLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QWidget>
 
 QT_BEGIN_NAMESPACE
@@ -26,67 +27,96 @@ QT_BEGIN_NAMESPACE
 class Ui_AGWConnectDkg
 {
 public:
-    QWidget *layoutWidget;
+    QWidget *verticalLayoutWidget;
+    QVBoxLayout *verticalLayout;
+    QFormLayout *formLayout_2;
+    QLabel *label;
+    QLineEdit *CallFrom;
+    QLabel *label_2;
+    QComboBox *CallTo;
+    QLabel *label_3;
+    QLineEdit *Digis;
+    QLabel *label_4;
+    QListWidget *RadioPorts;
     QHBoxLayout *hboxLayout;
     QPushButton *okButton;
     QPushButton *cancelButton;
-    QLineEdit *CallFrom;
-    QLineEdit *Digis;
-    QComboBox *CallTo;
-    QLabel *label;
-    QLabel *label_2;
-    QLabel *label_3;
-    QGroupBox *groupBox;
-    QListWidget *RadioPorts;
 
     void setupUi(QDialog *AGWConnectDkg)
     {
         if (AGWConnectDkg->objectName().isEmpty())
             AGWConnectDkg->setObjectName(QString::fromUtf8("AGWConnectDkg"));
-        AGWConnectDkg->resize(369, 378);
-        layoutWidget = new QWidget(AGWConnectDkg);
-        layoutWidget->setObjectName(QString::fromUtf8("layoutWidget"));
-        layoutWidget->setGeometry(QRect(80, 330, 213, 33));
-        hboxLayout = new QHBoxLayout(layoutWidget);
+        AGWConnectDkg->resize(500, 400);
+        verticalLayoutWidget = new QWidget(AGWConnectDkg);
+        verticalLayoutWidget->setObjectName(QString::fromUtf8("verticalLayoutWidget"));
+        verticalLayoutWidget->setGeometry(QRect(10, 10, 480, 380));
+        verticalLayout = new QVBoxLayout(verticalLayoutWidget);
+        verticalLayout->setObjectName(QString::fromUtf8("verticalLayout"));
+        verticalLayout->setContentsMargins(0, 0, 0, 0);
+        formLayout_2 = new QFormLayout();
+        formLayout_2->setObjectName(QString::fromUtf8("formLayout_2"));
+        label = new QLabel(verticalLayoutWidget);
+        label->setObjectName(QString::fromUtf8("label"));
+
+        formLayout_2->setWidget(0, QFormLayout::LabelRole, label);
+
+        CallFrom = new QLineEdit(verticalLayoutWidget);
+        CallFrom->setObjectName(QString::fromUtf8("CallFrom"));
+
+        formLayout_2->setWidget(0, QFormLayout::FieldRole, CallFrom);
+
+        label_2 = new QLabel(verticalLayoutWidget);
+        label_2->setObjectName(QString::fromUtf8("label_2"));
+
+        formLayout_2->setWidget(1, QFormLayout::LabelRole, label_2);
+
+        CallTo = new QComboBox(verticalLayoutWidget);
+        CallTo->setObjectName(QString::fromUtf8("CallTo"));
+        CallTo->setEditable(true);
+        CallTo->setInsertPolicy(QComboBox::NoInsert);
+
+        formLayout_2->setWidget(1, QFormLayout::FieldRole, CallTo);
+
+        label_3 = new QLabel(verticalLayoutWidget);
+        label_3->setObjectName(QString::fromUtf8("label_3"));
+
+        formLayout_2->setWidget(2, QFormLayout::LabelRole, label_3);
+
+        Digis = new QLineEdit(verticalLayoutWidget);
+        Digis->setObjectName(QString::fromUtf8("Digis"));
+
+        formLayout_2->setWidget(2, QFormLayout::FieldRole, Digis);
+
+
+        verticalLayout->addLayout(formLayout_2);
+
+        label_4 = new QLabel(verticalLayoutWidget);
+        label_4->setObjectName(QString::fromUtf8("label_4"));
+
+        verticalLayout->addWidget(label_4);
+
+        RadioPorts = new QListWidget(verticalLayoutWidget);
+        RadioPorts->setObjectName(QString::fromUtf8("RadioPorts"));
+
+        verticalLayout->addWidget(RadioPorts);
+
+        hboxLayout = new QHBoxLayout();
         hboxLayout->setSpacing(6);
         hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         hboxLayout->setContentsMargins(0, 0, 0, 0);
-        okButton = new QPushButton(layoutWidget);
+        okButton = new QPushButton(verticalLayoutWidget);
         okButton->setObjectName(QString::fromUtf8("okButton"));
 
         hboxLayout->addWidget(okButton);
 
-        cancelButton = new QPushButton(layoutWidget);
+        cancelButton = new QPushButton(verticalLayoutWidget);
         cancelButton->setObjectName(QString::fromUtf8("cancelButton"));
 
         hboxLayout->addWidget(cancelButton);
 
-        CallFrom = new QLineEdit(AGWConnectDkg);
-        CallFrom->setObjectName(QString::fromUtf8("CallFrom"));
-        CallFrom->setGeometry(QRect(104, 24, 113, 20));
-        Digis = new QLineEdit(AGWConnectDkg);
-        Digis->setObjectName(QString::fromUtf8("Digis"));
-        Digis->setGeometry(QRect(104, 82, 113, 20));
-        CallTo = new QComboBox(AGWConnectDkg);
-        CallTo->setObjectName(QString::fromUtf8("CallTo"));
-        CallTo->setGeometry(QRect(104, 50, 111, 22));
-        CallTo->setEditable(true);
-        CallTo->setInsertPolicy(QComboBox::NoInsert);
-        label = new QLabel(AGWConnectDkg);
-        label->setObjectName(QString::fromUtf8("label"));
-        label->setGeometry(QRect(10, 22, 65, 23));
-        label_2 = new QLabel(AGWConnectDkg);
-        label_2->setObjectName(QString::fromUtf8("label_2"));
-        label_2->setGeometry(QRect(10, 50, 65, 23));
-        label_3 = new QLabel(AGWConnectDkg);
-        label_3->setObjectName(QString::fromUtf8("label_3"));
-        label_3->setGeometry(QRect(10, 80, 65, 23));
-        groupBox = new QGroupBox(AGWConnectDkg);
-        groupBox->setObjectName(QString::fromUtf8("groupBox"));
-        groupBox->setGeometry(QRect(10, 122, 359, 189));
-        RadioPorts = new QListWidget(groupBox);
-        RadioPorts->setObjectName(QString::fromUtf8("RadioPorts"));
-        RadioPorts->setGeometry(QRect(15, 16, 337, 163));
+
+        verticalLayout->addLayout(hboxLayout);
+
 
         retranslateUi(AGWConnectDkg);
         QObject::connect(okButton, SIGNAL(clicked()), AGWConnectDkg, SLOT(accept()));
@@ -97,13 +127,13 @@ public:
 
     void retranslateUi(QDialog *AGWConnectDkg)
     {
-        AGWConnectDkg->setWindowTitle(QApplication::translate("AGWConnectDkg", "Dialog", nullptr));
-        okButton->setText(QApplication::translate("AGWConnectDkg", "OK", nullptr));
-        cancelButton->setText(QApplication::translate("AGWConnectDkg", "Cancel", nullptr));
-        label->setText(QApplication::translate("AGWConnectDkg", "Call From ", nullptr));
-        label_2->setText(QApplication::translate("AGWConnectDkg", "Call To ", nullptr));
-        label_3->setText(QApplication::translate("AGWConnectDkg", "Digis", nullptr));
-        groupBox->setTitle(QApplication::translate("AGWConnectDkg", "Radio Ports", nullptr));
+        AGWConnectDkg->setWindowTitle(QCoreApplication::translate("AGWConnectDkg", "Dialog", nullptr));
+        label->setText(QCoreApplication::translate("AGWConnectDkg", "Call From ", nullptr));
+        label_2->setText(QCoreApplication::translate("AGWConnectDkg", "Call To ", nullptr));
+        label_3->setText(QCoreApplication::translate("AGWConnectDkg", "Digis", nullptr));
+        label_4->setText(QCoreApplication::translate("AGWConnectDkg", "Radio Ports", nullptr));
+        okButton->setText(QCoreApplication::translate("AGWConnectDkg", "OK", nullptr));
+        cancelButton->setText(QCoreApplication::translate("AGWConnectDkg", "Cancel", nullptr));
     } // retranslateUi
 
 };

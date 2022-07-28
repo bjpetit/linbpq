@@ -51,7 +51,7 @@ typedef struct wavehdr_tag {
 extern int pnt_change[5];
 int debugmode = 0;
 extern float src_buf[5][2048];
-extern byte RCVR[5];
+extern Byte RCVR[5];
 
 int SatelliteMode = 0;
 
@@ -1722,7 +1722,7 @@ void runModems()
 	}
 }
 
-byte rcvr_idx;
+Byte rcvr_idx;
 
 void runModemthread(void * param)
 {
@@ -1750,7 +1750,7 @@ void runModemthread(void * param)
 void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 {
 	word i, i1;
-	byte snd_ch, rcvr_idx;
+	Byte snd_ch, rcvr_idx;
 	boolean add_fft_line;
 	int buf_offset;
 
@@ -2013,10 +2013,10 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 	char AGW_path[256];
 	string * AGW_data;
 
-	const byte * frm = "???";
-	byte * datap;
-	byte _data[512] = "";
-	byte * p_data = _data;
+	const Byte * frm = "???";
+	Byte * datap;
+	Byte _data[512] = "";
+	Byte * p_data = _data;
 	int _datalen;
 
 	char  agw_port;
@@ -2031,9 +2031,9 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 
 	AGWUser * AGW;
 
-	byte pid, nr, ns, f_type, f_id;
-	byte  rpt, cr, pf;
-	byte path[80];
+	Byte pid, nr, ns, f_type, f_id;
+	Byte  rpt, cr, pf;
+	Byte path[80];
 	char c;
 	const char * p;
 
@@ -2074,7 +2074,7 @@ char * frame_monitor(string * frame, char * code, int tx_stat)
 
 	if (_datalen)
 	{
-		byte * ptr = _data;
+		Byte * ptr = _data;
 		i = 0;
 
 		// remove successive cr or cr on end		while (i < _datalen)

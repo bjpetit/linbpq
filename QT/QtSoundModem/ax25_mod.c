@@ -380,7 +380,7 @@ void get_new_frame(UCHAR snd_ch, TStringList * frame_stream)
 
 	scrambler(line, LineLen); // should look like interleaved
 	{
-		byte unscrambled[1024];
+		Byte unscrambled[1024];
 		int count, len;
 		int origlen;
 
@@ -411,9 +411,9 @@ void get_new_frame(UCHAR snd_ch, TStringList * frame_stream)
 
 		while (j < len)
 		{
-			byte line1[256];
+			Byte line1[256];
 			int nErr, eras_pos = 0;
-			byte rs_block[256];
+			Byte rs_block[256];
 
 			memcpy(line1, &unscrambled[j], 16);
 
@@ -448,7 +448,7 @@ void get_new_frame(UCHAR snd_ch, TStringList * frame_stream)
   
 
 
-int get_new_bit(byte snd_ch, byte bit)
+int get_new_bit(Byte snd_ch, Byte bit)
 {
 	unsigned short len;
 	string * s;
@@ -534,7 +534,7 @@ int get_new_bit(byte snd_ch, byte bit)
 ////// FX.25 //////
 
 
-void bit_to_fx25(byte * tx_byte,  byte * bit_cnt, byte bit, string * data, int * data_cnt)
+void bit_to_fx25(Byte * tx_byte,  Byte * bit_cnt, Byte bit, string * data, int * data_cnt)
 {
 	*tx_byte = (*tx_byte >> 1) | (bit << 7);
 	(*bit_cnt)++;
@@ -553,7 +553,7 @@ string * fill_fx25_data(int snd_ch, string * data)
 
 	string * result;
 
-	byte rs_roots[nr_tags + 1] = { 16, 32, 64, 32, 16, 16 };
+	Byte rs_roots[nr_tags + 1] = { 16, 32, 64, 32, 16, 16 };
 	word rs_payload[nr_tags + 1] = { 1912, 1784, 1528, 1024, 512, 256 }; // 239, 233, 191, 128, 64, 32
 
 	unsigned long long rs_tag[nr_tags + 1] =
@@ -575,9 +575,9 @@ string * fill_fx25_data(int snd_ch, string * data)
 	string * ax25_data = newString();
 
 	int i, ax25_size;
-	byte a, bit, bit_cnt, bit_cnt1, bs, tx_byte;
-	byte rs_id;
-	byte rs_block[256], parity[256];
+	Byte a, bit, bit_cnt, bit_cnt1, bs, tx_byte;
+	Byte rs_id;
+	Byte rs_block[256], parity[256];
 
 	ax25_size = 0;
 	bs = 0;
@@ -682,7 +682,7 @@ string * fill_fx25_data(int snd_ch, string * data)
 
 	result = newString();
 
-	stringAdd(result, (byte *)&rs_tag[rs_id], 8);
+	stringAdd(result, (Byte *)&rs_tag[rs_id], 8);
 	stringAdd(result, ax25_data->Data, ax25_data->Length);
 	stringAdd(result, parity, rs_roots[rs_id]);
 
@@ -737,7 +737,7 @@ void fx25_get_new_frame(int snd_ch, TStringList * frame_stream)
 	}
 }
 
-int fx25_get_new_bit(int snd_ch, byte bit)
+int fx25_get_new_bit(int snd_ch, Byte bit)
 {
 	string *s;
 
@@ -1036,7 +1036,7 @@ single filter(single x)
 float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 {
 	float pi2, x1, x;
-	byte i,qbit,tribit,dibit;
+	Byte i,qbit,tribit,dibit;
 	float z1,z2,z3,z4;
 	unsigned short b, msb, lsb;
 	unsigned char bit = *bitptr;

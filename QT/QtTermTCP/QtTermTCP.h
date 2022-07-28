@@ -5,7 +5,9 @@
 //#include "ui_ListenPort.h"
 //#include "ui_AGWParams.h"
 //#include "ui_AGWConnect.h"
+#include "ui_ColourConfig.h"
 #include "ui_VARAConfig.h"
+#include "ui_KISSConfig.h"
 #include "QTextEdit"
 #include "QSplitter"
 #include "QLineEdit"
@@ -26,7 +28,7 @@
 #include <QTabWidget>
 #include <QMenuBar>
 #include <QProcess>
-
+#include <QtSerialPort/QSerialPort>
 
 
 
@@ -81,7 +83,7 @@ public:
 	char MonSave[4096];
 
 	char PortMonString[1024];		// 32 ports 32 Bytes
-	unsigned int portmask;
+	unsigned long long portmask;
 	int mtxparam;
 	int mcomparam;
 	int monUI;
@@ -91,7 +93,10 @@ public:
 	int Tab;						// Tab Index if Tabbed Mode
 	void * AGWSession;				// Terinal sess - Need to cast to TAGWPort to use it
 	void * AGWMonSession;
-
+	void * KISSSession;
+	int KISSMode;					// Connected or UI
+	char UIDEST[32];
+	char UIPATH[128];
 
 protected:
 
@@ -125,10 +130,14 @@ private slots:
 	void LDisconnect(Ui_ListenSession * LUI);
 	void SetupHosts();
 	void MyTimerSlot();
+	void KISSTimerSlot();
 	void ListenSlot();
 	void AGWSlot();
 	void VARASlot();
+	void KISSSlot();
 	void deviceaccept();
+	void KISSaccept();
+	void KISSreject();
 	void devicereject();
 	void showContextMenuM(const QPoint &pt);
 	void showContextMenuT(const QPoint &pt);
@@ -155,6 +164,17 @@ private slots:
 	void VARAdisplayError(QAbstractSocket::SocketError socketError);
 	void VARAreadyRead();
 	void onVARASocketStateChanged(QAbstractSocket::SocketState socketState);
+	void KISSdisplayError(QAbstractSocket::SocketError socketError);
+	void KISSreadyRead();
+	void onKISSSocketStateChanged(QAbstractSocket::SocketState socketState);
+	int openSerialPort();
+	void readSerialData();
+	void handleError(QSerialPort::SerialPortError serialPortError);
+	void doColours();
+	void ColourPressed();
+	void Colouraccept();
+	void Colourreject();
+	QColor setColor(QColor Colour);
 	void VARADatadisplayError(QAbstractSocket::SocketError socketError);
 	void VARADatareadyRead();
 	void onVARADataSocketStateChanged(QAbstractSocket::SocketState socketState);
@@ -173,6 +193,10 @@ private slots:
 	void OpenPTTPort();
 	void RadioPTT(bool PTTState);
 	void tabSelected(int);
+	void VARAHFChanged(bool state);
+	void VARAFMChanged(bool State);
+	void VARASATChanged(bool State);
+	void SetVARAParams();
 
 protected:
 	bool eventFilter(QObject* obj, QEvent *event);
@@ -199,11 +223,14 @@ private:
 	QAction *newCombinedAct;
 	QAction *AGWAction;
 	QAction *VARAAction;
+	QAction *KISSAction;
 	QAction *quitAction;
 
 	QList<myTcpSocket*>  _sockets;
 
 	QWidget *centralWidget;
+	void ConnecttoKISS();
+	void KISSTimer();
 };
 
 extern "C"
@@ -211,23 +238,23 @@ extern "C"
 	void EncodeSettingsLine(int n, char * String);
 	void DecodeSettingsLine(int n, char * String);
 	void WritetoOutputWindow(Ui_ListenSession * Sess, unsigned char * Buffer, int Len);
-	void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int *OutputSaveLen, char * OutputSave, int Colour);
+	void WritetoOutputWindowEx(Ui_ListenSession * Sess, unsigned char * Buffer, int len, QTextEdit * termWindow, int *OutputSaveLen, char * OutputSave, QColor Colour);
 	void WritetoMonWindow(Ui_ListenSession * Sess, unsigned char * Buffer, int Len);
 	void ProcessReceivedData(Ui_ListenSession * Sess, unsigned char * Buffer, int len);
 	void SendTraceOptions(Ui_ListenSession * LUI);
 	void setTraceOff(Ui_ListenSession * Sess);
 	void SetPortMonLine(int i, char * Text, int visible, int enabled);
 	void SaveSettings();
-	void Beep();
+	void myBeep();
 	void YAPPSendFile(Ui_ListenSession *  Sess, char * FN);
 	int SocketSend(Ui_ListenSession * Sess, char * Buffer, int len);
 	void SendTraceOptions(Ui_ListenSession * Sess);
 	int SocketFlush(Ui_ListenSession * Sess);
-	extern void Sleep(int ms);
+	extern void mySleep(int ms);
 	extern void setTraceOff(Ui_ListenSession * Sess);
 }
 
 
 char * strlop(char * buf, char delim);
-void setMenus(int State);
+extern "C" void setMenus(int State);
 void Send_AGW_Ds_Frame(void * AGW);

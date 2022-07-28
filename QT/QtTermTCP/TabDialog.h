@@ -11,8 +11,8 @@
 #include <QCheckBox>
 #include <QFormLayout>
 #include <QVBoxLayout>
-
-
+#include <QGroupBox>
+#include <QRadioButton>
 
 class QDialogButtonBox;
 class QFileInfo;
@@ -124,6 +124,34 @@ public:
 	QComboBox * wCallTo;
 	QLineEdit * Digis;
 	QListWidget * RadioPorts;
+
+private slots:
+	void myaccept();
+	void myreject();
+
+private:
+	//   Ui::TabDialog *ui;
+	QDialogButtonBox *buttonBox;
+};
+
+
+class KISSConnect : public QDialog
+{
+	Q_OBJECT
+
+public:
+	explicit KISSConnect(QWidget *parent = 0);
+	~KISSConnect();
+
+public:
+	QLineEdit * wCallFrom;
+	QComboBox * wCallTo;
+	QLineEdit * Digis;
+	QLineEdit * UIDest;
+	QListWidget * RadioPorts;
+	QHBoxLayout *mylayout;
+	QRadioButton * Connected;
+	QRadioButton * UIMode;
 
 private slots:
 	void myaccept();

@@ -29,28 +29,28 @@ typedef unsigned short      WORD;
 #define TCHAR char
 
 void QueueMsg(Ui_ListenSession * Sess, char * Msg, int Len);
-bool ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
+int ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
 void SetPortMonLine(int i, char * Text, int visible, int enabled);
 void AGW_AX25_data_in(void  * Sess, UCHAR * data, int Len);
 int checkUTF8(unsigned char * Msg, int Len, unsigned char * out);
 
-bool Bells = TRUE;
-bool StripLF = FALSE;
-bool LogMonitor = FALSE;
-bool LogOutput = FALSE;
-bool SendDisconnected = TRUE;
-bool ChatMode = TRUE;
+int Bells = TRUE;
+int StripLF = FALSE;
+int LogMonitor = FALSE;
+int LogOutput = FALSE;
+int SendDisconnected = TRUE;
+int ChatMode = TRUE;
 int MonPorts = 1;
-bool ListenOn = FALSE;
+int ListenOn = FALSE;
 
 time_t LastWrite = 0xffffffff;
 int AlertInterval = 300;
-bool AlertBeep = TRUE;
+int AlertBeep = TRUE;
 int AlertFreq = 600;
 int AlertDuration = 250;
 TCHAR AlertFileName[256] = { 0 };
-bool ConnectBeep = TRUE;
-bool UseKeywords = TRUE;
+int ConnectBeep = TRUE;
+int UseKeywords = TRUE;
 
 char KeyWordsName[MAX_PATH] = "Keywords.sys";
 char ** KeyWords = NULL;
@@ -108,7 +108,7 @@ char * strlop(char * buf, char delim)
 	return ptr;
 }
 
-bool CheckKeyWord(char * Word, char * Msg)
+int CheckKeyWord(char * Word, char * Msg)
 {
 	char * ptr1 = Msg, *ptr2;
 	int len = (int)strlen(Word);
@@ -134,7 +134,7 @@ bool CheckKeyWord(char * Word, char * Msg)
 	return FALSE;					// OK
 }
 
-bool CheckKeyWords(UCHAR * Msg, int len)
+int CheckKeyWords(UCHAR * Msg, int len)
 {
 	char dupMsg[2048];
 	int i;
@@ -260,6 +260,7 @@ MonLoop:
 			TCHAR msg[80];
 			int portnum;
 			char delim[] = "|";
+			int m;
 
 			// Save for changes of Window
 
@@ -269,7 +270,7 @@ MonLoop:
 			
 			// Remove old menu
 			
-			for (i = 0; i < 32; i++)
+			for (i = 0; i < 33; i++)
 			{
 				SetPortMonLine(i, (char *)"", 0, 0);
 			}
@@ -282,11 +283,13 @@ MonLoop:
 				if (p == NULL)
 					break;
 
-				portnum = atoi(p);
-
+				m = portnum = atoi(p);
 				sprintf(msg, "Port %s", p);
 
-				if (Sess->portmask & (1 << (portnum - 1)))
+				if (m == 0)
+					m = 33;
+
+				if (Sess->portmask & (1ll << (m - 1)))
 					SetPortMonLine(portnum, msg, 1, 1);
 				else
 					SetPortMonLine(portnum, msg, 1, 0);
@@ -340,7 +343,6 @@ MonLoop:
 
 	// Could be a YAPP Header
 
-
 	if (len == 2 && Buffptr[0] == ENQ && Buffptr[1] == 1)		// YAPP Send_Init
 	{
 		char YAPPRR[2];
@@ -355,7 +357,7 @@ MonLoop:
 		YAPPRR[1] = 1;
 
 		SocketFlush(Sess);			// To give Monitor Msg time to be sent
-		Sleep(1000);
+		mySleep(1000);
 		QueueMsg(Sess, YAPPRR, 2);
 
 		return;
@@ -371,16 +373,23 @@ MonLoop:
 
 extern myTcpSocket * VARASock;
 extern myTcpSocket * VARADataSock;
+extern "C" void SendtoAX25(void * conn, unsigned char * Msg, int Len);
 
 int SendMsg(Ui_ListenSession * Sess, TCHAR * Buffer, int len)
 {
-	if (Sess->AGWSession)
+	if (Sess->KISSSession)
+	{
+		// Send to ax.25 code
+
+		SendtoAX25(Sess->KISSSession, (unsigned char *)Buffer, len);
+		return len;
+	}
+	else if (Sess->AGWSession)
 	{
 		// Terminal is in AGWPE mode - send as AGW frame
 
 		AGW_AX25_data_in(Sess->AGWSession, (unsigned char *)Buffer, len);
 		return len;
-
 	}
 	else if (VARASock && VARASock->Sess == Sess)
 	{
@@ -403,7 +412,7 @@ void QueueMsg(Ui_ListenSession * Sess, char * Msg, int len)
 
 int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len);
 
-bool ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
+int ProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 {
 	// may have saved data
 
@@ -463,7 +472,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 
 		// Turn off monitoring
 
-		Sleep(1000);				// To give YAPP Msg time to be sent
+		mySleep(1000);				// To give YAPP Msg time to be sent
 
 		setTraceOff(Sess);
 
@@ -501,7 +510,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 		{
 			Mess[0] = NAK;
 			Mess[1] = sprintf(&Mess[2], "File %s size %d larger than limit %d\r", ARQFilename, FileSize, MaxRXSize);
-			Sleep(1000);				// To give YAPP Msg tome to be sent
+			mySleep(1000);				// To give YAPP Msg tome to be sent
 			QueueMsg(Sess, Mess, Mess[1] + 2);
 
 			len = sprintf((char *)Buffer, "YAPP File %s size %d larger than limit %d\r", ARQFilename, FileSize, MaxRXSize);
@@ -513,9 +522,24 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 			return Len;
 		}
 
-		// Make sure file does not exist
+		// Check that Path is set
 
-		// Path is Wide String, ARQFN normal
+		if (YAPPPath[0] == 0)
+		{
+			Mess[0] = NAK;
+			Mess[1] = sprintf(&Mess[2], "%s", "YAPP Receive directory not set");
+			mySleep(1000);				// To give YAPP Msg time to be sent
+			QueueMsg(Sess, Mess, Mess[1] + 2);
+			len = sprintf((char *)Buffer, "YAPP File Receive Failed - YAPP Receive directory not set\r");
+			WritetoOutputWindow(Sess, Buffer, len);
+
+			Sess->InputMode = 0;
+			SendTraceOptions(Sess);
+
+			return Len;
+		}
+
+		// Make sure file does not exist
 
 		sprintf(MsgFile, "%s/%s", YAPPPath, ARQFilename);
 
@@ -525,7 +549,7 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 
 			Mess[0] = NAK;
 			Mess[1] = sprintf(&Mess[2], "%s", "File Already Exists");
-			Sleep(1000);				// To give YAPP Msg time to be sent
+			mySleep(1000);				// To give YAPP Msg time to be sent
 			QueueMsg(Sess, Mess, Mess[1] + 2);
 			len = sprintf((char *)Buffer, "YAPP File Receive Failed - %s already exists\r", MsgFile);
 			WritetoOutputWindow(Sess, Buffer, len);
@@ -625,8 +649,8 @@ int InnerProcessYAPPMessage(Ui_ListenSession * Sess, UCHAR * Msg, int Len)
 		if (YAPPDate)
 			++pktLen;				// Add Checksum
 
-		if (YAPPLen == MailBufferSize)
-			pktLen = pktLen;
+//		if (YAPPLen == MailBufferSize)
+//			pktLen = pktLen;
 
 		return pktLen + 2;
 
@@ -924,6 +948,14 @@ void YAPPSendFile(Ui_ListenSession * Sess, WCHAR * FN)
 //			struct tm TM;
 
 			strcpy(ARQFilename, MsgFile);
+
+			if (MailBuffer)
+			{
+				free(MailBuffer);
+				MailBufferSize = 0;
+				MailBuffer = 0;
+			}
+
 			MailBuffer = (UCHAR *)malloc(FileSize);
 			MailBufferSize = FileSize;
 			YAPPLen = 0;

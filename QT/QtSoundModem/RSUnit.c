@@ -102,9 +102,9 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 			  */
 			  // specify irreducible polynomial coeffts }
 
-byte PP[17];
+Byte PP[17];
 
-byte CodeWord[256];
+Byte CodeWord[256];
 short Original_Recd[256];
 
 short bb[np];
@@ -123,53 +123,53 @@ string cName;
 
 void *  pPP[17];
 
-byte PP2[] = { 1 , 1 , 1 };
+Byte PP2[] = { 1 , 1 , 1 };
 
 //   { 1 + x + x^3 }
 
-byte PP3[] = { 1 , 1 , 0 , 1 };
+Byte PP3[] = { 1 , 1 , 0 , 1 };
 
 //     { 1 + x + x^4 }
-byte PP4[] = { 1 , 1 , 0 , 0 , 1 };
+Byte PP4[] = { 1 , 1 , 0 , 0 , 1 };
 
 //     { 1 + x^2 + x^5 }
-byte PP5[] = { 1 , 0 , 1 , 0 , 0 , 1 };
+Byte PP5[] = { 1 , 0 , 1 , 0 , 0 , 1 };
 
 //     { 1 + x + x^6 }
-byte PP6[] = { 1 , 1 , 0 , 0 , 0 , 0 , 1 };
+Byte PP6[] = { 1 , 1 , 0 , 0 , 0 , 0 , 1 };
 
 //     { 1 + x^3 + x^7 }
-byte PP7[] = { 1, 0, 0, 1, 0, 0, 0, 1 };
+Byte PP7[] = { 1, 0, 0, 1, 0, 0, 0, 1 };
 
 //     { 1+x^2+x^3+x^4+x^8 }
-byte PP8[] = { 1 , 0 , 1 , 1 , 1 , 0 , 0 , 0 , 1 };
+Byte PP8[] = { 1 , 0 , 1 , 1 , 1 , 0 , 0 , 0 , 1 };
 
 //     { 1+x^4+x^9 }
-byte PP9[] = { 1, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+Byte PP9[] = { 1, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 
 //    { 1+x^3+x^10 }
-byte PP10[] = { 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 };
+Byte PP10[] = { 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 };
 
 //     { 1+x^2+x^11 }
-byte PP11[] = { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+Byte PP11[] = { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
 
 //     { 1+x+x^4+x^6+x^12 }
-byte PP12[] = { 1, 1, 0, 0, 1, 0, 1, 0, 0,
+Byte PP12[] = { 1, 1, 0, 0, 1, 0, 1, 0, 0,
 	0, 0, 0, 1 };
 
 //    { 1+x+x^3+x^4+x^13 }
-byte PP13[] = { 1, 1, 0, 1, 1, 0, 0, 0, 0,
+Byte PP13[] = { 1, 1, 0, 1, 1, 0, 0, 0, 0,
 	0, 0, 0, 0, 1 };
 
 //     { 1+x+x^6+x^10+x^14 }
-byte PP14[] = { 1, 1, 0, 0, 0, 0, 1, 0, 0,
+Byte PP14[] = { 1, 1, 0, 0, 0, 0, 1, 0, 0,
 	0, 1, 0, 0, 0, 1 };
 
 //     { 1+x+x^15 }
-byte PP15[] = { 1, 1, 0, 0, 0, 0, 0, 0, 0,
+Byte PP15[] = { 1, 1, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 1 };
 //     { 1+x+x^3+x^12+x^16 }
-byte PP16[] = { 1, 1, 0, 1, 0, 0, 0, 0, 0,
+Byte PP16[] = { 1, 1, 0, 1, 0, 0, 0, 0, 0,
 	0, 0, 0, 1, 0, 0, 0, 1 };
 
 
@@ -333,7 +333,7 @@ void RsCreate()
 *                                                                      *
 ***********************************************************************/
 
-void EncodeRS(byte * xData, byte * xEncoded)
+void EncodeRS(Byte * xData, Byte * xEncoded)
 {
 
 	/* take the string of symbols in data[i], i=0..(k-1) and encode
@@ -436,7 +436,7 @@ Function TReedSolomon.DecodeRS(Var xData    ;
   routine if desired. */
 
 
-int DecodeRS(byte * xData, byte * xDecoded)
+int DecodeRS(Byte * xData, Byte * xDecoded)
 {
 	UNUSED(xDecoded);
 

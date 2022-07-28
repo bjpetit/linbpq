@@ -103,10 +103,10 @@ int rxOffset = 0;
 float DCD_LastPkPos[5] = { 0 };
 float DCD_LastPerc[5] = { 0 };
 int dcd_bit_cnt[5] = { 0 };
-byte DCD_status[5] = { 0 };
+Byte DCD_status[5] = { 0 };
 float DCD_persist[5] = { 0 };
 int dcd_bit_sync[5] = { 0 };
-byte dcd_hdr_cnt[5] = { 0 };
+Byte dcd_hdr_cnt[5] = { 0 };
 longword DCD_header[5] = { 0 };
 int dcd_on_hdr[5] = { 0 };
  
@@ -127,9 +127,7 @@ short rcvr_offset[5] = { 30, 30, 30, 30,30 };
 // for the actualdemod freq when using multiple decoders
 
 short active_rx_freq[5] = { 1700, 1700,1700,1700,1700 };
-
-
-
+ 
 int fx25_mode[4] = { 0, 0, 0, 0 };
 
 int pnt_change[5] = { 0 };
@@ -298,66 +296,8 @@ cfir_k:
 		goto cfir_i;
 
 }
-/*
 
-  __asm
-  {
-    push eax;
-    push ebx;
-    push ecx;
-    push edx;
-    push edi;
-    push esi;
-    xor eax,eax;
-    movzx ecx,tap;
-    movzx edx,buf_size;
-    shl ecx,2;
-    shl edx,2;
-    mov esi,core;
-    fir_i:
-      mov edi,prev;
-      add edi,eax;
-      xor ebx,ebx;
-      fldz;
-      fir_k:
-        fld dword ptr [edi+ebx];
-        fmul dword ptr [esi+ebx];
-        fadd;
-        add ebx,4;
-        cmp ebx,ecx;
-      jne fir_k;
-      mov edi,dest;
-      fstp dword ptr [edi+eax];
-      wait;
-      add eax,4;
-      cmp eax,edx;
-    jne fir_i;
-    pop esi;
-    pop edi;
-    pop edx;
-    pop ecx;
-    pop ebx;
-    pop eax;
-  }
-}
-*/
 
-/*
-function sgn(p1: single): integer;
-{
-  result = 0;
-  if p1>0 then result = 1;
-  if p1<0 then result = -1;
-}
-
-function pila(x: single): single;
-{
-  x = frac(x);
-  if x>0.5 then x = 1-x;
-  result = 2*x;
-}
-
-*/
 float get_persist(int snd_ch, int persist)
 {
 	single x, x1 ;
@@ -374,7 +314,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 	// This seems to schedule all TX, but is only called when a frame has been processed
 	//  ? does this work as Andy passes aborted frames to decoder
 
-	byte port;
+	Byte port;
 	word  i;
 	single  tick;
 	word  active;
@@ -547,14 +487,14 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 string * get_pkt_data(string * stream)
 {
-	byte  bitstuff_cnt;
-	byte  bits_cnt;
+	Byte  bitstuff_cnt;
+	Byte  bits_cnt;
 	word  i;
 	string * s = newString();
 
-	byte  bit;
-	byte  raw_bit;
-	byte  sym;
+	Byte  bit;
+	Byte  raw_bit;
+	Byte  sym;
 
 	bits_cnt = 0;
 	bitstuff_cnt = 0;
@@ -593,18 +533,18 @@ string * get_pkt_data(string * stream)
 	return s;
 }
 
-string * get_pkt_data2(string * stream, byte last_nrzi_bit)
+string * get_pkt_data2(string * stream, Byte last_nrzi_bit)
 {
-	byte  bitstuff_cnt;
-	byte  bits_cnt;
+	Byte  bitstuff_cnt;
+	Byte  bits_cnt;
 	word  i;
 	string * s = newString();
 
-	byte pkt[350];
+	Byte pkt[350];
 
-	byte bit;
-	byte raw_bit;
-	byte sym;
+	Byte bit;
+	Byte raw_bit;
+	Byte sym;
 	int  n = 0;
 
 	bits_cnt = 0;
@@ -652,7 +592,7 @@ string * get_NRZI_data(string * stream, UCHAR last_nrzi_bit)
 	longword len;
 	word i;
 	string * s = NULL;
-	byte raw_bit;
+	Byte raw_bit;
 
 	len = stream->Length;
 
@@ -707,7 +647,7 @@ var
 }
 */
 
-void make_rx_frame(int snd_ch, int rcvr_nr, int emph, byte last_nrzi_bit, string * raw_data, string * raw_data1)
+void make_rx_frame(int snd_ch, int rcvr_nr, int emph, Byte last_nrzi_bit, string * raw_data, string * raw_data1)
 {
 	int swap_i, swap_k;
 	string * data;
@@ -1422,23 +1362,23 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 	//
 	single  threshol;
 	single  tr;
-	byte fec_ch, bit;
+	Byte fec_ch, bit;
 	longword ii, kk;
 	single * core, *prevI, *prevQ;
 	//
 	unsigned long long bit64 = 0;
 	boolean  hdr_ok;
-	byte  fec_code;
+	Byte  fec_code;
 	string  fec_data_blk;
 	string  line1;
 
-	byte line[512];
+	Byte line[512];
 	int linelen = 0;
 
 	integer nErr;
 	word  crc1, crc2, size;
 
-	byte  hdr_byte[15] = "";
+	Byte  hdr_byte[15] = "";
 
 	tr = dcd_threshold * dcd_corr;
 
@@ -1503,6 +1443,7 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 				// Decimation filter
 				ii = i << 2;
 				kk = i_tap << 2;
+	
 				_asm
 				{
 					push eax;
@@ -1562,6 +1503,7 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 					core = LPF_core[snd_ch];
 					ii = k << 2;
 					kk = tap << 2;
+					
 					__asm
 					{
 						push eax;
@@ -1601,6 +1543,7 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 						pop ebx;
 						pop eax;
 					}
+					
 					// AFC-filter
 					prevI = pMChan->prev_AFCI_buf;
 					prevQ = pMChan->prev_AFCQ_buf;
@@ -1882,7 +1825,7 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 							if (pDET->frame_status[snd_ch] == FRAME_WAIT)
 							{
 								j1 = (pDET->FEC_header1[snd_ch][1] >> 16) ^ 0x7E7E;
-								_asm
+								/*_asm
 								{
 									push ax;
 									push bx;
@@ -1907,6 +1850,7 @@ void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int
 									pop bx;
 									pop ax;
 								}
+								*/
 							}
 							//if (FEC_header1[snd_ch][1] shr 24 and $FF=$7E) and (frame_status[snd_ch]=FRAME_WAIT) then
 
@@ -2089,13 +2033,13 @@ void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data)
 string * decode_FX25_data(TFX25 fx25)
 {
 	integer eras_pos = 0, i, j, len, rs_res;
-	byte a, k;
-	byte bit, byte_rx, bit_stuff_cnt, bit_cnt = 0, frame_status, bit_stream;
+	Byte a, k;
+	Byte bit, byte_rx, bit_stuff_cnt, bit_cnt = 0, frame_status, bit_stream;
 
 	string * data = newString();
 
 	int done;
-	byte rs_block[256];
+	Byte rs_block[256];
 	int RSOK;
 
 	bit_stream = 0;
@@ -2214,7 +2158,6 @@ unsigned char get_corr_arm(unsigned long long n)
 
 char errors;
 
-#ifndef WIN32
 
 unsigned char get_corr(unsigned long long val)
 {
@@ -2252,102 +2195,7 @@ unsigned char get_corr(unsigned long long val)
 	return 255;
 }
 
-#else
 
-unsigned char get_corr(unsigned long long n)
-{
-	unsigned char  max_corr;
-	int i = 0;
-	unsigned char result = 255;
-
-	__asm {
-		push eax
-		push ebx
-		push ecx
-		push esi
-		lea esi, tags
-		xor bl, bl
-	loopx:
-		mov eax, dword ptr[esi]
-		xor eax, dword ptr[n]
-		mov ecx, eax
-		and ecx, 0x55555555
-		shr eax, 1
-		and eax, 0x55555555
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x33333333
-		shr eax, 2
-		and eax, 0x33333333
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x0F0F0F0F
-		shr eax, 4
-		and eax, 0x0F0F0F0F
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x00FF00FF
-		shr eax, 8
-		and eax, 0x00FF00FF
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x0000FFFF
-		shr eax, 16
-		add eax, ecx
-		// skip the rest if damaged bits greater than tag threshold
-		cmp al, tt
-		mov errors, al
-		jnbe end_tt
-		mov bh, al
-		mov eax, dword ptr[esi + 4]
-		xor eax, dword ptr[n + 4]
-		mov ecx, eax
-		and ecx, 0x55555555
-		shr eax, 1
-		and eax, 0x55555555
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x33333333
-		shr eax, 2
-		and eax, 0x33333333
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x0F0F0F0F
-		shr eax, 4
-		and eax, 0x0F0F0F0F
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x00FF00FF
-		shr eax, 8
-		and eax, 0x00FF00FF
-		add eax, ecx
-		mov ecx, eax
-		and ecx, 0x0000FFFF
-		shr eax, 16
-		add eax, ecx
-		add bh, al
-		// check for tag threshold
-		cmp bh, tt
-		jnbe end_tt
-		mov result, bl
-		mov errors, bh
-		jmp ret_tt;
-		//
-	end_tt:
-		add esi, 8
-		inc bl
-		cmp bl, tags_nr
-		jbe loopx
-	ret_tt:
-		pop esi
-		pop ecx
-		pop ebx
-		pop eax
-	}
-	return result;
-}
-
-#endif
 
 void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_buf, float * bit_buf, int  buf_size, string * data)
 {
@@ -2363,11 +2211,11 @@ void decode_stream_FSK(int last, int snd_ch, int rcvr_nr, int emph, float * src_
 	float threshold;
 	float tr;
 
-	byte sample_cnt;
+	Byte sample_cnt;
 	float PkAmp, PkAmpMax = 0, MaxAmp, MinAmp, AverageAmp;
 	int newpkpos;
 	float bit_osc;
-	byte last_rx_bit, bit_stream, frame_status;
+	Byte last_rx_bit, bit_stream, frame_status;
 
 	TFX25 fx25;
 	unsigned long long tag64;
@@ -2781,7 +2629,7 @@ void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 	float agc_slow1 = 1 - agc_slow;
 
 	int i, k, j, n;
-	byte dibit, bit;
+	Byte dibit, bit;
 	single afc, x, amp, k1, k2;
 	single baudrate;
 	single div_bit_afc;
@@ -2789,11 +2637,11 @@ void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 	single threshold;
 	single tr;
 	single KCorr, AngleCorr, angle, muxI1, muxQ1, muxI2, muxQ2, sumIQ1, sumIQ2;
-	byte newpkpos, sample_cnt;
+	Byte newpkpos, sample_cnt;
 	single PkAmpI, PkAmpQ, PkAmpMax, PSK_AGC;
 	single PSK_IZ1, PSK_QZ1;
 	single bit_osc;
-	byte bit_stuff_cnt, last_rx_bit, frame_status, bit_cnt, bit_stream, byte_rx;
+	Byte bit_stuff_cnt, last_rx_bit, frame_status, bit_cnt, bit_stream, byte_rx;
 
 	// get saved values to local variables to speed up access
 
@@ -3052,7 +2900,7 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 	float agc_slow1 = 1 - agc_slow;
 
 	int i, k, j, n;
-	byte dibit = 0, bit;
+	Byte dibit = 0, bit;
 	single afc, x, amp, k1, k2;
 	single baudrate;
 	single div_bit_afc;
@@ -3060,11 +2908,11 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 	single threshold;
 	single tr;
 	single KCorr = 0, AngleCorr, angle, muxI1, muxQ1, muxI2, muxQ2, sumIQ1, sumIQ2;
-	byte newpkpos, sample_cnt;
+	Byte newpkpos, sample_cnt;
 	single PkAmpI, PkAmpQ, PkAmpMax, PSK_AGC;
 	single PSK_IZ1, PSK_QZ1;
 	single bit_osc;
-	byte bit_stuff_cnt, last_rx_bit, frame_status, bit_cnt, bit_stream, byte_rx;
+	Byte bit_stuff_cnt, last_rx_bit, frame_status, bit_cnt, bit_stream, byte_rx;
 
 	// get saved values to local variables to speed up access
 
@@ -3402,7 +3250,7 @@ void decode_stream_8PSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 	float agc_slow1 = 1 - agc_slow;
 
 	int i, k, j, n;
-	byte tribit = 0, bit;
+	Byte tribit = 0, bit;
 	single afc, x, amp, k1, k2;
 	single baudrate;
 	single div_bit_afc;
@@ -3410,11 +3258,11 @@ void decode_stream_8PSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 	single threshold;
 	single tr;
 	single KCorr = 0, AngleCorr, angle, muxI1, muxQ1, muxI2, muxQ2, sumIQ1, sumIQ2;
-	byte newpkpos, sample_cnt;
+	Byte newpkpos, sample_cnt;
 	single PkAmpI, PkAmpQ, PkAmpMax, PSK_AGC;
 	single PSK_IZ1, PSK_QZ1;
 	single bit_osc;
-	byte bit_stuff_cnt, last_rx_bit, frame_status, bit_cnt, bit_stream, byte_rx;
+	Byte bit_stuff_cnt, last_rx_bit, frame_status, bit_cnt, bit_stream, byte_rx;
 
 	// get saved values to local variables to speed up access
 
@@ -4377,7 +4225,7 @@ string * memory_ARQ(TStringList * buf, string * data)
 	string * frame;
 	word k, len, i;
 
-	byte zeros, ones;
+	Byte zeros, ones;
 	TStringList need_frames;
 
 	s = data;

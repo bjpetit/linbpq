@@ -2,8 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.52"
-#define VersionBytes {0, 0, 0, 52}
+#define VersionString "0.0.0.56"
+#define VersionBytes {0, 0, 0, 56}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -116,6 +116,13 @@
 
 // 0.52	Add Stdin as source on Linux
 
+// 0.53	Use Byte instead of byte as byte is defined in newer versions of gcc
+
+// 0.54 Fix for ALSA problem on new pi OS
+
+// 0.55 Fix for compiler error with newer compiler
+
+// 0.56	Fix errors in Config.cpp			June 22
 
 #include <string.h>
 #include <stdlib.h>
@@ -157,7 +164,7 @@ extern "C" {
 #define Integer int  //           -2,147,483,648 to 2,147,483,647
 //#define Int64 long long		 // -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807
 
-#define byte unsigned char		//                  0 to 255
+//#define Byte unsigned char		//                  0 to 255
 #define word unsigned short	//                        0 to 65,535
 #define smallint short 		//                  -32,768 to 32,767
 #define longword unsigned int	//                        0 to 4,294,967,295
@@ -254,13 +261,13 @@ typedef struct  TMChannel_t
 typedef struct TFX25_t
 {
 	string  data;
-	byte  status;
-	byte  bit_cnt;
-	byte  byte_rx;
+	Byte  status;
+	Byte  bit_cnt;
+	Byte  byte_rx;
 	unsigned long long tag;
-	byte  size;
-	byte  rs_size;
-	byte size_cnt;
+	Byte  size;
+	Byte  rs_size;
+	Byte size_cnt;
 } TFX25;
 
 
@@ -362,8 +369,8 @@ typedef struct TDetector_t
 	float prev_INTRI_buf[5][16384];
 	float prev_INTRQ_buf[5][16384];
 
-	byte emph_decoded;	
-	byte rx_decoded;
+	Byte emph_decoded;	
+	Byte rx_decoded;
 
 
 } TDetector;
@@ -398,10 +405,10 @@ typedef struct  TAX25Info_t
 
 typedef struct TAX25Port_t
 {
-	byte hi_vs;
-	byte vs;
-	byte vr;
-	byte PID;
+	Byte hi_vs;
+	Byte vs;
+	Byte vr;
+	Byte PID;
 	TStringList in_data_buf;
 	TStringList frm_collector;
 	string frm_win[8];
@@ -409,14 +416,14 @@ typedef struct TAX25Port_t
 	word t1;
 	word t2;
 	word t3;
-	byte i_lo;
-	byte i_hi;
+	Byte i_lo;
+	Byte i_hi;
 	word n1;
 	word n2;
 	word IPOLL_cnt;
 	TStringList frame_buf; //буфер кадров на передачу
 	TStringList I_frame_buf;
-	byte status;
+	Byte status;
 	word clk_frack;
 	char corrcall[10];
 	char mycall[10];
@@ -886,8 +893,8 @@ extern boolean dcd[5];
 extern struct TKISSMode_t  KISS;
 
 extern boolean dyn_frack[4] ;
-extern byte recovery[4];
-extern byte users[4];
+extern Byte recovery[4];
+extern Byte users[4];
 
 extern int resptime[4];
 extern int slottime[4];
@@ -944,19 +951,19 @@ void COMClearDTR(int fd);
 unsigned int getTicks();
 char * ShortDateTime();
 void  write_ax25_info(TAX25Port * AX25Sess);
-void reverse_addr(byte * path, byte * revpath, int Len);
+void reverse_addr(Byte * path, Byte * revpath, int Len);
 string * get_mycall(string * path);
 TAX25Port * get_user_port_by_calls(int snd_ch, char *  CallFrom, char *  CallTo);
 TAX25Port * get_free_port(int snd_ch);
-void * in_list_incoming_mycall(byte * path);
+void * in_list_incoming_mycall(Byte * path);
 boolean add_incoming_mycalls(void * socket, char * src_call);
 int get_addr(char * Calls, UCHAR * AXCalls);
-void reverse_addr(byte * path, byte * revpath, int Len);
+void reverse_addr(Byte * path, Byte * revpath, int Len);
 void set_link(TAX25Port * AX25Sess, UCHAR * axpath);
 void rst_timer(TAX25Port * AX25Sess);
-void set_unlink(TAX25Port * AX25Sess, byte * path);
+void set_unlink(TAX25Port * AX25Sess, Byte * path);
 unsigned short get_fcs(UCHAR * Data, unsigned short len);
-void KISSSendtoServer(void * sock, byte * Msg, int Len);
+void KISSSendtoServer(void * sock, Byte * Msg, int Len);
 int ConvFromAX25(unsigned char * incall, char * outcall);
 BOOL ConvToAX25(char * callsign, unsigned char * ax25call);
 void Debugprintf(const char * format, ...);

@@ -17,6 +17,8 @@
 #include "QFormLayout"
 #include "QScrollArea"
 
+#include "ax25.h"
+
 #ifndef WIN32
 #define strtok_s strtok_r
 #endif
@@ -30,6 +32,7 @@ extern QList<Ui_ListenSession *> _sessions;
 extern QTcpServer * _server;
 
 extern myTcpSocket * AGWSock;
+extern myTcpSocket * KISSSock;
 extern QLabel * Status1;
 extern QFont * menufont;
 extern QStatusBar * myStatusBar;
@@ -50,7 +53,7 @@ extern char Host[MAXHOSTS + 1][100];
 extern int Port[MAXHOSTS + 1];
 extern char UserName[MAXHOSTS + 1][80];
 extern char Password[MAXHOSTS + 1][80];
-
+extern char MYCALL[32];
 
 QLineEdit *TermCall;
 QGroupBox *groupBox;
@@ -87,6 +90,8 @@ QCheckBox *AVARAEnable;
 
 
 extern int AGWEnable;
+extern int VARAEnable;
+extern int KISSEnable;
 extern int AGWMonEnable;
 extern char AGWTermCall[12];
 extern char AGWBeaconDest[12];
@@ -95,11 +100,7 @@ extern int AGWBeaconInterval;
 extern char AGWBeaconPorts[80];
 extern char AGWBeaconMsg[260];
 
-extern int VARAEnable;
-extern int VARAPortNum;
-extern char VARAHost[128];
 extern char VARATermCall[12];
-extern char VARAPath[256];
 
 extern char AGWHost[128];
 extern int AGWPortNum;
@@ -108,13 +109,25 @@ extern char * AGWPortList;
 extern myTcpSocket * AGWSock; 
 extern char * AGWPortList;
 extern QStringList AGWToCalls;
+
+extern int KISSMode;
+
 extern Ui_ListenSession * ActiveSession;
 
+extern int TermMode;
+
+#define Single 0
+#define MDI 1
+#define Tabbed 2
+
 extern int listenPort;
-extern bool listenEnable;
+extern "C" int listenEnable;
 extern char listenCText[4096];
 
 void Send_AGW_C_Frame(Ui_ListenSession * Sess, int Port, char * CallFrom, char * CallTo, char * Data, int DataLen);
+extern "C" void SetSessLabel(Ui_ListenSession * Sess, char * label);
+extern "C" void SendtoTerm(Ui_ListenSession * Sess, char * Msg, int Len);
+
 QString GetConfPath();
 
 QScrollArea *scrollArea;
@@ -427,6 +440,147 @@ AGWDialog::~AGWDialog()
 }
 
 
+KISSConnect::KISSConnect(QWidget *parent) : QDialog(parent)
+{
+	this->setFont(*menufont);
+
+	setWindowTitle(tr("KISS Connection"));
+
+	myResize *resize = new myResize();
+	installEventFilter(resize);
+
+	scrollArea = new QScrollArea(this);
+	scrollArea->setObjectName(QString::fromUtf8("scrollArea"));
+	scrollArea->setGeometry(QRect(5, 5, 250, 200));
+	scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scrollArea->setWidgetResizable(false);
+	scrollAreaWidgetContents = new QWidget();
+	scrollAreaWidgetContents->setObjectName(QString::fromUtf8("scrollAreaWidgetContents"));
+
+	// layout is top level.
+	// Add a Horizontal layout for Mode and Verical Layout for Call and Digis
+
+	QVBoxLayout *layout = new QVBoxLayout();
+	layout->setContentsMargins(10, 10, 10, 10);
+	setLayout(layout);
+
+	QHBoxLayout *mylayout = new QHBoxLayout();
+
+	Connected = new QRadioButton("Sesion");
+	UIMode = new QRadioButton("UI");
+	
+	mylayout->addWidget(new QLabel("Connection Mode"));
+	mylayout->addWidget(Connected);
+	mylayout->addWidget(UIMode);
+
+	if (KISSMode)			// UI = 1
+		UIMode->setChecked(1);
+	else
+		Connected->setChecked(1);
+
+	QFormLayout *formLayout2 = new QFormLayout();
+	layout->addLayout(mylayout);
+	layout->addSpacing(10);
+	layout->addLayout(formLayout2);
+
+	wCallTo = new QComboBox();
+	wCallTo->setEditable(true);
+	wCallTo->setInsertPolicy(QComboBox::NoInsert);
+
+	formLayout2->addRow(new QLabel("Call To"), wCallTo);
+
+	Digis = new QLineEdit();
+	formLayout2->addRow(new QLabel("Digis"), Digis);
+
+	layout->addSpacing(2);
+
+	buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+	buttonBox->setFont(*menufont);
+	layout->addWidget(buttonBox);
+
+	scrollAreaWidgetContents->setLayout(layout);
+	scrollArea->setWidget(scrollAreaWidgetContents);
+
+	wCallTo->addItems(AGWToCalls);
+
+	connect(buttonBox, SIGNAL(accepted()), this, SLOT(myaccept()));
+	connect(buttonBox, SIGNAL(rejected()), this, SLOT(myreject()));
+}
+
+extern "C" void * KISSConnectOut(void * Sess, char * CallFrom, char * CallTo, char * Digis, int Chan, void * Socket);
+
+KISSConnect::~KISSConnect()
+{
+}
+
+extern QAction * YAPPSend;
+extern QMenu * connectMenu;
+extern QMenu * disconnectMenu;
+
+TAX25Port DummyPort;
+
+void KISSConnect::myaccept()
+{
+	QVariant Q;
+
+	char CallTo[32];
+	char Via[128];
+	strcpy(CallTo, wCallTo->currentText().toUpper().toUtf8());
+	strcpy(Via, Digis->text().toUpper().toUtf8());
+
+	KISSMode = UIMode->isChecked();
+
+	// Add CallTo if not already in list
+
+	if (AGWToCalls.contains(CallTo))
+		AGWToCalls.removeOne(CallTo);
+
+	AGWToCalls.insert(-1, CallTo);
+
+	ActiveSession->KISSMode = KISSMode;
+
+	if (KISSMode == 0)
+	{
+		ActiveSession->KISSSession = KISSConnectOut(ActiveSession, MYCALL, CallTo, Via, 0, (void *)KISSSock);
+		WritetoOutputWindow(ActiveSession, (unsigned char *)"Connecting...\r", 14);
+		discAction->setEnabled(true);
+	}
+	else
+	{
+		// UI
+
+		char Msg[128];
+		int Len = 0;
+
+		memset(&DummyPort, 0, sizeof(DummyPort));
+
+		ActiveSession->KISSSession = (void *)&DummyPort;		// Dummy marker to show session in use
+
+		strcpy(ActiveSession->UIDEST, CallTo);
+		strcpy(ActiveSession->UIPATH, Via);
+
+		if (TermMode == Tabbed)
+			Len = sprintf(Msg, "UI %s", CallTo);
+		else
+			Len = sprintf(Msg, "UI Session with %s\r", CallTo);
+
+		SetSessLabel(ActiveSession, Msg);
+
+		Len = sprintf(Msg, "UI Session with %s\r", CallTo);
+		SendtoTerm(ActiveSession, Msg, Len);
+		connectMenu->setEnabled(false);
+		discAction->setEnabled(true);
+		YAPPSend->setEnabled(false);
+	}
+
+	KISSConnect::accept();
+}
+
+void KISSConnect::myreject()
+{
+	KISSConnect::reject();
+}
 
 
 
@@ -441,7 +595,7 @@ VARAConnect::VARAConnect(QWidget *parent) : QDialog(parent)
 
 	scrollArea = new QScrollArea(this);
 	scrollArea->setObjectName(QString::fromUtf8("scrollArea"));
-	scrollArea->setGeometry(QRect(5, 5, 562, 681));
+	scrollArea->setGeometry(QRect(5, 5, 250, 150));
 	scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	scrollArea->setWidgetResizable(false);
@@ -631,7 +785,7 @@ void AGWDialog::myaccept()
 		// AGWTimer will reopen connection
 	}
 
-	myStatusBar->setVisible(AGWEnable);
+	myStatusBar->setVisible(AGWEnable | VARAEnable | KISSEnable);
 
 	AGWDialog::accept();
 
@@ -695,7 +849,7 @@ fontDialog::fontDialog(int Menu, QWidget *parent) : QDialog(parent)
 
 	QString family;
 	int csize;
-	int weight;
+    QFont::Weight weight;
 
 #ifdef ANDROID
 	this->resize((screenWidth * 7) / 8, 200);
@@ -721,12 +875,17 @@ fontDialog::fontDialog(int Menu, QWidget *parent) : QDialog(parent)
 
 		QSettings settings(GetConfPath(), QSettings::IniFormat);
 
+#ifdef ANDROID
+		family = settings.value("FontFamily", "Driod Sans Mono").toString();
+		csize = settings.value("PointSize", 12).toInt();
+        weight = (QFont::Weight)settings.value("Weight", 50).toInt();
+#else
 		family = settings.value("FontFamily", "Courier New").toString();
 		csize = settings.value("PointSize", 10).toInt();
-		weight = settings.value("Weight", 50).toInt();
+		weight = (QFont::Weight)settings.value("Weight", 50).toInt();
+#endif
 
 		workingFont = QFont(family);
-
 		workingFont.setPointSize(csize);
 		workingFont.setWeight(weight);
 
@@ -827,7 +986,7 @@ void fontDialog::stylechanged()
 		weight = 50;				// Normal
 
 	workingFont.setItalic(italic);
-	workingFont.setWeight(weight);
+    workingFont.setWeight((QFont::Weight) weight);
 
 	sample->setFont(workingFont);
 }

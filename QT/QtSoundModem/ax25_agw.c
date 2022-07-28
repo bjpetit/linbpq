@@ -64,14 +64,14 @@ void AGW_AX25_frame_analiz(int snd_ch, int RX, string * frame);
 
 void AGW_frame_analiz(AGWUser *  AGW);
 void AGW_send_to_app(void * socket, string * data);
-string * make_frame(string * data, byte * path, byte  pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpt, boolean pf, boolean cr);
+string * make_frame(string * data, Byte * path, Byte  pid, Byte nr, Byte ns, Byte f_type, Byte f_id, boolean rpt, boolean pf, boolean cr);
 void del_incoming_mycalls_by_sock(void * socket);
 void del_incoming_mycalls(char * src_call);
 void send_data_buf(TAX25Port * AX25Sess, int  nr);
-void get_monitor_path(byte * path, char * mycall, char * corrcall, char * digi);
-void decode_frame(byte * frame, int len, byte * path, string * data,
-	byte * pid, byte * nr, byte * ns, byte * f_type, byte * f_id,
-	byte *  rpt, byte * pf, byte * cr);
+void get_monitor_path(Byte * path, char * mycall, char * corrcall, char * digi);
+void decode_frame(Byte * frame, int len, Byte * path, string * data,
+	Byte * pid, Byte * nr, Byte * ns, Byte * f_type, Byte * f_id,
+	Byte *  rpt, Byte * pf, Byte * cr);
 
 
 int AGWVersion[2] = {2019, 'B'};		// QTSM Signature
@@ -292,7 +292,7 @@ string * AGW_G_Frame()
 
 
 
-string * AGW_Gs_Frame(int port, byte * port_info, int Len)
+string * AGW_Gs_Frame(int port, Byte * port_info, int Len)
 {
 	string * Msg;
 
@@ -404,7 +404,7 @@ string *  AGW_I_Frame(int port, char * CallFrom, char * CallTo, char * Monitor)
 	DataLen = strlen(Monitor);
 	Msg = AGW_frame_header(port, 'I', 0, CallFrom, CallTo, DataLen);
 
-	stringAdd(Msg, (byte *)Monitor, DataLen);
+	stringAdd(Msg, (Byte *)Monitor, DataLen);
 	return Msg;
 }
 
@@ -416,7 +416,7 @@ string *  AGW_S_Frame(int port, char * CallFrom, char * CallTo, char * Monitor)
 	DataLen = strlen(Monitor);
 	Msg = AGW_frame_header(port, 'S', 0, CallFrom, CallTo, DataLen);
 
-	stringAdd(Msg, (byte *)Monitor, DataLen);
+	stringAdd(Msg, (Byte *)Monitor, DataLen);
 	return Msg;
 };
 
@@ -428,7 +428,7 @@ string *  AGW_U_Frame(int port, char * CallFrom, char * CallTo, char * Monitor)
 	DataLen = strlen(Monitor);
 	Msg = AGW_frame_header(port, 'U', 0, CallFrom, CallTo, DataLen);
 
-	stringAdd(Msg, (byte *)Monitor, DataLen);
+	stringAdd(Msg, (Byte *)Monitor, DataLen);
 	return Msg;
 }
 
@@ -441,7 +441,7 @@ string * AGW_T_Frame(int port, char * CallFrom, char * CallTo, char * Data)
 	DataLen = strlen(Data);
 	Msg = AGW_frame_header(port, 'T', 0, CallFrom, CallTo, DataLen);
 
-	stringAdd(Msg, (byte *)Data, DataLen);
+	stringAdd(Msg, (Byte *)Data, DataLen);
 
 	return Msg;
 }
@@ -472,7 +472,7 @@ void on_AGW_P_frame(AGWUser * AGW)
 
 void on_AGW_X_frame(AGWUser * AGW, char * CallFrom)
 {
-	byte reg_call;
+	Byte reg_call;
 
 	if (add_incoming_mycalls(AGW->socket, CallFrom))
 		reg_call = 1;
@@ -508,11 +508,11 @@ void on_AGW_R_frame(AGWUser * AGW)
 int refreshModems = 0;
 
 
-void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, byte * Data)
+void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, Byte * Data)
 {
 	// QTSM with a data field is used by QtSM to set/read Modem Params
 
-	byte info[44] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
+	Byte info[44] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
 	int Len = 12;
 
 	if (Frame->DataLength == 32)
@@ -520,7 +520,7 @@ void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, byte * Data)
 		// BPQ to QTSM private Format. 
 
 		int Freq;
-		byte versionBytes[4] = VersionBytes;
+		Byte versionBytes[4] = VersionBytes;
 
 		AGW->reportFreqAndModem = 1;			// Can report frequency and Modem
 
@@ -605,9 +605,9 @@ void on_AGW_Y_frame(void * socket, int snd_ch, char * CallFrom, char * CallTo)
 
 // UI Transmit
 
-void on_AGW_M_frame(int port, byte PID, char * CallFrom, char *CallTo, byte *  Msg, int MsgLen)
+void on_AGW_M_frame(int port, Byte PID, char * CallFrom, char *CallTo, Byte *  Msg, int MsgLen)
 {
-	byte path[80];
+	Byte path[80];
 	char Calls[80];
 	string * Data = newString();
 
@@ -630,7 +630,7 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame)
 	char * CallTo = Frame->callto;
 
 	char path[128];
-	byte axpath[80];
+	Byte axpath[80];
 
 	TAX25Port * AX25Sess;
 
@@ -687,7 +687,7 @@ void on_AGW_C_frame(AGWUser * AGW, struct AGWHeader * Frame)
 
 
 
-void on_AGW_D_frame(int snd_ch, char * CallFrom, char * CallTo, byte * Msg, int Len)
+void on_AGW_D_frame(int snd_ch, char * CallFrom, char * CallTo, Byte * Msg, int Len)
 {
 	TAX25Port * AX25Sess;
 
@@ -970,12 +970,12 @@ void AGW_send_to_app(void * socket, string * data)
 	char * Msg = malloc(data->Length);
 	memcpy(Msg, data->Data, data->Length);
 	// can use KISS proc as it just sends to the supplied socket but need copy of message
-	KISSSendtoServer(socket, (byte *)Msg, data->Length);
+	KISSSendtoServer(socket, (Byte *)Msg, data->Length);
 	freeString(data);
 };
 
 
-void AGW_AX25_data_in(void  * socket, int snd_ch, int PID, byte * path, string * data)
+void AGW_AX25_data_in(void  * socket, int snd_ch, int PID, Byte * path, string * data)
 {
 	int len = 250, sendlen;
 
@@ -1002,7 +1002,7 @@ void AGW_AX25_data_in(void  * socket, int snd_ch, int PID, byte * path, string *
 
 }
 
-void AGW_AX25_conn(TAX25Port * AX25Sess, int snd_ch, byte mode)
+void AGW_AX25_conn(TAX25Port * AX25Sess, int snd_ch, Byte mode)
 {
 	string * Msg = newString();
 
@@ -1027,7 +1027,7 @@ void AGW_AX25_conn(TAX25Port * AX25Sess, int snd_ch, byte mode)
 
 
 
-void AGW_AX25_disc(TAX25Port * AX25Sess, byte mode)
+void AGW_AX25_disc(TAX25Port * AX25Sess, Byte mode)
 {
 	string * Msg = newString();
 
@@ -1055,16 +1055,16 @@ void AGW_AX25_disc(TAX25Port * AX25Sess, byte mode)
 };
 
 
-void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte nr, byte ns, byte f_type, byte f_id, byte  rpt, byte pf, byte cr, byte RX)
+void AGW_frame_monitor(Byte snd_ch, Byte * path, string * data, Byte pid, Byte nr, Byte ns, Byte f_type, Byte f_id, Byte  rpt, Byte pf, Byte cr, Byte RX)
 {
 	char mon_frm[512];
 	char AGW_path[256];
 	string * AGW_data = NULL;
 
 	const char * frm;
-	byte * datap = data->Data;
-	byte _data[512];
-	byte * p_data = _data;
+	Byte * datap = data->Data;
+	Byte _data[512];
+	Byte * p_data = _data;
 	int _datalen;
 
 	char  agw_port;
@@ -1103,7 +1103,7 @@ void AGW_frame_monitor(byte snd_ch, byte * path, string * data, byte pid, byte n
 
 	if (_datalen)
 	{
-		byte * ptr = _data;
+		Byte * ptr = _data;
 		i = 0;
 
 		// remove successive cr or cr on end		while (i < _datalen)
@@ -1338,7 +1338,7 @@ void AGW_Report_Modem_Change(int port)
 		{
 			// QTSM 's' Message with a data field is used by QtSM to set/read Modem Params
 
-			byte info[44] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
+			Byte info[44] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
 
 			// Return Freq and Modem
 
@@ -1380,9 +1380,9 @@ void AGW_Raw_monitor(int snd_ch, string * data)
 void AGW_AX25_frame_analiz(int snd_ch, int RX, string * frame)
 {
 	//  path,data string;
-	byte pid, nr, ns, f_type, f_id;
-	byte  rpt, cr, pf;
-	byte path[80];
+	Byte pid, nr, ns, f_type, f_id;
+	Byte  rpt, cr, pf;
+	Byte path[80];
 	string * data = newString();
 
 	decode_frame(frame->Data, frame->Length, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
@@ -1397,7 +1397,7 @@ void AGW_AX25_frame_analiz(int snd_ch, int RX, string * frame)
 void AGW_frame_analiz(AGWUser *  AGW)
 {
 	struct AGWHeader * Frame = (struct AGWHeader *)AGW->data_in->Data;
-	byte * Data = &AGW->data_in->Data[36];
+	Byte * Data = &AGW->data_in->Data[36];
 
 	if (Frame->Port < 0 || Frame->Port > 3)
 		return;

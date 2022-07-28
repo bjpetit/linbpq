@@ -378,7 +378,7 @@ void mynet::doHLSetPTT(int c)
 
 
 
-extern "C" void KISSSendtoServer(void * sock, byte * Msg, int Len)
+extern "C" void KISSSendtoServer(void * sock, Byte * Msg, int Len)
 {
 	emit t->sendtoKISS(sock, Msg, Len);
 }

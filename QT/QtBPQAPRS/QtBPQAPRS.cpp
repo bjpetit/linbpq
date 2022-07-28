@@ -1,6 +1,8 @@
 // Qt Version of BPQAPRS
 
-#define VersionString "0.0.0.7"
+// 0.0.0.8 April 2022 Allow Selection of map type
+
+#define VersionString "0.0.0.8"
 
 #define _USE_32BIT_TIME_T
 
@@ -141,6 +143,8 @@ char OSMDir[250] = "";
 char APRSDir[250] = "";
 char Symbols[250] = "";
 
+char Style[250] = "osm-bright";
+
 int newTiles = 0;						// New Tiles have been downloaded
 
 int WindowX = 100, WindowY = 100;			// Position of window on screen
@@ -197,15 +201,12 @@ int StationsOpen = 0;
 
 #ifdef MYTILES
 
-//char Host[] = "192.168.1.63:7381";
-//char Host[] = "g8bpqnotts.ddns.net:7381";
-
 char Host1[] = "server1.g8bpq.net:7381";
 char Host2[] = "server2.g8bpq.net:7381";
 
 
-//char Host1[] = "192.168.1.63:7381";
-//char Host2[] = "192.168.1.63:8080";
+//char Host1[] = "192.168.1.63:7382";
+//char Host2[] = "192.168.1.63:7382";
 
 //#define MapServerPort 8090
 
@@ -905,6 +906,8 @@ void QtBPQAPRS::Setup()
 	Uix->useLocalTime->setChecked(LocalTime);
 	Uix->distKM->setChecked(KM);
 
+	Uix->mapStyle->setCurrentText(Style);
+
 	connect(Uix->okButton, SIGNAL(clicked()), this, SLOT(myaccept()));
 	connect(Uix->cancelButton, SIGNAL(clicked()), this, SLOT(myreject()));
 
@@ -926,6 +929,8 @@ void QtBPQAPRS::myaccept()
 
 	strcpy(JPEGFilename, Uix->JPEGFileName->text().toUtf8());
 	JPEGinterval = Uix->JPEGInterval->text().toInt();
+
+	strcpy(Style, Uix->mapStyle->currentText().toUtf8());
 
 	SuppressNullPosn = Uix->suppressNoPosn->isChecked();
 	AddViewToFilter = Uix->addCurrentView->isChecked();
@@ -1697,9 +1702,9 @@ int QtBPQAPRS::GetTile(int Zoom, int x, int y, int Server, int Count)
 	gettingTile++;
 
 	if (Server == 0)
-		sprintf(URL, "http://%s/styles/klokantech-basic/%d/%d/%d.png", Host1, Zoom, x, y);
+		sprintf(URL, "http://%s/styles/%s/%d/%d/%d.png", Host1, Style, Zoom, x, y);
 	else
-		sprintf(URL, "http://%s/styles/klokantech-basic/%d/%d/%d.png", Host2, Zoom, x, y);
+		sprintf(URL, "http://%s/styles/%s/%d/%d/%d.png", Host2, Style, Zoom, x, y);
 
 //	if (Server == 0)
 //		sprintf(URL, "http://%s/styles/basic-preview/%d/%d/%d.png", Host1, Zoom, x, y);
@@ -3045,8 +3050,7 @@ void QtBPQAPRS::GetConfig()
 
 	strcpy(JPEGFilename, settings.value("JPEGFileName", "").toString().toUtf8());
 	strcpy(ISFilter, settings.value("ISFilter", "").toString().toUtf8());
-
-	settings.setValue("JPEGFileName", JPEGFilename);
+	strcpy(Style, settings.value("Style", "osm-bright").toString().toUtf8());
 
 	iconFontSize = settings.value("iconFontSize", 9).toInt();
 	TrackExpireTime = settings.value("TrackExpireTime", 1440).toInt();
@@ -3098,6 +3102,8 @@ void QtBPQAPRS::SaveConfig()
 
 	settings.setValue("CreateJPEG", CreateJPEG);
 	settings.setValue("JPEGInterval", JPEGinterval);
+	settings.setValue("Style", Style);
+
 
 	settings.setValue("JPEGFileName", JPEGFilename);
 	settings.setValue("iconFontSize", iconFontSize);

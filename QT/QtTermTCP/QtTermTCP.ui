@@ -47,6 +47,16 @@
    </layout>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
+  <action name="actionListen">
+   <property name="text">
+    <string>Listen</string>
+   </property>
+  </action>
+  <action name="actionDisconnect">
+   <property name="text">
+    <string>Disconnect</string>
+   </property>
+  </action>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <resources>

@@ -1990,7 +1990,7 @@ void QtSoundModem::sendtoTrace(char * Msg, int tx)
 
 typedef struct TRGBQ_t
 {
-	byte b, g, r, re;
+	Byte b, g, r, re;
 
 } TRGBWQ;
 
@@ -2007,9 +2007,8 @@ unsigned int RGBWF[256] ;
 
 extern "C" void init_raduga()
 {
-
-	byte offset[6] = {0, 51, 102, 153, 204};
-	byte i, n;
+	Byte offset[6] = {0, 51, 102, 153, 204};
+	Byte i, n;
 
 	for (n = 0; n < 52; n++)
 	{
@@ -2217,7 +2216,7 @@ void doWaterfallThread(void * param)
 
 	int lineLen;
 	word  hfft_size;
-	byte  n;
+	Byte  n;
 	float RealOut[4096] = { 0 };
 	float ImagOut[4096];
 	QRegion exposed;
@@ -2337,7 +2336,7 @@ void doWaterfallThread(void * param)
 		{
 			n = fft_disp[snd_ch][i];
 
-			memcpy(p, &RGBWF[n], 4);
+		memcpy(p, &RGBWF[n], 4);
 			p += 4;
 		}
 	}

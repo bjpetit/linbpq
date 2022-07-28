@@ -27,7 +27,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #ifndef WIN32
 
 #define VOID void
-#define bool int
+#define BOOL int
 #define TRUE 1
 #define FALSE 0
 
@@ -249,9 +249,9 @@ unsigned int CP1252toUTF8DataLen[128] = {
 };
 
 #ifdef __BIG_ENDIAN__
-bool initUTF8Done = FALSE;
+BOOL initUTF8Done = FALSE;
 #else
-bool initUTF8Done = TRUE;
+BOOL initUTF8Done = TRUE;
 #endif
 
 VOID initUTF8()

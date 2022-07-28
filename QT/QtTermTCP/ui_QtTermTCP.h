@@ -11,6 +11,7 @@
 
 #include <QtCore/QVariant>
 #include <QtGui/QIcon>
+#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QGridLayout>
 #include <QtWidgets/QMainWindow>
@@ -23,6 +24,8 @@ QT_BEGIN_NAMESPACE
 class Ui_QtTermTCPClass
 {
 public:
+    QAction *actionListen;
+    QAction *actionDisconnect;
     QWidget *centralWidget;
     QGridLayout *gridLayout;
     QVBoxLayout *verticalLayout;
@@ -40,6 +43,10 @@ public:
         QIcon icon;
         icon.addFile(QString::fromUtf8(":/QtTermTCP/QtTermTCP.ico"), QSize(), QIcon::Normal, QIcon::Off);
         QtTermTCPClass->setWindowIcon(icon);
+        actionListen = new QAction(QtTermTCPClass);
+        actionListen->setObjectName(QString::fromUtf8("actionListen"));
+        actionDisconnect = new QAction(QtTermTCPClass);
+        actionDisconnect->setObjectName(QString::fromUtf8("actionDisconnect"));
         centralWidget = new QWidget(QtTermTCPClass);
         centralWidget->setObjectName(QString::fromUtf8("centralWidget"));
         gridLayout = new QGridLayout(centralWidget);
@@ -66,6 +73,8 @@ public:
     void retranslateUi(QMainWindow *QtTermTCPClass)
     {
         QtTermTCPClass->setWindowTitle(QCoreApplication::translate("QtTermTCPClass", "QtTermTCP", nullptr));
+        actionListen->setText(QCoreApplication::translate("QtTermTCPClass", "Listen", nullptr));
+        actionDisconnect->setText(QCoreApplication::translate("QtTermTCPClass", "Disconnect", nullptr));
     } // retranslateUi
 
 };

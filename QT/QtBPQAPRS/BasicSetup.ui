@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>711</width>
+    <width>596</width>
     <height>389</height>
    </rect>
   </property>
@@ -108,7 +108,7 @@
    <property name="geometry">
     <rect>
      <x>146</x>
-     <y>268</y>
+     <y>260</y>
      <width>459</width>
      <height>20</height>
     </rect>
@@ -222,7 +222,7 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>270</y>
+     <y>260</y>
      <width>109</width>
      <height>20</height>
     </rect>
@@ -315,6 +315,39 @@
      <height>20</height>
     </rect>
    </property>
+  </widget>
+  <widget class="QLabel" name="label_12">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>291</y>
+     <width>109</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Map Style</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="mapStyle">
+   <property name="geometry">
+    <rect>
+     <x>150</x>
+     <y>290</y>
+     <width>131</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <item>
+    <property name="text">
+     <string>osm-bright</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>klokantech-basic</string>
+    </property>
+   </item>
   </widget>
  </widget>
  <resources/>

@@ -1,94 +1,37 @@
-// Microsoft Visual C++ generated resource script.
-//
-#include "resource.h"
-/////////////////////////////////////////////////////////////////////////////
-// English (United Kingdom) resources
+#include <windows.h>
 
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
-LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
-#pragma code_page(1252)
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Icon
-//
-
-// Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-IDI_ICON1               ICON                    "D:\\BT Cloud\\ActiveSource\\QT\\QtTermTCP\\QtTermTCP.ico"
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Version
-//
+IDI_ICON1	ICON	DISCARDABLE	"QtTermTCP.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,0,0,11
- PRODUCTVERSION 0,0,0,11
- FILEFLAGSMASK 0x3fL
+	FILEVERSION 0,0,0,0
+	PRODUCTVERSION 0,0,0,0
+	FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
- FILEFLAGS 0x1L
+	FILEFLAGS VS_FF_DEBUG
 #else
- FILEFLAGS 0x0L
+	FILEFLAGS 0x0L
 #endif
- FILEOS 0x4L
- FILETYPE 0x2L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "040904b0"
-        BEGIN
-            VALUE "FileVersion", "0.0.0.11"
-            VALUE "OriginalFilename", "QtTermTCP.exe"
-            VALUE "ProductName", "QtTermTCP"
-            VALUE "ProductVersion", "0.0.0.11"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x409, 1200
-    END
-END
-
-
-#ifdef APSTUDIO_INVOKED
-/////////////////////////////////////////////////////////////////////////////
-//
-// TEXTINCLUDE
-//
-
-1 TEXTINCLUDE 
-BEGIN
-    "resource.h\0"
-END
-
-2 TEXTINCLUDE 
-BEGIN
-    "\0"
-END
-
-3 TEXTINCLUDE 
-BEGIN
-    "\r\n"
-    "\0"
-END
-
-#endif    // APSTUDIO_INVOKED
-
-#endif    // English (United Kingdom) resources
-/////////////////////////////////////////////////////////////////////////////
-
-
-
-#ifndef APSTUDIO_INVOKED
-/////////////////////////////////////////////////////////////////////////////
-//
-// Generated from the TEXTINCLUDE 3 resource.
-//
-
-
-/////////////////////////////////////////////////////////////////////////////
-#endif    // not APSTUDIO_INVOKED
+	FILEOS VOS__WINDOWS32
+	FILETYPE VFT_DLL
+	FILESUBTYPE 0x0L
+	BEGIN
+		BLOCK "StringFileInfo"
+		BEGIN
+			BLOCK "040904b0"
+			BEGIN
+				VALUE "CompanyName", "\0"
+				VALUE "FileDescription", "\0"
+				VALUE "FileVersion", "0.0.0.0\0"
+				VALUE "LegalCopyright", "\0"
+				VALUE "OriginalFilename", "QtTermTCP.exe\0"
+				VALUE "ProductName", "QtTermTCP\0"
+				VALUE "ProductVersion", "0.0.0.0\0"
+			END
+		END
+		BLOCK "VarFileInfo"
+		BEGIN
+			VALUE "Translation", 0x0409, 1200
+		END
+	END
+/* End of Version info */
 

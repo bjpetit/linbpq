@@ -2,6 +2,7 @@
 QT += core gui
 QT += network
 QT += widgets
+QT += serialport
 
 
 TARGET = QtTermTCP
@@ -21,24 +22,27 @@ DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x050000    # disables all the APIs depr
 
 
 SOURCES += main.cpp\
-    QtTermTCP.cpp\
-	TermTCPCommon.cpp\
-	TabDialog.cpp \
-	AGWCode.cpp \
-	utf8Routines.cpp
+        QtTermTCP.cpp\
+        TermTCPCommon.cpp\ 
+        TabDialog.cpp  \
+        AGWCode.cpp \
+        ax25.c \
+        UZ7HOUtils.c \
+        ax25_l2.c\
+        utf8Routines.cpp
 
 HEADERS  += QtTermTCP.h\
-	TabDialog.h
+        TabDialog.h
 
 FORMS    += QtTermTCP.ui\
-	ListenPort.ui \
-	AGWParams.ui \
-	AGWConnect.ui
-		
+        ListenPort.ui \
+        AGWParams.ui \
+        VARAConfig.ui \
+        KISSConfig.ui \
+        AGWConnect.ui
+
 RESOURCES += QtTermTCP.qrc
 
 RC_ICONS = QtTermTCP.ico
 
-QMAKE_CFLAGS += -g
-QMAKE_CXXFLAGS += -g
 QMAKE_LFLAGS += -no-pie

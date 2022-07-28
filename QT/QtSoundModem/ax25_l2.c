@@ -50,10 +50,10 @@ implementation
 uses ax25,ax25_agw,sm_main,kiss_mode;
 */
 
-string * make_frame(string * data, byte * path, byte  pid, byte nr, byte ns, byte f_type, byte f_id, boolean rpt, boolean pf, boolean cr);
-void rst_t3(AX25Sess);
+string * make_frame(string * data, Byte * path, Byte  pid, Byte nr, Byte ns, Byte f_type, Byte f_id, boolean rpt, boolean pf, boolean cr);
+void rst_t3(TAX25Port * AX25Sess);
 
-TAX25Port * get_user_port(int snd_ch, byte * path);
+TAX25Port * get_user_port(int snd_ch, Byte * path);
 
 void  inc_frack(TAX25Port * AX25Sess)
 {
@@ -135,10 +135,10 @@ void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf)
 	// I think this removes redundant frames from the TX Queue (eg repeated RR frames)
 
 	string * frame;
-	byte path[80];
+	Byte path[80];
 	string * data = newString();
 
-	byte  pid, nr, ns, f_type, f_id, rpt, cr, pf;
+	Byte  pid, nr, ns, f_type, f_id, rpt, cr, pf;
 	boolean  curr_req, optimize;
 	int i, k;
 	char need_frm[8] = "";
@@ -292,7 +292,7 @@ void  add_pkt_buf(TAX25Port * AX25Sess, string * data)
 		Add(&AX25Sess->frame_buf, data);
 }
 
-void add_I_FRM(TAX25Port * AX25Sess, byte * path)
+void add_I_FRM(TAX25Port * AX25Sess, Byte * path)
 {
 	string * data;
 	int  i;
@@ -344,7 +344,7 @@ void delete_I_FRM_port(TAX25Port * AX25Sess)
 	string path = { 0 }; 
 	string data= { 0 };
 
-	byte pid, nr, ns, f_type, f_id, rpt, cr, pf;
+	Byte pid, nr, ns, f_type, f_id, rpt, cr, pf;
 	boolean  optimize;
 	int  i = 0;
 
@@ -478,7 +478,7 @@ void send_data_buf_srej(TAX25Port * AX25Sess, int  nr)
 
 void  write_frame_collector(TAX25Port * AX25Sess, int ns, string * data)
 {
-	byte  i;
+	Byte  i;
 	char  frm_ns;
 	string  * frm;
 	boolean  found ;
@@ -510,11 +510,12 @@ void  write_frame_collector(TAX25Port * AX25Sess, int ns, string * data)
 			{
 				frm = Strings(&AX25Sess->frm_collector, i);
 
-				if (frm_ns = frm->Data[0])
+				if (frm_ns == frm->Data[0])
 					found = TRUE;
 
 				i++;
-			} while (!found &&  i != AX25Sess->frm_collector.Count);
+			}
+			while (!found &&  i != AX25Sess->frm_collector.Count);
 
 		}
 
@@ -538,7 +539,7 @@ string * read_frame_collector(TAX25Port * AX25Sess, boolean fecflag)
 
 	int i = 0;
 	boolean found = FALSE;
-	byte frm_ns;
+	Byte frm_ns;
 
 	while (i < AX25Sess->frm_collector.Count)
 	{
@@ -577,7 +578,7 @@ string * read_frame_collector(TAX25Port * AX25Sess, boolean fecflag)
 
 /////////////////////////// SET-FRAMES //////////////////////////////////
 
-void set_chk_link(TAX25Port * AX25Sess, byte * path)
+void set_chk_link(TAX25Port * AX25Sess, Byte * path)
 {
 	boolean  b_IPOLL;
 	int   len;
@@ -633,7 +634,7 @@ void set_link(TAX25Port * AX25Sess, UCHAR * axpath)
 
 #define    MODE_OUR 0
 
-void set_try_unlink(TAX25Port * AX25Sess, byte * path)
+void set_try_unlink(TAX25Port * AX25Sess, Byte * path)
 {
 	string nullstring;
 	nullstring.Length = 0;
@@ -644,7 +645,7 @@ void set_try_unlink(TAX25Port * AX25Sess, byte * path)
 }
 
 
-void set_unlink(TAX25Port * AX25Sess, byte * path)
+void set_unlink(TAX25Port * AX25Sess, Byte * path)
 {
 	if (AX25Sess->status == STAT_TRY_UNLINK 
 		|| AX25Sess->status == STAT_TRY_LINK
@@ -676,11 +677,11 @@ void set_unlink(TAX25Port * AX25Sess, byte * path)
 		set_try_unlink(AX25Sess, AX25Sess->Path);
 }
 
-void set_FRMR(int snd_ch, byte * path, unsigned char frameType)
+void set_FRMR(int snd_ch, Byte * path, unsigned char frameType)
 {
 	//We may not have a session when sending FRMR so reverse path and send
 
-	byte revpath[80];
+	Byte revpath[80];
 	string * Data = newString();
 
 	Data->Data[0] = frameType;
@@ -695,11 +696,11 @@ void set_FRMR(int snd_ch, byte * path, unsigned char frameType)
 	freeString(Data);
 }
 
-void set_DM(int snd_ch, byte * path)
+void set_DM(int snd_ch, Byte * path)
 {
 	//We may not have a session when sending DM so reverse path and send
 	
-	byte revpath[80];
+	Byte revpath[80];
 
 	reverse_addr(path, revpath, strlen(path));
 
@@ -709,7 +710,7 @@ void set_DM(int snd_ch, byte * path)
 /////////////////////////// S-FRAMES ////////////////////////////////////
 
 
-void on_RR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
+void on_RR(TAX25Port * AX25Sess, Byte * path, int  nr, int  pf, int cr)
 {
 	char need_frame[16] = "";
 	int index = 0;
@@ -768,7 +769,7 @@ void on_RR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 }
 
 
-void on_RNR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
+void on_RNR(TAX25Port * AX25Sess, Byte * path, int  nr, int  pf, int cr)
 {
 	if (AX25Sess->status == STAT_TRY_LINK)
 		return;
@@ -798,7 +799,7 @@ void on_RNR(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 }
 
 
-void on_REJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
+void on_REJ(TAX25Port * AX25Sess, Byte * path, int  nr, int  pf, int cr)
 {
 	if (AX25Sess->status == STAT_TRY_LINK)
 		return;
@@ -824,7 +825,7 @@ void on_REJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 }
 
 
-void on_SREJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
+void on_SREJ(TAX25Port * AX25Sess, Byte * path, int  nr, int  pf, int cr)
 {
 	if (AX25Sess->status == STAT_TRY_LINK)
 		return;
@@ -850,11 +851,11 @@ void on_SREJ(TAX25Port * AX25Sess, byte * path, int  nr, int  pf, int cr)
 }
 /////////////////////////// I-FRAMES ////////////////////////////////////
 
-void  on_I(void * socket, TAX25Port * AX25Sess, int PID, byte * path, string * data, int nr, int ns, int pf, int cr, boolean fecflag)
+void  on_I(void * socket, TAX25Port * AX25Sess, int PID, Byte * path, string * data, int nr, int ns, int pf, int cr, boolean fecflag)
 {
 	string * collector_data;
 	int i;
-	byte need_frame[16] = "";
+	Byte need_frame[16] = "";
 	int index = 0;
 	{
 		if (AX25Sess->status == STAT_TRY_LINK)
@@ -1078,7 +1079,7 @@ void on_UI(TAX25Port * AX25Sess, int pf, int cr)
 {
 }
 
-void on_FRMR(void * socket, TAX25Port * AX25Sess, byte * path)
+void on_FRMR(void * socket, TAX25Port * AX25Sess, Byte * path)
 {
 	if (AX25Sess->status != STAT_NO_LINK)
 	{
@@ -1116,7 +1117,7 @@ void timer_event()
 	int  snd_ch, port;
 	void * socket;
 	single  frack;
-	byte  active;
+	Byte  active;
 	TAX25Port * AX25Sess;
 
 	TimerEvent = TIMER_EVENT_OFF;
@@ -1228,7 +1229,7 @@ TAX25Port * get_free_port(int snd_ch)
 
 
 
-TAX25Port * get_user_port(int snd_ch, byte * path)
+TAX25Port * get_user_port(int snd_ch, Byte * path)
                                                                                                                                                                                                                                                                                                                                                                        {
 	TAX25Port * AX25Sess = NULL;
 
@@ -1249,7 +1250,7 @@ TAX25Port * get_user_port(int snd_ch, byte * path)
 	return FALSE;
 }
 
-boolean get_user_dupe(int snd_ch, byte * path)
+boolean get_user_dupe(int snd_ch, Byte * path)
 {
 	int i = 0;
 	TAX25Port * AX25Sess;
@@ -1302,7 +1303,7 @@ void Digipeater(int snd_ch, string * frame)
 	boolean addr_end, flag_replaced, digi_stop;
 	word crc;
 	char call[16];
-	byte * addr = &frame->Data[7];					// Origon
+	Byte * addr = &frame->Data[7];					// Origon
 	int len = frame->Length - 2;					// not FCS
 	string * frameCopy;
 
@@ -1370,15 +1371,15 @@ void Digipeater(int snd_ch, string * frame)
 void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 {
 	int  port, free_port;
-	byte path[80];
+	Byte path[80];
 	string  *data = newString();
-	byte  pid, nr, ns, f_type, f_id, rpt, cr, pf;
+	Byte  pid, nr, ns, f_type, f_id, rpt, cr, pf;
 	boolean	need_free_port;
 	void * socket = NULL;
 	boolean	incoming_conn = 0;
-	byte revpath[80];
+	Byte revpath[80];
 	int pathlen;
-	byte * ptr;
+	Byte * ptr;
 
 	int excluded = 0;
 	int len;
@@ -1510,7 +1511,7 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 		{
 			// if there are no free ports for connection - beat off
 
-			byte Rev[80];
+			Byte Rev[80];
 
 			reverse_addr(path, Rev, strlen(path));
 			set_DM(snd_ch, Rev);

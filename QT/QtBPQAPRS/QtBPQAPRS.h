@@ -245,6 +245,9 @@ public:
 	QCheckBox *useLocalTime;
 	QCheckBox *distKM;
 	QCheckBox *createJPEG;
+	QLabel *label_12;
+	QComboBox *mapStyle;
+
 
 	void setupUi(QDialog *configDialog)
 	{
@@ -318,6 +321,15 @@ public:
 		createJPEG = new QCheckBox(configDialog);
 		createJPEG->setObjectName(QString::fromUtf8("createJPEG"));
 		createJPEG->setGeometry(QRect(20, 220, 159, 20));
+		label_12 = new QLabel(configDialog);
+		label_12->setObjectName(QString::fromUtf8("label_12"));
+		label_12->setGeometry(QRect(20, 291, 109, 20));
+		mapStyle = new QComboBox(configDialog);
+		mapStyle->addItem(QString());
+		mapStyle->addItem(QString());
+		mapStyle->setObjectName(QString::fromUtf8("mapStyle"));
+		mapStyle->setGeometry(QRect(146, 290, 131, 22));
+
 
 		retranslateUi(configDialog);
 		QObject::connect(okButton, SIGNAL(clicked()), configDialog, SLOT(accept()));
@@ -341,6 +353,9 @@ public:
 		useLocalTime->setText(QApplication::translate("configDialog", "Use Local Time", nullptr));
 		distKM->setText(QApplication::translate("configDialog", "Distance in Kilometers", nullptr));
 		createJPEG->setText(QApplication::translate("configDialog", "Create JPEG of display", nullptr));
+		label_12->setText(QCoreApplication::translate("configDialog", "Map Style", nullptr));
+		mapStyle->setItemText(0, QCoreApplication::translate("configDialog", "osm-bright", nullptr));
+		mapStyle->setItemText(1, QCoreApplication::translate("configDialog", "klokantech-basic", nullptr));
 	} // retranslateUi
 
 	Ui_configDialog(QWidget * parent);

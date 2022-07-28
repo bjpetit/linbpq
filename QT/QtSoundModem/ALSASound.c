@@ -1373,6 +1373,7 @@ void SoundFlush()
 
 	snd_pcm_status_t *status = NULL;
 	int err, res;
+	int lastavail = 0;
 
 	if (Loopback)
 		ProcessNewSamples(&buffer[Index][0], Number);
@@ -1385,13 +1386,17 @@ void SoundFlush()
 
 	if (SoundMode == 0)		// ALSA
 	{
+		usleep(100000);
+
 		while (1 && playhandle)
 		{
-			//		snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
+			snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
 
 			//		Debugprintf("Waiting for complete. Avail %d Max %d", avail, MaxAvail);
 
 			snd_pcm_status_alloca(&status);					// alloca allocates once per function, does not need a free
+
+//			Debugprintf("Waiting for complete. Avail %d Max %d last %d", avail, MaxAvail, lastavail);
 
 			if ((err = snd_pcm_status(playhandle, status)) != 0)
 			{
@@ -1403,7 +1408,8 @@ void SoundFlush()
 
 			//		Debugprintf("PCM Status = %d", res);
 
-			if (res != SND_PCM_STATE_RUNNING)				// If sound system is not running then it needs data
+			if (res != SND_PCM_STATE_RUNNING || lastavail == avail)			// If sound system is not running then it needs data
+//			if (res != SND_PCM_STATE_RUNNING)				// If sound system is not running then it needs data
 	//		if (MaxAvail - avail < 100)	
 			{
 				// Send complete - Restart Capture
@@ -1411,6 +1417,7 @@ void SoundFlush()
 				OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
 				break;
 			}
+			lastavail = avail;
 			usleep(50000);
 		}
 		// I think we should turn round the link here. I dont see the point in
@@ -1791,6 +1798,8 @@ HANDLE OpenCOMPort(char * Port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet,
 
 	sprintf(fulldev, "/dev/%s", Port);
 
+	printf("%s\n", fulldev);
+
 	if ((fd = open(fulldev, O_RDWR | O_NDELAY)) == -1)
 	{
 		if (Quiet == 0)
@@ -1832,7 +1841,7 @@ HANDLE OpenCOMPort(char * Port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet,
 
 	ioctl(fd, FIONBIO, &param);
 
-	Debugprintf("LinBPQ Port %s fd %d", fulldev, fd);
+	Debugprintf("Port %s fd %d", fulldev, fd);
 
 	if (SetDTR)
 		COMSetDTR(fd);
@@ -1860,6 +1869,8 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 
 		if (ret >= ToSend)
 			return TRUE;
+
+//		perror("WriteCOM");
 
 		if (ret == -1)
 		{
