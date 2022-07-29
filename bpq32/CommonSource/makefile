@@ -19,7 +19,7 @@ OBJS = pngwtran.o pngrtran.o pngset.o pngrio.o pngwio.o pngtrans.o pngrutil.o pn
 
 CC = gcc
 		                       
-all: CFLAGS = -DLINBPQ -MMD -g
+all: CFLAGS = -DLINBPQ -MMD -g -fcommon
 all: linbpq
 
 
@@ -28,7 +28,7 @@ noi2c: linbpq
 
 	
 linbpq: $(OBJS)
-	gcc $(OBJS) -Xlinker -Map=output.map -l:libminiupnpc.a -lrt -lm -lz -lpthread -lconfig -lpcap -o linbpq
+	CC $(OBJS) -Xlinker -Map=output.map -l:libminiupnpc.a -lrt -lm -lz -lpthread -lconfig -lpcap -o linbpq
 	sudo setcap "CAP_NET_ADMIN=ep CAP_NET_RAW=ep CAP_NET_BIND_SERVICE=ep" linbpq		
 
 -include *.d

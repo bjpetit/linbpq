@@ -145,7 +145,7 @@ typedef struct _TRANSPORTENTRY
 	UCHAR	SPYFLAG;			// SPY - CONNECT TO NODE VIA BBS CALLSIGN
 		
 	UCHAR	RTT_SEQ;			// SEQUENCE NUMBER BEING TIMED
-	ULONG	RTT_TIMER;			// TIME ABOVE SEQUENCE WAS SENT
+	uint32_t	RTT_TIMER;			// TIME ABOVE SEQUENCE WAS SENT
 
 	USHORT	PASSWORD;			// AUTHORISATION CODE FOR REMOTE SYSOP
 
@@ -898,7 +898,7 @@ struct myin_addr {
         union {
                 struct { u_char s_b1,s_b2,s_b3,s_b4; } S_un_b;
                 struct { u_short s_w1,s_w2; } S_un_w;
-                u_long addr;
+                uint32_t addr;
         };
 };
 
@@ -943,8 +943,8 @@ typedef struct _TCPMSG
 	USHORT	SOURCEPORT;
 	USHORT	DESTPORT;
 
-	ULONG	SEQNUM;
-	ULONG	ACKNUM;
+	uint32_t	SEQNUM;
+	uint32_t	ACKNUM;
 
 	UCHAR	TCPCONTROL;			// 4 BITS DATA OFFSET 4 RESERVED
 	UCHAR	TCPFLAGS;			// (2 RESERVED) URG ACK PSH RST SYN FIN

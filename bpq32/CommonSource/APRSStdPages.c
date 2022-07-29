@@ -3465,6 +3465,9 @@ char * get_aprs()
 "  {\n"
 "   var icon;\n"
 "   \n"
+"var dist = homePoint.distanceTo([elements[1], elements[2]]) / 1609.34;\n"
+"var popup = elements[3] + '<br>Distance ' + dist.toFixed(0) + ' Miles';"
+
 "   if (elements[6] < 900)\n"
 "   \ticon = blueIcon;\n"
 "   else if (elements[6] < 1800)\n"
@@ -3474,7 +3477,7 @@ char * get_aprs()
 "   \t\n"
 "     var m = L.marker([elements[1], elements[2]], {rotationAngle: elements[4], icon: icon})\n"
 "   .addTo(layergroup)\n"
-"   .bindPopup(elements[3])\n"
+"   .bindPopup(popup)\n"
 "   .on('click', function (e) {alert(this.getLatLng());})\n"
 "   .on('mouseover', function (e) {this.openPopup();})\n"
 "   .on('mouseout', function (e) {this.closePopup();});\n"

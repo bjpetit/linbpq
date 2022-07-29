@@ -66,6 +66,8 @@ void xdecodeblock( unsigned char in[4], unsigned char out[3] );
 void FlushData(struct TNCINFO * TNC);
 void CountRestarts(struct TNCINFO * TNC);
 void StopTNC(struct TNCINFO * TNC);
+int FreeDataConnect(struct TNCINFO * TNC, char * Call);
+int FreeDataDisconnect(struct TNCINFO * TNC);
 
 static char ClassName[]="FREEDATASTATUS";
 static char WindowTitle[] = "FreeData Modem";
@@ -1484,7 +1486,7 @@ VOID FreeDataProcessTNCMessage(struct TNCINFO * TNC, char * Call, unsigned char 
 				// Send 'd'
 
 				Sleep(1000);
-				FreeDataDisconnect(TNC, "d");
+				FreeDataDisconnect(TNC);
 				return;	
 			}
 		}

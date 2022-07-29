@@ -1075,7 +1075,7 @@
 //	Speed up killing multiple messages
 //	Allow SendWL2KFW as well as the (incorrect)SendWL2KPM command
 
-//  6.0.23.1  ?????????
+//  6.0.23.1  June 2022
 
 //	Fix crash when ; added to call in send commands
 //	Allow smtp/ override for messages from RMS Express to send via ISP gateway
@@ -1096,6 +1096,11 @@
 //	Fix Web management on Android deviced (.58)
 //	Disconnect immediately if "Invalid Command" "*** Protocol Error" or "Already Connected" received (.70)
 //	Check Badword and Reject filters before processing WP Messages
+
+//  6.0.24.1  ?? 2022
+
+//	Fix ' in Webmail subject
+
 
 #include "bpqmail.h"
 #define MAIL

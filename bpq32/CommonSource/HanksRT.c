@@ -404,10 +404,7 @@ void chat_link_out (LINK *link)
 			return;
 		}
 	}
-
 	return;
-	
-
 }
 
 

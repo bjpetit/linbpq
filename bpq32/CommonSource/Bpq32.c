@@ -1023,7 +1023,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add SendTandRtoRelay param to SCS Pactor, ARDOP and VARA drivers to divert calls to CMS for -T and -R to RELAY
 //	Add UPNP Support
 
-//  Version 6.0.23 ??
+//  Version 6.0.23.1 June 2022 
 
 //	Add option to control which applcalls are enabled in VARA
 //	Add support for rtl_udp to Rig Control
@@ -1085,6 +1085,16 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix not always detecting loss of FLRIG (73)
 //	Add ? and * wildcards to NODES command (74)
 //  Add Port RADIO config parameter (74)
+
+//  Version 6.0.24.1 ??
+
+//	Apply NODES command wildcard to alias as well a call (2)
+//	Add STOPPORT/STARTPORT to VARA Driver (2)
+//	Add bandwidth setting to FLRIG interface. (2)
+//	Fix N VIA (3)
+//	Fix NODE ADD and NODE DEL (4)
+//	Improvements to FLRIG Rigcontrol backend
+
 
 #define CKernel
 
@@ -4939,7 +4949,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					return (0);
 				}
 
-				RigReconfigFlag=TRUE;	
+				RigReconfigFlag = TRUE;	
 				WritetoConsole("Rigcontrol Reconfig requested ... Waiting for Timer Poll\n");
 				return 0;
 			}

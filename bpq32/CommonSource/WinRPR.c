@@ -414,7 +414,7 @@ static int ProcessLine(char * buf, int Port)
 		else
 		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			TNC->WL2K = DecodeWL2KReportLine(buf);
-		else
+		else if (standardParams(TNC, buf) == FALSE)
 		{
 			strcat (TNC->InitScript, buf);
 

@@ -88,6 +88,66 @@ static RECT Rect;
 
 extern struct TNCINFO * TNCInfo[41];		// Records are Malloc'd
 
+
+BOOL VARAStopPort(struct PORTCONTROL * PORT)
+{
+	// Disable Port - close TCP Sockets or Serial Port
+
+	struct TNCINFO * TNC = PORT->TNC;
+
+	TNC->CONNECTED = FALSE;
+	TNC->Alerted = FALSE;
+
+	if (TNC->PTTMode)
+		Rig_PTT(TNC, FALSE);			// Make sure PTT is down
+
+	if (TNC->Streams[0].Attached)
+		TNC->Streams[0].ReportDISC = TRUE;
+
+	if (TNC->TCPSock)
+	{
+		shutdown(TNC->TCPSock, SD_BOTH);
+		Sleep(100);
+		closesocket(TNC->TCPSock);
+	}
+
+	if (TNC->TCPDataSock)
+	{
+		shutdown(TNC->TCPDataSock, SD_BOTH);
+		Sleep(100);
+		closesocket(TNC->TCPDataSock);
+	}
+
+	TNC->TCPSock = 0;
+	TNC->TCPDataSock = 0;
+
+	KillTNC(TNC);
+
+	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Stopped");
+	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+
+	return TRUE;
+}
+
+int ConnecttoVARA(int port);
+
+BOOL VARAStartPort(struct PORTCONTROL * PORT)
+{
+	// Restart Port - Open Sockets or Serial Port
+
+	struct TNCINFO * TNC = PORT->TNC;
+
+	ConnecttoVARA(TNC->Port);
+	TNC->lasttime = time(NULL);;
+
+	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Restarted");
+	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+
+	return TRUE;
+}
+
+
+
 static int ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
@@ -983,6 +1043,9 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 	TNC->SuspendPortProc = VARASuspendPort;
 	TNC->ReleasePortProc = VARAReleasePort;
 
+	PortEntry->PORTCONTROL.PORTSTARTCODE = VARAStartPort;
+	PortEntry->PORTCONTROL.PORTSTOPCODE = VARAStopPort;
+
 	TNC->ModemCentre = 1500;				// WINMOR is always 1500 Offset
 
 	ptr=strchr(TNC->NodeCall, ' ');
@@ -1172,6 +1235,9 @@ void * VARAExtInit(EXTPORTDATA * PortEntry)
 
 int ConnecttoVARA(int port)
 {
+	if (TNCInfo[port]->CONNECTING || TNCInfo[port]->PortRecord->PORTCONTROL.PortStopped)
+		return 0;
+
 	_beginthread(VARAThread, 0, (void *)(size_t)port);
 
 	return 0;
@@ -1203,6 +1269,13 @@ VOID VARAThread(void * portptr)
 	TNC->CONNECTING = TRUE;
 
 	Sleep(3000);		// Allow init to complete 
+
+	if (TNCInfo[port]->PortRecord->PORTCONTROL.PortStopped)
+	{
+		TNC->CONNECTING = FALSE;
+		return;
+	}
+
 
 //	printf("Starting VARA Thread\n");
 

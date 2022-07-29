@@ -280,7 +280,7 @@ VOID RIGRECONFIG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 	}
 	else
 	{
-		RigReconfigFlag=TRUE;	
+		RigReconfigFlag = TRUE;	
 		Bufferptr = Cmdprintf(Session, Bufferptr, "Rigcontrol Reconfig requested");
 	}
 
@@ -3116,7 +3116,7 @@ DoNodePattern:
 			continue;
 
 		if (Pattern[0])
-			if (!WildCmp(Pattern, Normcall))
+			if (!WildCmp(Pattern, Normcall) && !WildCmp(Pattern, Alias))
 				continue;
 
 		if (Param == 'T')
@@ -3150,7 +3150,7 @@ NODE_VIA:
 
 	// List Nodes reachable via a neighbour
 
-	ptr = strtok_s(NULL, " ", &Context);
+	ptr = param2;
 
 	if (ptr == NULL)
 	{
@@ -3174,8 +3174,7 @@ NODE_VIA:
 			continue;
 
 
-		if (
-			   (Dest->NRROUTE[0].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[0].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
+		if ((Dest->NRROUTE[0].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[0].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
 			|| (Dest->NRROUTE[1].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[1].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
 			|| (Dest->NRROUTE[2].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[2].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
 
@@ -3227,7 +3226,7 @@ NODE_ADD:
 		goto SendReply;
 	}
 
-	ptr = strtok_s(NULL, " ", &Context);
+	ptr = param2;
 
 	if (ptr == NULL)
 	{
@@ -3390,7 +3389,7 @@ NODE_DEL:
 		goto SendReply;
 	}
 
-	ptr = strtok_s(NULL, " ", &Context);
+	ptr = param2;
 
 	if (ptr == NULL)
 	{
@@ -5162,12 +5161,13 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 					{
 						// Port has Close Routine
 
+						PORT->PortStopped = TRUE;
+
 						if (PORT->PORTSTOPCODE(PORT))
 							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Closed\r");
 						else
 							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Close Failed\r");
 
-						PORT->PortStopped = TRUE;
 	
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
@@ -5245,13 +5245,13 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 					{
 						// Port has Open Routine
 
+						PORT->PortStopped = FALSE;
+
 						if (PORT->PORTSTARTCODE(PORT))
 							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Opened\r");
 						else
 							Bufferptr = Cmdprintf(Session, Bufferptr, "Port Open Failed\r");
 
-						PORT->PortStopped = FALSE;
-	
 						SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 						return;
 					}

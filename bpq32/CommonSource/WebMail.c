@@ -136,7 +136,7 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=UTF
 	"<form align=center id=myform style=\"font-family: monospace; \" method=post action=/WebMail/EMSave\?%s enctype=multipart/form-data>"
 	"<div style='text-align: center;'><div style='display: inline-block;'><span style='display:block; text-align: left;'>"
 	"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='To' name='To' value='%s'>%s<br>"
-	"Subject <input size=60 id='Subj' name='Subj' value='%s'> &nbsp; &nbsp; &nbsp;"
+	"Subject <input size=60 id='Subj' name='Subj' value=\"%s\"> &nbsp; &nbsp; &nbsp;"
 //	"<button onclick='document.getElementById('getFile').click()'>Attach Files</button>"
 //	"<input type='file' id='getFile' name='myFile[]' multiple style='display:none'><br>"
 	"<label for='myfile'>Attachments </label><input type='file' name='myFile[]' multiple>"
@@ -1797,6 +1797,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		char * MsgBytes, * Save, * NewBytes;
 		char * ptr;
 		char * ptr1, * ptr2;
+		char * EncodedTitle;
 
 		n = Session->WebMail->CurrentMessageIndex;
 	
@@ -1843,7 +1844,11 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		*ptr++ = 0;
 
-		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, "", Title , NewBytes);
+		EncodedTitle = doXMLTransparency(Msg->title);
+
+		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, "", EncodedTitle , NewBytes);
+
+		free(EncodedTitle);
 
 		free(MsgBytes);
 		free(NewBytes);
@@ -1861,6 +1866,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		struct MsgInfo * Msg;
 		char Message[100] = "";
 		char Title[100];
+		char * EncodedTitle;
 				
 		// Quote Original
 		
@@ -1905,7 +1911,11 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		strcpy(ReplyAddr, Msg->from);
 		strcat(ReplyAddr, Msg->emailfrom);
 
-		*RLen = sprintf(Reply, MsgInputPage, Key, ReplyAddr, Temp, Title , "");
+		EncodedTitle = doXMLTransparency(Msg->title);
+
+		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, Temp, EncodedTitle , "");
+
+		free(EncodedTitle);
 		return;
 	}
 

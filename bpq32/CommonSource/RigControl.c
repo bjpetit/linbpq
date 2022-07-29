@@ -582,9 +582,12 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 
 void saveNewFreq(struct RIGINFO * RIG, double Freq, char * Mode)
 {
-	_gcvt((Freq + RIG->rxOffset) / 1000000.0, 9, RIG->Valchar);
-	strcpy(RIG->WEB_FREQ, RIG->Valchar);
-	MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+	if (Freq > 0.0)
+	{
+		_gcvt((Freq + RIG->rxOffset) / 1000000.0, 9, RIG->Valchar);
+		strcpy(RIG->WEB_FREQ, RIG->Valchar);
+		MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+	}
 
 	if (Mode[0])
 	{
@@ -708,8 +711,6 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 	char FreqString[80]="", FilterString[80]="", Mode[80]="", Data[80] = "", Dummy[80] = "";
 	struct MSGWITHOUTLEN * buffptr;
 	UCHAR * Poll;
-	char * Valchar;
-	int dec, sign;
 
 	int i;
 	TRANSPORTENTRY * L4 = L4TABLE;
@@ -1161,7 +1162,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 	{
 		Freq = atof(FreqString);
 
-		if (Freq < 0.1)
+		if (Freq < 0.1 && PORT->PortType != FLRIG)
 		{
 			strcpy(Command, "Sorry - Invalid Frequency\r");
 			return FALSE;
@@ -1814,12 +1815,30 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 		int len = sprintf(cmd, "<double>%.0f</double>", Freq);
 
-		// Save Mode to send when get response to set freq
-
 		strcpy(PORT->ScanEntry.Cmd2Msg, Mode);
-		PORT->AutoPoll = 0;
+		strcpy(PORT->ScanEntry.Cmd3Msg, FilterString);
 
-		FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
+		if (Freq > 0.0)
+			FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
+
+		else if (PORT->ScanEntry.Cmd2Msg[0] && Mode[0] != '*')
+		{
+			sprintf(cmd, "<i4>%s</i4>", PORT->ScanEntry.Cmd2Msg);
+			FLRIGSendCommand(PORT, "rig.set_mode", cmd);
+		}
+
+		else if (PORT->ScanEntry.Cmd3Msg[0] && strcmp(PORT->ScanEntry.Cmd3Msg, "0") != 0)
+		{
+			sprintf(cmd, "<i4>%s</i4>", PORT->ScanEntry.Cmd3Msg);
+			FLRIGSendCommand(PORT, "rig.set_bandwidth", cmd);
+		}
+		else
+		{
+			sprintf(Command, "Sorry - Nothing to do\r");
+			return FALSE;
+		}
+				
+		PORT->AutoPoll = 0;
 
 		saveNewFreq(RIG, Freq, Mode);
 		return TRUE;
@@ -2198,7 +2217,7 @@ DllExport BOOL APIENTRY Rig_Close()
 	int n, p;
 
 	HAMLIBMasterRunning = 0;			// Close HAMLIB thread(s)
-	HAMLIBSlaveRunning = 0;			// Close HAMLIB thread(s)
+	HAMLIBSlaveRunning = 0;				// Close HAMLIB thread(s)
 	FLRIGRunning = 0;					// Close FLRIG thread(s)
 
 	for (p = 0; p < NumberofPorts; p++)
@@ -5789,9 +5808,7 @@ CheckScan:
 		double Freq = 0.0;
 		int FreqInt = 0;
 		char FreqString[80]="";
-		char * Valchar;
 		char * Modeptr = NULL;
-		int dec, sign;
 		char Split, Data, PacketMode, RPacketMode, PMinLevel, PMaxLevel, Filter;
 		char Mode[10] = "";
 		char WinmorMode, Antenna;
@@ -6495,6 +6512,7 @@ CheckScan:
 		{
 			sprintf(FreqPtr[0]->Cmd1Msg, "%.0f", Freq);
 			sprintf(FreqPtr[0]->Cmd2Msg, "%s", Mode);
+			sprintf(FreqPtr[0]->Cmd3Msg, "%d", BandWidth);
 		}
 
 		else if	(PORT->PortType == RTLUDP)
@@ -7036,7 +7054,7 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 	char * msg;
 	int Length;
 
-	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one 
 	char * ptr1, * ptr2, * val;
 	int Len, TotalLen;
 	char cmd[80];
@@ -7045,6 +7063,8 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 
 	while (PORT->RXLen > 0)
 	{
+		int b1 = 0, b2 = 0;
+
 		msg = PORT->RXBuffer;
 		Length = PORT->RXLen;
 
@@ -7077,95 +7097,228 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 
 			memmove(PORT->RXBuffer, &PORT->RXBuffer[TotalLen], PORT->RXLen);
 
-			if (memcmp(PORT->TXBuffer, "rig.set_vfo", 11) == 0)
+			// It is quite difficult to corrolate responses with commands, but we only poll for freq, mode and bandwidth
+			// and the responses can be easily identified
+
+			if (strstr(val, "<i4>") || memcmp(val, "</value>", 8) == 0)
 			{
-				//	Set Freq - Send Set Mode if needed
+				// Reply to set command - may need to send next in set or use to send OK if interactive
 
 				if (PORT->ScanEntry.Cmd2Msg[0])
 				{
 					sprintf(cmd, "<string>%s</string>", PORT->ScanEntry.Cmd2Msg);
 					FLRIGSendCommand(PORT, "rig.set_mode", cmd);
-					strcpy(RIG->ModeString, PORT->ScanEntry.Cmd2Msg);
+					PORT->ScanEntry.Cmd2Msg[0] = 0;
+				}
+
+				else if (PORT->ScanEntry.Cmd3Msg[0] && strcmp(PORT->ScanEntry.Cmd3Msg, "0") != 0)
+				{
+					sprintf(cmd, "<i4>%s</i4>", PORT->ScanEntry.Cmd3Msg);
+					FLRIGSendCommand(PORT, "rig.set_bandwidth", cmd);
+					PORT->ScanEntry.Cmd3Msg[0] = 0;
+				}
+			
+				else if (!PORT->AutoPoll)
+				{
+					GetSemaphore(&Semaphore, 61);
+					SendResponse(RIG->Session, "Set OK");
+					FreeSemaphore(&Semaphore);
+					PORT->AutoPoll = 1;		// So we dond send another
+				}
+			}
+			else if(strstr(val, "<array>"))
+			{
+				// Reply to get BW
+
+				char * p1, * p2;
+
+				p1 = strstr(val, "<value>");
+
+				if (p1)
+				{
+					p1 += 7;
+					b1 = atoi(p1);
+
+					p2 = strstr(p1, "<value>");
+
+					if (p2)
+					{
+						p2 +=7;
+						b2 = atoi(p2);
+					}
+				}
+
+				if (b1)
+				{
+					if (b2)
+						sprintf(RIG->WEB_MODE, "%s/%d:%d", RIG->ModeString, b1, b2);
+					else
+						sprintf(RIG->WEB_MODE, "%s/%d", RIG->ModeString, b1);
+		
+					MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
+				}
+			}
+			else
+			{
+				// Either freq or mode. See if numeric
+
+				double freq;
+				
+				strlop(val, '<');
+
+				freq = atof(val) / 1000000.0;
+
+				if (freq > 0.0)
+				{
+					RIG->RigFreq = freq; 
+					_gcvt(RIG->RigFreq, 9, RIG->Valchar);
+
+					sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
+					MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+
+					// Read Mode
+
+					Len = sprintf(ReqBuf, Req, "rig.get_mode", "");
+					Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+					send(PORT->remoteSock, SendBuff, Len, 0);
+
 				}
 				else
 				{
-					if (!PORT->AutoPoll)
-						SendResponse(RIG->Session, "Set Freq OK");
+					if (strlen(val)> 1)
+					{
+						strcpy(RIG->ModeString, val);
 
-					strcpy(PORT->TXBuffer, "rig.get_vfo"); 
-					Len = sprintf(ReqBuf, Req, "rig.get_vfo", "");
-					Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+						if (b1)
+						{
+							if (b2)
+								sprintf(RIG->WEB_MODE, "%s/%d:%d", RIG->ModeString, b1, b2);
+							else
+								sprintf(RIG->WEB_MODE, "%s/%d", RIG->ModeString, b1);
+						}
+						else
+							SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+				
+						MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
 
-					send(PORT->remoteSock, SendBuff, Len, 0);
+						Len = sprintf(ReqBuf, Req, "rig.get_bw", "");
+						Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+						send(PORT->remoteSock, SendBuff, Len, 0);
+					}
 				}
-				continue;
+			}
+
+
+
+			// We now send all setting commands at once
+
+			/*
+
+
+			if (memcmp(PORT->TXBuffer, "rig.set_vfo", 11) == 0)
+			{
+			//	Set Freq - Send Set Mode if needed
+
+			if (PORT->ScanEntry.Cmd2Msg[0])
+			{
+			sprintf(cmd, "<string>%s</string>", PORT->ScanEntry.Cmd2Msg);
+			FLRIGSendCommand(PORT, "rig.set_mode", cmd);
+			if (strcmp(PORT->ScanEntry.Cmd3Msg, "0") != 0)
+			{
+			sprintf(cmd, "<i4>%s</i4>", PORT->ScanEntry.Cmd3Msg);
+			FLRIGSendCommand(PORT, "rig.set_bandwidth", cmd);
+			}
+			strcpy(RIG->ModeString, PORT->ScanEntry.Cmd2Msg);
+			}
+			else
+			{
+			if (!PORT->AutoPoll)
+			SendResponse(RIG->Session, "Set Freq OK");
+
+			strcpy(PORT->TXBuffer, "rig.get_vfo"); 
+			Len = sprintf(ReqBuf, Req, "rig.get_vfo", "");
+			Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+			strcpy(PORT->TXBuffer, "rig.get_bw"); 
+			Len = sprintf(ReqBuf, Req, "rig.get_bw", "");
+			Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+			send(PORT->remoteSock, SendBuff, Len, 0);
+			}
+			continue;
 			}
 
 			if (memcmp(PORT->TXBuffer, "rig.set_mode", 11) == 0)
 			{
-				strcpy(PORT->TXBuffer, "rig.get_vfo"); 		
-				Len = sprintf(ReqBuf, Req, "rig.get_vfo", "");
-				Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+			strcpy(PORT->TXBuffer, "rig.get_vfo"); 		
+			Len = sprintf(ReqBuf, Req, "rig.get_vfo", "");
+			Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
 
-				send(PORT->remoteSock, SendBuff, Len, 0);
+			send(PORT->remoteSock, SendBuff, Len, 0);
 
-				if (!PORT->AutoPoll)
-					SendResponse(RIG->Session, "Set Freq and Mode OK");
+			if (!PORT->AutoPoll)
+			SendResponse(RIG->Session, "Set Freq and Mode OK");
 
-				continue;
+			continue;
 			}
 
 			if (memcmp(PORT->TXBuffer, "rig.get_vfo", 11) == 0)
 			{
-				RIG->RigFreq = atof(val) / 1000000.0;
+			RIG->RigFreq = atof(val) / 1000000.0;
 
-				_gcvt(RIG->RigFreq, 9, RIG->Valchar);
+			_gcvt(RIG->RigFreq, 9, RIG->Valchar);
 
-				sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
-				MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+			sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
+			MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
 
-				strcpy(PORT->TXBuffer, "rig.get_mode"); 
+			strcpy(PORT->TXBuffer, "rig.get_mode"); 
+			Len = sprintf(ReqBuf, Req, "rig.get_mode", "");
+			Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+			send(PORT->remoteSock, SendBuff, Len, 0);
 
-				Len = sprintf(ReqBuf, Req, "rig.get_mode", "");
-				Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
-
-				send(PORT->remoteSock, SendBuff, Len, 0);
-				continue;
+			Len = sprintf(ReqBuf, Req, "rig.get_bw", "");
+			Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+			send(PORT->remoteSock, SendBuff, Len, 0);
+			continue;
 			}
 
 			if (memcmp(PORT->TXBuffer, "rig.get_mode", 11) == 0)
 			{
-				strlop(val, '<');
-				sprintf(RIG->WEB_MODE, "%s", val);
-				MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
+			strlop(val, '<');
+			sprintf(RIG->WEB_MODE, "%s", val);
+			MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
 			}
-		}
+			}
+
+			*/
+			}
+
 		PORT->Timeout = 0;
-	}
+		}
+
+		/*
+		POST /RPC2 HTTP/1.1
+		User-Agent: XMLRPC++ 0.8
+		Host: 127.0.0.1:12345
+		Content-type: text/xml
+		Content-length: 89
+
+		<?xml version="1.0"?>
+		<methodCall><methodName>rig.get_vfoA</methodName>
+		</methodCall>
+		HTTP/1.1 200 OK
+		Server: XMLRPC++ 0.8
+		Content-Type: text/xml
+		Content-length: 118
+
+		<?xml version="1.0"?>
+		<methodResponse><params><param>
+		<value>14070000</value>
+		</param></params></methodResponse>
+		*/
+		
+
 }
-
-/*
-POST /RPC2 HTTP/1.1
-User-Agent: XMLRPC++ 0.8
-Host: 127.0.0.1:12345
-Content-type: text/xml
-Content-length: 89
-
-<?xml version="1.0"?>
-<methodCall><methodName>rig.get_vfoA</methodName>
-</methodCall>
-HTTP/1.1 200 OK
-Server: XMLRPC++ 0.8
-Content-Type: text/xml
-Content-length: 118
-
-<?xml version="1.0"?>
-<methodResponse><params><param>
-<value>14070000</value>
-</param></params></methodResponse>
-*/
-
-
 
 
 
@@ -7835,6 +7988,7 @@ VOID FLRIGPoll(struct RIGPORTINFO * PORT)
 
 				sprintf(cmd, "<double>%s</double>", PORT->FreqPtr->Cmd1Msg);
 				FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
+
 
 				PORT->CmdSent = 1;
 				PORT->Retries = 0;	
