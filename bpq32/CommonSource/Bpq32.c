@@ -1094,7 +1094,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix N VIA (3)
 //	Fix NODE ADD and NODE DEL (4)
 //	Improvements to FLRIG Rigcontrol backend (6, 7)
-
+//	Fix UZ7HO Window Title Update
 
 #define CKernel
 
