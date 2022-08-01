@@ -176,7 +176,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 	{
 		GetWindowThreadProcessId(hwnd, &ProcessId);
 
-//		if (TNC->PID == ProcessId)
+		if (TNC->PID == ProcessId)
 		{
 			 // Our Process
 
