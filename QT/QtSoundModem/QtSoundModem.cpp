@@ -483,16 +483,16 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	actWaterfall2 = setupMenuLine(viewMenu, (char *)"Second Waterfall", this, Secondwaterfall);
 
 	actCalib = ui.menuBar->addAction("&Calibration");
-
 	connect(actCalib, SIGNAL(triggered()), this, SLOT(doCalibrate()));
 
+	actRestartWF = ui.menuBar->addAction("Restart Waterfall");
+	connect(actRestartWF, SIGNAL(triggered()), this, SLOT(doRestartWF()));
 
 	actAbout = ui.menuBar->addAction("&About");
-
 	connect(actAbout, SIGNAL(triggered()), this, SLOT(doAbout()));
 
-
 	//	Constellation = new QImage(91, 91, QImage::Format_RGB32);
+
 	Header[0] = new QImage(1024, 35, QImage::Format_RGB32);
 	Header[1] = new QImage(1024, 35, QImage::Format_RGB32);
 	RXLevel = new QImage(150, 10, QImage::Format_RGB32);
@@ -1839,6 +1839,22 @@ void QtSoundModem::handleButton(int Port, int Type)
 	
 	doCalib(Port, Type);
 }
+
+void QtSoundModem::doRestartWF()
+{
+	if (Firstwaterfall)
+	{
+		initWaterfall(0, 0);
+		initWaterfall(0, 1);
+	}
+
+	if (Secondwaterfall)
+	{
+		initWaterfall(1, 0);
+		initWaterfall(1, 1);
+	}
+}
+
 
 void QtSoundModem::doAbout()
 {

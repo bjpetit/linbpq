@@ -53,6 +53,7 @@ private slots:
 	void handleButton(int Port, int Act);
 	void doCalibrate();
 	void doAbout();
+	void doRestartWF();
 	void doupdateDCD(int, int);
 	void sendtoTrace(char * Msg, int tx);
 	void preEmphAllAChanged(int);
@@ -81,6 +82,7 @@ private:
 	QAction *actMintoTray;
 	QAction *actCalib;
 	QAction *actAbout;
+	QAction *actRestartWF;
 	QAction *actWaterfall1;
 	QAction *actWaterfall2;
 

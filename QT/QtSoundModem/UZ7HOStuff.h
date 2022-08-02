@@ -2,8 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.56"
-#define VersionBytes {0, 0, 0, 56}
+#define VersionString "0.0.0.57"
+#define VersionBytes {0, 0, 0, 57}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -123,6 +123,8 @@
 // 0.55 Fix for compiler error with newer compiler
 
 // 0.56	Fix errors in Config.cpp			June 22
+
+// 0.57	Add Restart Waterfall action		August 22
 
 #include <string.h>
 #include <stdlib.h>

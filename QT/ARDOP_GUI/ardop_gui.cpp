@@ -332,7 +332,7 @@ void ARDOP_GUI::readPendingDatagrams()
 			ui->Frequency->setText(&copy[1]);
 			break;
 
-		case 'O':					// Frequency
+		case 'O':					// Offset
 			ui->Offset->setText(&copy[1]);
 			break;
 
