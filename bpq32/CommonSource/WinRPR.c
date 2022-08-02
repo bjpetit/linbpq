@@ -1334,6 +1334,59 @@ VOID WinRPRProcessReceivedPacket(struct TNCINFO * TNC)
 
 
 
+#ifndef LINBPQ
+
+static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
+{
+	char wtext[100];
+	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
+	UINT ProcessId;
+	char FN[MAX_PATH] = "";
+	HANDLE hProc;
+
+	if (TNC->ProgramPath == NULL)
+		return FALSE;
+
+	GetWindowText(hwnd,wtext,99);
+
+	if (strstr(wtext,"WinRPR"))
+	{
+		GetWindowThreadProcessId(hwnd, &ProcessId);
+
+		if (TNC->PID == ProcessId)
+		{
+			 // Our Process
+
+			hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, ProcessId);
+
+			if (hProc && GetModuleFileNameExPtr)
+			{
+				GetModuleFileNameExPtr(hProc, NULL, FN, MAX_PATH);
+
+				// Make sure this is the right copy
+
+				CloseHandle(hProc);
+
+				if (_stricmp(FN, TNC->ProgramPath))
+					return TRUE;					//Wrong Copy
+			}
+
+			TNC->PID = ProcessId;
+
+			sprintf (wtext, "WinRPR - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
+			SetWindowText(hwnd, wtext);
+			return FALSE;
+		}
+	}
+	
+	return (TRUE);
+}
+#endif
+
+
+
+
+
 VOID WinRPRThread(void * portptr);
 
 int ConnecttoWinRPR(int port)
@@ -1465,6 +1518,11 @@ VOID WinRPRThread(void * portptr)
 		//
 		//	Connected successful
 		//
+
+#ifndef LINBPQ
+		EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
+#endif
+
 	}
 	else
 	{
@@ -1605,6 +1663,8 @@ Lost:
 	sprintf(Msg, "WinRPR Thread Terminated Port %d\r\n", TNC->Port);
 	WritetoConsoleLocal(Msg);
 }
+
+
 
 
 

@@ -1095,6 +1095,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix NODE ADD and NODE DEL (4)
 //	Improvements to FLRIG Rigcontrol backend (6, 7)
 //	Fix UZ7HO Window Title Update
+//	Reject L2 calls with a blank from call (8)
+//	Update WinRPR Window header with BPQ Port Description (8)
 
 #define CKernel
 
