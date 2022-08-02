@@ -1097,6 +1097,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix UZ7HO Window Title Update
 //	Reject L2 calls with a blank from call (8)
 //	Update WinRPR Window header with BPQ Port Description (8)
+//	Fix error in blank call code (9)
 
 #define CKernel
 
