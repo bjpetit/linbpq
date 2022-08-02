@@ -272,27 +272,29 @@ BOK1:
 
 			return 0;
 		}
-		if (pointer == pointer[0])
-		{
-			Debugprintf("Buffer chained to itself");
-			return 0;
-		}
+
+//		if (pointer[0] && pointer == pointer[0])
+//		{
+//			Debugprintf("Buffer chained to itself");
+//			return 0;
+//		}
+
 		debug = pointer;
 		pointer = pointer[0];
 		n++;
 
 		if (n > 1000)
 		{
-			Debugprintf("Loop searching free chain");
+			Debugprintf("Loop searching free chain - pointer = %p %p", debug, pointer);
 			return 0;
 		}
 	}
 
 	pointer = FREE_Q;
 
-	*BUFF=pointer;
+	*BUFF = pointer;
 
-	FREE_Q=BUFF;
+	FREE_Q = BUFF;
 
 	QCOUNT++;
 
