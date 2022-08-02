@@ -172,10 +172,11 @@ VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
 	ptr = &Buffer->ORIGIN[0];
 	n = 6;
 
-	c = *(ptr++) >> 1;
+	c = *(ptr) >> 1;
 
 	if (c == ' ')					// Blank Call
 	{
+		Debugprintf("BPQ32 Blank Call Port &%", PORT->PORTNUMBER);
 		ReleaseBuffer(Buffer);
 		return;
 	}
@@ -193,13 +194,7 @@ VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
 		}
 
 		c = c >> 1;
-
-		if (c == ' ')					// Blank Call
-		{
-			ReleaseBuffer(Buffer);
-			return;
-		}
-		
+	
 		if (!isalnum(c) && !(c == '#') && !(c == ' '))
 		{
 			ReleaseBuffer(Buffer);
