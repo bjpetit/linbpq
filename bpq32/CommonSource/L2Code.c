@@ -172,6 +172,14 @@ VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
 	ptr = &Buffer->ORIGIN[0];
 	n = 6;
 
+	c = *(ptr++) >> 1;
+
+	if (c == ' ')					// Blank Call
+	{
+		ReleaseBuffer(Buffer);
+		return;
+	}
+
 	while(n--)
 	{
 		// Try a bit harder to detect corruption
@@ -185,6 +193,12 @@ VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
 		}
 
 		c = c >> 1;
+
+		if (c == ' ')					// Blank Call
+		{
+			ReleaseBuffer(Buffer);
+			return;
+		}
 		
 		if (!isalnum(c) && !(c == '#') && !(c == ' '))
 		{

@@ -214,11 +214,11 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
 			>
 			<File
-				RelativePath="..\CKernel\WinmorControl.c"
+				RelativePath="..\CommonSource\WinmorControl.c"
 				>
 			</File>
 			<File
-				RelativePath="..\CKernel\WinmorControl.rc"
+				RelativePath="..\CommonSource\WinmorControl.rc"
 				>
 			</File>
 		</Filter>

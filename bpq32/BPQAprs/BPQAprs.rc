@@ -176,7 +176,7 @@ BEGIN
                     -1,25,128,189,10,NOT WS_GROUP
     LTEXT           "Includes code from zlib (http://zlib.net)",-1,44,111,
                     135,10,NOT WS_GROUP
-    LTEXT           "Map Tiles Copyright Thunderforest (http://www.thunderforest.com)",
+    LTEXT           "Imagery (c) OpenMapTiles (https://openmaptiles.org)",
                     -1,29,139,181,10,NOT WS_GROUP
 END
 

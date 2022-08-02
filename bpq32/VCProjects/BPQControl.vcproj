@@ -209,10 +209,6 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
 			>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\NewKernel\BPQControl.c"
-				>
-			</File>
-			<File
 				RelativePath="S:\DEV\Source\BPQ32\NewKernel\BPQWinAPP.rc"
 				>
 			</File>

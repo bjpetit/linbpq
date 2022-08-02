@@ -77,9 +77,10 @@
 
 //	Move support for APRS messaging in Node
 
-//	?? 1.1.15.1
+//	June 2022 Renumbered to 6.0.23.1 to match Node
 
 //	Fix Beep or Popup on Message RX
+//	Switch to my map servers
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
@@ -458,11 +459,33 @@ VOID SendWeatherBeacon();
 VOID DecodeWXPortList();
 BOOL CreatePopeThresd();
 
-SOCKADDR_IN destaddr = {0};
+SOCKADDR_IN destaddr1 = {0};
+SOCKADDR_IN destaddr2 = {0};
 
 unsigned int ipaddr = 0;
 
+#define MYTILES
+
+#ifdef MYTILES
+
+char Host1[] = "server1.g8bpq.net";
+char Host2[] = "server2.g8bpq.net";
+char Host[] = "server.g8bpq.net";
+
+#define MapServerPort 7381
+
+int Host1Down = 0;
+int Host2Down = 0;
+
+#else
+
+// Thunderforest
+
 char Host[] = "tile.thunderforest.com";
+char mapStyle[64] =	"outdoors"; //"neighbourhood mobile-atlas
+#define MapServerPort 80
+
+#endif
 
 char mapStyle[64] =	"outdoors"; //"neighbourhood mobile-atlas
 
@@ -1435,8 +1458,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
 	
-	destaddr.sin_family = AF_INET;
-	destaddr.sin_port = htons(80);
+	destaddr1.sin_family = AF_INET;
+	destaddr1.sin_port = htons(MapServerPort);
+
+	destaddr2.sin_family = AF_INET;
+	destaddr2.sin_port = htons(MapServerPort);
 
 	_beginthread(ResolveThread,0,0);
 	_beginthread(OSMThread,0,0);
@@ -3095,17 +3121,30 @@ VOID ResolveThread(void * unused)
 	{
 		// Resolve Name if needed
 
-		HostEnt = gethostbyname(Host);
+		HostEnt = gethostbyname(Host1);
 		 
 		if (!HostEnt)
 		{
 			err = WSAGetLastError();
-			Debugprintf("Resolve Failed for %s %d %x", Host, err, err);
+			printf("Resolve Failed for %s %d %x\n", Host1, err);
 		}
 		else
 		{
-			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+			memcpy(&destaddr1.sin_addr.s_addr,HostEnt->h_addr,4);	
 		}
+	
+		HostEnt = gethostbyname(Host2);
+		 
+		if (!HostEnt)
+		{
+			err = WSAGetLastError();
+			printf("Resolve Failed for %s %d %x\n", Host2, err);
+		}
+		else
+		{
+			memcpy(&destaddr2.sin_addr.s_addr,HostEnt->h_addr,4);	
+		}
+
 		Sleep(60 * 15 * 1000);
 	}
 }
@@ -3261,11 +3300,12 @@ VOID OSMThread(void * unused)
 
 		free(OSMRec);
 
+#ifdef MYTILES
+		wsprintf(Tile, "/styles/osm-bright/%d/%d/%d.png", Zoom, x, y);
+#else
 		wsprintf(Tile, "/%s/%d/%d/%d.png?apikey=41ab899ed1fd4d09b11da7caf3a48e1f", mapStyle, Zoom, x, y);
-//		wsprintf(Tile, "/tiles/1.0.0/sat/%02d/%d/%d.jpg", Zoom, x, y);
-//		wsprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
+#endif
 
-	
 		wsprintf(FN, "%s/%02d/%d/%d.png", OSMDir, Zoom, x, y);
 
 		if (GetFileAttributes(FN) != INVALID_FILE_ATTRIBUTES)
@@ -3301,17 +3341,41 @@ VOID OSMThread(void * unused)
 	}
 */
 
-		if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) != 0)
+		if (Host1Down == 0)
 		{
-			err=WSAGetLastError();
-
-			//
-			//	Connect failed
-			//
-
-			break;
+			if (connect(sock,(LPSOCKADDR) &destaddr1, sizeof(destaddr1)) != 0)
+			{
+				Debugprintf("OSM GET Connect to %s Failed %d", Host1, errno);
+				Host1Down = 600;			// Don't try again for 10 mins
+			}
+			else
+				goto ConnectOK;
+		}
+		if (Host2Down == 0)
+		{
+			if (connect(sock,(LPSOCKADDR) &destaddr2, sizeof(destaddr2)) != 0)
+			{
+				Debugprintf("OSM GET Connect to %s Failed %d", Host2, errno);
+				Host2Down = 600;			// Don't try again for 10 mins
+			}
+			else
+				goto ConnectOK;
 		}
 
+		//
+		//	Neither available or connect failed to both
+		//
+		//  Reduce retry timers
+
+		if (Host1Down > 60 && Host2Down > 60)
+		{
+			Host1Down = 60;			// Don't try again for 10 mins
+			Host2Down = 60;			// Don't try again for 10 mins
+		}
+
+		break;
+	
+        ConnectOK:
 //GET /15/15810/9778.png HTTP/1.0
 //Accept: */*
 //Host: tile.openstreetmap.org
@@ -5530,7 +5594,14 @@ VOID SecTimer()
 {
 	struct STATIONRECORD * sptr = *StationRecords;
 	int n = 0;
-	char Msg[20];
+	char Msg[256];
+
+	if (Host1Down)
+		Host1Down --;
+	
+	if (Host2Down)
+		Host2Down --;
+
 
 	// See if changed flag set on any stations
 
@@ -5612,6 +5683,13 @@ VOID SecTimer()
 
 	wsprintf(Msg, "%d", Zoom);
 	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
+
+#ifdef MYTILES
+	strcpy(Msg, "© OpenStreetMap contributors. Tiles © openmaptiles.org");
+#else
+	strcpy(Msg, "© OpenStreetMap contributors. Tiles © thunderforest.com");
+#endif
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 5, (LPARAM)Msg);
 }
 
 double radians(double Degrees)
