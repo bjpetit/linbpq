@@ -145,15 +145,15 @@ char RouteHddr[] = "<h2 align=center>Routes</h2><table align=center border=2 sty
 char RouteLine[] = "<tr><td>%s%d</td><td>%s%c</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td><td>%02d:%02d</td><td>%d</td><td>%d</td></tr>";
 char xNodeHddr[] = "<align=center><form align=center method=get action=/Node/Nodes.html>"
 "<table align=center  bgcolor=white>"
-"<tr><td><input type=submit name=a value=\"Nodes Sorted by Alias\"></td><td>"
-"<input type=submit name=c value=\"Nodes Sorted by Call\"></td><td>"
-"<input type=submit name=t value=\"Nodes with traffic\"></td></tr></form></table>"
+"<tr><td><input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\"></td><td>"
+"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\"></td><td>"
+"<input type=submit class='btn' name=t value=\"Nodes with traffic\"></td></tr></form></table>"
 "<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
 
 char NodeHddr[] = "<center><form method=get action=/Node/Nodes.html>"
-"<input type=submit name=a value=\"Nodes Sorted by Alias\">"
-"<input type=submit name=c value=\"Nodes Sorted by Call\">"
-"<input type=submit name=t value=\"Nodes with traffic\"></form></center>"
+"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">"
+"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">"
+"<input type=submit class='btn' name=t value=\"Nodes with traffic\"></form></center>"
 "<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
 
 char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
@@ -178,7 +178,7 @@ char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 alig
 "</table>" 
 "<input type=hidden name=Port value=%d>"
 
-"<p align=center><input type=submit value=Save><input type=submit value=Test name=Test>"
+"<p align=center><input type=submit class='btn' value=Save><input type=submit class='btn' value=Test name=Test>"
 "</form>";
 
 
@@ -198,7 +198,7 @@ char TermSignon[] = "<html><head><title>BPQ32 Node %s Terminal Access</title></h
 "<table align=center  bgcolor=white>"
 "<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 "<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit value=Submit><input type=submit value=Cancel name=Cancel>"
+"<p align=center><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel>"
 "<input type=hidden name=Appl value=\"%s\"  id=Pass></form>";
 
 
@@ -220,7 +220,7 @@ char TermPage[] = "<!DOCTYPE html><html><meta http-equiv=Content-Type content='t
 "<body onload='resize()' onresize='resize()'>"
 "<h3 align=center>BPQ32 Node %s</h3>"
 "<form method=post action=/Node/TermClose?%s>"
-"<p align=center><input type=submit value='Close and return to Node Page' /></form>"
+"<p align=center><input type=submit class='btn' value='Close and return to Node Page' /></form>"
 "<iframe style='display:block;' id=txt frameborder=2 marginwidth=0  marginheight=0 src=OutputScreen.html?%s width=100%%></iframe>"
 "<iframe style='display:block;' frameborder=0 marginwidth=0 marginheight=3 src=InputLine.html?%s width=100%% height=45px></iframe>"
 "</body>";
@@ -270,7 +270,7 @@ static char NodeSignon[] = "<html><head><title>BPQ32 Node SYSOP Access</title></
 "<table align=center  bgcolor=white>"
 "<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 "<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
 
 
 static char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
@@ -280,7 +280,7 @@ static char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title><
 "<table align=center  bgcolor=white>"
 "<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 "<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
 
 static char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title></head><body background=\"/background.jpg\">"
 "<h3 align=center>BPQ32 Chat Server %s Access</h3>"
@@ -289,20 +289,20 @@ static char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title><
 "<table align=center  bgcolor=white>"
 "<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 "<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
 
 
 static char MailLostSession[] = "<html><body>"
 "<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
+"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel><br></form>";
 
 
 static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
 "<title>Edit Config</title></head><body background=/background.jpg>"
 "<form style=\"font-family: monospace;  text-align: center;\"method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
-"<input name=Save value=Save type=submit><input name=Cancel value=Cancel type=submit><br></form>";
+"<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
 
 static char EXCEPTMSG[80] = "";
 
@@ -1305,8 +1305,11 @@ int SetupNodeMenu(char * Buff, int LOCAL)
 	// Change color of dropdown links on hover 
 	".dropdown-content a:hover {background-color: #ddd}"
 	// Show the dropdown menu (use JS to add this class to the .dropdown-content container when the user clicks on the dropdown button)
-	".show {display:block;}</style>"
-	
+	".show {display:block;}"
+	"input.btn:active {background:black;color:white;} "
+	"submit.btn:active {background:black;color:white;} "
+	"</style>"
+
 	"<script>\r\n"
 
 
@@ -1373,11 +1376,11 @@ int SetupNodeMenu(char * Buff, int LOCAL)
 		"<script>"
 		"document.getElementById('e').value = new Date().toISOString().substring(0, 10);"
 		"</script></label>"
-		"<input type=submit name='BBS' value='BBS Log'></br>"
-		"<input type=submit name='Debug' value='BBS Debug Log'></br>"
-		"<input type=submit name='Telnet' value='Telnet Log'></br>"
-		"<input type=submit name='CMS' value='CMS Log'></br>"
-		"<input type=submit name='Chat' value='Chat Log'></br>"
+		"<input type=submit class='btn' name='BBS' value='BBS Log'></br>"
+		"<input type=submit class='btn' name='Debug' value='BBS Debug Log'></br>"
+		"<input type=submit class='btn' name='Telnet' value='Telnet Log'></br>"
+		"<input type=submit class='btn' name='CMS' value='CMS Log'></br>"
+		"<input type=submit class='btn' name='Chat' value='Chat Log'></br>"
 		"</form></div>"
 		"</div>"		
 		"</td></tr></table>";
@@ -2614,7 +2617,8 @@ doHeader:
 					".dropdown-content a:hover {background-color: #dddfff;}\r\n"
 					".dropdown:hover .dropdown-content {display: block;}\r\n"
 					".dropdown:hover .dropbtn {background-color: #ddd;}\r\n"
-					;
+					"input.btn:active {background:black;color:white;}\r\n"
+					"submit.btn:active {background:black;color:white;}\r\n";
 				ReplyLen = sprintf(_REPLYBUFFER, "%s", WebprocCSS);
 			}
 
@@ -2705,7 +2709,7 @@ doHeader:
 					"<title>Log Display</title></head>"
 					"<body style=\"margin: 4;\" background=/background.jpg onload='myResize()' onresize='myResize()'>"
 					"<div id=outer style=\"width: 100%%; height: 100%%;\">"
-					"<form id = form><input name=input value=Back type=submit>"
+					"<form id = form><input name=input value=Back type=submit class='btn'>"
 //					"<form id = doDate><input type=date value=Date name='date'><input type='submit'>"
 					"</form>"
 					"<textarea id=log style=\"box-sizing: border-box; overflow: auto; white-space: pre; width: 100%%; height: auto\" name=Msg>%s</textarea>"

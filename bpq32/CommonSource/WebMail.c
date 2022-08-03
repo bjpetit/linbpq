@@ -127,10 +127,15 @@ char WebMailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></hea
 	"<table align=center  bgcolor=white>"
 	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+	"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
 
 static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
-	"<title></title><script src='/WebMail/webscript.js'></script></head>"
+	"<title></title><script src='/WebMail/webscript.js'></script>"
+	"<style type=\"text/css\">"
+	"input.btn:active {background:black;color:white;} "
+	"submit.btn:active {background:black;color:white;} "
+	"</style>"
+	"</head>"
 	"<body background=/background.jpg onload='initialize(185)' onresize='initialize(185)'>"
 	"<h3 align=center>Webmail Interface - Message Input Form</h3>"
 	"<form align=center id=myform style=\"font-family: monospace; \" method=post action=/WebMail/EMSave\?%s enctype=multipart/form-data>"
@@ -139,7 +144,7 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=UTF
 	"Subject <input size=60 id='Subj' name='Subj' value=\"%s\"> &nbsp; &nbsp; &nbsp;"
 //	"<button onclick='document.getElementById('getFile').click()'>Attach Files</button>"
 //	"<input type='file' id='getFile' name='myFile[]' multiple style='display:none'><br>"
-	"<label for='myfile'>Attachments </label><input type='file' name='myFile[]' multiple>"
+	"<label for='myfile'>Attachments </label><input type='file'   name='myFile[]' multiple>"
 	"<br>Type &nbsp;&nbsp;&nbsp;"
 	"<select tabindex=1 size=1 name=Type><option value=P>P</option>"
 	"<option value=B>B</option><option value=T>T</option></select>"
@@ -148,7 +153,7 @@ static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=UTF
 	"<label for='myfile3'> Footer </label><input type='file' name='myFile3[]'>"
 	"</span></div>"
 	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
-	"<input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form>";
+	"<input name=Send value=Send type=submit class='btn'> <input name=Cancel value=Cancel type=submit class='btn'></div></form>";
 
 static char CheckFormMsgPage[] = "<html><head><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
 	"<title></title><script src='/WebMail/webscript.js'></script></head>"
@@ -168,7 +173,7 @@ static char CheckFormMsgPage[] = "<html><head><meta content=\"text/html; charset
 	"</span></div>"
 
 	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
-	"<input name=Send value=Send type=submit><input name=Cancel value=Cancel type=submit></div></form>";
+	"<input name=Send value=Send type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'></div></form>";
 
 
 extern char * WebMailTemplate;
@@ -1874,7 +1879,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			" &nbsp; &nbsp; &nbsp;<script>function myfunc(){"
 			"document.getElementById('myform').action = '/WebMail/QuoteOriginal' + '?%s';"
 			" document.getElementById('myform').submit();}</script>"
-			"<input type=Button onclick='myfunc()' "
+			"<input type=button class='btn' onclick='myfunc()' "
 			"value='Include Orignal Msg'>";
 		
 		char Temp[1024];
@@ -2068,7 +2073,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			" &nbsp; &nbsp; &nbsp;<script>function myfunc(){"
 			"document.getElementById('myform').action = '/WebMail/GetTemplates' + '?%s';"
 			" document.getElementById('myform').submit();}</script>"
-			"<input type=Button onclick='myfunc()' "
+			"<input type=button class='btn' onclick='myfunc()' "
 			"value='Use Template'>";
 			
 		char Temp[1024];
@@ -5345,7 +5350,7 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 
 		sprintf(popup, "%s <option value='%s'>%s", popup, key, var[i]);
 	}
-	sprintf(popup, "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button></div>", popup);
+	sprintf(popup, "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>", popup);
 
 	*WebMail->RLen = sprintf(WebMail->Reply, "%s", popup);
 	free(SelCopy);
@@ -5913,7 +5918,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 			sprintf(popup, "%s <option value=%d>%s (Len %d)", popup, i + 1, WebMail->FileName[i], WebMail->FileLen[i]);
 	}
 
-	sprintf(popup, "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button></div>", popup);
+	sprintf(popup, "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>", popup);
 
 	*RLen = sprintf(Reply, "%s", popup);
 	return;

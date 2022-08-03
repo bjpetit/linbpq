@@ -136,10 +136,15 @@ char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><
 	"<table align=center  bgcolor=white>"
 	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+	"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
 
 
-char MailPage[] = "<html><head><title>%s's BBS Web Server</title></head>"
+char MailPage[] = "<html><head><title>%s's BBS Web Server</title>"
+	"<style type=\"text/css\">"
+	"input.btn:active {background:black;color:white;} "
+	"submit.btn:active {background:black;color:white;} "
+	"</style>"
+	"</head>"
 	"<body background=\"/background.jpg\"><h3 align=center>BPQ32 BBS %s</h3><P>"
 	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
 	"<td><a href=/Mail/Status?%s>Status</a></td>"
@@ -155,6 +160,10 @@ char MailPage[] = "<html><head><title>%s's BBS Web Server</title></head>"
 
 char RefreshMainPage[] = "<html><head>"
 	"<meta http-equiv=refresh content=10>"
+	"<style type=\"text/css\">"
+	"input.btn:active {background:black;color:white;} "
+	"submit.btn:active {background:black;color:white;} "
+	"</style>"
 	"<title>%s's BBS Web Server</title></head>"
 	"<body background=\"/background.jpg\"><h3 align=center>BPQ32 BBS %s</h3><P>"
 	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
@@ -176,7 +185,7 @@ char StatusPage [] =
 "<select style=\"font-family: monospace;\" tabindex=1 size=10 name=call>";
 
 char StreamEnd[] = 
-"</select><br><input name=Disconnect value=Disconnect type=submit><br><br>";
+"</select><br><input name=Disconnect value=Disconnect type=submit class='btn'><br><br>";
 
 char StatusTail[] = 
 "Msgs&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input readonly=readonly value=%d size=3><br>"
@@ -198,8 +207,8 @@ char UILine[] = "<input %sname=En%d type=checkbox> %s <input size=40 value=\"%s\
 "&nbsp;&nbsp;&nbsp;&nbsp;<input %sname=SndHDDR%d type=checkbox>"
 "&nbsp; &nbsp; &nbsp; &nbsp; <input %sname=SndNull%d type=checkbox><br>";
 
-char UITail[] = "<br><br><input name=Update value=Update type=submit> "
-"<input name=Cancel value=Cancel type=submit><br></form>";
+char UITail[] = "<br><br><input name=Update value=Update type=submit class='btn'> "
+"<input name=Cancel value=Cancel type=submit class='btn'><br></form>";
 
 char FWDSelectHddr[] = 
 	"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/FWDSel?%s>"
@@ -212,9 +221,9 @@ char FWDSelectHddr[] =
 	"<textarea rows=10 cols=20 name=Aliases>%s</textarea> &nbsp<select tabindex=1 size=10 name=call>";
 
 char FWDSelectTail[] =
-	"</select><br>&nbsp;&nbsp; <input name=Save value=Save type=submit>&nbsp;<input "
-	"name=Cancel value=Cancel type=submit>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-	"&nbsp; <input name=Select value=Select type=submit></form>";
+	"</select><br>&nbsp;&nbsp; <input name=Save value=Save type=submit class='btn'>&nbsp;<input "
+	"name=Cancel value=Cancel type=submit class='btn'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+	"&nbsp; <input name=Select value=Select type=submit class='btn'></form>";
 
 char UserSelectHddr[] = 
 	"<form style=\"font-family: monospace; text-align: center\" method=post action=/Mail/Users?%s>"
@@ -226,9 +235,9 @@ char StatusLine[] = "<option value=%d>%s</option>";
 
 char UserSelectTail[] = "</select><br><br>"
 	"<input size=6 value=\"\" name=NewCall>"
-	"<input type=submit value=\"Add User\" name=Adduser><br>"
-	"<input type=submit value=Select> "
-	"<input type=submit value=Cancel name=Cancel><br></form>";
+	"<input type=submit class='btn' value=\"Add User\" name=Adduser><br>"
+	"<input type=submit class='btn' value=Select> "
+	"<input type=submit class='btn' value=Cancel name=Cancel><br></form>";
 
 char UserUpdateHddr[] =
 	"<h3 align=center>Update User %s</h3>"
@@ -264,8 +273,8 @@ char FWDUpdate[] =
 "Allow Binary&nbsp; <input %sname=Bin type=checkbox>&nbsp;&nbsp; Use B1 "
 "Protocol <input %sname=B1 type=checkbox>&nbsp; Use B2 Protocol<input "
 "%sname=B2 type=checkbox><br><br>"
-"<input name=Submit value=Update type=submit> <input name=Fwd value=\"Start Forwarding\" type=submit> "
-"<input name=Cancel value=Cancel type=submit></form><br></body></html>";
+"<input name=Submit value=Update type=submit class='btn'> <input name=Fwd value=\"Start Forwarding\" type=submit class='btn'> "
+"<input name=Cancel value=Cancel type=submit class='btn'></form><br></body></html>";
 
 static char MailDetailPage[] = 
 "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
@@ -294,13 +303,13 @@ static char MailDetailPage[] =
 "%s"		// Email from Line
 "&nbsp;VIA&nbsp; <input style=\"width:360px;\" name=VIA value=%s><br>"
 "Title&nbsp; <input style=\"width:360px;\" name=Title value=\"%s\"> <br><br>"
-"<span align = center><input onclick=editmsg(\"EditM?%s?%d\") value=\"Edit Text\" type=button> "
-"<input onclick=save(this.form) value=Save type=button> "
-"<td><a href=/Mail/SaveMessage?%s><button type = button>Save Message</button></a></td>"
-"<td><a href=/Mail/SaveAttachment?%s><button type = button %s>Save Attachment</button></a></td>"
-//"<input onclick=doit(\"SavetoFile\") value=\"Save to File\" type=button> "
-"<input onclick=doit(\"Print\") value=Print type=button> "
-"<input onclick=doit(\"Export\") value=Export type=button></span><br><br>"
+"<span align = center><input onclick=editmsg(\"EditM?%s?%d\") value=\"Edit Text\" type=button class='btn'> "
+"<input onclick=save(this.form) value=Save type=button class='btn'> "
+"<td><a href=/Mail/SaveMessage?%s><button type=button class='btn'>Save Message</button></a></td>"
+"<td><a href=/Mail/SaveAttachment?%s><button type=button class='btn' %s>Save Attachment</button></a></td>"
+//"<input onclick=doit(\"SavetoFile\") value=\"Save to File\" type=button class='btn'> "
+"<input onclick=doit(\"Print\") value=Print type=button class='btn'> "
+"<input onclick=doit(\"Export\") value=Export type=button class='btn'></span><br><br>"
 "Green = Sent, Yellow = Queued"
 "<table style=\"text-align: left; width: 490px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>";
 
@@ -324,13 +333,13 @@ char Welcome[] = "<form style=\"font-family: monospace; text-align: center;\""
 "<textarea cols=80 rows=1 name=Bye>%s</textarea><br><br>"
 "$U:Callsign of the user&nbsp; $I:First name of the user $X:Messages for user $x:Unread messages<br>"
 "$L:Number of the latest message $N:Number of active messages. $Z:Last message read by user<br><br>"
-"<input name=Save value=Save type=submit> <inputcname=Cancel value=Cancel type=submit></form>";
+"<input name=Save value=Save type=submit class='btn'> <inputcname=Cancel value=Cancel type=submit class='btn'></form>";
 
 static char MsgEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
 "<title></title></head><body>"
 "<form style=\"font-family: monospace;  text-align: center;\"method=post action=EMSave?%s>"
 "<textarea cols=90 rows=33 name=Msg>%s</textarea><br><br>"
-"<input name=Save value=Save type=submit><input name=Cancel value=Cancel type=submit><br></form>";
+"<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
 
 static char WPDetail[] = "<form style=\"font-family: monospace;\" method=post action=/Mail/WP?%s>"
 "<br><table style=\"text-align: left; width: 431px;\" border=0 cellpadding=2 cellspacing=2><tbody>"
@@ -348,15 +357,15 @@ static char WPDetail[] = "<form style=\"font-family: monospace;\" method=post ac
 "<tr><td>Type<br></td><td><input size=4 name=Type value=%c></td></tr>"
 "<tr><td>Changed<br></td><td><input size=4 name=Changed value=%d></td></tr>"
 "<tr><td>Seen<br></td><td><input size=4 name=Seen value=%d></td></tr></tbody></table>"
-"<br><input onclick=save(this.form) value=Save type=button> "
-"<input onclick=del(this.form) value=Delete type=button> "
-"<input name=Cancel value=Cancel type=submit></form>";
+"<br><input onclick=save(this.form) value=Save type=button class='btn'> "
+"<input onclick=del(this.form) value=Delete type=button class='btn'> "
+"<input name=Cancel value=Cancel type=submit class='btn'></form>";
 
 
 static char LostSession[] = "<html><body>"
 "<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
+"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel><br></form>";
 
 
 char * MsgEditTemplate = NULL;

@@ -1099,7 +1099,8 @@
 
 //  6.0.24.1  ?? 2022
 
-//	Fix ' in Webmail subject
+//	Fix ' in Webmail subject (8)
+//	Change web buttons to white on black when pressed (10)
 
 
 #include "bpqmail.h"
