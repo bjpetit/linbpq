@@ -2741,6 +2741,9 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 		// Packet Connect. Much safer to process here, even though it means
 		// duplicating some code, or the Pactor/RP mode tests get very complicated
 
+		int Len = 0;
+		struct PORTCONTROL * PORT = &TNC->PortRecord->PORTCONTROL;
+
 		strcpy(DestCall, STREAM->MyCall);
 		Debugprintf("PTC Packet Incoming Call - MYCALL = *%s*", DestCall);
 					
@@ -2804,31 +2807,39 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 		}				
 		
 		// Not to a known appl - drop through to Node
-		
-		if (CTEXTLEN)
+
+		if (PORT->CTEXT)
 		{
-			int Len = CTEXTLEN, CTPaclen = 100;
-			int Next = 0;
+			Len = strlen(PORT->CTEXT);
+			ptr = PORT->CTEXT;
+		}
+		else if (CTEXTLEN)
+		{
+			Len = CTEXTLEN;
+			ptr = CTEXTMSG;
+		}
+		else
+			return;
 
-			while (Len > CTPaclen)		// CTEXT Paclen
-			{
-				buffptr = GetBuff();
-				if (buffptr == 0) return;			// No buffers, so ignore
+		while (Len > 0)
+		{
+			int sendLen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
 
-				buffptr->Len = CTPaclen;
-				memcpy(buffptr->Data, &CTEXTMSG[Next], CTPaclen);
-				C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
+			if (sendLen == 0)
+				sendLen = 80;
 
-				Next += CTPaclen;
-				Len -= CTPaclen;
-			}
+			if (Len < sendLen)
+				sendLen = Len;
 
 			buffptr = GetBuff();
 			if (buffptr == 0) return;			// No buffers, so ignore
 
-			buffptr->Len = Len;
-			memcpy(buffptr->Data, &CTEXTMSG[Next], Len);
+			buffptr->Len = sendLen;
+			memcpy(buffptr->Data, ptr, sendLen);
 			C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
+
+			ptr += sendLen;
+			Len -= sendLen;
 		}
 		return;
 	}

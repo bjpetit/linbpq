@@ -2030,7 +2030,8 @@ VOID TrkProcessDEDFrame(struct TNCINFO * TNC)
 					char DestCall[10];
 					TRANSPORTENTRY * SESS;
 					struct WL2KInfo * WL2K = TNC->WL2K;
-
+					struct PORTCONTROL * PORT = &TNC->PortRecord->PORTCONTROL;
+					int Totallen = 0;
 
 					if (Stream == 0)
 					{
@@ -2040,7 +2041,47 @@ VOID TrkProcessDEDFrame(struct TNCINFO * TNC)
 						TNC->RIG->CurrentBandWidth = Save;
 					}
 
-					ProcessIncommingConnect(TNC, Call, Stream, TRUE);
+					ProcessIncommingConnect(TNC, Call, Stream, FALSE);
+
+					// if Port CTEXT defined, use it
+
+					if (PORT->CTEXT)
+					{
+						Totallen = strlen(PORT->CTEXT);
+						ptr = PORT->CTEXT;
+					}
+					else if (HFCTEXTLEN > 0)
+					{
+						Totallen = HFCTEXTLEN;
+						ptr = HFCTEXT;
+					}
+					else if (FULL_CTEXT)
+					{
+						Totallen = CTEXTLEN;
+						ptr = CTEXTMSG;
+					}
+
+					while (Totallen)
+					{
+						int sendLen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
+
+						if (sendLen == 0)
+							sendLen = 80;
+
+						if (Totallen < sendLen)
+							sendLen = Totallen;
+
+						buffptr = (PMSGWITHLEN)GetBuff();
+
+						if (buffptr)
+						{
+							buffptr->Len = sendLen;
+							memcpy(&buffptr->Data[0], ptr, sendLen);
+							C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
+						}
+						Totallen -= sendLen;
+						ptr += sendLen;
+					}
 
 					SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
 
@@ -2162,33 +2203,6 @@ VOID TrkProcessDEDFrame(struct TNCINFO * TNC)
 					}	// End of Stream 0 or RP or Drop through from not APPL Connect
 				
 				DontUseAPPLCmd:
-
-					if (FULL_CTEXT && HFCTEXTLEN == 0)
-					{
-						int Len = CTEXTLEN, CTPaclen = 100;
-						int Next = 0;
-
-						while (Len > CTPaclen)		// CTEXT Paclen
-						{
-							buffptr = GetBuff();
-							if (buffptr == 0) return;			// No buffers, so ignore
-
-							buffptr->Len = CTPaclen;
-							memcpy(buffptr->Data, &CTEXTMSG[Next], CTPaclen);
-							C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
-
-							Next += CTPaclen;
-							Len -= CTPaclen;
-						}
-
-						buffptr = GetBuff();
-						if (buffptr == 0) return;			// No buffers, so ignore
-
-						buffptr->Len = Len;
-						memcpy(buffptr->Data, &CTEXTMSG[Next], Len);
-						C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
-					}
-
 					return;
 				}
 				else

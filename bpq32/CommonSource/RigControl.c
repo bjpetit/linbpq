@@ -274,7 +274,7 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 
 			// Freq can be set on the TNC, the RIG, or calculated from current rx freq + pttOffset
 
-			if (RIG->PTTSetsFreq)
+			if (TNC && RIG->PTTSetsFreq)
 			{
 				long long txfreq = 0;
 
@@ -347,7 +347,7 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 							// Dont need to save, as we can send strings separately
 
 							Len = sprintf(cmd, "F %lld\n", txfreq);
-							send(PORT->remoteSock, cmd, Len, 0);
+							i = send(PORT->remoteSock, cmd, Len, 0);
 							RIG->PollCounter = 100;		// Don't read for 10 secs to avoid clash with PTT OFF
 						}
 					}
@@ -816,6 +816,14 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 		else
 			sprintf(Command, "Frequency not known\r");
 
+		return FALSE;
+	}
+
+	if (n == 2 && _stricmp(FreqString, "PTT") == 0)
+	{
+		Rig_PTTEx(RIG, TRUE, NULL);
+		RIG->PTTTimer = 10;				// 1 sec
+		sprintf(Command, "Ok\r");
 		return FALSE;
 	}
 

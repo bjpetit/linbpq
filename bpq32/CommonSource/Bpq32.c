@@ -1099,7 +1099,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Update WinRPR Window header with BPQ Port Description (8)
 //	Fix error in blank call code (9)
 //	Change web buttons to white on black when pressed (10)
-
+//	Fix Port CTEXT paclen on Tracker and WinRPR drivers (11)
+//	Add RADIO PTT command for testing PTT (11)
 
 #define CKernel
 

@@ -882,7 +882,6 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 
 	TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
 
-
 	if (LogAllConnects)
 	{
 		if (TNC->TargetCall[0])
@@ -907,13 +906,16 @@ BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BO
 		ptr = HFCTEXT;
 	}
 	else
-		return 0;
+		return TRUE;
 
-	while (Totallen)
+	while (Totallen > 0)
 	{
-		int sendLen = 250;
-		
-		if (Totallen < 250)
+		int sendLen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
+
+		if (sendLen == 0)
+			sendLen = 80;
+
+		if (Totallen < sendLen)
 			sendLen = Totallen;
 			
 		buffptr = (PMSGWITHLEN)GetBuff();
