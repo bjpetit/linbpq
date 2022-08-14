@@ -2308,10 +2308,10 @@ NoPort:
 					else
 					{	
 						
-						// Copy Appl Command to Command Buffer
+						// Copy Appl Command to Command Buffer. Ensure doesn't contain old command
 
+						memset(COMMANDBUFFER, ' ', 72);
 						memcpy(COMMANDBUFFER, APPL->APPLCMD, 12);
-						COMMANDBUFFER[12] = 13;
 					}
 					DoTheCommand(Session);
 					return;
@@ -4559,6 +4559,7 @@ VOID DoTheCommand(TRANSPORTENTRY * Session)
 	struct DATAMESSAGE * Buffer = REPLYBUFFER;
 	char * ptr1, * ptr2;
 	int n;
+	char CMDCopy[80];
 
 	ptr1 = &COMMANDBUFFER[0];		//
 

@@ -58,6 +58,10 @@
 //  Add Connect Scripts
 //	Improve connect timeouts and add link validation polls
 
+//  Version 6.0.24.1 ??
+
+//	Restore CMD_TO_APPL flag to Applflags (13)
+
 
 
 #include "BPQChat.h"

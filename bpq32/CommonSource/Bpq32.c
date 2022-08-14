@@ -1105,6 +1105,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add Rigcntol Web Page (13)
 //	Fix scan bandwidth change with ARDOPOFDM (13)
 //	Fix setting Min Pactor Level in SCSPactor (13)
+//	Fix length of commands sent via CMD_TO_APPL flag (14)
 
 
 #define CKernel
