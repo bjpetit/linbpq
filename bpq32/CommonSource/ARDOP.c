@@ -1831,7 +1831,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			else if (strchr(Scan->ARDOPMode, 'M'))
 				sprintf(CMD, "ARQBW %sAX", Scan->ARDOPMode);
 			else 
-				return 0;		// Illegal but don't generate error message
+				sprintf(CMD, "ARQBW %s", Scan->ARDOPMode);		// ARDOPOFDM doesn't use MAX/FORCED
 
 			ARDOPSendCommand(TNC, CMD, TRUE);
 

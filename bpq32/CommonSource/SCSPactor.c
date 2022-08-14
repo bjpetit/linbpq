@@ -713,7 +713,7 @@ ok:
 
 			if (PLevel > '0' && PLevel < '5')		// 1 - 4 
 			{
-				if (TNC->Bandwidth != PLevel)
+				if (TNC->Bandwidth != PLevel  || TNC->MinLevel != (Scan->PMinLevel - '0'))
 				{
 					TNC->Bandwidth = PLevel;
 					TNC->MinLevel = Scan->PMinLevel - '0';
@@ -2876,8 +2876,6 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	if (PactorCall && TNC->MinLevel > 1)
 		TNC->MinLevelTimer = 150;		// Check we have reached right level
 					
-	// If an autoconnect APPL is defined, send it
-
 	// See which application the connect is for
 	
 	strcpy(DestCall, STREAM->MyCall);
@@ -2887,8 +2885,9 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	else					
 		Debugprintf("HF Packet/RP Incoming Call - MYCALL = *%s*", DestCall);					
 
-	if ( ((PactorCall && TNC->UseAPPLCallsforPactor) || (PactorCall == 0 && TNC->UseAPPLCalls))
-		&& strcmp(DestCall, TNC->NodeCall) != 0)		// Not Connect to Node Call
+	if ((PactorCall && TNC->UseAPPLCallsforPactor) || (PactorCall == 0 && TNC->UseAPPLCalls))
+		//   Test for Richard - Should drop through to Node if not to an APPLCALL  
+		//&& strcmp(DestCall, TNC->NodeCall) != 0)		// Not Connect to Node Call
 	{		
 		for (App = 0; App < 32; App++)
 		{
@@ -2951,8 +2950,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 			return;		
 		}
 
-		// Not to a known appl - drop through to Node
-				
+		// Not to a known appl - drop through to Node		
 	}
 
 	if (!PactorCall && TNC->UseAPPLCalls)
@@ -2979,7 +2977,9 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 		TNC->SwallowSignon = TRUE;
 		return;
 	}
-						
+
+	// If an autoconnect APPL is defined, send it
+					
 	if (TNC->ApplCmd)	
 	{
 		char App[16];

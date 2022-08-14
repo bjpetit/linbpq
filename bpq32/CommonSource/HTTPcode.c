@@ -67,6 +67,8 @@ unsigned char * Compressit(unsigned char * In, int Len, int * OutLen);
 char * stristr (char *ch1, char *ch2);
 int GetAPRSIcon(unsigned char * _REPLYBUFFER, char * NodeURL);
 char * GetStandardPage(char * FN, int * Len);
+BOOL SHA1PasswordHash(char * String, char * Hash);
+char * byte_base64_encode(char *str, int len);
 
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
@@ -79,13 +81,14 @@ extern int  MAXDESTS;			// MAX NODES IN SYSTEM
 extern struct _LINKTABLE * LINKS;
 extern int	LINK_TABLE_LEN; 
 extern int	MAXLINKS;
-
+extern char * RigWebPage;
 extern COLORREF Colours[256];
 
 extern BOOL IncludesMail;
 extern BOOL IncludesChat;
 
 extern BOOL APRSWeb;  
+extern BOOL RigActive;
 
 extern char * UIUIDigi[33];
 extern char UIUIDEST[33][11];		// Dest for Beacons
@@ -101,6 +104,9 @@ extern HKEY REGTREE;
 extern BOOL APRSActive;
 
 extern UCHAR LogDirectory[];
+
+extern struct RIGPORTINFO * PORTInfo[34];
+extern int NumberofPorts;
 
 char * strlop(char * buf, char delim);
 VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
@@ -1608,6 +1614,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	BOOL LOCAL = FALSE;
 	BOOL COOKIE = FALSE;
 	int Len;
+	char * WebSock = 0;
 
 	char PortsHddr[] = "<h2 align=center>Ports</h2><table align=center border=2 bgcolor=white>"
 		"<tr><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th></tr>";
@@ -1628,6 +1635,10 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		"<td><a href=PortBeacons?%d>&nbsp;Beacons</a></td>"
 		"<td><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td></tr>\r\n";
 
+	char RigControlLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
+		"<td><a href=\"javascript:dev_win('/Node/RigControl.html',%d,%d,%d,%d);\">Rig Control</a></td></tr>\r\n";
+
+
 	char Encoding[] = "Content-Encoding: deflate\r\n";
 
 #ifdef WIN32
@@ -1645,6 +1656,8 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		strcpy(URL, MsgPtr);
 
 		HostPtr = strstr(MsgPtr, "Host: ");
+
+		WebSock = strstr(MsgPtr, "Upgrade");
 		
 		if (HostPtr)
 		{
@@ -1709,6 +1722,55 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			}
 		}
 
+		if (WebSock)
+		{
+			// Websock connection request - Reply and remember state.
+
+			char KeyMsg[128];
+			char Webx[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";	// Fixed UID
+			char Hash[64] = "";
+			char * Hash64;		// base 64 version
+			char * ptr;
+
+			//Sec-WebSocket-Key: l622yZS3n+zI+hR6SVWkPw==
+
+			char ReplyMsg[] = 
+				"HTTP/1.1 101 Switching Protocols\r\n"
+				"Upgrade: websocket\r\n"
+				"Connection: Upgrade\r\n"
+				"Sec-WebSocket-Accept: %s\r\n"
+//				"Sec-WebSocket-Protocol: chat\r\n"
+				"\r\n";
+
+			ptr = strstr(MsgPtr, "Sec-WebSocket-Key:");
+
+			if (ptr)
+			{
+				ptr += 18;
+				while (*ptr == ' ')
+					ptr++;
+
+				memcpy(KeyMsg, ptr, 40);
+				strlop(KeyMsg, 13);
+				strlop(KeyMsg, ' ');
+				strcat(KeyMsg, Webx);
+
+				SHA1PasswordHash(KeyMsg, Hash);
+				Hash64 = byte_base64_encode(Hash, 20);
+
+				conn->WebSocks = 1;
+				strlop(&URL[4], ' ');
+				strcpy(conn->WebURL, &URL[4]);
+
+				ReplyLen = sprintf(Reply, ReplyMsg, Hash64);
+			
+				free(Hash64);
+				goto Returnit;
+
+			}
+		}
+
+
 		ptr = strstr(URL, " HTTP");
 
 		if (ptr)
@@ -1740,7 +1802,6 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			return 0;
 
 		}
-
 
 		// If for Mail or Chat, check for a session, and send login screen if necessary
 
@@ -2696,6 +2757,79 @@ doHeader:
 					"L3 Frames Relayed", L3FRAMES);
 
 			}
+
+			else if (_stricmp(NodeURL, "/Node/RigControl.html") == 0)
+			{
+				char Test[] =
+					"<html><meta http-equiv=expires content=0>\r\n"
+					"<head><title>Rigcontrol</title></head>\r\n"
+					"<script type = \"text/javascript\">\r\n"
+					"var ws;"
+					"function WebSocketTest()"
+					"{"
+					" if (\"WebSocket\" in window)"
+					" {"
+					"   // Let us open a web socket. Get address from URL\r\n"
+					"	var text = window.location.href;"
+					"	var result = text.substring(7);"
+					"	var myArray = result.split('/', 1);"
+					"   ws = new WebSocket('ws://' + myArray[0] + '/RIGCTL');\r\n"
+					
+					"   ws.onopen = function() {\r\n"
+			
+					"   // Web Socket is connected\r\n"
+
+					"	const div = document.getElementById('div');\r\n"
+					"	div.innerHTML = 'Websock Connected'\r\n"
+					"    };\r\n"
+					
+					"   ws.onmessage = function (evt)"
+					"   {"
+					"     var received_msg = evt.data;\r\n"
+					"	  const div = document.getElementById('div');\r\n"
+					"	  div.innerHTML = received_msg\r\n"
+					"     };"
+
+					"   ws.onclose = function()"
+					"   {"
+
+					"    // websocket is closed.\r\n"
+					"	 const div = document.getElementById('div');\r\n"
+					"	 div.innerHTML = 'Websock Connection Lost'\r\n"
+					"    };"
+					" }"
+					" else"
+					" {"
+					"  // The browser doesn't support WebSocket\r\n"
+					"	const div = document.getElementById('div');\r\n"
+					"	div.innerHTML = 'WebSocket not supported by your Browser - RigControl Page not availble'\r\n"
+					" }"
+					"}"
+					"function PTT(p)"
+					"{"
+					"  ws.send(p);"
+					"}" 
+					"</script>\r\n"
+					"</head>\r\n"
+					"<body height: 600px; onload=WebSocketTest()>\r\n"
+					"<div id = 'div'>Waiting for data...</div>\r\n"
+					"</body></html>\r\n";
+
+		
+				char NoRigCtl[] =
+					"<html><meta http-equiv=expires content=0>\r\n"
+					"<head><title>Rigcontrol</title></head>\r\n"
+					"</head>\r\n"
+					"<body height: 600px>\r\n"
+					"<div id = 'div'>RigControl Not Configured...</div>\r\n"
+					"</body></html>\r\n";
+
+				if (RigWebPage)
+					ReplyLen = sprintf(_REPLYBUFFER, "%s", Test);
+				else
+					ReplyLen = sprintf(_REPLYBUFFER, "%s", NoRigCtl);
+			}
+
 			else if (_stricmp(NodeURL, "/Node/ShowLog.html") == 0)
 			{
 				char ShowLogPage[] =
@@ -3068,6 +3202,10 @@ doHeader:
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithBeacon, Port->PORTNUMBER, Port->PORTNUMBER,
 						DLL, DLL, Port->PORTDESCRIPTION, Port->PORTNUMBER);
 				}
+
+				if (RigActive)
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], RigControlLine, 33, "Rig Control", "Rig Control", 600, 350, 200, 200);
+
 			}
 
 			if (_stricmp(NodeURL, "/Node/Nodes.html") == 0)
@@ -3703,6 +3841,13 @@ CMDS60:
 
 			}
 
+			else if (_stricmp(NodeURL, "/Node/PTT") == 0)
+			{
+				struct TNCINFO * TNC = conn->TNC;
+				int x = atoi(Context);
+			}
+
+
 SendResp:
 
 			FormatTime3(TimeString, time(NULL));
@@ -4026,3 +4171,161 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 	return ReplyLen;
 
 }
+
+#ifdef WIN32
+
+#include <windows.h>
+#include <wincrypt.h>
+ 
+#define SHA1_HASH_LEN 20
+ 
+BOOL SHA1PasswordHash(char * lpszPassword, char * Hash)
+{
+    HCRYPTPROV hCryptProv; // Handle to our context
+    HCRYPTHASH hCryptHash; // Handle to our hash
+    BYTE       bHashValue[SHA1_HASH_LEN]; // This will hold our SHA-1 hash
+    DWORD     dwSize   = SHA1_HASH_LEN; // Size of output
+    BOOL       bSuccess = FALSE; // We change this to TRUE if we complete the operations
+    // Declare all the variables at the start of our code for C89 compatability
+ 
+    if(CryptAcquireContext(&hCryptProv, NULL, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
+    { // Initiate usage of the functions
+        if(CryptCreateHash(hCryptProv, CALG_SHA1, 0, 0, &hCryptHash))
+        { // Create a SHA1 hash
+            if(CryptHashData(hCryptHash, (PBYTE)lpszPassword, lstrlen(lpszPassword) * sizeof(TCHAR), 0))
+            { // Update the hash, (process our password)
+                if(CryptGetHashParam(hCryptHash, HP_HASHVAL, bHashValue, &dwSize, 0))
+                { // Extract the hash
+                    
+					memcpy(Hash, bHashValue, 20);
+                    bSuccess = TRUE;
+                }
+            }
+            CryptDestroyHash(hCryptHash);
+        }
+        CryptReleaseContext(hCryptProv, 0);
+    }
+ 
+    return bSuccess;
+}
+
+#else
+
+#include <openssl/sha.h>
+
+BOOL SHA1PasswordHash(char * data, char * Hash)
+{
+		SHA1(data, strlen(data), Hash);
+		return 1;
+}
+#endif
+
+int BuildRigCtlPage(char * _REPLYBUFFER)
+{
+	int ReplyLen;
+
+	struct RIGPORTINFO * PORT;
+	struct RIGINFO * RIG;
+	int p, i;
+
+	char Page[] =
+		"<html><meta http-equiv=expires content=0>\r\n"
+		//					"<meta http-equiv=refresh content=5>\r\n"
+		"<head><title>Rigcontrol</title></head>\r\n"
+		"<style type=text/css>form{margin:0px; padding:0px; display:inline;}</style>"
+		"<body height: 580px;><h3>Rigcontrol</h3>\r\n"
+		"<table style=\"text-align: left; width: 580px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2><tr>\r\n"
+		"<th width=90px>Radio</th>\r\n"
+		"<th width=90px>Freq</th>\r\n"
+		"<th width=90px>Mode</th>\r\n"
+		"<th>ST</th>\r\n"
+		"<th>Ports</th>\r\n"
+		"<th hidden width=10px>Action</th>\r\n"
+		"</tr>";
+	char RigLine[] =
+		"<tr>\r\n"
+		"  <td>%s</td>\r\n"
+		"  <td>%s</td>\r\n"
+		"  <td>%s/1</td>\r\n"
+		"  <td>%c%c</td>\r\n"
+		"  <td>%s</td>\r\n"
+		"  <td hidden width=10px><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td>\r\n"
+		"  </tr>\r\n";
+	char Tail[] =		
+		"</table>\r\n"
+		"</body></html>\r\n";
+
+	ReplyLen = sprintf(_REPLYBUFFER, "%s", Page);
+
+	for (p = 0; p < NumberofPorts; p++)
+	{
+		PORT = PORTInfo[p];
+
+		for (i=0; i< PORT->ConfiguredRigs; i++)
+		{
+			RIG = &PORT->Rigs[i];
+			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], RigLine, RIG->WEB_Label, RIG->WEB_FREQ, RIG->WEB_MODE, RIG->WEB_SCAN, RIG->WEB_PTT, RIG->WEB_PORTS, RIG->Interlock);
+		}
+	}
+
+	ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", Tail);
+	return ReplyLen;
+}
+
+
+void SendRigWebPage()
+{
+	int n;
+	struct ConnectionInfo * sockptr;
+	struct TNCINFO * TNC;
+	struct TCPINFO * TCP;
+
+	for (n = 0; n < 33; n++)
+	{
+		TNC = TNCInfo[n];
+
+		if (TNC && TNC->Hardware == H_TELNET)
+		{
+			TCP = TNC->TCPInfo;
+
+			if (TCP)
+			{
+				for (n = 0; n <= TCP->MaxSessions; n++)
+				{
+					sockptr = TNC->Streams[n].ConnectionInfo;
+
+					if (sockptr->SocketActive)
+					{
+						if (sockptr->HTTPMode && sockptr->WebSocks  && strcmp(sockptr->WebURL, "RIGCTL") == 0)
+						{
+							char RigMsg[8192];
+							int RigMsgLen = strlen(RigWebPage);
+							char* ptr;
+
+							RigMsg[0] = 0x81;		// Fin, Data
+							RigMsg[1] = 126;		// Unmasked, Extended Len
+							RigMsg[2] = RigMsgLen >> 8;
+							RigMsg[3] = RigMsgLen & 0xff;
+							strcpy(&RigMsg[4], RigWebPage);
+
+							// If secure session enable PTT button
+
+							if (sockptr->WebSecure)
+							{
+								while (ptr = strstr(RigMsg, "hidden"))
+									memcpy(ptr, "      ", 6);
+							}
+
+							send(sockptr->socket, RigMsg, RigMsgLen + 4, 0);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+
+
+ 

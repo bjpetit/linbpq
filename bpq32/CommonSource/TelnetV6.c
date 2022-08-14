@@ -87,6 +87,7 @@ int IntSetTraceOptionsEx(uint64_t mask, int mtxparam, int mcomparam, int monUIOn
 int DataSocket_ReadDRATS(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
 void processDRATSFrame(unsigned char * Message, int Len, struct ConnectionInfo * sockptr);
 void DRATSConnectionLost(struct ConnectionInfo * sockptr);
+int BuildRigCtlPage(char * _REPLYBUFFER);
 
 #ifndef LINBPQ
 extern HKEY REGTREE;
@@ -950,11 +951,14 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			{
 				if (sockptr->HTTPMode)
 				{
-					if (sockptr->LastSendTime && (REALTIMETICKS - sockptr->LastSendTime) > 1500)	// ~ 2.5 mins
+					if (sockptr->WebSocks == 0)
 					{
-						closesocket(sockptr->socket);
-						sockptr->SocketActive = FALSE;
-						ShowConnections(TNC);
+						if (sockptr->LastSendTime && (REALTIMETICKS - sockptr->LastSendTime) > 1500)	// ~ 2.5 mins
+						{
+							closesocket(sockptr->socket);
+							sockptr->SocketActive = FALSE;
+							ShowConnections(TNC);
+						}
 					}
 				}
 				else
@@ -3203,6 +3207,7 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 			sockptr->ClientSession = FALSE;
 			sockptr->NeedLF = FALSE;
 			sockptr->TNC = TNC;
+			sockptr->WebSocks = 0;
 
 			if (sockptr->ADIF == NULL)
 				sockptr->ADIF = malloc(sizeof(struct ADIF));
@@ -4852,10 +4857,11 @@ MsgLoop:
 	return 0;
 }
 
+extern char * RigWebPage;
 
 int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream)
 {
-	int len=0, maxlen, InputLen;
+	int w =1, x= 1, len=0, y = 2, maxlen, InputLen, ret;
 	char NLMsg[3]={13,10,0};
 	UCHAR * MsgPtr;
 	UCHAR * CRLFCRLF;
@@ -4863,13 +4869,13 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 	int BodyLen, ContentLen;
 	struct ConnectionInfo * sockcopy;
 	
-	ioctl(sock,FIONREAD,&len);
+	ret = ioctl(sock,FIONREAD,&w);
 
 	maxlen = InputBufferLen - sockptr->InputLen;
 	
-	if (len > maxlen) len = maxlen;
+	if (w > maxlen) w = maxlen;
 
-	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
+	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], w, 0);
 
 	if (len == SOCKET_ERROR || len == 0)
 	{
@@ -4880,13 +4886,84 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 		return 0;
 	}
 
-	// Make sure request is complete - should end crlfcrlf, and if a post have the required input message
-
 	MsgPtr = &sockptr->InputBuffer[0];
 	sockptr->InputLen += len;
 	InputLen = sockptr->InputLen;
 
 	MsgPtr[InputLen] = 0;
+
+	if (sockptr->WebSocks)
+	{
+		// Websocks message
+
+		int i, j;
+		int Fin, Opcode, Len, Mask;
+		char MaskingKey[4];
+		char * ptr;
+
+		/*
+		 +-+-+-+-+-------+-+-------------+-------------------------------+
+     |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
+     |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
+     |N|V|V|V|       |S|             |   (if payload len==126/127)   |
+     | |1|2|3|       |K|             |                               |
+     +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
+     |     Extended payload length continued, if payload len == 127  |
+     + - - - - - - - - - - - - - - - +-------------------------------+
+     |                               |Masking-key, if MASK set to 1  |
+     +-------------------------------+-------------------------------+
+     | Masking-key (continued)       |          Payload Data         |
+     +-------------------------------- - - - - - - - - - - - - - - - +
+     :                     Payload Data continued ...                :
+
+	  Octet i of the transformed data ("transformed-octet-i") is the XOR of
+   octet i of the original data ("original-octet-i") with octet at index
+   i modulo 4 of the masking key ("masking-key-octet-j"):
+
+     j                   = i MOD 4
+     transformed-octet-i = original-octet-i XOR masking-key-octet-j
+*/
+		Fin = MsgPtr[0] >> 7;
+		Opcode = MsgPtr[0] & 15;
+		Mask = MsgPtr[1] >> 7;
+		Len = MsgPtr[1] & 127;
+		memcpy(MaskingKey, &MsgPtr[2], 4);
+		ptr = &MsgPtr[6];
+
+		for (i = 0; i < Len; i++)
+		{
+			j = i & 3;
+
+			*ptr = *ptr ^ MaskingKey[j];
+			ptr++;
+		}
+
+		if (Opcode == 8)
+		{
+			Debugprintf("WebSock Close");
+		}
+		else if (Opcode == 1)
+		{
+			if (strcmp(sockptr->WebURL, "RIGCTL") == 0)
+			{
+				// PTT Message
+
+				char RigCMD[64];
+				
+				sprintf(RigCMD, "%s PTT", &MsgPtr[6]);
+				Rig_Command(-1, RigCMD);
+			}
+			else
+				Debugprintf("WebSock Opcode %d Msg %s", Opcode, &MsgPtr[6]);
+
+		}
+
+		sockptr->InputLen = 0;
+		return 0;
+	}
+
+	// Make sure request is complete - should end crlfcrlf, and if a post have the required input message
+
 
 	CRLFCRLF = strstr(MsgPtr, "\r\n\r\n");
 
@@ -4909,6 +4986,60 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 	sockptr->LastSendTime = REALTIMETICKS;
 
 	memcpy(sockcopy, sockptr, sizeof(struct ConnectionInfo));
+
+	if(strstr(MsgPtr, "Upgrade: websocket"))
+	{
+		if(RigWebPage[0])
+		{
+			int LOCAL = 0, COOKIE = 0;
+			char * HostPtr;
+			char * ptr;
+
+			sockptr->WebSocks = 1;
+			memcpy(sockptr->WebURL, &MsgPtr[5], 15);
+			strlop(sockptr->WebURL, ' ');
+			RigWebPage[0] = 0;
+
+			HostPtr = strstr(MsgPtr, "Host: ");
+
+			if (HostPtr)
+			{
+				uint32_t Host;
+				char Hostname[32]= "";
+				struct LOCALNET * LocalNet = sockptr->TNC->TCPInfo->LocalNets;
+
+				HostPtr += 6;
+				memcpy(Hostname, HostPtr, 31);
+				strlop(Hostname, ':');
+				Host = inet_addr(Hostname);
+
+				if (strcmp(Hostname, "127.0.0.1") == 0)
+					LOCAL = TRUE;
+				else
+				{
+					if (sockptr->sin.sin_family != AF_INET6)
+					{
+						while(LocalNet)
+						{
+							uint32_t MaskedHost = sockptr->sin.sin_addr.s_addr & LocalNet->Mask;
+							if (MaskedHost == LocalNet->Network)
+							{				
+								LOCAL = 1;
+								break;
+							}
+							LocalNet = LocalNet->Next;
+						}
+					}
+				
+					ptr = strstr(MsgPtr, "BPQSessionCookie=N");
+
+					if (ptr)
+						COOKIE = TRUE;
+				}
+				sockptr->WebSecure = LOCAL | COOKIE;
+			}
+		}
+	}
 
 	_beginthread(ProcessHTTPMessage, 2048000, (VOID *)sockcopy);
 

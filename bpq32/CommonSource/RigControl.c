@@ -128,6 +128,8 @@ VOID ConnecttoHAMLIB(struct RIGPORTINFO * PORT);
 
 int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length);
 int GetPTCRadioCommand(struct TNCINFO * TNC, char * Block);
+int BuildRigCtlPage(char * _REPLYBUFFER);
+void SendRigWebPage();
 
 extern  TRANSPORTENTRY * L4TABLE;
 HANDLE hInstance;
@@ -182,6 +184,10 @@ BOOL EndPTTCATThread = FALSE;
 int HAMLIBMasterRunning = 0;
 int HAMLIBSlaveRunning = 0;
 int FLRIGRunning = 0;
+
+char * RigWebPage = 0;
+int RigWebPageLen = 0;
+
 
 struct RIGPORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
 
@@ -805,7 +811,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 				sprintf(Command, "Sorry - Radio port closed\r");
 			else
 				sprintf(Command, "Sorry - Radio not responding\r");
-	}
+		}
 		return FALSE;
 	}
 
@@ -2213,6 +2219,8 @@ DllExport BOOL APIENTRY Rig_Init()
 
 	SetupPortRIGPointers();
 
+	RigWebPage = zalloc(10);
+
 	WritetoConsole("\nRig Control Enabled\n");
 
 	return TRUE;
@@ -2317,7 +2325,8 @@ DllExport BOOL APIENTRY Rig_Close()
 
 BOOL Rig_Poll()
 {
-	int p, i;
+	int p, i, Len;
+	char RigWeb[16384];
 
 	struct RIGPORTINFO * PORT;
 	struct RIGINFO * RIG;
@@ -2436,6 +2445,19 @@ BOOL Rig_Poll()
 
 		}
 	}
+
+	// Build page for Web Display
+
+	Len = BuildRigCtlPage(RigWeb);
+
+	if (strcmp(RigWebPage, RigWeb) == 0)
+		return TRUE;				// No change
+
+	free(RigWebPage);
+	
+	RigWebPage = strdup(RigWeb);
+
+	SendRigWebPage();
 
 	return TRUE;
 }

@@ -1355,7 +1355,7 @@ Retry:
 
 		BPQSetHandle(conn->BPQStream, hWnd);
 
-		SetAppl(conn->BPQStream, 2, ChatApplMask);
+		SetAppl(conn->BPQStream, 3, ChatApplMask);
 		Disconnect(conn->BPQStream);
 	}
 

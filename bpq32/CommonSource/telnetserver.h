@@ -66,7 +66,10 @@ struct ConnectionInfo
 	UCHAR * ResendBuffer;		// Used if send() returns EWOULDBLOCK
 	int	ResendLen;				// Len to resend
 
-	struct ADIF * ADIF;				// ADIF Logging info
+	struct ADIF * ADIF;			// ADIF Logging info
+	int WebSocks;
+	char WebURL[16];			// URL for WebSocket Connection
+	int WebSecure;				// Set if secure session
 };
 
 

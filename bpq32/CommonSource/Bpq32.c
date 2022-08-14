@@ -1101,6 +1101,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Change web buttons to white on black when pressed (10)
 //	Fix Port CTEXT paclen on Tracker and WinRPR drivers (11)
 //	Add RADIO PTT command for testing PTT (11)
+//	Fix using APPLCALLs on SCSTracker RP call (12)
+//	Add Rigcntol Web Page (13)
+//	Fix scan bandwidth change with ARDOPOFDM (13)
+//	Fix setting Min Pactor Level in SCSPactor (13)
+
 
 #define CKernel
 
