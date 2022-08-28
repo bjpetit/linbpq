@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
+			OutputDirectory="C:\Dev\Msdev2005\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -103,8 +103,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
+			OutputDirectory="C:\Dev\Msdev2005\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"
@@ -202,14 +202,38 @@
 			<File
 				RelativePath=".\bpqchat.c"
 				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AssemblerListingLocation="$(IntDir)\"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\ChatDebug.c"
 				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AssemblerListingLocation="$(IntDir)\"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\ChatHTMLConfig.c"
 				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AssemblerListingLocation="$(IntDir)\"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\ChatMonitor.c"
@@ -219,8 +243,8 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						ObjectFile="$(IntDir)\"
+						XMLDocumentationFileName="$(IntDir)\"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -228,7 +252,8 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						AssemblerListingLocation="$(IntDir)\"
+						ObjectFile="$(IntDir)\"
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
@@ -241,8 +266,8 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						ObjectFile="$(IntDir)\"
+						XMLDocumentationFileName="$(IntDir)\"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -250,7 +275,8 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						AssemblerListingLocation="$(IntDir)\"
+						ObjectFile="$(IntDir)\"
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
@@ -258,6 +284,14 @@
 			<File
 				RelativePath=".\ChatUtilities.c"
 				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AssemblerListingLocation="$(IntDir)\"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\ChatUtils.c"
@@ -267,8 +301,8 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						ObjectFile="$(IntDir)\"
+						XMLDocumentationFileName="$(IntDir)\"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -276,14 +310,23 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						AssemblerListingLocation="$(IntDir)\"
+						ObjectFile="$(IntDir)\"
+						XMLDocumentationFileName="$(IntDir)\"
 					/>
 				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\HanksRT.c"
 				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AssemblerListingLocation="$(IntDir)\"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\HTMLCommonCode.c"
@@ -293,8 +336,8 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						ObjectFile="$(IntDir)\"
+						XMLDocumentationFileName="$(IntDir)\"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -302,8 +345,9 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						AssemblerListingLocation="$(IntDir)\"
+						ObjectFile="$(IntDir)\"
+						XMLDocumentationFileName="$(IntDir)\"
 					/>
 				</FileConfiguration>
 			</File>

@@ -1106,7 +1106,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix scan bandwidth change with ARDOPOFDM (13)
 //	Fix setting Min Pactor Level in SCSPactor (13)
 //	Fix length of commands sent via CMD_TO_APPL flag (14)
-
+//	Add filter by quality option to N display (15)
+//	Fix VARA Mode reporting to WL2K (16)
+//	Add FLRIG POWER anf TUNE commands (18)
 
 #define CKernel
 

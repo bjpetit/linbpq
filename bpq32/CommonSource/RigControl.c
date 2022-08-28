@@ -710,6 +710,21 @@ portok:
 
 
 
+static char MsgHddr[] = "POST /RPC2 HTTP/1.1\r\n"
+					"User-Agent: XMLRPC++ 0.8\r\n"
+					"Host: 127.0.0.1:7362\r\n"
+					"Content-Type: text/xml\r\n"
+					"Content-length: %d\r\n"
+					"\r\n%s";
+
+static char Req[] = "<?xml version=\"1.0\"?>\r\n"
+					"<methodCall><methodName>%s</methodName>\r\n"
+					"%s"
+					"</methodCall>\r\n";
+
+
+
+
 int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, char * Command)
 {
 	int n, ModeNo, Filter, Port = 0;
@@ -893,6 +908,10 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 	if (_stricmp(FreqString, "TUNE") == 0)
 	{
+		char ReqBuf[256];
+		char SendBuff[256];
+		char FLPoll[80];
+
 		switch (PORT->PortType)
 		{ 
 		case ICOM:
@@ -953,9 +972,31 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 			return TRUE;
+
+		case FLRIG:
+
+			strcpy(FLPoll, "rig.tune");
+
+			Len = sprintf(ReqBuf, Req, FLPoll, "");
+			Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+			if (PORT->CONNECTED)
+			{
+				if (send(PORT->remoteSock, SendBuff, Len, 0) != Len)
+				{
+					if (PORT->remoteSock)
+						closesocket(PORT->remoteSock);
+
+					PORT->remoteSock = 0;
+					PORT->CONNECTED = FALSE;
+					PORT->hDevice = 0;	
+				}
+			}
+			sprintf(Command, "Ok\r");
+			return FALSE;
 		}
 
-		sprintf(Command, "Sorry - TUNE only supported on ICOM and Kenwood Radios\r");
+		sprintf(Command, "Sorry - TUNE only supported on your radio\r");
 		return FALSE;
 	}
 
@@ -963,6 +1004,8 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 	{
 		char PowerString[8] = "";
 		int Power = atoi(Mode);
+		int len;
+		char cmd[80];
 
 		switch (PORT->PortType)
 		{ 
@@ -1043,9 +1086,18 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, int Session, 
 
 			C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 			return TRUE;
+
+		case FLRIG:
+
+			len = sprintf(cmd, "<i4>%d</i4>", Power);
+
+			FLRIGSendCommand(PORT, "rig.set_power", cmd);
+
+			sprintf(Command, "Ok\r");
+			return FALSE;
 		}
 
-		sprintf(Command, "Sorry - POWER only supported on ICOM and Kenwood Radios\r");
+		sprintf(Command, "Sorry - POWER not supported on your Radio\r");
 		return FALSE;
 	}
 
@@ -2455,7 +2507,7 @@ BOOL Rig_Poll()
 
 	free(RigWebPage);
 	
-	RigWebPage = strdup(RigWeb);
+	RigWebPage = _strdup(RigWeb);
 
 	SendRigWebPage();
 
@@ -7061,23 +7113,6 @@ void ProcessHAMLIBFrame(struct RIGPORTINFO * PORT, int Length)
 	}
 }
 
-
-
-
-
-
-
-static char MsgHddr[] = "POST /RPC2 HTTP/1.1\r\n"
-					"User-Agent: XMLRPC++ 0.8\r\n"
-					"Host: 127.0.0.1:7362\r\n"
-					"Content-Type: text/xml\r\n"
-					"Content-length: %d\r\n"
-					"\r\n%s";
-
-static char Req[] = "<?xml version=\"1.0\"?>\r\n"
-					"<methodCall><methodName>%s</methodName>\r\n"
-					"%s"
-					"</methodCall>\r\n";
 
 void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 {

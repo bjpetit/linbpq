@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\LinBPQ\$(ConfigurationName)"
+			OutputDirectory="C:\Dev\Msdev2005\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -100,8 +100,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\LinBPQ\$(ConfigurationName)"
+			OutputDirectory="C:\Dev\Msdev2005\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"

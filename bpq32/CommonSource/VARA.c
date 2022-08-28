@@ -1923,20 +1923,14 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					// try to get from WL2K record
 
 					if (WL2K)
-					{
 						SESS->Frequency = WL2K->Freq;
-					}
 				}
-				SESS->Mode = TNC->WL2KMode;
 			}
 			else
 			{
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->TargetCall);
 				if (WL2K)
-				{
 					SESS->Frequency = WL2K->Freq;
-					SESS->Mode = WL2K->mode;
-				}
 			}
 			
 			if (WL2K)

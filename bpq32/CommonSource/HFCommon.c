@@ -1861,7 +1861,7 @@ int standardParams(struct TNCINFO * TNC, char * buf)
 		TNC->RXRadio = TNC->TXRadio = atoi(&buf[6]);
 	else if (_memicmp(buf, "TXRadio", 7) == 0)		// Rig Control RADIO for TX
 		TNC->TXRadio = atoi(&buf[8]);
-	else if (_memicmp(buf, "RXRadio", 7) == 0)		// Rig Control RADIO for RX
+	else if (_memicmp(buf, "RXRadio", 7) == 0)		// Rig Control RADIO for RXFRETRIES
 		TNC->RXRadio = atoi(&buf[8]);
 	else if (_memicmp(buf, "TXFreq", 6) == 0)		// For PTT Sets Freq mode
 		TNC->TXFreq = strtoll(&buf[7], NULL, 10);

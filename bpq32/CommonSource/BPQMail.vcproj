@@ -17,8 +17,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\msdev2005\Intermed\bpqmailchat\debug"
+			OutputDirectory="C:\Dev\Msdev2005\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			CharacterSet="0"
@@ -107,8 +107,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
+			OutputDirectory="C:\Dev\Msdev2005\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
+			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			WholeProgramOptimization="1"
@@ -228,7 +228,7 @@
 					<Tool
 						Name="VCCLCompilerTool"
 						AssemblerOutput="2"
-						AssemblerListingLocation="$(IntDir)\BBSListings\"
+						AssemblerListingLocation="$(IntDir)\"
 						ObjectFile="$(IntDir)\$(InputName)1.obj"
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
@@ -298,8 +298,8 @@
 					<Tool
 						Name="VCCLCompilerTool"
 						AssemblerOutput="2"
-						AssemblerListingLocation="$(IntDir)\BBSListings\"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						AssemblerListingLocation="$(IntDir)\"
+						ObjectFile="$(IntDir)\"
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>

@@ -491,6 +491,21 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 
 		if (conn->Flags & GETTINGUSER)
 		{
+			// Check not getting *RTL in response to Name prompt
+
+			if (memcmp(Buffer, "*RTL", 4) == 0)
+			{
+				// Other end thinks this is a node-node link
+
+				Logprintf(LOG_CHAT, conn, '!', "Station %s trying to start Node Protocol, but not defined as a Node",
+					conn->Callsign);
+
+				knownnode_add(conn->Callsign);			// So it won't happen again
+
+				Disconnect(conn->BPQStream);
+				return;
+			}
+
 			conn->Flags &=  ~GETTINGUSER;
 			memcpy(user->Name, Buffer, len-1);
 			ChatSendWelcomeMsg(conn->BPQStream, conn, user);
@@ -857,6 +872,9 @@ void upduser(USER *user)
 
 	while(fgets(buf, 128, in))
 	{
+		if (strstr(buf, "*RTL"))				// Tidy user database
+			continue;
+
  	  c = strchr(buf, ' ');
  	  if (c) *c = '\0';
 		if (!matchi(buf, user->call))

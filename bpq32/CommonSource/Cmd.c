@@ -2949,6 +2949,7 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	struct ROUTE * ROUTE = NULL;
 	char Pattern[80] = "";
 	char * firststar;
+	int minqual = 0;
 
 	ptr = strtok_s(CmdTail, " ", &Context);
 	param2 = strtok_s(NULL, " ", &Context);
@@ -2981,6 +2982,14 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 			if (param2)
 				strcpy(Pattern, param2);
 		}
+	}
+
+	// Pattern >nnn selects nodes with at least that quality
+
+	if (Pattern[0] == '>')
+	{
+		minqual = atoi(&Pattern[1]);
+		Pattern[0] = 0;
 	}
 
 	// We need to pick out CALL or CALL* from other patterns (as call use detail display)
@@ -3084,13 +3093,13 @@ DoNodePattern:
 	{
 		if (Dest->DEST_CALL[0] != 0)
 		{
-			if (Param != 'T' || Dest->DEST_COUNT)
-				List[n++] = Dest;
+			if (Dest->NRROUTE->ROUT_QUALITY >= minqual)
+				if (Param != 'T' || Dest->DEST_COUNT)
+					List[n++] = Dest;
 
 			if (n > 999)
 				break;
 		}
-
 		Dest++;
 	}
 
@@ -4559,7 +4568,6 @@ VOID DoTheCommand(TRANSPORTENTRY * Session)
 	struct DATAMESSAGE * Buffer = REPLYBUFFER;
 	char * ptr1, * ptr2;
 	int n;
-	char CMDCopy[80];
 
 	ptr1 = &COMMANDBUFFER[0];		//
 
