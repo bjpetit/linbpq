@@ -39,6 +39,7 @@ FORMS    += QtTermTCP.ui\
         AGWParams.ui \
         VARAConfig.ui \
         KISSConfig.ui \
+		ColourConfig.ui \
         AGWConnect.ui
 
 RESOURCES += QtTermTCP.qrc

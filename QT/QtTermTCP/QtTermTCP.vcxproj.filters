@@ -128,9 +128,4 @@
   <ItemGroup>
     <ResourceCompile Include=".\QtTermTCP_resource.rc" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="ui_ColourConfig.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-  </ItemGroup>
 </Project>
