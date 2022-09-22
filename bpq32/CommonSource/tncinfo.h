@@ -294,8 +294,8 @@ typedef struct ARQINFO
 	char OurStream;
 	char FarStream;
 
-	UINT * TXHOLDQ[64];			// Frames waiting ACK
-	UINT * RXHOLDQ[64];			// Frames waiting missing frames.
+	PMSGWITHLEN TXHOLDQ[64];	// Frames waiting ACK
+	PMSGWITHLEN RXHOLDQ[64];	// Frames waiting missing frames.
 
 	int TXWindow;
 	int RXWindow;

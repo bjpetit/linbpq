@@ -934,6 +934,22 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				ptr = strtok_s(&buff->L2DATA[2], " ,\r", &context);
 
+				if (ptr == 0)
+				{
+					PMSGWITHLEN buffptr = (PMSGWITHLEN)GetBuff();
+
+					if (buffptr)
+					{
+						buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0],
+							"UZ7HO} Error - Call missing from C command\r", STREAM->MyCall, STREAM->RemoteCall);
+
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+					}
+
+					STREAM->DiscWhenAllSent = 10;
+					return 0;
+				}
+
 				if (*ptr == '!')
 					ptr++;
 

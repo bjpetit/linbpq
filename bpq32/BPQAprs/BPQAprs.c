@@ -82,6 +82,11 @@
 //	Fix Beep or Popup on Message RX
 //	Switch to my map servers
 
+// ??
+
+//	Add option to lock map (acroll and zoom) (.17)
+//	Save and restore Map Locked flag when program closed (.19)
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 #define _WIN32_WINNT 0x0501	
@@ -367,6 +372,8 @@ int MapCentreY = 0;
 
 int MouseX, MouseY;
 int PopupX, PopupY;
+
+int MapLocked = 0;
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
@@ -1032,7 +1039,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	char Error[80];
 	int SharedSize;
 	int Retries = 5;			// Attempts to get shared memory
-
+	MENUITEMINFOA menuitem = {sizeof(MENUITEMINFO)};
 
 	BOOL bcopt=TRUE;
 	u_long param=1;
@@ -1319,6 +1326,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey, "JPEGInterval", 0, &Type,(UCHAR *)&JPEGInterval, &Vallen);
 		Vallen=250;
 		retCode = RegQueryValueEx(hKey, "JPEGFile", 0, &Type, JPEGFileName, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "MapLocked", 0, &Type,(UCHAR *)&MapLocked, &Vallen);
 
 		RegCloseKey(hKey);
 	}
@@ -1411,8 +1420,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	AppendMenu(hMenu, MF_STRING, IDM_CONFIG, "Basic Setup");
 	AppendMenu(hMenu, MF_STRING, IDM_APRSMSGS, "Messages");
 	AppendMenu(hMenu, MF_STRING, IDM_APRSSTNS, "Stations");
-	AppendMenu(hMenu, MF_STRING, IDM_ZOOMIN,"Zoom In");
-	AppendMenu(hMenu, MF_STRING, IDM_ZOOMOUT,"Zoom Out");
+	AppendMenu(hMenu, MF_STRING, IDM_ZOOMIN, "Zoom In");
+	AppendMenu(hMenu, MF_STRING, IDM_ZOOMOUT, "Zoom Out");
+	AppendMenu(hMenu, MF_STRING, IDM_LOCK, "Lock Map");
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu1,"Actions");
 	AppendMenu(hPopMenu1, MF_STRING, IDM_HOME,"Home");
 	AppendMenu(hPopMenu1, MF_STRING, IDM_SENDBEACON,"Send Beacon");
@@ -1420,6 +1430,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu3,"Help");
 	AppendMenu(hPopMenu3, MF_STRING, IDM_HELP, "Online Help");
 	AppendMenu(hPopMenu3, MF_STRING, IDM_ABOUT, "About");
+
+	menuitem.fMask = MIIM_TYPE | MIIM_DATA; 
+	GetMenuItemInfoA(hMenu, IDM_LOCK, 0, &menuitem);
+	if (MapLocked)
+		menuitem.dwTypeData = "Unlock Map";
+	else
+		menuitem.dwTypeData = "Lock Map";
+
+	SetMenuItemInfoA(hMenu, IDM_LOCK, 0, &menuitem);
 
 	DrawMenuBar(hWnd);
 
@@ -1695,6 +1714,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			retCode = RegSetValueEx(hKey, "LocalTime", 0, REG_DWORD, (BYTE *)&LocalTime, 4);
 			retCode = RegSetValueEx(hKey, "KM", 0, REG_DWORD, (BYTE *)&KM, 4);
 			retCode = RegSetValueEx(hKey, "CreateJPEG", 0, REG_DWORD, (BYTE *)&CreateJPEG, 4);
+			retCode = RegSetValueEx(hKey, "MapLocked", 0, REG_DWORD, (BYTE *)&MapLocked, 4);
 
 			APRSConnect(APRSCall, ISFilter);			// Will resend Filter
 
@@ -2083,6 +2103,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	
 		case WM_CHAR:
 
+			if (MapLocked && (wParam == '=' || wParam == '+' || wParam == '-'))
+					break;
+
 			GetMouseLatLon(&MouseLat, &MouseLon);
 
 			if (wParam == '=' || wParam == '+')
@@ -2134,6 +2157,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (MouseLeftDown)
 			{
 				// Dragging
+
+				if (MapLocked)
+					break;
 
 				DeltaX = MouseX - DownX;
 				DeltaY = MouseY - DownY;
@@ -2495,6 +2521,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			case IDM_ZOOMIN:
 
+				if (MapLocked)
+					break;
+				
 				// Move logical mouse posn to centre of screen
 
 				MouseX = cxWinSize/2;
@@ -2504,6 +2533,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				break;
 
 			case IDM_ZOOMOUT:
+
+				if (MapLocked)
+					break;
 
 				// Move logical mouse posn to centre of screen
 
@@ -2516,6 +2548,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			case IDM_CONFIG:
 
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_BASICSETUP), hWnd, ConfigWndProc);
+				break;
+
+			case IDM_LOCK:
+
+				MapLocked ^= 1;
+				{
+					HKEY hKey;
+
+					int retCode = RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS", 0, KEY_ALL_ACCESS, &hKey);
+				
+					MENUITEMINFOA menuitem = {sizeof(MENUITEMINFO)};
+					menuitem.fMask = MIIM_TYPE | MIIM_DATA; 
+					GetMenuItemInfoA(hMenu, IDM_LOCK, 0, &menuitem);
+					if (MapLocked)
+						menuitem.dwTypeData = "Unlock Map";
+					else
+						menuitem.dwTypeData = "Lock Map";
+
+					SetMenuItemInfoA(hMenu, IDM_LOCK, 0, &menuitem);
+					DrawMenuBar(hWnd);
+
+					// Save to Config
+	
+					retCode = RegSetValueEx(hKey, "MapLocked", 0, REG_DWORD, (BYTE *)&MapLocked, 4);
+					RegCloseKey(hKey);
+				}
 				break;
 			
 /*
@@ -3271,7 +3329,6 @@ VOID OSMThread(void * unused)
 	SOCKET sock;
 	SOCKADDR_IN sinx; 
 	int addrlen=sizeof(sinx);
-	int err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	char Request[100];
