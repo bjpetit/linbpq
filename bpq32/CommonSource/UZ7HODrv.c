@@ -1996,6 +1996,15 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 	RXHeader->DataLength = reverse(RXHeader->DataLength);
 #endif
 
+	if (RXHeader->DataKind == 'x')
+		return;
+
+	if (RXHeader->DataKind == 'R')
+		return;
+
+	if (RXHeader->DataKind == 'g')
+		return;
+
 	switch (RXHeader->DataKind)
 	{
 	case 'D':			// Appl Data
@@ -2476,6 +2485,9 @@ GotStream:
 			Rest -= 7;
 
 			// Now copy CTL PID and Data
+
+			if (Rest < 0 || Rest > 256)
+				return;
 
 			memcpy(ptr2, ptr1, Rest);
 

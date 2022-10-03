@@ -389,6 +389,12 @@ struct FreeDataINFO
 	int toSendMsgTimeout;
 	char * RXDir;				// Directory for Received Files
 	int CONOK;					// Virtual Lisren Flag
+	int Chat;					// In Chat Mode
+	char ChatCall[10];
+	int needPoll;				// Set if get data needed
+	int arqstate;				// 1 = Disc / 2 - connecting 3 - connected
+	int TuningRange;			// Must be 50, 100, 150, 200, 250
+	int LimitBandWidth;
 };
 
 

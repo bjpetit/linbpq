@@ -1112,7 +1112,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix crash when processing "C " without a call in UZ7HO, FLDIGI or MULTIPSK drivers (19)
 //	FLDIGI improvements (19)
 //	Fix hang at start if Telnet port Number > Number of Telnet Streams (20)
-//	Fix processing C command if first port driver is SCSPACTROR
+//	Fix processing C command if first port driver is SCSPACTROR (20)
+//	Fix crash in UZ7HO driver if bad raw frame received (21)
+
 
 #define CKernel
 
