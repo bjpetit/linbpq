@@ -122,6 +122,7 @@ struct TCPINFO
 	int CMDPort[33];
 	int NETROMPort;
 	char RELAYHOST[64];
+	int RELAYPORT;
 	char CMSServer[64];
 	BOOL FallbacktoRelay;		// Use Relsy if can't connect to CMS
 

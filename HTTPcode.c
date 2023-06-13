@@ -1818,7 +1818,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 		"<a href='/Node/Links.html'>Links</a>"
 		"<a href='/Node/Users.html'>Users</a>"
 		"<a href='/Node/Stats.html'>Stats</a>"
-		"<a href=javascript:dev_win(\"/Node/Terminal.html\",800,600,200,200);'>Terminal</a>%s%s%s%s";
+		"<a href=\"javascript:dev_win('/Node/Terminal.html',800,600,200,200);\">Terminal</a>%s%s%s%s";
 
 	char DriverBit[] = "<a href=\"javascript:open_win();\">Driver Windows</a>"
 		"<a href=\"javascript:dev_win('/Node/Streams',820,700,200,200);\">Stream Status</a>";
