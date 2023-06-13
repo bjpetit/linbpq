@@ -571,7 +571,6 @@ int ProcessLine(char * buf, int Port)
 		strcpy(TCP->RELAYHOST, ptr);
 	}
 
-
 	else if (_stricmp(param,"FALLBACKTORELAY") == 0)
 	{
 		int n = 0;
@@ -2564,7 +2563,7 @@ nosocks:
 						if (P2[0] == 0)
 						{
 							strcpy(P2, TCP->RELAYHOST);
-							strcpy(P3, "8772");
+							snprintf(P3, sizeof(P3), "%d", TCP->RelayPort);
 						}
 
 						if (P2[0])
@@ -2607,7 +2606,7 @@ nosocks:
 								STREAM->Connecting = TRUE;
 								STREAM->ConnectionInfo->CMSSession = TRUE;
 								STREAM->ConnectionInfo->RelaySession = TRUE;
-								TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772, TRUE);
+								TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, TCP->RelayPort, TRUE);
 								ReleaseBuffer(buffptr);
 								return;
 							}
@@ -4604,7 +4603,7 @@ MsgLoop:
 
 		if (strstr(MsgPtr, "Password :")) 
 		{
-			// Send “CMSTelnet” + gateway callsign + frequency + emission type if info is available
+			// Send ï¿½CMSTelnetï¿½ + gateway callsign + frequency + emission type if info is available
 
 			TRANSPORTENTRY * Sess1 = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
 			TRANSPORTENTRY * Sess2 = NULL;
@@ -5990,7 +5989,7 @@ int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * S
 				STREAM->Connecting = TRUE;
 				STREAM->ConnectionInfo->CMSSession = TRUE;
 				STREAM->ConnectionInfo->RelaySession = TRUE;
-				return TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772, TRUE);
+				return TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, TCP->RelayPort, TRUE);
 			}
 
 			STREAM->NeedDisc = 10;
