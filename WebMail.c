@@ -714,33 +714,33 @@ VOID ProcessFormDir(char * FormSet, char * DirName, struct HtmlFormDir *** xxx, 
 
 	if (!(dir = opendir(Search)))
 	{
-		Debugprintf("%s %d %d", "cant open forms dir", errno, dir);
+		Debugprintf("Can't open forms dir %s - %s", Search, strerror(errno));
         return ;
 	}
     while ((entry = readdir(dir)) != NULL)
 	{
         if (entry->d_type == DT_DIR)
 		{
+            char Dir[MAX_PATH];
+
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
 
-			Debugprintf("Recurse %s/%s/%s", FormSet, DirName, entry->d_name);
+			sprintf(Dir, "%s/%s", DirName, entry->d_name);
+			// Debugprintf("Recurse %s/%s", FormSet, Dir);
+                        ProcessFormDir(FormSet, Dir, &FormDir->Dirs, &FormDir->DirCount);
 			continue;
 
 		}
-		// see if initial html
 
-//		if (stristr(entry->d_name, "initial.html"))
-		{
-			// Add to list
+		// Add to list
 
-			Form = zalloc(sizeof (struct HtmlForm));
+		Form = zalloc(sizeof (struct HtmlForm));
 
-			Form->FileName = _strdup(entry->d_name);
+		Form->FileName = _strdup(entry->d_name);
 
-			FormDir->Forms=realloc(FormDir->Forms, (FormDir->FormCount + 1) * sizeof(void *));
-			FormDir->Forms[FormDir->FormCount++] = Form;
-		}
+		FormDir->Forms=realloc(FormDir->Forms, (FormDir->FormCount + 1) * sizeof(void *));
+		FormDir->Forms[FormDir->FormCount++] = Form;
     }
     closedir(dir);
 #endif
@@ -809,7 +809,7 @@ int GetHTMLFormSet(char * FormSet)
 
 	if (!(dir = opendir(name)))
 	{
-		Debugprintf("cant open forms dir %s %d %d", name, errno, dir);
+		Debugprintf("Can't open forms dir %s - %s", name, strerror(errno));
         return 0;
 	}
 
@@ -3121,7 +3121,7 @@ char * xxReadTemplate(char * FormSet, char * DirName, char *FileName)
 
 	if (!(dir = opendir(name)))
 	{
-		Debugprintf("cant open forms dir %s %d %d", name, errno, dir);
+		Debugprintf("Can't open forms dir %s - %s", name, strerror(errno));
         return 0;
 	}
 
@@ -5335,7 +5335,7 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 
 	if (!(dir = opendir(name)))
 	{
-		Debugprintf("cant open forms dir %s %s %d", Dir->DirName, name, errno);
+		Debugprintf("Can't open forms dir %s %s %d", Dir->DirName, name, errno);
         return 0;
 	}
 
