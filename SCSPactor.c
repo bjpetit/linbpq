@@ -79,6 +79,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define MaxStreams 10			// First is used for Pactor, even though Pactor uses channel 31
 
 #include "cheaders.h"
+#include "common_web_components.h"
 #include "tncinfo.h"
 
 #include "bpq32.h"
@@ -772,7 +773,7 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len)
 
 	if (RIG && RIG->WEB_Label)
 	{
-		Len += sprintf(&Buff[Len], "<table style=\"font-family: monospace; align=center \"><tr>");
+		Len += sprintf(&Buff[Len], "<table style=\"font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \"><tr>");
 		Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_Label);
 		Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_FREQ);
 		Len += sprintf(&Buff[Len], "<td width=90px>%s</td>", RIG->WEB_MODE);
@@ -797,10 +798,11 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-	"<head><title>SCS Pactor Status</title></head><body><h3>SCS Pactor Status</h3>");
+	int Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	"<title>SCS Pactor Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style>"
+	"</head><body><h3>SCS Pactor Status</h3>");
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=90px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
@@ -2080,7 +2082,7 @@ VOID SCSPoll(int Port)
 			{
 				CheckMode(TNC);
 
-				buffptr->Len = sprintf(buffptr->Data, "%s\r", &TNC->RXBuffer[2]);		
+				buffptr->Len = snprintf((char*)buffptr->Data, 256, "%s\r", &TNC->RXBuffer[2]);		
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 				return;

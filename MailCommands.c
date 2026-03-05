@@ -221,7 +221,7 @@ VOID DoShowRMSCmd(CIRCUIT * conn, struct UserInfo * inuser, char * Arg1, char * 
 VOID DoPollRMSCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {
 	char RMSLine[200];
-	char RMSCall[10];
+	char RMSCall[20];
 	struct UserInfo * RMSUser = user;
 	int s;
 Loop:
@@ -300,7 +300,7 @@ Display:
 					strcat(RMSLine, " ");
 					if (s)
 					{
-						sprintf(RMSCall, "%s-%d", RMSUser->Call, s);
+						snprintf(RMSCall, sizeof(RMSCall), "%s-%d", RMSUser->Call, s);
 						strcat(RMSLine, RMSCall);
 					}
 					else

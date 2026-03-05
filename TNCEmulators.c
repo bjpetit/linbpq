@@ -4964,7 +4964,7 @@ int STATUSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel)
 	
 		GetCallsign(Channel->BPQStream, WorkString);
 		strlop(WorkString, ' ');
-		i = sprintf(ConMsg, "\x3(%d) CONNECTED to %s\r", TNC->MSGCHANNEL, WorkString);
+		i = snprintf(ConMsg, sizeof(ConMsg), "\x3(%d) CONNECTED to %s\r", TNC->MSGCHANNEL, WorkString);
 		i++;
 	}
 
@@ -5290,8 +5290,8 @@ VOID ProcessKNormCommand(struct TNCDATA * conn, UCHAR * rxbuffer)
 //INTFACE HOST
 //INTFACE was TERMINAL
 //cmd:RESET
-//응S00�
-//픀20XFLOW OFF�
+//--S00-
+//-C20XFLOW OFF-
 
 
 	//SendKISSData(conn, CmdReply, 3);

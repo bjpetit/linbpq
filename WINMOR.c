@@ -71,6 +71,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <time.h>
 
 #include "cheaders.h"
+#include "common_web_components.h"
 
 #ifdef WIN32
 #include <Psapi.h>
@@ -984,7 +985,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				// Send FEC Data
 
 				buff->L2DATA[txlen] = 0;
-				len = sprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, &buff->L2DATA);
+len = sprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, buff->L2DATA);
 
 				send(TNC->TCPDataSock, Buffer, len, 0);
 
@@ -1010,7 +1011,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				char cmd[56];
 
 				strcpy(cmd, &buff->L2DATA[6]);
-				sprintf(&buff->L2DATA[0], "%d %s", TNC->Port, &cmd);
+sprintf(&buff->L2DATA[0], "%d %s", TNC->Port, cmd);
 
 	
 				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK, &buff->L2DATA[0]))
@@ -1438,7 +1439,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);

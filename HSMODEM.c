@@ -34,6 +34,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 
 #include "cheaders.h"
+#include "common_web_components.h"
 
 #pragma pack(1)
 
@@ -719,7 +720,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (strlen(&buff->L2DATA[2]) > 9)
 				buff->L2DATA[11] = 0;
 
-			txlen = sprintf(Connect, "C %s\r", &buff->L2DATA[2]);
+			txlen = snprintf(Connect, sizeof(Connect), "C %s\r", &buff->L2DATA[2]);
 
 			HSMODEMChangeMYC(TNC, TNC->Streams[0].MyCall);
 
@@ -890,7 +891,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 		TNC->Port);
 
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);

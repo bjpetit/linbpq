@@ -389,7 +389,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 		}
 		else
 		{
-			char Command[80];
+			char Command[290];
 			int len;
 
 			buff->L2DATA[txlen] = 0;
@@ -444,7 +444,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 			{
 				buff->L2DATA[txlen - 1] = 0;	// Remove CR
 				
-				len = sprintf(Command,"%cDIGITAL MODE %s\x1b", '\x1a', &buff->L2DATA[5]);
+				len = snprintf(Command, sizeof(Command), "%cDIGITAL MODE %s\x1b", '\x1a', &buff->L2DATA[5]);
 	
 				if (TNC->MPSKInfo->TX)
 					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
@@ -503,8 +503,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 					if (buffptr)
 					{
 						buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0],
-							"MPSK} Error - Call missing from C command\r", STREAM->MyCall, STREAM->RemoteCall);
-
+						    "MPSK} Error - Call missing from C command\r");
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
 
@@ -535,7 +534,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 			buff->L2DATA[txlen - 1] = 0;
 			_strupr(buff->L2DATA);
 
-			len = sprintf(Command,"%c%s\x1b", '\x1a', buff->L2DATA);
+			len = snprintf(Command, sizeof(Command), "%c%s\x1b", '\x1a', buff->L2DATA);
 		
 			if (TNC->MPSKInfo->TX)
 				TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
@@ -1208,7 +1207,7 @@ VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 
 				if (buffptr)
 				{
-					buffptr->Len= sprintf(buffptr->Data, "MPSK} %s\r", TNC->CmdBuffer);
+					buffptr->Len= snprintf((char*)buffptr->Data, 256, "MPSK} %s\r", TNC->CmdBuffer);
 					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 				}
 

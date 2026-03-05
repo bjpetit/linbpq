@@ -566,7 +566,7 @@ KC6OAR*>ID:
 
 			//	Compressed L2 Data
 
-		Output += sprintf((char *)Output, " <%d Bytes of Compressed L2 Data>", MsgLen - (19 + sizeof(void *)));
+Output += sprintf((char *)Output, " <%d Bytes of Compressed L2 Data>", (int)(MsgLen - (19 + sizeof(void *))));
 
 		break;
 

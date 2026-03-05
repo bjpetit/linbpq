@@ -2130,7 +2130,7 @@ void sendFreqReport(char * From)
 
 						if (Band->Scanlist[0])
 						{
-							Len += sprintf(&Msg[Len], "%02d:%02d/", Band->Start / 3600, Band->Start % 3600); 
+Len += sprintf(&Msg[Len], "%02d:%02d/", (int)(Band->Start / 3600), (int)(Band->Start % 3600));
 
 							while (Band->Scanlist[k])
 							{

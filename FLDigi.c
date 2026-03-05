@@ -24,6 +24,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "cheaders.h"
+#include "common_web_components.h"
 
 extern int (WINAPI FAR *GetModuleFileNameExPtr)();
 extern int (WINAPI FAR *EnumProcessesPtr)();
@@ -1113,16 +1114,17 @@ static int RestartTNC(struct TNCINFO * TNC)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+		"<title>FLDigi Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>FLDigi Status</title></head><body id=Text onload=\"ScrollOutput()\">"
+		"</head><body id=Text onload=\"ScrollOutput()\">"
 		"<h2>FLDIGI Status</h2>");
 
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
@@ -3195,11 +3197,11 @@ VOID FLReleaseTNC(struct TNCINFO * TNC)
 
 	if (TNC->FLInfo->DefaultMode[0])
 	{
-		char txbuff[80];
+		char txbuff[120];
 				
 		if (TNC->FLInfo->KISSMODE)
 		{
-			sprintf(txbuff, "WFF:%d MODEM:%s MODEM: WFF:", TNC->FLInfo->DefaultFreq, TNC->FLInfo->DefaultMode);
+			snprintf(txbuff, sizeof(txbuff), "WFF:%d MODEM:%s MODEM: WFF:", TNC->FLInfo->DefaultFreq, TNC->FLInfo->DefaultMode);
 			SendKISSCommand(TNC, txbuff);
 		}
 		else
@@ -3894,7 +3896,7 @@ VOID SendXMLCommand(struct TNCINFO * TNC, char * Command, char * Value, char Par
 		if (ParamType == 'S')
 			sprintf(ValueString, "<params><param><value><string>%s</string></value></param></params\r\n>", Value);
 		else
-			sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", Value);
+			sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", (int)(intptr_t)Value);
 
 	strcpy(FL->LastXML, Command);
 	Len = sprintf(ReqBuf, Req, FL->LastXML, ValueString);
@@ -3915,7 +3917,7 @@ VOID SendXMLCommandInt(struct TNCINFO * TNC, char * Command, int Value, char Par
 	if (!TNC->CONNECTED || TNC->FLInfo->KISSMODE)
 		return;
 
-	sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", Value);
+	sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", (int)(intptr_t)Value);
 
 	strcpy(FL->LastXML, Command);
 	Len = sprintf(ReqBuf, Req, FL->LastXML, ValueString);

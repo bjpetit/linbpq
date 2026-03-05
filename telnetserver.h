@@ -63,7 +63,7 @@ struct ConnectionInfo
 	BOOL UTF8;					// Set if BPQTerminal in UTF8 Mode
 	BOOL RelaySession;			// Set if connection to RMS Relay
 	BOOL LogonSent;				// To ignore second callsign: prompt
-	char Signon[100];			// User/Pass/Appl for Outgoing Connects
+	char Signon[320];			// User/Pass/Appl for Outgoing Connects
 	BOOL Keepalive;				// For HOST (esp CCC) Keepalives 
 	time_t LastSendTime;
 	time_t LastReceiveTime;

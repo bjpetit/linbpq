@@ -241,8 +241,8 @@ WPOK:;
 
 	if (!config_read_file(&wpcfg, CfgName))
 	{
-		char Msg[256];
-		sprintf(Msg, "Config File %s Line %d - %s\n", CfgName,
+		char Msg[520];
+		snprintf(Msg, sizeof(Msg), "Config File %s Line %d - %s\n", CfgName,
 			config_error_line(&wpcfg), config_error_text(&wpcfg));
 
 		printf("%s", Msg);

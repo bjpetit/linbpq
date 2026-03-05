@@ -188,7 +188,7 @@ void hookL2SessionDeleted(struct _LINKTABLE * LINK)
 		}
 		else
 		{
-			char Msg[256];
+			char Msg[1024];
 			char timestamp[64];
 			time_t sessionTime = time(NULL) - LINK->ConnectTime;
 			double avBytesSent = LINK->bytesTXed / (sessionTime / 60.0);
@@ -202,12 +202,12 @@ void hookL2SessionDeleted(struct _LINKTABLE * LINK)
 				sessionTime = 1;				// Or will get divide by zero error 
 
 			Debugprintf("KISS Session Stats Port %d %s %s %d secs Bytes Sent %d  BPM %4.2f Bytes Received %d %4.2f BPM ", 
-				LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall, sessionTime, LINK->bytesTXed, avBytesSent, LINK->bytesRXed, avBytesRXed, timestamp);
+				LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall, (int)sessionTime, LINK->bytesTXed, avBytesSent, LINK->bytesRXed, avBytesRXed, timestamp);
 
 
-			sprintf(Msg, "{\"mode\": \"%s\", \"direction\": \"%s\", \"port\": %d, \"callfrom\": \"%s\", \"callto\": \"%s\", \"time\": %d,  \"bytesSent\": %d," 
+			snprintf(Msg, sizeof(Msg), "{\"mode\": \"%s\", \"direction\": \"%s\", \"port\": %d, \"callfrom\": \"%s\", \"callto\": \"%s\", \"time\": %d,  \"bytesSent\": %d," 
 				"\"BPMSent\": %4.2f, \"BytesReceived\": %d,  \"BPMReceived\": %4.2f, \"timestamp\": \"%s\"}",
-				"KISS", LINK->Direction, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall, sessionTime,
+				"KISS", LINK->Direction, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall, (int)sessionTime,
 				LINK->bytesTXed,  avBytesSent, LINK->bytesRXed, avBytesRXed, timestamp);
 
 			if (MQTT)
@@ -276,14 +276,14 @@ void hookL2SessionClosed(struct _LINKTABLE * LINK, char * Reason, char * Directi
 			" \"time\": %d, \"upForSecs\": %d, \"frmsQdPeak\": %d, \"isRF\": %s}",
 			NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->receivingCall, LINK->callingCall,
 			LINK->bytesTXed , LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, COUNT_AT_L2(LINK), LINK->framesResent, Reason,
-			(int)Now, (int)Now - LINK->ConnectTime, LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
+			(int)Now, (int)(Now - LINK->ConnectTime), LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
 		else
 			udplen = sprintf(UDPMsg, "{\"@type\":\"LinkDownEvent\", \"node\": \"%s\", \"id\": %d, \"direction\": \"incoming\", \"port\": \"%d\", \"remote\": \"%s\", \"local\": \"%s\","
 			"\"bytesSent\": %d, \"bytesRcvd\": %d, \"frmsSent\": %d, \"frmsRcvd\": %d, \"frmsQueued\": %d, \"frmsResent\": %d, \"reason\": \"%s\","
 			" \"time\": %d, \"upForSecs\": %d, \"frmsQdPeak\": %d, \"isRF\": %s}",
 			NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall,
 			LINK->bytesTXed , LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, COUNT_AT_L2(LINK), LINK->framesResent, Reason,
-			(int)Now, (int)Now - LINK->ConnectTime, LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
+			(int)Now, (int)(Now - LINK->ConnectTime), LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
 
 //		Debugprintf(UDPMsg);
 
@@ -316,14 +316,14 @@ void hookL2SessionStatus(struct _LINKTABLE * LINK)
 				"\"upForSecs\": %d, \"frmsQdPeak\": %d, \"bpsTxMean\": %d, \"bpsRxMean\": %d, \"frmQMax\": %d, \"l2rttMs\": %d, \"isRF\": %s}",
 				NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->receivingCall, LINK->callingCall,
 				LINK->bytesTXed, LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, 0, LINK->framesResent,
-				(int)Now - LINK->ConnectTime, LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
+				(int)(Now - LINK->ConnectTime), LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
 		else
 			udplen = sprintf(UDPMsg, "{\"@type\":\"LinkStatus\", \"node\": \"%s\", \"id\": %d, \"direction\": \"incoming\", \"port\": \"%d\", \"remote\": \"%s\", \"local\": \"%s\","
 				"\"bytesSent\": %d, \"bytesRcvd\": %d, \"frmsSent\": %d, \"frmsRcvd\": %d, \"frmsQueued\": %d, \"frmsResent\": %d,"
 				"\"upForSecs\": %d, \"frmsQdPeak\": %d, \"bpsTxMean\": %d, \"bpsRxMean\": %d, \"frmQMax\": %d, \"l2rttMs\": %d, \"isRF\": %s}",
 				NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall,
 				LINK->bytesTXed, LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, 0, LINK->framesResent,
-				(int)Now - LINK->ConnectTime, LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
+				(int)(Now - LINK->ConnectTime), LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
 
 		LINK->intervalMaxQueued = 0;
 
@@ -391,9 +391,9 @@ void hookL4SessionDeleted(struct TNCINFO * TNC, struct STREAMINFO * STREAM)
 		if (sessionTime == 0)
 			sessionTime = 1;				// Or will get divide by zero error 
  
-		sprintf(Msg, "{\"mode\": \"%s\", \"direction\": \"%s\", \"port\": %d, \"callfrom\": \"%s\", \"callto\": \"%s\", \"time\": %d,  \"bytesSent\": %d," 
+		snprintf(Msg, sizeof(Msg), "{\"mode\": \"%s\", \"direction\": \"%s\", \"port\": %d, \"callfrom\": \"%s\", \"callto\": \"%s\", \"time\": %d,  \"bytesSent\": %d," 
 			"\"BPMSent\": %4.2f, \"BytesReceived\": %d,  \"BPMReceived\": %4.2f, \"timestamp\": \"%s\"}",
-			Modenames[TNC->Hardware - 1], STREAM->Direction, TNC->Port, STREAM->callingCall, STREAM->receivingCall, sessionTime,
+			Modenames[TNC->Hardware - 1], STREAM->Direction, TNC->Port, STREAM->callingCall, STREAM->receivingCall, (int)sessionTime,
 			STREAM->bytesTXed,  avBytesSent, STREAM->bytesRXed, avBytesRXed, timestamp);
 
 		if (MQTT)
@@ -444,7 +444,7 @@ void hookNodeClosing(char * Reason)
 	{
 		udplen = sprintf(UDPMsg, "{\"@type\": \"NodeDownEvent\", \"nodeCall\": \"%s\", \"nodeAlias\": \"%s\", \"reason\": \"%s\", \"uptimeSecs\": %d,"
 			"\"linksIn\": %d, \"linksOut\": %d, \"cctsIn\": %d, \"cctsOut\": %d, \"l3Relayed\": %d}",
-			NODECALLLOPPED, MYALIASLOPPED, Reason, time(NULL) - TimeLoaded, L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
+			NODECALLLOPPED, MYALIASLOPPED, Reason, (int)(time(NULL) - TimeLoaded), L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
    
 //		Debugprintf(UDPMsg);
 
@@ -471,7 +471,7 @@ void hookNodeRunning()
 		udplen = sprintf(UDPMsg, "{\"@type\": \"NodeStatus\", \"nodeCall\": \"%s\", \"nodeAlias\": \"%s\", \"locator\": \"%s\","
 			"\"latitude\": %f, \"longitude\": %f, \"software\": \"%s\", \"version\": \"%s\", \"uptimeSecs\": %d,"
 			"\"linksIn\": %d, \"linksOut\": %d, \"cctsIn\": %d, \"cctsOut\": %d, \"l3Relayed\": %d}",
-			NODECALLLOPPED, MYALIASLOPPED, LOC, LatFromLOC, LonFromLOC, Software, VersionString, time(NULL) - TimeLoaded,
+			NODECALLLOPPED, MYALIASLOPPED, LOC, LatFromLOC, LonFromLOC, Software, VersionString, (int)(time(NULL) - TimeLoaded),
 			L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
 
 //		Debugprintf(UDPMsg);
@@ -664,11 +664,11 @@ void L4StatusSeport(TRANSPORTENTRY * L4)
 		if (Service == -1)
 			udplen = sprintf(UDPMsg, "{\"@type\": \"CircuitStatus\", \"node\": \"%s\", \"id\": %d, \"direction\": \"%s\","
 			"\"upForSecs\": %d,\"remote\": \"%s\", \"local\": \"%s\", \"segsSent\": %d, \"segsRcvd\": %d, \"segsResent\": %d, \"segsQueued\": %d}",
-			NODECALLLOPPED, L4->apiSeq, L4->Direction, Now - L4->ConnectTime, remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
+			NODECALLLOPPED, L4->apiSeq, L4->Direction, (int)(Now - L4->ConnectTime), remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
 		else
 			udplen = sprintf(UDPMsg, "{\"@type\": \"CircuitStatus\", \"node\": \"%s\", \"id\": %d, \"direction\": \"%s\","
 			"\"upForSecs\": %d, \"service\": %d, \"remote\": \"%s\", \"local\": \"%s\", \"segsSent\": %d, \"segsRcvd\": %d, \"segsResent\": %d, \"segsQueued\": %d}",
-			NODECALLLOPPED, L4->apiSeq, L4->Direction, Now - L4->ConnectTime, Service, remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
+			NODECALLLOPPED, L4->apiSeq, L4->Direction, (int)(Now - L4->ConnectTime), Service, remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
 
 //		Debugprintf(UDPMsg);
 		sendto(NodeAPISocket, UDPMsg, udplen, 0, (struct sockaddr *)&UDPreportdest, sizeof(UDPreportdest));

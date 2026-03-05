@@ -1632,7 +1632,7 @@ extern BOOL Localtime;
 extern struct ConsoleInfo * ConsHeader[2];
 
 extern BOOL NeedHomeBBS;
-extern char ConfigName[250];
+extern char ConfigName[290];
 extern BOOL UsingingRegConfig;
 
 extern BOOL MulticastRX;

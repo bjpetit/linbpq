@@ -3052,7 +3052,7 @@ VOID FindLostBuffers()
 
 void WriteConnectLog(char * fromCall, char * toCall, UCHAR * Mode)
 {
-	UCHAR FN[MAX_PATH];
+	UCHAR FN[295];
 	FILE * LogHandle;
 	time_t T;
 	struct tm * tm;
@@ -3062,7 +3062,7 @@ void WriteConnectLog(char * fromCall, char * toCall, UCHAR * Mode)
 	T = time(NULL);
 	tm = gmtime(&T);	
 
-	sprintf(FN,"%s/logs/ConnectLog_%02d%02d%02d.log", LogDirectory, tm->tm_year - 100, tm->tm_mon + 1, tm->tm_mday);
+	snprintf((char*)FN, sizeof(FN), "%s/logs/ConnectLog_%02d%02d%02d.log", LogDirectory, tm->tm_year - 100, tm->tm_mon + 1, tm->tm_mday);
 
 	LogHandle = fopen(FN, "ab");
 
