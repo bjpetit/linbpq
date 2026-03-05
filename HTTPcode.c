@@ -53,7 +53,7 @@ extern char VersionString[];
 VOID FormatTime3(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 VOID SaveUIConfig();
-int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL);
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL);
 VOID SetupUI(int Port);
 VOID SendUIBeacon(int Port);
 VOID GetParam(char * input, char * key, char * value);
@@ -115,11 +115,11 @@ int CompareRoutes(const void * a, const void * b);
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen, char * Token);
 void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
-int SetupNodeMenu(char * Buff, int SYSOP);
+int SetupNodeMenu(char * Buff, size_t BuffSize, int SYSOP);
 int StatusProc(char * Buff);
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
-int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
-int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL);
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
+int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL);
 VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr, BOOL LOCAL, BOOL COOKIE);
 
 
@@ -146,8 +146,8 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 
 char Tail[] = "</body></html>";
 
-char RouteHddr[] = "<h2 align=center>Routes</h2><table align=center border=2 style=font-family:monospace bgcolor=white>"
-"<tr><th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
+char RouteHddr[] = "<h2 style=\"text-align:center;\">Routes</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+"<tr style=\"background:#f0f0f0;\"><th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
 "<th>Frack</th><th>Last Heard</th><th>Queued</th><th>Rem Qual</th><th>SRTT</th><th>Rem SRTT</th></tr>";
 
 char RouteLine[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
@@ -163,19 +163,19 @@ char xNodeHddr[] = "<align=center><form align=center method=get action=/Node/Nod
 "<input type=submit class='btn' name=t value=\"Nodes with traffic\"></td></tr></form></table>"
 "<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
 
-char NodeHddr[] = "<center><form method=get action=/Node/Nodes.html>"
-"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">"
-"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">"
-"<input type=submit class='btn' name=t value=\"Nodes with traffic\"></form></center>"
-"<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
+char NodeHddr[] = "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">"
+"<input type=submit class='btn' value=\"Nodes Sorted by Alias\">"
+"<input type=submit class='btn' value=\"Nodes Sorted by Call\">"
+"<input type=submit class='btn' value=\"Nodes with traffic\"></form></div>"
+"<h2 style=\"text-align:center;\">Nodes %s</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white><tr>";
 
 char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
 
 
-char StatsHddr[] = "<h2 align=center>Node Stats</h2><table align=center cellpadding=2 bgcolor=white>"
-"<col width=250 /><col width=80 /><col width=80 /><col width=80 /><col width=80 /><col width=80 />";
+char StatsHddr[] = "<h2 style=\"text-align:center;\">Node Stats</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>";
 
-char PortStatsHddr[] = "<h2 align=center>Stats for Port %d</h2><table align=center border=2 cellpadding=2 bgcolor=white>";
+char PortStatsHddr[] = "<h2 style=\"text-align:center;\">Stats for Port %d</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+"<tr style=\"background:#f0f0f0;\"><th>Statistic</th><th>Value</th></tr>";
 
 char PortStatsLine[] = "<tr><td> %s </td><td> %d </td></tr>";
 
@@ -195,59 +195,55 @@ char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 alig
 "</form>";
 
 
-char LinkHddr[] = "<h2 align=center>Links</h2><table align=center border=2 bgcolor=white>"
-"<tr><th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
+char LinkHddr[] = "<h2 style=\"text-align:center;\">Links</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+"<tr style=\"background:#f0f0f0;\"><th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
 
 char LinkLine[] = "<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td align=center >%d</td></tr>";
 
-char UserHddr[] = "<h2 align=center>Sessions</h2><table align=center border=2 cellpadding=2 bgcolor=white>";
+char UserHddr[] = "<h2 style=\"text-align:center;\">Sessions</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+"<tr style=\"background:#f0f0f0;\"><th>Circuit</th><th>Link</th><th>Circuit</th></tr>";
 
 char UserLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td></tr>";
 
-char TermSignon[] = "<html><head><title>BPQ32 Node %s Terminal Access</title></head><body background=\"/background.jpg\">"
-"<h2 align=center>BPQ32 Node %s Terminal Access</h2>"
-"<h3 align=center>Please enter username and password to access the node</h3>"
-"<form method=post action=TermSignon>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel>"
-"<input type=hidden name=Appl value=\"%s\"  id=Pass></form>";
+char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+"<h2>BPQ32 Node %s Terminal Access</h2>"
+"<h3>Please enter username and password to access the node</h3>"
+"<div class=\"form-container\"><form method=post action=TermSignon>"
+"<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>" 
+"<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
+"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel />"
+"<input type=hidden name=Appl value=\"%s\"  id=Pass></form></div></div>";
 
 
-char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
+char PassError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #fee; border: 1px solid #fcc; border-radius: 6px; color: #c33; text-align: center; font-weight: bold;\">Sorry, User or Password is invalid - please try again</div>";
 
-char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
+char BusyError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #ffc; border: 1px solid #fa3; border-radius: 6px; color: #a60; text-align: center; font-weight: bold;\">Sorry, No sessions available - please try later</div>";
 
-char LostSession[] = "<html><body>Sorry, Session had been lost - refresh page to sign in again";
-char NoSessions[] = "<html><body>Sorry, No Sessions available - refresh page to try again";
+char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; }</style></head><body><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
+char NoSessions[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; }</style></head><body><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
 
-char TermPage[] = "<!DOCTYPE html><html><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
-"<head><title>BPQ32 Node %s</title></head>"
-"<script>function resize(){"
-"var w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];"
-"x=w.innerWidth;"
-"y=w.innerHeight;"
-"var txt=document.getElementById('txt');"
-"txt.style.height = y - 150 + 'px';}</script>"
-"<body onload='resize()' onresize='resize()'>"
-"<h3 align=center>BPQ32 Node %s</h3>"
-"<form method=post action=/Node/TermClose?%s>"
-"<p align=center><input type=submit class='btn' value='Close and return to Node Page' /></form>"
-"<iframe style='display:block;' id=txt frameborder=2 marginwidth=0  marginheight=0 src=OutputScreen.html?%s width=100%%></iframe>"
-"<iframe style='display:block;' frameborder=0 marginwidth=0 marginheight=3 src=InputLine.html?%s width=100%% height=45px></iframe>"
-"</body>";
+char TermPage[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
+"<title>BPQ32 Node %s</title><style>body { margin: 0; padding: 10px; font-family: Arial, sans-serif; background: #f6f7f8; color: #1f2937; } h3 { text-align: center; margin: 10px 0; } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #output-frame { flex: 1; border: 2px solid #ccc; background: #fff; min-height: 200px; } #input-frame { height: 50px; border: 2px solid #ccc; background: #fff; flex-shrink: 0; } @media (max-width: 768px) { .term-actions .btn { width: 100%; } .term-container { height: calc(100vh - 200px); } }</style>"
+"</head><body>"
+"<h3>BPQ32 Node %s</h3>"
+"<form method=post action=/Node/TermClose?%s class='term-actions'>"
+"<input type=submit class='btn' value='Close and return to Node Page' /></form>"
+"<div class=\"term-container\">"
+"<iframe id=output-frame frameborder=0 marginwidth=0 marginheight=0 src=OutputScreen.html?%s></iframe>"
+"<iframe id=input-frame frameborder=0 marginwidth=0 marginheight=0 src=InputLine.html?%s></iframe>"
+"</div></body>";
 
 char TermOutput[] = "<!DOCTYPE html><html><head>"
 "<meta http-equiv=cache-control content=no-cache>"
 "<meta http-equiv=pragma content=no-cache>"
 "<meta http-equiv=expires content=0>" 
 "<meta http-equiv=refresh content=2>"
+"<style>body { margin: 0; padding: 8px; background: #f6f7f8; font-family: monospace; font-size: 14px; color: #1f2937; } #Text div { %s }</style>"
 "<script type=\"text/javascript\">\r\n"
 "function ScrollOutput()\r\n"
 "{window.scrollBy(0,document.body.scrollHeight)}</script>"
 "</head><body id=Text>"
-"<div style=\"font-family:monospace;%s>\"";
+"<div>";
 
 
 // font-family:monospace;background-color:black;color:lawngreen;font-size:12px
@@ -265,50 +261,47 @@ char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize(
 "inp.style.width =  x + 'px';}</script>"
 "<input id=inp type=text width=100%% name=input /></form>";
 */
-char InputLine[] = "<!DOCTYPE html><html><head></head><body onload='resize()' onresize='resize()'>"
+char InputLine[] = "<!DOCTYPE html><html><head><style>"
+"* { margin: 0; padding: 0; box-sizing: border-box; } "
+"body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%; display: flex; align-items: center; } "
+"form { width: 100%; margin: 0; } "
+"#inp { width: 100%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 14px; background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
+"</style></head><body>"
 "<form name=inputform method=post action=/TermInput?%s>"
-"<input style=\"font-family:monospace;%s>\" id=inp type=text text width=100%% name=input />"
-"<script>document.inputform.input.focus();"
-"function resize(){"
-"var w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];"
-"x=w.innerWidth;y=w.innerHeight;"
-"var inp=document.getElementById('inp');"
-"inp.style.width=x-20+'px';}</script></form>";
+"<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
+"<script>document.inputform.input.focus();</script></form></body></html>";
 
-static char NodeSignon[] = "<html><head><title>BPQ32 Node SYSOP Access</title></head><body background=\"/background.jpg\">"
-"<h3 align=center>BPQ32 Node %s SYSOP Access</h3>"
-"<h3 align=center>This page sets Cookies. Don't continue if you object to this</h3>"
-"<h3 align=center>Please enter Callsign and Password to access the Node</h3>"
-"<form method=post action=/Node/Signon?Node>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+"<h2>BPQ32 Node %s SYSOP Access</h2>"
+"<h3>This page sets Cookies. Don't continue if you object to this</h3>"
+"<h3>Please enter Callsign and Password to access the Node</h3>"
+"<div class=\"form-container\"><form method=post action=/Node/Signon?Node>"
+"<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>" 
+"<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
+"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
-"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
-"<h3 align=center>Please enter Callsign and Password to access the BBS</h3>"
-"<form method=post action=/Mail/Signon?Mail>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+"<h2>BPQ32 Mail Server %s Access</h2>"
+"<h3>Please enter Callsign and Password to access the BBS</h3>"
+"<div class=\"form-container\"><form method=post action=/Mail/Signon?Mail>"
+"<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>" 
+"<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
+"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
-static char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title></head><body background=\"/background.jpg\">"
-"<h3 align=center>BPQ32 Chat Server %s Access</h3>"
-"<h3 align=center>Please enter Callsign and Password to access the Chat Server</h3>"
-"<form method=post action=/Chat/Signon?Chat>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+"<h2>BPQ32 Chat Server %s Access</h2>"
+"<h3>Please enter Callsign and Password to access the Chat Server</h3>"
+"<div class=\"form-container\"><form method=post action=/Chat/Signon?Chat>"
+"<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>" 
+"<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
+"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailLostSession[] = "<html><body>"
-"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/Lost?%s>"
-"Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel><br></form>";
+static char MailLostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; } .form-container { max-width: 400px; margin: 50px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; text-align: center; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin: 10px 5px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style></head><body>"
+"<div class=\"form-container\"><h2>Sorry, Session had been lost</h2>"
+"<form method=post action=/Mail/Lost?%s>"
+"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel></form></div>";
 
 
 static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
@@ -829,7 +822,7 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LOCAL)
 {
-	char _REPLYBUFFER[8192];
+	char _REPLYBUFFER[250000];
 	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, "");
 	char Header[256];
 	int HeaderLen;
@@ -840,7 +833,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 		Session->KillTimer = 99999;
 	}
 
-	ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+	ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
 	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 		"\r\n", ReplyLen + (int)strlen(Tail));
@@ -851,7 +844,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 
 int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen,  int LOCAL)
 {
-	char _REPLYBUFFER[8192];
+	char _REPLYBUFFER[250000];
 	int ReplyLen;
 	char Header[256];
 	int HeaderLen;
@@ -869,7 +862,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 			goto Sendit;
 		}
 		user = strtok_s(&input[9], "&", &Context);
@@ -918,7 +911,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 				}
 				else
 				{
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
 				}
@@ -1316,44 +1309,138 @@ int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session,
 		return 0;
 }	
 
-int SetupNodeMenu(char * Buff, int LOCAL)
+int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 {
 	int Len = 0, i;
 	struct TNCINFO * TNC;
 	int top = 0, left = 0;
+	char MgmtMenu[8192];
 
 	char NodeMenuHeader[] = "<html id=body><head><title>%s's BPQ32 Web Server</title>"
+	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 	"<style type=\"text/css\">"
-	// The container <div> - needed to position the dropdown content
-	".dropdown {position: relative; display: inline-block;}"
-	// Dropdown Content (Hidden by Default)
-	".dropdown-content {display: none; position: absolute; left: -100px; background-color: #f1f1f1;"
-	" min-width: 120px; border: 1px solid; padding: 4px; z-index: 1;}"
-	// Links inside the dropdown
-	".dropdown-content a {color: black; padding: 2px 2px; display: block;}"
-	// Change color of dropdown links on hover 
-	".dropdown-content a:hover {background-color: #ddd}"
-	// Show the dropdown menu (use JS to add this class to the .dropdown-content container when the user clicks on the dropdown button)
-	".show {display:block;}"
-	"input.btn:active {background:black;color:white;} "
-	"submit.btn:active {background:black;color:white;} "
+	"body { font-family: Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }"
+	"h1 { text-align: center; margin: 10px 0 18px; }"
+	".menu-header { display: none; max-width: 1100px; margin: 0 auto 10px; }"
+	".menu-toggle { width: 100%; min-height: 44px; border: 1px solid #ccc; border-radius: 6px; background: #fff; font-size: 16px; color: #1f2937; }"
+	".menu { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 20px auto; max-width: 1100px; }"
+	".menu a, .menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }"
+	".menu a:hover, .menu td:hover, .menu .btn:hover { background: #e9ecef; }"
+	".dropdown { position: relative; display: inline-block; }"
+	".dropdown-content { display: none; position: absolute; left: 50%; transform: translateX(-50%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }"
+	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }"
+	".dropdown-content a:hover { background: #e9ecef; }"
+	".dropdown-content .btn { width: 100%; margin-top: 6px; }"
+	".dropdown-content form { margin: 0; }"
+	".dropdown-content label { display: block; margin-bottom: 8px; }"
+	".dropdown-content input[type='date'] { width: 100%; box-sizing: border-box; margin-top: 4px; }"
+	".dropdown-content input[type='submit'] { width: 100%; margin-top: 6px; }"
+	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 6px; }"
+	".mgmt-section.show { display: block; }"
+	".show { display: block; }"
+	"input.btn:active, .menu .btn:active { background: black; color: white; }"
+	"@media (max-width: 768px) { .menu-header { display: block; } .menu { display: none; flex-direction: column; align-items: stretch; margin-top: 0; } .menu.menu-open { display: flex; } .menu a, .menu td, .menu .btn, .dropdown { width: 100%; text-align: center; } .dropdown-content { position: static; transform: none; width: 100%; margin-top: 8px; box-shadow: none; } }"
 	"</style>"
 
 	"<script>\r\n"
 
 
 // Close the dropdown menu if the user clicks outside of it
-	"window.onclick = function(event) {console.log(event.target.id);"
-	" if (event.target.id == 'body') {"
-	"  var dropdowns = document.getElementsByClassName('dropdown-content');"
-	"  var i;\r\n"
-	" for (i = 0; i < dropdowns.length; i++) {"
-    "  var openDropdown = dropdowns[i];"
-    "  if (openDropdown.classList.contains('show')) {"
-	"   openDropdown.classList.remove('show');"
-    "  }}}}\r\n"
+	"window.addEventListener('click', function(event) {"
+	" var dropdown = document.getElementById('mgmtDropdown');"
+	" var button = document.getElementById('mgmtButton');"
+	" if (dropdown && button && !dropdown.contains(event.target) && event.target !== button) {"
+	"  dropdown.classList.remove('show');"
+	"  closeMgmtSections();"
+	" }"
+	" var menu = document.getElementById('mainMenu');"
+	" var toggle = document.getElementById('menuToggle');"
+	" var header = document.querySelector('.menu-header');"
+	" if (menu && toggle && window.matchMedia('(max-width: 768px)').matches) {"
+	"  var inMenu = menu.contains(event.target);"
+	"  var inHeader = header && header.contains(event.target);"
+	"  if (!inMenu && !inHeader) {"
+	"   menu.classList.remove('menu-open');"
+	"   toggle.textContent = 'Menu';"
+	"   if (dropdown) dropdown.classList.remove('show');"
+	"   closeMgmtSections();"
+	"  }"
+	" }"
+	"});\r\n"
+	"function closeMgmtSections() {"
+	" var sections = document.querySelectorAll('#mgmtDropdown .mgmt-section');"
+	" var toggles = document.querySelectorAll('#mgmtDropdown .mgmt-toggle');"
+	" var i;"
+	" for (i = 0; i < sections.length; i++) {"
+	"  sections[i].classList.remove('show');"
+	" }"
+	" for (i = 0; i < toggles.length; i++) {"
+	"  toggles[i].textContent = toggles[i].getAttribute('data-label') + ' +';"
+	" }"
+	"}"
 
-	"function myShow() {document.getElementById('myDropdown').classList.add('show');}"
+	"function toggleMgmt(event) {"
+	" if (event) { event.preventDefault(); event.stopPropagation(); }"
+	" var dropdown = document.getElementById('mgmtDropdown');"
+	" if (!dropdown) return;"
+	" if (dropdown.classList.contains('show')) {"
+	"  dropdown.classList.remove('show');"
+	"  closeMgmtSections();"
+	" } else {"
+	"  dropdown.classList.add('show');"
+	" }"
+	"}"
+	"function toggleMgmtSection(event, sectionId, toggleId) {"
+	" if (event) { event.preventDefault(); event.stopPropagation(); }"
+	" var section = document.getElementById(sectionId);"
+	" var toggle = document.getElementById(toggleId);"
+	" if (!section || !toggle) return;"
+	" var sections = document.querySelectorAll('#mgmtDropdown .mgmt-section');"
+	" var toggles = document.querySelectorAll('#mgmtDropdown .mgmt-toggle');"
+	" var i;"
+	" var openNow = section.classList.contains('show');"
+	" for (i = 0; i < sections.length; i++) sections[i].classList.remove('show');"
+	" for (i = 0; i < toggles.length; i++) toggles[i].textContent = toggles[i].getAttribute('data-label') + ' +';"
+	" if (!openNow) {"
+	"  section.classList.add('show');"
+	"  toggle.textContent = toggle.getAttribute('data-label') + ' -';"
+	" }"
+	"}"
+	"function toggleMenu(event) {"
+	" if (event) event.preventDefault();"
+	" var menu = document.getElementById('mainMenu');"
+	" var toggle = document.getElementById('menuToggle');"
+	" if (!menu || !toggle) return;"
+	" if (menu.classList.contains('menu-open')) {"
+	"  menu.classList.remove('menu-open');"
+	"  toggle.textContent = 'Menu';"
+	" } else {"
+	"  menu.classList.add('menu-open');"
+	"  toggle.textContent = 'Close';"
+	" }"
+	"}"
+	"function closeMenuOnMobile() {"
+	" var menu = document.getElementById('mainMenu');"
+	" var toggle = document.getElementById('menuToggle');"
+	" var dropdown = document.getElementById('mgmtDropdown');"
+	" if (!menu || !toggle) return;"
+	" if (window.matchMedia('(max-width: 768px)').matches) {"
+	"  menu.classList.remove('menu-open');"
+	"  toggle.textContent = 'Menu';"
+	"  if (dropdown) dropdown.classList.remove('show');"
+	"  closeMgmtSections();"
+	" }"
+	"}"
+	"window.addEventListener('DOMContentLoaded', function() {"
+	" var menu = document.getElementById('mainMenu');"
+	" if (!menu) return;"
+	" menu.addEventListener('click', function(event) {"
+	"  var target = event.target;"
+	"  if (!target) return;"
+	"  if (target.tagName === 'A') closeMenuOnMobile();"
+	"  if (target.tagName === 'INPUT' && target.type === 'submit') closeMenuOnMobile();"
+	" });"
+	"});"
 //	"function myHide() {"
 //	" if (event.target.matches('.HTMLBodyElement'))"
 //	"{document.getElementById('myDropdown').classList.remove('show');}}"
@@ -1374,48 +1461,70 @@ int SetupNodeMenu(char * Buff, int LOCAL)
 	char NodeMenuLine[] = "dev_win(\"/Node/Port?%d\",%d,%d,%d,%d);";
 
 	char NodeMenuRest[] = "}</script></head>"
-		"<body id=body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
-		"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-		"<td><a href=/Node/Routes.html>Routes</a></td>"
-		"<td><a href=/Node/Nodes.html>Nodes</a></td>"
-		"<td><a href=/Node/Ports.html>Ports</a></td>"
-		"<td><a href=/Node/Links.html>Links</a></td>"
-		"<td><a href=/Node/Users.html>Users</a></td>"
-		"<td><a href=/Node/Stats.html>Stats</a></td>"
-		"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s%s";
+		"<body id=body><h1>BPQ32 Node %s</h1>"
+		"<div class='menu-header'><button id='menuToggle' class='menu-toggle' type='button' onclick='toggleMenu(event)'>Menu</button></div>"
+		"<div id='mainMenu' class=\"menu\">"
+		"<a href=/Node/Routes.html>Routes</a>"
+		"<a href=/Node/Nodes.html>Nodes</a>"
+		"<a href=/Node/Ports.html>Ports</a>"
+		"<a href=/Node/Links.html>Links</a>"
+		"<a href=/Node/Users.html>Users</a>"
+		"<a href=/Node/Stats.html>Stats</a>"
+		"<a href=/Node/Terminal.html>Terminal</a>%s%s%s%s";
 
-	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
-		"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a></td>";
+	char DriverBit[] = "<a href=\"javascript:open_win();\">Driver Windows</a>"
+		"<a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a>";
 
-	char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
+	char APRSBit[] = "<a href=../aprs>APRS Pages</a>";
 
-	char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
-		"<td><a href=/Webmail>WebMail</a></td>";
+	char WebMailBit[] = "<a href=/Webmail>WebMail</a>";
 
-	char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
-	char SigninBit[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>";
+	char MailBit[] = "<a href=../Mail/Header>Mail Mgmt</a>";
+
+	char ChatBit[] = "<a href=../Chat/Header>Chat Mgmt</a>";
+	char SigninBit[] = "<a href=/Node/Signon.html>Sysop Signin</a>";
+
+	char MgmtBit[] =
+		"<div class='dropdown'>"
+		"<button id='mgmtButton' class='btn' type='button' onclick='toggleMgmt(event)'>Mgmt</button>"
+		"<div id='mgmtDropdown' class='dropdown-content'>"
+		"%s%s%s"
+		"<a href=\"javascript:open_win();\">Driver Windows</a>"
+		"<a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a>"
+		"<a href=/Node/EditCfg.html>Edit Config</a>"
+		"<button id='mgmtLogsToggle' class='btn mgmt-toggle' data-label='Logs' type='button' onclick='toggleMgmtSection(event,\"mgmtLogs\",\"mgmtLogsToggle\")'>Logs +</button>"
+		"<div id='mgmtLogs' class='mgmt-section'>"
+		"<form id=doDate action='/node/ShowLog.html'><label>"
+		"Select Date: <input type='date' name='date' id=e>"
+		"<script>"
+		"document.getElementById('e').value = new Date().toISOString().substring(0, 10);"
+		"</script></label>"
+		"<input type=submit class='btn' name='BBS' value='BBS Log'>"
+		"<input type=submit class='btn' name='Debug' value='BBS Debug Log'>"
+		"<input type=submit class='btn' name='Telnet' value='Telnet Log'>"
+		"<input type=submit class='btn' name='CMS' value='CMS Log'>"
+		"<input type=submit class='btn' name='Chat' value='Chat Log'>"
+		"</form></div>"
+		"</div>"
+		"</div>";
 
 	char NodeTail[] = 
-		"<td><a href=/Node/EditCfg.html>Edit Config</a></td>\
-		<td><div onmouseover=myShow() class='dropdown'>\
-		<button class=\"dropbtn\">View Logs</button>\
-		<div id=\"myDropdown\" class=\"dropdown-content\">\
-		<form id = doDate form action='/node/ShowLog.html'><label>\
-		Select Date: <input type='date' name='date' id=e>\
-		<script>\
-		document.getElementById('e').value = new Date().toISOString().substring(0, 10);\
-		</script></label>\
-		<input type=submit class='btn' name='BBS' value='BBS Log'></br>\
-		<input type=submit class='btn' name='Debug' value='BBS Debug Log'></br>\
-		<input type=submit class='btn' name='Telnet' value='Telnet Log'></br>\
-		<input type=submit class='btn' name='CMS' value='CMS Log'></br>\
-		<input type=submit class='btn' name='Chat' value='Chat Log'></br>\
-		</form></div>\
-		</div>\
-		</td></tr></table>";
+		"</div></body></html>";
 
 
-	Len = sprintf(Buff, NodeMenuHeader, Mycall);
+	int n;
+
+	if (BuffSize == 0)
+		return 0;
+
+	n = snprintf(Buff, BuffSize, NodeMenuHeader, Mycall);
+	if (n < 0)
+		return 0;
+
+	if ((size_t)n >= BuffSize)
+		return (int)(BuffSize - 1);
+
+	Len = n;
 
 	for (i=1; i <= MAXBPQPORTS; i++)
 	{
@@ -1425,16 +1534,52 @@ int SetupNodeMenu(char * Buff, int LOCAL)
 
 		if (TNC->WebWindowProc)
 		{
-			Len += sprintf(&Buff[Len], NodeMenuLine, i, TNC->WebWinX, TNC->WebWinY, top, left);
+			size_t Remaining;
+
+			if ((size_t)Len >= BuffSize)
+				return (int)(BuffSize - 1);
+
+			Remaining = BuffSize - (size_t)Len;
+			n = snprintf(&Buff[Len], Remaining, NodeMenuLine, i, TNC->WebWinX, TNC->WebWinY, top, left);
+
+			if (n < 0)
+				return Len;
+
+			if ((size_t)n >= Remaining)
+				return (int)(BuffSize - 1);
+
+			Len += n;
 			top += 22;
 			left += 22;
 		}
 	}
 
-	Len += sprintf(&Buff[Len], NodeMenuRest, Mycall,
-		DriverBit,
+	n = snprintf(MgmtMenu, sizeof(MgmtMenu), MgmtBit,
+		(IncludesMail)?MailBit:"",
+		(IncludesChat)?ChatBit:"",
+		(LOCAL)?"":SigninBit);
+
+	if (n < 0)
+		MgmtMenu[0] = 0;
+	else if ((size_t)n >= sizeof(MgmtMenu))
+		MgmtMenu[sizeof(MgmtMenu) - 1] = 0;
+
+	if ((size_t)Len >= BuffSize)
+		return (int)(BuffSize - 1);
+
+	n = snprintf(&Buff[Len], BuffSize - (size_t)Len, NodeMenuRest, Mycall,
 		(APRSWeb)?APRSBit:"",
-		(IncludesMail)?MailBit:"", (IncludesChat)?ChatBit:"", (LOCAL)?"":SigninBit, NodeTail);
+		(IncludesMail)?WebMailBit:"",
+		MgmtMenu,
+		NodeTail);
+
+	if (n < 0)
+		return Len;
+
+	if ((size_t)n >= BuffSize - (size_t)Len)
+		return (int)(BuffSize - 1);
+
+	Len += n;
 
 	return Len;
 }
@@ -1449,7 +1594,7 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 	FILE *fp1;
 	char Header[256];
 	int HeaderLen;
-	char Reply[4096];
+	char Reply[250000];
 	char Mess[256];
 	char Backup1[MAX_PATH];
 	char Backup2[MAX_PATH];
@@ -1461,7 +1606,7 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 	{
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, LOCAL);
+			ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 			//			ReplyLen = sprintf(Reply, "%s", "<html><script>window.close();</script></html>");
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 			send(sock, Header, HeaderLen, 0);
@@ -1638,8 +1783,8 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	int Len;
 	char * WebSock = 0;
 
-	char PortsHddr[] = "<h2 align=center>Ports</h2><table align=center border=2 bgcolor=white>"
-		"<tr><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th><th>Stats Graph</th></tr>";
+	char PortsHddr[] = "<h2 style=\"text-align:center;\">Ports</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+		"<tr style=\"background:#f0f0f0;\"><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th><th>Stats Graph</th></tr>";
 
 //	char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
 
@@ -1819,7 +1964,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		
 				if (memcmp(&Context[13], "login", 5) == 0)
 				{
-					ReplyLen = ProcessMailAPISignon(TCP, MsgPtr, "M", Reply, &Session, FALSE, LOCAL);
+					ReplyLen = ProcessMailAPISignon(TCP, MsgPtr, "M", Reply, sizeof(Reply), &Session, FALSE, LOCAL);
 					memcpy(MsgPtr, "GET /mail/api/v1/", 17);
 
 					if (ReplyLen)			// Error message
@@ -1917,7 +2062,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			NodeURL = strtok_s(Context, "?", &IContext);
 			Key = strtok_s(NULL, "?", &IContext);
 
-			ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session, LOCAL);
+			ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, LOCAL);
 			return 0;
 
 		}
@@ -1938,7 +2083,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 			if (_stricmp(NodeURL, "/Mail/Signon") == 0)
 			{
-				ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session, FALSE, LOCAL);
+				ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, FALSE, LOCAL);
 
 				if (ReplyLen)
 				{
@@ -1959,7 +2104,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply, LOCAL);
+					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -1986,7 +2131,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply, LOCAL);
+						ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					RLen = ReplyLen;
@@ -2059,7 +2204,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 			if (_stricmp(NodeURL, "/Chat/Signon") == 0)
 			{
-				ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, &Session, LOCAL);
+				ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, LOCAL);
 
 				if (ReplyLen)
 				{
@@ -2080,7 +2225,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply, LOCAL);
+					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -2107,7 +2252,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply, LOCAL);
+						ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					RLen = ReplyLen;
@@ -2575,7 +2720,7 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/Signon") == 0)
 			{
-				ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session, LOCAL);
+				ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, LOCAL);
 				return 0;
 			}
 
@@ -2605,7 +2750,7 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -2617,7 +2762,7 @@ doHeader:
 
 				if (strstr(input, "Cancel=Cancel"))
 				{
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
@@ -2685,7 +2830,7 @@ doHeader:
 					SendUIBeacon(Slot);
 
 
-				ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, Port,		
 					Interval[Slot], &UIUIDEST[Slot][0], &UIUIDigi[Slot][0], &FN[Slot][0], &Message[Slot][0], Port);
 
@@ -2707,7 +2852,7 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/LogAction") == 0)
 			{
-				ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
@@ -2939,7 +3084,7 @@ doHeader:
 
 		{
 
-			ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
 			if (_stricmp(NodeURL, "/Node/webproc.css") == 0)
 			{
@@ -3144,8 +3289,8 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					char _REPLYBUFFER[4096];	
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					char _REPLYBUFFER[250000];	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -3169,7 +3314,7 @@ doHeader:
 
 				if (strcmp(Context, "input=Back") == 0)
 				{
-					ReplyLen = SetupNodeMenu(Reply, LOCAL);
+					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
@@ -3274,8 +3419,8 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					char _REPLYBUFFER[4096];	
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					char _REPLYBUFFER[250000];	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -3534,7 +3679,7 @@ doHeader:
 				if (Param == 'T')
 				{
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "with traffic");
-					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<td>Call</td><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr><tr>");
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<th style=\"background:#f0f0f0;\">Call</th><th style=\"background:#f0f0f0;\">Frames</th><th style=\"background:#f0f0f0;\">RTT</th><th style=\"background:#f0f0f0;\">BPQ?</th><th style=\"background:#f0f0f0;\">Hops</th></tr><tr>");
 				}
 				else if (Param == 'C') 
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "sorted by Call");
@@ -4151,7 +4296,7 @@ CMDS60:
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+						ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
 					}
 				}
@@ -4368,7 +4513,7 @@ int StatusProc(char * Buff)
 	return Len;
 }
 
-int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL)
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -4387,13 +4532,14 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+			ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 				"\r\n", (int)(ReplyLen + strlen(Tail)));	
 			send(sock, Header, HeaderLen, 0);
 			send(sock, Reply, ReplyLen, 0);
 			send(sock, Tail, (int)strlen(Tail), 0);
+			return ReplyLen;
 		}
 		user = strtok_s(&input[9], "&", &Key);
 		password = strtok_s(NULL, "=", &Key);
@@ -4410,9 +4556,22 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 					// ok
 
 					Sess = *Session = AllocateSession(sock, 'N');
+
+					if (Sess == NULL)
+					{
+						ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
+						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
+
+						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", (int)(ReplyLen + strlen(Tail)));
+						send(sock, Header, HeaderLen, 0);
+						send(sock, Reply, ReplyLen, 0);
+						send(sock, Tail, (int)strlen(Tail), 0);
+						return ReplyLen;
+					}
+
 					Sess->USER = USER;
 
-					ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+					ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 						"Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
@@ -4440,7 +4599,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 	return ReplyLen;
 }
 
-int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
+int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -4478,7 +4637,7 @@ int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char 
 					}
 					else
 					{
-						ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+						ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;
@@ -4505,7 +4664,7 @@ int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char 
 		ReplyLen = 0;
 	else
 	{
-		ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+		ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 		ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 	}
 	
@@ -4515,7 +4674,7 @@ int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char 
 
 
 
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -4531,7 +4690,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, LOCAL);
+			ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 			return ReplyLen;
 		}
 		user = strtok_s(&input[9], "&", &Key);
@@ -4560,7 +4719,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 					}
 					else
 					{
-						ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+						ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;
@@ -4576,7 +4735,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 }
 
 
-int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL)
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -4591,7 +4750,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, LOCAL);
+			ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 			return ReplyLen;
 		}
 
@@ -4612,13 +4771,13 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 					*Session = AllocateSession(Appl[0], 'C');
 
-					if (Session)
+					if (*Session)
 					{
 						ReplyLen = 0;
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply, LOCAL);
+						ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;

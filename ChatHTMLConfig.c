@@ -19,6 +19,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 
 #include "bpqchat.h"
+#include "common_web_components.h"
 
 extern char OurNode[10];
 
@@ -122,23 +123,54 @@ static char CHKD[] = "checked=checked ";
 static char sel[] = "selected";
 
 
-char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title></head><body background=\"/background.jpg\">"
-	"<h3 align=center>BPQ32 Chat Server %s Access</h3>"
-	"<h3 align=center>Please enter Callsign and Password to access the Chat Server</h3>"
+char ChatSignon[] = "<html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>BPQ32 Chat Server Access</title>"
+	"<style>"
+	COMMON_CSS_VARIABLES
+	"body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: var(--bg); } "
+	".login-container { max-width: 400px; margin: 40px auto; background: var(--surface); padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); } "
+	"h3 { text-align: center; color: #333; margin-top: 0; } "
+	".form-group { margin-bottom: 15px; } "
+	"label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; } "
+	"input[type=text], input[type=password] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 14px; } "
+	"input[type=text]:focus, input[type=password]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 4px rgba(0,102,204,0.2); } "
+	".button-group { text-align: center; padding-top: 15px; } "
+	"input[type=submit] { padding: 10px 20px; margin: 0 5px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; } "
+	"input[type=submit]:hover { background-color: var(--primary-dark); }"
+	"</style>"
+	"</head><body>"
+	"<div class='login-container'>"
+	"<h3>BPQ32 Chat Server %s Access</h3>"
+	"<h3>Please enter Callsign and Password to access the Chat Server</h3>"
 	"<form method=post action=/Chat/Signon?Chat>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+	"<div class='form-group'><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>"
+	"<div class='form-group'><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"
+	"<div class='button-group'><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></div>"
+	"</form>"
+	"</div>"
+	"</body></html>";
 
 
-char ChatPage[] = "<html><head><title>%s's Chat Server</title></head>"
-	"<body background=\"/background.jpg\"><h3 align=center>BPQ32 Chat Node %s</h3><P>"
-	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-	"<td><a href=/Chat/ChatStatus?%s>Status</a></td>"
-	"<td><a href=/Chat/ChatConf?%s>Configuration</a></td>"
-	"<td><a href=/>Node Menu</a></td>"
-	"</tr></table>";
+char ChatPage[] = "<html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>%s's Chat Server</title>"
+	"<style>"
+	COMMON_CSS_VARIABLES
+	"*{box-sizing:border-box;}"
+	".container{max-width:900px;margin:0 auto;background:var(--surface);padding:20px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}"
+	COMMON_MENU_CSS
+	"</style>"
+	"<script>"
+	COMMON_MENU_JAVASCRIPT
+	"</script>"
+	"</head><body>"
+	"<div class='container'>"
+	"<h3 style='text-align:center;margin-top:0;'>BPQ32 Chat Node %s</h3>"
+	"<div class='menu-header'><button id='menuToggle' class='menu-toggle' type='button' onclick='toggleMenu(event)'>Menu</button></div>"
+	"<div id='chatMenu' class='menu'>"
+	"<a href=/Chat/ChatStatus?%s>Status</a>"
+	"<a href=/Chat/ChatConf?%s>Configuration</a>"
+	"<a href=/>Node Menu</a>"
+	"</div>"
+	"</div>"
+	"</body></html>";
 
 
 

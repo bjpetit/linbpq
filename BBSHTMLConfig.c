@@ -21,6 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "cheaders.h"
 #include "bpqmail.h"
+#include "common_web_components.h"
 
 #ifdef WIN32
 //#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
@@ -134,121 +135,132 @@ static char BusyError[] = "<p align=center>Sorry, No sessions available - please
 
 extern char WebMailSignon[];
 
-char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
-	"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
-	"<h3 align=center>Please enter Callsign and Password to access the BBS</h3>"
+char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+	"<title>BPQ32 Mail Server Access</title>"
+	"<style>"
+	COMMON_CSS_VARIABLES
+	"body { font-family: Arial, sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }"
+	"form { background: var(--surface); padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 400px; width: 100%%; }"
+	"input[type=text], input[type=password] { width: 100%%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }"
+	"input[type=submit] { background: var(--primary); color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; width: 100%%; margin: 5px 0; }"
+	"input[type=submit]:hover { background: var(--primary-dark); }"
+	"@media (max-width: 480px) { body { padding: 10px; } form { padding: 15px; } }"
+	"</style></head><body>"
+	"<h3 style=\"text-align: center;\">BPQ32 Mail Server %s Access</h3>"
+	"<h3 style=\"text-align: center;\">Please enter Callsign and Password</h3>"
 	"<form method=post action=/Mail/Signon?Mail>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+	"<label for=user>User</label><input type=text id=user name=user tabindex=1 maxlength=50 required><br>"
+	"<label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required><br>"
+	"<input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form></body></html>";
 
 
-char MailPage[] = "<html><head><title>%s's BBS Web Server</title>"
+char MailPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+	"<title>%s's BBS Web Server</title>"
 	"<style type=\"text/css\">"
-	"input.btn:active {background:black;color:white;} "
-	"submit.btn:active {background:black;color:white;} "
+	COMMON_CSS_VARIABLES
+	COMMON_MENU_CSS
 	"</style>"
+	"<script>"
+	COMMON_MENU_JAVASCRIPT
+	"</script>"
 	"</head>"
-	"<body background=\"/background.jpg\"><h3 align=center>BPQ32 BBS %s</h3><P>"
-	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-	"<td><a href=/Mail/Status?%s>Status</a></td>"
-	"<td><a href=/Mail/Conf?%s>Configuration</a></td>"
-	"<td><a href=/Mail/Users?%s>Users</a></td>"
-	"<td><a href=/Mail/Msgs?%s>Messages</a></td>"
-	"<td><a href=/Mail/FWD?%s>Forwarding</a></td>"
-	"<td><a href=/Mail/Wel?%s>Welcome Msgs & Prompts</a></td>"
-	"<td><a href=/Mail/HK?%s>Housekeeping</a></td>"
-	"<td><a href=/Mail/WP?%s>WP Update</a></td>"
-	"<td><a href=/Webmail>WebMail</a></td>"
-	"<td><a href=/>Node Menu</a></td>"
-	"</tr></table>";
+	"<body><h3>BPQ32 BBS %s</h3>"
+	COMMON_MAIL_MENU;
 
 char RefreshMainPage[] = "<html><head>"
 	"<meta http-equiv=refresh content=10>"
+	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<style type=\"text/css\">"
-	"input.btn:active {background:black;color:white;} "
-	"submit.btn:active {background:black;color:white;} "
+	COMMON_CSS_VARIABLES
+	COMMON_MENU_CSS
 	"</style>"
+	"<script>"
+	COMMON_MENU_JAVASCRIPT
+	"</script>"
 	"<title>%s's BBS Web Server</title></head>"
-	"<body background=\"/background.jpg\"><h3 align=center>BPQ32 BBS %s</h3><P>"
-	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-	"<td><a href=/Mail/Status?%s>Status</a></td>"
-	"<td><a href=/Mail/Conf?%s>Configuration</a></td>"
-	"<td><a href=/Mail/Users?%s>Users</a></td>"
-	"<td><a href=/Mail/Msgs?%s>Messages</a></td>"
-	"<td><a href=/Mail/FWD?%s>Forwarding</a></td>"
-	"<td><a href=/Mail/Wel?%s>Welcome Msgs & Prompts</a></td>"
-	"<td><a href=/Mail/HK?%s>Housekeeping</a></td>"
-	"<td><a href=/Mail/WP?%s>WP Update</a></td>"
-	"<td><a href=/Webmail>WebMail</a></td>"
-	"<td><a href=/>Node Menu</a></td>"
-	"</tr></table>";
+	"<body><h3>BPQ32 BBS %s</h3>"
+	COMMON_MAIL_MENU;
 
 char StatusPage [] = 
-
-"<form style=\"font-family: monospace; text-align: center\"  method=post action=/Mail/DisSession?%s>"
-"<br>User&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Callsign&nbsp;&nbsp; Stream &nbsp;Queue &nbsp;Sent &nbsp;Rxed<br>"
-"<select style=\"font-family: monospace;\" tabindex=1 size=10 name=call>";
+"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+COMMON_CSS_VARIABLES
+COMMON_TABLE_CSS
+COMMON_FORM_CSS
+COMMON_BUTTON_CSS
+"</style></head><body><h3>Active Sessions</h3>"
+"<form method=post action=/Mail/DisSession?%s>"
+"<div class=table-container><table>"
+"<thead><tr><th>Select</th><th>User</th><th>Callsign</th><th>Stream</th><th>Queue</th><th>Sent</th><th>Rxed</th></tr></thead><tbody>";
 
 char StreamEnd[] = 
-"</select><br><input name=Disconnect value=Disconnect type=submit class='btn'><br><br>";
+"</tbody></table></div>";
 
 char StatusTail[] = 
-"Msgs&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input readonly=readonly value=%d size=3><br>"
-"Sysop Msgs <input readonly=readonly value=%d size=3><br>"
-"Held Msgs&nbsp; <input readonly=readonly value=%d size=3><br>"
-"SMTP Msgs&nbsp; <input readonly=readonly value=%d size=3><br></form>";
+"<div class=stats-section>"
+"<div class=stat-row><label>Total Messages</label><input readonly=readonly value=%d></div>"
+"<div class=stat-row><label>Sysop Messages</label><input readonly=readonly value=%d></div>"
+"<div class=stat-row><label>Held Messages</label><input readonly=readonly value=%d></div>"
+"<div class=stat-row><label>SMTP Messages</label><input readonly=readonly value=%d></div>"
+"</div>"
+"<div class=buttons><input name=Disconnect value=Disconnect type=submit></div>"
+"</form></body></html>";
 
 
-char UIHddr [] = "<form style=\"font-family: monospace;\" align=center method=post"
-" action=/Mail/UI?%s> Mailfor Header <input size=40 value=\"%s\" name=MailFor><br>"
-"&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;"
-"&nbsp;&nbsp;&nbsp; (use \\r to insert newline in message)<br><br>"
-"Enable Port&nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp;"
-"&nbsp;&nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; Path&nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp;"
-"&nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Send: MailFor Headers Empty Mailfor<br><br>";
+char UIHddr [] = "<h3>User Interface Configuration</h3>"
+	"<form method=post action=/Mail/UI?%s>"
+	"<div class=form-section>"
+	"<div class=form-row><label>Mailfor Header</label><input type=text value=\"%s\" name=MailFor></div>"
+	"<p style=\"margin: 10px 0 0 0; color: #666; font-size: 0.9em;\">(use \\r to insert newline in message)</p>"
+	"</div>"
+	"<div class=form-section>"
+	"<div class=port-row-header>"
+	"<span class=port-row-label>Enable</span><span style=\"flex: 2 1 200px;\">Port Path</span><span>Send MailFor</span><span>Send Headers</span><span>Send Empty</span>"
+	"</div>";
 
-char UILine[] = "<input %sname=En%d type=checkbox> %s <input size=40 value=\"%s\" name=Path%d>"
-" <input %sname=SndMF%d type=checkbox>"
-"&nbsp;&nbsp;&nbsp;&nbsp;<input %sname=SndHDDR%d type=checkbox>"
-"&nbsp; &nbsp; &nbsp; &nbsp; <input %sname=SndNull%d type=checkbox><br>";
+char UILine[] = "<div class=port-row><input %s name=En%d type=checkbox><span class=port-row-label>%s</span><input type=text value=\"%s\" name=Path%d><input %s name=SndMF%d type=checkbox><input %s name=SndHDDR%d type=checkbox><input %s name=SndNull%d type=checkbox></div>";
 
-char UITail[] = "<br><br><input name=Update value=Update type=submit class='btn'> "
-"<input name=Cancel value=Cancel type=submit class='btn'><br></form>";
+char UITail[] = "</div><div class=buttons><input name=Update value=Update type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
 char FWDSelectHddr[] = 
-	"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/FWDSel?%s>"
-	"Max Size to Send &nbsp;&nbsp; <input value=%d size=3 name=MaxTX><br>"
-	"Max Size to Receive <input value=%d size=3 name=MaxRX><br>"
-	"Warn if no route for P or T <input %sname=WarnNoRoute type=checkbox><br>"
-	"Use Local Time&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-	"<input %sname=LocalTime type=checkbox><br><br>"
-	"Aliases &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; Select BBS<br>"
-	"<textarea rows=10 cols=20 name=Aliases>%s</textarea> &nbsp<select tabindex=1 size=10 name=call>";
+	"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+	COMMON_CSS_VARIABLES
+	COMMON_FORM_CSS
+	COMMON_BUTTON_CSS
+	"</style></head><body><h3>Forwarding Selection</h3>"
+	"<form method=post action=/Mail/FWDSel?%s>"
+	"<div class=form-section>"
+	"<div class=form-row><label>Max Size to Send</label><input type=number value=%d name=MaxTX></div>"
+	"<div class=form-row><label>Max Size to Receive</label><input type=number value=%d name=MaxRX></div>"
+	"<div class=form-row><label>Warn if no route for P or T</label><div class=checkbox-group><input %s name=WarnNoRoute type=checkbox><span>Enable</span></div></div>"
+	"<div class=form-row><label>Use Local Time</label><div class=checkbox-group><input %s name=LocalTime type=checkbox><span>Enable</span></div></div>"
+	"</div>"
+	"<div class=form-section>"
+	"<div class=form-row><label>Aliases</label><textarea name=Aliases>%s</textarea></div>"
+	"<div class=form-row><label>Select BBS</label><select name=call>";
 
 char FWDSelectTail[] =
-	"</select><br>&nbsp;&nbsp; <input name=Save value=Save type=submit class='btn'>&nbsp;<input "
-	"name=Cancel value=Cancel type=submit class='btn'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-	"&nbsp; <input name=Select value=Select type=submit class='btn'></form>";
+	"</select></div></div><div class=buttons><input name=Save value=Save type=submit> <input name=Cancel value=Cancel type=submit> <input name=Select value=Select type=submit></div></form></body></html>";
 
 char UserSelectHddr[] = 
-	"<form style=\"font-family: monospace; text-align: center\" method=post action=/Mail/Users?%s>"
-	"Please Select User<br><br><select tabindex=1 size=10 name=call>";
+	"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+	COMMON_CSS_VARIABLES
+	COMMON_FORM_CSS
+	COMMON_BUTTON_CSS
+	"</style></head><body><h3>Please Select User</h3><form method=post action=/Mail/Users?%s><select name=call>";
 
 char UserSelectLine[] = "<option value=%s>%s</option>";
 
 char StatusLine[] = "<option value=%d>%s</option>";
 
-char UserSelectTail[] = "</select><br><br>"
-	"<input size=6 value=\"\" name=NewCall>"
-	"<input type=submit class='btn' value=\"Add User\" name=Adduser><br>"
-	"<input type=submit class='btn' value=Select> "
-	"<input type=submit class='btn' value=Cancel name=Cancel><br></form>";
+char UserSelectTail[] = "</select><div class=form-row><input size=6 value=\"\" name=NewCall><input type=submit value=\"Add User\" name=Adduser></div><div class=buttons><input type=submit value=Select> <input type=submit value=Cancel name=Cancel></div></form></body></html>";
 
 char UserUpdateHddr[] =
-	"<h3 align=center>Update User %s</h3>"
-	"<form style=\"font-family: monospace; text-align: center\" method=post action=/Mail/Users?%s>";
+	"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+	COMMON_CSS_VARIABLES
+	COMMON_FORM_CSS
+	COMMON_BUTTON_CSS
+	"</style></head><body><h3>Update User %s</h3>"
+	"<form method=post action=/Mail/Users?%s>";
 
 char UserUpdateLine[] = "<option value=%s>%s</option>";
 
@@ -257,122 +269,205 @@ char UserUpdateLine[] = "<option value=%s>%s</option>";
 
 
 char FWDUpdate[] = 
-"<h3 align=center>Update Forwarding for BBS %s</h3>"
-"<form style=\"font-family: monospace; text-align: center\" method=post action=/Mail/FWD?%s"
-" name=Test>&nbsp;&nbsp;&nbsp;&nbsp;"
-"TO &nbsp; &nbsp; &nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-"AT&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-"TIMES&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp; Connect Script<br>"
-"<textarea wrap=hard rows=10 cols=10 name=TO>%s</textarea>"
-" <textarea wrap=hard rows=10 cols=10 name=AT>%s</textarea>"
-" <textarea wrap=hard rows=10 cols=10 name=Times>%s</textarea>"
-" <textarea wrap=hard rows=10 cols=20 name=FWD>%s</textarea><br>"
-"<textarea wrap=hard rows=10 cols=30 name=HRB>%s</textarea>"
-" <textarea wrap=hard rows=10 cols=30 name=HRP>%s</textarea><br><br>"
-"Enable Forwarding&nbsp;<input %sname=EnF type=checkbox> Interval"
-"<input value=%d size=3 name=Interval>(Secs) Request Reverse"
-"<input %sname=EnR type=checkbox> Interval <input value=%d size=3 "
-"name=RInterval>(Secs)<br>"
-"Send new messages without waiting for poll timer<input %sname=NoWait type=checkbox><br>"
-"BBS HA <input value=%s size=60 name=BBSHA> FBB Max Block <input "
-"value=%d size=3 name=FBBBlock><br>"
-"Send Personal Mail Only <input %sname=Personal type=checkbox>&nbsp;"
-"Allow Binary&nbsp; <input %sname=Bin type=checkbox>&nbsp;&nbsp; Use B1 "
-"Protocol <input %sname=B1 type=checkbox>&nbsp; Use B2 Protocol<input "
-"%sname=B2 type=checkbox><br><br>"
-"<input name=Submit value=Update type=submit class='btn'> <input name=Fwd value=\"Start Forwarding\" type=submit class='btn'> "
-"<input name=Cancel value=Cancel type=submit class='btn'></form><br></body></html>";
+"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+COMMON_CSS_VARIABLES
+COMMON_FORM_CSS
+COMMON_BUTTON_CSS
+"</style></head><body><h3>Update Forwarding for BBS %s</h3>"
+"<form method=post action=/Mail/FWD?%s name=Test>"
+"<div class=textarea-section><h4>Forwarding Addresses & Schedule</h4><div class=textarea-grid>"
+"<div class=textarea-group><label>TO</label><textarea name=TO>%s</textarea></div>"
+"<div class=textarea-group><label>AT</label><textarea name=AT>%s</textarea></div>"
+"<div class=textarea-group><label>TIMES</label><textarea name=Times>%s</textarea></div>"
+"<div class=textarea-group><label>Connect Script</label><textarea name=FWD>%s</textarea></div>"
+"</div></div>"
+"<div class=textarea-section><h4>Protocol Options</h4><div class=textarea-grid>"
+"<div class=textarea-group><label>HRB</label><textarea name=HRB>%s</textarea></div>"
+"<div class=textarea-group><label>HRP</label><textarea name=HRP>%s</textarea></div>"
+"</div></div>"
+"<div class=form-row><label>Enable Forwarding</label><div class=checkbox-group><input %s name=EnF type=checkbox><span style=\"font-weight: normal;\">Enable</span><label style=\"flex: 1 1 100px; font-weight: bold; margin: 0; padding-left: 10px;\">Interval (Secs)</label><input type=number value=%d size=3 name=Interval style=\"flex: none; width: 80px;\"></div></div>"
+"<div class=form-row><label>Request Reverse</label><div class=checkbox-group><input %s name=EnR type=checkbox><span style=\"font-weight: normal;\">Enable</span><label style=\"flex: 1 1 100px; font-weight: bold; margin: 0; padding-left: 10px;\">Interval (Secs)</label><input type=number value=%d size=3 name=RInterval style=\"flex: none; width: 80px;\"></div></div>"
+"<div class=form-row><label>Send new messages without waiting for poll timer</label><div class=checkbox-group><input %s name=NoWait type=checkbox><span style=\"font-weight: normal;\">Enable</span></div></div>"
+"<div class=form-row><label>BBS HA</label><input type=text value=\"%%s\" name=BBSHA></div>"
+"<div class=form-row><label>FBB Max Block Size</label><input type=number value=%d size=3 name=FBBBlock style=\"flex: none; width: 100px;\"></div>"
+"<div class=form-row><label>Protocol Flags</label><div class=checkbox-group>"
+"<div><input %s name=Personal type=checkbox><span style=\"font-weight: normal;\">Personal Mail Only</span></div>"
+"<div><input %s name=Bin type=checkbox><span style=\"font-weight: normal;\">Allow Binary</span></div>"
+"<div><input %s name=B1 type=checkbox><span style=\"font-weight: normal;\">Use B1 Protocol</span></div>"
+"<div><input %s name=B2 type=checkbox><span style=\"font-weight: normal;\">Use B2 Protocol</span></div>"
+"</div></div>"
+"<div class=buttons><input name=Submit value=Update type=submit> <input name=Fwd value=\"Start Forwarding\" type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
-static char MailDetailPage[] = 
-"<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
-"<title>MsgEdit</title></head><body><h4>Message %d</h4>"
-"<form style=\"font-family: monospace;\" method=post action=/Mail/Msg?%s name=Msgs>"
-"From&nbsp; <input style=\"font-family: monospace;\" size=10 name=From value=%s> Sent&nbsp;&nbsp;&nbsp;"
-"&nbsp; &nbsp; &nbsp; <input readonly=readonly size=12 name=Sent value=\"%s\">&nbsp;"
-"Type &nbsp;&nbsp;&nbsp;&nbsp;<select tabindex=1 size=1 name=Type>"
-"<option %s value=B>B</option>"
-"<option %s value=P>P</option>"
-"<option %s value=T>T</option>"
-"</select><br>"
-"To&nbsp; &nbsp; <input style=\"font-family: monospace;\" size=10 name=To value=%s>"
-" Received&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input readonly=readonly size=12 name=RX value=\"%s\">&nbsp;"
-"Status &nbsp;&nbsp;<select tabindex=1 size=1 name=Status>"
-"<option %s value=N>N</option>"
-"<option %s value=Y>Y</option>"
-"<option %s value=F>F</option>"
-"<option %s value=K>K</option>"
-"<option %s value=H>H</option>"
-"<option %s value=D>D</option>"
-"<option %s value=$>$</option>"
-"</select><br>"
-"BID&nbsp;&nbsp; <input style=\"width:100px; font-family: monospace; \" name=BID value=\"%s\"> Last Changed <input readonly=readonly size=12 name=LastChange value=\"%s\">&nbsp;"
-"Size&nbsp; <input readonly=readonly size=5 name=Size value=%d><br><br>"
-"%s"		// Email from Line
-"&nbsp;VIA&nbsp; <input style=\"width:360px;\" name=VIA value=%s><br>"
-"Title&nbsp; <input style=\"width:360px;\" name=Title value=\"%s\"> <br><br>"
-"<span align = center><input onclick=editmsg(\"EditM?%s?%d\") value=\"Edit Text\" type=button class='btn'> "
-"<input onclick=save(this.form) value=Save type=button class='btn'> "
-"<td><a href=/Mail/SaveMessage?%s><button type=button class='btn'>Save Message</button></a></td>"
-"<td><a href=/Mail/SaveAttachment?%s><button type=button class='btn' %s>Save Attachment</button></a></td>"
-//"<input onclick=doit(\"SavetoFile\") value=\"Save to File\" type=button class='btn'> "
-"<input onclick=doit(\"Print\") value=Print type=button class='btn'> "
-"<input onclick=doit(\"Export\") value=Export type=button class='btn'></span><br><br>"
-"Green = Sent, Yellow = Queued"
-"<table style=\"text-align: left; width: 490px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>";
+// Split MailDetailPage into smaller chunks to avoid ARM printf_positional limits with large format strings
+static char MailDetailCSS[] = 
+"<style>:root{--bg:#f4f4f4;--surface:#fff;--border:#ddd;--text:#1f2937;--primary:#007bff;--primary-dark:#0056b3;}*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);margin:0;padding:max(20px,env(safe-area-inset-left));color:var(--text);-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}"
+"h3{text-align:center;margin-bottom:20px;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}"
+".form-section{background:var(--surface);padding:clamp(12px,4vw,20px);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:15px 0;}"
+".form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 20px;margin:16px 0;}"
+".form-field{display:flex;flex-direction:column;gap:6px;}"
+".form-field label{font-weight:600;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;}"
+".form-field input,.form-field select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;transition:border-color 0.15s ease,box-shadow 0.15s ease;min-height:44px;font-family:monospace;}"
+".form-field input:focus,.form-field select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1);}"
+".form-row-full{grid-column:1/-1;}"
+"input[readonly]{background:#f9f9f9;color:#666;cursor:not-allowed;}"
+"input.uppercase{text-transform:uppercase;}"
+".table-container{background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow-x:auto;margin:15px 0;}"
+"table{width:100%%;border-collapse:collapse;table-layout:fixed;}"
+"th,td{padding:12px 14px;border:1px solid var(--border);text-align:center;font-size:14px;width:12.5%%;}"
+"th{background:#f1f5f9;font-weight:600;text-align:left;}"
+"th[colspan]{text-align:center;width:100%%;}"
+"td{cursor:pointer;transition:opacity 0.15s ease;}"
+"td:hover:not(:empty){opacity:0.8;}"
+"tbody tr:nth-child(even){background:#f9fafb;}"
+"tbody tr:hover{background:#f1f5f9;transition:background 0.15s ease;}"
+".status-legend{background:var(--surface);padding:16px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:15px 0;font-size:14px;color:#64748b;line-height:1.6;}"
+".status-legend strong{color:var(--text);display:block;margin-bottom:8px;}"
+".buttons{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0;}"
+".buttons input,.buttons button,.buttons a button{flex:1 1 auto;min-width:140px;background:var(--primary);color:white;padding:12px 20px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;transition:background 0.15s ease;min-height:44px;}"
+".buttons input:hover,.buttons button:hover,.buttons a button:hover{background:var(--primary-dark);}"
+".buttons a{text-decoration:none;}"
+"@media(max-width:768px){.form-grid{grid-template-columns:1fr;gap:12px;}"
+".form-row-full{grid-column:1;}"
+".form-field label{font-size:13px;margin-bottom:4px;}"
+".form-field input,.form-field select{min-height:44px;font-size:16px;}"
+"table{font-size:13px;}"
+"th,td{padding:10px 8px;}"
+".buttons{flex-direction:column;gap:8px;}"
+".buttons input,.buttons button,.buttons a button{width:100%;min-width:0;}"
+"}"
+"@media(max-width:480px){body{padding:clamp(8px,2vw,12px);padding-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));}"
+".form-section{padding:12px;margin:8px 0;}"
+"table{font-size:12px;}"
+"th,td{padding:8px 6px;}"
+"}}</style>";
 
-char MailDetailTail[] = "</table></form>";
+static char MailDetailHeader[] = "<h3>Message %d</h3><form method=post action=/Mail/Msg?%s name=Msgs>";
 
-char Welcome[] = "<form style=\"font-family: monospace; text-align: center;\"" 
-"method=post action=/Mail/Welcome?%s>"
-"Normal User Welcome<br>"
-"<textarea cols=80 rows=3 name=NUWelcome>%s</textarea><br>"
-"New User Welcome<br>"
-"<textarea cols=80 rows=3 name=NewWelcome>%s</textarea><br>"
-"Expert User Welcome<br>"
-"<textarea cols=80 rows=3 name=ExWelcome>%s</textarea><br>"
-"Normal User Prompt<br>"
-"<textarea cols=80 rows=3 name=NUPrompt>%s</textarea><br>"
-"New User Prompt<br>"
-"<textarea cols=80 rows=3 name=NewPrompt>%s</textarea><br>"
-"Expert User Prompt<br>"
-"<textarea cols=80 rows=1 name=ExPrompt>%s</textarea><br>"
-"Signoff<br>"
-"<textarea cols=80 rows=1 name=Bye>%s</textarea><br><br>"
-"$U:Callsign of the user&nbsp; $I:First name of the user $X:Messages for user $x:Unread messages<br>"
-"$L:Number of the latest message $N:Number of active messages. $Z:Last message read by user<br><br>"
-"<input name=Save value=Save type=submit class='btn'> <inputcname=Cancel value=Cancel type=submit class='btn'></form>";
+static char MailDetailFormFields[] = 
+"<div class=form-section>"
+"<div class=form-grid>"
+"<div class=form-field><label>From</label><input class=uppercase name=From value=%s></div>"
+"<div class=form-field><label>Sent</label><input readonly name=Sent value=\"%s\"></div>"
+"<div class=form-field><label>Type</label><select name=Type><option %s value=B>B</option><option %s value=P>P</option><option %s value=T>T</option></select></div>"
+"<div class=form-field><label>To</label><input class=uppercase name=To value=%s></div>"
+"<div class=form-field><label>Received</label><input readonly name=RX value=\"%s\"></div>"
+"<div class=form-field><label>Status</label><select name=Status><option %s value=N>N</option><option %s value=Y>Y</option><option %s value=F>F</option><option %s value=K>K</option><option %s value=H>H</option><option %s value=D>D</option><option %s value=$>$</option></select></div>"
+"<div class=form-field><label>BID</label><input class=uppercase name=BID value=\"%s\"></div>"
+"<div class=form-field><label>Last Changed</label><input readonly name=LastChange value=\"%s\"></div>"
+"<div class=form-field><label>Size</label><input readonly name=Size value=%d></div>"
+"%s"
+"<div class=\"form-field form-row-full\"><label>VIA</label><input class=uppercase name=VIA value=%s></div>"
+"<div class=\"form-field form-row-full\"><label>Title</label><input name=Title value=\"%s\"></div>"
+"</div>"
+"</div>";
 
-static char MsgEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
-"<title></title></head><body>"
-"<form style=\"font-family: monospace;  text-align: center;\"method=post action=EMSave?%s>"
+static char MailDetailButtons[] = 
+"<div class=form-section>"
+"<div class=buttons>"
+"<input onclick=editmsg(\"EditM?%s?%d\") value=\"Edit Text\" type=button>"
+"<input onclick=save(this.form) value=Save type=button>"
+"<a href=/Mail/SaveMessage?%s><button type=button>Download</button></a>"
+"<a href=/Mail/SaveAttachment?%s><button type=button %s>Save Attachment</button></a>"
+"</div>"
+"<div class=status-legend><strong>Message Status Legend:</strong> Green = Sent to BBS, Yellow = Queued for sending</div>"
+"</div>"
+"<div class=table-container><table><thead><tr><th colspan=8>BBS Forwarding Status</th></tr></thead><tbody>";
+
+char MailDetailTail[] = "</tbody></table></div></form></body></html>";
+
+char Welcome[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+"<style>"
+COMMON_CSS_VARIABLES
+"*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}h3{text-align:center;color:#1f2937;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}.form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:#1f2937;}.form-row textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:14px;line-height:1.4;}p{font-size:13px;color:#666;line-height:1.5;}input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;font-size:14px;}input[type=submit]:hover{background:var(--primary-dark);}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
+"</style></head><body>"
+"<form method=post action=/Mail/Welcome?%s>"
+"<div class=form-row><label>Normal User Welcome</label><textarea rows=3 name=NUWelcome>%s</textarea></div>"
+"<div class=form-row><label>New User Welcome</label><textarea rows=3 name=NewWelcome>%s</textarea></div>"
+"<div class=form-row><label>Expert User Welcome</label><textarea rows=3 name=ExWelcome>%s</textarea></div>"
+"<div class=form-row><label>Normal User Prompt</label><textarea rows=3 name=NUPrompt>%s</textarea></div>"
+"<div class=form-row><label>New User Prompt</label><textarea rows=3 name=NewPrompt>%s</textarea></div>"
+"<div class=form-row><label>Expert User Prompt</label><textarea rows=1 name=ExPrompt>%s</textarea></div>"
+"<div class=form-row><label>Signoff</label><textarea rows=1 name=Bye>%s</textarea></div>"
+"<p>$U:Callsign of the user&nbsp; $I:First name of the user $X:Messages for user $x:Unread messages<br>"
+"$L:Number of the latest message $N:Number of active messages. $Z:Last message read by user</p>"
+"<input name=Save value=Save type=submit> <input name=Cancel value=Cancel type=submit></form></body></html>";
+
+static char MsgEditPage[] = "<style>"
+COMMON_CSS_VARIABLES
+"*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}h3{text-align:center;margin-bottom:30px;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:monospace;font-size:12px;line-height:1.4;resize:vertical;}input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}input[type=submit]:hover{background:var(--primary-dark);}@media(max-width:768px){textarea{font-size:13px;min-height:200px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
+"</style><h3>Edit Message</h3>"
+"<form method=post action=EMSave?%s>"
 "<textarea cols=90 rows=33 name=Msg>%s</textarea><br><br>"
-"<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
+"<input name=Save value=Save type=submit><input name=Cancel value=Cancel type=submit><br></form></body></html>";
 
-static char WPDetail[] = "<form style=\"font-family: monospace;\" method=post action=/Mail/WP?%s>"
-"<br><table style=\"text-align: left; width: 431px;\" border=0 cellpadding=2 cellspacing=2><tbody>"
- 
-"<tr><td>Call</td><td><input readonly=readonly size=10 value=\"%s\"></td></tr>"
-"<tr><td>Name</td><td><input size=30 name=Name value=\"%s\"></td></tr>"
-"<tr><td>Home BBS 1</td><td><input size=40 name=Home1 value=%s></td></tr>"
-"<tr><td>Home BBS 2</td><td><input size=40 name=Home2 value=%s></td></tr>"
-"<tr><td>QTH 1</td><td><input size=40 name=QTH1 value=\"%s\"></td></tr>"
-"<tr><td>QTH 2</td><td><input size=40 name=QTH2 value=\"%s\"></td></tr>"
-"<tr><td>ZIP 1<br></td><td><input size=10 name=ZIP1 value=\"%s\"></td></tr>"
-"<tr><td>ZIP 2<br></td><td><input size=10 name=ZIP2 value=\"%s\"></td></tr>"
-"<tr><td>Last Seen<br></td><td><input size=15 name=Seen value=\"%s\"></td></tr>"
-"<tr><td>Last Modified<br></td><td><input size=15 name=Modif value=\"%s\"></td></tr>"
-"<tr><td>Type<br></td><td><input size=4 name=Type value=%c></td></tr>"
-"<tr><td>Changed<br></td><td><input size=4 name=Changed value=%d></td></tr>"
-"<tr><td>Seen<br></td><td><input size=4 name=Seen value=%d></td></tr></tbody></table>"
-"<br><input onclick=save(this.form) value=Save type=button class='btn'> "
-"<input onclick=del(this.form) value=Delete type=button class='btn'> "
-"<input name=Cancel value=Cancel type=submit class='btn'></form>";
+// Split WPDetail into 5 smaller templates to avoid ARM printf_positional limits
+// NOTE: This is AJAX-injected content, so no <style>, <body>, or </html> closing tags
+// Uses flexbox layout with inline class-based styling
+static char WPDetailOpen[] = "<h3>White Pages Record</h3><form method=post action=/Mail/WP?%s style=\"margin:0;\">";
+
+static char WPDetailSection1[] = 
+"<div style=\"background:white;padding:15px;border-radius:4px;margin:15px 0;box-shadow:0 0 5px rgba(0,0,0,0.1);\">"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Call</label>"
+"<input readonly size=10 style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%s\"></div>";
+
+static char WPDetailSection2[] = 
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Name</label>"
+"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Name value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Home BBS 1</label>"
+"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Home1 value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Home BBS 2</label>"
+"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Home2 value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">QTH 1</label>"
+"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=QTH1 value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">QTH 2</label>"
+"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=QTH2 value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">ZIP 1</label>"
+"<input style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=ZIP1 value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">ZIP 2</label>"
+"<input style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=ZIP2 value=\"%s\"></div>"
+"</div></div>";
+
+static char WPDetailSection3[] = 
+"<div style=\"background:white;padding:15px;border-radius:4px;margin:15px 0;box-shadow:0 0 5px rgba(0,0,0,0.1);\">"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Last Seen</label>"
+"<input readonly style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Last Modified</label>"
+"<input readonly style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%s\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Type</label>"
+"<input style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Type value=\"%c\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Changed</label>"
+"<input readonly style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%d\"></div>"
+"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
+"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Seen</label>"
+"<input readonly style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%d\"></div>"
+"</div></div>";
+
+static char WPDetailButtons[] = 
+"<div style=\"text-align:center;margin:20px 0;position:sticky;bottom:0;background:white;padding:12px;border-top:1px solid #e5e7eb;z-index:10;\">"
+"<input onclick=save(this.form) value=Save style=\"background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;\" type=button> "
+"<input onclick=del(this.form) value=Delete style=\"background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;\" type=button> "
+"<input name=Cancel value=Cancel style=\"background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;\" type=submit></div></form>";
 
 
-static char LostSession[] = "<html><body>"
-"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/Lost?%s>"
+static char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+COMMON_CSS_VARIABLES
+"*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;text-align:center;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;font-size:14px;}input[type=submit]:hover{background:var(--primary-dark);}@media(max-width:480px){input[type=submit]{width:calc(50%-5px);}input[type=submit]:only-of-type{width:100%;}}"
+"</style></head><body>"
+"<form method=post action=/Mail/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel><br></form>";
+"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form></body></html>";
 
 
 char * MsgEditTemplate = NULL;
@@ -786,8 +881,9 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 		UserDetailTemplate = GetTemplateFromFile(4, "UserDetail.txt");
 
-		*RLen = sprintf(Reply, UserListTemplate, Key, Key, BBSName,
-			Key, Key, Key, Key, Key, Key, Key, Key);
+		*RLen = sprintf(Reply, UserListTemplate, Key, Key,
+			Key, Key, Key, Key, Key, Key, Key, Key,
+			BBSName);
 	
 		return;
 	}
@@ -962,8 +1058,9 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 		if (MsgEditTemplate)
 		{
-			int len =sprintf(Reply, MsgEditTemplate, PageLen, PageLen, PageLen - 97, Key, Key, Key, Key, Key, 
-				BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
+			int len =sprintf(Reply, MsgEditTemplate, PageLen, PageLen, Key, Key, Key, Key, Key,
+				Key, Key, Key, Key, Key, Key, Key, Key,
+				BBSName);
 			*RLen = len;
 			return;
 		}
@@ -976,20 +1073,43 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 	if (_stricmp(NodeURL, "/Mail/EditM") == 0)
 	{
 		// Edit Message
+		// URL format: /Mail/EditM?Key?MessageNumber
 
 		char * MsgBytes;
-	
-		MsgBytes = ReadMessageFile(Session->Msg->number);
+		char * MsgnoStr;
+		char * MyContext = NULL;
+		int Msgno = 0;
+		struct MsgInfo * Msg = NULL;
 
-		// See if Multipart
-
-//		if (Msg->B2Flags & Attachments)
-//			EnableWindow(GetDlgItem(hDlg, IDC_SAVEATTACHMENTS), TRUE);
-
-		if (MsgBytes)
+		// Parse URL parameters: Context contains "Key?MessageNumber"
+		if (Context)
 		{
-			*RLen = sprintf(Reply, MsgEditPage, Key, MsgBytes);
-			free (MsgBytes);
+			// Skip the Key and get the message number
+			MsgnoStr = strtok_s(Context, "?", &MyContext);  // First token is Key
+			if (MyContext && *MyContext)  // Second token is message number
+			{
+				Msgno = atoi(MyContext);
+				if (Msgno > 0)
+					Msg = FindMessageByNumber(Msgno);
+			}
+		}
+
+		// Fall back to session if URL parsing didn't work
+		if (!Msg && Session->Msg)
+			Msg = Session->Msg;
+
+		if (Msg)
+		{
+			Session->Msg = Msg;
+			MsgBytes = ReadMessageFile(Msg->number);
+
+			if (MsgBytes)
+			{
+				*RLen = sprintf(Reply, MsgEditPage, Key, MsgBytes);
+				free (MsgBytes);
+			}
+			else
+				*RLen = sprintf(Reply, MsgEditPage, Key, "Message Not Found");
 		}
 		else
 			*RLen = sprintf(Reply, MsgEditPage, Key, "Message Not Found");
@@ -1018,7 +1138,8 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (WPTemplate)
 		{
 			int len =sprintf(Reply, WPTemplate, Key, Key, Key, Key,
-				BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
+				Key, Key, Key, Key, Key, Key, Key, Key,
+				BBSName);
 			*RLen = len;
 			return;
 		}
@@ -1058,21 +1179,53 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 int SendWPDetails(WPRec * WP, char * Reply, char * Key)
 {
-	int len = 0;
+	int len = 0, nwritten;
 	char D1[80], D2[80];
+	
+	// WP details are injected into the /Mail/WP page via AJAX.
+	// Do not prepend the global header/menu here.
+	// Return content only - CSS styling is already in the main page
+	len = 0;
+	
+	if (!Key) Key = "";
 	
 	if (WP)
 	{
 		strcpy(D1, FormatDateAndTime(WP->last_modif, FALSE));
 		strcpy(D2, FormatDateAndTime(WP->last_seen, FALSE));
 
-		len = sprintf(Reply, WPDetail, Key, WP->callsign, WP->name,
+		// Chunk 1: Opening with Key
+		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailOpen, Key);
+		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
+		len += nwritten;
+
+		// Chunk 2: Call field (1 specifier)
+		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailSection1, WP->callsign);
+		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
+		len += nwritten;
+
+		// Chunk 3: Contact info (7 specifiers: name, home1, home2, qth1, qth2, zip1, zip2)
+		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailSection2, 
+			WP->name,
 			WP->first_homebbs, WP->secnd_homebbs,
 			WP->first_qth, WP->secnd_qth,
-			WP->first_zip, WP->secnd_zip, D1, D2,
+			WP->first_zip, WP->secnd_zip);
+		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
+		len += nwritten;
+
+		// Chunk 4: Metadata (5 specifiers: seen, modif, type, changed, seen)
+		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailSection3,
+			D1, D2,
 			WP->Type,
 			WP->changed, 
 			WP->seen);
+		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
+		len += nwritten;
+
+		// Chunk 5: Buttons and closing form
+		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailButtons);
+		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
+		len += nwritten;
 	}
 	return(len);	
 }
@@ -1159,29 +1312,77 @@ VOID SaveWP(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, in
 
 int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 {	
+	const int ReplyCap = 250000;
 	int BBSNo = 1, x, y, len = 0;
 	char D1[80], D2[80], D3[80];
 	struct UserInfo * USER;
 	int i = 0, n;
 	struct UserInfo * bbs[NBBBS+2] = {0}; 
 
+	// Message details are injected into the /Mail/Msgs page via AJAX.
+	// Do not prepend the global header/menu here.
+	len = 0;
+
 	if (Msg)
 	{
 		char EmailFromLine[256] = "";
+		char MsgFrom[sizeof(Msg->from) + 1];
+		char MsgTo[sizeof(Msg->to) + 1];
+		char MsgTitle[sizeof(Msg->title) + 1];
+		char MsgBid[sizeof(Msg->bid) + 1];
+		char MsgVia[sizeof(Msg->via) + 1];
+		char MsgEmailFrom[sizeof(Msg->emailfrom) + 1];
+		int nwritten;
+
+		memcpy(MsgFrom, Msg->from, sizeof(Msg->from));
+		MsgFrom[sizeof(Msg->from)] = 0;
+		memcpy(MsgTo, Msg->to, sizeof(Msg->to));
+		MsgTo[sizeof(Msg->to)] = 0;
+		memcpy(MsgTitle, Msg->title, sizeof(Msg->title));
+		MsgTitle[sizeof(Msg->title)] = 0;
+		memcpy(MsgBid, Msg->bid, sizeof(Msg->bid));
+		MsgBid[sizeof(Msg->bid)] = 0;
+		memcpy(MsgVia, Msg->via, sizeof(Msg->via));
+		MsgVia[sizeof(Msg->via)] = 0;
+		memcpy(MsgEmailFrom, Msg->emailfrom, sizeof(Msg->emailfrom));
+		MsgEmailFrom[sizeof(Msg->emailfrom)] = 0;
 
 		strcpy(D1, FormatDateAndTime((time_t)Msg->datecreated, FALSE));
 		strcpy(D2, FormatDateAndTime((time_t)Msg->datereceived, FALSE));
 		strcpy(D3, FormatDateAndTime((time_t)Msg->datechanged, FALSE));
 
-//		if (Msg->emailfrom[0])
-			sprintf(EmailFromLine, "Email From <input style=\"width:320px;\" name=EFROM value=%s><br>", Msg->emailfrom);
+		// Build Email From field in new grid format
+		if (Msg->emailfrom[0])
+			snprintf(EmailFromLine, sizeof(EmailFromLine), 
+				"<div class=\"form-field form-row-full\"><label>Email From</label><input name=EFROM value=\"%s\"></div>", 
+				MsgEmailFrom);
 
-		len = sprintf(Reply, MailDetailPage, Msg->number, Key,
-			Msg->from, D1, 
+		// Ensure Key is never NULL to prevent SIGSEGV in snprintf
+		if (!Key) Key = "";
+		
+		// Build response incrementally to avoid large format string limits on ARM
+		// 1. CSS (no format specifiers)
+		len += snprintf(&Reply[len], ReplyCap - len, "%s", MailDetailCSS);
+		if (len >= ReplyCap - 1) return len;
+		
+		// 2. Header (message number and form action)
+		nwritten = snprintf(&Reply[len], ReplyCap - len, MailDetailHeader, Msg->number, Key);
+		if (nwritten < 0 || nwritten >= (ReplyCap - len)) return len;
+		len += nwritten;
+		
+		// 3. Form fields in new grid layout order
+		// Row 1: From, Sent, Type
+		// Row 2: To, Received, Status
+		// Row 3: BID, Last Changed, Size
+		// Row 4: Email From (if present)
+		// Row 5: VIA
+		// Row 6: Title
+		nwritten = snprintf(&Reply[len], ReplyCap - len, MailDetailFormFields,
+			MsgFrom, D1,
 			(Msg->type == 'B')?sel:"",
 			(Msg->type == 'P')?sel:"",
 			(Msg->type == 'T')?sel:"",
-			Msg->to, D2,
+			MsgTo, D2,
 			(Msg->status == 'N')?sel:"",
 			(Msg->status == 'Y')?sel:"",
 			(Msg->status == 'F')?sel:"",
@@ -1189,9 +1390,17 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			(Msg->status == 'H')?sel:"",
 			(Msg->status == 'D')?sel:"",
 			(Msg->status == '$')?sel:"",
-			Msg->bid, D3, Msg->length, EmailFromLine, Msg->via, Msg->title,
+			MsgBid, D3, Msg->length,
+			EmailFromLine, MsgVia, MsgTitle);
+		if (nwritten < 0 || nwritten >= (ReplyCap - len)) return len;
+		len += nwritten;
+		
+		// 4. Buttons and links
+		nwritten = snprintf(&Reply[len], ReplyCap - len, MailDetailButtons,
 			Key, Msg->number, Key, Key,
 			(Msg->B2Flags & Attachments)?"":"disabled");
+		if (nwritten < 0 || nwritten >= (ReplyCap - len)) return len;
+		len += nwritten;
 
 		// Get a sorted list of BBS records
 
@@ -1210,7 +1419,18 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 		
 		for (y = 0; y < NBBBS/8; y++)
 		{
-			len += sprintf(&Reply[len],"<tr>");
+			if (len >= ReplyCap - 1)
+				break;
+
+			nwritten = snprintf(&Reply[len], ReplyCap - len, "<tr>");
+			if (nwritten < 0)
+				break;
+			if (nwritten >= (ReplyCap - len))
+			{
+				len = ReplyCap - 1;
+				break;
+			}
+			len += nwritten;
 			for (x= 0; x < 8; x++)
 			{
 				char * Colour  = NotThisOne;	
@@ -1224,19 +1444,62 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 						if (check_fwd_bit(Msg->forw, bbs[n]->BBSNumber))
 								Colour = Sent;
 				
-					len += sprintf(&Reply[len],"<td style=\"background-color: %s;\"onclick=ck(\"%d\")>%s</td>",
+					nwritten = snprintf(&Reply[len], ReplyCap - len, "<td style=\"background-color: %s;\"onclick=ck(\"%d\")>%.6s</td>",
 						Colour, bbs[n]->BBSNumber, bbs[n]->Call);
+					if (nwritten < 0)
+						break;
+					if (nwritten >= (ReplyCap - len))
+					{
+						len = ReplyCap - 1;
+						break;
+					}
+					len += nwritten;
 				}
 				else
-					len += sprintf(&Reply[len], "<td>&nbsp;</td>");
+				{
+					nwritten = snprintf(&Reply[len], ReplyCap - len, "<td>&nbsp;</td>");
+					if (nwritten < 0)
+						break;
+					if (nwritten >= (ReplyCap - len))
+					{
+						len = ReplyCap - 1;
+						break;
+					}
+					len += nwritten;
+				}
 
 				n++;
+
+				if (len >= ReplyCap - 1)
+					break;
 			}
-			len += sprintf(&Reply[len],"</tr>");
+			if (len >= ReplyCap - 1)
+				break;
+
+			nwritten = snprintf(&Reply[len], ReplyCap - len, "</tr>");
+			if (nwritten < 0)
+				break;
+			if (nwritten >= (ReplyCap - len))
+			{
+				len = ReplyCap - 1;
+				break;
+			}
+			len += nwritten;
 			if (n > i)
 				break;
 		}
-		len += sprintf(&Reply[len], "%s", MailDetailTail);
+
+		if (len < ReplyCap - 1)
+		{
+			nwritten = snprintf(&Reply[len], ReplyCap - len, "%s", MailDetailTail);
+			if (nwritten > 0)
+			{
+				if (nwritten >= (ReplyCap - len))
+					len = ReplyCap - 1;
+				else
+					len += nwritten;
+			}
+		}
 	}
 	return(len);	
 }
@@ -2498,10 +2761,14 @@ VOID SendFwdDetails(struct UserInfo * User, char * Reply, int * ReplyLen, char *
 	SetMultiStringValue(FWDInfo->Haddresses, HRB);
 	SetMultiStringValue(FWDInfo->HaddressesP, HRP);
 
+	// Forwarding details are injected into the /Mail/FWD page via AJAX.
+	// Do not prepend the global header/menu here.
+	Len = 0;
+
 	if (FwdDetailTemplate == NULL)
 		FwdDetailTemplate = GetTemplateFromFile(3, "FwdDetail.txt");
 		
-	Len = sprintf(Reply, FwdDetailTemplate, User->Call,
+	Len += sprintf(&Reply[Len], FwdDetailTemplate, User->Call,
 		CountMessagestoForward (User), Key,
 		TO, AT, TIMES , FWD, HRB, HRP, 
 		(FWDInfo->BBSHA) ? FWDInfo->BBSHA : "", 
@@ -2543,6 +2810,10 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	char * ptr = FBBFilters;
 	FBBFilter * Filter = Filters;
 
+	// ConfigTemplate includes its own page header/navigation.
+	// Avoid prepending MailPage here or the menu can be rendered twice.
+	Len = 0;
+
 	SetMultiStringValue(RejFrom, RF);
 	SetMultiStringValue(RejTo, RT);
 	SetMultiStringValue(RejAt, RA);
@@ -2553,21 +2824,21 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	SetMultiStringValue(HoldBID, HB);
 	SetMultiStringValue(SendWPAddrs, WPTO);
 
-	// set up FB style fiters
+	// set up FBB style filters
 	
 	ptr += sprintf(ptr, 
-		"<table><tr><th>Action</th><th>Type</th><th>From</th><th>To</th><th>@BBS</th><th>Bid</th><th>Max Size</th></tr>");
+		"<div class=table-container><table><thead><tr><th>Action</th><th>Type</th><th>From</th><th>To</th><th>@BBS</th><th>Bid</th><th>Max Size</th></tr></thead><tbody>");
 
 	while(Filter)
 	{
 		ptr += sprintf(ptr, "<tr>"	
-		"<td><input type=text name=Action style=\"text-transform: uppercase\"maxlength=2 size=2 value=%c></td>"
-		"<td><input type=text name=Type style=\"text-transform: uppercase\"maxlength=2 size=2 value=%c></td>"
-		"<td><input type=text name=From style=\"text-transform: uppercase\" maxlength=7 size=7 value=%s></td>"
-		"<td><input type=text name=TO style=\"text-transform: uppercase\" maxlength=7 size=7 value=%s></td>"
-		"<td><input type=text name=AT style=\"text-transform: uppercase\" maxlength=7 size=7 value=%s></td>"
-		"<td><input type=text name=BID style=\"text-transform: uppercase\" maxlength=13 size=13 value=%s></td>"
-		"<td><input type=text name=MaxLen maxlength=6 size=6 value=%d></td></tr>",
+		"<td><input type=text class=uppercase name=Action maxlength=2 value=\"%c\"></td>"
+		"<td><input type=text class=uppercase name=Type maxlength=2 value=\"%c\"></td>"
+		"<td><input type=text class=uppercase name=From maxlength=7 value=\"%s\"></td>"
+		"<td><input type=text class=uppercase name=TO maxlength=7 value=\"%s\"></td>"
+		"<td><input type=text class=uppercase name=AT maxlength=7 value=\"%s\"></td>"
+		"<td><input type=text class=uppercase name=BID maxlength=13 value=\"%s\"></td>"
+		"<td><input type=text name=MaxLen maxlength=6 value=\"%d\"></td></tr>",
 			Filter->Action, Filter->Type, Filter->From, Filter->TO, Filter->AT, Filter->BID, Filter->MaxLen);
 
 		Filter = Filter->Next;
@@ -2578,21 +2849,22 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	for (i = 0; i < 5; i++)
 	{
 		ptr += sprintf(ptr, "<tr>"
-		"<td><input type=text name=Action style=\"text-transform: uppercase\"maxlength=2 size=2 value=%c></td>"
-		"<td><input type=text name=Type style=\"text-transform: uppercase\"maxlength=2 size=2 value=%c></td>"
-		"<td><input type=text name=From style=\"text-transform: uppercase\" maxlength=7 size=7 value=%s></td>"
-		"<td><input type=text name=TO style=\"text-transform: uppercase\" maxlength=7 size=7 value=%s></td>"
-		"<td><input type=text name=AT style=\"text-transform: uppercase\" maxlength=7 size=7 value=%s></td>"
-		"<td><input type=text name=BID style=\"text-transform: uppercase\" maxlength=13 size=13 value=%s></td>"
-		"<td><input type=text name=MaxLen maxlength=6 size=6 value=%d></td></tr>", ' ', ' ', "", "", "", "", 0);
+		"<td><input type=text class=uppercase name=Action maxlength=2 value=\"%c\"></td>"
+		"<td><input type=text class=uppercase name=Type maxlength=2 value=\"%c\"></td>"
+		"<td><input type=text class=uppercase name=From maxlength=7 value=\"%s\"></td>"
+		"<td><input type=text class=uppercase name=TO maxlength=7 value=\"%s\"></td>"
+		"<td><input type=text class=uppercase name=AT maxlength=7 value=\"%s\"></td>"
+		"<td><input type=text class=uppercase name=BID maxlength=13 value=\"%s\"></td>"
+		"<td><input type=text name=MaxLen maxlength=6 value=\"%d\"></td></tr>", ' ', ' ', "", "", "", "", 0);
 	}
 
-	ptr += sprintf(ptr, "</table>");
+	ptr += sprintf(ptr, "</tbody></table></div>");
 
 	Debugprintf("%d", strlen(FBBFilters));
 
-	Len = sprintf(Reply, ConfigTemplate,
-		BBSName, Key, Key, Key, Key, Key, Key, Key, Key, Key,
+	Len += sprintf(&Reply[Len], ConfigTemplate,
+		Key, Key, Key, Key, Key, Key, Key, Key,
+		BBSName, Key,
 		BBSName, SYSOPCall, HRoute,
 		(SendBBStoSYSOPCall) ? CHKD  : UNC,
 		BBSApplNum, MaxStreams,
@@ -2631,6 +2903,9 @@ VOID SendHouseKeeping(char * Reply, int * ReplyLen, char * Key)
 	char FromList[1000]= "", ToList[1000]= "", AtList[1000] = "";
 	char Line[80];
 	struct Override ** Call;
+	int Len;
+
+	Len = SendHeader(Reply, Key);
 
 	if (LTFROM)
 	{
@@ -2664,8 +2939,8 @@ VOID SendHouseKeeping(char * Reply, int * ReplyLen, char * Key)
 			}
 		}
 
-		*ReplyLen = sprintf(Reply, HousekeepingTemplate, 
-			 BBSName, Key, Key, Key, Key, Key, Key, Key, Key, Key,
+		*ReplyLen = Len + sprintf(&Reply[Len], HousekeepingTemplate, 
+			 BBSName, Key,
 			MaintTime, MaintInterval, MaxMsgno, BidLifetime, BBSLogAge, UserLifetime,
 			(DeletetoRecycleBin) ? CHKD  : UNC,
 			(SendNonDeliveryMsgs) ? CHKD  : UNC,
@@ -2694,11 +2969,17 @@ VOID SendWelcomePage(char * Reply, int * ReplyLen, char * Key)
 VOID SendFwdMainPage(char * Reply, int * RLen, char * Key)
 {
 	char ALIASES[16384];
+	int Len;
+
+	// FwdTemplate is a full page template that includes its own header/navigation.
+	// Avoid prepending MailPage here or the menu can be rendered twice.
+	Len = 0;
 
 	SetMultiStringValue(AliasText, ALIASES);
 
-	*RLen = sprintf(Reply, FwdTemplate, Key, Key, BBSName,
+	*RLen = Len + sprintf(&Reply[Len], FwdTemplate, Key, Key,
 		Key, Key, Key, Key, Key, Key, Key, Key,
+		BBSName,
 		Key, MaxTXSize, MaxRXSize, MaxAge,
 		(WarnNoRoute) ? CHKD  : UNC, 
 		(Localtime) ? CHKD  : UNC,
@@ -2715,7 +2996,17 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 	int Len, i;
 
 	Len = SendHeader(Reply, Key);
-	Len += sprintf(&Reply[Len], UIHddr, Key, MailForText);
+	Len += sprintf(&Reply[Len], "<style>body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; } h3 { text-align: center; margin-bottom: 30px; } .form-section { background: white; padding: 20px; border-radius: 4px; box-shadow: 0 0 5px rgba(0,0,0,0.1); margin: 20px 0; } .form-row { display: flex; flex-wrap: wrap; margin: 15px 0; gap: 10px; align-items: flex-start; } .form-row label { flex: 1 1 150px; font-weight: bold; display: block; } .form-row input[type=text] { flex: 2 1 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; } .form-row p { margin: 0; font-size: 0.9em; color: #666; flex: 100%%; } .port-row { display: flex; flex-wrap: wrap; margin: 15px 0; gap: 10px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; align-items: center; } .port-row-header { display: flex; flex-wrap: wrap; margin: 10px 0; gap: 15px; font-weight: bold; font-size: 0.9em; } .port-row-label { flex: 0 1 120px; } .port-row input[type=checkbox] { margin: 0; } .port-row input[type=text] { flex: 2 1 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; } .port-row span { flex: 1 1 120px; } .buttons { text-align: center; margin: 30px 0; } .buttons input { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 0 5px; } .buttons input:hover { background: #0056b3; } @media (max-width: 768px) { .form-row { flex-direction: column; } .form-row label { flex: none; } .form-row input[type=text] { flex: none; width: 100%%; } .port-row { flex-direction: column; align-items: flex-start; } .port-row input[type=text] { width: 100%%; flex: none; } .port-row-header { flex-direction: column; align-items: flex-start; } }</style>");
+	Len += sprintf(&Reply[Len], UIHddr);
+	Len += sprintf(&Reply[Len], "<form method=post action=/Mail/UI?%s>"
+		"<div class=form-section>"
+		"<div class=form-row><label>Mailfor Header</label><input type=text value=\"%s\" name=MailFor></div>"
+		"<p style=\"margin: 10px 0 0 0; color: #666; font-size: 0.9em;\">(use \\r to insert newline in message)</p>"
+		"</div>"
+		"<div class=form-section>"
+		"<div class=port-row-header>"
+		"<span class=port-row-label>Enable</span><span style=\"flex: 2 1 200px;\">Port Path</span><span>Send MailFor</span><span>Send Headers</span><span>Send Empty</span>"
+		"</div>", Key, MailForText);
 
 	for (i = 1; i <= GetNumberofPorts(); i++)
 	{
@@ -2792,33 +3083,25 @@ VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 
 		if (!conn->Active)
 		{
-			strcpy(msg,"Idle&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-								 "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-								 "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-								 "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-								 "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\r\n");
+			Len += sprintf(&Reply[Len], "<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\">Idle</td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td></tr>");
 		}
 		else
 		{
 			{
 				if (conn->UserPointer == 0)
-					strcpy(msg,"Logging in\r\n");
+				{
+					Len += sprintf(&Reply[Len], "<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><input type=radio name=call value=%d></td><td style=\"padding: 8px; border: 1px solid #ddd;\">Logging in</td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td></tr>", conn->BPQStream);
+				}
 				else
 				{
 					strcpy(Name, conn->UserPointer->Name);
 					Name[9] = 0;
 
-					i=sprintf_s(msg, sizeof(msg), "%-12s  %-9s  %3d  %6d%6d%6d\r\n",
-						Name,
-						conn->UserPointer->Call,
-						conn->BPQStream,
-						conn->OutputQueueLength - conn->OutputGetPointer, conn->bytesSent, conn->bytesRxed);
+					Len += sprintf(&Reply[Len], "<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><input type=radio name=call value=%d></td><td style=\"padding: 8px; border: 1px solid #ddd;\">%s</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%s</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td></tr>",
+						conn->BPQStream, Name, conn->UserPointer->Call, conn->BPQStream, conn->OutputQueueLength - conn->OutputGetPointer, conn->bytesSent, conn->bytesRxed);
 				}
 			}
 		}
-
-		ConvertSpaceTonbsp(msg);
-		Len += sprintf(&Reply[Len], StatusLine, conn->BPQStream, msg);
 	}
 
 	n = 0;
@@ -2954,10 +3237,14 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 	if (i == 0)
 		ASSID[0] = 0;
 
+	// User details are injected into the /Mail/Users page via AJAX.
+	// Do not prepend the global header/menu here, or it renders a duplicate menu inside #main.
+	Len = 0;
+
 	if (!UserDetailTemplate)
 		UserDetailTemplate = GetTemplateFromFile(4, "UserDetail.txt");
 
-	Len = sprintf(Reply, UserDetailTemplate, Key, User->Call,
+	Len += sprintf(&Reply[Len], UserDetailTemplate, Key, User->Call,
 		(flags & F_BBS)?CHKD:UNC,
 		(flags & F_EMAIL)?CHKD:UNC,
 		(flags & F_PMS)?CHKD:UNC,

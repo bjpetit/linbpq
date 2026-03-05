@@ -1046,7 +1046,8 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-eq
 		"<a href='javascript:xxx(\"KillRestart\");'>Kill and Restart TNC</a>"
 		"</div></span>";
 */
-char WebProcTemplate[] = "<html><meta http-equiv=expires content=0>"
+char WebProcTemplate[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0>"
+		"<style>body { font-family: monospace; margin: 10px; } h2 { text-align: center; margin-bottom: 0.2em; } table { border-collapse: collapse; margin: 20px auto; width: 100%; max-width: 700px; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%; max-width: 600px; display: block; margin: 20px auto; } .dropdown { position: relative; display: inline-block; } .dropbtn { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; } .dropdown-content { display: none; position: absolute; background-color: #f9f9f9; min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); padding: 12px 16px; z-index: 1; } .dropdown-content a { color: black; padding: 8px 0; display: block; text-decoration: none; } .dropdown-content a:hover { background-color: #e9ecef; } .dropdown:hover .dropdown-content { display: block; }</style>"
 		"<link rel='stylesheet' href='webproc.css'>\r\n"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
@@ -1064,8 +1065,8 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0>"
 		"function Refresh( )\n"
 		"{location.reload()}\n"
 		"</script>\r\n"
-		"</head><title>%s</title></head><body id=Text onload=\"ScrollOutput()\">\r\n"
-		"<h2 style=\"margin-bottom: 0.2em; text-align:center\">%s</h2>";
+		"</head><body id=Text onload=\"ScrollOutput()\">\r\n"
+		"<h2>%s</h2>";
 
 char Menubit[] = "<span class='dropdown' style=\"position: absolute; left: 10;top: 12;\">"
 		"<button class='dropbtn'>Actions</button>\r\n"
