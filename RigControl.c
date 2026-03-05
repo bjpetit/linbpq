@@ -8269,7 +8269,7 @@ void HLGetMode(SOCKET Sock, struct RIGINFO * RIG, char sep)
 
 void HLGetFreq(SOCKET Sock, struct RIGINFO * RIG, char sep)
 {
-	char Resp[80];
+	char Resp[100];
 	int Len;
 	char freqval[64];
 	double freq = atof(RIG->Valchar) * 1000000.0;
@@ -8278,7 +8278,7 @@ void HLGetFreq(SOCKET Sock, struct RIGINFO * RIG, char sep)
 	strlop(freqval, '.');
 
 	if (sep)
-		Len = sprintf(Resp, "get_freq:%cFrequency: %s%cRPRT 0\n", sep, freqval, sep);
+		Len = snprintf(Resp, sizeof(Resp), "get_freq:%cFrequency: %s%cRPRT 0\n", sep, freqval, sep);
 	else
 		Len = sprintf(Resp, "%s\n", freqval);
 
@@ -8487,7 +8487,7 @@ VOID HAMLIBThread(void * Param)
 	// Opens sockets and looks for data
 
 	struct RIGPORTINFO * PORT = (struct RIGPORTINFO * )Param;
-	char Msg[255];
+	char Msg[320];
 	int err, i, ret;
 	u_long param=1;
 	BOOL bcopt=TRUE;
@@ -8531,7 +8531,7 @@ VOID HAMLIBThread(void * Param)
 
 			err = WSAGetLastError();
 
-   			sprintf(Msg, "Connect Failed for HAMLIB socket - error code = %d Addr %s\r\n", err, PORT->IOBASE);
+   			snprintf(Msg, sizeof(Msg), "Connect Failed for HAMLIB socket - error code = %d Addr %s\r\n", err, PORT->IOBASE);
 
 			WritetoConsole(Msg);
 				PORT->Alerted = TRUE;
@@ -8583,7 +8583,7 @@ VOID HAMLIBThread(void * Param)
 			if (FD_ISSET(PORT->remoteSock, &errorfs))
 			{
 Lost:	
-				sprintf(Msg, "HAMLIB Connection lost for Addr %s\r\n", PORT->IOBASE);
+				snprintf(Msg, sizeof(Msg), "HAMLIB Connection lost for Addr %s\r\n", PORT->IOBASE);
 				WritetoConsole(Msg);
 
 				PORT->CONNECTED = FALSE;
@@ -8602,7 +8602,7 @@ Lost:
 		{
 		}
 	}
-	sprintf(Msg, "HAMLIB Thread Terminated Addr %s\r\n", PORT->IOBASE);
+	snprintf(Msg, sizeof(Msg), "HAMLIB Thread Terminated Addr %s\r\n", PORT->IOBASE);
 	WritetoConsole(Msg);
 }
 
@@ -8815,7 +8815,7 @@ VOID FLRIGPoll(struct RIGPORTINFO * PORT)
 
 			if (GetPermissionToChange(PORT, RIG))
 			{
-				char cmd[80];
+				char cmd[130];
 				double freq;
 
 				if (RIG->RIG_DEBUG)
@@ -8827,7 +8827,7 @@ VOID FLRIGPoll(struct RIGPORTINFO * PORT)
 				
 				memcpy(&PORT->ScanEntry, PORT->FreqPtr, sizeof(struct ScanEntry));
 
-				sprintf(cmd, "<double>%s</double>", PORT->FreqPtr->Cmd1Msg);
+				snprintf(cmd, sizeof(cmd), "<double>%s</double>", PORT->FreqPtr->Cmd1Msg);
 				FLRIGSendCommand(PORT, "rig.set_vfo", cmd);
 
 				// Update display as we don't get a response
@@ -8942,7 +8942,7 @@ VOID FLRIGThread(VOID * Param)
 	// Opens sockets and looks for data
 	
 	struct RIGPORTINFO * PORT = (struct RIGPORTINFO *)Param;
-	char Msg[255];
+	char Msg[320];
 	int err, i, ret;
 	u_long param=1;
 	BOOL bcopt=TRUE;
@@ -9039,7 +9039,7 @@ VOID FLRIGThread(VOID * Param)
 			if (FD_ISSET(PORT->remoteSock, &errorfs))
 			{
 Lost:	
-				sprintf(Msg, "FLRIG Connection lost for Port %s\r\n", PORT->IOBASE);
+				snprintf(Msg, sizeof(Msg), "FLRIG Connection lost for Port %s\r\n", PORT->IOBASE);
 				WritetoConsole(Msg);
 
 				PORT->CONNECTED = FALSE;
@@ -9056,7 +9056,7 @@ Lost:
 		{
 		}
 	}
-	sprintf(Msg, "FLRIG Thread Terminated Port %s\r\n", PORT->IOBASE);
+	snprintf(Msg, sizeof(Msg), "FLRIG Thread Terminated Port %s\r\n", PORT->IOBASE);
 	WritetoConsole(Msg);
 }
 
@@ -9892,7 +9892,7 @@ VOID RTLUDPPoll(struct RIGPORTINFO * PORT)
 
 VOID ConnecttoRTLUDP(struct RIGPORTINFO * PORT)
 {
-	char Msg[255];
+	char Msg[320];
 	int i;
 	u_long param=1;
 	BOOL bcopt=TRUE;

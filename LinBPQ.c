@@ -191,7 +191,7 @@ extern UCHAR LogDirectory[260];
 extern UCHAR ConfigDirectory[260];
 
 // overrides from params
-UCHAR LogDir[260] = "";
+UCHAR LogDir[270] = "";
 UCHAR ConfigDir[260] = "";
 UCHAR DataDir[260] = "";
 
@@ -254,7 +254,7 @@ extern char BadWordsName[MAX_PATH];
 extern char NTSAliasesPath[MAX_PATH];
 extern char NTSAliasesName[MAX_PATH];
 
-extern char BaseDir[MAX_PATH];
+extern char BaseDir[290];
 extern char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
 extern char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
 
@@ -573,7 +573,7 @@ extern struct WL2KInfo * WL2KReports;
 int InitDone;
 char pgm[256] = "LINBPQ";
 
-char SESSIONHDDR[80] = "";
+char SESSIONHDDR[120] = "";
 int SESSHDDRLEN = 0;
 
 
@@ -600,7 +600,7 @@ extern UCHAR PWLen;
 extern char PWTEXT[];
 extern int ISPort;
 
-extern char ChatConfigName[250];
+extern char ChatConfigName[290];
 
 BOOL EventsEnabled = 0;
 
@@ -972,7 +972,7 @@ int main(int argc, char * argv[])
 
 	// Make sure logs directory exists
 
-	sprintf(LogDir, "%s/logs", LogDirectory);
+	snprintf((char*)LogDir, sizeof(LogDir), "%s/logs", LogDirectory);
 
 #ifdef WIN32
 	CreateDirectory(LogDir, NULL);
@@ -993,10 +993,10 @@ int main(int argc, char * argv[])
 			return (0);
 	}
 
-	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for Linux (", TextVerstring);
+	SESSHDDRLEN = snprintf(SESSIONHDDR, sizeof(SESSIONHDDR), "G8BPQ Network System %s for Linux (", TextVerstring);
 
 #ifdef MACBPQ
-	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for MAC (", TextVerstring);
+	SESSHDDRLEN = snprintf(SESSIONHDDR, sizeof(SESSIONHDDR), "G8BPQ Network System %s for MAC (", TextVerstring);
 #endif
 #ifdef FREEBSD
 	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for FreeBSD (", TextVerstring);
@@ -1081,7 +1081,7 @@ int main(int argc, char * argv[])
 
 		printf("Starting Chat\n");
 
-		sprintf (ChatConfigName, "%s/chatconfig.cfg", BPQDirectory);
+		snprintf(ChatConfigName, sizeof(ChatConfigName), "%s/chatconfig.cfg", BPQDirectory);
 		printf("Config File is %s\n", ChatConfigName);
 
 		if (stat(ChatConfigName, &STAT) == -1)
@@ -1133,7 +1133,7 @@ int main(int argc, char * argv[])
 
 		printf("Starting Mail\n");
 
-		sprintf (ConfigName, "%s/linmail.cfg", BPQDirectory);
+		snprintf(ConfigName, sizeof(ConfigName), "%s/linmail.cfg", BPQDirectory);
 		printf("Config File is %s\n", ConfigName);
 
 		if (stat(ConfigName, &STAT) == -1)
@@ -1159,7 +1159,7 @@ int main(int argc, char * argv[])
 
 		// See if we need to warn of possible problem with BaseDir moved by installer
 
-		sprintf(BaseDir, "%s", BPQDirectory);
+		snprintf(BaseDir, sizeof(BaseDir), "%s", BPQDirectory);
 
 
 		// Set up file and directory names

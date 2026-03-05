@@ -30,6 +30,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <time.h>
 #include "kernelresource.h"
 
+#include "common_web_components.h"
+
 #include "tncinfo.h"
 
 #include "bpqaprs.h"
@@ -648,7 +650,7 @@ Dll BOOL APIENTRY Init_APRS()
 
 			if (Shared != (void *)APRSSHAREDMEMORYBASE)
 			{
-				printf("Map APRS Shared Memory Allocated at %x\n", Shared);
+				printf("Map APRS Shared Memory Allocated at %p\n", Shared);
 				Shared = NULL;
 			}
 
@@ -663,7 +665,7 @@ Dll BOOL APIENTRY Init_APRS()
 	{
 		printf("APRS not using shared memory\n");
 		Shared = malloc(SharedMemorySize);
-		printf("APRS Non-Shared Memory Allocated at %x\n", Shared);
+		printf("APRS Non-Shared Memory Allocated at %p\n", Shared);
 	}
 
 #else
@@ -2492,9 +2494,9 @@ VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlus
 {
 	if (_memicmp(Query, "APRSS", 5) == 0)
 	{
-		char Message[255];
+		char Message[270];
 	
-		sprintf(Message, ":%-9s:%s", Origin, StatusMsg);
+		snprintf(Message, sizeof(Message), ":%-9s:%s", Origin, StatusMsg);
 		SendAPRSMessage(Message, Port);
 
 		return;
@@ -2995,7 +2997,7 @@ VOID APRSISThread(void * Report)
 {
 	// Receive from core server
 
-	char Signon[500];
+	char Signon[1100];
 	unsigned char work[4];
 
 	struct sockaddr_in sinx; 
@@ -3020,10 +3022,10 @@ VOID APRSISThread(void * Report)
 #endif
 
 	if (ISFilter[0])
-		sprintf(Signon, "user %s pass %d vers BPQ32 %s filter %s\r\n",
+		snprintf(Signon, sizeof(Signon), "user %s pass %d vers BPQ32 %s filter %s\r\n",
 			APRSCall, ISPasscode, TextVerstring, ISFilter);
 	else
-		sprintf(Signon, "user %s pass %d vers BPQ32 %s\r\n",
+		snprintf(Signon, sizeof(Signon), "user %s pass %d vers BPQ32 %s\r\n",
 			APRSCall, ISPasscode, TextVerstring);
 
 
@@ -6433,7 +6435,7 @@ char SymbolText[192][20] = {
 
 char * DoSummaryLine(struct STATIONRECORD * ptr, int n, int Width)
 {
-	static char Line2[80];
+	static char Line2[320];
 	int x;
 	char XCall[256];
 	char * ptr1 = ptr->Callsign;
@@ -6460,7 +6462,7 @@ char * DoSummaryLine(struct STATIONRECORD * ptr, int n, int Width)
 	// Object Names can contain spaces
 	
 
-	sprintf(Line2, "<td><a href=""find.cgi?call=%s"">%s</a></td>",
+	snprintf(Line2, sizeof(Line2), "<td><a href=""find.cgi?call=%s"">%s</a></td>",
 		XCall, ptr->Callsign);
 
 	x = ++n/Width;
@@ -6474,7 +6476,7 @@ char * DoSummaryLine(struct STATIONRECORD * ptr, int n, int Width)
 
 char * DoDetailLine(struct STATIONRECORD * ptr, BOOL LocalTime, BOOL KM)
 {
-	static char Line[512];
+	static char Line[640];
 	double Lat = ptr->Lat;
 	double Lon = ptr->Lon;
 	char NS='N', EW='E';
@@ -6534,7 +6536,7 @@ char * DoDetailLine(struct STATIONRECORD * ptr, BOOL LocalTime, BOOL KM)
 	Degrees = Lat;
 	Minutes = Lat * 60.0 - (60 * Degrees);
 
-	sprintf(LatString,"%2d°%05.2f'%c", Degrees, Minutes, NS);
+	sprintf(LatString,"%2d\xB0%05.2f'%c", Degrees, Minutes, NS);
 		
 	Degrees = Lon;
 
@@ -6542,12 +6544,12 @@ char * DoDetailLine(struct STATIONRECORD * ptr, BOOL LocalTime, BOOL KM)
 
 	Minutes = Lon * 60 - 60 * Degrees;
 
-	sprintf(LongString, "%3d°%05.2f'%c",Degrees, Minutes, EW);
+	sprintf(LongString, "%3d\xB0%05.2f'%c",Degrees, Minutes, EW);
 
 	sprintf(DistString, "%6.1f", myDistance(ptr->Lat, ptr->Lon, KM));
 	sprintf(BearingString, "%3.0f", myBearing(ptr->Lat, ptr->Lon));
 	
-	sprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>\r\n",
+	snprintf(Line, sizeof(Line), "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>\r\n",
 			XCall, ptr->Callsign, 
 			(strchr(ptr->Path, '*'))?  "*": "", &SymbolText[ptr->iconRow << 4 | ptr->iconCol][0], LatString, LongString, DistString, BearingString, Time);
 
@@ -6707,7 +6709,7 @@ char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key, BOOL KM)
 		Degrees = Lat;
 		Minutes = Lat * 60.0 - (60 * Degrees);
 
-		sprintf(LatString,"%2d°%05.2f'%c",Degrees, Minutes, NS);
+		sprintf(LatString,"%2d\xB0%05.2f'%c",Degrees, Minutes, NS);
 		
 		Degrees = Lon;
 
@@ -6715,7 +6717,7 @@ char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key, BOOL KM)
 
 		Minutes = Lon * 60 - 60 * Degrees;
 
-		sprintf(val,"%s %3d°%05.2f'%c", LatString, Degrees, Minutes, EW);
+		sprintf(val,"%s %3d\xB0%05.2f'%c", LatString, Degrees, Minutes, EW);
 
 		return _strdup(val);
 	}
@@ -7236,64 +7238,59 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	free (SaveMsgBytes);
 }
 
-char WebHeader[] = "<HTML><HEAD><meta http-equiv=\"expires\" content=\"-1\">"
-	"<meta http-equiv=\"pragma\" content=\"no-cache\">"
-	"<TITLE>APRS Messaging</TITLE></HEAD>"
-	"<BODY alink=\"#008000\" bgcolor=\"#F5F5DC\" link=\"#0000FF\" vlink=\"#000080\"  background=/background.jpg>"
-	"<table  align=center border=2 cellpadding=2 cellspacing=2 bgcolor=white><tr>"
-	"<td align=center><a href=/aprs.html>APRS Map</a></td>"
-	"<td align=center><a href=/aprs/msgs>Received Messages</a></td>"
-	"<td align=center><a href=/aprs/txmsgs>Sent Messages</a></td>"
-	"<td align=center><a href=/aprs/msgs/entermsg>Send Message</a></td>"
-	"<td align=center><a href=/aprs/all.html>Station Pages</a></td>"
-	"<td align=center><a href=/Node/NodeMenu.html>Return to Node Pages</a></td>"
-	"</tr></table>"
-	"<center><h2>%s's Messages</h2><TABLE BORDER=\"3\" CELLSPACING=\"2\" CELLPADDING=\"1\">"
-	"<tr><td>From</td><td>To</td><td>Seq</td><td>Time</td><td>&nbsp;</td><td>Message</td></tr>";
+#define APRS_MSG_PAGE_STYLE COMMON_APRS_MESSAGE_PAGE_CSS_FMT
 
-char WebTXHeader[] = "<HTML><HEAD><meta http-equiv=\"expires\" content=\"-1\">"
-	"<meta http-equiv=\"pragma\" content=\"no-cache\">"
-	"<TITLE>APRS Messaging</TITLE></HEAD>"
-	"<BODY alink=\"#008000\" bgcolor=\"#F5F5DC\" link=\"#0000FF\" vlink=\"#000080\"  background=/background.jpg>"
-	"<table align=center border=2 cellpadding=2 cellspacing=2 bgcolor=white><tr>"
-	"<td align=center><a href=/aprs.html>APRS Map</a></td>"
-	"<td align=center><a href=/aprs/msgs>Received Messages</a></td>"
-	"<td align=center><a href=/aprs/txmsgs>Sent Messages</a></td>"
-	"<td align=center><a href=/aprs/msgs/entermsg>Send Message</a></td>"
-	"<td align=center><a href=/aprs/all.html>Station Pages</a></td>"
-	"<td align=center><a href=/Node/NodeMenu.html>Return to Node Pages</a></td>"
-	"</tr></table>"
-	"<center><h2>Message Sent by %s</h2><TABLE BORDER=\"3\" CELLSPACING=\"2\" CELLPADDING=\"1\">"
-	"<tr><td>To</td><td>Seq</td><td>Time</td><td>State</td><td>message</td></tr>";
+#define APRS_MSG_MENU \
+	"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button></div>" \
+	"<nav id=\"mainMenu\" class=\"menu\">" \
+	"<a href=/aprs.html>APRS Map</a>" \
+	"<a href=/aprs/msgs>Received Messages</a>" \
+	"<a href=/aprs/txmsgs>Sent Messages</a>" \
+	"<a href=/aprs/msgs/entermsg>Send Message</a>" \
+	"<a href=/aprs/all.html>Station Pages</a>" \
+	"<a href=/Node/NodeMenu.html>Return to Node Pages</a>" \
+	"</nav>"
 
-char WebLine[] = "<tr bgcolor=\"#ffcccc\"><td>%s </td><td> %s </td><td> %s </td><td> %s</td><td>"
-	"<a href=\"entermsg?tocall=%s&fromcall=%s\">Reply</a></td><td> %s</td></tr>";
+char WebHeader[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT
+	"<meta http-equiv=\"expires\" content=\"-1\"><meta http-equiv=\"pragma\" content=\"no-cache\">"
+	"<title>APRS Messaging</title><style>" APRS_MSG_PAGE_STYLE "</style>"
+	"<script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	APRS_MSG_MENU
+	"<main class=\"aprs-msg-wrap\"><h2>%s's Messages</h2><div class=\"aprs-msg-table-wrap\"><table class=\"aprs-msg-table\"><thead>"
+	"<tr><th scope=col>From</th><th scope=col>To</th><th scope=col>Seq</th><th scope=col>Time</th><th scope=col>&nbsp;</th><th scope=col>Message</th></tr>"
+	"</thead><tbody>";
 
-char WebTXLine[] = "<tr bgcolor=\"#ffcccc\">"
-	"<td>%s </td><td> %s </td><td> %s </td><td> %s </td><td> %s</td></tr>";
+char WebTXHeader[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT
+	"<meta http-equiv=\"expires\" content=\"-1\"><meta http-equiv=\"pragma\" content=\"no-cache\">"
+	"<title>APRS Messaging</title><style>" APRS_MSG_PAGE_STYLE "</style>"
+	"<script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	APRS_MSG_MENU
+	"<main class=\"aprs-msg-wrap\"><h2>Message Sent by %s</h2><div class=\"aprs-msg-table-wrap\"><table class=\"aprs-msg-table\"><thead>"
+	"<tr><th scope=col>To</th><th scope=col>Seq</th><th scope=col>Time</th><th scope=col>State</th><th scope=col>Message</th></tr>"
+	"</thead><tbody>";
+
+char WebLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>"
+	"<a href=\"entermsg?tocall=%s&fromcall=%s\">Reply</a></td><td>%s</td></tr>";
+
+char WebTXLine[] = "<tr>"
+	"<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>";
 
 
-char WebTrailer[] = "</table></BODY></HTML>";
+char WebTrailer[] = "</tbody></table></div></main></body></html>";
 
-char SendMsgPage[] = "<html><head><title>BPQ32 APRS Messaging</title></head><body background=\"/background.jpg\">"
-	"<center><h2>APRS Message Input</h1>"
-	"<form method=post action=/APRS/Msgs/SendMsg>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>To</td><td><input type=text name=call tabindex=1 size=10 maxlength=12 value=\"%s\"/></td></tr>" 
-	"<tr><td>Message</td><td><input type=text name=message tabindex=2 size=80 maxlength=100 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+char SendMsgPage[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT "<title>BPQ32 APRS Messaging</title>"
+	"<style>" APRS_MSG_PAGE_STYLE "</style><script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	APRS_MSG_MENU
+	"<main class=\"aprs-msg-wrap\"><h2>APRS Message Input</h2>"
+	"<form class=\"aprs-msg-form\" method=post action=/APRS/Msgs/SendMsg>"
+	"<table><tr><td>To</td><td><input type=text name=call tabindex=1 size=10 maxlength=12 value=\"%s\"/></td></tr>"
+	"<tr><td>Message</td><td><input type=text name=message tabindex=2 size=80 maxlength=100 /></td></tr></table>"
+	"<div class=\"aprs-msg-actions\"><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></div></form></main></body></html>";
 
-char APRSIndexPage[] = "<html><head><title>BPQ32 Web Server APRS Pages</title></head>"
-	"<body background=/background.jpg><P align=center>"
-	"<h2 align=center>BPQ32 APRS Server</h2><P align=center>"
-	"<table border=2 cellpadding=2 cellspacing=2 bgcolor=white><tr>"
-	"<td align=center><a href=/aprs.html>APRS Map</a></td>"
-	"<td align=center><a href=/aprs/msgs>Received Messages</a></td>"
-	"<td align=center><a href=/aprs/txmsgs>Sent Messages</a></td>"
-	"<td align=center><a href=/aprs/msgs/entermsg>Send Message</a></td>"
-	"<td align=center><a href=/aprs/all.html>Station Pages</a></td>"
-	"<td align=center><a href=/Node/NodeMenu.html>Return to Node Pages</a></td>"
-	"</tr></table>%s</body></html>";
+char APRSIndexPage[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT "<title>BPQ32 Web Server APRS Pages</title>"
+	"<style>" APRS_MSG_PAGE_STYLE "</style><script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	APRS_MSG_MENU
+	"<main class=\"aprs-msg-wrap\"><h2>BPQ32 APRS Server</h2>%s</main></body></html>";
 
 extern char Tail[];
 
@@ -7346,7 +7343,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 						
 						// Return APRS Index Page
 
-						OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 align=center>Message Cancelled</h2>");
+						OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 style=\"text-align:center\">Message Cancelled</h2>");
 						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 						send(sockptr->sock, Header, HeaderLen, 0); 
 						send(sockptr->sock, OutBuffer, OutputLen, 0); 
@@ -7363,7 +7360,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 			if (strlen(To) < 2)
 			{
 				OutputLen = sprintf(OutBuffer, SendMsgPage, To);
-				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 align=center>Invalid Callsign</h2>");
+				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 style=\"text-align:center\">Invalid Callsign</h2>");
 				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 				send(sockptr->sock, Header, HeaderLen, 0); 
 				send(sockptr->sock, OutBuffer, OutputLen, 0); 
@@ -7374,7 +7371,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 			if (Msg[0] == 0)
 			{
 				OutputLen = sprintf(OutBuffer, SendMsgPage, To);
-				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 align=center>No Message</h2>");
+				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 style=\"text-align:center\">No Message</h2>");
 				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 				send(sockptr->sock, Header, HeaderLen, 0); 
 				send(sockptr->sock, OutBuffer, OutputLen, 0); 
@@ -7389,7 +7386,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 
 			InternalSendAPRSMessage(Msg, To);
 
-			OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 align=center>Message Sent</h2>");
+			OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 style=\"text-align:center\">Message Sent</h2>");
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 			send(sockptr->sock, Header, HeaderLen, 0); 
 			send(sockptr->sock, OutBuffer, OutputLen, 0); 
@@ -8733,7 +8730,7 @@ int GetAPRSPageInfo(char * Buffer, double N, double S, double W, double E, int a
 
 				Len += sprintf(&Buffer[Len],"A,%.4f,%.4f,%s,%s,%s,%d\r\n|",
 					ptr->Lat, ptr->Lon, ptr->Callsign, popup, IconKey,
-					NOW - ptr->TimeLastUpdated);
+					(int)(NOW - ptr->TimeLastUpdated));
 
 				if (ptr->TrackTime[0] && ptr->TrackTime[1])	// Have trackpoints
 				{
@@ -9009,7 +9006,7 @@ void SaveAPRSMessage(struct APRSMESSAGE * ptr)
 	if ((file = fopen(FN, "a")) == NULL)
 		return ;
 
-	fprintf(file, "%d %s,%s,%s,%s,%s\n", time(NULL), ptr->FromCall, ptr->ToCall, ptr->Seq, ptr->Time, ptr->Text);
+	fprintf(file, "%ld %s,%s,%s,%s,%s\n", (long)time(NULL), ptr->FromCall, ptr->ToCall, ptr->Seq, ptr->Time, ptr->Text);
 
 	fclose(file);
 }

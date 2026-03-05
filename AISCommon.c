@@ -736,7 +736,7 @@ void SaveVesselDataBase()
 
 		if (ShipDataRec->Callsign[0] > 32)			// No point in saving if no vessel details
 		{
-			sprintf(buf,"%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d\n",
+			sprintf(buf,"%d|%s|%s|%d|%d|%d|%d|%d|%ld|%ld|%d|%d\n",
 			ShipDataRec->ID,
 			ShipDataRec->name,
 			ShipDataRec->Callsign,
@@ -745,8 +745,8 @@ void SaveVesselDataBase()
 			ShipDataRec->WidthC,
 			ShipDataRec->WidthD,
 			ShipDataRec->Draft,
-			ShipDataRec->TimeAdded,
-			ShipDataRec->TimeLastUpdated,
+			(long)ShipDataRec->TimeAdded,
+			(long)ShipDataRec->TimeLastUpdated,
 			ShipDataRec->Type,
 			ShipDataRec->Class);
 
@@ -867,7 +867,7 @@ void SaveNavAidDataBase()
 	for (i = 0; i < NavAidCount; i++)
 	{
 		navptr=NavRecords[i];
-		fprintf(file, "%d|%s|%f|%f|%d|%d\n", navptr->ID, navptr->name, navptr->lat, navptr->Long, navptr->TimeAdded, navptr->TimeLastUpdated);
+		fprintf(file, "%d|%s|%f|%f|%ld|%ld\n", navptr->ID, navptr->name, navptr->lat, navptr->Long, (long)navptr->TimeAdded, (long)navptr->TimeLastUpdated);
 	}
 
 	fclose(file);

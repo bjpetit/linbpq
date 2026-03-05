@@ -882,7 +882,7 @@ int DeleteBBSLogFiles()
 	struct stat STAT;
 	time_t now = time(NULL);
 	int Age = 0, res;
-	char FN[256];
+	char FN[270];
      	
     n = scandir("logs", &namelist, Filter, alphasort);
 
@@ -892,7 +892,7 @@ int DeleteBBSLogFiles()
 	{ 
 		while(n--)
 		{
-			sprintf(FN, "logs/%s", namelist[n]->d_name);
+			snprintf(FN, sizeof(FN), "logs/%s", namelist[n]->d_name);
 			if (stat(FN, &STAT) == 0)
 			{
 				Age = (now - STAT.st_mtime) / 86400;
@@ -1020,7 +1020,7 @@ VOID CreateBBSTrafficReport()
 {
 	struct UserInfo * User;
 	int i, n;
-	char Line[200];
+	char Line[400];
 	int len;
 	char File[MAX_PATH];
 	FILE * hFile;
@@ -1140,7 +1140,7 @@ VOID CreateBBSTrafficReport()
 			User->Total.MsgsRejectedOut[2] - User->Last.MsgsRejectedOut[2],
 			User->Total.MsgsRejectedOut[3] - User->Last.MsgsRejectedOut[3]);
 
-		len = sprintf(Line, "%s %-7s %5d %8d%16s%16s%16s%16s%16s%16s\r\n",
+		len = snprintf(Line, sizeof(Line), "%s %-7s %5d %8d%16s%16s%16s%16s%16s%16s\r\n",
 			(User->flags & F_BBS)? "(B)": "   ",
 			User->Call, ConnectsIn,
 			ConnectsOut,
@@ -1176,7 +1176,7 @@ VOID CreateBBSTrafficReport()
 
 	sprintf(BytesOut,"%d/%d/%d", TotBytesForwardedOut[1], TotBytesForwardedOut[2], TotBytesForwardedOut[3]);
 
-	len = sprintf(Line, "\r\n Totals    %s Messages In        %s Messages Out       %s"
+	len = snprintf(Line, sizeof(Line), "\r\n Totals    %s Messages In        %s Messages Out       %s"
 						" Bytes In        %s Bytes Out\r\n", MsgsIn, MsgsOut, BytesIn, BytesOut);
 
 	fwrite(Line, 1, len, hFile);

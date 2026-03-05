@@ -1637,7 +1637,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
-				char Connect[80];
+				char Connect[290];
 				char * ptr = strchr(&buff->L2DATA[2], 13);
 
 				if (ptr)
@@ -1650,7 +1650,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				if (Stream == 0)
 				{
-					sprintf(Connect, "ARQCALL %s %d", &buff->L2DATA[2], TNC->MaxConReq);
+					snprintf(Connect, sizeof(Connect), "ARQCALL %s %d", &buff->L2DATA[2], TNC->MaxConReq);
 
 					ARDOPChangeMYC(TNC, TNC->Streams[0].MyCall);
 
@@ -1690,7 +1690,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				{
 					// Packet Connect
 				
-					sprintf(Connect, "%cPKTCALL %s %s", Stream, &buff->L2DATA[2], STREAM->MyCall);
+					snprintf(Connect, sizeof(Connect), "%cPKTCALL %s %s", Stream, &buff->L2DATA[2], STREAM->MyCall);
 					ARDOPSendPktCommand(TNC, Stream, Connect);
 				}
 
@@ -1941,7 +1941,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);

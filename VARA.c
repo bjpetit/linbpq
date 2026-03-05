@@ -29,6 +29,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 
 #include "cheaders.h"
+#include "common_web_components.h"
 
 #ifdef WIN32
 #include <Psapi.h>
@@ -747,7 +748,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (_memicmp(buff->L2DATA, "RADIO ", 6) == 0)
 			{
-				sprintf(buff->L2DATA, "%d %s", TNC->Port, &buff->L2DATA[6]);
+				{ char _tmp[290]; snprintf(_tmp, sizeof(_tmp), "%d %s", TNC->Port, &buff->L2DATA[6]); memcpy(buff->L2DATA, _tmp, sizeof(buff->L2DATA)); }
 
 				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK, buff->L2DATA))
 				{
@@ -823,7 +824,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
-				char Connect[80];
+				char Connect[290];
 				char * ptr = strchr(&buff->L2DATA[2], 13);
 
 				if (ptr)
@@ -831,7 +832,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				_strupr(&buff->L2DATA[2]);
 
-				sprintf(Connect, "CONNECT %s %s\r", TNC->Streams[0].MyCall, &buff->L2DATA[2]);
+				snprintf(Connect, sizeof(Connect), "CONNECT %s %s\r", TNC->Streams[0].MyCall, &buff->L2DATA[2]);
 
 				// Need to set connecting here as if we delay for busy we may incorrectly process OK response
 
@@ -1046,7 +1047,8 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-eq
 		"<a href='javascript:xxx(\"KillRestart\");'>Kill and Restart TNC</a>"
 		"</div></span>";
 */
-char WebProcTemplate[] = "<html><meta http-equiv=expires content=0>"
+char WebProcTemplate[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0>"
+		"<style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; margin: 10px; background: var(--bg); color: var(--text); } h2 { text-align: center; margin-bottom: 0.2em; } table { border-collapse: collapse; margin: 20px auto; width: 100%%; max-width: 700px; } td { padding: 8px; border: 1px solid var(--border); } textarea { width: 100%%; max-width: 600px; display: block; margin: 20px auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); } .dropdown { position: relative; display: inline-block; } .dropbtn { background-color: var(--primary); color: var(--on-primary); padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; } .dropdown-content { display: none; position: absolute; background-color: var(--surface); min-width: 160px; box-shadow: var(--shadow-overlay); padding: 12px 16px; z-index: 1; } .dropdown-content a { color: var(--text); padding: 8px 0; display: block; text-decoration: none; } .dropdown-content a:hover { background-color: var(--surface-hover); } .dropdown:hover .dropdown-content { display: block; }</style>"
 		"<link rel='stylesheet' href='webproc.css'>\r\n"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
@@ -1064,8 +1066,8 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0>"
 		"function Refresh( )\n"
 		"{location.reload()}\n"
 		"</script>\r\n"
-		"</head><title>%s</title></head><body id=Text onload=\"ScrollOutput()\">\r\n"
-		"<h2 style=\"margin-bottom: 0.2em; text-align:center\">%s</h2>";
+		"</head><body id=Text onload=\"ScrollOutput()\">\r\n"
+		"<h2>%s</h2>";
 
 char Menubit[] = "<span class='dropdown' style=\"position: absolute; left: 10;top: 12;\">"
 		"<button class='dropbtn'>Actions</button>\r\n"
@@ -1096,7 +1098,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);

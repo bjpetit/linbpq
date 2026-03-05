@@ -19,6 +19,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 
 #include "bpqchat.h"
+#include "common_web_components.h"
 
 extern char OurNode[10];
 
@@ -42,7 +43,7 @@ extern int chatPaclen;
 extern char NodeTail[];
 extern BOOL APRSApplConnected;
 
-extern char ChatConfigName[250];
+extern char ChatConfigName[290];
 
 extern char OtherNodesList[1000];
 
@@ -122,28 +123,40 @@ static char CHKD[] = "checked=checked ";
 static char sel[] = "selected";
 
 
-char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title></head><body background=\"/background.jpg\">"
-	"<h3 align=center>BPQ32 Chat Server %s Access</h3>"
-	"<h3 align=center>Please enter Callsign and Password to access the Chat Server</h3>"
-	"<form method=post action=/Chat/Signon?Chat>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+char ChatSignon[] = "<html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>BPQ32 Chat Server Access</title>"
+	"<style>" COMMON_SIGNON_CSS "</style>"
+	"</head><body>"
+	"<h2>BPQ32 Chat Server %s Access</h2>"
+	"<h3>Please enter Callsign and Password to access the Chat Server</h3>"
+	"<div class=\"form-container\"><form method=post action=/Chat/Signon?Chat>"
+	"<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>"
+	"<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"
+	"<div class=\"form-row\"><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></div>"
+	"</form></div>"
+	"</body></html>";
 
 
-char ChatPage[] = "<html><head><title>%s's Chat Server</title></head>"
-	"<body background=\"/background.jpg\"><h3 align=center>BPQ32 Chat Node %s</h3><P>"
-	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-	"<td><a href=/Chat/ChatStatus?%s>Status</a></td>"
-	"<td><a href=/Chat/ChatConf?%s>Configuration</a></td>"
-	"<td><a href=/>Node Menu</a></td>"
-	"</tr></table>";
+char ChatPage[] = "<html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>%s's Chat Server</title>"
+	"<style>"
+	COMMON_CSS_VARIABLES
+	COMMON_UTILITY_CSS
+	".container{max-width:900px;margin:0 auto;background:var(--surface);padding:20px;border-radius:8px;box-shadow:var(--shadow-card);}"
+	COMMON_MENU_CSS
+	"</style>"
+	"<script>"
+	COMMON_MENU_JAVASCRIPT
+	"</script>"
+	"</head><body>"
+	"<div class='container'>"
+	"<h2>BPQ32 Chat Node %s</h2>"
+	COMMON_CHAT_MENU
+	"</div>"
+	"</body></html>";
 
 
 
 static char LostSession[] = "<html><body>"
-"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Chat/Lost?%s>"
+"<form class=text-center style=\"font-family: " COMMON_FONT_MONO ";\" method=post action=/Chat/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
 "<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
 
@@ -551,7 +564,7 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		else
 			Topic = user->topic->name;
 
-		Len += sprintf(&Users[Len], "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>",
+		Len += sprintf(&Users[Len], "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class=num>%d</td><td>%s</td></tr>",
 			user->call, Alias, user->name, Topic, (int)(time(NULL) - user->lastrealmsgtime), user->qth);
 	
 	}
@@ -564,7 +577,7 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 	{
 		if (link->flags & p_linked )
 			if (link->supportsPolls)
-				Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Open &nbsp RTT %d</td></tr>", link->call, link->RTT);
+				Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Open RTT %d</td></tr>", link->call, link->RTT);
 			else
 				Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Open</td></tr>", link->call);
 		else if (link->flags & (p_linked | p_linkini))
@@ -584,35 +597,36 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		i = conn->BPQStream;
 		if (!conn->Active)
 		{
-			Len += sprintf(&Streams[Len], "<tr><td onclick= SelectRow(%d) id=cell_%d>Idle</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td></tr>", i, i);
+			Len += sprintf(&Streams[Len], "<tr class=selectable onclick='SelectRow(%d)'><td id='cell_%d'>Idle</td><td></td><td class=num></td><td></td><td class=num></td></tr>", i, i);
 		}
 		else
 		{
 			if (conn->Flags & CHATLINK)
 			{
 				if (conn->BPQStream > 64 || conn->u.link == 0 || conn->u.link->alias == 0)
-					Len += sprintf(&Streams[Len], "<tr><td onclick= SelectRow(%d) id=cell_%d>** Corrupt ChatLink **</td>"
-					"<td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td></tr>", i, i);
+					Len += sprintf(&Streams[Len], "<tr class=selectable onclick='SelectRow(%d)'><td id='cell_%d'>** Corrupt ChatLink **</td>"
+					"<td></td><td class=num></td><td></td><td class=num></td></tr>", i, i);
 				else
-					Len += sprintf(&Streams[Len], "<tr><td onclick='SelectRow(%d)' id='cell_%d'>"
-					"%s</td><td>%s</td><td>%d</td><td>%s</td><td>%d</td></tr>",
+					Len += sprintf(&Streams[Len], "<tr class=selectable onclick='SelectRow(%d)'><td id='cell_%d'>"
+					"%s</td><td>%s</td><td class=num>%d</td><td>%s</td><td class=num>%d</td></tr>",
 						i, i, "Chat Link", conn->u.link->alias, conn->BPQStream,
 						"", conn->OutputQueueLength - conn->OutputGetPointer);
 			}
 			else
 			if ((conn->Flags & CHATMODE) && conn->topic && conn->u.user && conn->u.user->call)
 			{
-				Len += sprintf(&Streams[Len],  "<tr><td onclick='SelectRow(%d)' id='cell_%d'>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%d</td></tr>",
+				Len += sprintf(&Streams[Len],  "<tr class=selectable onclick='SelectRow(%d)'><td id='cell_%d'>%s</td><td>%s</td><td class=num>%d</td><td>%s</td><td class=num>%d</td></tr>",
 					i, i, conn->u.user->name, conn->u.user->call, conn->BPQStream,
 					conn->topic->topic->name, conn->OutputQueueLength - conn->OutputGetPointer);
 			}
 			else
 			{
 				if (conn->UserPointer == 0)
-					Len += sprintf(&Streams[Len], "Logging in");
+					Len += sprintf(&Streams[Len], "<tr class=selectable onclick='SelectRow(%d)'><td id='cell_%d'>Logging in</td><td></td><td class=num>%d</td><td></td><td class=num>%d</td></tr>",
+						i, i, conn->BPQStream, conn->OutputQueueLength - conn->OutputGetPointer);
 				else
 				{
-					Len += sprintf(&Streams[Len], "<tr><td onclick='SelectRow(%d)' id='cell_%d'>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%d</td></tr>",
+					Len += sprintf(&Streams[Len], "<tr class=selectable onclick='SelectRow(%d)'><td id='cell_%d'>%s</td><td>%s</td><td class=num>%d</td><td>%s</td><td class=num>%d</td></tr>",
 						i, i, conn->UserPointer->Name, conn->UserPointer->Call, conn->BPQStream,
 						"CHAT", conn->OutputQueueLength - conn->OutputGetPointer);
 				}
@@ -620,7 +634,74 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		}
 	}
 
-	Len = sprintf(Reply, ChatStatusTemplate, OurNode, OurNode, Key, Key, Key, Streams, Users, Links);
+	Len = sprintf(Reply,
+		"<!DOCTYPE html>"
+		"<html><head>"
+		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+		"<title>%s's Chat Server</title>"
+		"<style>"
+		COMMON_CSS_VARIABLES
+		COMMON_MENU_CSS
+		COMMON_TABLE_CSS
+		COMMON_FORM_CSS
+		COMMON_UTILITY_CSS
+		COMMON_BUTTON_CSS
+		"body{margin:0;padding:12px;background:var(--bg);}"
+		".chat-shell{max-width:1100px;margin:0 auto;}"
+		".chat-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}"
+		".chat-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-card);padding:10px;min-width:0;}"
+		".chat-section h4{margin:4px 0 10px 0;font-size:clamp(14px,2vw,16px);text-align:center;}"
+		".chat-section-wide{grid-column:1 / -1;}"
+		".chat-grid{width:100%%;border-collapse:collapse;font-family: " COMMON_FONT_MONO ";white-space:nowrap;}"
+		".chat-grid{background:var(--surface);color:var(--text);}"
+		".chat-grid thead tr{background:var(--table-header);}"
+		".chat-grid th,.chat-grid td{padding:8px;border:1px solid var(--border);text-align:left;color:var(--text);}"
+		".chat-grid th{background:var(--table-header);font-weight:bold;}"
+		".chat-grid td{background:var(--surface);}"
+		".chat-grid tbody tr:nth-child(even){background:var(--table-stripe);}"
+		".chat-grid tbody tr:hover{background:var(--surface-soft);}"
+		".chat-grid th.num,.chat-grid td.num{text-align:center;}"
+		".chat-grid tr.selectable{cursor:pointer;}"
+		".chat-grid tr.selected td{background:var(--table-selected);}"
+		".chat-status-form{margin:0;}"
+		".chat-actions input{min-width:170px;}"
+		"@media (max-width:900px){.chat-layout{grid-template-columns:1fr;}.chat-section-wide{grid-column:auto;}}"
+		"@media (max-width:768px){body{padding:10px;}.chat-grid{font-size:13px;}.chat-grid th,.chat-grid td{padding:7px 6px;}}"
+		"</style>"
+		"<script>"
+		COMMON_MENU_JAVASCRIPT
+		"var Selected;"
+		"var Inpval;"
+		"var SelectedStream = 0;"
+		"function initialize(){Inpval=document.getElementById('inpval');}"
+		"function SelectRow(newRow){var cell=document.getElementById('cell_'+newRow);var Last=Selected;var row=cell?cell.parentNode:null;if(!row)return;Selected=row;SelectedStream=newRow;row.classList.add('selected');if(Last){Last.classList.remove('selected');}if(row==Last){SelectedStream=0;row.classList.remove('selected');}Inpval.value=SelectedStream;}"
+		"function condRefresh(){if(SelectedStream==0){location.reload(true);}}"
+		"window.setInterval(condRefresh,10000);"
+		"</script>"
+		"</head><body onload=initialize()>"
+		"<div class=chat-shell>"
+		"<h2 class=text-center>BPQ32 Chat Server %s</h2>"
+		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" onclick=\"toggleMenu(event)\">Menu</button></div>"
+		"<div id=\"chatMenu\" class=\"menu\">"
+		"<a href=\"/Chat/ChatStatus?%s\">Status</a>"
+		"<a href=\"/Chat/ChatConf?%s\">Configuration</a>"
+		"<a href=\"/\">Node Menu</a>"
+		"</div>"
+		"<div class=chat-layout>"
+		"<div class=chat-section><h4>Streams</h4>"
+		"<form class=chat-status-form method=post action=\"/Chat/ChatDisSession?%s\">"
+		"<div class=table-container><table class=chat-grid><thead><tr><th>User</th><th>Callsign</th><th class=num>Stream</th><th>Topic</th><th class=num>Queue</th></tr></thead><tbody>%s</tbody></table></div>"
+		"<input type=hidden name=Stream value=99 id=inpval>"
+		"<div class=\"buttons chat-actions\"><input value=Disconnect type=submit></div>"
+		"</form></div>"
+		"<div class=chat-section><h4>Links</h4>"
+		"<div class=table-container><table class=chat-grid><thead><tr><th>Callsign</th><th>State</th></tr></thead><tbody>%s</tbody></table></div>"
+		"</div>"
+		"<div class=\"chat-section chat-section-wide\"><h4>Users</h4>"
+		"<div class=table-container><table class=chat-grid><thead><tr><th>Callsign</th><th>Node</th><th>Name</th><th>Topic</th><th class=num>Idle</th><th>QTH</th></tr></thead><tbody>%s</tbody></table></div>"
+		"</div>"
+		"</div></div></body></html>",
+		OurNode, OurNode, Key, Key, Key, Streams, Links, Users);
 	*ReplyLen = Len;
 }
 

@@ -155,14 +155,14 @@ char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
 char NTSAliasesPath[MAX_PATH];
 char NTSAliasesName[MAX_PATH] = "INTRCPT.APS";
 
-char ConfigName[250];
-char ChatConfigName[250];
+char ConfigName[290];
+char ChatConfigName[290];
 
 BOOL UsingingRegConfig = FALSE;
 
 BOOL MulticastRX = FALSE;
 
-char BaseDir[MAX_PATH];
+char BaseDir[290];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
 char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
 

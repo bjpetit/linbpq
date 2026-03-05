@@ -263,7 +263,7 @@ int DeleteLogFile(char * Log, int KeepDays)
 	struct stat STAT;
 	time_t now = time(NULL);
 	int Age = 0, res;
-	char FN[256];
+	char FN[270];
 
 	n = scandir("logs", &namelist, TelFilter, alphasort);
 
@@ -275,7 +275,7 @@ int DeleteLogFile(char * Log, int KeepDays)
 		{
 			if (memcmp(namelist[n]->d_name, Log, strlen(Log)) == 0)	
 			{
-				sprintf(FN, "logs/%s", namelist[n]->d_name);
+				snprintf(FN, sizeof(FN), "logs/%s", namelist[n]->d_name);
 
 				if (stat(FN, &STAT) == 0)
 				{
@@ -826,7 +826,7 @@ static VOID WritetoTrace(int Stream, char * Msg, int Len, struct ADIF * ADIF, ch
 	UCHAR * ptr1 = Msg, * ptr2;
 	UCHAR Line[1000];
 	int LineLen, i;
-	char logmsg[200];
+	char logmsg[1020];
 
 	Msg[Len] = 0;
 
@@ -871,7 +871,7 @@ lineloop:
 
 			if (strlen(Line) < 100)
 			{
-				sprintf(logmsg,"%d %s\r\n", Stream, Line);
+				snprintf(logmsg, sizeof(logmsg), "%d %s\r\n", Stream, Line);
 				WriteCMSLog(logmsg);
 				UpdateADIFRecord(ADIF, Line, Dirn);
 			}
@@ -1315,7 +1315,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 	"<head><title>Telnet Status</title></head><body><b>Telnet Status &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%s</b>", CMSStatus);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 250px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 250px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
 
 	Len += sprintf(&Buff[Len], "<tr><th>User</th><th>Callsign</th><th>Queue</th></tr>");
@@ -2821,24 +2821,24 @@ nosocks:
 								// Send LF after each param
 
 								if (P6[0])
-									sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n%s\r\n", P4, P5, P6);
+									snprintf(STREAM->ConnectionInfo->Signon, sizeof(STREAM->ConnectionInfo->Signon), "%s\r\n%s\r\n%s\r\n", P4, P5, P6);
 								else
 									if (P5[0])
-										sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n", P4, P5);
+										snprintf(STREAM->ConnectionInfo->Signon, sizeof(STREAM->ConnectionInfo->Signon), "%s\r\n%s\r\n", P4, P5);
 									else
 										if (P4[0])
-											sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n", P4);
+											snprintf(STREAM->ConnectionInfo->Signon, sizeof(STREAM->ConnectionInfo->Signon), "%s\r\n", P4);
 							}
 							else
 							{
 								if (P5[0])
-									sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r%s\r", P3, P4, P5);
+									snprintf(STREAM->ConnectionInfo->Signon, sizeof(STREAM->ConnectionInfo->Signon), "%s\r%s\r%s\r", P3, P4, P5);
 								else
 									if (P4[0])
-										sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r", P3, P4);
+										snprintf(STREAM->ConnectionInfo->Signon, sizeof(STREAM->ConnectionInfo->Signon), "%s\r%s\r", P3, P4);
 									else
 										if (P3[0])
-											sprintf(STREAM->ConnectionInfo->Signon, "%s\r", P3);
+											snprintf(STREAM->ConnectionInfo->Signon, sizeof(STREAM->ConnectionInfo->Signon), "%s\r", P3);
 							}
 						}
 
@@ -5372,7 +5372,7 @@ int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr
 int ShowConnections(struct TNCINFO * TNC)
 {
 #ifndef LINBPQ
-	char msg[80];
+	char msg[130];
 	struct ConnectionInfo * sockptr;
 	int i,n;
 
@@ -5396,15 +5396,15 @@ int ShowConnections(struct TNCINFO * TNC)
 					Tel_Format_Addr(sockptr, Addr);
 				
 					if (sockptr->WebSocks)
-						sprintf(msg, "Websock From %s", Addr);
+						snprintf(msg, sizeof(msg), "Websock From %s", Addr);
 					else
-						sprintf(msg, "HTTP From %s", Addr);
+						snprintf(msg, sizeof(msg), "HTTP From %s", Addr);
 				}
 				else if (sockptr->DRATSMode)
 				{
 					char Addr[100];
 					Tel_Format_Addr(sockptr, Addr);
-					sprintf(msg, "DRATS From %s", Addr);
+					snprintf(msg, sizeof(msg), "DRATS From %s", Addr);
 				}
 				else
 					strcpy(msg,"Logging in");
@@ -5752,7 +5752,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 			char Addr[256];
 			Tel_Format_Addr(sockptr, Addr);
 
-			buffptr->Len  = sprintf(&buffptr->Data[0], "*** Connected to SYNC %s:%d\r", Addr, htons(sockptr->sin.sin_port));
+			buffptr->Len  = snprintf((char*)&buffptr->Data[0], 256, "*** Connected to SYNC %s:%d\r", Addr, htons(sockptr->sin.sin_port));
 			send(sockptr->socket, sockptr->Signon, (int)strlen(sockptr->Signon), 0);
 		}
 		else
@@ -6388,8 +6388,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 		if (sizeof(time_t) == 4)
 			n = sscanf(buf,"%s %d %s", addr, (int *)&t, ip);
 		else
-			n = sscanf(buf, "%s %lld %s", addr, &t, ip);
-
+                        n = sscanf(buf, "%s %ld %s", addr, &t, ip);
 		if (n == 3)
 		{
 			time_t age = time(NULL) - t;
@@ -7128,7 +7127,7 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, stru
 	struct PORTCONTROL * PORT = NULL;
 	int txlen = 0, n;
 	struct TNCINFO * TNC;
-	char msg[80];
+	char msg[130];
 	struct ConnectionInfo * sockptr;
 	int i;
 	char CMS[] = "CMS Disabled";
@@ -7183,16 +7182,16 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, stru
 					Tel_Format_Addr(sockptr, Addr);
 
 					if (sockptr->WebSocks)
-						sprintf(msg, "Websock From %s", Addr);
+						snprintf(msg, sizeof(msg), "Websock From %s", Addr);
 					else
-						sprintf(msg, "HTTP From %s", Addr);
+						snprintf(msg, sizeof(msg), "HTTP From %s", Addr);
 
 				}
 				else if (sockptr->DRATSMode)
 				{
 					char Addr[100];
 					Tel_Format_Addr(sockptr, Addr);
-					sprintf(msg, "DRATS From %s", Addr);
+					snprintf(msg, sizeof(msg), "DRATS From %s", Addr);
 				}
 				else
 					strcpy(msg,"Logging in");

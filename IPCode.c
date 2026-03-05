@@ -639,12 +639,12 @@ Dll BOOL APIENTRY Init_IP()
 
 	if (Adapter[0])					// Don't have to have ethernet, if used just as ip over ax.25 switch 
 	{
-		char buf[80];
+		char buf[290];
 
 		if (OpenPCAP())
-			sprintf(buf,"IP Using %s\n", Adapter);
+			snprintf(buf, sizeof(buf), "IP Using %s\n", Adapter);
 		else
-			sprintf(buf," IP Unable to open %s\n", Adapter);
+			snprintf(buf, sizeof(buf), " IP Unable to open %s\n", Adapter);
 	
 		WritetoConsoleLocal(buf);
 

@@ -31,6 +31,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "time.h"
 #include "bpq32.h"
 #include "telnetserver.h"
+#include "common_web_components.h"
 
 // This is needed to link with a lib built from source
 
@@ -53,7 +54,7 @@ extern char VersionString[];
 VOID FormatTime3(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 VOID SaveUIConfig();
-int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL);
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL);
 VOID SetupUI(int Port);
 VOID SendUIBeacon(int Port);
 VOID GetParam(char * input, char * key, char * value);
@@ -71,7 +72,6 @@ BOOL SHA1PasswordHash(char * String, char * Hash);
 char * byte_base64_encode(char *str, int len);
 int APIProcessHTTPMessage(char * response, char * Method, char * URL, char * request,	BOOL LOCAL, BOOL COOKIE);
 int RHPProcessHTTPMessage(struct ConnectionInfo * conn, char * response, char * Method, char * URL, char * request, BOOL LOCAL, BOOL COOKIE);
-unsigned char * Compressit(unsigned char * In, int Len, int * OutLen);
 int doinflate(unsigned char * source, unsigned char * dest, int Len, int destlen, int * outLen);
 
 extern struct ROUTE * NEIGHBOURS;
@@ -115,11 +115,11 @@ int CompareRoutes(const void * a, const void * b);
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen, char * Token);
 void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
-int SetupNodeMenu(char * Buff, int SYSOP);
+int SetupNodeMenu(char * Buff, size_t BuffSize, int SYSOP);
 int StatusProc(char * Buff);
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
-int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
-int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL);
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
+int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL);
 VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr, BOOL LOCAL, BOOL COOKIE);
 
 
@@ -130,13 +130,32 @@ char Mycall[10];
 char MAILPipeFileName[] = "\\\\.\\pipe\\BPQMAILWebPipe";
 char CHATPipeFileName[] = "\\\\.\\pipe\\BPQCHATWebPipe";
 
-char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P align=center>"
-"<table border=2 cellpadding=2 cellspacing=2 bgcolor=white>"
-"<tr><td align=center><a href=/Node/NodeMenu.html>Node Pages</a></td>"
-"<td align=center><a href=/aprs>APRS Pages</a></td></tr></table></body></html>";
+char Index[] =
+	COMMON_HTML_HEAD_COMMON
+	COMMON_HTML_META_UTF8
+	COMMON_HTML_META_VIEWPORT_COMPACT
+	"<title>%s's BPQ32 Node</title>"
+	"<style>"
+	COMMON_CSS_VARIABLES
+	"*{box-sizing:border-box;}"
+	"body{margin:0;padding:20px;font-family:" COMMON_FONT_MONO ";background:var(--bg);color:var(--text);}"
+	"h1{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.75rem,5vw,3rem);margin:30px 0 10px;}"
+	".links{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin:40px auto;max-width:600px;}"
+	".links a{display:flex;align-items:center;justify-content:center;min-height:60px;padding:16px 32px;"
+	"background:var(--surface);border:1px solid var(--border-card);border-radius:8px;text-decoration:none;color:var(--text);"
+	"font-weight:bold;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);"
+	"box-shadow:var(--shadow-card);}"
+	".links a:hover{background:var(--surface-hover);}"
+	"@media(max-width:480px){.links{flex-direction:column;}.links a{width:100%;}}"
+	"</style>"
+	"</head><body>"
+	"<h1>%s's BPQ32 Node</h1>"
+	"<div class=links>"
+	"<a href=/Node/NodeMenu.html>Node Pages</a>"
+	"<a href=/aprs>APRS Pages</a>"
+	"</div>";
 
-char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
-"<html><head></head><body></body></html>";
+char IndexNoAPRS[] = COMMON_HTML_HEAD_OPEN_DOCTYPE COMMON_FONT_INTER_LINK "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\"></head><body></body></html>";
 
 //char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
 
@@ -146,111 +165,162 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 
 char Tail[] = "</body></html>";
 
-char RouteHddr[] = "<h2 align=center>Routes</h2><table align=center border=2 style=font-family:monospace bgcolor=white>"
-"<tr><th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
-"<th>Frack</th><th>Last Heard</th><th>Queued</th><th>Rem Qual</th><th>SRTT</th><th>Rem SRTT</th></tr>";
+#define HTTP_NODE_TABLE_HEADER_ROW "<tr>"
+#define HTTP_NODE_SORT_CONTROLS "<div class='text-center my-20'><form method=get action=/Node/Nodes.html class='flex-center-wrap-gap-10'>" \
+	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
+	"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">" \
+	"<input type=submit class='btn' name=t value=\"Nodes With Traffic\"></form></div>"
 
-char RouteLine[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
-"<td>%02d:%02d<td>%d</td><td>%d</td></td><td></td><td></td></tr>";
+#define HTTP_NODE_TABLE_OPEN_STACK_CLASS(CLASSLIST) "<div class='table-wrap'><table class='node-table node-table-stack " CLASSLIST "'><thead>"
+#define HTTP_NODE_TABLE_OPEN_STACK HTTP_NODE_TABLE_OPEN_STACK_CLASS("")
+#define HTTP_NODE_TABLE_OPEN_STACK_COMPACT HTTP_NODE_TABLE_OPEN_STACK_CLASS("compact-table")
+#define HTTP_NODE_TABLE_OPEN_STACK_ROUTES HTTP_NODE_TABLE_OPEN_STACK_CLASS("routes-table")
+#define HTTP_NODE_TABLE_OPEN_STACK_STATS HTTP_NODE_TABLE_OPEN_STACK_CLASS("compact-table stats-table")
+#define HTTP_NODE_TABLE_MID_STACK "</thead><tbody>"
+#define HTTP_NODE_TABLE_HEADER_WITH_COLS(TABLE_CLASS, COLS) HTTP_NODE_TABLE_OPEN_STACK_CLASS(TABLE_CLASS) HTTP_NODE_TABLE_HEADER_ROW COLS "</tr>" HTTP_NODE_TABLE_MID_STACK
+#define HTTP_NODE_SECTION_TABLE_HEADER(TITLE, TABLE_CLASS, COLS) HTTP_NODE_H2(TITLE) HTTP_NODE_TABLE_HEADER_WITH_COLS(TABLE_CLASS, COLS)
+#define HTTP_NODE_SECTION_TABLE_OPEN(TITLE, TABLE_CLASS) HTTP_NODE_H2(TITLE) HTTP_NODE_TABLE_OPEN_STACK_CLASS(TABLE_CLASS) HTTP_NODE_TABLE_MID_STACK
+#define HTTP_NODE_H2(TEXT) "<h2 class='node-h2'>" TEXT "</h2>"
+#define HTTP_NODE_H3(TEXT) "<h3 class='node-h3'>" TEXT "</h3>"
 
-char RouteLineINP3[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
-"<td>%02d:%02d</td><td>%d</td><td>%d</td><td>%4.2fs</td><td>%4.2fs</td></tr>";
+#define HTTP_NODE_COLS_ROUTES "<th scope=col>Port</th><th scope=col>Call</th><th scope=col>Quality</th><th scope=col>Node Count</th><th scope=col>Frame Count</th><th scope=col>Retries</th><th scope=col>Percent</th><th scope=col>Maxframe</th><th scope=col>Frack</th><th scope=col>Last Heard</th><th scope=col>Queued</th><th scope=col>Rem Qual</th><th scope=col>SRTT</th><th scope=col>Rem SRTT</th>"
+#define HTTP_NODE_COLS_TRAFFIC "<th scope=col>Call</th><th scope=col>Frames</th><th scope=col>RTT</th><th scope=col>BPQ?</th><th scope=col>Hops</th>"
+#define HTTP_NODE_COLS_LINKS "<th scope=col>Far Call</th><th scope=col>Our Call</th><th scope=col>Port</th><th scope=col>ax.25 state</th><th scope=col>Link Type</th><th scope=col>ax.25 Version</th>"
+#define HTTP_NODE_COLS_USERS "<th scope=col>Circuit</th><th scope=col>Link</th><th scope=col>Circuit</th>"
+#define HTTP_NODE_COLS_PORTS "<th scope=col>Port</th><th scope=col>Driver</th><th scope=col>ID</th><th scope=col>Beacons</th><th scope=col>Driver Window</th><th scope=col>Stats Graph</th>"
 
-char xNodeHddr[] = "<align=center><form align=center method=get action=/Node/Nodes.html>"
-"<table align=center  bgcolor=white>"
-"<tr><td><input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\"></td><td>"
-"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\"></td><td>"
-"<input type=submit class='btn' name=t value=\"Nodes with traffic\"></td></tr></form></table>"
-"<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
+#define HTTP_NODE_MENU_CSS \
+	COMMON_CSS_ROOT \
+	COMMON_REDUCED_MOTION_CSS \
+	COMMON_MENU_CSS \
+	COMMON_TABLE_CSS \
+	COMMON_FORM_CSS \
+	COMMON_BUTTON_CSS \
+	COMMON_UTILITY_CSS \
+	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); line-height: 1.5; margin: 0; padding: 12px; background: var(--bg); color: var(--text); }" \
+	"h1 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0 18px; font-size: clamp(1.25rem,3vw,1.75rem); line-height: 1.25; }" \
+	".node-h2 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1.5rem,4vw,2.25rem); }" \
+	".node-h3 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1.25rem,3vw,1.75rem); }" \
+	".menu-header { max-width: 1100px; }" \
+	".menu { margin: 20px auto; max-width: 1100px; }" \
+	".menu a, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: var(--surface); text-decoration: none; border-radius: 6px; border: 1px solid var(--border); color: var(--link); box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); font-family: " COMMON_FONT_TITLE "; margin: 0; -webkit-appearance: none; appearance: none; line-height: 1.2; }" \
+	".menu a:hover, .menu .btn:hover { background: var(--surface-hover); }" \
+	".menu a:focus-visible, .menu .btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }" \
+	".dropdown { position: relative; display: inline-block; }" \
+	".dropdown-content { display: none; position: absolute; left: 50%%; transform: translateX(-50%%); background-color: var(--surface); min-width: 220px; border: 1px solid var(--border); border-radius: 6px; padding: 8px; z-index: 10; box-shadow: var(--shadow-overlay); font-family: " COMMON_FONT_TITLE "; }" \
+	".dropdown-content a, .dropdown-content .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; width: 100%%; margin-top: 6px; padding: 10px 16px; background: var(--surface); text-decoration: none; border-radius: 6px; border: 1px solid var(--border); color: var(--link); box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); font-family: " COMMON_FONT_TITLE "; line-height: 1.2; }" \
+	".dropdown-content a:hover, .dropdown-content .btn:hover { background: var(--surface-hover); }" \
+	".dropdown-content a:focus-visible, .dropdown-content .btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }" \
+	".dropdown-content form { margin: 0; }" \
+	".dropdown-content label { display: block; margin-bottom: 8px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); font-family: " COMMON_FONT_TITLE "; }" \
+	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); min-height: 44px; font-family: " COMMON_FONT_TITLE "; }" \
+	".dropdown-content input[type='submit'] { width: 100%%; margin-top: 6px; font-family: " COMMON_FONT_TITLE "; }" \
+	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid var(--border-light); padding-top: 6px; }" \
+	".mgmt-section.show { display: block; }" \
+	".show { display: block; }" \
+	".menu a:active, .menu .btn:active { background: var(--primary-dark); color: var(--on-primary); }" \
+	"input.btn:active { background: var(--primary-dark); color: var(--on-primary); }" \
+	COMMON_NODE_MENU_MOBILE_CSS
 
-char NodeHddr[] = "<center><form method=get action=/Node/Nodes.html>"
-"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">"
-"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">"
-"<input type=submit class='btn' name=t value=\"Nodes with traffic\"></form></center>"
-"<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
+char RouteHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Routes", "routes-table", HTTP_NODE_COLS_ROUTES);
 
-char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
+char RouteLine[] = "<tr><td data-label='Port' class='text'>%s%d</td><td data-label='Call' class='text'>%s%s</td><td data-label='Quality' class='num'>%d</td><td data-label='Node Count' class='num'>%d</td><td data-label='Frame Count' class='num'>%d</td><td data-label='Retries' class='num'>%d</td><td data-label='Percent' class='num'>%d%%</td><td data-label='Maxframe' class='num'>%d</td><td data-label='Frack' class='num'>%d</td>"
+"<td data-label='Last Heard' class='text'>%02d:%02d</td><td data-label='Queued' class='num'>%d</td><td data-label='Rem Qual' class='num'>%d</td><td data-label='SRTT' class='text'>-</td><td data-label='Rem SRTT' class='text'>-</td></tr>";
 
+char RouteLineINP3[] = "<tr><td data-label='Port' class='text'>%s%d</td><td data-label='Call' class='text'>%s%s</td><td data-label='Quality' class='num'>%d</td><td data-label='Node Count' class='num'>%d</td><td data-label='Frame Count' class='num'>%d</td><td data-label='Retries' class='num'>%d</td><td data-label='Percent' class='num'>%d%%</td><td data-label='Maxframe' class='num'>%d</td><td data-label='Frack' class='num'>%d</td>"
+"<td data-label='Last Heard' class='text'>%02d:%02d</td><td data-label='Queued' class='num'>%d</td><td data-label='Rem Qual' class='num'>%d</td><td data-label='SRTT' class='num'>%4.2fs</td><td data-label='Rem SRTT' class='num'>%4.2fs</td></tr>";
 
-char StatsHddr[] = "<h2 align=center>Node Stats</h2><table align=center cellpadding=2 bgcolor=white>"
-"<col width=250 /><col width=80 /><col width=80 /><col width=80 /><col width=80 /><col width=80 />";
+char NodeHddr[] = HTTP_NODE_SORT_CONTROLS
+HTTP_NODE_H2("Nodes %s");
 
-char PortStatsHddr[] = "<h2 align=center>Stats for Port %d</h2><table align=center border=2 cellpadding=2 bgcolor=white>";
+char NodeHeaderTraffic[] = HTTP_NODE_TABLE_HEADER_WITH_COLS("compact-table", HTTP_NODE_COLS_TRAFFIC);
 
-char PortStatsLine[] = "<tr><td> %s </td><td> %d </td></tr>";
-
-
-char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 align=center>You need to be signed in to save changes</h3><table align=center border=2 cellpadding=2 bgcolor=white>"
-"<form method=post action=BeaconAction>"
-"<table align=center  bgcolor=white>"
-"<tr><td>Send Interval (Minutes)</td><td><input type=text name=Every tabindex=1 size=5 value=%d></td></tr>" 
-"<tr><td>To</td><td><input name=Dest style=\"text-transform:uppercase;\" tabindex=2 size=5 value=%s></td></tr>"  
-"<tr><td>Path</td><td><input type=text name=Path style=\"text-transform:uppercase;\" size=50 maxlength=50 value=%s></td></tr>"
-"<tr><td>Send From File</td><td><input type=text name=File size=50 maxlength=50  value=%s></td></tr>"
-"<tr><td>Text</td><td><textarea name=\"Text\" cols=40 rows=5>%s</textarea></td></tr>"
-"</table>" 
-"<input type=hidden name=Port value=%d>"
-
-"<p align=center><input type=submit class='btn' value=Save><input type=submit class='btn' value=Test name=Test>"
-"</form>";
-
-
-char LinkHddr[] = "<h2 align=center>Links</h2><table align=center border=2 bgcolor=white>"
-"<tr><th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
-
-char LinkLine[] = "<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td align=center >%d</td></tr>";
-
-char UserHddr[] = "<h2 align=center>Sessions</h2><table align=center border=2 cellpadding=2 bgcolor=white>";
-
-char UserLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td></tr>";
-
-char TermSignon[] = "<html><head><title>BPQ32 Node %s Terminal Access</title></head><body background=\"/background.jpg\">"
-"<h2 align=center>BPQ32 Node %s Terminal Access</h2>"
-"<h3 align=center>Please enter username and password to access the node</h3>"
-"<form method=post action=TermSignon>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel>"
-"<input type=hidden name=Appl value=\"%s\"  id=Pass></form>";
+char NodeLine[] = "<a href=NodeDetail?%s>%s:%s</a>";
+char NodeTrafficLine[] = "<tr><td data-label='Call' class='text'><a href=NodeDetail?%s>%s:%s</a></td><td data-label='Frames' class='num'>%d</td><td data-label='RTT' class='num'>%d</td><td data-label='BPQ?' class='center'>%c</td><td data-label='Hops' class='num'>%.0d</td></tr>";
 
 
-char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
+char StatsHddr[] = HTTP_NODE_SECTION_TABLE_OPEN("Node Stats", "compact-table stats-table");
 
-char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
+char StatsLine[] = "<tr><td data-label='Statistic' class='text'>%s</td><td data-label='Value' class='text'>%s</td></tr>";
 
-char LostSession[] = "<html><body>Sorry, Session had been lost - refresh page to sign in again";
-char NoSessions[] = "<html><body>Sorry, No Sessions available - refresh page to try again";
+char PortStatsHddr[] = HTTP_NODE_SECTION_TABLE_OPEN("Stats for Port %d", "compact-table stats-table");
 
-char TermPage[] = "<!DOCTYPE html><html><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
-"<head><title>BPQ32 Node %s</title></head>"
-"<script>function resize(){"
-"var w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];"
-"x=w.innerWidth;"
-"y=w.innerHeight;"
-"var txt=document.getElementById('txt');"
-"txt.style.height = y - 150 + 'px';}</script>"
-"<body onload='resize()' onresize='resize()'>"
-"<h3 align=center>BPQ32 Node %s</h3>"
-"<form method=post action=/Node/TermClose?%s>"
-"<p align=center><input type=submit class='btn' value='Close and return to Node Page' /></form>"
-"<iframe style='display:block;' id=txt frameborder=2 marginwidth=0  marginheight=0 src=OutputScreen.html?%s width=100%%></iframe>"
-"<iframe style='display:block;' frameborder=0 marginwidth=0 marginheight=3 src=InputLine.html?%s width=100%% height=45px></iframe>"
-"</body>";
+char PortStatsLine[] = "<tr><td data-label='Statistic' class='text'>%s</td><td data-label='Value' class='num'>%d</td></tr>";
 
-char TermOutput[] = "<!DOCTYPE html><html><head>"
+
+char Beacons[] =
+	"<div class='form-section'>"
+	HTTP_NODE_H2("Beacon Configuration for Port %d")
+	HTTP_NODE_H3("You need to be signed in to save changes")
+	"<form method=post action=BeaconAction>"
+	"<div class='form-row'><label for=Every>Send Interval (Minutes)</label><input type=text id=Every name=Every tabindex=1 value=%d></div>"
+	"<div class='form-row'><label for=Dest>To</label><input type=text id=Dest name=Dest class='text-uppercase' tabindex=2 value=%s></div>"
+	"<div class='form-row'><label for=Path>Path</label><input type=text id=Path name=Path class='text-uppercase' maxlength=50 value=%s></div>"
+	"<div class='form-row'><label for=File>Send From File</label><input type=text id=File name=File maxlength=50 value=%s></div>"
+	"<div class='form-row'><label for=Text>Text</label><textarea id=Text name=Text>%s</textarea></div>"
+	"<input type=hidden name=Port value=%d>"
+	"<div class='buttons'><input type=submit value=Save><input type=submit value=Test name=Test></div>"
+	"</form>"
+	"</div>";
+
+
+char LinkHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Links", "compact-table", HTTP_NODE_COLS_LINKS);
+
+char LinkLine[] = "<tr><td data-label='Far Call' class='text'>%s</td><td data-label='Our Call' class='text'>%s</td><td data-label='Port' class='num'>%d</td><td data-label='ax.25 state' class='text'>%s</td><td data-label='Link Type' class='text'>%s</td><td data-label='ax.25 Version' class='num'>%d</td></tr>";
+
+char UserHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Sessions", "compact-table", HTTP_NODE_COLS_USERS);
+
+char UserLine[] = "<tr><td data-label='Circuit' class='text'>%s</td><td data-label='Link' class='center'>%s</td><td data-label='Circuit' class='text'>%s</td></tr>";
+
+#define HTTP_SIGNON_HEAD(TITLE) COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING "<title>" TITLE "</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
+#define HTTP_SIGNON_FORM_OPEN(ACTION) "<div class=\"form-container\"><form method=post action=" ACTION ">"
+#define HTTP_SIGNON_USER_ROW "<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>"
+#define HTTP_SIGNON_PASS_ROW "<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"
+#define HTTP_SIGNON_SUBMIT_CANCEL_ROW "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>"
+
+char TermSignon[] = HTTP_SIGNON_HEAD("BPQ32 Node %s Terminal Access")
+"<h2>BPQ32 Node %s Terminal Access</h2>"
+"<h3>Please enter username and password to access the node</h3>"
+HTTP_SIGNON_FORM_OPEN("TermSignon")
+HTTP_SIGNON_USER_ROW
+HTTP_SIGNON_PASS_ROW
+"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel />"
+"<input type=hidden name=Appl value=\"%s\"  id=Pass></form></div></div>";
+
+
+char PassError[] = "<div class='alert-error'>Sorry, User or Password is invalid - please try again</div>";
+
+char BusyError[] = "<div class='alert-warn'>Sorry, No sessions available - please try later</div>";
+
+char LostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
+char NoSessions[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
+
+char TermPage[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_VIEWPORT "<meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
+"<title>BPQ32 Node %s</title><style>" COMMON_CSS_VARIABLES COMMON_NODE_TERM_IO_COLORS_CSS "body { margin: 0; padding: 10px; font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: var(--bg); color: var(--text); } h3 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0; font-size: clamp(1.25rem,3vw,1.75rem); } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; }" COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#output-frame { flex: 1; border: 2px solid var(--border-card); background: var(--term-io-bg); min-height: 200px; } #input-frame { height: 50px; border: 2px solid var(--border-card); background: var(--term-io-bg); flex-shrink: 0; }" COMMON_NODE_TERM_MOBILE_CSS "</style>"
+"</head><body>"
+"<h3>BPQ32 Node %s</h3>"
+"<form method=post action=/Node/TermClose?%s class='term-actions'>"
+"<input type=submit class='btn' value='Close and return to Node Page' /></form>"
+"<div class=\"term-container\">"
+"<iframe id=output-frame frameborder=0 marginwidth=0 marginheight=0 src=OutputScreen.html?%s></iframe>"
+"<iframe id=input-frame frameborder=0 marginwidth=0 marginheight=0 src=InputLine.html?%s></iframe>"
+"</div></body>";
+
+char TermOutput[] = COMMON_HTML_HEAD_OPEN_DOCTYPE
+COMMON_FONT_INTER_LINK
 "<meta http-equiv=cache-control content=no-cache>"
 "<meta http-equiv=pragma content=no-cache>"
 "<meta http-equiv=expires content=0>" 
 "<meta http-equiv=refresh content=2>"
+"<style>" COMMON_CSS_VARIABLES COMMON_NODE_TERM_IO_COLORS_CSS "body { margin: 0; padding: 8px; background: var(--term-io-bg); font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); color: var(--term-io-text); } #Text div { white-space: nowrap; %s }</style>"
 "<script type=\"text/javascript\">\r\n"
 "function ScrollOutput()\r\n"
 "{window.scrollBy(0,document.body.scrollHeight)}</script>"
 "</head><body id=Text>"
-"<div style=\"font-family:monospace;%s>\"";
+"<div>";
 
 
-// font-family:monospace;background-color:black;color:lawngreen;font-size:12px
+// font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace;background-color:black;color:lawngreen;font-size:12px
 
 char TermOutputTail[] = "</div><script type=\"text/javascript\">\r\nsetTimeout(ScrollOutput, 1)</script></body></html>";
 
@@ -265,55 +335,53 @@ char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize(
 "inp.style.width =  x + 'px';}</script>"
 "<input id=inp type=text width=100%% name=input /></form>";
 */
-char InputLine[] = "<!DOCTYPE html><html><head></head><body onload='resize()' onresize='resize()'>"
+char InputLine[] = COMMON_HTML_HEAD_COMMON_STYLE_OPEN COMMON_CSS_VARIABLES
+"* { margin: 0; padding: 0; box-sizing: border-box; } "
+COMMON_NODE_TERM_IO_COLORS_CSS
+"body { background: var(--term-io-bg); color: var(--term-io-text); font-family: " COMMON_FONT_MONO "; padding: 5px; height: 100%%; display: flex; align-items: center; } "
+"form { width: 100%%; margin: 0; } "
+"#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid var(--border-card); border-radius: 6px; box-sizing: border-box; font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); background: var(--term-io-bg); color: var(--term-io-text); overflow: hidden; white-space: nowrap; }"
+"</style></head><body>"
 "<form name=inputform method=post action=/TermInput?%s>"
-"<input style=\"font-family:monospace;%s>\" id=inp type=text text width=100%% name=input />"
-"<script>document.inputform.input.focus();"
-"function resize(){"
-"var w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];"
-"x=w.innerWidth;y=w.innerHeight;"
-"var inp=document.getElementById('inp');"
-"inp.style.width=x-20+'px';}</script></form>";
+"<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
+"<script>document.inputform.input.focus();</script></form></body></html>";
 
-static char NodeSignon[] = "<html><head><title>BPQ32 Node SYSOP Access</title></head><body background=\"/background.jpg\">"
-"<h3 align=center>BPQ32 Node %s SYSOP Access</h3>"
-"<h3 align=center>This page sets Cookies. Don't continue if you object to this</h3>"
-"<h3 align=center>Please enter Callsign and Password to access the Node</h3>"
-"<form method=post action=/Node/Signon?Node>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+static char NodeSignon[] = HTTP_SIGNON_HEAD("BPQ32 Node SYSOP Access")
+"<h2>BPQ32 Node %s SYSOP Access</h2>"
+"<h3>This page sets Cookies. Don't continue if you object to this</h3>"
+"<h3>Please enter Callsign and Password to access the Node</h3>"
+HTTP_SIGNON_FORM_OPEN("/Node/Signon?Node")
+HTTP_SIGNON_USER_ROW
+HTTP_SIGNON_PASS_ROW
+HTTP_SIGNON_SUBMIT_CANCEL_ROW;
 
 
-static char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
-"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
-"<h3 align=center>Please enter Callsign and Password to access the BBS</h3>"
-"<form method=post action=/Mail/Signon?Mail>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+static char MailSignon[] = HTTP_SIGNON_HEAD("BPQ32 Mail Server Access")
+"<h2>BPQ32 Mail Server %s Access</h2>"
+"<h3>Please enter Callsign and Password to access the BBS</h3>"
+HTTP_SIGNON_FORM_OPEN("/Mail/Signon?Mail")
+HTTP_SIGNON_USER_ROW
+HTTP_SIGNON_PASS_ROW
+HTTP_SIGNON_SUBMIT_CANCEL_ROW;
 
-static char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title></head><body background=\"/background.jpg\">"
-"<h3 align=center>BPQ32 Chat Server %s Access</h3>"
-"<h3 align=center>Please enter Callsign and Password to access the Chat Server</h3>"
-"<form method=post action=/Chat/Signon?Chat>"
-"<table align=center  bgcolor=white>"
-"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+static char ChatSignon[] = HTTP_SIGNON_HEAD("BPQ32 Chat Server Access")
+"<h2>BPQ32 Chat Server %s Access</h2>"
+"<h3>Please enter Callsign and Password to access the Chat Server</h3>"
+HTTP_SIGNON_FORM_OPEN("/Chat/Signon?Chat")
+HTTP_SIGNON_USER_ROW
+HTTP_SIGNON_PASS_ROW
+HTTP_SIGNON_SUBMIT_CANCEL_ROW;
 
 
-static char MailLostSession[] = "<html><body>"
-"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/Lost?%s>"
-"Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel><br></form>";
+static char MailLostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style></head><body>"
+"<div class=\"form-container\" style=\"margin-top:50px;text-align:center\"><h2>Sorry, Session had been lost</h2>"
+"<form method=post action=/Mail/Lost?%s>"
+"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel></form></div>";
 
 
-static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
-"<title>Edit Config</title></head><body background=/background.jpg>"
-"<form style=\"font-family: monospace;  text-align: center;\"method=post action=CFGSave?%s>"
+static char ConfigEditPage[] = COMMON_HTML_HEAD_UTF8_VIEWPORT
+"<title>Edit Config</title><style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 0; padding: 10px; background: var(--bg); color: var(--text); } form { text-align: center; } textarea { width: min(100%%, 1100px); min-height: 60vh; box-sizing: border-box; font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); white-space: pre; }" COMMON_BTN_PANEL_BASE_CSS ".btn{margin:10px 6px 0;}" COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "</style></head><body>"
+"<form method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
 
@@ -349,6 +417,7 @@ void UndoTransparency(char * input)
 				hex = (tolower(c) - 'a' + 10) << 4;
 
 			c = *(ptr1++);
+
 			if(isdigit(c))
 				hex += (c - '0');
 			else
@@ -363,16 +432,12 @@ void UndoTransparency(char * input)
 	}
 	*ptr2 = 0;
 }
-
-
-
-
 VOID PollSession(struct HTTPConnectionInfo * Session)
 {
 	int state, change;
 	int count, len;
-	char Msg[400] = "";
 	char Formatted[8192];
+	char Msg[400] = "";
 	char * ptr1, * ptr2;
 	char c;
 	int Line;
@@ -694,7 +759,7 @@ struct HTTPConnectionInfo * FindSession(char * Key)
 
 void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
-	char _REPLYBUFFER[2048];
+	char _REPLYBUFFER[sizeof(InputLine) + 1024];
 	int ReplyLen;
 	char Header[256];
 	int HeaderLen;
@@ -736,9 +801,9 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 
 		if (TCP && TCP->WebTermCSS)	
-			ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, TCP->WebTermCSS);
+			ReplyLen = snprintf(_REPLYBUFFER, sizeof(_REPLYBUFFER), InputLine, Key, TCP->WebTermCSS);
 		else
-			ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, "");
+			ReplyLen = snprintf(_REPLYBUFFER, sizeof(_REPLYBUFFER), InputLine, Key, "");
 
 
 		Stream = Session->Stream;
@@ -829,7 +894,7 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LOCAL)
 {
-	char _REPLYBUFFER[8192];
+	char _REPLYBUFFER[250000];
 	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, "");
 	char Header[256];
 	int HeaderLen;
@@ -840,7 +905,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 		Session->KillTimer = 99999;
 	}
 
-	ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+	ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
 	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 		"\r\n", ReplyLen + (int)strlen(Tail));
@@ -851,7 +916,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 
 int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen,  int LOCAL)
 {
-	char _REPLYBUFFER[8192];
+	char _REPLYBUFFER[250000];
 	int ReplyLen;
 	char Header[256];
 	int HeaderLen;
@@ -869,7 +934,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 			goto Sendit;
 		}
 		user = strtok_s(&input[9], "&", &Context);
@@ -918,7 +983,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 				}
 				else
 				{
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
 				}
@@ -1200,7 +1265,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 			_stricmp(ptr, "gif") == 0 || _stricmp(ptr, "bmp") == 0 || _stricmp(ptr, "ico") == 0)
 			strcpy(Type, "Content-Type: image\r\n");
 
-		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
+		HeaderLen = snprintf(Header, sizeof(Header), "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
 				"Date: %s\r\n"
 				"Last-Modified: %s\r\n"
 				"%s%s"
@@ -1274,7 +1339,6 @@ VOID sendandcheck(SOCKET sock, const char * Buffer, int Len)
 
 int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
 {
-	char Msg[400] = "";
 	int HeaderLen, ReplyLen;
 	char Header[256];
 
@@ -1316,44 +1380,97 @@ int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session,
 		return 0;
 }	
 
-int SetupNodeMenu(char * Buff, int LOCAL)
+int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 {
 	int Len = 0, i;
 	struct TNCINFO * TNC;
 	int top = 0, left = 0;
+	char MgmtMenu[8192];
 
-	char NodeMenuHeader[] = "<html id=body><head><title>%s's BPQ32 Web Server</title>"
-	"<style type=\"text/css\">"
-	// The container <div> - needed to position the dropdown content
-	".dropdown {position: relative; display: inline-block;}"
-	// Dropdown Content (Hidden by Default)
-	".dropdown-content {display: none; position: absolute; left: -100px; background-color: #f1f1f1;"
-	" min-width: 120px; border: 1px solid; padding: 4px; z-index: 1;}"
-	// Links inside the dropdown
-	".dropdown-content a {color: black; padding: 2px 2px; display: block;}"
-	// Change color of dropdown links on hover 
-	".dropdown-content a:hover {background-color: #ddd}"
-	// Show the dropdown menu (use JS to add this class to the .dropdown-content container when the user clicks on the dropdown button)
-	".show {display:block;}"
-	"input.btn:active {background:black;color:white;} "
-	"submit.btn:active {background:black;color:white;} "
-	"</style>"
+	char NodeMenuHeader[] = "<!DOCTYPE html><html id=body><head>" COMMON_FONT_INTER_LINK "<title>%s's BPQ32 Web Server</title>"
+	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
+	"<style type=\"text/css\">" HTTP_NODE_MENU_CSS "</style>"
 
 	"<script>\r\n"
+	COMMON_MENU_JAVASCRIPT
 
 
 // Close the dropdown menu if the user clicks outside of it
-	"window.onclick = function(event) {console.log(event.target.id);"
-	" if (event.target.id == 'body') {"
-	"  var dropdowns = document.getElementsByClassName('dropdown-content');"
-	"  var i;\r\n"
-	" for (i = 0; i < dropdowns.length; i++) {"
-    "  var openDropdown = dropdowns[i];"
-    "  if (openDropdown.classList.contains('show')) {"
-	"   openDropdown.classList.remove('show');"
-    "  }}}}\r\n"
+	"function getMgmtDom() {"
+	" return {"
+	"  dropdown: document.getElementById('mgmtDropdown'),"
+	"  button: document.getElementById('mgmtButton'),"
+	"  sections: document.querySelectorAll('#mgmtDropdown .mgmt-section'),"
+	"  toggles: document.querySelectorAll('#mgmtDropdown .mgmt-toggle')"
+	" };"
+	"}"
+	"function resetMgmtSections(parts) {"
+	" var i;"
+	" for (i = 0; i < parts.sections.length; i++) parts.sections[i].classList.remove('show');"
+	" for (i = 0; i < parts.toggles.length; i++) parts.toggles[i].textContent = parts.toggles[i].getAttribute('data-label') + ' +';"
+	"}"
+	"function setMgmtOpen(parts, open) {"
+	" if (!parts.dropdown) return;"
+	" if (open) parts.dropdown.classList.add('show');"
+	" else parts.dropdown.classList.remove('show');"
+	"}"
+	"window.addEventListener('click', function(event) {"
+	" var parts = getMgmtDom();"
+	" if (parts.dropdown && parts.button && !parts.dropdown.contains(event.target) && !parts.button.contains(event.target)) {"
+	"  setMgmtOpen(parts, false);"
+	"  resetMgmtSections(parts);"
+	" }"
+	"});\r\n"
+	"function closeMgmtSections() {"
+	" resetMgmtSections(getMgmtDom());"
+	"}"
 
-	"function myShow() {document.getElementById('myDropdown').classList.add('show');}"
+	"function toggleMgmt(event) {"
+	" if (event) { event.preventDefault(); event.stopPropagation(); }"
+	" var parts = getMgmtDom();"
+	" if (!parts.dropdown) return;"
+	" if (parts.dropdown.classList.contains('show')) {"
+	"  setMgmtOpen(parts, false);"
+	"  resetMgmtSections(parts);"
+	" } else {"
+	"  setMgmtOpen(parts, true);"
+	" }"
+	"}"
+	"function toggleMgmtSection(event, sectionId, toggleId) {"
+	" if (event) { event.preventDefault(); event.stopPropagation(); }"
+	" var parts = getMgmtDom();"
+	" var section = document.getElementById(sectionId);"
+	" var toggle = document.getElementById(toggleId);"
+	" if (!section || !toggle) return;"
+	" var openNow = section.classList.contains('show');"
+	" resetMgmtSections(parts);"
+	" if (!openNow) {"
+	"  section.classList.add('show');"
+	"  toggle.textContent = toggle.getAttribute('data-label') + ' -';"
+	" }"
+	"}"
+	"function closeMenuOnMobile() {"
+	" var menu = document.getElementById('mainMenu');"
+	" var toggle = document.getElementById('menuToggle');"
+	" var parts = getMgmtDom();"
+	" if (!menu || !toggle) return;"
+	" if (window.matchMedia('(max-width: 768px)').matches) {"
+	"  menu.classList.remove('menu-open');"
+	"  toggle.textContent = 'Menu';"
+	"  setMgmtOpen(parts, false);"
+	"  resetMgmtSections(parts);"
+	" }"
+	"}"
+	"window.addEventListener('DOMContentLoaded', function() {"
+	" var menu = document.getElementById('mainMenu');"
+	" if (!menu) return;"
+	" menu.addEventListener('click', function(event) {"
+	"  var target = event.target;"
+	"  if (!target) return;"
+	"  if (target.tagName === 'A') closeMenuOnMobile();"
+	"  if (target.tagName === 'INPUT' && target.type === 'submit') closeMenuOnMobile();"
+	" });"
+	"});"
 //	"function myHide() {"
 //	" if (event.target.matches('.HTMLBodyElement'))"
 //	"{document.getElementById('myDropdown').classList.remove('show');}}"
@@ -1374,48 +1491,70 @@ int SetupNodeMenu(char * Buff, int LOCAL)
 	char NodeMenuLine[] = "dev_win(\"/Node/Port?%d\",%d,%d,%d,%d);";
 
 	char NodeMenuRest[] = "}</script></head>"
-		"<body id=body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
-		"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-		"<td><a href=/Node/Routes.html>Routes</a></td>"
-		"<td><a href=/Node/Nodes.html>Nodes</a></td>"
-		"<td><a href=/Node/Ports.html>Ports</a></td>"
-		"<td><a href=/Node/Links.html>Links</a></td>"
-		"<td><a href=/Node/Users.html>Users</a></td>"
-		"<td><a href=/Node/Stats.html>Stats</a></td>"
-		"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s%s";
+		"<body id=body><h1>BPQ32 Node %s</h1>"
+		"<div class='menu-header'><button id='menuToggle' class='menu-toggle' type='button' aria-expanded='false' aria-controls='mainMenu' onclick='toggleMenu(event)'>Menu</button></div>"
+		"<div id='mainMenu' class=\"menu\">"
+		"<a href=/Node/Routes.html>Routes</a>"
+		"<a href=/Node/Nodes.html>Nodes</a>"
+		"<a href=/Node/Ports.html>Ports</a>"
+		"<a href=/Node/Links.html>Links</a>"
+		"<a href=/Node/Users.html>Users</a>"
+		"<a href=/Node/Stats.html>Stats</a>"
+		"<a href=/Node/Terminal.html>Terminal</a>%s%s%s%s";
 
-	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
-		"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a></td>";
+	char DriverBit[] = "<a href=\"javascript:open_win();\">Driver Windows</a>"
+		"<a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a>";
 
-	char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
+	char APRSBit[] = "<a href=../aprs>APRS Pages</a>";
 
-	char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
-		"<td><a href=/Webmail>WebMail</a></td>";
+	char WebMailBit[] = "<a href=/Webmail>WebMail</a>";
 
-	char ChatBit[] = "<td><a href=../Chat/Header>Chat Mgmt</a></td>";
-	char SigninBit[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>";
+	char MailBit[] = "<a href=../Mail/Header>Mail Mgmt</a>";
+
+	char ChatBit[] = "<a href=../Chat/Header>Chat Mgmt</a>";
+	char SigninBit[] = "<a href=/Node/Signon.html>Sysop Signin</a>";
+
+	char MgmtBit[] =
+		"<div class='dropdown'>"
+		"<a id='mgmtButton' href='#' onclick='toggleMgmt(event)'>Mgmt</a>"
+		"<div id='mgmtDropdown' class='dropdown-content'>"
+		"%s%s%s"
+		"<a href=\"javascript:open_win();\">Driver Windows</a>"
+		"<a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a>"
+		"<a href=/Node/EditCfg.html>Edit Config</a>"
+		"<button id='mgmtLogsToggle' class='btn mgmt-toggle' data-label='Logs' type='button' onclick='toggleMgmtSection(event,\"mgmtLogs\",\"mgmtLogsToggle\")'>Logs +</button>"
+		"<div id='mgmtLogs' class='mgmt-section'>"
+		"<form id=doDate action='/node/ShowLog.html'><label>"
+		"Select Date: <input type='date' name='date' id=e>"
+		"<script>"
+		"document.getElementById('e').value = new Date().toISOString().substring(0, 10);"
+		"</script></label>"
+		"<input type=submit class='btn' name='BBS' value='BBS Log'>"
+		"<input type=submit class='btn' name='Debug' value='BBS Debug Log'>"
+		"<input type=submit class='btn' name='Telnet' value='Telnet Log'>"
+		"<input type=submit class='btn' name='CMS' value='CMS Log'>"
+		"<input type=submit class='btn' name='Chat' value='Chat Log'>"
+		"</form></div>"
+		"</div>"
+		"</div>";
 
 	char NodeTail[] = 
-		"<td><a href=/Node/EditCfg.html>Edit Config</a></td>\
-		<td><div onmouseover=myShow() class='dropdown'>\
-		<button class=\"dropbtn\">View Logs</button>\
-		<div id=\"myDropdown\" class=\"dropdown-content\">\
-		<form id = doDate form action='/node/ShowLog.html'><label>\
-		Select Date: <input type='date' name='date' id=e>\
-		<script>\
-		document.getElementById('e').value = new Date().toISOString().substring(0, 10);\
-		</script></label>\
-		<input type=submit class='btn' name='BBS' value='BBS Log'></br>\
-		<input type=submit class='btn' name='Debug' value='BBS Debug Log'></br>\
-		<input type=submit class='btn' name='Telnet' value='Telnet Log'></br>\
-		<input type=submit class='btn' name='CMS' value='CMS Log'></br>\
-		<input type=submit class='btn' name='Chat' value='Chat Log'></br>\
-		</form></div>\
-		</div>\
-		</td></tr></table>";
+		"</div></body></html>";
 
 
-	Len = sprintf(Buff, NodeMenuHeader, Mycall);
+	int n;
+
+	if (BuffSize == 0)
+		return 0;
+
+	n = snprintf(Buff, BuffSize, NodeMenuHeader, Mycall);
+	if (n < 0)
+		return 0;
+
+	if ((size_t)n >= BuffSize)
+		return (int)(BuffSize - 1);
+
+	Len = n;
 
 	for (i=1; i <= MAXBPQPORTS; i++)
 	{
@@ -1425,16 +1564,52 @@ int SetupNodeMenu(char * Buff, int LOCAL)
 
 		if (TNC->WebWindowProc)
 		{
-			Len += sprintf(&Buff[Len], NodeMenuLine, i, TNC->WebWinX, TNC->WebWinY, top, left);
+			size_t Remaining;
+
+			if ((size_t)Len >= BuffSize)
+				return (int)(BuffSize - 1);
+
+			Remaining = BuffSize - (size_t)Len;
+			n = snprintf(&Buff[Len], Remaining, NodeMenuLine, i, TNC->WebWinX, TNC->WebWinY, top, left);
+
+			if (n < 0)
+				return Len;
+
+			if ((size_t)n >= Remaining)
+				return (int)(BuffSize - 1);
+
+			Len += n;
 			top += 22;
 			left += 22;
 		}
 	}
 
-	Len += sprintf(&Buff[Len], NodeMenuRest, Mycall,
-		DriverBit,
+	n = snprintf(MgmtMenu, sizeof(MgmtMenu), MgmtBit,
+		(IncludesMail)?MailBit:"",
+		(IncludesChat)?ChatBit:"",
+		(LOCAL)?"":SigninBit);
+
+	if (n < 0)
+		MgmtMenu[0] = 0;
+	else if ((size_t)n >= sizeof(MgmtMenu))
+		MgmtMenu[sizeof(MgmtMenu) - 1] = 0;
+
+	if ((size_t)Len >= BuffSize)
+		return (int)(BuffSize - 1);
+
+	n = snprintf(&Buff[Len], BuffSize - (size_t)Len, NodeMenuRest, Mycall,
 		(APRSWeb)?APRSBit:"",
-		(IncludesMail)?MailBit:"", (IncludesChat)?ChatBit:"", (LOCAL)?"":SigninBit, NodeTail);
+		(IncludesMail)?WebMailBit:"",
+		MgmtMenu,
+		NodeTail);
+
+	if (n < 0)
+		return Len;
+
+	if ((size_t)n >= BuffSize - (size_t)Len)
+		return (int)(BuffSize - 1);
+
+	Len += n;
 
 	return Len;
 }
@@ -1449,7 +1624,7 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 	FILE *fp1;
 	char Header[256];
 	int HeaderLen;
-	char Reply[4096];
+	char Reply[250000];
 	char Mess[256];
 	char Backup1[MAX_PATH];
 	char Backup2[MAX_PATH];
@@ -1461,7 +1636,7 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 	{
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, LOCAL);
+			ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 			//			ReplyLen = sprintf(Reply, "%s", "<html><script>window.close();</script></html>");
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 			send(sock, Header, HeaderLen, 0);
@@ -1626,7 +1801,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char * HostPtr = 0;
 
 	char * Context, * Method, * NodeURL = 0, * Key;
-	char _REPLYBUFFER[250000];
+	char _REPLYBUFFER[300000];
 	char Reply[250000];
 
 	int ReplyLen = 0;
@@ -1638,27 +1813,26 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	int Len;
 	char * WebSock = 0;
 
-	char PortsHddr[] = "<h2 align=center>Ports</h2><table align=center border=2 bgcolor=white>"
-		"<tr><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th><th>Stats Graph</th></tr>";
+	char PortsHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Ports", "compact-table", HTTP_NODE_COLS_PORTS);
 
 //	char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
 
-	char PortLineWithBeacon[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td>"
-		"<td><a href=PortBeacons?%d>&nbsp;Beacons</a><td> </td></td><td>%s</td></tr>\r\n";
+	char PortLineWithBeacon[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'><a href=PortStats?%d&%s>%s</a></td><td data-label='ID' class='text'>%s</td>"
+		"<td data-label='Beacons' class='text'><a href=PortBeacons?%d>Beacons</a></td><td data-label='Driver Window' class='text'>-</td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char SessionPortLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
-		"<td> </td><td>%s</td></tr>\r\n";
+	char SessionPortLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+		"<td data-label='Driver Window' class='text'>-</td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char PortLineWithDriver[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
-		"<td><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td>%s</td></tr>\r\n";
+	char PortLineWithDriver[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
 
-	char PortLineWithBeaconAndDriver[] = "<tr><td>%d</td><td>%s</td><td>%s</td>"
-		"<td><a href=PortBeacons?%d>&nbsp;Beacons</a></td>"
-		"<td><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td>%s</td></tr>\r\n";
+	char PortLineWithBeaconAndDriver[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td>"
+		"<td data-label='Beacons' class='text'><a href=PortBeacons?%d>Beacons</a></td>"
+		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char RigControlLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
-		"<td><a href=\"javascript:dev_win('/Node/RigControl.html',%d,%d,%d,%d);\">Rig Control</a></td></tr>\r\n";
+	char RigControlLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/RigControl.html',%d,%d,%d,%d);\">Rig Control</a></td><td data-label='Stats Graph' class='text'>-</td></tr>\r\n";
 
 
 	char Encoding[] = "Content-Encoding: deflate\r\n";
@@ -1819,7 +1993,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		
 				if (memcmp(&Context[13], "login", 5) == 0)
 				{
-					ReplyLen = ProcessMailAPISignon(TCP, MsgPtr, "M", Reply, &Session, FALSE, LOCAL);
+					ReplyLen = ProcessMailAPISignon(TCP, MsgPtr, "M", Reply, sizeof(Reply), &Session, FALSE, LOCAL);
 					memcpy(MsgPtr, "GET /mail/api/v1/", 17);
 
 					if (ReplyLen)			// Error message
@@ -1917,7 +2091,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			NodeURL = strtok_s(Context, "?", &IContext);
 			Key = strtok_s(NULL, "?", &IContext);
 
-			ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session, LOCAL);
+			ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, LOCAL);
 			return 0;
 
 		}
@@ -1938,7 +2112,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 			if (_stricmp(NodeURL, "/Mail/Signon") == 0)
 			{
-				ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session, FALSE, LOCAL);
+				ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, FALSE, LOCAL);
 
 				if (ReplyLen)
 				{
@@ -1959,7 +2133,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply, LOCAL);
+					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -1986,7 +2160,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply, LOCAL);
+						ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					RLen = ReplyLen;
@@ -2059,7 +2233,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 			if (_stricmp(NodeURL, "/Chat/Signon") == 0)
 			{
-				ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, &Session, LOCAL);
+				ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, LOCAL);
 
 				if (ReplyLen)
 				{
@@ -2080,7 +2254,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply, LOCAL);
+					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -2107,7 +2281,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply, LOCAL);
+						ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					RLen = ReplyLen;
@@ -2191,7 +2365,7 @@ doHeader:
 
 		if ((_memicmp(Context, "/MAIL/", 6) == 0) || (_memicmp(Context, "/WebMail", 8) == 0))
 		{
-			char _REPLYBUFFER[250000];
+			char _REPLYBUFFER[300000];
 			struct HTTPConnectionInfo Dummy = {0};
 			int Sent, Loops = 0;
 			char token[16] = "";
@@ -2575,7 +2749,7 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/Signon") == 0)
 			{
-				ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session, LOCAL);
+				ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, sizeof(Reply), &Session, LOCAL);
 				return 0;
 			}
 
@@ -2605,7 +2779,7 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -2617,7 +2791,7 @@ doHeader:
 
 				if (strstr(input, "Cancel=Cancel"))
 				{
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
@@ -2685,7 +2859,7 @@ doHeader:
 					SendUIBeacon(Slot);
 
 
-				ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, Port,		
 					Interval[Slot], &UIUIDEST[Slot][0], &UIUIDigi[Slot][0], &FN[Slot][0], &Message[Slot][0], Port);
 
@@ -2707,7 +2881,7 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/LogAction") == 0)
 			{
-				ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
@@ -2939,21 +3113,20 @@ doHeader:
 
 		{
 
-			ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
 			if (_stricmp(NodeURL, "/Node/webproc.css") == 0)
 			{
 				char WebprocCSS[] =
-					".dropbtn {position: relative; border: 1px solid black;padding:1px;}\r\n"
+					".dropbtn {position: relative; border: 1px solid var(--border);padding:1px;}\r\n"
 					".dropdown {position: relative; display: inline-block;}\r\n"
-					".dropdown-content {display: none; position: absolute;background-color: #ccc; "
-					"min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,00.2); z-index: 1;}\r\n"
-					".dropdown-content a {color: black; padding: 1px 1px;text-decoration:none;display:block;}"
-					".dropdown-content a:hover {background-color: #dddfff;}\r\n"
+					".dropdown-content {display: none; position: absolute;background-color: var(--surface); "
+					"min-width: 160px; box-shadow: var(--shadow-overlay); z-index: 1;}\r\n"
+					".dropdown-content a {color: var(--text); padding: 1px 1px;text-decoration:none;display:block;}"
+					".dropdown-content a:hover {background-color: var(--surface-soft);}\r\n"
 					".dropdown:hover .dropdown-content {display: block;}\r\n"
-					".dropdown:hover .dropbtn {background-color: #ddd;}\r\n"
-					"input.btn:active {background:black;color:white;}\r\n"
-					"submit.btn:active {background:black;color:white;}\r\n";
+					".dropdown:hover .dropbtn {background-color: var(--surface-hover);}\r\n"
+					COMMON_BTN_ACTIVE_DARK_CSS;
 				ReplyLen = sprintf(_REPLYBUFFER, "%s", WebprocCSS);
 			}
 
@@ -2998,6 +3171,7 @@ doHeader:
 			{
 				struct tm * TM;
 				char UPTime[50];
+				char Value[128];
 				time_t szClock = STATSTIME * 60;
 
 				TM = gmtime(&szClock);
@@ -3006,38 +3180,41 @@ doHeader:
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", StatsHddr);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%s</td></tr>",
-					"Version", VersionString);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Version", VersionString);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%s</td></tr>",
-					"Uptime (Days Hours Mins)", UPTime);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Uptime (Days Hours Mins)", UPTime);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td></tr>",
-					"Semaphore: Get-Rel/Clashes", Semaphore.Gets - Semaphore.Rels, Semaphore.Clashes);
+				snprintf(Value, sizeof(Value), "%d / %d", Semaphore.Gets - Semaphore.Rels, Semaphore.Clashes);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Semaphore: Get-Rel/Clashes", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td align=right><td align=right>%d</td></tr>",
-					"Buffers: Max/Cur/Min/Out/Wait", MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS);
+				snprintf(Value, sizeof(Value), "%d / %d / %d / %d / %d", MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Buffers: Max/Cur/Min/Out/Wait", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td></tr>",
-					"Known Nodes/Max Nodes", NUMBEROFNODES, MAXDESTS);
+				snprintf(Value, sizeof(Value), "%d / %d", NUMBEROFNODES, MAXDESTS);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Known Nodes/Max Nodes", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td></tr>",
-					"L4 Connects Sent/Rxed ", L4CONNECTSOUT, L4CONNECTSIN);
+				snprintf(Value, sizeof(Value), "%d / %d", L4CONNECTSOUT, L4CONNECTSIN);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "L4 Connects Sent/Rxed", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td align=right><td align=right>%d</td></tr>",
-					"L4 Frames TX/RX/Resent/Reseq", L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES);
+				snprintf(Value, sizeof(Value), "%d / %d / %d / %d", L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "L4 Frames TX/RX/Resent/Reseq", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td></tr>",
-					"L3 Frames Relayed", L3FRAMES);
+				snprintf(Value, sizeof(Value), "%d", L3FRAMES);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "L3 Frames Relayed", Value);
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 
 			}
 
 			else if (_stricmp(NodeURL, "/Node/RigControl.html") == 0)
 			{
 				char Test[] =
-					"<html><meta http-equiv=expires content=0>\r\n"
-					"<head><title>Rigcontrol</title></head>\r\n"
-					"<script type = \"text/javascript\">\r\n"
+					COMMON_HTML_HEAD_COMMON
+					COMMON_HTML_META_UTF8
+					COMMON_HTML_META_VIEWPORT_COMPACT
+					"<meta http-equiv=expires content=0>"
+					"<title>Rigcontrol</title>"
+					"<script type=\"text/javascript\">\r\n"
 					"var ws;"
 					"function WebSocketTest()"
 					"{"
@@ -3085,17 +3262,20 @@ doHeader:
 					"}" 
 					"</script>\r\n"
 					"</head>\r\n"
-					"<body height: 600px; onload=WebSocketTest()>\r\n"
-					"<div id = 'div'>Waiting for data...</div>\r\n"
+					"<body onload=WebSocketTest()>\r\n"
+					"<div id='div'>Waiting for data...</div>\r\n"
 					"</body></html>\r\n";
 
 		
 				char NoRigCtl[] =
-					"<html><meta http-equiv=expires content=0>\r\n"
-					"<head><title>Rigcontrol</title></head>\r\n"
+					COMMON_HTML_HEAD_COMMON
+					COMMON_HTML_META_UTF8
+					COMMON_HTML_META_VIEWPORT_COMPACT
+					"<meta http-equiv=expires content=0>"
+					"<title>Rigcontrol</title>"
 					"</head>\r\n"
-					"<body height: 600px>\r\n"
-					"<div id = 'div'>RigControl Not Configured...</div>\r\n"
+					"<body>"
+					"<div id='div'>RigControl Not Configured...</div>\r\n"
 					"</body></html>\r\n";
 
 				if (RigWebPage)
@@ -3107,15 +3287,16 @@ doHeader:
 			else if (_stricmp(NodeURL, "/Node/ShowLog.html") == 0)
 			{
 				char ShowLogPage[] =
-					"<html><script>"
+					COMMON_HTML_HEAD_UTF8_VIEWPORT_STYLE_OPEN COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 4px; background: var(--bg); color: var(--text); }" COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#log { font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); }</style>"
+					"<title>Log Display</title>"
+					"<script>"
 					"function myResize() {"
 					" var h = document.getElementById('outer').clientHeight;"
 					" var offsets = document.getElementById('log').getBoundingClientRect();"
 					" document.getElementById('log').style.height = h - offsets.top;}"
 					"</script>"
-					"<head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
-					"<title>Log Display</title></head>"
-					"<body style=\"margin: 4;\" background=/background.jpg onload='myResize()' onresize='myResize()'>"
+					"</head>"
+					"<body onload='myResize()' onresize='myResize()'>"
 					"<div id=outer style=\"width: 100%%; height: 100%%;\">"
 					"<form id = form><input name=input value=Back type=submit class='btn'>"
 //					"<form id = doDate><input type=date value=Date name='date'><input type='submit'>"
@@ -3144,8 +3325,8 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					char _REPLYBUFFER[4096];	
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					char _REPLYBUFFER[250000];	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -3169,7 +3350,7 @@ doHeader:
 
 				if (strcmp(Context, "input=Back") == 0)
 				{
-					ReplyLen = SetupNodeMenu(Reply, LOCAL);
+					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
@@ -3274,8 +3455,8 @@ doHeader:
 				{
 					//	Send Not Authorized
 
-					char _REPLYBUFFER[4096];	
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					char _REPLYBUFFER[250000];	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
@@ -3418,6 +3599,7 @@ doHeader:
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "FRMRs Sent", Port->PORTCONTROL.L2FRMRTX);
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "FRMRs Received", Port->PORTCONTROL.L2FRMRRX);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 
 				//		DB	'Link Active %   '
 				//		DD	AVSENDING
@@ -3488,6 +3670,8 @@ doHeader:
 				if (RigActive)
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], RigControlLine, 64, "Rig Control", "Rig Control", 600, 350, 200, 200);
 
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
+
 			}
 
 			if (_stricmp(NodeURL, "/Node/Nodes.html") == 0)
@@ -3496,8 +3680,7 @@ doHeader:
 				int count, i;
 				char Normcall[10];
 				char Alias[10];
-				int Width = 5;
-				int x = 0, n = 0;
+				int n = 0;
 				struct DEST_LIST * List[1000];
 				char Param = 0;
 
@@ -3534,12 +3717,18 @@ doHeader:
 				if (Param == 'T')
 				{
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "with traffic");
-					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<td>Call</td><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr><tr>");
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", NodeHeaderTraffic);
 				}
 				else if (Param == 'C') 
+				{
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "sorted by Call");
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", "<div class='node-grid'>");
+				}
 				else
+				{
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "sorted by Alias");
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", "<div class='node-grid'>");
+				}
 
 				for (i = 0; i < n; i++)
 				{
@@ -3551,24 +3740,21 @@ doHeader:
 
 					if (Param == 'T')
 					{
-						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<td>%s:%s</td><td align=center>%d</td><td align=center>%d</td><td align=center>%c</td><td align=center>%.0d</td></tr><tr>",
-							Normcall, Alias, List[i]->DEST_COUNT, List[i]->DEST_RTT /16,
+						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeTrafficLine,
+							Normcall, Normcall, Alias, List[i]->DEST_COUNT, List[i]->DEST_RTT /16,
 							(List[i]->DEST_STATE & 0x40)? 'B':' ', (List[i]->DEST_STATE & 63));
 
 					}
 					else
 					{
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeLine, Normcall, Alias, Normcall);
-
-						if (++x == Width)
-						{
-							x = 0;
-							ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tr><tr>");
-						}
 					}
 				}
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tr>");
+				if (Param == 'T')
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
+				else
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/NodeDetail") == 0)
@@ -3598,7 +3784,7 @@ doHeader:
 
 				if (count == MAXDESTS)
 				{
-					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<h3 align = center>Call %s not found</h3>", Context);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<h3 style=\"text-align:center;font-size:clamp(1.0625rem,0.95rem + 0.6vw,1.25rem);\">Call %s not found</h3>", Context);
 					goto SendResp;
 				}
 
@@ -3606,19 +3792,18 @@ doHeader:
 				strlop(Alias, ' ');
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen],
-					"<h3 align=center>Info for Node %s:%s</h3><p style=font-family:monospace align=center>", Alias, Context);
+					HTTP_NODE_H3("Info for Node %s:%s"), Alias, Context);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<table border=1 bgcolor=white><tr><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr>");	
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", HTTP_NODE_TABLE_OPEN_STACK_CLASS("node-detail-table") HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Frames</th><th scope=col>RTT</th><th scope=col>BPQ?</th><th scope=col>Hops</th></tr>" HTTP_NODE_TABLE_MID_STACK);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td align=center>%d</td><td align=center>%d</td><td align=center>%c</td><td align=center>%.0d</td></tr></table>",
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td data-label='Frames' class='num'>%d</td><td data-label='RTT' class='num'>%d</td><td data-label='BPQ?' class='center'>%c</td><td data-label='Hops' class='num'>%.0d</td></tr></tbody></table></div>",
 					Dest->DEST_COUNT, Dest->DEST_RTT /16,
 					(Dest->DEST_STATE & 0x40)? 'B':' ', (Dest->DEST_STATE & 63));
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<h3 align=center>Neighbours</h3>");
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", HTTP_NODE_H3("Neighbours"));
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], 
-					"<table border=1 style=font-family:monospace align=center bgcolor=white>"
-					"<tr><td> </td><td> Qual </td><td> Obs </td><td> Port </td><td> Call </td></tr>");	
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen],
+					"%s", HTTP_NODE_TABLE_OPEN_STACK_CLASS("node-detail-table") HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Active</th><th scope=col>Qual</th><th scope=col>Obs</th><th scope=col>Port</th><th scope=col>Call</th></tr>" HTTP_NODE_TABLE_MID_STACK);
 
 				NRRoute = &Dest->NRROUTE[0];
 
@@ -3633,13 +3818,13 @@ doHeader:
 						len = ConvFromAX25(Neighbour->NEIGHBOUR_CALL, Normcall);
 						Normcall[len] = 0;
 
-						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%c&nbsp;</td><td>%d</td><td>%d</td><td>%d</td><td>%s</td></tr>",
+						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td data-label='Active' class='center'>%c</td><td data-label='Qual' class='num'>%d</td><td data-label='Obs' class='num'>%d</td><td data-label='Port' class='num'>%d</td><td data-label='Call' class='text'>%s</td></tr>",
 							(Active == i)?'>':' ',NRRoute->ROUT_QUALITY, NRRoute->ROUT_OBSCOUNT, Neighbour->NEIGHBOUR_PORT, Normcall);
 					}
 					NRRoute++;
 				}
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</table>");
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 
 				goto SendResp;
 
@@ -3809,12 +3994,9 @@ doHeader:
 			{
 				int i;
 				char Normcall[10];
-				int Width = 5;
-				int x = 0, n = 0, nd = 0;
+				int n = 0, nd = 0;
 				struct arp_table_entry * List[1000];
 				struct arp_table_entry * ListD[1000];
-				char AXIPList[10000] = "";
-				int ListLen = 0;
 
 				struct AXIPPORTINFO * AXPORT = Portlist[0];
 				struct PORTCONTROL * PORT = PORTTABLE;
@@ -3822,8 +4004,12 @@ doHeader:
 				time_t NOW = time(NULL);
 				
 				char AXIPHeader[] =
-					"<table align='center' bgcolor='ffffff' border=2 cellpadding=10 cellspacing=2 style=font-family:monospace>"
-					"<tr><td align='center'>AXIP Up</td><td align='center'>AXIP Down</td></tr><tr><td valign='top'>%s";
+					HTTP_NODE_H2("AXIP Partners")
+					HTTP_NODE_TABLE_OPEN_STACK
+					HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Status</th><th scope=col>Call</th><th scope=col>Last Heard (s)</th></tr>"
+					HTTP_NODE_TABLE_MID_STACK;
+
+				char AXIPRow[] = "<tr><td data-label='Status' class='text'>%s</td><td data-label='Call' class='text'>%s</td><td data-label='Last Heard (s)' class='num'>%d</td></tr>";
 				
 
 				while (PORT)
@@ -3852,26 +4038,23 @@ doHeader:
 				if (nd > 1)
 					qsort(ListD, nd, sizeof(void *), CompareNode);
 
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", AXIPHeader);
+
 				for (i = 0; i < n; i++)
 				{
 					int len = ConvFromAX25(List[i]->callsign, Normcall);
 					Normcall[len]=0;
-
-					ListLen += sprintf(&AXIPList[ListLen], "%02d - %s %d<br>", i + 1, Normcall, (List[i]->LastHeard)?(NOW - List[i]->LastHeard):0);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], AXIPRow, "Up", Normcall, (List[i]->LastHeard)?(int)(NOW - List[i]->LastHeard):0);
 				}
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], AXIPHeader, AXIPList);
-
-				ListLen = 0;
-	
 				for (i = 0; i < nd; i++)
 				{
 					int len = ConvFromAX25(ListD[i]->callsign, Normcall);
 					Normcall[len]=0;
-					ListLen += sprintf(&AXIPList[ListLen], "%02d - %s %d<br>", i + 1, Normcall, (ListD[i]->LastHeard)?(NOW - ListD[i]->LastHeard):0);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], AXIPRow, "Down", Normcall, (ListD[i]->LastHeard)?(int)(NOW - ListD[i]->LastHeard):0);
 				}
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</td><td valign='top'>%s", AXIPList);
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</td></tr></table></body></html>");
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/Routes.html") == 0)
@@ -3965,6 +4148,8 @@ doHeader:
 					}
 					Routes+=1;
 				}
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/Links.html") == 0)
@@ -4018,6 +4203,8 @@ doHeader:
 						Links+=1;
 					}
 				}
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/Users.html") == 0)
@@ -4079,6 +4266,8 @@ CMDS50:
 CMDS60:			
 					L4++;	
 				}
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 			/*
 			PUBLIC	CMDUXX_1
@@ -4151,7 +4340,7 @@ CMDS60:
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);
+						ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
 					}
 				}
@@ -4308,16 +4497,30 @@ int StatusProc(char * Buff)
 	int Flags;
 	int AppNumber;
 	int OneBits;
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<head><title>Stream Status</title></head><body>");
+	int Len = sprintf(Buff, COMMON_HTML_HEAD_COMMON
+		COMMON_HTML_META_UTF8
+		COMMON_HTML_META_VIEWPORT_COMPACT
+		"<meta http-equiv=expires content=0>"
+		"<meta http-equiv=refresh content=15>"
+		"<title>Stream Status</title>"
+		"<style>"
+		COMMON_CSS_VARIABLES
+		"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}"
+		"h3{text-align:center;margin:8px 0 12px;}"
+		"table{border-collapse:collapse;margin:10px 0;}"
+		"th,td{border:1px solid var(--border);padding:3px 7px;text-align:left;}"
+		"th{background:var(--table-header);font-weight:bold;}"
+		"</style>"
+		"</head><body>"
+		"<h3>Stream Status</h3>");
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; font-family: monospace; align=center \" border=1 cellpadding=1 cellspacing=0>");
-	Len += sprintf(&Buff[Len], "<tr><th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th>");
-	Len += sprintf(&Buff[Len], "<th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th></tr><tr>");
+	Len += sprintf(&Buff[Len], "<table>");
+	Len += sprintf(&Buff[Len], "<tr><th>#</th><th>RX</th><th>TX</th>");
+	Len += sprintf(&Buff[Len], "<th>MON</th><th>App</th><th>Flg</th>");
+	Len += sprintf(&Buff[Len], "<th>Callsign</th><th>Program</th>");
+	Len += sprintf(&Buff[Len], "<th>#</th><th>RX</th><th>TX</th>");
+	Len += sprintf(&Buff[Len], "<th>MON</th><th>App</th><th>Flg</th>");
+	Len += sprintf(&Buff[Len], "<th>Callsign</th><th>Program</th></tr><tr>");
 
 	for (i=1; i <=BPQHOSTSTREAMS; i++)
 	{		
@@ -4364,11 +4567,11 @@ int StatusProc(char * Buff)
 
 	}
 
-	Len += sprintf(&Buff[Len], "</tr></table>");
+	Len += sprintf(&Buff[Len], "</tr></table></body></html>");
 	return Len;
 }
 
-int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL)
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -4387,13 +4590,14 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+			ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 				"\r\n", (int)(ReplyLen + strlen(Tail)));	
 			send(sock, Header, HeaderLen, 0);
 			send(sock, Reply, ReplyLen, 0);
 			send(sock, Tail, (int)strlen(Tail), 0);
+			return ReplyLen;
 		}
 		user = strtok_s(&input[9], "&", &Key);
 		password = strtok_s(NULL, "=", &Key);
@@ -4410,9 +4614,22 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 					// ok
 
 					Sess = *Session = AllocateSession(sock, 'N');
+
+					if (Sess == NULL)
+					{
+						ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
+						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
+
+						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", (int)(ReplyLen + strlen(Tail)));
+						send(sock, Header, HeaderLen, 0);
+						send(sock, Reply, ReplyLen, 0);
+						send(sock, Tail, (int)strlen(Tail), 0);
+						return ReplyLen;
+					}
+
 					Sess->USER = USER;
 
-					ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+					ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 						"Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
@@ -4435,15 +4652,11 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 	send(sock, Tail, (int)strlen(Tail), 0);
 
 	return 0;
-
-
-	return ReplyLen;
 }
 
-int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
+int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
 {
 	int ReplyLen = 0;
-	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 	char * user, * password;
 	struct HTTPConnectionInfo * NewSession;
 	int i;
@@ -4478,7 +4691,7 @@ int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char 
 					}
 					else
 					{
-						ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+						ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;
@@ -4505,7 +4718,7 @@ int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char 
 		ReplyLen = 0;
 	else
 	{
-		ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+		ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 		ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 	}
 	
@@ -4515,7 +4728,7 @@ int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char 
 
 
 
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -4531,7 +4744,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, LOCAL);
+			ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 			return ReplyLen;
 		}
 		user = strtok_s(&input[9], "&", &Key);
@@ -4560,7 +4773,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 					}
 					else
 					{
-						ReplyLen =  SetupNodeMenu(Reply, LOCAL);
+						ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;
@@ -4576,7 +4789,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 }
 
 
-int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL)
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, int LOCAL)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
@@ -4591,7 +4804,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, LOCAL);
+			ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 			return ReplyLen;
 		}
 
@@ -4612,13 +4825,13 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 					*Session = AllocateSession(Appl[0], 'C');
 
-					if (Session)
+					if (*Session)
 					{
 						ReplyLen = 0;
 					}
 					else
 					{
-						ReplyLen = SetupNodeMenu(Reply, LOCAL);
+						ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 					}
 					return ReplyLen;
@@ -4734,18 +4947,31 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 	int p, i;
 
 	char Page[] =
-		"<html><meta http-equiv=expires content=0>\r\n"
-		//					"<meta http-equiv=refresh content=5>\r\n"
-		"<head><title>Rigcontrol</title></head>\r\n"
-		"<style type=text/css>form{margin:0px; padding:0px; display:inline;}</style>"
-		"<body height: 580px;><h3>Rigcontrol</h3>\r\n"
-		"<table style=\"text-align: left; width: 580px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2><tr>\r\n"
-		"<th width=90px>Radio</th>\r\n"
-		"<th width=90px>Freq</th>\r\n"
-		"<th width=90px>Mode</th>\r\n"
+		COMMON_HTML_HEAD_COMMON
+		COMMON_HTML_META_UTF8
+		COMMON_HTML_META_VIEWPORT_COMPACT
+		"<meta http-equiv=expires content=0>\r\n"
+		"<title>Rig Control</title>\r\n"
+		"<style>"
+		COMMON_CSS_VARIABLES
+		"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}"
+		"h3{text-align:center;margin:8px 0 12px;}"
+		"form{margin:0;padding:0;display:inline;}"
+		"table{border-collapse:collapse;margin:10px 0;max-width:600px;}"
+		"th,td{border:1px solid var(--border);padding:5px 10px;text-align:left;}"
+		"th{background:var(--table-header);font-weight:bold;}"
+		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;background:var(--primary);color:var(--on-primary);border:none;border-radius:4px;cursor:pointer;font-size:12px;box-sizing:border-box;}"
+		".btn:hover,.btn:focus{background:var(--primary-dark);outline:2px solid var(--focus-ring);outline-offset:2px;}"
+		"</style>"
+		"</head><body>"
+		"<h3>Rig Control</h3>\r\n"
+		"<table><tr>\r\n"
+		"<th>Radio</th>\r\n"
+		"<th>Freq</th>\r\n"
+		"<th>Mode</th>\r\n"
 		"<th>ST</th>\r\n"
 		"<th>Ports</th>\r\n"
-		"<th hidden width=10px>Action</th>\r\n"
+		"<th style=\"display:none\">Action</th>\r\n"
 		"</tr>";
 	char RigLine[] =
 		"<tr>\r\n"
@@ -4754,7 +4980,7 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"  <td>%s/1</td>\r\n"
 		"  <td>%c%c</td>\r\n"
 		"  <td>%s</td>\r\n"
-		"  <td hidden width=10px><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td>\r\n"
+		"  <td style=\"display:none\"><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td>\r\n"
 		"  </tr>\r\n";
 	char Tail[] =		
 		"</table>\r\n"

@@ -21,6 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "cheaders.h"
 #include "bpqmail.h"
+#include "common_web_components.h"
 
 #define MAIL
 #include "httpconnectioninfo.h"
@@ -32,13 +33,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <dirent.h>
 #endif
 
-static struct HTTPConnectionInfo * FindSession(char * Key);
 int APIENTRY SessionControl(int stream, int command, int param);
-int SetupNodeMenu(char * Buff);
 VOID SetMultiStringValue(char ** values, char * Multi);
 char * GetTemplateFromFile(int Version, char * FN);
 VOID FormatTime(char * Time, time_t cTime);
 struct MsgInfo * GetMsgFromNumber(int msgno);
+VOID GetReplyAddress(struct MsgInfo * Msg, char * ReplyAddr);
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP);
 BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg);
 int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, char * FileName, char * XML, char * Reply, char * RawMessage, int RawLen);
@@ -46,7 +46,6 @@ struct HTTPConnectionInfo * AllocateWebMailSession();
 VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest, int InputLen);
 void ConvertTitletoUTF8(WebMailInfo * WebMail, char * Title, char * UTF8Title, int Len);
 char *stristr (char *ch1, char *ch2);
-char * ReadTemplate(char * FormSet, char * DirName, char * FileName);
 VOID DoStandardTemplateSubsitutions(struct HTTPConnectionInfo * Session, char * txtFile);
 BOOL CheckifPacket(char * Via);
 int GetHTMLFormSet(char * FormSet);
@@ -69,7 +68,6 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 char * BuildB2Header(WebMailInfo * WebMail, struct MsgInfo * Msg, char ** ToCalls, int Calls);
 VOID FormatTime2(char * Time, time_t cTime);
 VOID ProcessSelectResponse(struct HTTPConnectionInfo * Session, char * URLParams);
-VOID ProcessAskResponse(struct HTTPConnectionInfo * Session, char * URLParams);
 char * CheckFile(struct HtmlFormDir * Dir, char * FN);
 VOID GetPage(struct HTTPConnectionInfo * Session, char * NodeURL);
 VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *URLParams, int InputLen);
@@ -118,65 +116,73 @@ struct HtmlFormDir
 
 char FormDirList[4][MAX_PATH] = {"Standard_Templates", "Standard Templates", "Local_Templates"};
 
-static char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
-static char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
+static char PassError[] = "<div class='alert-error'>Sorry, User or Password is invalid - please try again</div>";
+static char BusyError[] = "<div class='alert-warn'>Sorry, No sessions available - please try later</div>";
+
+VOID GetReplyAddress(struct MsgInfo * Msg, char * ReplyAddr)
+{
+	if (Msg->type == 'B')
+	{
+		if (_stricmp(Msg->to, "RMS") == 0)
+			sprintf(ReplyAddr, "RMS:%s", Msg->via);
+		else if (Msg->to[0] == 0)
+			sprintf(ReplyAddr, "smtp:%s", Msg->via);
+		else if (Msg->via[0])
+			sprintf(ReplyAddr, "%s@%s", Msg->to, Msg->via);
+		else
+			sprintf(ReplyAddr, "%s", Msg->to);
+
+		if (ReplyAddr[0])
+			return;
+	}
+
+	if (Msg->emailfrom[0])
+		sprintf(ReplyAddr, "%s%s", Msg->from, Msg->emailfrom);
+	else
+		sprintf(ReplyAddr, "%s", Msg->from);
+}
 
 extern char MailSignon[];
 
-char WebMailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background='/background.jpg'>"
-	"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
-	"<h3 align=center>Please enter Callsign and Password to access WebMail</h3>"
-	"<form method=post action=/WebMail/Signon>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></form>";
+char WebMailSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+	COMMON_FONT_INTER_LINK
+	"<title>BPQ32 WebMail Access</title>"
+	"<style>" COMMON_SIGNON_CSS "</style>"
+	"</head><body>"
+	"<h2>BPQ32 WebMail %s Access</h2>"
+	"<h3>Please enter Callsign and Password to access WebMail</h3>"
+	"<div class=\"form-container\"><form method=post action=/WebMail/Signon>"
+	"<div class=\"form-row\"><label for=user>User</label><input type=text id=user name=user tabindex=1 maxlength=50 required></div>"
+	"<div class=\"form-row\"><label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required></div>"
+	"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/ /></div></form></div></body></html>";
 
-static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
-	"<title></title><script src='/WebMail/webscript.js'></script>"
-	"<style type=\"text/css\">"
-	"input.btn:active {background:black;color:white;} "
-	"submit.btn:active {background:black;color:white;} "
-	"</style>"
-	"</head>"
-	"<body background=/background.jpg onload='initialize(185)' onresize='initialize(185)'>"
-	"<h3 align=center>Webmail Interface - Message Input Form</h3>"
-	"<form align=center id=myform style=\"font-family: monospace; \" method=post action=/WebMail/EMSave\?%s enctype=multipart/form-data>"
-	"<div style='text-align: center;'><div style='display: inline-block;'><span style='display:block; text-align: left;'>"
-	"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='To' name='To' value='%s'>%s<br>"
-	"Subject <input size=60 id='Subj' name='Subj' value=\"%s\"> &nbsp; &nbsp; &nbsp;"
-//	"<button onclick='document.getElementById('getFile').click()'>Attach Files</button>"
-//	"<input type='file' id='getFile' name='myFile[]' multiple style='display:none'><br>"
-	"<label for='myfile'>Attachments </label><input type='file'   name='myFile[]' multiple>"
-	"<br>Type &nbsp;&nbsp;&nbsp;"
-	"<select tabindex=1 size=1 name=Type><option value=P>P</option>"
-	"<option value=B>B</option><option value=T>T</option></select>"
-	" BID <input name=BID><br><label for='myfile2'>Header &nbsp;</label>"
-	"<input type='file' name='myFile2[]' style='width: 220px'>"
-	"<label for='myfile3'> Footer </label><input type='file' name='myFile3[]'>"
-	"</span></div>"
-	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
-	"<input name=Send value=Send type=submit class='btn'> <input name=Cancel value=Cancel type=submit class='btn'></div></form>";
+static char MsgInputPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+	"<title>Webmail Message Input</title><script src='/WebMail/webscript.js'></script>"
+	"<style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; margin: 12px; background: var(--bg); color: var(--text); } h2 { text-align: center; font-family: " COMMON_FONT_TITLE "; font-size: clamp(1.25rem,3vw,1.75rem); margin: 0 0 12px; } #myform { max-width: 980px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; box-sizing: border-box; } .form-row label { flex: 0 0 88px; font-weight: 600; } .form-row input, .form-row select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: clamp(14px,2vw,16px); } #To, #Subj { font-size: 15px; padding-top: 9px; padding-bottom: 9px; } .form-row input[type=file] { padding: 6px 0; border: none; } .form-row textarea { flex: 1 1 auto; width: 100%%; min-height: 360px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; line-height: 1.4; resize: vertical; font-family: " COMMON_FONT_MONO "; } .form-row.meta-row label { flex: 0 0 88px; } " COMMON_WEBMAIL_FORM_LAYOUT_CORE_CSS " .inline-action { white-space: nowrap; flex: 0 0 auto; margin-left: 10px; } .btn, .buttons input { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; text-decoration: none; font-size: clamp(14px,1.5vw,16px); box-sizing: border-box; } " COMMON_WEBMAIL_FORM_BUTTON_INTERACTION_CSS " " COMMON_WEBMAIL_FORM_BUTTON_ROW_BASE_CSS " @media (max-width: 768px) { body { margin: 10px; } #myform { padding: 12px; } " COMMON_WEBMAIL_FORM_MOBILE_STACK_BASE_CSS " .form-row input, .form-row select { width: 100%%; } .form-row input, .form-row select, .buttons input, .btn { min-height: 48px; } .form-row input[type=file] { min-height: 0; } .form-row.message-row label { padding-top: 0; } .inline-action { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; width: 100%%; margin-left: 0; } .inline-action .btn { flex: 1 1 auto; min-width: 100px; } .buttons { justify-content: stretch; gap: 8px; } .buttons input { flex: 1 1 0; } }</style></head><body>"
+	"<h2>Webmail Interface - Message Input Form</h2>"
+	"<form id=myform method=post action=/WebMail/EMSave\?%s enctype=multipart/form-data>"
+	"<div class=form-row><label for='To'>To:</label><input id='To' size=60 name='To' value='%s'><span class=inline-action>%s</span></div>"
+	"<div class=form-row><label for='Subj'>Subject:</label><input id='Subj' size=60 name='Subj' value=\"%s\"></div>"
+	"<div class=form-row><label for='Attachments'>Attachments:</label><input id='Attachments' type='file' name='myFile[]' multiple></div>"
+	"<div class='form-row meta-row'><label for='Type'>Type:</label><select id='Type' tabindex=1 size=1 name=Type><option value=P %s>P</option><option value=B %s>B</option><option value=T %s>T</option></select></div>"
+	"<div class='form-row meta-row'><label for='BID'>BID:</label><input id='BID' name=BID></div>"
+	"<div class=form-row><label for='Header'>Header:</label><input id='Header' type='file' name='myFile2[]'></div>"
+	"<div class=form-row><label for='Footer'>Footer:</label><input id='Footer' type='file' name='myFile3[]'></div>"
+	"<div class='form-row message-row'><label for='main'>Message:</label><textarea id='main' name=Msg style='overflow:auto;'>%s</textarea></div>"
+	"<div class=buttons><input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
-static char CheckFormMsgPage[] = "<html><head><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
-	"<title></title><script src='/WebMail/webscript.js'></script></head>"
-	"<body background=/background.jpg onload='initialize(210)' onresize='initialize(210)'>"
-	"<h3 align=center>Webmail Forms Interface - Check Message</h3>"
-	"<form align=center id=myform style=\"font-family: monospace; \"method=post action=/WebMail/FormMsgSave\?%s>"
-
-	"<div style='text-align: center;'><div style='display: inline-block;'><span style='display:block; text-align: left;'>"
-	"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='To' name='To' value='%s'><br>"
-	"CC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 id='CC' name='CC' value='%s'><br>"
-	"Subject <input size=60 id='Subj' name='Subj' value='%s'>"
-//"<input type='file' name='myFile' multiple>"
-	"<br>Type &nbsp;&nbsp;&nbsp;"
-	"<select tabindex=1 size=1 name=Type><option value=P %s>P</option>"
-	"<option value=B %s>B</option><option value=T %s>T</option></select>"
-	" BID <input name=BID value='%s'><br><br>"
-	"</span></div>"
-
-	"<textarea id='main' name=Msg style='overflow:auto;'>%s</textarea><br>"
-	"<input name=Send value=Send type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'></div></form>";
+static char CheckFormMsgPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+	"<title>Webmail Forms - Check Message</title><script src='/WebMail/webscript.js'></script>"
+	"<style>" COMMON_CSS_VARIABLES "*{box-sizing:border-box;}body{font-family:" COMMON_FONT_MONO ";margin:max(12px,env(safe-area-inset-left));background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}h2{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);margin:0 0 12px;}#myform{max-width:980px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;flex-direction:column;}@supports(padding:max(0px)){body{margin:clamp(10px,3vw,20px);margin-left:max(clamp(10px,3vw,20px),env(safe-area-inset-left));margin-right:max(clamp(10px,3vw,20px),env(safe-area-inset-right));}}.form-row label{flex:0 0 clamp(70px,20%,100px);font-weight:600;font-size:14px;}.form-row input,.form-row select{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;touch-action:manipulation;}#To,#Subj{font-size:15px;padding:9px 10px;}.form-row textarea{flex:1 1 auto;width:100%%;min-height:360px;padding:10px;border:1px solid var(--border);border-radius:6px;line-height:1.4;resize:vertical;font-family:" COMMON_FONT_MONO ";font-size:14px;touch-action:manipulation;}.form-row.meta-row label{flex:0 0 clamp(70px,20%,100px);}" COMMON_WEBMAIL_FORM_LAYOUT_CORE_CSS ".btn,.buttons input{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:clamp(14px,1.5vw,16px);touch-action:manipulation;}" COMMON_WEBMAIL_FORM_BUTTON_INTERACTION_CSS "" COMMON_WEBMAIL_FORM_BUTTON_ROW_BASE_CSS ".buttons{position:sticky;bottom:0;background:var(--surface);padding:10px 0;border-top:1px solid var(--border-light);z-index:10;}" COMMON_REDUCED_MOTION_CSS "@media(max-width:480px){body{margin:clamp(8px,2vw,12px);margin-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));margin-right:max(clamp(8px,2vw,12px),env(safe-area-inset-right));}#myform{padding:12px;border-radius:6px;}" COMMON_WEBMAIL_FORM_MOBILE_STACK_BASE_CSS ".form-row input,.form-row select,.form-row textarea{width:100%%;min-height:48px;}.form-row.message-row{align-items:stretch;}.form-row.message-row label{padding-top:0;padding-bottom:4px;}.form-row.message-row textarea{min-height:300px;}.form-row.meta-row select,.form-row.meta-row input{min-height:48px;}.buttons{justify-content:stretch;gap:8px;padding:12px 0;}.buttons input{flex:1 1 0;min-height:48px;padding:12px 10px;}}</style></head><body>"
+	"<h2>Webmail Forms Interface - Check Message</h2>"
+	"<form id=myform method=post action=/WebMail/FormMsgSave\?%s>"
+	"<div class=form-row><label for='To'>To:</label><input id='To' size=60 name='To' value='%s'></div>"
+	"<div class=form-row><label for='CC'>CC:</label><input id='CC' size=60 name='CC' value='%s'></div>"
+	"<div class=form-row><label for='Subj'>Subject:</label><input id='Subj' size=60 name='Subj' value='%s'></div>"
+	"<div class='form-row meta-row'><label for='Type'>Type:</label><select id='Type' tabindex=1 size=1 name=Type><option value=P %s>P</option><option value=B %s>B</option><option value=T %s>T</option></select></div>"
+	"<div class='form-row meta-row'><label for='BID'>BID:</label><input id='BID' name=BID value='%s'></div>"
+	"<div class='form-row message-row'><label for='main'>Message:</label><textarea id='main' name=Msg style='overflow:auto;'>%s</textarea></div>"
+	"<div class=buttons><input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
 
 extern char * WebMailTemplate;
@@ -722,14 +728,14 @@ VOID ProcessFormDir(char * FormSet, char * DirName, struct HtmlFormDir *** xxx, 
 	{
         if (entry->d_type == DT_DIR)
 		{
-			char Dir[MAX_PATH];
+			char Dir[520];
 
 			if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
 
 			// Recurse in subdir
 
-			sprintf(Dir, "%s/%s", DirName, entry->d_name);
+			snprintf(Dir, sizeof(Dir), "%s/%s", DirName, entry->d_name);
 
 			ProcessFormDir(FormSet, Dir, &FormDir->Dirs, &FormDir->DirCount);
 			continue;
@@ -805,9 +811,9 @@ int GetHTMLFormSet(char * FormSet)
 
 	DIR *dir;
 	struct dirent *entry;
-	char name[256];
+	char name[295];
 	
-   	sprintf(name, "%s/%s", BPQDirectory, FormSet);
+   	snprintf(name, sizeof(name), "%s/%s", BPQDirectory, FormSet);
 
 	if (!(dir = opendir(name)))
 	{
@@ -884,7 +890,7 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
  	// Ex includes an alert string to be sent before message
 	
 	struct UserInfo * User = Session->User;
-	char Messages[245000];
+	char Messages[255000];
 	int m;
 	struct MsgInfo * Msg;
 	char * ptr = Messages;
@@ -897,7 +903,22 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 	if (Alert && Alert[0])
 		ptr += sprintf(Messages, "<script>alert(\"%s\");window.location.href = '/Webmail/WebMail?%s';</script>", Alert, Key); 
 
-	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len To      @       From    Subject\r\n\r\n");
+	// Keep WebMail heading scale consistent with Node/Terminal title sizing,
+	// even when WebMailPage.txt is customized.
+	ptr += sprintf(ptr, "<style>.wm-title{text-align:center;margin:0 0 12px 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem)!important;font-weight:500;}</style>");
+
+	ptr += sprintf(ptr, "<table class=\"msg-table\" "
+		"onclick=\"var row=event.target.closest('tr.msg-row[data-href]');if(row&&this.contains(row))window.location=row.getAttribute('data-href');\" "
+		"onkeydown=\"var row=event.target.closest('tr.msg-row[data-href]');var k=event.key||event.code;var kc=event.keyCode||event.which;if(row&&this.contains(row)&&(k==='Enter'||k===' '||k==='Spacebar'||k==='Space'||kc===13||kc===32)){event.preventDefault();window.location=row.getAttribute('data-href');}\"><thead><tr>"
+		"<th scope=\"col\" class=\"msg-num\">#</th>"
+		"<th scope=\"col\" class=\"msg-date\">Date</th>"
+		"<th scope=\"col\" class=\"msg-type\">Type</th>"
+		"<th scope=\"col\" class=\"msg-len\">Len</th>"
+		"<th scope=\"col\" class=\"msg-to\">To</th>"
+		"<th scope=\"col\" class=\"msg-via\">@</th>"
+		"<th scope=\"col\" class=\"msg-from\">From</th>"
+		"<th scope=\"col\" class=\"msg-subject\">Subject</th>"
+		"</tr></thead><tbody>");
 
 	for (m = LatestMsg; m >= 1; m--)
 	{
@@ -960,11 +981,22 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 
 			free(EncodedTitle);
 			
-			ptr += sprintf(ptr, "<a href=/WebMail/WM?%s&%d>%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
-				Key, Msg->number, Msg->number,
-				FormatDateAndTime((time_t)Msg->datecreated, TRUE), Msg->type,
-				Msg->status, Msg->length, Msg->to, Via,
-				Msg->from, UTF8Title);
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" data-href=\"/WebMail/WM?%s&%d\">"
+				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
+				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
+				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
+				"<td class=\"msg-len\" data-label=\"Len\">%d</td>"
+				"<td class=\"msg-to\" data-label=\"To\">%s</td>"
+				"<td class=\"msg-via\" data-label=\"@\">%s</td>"
+				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
+				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
+				"</tr>",
+				Key, Msg->number, Key, Msg->number, Msg->number,
+				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
+				Msg->type, Msg->status,
+				Msg->length,
+				Msg->to, Via, Msg->from,
+				UTF8Title);
 
 			n--;
 
@@ -972,6 +1004,8 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 				break;
 		}
 	}
+
+	ptr += sprintf(ptr, "</tbody></table>");
 
 	if (WebMailTemplate == NULL)
 		WebMailTemplate = GetTemplateFromFile(6, "WebMailPage.txt");
@@ -1067,7 +1101,7 @@ int ViewWebMailMessage(struct HTTPConnectionInfo * Session, char * Reply, int Nu
 				int i;
 				char *ptr2, *attptr;	
 
-				sprintf(DownLoad, "<td><a href=/WebMail/DL?%s&%d>Save Attachments</a></td>", Key, Msg->number);
+				sprintf(DownLoad, "<a class=\"wm-btn\" href=/WebMail/DL?%s&%d>Save Attachments</a>", Key, Msg->number);
 
 				WebMail->Files = 0;
 
@@ -1702,6 +1736,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 							n = sprintf_s(Msg, sizeof(Msg), "Webmail Connect from %s Rejected by Exclude Flag", _strupr(user));
 							WriteLogLine(NULL, '|',Msg, n, LOG_BBS);
 							ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
+						ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 							*RLen = ReplyLen;
 							return;
 						}			
@@ -1718,6 +1753,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 				//	Bad User or Pass
 
 				ReplyLen = sprintf(Reply, WebMailSignon, BBSName, BBSName);
+				ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 				*RLen = ReplyLen;
 				return;
 			}
@@ -1936,14 +1972,56 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		char Page[4096];
 
 		char WebSockPage[] =
-			"<!-- Version 6 8/11/2018 -->\r\n"
+			"<!-- Version 7 Auto-Refresh -->\r\n"
 			"<!DOCTYPE html> \r\n"
 			"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"> \r\n"
 			"<head> \r\n"
 			"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/> \r\n"
+			"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/> \r\n"
 			"<style type=\"text/css\">\r\n"
-			"pre {margin-left: 4px;white-space: pre} \r\n"
-			"#main{width:700px;position:absolute;left:0px;border:2px solid;background-color: #ffffff;}\r\n"
+			COMMON_CSS_ROOT
+			"*{box-sizing:border-box;}\r\n"
+			"body{margin:0;padding:max(12px,env(safe-area-inset-left));font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}\r\n"
+			"@supports(padding:max(0px)){body{padding:clamp(10px,3vw,12px);padding-left:max(clamp(10px,3vw,12px),env(safe-area-inset-left));padding-right:max(clamp(10px,3vw,12px),env(safe-area-inset-right));}}\r\n"
+			".wm-shell{max-width:980px;margin:0 auto;}\r\n"
+			".wm-title{text-align:center;margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;font-size:clamp(1.25rem,3vw,1.75rem);font-weight:500;}\r\n"
+			COMMON_WEBMAIL_MENU_LINK_TOUCH_BASE_CSS
+			"\r\n"
+			"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;min-height:calc(100dvh - 240px);overflow:auto;}\r\n"
+			".msg-table{width:100%%;border-collapse:collapse;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
+			".msg-table thead{background:var(--table-header);border-bottom:2px solid var(--border);}\r\n"
+			".msg-table th{padding:10px 6px;text-align:left;font-weight:600;white-space:nowrap;touch-action:manipulation;}\r\n"
+			".msg-table td{padding:8px 6px;border-bottom:1px solid var(--border-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}\r\n"
+			".msg-table tr.msg-row{cursor:pointer;}\r\n"
+			".msg-table tr:hover{background:var(--surface-soft);}\r\n"
+			".msg-table a{color:var(--link);text-decoration:none;}\r\n"
+			".msg-table a:hover{text-decoration:underline;}\r\n"
+			".msg-num{font-family: " COMMON_FONT_MONO ";}\r\n"
+			".msg-date{font-family: " COMMON_FONT_MONO ";}\r\n"
+			".msg-type{font-family: " COMMON_FONT_MONO ";min-width:24px;}\r\n"
+			".msg-len{font-family: " COMMON_FONT_MONO ";min-width:50px;}\r\n"
+			".msg-to,.msg-via,.msg-from{max-width:80px;}\r\n"
+			".msg-subject{max-width:380px;}\r\n"
+			"@media(min-width:1200px){.msg-subject{max-width:420px;}}\r\n"
+			"@media(max-width:768px){\r\n"
+			"body{padding:clamp(6px,2vw,10px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu a{width:100%%;text-align:center;min-height:48px;}#main{padding:8px;min-height:calc(100dvh - 280px);}\r\n"
+			".msg-table{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
+			".msg-table th,.msg-table td{padding:6px 4px;}\r\n"
+			".msg-date{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
+			".msg-to,.msg-via,.msg-from{max-width:60px;}\r\n"
+			".msg-subject{max-width:180px;}\r\n"
+			"}\r\n"
+			"@media(max-width:520px){\r\n"
+			".msg-len,.msg-via{display:none;}\r\n"
+			".msg-to,.msg-from{max-width:50px;}\r\n"
+			".msg-subject{max-width:120px;}\r\n"
+			"}\r\n"
+			"@media(max-width:380px){\r\n"
+			".msg-date,.msg-from{display:none;}\r\n"
+			".msg-len,.msg-via,.msg-type{display:none;}\r\n"
+			".msg-to{max-width:45px;}\r\n"
+			".msg-subject{max-width:100px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
+			"}\r\n"
 			"</style>\r\n"
 			"<script src=\"/WebMail/webscript.js\"></script>\r\n"
 
@@ -1953,11 +2031,9 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"{"
 			" if (\"WebSocket\" in window)"
 			" {"
-			"   // open a web socket. Get address from URL\r\n"
-			"	var text = window.location.href;"
-			"	var result = text.substring(7);"
-			"	var myArray = result.split('/', 1);"
-			"   ws = new WebSocket('ws://' + myArray[0] + '/WMRefresh&%s');\r\n"
+			"   // open a web socket\r\n"
+			"   var wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';"
+			"   ws = new WebSocket(wsProto + '//' + window.location.host + '/WMRefresh&%s');\r\n"
 
 			"   ws.onopen = function() {\r\n"
 
@@ -1991,32 +2067,38 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"	div.innerHTML = 'WebSocket not supported by your Browser - AutoRefresh not availble'\r\n"
 			" }"
 			"}"
+			"function toggleMenu(event){if(event)event.preventDefault();var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');if(!menu||!toggle)return;if(menu.classList.contains('menu-open')){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}else{menu.classList.add('menu-open');toggle.textContent='Close';toggle.setAttribute('aria-expanded','true');}}"
+			"function closeMenuOnMobile(){var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');if(!menu||!toggle)return;if(window.matchMedia('(max-width: 768px)').matches){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}}"
+			"window.addEventListener('click',function(event){var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');var header=document.querySelector('.menu-header');if(menu&&toggle&&window.matchMedia('(max-width: 768px)').matches){var inMenu=menu.contains(event.target);var inHeader=header&&header.contains(event.target);if(!inMenu&&!inHeader){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}}});"
+			"window.addEventListener('DOMContentLoaded',function(){var menu=document.getElementById('mainMenu');if(!menu)return;menu.addEventListener('click',function(event){var target=event.target;if(target&&target.tagName==='A')closeMenuOnMobile();});});"
 
 			"</script>\r\n"
 			"<title>WebMail</title> \r\n"
 			"</head>\r\n"
 
-			"<body background=/background.jpg onload=Init() onresize=initialize(120)>\r\n"
-			"<h3 align=center> %s Webmail Interface - User %s - Message List</h3>\r\n"
-			"<table align=center border=1 cellpadding=2 bgcolor=white><tr>\r\n"
-			"\r\n"
-			"<td><a href=/WebMail/WMB?%s>Bulls</a></td>\r\n"
-			"<td><a href=/WebMail/WMP?%s>Personal</a></td>\r\n"
-			"<td><a href=/WebMail/WMT?%s>NTS</a></td>\r\n"
-			"<td><a href=/WebMail/WMALL?%s>All Types</a></td>\r\n"
-			"<td><a href=/WebMail/WMMine?%s>Mine</a></td>\r\n"
-			"<td><a href=/WebMail/WMfromMe?%s>My Sent</a></td>\r\n"
-			"<td><a href=/WebMail/WMtoMe?%s>My Rxed</a></td>\r\n"
-			"<td><a href=/WebMail/WMAuto?%s>Auto Refresh</a></td>\r\n"
-			"<td><a href=\"#\" onclick=\"newmsg('%s'); return false;\">Send Message</a></td>\r\n"
-			"<td><a href=/WebMail/WMLogout?%s>Logout</a></td>\r\n"
-			"<td><a href=/>Node Menu</a></td></tr></table>\r\n"
-			"<br>\r\n"
+			"<body onload=Init() onresize=initialize(120)>\r\n"
+			"<div class=\"wm-shell\">\r\n"
+			"<h2 class=\"wm-title\"> %s Webmail Interface - User %s - Message List</h2>\r\n"
+			"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mainMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>\r\n"
+			"<nav id=\"mainMenu\" class=\"wm-menu\">\r\n"
+			"<a href=/WebMail/WMB?%s>Bulls</a>\r\n"
+			"<a href=/WebMail/WMP?%s>Personal</a>\r\n"
+			"<a href=/WebMail/WMT?%s>NTS</a>\r\n"
+			"<a href=/WebMail/WMALL?%s>All Types</a>\r\n"
+			"<a href=/WebMail/WMMine?%s>Mine</a>\r\n"
+			"<a href=/WebMail/WMfromMe?%s>My Sent</a>\r\n"
+			"<a href=/WebMail/WMtoMe?%s>My Rxed</a>\r\n"
+			"<a href=/WebMail/WMAuto?%s>Auto Refresh</a>\r\n"
+			"<a href=\"#\" onclick=\"newmsg('%s'); return false;\">Send Message</a>\r\n"
+			"<a href=/WebMail/WMLogout?%s>Logout</a>\r\n"
+			"<a href=/>Node Menu</a>\r\n"
+			"</nav>\r\n"
 
-			"<div align=left id=main style=overflow:scroll;>Waiting for data...</div>\r\n"
+			"<div id=main>Waiting for data...</div>\r\n"
+			"</div>\r\n"
 			"</body></html>\r\n";
 
-		sprintf(Page, WebSockPage, Key, Key ,BBSName, Session->User->Call, Key, Key, Key, Key, Key, Key, Key, Key, Key, Key);
+		sprintf(Page, WebSockPage, Key, Key, BBSName, Session->User->Call, Key, Key, Key, Key, Key, Key, Key, Key, Key, Key);
 
 		*RLen = sprintf(Reply, "%s", Page);
 		return;
@@ -2035,6 +2117,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		char * ptr;
 		char * ptr1, * ptr2;
 		char * EncodedTitle;
+		char ReplyAddr[128];
 
 		n = Session->WebMail->CurrentMessageIndex;
 	
@@ -2082,8 +2165,10 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		*ptr++ = 0;
 
 		EncodedTitle = doXMLTransparency(Msg->title);
+		GetReplyAddress(Msg, ReplyAddr);
 
-		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, "", EncodedTitle , NewBytes);
+		*RLen = sprintf(Reply, MsgInputPage, Key, ReplyAddr, "", EncodedTitle,
+			(Msg->type =='P') ? "selected" : "", (Msg->type =='B') ? "selected" : "", (Msg->type =='T') ? "selected" : "", NewBytes);
 
 		free(EncodedTitle);
 
@@ -2145,12 +2230,12 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		else
 			sprintf(Title, "%s", Msg->title);
 
-		strcpy(ReplyAddr, Msg->from);
-		strcat(ReplyAddr, Msg->emailfrom);
+		GetReplyAddress(Msg, ReplyAddr);
 
 		EncodedTitle = doXMLTransparency(Msg->title);
 
-		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, Temp, EncodedTitle , "");
+		*RLen = sprintf(Reply, MsgInputPage, Key, ReplyAddr, Temp, EncodedTitle,
+			(Msg->type =='P') ? "selected" : "", (Msg->type =='B') ? "selected" : "", (Msg->type =='T') ? "selected" : "", "");
 
 		free(EncodedTitle);
 		return;
@@ -2232,7 +2317,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		// No More
 
-		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html></script></html>", Session->Key);
+		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html>", Session->Key);
 		return;
 
 	}
@@ -2292,7 +2377,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		// No More 
 
-		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html></script></html>", Session->Key);
+		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html>", Session->Key);
 		return;
 
 	}
@@ -2345,9 +2430,9 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		sprintf(Temp, Button, Key);
 
 		if (FormDirCount == 0)
-			*RLen = sprintf(Reply, MsgInputPage, Key, "", "", "", "");
+			*RLen = sprintf(Reply, MsgInputPage, Key, "", "", "", "selected", "", "", "");
 		else
-			*RLen = sprintf(Reply, MsgInputPage, Key, "", Temp, "", "");
+			*RLen = sprintf(Reply, MsgInputPage, Key, "", Temp, "", "selected", "", "", "");
 
 		return;
 	}
@@ -2371,13 +2456,19 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		char popuphddr[] = 
 			
-			"<html><body align=center background='/background.jpg'>"
+			"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+			COMMON_CSS_VARIABLES
+			COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
+			COMMON_WEBMAIL_POPUP_SELECT_CSS
+			COMMON_WEBMAIL_POPUP_P_CSS
+			"</style>"
 			"<script>function myFunction() {var x = document.getElementById(\"mySelect\").value;"
 			"var Key = \"%s\";"
 			"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar,=scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 			"window.open(\"/WebMail/GetPage/\" + x + \"?\" + Key,\"_self\",param);"
 			"}</script>"
-			"<p align=center>"
+			"</head><body>"
+			"<p>"
 			"Select Required Template from %s<br><br>"
 			"<select size=15 id=\"mySelect\" onclick=\"myFunction()\">"
 			"<option value=-1>No Page Selected";
@@ -2473,7 +2564,14 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 
 	char popuphddr[] = 
 			
-		"<html><body align=center background='/background.jpg'>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+		COMMON_CSS_VARIABLES
+		COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
+		COMMON_WEBMAIL_POPUP_TABLE_CSS
+		COMMON_WEBMAIL_POPUP_TH_TD_CSS
+		COMMON_WEBMAIL_POPUP_P_CSS
+		COMMON_WEBMAIL_POPUP_TH_CSS
+		"</style>"
 		"<script>"
 		"function myFunction(val) {var x = document.getElementById(val).value;"
 		"var Key = \"%s\";"
@@ -2481,17 +2579,18 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 		"window.open(\"/WebMail/GetList/\" + x + \"?\" + Key,\"_self\",param);"
 		"}"
 		"</script>"
-		"<p align=center>"
+		"</head><body>"
+		"<p>"
 		" Select Required Template Folder from List<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"<table>"
 		"<tr>"
 		"<th>Standard Templates</th>"
 		"<th>Local Templates</th>"
 		"</tr>"
-		"<tr><td width=50%%><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
+		"<tr><td style=\"width:50%%;vertical-align:top\"><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
 
 	char NewGroup [] =
-		"</select></td><td width=50%% align=center>"
+		"</select></td><td style=\"width:50%%;vertical-align:top;text-align:center\">"
 		"<select size=15 id=Sel2 onclick=\"myFunction('Sel2')\">";
 
 	char popup[10000];
@@ -2575,7 +2674,7 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 			n++;
 		}
 	}
-	len += sprintf(&popup[len], "%</select></td></tr></table></p>");
+	len += sprintf(&popup[len], "%%</select></td></tr></table></p>");
 
 	*WebMail->RLen = sprintf(WebMail->Reply, "%s", popup);
 
@@ -2702,7 +2801,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	{
 		if (RefuseBulls)
 		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();script></html>");
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();</script></html>");
 			FreeWebMailFields(WebMail);		// We will reprocess message and attachments so reinitialise
 			return;
 		}
@@ -3036,10 +3135,6 @@ char * GetHTMLViewerTemplate(char * FN, struct HtmlFormDir ** FormDir)
 
 	return NULL;
 }
-VOID GetReply(struct HTTPConnectionInfo * Session, char * NodeURL)
-{
-}
-
 VOID GetPage(struct HTTPConnectionInfo * Session, char * NodeURL)
 {
 		// Read the HTML Template file and do any needed substitutions
@@ -3283,80 +3378,13 @@ reEnter:
 
 
 
-char * xxReadTemplate(char * FormSet, char * DirName, char *FileName)
-{
-	int FileSize;
-	char * MsgBytes;
-	char MsgFile[265];
-	size_t ReadLen;
-	struct stat STAT;
-	FILE * hFile;
-
-#ifndef WIN32
-
-	// Need to do case insensitive file search
-
-	DIR *dir;
-	struct dirent *entry;
-	char name[256];
-
-	sprintf(name, "%s/%s/%s", BPQDirectory, FormSet, DirName);
-
-	if (!(dir = opendir(name)))
-	{
-		Debugprintf("cant open forms dir %s %d %d", name, errno, dir);
-        return 0;
-	}
-
-    while ((entry = readdir(dir)) != NULL)
-	{
-        if (entry->d_type == DT_DIR)
-			continue;
-	
-		if (stristr(entry->d_name, FileName))
-		{
-			sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), FormSet, DirName, entry->d_name);
-		    closedir(dir);
-			break;
-		}
-	}
-    closedir(dir);
-
-#else
-
-	sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), FormSet, DirName, FileName);
-
-#endif
-
-	if (stat(MsgFile, &STAT) != -1)
-	{
-		hFile = fopen(MsgFile, "rb");
-	
-		if (hFile == 0)
-		{
-			MsgBytes = _strdup("File is missing");
-			return MsgBytes;
-		}
-
-		FileSize = STAT.st_size;
-		MsgBytes = malloc(FileSize * 2);		// Allow plenty of room for template substitution
-		ReadLen = fread(MsgBytes, 1, FileSize, hFile); 
-		MsgBytes[FileSize] = 0;
-		fclose(hFile);
-
-		return MsgBytes;
-	}
-	
-	return NULL;
-}
-
 int	ReturnRawMessage(struct UserInfo * User, struct MsgInfo * Msg, char * Key, char * Reply, char * RawMessage, int len, char * ErrorString)
 {
 	char * ErrorMsg = malloc(len + 100);
 	char * ptr;
 	char DownLoad[256];
 
-	sprintf(DownLoad, "<td><a href=/WebMail/DL?%s&%d>Save Attachments</a></td>", Key, Msg->number);
+	sprintf(DownLoad, "<a class=\"wm-btn\" href=/WebMail/DL?%s&%d>Save Attachments</a>", Key, Msg->number);
 
 	RawMessage[strlen(RawMessage)] = '.'; // We null terminated file name 
 	RawMessage[strlen(RawMessage)] = ' '; // We null terminated file name 	Len = XML - RawMessage; 
@@ -3779,14 +3807,14 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 				"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar=yes,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 				"window.open(\"/WebMail/Reply/\" + Num + \"?\" + Key,\"_self\",param);"
 				"}</script>"
-				"<h3 align=center> %s Webmail Interface - User %s - Message %d</h3>"
-				"<table align=center border=1 cellpadding=2 bgcolor=white><tr>"
-				"<td><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
-				"<td><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"
-				"<td><a href=/WebMail/DisplayText?%s&%d>Display as Text</a></td>"
-				"<td><a href=/WebMail/WMNext?%s>Next</a></td>"
-				"<td><a href=/WebMail/WMPrev?%s>Previous</a></td>"
-				"<td><a href=/WebMail/WMSame?%s>Back to List</a></td>"
+				"<h2 style=\"text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);margin:0 0 12px;line-height:1.25;\"> %s Webmail Interface - User %s - Message %d</h2>"
+				"<table style=\"margin:0 auto;border-collapse:collapse;\"><tr>"
+				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=/WebMail/DisplayText?%s&%d>Display as Text</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=/WebMail/WMNext?%s>Next</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=/WebMail/WMPrev?%s>Previous</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=/WebMail/WMSame?%s>Back to List</a></td>"
 				"</tr></table>", BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key,  Key, Msg->number, Key, Key, Key);
 
 			strcat(temp, ptr);
@@ -4097,7 +4125,7 @@ VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, cha
 	{
 		if (RefuseBulls)
 		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();script></html>");
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();</script></html>");
 			return;
 		}
 
@@ -5426,11 +5454,8 @@ int ReplyToFormsMessage(struct HTTPConnectionInfo * Session, struct MsgInfo * Ms
 	// Set To: from From:
 
 	WebMail->To = malloc(80);
-
-	if (Msg->emailfrom[0])
-		sprintf(WebMail->To, "%s%s", Msg->from, Msg->emailfrom);
-	else
-		sprintf(WebMail->To, "%s", Msg->from);
+	GetReplyAddress(Msg, WebMail->To);
+	WebMail->Type = Msg->type;
 
 
 	
@@ -5585,7 +5610,7 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 {
 	struct stat STAT;
 	FILE * hFile;
-	char MsgFile[MAX_PATH];
+	char MsgFile[295];
 	char * MsgBytes;
 	int ReadLen;
 	int FileSize;
@@ -5596,9 +5621,9 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 
 	DIR *dir;
 	struct dirent *entry;
-	char name[256];
+	char name[295];
 
-	sprintf(name, "%s/%s/%s", BPQDirectory, Dir->FormSet, Dir->DirName);
+	snprintf(name, sizeof(name), "%s/%s/%s", BPQDirectory, Dir->FormSet, Dir->DirName);
 
 	if (!(dir = opendir(name)))
 	{
@@ -5613,7 +5638,7 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 	
 		if (stricmp(entry->d_name, FN) == 0)
 		{
-			sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), Dir->FormSet, Dir->DirName, entry->d_name);
+			snprintf(MsgFile, sizeof(MsgFile), "%s/%s/%s/%s", GetBPQDirectory(), Dir->FormSet, Dir->DirName, entry->d_name);
 			break;
 		}
 	}
@@ -5652,7 +5677,13 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 
 	char popuphddr[] = 
 			
-		"<html><body align=center background='/background.jpg'>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+		COMMON_CSS_VARIABLES
+		COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
+		COMMON_WEBMAIL_POPUP_SELECT_CSS
+		COMMON_WEBMAIL_POPUP_TABLE_CSS
+		COMMON_WEBMAIL_POPUP_TD_CSS
+		"</style>"
 		"<script>"
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
@@ -5660,8 +5691,9 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 		"window.open(\"/WebMail/DoSelect\" + '?' + Key + '&' + x,'_self');"
 		"}"
 		"</script>"
-		"<div align=center>%s<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"</head><body>"
+		"<div>%s<br><br>"
+		"<table>"
 		"<tr><td><select size=%d id='Sel' size=10 onclick=myFunction()>";
 	
 
@@ -5751,7 +5783,7 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 
 		len += sprintf(&popup[len], " <option value='%s'>%s", key, var[i]);
 	}
-	len += sprintf(&popup[len], "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
+	len += sprintf(&popup[len], "</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
 
 	*WebMail->RLen = sprintf(WebMail->Reply, "%s", popup);
 	free(SelCopy);
@@ -5856,7 +5888,7 @@ BOOL ParsetxtTemplate(struct HTTPConnectionInfo * Session, struct HtmlFormDir * 
 	char FormDir[MAX_PATH];
 	double Lat;
 	double Lon;
-	char LatString[32], LonString[32], GPSString[32];
+	char LatString[32], LonString[32], GPSString[70];
 	BOOL GPSOK;
 	
 	struct tm * tm;
@@ -5958,7 +5990,7 @@ BOOL ParsetxtTemplate(struct HTTPConnectionInfo * Session, struct HtmlFormDir * 
 	memmove(LonString, &LonString[1], 3);
 	LatString[2] = '-';
 	LonString[3] = '-';
-	sprintf(GPSString,"%s %s", LatString, LonString);
+	snprintf(GPSString, sizeof(GPSString), "%s %s", LatString, LonString);
 
 	txtKey->Key = _strdup("<GPS>");
 	if (GPSOK)
@@ -6295,7 +6327,13 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 {
 	char popuphddr[] = 
 			
-		"<html><body align=center background='/background.jpg'>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+		COMMON_CSS_VARIABLES
+		COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
+		COMMON_WEBMAIL_POPUP_SELECT_CSS
+		COMMON_WEBMAIL_POPUP_TABLE_CSS
+		COMMON_WEBMAIL_POPUP_TD_CSS
+		"</style>"
 		"<script>"
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
@@ -6303,8 +6341,9 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 		"window.open(\"/WebMail/GetDownLoad\" + '?' + Key + '&' + x,'_self', param);"
 		"}"
 		"</script>"
-		"<div align=center>Note files over 100K long can't be downloaded<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"</head><body>"
+		"<div>Note files over 100K long can't be downloaded<br><br>"
+		"<table>"
 		"<tr><td><select size=%d id='Sel' size=10 onclick=myFunction()>";
 
 	char popup[10000];
@@ -6320,7 +6359,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 			len += sprintf(&popup[len], " <option value=%d>%s (Len %d)", i + 1, WebMail->FileName[i], WebMail->FileLen[i]);
 	}
 
-	len += sprintf(&popup[len], "%</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
+	len += sprintf(&popup[len], "%%</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
 
 	*RLen = sprintf(Reply, "%s", popup);
 	return;
@@ -6388,10 +6427,18 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 
 	// Outbuffer is 250000
 
-//	ptr += sprintf(ptr, "<div align=left id=\"main\" style=\"overflow:scroll;\">\r\n"
-	ptr += sprintf(ptr, "<pre align=left>");
-
-	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len To      @       From    Subject\r\n\r\n");
+	ptr += sprintf(ptr, "<table class=\"msg-table\" "
+		"onclick=\"var row=event.target.closest('tr.msg-row[data-href]');if(row&&this.contains(row))window.location=row.getAttribute('data-href');\" "
+		"onkeydown=\"var row=event.target.closest('tr.msg-row[data-href]');var k=event.key||event.code;var kc=event.keyCode||event.which;if(row&&this.contains(row)&&(k==='Enter'||k===' '||k==='Spacebar'||k==='Space'||kc===13||kc===32)){event.preventDefault();window.location=row.getAttribute('data-href');}\"><thead><tr>"
+		"<th scope=\"col\" class=\"msg-num\">#</th>"
+		"<th scope=\"col\" class=\"msg-date\">Date</th>"
+		"<th scope=\"col\" class=\"msg-type\">Type</th>"
+		"<th scope=\"col\" class=\"msg-len\">Len</th>"
+		"<th scope=\"col\" class=\"msg-to\">To</th>"
+		"<th scope=\"col\" class=\"msg-via\">@</th>"
+		"<th scope=\"col\" class=\"msg-from\">From</th>"
+		"<th scope=\"col\" class=\"msg-subject\">Subject</th>"
+		"</tr></thead><tbody>");
 
 	for (m = LatestMsg; m >= 1; m--)
 	{
@@ -6453,11 +6500,22 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 
 			free(EncodedTitle);
 
-			ptr += sprintf(ptr, "<a href=/WebMail/WM?%s&%d>%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
-				Key, Msg->number, Msg->number,
-				FormatDateAndTime((time_t)Msg->datecreated, TRUE), Msg->type,
-				Msg->status, Msg->length, Msg->to, Via,
-				Msg->from, UTF8Title);
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" data-href=\"/WebMail/WM?%s&%d\">"
+				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
+				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
+				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
+				"<td class=\"msg-len\" data-label=\"Len\">%d</td>"
+				"<td class=\"msg-to\" data-label=\"To\">%s</td>"
+				"<td class=\"msg-via\" data-label=\"@\">%s</td>"
+				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
+				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
+				"</tr>",
+				Key, Msg->number, Key, Msg->number, Msg->number,
+				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
+				Msg->type, Msg->status,
+				Msg->length,
+				Msg->to, Via, Msg->from,
+				UTF8Title);
 
 			n--;
 
@@ -6466,7 +6524,7 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 		}
 	}
 
-	ptr += sprintf(&ptr[strlen(ptr)], "</pre> \r\n");
+	ptr += sprintf(ptr, "</tbody></table>");
 
 	Len = ptr - &OutBuffer[10];
 
