@@ -31,6 +31,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include "time.h"
 #include "bpq32.h"
 #include "telnetserver.h"
+#include "common_web_components.h"
 
 // This is needed to link with a lib built from source
 
@@ -71,7 +72,6 @@ BOOL SHA1PasswordHash(char * String, char * Hash);
 char * byte_base64_encode(char *str, int len);
 int APIProcessHTTPMessage(char * response, char * Method, char * URL, char * request,	BOOL LOCAL, BOOL COOKIE);
 int RHPProcessHTTPMessage(struct ConnectionInfo * conn, char * response, char * Method, char * URL, char * request, BOOL LOCAL, BOOL COOKIE);
-unsigned char * Compressit(unsigned char * In, int Len, int * OutLen);
 int doinflate(unsigned char * source, unsigned char * dest, int Len, int destlen, int * outLen);
 
 extern struct ROUTE * NEIGHBOURS;
@@ -146,8 +146,39 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 
 char Tail[] = "</body></html>";
 
-char RouteHddr[] = "<h2 style=\"text-align:center;\">Routes</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
-"<tr style=\"background:#f0f0f0;\"><th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
+#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+#define HTTP_NODE_TABLE_HEADER_ROW "<tr style=\"background:#f0f0f0;\">"
+#define HTTP_NODE_SORT_CONTROLS "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">" \
+	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
+	"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">" \
+	"<input type=submit class='btn' name=t value=\"Nodes With Traffic\"></form></div>"
+
+#define HTTP_NODE_MENU_CSS \
+	COMMON_CSS_VARIABLES \
+	COMMON_MENU_CSS \
+	"body { font-family: Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }" \
+	"h1 { text-align: center; margin: 10px 0 18px; }" \
+	".menu-header { max-width: 1100px; }" \
+	".menu { margin: 20px auto; max-width: 1100px; }" \
+	".menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
+	".menu td:hover, .menu .btn:hover { background: #e9ecef; }" \
+	".dropdown { position: relative; display: inline-block; }" \
+	".dropdown-content { display: none; position: absolute; left: 50%; transform: translateX(-50%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }" \
+	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
+	".dropdown-content a:hover { background: #e9ecef; }" \
+	".dropdown-content .btn { width: 100%%; margin-top: 6px; }" \
+	".dropdown-content form { margin: 0; }" \
+	".dropdown-content label { display: block; margin-bottom: 8px; }" \
+	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; }" \
+	".dropdown-content input[type='submit'] { width: 100%%; margin-top: 6px; }" \
+	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 6px; }" \
+	".mgmt-section.show { display: block; }" \
+	".show { display: block; }" \
+	"input.btn:active, .menu .btn:active { background: black; color: white; }" \
+	"@media (max-width: 768px) { .menu td, .menu .btn, .dropdown { width: 100%%; text-align: center; } .dropdown-content { position: static; transform: none; width: 100%%; margin-top: 8px; box-shadow: none; } }"
+
+char RouteHddr[] = "<h2 style=\"text-align:center;\">Routes</h2>" HTTP_NODE_TABLE_OPEN
+HTTP_NODE_TABLE_HEADER_ROW "<th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
 "<th>Frack</th><th>Last Heard</th><th>Queued</th><th>Rem Qual</th><th>SRTT</th><th>Rem SRTT</th></tr>";
 
 char RouteLine[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
@@ -156,26 +187,16 @@ char RouteLine[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</
 char RouteLineINP3[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
 "<td>%02d:%02d</td><td>%d</td><td>%d</td><td>%4.2fs</td><td>%4.2fs</td></tr>";
 
-char xNodeHddr[] = "<align=center><form align=center method=get action=/Node/Nodes.html>"
-"<table align=center  bgcolor=white>"
-"<tr><td><input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\"></td><td>"
-"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\"></td><td>"
-"<input type=submit class='btn' name=t value=\"Nodes with traffic\"></td></tr></form></table>"
-"<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
-
-char NodeHddr[] = "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">"
-"<input type=submit class='btn' value=\"Nodes Sorted by Alias\">"
-"<input type=submit class='btn' value=\"Nodes Sorted by Call\">"
-"<input type=submit class='btn' value=\"Nodes with traffic\"></form></div>"
-"<h2 style=\"text-align:center;\">Nodes %s</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white><tr>";
+char NodeHddr[] = HTTP_NODE_SORT_CONTROLS
+"<h2 style=\"text-align:center;\">Nodes %s</h2>" HTTP_NODE_TABLE_OPEN "<tr>";
 
 char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
 
 
-char StatsHddr[] = "<h2 style=\"text-align:center;\">Node Stats</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>";
+char StatsHddr[] = "<h2 style=\"text-align:center;\">Node Stats</h2>" HTTP_NODE_TABLE_OPEN;
 
-char PortStatsHddr[] = "<h2 style=\"text-align:center;\">Stats for Port %d</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
-"<tr style=\"background:#f0f0f0;\"><th>Statistic</th><th>Value</th></tr>";
+char PortStatsHddr[] = "<h2 style=\"text-align:center;\">Stats for Port %d</h2>" HTTP_NODE_TABLE_OPEN
+HTTP_NODE_TABLE_HEADER_ROW "<th>Statistic</th><th>Value</th></tr>";
 
 char PortStatsLine[] = "<tr><td> %s </td><td> %d </td></tr>";
 
@@ -195,13 +216,13 @@ char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 alig
 "</form>";
 
 
-char LinkHddr[] = "<h2 style=\"text-align:center;\">Links</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
-"<tr style=\"background:#f0f0f0;\"><th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
+char LinkHddr[] = "<h2 style=\"text-align:center;\">Links</h2>" HTTP_NODE_TABLE_OPEN
+HTTP_NODE_TABLE_HEADER_ROW "<th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
 
 char LinkLine[] = "<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td align=center >%d</td></tr>";
 
-char UserHddr[] = "<h2 style=\"text-align:center;\">Sessions</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
-"<tr style=\"background:#f0f0f0;\"><th>Circuit</th><th>Link</th><th>Circuit</th></tr>";
+char UserHddr[] = "<h2 style=\"text-align:center;\">Sessions</h2>" HTTP_NODE_TABLE_OPEN
+HTTP_NODE_TABLE_HEADER_ROW "<th>Circuit</th><th>Link</th><th>Circuit</th></tr>";
 
 char UserLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td></tr>";
 
@@ -342,6 +363,7 @@ void UndoTransparency(char * input)
 				hex = (tolower(c) - 'a' + 10) << 4;
 
 			c = *(ptr1++);
+
 			if(isdigit(c))
 				hex += (c - '0');
 			else
@@ -356,16 +378,12 @@ void UndoTransparency(char * input)
 	}
 	*ptr2 = 0;
 }
-
-
-
-
 VOID PollSession(struct HTTPConnectionInfo * Session)
 {
 	int state, change;
 	int count, len;
-	char Msg[400] = "";
 	char Formatted[8192];
+	char Msg[400] = "";
 	char * ptr1, * ptr2;
 	char c;
 	int Line;
@@ -1267,7 +1285,6 @@ VOID sendandcheck(SOCKET sock, const char * Buffer, int Len)
 
 int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
 {
-	char Msg[400] = "";
 	int HeaderLen, ReplyLen;
 	char Header[256];
 
@@ -1318,31 +1335,10 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 
 	char NodeMenuHeader[] = "<html id=body><head><title>%s's BPQ32 Web Server</title>"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
-	"<style type=\"text/css\">"
-	"body { font-family: Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }"
-	"h1 { text-align: center; margin: 10px 0 18px; }"
-	".menu-header { display: none; max-width: 1100px; margin: 0 auto 10px; }"
-	".menu-toggle { width: 100%; min-height: 44px; border: 1px solid #ccc; border-radius: 6px; background: #fff; font-size: 16px; color: #1f2937; }"
-	".menu { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 20px auto; max-width: 1100px; }"
-	".menu a, .menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }"
-	".menu a:hover, .menu td:hover, .menu .btn:hover { background: #e9ecef; }"
-	".dropdown { position: relative; display: inline-block; }"
-	".dropdown-content { display: none; position: absolute; left: 50%; transform: translateX(-50%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }"
-	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }"
-	".dropdown-content a:hover { background: #e9ecef; }"
-	".dropdown-content .btn { width: 100%; margin-top: 6px; }"
-	".dropdown-content form { margin: 0; }"
-	".dropdown-content label { display: block; margin-bottom: 8px; }"
-	".dropdown-content input[type='date'] { width: 100%; box-sizing: border-box; margin-top: 4px; }"
-	".dropdown-content input[type='submit'] { width: 100%; margin-top: 6px; }"
-	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 6px; }"
-	".mgmt-section.show { display: block; }"
-	".show { display: block; }"
-	"input.btn:active, .menu .btn:active { background: black; color: white; }"
-	"@media (max-width: 768px) { .menu-header { display: block; } .menu { display: none; flex-direction: column; align-items: stretch; margin-top: 0; } .menu.menu-open { display: flex; } .menu a, .menu td, .menu .btn, .dropdown { width: 100%; text-align: center; } .dropdown-content { position: static; transform: none; width: 100%; margin-top: 8px; box-shadow: none; } }"
-	"</style>"
+	"<style type=\"text/css\">" HTTP_NODE_MENU_CSS "</style>"
 
 	"<script>\r\n"
+	COMMON_MENU_JAVASCRIPT
 
 
 // Close the dropdown menu if the user clicks outside of it
@@ -1352,19 +1348,6 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	" if (dropdown && button && !dropdown.contains(event.target) && event.target !== button) {"
 	"  dropdown.classList.remove('show');"
 	"  closeMgmtSections();"
-	" }"
-	" var menu = document.getElementById('mainMenu');"
-	" var toggle = document.getElementById('menuToggle');"
-	" var header = document.querySelector('.menu-header');"
-	" if (menu && toggle && window.matchMedia('(max-width: 768px)').matches) {"
-	"  var inMenu = menu.contains(event.target);"
-	"  var inHeader = header && header.contains(event.target);"
-	"  if (!inMenu && !inHeader) {"
-	"   menu.classList.remove('menu-open');"
-	"   toggle.textContent = 'Menu';"
-	"   if (dropdown) dropdown.classList.remove('show');"
-	"   closeMgmtSections();"
-	"  }"
 	" }"
 	"});\r\n"
 	"function closeMgmtSections() {"
@@ -1404,19 +1387,6 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	" if (!openNow) {"
 	"  section.classList.add('show');"
 	"  toggle.textContent = toggle.getAttribute('data-label') + ' -';"
-	" }"
-	"}"
-	"function toggleMenu(event) {"
-	" if (event) event.preventDefault();"
-	" var menu = document.getElementById('mainMenu');"
-	" var toggle = document.getElementById('menuToggle');"
-	" if (!menu || !toggle) return;"
-	" if (menu.classList.contains('menu-open')) {"
-	"  menu.classList.remove('menu-open');"
-	"  toggle.textContent = 'Menu';"
-	" } else {"
-	"  menu.classList.add('menu-open');"
-	"  toggle.textContent = 'Close';"
 	" }"
 	"}"
 	"function closeMenuOnMobile() {"
@@ -1783,8 +1753,8 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	int Len;
 	char * WebSock = 0;
 
-	char PortsHddr[] = "<h2 style=\"text-align:center;\">Ports</h2><table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
-		"<tr style=\"background:#f0f0f0;\"><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th><th>Stats Graph</th></tr>";
+	char PortsHddr[] = "<h2 style=\"text-align:center;\">Ports</h2>" HTTP_NODE_TABLE_OPEN
+		HTTP_NODE_TABLE_HEADER_ROW "<th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th><th>Stats Graph</th></tr>";
 
 //	char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
 
@@ -4594,15 +4564,11 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 	send(sock, Tail, (int)strlen(Tail), 0);
 
 	return 0;
-
-
-	return ReplyLen;
 }
 
 int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int ReplyBufferSize, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL)
 {
 	int ReplyLen = 0;
-	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 	char * user, * password;
 	struct HTTPConnectionInfo * NewSession;
 	int i;

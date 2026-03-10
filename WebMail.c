@@ -32,9 +32,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #include <dirent.h>
 #endif
 
-static struct HTTPConnectionInfo * FindSession(char * Key);
 int APIENTRY SessionControl(int stream, int command, int param);
-int SetupNodeMenu(char * Buff);
 VOID SetMultiStringValue(char ** values, char * Multi);
 char * GetTemplateFromFile(int Version, char * FN);
 VOID FormatTime(char * Time, time_t cTime);
@@ -46,7 +44,6 @@ struct HTTPConnectionInfo * AllocateWebMailSession();
 VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest, int InputLen);
 void ConvertTitletoUTF8(WebMailInfo * WebMail, char * Title, char * UTF8Title, int Len);
 char *stristr (char *ch1, char *ch2);
-char * ReadTemplate(char * FormSet, char * DirName, char * FileName);
 VOID DoStandardTemplateSubsitutions(struct HTTPConnectionInfo * Session, char * txtFile);
 BOOL CheckifPacket(char * Via);
 int GetHTMLFormSet(char * FormSet);
@@ -69,7 +66,6 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 char * BuildB2Header(WebMailInfo * WebMail, struct MsgInfo * Msg, char ** ToCalls, int Calls);
 VOID FormatTime2(char * Time, time_t cTime);
 VOID ProcessSelectResponse(struct HTTPConnectionInfo * Session, char * URLParams);
-VOID ProcessAskResponse(struct HTTPConnectionInfo * Session, char * URLParams);
 char * CheckFile(struct HtmlFormDir * Dir, char * FN);
 VOID GetPage(struct HTTPConnectionInfo * Session, char * NodeURL);
 VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *URLParams, int InputLen);
@@ -3087,10 +3083,6 @@ char * GetHTMLViewerTemplate(char * FN, struct HtmlFormDir ** FormDir)
 
 	return NULL;
 }
-VOID GetReply(struct HTTPConnectionInfo * Session, char * NodeURL)
-{
-}
-
 VOID GetPage(struct HTTPConnectionInfo * Session, char * NodeURL)
 {
 		// Read the HTML Template file and do any needed substitutions
@@ -3333,73 +3325,6 @@ reEnter:
 }
 
 
-
-char * xxReadTemplate(char * FormSet, char * DirName, char *FileName)
-{
-	int FileSize;
-	char * MsgBytes;
-	char MsgFile[265];
-	size_t ReadLen;
-	struct stat STAT;
-	FILE * hFile;
-
-#ifndef WIN32
-
-	// Need to do case insensitive file search
-
-	DIR *dir;
-	struct dirent *entry;
-	char name[256];
-
-	sprintf(name, "%s/%s/%s", BPQDirectory, FormSet, DirName);
-
-	if (!(dir = opendir(name)))
-	{
-		Debugprintf("cant open forms dir %s %d %d", name, errno, dir);
-        return 0;
-	}
-
-    while ((entry = readdir(dir)) != NULL)
-	{
-        if (entry->d_type == DT_DIR)
-			continue;
-	
-		if (stristr(entry->d_name, FileName))
-		{
-			sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), FormSet, DirName, entry->d_name);
-		    closedir(dir);
-			break;
-		}
-	}
-    closedir(dir);
-
-#else
-
-	sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), FormSet, DirName, FileName);
-
-#endif
-
-	if (stat(MsgFile, &STAT) != -1)
-	{
-		hFile = fopen(MsgFile, "rb");
-	
-		if (hFile == 0)
-		{
-			MsgBytes = _strdup("File is missing");
-			return MsgBytes;
-		}
-
-		FileSize = STAT.st_size;
-		MsgBytes = malloc(FileSize * 2);		// Allow plenty of room for template substitution
-		ReadLen = fread(MsgBytes, 1, FileSize, hFile); 
-		MsgBytes[FileSize] = 0;
-		fclose(hFile);
-
-		return MsgBytes;
-	}
-	
-	return NULL;
-}
 
 int	ReturnRawMessage(struct UserInfo * User, struct MsgInfo * Msg, char * Key, char * Reply, char * RawMessage, int len, char * ErrorString)
 {

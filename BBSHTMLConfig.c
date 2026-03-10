@@ -146,8 +146,8 @@ char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-
 	"input[type=submit]:hover { background: var(--primary-dark); }"
 	"@media (max-width: 480px) { body { padding: 10px; } form { padding: 15px; } }"
 	"</style></head><body>"
-	"<h3 style=\"text-align: center;\">BPQ32 Mail Server %s Access</h3>"
-	"<h3 style=\"text-align: center;\">Please enter Callsign and Password</h3>"
+	"<h3 class=text-center>BPQ32 Mail Server %s Access</h3>"
+	"<h3 class=text-center>Please enter Callsign and Password</h3>"
 	"<form method=post action=/Mail/Signon?Mail>"
 	"<label for=user>User</label><input type=text id=user name=user tabindex=1 maxlength=50 required><br>"
 	"<label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required><br>"
@@ -186,7 +186,9 @@ char StatusPage [] =
 COMMON_CSS_VARIABLES
 COMMON_TABLE_CSS
 COMMON_FORM_CSS
+COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
+".status-cell{padding:8px;border:1px solid #ddd;}"
 "</style></head><body><h3>Active Sessions</h3>"
 "<form method=post action=/Mail/DisSession?%s>"
 "<div class=table-container><table>"
@@ -210,11 +212,11 @@ char UIHddr [] = "<h3>User Interface Configuration</h3>"
 	"<form method=post action=/Mail/UI?%s>"
 	"<div class=form-section>"
 	"<div class=form-row><label>Mailfor Header</label><input type=text value=\"%s\" name=MailFor></div>"
-	"<p style=\"margin: 10px 0 0 0; color: #666; font-size: 0.9em;\">(use \\r to insert newline in message)</p>"
+	"<p class=muted-note>(use \\r to insert newline in message)</p>"
 	"</div>"
 	"<div class=form-section>"
 	"<div class=port-row-header>"
-	"<span class=port-row-label>Enable</span><span style=\"flex: 2 1 200px;\">Port Path</span><span>Send MailFor</span><span>Send Headers</span><span>Send Empty</span>"
+	"<span class=port-row-label>Enable</span><span class=flex-2-200>Port Path</span><span>Send MailFor</span><span>Send Headers</span><span>Send Empty</span>"
 	"</div>";
 
 char UILine[] = "<div class=port-row><input %s name=En%d type=checkbox><span class=port-row-label>%s</span><input type=text value=\"%s\" name=Path%d><input %s name=SndMF%d type=checkbox><input %s name=SndHDDR%d type=checkbox><input %s name=SndNull%d type=checkbox></div>";
@@ -272,6 +274,7 @@ char FWDUpdate[] =
 "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 COMMON_CSS_VARIABLES
 COMMON_FORM_CSS
+COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
 "</style></head><body><h3>Update Forwarding for BBS %s</h3>"
 "<form method=post action=/Mail/FWD?%s name=Test>"
@@ -285,16 +288,16 @@ COMMON_BUTTON_CSS
 "<div class=textarea-group><label>HRB</label><textarea name=HRB>%s</textarea></div>"
 "<div class=textarea-group><label>HRP</label><textarea name=HRP>%s</textarea></div>"
 "</div></div>"
-"<div class=form-row><label>Enable Forwarding</label><div class=checkbox-group><input %s name=EnF type=checkbox><span style=\"font-weight: normal;\">Enable</span><label style=\"flex: 1 1 100px; font-weight: bold; margin: 0; padding-left: 10px;\">Interval (Secs)</label><input type=number value=%d size=3 name=Interval style=\"flex: none; width: 80px;\"></div></div>"
-"<div class=form-row><label>Request Reverse</label><div class=checkbox-group><input %s name=EnR type=checkbox><span style=\"font-weight: normal;\">Enable</span><label style=\"flex: 1 1 100px; font-weight: bold; margin: 0; padding-left: 10px;\">Interval (Secs)</label><input type=number value=%d size=3 name=RInterval style=\"flex: none; width: 80px;\"></div></div>"
-"<div class=form-row><label>Send new messages without waiting for poll timer</label><div class=checkbox-group><input %s name=NoWait type=checkbox><span style=\"font-weight: normal;\">Enable</span></div></div>"
+"<div class=form-row><label>Enable Forwarding</label><div class=checkbox-group><input %s name=EnF type=checkbox><span class=font-normal>Enable</span><label class=inline-label>Interval (Secs)</label><input type=number class=input-w-80 value=%d size=3 name=Interval></div></div>"
+"<div class=form-row><label>Request Reverse</label><div class=checkbox-group><input %s name=EnR type=checkbox><span class=font-normal>Enable</span><label class=inline-label>Interval (Secs)</label><input type=number class=input-w-80 value=%d size=3 name=RInterval></div></div>"
+"<div class=form-row><label>Send new messages without waiting for poll timer</label><div class=checkbox-group><input %s name=NoWait type=checkbox><span class=font-normal>Enable</span></div></div>"
 "<div class=form-row><label>BBS HA</label><input type=text value=\"%%s\" name=BBSHA></div>"
-"<div class=form-row><label>FBB Max Block Size</label><input type=number value=%d size=3 name=FBBBlock style=\"flex: none; width: 100px;\"></div>"
+"<div class=form-row><label>FBB Max Block Size</label><input type=number class=input-w-100 value=%d size=3 name=FBBBlock></div>"
 "<div class=form-row><label>Protocol Flags</label><div class=checkbox-group>"
-"<div><input %s name=Personal type=checkbox><span style=\"font-weight: normal;\">Personal Mail Only</span></div>"
-"<div><input %s name=Bin type=checkbox><span style=\"font-weight: normal;\">Allow Binary</span></div>"
-"<div><input %s name=B1 type=checkbox><span style=\"font-weight: normal;\">Use B1 Protocol</span></div>"
-"<div><input %s name=B2 type=checkbox><span style=\"font-weight: normal;\">Use B2 Protocol</span></div>"
+"<div><input %s name=Personal type=checkbox><span class=font-normal>Personal Mail Only</span></div>"
+"<div><input %s name=Bin type=checkbox><span class=font-normal>Allow Binary</span></div>"
+"<div><input %s name=B1 type=checkbox><span class=font-normal>Use B1 Protocol</span></div>"
+"<div><input %s name=B2 type=checkbox><span class=font-normal>Use B2 Protocol</span></div>"
 "</div></div>"
 "<div class=buttons><input name=Submit value=Update type=submit> <input name=Fwd value=\"Start Forwarding\" type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
@@ -318,6 +321,9 @@ static char MailDetailCSS[] =
 "th[colspan]{text-align:center;width:100%%;}"
 "td{cursor:pointer;transition:opacity 0.15s ease;}"
 "td:hover:not(:empty){opacity:0.8;}"
+".fwd-none{background-color:#FFFFFF;}"
+".fwd-queued{background-color:#FFFF00;}"
+".fwd-sent{background-color:#98FFA0;}"
 "tbody tr:nth-child(even){background:#f9fafb;}"
 "tbody tr:hover{background:#f1f5f9;transition:background 0.15s ease;}"
 ".status-legend{background:var(--surface);padding:16px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:15px 0;font-size:14px;color:#64748b;line-height:1.6;}"
@@ -375,10 +381,33 @@ static char MailDetailButtons[] =
 
 char MailDetailTail[] = "</tbody></table></div></form></body></html>";
 
+// Local CSS de-dup fragments used by multiple templates in this file.
+#define MOBILE_BASE_CSS "*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}"
+#define REDUCED_MOTION_CSS "@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}"
+#define SUBMIT_BUTTON_CSS "input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}input[type=submit]:hover{background:var(--primary-dark);}"
+
+static char WPDetailCSS[] =
+"<style>"
+".wp-form{margin:0;}"
+".wp-box{background:white;padding:15px;border-radius:4px;margin:15px 0;box-shadow:0 0 5px rgba(0,0,0,0.1);}"
+".wp-row{display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;}"
+".wp-label{flex:1 1 100px;font-weight:bold;padding-top:2px;}"
+".wp-input-text{flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;}"
+".wp-input-small{flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;}"
+".wp-input-readonly{background:#f9f9f9;color:#666;}"
+".wp-actions{text-align:center;margin:20px 0;position:sticky;bottom:0;background:white;padding:12px;border-top:1px solid #e5e7eb;z-index:10;}"
+".wp-btn{background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}"
+"</style>";
+
 char Welcome[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 "<style>"
 COMMON_CSS_VARIABLES
-"*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}h3{text-align:center;color:#1f2937;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}.form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:#1f2937;}.form-row textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:14px;line-height:1.4;}p{font-size:13px;color:#666;line-height:1.5;}input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;font-size:14px;}input[type=submit]:hover{background:var(--primary-dark);}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
+MOBILE_BASE_CSS
+"h3{text-align:center;color:#1f2937;}"
+REDUCED_MOTION_CSS
+".form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:#1f2937;}.form-row textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:14px;line-height:1.4;}p{font-size:13px;color:#666;line-height:1.5;}"
+SUBMIT_BUTTON_CSS
+"input[type=submit]{font-size:14px;}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
 "</style></head><body>"
 "<form method=post action=/Mail/Welcome?%s>"
 "<div class=form-row><label>Normal User Welcome</label><textarea rows=3 name=NUWelcome>%s</textarea></div>"
@@ -394,76 +423,85 @@ COMMON_CSS_VARIABLES
 
 static char MsgEditPage[] = "<style>"
 COMMON_CSS_VARIABLES
-"*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}h3{text-align:center;margin-bottom:30px;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:monospace;font-size:12px;line-height:1.4;resize:vertical;}input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}input[type=submit]:hover{background:var(--primary-dark);}@media(max-width:768px){textarea{font-size:13px;min-height:200px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
+MOBILE_BASE_CSS
+"h3{text-align:center;margin-bottom:30px;}"
+REDUCED_MOTION_CSS
+"textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:monospace;font-size:12px;line-height:1.4;resize:vertical;}"
+SUBMIT_BUTTON_CSS
+"@media(max-width:768px){textarea{font-size:13px;min-height:200px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
 "</style><h3>Edit Message</h3>"
 "<form method=post action=EMSave?%s>"
 "<textarea cols=90 rows=33 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit><input name=Cancel value=Cancel type=submit><br></form></body></html>";
 
 // Split WPDetail into 5 smaller templates to avoid ARM printf_positional limits
-// NOTE: This is AJAX-injected content, so no <style>, <body>, or </html> closing tags
-// Uses flexbox layout with inline class-based styling
-static char WPDetailOpen[] = "<h3>White Pages Record</h3><form method=post action=/Mail/WP?%s style=\"margin:0;\">";
+// NOTE: This is AJAX-injected content; no <body> or </html> closing tags.
+// A small fragment-local <style> is prepended so class-based markup is self-contained.
+static char WPDetailOpen[] = "<h3>White Pages Record</h3><form method=post action=/Mail/WP?%s class=wp-form>";
 
 static char WPDetailSection1[] = 
-"<div style=\"background:white;padding:15px;border-radius:4px;margin:15px 0;box-shadow:0 0 5px rgba(0,0,0,0.1);\">"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Call</label>"
-"<input readonly size=10 style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%s\"></div>";
+"<div class=wp-box>"
+"<div class=wp-row>"
+"<label class=wp-label>Call</label>"
+"<input readonly size=10 class=\"wp-input-text wp-input-readonly\" value=\"%s\"></div>";
 
 static char WPDetailSection2[] = 
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Name</label>"
-"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Name value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Home BBS 1</label>"
-"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Home1 value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Home BBS 2</label>"
-"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Home2 value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">QTH 1</label>"
-"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=QTH1 value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">QTH 2</label>"
-"<input style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=QTH2 value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">ZIP 1</label>"
-"<input style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=ZIP1 value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">ZIP 2</label>"
-"<input style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=ZIP2 value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>Name</label>"
+"<input class=wp-input-text name=Name value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>Home BBS 1</label>"
+"<input class=wp-input-text name=Home1 value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>Home BBS 2</label>"
+"<input class=wp-input-text name=Home2 value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>QTH 1</label>"
+"<input class=wp-input-text name=QTH1 value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>QTH 2</label>"
+"<input class=wp-input-text name=QTH2 value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>ZIP 1</label>"
+"<input class=wp-input-small name=ZIP1 value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>ZIP 2</label>"
+"<input class=wp-input-small name=ZIP2 value=\"%s\"></div>"
 "</div></div>";
 
 static char WPDetailSection3[] = 
-"<div style=\"background:white;padding:15px;border-radius:4px;margin:15px 0;box-shadow:0 0 5px rgba(0,0,0,0.1);\">"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Last Seen</label>"
-"<input readonly style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Last Modified</label>"
-"<input readonly style=\"flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%s\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Type</label>"
-"<input style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;\" name=Type value=\"%c\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Changed</label>"
-"<input readonly style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%d\"></div>"
-"<div style=\"display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;\">"
-"<label style=\"flex:1 1 100px;font-weight:bold;padding-top:2px;\">Seen</label>"
-"<input readonly style=\"flex:none;width:100px;padding:8px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;color:#666;\" value=\"%d\"></div>"
+"<div class=wp-box>"
+"<div class=wp-row>"
+"<label class=wp-label>Last Seen</label>"
+"<input readonly class=\"wp-input-text wp-input-readonly\" value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>Last Modified</label>"
+"<input readonly class=\"wp-input-text wp-input-readonly\" value=\"%s\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>Type</label>"
+"<input class=wp-input-small name=Type value=\"%c\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>Changed</label>"
+"<input readonly class=\"wp-input-small wp-input-readonly\" value=\"%d\"></div>"
+"<div class=wp-row>"
+"<label class=wp-label>Seen</label>"
+"<input readonly class=\"wp-input-small wp-input-readonly\" value=\"%d\"></div>"
 "</div></div>";
 
 static char WPDetailButtons[] = 
-"<div style=\"text-align:center;margin:20px 0;position:sticky;bottom:0;background:white;padding:12px;border-top:1px solid #e5e7eb;z-index:10;\">"
-"<input onclick=save(this.form) value=Save style=\"background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;\" type=button> "
-"<input onclick=del(this.form) value=Delete style=\"background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;\" type=button> "
-"<input name=Cancel value=Cancel style=\"background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;\" type=submit></div></form>";
+"<div class=wp-actions>"
+"<input onclick=save(this.form) value=Save class=wp-btn type=button> "
+"<input onclick=del(this.form) value=Delete class=wp-btn type=button> "
+"<input name=Cancel value=Cancel class=wp-btn type=submit></div></form>";
 
 
 static char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 COMMON_CSS_VARIABLES
-"*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;text-align:center;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;font-size:14px;}input[type=submit]:hover{background:var(--primary-dark);}@media(max-width:480px){input[type=submit]{width:calc(50%-5px);}input[type=submit]:only-of-type{width:100%;}}"
+MOBILE_BASE_CSS
+"body{text-align:center;}"
+REDUCED_MOTION_CSS
+SUBMIT_BUTTON_CSS
+"input[type=submit]{font-size:14px;}@media(max-width:480px){input[type=submit]{width:calc(50%-5px);}input[type=submit]:only-of-type{width:100%;}}"
 "</style></head><body>"
 "<form method=post action=/Mail/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
@@ -1195,16 +1233,21 @@ int SendWPDetails(WPRec * WP, char * Reply, char * Key)
 		strcpy(D2, FormatDateAndTime(WP->last_seen, FALSE));
 
 		// Chunk 1: Opening with Key
+		nwritten = snprintf(&Reply[len], 65536 - len, "%s", WPDetailCSS);
+		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
+		len += nwritten;
+
+		// Chunk 2: Opening with Key
 		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailOpen, Key);
 		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
 		len += nwritten;
 
-		// Chunk 2: Call field (1 specifier)
+		// Chunk 3: Call field (1 specifier)
 		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailSection1, WP->callsign);
 		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
 		len += nwritten;
 
-		// Chunk 3: Contact info (7 specifiers: name, home1, home2, qth1, qth2, zip1, zip2)
+		// Chunk 4: Contact info (7 specifiers: name, home1, home2, qth1, qth2, zip1, zip2)
 		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailSection2, 
 			WP->name,
 			WP->first_homebbs, WP->secnd_homebbs,
@@ -1213,7 +1256,7 @@ int SendWPDetails(WPRec * WP, char * Reply, char * Key)
 		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
 		len += nwritten;
 
-		// Chunk 4: Metadata (5 specifiers: seen, modif, type, changed, seen)
+		// Chunk 5: Metadata (5 specifiers: seen, modif, type, changed, seen)
 		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailSection3,
 			D1, D2,
 			WP->Type,
@@ -1222,7 +1265,7 @@ int SendWPDetails(WPRec * WP, char * Reply, char * Key)
 		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
 		len += nwritten;
 
-		// Chunk 5: Buttons and closing form
+		// Chunk 6: Buttons and closing form
 		nwritten = snprintf(&Reply[len], 65536 - len, WPDetailButtons);
 		if (nwritten < 0 || nwritten >= (65536 - len)) return len;
 		len += nwritten;
@@ -1433,19 +1476,25 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			len += nwritten;
 			for (x= 0; x < 8; x++)
 			{
-				char * Colour  = NotThisOne;	
+				char * Colour  = NotThisOne;
+				const char * CellClass = "fwd-none";
 
 				if (bbs[n])
 				{
-					if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)	
+					if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
 						if (check_fwd_bit(Msg->fbbs, bbs[n]->BBSNumber))
-								Colour = ToSend;
-					if (memcmp(Msg->forw, zeros, NBMASK) != 0)	
+							Colour = ToSend;
+					if (memcmp(Msg->forw, zeros, NBMASK) != 0)
 						if (check_fwd_bit(Msg->forw, bbs[n]->BBSNumber))
-								Colour = Sent;
-				
-					nwritten = snprintf(&Reply[len], ReplyCap - len, "<td style=\"background-color: %s;\"onclick=ck(\"%d\")>%.6s</td>",
-						Colour, bbs[n]->BBSNumber, bbs[n]->Call);
+							Colour = Sent;
+
+					if (Colour == ToSend)
+						CellClass = "fwd-queued";
+					else if (Colour == Sent)
+						CellClass = "fwd-sent";
+
+					nwritten = snprintf(&Reply[len], ReplyCap - len, "<td class=\"%s\" onclick=ck(\"%d\")>%.6s</td>",
+						CellClass, bbs[n]->BBSNumber, bbs[n]->Call);
 					if (nwritten < 0)
 						break;
 					if (nwritten >= (ReplyCap - len))
@@ -2996,16 +3045,28 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 	int Len, i;
 
 	Len = SendHeader(Reply, Key);
-	Len += sprintf(&Reply[Len], "<style>body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; } h3 { text-align: center; margin-bottom: 30px; } .form-section { background: white; padding: 20px; border-radius: 4px; box-shadow: 0 0 5px rgba(0,0,0,0.1); margin: 20px 0; } .form-row { display: flex; flex-wrap: wrap; margin: 15px 0; gap: 10px; align-items: flex-start; } .form-row label { flex: 1 1 150px; font-weight: bold; display: block; } .form-row input[type=text] { flex: 2 1 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; } .form-row p { margin: 0; font-size: 0.9em; color: #666; flex: 100%%; } .port-row { display: flex; flex-wrap: wrap; margin: 15px 0; gap: 10px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; align-items: center; } .port-row-header { display: flex; flex-wrap: wrap; margin: 10px 0; gap: 15px; font-weight: bold; font-size: 0.9em; } .port-row-label { flex: 0 1 120px; } .port-row input[type=checkbox] { margin: 0; } .port-row input[type=text] { flex: 2 1 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; } .port-row span { flex: 1 1 120px; } .buttons { text-align: center; margin: 30px 0; } .buttons input { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 0 5px; } .buttons input:hover { background: #0056b3; } @media (max-width: 768px) { .form-row { flex-direction: column; } .form-row label { flex: none; } .form-row input[type=text] { flex: none; width: 100%%; } .port-row { flex-direction: column; align-items: flex-start; } .port-row input[type=text] { width: 100%%; flex: none; } .port-row-header { flex-direction: column; align-items: flex-start; } }</style>");
+	Len += sprintf(&Reply[Len], "<style>"
+		COMMON_CSS_VARIABLES
+		COMMON_FORM_CSS
+		COMMON_UTILITY_CSS
+		COMMON_BUTTON_CSS
+		".port-row{display:flex;flex-wrap:wrap;margin:15px 0;gap:10px;padding:15px;background:#f9f9f9;border:1px solid #ddd;border-radius:4px;align-items:center;}"
+		".port-row-header{display:flex;flex-wrap:wrap;margin:10px 0;gap:15px;font-weight:bold;font-size:0.9em;}"
+		".port-row-label{flex:0 1 120px;}"
+		".port-row input[type=checkbox]{margin:0;}"
+		".port-row input[type=text]{flex:2 1 200px;padding:8px;border:1px solid #ccc;border-radius:4px;}"
+		".port-row span{flex:1 1 120px;}"
+		"@media(max-width:768px){.port-row{flex-direction:column;align-items:flex-start;}.port-row input[type=text]{width:100%%;flex:none;}.port-row-header{flex-direction:column;align-items:flex-start;}}"
+		"</style>");
 	Len += sprintf(&Reply[Len], UIHddr);
 	Len += sprintf(&Reply[Len], "<form method=post action=/Mail/UI?%s>"
 		"<div class=form-section>"
 		"<div class=form-row><label>Mailfor Header</label><input type=text value=\"%s\" name=MailFor></div>"
-		"<p style=\"margin: 10px 0 0 0; color: #666; font-size: 0.9em;\">(use \\r to insert newline in message)</p>"
+		"<p class=muted-note>(use \\r to insert newline in message)</p>"
 		"</div>"
 		"<div class=form-section>"
 		"<div class=port-row-header>"
-		"<span class=port-row-label>Enable</span><span style=\"flex: 2 1 200px;\">Port Path</span><span>Send MailFor</span><span>Send Headers</span><span>Send Empty</span>"
+		"<span class=port-row-label>Enable</span><span class=flex-2-200>Port Path</span><span>Send MailFor</span><span>Send Headers</span><span>Send Empty</span>"
 		"</div>", Key, MailForText);
 
 	for (i = 1; i <= GetNumberofPorts(); i++)
@@ -3083,21 +3144,21 @@ VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 
 		if (!conn->Active)
 		{
-			Len += sprintf(&Reply[Len], "<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\">Idle</td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td></tr>");
+			Len += sprintf(&Reply[Len], "<tr><td class=status-cell></td><td class=status-cell>Idle</td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td></tr>");
 		}
 		else
 		{
 			{
 				if (conn->UserPointer == 0)
 				{
-					Len += sprintf(&Reply[Len], "<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><input type=radio name=call value=%d></td><td style=\"padding: 8px; border: 1px solid #ddd;\">Logging in</td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td><td style=\"padding: 8px; border: 1px solid #ddd;\"></td></tr>", conn->BPQStream);
+					Len += sprintf(&Reply[Len], "<tr><td class=status-cell><input type=radio name=call value=%d></td><td class=status-cell>Logging in</td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td></tr>", conn->BPQStream);
 				}
 				else
 				{
 					strcpy(Name, conn->UserPointer->Name);
 					Name[9] = 0;
 
-					Len += sprintf(&Reply[Len], "<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><input type=radio name=call value=%d></td><td style=\"padding: 8px; border: 1px solid #ddd;\">%s</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%s</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td><td style=\"padding: 8px; border: 1px solid #ddd;\">%d</td></tr>",
+					Len += sprintf(&Reply[Len], "<tr><td class=status-cell><input type=radio name=call value=%d></td><td class=status-cell>%s</td><td class=status-cell>%s</td><td class=status-cell>%d</td><td class=status-cell>%d</td><td class=status-cell>%d</td><td class=status-cell>%d</td></tr>",
 						conn->BPQStream, Name, conn->UserPointer->Call, conn->BPQStream, conn->OutputQueueLength - conn->OutputGetPointer, conn->bytesSent, conn->bytesRxed);
 				}
 			}

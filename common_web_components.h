@@ -214,6 +214,17 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}" \
 	"}"
 
+// Common Utility Styles
+// Lightweight helper classes to replace one-off inline style attributes
+#define COMMON_UTILITY_CSS \
+	".text-center{text-align:center;}" \
+	".muted-note{margin:10px 0 0 0;color:#666;font-size:0.9em;}" \
+	".font-normal{font-weight:normal;}" \
+	".inline-label{flex:1 1 100px;font-weight:bold;margin:0;padding-left:10px;}" \
+	".flex-2-200{flex:2 1 200px;}" \
+	".form-row input.input-w-80{flex:none;width:80px;}" \
+	".form-row input.input-w-100{flex:none;width:100px;}"
+
 // Common Button Styles
 // Provides consistent button appearance with proper touch targets
 #define COMMON_BUTTON_CSS \
@@ -305,26 +316,6 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"padding:8px 6px;" \
 	"}" \
 	"}"
-
-// Helper: Build complete page header with common styles
-// Usage: sprintf(buffer, COMMON_PAGE_HEADER, "Page Title", includeRefresh ? refreshMeta : "");
-static const char COMMON_PAGE_HEADER[] =
-	"<!DOCTYPE html>"
-	"<html><head>"
-	"<meta charset=\"UTF-8\">"
-	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
-	"%s"  // Placeholder for refresh meta or other head elements
-	"<title>%s</title>"
-	"<style>"
-	"%s"  // COMMON_CSS_VARIABLES
-	"%s"  // COMMON_MENU_CSS
-	"%s"  // Additional page-specific CSS
-	"</style>"
-	"<script>"
-	"%s"  // COMMON_MENU_JAVASCRIPT
-	"%s"  // Additional page-specific JavaScript
-	"</script>"
-	"</head><body>";
 
 // Helper: Build mail menu HTML
 // Usage: sprintf(buffer, COMMON_MAIL_MENU, key, key, key, ..., key);

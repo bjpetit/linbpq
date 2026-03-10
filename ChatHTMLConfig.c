@@ -153,6 +153,7 @@ char ChatSignon[] = "<html><head><meta charset='UTF-8'><meta name='viewport' con
 char ChatPage[] = "<html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>%s's Chat Server</title>"
 	"<style>"
 	COMMON_CSS_VARIABLES
+	COMMON_UTILITY_CSS
 	"*{box-sizing:border-box;}"
 	".container{max-width:900px;margin:0 auto;background:var(--surface);padding:20px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}"
 	COMMON_MENU_CSS
@@ -162,20 +163,15 @@ char ChatPage[] = "<html><head><meta charset='UTF-8'><meta name='viewport' conte
 	"</script>"
 	"</head><body>"
 	"<div class='container'>"
-	"<h3 style='text-align:center;margin-top:0;'>BPQ32 Chat Node %s</h3>"
-	"<div class='menu-header'><button id='menuToggle' class='menu-toggle' type='button' onclick='toggleMenu(event)'>Menu</button></div>"
-	"<div id='chatMenu' class='menu'>"
-	"<a href=/Chat/ChatStatus?%s>Status</a>"
-	"<a href=/Chat/ChatConf?%s>Configuration</a>"
-	"<a href=/>Node Menu</a>"
-	"</div>"
+	"<h3>BPQ32 Chat Node %s</h3>"
+	COMMON_CHAT_MENU
 	"</div>"
 	"</body></html>";
 
 
 
 static char LostSession[] = "<html><body>"
-"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Chat/Lost?%s>"
+"<form class=text-center style=\"font-family: monospace;\" method=post action=/Chat/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
 "<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
 
