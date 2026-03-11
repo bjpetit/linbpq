@@ -1175,9 +1175,8 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 		if (WPTemplate)
 		{
-			int len =sprintf(Reply, WPTemplate, Key, Key, Key, Key,
-				Key, Key, Key, Key, Key, Key, Key, Key,
-				BBSName);
+			int len =sprintf(Reply, WPTemplate, Key, Key, BBSName, Key, Key,
+				Key, Key, Key, Key, Key, Key);
 			*RLen = len;
 			return;
 		}
