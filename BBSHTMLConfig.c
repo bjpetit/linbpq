@@ -407,7 +407,7 @@ MOBILE_BASE_CSS
 REDUCED_MOTION_CSS
 ".form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:#1f2937;}.form-row textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:14px;line-height:1.4;}p{font-size:13px;color:#666;line-height:1.5;}"
 SUBMIT_BUTTON_CSS
-"input[type=submit]{font-size:14px;}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
+"input[type=submit]{font-size:14px;}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
 "</style></head><body>"
 "<form method=post action=/Mail/Welcome?%s>"
 "<div class=form-row><label>Normal User Welcome</label><textarea rows=3 name=NUWelcome>%s</textarea></div>"
