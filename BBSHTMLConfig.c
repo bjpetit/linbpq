@@ -96,6 +96,7 @@ VOID SaveMessageText(struct HTTPConnectionInfo * Session, char * MsgPtr, char * 
 VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
 VOID SaveWP(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
 int SendWPDetails(WPRec * WP, char * Reply, char * Key);
+VOID SendWPSelectPage(char * Reply, int * ReplyLen, char * Key);
 int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Key);
 int SetupNodeMenu(char * Buff);
 VOID SendFwdSelectPage(char * Reply, int * ReplyLen, char * Key);
@@ -1312,7 +1313,7 @@ VOID SaveWP(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, in
 
 				Session->WP = WPRecPtr[1];
 			}
-			*RLen = SendWPDetails(Session->WP, Reply, Session->Key);
+			SendWPSelectPage(Reply, RLen, Session->Key);
  			return;
 		}
 	}
@@ -1349,6 +1350,30 @@ VOID SaveWP(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, in
 
 		*RLen = SendWPDetails(WP, Reply, Key);
 	}
+}
+
+VOID SendWPSelectPage(char * Reply, int * ReplyLen, char * Key)
+{
+	WPRec * WP;
+	int i = 0, n;
+	int Len = 0;
+	WPRec * WPs[10000];
+
+	for (n = 1; n <= NumberofWPrecs; n++)
+	{
+		WPs[i++] = WPRecPtr[n];
+		if (i > 9999) break;
+	}
+
+	qsort((void *)WPs, i, sizeof(void *), compare);
+
+	for (n = 0; n < NumberofWPrecs; n++)
+	{
+		WP = WPs[n];
+		Len += sprintf(&Reply[Len], "%s|", WP->callsign);
+	}
+
+	*ReplyLen = Len;
 }
 
 
