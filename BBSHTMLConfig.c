@@ -189,11 +189,23 @@ COMMON_TABLE_CSS
 COMMON_FORM_CSS
 COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
-".status-cell{padding:8px;border:1px solid #ddd;}"
+".status-grid{width:100%%;border-collapse:collapse;font-family:monospace;white-space:nowrap;}"
+".status-grid{background:#fff;color:#000;}"
+".status-grid thead tr{background:#f0f0f0;}"
+".status-grid th,.status-grid td{padding:10px;border:1px solid var(--border);color:#000;}"
+".status-grid th{background:#f0f0f0;font-weight:bold;}"
+".status-grid td{background:#fff;}"
+".status-grid tbody tr:nth-child(even){background:#fff;}"
+".status-grid tbody tr:hover{background:#fff;}"
+".status-grid th{text-align:left;}"
+".status-grid td{text-align:left;}"
+".status-grid th.num,.status-grid td.num{text-align:center;}"
+".status-actions input{min-width:160px;}"
+"@media(max-width:768px){.status-grid{font-size:13px;}.status-grid th,.status-grid td{padding:8px 6px;}}"
 "</style></head><body><h3>Active Sessions</h3>"
 "<form method=post action=/Mail/DisSession?%s>"
-"<div class=table-container><table>"
-"<thead><tr><th>Select</th><th>User</th><th>Callsign</th><th>Stream</th><th>Queue</th><th>Sent</th><th>Rxed</th></tr></thead><tbody>";
+"<div class=table-container><table class=status-grid>"
+"<thead><tr><th class=num>Select</th><th>User</th><th>Callsign</th><th class=num>Stream</th><th class=num>Queue</th><th class=num>Sent</th><th class=num>Rxed</th></tr></thead><tbody>";
 
 char StreamEnd[] = 
 "</tbody></table></div>";
@@ -205,7 +217,7 @@ char StatusTail[] =
 "<div class=stat-row><label>Held Messages</label><input readonly=readonly value=%d></div>"
 "<div class=stat-row><label>SMTP Messages</label><input readonly=readonly value=%d></div>"
 "</div>"
-"<div class=buttons><input name=Disconnect value=Disconnect type=submit></div>"
+"<div class=\"buttons status-actions\"><input name=Disconnect value=Disconnect type=submit></div>"
 "</form></body></html>";
 
 
@@ -3168,21 +3180,21 @@ VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 
 		if (!conn->Active)
 		{
-			Len += sprintf(&Reply[Len], "<tr><td class=status-cell></td><td class=status-cell>Idle</td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td></tr>");
+			Len += sprintf(&Reply[Len], "<tr><td class=num></td><td>Idle</td><td></td><td class=num></td><td class=num></td><td class=num></td><td class=num></td></tr>");
 		}
 		else
 		{
 			{
 				if (conn->UserPointer == 0)
 				{
-					Len += sprintf(&Reply[Len], "<tr><td class=status-cell><input type=radio name=call value=%d></td><td class=status-cell>Logging in</td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td><td class=status-cell></td></tr>", conn->BPQStream);
+					Len += sprintf(&Reply[Len], "<tr><td class=num><input type=radio name=call value=%d></td><td>Logging in</td><td></td><td class=num></td><td class=num></td><td class=num></td><td class=num></td></tr>", conn->BPQStream);
 				}
 				else
 				{
 					strcpy(Name, conn->UserPointer->Name);
 					Name[9] = 0;
 
-					Len += sprintf(&Reply[Len], "<tr><td class=status-cell><input type=radio name=call value=%d></td><td class=status-cell>%s</td><td class=status-cell>%s</td><td class=status-cell>%d</td><td class=status-cell>%d</td><td class=status-cell>%d</td><td class=status-cell>%d</td></tr>",
+					Len += sprintf(&Reply[Len], "<tr><td class=num><input type=radio name=call value=%d></td><td>%s</td><td>%s</td><td class=num>%d</td><td class=num>%d</td><td class=num>%d</td><td class=num>%d</td></tr>",
 						conn->BPQStream, Name, conn->UserPointer->Call, conn->BPQStream, conn->OutputQueueLength - conn->OutputGetPointer, conn->bytesSent, conn->bytesRxed);
 				}
 			}
