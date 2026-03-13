@@ -12,7 +12,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 // CSS Variables and Universal Styles
 // Used by all pages for consistent theming
-#define COMMON_CSS_VARIABLES \
+#define COMMON_CSS_ROOT \
 	":root{" \
 	"--bg:#f4f4f4;" \
 	"--surface:#fff;" \
@@ -23,7 +23,9 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"--text:#1f2937;" \
 	"--link:#1f2937;" \
 	"}" \
-	"*{box-sizing:border-box;}" \
+	"*{box-sizing:border-box;}"
+
+#define COMMON_BODY_BASE_CSS \
 	"body{" \
 	"font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;" \
 	"background:var(--bg);" \
@@ -38,11 +40,21 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));" \
 	"padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));" \
 	"}" \
-	"}" \
-	"h3{text-align:center;margin:0 0 15px;}" \
+	"}"
+
+#define COMMON_HEADING_CSS \
+	"h3{text-align:center;margin:0 0 15px;font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);line-height:1.25;}"
+
+#define COMMON_REDUCED_MOTION_CSS \
 	"@media(prefers-reduced-motion:reduce){" \
 	"*{animation-duration:0!important;transition-duration:0!important;}" \
 	"}"
+
+#define COMMON_CSS_VARIABLES \
+	COMMON_CSS_ROOT \
+	COMMON_BODY_BASE_CSS \
+	COMMON_HEADING_CSS \
+	COMMON_REDUCED_MOTION_CSS
 
 // Responsive Menu System CSS
 // Provides collapsible mobile menu with hamburger toggle
@@ -56,7 +68,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border:1px solid var(--border);" \
 	"border-radius:6px;" \
 	"background:var(--surface);" \
-	"font-size:16px;" \
+	"font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);" \
 	"color:var(--text);" \
 	"cursor:pointer;" \
 	"touch-action:manipulation;" \
@@ -83,7 +95,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border-radius:6px;" \
 	"border:1px solid var(--border);" \
 	"color:var(--link);" \
-	"font-size:15px;" \
+	"font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);" \
 	"cursor:pointer;" \
 	"touch-action:manipulation;" \
 	"}" \
@@ -97,14 +109,53 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".menu a{width:100%%;text-align:center;min-height:48px;}" \
 	"}"
 
+// Common responsive table styles
+// Use classes: table-wrap, node-table, node-table-stack, num/text/center
+#define COMMON_TABLE_FONT_SIZE "clamp(0.75rem,0.65rem + 1vw,0.9375rem)"
+#define COMMON_TABLE_FONT_SIZE_COMPACT "clamp(0.6875rem,0.62rem + 0.45vw,0.8125rem)"
+
+#define COMMON_TABLE_CSS \
+	".table-container{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
+	".table-wrap{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
+	".node-table{width:max-content;max-width:none;border-collapse:collapse;table-layout:auto;background:var(--surface);font-family:'JetBrains Mono',Consolas,Monaco,'Courier New',monospace;font-size:" COMMON_TABLE_FONT_SIZE ";}" \
+	".node-table caption{caption-side:top;text-align:left;font-family:Arial,sans-serif;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);font-weight:600;color:var(--text);padding:0 0 8px;}" \
+	".node-table th,.node-table td{border:1px solid var(--border);padding:8px;vertical-align:top;}" \
+	".node-table th,.node-table td{white-space:nowrap;}" \
+	".node-table th{background:#f0f0f0;text-align:left;}" \
+	".node-table tbody tr:nth-child(even){background-color:#f2f2f2;}" \
+	".node-table td.num{text-align:right;}" \
+	".node-table td.text{text-align:left;}" \
+	".node-table td.center{text-align:center;}" \
+	".node-table.routes-table,.node-table.compact-table{font-size:" COMMON_TABLE_FONT_SIZE_COMPACT ";}" \
+	".node-table.routes-table th,.node-table.routes-table td,.node-table.compact-table th,.node-table.compact-table td{padding:5px 4px;}" \
+	".node-table.node-detail-table{margin-left:auto;margin-right:auto;}" \
+	".node-table a{color:var(--link);}" \
+	"@media(max-width:768px){" \
+	".node-table-stack thead{display:none;}" \
+	".node-table-stack thead th{display:none;}" \
+	".node-table-stack th{display:none;}" \
+	".node-table-stack,.node-table-stack tbody,.node-table-stack tr,.node-table-stack td{display:block;width:100%%;}" \
+	".node-table-stack tr{margin:0 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:6px;}" \
+	".node-table-stack tbody tr:nth-child(even){background:var(--surface);}" \
+	".node-table-stack td{border:none;border-bottom:1px solid #eee;text-align:left;padding:6px 4px;}" \
+	".node-table-stack td.num,.node-table-stack td.center,.node-table-stack td.text{text-align:left;}" \
+	".node-table-stack td:last-child{border-bottom:none;}" \
+	".node-table-stack td::before{content:attr(data-label);display:inline-block;min-width:130px;font-weight:700;color:var(--text);margin-right:8px;}" \
+	".node-table-stack.stats-table td::before{content:none;display:none;}" \
+	"}" \
+	".node-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(17ch,max-content));justify-content:center;gap:0;width:100%%;padding:8px;box-sizing:border-box;font-family:'JetBrains Mono',Consolas,Monaco,'Courier New',monospace;font-size:" COMMON_TABLE_FONT_SIZE_COMPACT ";}" \
+	".node-grid a{color:var(--link);white-space:nowrap;padding:3px 10px 3px 6px;display:block;border:1px solid var(--border);}" \
+	".node-grid a:hover{background:rgba(0,0,0,0.05);}"
+
 // Responsive Menu JavaScript
 // Handles toggle, click-outside-to-close, and escape key
 // Expects menu element ID to be 'mainMenu' or 'mailMenu'
 // Expects toggle button ID to be 'menuToggle'
 #define COMMON_MENU_JAVASCRIPT \
+	"function getMenu(){return document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');}"\
 	"function toggleMenu(event){" \
 	"if(event)event.preventDefault();" \
-	"var menu=document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');" \
+	"var menu=getMenu();" \
 	"var toggle=document.getElementById('menuToggle');" \
 	"if(!menu||!toggle)return;" \
 	"if(menu.classList.contains('menu-open')){" \
@@ -116,7 +167,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}" \
 	"}" \
 	"window.addEventListener('click',function(event){" \
-	"var menu=document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');" \
+	"var menu=getMenu();" \
 	"var toggle=document.getElementById('menuToggle');" \
 	"var header=document.querySelector('.menu-header');" \
 	"if(menu&&toggle&&window.matchMedia('(max-width:768px)').matches){" \
@@ -130,7 +181,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"});" \
 	"window.addEventListener('keydown',function(event){" \
 	"if(event.key==='Escape'){" \
-	"var menu=document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');" \
+	"var menu=getMenu();" \
 	"if(menu&&menu.classList.contains('menu-open')){" \
 	"menu.classList.remove('menu-open');" \
 	"document.getElementById('menuToggle').textContent='Menu';" \
@@ -158,7 +209,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".form-row label{" \
 	"flex:1 1 clamp(100px,25%%,150px);" \
 	"font-weight:bold;" \
-	"font-size:14px;" \
+	"font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);" \
 	"padding-top:2px;" \
 	"}" \
 	".form-row input[type=text],.form-row input[type=number],.form-row input[type=password],.form-row select{" \
@@ -166,7 +217,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"padding:8px;" \
 	"border:1px solid var(--border);" \
 	"border-radius:4px;" \
-	"font-size:14px;" \
+	"font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);" \
 	"touch-action:manipulation;" \
 	"min-height:44px;" \
 	"}" \
@@ -182,8 +233,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border:1px solid var(--border);" \
 	"border-radius:4px;" \
 	"min-height:120px;" \
-	"font-family:monospace;" \
-	"font-size:12px;" \
+	"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;" \
+	"font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);" \
 	"touch-action:manipulation;" \
 	"}" \
 	".checkbox-group{" \
@@ -218,7 +269,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Lightweight helper classes to replace one-off inline style attributes
 #define COMMON_UTILITY_CSS \
 	".text-center{text-align:center;}" \
-	".muted-note{margin:10px 0 0 0;color:#666;font-size:0.9em;}" \
+	".muted-note{margin:10px 0 0 0;color:#666;font-size:clamp(0.875rem,0.84rem + 0.15vw,1rem);line-height:1.45;}" \
 	".font-normal{font-weight:normal;}" \
 	".inline-label{flex:1 1 100px;font-weight:bold;margin:0;padding-left:10px;}" \
 	".flex-2-200{flex:2 1 200px;}" \
@@ -268,55 +319,6 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"margin:4px 0;" \
 	"}" \
 	"}"
-
-// Common Table Styles
-// For data tables with proper mobile responsiveness
-#define COMMON_TABLE_CSS \
-	".table-container{" \
-	"background:var(--surface);" \
-	"border-radius:4px;" \
-	"box-shadow:0 0 5px rgba(0,0,0,0.1);" \
-	"overflow-x:auto;" \
-	"margin:20px 0;" \
-	"}" \
-	"table{" \
-	"width:100%%;" \
-	"border-collapse:collapse;" \
-	"}" \
-	"th{" \
-	"background:var(--primary);" \
-	"color:white;" \
-	"padding:12px;" \
-	"text-align:left;" \
-	"font-weight:bold;" \
-	"border:1px solid var(--border);" \
-	"}" \
-	"td{" \
-	"padding:10px 12px;" \
-	"border:1px solid var(--border);" \
-	"}" \
-	"tbody tr:nth-child(even){" \
-	"background:#f9f9f9;" \
-	"}" \
-	"tbody tr:hover{" \
-	"background:#f0f0f0;" \
-	"}" \
-	"input[type=checkbox]{" \
-	"margin:0;" \
-	"touch-action:manipulation;" \
-	"width:18px;" \
-	"height:18px;" \
-	"cursor:pointer;" \
-	"}" \
-	"@media(max-width:768px){" \
-	"table{" \
-	"font-size:13px;" \
-	"}" \
-	"th,td{" \
-	"padding:8px 6px;" \
-	"}" \
-	"}"
-
 // Helper: Build mail menu HTML
 // Usage: sprintf(buffer, COMMON_MAIL_MENU, key, key, key, ..., key);
 #define COMMON_MAIL_MENU \

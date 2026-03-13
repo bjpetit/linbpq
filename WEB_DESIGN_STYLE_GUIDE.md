@@ -9,6 +9,7 @@
 
 ## Typography & Color Scheme
 - **Font**: Arial, sans-serif (fallback to system fonts)
+- **Monospace Fonts**: 'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace
 - **Background**: Light neutral gray (#f4f4f4) for page backgrounds, white for cards/forms
 - **Primary Color**: Blue (#007bff) for buttons and interactive elements
 - **Button Hover State**: Darker blue (#0056b3) on hover
@@ -75,6 +76,17 @@
   - Menu items: 0 0 5px rgba(0,0,0,0.1) (subtle shadows)
   - Login containers: 0 2px 8px rgba(0,0,0,0.1) (refined shadow)
 - **Border Radius**: 4px for inputs/buttons, 8px for larger containers
+
+## Table Layout
+- Mobile-First & Fluid: Set table { width: 100%; max-width: 100%; } so tables fill the container but do not overflow.
+- Horizontal Scrolling: For complex data, wrap the <table> in a <div> with overflow-x: auto. Ensure the table is still legible and consider adding a scroll prompt.
+- Stacked/Card Layout (Mobile): At smaller breakpoints, convert rows to block-level elements (td { display: block; }) and use data-attributes to add labels, turning each row into a distinct "card".
+- Fixed Table Layout: Use table-layout: fixed; to allow the browser to render the table faster and allow columns to size based on width attributes rather than content, improving Readability & Styling Best Practices
+- Zebra Striping: Use tbody tr:nth-child(even) { background-color: #f2f2f2; } to improve readability for large data sets.
+- Alignment: Align text to the left and numerical data to the right (left-to-right languages) to facilitate easier scanning.
+- Spacing/Padding: Ensure generous padding on td and th elements to reduce visual clutter.
+- Sticky Headers: Implement position: sticky on the <thead> or the first column to keep context while scrolling, improving the experience of long, narrow tables.
+- Accessibility: Use <th> elements for headers, apply scope attributes, and use <caption to describe the table.
 
 ## Accessibility & Best Practices
 - All form inputs have associated labels or clear labels within form-row divs

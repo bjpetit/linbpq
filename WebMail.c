@@ -121,7 +121,7 @@ extern char MailSignon[];
 
 char WebMailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>BPQ32 WebMail Access</title>"
-	"<style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style>"
+	"<style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style>"
 	"</head><body>"
 	"<h2>BPQ32 WebMail %s Access</h2>"
 	"<h3>Please enter Callsign and Password to access WebMail</h3>"
@@ -132,7 +132,7 @@ char WebMailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=devi
 
 static char MsgInputPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
 	"<title>Webmail Message Input</title><script src='/WebMail/webscript.js'></script>"
-	"<style>body { font-family: Arial, sans-serif; margin: 12px; background: #f5f7fa; color: #1f2937; } h3 { text-align: center; margin: 0 0 12px; } #myform { max-width: 980px; margin: 0 auto; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 14px; box-sizing: border-box; } .form-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; } .form-row label { flex: 0 0 88px; font-weight: 600; } .form-row input, .form-row select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; } #To, #Subj { font-size: 15px; padding-top: 9px; padding-bottom: 9px; } .form-row input[type=file] { padding: 6px 0; border: none; } .form-row textarea { flex: 1 1 auto; width: 100%; min-height: 360px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; line-height: 1.4; resize: vertical; } .form-row.message-row { align-items: flex-start; } .form-row.message-row label { padding-top: 10px; } .form-row.meta-row label { flex: 0 0 88px; } .form-row.meta-row select { flex: 0 0 120px; max-width: 120px; } .form-row.meta-row input { flex: 0 1 260px; max-width: 260px; } .inline-action { white-space: nowrap; flex: 0 0 auto; margin-left: 10px; } .btn, .buttons input { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 14px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; color: #1f2937; cursor: pointer; text-decoration: none; font-size: 14px; box-sizing: border-box; } .btn:hover, .buttons input:hover { background: #eef2f7; } .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; } .buttons input[name=Send] { background: #2563eb; border-color: #2563eb; color: #fff; } .buttons input[name=Send]:hover { background: #1d4ed8; } @media (max-width: 768px) { body { margin: 10px; } #myform { padding: 12px; } .form-row { flex-direction: column; align-items: stretch; gap: 6px; margin: 6px 0; } .form-row label { flex: none; width: 100%; } .form-row input, .form-row select { width: 100%; } .form-row input, .form-row select, .buttons input, .btn { min-height: 44px; } .form-row input[type=file] { min-height: 0; } .form-row.message-row label { padding-top: 0; } .form-row.meta-row label { flex: none; width: 100%; } .form-row.meta-row select, .form-row.meta-row input { flex: 1 1 auto; max-width: none; } .inline-action { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-left: 0; } .inline-action .btn { flex: 1 1 auto; min-width: 100px; } .buttons { justify-content: stretch; gap: 8px; } .buttons input { flex: 1 1 0; } }</style></head><body>"
+	"<style>body { font-family: Arial, sans-serif; margin: 12px; background: #f5f7fa; color: #1f2937; } h3 { text-align: center; margin: 0 0 12px; } #myform { max-width: 980px; margin: 0 auto; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 14px; box-sizing: border-box; } .form-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; } .form-row label { flex: 0 0 88px; font-weight: 600; } .form-row input, .form-row select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; } #To, #Subj { font-size: 15px; padding-top: 9px; padding-bottom: 9px; } .form-row input[type=file] { padding: 6px 0; border: none; } .form-row textarea { flex: 1 1 auto; width: 100%%; min-height: 360px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; line-height: 1.4; resize: vertical; } .form-row.message-row { align-items: flex-start; } .form-row.message-row label { padding-top: 10px; } .form-row.meta-row label { flex: 0 0 88px; } .form-row.meta-row select { flex: 0 0 120px; max-width: 120px; } .form-row.meta-row input { flex: 0 1 260px; max-width: 260px; } .inline-action { white-space: nowrap; flex: 0 0 auto; margin-left: 10px; } .btn, .buttons input { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 14px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; color: #1f2937; cursor: pointer; text-decoration: none; font-size: 14px; box-sizing: border-box; } .btn:hover, .buttons input:hover { background: #eef2f7; } .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; } .buttons input[name=Send] { background: #2563eb; border-color: #2563eb; color: #fff; } .buttons input[name=Send]:hover { background: #1d4ed8; } @media (max-width: 768px) { body { margin: 10px; } #myform { padding: 12px; } .form-row { flex-direction: column; align-items: stretch; gap: 6px; margin: 6px 0; } .form-row label { flex: none; width: 100%%; } .form-row input, .form-row select { width: 100%%; } .form-row input, .form-row select, .buttons input, .btn { min-height: 44px; } .form-row input[type=file] { min-height: 0; } .form-row.message-row label { padding-top: 0; } .form-row.meta-row label { flex: none; width: 100%%; } .form-row.meta-row select, .form-row.meta-row input { flex: 1 1 auto; max-width: none; } .inline-action { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; width: 100%%; margin-left: 0; } .inline-action .btn { flex: 1 1 auto; min-width: 100px; } .buttons { justify-content: stretch; gap: 8px; } .buttons input { flex: 1 1 0; } }</style></head><body>"
 	"<h3>Webmail Interface - Message Input Form</h3>"
 	"<form id=myform method=post action=/WebMail/EMSave\?%s enctype=multipart/form-data>"
 	"<div class=form-row><label for='To'>To:</label><input id='To' size=60 name='To' value='%s'><span class=inline-action>%s</span></div>"
@@ -147,7 +147,7 @@ static char MsgInputPage[] = "<html><head><meta name=\"viewport\" content=\"widt
 
 static char CheckFormMsgPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
 	"<title>Webmail Forms - Check Message</title><script src='/WebMail/webscript.js'></script>"
-	"<style>:root{--bg:#f5f7fa;--surface:#fff;--border:#cbd5e1;--text:#1f2937;}*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:max(12px,env(safe-area-inset-left));background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}h3{text-align:center;margin:0 0 12px;}#myform{max-width:980px;margin:0 auto;background:var(--surface);border:1px solid #d1d5db;border-radius:8px;padding:14px;display:flex;flex-direction:column;}@supports(padding:max(0px)){body{margin:clamp(10px,3vw,20px);margin-left:max(clamp(10px,3vw,20px),env(safe-area-inset-left));margin-right:max(clamp(10px,3vw,20px),env(safe-area-inset-right));}}.form-row{display:flex;align-items:center;gap:10px;margin:8px 0;}.form-row label{flex:0 0 clamp(70px,20%,100px);font-weight:600;font-size:14px;}.form-row input,.form-row select{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;touch-action:manipulation;}#To,#Subj{font-size:15px;padding:9px 10px;}.form-row textarea{flex:1 1 auto;width:100%;min-height:360px;padding:10px;border:1px solid var(--border);border-radius:6px;line-height:1.4;resize:vertical;font-family:inherit;font-size:14px;touch-action:manipulation;}.form-row.message-row{align-items:flex-start;}.form-row.message-row label{padding-top:10px;}.form-row.meta-row label{flex:0 0 clamp(70px,20%,100px);}.form-row.meta-row select{flex:0 0 120px;max-width:120px;}.form-row.meta-row input{flex:0 1 260px;max-width:260px;}.btn,.buttons input{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 14px;border:1px solid #94a3b8;border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:14px;touch-action:manipulation;}.btn:hover,.buttons input:hover{background:#eef2f7;}.buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;position:sticky;bottom:0;background:var(--surface);padding:10px 0;border-top:1px solid #e5e7eb;z-index:10;}.buttons input[name=Send]{background:#2563eb;border-color:#2563eb;color:#fff;}.buttons input[name=Send]:hover{background:#1d4ed8;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}@media(max-width:480px){body{margin:clamp(8px,2vw,12px);margin-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));margin-right:max(clamp(8px,2vw,12px),env(safe-area-inset-right));}#myform{padding:12px;border-radius:6px;}.form-row{flex-direction:column;align-items:stretch;gap:6px;margin:6px 0;}.form-row label{flex:none;width:100%;}.form-row input,.form-row select,.form-row textarea{width:100%;min-height:48px;}.form-row.message-row{align-items:stretch;}.form-row.message-row label{padding-top:0;padding-bottom:4px;}.form-row.message-row textarea{min-height:300px;}.form-row.meta-row label{flex:none;width:100%;}.form-row.meta-row select,.form-row.meta-row input{flex:1 1 auto;max-width:none;min-height:48px;}.buttons{justify-content:stretch;gap:8px;padding:12px 0;}.buttons input{flex:1 1 0;min-height:48px;padding:12px 10px;}}</style></head><body>"
+	"<style>:root{--bg:#f5f7fa;--surface:#fff;--border:#cbd5e1;--text:#1f2937;}*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:max(12px,env(safe-area-inset-left));background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}h3{text-align:center;margin:0 0 12px;}#myform{max-width:980px;margin:0 auto;background:var(--surface);border:1px solid #d1d5db;border-radius:8px;padding:14px;display:flex;flex-direction:column;}@supports(padding:max(0px)){body{margin:clamp(10px,3vw,20px);margin-left:max(clamp(10px,3vw,20px),env(safe-area-inset-left));margin-right:max(clamp(10px,3vw,20px),env(safe-area-inset-right));}}.form-row{display:flex;align-items:center;gap:10px;margin:8px 0;}.form-row label{flex:0 0 clamp(70px,20%,100px);font-weight:600;font-size:14px;}.form-row input,.form-row select{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;touch-action:manipulation;}#To,#Subj{font-size:15px;padding:9px 10px;}.form-row textarea{flex:1 1 auto;width:100%%;min-height:360px;padding:10px;border:1px solid var(--border);border-radius:6px;line-height:1.4;resize:vertical;font-family:inherit;font-size:14px;touch-action:manipulation;}.form-row.message-row{align-items:flex-start;}.form-row.message-row label{padding-top:10px;}.form-row.meta-row label{flex:0 0 clamp(70px,20%,100px);}.form-row.meta-row select{flex:0 0 120px;max-width:120px;}.form-row.meta-row input{flex:0 1 260px;max-width:260px;}.btn,.buttons input{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 14px;border:1px solid #94a3b8;border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:14px;touch-action:manipulation;}.btn:hover,.buttons input:hover{background:#eef2f7;}.buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;position:sticky;bottom:0;background:var(--surface);padding:10px 0;border-top:1px solid #e5e7eb;z-index:10;}.buttons input[name=Send]{background:#2563eb;border-color:#2563eb;color:#fff;}.buttons input[name=Send]:hover{background:#1d4ed8;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}@media(max-width:480px){body{margin:clamp(8px,2vw,12px);margin-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));margin-right:max(clamp(8px,2vw,12px),env(safe-area-inset-right));}#myform{padding:12px;border-radius:6px;}.form-row{flex-direction:column;align-items:stretch;gap:6px;margin:6px 0;}.form-row label{flex:none;width:100%%;}.form-row input,.form-row select,.form-row textarea{width:100%%;min-height:48px;}.form-row.message-row{align-items:stretch;}.form-row.message-row label{padding-top:0;padding-bottom:4px;}.form-row.message-row textarea{min-height:300px;}.form-row.meta-row label{flex:none;width:100%%;}.form-row.meta-row select,.form-row.meta-row input{flex:1 1 auto;max-width:none;min-height:48px;}.buttons{justify-content:stretch;gap:8px;padding:12px 0;}.buttons input{flex:1 1 0;min-height:48px;padding:12px 10px;}}</style></head><body>"
 	"<h3>Webmail Forms Interface - Check Message</h3>"
 	"<form id=myform method=post action=/WebMail/FormMsgSave\?%s>"
 	"<div class=form-row><label for='To'>To:</label><input id='To' size=60 name='To' value='%s'></div>"
@@ -864,7 +864,7 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
  	// Ex includes an alert string to be sent before message
 	
 	struct UserInfo * User = Session->User;
-	char Messages[245000];
+	char Messages[255000];
 	int m;
 	struct MsgInfo * Msg;
 	char * ptr = Messages;
@@ -877,15 +877,17 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 	if (Alert && Alert[0])
 		ptr += sprintf(Messages, "<script>alert(\"%s\");window.location.href = '/Webmail/WebMail?%s';</script>", Alert, Key); 
 
-	ptr += sprintf(ptr, "<table class=\"msg-table\"><thead><tr>"
-		"<th class=\"msg-num\">#</th>"
-		"<th class=\"msg-date\">Date</th>"
-		"<th class=\"msg-type\">Type</th>"
-		"<th class=\"msg-len\">Len</th>"
-		"<th class=\"msg-to\">To</th>"
-		"<th class=\"msg-via\">@</th>"
-		"<th class=\"msg-from\">From</th>"
-		"<th class=\"msg-subject\">Subject</th>"
+	ptr += sprintf(ptr, "<table class=\"msg-table\" "
+		"onclick=\"var row=event.target.closest('tr.msg-row[data-href]');if(row&&this.contains(row))window.location=row.getAttribute('data-href');\" "
+		"onkeydown=\"var row=event.target.closest('tr.msg-row[data-href]');var k=event.key||event.code;var kc=event.keyCode||event.which;if(row&&this.contains(row)&&(k==='Enter'||k===' '||k==='Spacebar'||k==='Space'||kc===13||kc===32)){event.preventDefault();window.location=row.getAttribute('data-href');}\"><thead><tr>"
+		"<th scope=\"col\" class=\"msg-num\">#</th>"
+		"<th scope=\"col\" class=\"msg-date\">Date</th>"
+		"<th scope=\"col\" class=\"msg-type\">Type</th>"
+		"<th scope=\"col\" class=\"msg-len\">Len</th>"
+		"<th scope=\"col\" class=\"msg-to\">To</th>"
+		"<th scope=\"col\" class=\"msg-via\">@</th>"
+		"<th scope=\"col\" class=\"msg-from\">From</th>"
+		"<th scope=\"col\" class=\"msg-subject\">Subject</th>"
 		"</tr></thead><tbody>");
 
 	for (m = LatestMsg; m >= 1; m--)
@@ -949,15 +951,15 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 
 			free(EncodedTitle);
 			
-			ptr += sprintf(ptr, "<tr class=\"msg-row\" onclick=\"window.location='/WebMail/WM?%s&%d'\">"
-				"<td class=\"msg-num\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
-				"<td class=\"msg-date\">%s</td>"
-				"<td class=\"msg-type\">%c%c</td>"
-				"<td class=\"msg-len\">%d</td>"
-				"<td class=\"msg-to\">%s</td>"
-				"<td class=\"msg-via\">%s</td>"
-				"<td class=\"msg-from\">%s</td>"
-				"<td class=\"msg-subject\">%s</td>"
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" data-href=\"/WebMail/WM?%s&%d\">"
+				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
+				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
+				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
+				"<td class=\"msg-len\" data-label=\"Len\">%d</td>"
+				"<td class=\"msg-to\" data-label=\"To\">%s</td>"
+				"<td class=\"msg-via\" data-label=\"@\">%s</td>"
+				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
+				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
 				"</tr>",
 				Key, Msg->number, Key, Msg->number, Msg->number,
 				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
@@ -1953,23 +1955,23 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			".wm-shell{max-width:980px;margin:0 auto;}\r\n"
 			".wm-title{text-align:center;margin:6px 0 12px 0;font-size:clamp(18px,3.4vw,24px);}\r\n"
 			".menu-header{display:none;margin-bottom:10px;}\r\n"
-			".menu-toggle{width:100%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:16px;color:#1f2937;}\r\n"
+			".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:16px;color:#1f2937;}\r\n"
 			".wm-menu{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px;}\r\n"
 			".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:15px;cursor:pointer;}\r\n"
 			".wm-menu a:hover{background:#e9ecef;}\r\n"
 			".wm-menu a:active{background:black;color:white;}\r\n"
 			"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;min-height:calc(100dvh - 220px);overflow:auto;}\r\n"
-			".msg-table{width:100%;border-collapse:collapse;font-size:clamp(11px,2.4vw,13px);}\r\n"
+			".msg-table{width:100%%;border-collapse:collapse;font-size:clamp(11px,2.4vw,13px);}\r\n"
 			".msg-table thead{background:#f1f5f9;border-bottom:2px solid var(--border);}\r\n"
 			".msg-table th{padding:8px 4px;text-align:left;font-weight:600;white-space:nowrap;}\r\n"
 			".msg-table td{padding:6px 4px;border-bottom:1px solid #e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}\r\n"
 			".msg-table tr:hover{background:#f8fafc;}\r\n"
 			".msg-table a{color:var(--link);text-decoration:none;}\r\n"
 			".msg-table a:hover{text-decoration:underline;}\r\n"
-			".msg-num{text-align:right;font-family:monospace;}\r\n"
-			".msg-date{font-family:monospace;min-width:100px;}\r\n"
-			".msg-type{text-align:center;font-family:monospace;min-width:24px;}\r\n"
-			".msg-len{text-align:right;font-family:monospace;min-width:50px;}\r\n"
+			".msg-num{text-align:right;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}\r\n"
+			".msg-date{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:100px;}\r\n"
+			".msg-type{text-align:center;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:24px;}\r\n"
+			".msg-len{text-align:right;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:50px;}\r\n"
 			".msg-to,.msg-via,.msg-from{max-width:80px;}\r\n"
 			".msg-subject{max-width:300px;}\r\n"
 			"@media (max-width:768px){\r\n"
@@ -6296,7 +6298,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 			len += sprintf(&popup[len], " <option value=%d>%s (Len %d)", i + 1, WebMail->FileName[i], WebMail->FileLen[i]);
 	}
 
-	len += sprintf(&popup[len], "%</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
+	len += sprintf(&popup[len], "%%</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
 
 	*RLen = sprintf(Reply, "%s", popup);
 	return;
@@ -6364,15 +6366,17 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 
 	// Outbuffer is 250000
 
-	ptr += sprintf(ptr, "<table class=\"msg-table\"><thead><tr>"
-		"<th class=\"msg-num\">#</th>"
-		"<th class=\"msg-date\">Date</th>"
-		"<th class=\"msg-type\">Type</th>"
-		"<th class=\"msg-len\">Len</th>"
-		"<th class=\"msg-to\">To</th>"
-		"<th class=\"msg-via\">@</th>"
-		"<th class=\"msg-from\">From</th>"
-		"<th class=\"msg-subject\">Subject</th>"
+	ptr += sprintf(ptr, "<table class=\"msg-table\" "
+		"onclick=\"var row=event.target.closest('tr.msg-row[data-href]');if(row&&this.contains(row))window.location=row.getAttribute('data-href');\" "
+		"onkeydown=\"var row=event.target.closest('tr.msg-row[data-href]');var k=event.key||event.code;var kc=event.keyCode||event.which;if(row&&this.contains(row)&&(k==='Enter'||k===' '||k==='Spacebar'||k==='Space'||kc===13||kc===32)){event.preventDefault();window.location=row.getAttribute('data-href');}\"><thead><tr>"
+		"<th scope=\"col\" class=\"msg-num\">#</th>"
+		"<th scope=\"col\" class=\"msg-date\">Date</th>"
+		"<th scope=\"col\" class=\"msg-type\">Type</th>"
+		"<th scope=\"col\" class=\"msg-len\">Len</th>"
+		"<th scope=\"col\" class=\"msg-to\">To</th>"
+		"<th scope=\"col\" class=\"msg-via\">@</th>"
+		"<th scope=\"col\" class=\"msg-from\">From</th>"
+		"<th scope=\"col\" class=\"msg-subject\">Subject</th>"
 		"</tr></thead><tbody>");
 
 	for (m = LatestMsg; m >= 1; m--)
@@ -6435,17 +6439,17 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 
 			free(EncodedTitle);
 
-			ptr += sprintf(ptr, "<tr>"
-				"<td class=\"msg-num\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
-				"<td class=\"msg-date\">%s</td>"
-				"<td class=\"msg-type\">%c%c</td>"
-				"<td class=\"msg-len\">%d</td>"
-				"<td class=\"msg-to\">%s</td>"
-				"<td class=\"msg-via\">%s</td>"
-				"<td class=\"msg-from\">%s</td>"
-				"<td class=\"msg-subject\">%s</td>"
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" data-href=\"/WebMail/WM?%s&%d\">"
+				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
+				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
+				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
+				"<td class=\"msg-len\" data-label=\"Len\">%d</td>"
+				"<td class=\"msg-to\" data-label=\"To\">%s</td>"
+				"<td class=\"msg-via\" data-label=\"@\">%s</td>"
+				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
+				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
 				"</tr>",
-				Key, Msg->number, Msg->number,
+				Key, Msg->number, Key, Msg->number, Msg->number,
 				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
 				Msg->type, Msg->status,
 				Msg->length,

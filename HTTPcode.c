@@ -146,30 +146,40 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 
 char Tail[] = "</body></html>";
 
-#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
 #define HTTP_NODE_TABLE_HEADER_ROW "<tr style=\"background:#f0f0f0;\">"
 #define HTTP_NODE_SORT_CONTROLS "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">" \
 	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
 	"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">" \
 	"<input type=submit class='btn' name=t value=\"Nodes With Traffic\"></form></div>"
 
+#define HTTP_NODE_TABLE_OPEN_STACK_CLASS(CLASSLIST) "<div class='table-wrap'><table class='node-table node-table-stack " CLASSLIST "' align=center border=1 bgcolor=white><thead>"
+#define HTTP_NODE_TABLE_OPEN_STACK HTTP_NODE_TABLE_OPEN_STACK_CLASS("")
+#define HTTP_NODE_TABLE_OPEN_STACK_COMPACT HTTP_NODE_TABLE_OPEN_STACK_CLASS("compact-table")
+#define HTTP_NODE_TABLE_OPEN_STACK_ROUTES HTTP_NODE_TABLE_OPEN_STACK_CLASS("routes-table")
+#define HTTP_NODE_TABLE_OPEN_STACK_STATS HTTP_NODE_TABLE_OPEN_STACK_CLASS("compact-table stats-table")
+#define HTTP_NODE_TABLE_MID_STACK "</thead><tbody>"
+#define HTTP_NODE_H2(TEXT) "<h2 style=\"text-align:center;font-size:clamp(1.25rem,1rem + 1.5vw,1.75rem);\">" TEXT "</h2>"
+#define HTTP_NODE_H3(TEXT) "<h3 style=\"text-align:center;font-size:clamp(1.0625rem,0.95rem + 0.6vw,1.25rem);\">" TEXT "</h3>"
+
 #define HTTP_NODE_MENU_CSS \
-	COMMON_CSS_VARIABLES \
+	COMMON_CSS_ROOT \
+	COMMON_REDUCED_MOTION_CSS \
 	COMMON_MENU_CSS \
-	"body { font-family: Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }" \
-	"h1 { text-align: center; margin: 10px 0 18px; }" \
+	COMMON_TABLE_CSS \
+	"body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); line-height: 1.5; margin: 0; padding: 12px; background: #f5f6f8; }" \
+	"h1 { text-align: center; margin: 10px 0 18px; font-size: clamp(1.375rem,1.1rem + 1vw,2rem); line-height: 1.25; }" \
 	".menu-header { max-width: 1100px; }" \
 	".menu { margin: 20px auto; max-width: 1100px; }" \
-	".menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
+	".menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); }" \
 	".menu td:hover, .menu .btn:hover { background: #e9ecef; }" \
 	".dropdown { position: relative; display: inline-block; }" \
-	".dropdown-content { display: none; position: absolute; left: 50%; transform: translateX(-50%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }" \
-	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
+	".dropdown-content { display: none; position: absolute; left: 50%%; transform: translateX(-50%%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }" \
+	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); }" \
 	".dropdown-content a:hover { background: #e9ecef; }" \
 	".dropdown-content .btn { width: 100%%; margin-top: 6px; }" \
 	".dropdown-content form { margin: 0; }" \
-	".dropdown-content label { display: block; margin-bottom: 8px; }" \
-	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; }" \
+	".dropdown-content label { display: block; margin-bottom: 8px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); }" \
+	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); min-height: 44px; }" \
 	".dropdown-content input[type='submit'] { width: 100%%; margin-top: 6px; }" \
 	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 6px; }" \
 	".mgmt-section.show { display: block; }" \
@@ -177,31 +187,37 @@ char Tail[] = "</body></html>";
 	"input.btn:active, .menu .btn:active { background: black; color: white; }" \
 	"@media (max-width: 768px) { .menu td, .menu .btn, .dropdown { width: 100%%; text-align: center; } .dropdown-content { position: static; transform: none; width: 100%%; margin-top: 8px; box-shadow: none; } }"
 
-char RouteHddr[] = "<h2 style=\"text-align:center;\">Routes</h2>" HTTP_NODE_TABLE_OPEN
-HTTP_NODE_TABLE_HEADER_ROW "<th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
-"<th>Frack</th><th>Last Heard</th><th>Queued</th><th>Rem Qual</th><th>SRTT</th><th>Rem SRTT</th></tr>";
+char RouteHddr[] = HTTP_NODE_H2("Routes") HTTP_NODE_TABLE_OPEN_STACK_ROUTES
+HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Port</th><th scope=col>Call</th><th scope=col>Quality</th><th scope=col>Node Count</th><th scope=col>Frame Count</th><th scope=col>Retries</th><th scope=col>Percent</th><th scope=col>Maxframe</th>"
+"<th scope=col>Frack</th><th scope=col>Last Heard</th><th scope=col>Queued</th><th scope=col>Rem Qual</th><th scope=col>SRTT</th><th scope=col>Rem SRTT</th></tr>" HTTP_NODE_TABLE_MID_STACK;
 
-char RouteLine[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
-"<td>%02d:%02d<td>%d</td><td>%d</td></td><td></td><td></td></tr>";
+char RouteLine[] = "<tr><td data-label='Port' class='text'>%s%d</td><td data-label='Call' class='text'>%s%s</td><td data-label='Quality' class='num'>%d</td><td data-label='Node Count' class='num'>%d</td><td data-label='Frame Count' class='num'>%d</td><td data-label='Retries' class='num'>%d</td><td data-label='Percent' class='num'>%d%%</td><td data-label='Maxframe' class='num'>%d</td><td data-label='Frack' class='num'>%d</td>"
+"<td data-label='Last Heard' class='text'>%02d:%02d</td><td data-label='Queued' class='num'>%d</td><td data-label='Rem Qual' class='num'>%d</td><td data-label='SRTT' class='text'>-</td><td data-label='Rem SRTT' class='text'>-</td></tr>";
 
-char RouteLineINP3[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
-"<td>%02d:%02d</td><td>%d</td><td>%d</td><td>%4.2fs</td><td>%4.2fs</td></tr>";
+char RouteLineINP3[] = "<tr><td data-label='Port' class='text'>%s%d</td><td data-label='Call' class='text'>%s%s</td><td data-label='Quality' class='num'>%d</td><td data-label='Node Count' class='num'>%d</td><td data-label='Frame Count' class='num'>%d</td><td data-label='Retries' class='num'>%d</td><td data-label='Percent' class='num'>%d%%</td><td data-label='Maxframe' class='num'>%d</td><td data-label='Frack' class='num'>%d</td>"
+"<td data-label='Last Heard' class='text'>%02d:%02d</td><td data-label='Queued' class='num'>%d</td><td data-label='Rem Qual' class='num'>%d</td><td data-label='SRTT' class='num'>%4.2fs</td><td data-label='Rem SRTT' class='num'>%4.2fs</td></tr>";
 
 char NodeHddr[] = HTTP_NODE_SORT_CONTROLS
-"<h2 style=\"text-align:center;\">Nodes %s</h2>" HTTP_NODE_TABLE_OPEN "<tr>";
+HTTP_NODE_H2("Nodes %s");
 
-char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
+char NodeHeaderTraffic[] = HTTP_NODE_TABLE_OPEN_STACK_COMPACT HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Call</th><th scope=col>Frames</th><th scope=col>RTT</th><th scope=col>BPQ?</th><th scope=col>Hops</th></tr>" HTTP_NODE_TABLE_MID_STACK;
 
-
-char StatsHddr[] = "<h2 style=\"text-align:center;\">Node Stats</h2>" HTTP_NODE_TABLE_OPEN;
-
-char PortStatsHddr[] = "<h2 style=\"text-align:center;\">Stats for Port %d</h2>" HTTP_NODE_TABLE_OPEN
-HTTP_NODE_TABLE_HEADER_ROW "<th>Statistic</th><th>Value</th></tr>";
-
-char PortStatsLine[] = "<tr><td> %s </td><td> %d </td></tr>";
+char NodeLine[] = "<a href=NodeDetail?%s>%s:%s</a>";
+char NodeTrafficLine[] = "<tr><td data-label='Call' class='text'><a href=NodeDetail?%s>%s:%s</a></td><td data-label='Frames' class='num'>%d</td><td data-label='RTT' class='num'>%d</td><td data-label='BPQ?' class='center'>%c</td><td data-label='Hops' class='num'>%.0d</td></tr>";
 
 
-char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 align=center>You need to be signed in to save changes</h3><table align=center border=2 cellpadding=2 bgcolor=white>"
+char StatsHddr[] = HTTP_NODE_H2("Node Stats") HTTP_NODE_TABLE_OPEN_STACK_STATS
+HTTP_NODE_TABLE_MID_STACK;
+
+char StatsLine[] = "<tr><td data-label='Statistic' class='text'>%s</td><td data-label='Value' class='text'>%s</td></tr>";
+
+char PortStatsHddr[] = HTTP_NODE_H2("Stats for Port %d") HTTP_NODE_TABLE_OPEN_STACK_STATS
+HTTP_NODE_TABLE_MID_STACK;
+
+char PortStatsLine[] = "<tr><td data-label='Statistic' class='text'>%s</td><td data-label='Value' class='num'>%d</td></tr>";
+
+
+char Beacons[] = HTTP_NODE_H2("Beacon Configuration for Port %d") HTTP_NODE_H3("You need to be signed in to save changes") "<table align=center border=2 cellpadding=2 bgcolor=white>"
 "<form method=post action=BeaconAction>"
 "<table align=center  bgcolor=white>"
 "<tr><td>Send Interval (Minutes)</td><td><input type=text name=Every tabindex=1 size=5 value=%d></td></tr>" 
@@ -216,17 +232,17 @@ char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 alig
 "</form>";
 
 
-char LinkHddr[] = "<h2 style=\"text-align:center;\">Links</h2>" HTTP_NODE_TABLE_OPEN
-HTTP_NODE_TABLE_HEADER_ROW "<th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
+char LinkHddr[] = HTTP_NODE_H2("Links") HTTP_NODE_TABLE_OPEN_STACK_COMPACT
+HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Far Call</th><th scope=col>Our Call</th><th scope=col>Port</th><th scope=col>ax.25 state</th><th scope=col>Link Type</th><th scope=col>ax.25 Version</th></tr>" HTTP_NODE_TABLE_MID_STACK;
 
-char LinkLine[] = "<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td align=center >%d</td></tr>";
+char LinkLine[] = "<tr><td data-label='Far Call' class='text'>%s</td><td data-label='Our Call' class='text'>%s</td><td data-label='Port' class='num'>%d</td><td data-label='ax.25 state' class='text'>%s</td><td data-label='Link Type' class='text'>%s</td><td data-label='ax.25 Version' class='num'>%d</td></tr>";
 
-char UserHddr[] = "<h2 style=\"text-align:center;\">Sessions</h2>" HTTP_NODE_TABLE_OPEN
-HTTP_NODE_TABLE_HEADER_ROW "<th>Circuit</th><th>Link</th><th>Circuit</th></tr>";
+char UserHddr[] = HTTP_NODE_H2("Sessions") HTTP_NODE_TABLE_OPEN_STACK_COMPACT
+HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Circuit</th><th scope=col>Link</th><th scope=col>Circuit</th></tr>" HTTP_NODE_TABLE_MID_STACK;
 
-char UserLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td></tr>";
+char UserLine[] = "<tr><td data-label='Circuit' class='text'>%s</td><td data-label='Link' class='center'>%s</td><td data-label='Circuit' class='text'>%s</td></tr>";
 
-char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); } h3 { text-align: center; font-size: clamp(1.0625rem,0.95rem + 0.6vw,1.25rem); } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Node %s Terminal Access</h2>"
 "<h3>Please enter username and password to access the node</h3>"
 "<div class=\"form-container\"><form method=post action=TermSignon>"
@@ -240,11 +256,11 @@ char PassError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 1
 
 char BusyError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #ffc; border: 1px solid #fa3; border-radius: 6px; color: #a60; text-align: center; font-weight: bold;\">Sorry, No sessions available - please try later</div>";
 
-char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; }</style></head><body><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
-char NoSessions[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; }</style></head><body><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
+char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; } h2 { font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); }</style></head><body><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
+char NoSessions[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; } h2 { font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); }</style></head><body><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
 
 char TermPage[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
-"<title>BPQ32 Node %s</title><style>body { margin: 0; padding: 10px; font-family: Arial, sans-serif; background: #f6f7f8; color: #1f2937; } h3 { text-align: center; margin: 10px 0; } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #output-frame { flex: 1; border: 2px solid #ccc; background: #fff; min-height: 200px; } #input-frame { height: 50px; border: 2px solid #ccc; background: #fff; flex-shrink: 0; } @media (max-width: 768px) { .term-actions .btn { width: 100%; } .term-container { height: calc(100vh - 200px); } }</style>"
+"<title>BPQ32 Node %s</title><style>body { margin: 0; padding: 10px; font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: #f6f7f8; color: #1f2937; } h3 { text-align: center; margin: 10px 0; font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #output-frame { flex: 1; border: 2px solid #ccc; background: #fff; min-height: 200px; } #input-frame { height: 50px; border: 2px solid #ccc; background: #fff; flex-shrink: 0; } @media (max-width: 768px) { .term-actions .btn { width: 100%%; } .term-container { height: calc(100vh - 200px); } }</style>"
 "</head><body>"
 "<h3>BPQ32 Node %s</h3>"
 "<form method=post action=/Node/TermClose?%s class='term-actions'>"
@@ -259,7 +275,7 @@ char TermOutput[] = "<!DOCTYPE html><html><head>"
 "<meta http-equiv=pragma content=no-cache>"
 "<meta http-equiv=expires content=0>" 
 "<meta http-equiv=refresh content=2>"
-"<style>body { margin: 0; padding: 8px; background: #f6f7f8; font-family: monospace; font-size: 14px; color: #1f2937; } #Text div { %s }</style>"
+"<style>body { margin: 0; padding: 8px; background: #f6f7f8; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); color: #1f2937; } #Text div { white-space: nowrap; %s }</style>"
 "<script type=\"text/javascript\">\r\n"
 "function ScrollOutput()\r\n"
 "{window.scrollBy(0,document.body.scrollHeight)}</script>"
@@ -267,7 +283,7 @@ char TermOutput[] = "<!DOCTYPE html><html><head>"
 "<div>";
 
 
-// font-family:monospace;background-color:black;color:lawngreen;font-size:12px
+// font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;background-color:black;color:lawngreen;font-size:12px
 
 char TermOutputTail[] = "</div><script type=\"text/javascript\">\r\nsetTimeout(ScrollOutput, 1)</script></body></html>";
 
@@ -284,15 +300,15 @@ char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize(
 */
 char InputLine[] = "<!DOCTYPE html><html><head><style>"
 "* { margin: 0; padding: 0; box-sizing: border-box; } "
-"body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%; display: flex; align-items: center; } "
-"form { width: 100%; margin: 0; } "
-"#inp { width: 100%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 14px; background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
+"body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%%; display: flex; align-items: center; } "
+"form { width: 100%%; margin: 0; } "
+"#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
 "</style></head><body>"
 "<form name=inputform method=post action=/TermInput?%s>"
 "<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
 "<script>document.inputform.input.focus();</script></form></body></html>";
 
-static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); } h3 { text-align: center; font-size: clamp(1.0625rem,0.95rem + 0.6vw,1.25rem); } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Node %s SYSOP Access</h2>"
 "<h3>This page sets Cookies. Don't continue if you object to this</h3>"
 "<h3>Please enter Callsign and Password to access the Node</h3>"
@@ -302,7 +318,7 @@ static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Mail Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the BBS</h3>"
 "<div class=\"form-container\"><form method=post action=/Mail/Signon?Mail>"
@@ -310,7 +326,7 @@ static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
-static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Chat Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the Chat Server</h3>"
 "<div class=\"form-container\"><form method=post action=/Chat/Signon?Chat>"
@@ -319,15 +335,15 @@ static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailLostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; } .form-container { max-width: 400px; margin: 50px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; text-align: center; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin: 10px 5px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style></head><body>"
+static char MailLostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; } .form-container { max-width: 400px; margin: 50px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; text-align: center; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin: 10px 5px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style></head><body>"
 "<div class=\"form-container\"><h2>Sorry, Session had been lost</h2>"
 "<form method=post action=/Mail/Lost?%s>"
 "<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel></form></div>";
 
 
-static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
-"<title>Edit Config</title></head><body background=/background.jpg>"
-"<form style=\"font-family: monospace;  text-align: center;\"method=post action=CFGSave?%s>"
+static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+"<title>Edit Config</title><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 0; padding: 10px; background: #f6f7f8; color: #1f2937; } form { text-align: center; } textarea { width: min(100%%, 1100px); min-height: 60vh; box-sizing: border-box; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); white-space: pre; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; margin: 10px 6px 0; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style></head><body>"
+"<form method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
 
@@ -1741,7 +1757,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char * HostPtr = 0;
 
 	char * Context, * Method, * NodeURL = 0, * Key;
-	char _REPLYBUFFER[250000];
+	char _REPLYBUFFER[300000];
 	char Reply[250000];
 
 	int ReplyLen = 0;
@@ -1753,27 +1769,27 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	int Len;
 	char * WebSock = 0;
 
-	char PortsHddr[] = "<h2 style=\"text-align:center;\">Ports</h2>" HTTP_NODE_TABLE_OPEN
-		HTTP_NODE_TABLE_HEADER_ROW "<th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th><th>Stats Graph</th></tr>";
+	char PortsHddr[] = HTTP_NODE_H2("Ports") HTTP_NODE_TABLE_OPEN_STACK_COMPACT
+		HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Port</th><th scope=col>Driver</th><th scope=col>ID</th><th scope=col>Beacons</th><th scope=col>Driver Window</th><th scope=col>Stats Graph</th></tr>" HTTP_NODE_TABLE_MID_STACK;
 
 //	char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
 
-	char PortLineWithBeacon[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td>"
-		"<td><a href=PortBeacons?%d>&nbsp;Beacons</a><td> </td></td><td>%s</td></tr>\r\n";
+	char PortLineWithBeacon[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'><a href=PortStats?%d&%s>%s</a></td><td data-label='ID' class='text'>%s</td>"
+		"<td data-label='Beacons' class='text'><a href=PortBeacons?%d>Beacons</a></td><td data-label='Driver Window' class='text'>-</td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char SessionPortLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
-		"<td> </td><td>%s</td></tr>\r\n";
+	char SessionPortLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+		"<td data-label='Driver Window' class='text'>-</td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char PortLineWithDriver[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
-		"<td><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td>%s</td></tr>\r\n";
+	char PortLineWithDriver[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
 
-	char PortLineWithBeaconAndDriver[] = "<tr><td>%d</td><td>%s</td><td>%s</td>"
-		"<td><a href=PortBeacons?%d>&nbsp;Beacons</a></td>"
-		"<td><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td>%s</td></tr>\r\n";
+	char PortLineWithBeaconAndDriver[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td>"
+		"<td data-label='Beacons' class='text'><a href=PortBeacons?%d>Beacons</a></td>"
+		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char RigControlLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td>"
-		"<td><a href=\"javascript:dev_win('/Node/RigControl.html',%d,%d,%d,%d);\">Rig Control</a></td></tr>\r\n";
+	char RigControlLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/RigControl.html',%d,%d,%d,%d);\">Rig Control</a></td><td data-label='Stats Graph' class='text'>-</td></tr>\r\n";
 
 
 	char Encoding[] = "Content-Encoding: deflate\r\n";
@@ -2306,7 +2322,7 @@ doHeader:
 
 		if ((_memicmp(Context, "/MAIL/", 6) == 0) || (_memicmp(Context, "/WebMail", 8) == 0))
 		{
-			char _REPLYBUFFER[250000];
+			char _REPLYBUFFER[300000];
 			struct HTTPConnectionInfo Dummy = {0};
 			int Sent, Loops = 0;
 			char token[16] = "";
@@ -3113,6 +3129,7 @@ doHeader:
 			{
 				struct tm * TM;
 				char UPTime[50];
+				char Value[128];
 				time_t szClock = STATSTIME * 60;
 
 				TM = gmtime(&szClock);
@@ -3121,29 +3138,29 @@ doHeader:
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", StatsHddr);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%s</td></tr>",
-					"Version", VersionString);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Version", VersionString);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%s</td></tr>",
-					"Uptime (Days Hours Mins)", UPTime);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Uptime (Days Hours Mins)", UPTime);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td></tr>",
-					"Semaphore: Get-Rel/Clashes", Semaphore.Gets - Semaphore.Rels, Semaphore.Clashes);
+				snprintf(Value, sizeof(Value), "%d / %d", Semaphore.Gets - Semaphore.Rels, Semaphore.Clashes);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Semaphore: Get-Rel/Clashes", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td align=right><td align=right>%d</td></tr>",
-					"Buffers: Max/Cur/Min/Out/Wait", MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS);
+				snprintf(Value, sizeof(Value), "%d / %d / %d / %d / %d", MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Buffers: Max/Cur/Min/Out/Wait", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td></tr>",
-					"Known Nodes/Max Nodes", NUMBEROFNODES, MAXDESTS);
+				snprintf(Value, sizeof(Value), "%d / %d", NUMBEROFNODES, MAXDESTS);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "Known Nodes/Max Nodes", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td></tr>",
-					"L4 Connects Sent/Rxed ", L4CONNECTSOUT, L4CONNECTSIN);
+				snprintf(Value, sizeof(Value), "%d / %d", L4CONNECTSOUT, L4CONNECTSIN);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "L4 Connects Sent/Rxed", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td align=right><td align=right>%d</td></tr>",
-					"L4 Frames TX/RX/Resent/Reseq", L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES);
+				snprintf(Value, sizeof(Value), "%d / %d / %d / %d", L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "L4 Frames TX/RX/Resent/Reseq", Value);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td></tr>",
-					"L3 Frames Relayed", L3FRAMES);
+				snprintf(Value, sizeof(Value), "%d", L3FRAMES);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], StatsLine, "L3 Frames Relayed", Value);
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 
 			}
 
@@ -3228,9 +3245,9 @@ doHeader:
 					" var offsets = document.getElementById('log').getBoundingClientRect();"
 					" document.getElementById('log').style.height = h - offsets.top;}"
 					"</script>"
-					"<head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
+					"<head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 4px; background: #f6f7f8; color: #1f2937; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #log { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); }</style>"
 					"<title>Log Display</title></head>"
-					"<body style=\"margin: 4;\" background=/background.jpg onload='myResize()' onresize='myResize()'>"
+					"<body onload='myResize()' onresize='myResize()'>"
 					"<div id=outer style=\"width: 100%%; height: 100%%;\">"
 					"<form id = form><input name=input value=Back type=submit class='btn'>"
 //					"<form id = doDate><input type=date value=Date name='date'><input type='submit'>"
@@ -3533,6 +3550,7 @@ doHeader:
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "FRMRs Sent", Port->PORTCONTROL.L2FRMRTX);
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "FRMRs Received", Port->PORTCONTROL.L2FRMRRX);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 
 				//		DB	'Link Active %   '
 				//		DD	AVSENDING
@@ -3603,6 +3621,8 @@ doHeader:
 				if (RigActive)
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], RigControlLine, 64, "Rig Control", "Rig Control", 600, 350, 200, 200);
 
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
+
 			}
 
 			if (_stricmp(NodeURL, "/Node/Nodes.html") == 0)
@@ -3611,8 +3631,7 @@ doHeader:
 				int count, i;
 				char Normcall[10];
 				char Alias[10];
-				int Width = 5;
-				int x = 0, n = 0;
+				int n = 0;
 				struct DEST_LIST * List[1000];
 				char Param = 0;
 
@@ -3649,12 +3668,18 @@ doHeader:
 				if (Param == 'T')
 				{
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "with traffic");
-					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<th style=\"background:#f0f0f0;\">Call</th><th style=\"background:#f0f0f0;\">Frames</th><th style=\"background:#f0f0f0;\">RTT</th><th style=\"background:#f0f0f0;\">BPQ?</th><th style=\"background:#f0f0f0;\">Hops</th></tr><tr>");
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", NodeHeaderTraffic);
 				}
 				else if (Param == 'C') 
+				{
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "sorted by Call");
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", "<div class='node-grid'>");
+				}
 				else
+				{
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "sorted by Alias");
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", "<div class='node-grid'>");
+				}
 
 				for (i = 0; i < n; i++)
 				{
@@ -3666,24 +3691,21 @@ doHeader:
 
 					if (Param == 'T')
 					{
-						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<td>%s:%s</td><td align=center>%d</td><td align=center>%d</td><td align=center>%c</td><td align=center>%.0d</td></tr><tr>",
-							Normcall, Alias, List[i]->DEST_COUNT, List[i]->DEST_RTT /16,
+						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeTrafficLine,
+							Normcall, Normcall, Alias, List[i]->DEST_COUNT, List[i]->DEST_RTT /16,
 							(List[i]->DEST_STATE & 0x40)? 'B':' ', (List[i]->DEST_STATE & 63));
 
 					}
 					else
 					{
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeLine, Normcall, Alias, Normcall);
-
-						if (++x == Width)
-						{
-							x = 0;
-							ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tr><tr>");
-						}
 					}
 				}
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tr>");
+				if (Param == 'T')
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
+				else
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/NodeDetail") == 0)
@@ -3713,7 +3735,7 @@ doHeader:
 
 				if (count == MAXDESTS)
 				{
-					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<h3 align = center>Call %s not found</h3>", Context);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<h3 style=\"text-align:center;font-size:clamp(1.0625rem,0.95rem + 0.6vw,1.25rem);\">Call %s not found</h3>", Context);
 					goto SendResp;
 				}
 
@@ -3721,19 +3743,18 @@ doHeader:
 				strlop(Alias, ' ');
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen],
-					"<h3 align=center>Info for Node %s:%s</h3><p style=font-family:monospace align=center>", Alias, Context);
+					HTTP_NODE_H3("Info for Node %s:%s"), Alias, Context);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<table border=1 bgcolor=white><tr><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr>");	
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", HTTP_NODE_TABLE_OPEN_STACK_CLASS("node-detail-table") HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Frames</th><th scope=col>RTT</th><th scope=col>BPQ?</th><th scope=col>Hops</th></tr>" HTTP_NODE_TABLE_MID_STACK);
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td align=center>%d</td><td align=center>%d</td><td align=center>%c</td><td align=center>%.0d</td></tr></table>",
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td data-label='Frames' class='num'>%d</td><td data-label='RTT' class='num'>%d</td><td data-label='BPQ?' class='center'>%c</td><td data-label='Hops' class='num'>%.0d</td></tr></tbody></table></div>",
 					Dest->DEST_COUNT, Dest->DEST_RTT /16,
 					(Dest->DEST_STATE & 0x40)? 'B':' ', (Dest->DEST_STATE & 63));
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<h3 align=center>Neighbours</h3>");
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", HTTP_NODE_H3("Neighbours"));
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], 
-					"<table border=1 style=font-family:monospace align=center bgcolor=white>"
-					"<tr><td> </td><td> Qual </td><td> Obs </td><td> Port </td><td> Call </td></tr>");	
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen],
+					"%s", HTTP_NODE_TABLE_OPEN_STACK_CLASS("node-detail-table") HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Active</th><th scope=col>Qual</th><th scope=col>Obs</th><th scope=col>Port</th><th scope=col>Call</th></tr>" HTTP_NODE_TABLE_MID_STACK);
 
 				NRRoute = &Dest->NRROUTE[0];
 
@@ -3748,13 +3769,13 @@ doHeader:
 						len = ConvFromAX25(Neighbour->NEIGHBOUR_CALL, Normcall);
 						Normcall[len] = 0;
 
-						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%c&nbsp;</td><td>%d</td><td>%d</td><td>%d</td><td>%s</td></tr>",
+						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td data-label='Active' class='center'>%c</td><td data-label='Qual' class='num'>%d</td><td data-label='Obs' class='num'>%d</td><td data-label='Port' class='num'>%d</td><td data-label='Call' class='text'>%s</td></tr>",
 							(Active == i)?'>':' ',NRRoute->ROUT_QUALITY, NRRoute->ROUT_OBSCOUNT, Neighbour->NEIGHBOUR_PORT, Normcall);
 					}
 					NRRoute++;
 				}
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</table>");
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 
 				goto SendResp;
 
@@ -3924,12 +3945,9 @@ doHeader:
 			{
 				int i;
 				char Normcall[10];
-				int Width = 5;
-				int x = 0, n = 0, nd = 0;
+				int n = 0, nd = 0;
 				struct arp_table_entry * List[1000];
 				struct arp_table_entry * ListD[1000];
-				char AXIPList[10000] = "";
-				int ListLen = 0;
 
 				struct AXIPPORTINFO * AXPORT = Portlist[0];
 				struct PORTCONTROL * PORT = PORTTABLE;
@@ -3937,8 +3955,12 @@ doHeader:
 				time_t NOW = time(NULL);
 				
 				char AXIPHeader[] =
-					"<table align='center' bgcolor='ffffff' border=2 cellpadding=10 cellspacing=2 style=font-family:monospace>"
-					"<tr><td align='center'>AXIP Up</td><td align='center'>AXIP Down</td></tr><tr><td valign='top'>%s";
+					HTTP_NODE_H2("AXIP Partners")
+					HTTP_NODE_TABLE_OPEN_STACK
+					HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Status</th><th scope=col>Call</th><th scope=col>Last Heard (s)</th></tr>"
+					HTTP_NODE_TABLE_MID_STACK;
+
+				char AXIPRow[] = "<tr><td data-label='Status' class='text'>%s</td><td data-label='Call' class='text'>%s</td><td data-label='Last Heard (s)' class='num'>%d</td></tr>";
 				
 
 				while (PORT)
@@ -3967,26 +3989,23 @@ doHeader:
 				if (nd > 1)
 					qsort(ListD, nd, sizeof(void *), CompareNode);
 
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", AXIPHeader);
+
 				for (i = 0; i < n; i++)
 				{
 					int len = ConvFromAX25(List[i]->callsign, Normcall);
 					Normcall[len]=0;
-
-					ListLen += sprintf(&AXIPList[ListLen], "%02d - %s %d<br>", i + 1, Normcall, (List[i]->LastHeard)?(NOW - List[i]->LastHeard):0);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], AXIPRow, "Up", Normcall, (List[i]->LastHeard)?(int)(NOW - List[i]->LastHeard):0);
 				}
 
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], AXIPHeader, AXIPList);
-
-				ListLen = 0;
-	
 				for (i = 0; i < nd; i++)
 				{
 					int len = ConvFromAX25(ListD[i]->callsign, Normcall);
 					Normcall[len]=0;
-					ListLen += sprintf(&AXIPList[ListLen], "%02d - %s %d<br>", i + 1, Normcall, (ListD[i]->LastHeard)?(NOW - ListD[i]->LastHeard):0);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], AXIPRow, "Down", Normcall, (ListD[i]->LastHeard)?(int)(NOW - ListD[i]->LastHeard):0);
 				}
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</td><td valign='top'>%s", AXIPList);
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</td></tr></table></body></html>");
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/Routes.html") == 0)
@@ -4080,6 +4099,8 @@ doHeader:
 					}
 					Routes+=1;
 				}
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/Links.html") == 0)
@@ -4133,6 +4154,8 @@ doHeader:
 						Links+=1;
 					}
 				}
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 
 			if (_stricmp(NodeURL, "/Node/Users.html") == 0)
@@ -4194,6 +4217,8 @@ CMDS50:
 CMDS60:			
 					L4++;	
 				}
+
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "</tbody></table></div>");
 			}
 			/*
 			PUBLIC	CMDUXX_1
@@ -4426,7 +4451,7 @@ int StatusProc(char * Buff)
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<head><title>Stream Status</title></head><body>");
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; font-family: monospace; align=center \" border=1 cellpadding=1 cellspacing=0>");
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; align=center \" border=1 cellpadding=1 cellspacing=0>");
 	Len += sprintf(&Buff[Len], "<tr><th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
 	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
 	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th>");
@@ -4864,7 +4889,7 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"<head><title>Rigcontrol</title></head>\r\n"
 		"<style type=text/css>form{margin:0px; padding:0px; display:inline;}</style>"
 		"<body height: 580px;><h3>Rigcontrol</h3>\r\n"
-		"<table style=\"text-align: left; width: 580px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2><tr>\r\n"
+		"<table style=\"text-align: left; width: 580px; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2><tr>\r\n"
 		"<th width=90px>Radio</th>\r\n"
 		"<th width=90px>Freq</th>\r\n"
 		"<th width=90px>Mode</th>\r\n"

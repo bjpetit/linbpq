@@ -10,7 +10,7 @@
 
 char * WebMailMsgtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 
 		"<!-- Version 5 11/11/2019 -->"
 		"<!DOCTYPE html> "
@@ -19,21 +19,22 @@ char * WebMailMsgtxt()
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/>"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 		"<style type=\"text/css\">"
-		COMMON_CSS_VARIABLES
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
 		"*{box-sizing:border-box;}"
 		"body{margin:0;padding:12px;font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;}"
 		".wm-shell{max-width:980px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 24px);}"
 		".wm-title{text-align:center;margin:0 0 12px 0;font-size:clamp(18px,3.4vw,24px);}"
 		".menu-header{display:none;margin-bottom:10px;}"
-		".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:16px;color:#1f2937;}"
+		".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);color:#1f2937;}"
 		".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:10px;}"
-		".wm-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid #94a3b8;border-radius:6px;color:var(--link);text-decoration:none;font-size:15px;cursor:pointer;}"
+		".wm-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid #94a3b8;border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;}"
 		".wm-btn:hover{background:#e9ecef;}"
 		".wm-btn:active{background:black;color:white;}"
 		"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;}"
-		"textarea#txt{display:block;width:100%%;height:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family:monospace;font-size:14px;line-height:1.45;overflow:auto;resize:vertical;background:var(--surface);color:var(--text);flex:1 1 auto;}"
-		"div#txt{display:block;width:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family:monospace;font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;flex:1 1 auto;}"
-		"@media (max-width:768px){body{padding:8px;}.wm-shell{min-height:calc(100dvh - 16px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu .wm-btn{width:100%%;text-align:center;}#main{padding:10px;}textarea#txt{min-height:240px;font-size:13px;}div#txt{min-height:240px;font-size:13px;}}"
+		"textarea#txt{display:block;width:100%%;height:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);line-height:1.45;overflow:auto;resize:vertical;background:var(--surface);color:var(--text);flex:1 1 auto;}"
+		"div#txt{display:block;width:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;flex:1 1 auto;}"
+		"@media (max-width:768px){body{padding:8px;}.wm-shell{min-height:calc(100dvh - 16px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu .wm-btn{width:100%%;text-align:center;}#main{padding:10px;}textarea#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}div#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}}"
 		"</style>\r\n"
 		"<script>"
 		"function Reply(Num, Key)"
@@ -69,15 +70,15 @@ char * WebMailMsgtxt()
 
 char * FwdPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 
 		"<!-- Version 5 3/8/2026 Responsive -->"
 		"<!DOCTYPE html>"
 		"<head>"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 		"<style type=\"text/css\"> "
-		COMMON_CSS_VARIABLES
-		"* { box-sizing: border-box; }"
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
 		"body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }"
 		"h3 { text-align: center; margin: 0 0 20px; }"
 		"input.btn:active, submit.btn:active { background: black; color: white; }"
@@ -92,14 +93,14 @@ char * FwdPagetxt()
 		".fwd-list table { width: 100%%; border-collapse: collapse; }"
 		".fwd-list table tr:nth-child(even) { background: #f9f9f9; }"
 		".fwd-list td { border-bottom: 1px solid #e2e8f0; padding: 0; }"
-		".fwd-list a { color: #1f2937; text-decoration: none; display: block; padding: 8px 10px; border-radius: 0; font-family: monospace; font-weight: 600; text-transform: uppercase; }"
+		".fwd-list a { color: #1f2937; text-decoration: none; display: block; padding: 8px 10px; border-radius: 0; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-weight: 600; text-transform: uppercase; }"
 		".fwd-list a:hover { background: #eef2f7; text-decoration: none; }"
 		".fwd-main { flex: 1 1 500px; min-width: 0; background: white; padding: 20px; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 0 5px rgba(0,0,0,0.1); min-height: 400px; }"
 		".fwd-form-row { display: flex; flex-wrap: wrap; margin: 10px 0; gap: 10px; align-items: center; }"
 		".fwd-form-row label { flex: 1 1 150px; font-weight: bold; }"
 		".fwd-form-row input[type=text], .fwd-form-row input[type=number] { flex: 2 1 100px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; max-width: 200px; }"
 		".fwd-form-row input[type=checkbox] { margin: 0 5px; }"
-		".fwd-form-row textarea { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 13px; }"
+		".fwd-form-row textarea { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.9375rem,0.9rem + 0.2vw,1rem); }"
 		".fwd-common form { text-align: left; }"
 		".fwd-common input[type=submit] { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; width: 100%%; }"
 		".fwd-common input[type=submit]:hover { background: #0056b3; }"
@@ -254,15 +255,15 @@ char * FwdPagetxt()
 
 char * FwdDetailtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 
 		"<!-- Version 4 3/8/2026 Responsive -->\r\n"
 		"<style>"
 		".fwd-detail-form { max-width: 100%%; }"
 		".fwd-detail-form h3 { text-align: center; margin-bottom: 20px; }"
 		".fwd-textarea-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 15px 0; }"
-		".fwd-textarea-grid label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; text-align: center; }"
-		".fwd-textarea-grid textarea { width: 100%%; min-height: 120px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 13px; resize: vertical; }"
+		".fwd-textarea-grid label { display: block; font-weight: bold; margin-bottom: 5px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); text-align: center; }"
+		".fwd-textarea-grid textarea { width: 100%%; min-height: 120px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.9375rem,0.9rem + 0.2vw,1rem); resize: vertical; }"
 		".fwd-textarea-wide { grid-column: span 2; }"
 		".fwd-detail-row { display: flex; flex-wrap: wrap; margin: 10px 0; gap: 10px; align-items: center; }"
 		".fwd-detail-row label { font-weight: bold; }"
@@ -270,7 +271,7 @@ char * FwdDetailtxt()
 		".fwd-detail-row input[type=text], .fwd-detail-row input[type=number] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }"
 		".fwd-detail-row input[type=checkbox] { margin: 0 5px; }"
 		".fwd-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }"
-		".fwd-buttons input { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; min-height: 44px; font-size: 15px; }"
+		".fwd-buttons input { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; min-height: 44px; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); }"
 		".fwd-buttons input:hover { background: #0056b3; }"
 		".fwd-buttons input[type=text] { background: white; color: black; border: 1px solid #ccc; max-width: 100px; }"
 		"@media (max-width: 768px) { "
@@ -315,7 +316,7 @@ char * FwdDetailtxt()
 
 char * webscriptjs()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 2 17/10/2018 -->\r\n"
 		"var Main\r\n"
 		"\r\n"
@@ -360,7 +361,7 @@ char * webscriptjs()
 
 char * WebMailPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 6 8/11/2018 -->\r\n"
 		"<!DOCTYPE html> \r\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"> \r\n"
@@ -369,22 +370,22 @@ char * WebMailPagetxt()
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 		"<meta http-equiv=refresh content=300>"
 		"<style type=\"text/css\">\r\n"
-		":root{--bg:#f6f7f8;--surface:#ffffff;--border:#cccccc;--text:#1f2937;--link:#1f2937;}"
-		"*{box-sizing:border-box;}"
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
 		"body{margin:0;padding:max(12px,env(safe-area-inset-left));font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}"
 		"@supports(padding:max(0px)){body{padding:clamp(10px,3vw,12px);padding-left:max(clamp(10px,3vw,12px),env(safe-area-inset-left));padding-right:max(clamp(10px,3vw,12px),env(safe-area-inset-right));}}"
 		".wm-shell{max-width:980px;margin:0 auto;}"
 		".wm-title{text-align:center;margin:0 0 12px 0;font-size:clamp(16px,4vw,24px);font-weight:500;}"
 		".menu-header{display:none;margin-bottom:10px;}"
-		".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:16px;color:#1f2937;cursor:pointer;touch-action:manipulation;font-weight:500;}"
+		".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);color:#1f2937;cursor:pointer;touch-action:manipulation;font-weight:500;}"
 		".menu-toggle:active{background:#e9ecef;}"
 		".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:10px;}"
-		".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid #94a3b8;border-radius:6px;color:var(--link);text-decoration:none;font-size:15px;cursor:pointer;touch-action:manipulation;}"
+		".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid #94a3b8;border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;touch-action:manipulation;}"
 		".wm-menu a:hover{background:#e9ecef;}"
 		".wm-menu a:focus-visible{outline:2px solid #2563eb;outline-offset:2px;}"
 		".wm-menu a:active{background:black;color:white;}"
 		"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;min-height:calc(100dvh - 240px);overflow:auto;}"
-		".msg-table{width:100%%;border-collapse:collapse;font-size:13px;}"
+		".msg-table{width:100%%;border-collapse:collapse;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		".msg-table thead{background:#f1f5f9;border-bottom:2px solid var(--border);}"
 		".msg-table th{padding:10px 6px;text-align:left;font-weight:600;white-space:nowrap;touch-action:manipulation;}"
 		".msg-table td{padding:8px 6px;border-bottom:1px solid #e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}"
@@ -392,19 +393,18 @@ char * WebMailPagetxt()
 		".msg-table tr:hover{background:#f8fafc;}"
 		".msg-table a{color:var(--link);text-decoration:none;}"
 		".msg-table a:hover{text-decoration:underline;}"
-		".msg-num{text-align:right;font-family:monospace;}"
-		".msg-date{font-family:monospace;min-width:112px;}"
-		".msg-type{text-align:center;font-family:monospace;min-width:24px;}"
-		".msg-len{text-align:right;font-family:monospace;min-width:50px;}"
+		".msg-num{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
+		".msg-date{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
+		".msg-type{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:24px;}"
+		".msg-len{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:50px;}"
 		".msg-to,.msg-via,.msg-from{max-width:80px;}"
 		".msg-subject{max-width:380px;}"
-		"@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}"
 		"@media(min-width:1200px){.msg-subject{max-width:420px;}}"
 		"@media(max-width:768px){"
 		"body{padding:clamp(6px,2vw,10px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu a{width:100%%;text-align:center;min-height:48px;}#main{padding:8px;min-height:calc(100dvh - 280px);}"
-		".msg-table{font-size:12px;}"
+		".msg-table{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		".msg-table th,.msg-table td{padding:6px 4px;}"
-		".msg-date{min-width:80px;font-size:11px;}"
+		".msg-date{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		".msg-to,.msg-via,.msg-from{max-width:60px;}"
 		".msg-subject{max-width:180px;}"
 		"}"
@@ -417,7 +417,7 @@ char * WebMailPagetxt()
 		".msg-date,.msg-from{display:none;}"
 		".msg-len,.msg-via,.msg-type{display:none;}"
 		".msg-to{max-width:45px;}"
-		".msg-subject{max-width:100px;font-size:11px;}"
+		".msg-subject{max-width:100px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		"}"
 		"</style>\r\n"
 		"<script src=\"/WebMail/webscript.js\"></script>\r\n"
@@ -457,7 +457,7 @@ char * WebMailPagetxt()
 
 char * MainConfigtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 9 3/9/2026 Mobile Responsive Layout -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<html><head>"
@@ -475,20 +475,20 @@ char * MainConfigtxt()
 		".form-row label{min-width:120px;text-align:left;flex-shrink:0;}"
 		".form-row.checkbox-row label{display:flex;align-items:center;gap:6px;margin:0;min-width:auto;}"
 		".form-row.checkbox-row input[type=checkbox]{width:18px;height:18px;margin:0;flex-shrink:0;}"
-		".form-row input[type=text]{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family:monospace;flex:1 1 180px;min-width:100px;}"
-		".form-row input[type=number]{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family:monospace;width:80px;}"
+		".form-row input[type=text]{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;flex:1 1 180px;min-width:100px;}"
+		".form-row input[type=number]{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;width:80px;}"
 		".form-row input[type=radio]{margin:0 4px 0 0;}"
-		".form-row textarea{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family:monospace;flex:1 1 300px;min-width:150px;}"
+		".form-row textarea{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;flex:1 1 300px;min-width:150px;}"
 		".text-area-row{display:flex;flex-direction:column;align-items:flex-start;margin:10px 0;}"
 		".text-area-row label{text-align:left;margin-bottom:4px;font-weight:500;}"
-		".text-area-row textarea{width:100%;}"
+		".text-area-row textarea{width:100%%;}"
 		".textarea-group{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0;}"
 		".textarea-col{flex:1 1 150px;display:flex;flex-direction:column;}"
 		".textarea-col label{text-align:left;margin-bottom:4px;font-weight:500;font-size:0.9em;}"
-		".textarea-col textarea{width:100%;box-sizing:border-box;}"
+		".textarea-col textarea{width:100%%;box-sizing:border-box;}"
 		".filter-table-wrap{overflow:auto;max-width:100%%;margin-top:8px;}"
 		".buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}"
-		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:14px;font-weight:500;}"
+		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);font-weight:500;}"
 		".btn:hover{background:#eef2f7;}"
 		"input[type=submit].btn:active{background:#111827;color:#fff;}"
 		"@media (max-width:768px){"
@@ -725,7 +725,7 @@ char * MainConfigtxt()
 
 char * MsgPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 5 3/9/2026 Desktop Layout Improved -->\r\n"
 		"<!DOCTYPE html> \r\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"> \r\n"
@@ -737,33 +737,35 @@ char * MsgPagetxt()
 		".wm-shell{max-width:1100px;margin:0 auto;}"
 		".wm-title{text-align:center;margin:0 0 16px;font-size:clamp(20px,3.4vw,26px);font-weight:600;color:var(--text);}"
 		".menu-header{display:none;margin-bottom:10px;}"
-		".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:16px;color:var(--text);}"
+		".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);color:var(--text);}"
 		".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:16px;}"
-		".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:15px;cursor:pointer;transition:background 0.15s ease;}"
+		".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;transition:background 0.15s ease;}"
 		".wm-menu a:hover{background:#e9ecef;}"
 		".wm-menu a:active{background:black;color:white;}"
-		"#outer{display:grid;grid-template-columns:200px minmax(0,1fr);grid-template-rows:auto 1fr;gap:16px;min-height:%dpx;font-family:monospace;align-items:start;}"
+		"#outer{display:grid;grid-template-columns:200px minmax(0,1fr);grid-template-rows:auto 1fr;gap:16px;min-height:%dpx;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;align-items:start;}"
 		"#main{grid-column:2;grid-row:1 / span 2;min-height:%dpx;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:20px;overflow:auto;box-shadow:0 1px 3px rgba(0,0,0,0.06);}"
 		"#sidebar{grid-column:1;grid-row:2;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;display:flex;flex-direction:column;padding:0;max-height:calc(100vh - 280px);box-shadow:0 1px 3px rgba(0,0,0,0.06);}"
-		"#sel{grid-column:1;grid-row:1;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-family:monospace;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);}"
-		"#sel .filter-title{text-align:center;font-weight:700;font-size:15px;margin-bottom:12px;color:var(--text);text-transform:uppercase;letter-spacing:0.5px;}"
+		"#sel{grid-column:1;grid-row:1;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);}"
+		"#sel .filter-title{text-align:center;font-weight:700;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);margin-bottom:12px;color:var(--text);text-transform:uppercase;letter-spacing:0.5px;}"
 		"#sel .filter-row{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:0 0 12px 0;}"
-		"#sel .filter-row label{font-size:13px;font-weight:600;text-align:left;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;}"
-		"#sel .filter-row input{width:100%%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-size:14px;transition:border-color 0.15s ease,box-shadow 0.15s ease;}"
+		"#sel .filter-row label{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);font-weight:600;text-align:left;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;}"
+		"#sel .filter-row input{width:100%%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);transition:border-color 0.15s ease,box-shadow 0.15s ease;}"
 		"#sel .filter-row input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1);}"
 		"#sidebar table{width:100%%;border-collapse:collapse;}"
 		"#sidebar td{border-bottom:1px solid #e2e8f0;padding:0;}"
-		"#sidebar a{display:block;padding:12px 14px;color:var(--text);text-decoration:none;font-family:monospace;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.3px;transition:background 0.15s ease;}"
+		"#sidebar a{display:block;padding:12px 14px;color:var(--text);text-decoration:none;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-weight:600;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);text-transform:uppercase;letter-spacing:0.3px;transition:background 0.15s ease;}"
 		"#sidebar a:hover{background:#f1f5f9;}"
 		"#sidebar a:focus{outline:2px solid #3b82f6;outline-offset:-2px;}"
-		"input[type=text],input[type=input]{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family:monospace;font-size:14px;}"
+		"input[type=text],input[type=input]{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);}"
 		"input[type=text]:focus,input[type=input]:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1);}"
 		"input.btn:active{background:black;color:white;}"
 		"submit.btn:active{background:black;color:white;}"
-		".msg-list{display:flex;flex-direction:column;height:100%%;min-height:0;}"
+		".msg-list{display:flex;flex-direction:column;height:100%%;min-height:0;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
+		".msg-list a{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
 		".msg-list a.active{background:#dbeafe;border-left:3px solid #3b82f6;}"
-		".msg-list-toggle{display:none;width:100%%;min-height:44px;padding:10px 12px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;flex-shrink:0;}"
-		".msg-list-body{display:block;flex:1 1 auto;overflow-y:auto;min-height:0;}"
+		".msg-list-toggle{display:none;width:100%%;min-height:44px;padding:10px 12px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;flex-shrink:0;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
+		".msg-list-body{display:block;flex:1 1 auto;overflow-y:auto;min-height:0;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
+		".msg-list table{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
 		".msg-list table tr:nth-child(even){background:#f9fafb;}"
 		".msg-list table tr:hover{background:#f1f5f9;}"
 		"@media (max-width:768px){"
@@ -776,7 +778,7 @@ char * MsgPagetxt()
 		"#sel{grid-column:1;grid-row:1;padding:12px;}"
 		"#sel .filter-row{gap:4px;margin:10px 0;}"
 		"#sel .filter-row label{min-width:100%%;font-weight:500;}"
-		"#sel .filter-row input{width:100%%;min-height:44px;font-size:16px;}"
+		"#sel .filter-row input{width:100%%;min-height:44px;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);}"
 		"#sidebar{grid-column:1;grid-row:2;min-height:200px;max-height:none;padding:0;}"
 		".wm-shell{max-width:none;}"
 		".msg-list{order:1;}"
@@ -825,8 +827,9 @@ char * MsgPagetxt()
 		"\r\n"
 		"function save(form)\r\n"
 		"{\r\n"
-		"	var msg\r\n"
-		"	msg = form.From.value + \"|\" + form.To.value+ \"|\" + form.BID.value+ \"|\" + form.EFROM.value + \"|\" + form.VIA.value+ \"|\" + form.Title.value+ \"|\" + form.Type.value + \"|\" + form.Status.value +\"|\"\r\n"
+		"\tvar msg\r\n"
+		"\tvar efrom = form.EFROM ? form.EFROM.value : \"\";\r\n"
+		"\tmsg = form.From.value + \"|\" + form.To.value+ \"|\" + form.BID.value+ \"|\" + efrom + \"|\" + form.VIA.value+ \"|\" + form.Title.value+ \"|\" + form.Type.value + \"|\" + form.Status.value +\"|\"\r\n"
 		"	var fn = \"MsgSave?%s\";\r\n"
 		"	post(fn, msg);\r\n"
 		"}\r\n"
@@ -942,7 +945,7 @@ char * MsgPagetxt()
 
 char * UserDetailtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 5 7/3/2026 -->\r\n"
 		"<form method=\"post\" action=\"/Mail/UserSave?%s\">\r\n"
 		"<h3>Update User %s</h3>\r\n"
@@ -1044,7 +1047,7 @@ char * UserDetailtxt()
 
 char * UserPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 6 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html> \r\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"> \r\n"
@@ -1056,7 +1059,7 @@ char * UserPagetxt()
 		COMMON_MENU_CSS
 		".wm-shell{max-width:980px;margin:0 auto;}"
 		".wm-title{text-align:center;margin:0 0 12px;}"
-		".section-title{text-align:center;font-family:monospace;font-size:18px;font-weight:700;margin:12px 0 0;}"
+		".section-title{text-align:center;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
 		"#outer{display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-areas:'sidebar main';gap:12px;width:100%%;margin-top:12px;align-items:start;}"
 		"#sidebar{grid-area:sidebar;display:flex;flex-direction:column;overflow:hidden;max-height:calc(100vh - 260px);}"
 		"#main{grid-area:main;overflow:auto;}"
@@ -1068,9 +1071,9 @@ char * UserPagetxt()
 		".user-list table tr:nth-child(even){background:#f9f9f9;}"
 		"#sidebar table{width:100%%;border-collapse:collapse;}"
 		"#sidebar td{border-bottom:1px solid #e2e8f0;padding:0;}"
-		"#sidebar a{display:block;padding:8px 10px;color:var(--text);text-decoration:none;font-family:monospace;font-weight:600;text-transform:uppercase;}"
+		"#sidebar a{display:block;padding:8px 10px;color:var(--text);text-decoration:none;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-weight:600;text-transform:uppercase;}"
 		"#sidebar a:hover{background:#eef2f7;}"
-		"#main form{font-family:monospace;line-height:1.35;}"
+		"#main form{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;line-height:1.35;}"
 		"#main h3{margin:0 0 10px;text-align:center;}"
 		"#main form > div:first-of-type{position:static !important;left:auto !important;}"
 		"#main table{border-collapse:collapse;max-width:100%%;}"
@@ -1268,7 +1271,7 @@ char * UserPagetxt()
 
 char * Housekeepingtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 4 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<html><head>\r\n"
@@ -1303,9 +1306,9 @@ char * Housekeepingtxt()
 		".hk-override-section p{margin:0 0 10px;font-size:0.9em;color:#666;}"
 		".hk-textarea-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:10px 0;}"
 		".hk-textarea-grid label{display:block;font-weight:bold;margin-bottom:5px;text-align:center;}"
-		".hk-textarea-grid textarea{width:100%%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;font-size:13px;resize:vertical;}"
+		".hk-textarea-grid textarea{width:100%%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:4px;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);resize:vertical;}"
 		".hk-buttons{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap;}"
-		".hk-buttons input{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;min-height:44px;font-size:15px;}"
+		".hk-buttons input{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;min-height:44px;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);}"
 		".hk-buttons input:hover{background:var(--primary-dark);}"
 		"@media (max-width:768px){"
 		".hk-layout{flex-direction:column;}"
@@ -1390,7 +1393,7 @@ char * Housekeepingtxt()
 
 char * WPtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 3 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<html><head>\r\n"
@@ -1412,7 +1415,7 @@ char * WPtxt()
 		".wp-list table{width:100%%;border-collapse:collapse;}"
 		".wp-list table tr:nth-child(even){background:#f9f9f9;}"
 		".wp-list td{border-bottom:1px solid #e2e8f0;padding:0;}"
-		".wp-list a{color:var(--text);text-decoration:none;display:block;padding:8px 10px;border-radius:0;font-family:monospace;font-weight:600;text-transform:uppercase;}"
+		".wp-list a{color:var(--text);text-decoration:none;display:block;padding:8px 10px;border-radius:0;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-weight:600;text-transform:uppercase;}"
 		".wp-list a:hover{background:#eef2f7;text-decoration:none;}"
 		".wp-main{flex:1 1 500px;min-width:0;background:var(--surface);padding:20px;border:1px solid var(--border);border-radius:8px;box-shadow:0 0 5px rgba(0,0,0,0.1);min-height:400px;}"
 		"@media (max-width:768px){"
@@ -1551,36 +1554,50 @@ char * WPtxt()
 
 char * ChatConfigtxt()
 {
-	char Msg[] =
-		"<!-- Version 3 3/9/2026 Refactored -->\r\n"
-		"<html>\r\n"
+	static const char Msg[] =
+		"<!-- Version 4 3/22/2026 Responsive refresh -->\r\n"
+		"<!DOCTYPE html>\r\n"
+		"<html><head>\r\n"
+		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
+		"<meta charset=\"UTF-8\">\r\n"
 		"<style>"
 		COMMON_CSS_VARIABLES
 		COMMON_MENU_CSS
-		"input.btn:active{background:black;color:white;}"
-		"submit.btn:active{background:black;color:white;}"
-		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;}"
+		"body{margin:0;padding:12px;background-image:url(/background.jpg);box-sizing:border-box;}"
+		"h3{margin:0 0 10px;text-align:center;}"
+		"#main{border:1px solid var(--border);border-radius:8px;background:var(--surface);box-shadow:0 0 5px rgba(0,0,0,0.1);overflow:auto;text-align:center;position:relative;min-height:650px;width:min(960px,100%%);margin:10px auto 0;padding:14px;box-sizing:border-box;}"
+		"#main form{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;text-align:left;}"
+		"#main input[type=text],#main input[type=number],#main input:not([type]),#main textarea{border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
+		"#main input[type=text],#main input:not([type]){max-width:100%%;}"
+		"#main textarea{width:100%%;resize:vertical;}"
+		".chatcfg-title{text-align:center;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:6px 0 0;}"
+		".chatcfg-formrow{display:flex;align-items:center;gap:10px;margin:10px 0;flex-wrap:wrap;}"
+		".chatcfg-formrow label{font-weight:600;}"
+		".chatcfg-formrow .num{width:90px;}"
+		".chatcfg-formrow .grow{flex:1 1 auto;}"
+		".chatcfg-check{display:flex;align-items:center;gap:8px;margin:10px 0 14px;}"
+		".chatcfg-info{width:100%%;max-width:100%%;margin:0 auto;text-align:left;line-height:1.4;border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px;padding:10px 12px;box-sizing:border-box;}"
+		".chatcfg-block{margin:12px 0;}"
+		".chatcfg-block label{display:block;font-weight:600;margin-bottom:6px;}"
+		".chatcfg-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}"
+		".chatcfg-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:14px;}"
+		"input.btn:active,submit.btn:active{background:black;color:white;}"
+		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 14px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;}"
 		".btn:hover{background:#e9ecef;}"
-		"@media (max-width:768px){#main{width:100%% !important;left:0 !important;height:auto !important;min-height:650px;}}"
+		"@media (max-width:768px){body{padding:8px;}#main{min-height:0;padding:10px;}.chatcfg-formrow{flex-direction:column;align-items:stretch;}.chatcfg-formrow .num{width:100%%;}#main input[type=text],#main input[type=number],#main input:not([type]),#main textarea,.btn{width:100%%;min-height:44px;}.chatcfg-inline{justify-content:flex-start;}.chatcfg-actions{justify-content:stretch;}}"
 		"</style>"
-		"<head>\r\n"
 		"<title>Chat Configuration</title>\r\n"
 		"<script>"
 		COMMON_MENU_JAVASCRIPT
 		"</script>"
 		"<script type=\"text/javascript\">\r\n"
 		"var Main;\r\n"
-		"var fromleft;\r\n"
 		"var Pos;\r\n"
 		"var Poptext;\r\n"
 		"\r\n"
 		"function initialize()\r\n"
-		"{ var\r\n"
-		"w=window,d=document,e=d.documentElement,g=d.getElementsByTagName('body')[0];\r\n"
-		"x=w.innerWidth||e.clientWidth||g.clientWidth; fromleft = (x / 2) - 310;\r\n"
-		"if (fromleft < 0) {fromleft = 0;}\r\n"
+		"{\r\n"
 		"Main = document.getElementById(\"main\");\r\n"
-		"Main.style.left = fromleft + \"px\";\r\n"
 		"Pos = document.getElementById(\"pos\");\r\n"
 		"Poptext = document.getElementById(\"poptext\");\r\n"
 		"\r\n"
@@ -1593,62 +1610,43 @@ char * ChatConfigtxt()
 		"	{alert(\"Combinded length of Location and Popup Text must not exceed 245. Now \" + len);}\r\n"
 		"}\r\n"
 		"</script>\r\n"
-		"<title></title>\r\n"
-		"<title>ChatP</title>\r\n"
 		"</head>\r\n"
-		"<body>\r\n"
-		"onload=\"initialize()\" onresize=\"initialize()\">\r\n"
-		"<h3 align=\"center\">BPQ32 Chat Node %s</h3>\r\n"
+		"<body onload=\"initialize()\" onresize=\"initialize()\">\r\n"
+		"<h3>BPQ32 Chat Node %s</h3>\r\n"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" onclick=\"toggleMenu(event)\">Menu</button></div>\r\n"
 		"<div id=\"chatMenu\" class=\"menu\">\r\n"
 		"<a href=\"/Chat/ChatStatus?%s\">Status</a>\r\n"
 		"<a href=\"/Chat/ChatConf?%s\">Configuration</a>\r\n"
 		"<a href=\"/\">Node Menu</a>\r\n"
 		"</div>\r\n"
-		"<br>\r\n"
-		"<div style=\"text-align: center;\"><font size=\"+1\"><span\r\n"
-		"style=\"font-family: monospace; font-weight: bold;\">Chat Configuration</span></font></div>\r\n"
-		"<div id=\"main\"\r\n"
-		"style=\"align: center; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; box-shadow: 0 0 5px rgba(0,0,0,0.1); overflow: auto; text-align: center; position: relative; top: 10px; height: 650px; width: 700px; left: 96.5px;\">\r\n"
-		"<form border=\"1\" style=\"font-family: monospace;\" method=\"post\"\r\n"
+		"<div class=\"chatcfg-title\">Chat Configuration</div>\r\n"
+		"<div id=\"main\">\r\n"
+		"<form border=\"1\" style=\"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;\" method=\"post\"\r\n"
 		"action=\"/Chat/ChatConfig?%s\">\r\n"
-		"<h3>&nbsp;Chat Server  Params<span style=\"font-family: monospace;\"></span></h3>\r\n"
-		"<span style=\"font-family: monospace;\"></span>Chat APPL No&nbsp;&nbsp;\r\n"
-		"<input value=\"%d\" size=\"3\" name=\"ApplNum\"><br>\r\n"
-		"<span style=\"font-family: monospace;\"></span>Streams &nbsp; &nbsp;\r\n"
-		"&nbsp;&nbsp; <input value=\"%d\" size=\"3\" name=\"Streams\"><br>\r\n"
-		"&nbsp; <br>\r\n"
-		"<input %sname=\"Events\" type=\"checkbox\"> Enable Event Reporting<br><br>\r\n"
+		"<h3>Chat Server Params</h3>\r\n"
+		"<div class=\"chatcfg-formrow\"><label for=\"chatappl\">Chat APPL No</label><input id=\"chatappl\" class=\"num\" value=\"%d\" size=\"3\" name=\"ApplNum\" type=\"number\"></div>\r\n"
+		"<div class=\"chatcfg-formrow\"><label for=\"chatstreams\">Streams</label><input id=\"chatstreams\" class=\"num\" value=\"%d\" size=\"3\" name=\"Streams\" type=\"number\"></div>\r\n"
+		"<label class=\"chatcfg-check\"><input %sname=\"Events\" type=\"checkbox\"> Enable Event Reporting</label>\r\n"
 
-		"<div style=\"text-align: left; width: 680px; margin: auto;\">The Nodes to link to box defines which other Chat Nodes should be connected to, or from which "
+		"<div class=\"chatcfg-info\">The Nodes to link to box defines which other Chat Nodes should be connected to, or from which "
 		"connections may be accepted. The format is ALIAS:CALL, eg BPQCHT:G8BPQ-4. If the node is not directly "
 		"connectable (ie is not in your NODES table) you can add a connect script. This consists of a series of commands "
 		"separared by |, eg NOTCHT:G8BPQ-4|C 3 GM8BPQ-9|CHAT"
 
-		"<br><br>The Callsign of the Chat Node is not defined here - it is obtained from the bpq32.cfg APPLICATION line corresponding to the Chat Appl Number.<br>\r\n"
-		"<br></div>\n"
-		"Nodes to link to<br>"
-		"&nbsp;<textarea cols=\"70\" rows=\"5\" name=\"nodes\">%s</textarea><br>\r\n"
-		"<span style=\"font-family: monospace;\"></span>Node to Node Link PACLEN \r\n"
-		"&nbsp;&nbsp; <input value=\"%d\" size=\"3\" name=\"Paclen\"><br><br>\r\n"
-		"&nbsp;Map Position <input onchange=CheckLen() maxlength=\"80\" value=\"%s\" size=\"20\" name=\"Posn\" id=pos> <br>\r\n"
-		"<br>\r\n"
-		"&nbsp;Popup Type &nbsp;&nbsp; Hover <input %s name=\"PopType\" value=\"Hover\"\r\n"
-		"type=\"radio\">\r\n"
-		"Click <input %s name=\"PopType\" value=\"Click\" type=\"radio\"><br>\r\n"
-		"<br>\r\n"
-		"Map Popup Text<br>\r\n"
-		"&nbsp;<input onchange=CheckLen() maxlength=\"250\" value=\"%s\" size=\"90\" name=\"MapText\" id=poptext>\r\n"
-		"<br><br>Welcome Message<br>\r\n"
-		"<textarea cols=\"80\" rows=\"5\" name=\"welcome\">%s</textarea><br>\r\n"
-		"<br>\r\n"
+		"<br><br>The Callsign of the Chat Node is not defined here - it is obtained from the bpq32.cfg APPLICATION line corresponding to the Chat Appl Number.</div>\r\n"
+		"<div class=\"chatcfg-block\"><label for=\"nodes\">Nodes to link to</label><textarea id=\"nodes\" cols=\"70\" rows=\"5\" name=\"nodes\">%s</textarea></div>\r\n"
+		"<div class=\"chatcfg-formrow\"><label for=\"paclen\">Node to Node Link PACLEN</label><input id=\"paclen\" class=\"num\" value=\"%d\" size=\"3\" name=\"Paclen\" type=\"number\"></div>\r\n"
+		"<div class=\"chatcfg-formrow\"><label for=\"pos\">Map Position</label><input class=\"grow\" onchange=\"CheckLen()\" maxlength=\"80\" value=\"%s\" size=\"20\" name=\"Posn\" id=\"pos\"></div>\r\n"
+		"<div class=\"chatcfg-formrow\"><label>Popup Type</label><div class=\"chatcfg-inline\">Hover <input %s name=\"PopType\" value=\"Hover\" type=\"radio\"> Click <input %s name=\"PopType\" value=\"Click\" type=\"radio\"></div></div>\r\n"
+		"<div class=\"chatcfg-block\"><label for=\"poptext\">Map Popup Text</label><input onchange=\"CheckLen()\" maxlength=\"250\" value=\"%s\" size=\"90\" name=\"MapText\" id=\"poptext\"></div>\r\n"
+		"<div class=\"chatcfg-block\"><label for=\"welcome\">Welcome Message</label><textarea id=\"welcome\" cols=\"80\" rows=\"5\" name=\"welcome\">%s</textarea></div>\r\n"
 		"\r\n"
-		"<div style=\"position: absolute; left: 150px; top: 620px;\">\r\n"
-		"<input name=\"Save\" value=\"Save\" type=submit class='btn'> \r\n"
-		"<input name=\"UpdateMap\" value=\"Update Map\" type=submit class='btn'> \r\n"
-		"<input name=\"Restart\" value=\"Restart Links\" type=submit class='btn'> \r\n"
+		"<div class=\"chatcfg-actions\">\r\n"
+		"<input name=\"Save\" value=\"Save\" type=\"submit\" class=\"btn\"> \r\n"
+		"<input name=\"UpdateMap\" value=\"Update Map\" type=\"submit\" class=\"btn\"> \r\n"
+		"<input name=\"Restart\" value=\"Restart Links\" type=\"submit\" class=\"btn\"> \r\n"
 		"<input name=\"Cancel\" value=\"Cancel\"\r\n"
-		"type=submit class='btn'></div>\r\n"
+		"type=\"submit\" class=\"btn\"></div>\r\n"
 		"</form>\r\n"
 		"</div>\r\n";
 
@@ -1658,7 +1656,7 @@ char * ChatConfigtxt()
 
 char * ChatStatustxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 2 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<style>"
@@ -1672,7 +1670,7 @@ char * ChatStatustxt()
 		"</style>"
 		"<html><head>\r\n"
 		"<style>"
-		"#outer{width:720px;height:700px;position:absolute;border:0px solid;font-family:monospace;}"
+		"#outer{width:720px;height:700px;position:absolute;border:0px solid;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
 		"#streams{width:360px;position:absolute;height:300px;left:2px;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:auto}"
 		"#users{position:absolute;top:307px;left:2px;width:710px;height:350px;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:auto;}"
 		"#links{position:absolute;left:370px;width:341px;height:300px;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:auto;}"
@@ -1741,8 +1739,8 @@ char * ChatStatustxt()
 		"\r\n"
 		"<div style=\"left: 160px;\" id=\"outer\">\r\n"
 		"<div id=\"streams\">\r\n"
-		"<form style=\"font-family: monospace; text-align: center;\" method=\"post\" action=\"/Chat/ChatDisSession?%s\">\r\n"
-		"  <table style=\"font-family: monospace; background-color: white; text-align: left; margin-left: auto; margin-right: auto;\" tabindex=\"1\" border=\"1\" cellpadding=\"2\">\r\n"
+		"<form style=\"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; text-align: center;\" method=\"post\" action=\"/Chat/ChatDisSession?%s\">\r\n"
+		"  <table style=\"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; background-color: white; text-align: left; margin-left: auto; margin-right: auto;\" tabindex=\"1\" border=\"1\" cellpadding=\"2\">\r\n"
 		"    <tbody>\r\n"
 		"      <tr>\r\n"
 		"        <th style=\"width: 120px;\">User</th>\r\n"
@@ -1760,7 +1758,7 @@ char * ChatStatustxt()
 		"  </form>\r\n"
 		"</div>\r\n"
 		"<div id=\"users\">\r\n"
-		"<table style=\"font-family: monospace; background-color: white; text-align: left; margin-left: auto; margin-right: auto;\" tabindex=\"1\" border=\"1\" cellpadding=\"2\">\r\n"
+		"<table style=\"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; background-color: white; text-align: left; margin-left: auto; margin-right: auto;\" tabindex=\"1\" border=\"1\" cellpadding=\"2\">\r\n"
 		"  <tbody>\r\n"
 		"    <tr>\r\n"
 		"      <th style=\"width: 75px;\">Callsign</th>\r\n"
@@ -1775,7 +1773,7 @@ char * ChatStatustxt()
 		"</table>\r\n"
 		"</div>\r\n"
 		"<div id=\"links\">\r\n"
-		"<table style=\"font-family: monospace; background-color: white; text-align: left; tabindex=\"1\" border=\"1\" cellpadding=\"2\">\r\n"
+		"<table style=\"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; background-color: white; text-align: left; tabindex=\"1\" border=\"1\" cellpadding=\"2\">\r\n"
 		"  <tbody>\r\n"
 		"    <tr>\r\n"
 		"      <th style=\"width: 80px;\">Callsign</th>\r\n"
