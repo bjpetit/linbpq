@@ -147,6 +147,7 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 char Tail[] = "</body></html>";
 
 #define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+#define HTTP_PREFERRED_TABLE_OPEN "<table style=\"width:100%%;border-collapse:collapse;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Cascadia Mono,Consolas,Liberation Mono,DejaVu Sans Mono,Courier New,monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
 #define HTTP_NODE_TABLE_HEADER_ROW "<tr style=\"background:#f0f0f0;\">"
 #define HTTP_NODE_SORT_CONTROLS "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">" \
 	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
@@ -156,7 +157,7 @@ char Tail[] = "</body></html>";
 #define HTTP_NODE_MENU_CSS \
 	COMMON_CSS_VARIABLES \
 	COMMON_MENU_CSS \
-	"body { font-family: Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }" \
+	"body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }" \
 	"h1 { text-align: center; margin: 10px 0 18px; }" \
 	".menu-header { max-width: 1100px; }" \
 	".menu { margin: 20px auto; max-width: 1100px; }" \
@@ -177,7 +178,7 @@ char Tail[] = "</body></html>";
 	"input.btn:active, .menu .btn:active { background: black; color: white; }" \
 	"@media (max-width: 768px) { .menu td, .menu .btn, .dropdown { width: 100%%; text-align: center; } .dropdown-content { position: static; transform: none; width: 100%%; margin-top: 8px; box-shadow: none; } }"
 
-char RouteHddr[] = "<h2 style=\"text-align:center;\">Routes</h2>" HTTP_NODE_TABLE_OPEN
+char RouteHddr[] = "<h2 style=\"text-align:center;\">Routes</h2>" HTTP_PREFERRED_TABLE_OPEN
 HTTP_NODE_TABLE_HEADER_ROW "<th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
 "<th>Frack</th><th>Last Heard</th><th>Queued</th><th>Rem Qual</th><th>SRTT</th><th>Rem SRTT</th></tr>";
 
@@ -188,12 +189,12 @@ char RouteLineINP3[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>
 "<td>%02d:%02d</td><td>%d</td><td>%d</td><td>%4.2fs</td><td>%4.2fs</td></tr>";
 
 char NodeHddr[] = HTTP_NODE_SORT_CONTROLS
-"<h2 style=\"text-align:center;\">Nodes %s</h2>" HTTP_NODE_TABLE_OPEN "<tr>";
+"<h2 style=\"text-align:center;\">Nodes %s</h2>" HTTP_PREFERRED_TABLE_OPEN "<tr>";
 
 char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
 
 
-char StatsHddr[] = "<h2 style=\"text-align:center;\">Node Stats</h2>" HTTP_NODE_TABLE_OPEN;
+char StatsHddr[] = "<h2 style=\"text-align:center;\">Node Stats</h2>" HTTP_PREFERRED_TABLE_OPEN;
 
 char PortStatsHddr[] = "<h2 style=\"text-align:center;\">Stats for Port %d</h2>" HTTP_NODE_TABLE_OPEN
 HTTP_NODE_TABLE_HEADER_ROW "<th>Statistic</th><th>Value</th></tr>";
@@ -216,12 +217,12 @@ char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 alig
 "</form>";
 
 
-char LinkHddr[] = "<h2 style=\"text-align:center;\">Links</h2>" HTTP_NODE_TABLE_OPEN
+char LinkHddr[] = "<h2 style=\"text-align:center;\">Links</h2>" HTTP_PREFERRED_TABLE_OPEN
 HTTP_NODE_TABLE_HEADER_ROW "<th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
 
 char LinkLine[] = "<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td align=center >%d</td></tr>";
 
-char UserHddr[] = "<h2 style=\"text-align:center;\">Sessions</h2>" HTTP_NODE_TABLE_OPEN
+char UserHddr[] = "<h2 style=\"text-align:center;\">Sessions</h2>" HTTP_PREFERRED_TABLE_OPEN
 HTTP_NODE_TABLE_HEADER_ROW "<th>Circuit</th><th>Link</th><th>Circuit</th></tr>";
 
 char UserLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td></tr>";
@@ -1767,7 +1768,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	int Len;
 	char * WebSock = 0;
 
-	char PortsHddr[] = "<h2 style=\"text-align:center;\">Ports</h2>" HTTP_NODE_TABLE_OPEN
+	char PortsHddr[] = "<h2 style=\"text-align:center;\">Ports</h2>" HTTP_PREFERRED_TABLE_OPEN
 		HTTP_NODE_TABLE_HEADER_ROW "<th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th><th>Driver Window</th><th>Stats Graph</th></tr>";
 
 //	char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
