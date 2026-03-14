@@ -878,14 +878,14 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 		ptr += sprintf(Messages, "<script>alert(\"%s\");window.location.href = '/Webmail/WebMail?%s';</script>", Alert, Key); 
 
 	ptr += sprintf(ptr, "<table class=\"msg-table\"><thead><tr>"
-		"<th class=\"msg-num\">#</th>"
-		"<th class=\"msg-date\">Date</th>"
-		"<th class=\"msg-type\">Type</th>"
-		"<th class=\"msg-len\">Len</th>"
-		"<th class=\"msg-to\">To</th>"
-		"<th class=\"msg-via\">@</th>"
-		"<th class=\"msg-from\">From</th>"
-		"<th class=\"msg-subject\">Subject</th>"
+		"<th scope=\"col\" class=\"msg-num\">#</th>"
+		"<th scope=\"col\" class=\"msg-date\">Date</th>"
+		"<th scope=\"col\" class=\"msg-type\">Type</th>"
+		"<th scope=\"col\" class=\"msg-len\">Len</th>"
+		"<th scope=\"col\" class=\"msg-to\">To</th>"
+		"<th scope=\"col\" class=\"msg-via\">@</th>"
+		"<th scope=\"col\" class=\"msg-from\">From</th>"
+		"<th scope=\"col\" class=\"msg-subject\">Subject</th>"
 		"</tr></thead><tbody>");
 
 	for (m = LatestMsg; m >= 1; m--)
@@ -949,17 +949,17 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 
 			free(EncodedTitle);
 			
-			ptr += sprintf(ptr, "<tr class=\"msg-row\" onclick=\"window.location='/WebMail/WM?%s&%d'\">"
-				"<td class=\"msg-num\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
-				"<td class=\"msg-date\">%s</td>"
-				"<td class=\"msg-type\">%c%c</td>"
-				"<td class=\"msg-len\">%d</td>"
-				"<td class=\"msg-to\">%s</td>"
-				"<td class=\"msg-via\">%s</td>"
-				"<td class=\"msg-from\">%s</td>"
-				"<td class=\"msg-subject\">%s</td>"
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" onclick=\"window.location='/WebMail/WM?%s&%d'\" onkeydown=\"if(event.key==='Enter'||event.key===' '){event.preventDefault();window.location='/WebMail/WM?%s&%d';}\">"
+				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
+				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
+				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
+				"<td class=\"msg-len\" data-label=\"Len\">%d</td>"
+				"<td class=\"msg-to\" data-label=\"To\">%s</td>"
+				"<td class=\"msg-via\" data-label=\"@\">%s</td>"
+				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
+				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
 				"</tr>",
-				Key, Msg->number, Key, Msg->number, Msg->number,
+				Key, Msg->number, Key, Msg->number, Key, Msg->number, Msg->number,
 				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
 				Msg->type, Msg->status,
 				Msg->length,
@@ -6365,14 +6365,14 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 	// Outbuffer is 250000
 
 	ptr += sprintf(ptr, "<table class=\"msg-table\"><thead><tr>"
-		"<th class=\"msg-num\">#</th>"
-		"<th class=\"msg-date\">Date</th>"
-		"<th class=\"msg-type\">Type</th>"
-		"<th class=\"msg-len\">Len</th>"
-		"<th class=\"msg-to\">To</th>"
-		"<th class=\"msg-via\">@</th>"
-		"<th class=\"msg-from\">From</th>"
-		"<th class=\"msg-subject\">Subject</th>"
+		"<th scope=\"col\" class=\"msg-num\">#</th>"
+		"<th scope=\"col\" class=\"msg-date\">Date</th>"
+		"<th scope=\"col\" class=\"msg-type\">Type</th>"
+		"<th scope=\"col\" class=\"msg-len\">Len</th>"
+		"<th scope=\"col\" class=\"msg-to\">To</th>"
+		"<th scope=\"col\" class=\"msg-via\">@</th>"
+		"<th scope=\"col\" class=\"msg-from\">From</th>"
+		"<th scope=\"col\" class=\"msg-subject\">Subject</th>"
 		"</tr></thead><tbody>");
 
 	for (m = LatestMsg; m >= 1; m--)
@@ -6435,17 +6435,17 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 
 			free(EncodedTitle);
 
-			ptr += sprintf(ptr, "<tr>"
-				"<td class=\"msg-num\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
-				"<td class=\"msg-date\">%s</td>"
-				"<td class=\"msg-type\">%c%c</td>"
-				"<td class=\"msg-len\">%d</td>"
-				"<td class=\"msg-to\">%s</td>"
-				"<td class=\"msg-via\">%s</td>"
-				"<td class=\"msg-from\">%s</td>"
-				"<td class=\"msg-subject\">%s</td>"
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" onclick=\"window.location='/WebMail/WM?%s&%d'\" onkeydown=\"if(event.key==='Enter'||event.key===' '){event.preventDefault();window.location='/WebMail/WM?%s&%d';}\">"
+				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
+				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
+				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
+				"<td class=\"msg-len\" data-label=\"Len\">%d</td>"
+				"<td class=\"msg-to\" data-label=\"To\">%s</td>"
+				"<td class=\"msg-via\" data-label=\"@\">%s</td>"
+				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
+				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
 				"</tr>",
-				Key, Msg->number, Msg->number,
+				Key, Msg->number, Key, Msg->number, Key, Msg->number, Msg->number,
 				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
 				Msg->type, Msg->status,
 				Msg->length,
