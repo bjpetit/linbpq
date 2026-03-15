@@ -295,7 +295,7 @@ char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize(
 */
 char InputLine[] = "<!DOCTYPE html><html><head><style>"
 "* { margin: 0; padding: 0; box-sizing: border-box; } "
-"body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%; display: flex; align-items: center; } "
+"body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%%; display: flex; align-items: center; } "
 "form { width: 100%%; margin: 0; } "
 "#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 14px; background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
 "</style></head><body>"
