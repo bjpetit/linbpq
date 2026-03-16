@@ -12,7 +12,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 // CSS Variables and Universal Styles
 // Used by all pages for consistent theming
-#define COMMON_CSS_VARIABLES \
+#define COMMON_CSS_ROOT \
 	":root{" \
 	"--bg:#f4f4f4;" \
 	"--surface:#fff;" \
@@ -23,7 +23,9 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"--text:#1f2937;" \
 	"--link:#1f2937;" \
 	"}" \
-	"*{box-sizing:border-box;}" \
+	"*{box-sizing:border-box;}"
+
+#define COMMON_BODY_BASE_CSS \
 	"body{" \
 	"font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;" \
 	"background:var(--bg);" \
@@ -38,11 +40,21 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));" \
 	"padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));" \
 	"}" \
-	"}" \
-	"h3{text-align:center;margin:0 0 15px;}" \
+	"}"
+
+#define COMMON_HEADING_CSS \
+	"h3{text-align:center;margin:0 0 15px;}"
+
+#define COMMON_REDUCED_MOTION_CSS \
 	"@media(prefers-reduced-motion:reduce){" \
 	"*{animation-duration:0!important;transition-duration:0!important;}" \
 	"}"
+
+#define COMMON_CSS_VARIABLES \
+	COMMON_CSS_ROOT \
+	COMMON_BODY_BASE_CSS \
+	COMMON_HEADING_CSS \
+	COMMON_REDUCED_MOTION_CSS
 
 // Responsive Menu System CSS
 // Provides collapsible mobile menu with hamburger toggle
@@ -102,9 +114,10 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Expects menu element ID to be 'mainMenu' or 'mailMenu'
 // Expects toggle button ID to be 'menuToggle'
 #define COMMON_MENU_JAVASCRIPT \
+	"function getMenu(){return document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');}"\
 	"function toggleMenu(event){" \
 	"if(event)event.preventDefault();" \
-	"var menu=document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');" \
+	"var menu=getMenu();" \
 	"var toggle=document.getElementById('menuToggle');" \
 	"if(!menu||!toggle)return;" \
 	"if(menu.classList.contains('menu-open')){" \
@@ -116,7 +129,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}" \
 	"}" \
 	"window.addEventListener('click',function(event){" \
-	"var menu=document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');" \
+	"var menu=getMenu();" \
 	"var toggle=document.getElementById('menuToggle');" \
 	"var header=document.querySelector('.menu-header');" \
 	"if(menu&&toggle&&window.matchMedia('(max-width:768px)').matches){" \
@@ -130,7 +143,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"});" \
 	"window.addEventListener('keydown',function(event){" \
 	"if(event.key==='Escape'){" \
-	"var menu=document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');" \
+	"var menu=getMenu();" \
 	"if(menu&&menu.classList.contains('menu-open')){" \
 	"menu.classList.remove('menu-open');" \
 	"document.getElementById('menuToggle').textContent='Menu';" \

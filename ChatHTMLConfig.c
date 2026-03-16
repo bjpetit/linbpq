@@ -125,7 +125,8 @@ static char sel[] = "selected";
 
 char ChatSignon[] = "<html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>BPQ32 Chat Server Access</title>"
 	"<style>"
-	COMMON_CSS_VARIABLES
+	COMMON_CSS_ROOT
+	COMMON_REDUCED_MOTION_CSS
 	"body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: var(--bg); } "
 	".login-container { max-width: 400px; margin: 40px auto; background: var(--surface); padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); } "
 	"h3 { text-align: center; color: #333; margin-top: 0; } "
@@ -154,7 +155,6 @@ char ChatPage[] = "<html><head><meta charset='UTF-8'><meta name='viewport' conte
 	"<style>"
 	COMMON_CSS_VARIABLES
 	COMMON_UTILITY_CSS
-	"*{box-sizing:border-box;}"
 	".container{max-width:900px;margin:0 auto;background:var(--surface);padding:20px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}"
 	COMMON_MENU_CSS
 	"</style>"
@@ -661,7 +661,6 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		COMMON_FORM_CSS
 		COMMON_UTILITY_CSS
 		COMMON_BUTTON_CSS
-		"*{box-sizing:border-box;}"
 		"body{margin:0;padding:12px;background:var(--bg);}"
 		".chat-shell{max-width:1100px;margin:0 auto;}"
 		".chat-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}"

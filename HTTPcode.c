@@ -154,7 +154,8 @@ char Tail[] = "</body></html>";
 	"<input type=submit class='btn' name=t value=\"Nodes With Traffic\"></form></div>"
 
 #define HTTP_NODE_MENU_CSS \
-	COMMON_CSS_VARIABLES \
+	COMMON_CSS_ROOT \
+	COMMON_REDUCED_MOTION_CSS \
 	COMMON_MENU_CSS \
 	"body { font-family: Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }" \
 	"h1 { text-align: center; margin: 10px 0 18px; }" \

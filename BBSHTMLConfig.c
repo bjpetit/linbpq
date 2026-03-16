@@ -139,7 +139,8 @@ extern char WebMailSignon[];
 char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>BPQ32 Mail Server Access</title>"
 	"<style>"
-	COMMON_CSS_VARIABLES
+	COMMON_CSS_ROOT
+	COMMON_REDUCED_MOTION_CSS
 	"body { font-family: Arial, sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }"
 	"form { background: var(--surface); padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 400px; width: 100%%; }"
 	"input[type=text], input[type=password] { width: 100%%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }"
@@ -395,8 +396,6 @@ static char MailDetailButtons[] =
 char MailDetailTail[] = "</tbody></table></div></form></body></html>";
 
 // Local CSS de-dup fragments used by multiple templates in this file.
-#define MOBILE_BASE_CSS "*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:0;padding:max(20px,env(safe-area-inset-left));background:#f4f4f4;-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}"
-#define REDUCED_MOTION_CSS "@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}"
 #define SUBMIT_BUTTON_CSS "input[type=submit]{background:var(--primary);color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}input[type=submit]:hover{background:var(--primary-dark);}"
 
 static char WPDetailCSS[] =
@@ -415,9 +414,7 @@ static char WPDetailCSS[] =
 char Welcome[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 "<style>"
 COMMON_CSS_VARIABLES
-MOBILE_BASE_CSS
 "h3{text-align:center;color:#1f2937;}"
-REDUCED_MOTION_CSS
 ".form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:#1f2937;}.form-row textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:14px;line-height:1.4;}p{font-size:13px;color:#666;line-height:1.5;}"
 SUBMIT_BUTTON_CSS
 "input[type=submit]{font-size:14px;}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
@@ -436,9 +433,7 @@ SUBMIT_BUTTON_CSS
 
 static char MsgEditPage[] = "<style>"
 COMMON_CSS_VARIABLES
-MOBILE_BASE_CSS
 "h3{text-align:center;margin-bottom:30px;}"
-REDUCED_MOTION_CSS
 "textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:monospace;font-size:12px;line-height:1.4;resize:vertical;}"
 SUBMIT_BUTTON_CSS
 "@media(max-width:768px){textarea{font-size:13px;min-height:200px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
@@ -510,9 +505,7 @@ static char WPDetailButtons[] =
 
 static char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 COMMON_CSS_VARIABLES
-MOBILE_BASE_CSS
 "body{text-align:center;}"
-REDUCED_MOTION_CSS
 SUBMIT_BUTTON_CSS
 "input[type=submit]{font-size:14px;}@media(max-width:480px){input[type=submit]{width:calc(50%-5px);}input[type=submit]:only-of-type{width:100%;}}"
 "</style></head><body>"

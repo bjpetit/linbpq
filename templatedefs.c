@@ -10,7 +10,7 @@
 
 char * WebMailMsgtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 
 		"<!-- Version 5 11/11/2019 -->"
 		"<!DOCTYPE html> "
@@ -19,7 +19,8 @@ char * WebMailMsgtxt()
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/>"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 		"<style type=\"text/css\">"
-		COMMON_CSS_VARIABLES
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
 		"*{box-sizing:border-box;}"
 		"body{margin:0;padding:12px;font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;}"
 		".wm-shell{max-width:980px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 24px);}"
@@ -69,15 +70,15 @@ char * WebMailMsgtxt()
 
 char * FwdPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 
 		"<!-- Version 5 3/8/2026 Responsive -->"
 		"<!DOCTYPE html>"
 		"<head>"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 		"<style type=\"text/css\"> "
-		COMMON_CSS_VARIABLES
-		"* { box-sizing: border-box; }"
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
 		"body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }"
 		"h3 { text-align: center; margin: 0 0 20px; }"
 		"input.btn:active, submit.btn:active { background: black; color: white; }"
@@ -254,7 +255,7 @@ char * FwdPagetxt()
 
 char * FwdDetailtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 
 		"<!-- Version 4 3/8/2026 Responsive -->\r\n"
 		"<style>"
@@ -315,7 +316,7 @@ char * FwdDetailtxt()
 
 char * webscriptjs()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 2 17/10/2018 -->\r\n"
 		"var Main\r\n"
 		"\r\n"
@@ -360,7 +361,7 @@ char * webscriptjs()
 
 char * WebMailPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 6 8/11/2018 -->\r\n"
 		"<!DOCTYPE html> \r\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"> \r\n"
@@ -369,8 +370,8 @@ char * WebMailPagetxt()
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 		"<meta http-equiv=refresh content=300>"
 		"<style type=\"text/css\">\r\n"
-		":root{--bg:#f6f7f8;--surface:#ffffff;--border:#cccccc;--text:#1f2937;--link:#1f2937;}"
-		"*{box-sizing:border-box;}"
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
 		"body{margin:0;padding:max(12px,env(safe-area-inset-left));font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}"
 		"@supports(padding:max(0px)){body{padding:clamp(10px,3vw,12px);padding-left:max(clamp(10px,3vw,12px),env(safe-area-inset-left));padding-right:max(clamp(10px,3vw,12px),env(safe-area-inset-right));}}"
 		".wm-shell{max-width:980px;margin:0 auto;}"
@@ -398,7 +399,6 @@ char * WebMailPagetxt()
 		".msg-len{font-family:monospace;min-width:50px;}"
 		".msg-to,.msg-via,.msg-from{max-width:80px;}"
 		".msg-subject{max-width:380px;}"
-		"@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}"
 		"@media(min-width:1200px){.msg-subject{max-width:420px;}}"
 		"@media(max-width:768px){"
 		"body{padding:clamp(6px,2vw,10px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu a{width:100%%;text-align:center;min-height:48px;}#main{padding:8px;min-height:calc(100dvh - 280px);}"
@@ -457,7 +457,7 @@ char * WebMailPagetxt()
 
 char * MainConfigtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 9 3/9/2026 Mobile Responsive Layout -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<html><head>"
@@ -725,7 +725,7 @@ char * MainConfigtxt()
 
 char * MsgPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 5 3/9/2026 Desktop Layout Improved -->\r\n"
 		"<!DOCTYPE html> \r\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"> \r\n"
@@ -943,7 +943,7 @@ char * MsgPagetxt()
 
 char * UserDetailtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 5 7/3/2026 -->\r\n"
 		"<form method=\"post\" action=\"/Mail/UserSave?%s\">\r\n"
 		"<h3>Update User %s</h3>\r\n"
@@ -1045,7 +1045,7 @@ char * UserDetailtxt()
 
 char * UserPagetxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 6 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html> \r\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"> \r\n"
@@ -1269,7 +1269,7 @@ char * UserPagetxt()
 
 char * Housekeepingtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 4 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<html><head>\r\n"
@@ -1391,7 +1391,7 @@ char * Housekeepingtxt()
 
 char * WPtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 3 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<html><head>\r\n"
@@ -1552,7 +1552,7 @@ char * WPtxt()
 
 char * ChatConfigtxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 3 3/9/2026 Refactored -->\r\n"
 		"<html>\r\n"
 		"<style>"
@@ -1659,7 +1659,7 @@ char * ChatConfigtxt()
 
 char * ChatStatustxt()
 {
-	char Msg[] =
+	static const char Msg[] =
 		"<!-- Version 2 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<style>"
