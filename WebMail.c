@@ -864,7 +864,7 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
  	// Ex includes an alert string to be sent before message
 	
 	struct UserInfo * User = Session->User;
-	char Messages[245000];
+	char Messages[255000];
 	int m;
 	struct MsgInfo * Msg;
 	char * ptr = Messages;
@@ -877,7 +877,9 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 	if (Alert && Alert[0])
 		ptr += sprintf(Messages, "<script>alert(\"%s\");window.location.href = '/Webmail/WebMail?%s';</script>", Alert, Key); 
 
-	ptr += sprintf(ptr, "<table class=\"msg-table\"><thead><tr>"
+	ptr += sprintf(ptr, "<table class=\"msg-table\" "
+		"onclick=\"var row=event.target.closest('tr.msg-row[data-href]');if(row&&this.contains(row))window.location=row.getAttribute('data-href');\" "
+		"onkeydown=\"var row=event.target.closest('tr.msg-row[data-href]');var k=event.key||event.code;var kc=event.keyCode||event.which;if(row&&this.contains(row)&&(k==='Enter'||k===' '||k==='Spacebar'||k==='Space'||kc===13||kc===32)){event.preventDefault();window.location=row.getAttribute('data-href');}\"><thead><tr>"
 		"<th scope=\"col\" class=\"msg-num\">#</th>"
 		"<th scope=\"col\" class=\"msg-date\">Date</th>"
 		"<th scope=\"col\" class=\"msg-type\">Type</th>"
@@ -949,9 +951,7 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 
 			free(EncodedTitle);
 			
-			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" "
-				"onclick=\"window.location='/WebMail/WM?%s&%d'\" "
-				"onkeydown=\"if(event.key==='Enter'||event.key===' '){event.preventDefault();window.location='/WebMail/WM?%s&%d';}\">"
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" data-href=\"/WebMail/WM?%s&%d\">"
 				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
 				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
 				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
@@ -961,7 +961,7 @@ int SendWebMailHeaderEx(char * Reply, char * Key, struct HTTPConnectionInfo * Se
 				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
 				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
 				"</tr>",
-				Key, Msg->number, Key, Msg->number, Key, Msg->number, Msg->number,
+				Key, Msg->number, Key, Msg->number, Msg->number,
 				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
 				Msg->type, Msg->status,
 				Msg->length,
@@ -6298,7 +6298,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 			len += sprintf(&popup[len], " <option value=%d>%s (Len %d)", i + 1, WebMail->FileName[i], WebMail->FileLen[i]);
 	}
 
-	len += sprintf(&popup[len], "%</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
+	len += sprintf(&popup[len], "%%</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
 
 	*RLen = sprintf(Reply, "%s", popup);
 	return;
@@ -6366,7 +6366,9 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 
 	// Outbuffer is 250000
 
-	ptr += sprintf(ptr, "<table class=\"msg-table\"><thead><tr>"
+	ptr += sprintf(ptr, "<table class=\"msg-table\" "
+		"onclick=\"var row=event.target.closest('tr.msg-row[data-href]');if(row&&this.contains(row))window.location=row.getAttribute('data-href');\" "
+		"onkeydown=\"var row=event.target.closest('tr.msg-row[data-href]');var k=event.key||event.code;var kc=event.keyCode||event.which;if(row&&this.contains(row)&&(k==='Enter'||k===' '||k==='Spacebar'||k==='Space'||kc===13||kc===32)){event.preventDefault();window.location=row.getAttribute('data-href');}\"><thead><tr>"
 		"<th scope=\"col\" class=\"msg-num\">#</th>"
 		"<th scope=\"col\" class=\"msg-date\">Date</th>"
 		"<th scope=\"col\" class=\"msg-type\">Type</th>"
@@ -6437,7 +6439,7 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 
 			free(EncodedTitle);
 
-			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" onclick=\"window.location='/WebMail/WM?%s&%d'\" onkeydown=\"if(event.key==='Enter'||event.key===' '){event.preventDefault();window.location='/WebMail/WM?%s&%d';}\">"
+			ptr += sprintf(ptr, "<tr class=\"msg-row\" role=\"link\" tabindex=\"0\" data-href=\"/WebMail/WM?%s&%d\">"
 				"<td class=\"msg-num\" data-label=\"#\"><a href=/WebMail/WM?%s&%d>%d</a></td>"
 				"<td class=\"msg-date\" data-label=\"Date\">%s</td>"
 				"<td class=\"msg-type\" data-label=\"Type\">%c%c</td>"
@@ -6447,7 +6449,7 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 				"<td class=\"msg-from\" data-label=\"From\">%s</td>"
 				"<td class=\"msg-subject\" data-label=\"Subject\">%s</td>"
 				"</tr>",
-				Key, Msg->number, Key, Msg->number, Key, Msg->number, Msg->number,
+				Key, Msg->number, Key, Msg->number, Msg->number,
 				FormatDateAndTime((time_t)Msg->datecreated, TRUE),
 				Msg->type, Msg->status,
 				Msg->length,

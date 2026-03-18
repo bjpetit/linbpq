@@ -1742,7 +1742,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char * HostPtr = 0;
 
 	char * Context, * Method, * NodeURL = 0, * Key;
-	char _REPLYBUFFER[250000];
+	char _REPLYBUFFER[300000];
 	char Reply[250000];
 
 	int ReplyLen = 0;
@@ -2307,7 +2307,7 @@ doHeader:
 
 		if ((_memicmp(Context, "/MAIL/", 6) == 0) || (_memicmp(Context, "/WebMail", 8) == 0))
 		{
-			char _REPLYBUFFER[250000];
+			char _REPLYBUFFER[300000];
 			struct HTTPConnectionInfo Dummy = {0};
 			int Sent, Loops = 0;
 			char token[16] = "";
