@@ -146,7 +146,7 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 
 char Tail[] = "</body></html>";
 
-#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
 #define HTTP_NODE_TABLE_HEADER_ROW "<tr style=\"background:#f0f0f0;\">"
 #define HTTP_NODE_SORT_CONTROLS "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">" \
 	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
@@ -163,7 +163,7 @@ char Tail[] = "</body></html>";
 	".menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
 	".menu td:hover, .menu .btn:hover { background: #e9ecef; }" \
 	".dropdown { position: relative; display: inline-block; }" \
-	".dropdown-content { display: none; position: absolute; left: 50%; transform: translateX(-50%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }" \
+	".dropdown-content { display: none; position: absolute; left: 50%%; transform: translateX(-50%%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }" \
 	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
 	".dropdown-content a:hover { background: #e9ecef; }" \
 	".dropdown-content .btn { width: 100%%; margin-top: 6px; }" \
@@ -181,10 +181,10 @@ char RouteHddr[] = "<h2 style=\"text-align:center;\">Routes</h2>" HTTP_NODE_TABL
 HTTP_NODE_TABLE_HEADER_ROW "<th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th>"
 "<th>Frack</th><th>Last Heard</th><th>Queued</th><th>Rem Qual</th><th>SRTT</th><th>Rem SRTT</th></tr>";
 
-char RouteLine[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
+char RouteLine[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%%</td><td>%d</td><td>%d</td>"
 "<td>%02d:%02d<td>%d</td><td>%d</td></td><td></td><td></td></tr>";
 
-char RouteLineINP3[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td>"
+char RouteLineINP3[] = "<tr><td>%s%d</td><td>%s%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%%</td><td>%d</td><td>%d</td>"
 "<td>%02d:%02d</td><td>%d</td><td>%d</td><td>%4.2fs</td><td>%4.2fs</td></tr>";
 
 char NodeHddr[] = HTTP_NODE_SORT_CONTROLS
@@ -226,7 +226,7 @@ HTTP_NODE_TABLE_HEADER_ROW "<th>Circuit</th><th>Link</th><th>Circuit</th></tr>";
 
 char UserLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td></tr>";
 
-char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Node %s Terminal Access</h2>"
 "<h3>Please enter username and password to access the node</h3>"
 "<div class=\"form-container\"><form method=post action=TermSignon>"
@@ -244,7 +244,7 @@ char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device
 char NoSessions[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; }</style></head><body><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
 
 char TermPage[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
-"<title>BPQ32 Node %s</title><style>body { margin: 0; padding: 10px; font-family: Arial, sans-serif; background: #f6f7f8; color: #1f2937; } h3 { text-align: center; margin: 10px 0; } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #output-frame { flex: 1; border: 2px solid #ccc; background: #fff; min-height: 200px; } #input-frame { height: 50px; border: 2px solid #ccc; background: #fff; flex-shrink: 0; } @media (max-width: 768px) { .term-actions .btn { width: 100%; } .term-container { height: calc(100vh - 200px); } }</style>"
+"<title>BPQ32 Node %s</title><style>body { margin: 0; padding: 10px; font-family: Arial, sans-serif; background: #f6f7f8; color: #1f2937; } h3 { text-align: center; margin: 10px 0; } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #output-frame { flex: 1; border: 2px solid #ccc; background: #fff; min-height: 200px; } #input-frame { height: 50px; border: 2px solid #ccc; background: #fff; flex-shrink: 0; } @media (max-width: 768px) { .term-actions .btn { width: 100%%; } .term-container { height: calc(100vh - 200px); } }</style>"
 "</head><body>"
 "<h3>BPQ32 Node %s</h3>"
 "<form method=post action=/Node/TermClose?%s class='term-actions'>"
@@ -284,15 +284,15 @@ char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize(
 */
 char InputLine[] = "<!DOCTYPE html><html><head><style>"
 "* { margin: 0; padding: 0; box-sizing: border-box; } "
-"body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%; display: flex; align-items: center; } "
-"form { width: 100%; margin: 0; } "
-"#inp { width: 100%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 14px; background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
+"body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%%; display: flex; align-items: center; } "
+"form { width: 100%%; margin: 0; } "
+"#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 14px; background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
 "</style></head><body>"
 "<form name=inputform method=post action=/TermInput?%s>"
 "<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
 "<script>document.inputform.input.focus();</script></form></body></html>";
 
-static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Node %s SYSOP Access</h2>"
 "<h3>This page sets Cookies. Don't continue if you object to this</h3>"
 "<h3>Please enter Callsign and Password to access the Node</h3>"
@@ -302,7 +302,7 @@ static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Mail Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the BBS</h3>"
 "<div class=\"form-container\"><form method=post action=/Mail/Signon?Mail>"
@@ -310,7 +310,7 @@ static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
-static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
 "<h2>BPQ32 Chat Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the Chat Server</h3>"
 "<div class=\"form-container\"><form method=post action=/Chat/Signon?Chat>"
