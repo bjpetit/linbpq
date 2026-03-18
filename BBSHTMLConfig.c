@@ -3094,16 +3094,7 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 		".port-row span{flex:1 1 120px;}"
 		"@media(max-width:768px){.port-row{flex-direction:column;align-items:flex-start;}.port-row input[type=text]{width:100%%;flex:none;}.port-row-header{flex-direction:column;align-items:flex-start;}}"
 		"</style>");
-	Len += sprintf(&Reply[Len], UIHddr);
-	Len += sprintf(&Reply[Len], "<form method=post action=/Mail/UI?%s>"
-		"<div class=form-section>"
-		"<div class=form-row><label>Mailfor Header</label><input type=text value=\"%s\" name=MailFor></div>"
-		"<p class=muted-note>(use \\r to insert newline in message)</p>"
-		"</div>"
-		"<div class=form-section>"
-		"<div class=port-row-header>"
-		"<span class=port-row-label>Enable</span><span class=flex-2-200>Port Path</span><span>Send MailFor</span><span>Send Headers</span><span>Send Empty</span>"
-		"</div>", Key, MailForText);
+	Len += sprintf(&Reply[Len], UIHddr, Key, MailForText);
 
 	for (i = 1; i <= GetNumberofPorts(); i++)
 	{
@@ -3142,7 +3133,7 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 				 (UINull[i])?CHKD:UNC, i);
 	}
 
-	Len += sprintf(&Reply[Len], UITail, Key);
+	Len += sprintf(&Reply[Len], UITail);
 
 	*ReplyLen = Len;
 }
