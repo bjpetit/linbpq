@@ -43,7 +43,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}"
 
 #define COMMON_HEADING_CSS \
-	"h3{text-align:center;margin:0 0 15px;}"
+	"h3{text-align:center;margin:0 0 15px;font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);line-height:1.25;}"
 
 #define COMMON_REDUCED_MOTION_CSS \
 	"@media(prefers-reduced-motion:reduce){" \
@@ -68,7 +68,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border:1px solid var(--border);" \
 	"border-radius:6px;" \
 	"background:var(--surface);" \
-	"font-size:16px;" \
+	"font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);" \
 	"color:var(--text);" \
 	"cursor:pointer;" \
 	"touch-action:manipulation;" \
@@ -95,7 +95,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border-radius:6px;" \
 	"border:1px solid var(--border);" \
 	"color:var(--link);" \
-	"font-size:15px;" \
+	"font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);" \
 	"cursor:pointer;" \
 	"touch-action:manipulation;" \
 	"}" \
@@ -171,7 +171,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".form-row label{" \
 	"flex:1 1 clamp(100px,25%%,150px);" \
 	"font-weight:bold;" \
-	"font-size:14px;" \
+	"font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);" \
 	"padding-top:2px;" \
 	"}" \
 	".form-row input[type=text],.form-row input[type=number],.form-row input[type=password],.form-row select{" \
@@ -179,7 +179,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"padding:8px;" \
 	"border:1px solid var(--border);" \
 	"border-radius:4px;" \
-	"font-size:14px;" \
+	"font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);" \
 	"touch-action:manipulation;" \
 	"min-height:44px;" \
 	"}" \
@@ -196,7 +196,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border-radius:4px;" \
 	"min-height:120px;" \
 	"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;" \
-	"font-size:12px;" \
+	"font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);" \
 	"touch-action:manipulation;" \
 	"}" \
 	".checkbox-group{" \
@@ -231,7 +231,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Lightweight helper classes to replace one-off inline style attributes
 #define COMMON_UTILITY_CSS \
 	".text-center{text-align:center;}" \
-	".muted-note{margin:10px 0 0 0;color:#666;font-size:0.9em;}" \
+	".muted-note{margin:10px 0 0 0;color:#666;font-size:clamp(0.875rem,0.84rem + 0.15vw,1rem);line-height:1.45;}" \
 	".font-normal{font-weight:normal;}" \
 	".inline-label{flex:1 1 100px;font-weight:bold;margin:0;padding-left:10px;}" \
 	".flex-2-200{flex:2 1 200px;}" \
