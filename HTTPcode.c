@@ -146,7 +146,7 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 
 char Tail[] = "</body></html>";
 
-#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%%;border-collapse:collapse;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%%;border-collapse:collapse;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);white-space:nowrap;\" align=center border=1 bgcolor=white>"
 #define HTTP_NODE_TABLE_HEADER_ROW "<tr style=\"background:#f0f0f0;\">"
 #define HTTP_NODE_SORT_CONTROLS "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">" \
 	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
@@ -157,20 +157,20 @@ char Tail[] = "</body></html>";
 	COMMON_CSS_ROOT \
 	COMMON_REDUCED_MOTION_CSS \
 	COMMON_MENU_CSS \
-	"body { font-family: Arial, sans-serif; margin: 0; padding: 12px; background: #f5f6f8; }" \
-	"h1 { text-align: center; margin: 10px 0 18px; }" \
+	"body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); line-height: 1.5; margin: 0; padding: 12px; background: #f5f6f8; }" \
+	"h1 { text-align: center; margin: 10px 0 18px; font-size: clamp(1.375rem,1.1rem + 1vw,2rem); line-height: 1.25; }" \
 	".menu-header { max-width: 1100px; }" \
 	".menu { margin: 20px auto; max-width: 1100px; }" \
-	".menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
+	".menu td, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); }" \
 	".menu td:hover, .menu .btn:hover { background: #e9ecef; }" \
 	".dropdown { position: relative; display: inline-block; }" \
 	".dropdown-content { display: none; position: absolute; left: 50%%; transform: translateX(-50%%); background-color: #fff; min-width: 220px; border: 1px solid #ccc; border-radius: 6px; padding: 8px; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }" \
-	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; }" \
+	".dropdown-content a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; width: 100%%; margin-top: 6px; padding: 8px 12px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); }" \
 	".dropdown-content a:hover { background: #e9ecef; }" \
 	".dropdown-content .btn { width: 100%%; margin-top: 6px; }" \
 	".dropdown-content form { margin: 0; }" \
-	".dropdown-content label { display: block; margin-bottom: 8px; }" \
-	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; }" \
+	".dropdown-content label { display: block; margin-bottom: 8px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); }" \
+	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); min-height: 44px; }" \
 	".dropdown-content input[type='submit'] { width: 100%%; margin-top: 6px; }" \
 	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 6px; }" \
 	".mgmt-section.show { display: block; }" \
