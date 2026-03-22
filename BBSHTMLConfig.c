@@ -190,7 +190,7 @@ COMMON_TABLE_CSS
 COMMON_FORM_CSS
 COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
-".status-grid{width:100%%;border-collapse:collapse;font-family:monospace;white-space:nowrap;}"
+".status-grid{width:100%%;border-collapse:collapse;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;white-space:nowrap;}"
 ".status-grid{background:#fff;color:#000;}"
 ".status-grid thead tr{background:#f0f0f0;}"
 ".status-grid th,.status-grid td{padding:10px;border:1px solid var(--border);color:#000;}"
@@ -323,7 +323,7 @@ static char MailDetailCSS[] =
 ".form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 20px;margin:16px 0;}"
 ".form-field{display:flex;flex-direction:column;gap:6px;}"
 ".form-field label{font-weight:600;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;}"
-".form-field input,.form-field select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;transition:border-color 0.15s ease,box-shadow 0.15s ease;min-height:44px;font-family:monospace;}"
+".form-field input,.form-field select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;transition:border-color 0.15s ease,box-shadow 0.15s ease;min-height:44px;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}"
 ".form-field input:focus,.form-field select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1);}"
 ".form-row-full{grid-column:1/-1;}"
 "input[readonly]{background:#f9f9f9;color:#666;cursor:not-allowed;}"
@@ -434,7 +434,7 @@ SUBMIT_BUTTON_CSS
 static char MsgEditPage[] = "<style>"
 COMMON_CSS_VARIABLES
 "h3{text-align:center;margin-bottom:30px;}"
-"textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family:monospace;font-size:12px;line-height:1.4;resize:vertical;}"
+"textarea{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;touch-action:manipulation;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;font-size:12px;line-height:1.4;resize:vertical;}"
 SUBMIT_BUTTON_CSS
 "@media(max-width:768px){textarea{font-size:13px;min-height:200px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
 "</style><h3>Edit Message</h3>"

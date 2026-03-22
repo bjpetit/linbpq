@@ -1047,7 +1047,7 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-eq
 		"</div></span>";
 */
 char WebProcTemplate[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0>"
-		"<style>body { font-family: monospace; margin: 10px; } h2 { text-align: center; margin-bottom: 0.2em; } table { border-collapse: collapse; margin: 20px auto; width: 100%; max-width: 700px; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%; max-width: 600px; display: block; margin: 20px auto; } .dropdown { position: relative; display: inline-block; } .dropbtn { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; } .dropdown-content { display: none; position: absolute; background-color: #f9f9f9; min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); padding: 12px 16px; z-index: 1; } .dropdown-content a { color: black; padding: 8px 0; display: block; text-decoration: none; } .dropdown-content a:hover { background-color: #e9ecef; } .dropdown:hover .dropdown-content { display: block; }</style>"
+		"<style>body { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; margin: 10px; } h2 { text-align: center; margin-bottom: 0.2em; } table { border-collapse: collapse; margin: 20px auto; width: 100%; max-width: 700px; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%; max-width: 600px; display: block; margin: 20px auto; } .dropdown { position: relative; display: inline-block; } .dropbtn { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; } .dropdown-content { display: none; position: absolute; background-color: #f9f9f9; min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); padding: 12px 16px; z-index: 1; } .dropdown-content a { color: black; padding: 8px 0; display: block; text-decoration: none; } .dropdown-content a:hover { background-color: #e9ecef; } .dropdown:hover .dropdown-content { display: block; }</style>"
 		"<link rel='stylesheet' href='webproc.css'>\r\n"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
@@ -1097,7 +1097,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);

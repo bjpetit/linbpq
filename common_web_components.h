@@ -195,7 +195,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border:1px solid var(--border);" \
 	"border-radius:4px;" \
 	"min-height:120px;" \
-	"font-family:monospace;" \
+	"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;" \
 	"font-size:12px;" \
 	"touch-action:manipulation;" \
 	"}" \

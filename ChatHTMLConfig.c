@@ -171,7 +171,7 @@ char ChatPage[] = "<html><head><meta charset='UTF-8'><meta name='viewport' conte
 
 
 static char LostSession[] = "<html><body>"
-"<form class=text-center style=\"font-family: monospace;\" method=post action=/Chat/Lost?%s>"
+"<form class=text-center style=\"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;\" method=post action=/Chat/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
 "<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
 
@@ -667,7 +667,7 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		".chat-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 0 5px rgba(0,0,0,0.08);padding:10px;min-width:0;}"
 		".chat-section h4{margin:4px 0 10px 0;font-size:16px;text-align:center;}"
 		".chat-section-wide{grid-column:1 / -1;}"
-		".chat-grid{width:100%%;border-collapse:collapse;font-family:monospace;white-space:nowrap;}"
+		".chat-grid{width:100%%;border-collapse:collapse;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;white-space:nowrap;}"
 		".chat-grid{background:#fff;color:#000;}"
 		".chat-grid thead tr{background:#f0f0f0;}"
 		".chat-grid th,.chat-grid td{padding:8px;border:1px solid var(--border);text-align:left;color:#000;}"

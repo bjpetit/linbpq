@@ -1114,7 +1114,7 @@ static int RestartTNC(struct TNCINFO * TNC)
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<title>FLDigi Status</title><style>body { font-family: monospace; margin: 10px; } h2 { text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%; max-width: 600px; display: block; margin: 20px auto; }</style>"
+		"<title>FLDigi Status</title><style>body { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; margin: 10px; } h2 { text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%; max-width: 600px; display: block; margin: 20px auto; }</style>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"

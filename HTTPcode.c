@@ -146,7 +146,7 @@ char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeInd
 
 char Tail[] = "</body></html>";
 
-#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%%;border-collapse:collapse;font-family:monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
+#define HTTP_NODE_TABLE_OPEN "<table style=\"width:100%%;border-collapse:collapse;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;white-space:nowrap;\" align=center border=1 bgcolor=white>"
 #define HTTP_NODE_TABLE_HEADER_ROW "<tr style=\"background:#f0f0f0;\">"
 #define HTTP_NODE_SORT_CONTROLS "<div style=\"text-align:center;margin:20px 0;\"><form method=get action=/Node/Nodes.html style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;\">" \
 	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
@@ -260,7 +260,7 @@ char TermOutput[] = "<!DOCTYPE html><html><head>"
 "<meta http-equiv=pragma content=no-cache>"
 "<meta http-equiv=expires content=0>" 
 "<meta http-equiv=refresh content=2>"
-"<style>body { margin: 0; padding: 8px; background: #f6f7f8; font-family: monospace; font-size: 14px; color: #1f2937; } #Text div { %s }</style>"
+"<style>body { margin: 0; padding: 8px; background: #f6f7f8; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: 14px; color: #1f2937; } #Text div { %s }</style>"
 "<script type=\"text/javascript\">\r\n"
 "function ScrollOutput()\r\n"
 "{window.scrollBy(0,document.body.scrollHeight)}</script>"
@@ -268,7 +268,7 @@ char TermOutput[] = "<!DOCTYPE html><html><head>"
 "<div>";
 
 
-// font-family:monospace;background-color:black;color:lawngreen;font-size:12px
+// font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;background-color:black;color:lawngreen;font-size:12px
 
 char TermOutputTail[] = "</div><script type=\"text/javascript\">\r\nsetTimeout(ScrollOutput, 1)</script></body></html>";
 
@@ -287,7 +287,7 @@ char InputLine[] = "<!DOCTYPE html><html><head><style>"
 "* { margin: 0; padding: 0; box-sizing: border-box; } "
 "body { background: #f6f7f8; font-family: Arial, sans-serif; padding: 5px; height: 100%%; display: flex; align-items: center; } "
 "form { width: 100%%; margin: 0; } "
-"#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 14px; background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
+"#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: 14px; background: #fff; color: #1f2937; overflow: hidden; white-space: nowrap; }"
 "</style></head><body>"
 "<form name=inputform method=post action=/TermInput?%s>"
 "<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
@@ -328,7 +328,7 @@ static char MailLostSession[] = "<html><head><meta name=\"viewport\" content=\"w
 
 static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
 "<title>Edit Config</title></head><body background=/background.jpg>"
-"<form style=\"font-family: monospace;  text-align: center;\"method=post action=CFGSave?%s>"
+"<form style=\"font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;  text-align: center;\"method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
 
@@ -3722,7 +3722,7 @@ doHeader:
 				strlop(Alias, ' ');
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen],
-					"<h3 align=center>Info for Node %s:%s</h3><p style=font-family:monospace align=center>", Alias, Context);
+					"<h3 align=center>Info for Node %s:%s</h3><p style=font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;align=center>", Alias, Context);
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<table border=1 bgcolor=white><tr><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr>");	
 
@@ -3733,7 +3733,7 @@ doHeader:
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<h3 align=center>Neighbours</h3>");
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], 
-					"<table border=1 style=font-family:monospace align=center bgcolor=white>"
+					"<table border=1 style=font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;align=center bgcolor=white>"
 					"<tr><td> </td><td> Qual </td><td> Obs </td><td> Port </td><td> Call </td></tr>");	
 
 				NRRoute = &Dest->NRROUTE[0];
@@ -3938,7 +3938,7 @@ doHeader:
 				time_t NOW = time(NULL);
 				
 				char AXIPHeader[] =
-					"<table align='center' bgcolor='ffffff' border=2 cellpadding=10 cellspacing=2 style=font-family:monospace>"
+					"<table align='center' bgcolor='ffffff' border=2 cellpadding=10 cellspacing=2 style=font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;>"
 					"<tr><td align='center'>AXIP Up</td><td align='center'>AXIP Down</td></tr><tr><td valign='top'>%s";
 				
 
@@ -4427,7 +4427,7 @@ int StatusProc(char * Buff)
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<head><title>Stream Status</title></head><body>");
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; font-family: monospace; align=center \" border=1 cellpadding=1 cellspacing=0>");
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; align=center \" border=1 cellpadding=1 cellspacing=0>");
 	Len += sprintf(&Buff[Len], "<tr><th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
 	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
 	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th>");
@@ -4865,7 +4865,7 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"<head><title>Rigcontrol</title></head>\r\n"
 		"<style type=text/css>form{margin:0px; padding:0px; display:inline;}</style>"
 		"<body height: 580px;><h3>Rigcontrol</h3>\r\n"
-		"<table style=\"text-align: left; width: 580px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2><tr>\r\n"
+		"<table style=\"text-align: left; width: 580px; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2><tr>\r\n"
 		"<th width=90px>Radio</th>\r\n"
 		"<th width=90px>Freq</th>\r\n"
 		"<th width=90px>Mode</th>\r\n"
