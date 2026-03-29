@@ -1,6 +1,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include "common_web_components.h"
 
 #ifndef WIN32
 
@@ -527,71 +528,123 @@ unsigned char aiswhite_png[] = {
   0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
 };
 unsigned int aiswhite_png_len = 227;
+
+// APRS page CSS - uses single % (not for printf/snprintf format strings)
+#define APRS_CSS \
+	":root{--bg:#f4f4f4;--surface:#fff;--primary:#007bff;--border:#ccc;--text:#1f2937;--link:#1f2937;}" \
+	"*{box-sizing:border-box;}" \
+	"body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);-webkit-font-smoothing:antialiased;}" \
+	"h1,h2,h3{text-align:center;margin:0.5em 0;}" \
+	"@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}" \
+	".menu-header{display:none;max-width:980px;margin:0 auto 10px;}" \
+	".menu-toggle{width:100%;min-height:44px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);color:var(--text);cursor:pointer;touch-action:manipulation;font-weight:500;}" \
+	".menu-toggle:active{background:#e9ecef;}" \
+	".menu{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;max-width:980px;margin:0 auto 16px;}" \
+	".menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);text-decoration:none;border-radius:6px;border:1px solid var(--border);color:var(--link);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;touch-action:manipulation;}" \
+	".menu a:hover{background:#e9ecef;}" \
+	".menu a:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}" \
+	".menu a:active{background:black;color:white;}" \
+	"@media(max-width:768px){" \
+	".menu-header{display:block;}" \
+	".menu{display:none;flex-direction:column;align-items:stretch;gap:8px;}" \
+	".menu.menu-open{display:flex;}" \
+	".menu a{width:100%;text-align:center;min-height:48px;}" \
+	"}" \
+	".table-wrap{width:100%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
+	".aprs-station-table{border-collapse:collapse;font-family:Arial,sans-serif;}" \
+	".aprs-station-table th,.aprs-station-table td{border:1px solid #888;padding:6px 8px;}" \
+	".aprs-station-table th{background:#f0e9d2;text-align:left;}" \
+	".aprs-station-table tbody tr{background:#FFFFCC;}" \
+	".aprs-station-table tbody tr:nth-child(even){background:#f0efbf;}" \
+	".aprs-weather-table{border-collapse:collapse;margin:0 auto 12px;}" \
+	".aprs-weather-table th,.aprs-weather-table td{border:1px solid var(--border);padding:6px 10px;}" \
+	".aprs-weather-table th{background:#f0f0f0;}" \
+	".aprs-map{width:100%;max-width:600px;height:500px;border:0;display:block;margin:10px auto;}" \
+	".aprs-note{text-align:center;font-style:italic;margin:8px 0;}" \
+	".aprs-station-title{text-align:center;font-size:1.2rem;margin:12px 0;}" \
+	".aprs-detail{text-align:center;margin:8px 0;}" \
+	".aprs-lastposit{background:#f8f8f8;border:1px solid var(--border);border-radius:4px;padding:8px 12px;max-width:800px;margin:10px auto;word-break:break-word;}"
+
+#define APRS_PAGE_HEAD_REFRESH \
+	"<!DOCTYPE html>" \
+	"<html lang=\"en\">" \
+	"<head>" \
+	"<meta charset=\"UTF-8\">" \
+	"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">" \
+	"<meta http-equiv=\"cache-control\" content=\"no-cache\">" \
+	"<meta http-equiv=\"pragma\" content=\"no-cache\">" \
+	"<meta http-equiv=\"expires\" content=\"0\">" \
+	"<meta http-equiv=\"refresh\" content=\"300\">" \
+	"<title>##MY_CALLSIGN##'s BPQ32 APRS Web Server</title>" \
+	"<style>" APRS_CSS "</style>" \
+	"<script>" COMMON_MENU_JAVASCRIPT "</script>" \
+	"</head>" \
+	"<body>" \
+	"<div style=\"max-width:1100px;margin:0 auto;padding:0 10px;\">"
+
+#define APRS_PAGE_HEAD_STATIC \
+	"<!DOCTYPE html>" \
+	"<html lang=\"en\">" \
+	"<head>" \
+	"<meta charset=\"UTF-8\">" \
+	"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">" \
+	"<title>##MY_CALLSIGN##'s BPQ32 APRS Web Server</title>" \
+	"<style>" APRS_CSS "</style>" \
+	"<script>" COMMON_MENU_JAVASCRIPT "</script>" \
+	"</head>" \
+	"<body>" \
+	"<div style=\"max-width:1100px;margin:0 auto;padding:0 10px;\">"
+
+#define APRS_LEFT_MENU \
+	"<div class=\"menu-header\">" \
+	"<button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button>" \
+	"</div>" \
+	"<nav id=\"mainMenu\" class=\"menu\">" \
+	"<a href=\"../index.html\">Home</a>" \
+	"<a href=\"all.html?width=7\">All Stations</a>" \
+	"<a href=\"allrf.html\">RF Stations</a>" \
+	"<a href=\"wxall.html?width=7\">All WX Stations</a>" \
+	"<a href=\"wxrf.html\">RF WX Stations</a>" \
+	"<a href=\"mobilesall.html?width=7\">All Mobile Stations</a>" \
+	"<a href=\"mobilesrf.html\">RF Mobile Stations</a>" \
+	"<a href=\"obj.html?width=7\">All Objects</a>" \
+	"<a href=\"objrf.html\">RF Objects</a>" \
+	"<a href=\"info.html\">Information</a>" \
+	"<a href=\"../nodemenu.html\">Node Pages</a>" \
+	"</nav>"
+
+#define APRS_CONTENT_OPEN \
+	"<h1>##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>"
+
+#define APRS_PAGE_OPEN_REFRESH APRS_PAGE_HEAD_REFRESH APRS_LEFT_MENU APRS_CONTENT_OPEN
+#define APRS_PAGE_OPEN_STATIC APRS_PAGE_HEAD_STATIC APRS_LEFT_MENU APRS_CONTENT_OPEN
+
+#define APRS_STATION_TABLE_OPEN "<div class=\"table-wrap\"><table class=\"aprs-station-table\">"
+#define APRS_STATION_TABLE_OPEN_NL "<div class=\"table-wrap\"><table class=\"aprs-station-table\">\r\n"
+#define APRS_WEATHER_TABLE_OPEN "<div class=\"table-wrap\"><table class=\"aprs-weather-table\">\r\n"
+
 char * get_info_call()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
-
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=\"center\"><font size=\"+2\">Information about\r\n"
-		"<a href=\"http://www.qrz.com/db/##CALLSIGN_NOSSID##\">##CALLSIGN##</a></font><br>\r\n"
+		"<p class=\"aprs-station-title\">Information about\r\n"
+		"<a href=\"http://www.qrz.com/db/##CALLSIGN_NOSSID##\">##CALLSIGN##</a><br>\r\n"
 		"Click the callsign to look it up on qrz.com<br>\r\n"
-		"<font size=\"+1\">Location: ##LOCATION##<br>\r\n"
+		"Location: ##LOCATION##<br>\r\n"
 		"The bearing from ##MY_CALLSIGN## to ##CALLSIGN## is\r\n"
-		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</font></p>\r\n"
+		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</p>\r\n"
 
-		"<table align=\"center\">\r\n"
-		"<tr>\r\n"
-		"<td><font size=\"+1\">Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</font></td>\r\n"
-		"</tr>\r\n"
-		"</table>\r\n"
+		"<div class=\"aprs-lastposit\"><p>Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</p></div>\r\n"
 
-		"<p align=center><font size=+1>Status: ##STATUS_TEXT##<br>\r\n"
-		"Last heard ##LAST_HEARD## ago</font></p>\r\n"
+		"<p class=\"aprs-detail\">Status: ##STATUS_TEXT##<br>\r\n"
+		"Last heard ##LAST_HEARD## ago</p>\r\n"
 
-		"<p align=center><iframe width=600 height=500 src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
+		"<iframe class=\"aprs-map\" src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
 
-		"</table>\r\n"
-		"</body>\r\n"
-		"</html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -599,70 +652,26 @@ char * get_info_call()
 char * get_infomobile_call()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
-
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=\"center\"><font size=\"+2\">Information about\r\n"
-		"<a href=\"http://www.qrz.com/db/##CALLSIGN_NOSSID##\">##CALLSIGN##</a></font><br>\r\n"
+		"<p class=\"aprs-station-title\">Information about\r\n"
+		"<a href=\"http://www.qrz.com/db/##CALLSIGN_NOSSID##\">##CALLSIGN##</a><br>\r\n"
 		"Click the callsign to look it up on qrz.com<br>\r\n"
-		"<font size=\"+1\">Location: ##LOCATION##<br>\r\n"
+		"Location: ##LOCATION##<br>\r\n"
 		"The bearing from ##MY_CALLSIGN## to ##CALLSIGN## is\r\n"
-		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</font></p>\r\n"
+		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</p>\r\n"
 
-		"<table align=\"center\">\r\n"
-		"<tr>\r\n"
-		"<td><font size=\"+1\">Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</font></td>\r\n"
-		"</tr>\r\n"
-		"</table>\r\n"
+		"<div class=\"aprs-lastposit\"><p>Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</p></div>\r\n"
 
-		"<p align=center><font size=+1>Course ##COURSE## degrees, speed ##SPEED_MPH##mph<br>"
+		"<p class=\"aprs-detail\">Course ##COURSE## degrees, speed ##SPEED_MPH##mph<br>"
 		"Status: ##STATUS_TEXT##<br>"
+		"Last heard ##LAST_HEARD## ago</p>\r\n"
 
-		"Last heard ##LAST_HEARD## ago</font></p>\r\n"
+		"<iframe class=\"aprs-map\" src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
 
-		"<p align=center><iframe width=600 height=500 src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
-
-		"</table>\r\n"
-		"</body>\r\n"
-		"</html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -670,69 +679,24 @@ char * get_infomobile_call()
 char * get_infoobj_call()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-station-title\">Information about Object ##CALLSIGN##</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=center><font size=+2>Information about Object ##CALLSIGN##</font><br><br>"
-
-		"<font size=\"+1\">Location: ##LOCATION##<br>\r\n"
-
+		"<p class=\"aprs-detail\">Location: ##LOCATION##<br>\r\n"
 		"The bearing from ##MY_CALLSIGN## to ##CALLSIGN## is\r\n"
-		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</font></p>\r\n"
+		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</p>\r\n"
 
-		"<table align=\"center\">\r\n"
-		"<tr>\r\n"
-		"<td><font size=\"+1\">Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</font></td>\r\n"
-		"</tr>\r\n"
-		"</table>\r\n"
+		"<div class=\"aprs-lastposit\"><p>Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</p></div>\r\n"
 
-		"<p align=center><font size=+1>Last Report: ##LASTPACKET##<br>"
+		"<p class=\"aprs-detail\">Last Report: ##LASTPACKET##<br>"
+		"Last heard ##LAST_HEARD## ago</p>\r\n"
 
-		"Last heard ##LAST_HEARD## ago</font></p>\r\n"
+		"<iframe class=\"aprs-map\" src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
 
-		"<p align=center><iframe width=600 height=500 src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
-
-		"</table>\r\n"
-		"</body>\r\n"
-		"</html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -741,65 +705,24 @@ char * get_infoobj_call()
 char * get_infowx_call()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
-
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=\"center\"><font size=\"+2\">Information about\r\n"
-		"<a href=\"http://www.qrz.com/db/##CALLSIGN_NOSSID##\">##CALLSIGN##</a></font><br>\r\n"
+		"<p class=\"aprs-station-title\">Information about\r\n"
+		"<a href=\"http://www.qrz.com/db/##CALLSIGN_NOSSID##\">##CALLSIGN##</a><br>\r\n"
 		"Click the callsign to look it up on qrz.com<br>\r\n"
-		"<font size=\"+1\">Location: ##LOCATION##<br>\r\n"
+		"Location: ##LOCATION##<br>\r\n"
 		"The bearing from ##MY_CALLSIGN## to ##CALLSIGN## is\r\n"
-		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</font></p>\r\n"
+		"##BEARING## degrees, the distance is ##DISTANCE## ##MILES_KM##</p>\r\n"
 
-		"<table align=\"center\">\r\n"
-		"<tr>\r\n"
-		"<td><font size=\"+1\">Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</font></td>\r\n"
-		"</tr>\r\n"
-		"</table>\r\n"
+		"<div class=\"aprs-lastposit\"><p>Last posit: ##FRAME_HEADER##<br>##FRAME_INFO##</p></div>\r\n"
 
-		"<p align=center><font size=+1>Status: ##STATUS_TEXT##<br>\r\n"
-		"Last heard ##LAST_HEARD## ago</font></p>\r\n"
+		"<p class=\"aprs-detail\">Status: ##STATUS_TEXT##<br>\r\n"
+		"Last heard ##LAST_HEARD## ago</p>\r\n"
 
-		"<p align=center><font size=+1>Weather Data</font></p>\r\n"
-		"<table align=center border=2 bgcolor=white>\r\n"
+		"<h3>Weather Data</h3>\r\n"
+		APRS_WEATHER_TABLE_OPEN
 		"<tr><td><b>Measurement</b></td><td><b>Imperial</b></td></tr>\r\n"
 		"<tr><td>Wind speed</td><td>##WIND_SPEED_MPH## mph</td></tr>\r\n"
 		"<tr><td>Wind gust</td><td>##WIND_GUST_MPH## mph</td></tr>\r\n"
@@ -810,13 +733,11 @@ char * get_infowx_call()
 		"<td>Rain last hour</td><td>##RAIN_HOUR_IN##\"</td></tr>\r\n"
 		"<tr><td>Rain today</td><td>##RAIN_TODAY_IN##\"</td></tr>\r\n"
 		"<tr><td>Rain last 24 hours</td><td>##RAIN_24_IN##\"</td></tr>\r\n"
-		"</table>\r\n"
+		"</table></div>\r\n"
 
-		"<p align=center><iframe width=600 height=500 src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
+		"<iframe class=\"aprs-map\" src=\"https://maps.google.com/?q=##MAP_LAT_LON##&ll=##MAP_LAT_LON##&z=10&output=embed\"></iframe>"
 
-		"</table>\r\n"
-		"</body>\r\n"
-		"</html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -825,56 +746,18 @@ char * get_infowx_call()
 char * get_all()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>All Stations</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the stations heard in the past ##EXPIRE_TIME## minutes,<br>both on RF and on the internet.</p>"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<h2 align=center>All Stations</h2>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=center><font size=4>The following is a list of all the stations heard in the past ##EXPIRE_TIME## minutes,<BR>both on RF and on the internet.</font></p>"
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center border=3 cellpadding=3 bgcolor=\"#FFFFCC\">"
-		"<tr>##STATION_TABLE##</tr></table>\r\n"
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		APRS_STATION_TABLE_OPEN
+		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -882,56 +765,18 @@ char * get_all()
 char * get_mobileall()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>All Mobile Stations</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the mobile stations heard in the past ##EXPIRE_TIME## minutes,<br>both on RF and on the internet.</p>"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<h2 align=center>All Mobile Stations</h2>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=center><font size=4>The following is a list of all the mobile stations heard in the past ##EXPIRE_TIME## minutes,<BR>both on RF and on the internet.</font></p>"
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center border=3 cellpadding=3 bgcolor=\"#FFFFCC\">"
-		"<tr>##STATION_TABLE##</tr></table>\r\n"
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		APRS_STATION_TABLE_OPEN
+		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -939,56 +784,18 @@ char * get_mobileall()
 char * get_obj()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>All Objects</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the objects heard in the past ##EXPIRE_TIME## minutes,<br>both on RF and on the internet.</p>"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<h2 align=center>All Objects</h2>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=center><font size=4>The following is a list of all the objects heard in the past ##EXPIRE_TIME## minutes,<BR>both on RF and on the internet.</font></p>"
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center border=3 cellpadding=3 bgcolor=\"#FFFFCC\">"
-		"<tr>##STATION_TABLE##</tr></table>\r\n"
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		APRS_STATION_TABLE_OPEN
+		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -997,46 +804,9 @@ char * get_obj()
 char * get_noinfo()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
-
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
-
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
-
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
-		"<p align=center><font size=+2>No information is available for ##CALLSIGN##</font></p>\r\n"
-		"</table></body></html>\r\n";
+		APRS_PAGE_OPEN_REFRESH
+		"<p>No information is available for ##CALLSIGN##</p>\r\n"
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -1044,56 +814,18 @@ char * get_noinfo()
 char * get_wxall()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>All WX Stations</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the WX stations heard in the past ##EXPIRE_TIME## minutes,<br>both on RF and on the internet.</p>"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<h2 align=center>All WX Stations</h2>\r\n"
-
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
-
-		"<p align=center><font size=4>The following is a list of all the WX stations heard in the past ##EXPIRE_TIME## minutes,<BR>both on RF and on the internet.</font></p>"
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center border=3 cellpadding=3 bgcolor=\"#FFFFCC\">"
-		"<tr>##STATION_TABLE##</tr></table>\r\n"
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		APRS_STATION_TABLE_OPEN
+		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -1101,63 +833,29 @@ char * get_wxall()
 char * get_info()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_STATIC
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>Information</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
-
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
-
-		"<h2 align=center>Information</h2>\r\n"
-
-		"<table align=center width=80%>\r\n"
-		"<tr><td>\r\n"
-		"<p><font size=+1>BPQ-WebServer is a simple plug-in web server for BPQ32. It will dynamically serve a selection of pages created from the data in BPQ32. The pages currently available are -</font></p>\r\n"
+		"<div style=\"max-width:80%;margin:0 auto\">\r\n"
+		"<p>BPQ-WebServer is a simple plug-in web server for BPQ32. It will dynamically serve a selection of pages created from the data in BPQ32. The pages currently available are -</p>\r\n"
 
 		"<ul>"
-		"	<li><font size=+1>index.html - return to the home page</font></li>\r\n"
-		"	<li><font size=+1>all.html - a list of all the stations heard</font></li>\r\n"
-		"	<li><font size=+1>allrf.html - a list of all stations heard on RF</font></li>\r\n"
-		"	<li><font size=+1>mobilesall.html - a list of all mobiles stations heard</font></li>\r\n"
-		"	<li><font size=+1>mobilesrf.html - a list of all the mobile stations heard on RF</font></li>\r\n"
-		"	<li><font size=+1>wxall.html - a list of all WX stations heard</font></li>\r\n"
-		"	<li><font size=+1>wxrf.html - a list of all the WX stations heard on RF</font></li>\r\n"
-		"	<li><font size=+1>obj.html - a list of all objects heard</font></li>\r\n"
-		"	<li><font size=+1>objrf.html - a list of all objects heard on RF</font></li>\r\n"
+		"	<li>index.html - return to the home page</li>\r\n"
+		"	<li>all.html - a list of all the stations heard</li>\r\n"
+		"	<li>allrf.html - a list of all stations heard on RF</li>\r\n"
+		"	<li>mobilesall.html - a list of all mobiles stations heard</li>\r\n"
+		"	<li>mobilesrf.html - a list of all the mobile stations heard on RF</li>\r\n"
+		"	<li>wxall.html - a list of all WX stations heard</li>\r\n"
+		"	<li>wxrf.html - a list of all the WX stations heard on RF</li>\r\n"
+		"	<li>obj.html - a list of all objects heard</li>\r\n"
+		"	<li>objrf.html - a list of all objects heard on RF</li>\r\n"
 		"</ul>"
 
-		"<p><font size=+1>The dynamic pages use templates, so the user can make them as pretty or as simple as he wishes, including using graphics.</font></p>"
+		"<p>The dynamic pages use templates, so the user can make them as pretty or as simple as he wishes, including using graphics.</p>"
 
-		"<p><font size=+1>Besides serving dynamic pages, BPQ-WebServer can also serve other pages that you may wish to make available. For example, this page is made available simply by putting it in BPQ-WebServer's HTML folder, and adding a link to it to the other pages.</font></p>"
-		"</td></tr></table></table></body></html>\r\n";
+		"<p>Besides serving dynamic pages, BPQ-WebServer can also serve other pages that you may wish to make available. For example, this page is made available simply by putting it in BPQ-WebServer's HTML folder, and adding a link to it to the other pages.</p>"
+		"</div></div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -1165,68 +863,25 @@ char * get_info()
 char * get_allrf()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>RF Stations</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the stations heard on RF in the past ##EXPIRE_TIME## minutes.</p>"
 
-		"<h2 align=center>RF Stations</h2>\r\n"
+		"<p class=\"aprs-note\">'*' after a callsign means that it was heard via a digi</p>"
 
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
+		"<p>The list only includes callsigns heard on RF, direct or via digipeaters.<br>It does not include callsigns heard on the internet,<br>or heard as third-party RF traffic via IGATEs.</p>"
 
-		"<p align=center><font size=4>The following is a list of all the stations heard on RF in the past ##EXPIRE_TIME## minutes.</font></p>"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<p align=center><font size=4>'*' after a callsign means that it was heard via a digi</font></p>"
+		APRS_STATION_TABLE_OPEN_NL
+		"<tr><th>Callsign</th><th>Symbol</th><th>Location</th><th>##MILES_KM##</th><th>Bearing</th><th>Last heard</th></tr>\r\n"
+		"##STATION_TABLE##</table></div>\r\n"
 
-		"<table width=80% align=center>"
-		"<tr>"
-		"<td align=center><font size=4>The list only includes callsigns heard on RF, direct or via digipeaters.<br> It does not include callsigns heard on the internet,<br> or heard as third-party RF traffic via IGATEs.</font></td>"
-		"</tr>"
-		"</table>"
-
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center cellpadding=3 border=3 bgcolor=\"#FFFFCC\">\r\n"
-		"<tr><td align=left><b>Callsign</b></td><td align=left><b>Symbol</b></td><td align=center><b>Location</b></td>\r\n"
-		"<td align=right><b>##MILES_KM##</b></td><td align=right><b>Bearing</b></td><td align=left><b>Last heard</b></td></tr>\r\n"
-		"##STATION_TABLE##</table>\r\n"
-
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -1234,68 +889,23 @@ char * get_allrf()
 char * get_mobilesrf()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>Mobile RF Stations</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the mobile stations heard on RF in the past ##EXPIRE_TIME## minutes.</p>"
 
-		"<h2 align=center>Mobile RF Stations</h2>\r\n"
+		"<p class=\"aprs-note\">'*' after a callsign means that it was heard via a digi</p>"
 
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<p align=center><font size=4>The following is a list of all the mobile stations heard on RF in the past ##EXPIRE_TIME## minutes.</font></p>"
+		APRS_STATION_TABLE_OPEN_NL
+		"<tr><th>Callsign</th><th>Symbol</th><th>Location</th><th>##MILES_KM##</th><th>Bearing</th><th>Last heard</th></tr>\r\n"
+		"##STATION_TABLE##</table></div>\r\n"
 
-		"<p align=center><font size=4>'*' after a callsign means that it was heard via a digi</font></p>"
-
-		//		"<table width=80% align=center>"
-		//		"<tr>"
-		//		"<td align=center><font size=4>The list only includes callsigns heard on RF, direct or via digipeaters.<br> It does not include callsigns heard on the internet,<br> or heard as third-party RF traffic via IGATEs.</font></td>"
-		//		"</tr>"
-		//		"</table>"
-
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center cellpadding=3 border=3 bgcolor=\"#FFFFCC\">\r\n"
-		"<tr><td align=left><b>Callsign</b></td><td align=left><b>Symbol</b></td><td align=center><b>Location</b></td>\r\n"
-		"<td align=right><b>##MILES_KM##</b></td><td align=right><b>Bearing</b></td><td align=left><b>Last heard</b></td></tr>\r\n"
-		"##STATION_TABLE##</table>\r\n"
-
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -1303,68 +913,23 @@ char * get_mobilesrf()
 char * get_objrf()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>RF Objects</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the objects heard on RF in the past ##EXPIRE_TIME## minutes.</p>"
 
-		"<h2 align=center>RF Objects</h2>\r\n"
+		"<p class=\"aprs-note\">'*' after a callsign means that it was heard via a digi</p>"
 
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<p align=center><font size=4>The following is a list of all the objects heard on RF in the past ##EXPIRE_TIME## minutes.</font></p>"
+		APRS_STATION_TABLE_OPEN_NL
+		"<tr><th>Callsign</th><th>Symbol</th><th>Location</th><th>##MILES_KM##</th><th>Bearing</th><th>Last heard</th></tr>\r\n"
+		"##STATION_TABLE##</table></div>\r\n"
 
-		"<p align=center><font size=4>'*' after a callsign means that it was heard via a digi</font></p>"
-
-		//		"<table width=80% align=center>"
-		//		"<tr>"
-		//		"<td align=center><font size=4>The list only includes callsigns heard on RF, direct or via digipeaters.<br> It does not include callsigns heard on the internet,<br> or heard as third-party RF traffic via IGATEs.</font></td>"
-		//		"</tr>"
-		//		"</table>"
-
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center cellpadding=3 border=3 bgcolor=\"#FFFFCC\">\r\n"
-		"<tr><td align=left><b>Callsign</b></td><td align=left><b>Symbol</b></td><td align=center><b>Location</b></td>\r\n"
-		"<td align=right><b>##MILES_KM##</b></td><td align=right><b>Bearing</b></td><td align=left><b>Last heard</b></td></tr>\r\n"
-		"##STATION_TABLE##</table>\r\n"
-
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
@@ -1372,68 +937,23 @@ char * get_objrf()
 char * get_wxrf()
 {
 	char Msg[] = 
-		"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">"
-		"<html>"
-		"<head>"
-		"<meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\">"
-		"<meta http-equiv=\"cache-control\" content=\"no-cache\">"
-		"<meta http-equiv=\"pragma\" content=\"no-cache\">\r\n"
-		"<meta http-equiv=\"expires\" content=\"0\"> \r\n"
-		"<meta http-equiv=\"refresh\" content=\"300\">\r\n"
-		"<title>##MY_CALLSIGN##'s BPQ32 Web Server</title>\r\n"
-		"</head>\r\n"
+		APRS_PAGE_OPEN_REFRESH
 
-		"<body background=\"Images/clouds.jpg\" bgcolor=\"white\" text=\"black\">\r\n"
+		"<h2>RF WX Stations</h2>\r\n"
 
-		"<table\r\n"
-		"style=\"text-align: left; width: 900; margin-left: auto; margin-right: auto;\"\r\n"
-		"border=\"0\" cellpadding=\"2\" cellspacing=\"2\">\r\n"
-		"<tbody>\r\n"
-		"<tr>\r\n"
-		"<td style=\"vertical-align: top\">\r\n"
-		"<table\r\n"
-		"style=\"text-align: center; width: 170; margin-left: auto; margin-right: auto; background-color: #FFCC99;\"\r\n"
-		"border=\"3\" cellpadding=\"4\" cellspacing=\"2\">\r\n"
-		"<tr><td align=center><a href=../index.html><B>Home</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"all.html?width=7\"><B>All Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"allrf.html\"><B>RF Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxall.html?width=7\"><B>All WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"wxrf.html\"><B>RF WX Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesall.html?width=7\"><B>All Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"mobilesrf.html\"><B>RF Mobile Stations</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"obj.html?width=7\"><B>All Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"objrf.html\"><B>RF Objects</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"info.html\"><B>Information</B></a></td></tr>\r\n"
-		"<tr><td align=\"center\"><a href=\"../nodemenu.html\"><B>Node Pages</B></a></td></tr>\r\n"
-		"</table>\r\n"
-		"</td>\r\n"
+		"<p class=\"aprs-note\">(This page will automatically refresh every five minutes)</p>\r\n"
 
-		"<td style=\"vertical-align: top; width: 730;\">\r\n"
-		"<h1 align=\"center\">##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\r\n"
+		"<p>The following is a list of all the WX stations heard on RF in the past ##EXPIRE_TIME## minutes.</p>"
 
-		"<h2 align=center>RF WX Stations</h2>\r\n"
+		"<p class=\"aprs-note\">'*' after a callsign means that it was heard via a digi</p>"
 
-		"<p align=\"center\"><font size=\"4\">(This page will automatically refresh every five minutes)</font></p>\r\n"
+		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
-		"<p align=center><font size=4>The following is a list of all the WX stations heard on RF in the past ##EXPIRE_TIME## minutes.</font></p>"
+		APRS_STATION_TABLE_OPEN_NL
+		"<tr><th>Callsign</th><th>Symbol</th><th>Location</th><th>##MILES_KM##</th><th>Bearing</th><th>Last heard</th></tr>\r\n"
+		"##STATION_TABLE##</table></div>\r\n"
 
-		"<p align=center><font size=4>'*' after a callsign means that it was heard via a digi</font></p>"
-
-		//		"<table width=80% align=center>"
-		//		"<tr>"
-		//		"<td align=center><font size=4>The list only includes callsigns heard on RF, direct or via digipeaters.<br> It does not include callsigns heard on the internet,<br> or heard as third-party RF traffic via IGATEs.</font></td>"
-		//		"</tr>"
-		//		"</table>"
-
-		"<p align=center><font size=4>There are ##TABLE_COUNT## callsigns in the list,<BR>click a callsign to get an information page for that station.</font></p>"
-
-		"<table align=center cellpadding=3 border=3 bgcolor=\"#FFFFCC\">\r\n"
-		"<tr><td align=left><b>Callsign</b></td><td align=left><b>Symbol</b></td><td align=center><b>Location</b></td>\r\n"
-		"<td align=right><b>##MILES_KM##</b></td><td align=right><b>Bearing</b></td><td align=left><b>Last heard</b></td></tr>\r\n"
-		"##STATION_TABLE##</table>\r\n"
-
-		"</td></tr></tbody></table>\r\n"
-		"</body></html>\r\n";
+		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
 }
