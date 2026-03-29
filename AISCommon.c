@@ -736,7 +736,7 @@ void SaveVesselDataBase()
 
 		if (ShipDataRec->Callsign[0] > 32)			// No point in saving if no vessel details
 		{
-			sprintf(buf,"%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d\n",
+			sprintf(buf,"%d|%s|%s|%d|%d|%d|%d|%d|%ld|%ld|%d|%d\n",
 			ShipDataRec->ID,
 			ShipDataRec->name,
 			ShipDataRec->Callsign,
@@ -745,8 +745,8 @@ void SaveVesselDataBase()
 			ShipDataRec->WidthC,
 			ShipDataRec->WidthD,
 			ShipDataRec->Draft,
-			ShipDataRec->TimeAdded,
-			ShipDataRec->TimeLastUpdated,
+			(long)ShipDataRec->TimeAdded,
+			(long)ShipDataRec->TimeLastUpdated,
 			ShipDataRec->Type,
 			ShipDataRec->Class);
 
@@ -867,7 +867,7 @@ void SaveNavAidDataBase()
 	for (i = 0; i < NavAidCount; i++)
 	{
 		navptr=NavRecords[i];
-		fprintf(file, "%d|%s|%f|%f|%d|%d\n", navptr->ID, navptr->name, navptr->lat, navptr->Long, navptr->TimeAdded, navptr->TimeLastUpdated);
+		fprintf(file, "%d|%s|%f|%f|%ld|%ld\n", navptr->ID, navptr->name, navptr->lat, navptr->Long, (long)navptr->TimeAdded, (long)navptr->TimeLastUpdated);
 	}
 
 	fclose(file);
@@ -1019,7 +1019,7 @@ int DecodeVDM(char *msg)
 
 		NavStatus = val[7] & 15;
 
-		//'Rate of turn           8   50  Char 8 Char 9 bits 0-1±127 (–128 (80 hex) indicates not available, which should be the
+		//'Rate of turn           8   50  Char 8 Char 9 bits 0-1ï¿½127 (ï¿½128 (80 hex) indicates not available, which should be the
 
 		V_ROT = (val[8] << 2)  + (val[9] >> 4);
 
@@ -1032,7 +1032,7 @@ int DecodeVDM(char *msg)
 		'           Indicator. ROTAIS is rounded to the nearest integer value.
 		'           + 127 = turning right at more than 5 deg/30s (No TI available)
 		'           -127 = turning Left at more than 5 deg/30s (No TI available)
-		'           –128 (80 hex) indicates no turn information available (default).
+		'           ï¿½128 (80 hex) indicates no turn information available (default).
 		*/
 
 		if (V_ROT > 128)  V_ROT = -(256 - V_ROT);
@@ -1111,11 +1111,11 @@ int DecodeVDM(char *msg)
 
 		'Message ID             6       Char 1           Identifier for this message 1, 2 or 3
 		'Repeat Indicator       2   8   Char 2 bits 0-1 Used by the repeater to indicate how many times a message has been
-		'                                             repeated. Refer to § 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
+		'                                             repeated. Refer to ï¿½ 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
 		'User ID                30  38  Char 2 bits 2-5, Chars 3 4 5 6  Char 7 bits 0-1 MMSI number
 		'Navigational status    4   42  Char 7 bits 2-5 0 = under way using engine, 1 = at anchor, 2 = not under command,
 
-		'Rate of turn           8   50  Char 8 Char 9 bits 0-1±127 (–128 (80 hex) indicates not available, which should be the
+		'Rate of turn           8   50  Char 8 Char 9 bits 0-1ï¿½127 (ï¿½128 (80 hex) indicates not available, which should be the
 		'SOG                 10     60  Char 9 bits 2-5 char 10 Speed over ground in 1/10 knot steps (0-102.2 knots)
 
 		'Accuracy            1      61  Char 11 bit 0
@@ -1148,7 +1148,7 @@ int DecodeVDM(char *msg)
 
 		//'Message ID             6       Char 1           Identifier for this message 1, 2 or 3
 		//'Repeat Indicator       2   8   Char 2 bits 0-1 Used by the repeater to indicate how many times a message has been
-		//'                                             repeated. Refer to § 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
+		//'                                             repeated. Refer to ï¿½ 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
 		//'User ID                30  38  Char 2 bits 2-5, Chars 3 4 5 6  Char 7 bits 0-1 MMSI number
 
 		//'UTC year               14  52    Char 7 bits 2-5, char 8, char 9 bits 0-3  1 - 9999; 0 = UTC year not available = default.
@@ -1184,8 +1184,8 @@ int DecodeVDM(char *msg)
 		Accuracy = val[14] >> 5;
 
 		//'Long                28     107  char 14 bits 1-5 char 15 16 17 char 18 bitS 0-4
-		//'Longitude 28 Longitude in 1/10 000 minute (±180 degrees, East = positive (as per 2´s
-		//'complement), West = negative(as per 2´s complement);
+		//'Longitude 28 Longitude in 1/10 000 minute (ï¿½180 degrees, East = positive (as per 2ï¿½s
+		//'complement), West = negative(as per 2ï¿½s complement);
 		//'181 degrees (6791AC0 hex) = not available = default)
 
 
@@ -1197,8 +1197,8 @@ int DecodeVDM(char *msg)
 		V_Lon = Conv;
 		V_Lon/= 600000;
 
-		//'Latitude 27 Latitude in 1/10 000 minute (±90 degrees, North = positive (as per 2´s
-		//'complement), South = negative (as per 2´s complement);
+		//'Latitude 27 Latitude in 1/10 000 minute (ï¿½90 degrees, North = positive (as per 2ï¿½s
+		//'complement), South = negative (as per 2ï¿½s complement);
 		//'91 degrees (3412140 hex) = not available = default)
 
 
@@ -1237,15 +1237,15 @@ int DecodeVDM(char *msg)
 		'Spare          10       148       char 24, char 25 bits 0-3  Not used. Should be set to zero.
 		'RAIM-Flag      1        149       char 25 bit 4               RAIM (Receiver Autonomous Integrity Monitoring) flag of Electronic
 		'Position Fixing Device; 0 = RAIM not in use = default; 1 = RAIM in use)
-		'Communication State 19  168       char 25 bit 5, 26 27 28      SOTDMA Communication State as described in § 3.3.7.2.2.
+		'Communication State 19  168       char 25 bit 5, 26 27 28      SOTDMA Communication State as described in ï¿½ 3.3.7.2.2.
 
 
-		'Sync state         2       0 UTC Direct (refer to § 3.1.1.1).
-		'                           1 UTC Indirect (refer to § 3.1.1.2).
-		'                           2 Station is synchronized to a Base station(Base direct) (refer to § 3.1.1.3).
+		'Sync state         2       0 UTC Direct (refer to ï¿½ 3.1.1.1).
+		'                           1 UTC Indirect (refer to ï¿½ 3.1.1.2).
+		'                           2 Station is synchronized to a Base station(Base direct) (refer to ï¿½ 3.1.1.3).
 		'                           3 Station is synchronized to another station based on the highest
 		'                               number of received stations or to another mobile station, which is
-		'                               directly synchronized to a base station (refer to § 3.1.1.3 and § 3.1.1.4).
+		'                               directly synchronized to a base station (refer to ï¿½ 3.1.1.3 and ï¿½ 3.1.1.4).
 		'Slot Time-Out      3           Specifies frames remaining until a new slot is selected.
 		'0 means that this was the last transmission in this slot.
 		'1-7 means that 1 to 7 frames respectively are left until slot change.
@@ -1305,10 +1305,10 @@ int DecodeVDM(char *msg)
 
 		//'Dimensions             30  270 char 41 42 43 44 45
 
-		//'A Bit 21 – Bit 29 0 – 511 9
-		//'B Bit 12 – Bit 20 0 – 511 9
-		//'C Bit 6 – Bit 11 0 - 63 ; 6
-		//'D Bit 0 – Bit 5 0 - 63 ;  6
+		//'A Bit 21 ï¿½ Bit 29 0 ï¿½ 511 9
+		//'B Bit 12 ï¿½ Bit 20 0 ï¿½ 511 9
+		//'C Bit 6 ï¿½ Bit 11 0 - 63 ; 6
+		//'D Bit 0 ï¿½ Bit 5 0 - 63 ;  6
 
 
 		V_LenA = (val[41] << 3) + (val[42] >> 3);
@@ -1356,7 +1356,7 @@ int DecodeVDM(char *msg)
 
 	'Message ID             6       Char 1           Identifier for this message 1, 2 or 3
 	'Repeat Indicator       2   8   Char 2 bits 0-1 Used by the repeater to indicate how many times a message has been
-	'                                             repeated. Refer to § 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
+	'                                             repeated. Refer to ï¿½ 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
 	'User ID                30  38  Char 2 bits 2-5, Chars 3 4 5 6  Char 7 bits 0-1 MMSI number
 	'AIS Version            2   40  char 7 2-3
 	'IMO No                 30  70  char 7 4-5, 8 9 10 11, char 12 0-3
@@ -1366,10 +1366,10 @@ int DecodeVDM(char *msg)
 
 	'Dimensions             30  270 char 41 42 43 44 45
 
-	'A Bit 21 – Bit 29 0 – 511 9
-	'B Bit 12 – Bit 20 0 – 511 9
-	'C Bit 6 – Bit 11 0 - 63 ; 6
-	'D Bit 0 – Bit 5 0 - 63 ;  6
+	'A Bit 21 ï¿½ Bit 29 0 ï¿½ 511 9
+	'B Bit 12 ï¿½ Bit 20 0 ï¿½ 511 9
+	'C Bit 6 ï¿½ Bit 11 0 - 63 ; 6
+	'D Bit 0 ï¿½ Bit 5 0 - 63 ;  6
 
 
 
@@ -1385,10 +1385,10 @@ int DecodeVDM(char *msg)
 	'                   Total 424 bits = 53 bytes = 70 chars  + 4 bits
 
 
-	'A Bit 21 – Bit 29 0 – 511
-	'B Bit 12 – Bit 20 0 – 511
-	'C Bit 6 – Bit 11 0 - 63 ;
-	'D Bit 0 – Bit 5 0 - 63 ;
+	'A Bit 21 ï¿½ Bit 29 0 ï¿½ 511
+	'B Bit 12 ï¿½ Bit 20 0 ï¿½ 511
+	'C Bit 6 ï¿½ Bit 11 0 - 63 ;
+	'D Bit 0 ï¿½ Bit 5 0 - 63 ;
 
 	*/
 
@@ -1401,7 +1401,7 @@ int DecodeVDM(char *msg)
 		Message ID										6	Identifier for Message 18; always 18
 		char 1
 
-		Repeat indicator								2	Used by the repeater to indicate how many times a message has been repeated. 0-3; shall be 0 for Class B “CS” transmissions
+		Repeat indicator								2	Used by the repeater to indicate how many times a message has been repeated. 0-3; shall be 0 for Class B ï¿½CSï¿½ transmissions
 		char 2 bits 0-1
 
 		User ID											30	MMSI number
@@ -1423,7 +1423,7 @@ int DecodeVDM(char *msg)
 
 		Accuracy = ((val[10] & 8) >> 3);
 
-		//Longitude										28	Longitude in 1/10 000 min (±180°, East = positive (as per 2's complement), West = negative (as per 2's complement), 181° (6791AC0 hex) = not available = default)
+		//Longitude										28	Longitude in 1/10 000 min (ï¿½180ï¿½, East = positive (as per 2's complement), West = negative (as per 2's complement), 181ï¿½ (6791AC0 hex) = not available = default)
 		//		Char 10 bits 3-5, 11, 12, 13, 14, 15 bit 0 		
 
 		Conv = ((val[10] & 7) << 25) + (val[11] << 19) + (val[12] << 13) + (val[13] << 7) + (val[14] << 1) + (val[15] >>5); 
@@ -1435,7 +1435,7 @@ int DecodeVDM(char *msg)
 		V_Lon/= 600000;
 
 
-		//Latitude										27	Latitude in 1/10 000 min (±90°, North = positive (as per 2's complement), South = negative (as per 2's complement), 91° (3412140 hex) = not available = default)
+		//Latitude										27	Latitude in 1/10 000 min (ï¿½90ï¿½, North = positive (as per 2's complement), South = negative (as per 2's complement), 91ï¿½ (3412140 hex) = not available = default)
 		//		 Char 15 bits 1-5 16 17 18 19 bits 0-3
 
 		Conv = ((val[15] & 31) << 22) + (val[16]<< 16) + (val[17]<< 10) + (val[18]<< 4) + (val[19] >>2);
@@ -1448,7 +1448,7 @@ int DecodeVDM(char *msg)
 		V_Lat/= 600000;
 
 
-		//COG												12	Course over ground in 1/10° (0-3 599). 3 600 (E10h) = not available = default; 3 601-4 095 shall not be used
+		//COG												12	Course over ground in 1/10ï¿½ (0-3 599). 3 600 (E10h) = not available = default; 3 601-4 095 shall not be used
 		//		 Char 19 bits 4-5 20 21 bit 0-3
 
 		V_COG = ((val[19] & 3) << 10) + (val[20]<< 4) + (val[21] >>2);
@@ -1460,7 +1460,7 @@ int DecodeVDM(char *msg)
 
 		V_Heading = ((val[21] & 3) << 7) + (val[22]<< 1) + (val[23] >>5);
 
-		//Time stamp										6	UTC second when the report was generated by the EPFS (0-59); 60 if time stamp is not available, which shall also be the default value 61, 62 and 63 are not used by the Class B “CS” AIS
+		//Time stamp										6	UTC second when the report was generated by the EPFS (0-59); 60 if time stamp is not available, which shall also be the default value 61, 62 and 63 are not used by the Class B ï¿½CSï¿½ AIS
 		//		Char 23 bits 1-5, 24 bit 0
 
 
@@ -1468,7 +1468,7 @@ int DecodeVDM(char *msg)
 		//		24 bit 1-2
 
 
-		//Class B unit flag								1	0 = Class B SOTDMA unit 1 = Class B “CS” unit
+		//Class B unit flag								1	0 = Class B SOTDMA unit 1 = Class B ï¿½CSï¿½ unit
 		//		24 bit 3
 
 		//Class B display flag							1	0 = No display available; not capable of displaying Message 12 and 14 1 = Equipped with integrated display displaying Message 12 and 14
@@ -1477,7 +1477,7 @@ int DecodeVDM(char *msg)
 		//Class B DSC flag								1	0 = Not equipped with DSC function 1 = Equipped with DSC function (dedicated or time-shared)
 		//		24 bit 5
 
-		//Class B band flag								1	0 = Capable of operating over the upper 525 kHz band of the marine band 1 = Capable of operating over the whole marine band (irrelevant if “Class B Msg22 flag” is 0)
+		//Class B band flag								1	0 = Capable of operating over the upper 525 kHz band of the marine band 1 = Capable of operating over the whole marine band (irrelevant if ï¿½Class B Msg22 flagï¿½ is 0)
 		//		25 bit 0
 
 		//Class B Message 22 flag							1	0 = No frequency management via Message 22 , operating on AIS1, AIS2 only 1 = Frequency management via Message 22
@@ -1492,7 +1492,7 @@ int DecodeVDM(char *msg)
 		//Communication state selector flag				1	1 = ITDMA communication state follows
 		//		25 bit 4
 
-		//Communication state								19	ITDMA communication state; refer to § 4.3.3.5
+		//Communication state								19	ITDMA communication state; refer to ï¿½ 4.3.3.5
 		//		25 bit  5, 26, 27. 28
 
 		//Total number of bits 168 Occupies one-time period (28 chars)
@@ -1514,7 +1514,7 @@ int DecodeVDM(char *msg)
 		Message ID										6	Identifier for Message 18; always 18
 		char 1
 
-		Repeat indicator								2	Used by the repeater to indicate how many times a message has been repeated. 0-3; shall be 0 for Class B “CS” transmissions
+		Repeat indicator								2	Used by the repeater to indicate how many times a message has been repeated. 0-3; shall be 0 for Class B ï¿½CSï¿½ transmissions
 		char 2 bits 0-1
 
 		User ID											30	MMSI number
@@ -1536,7 +1536,7 @@ int DecodeVDM(char *msg)
 
 		Accuracy = ((val[10] & 8) >> 3);
 
-		//Longitude										28	Longitude in 1/10 000 min (±180°, East = positive (as per 2's complement), West = negative (as per 2's complement), 181° (6791AC0 hex) = not available = default)
+		//Longitude										28	Longitude in 1/10 000 min (ï¿½180ï¿½, East = positive (as per 2's complement), West = negative (as per 2's complement), 181ï¿½ (6791AC0 hex) = not available = default)
 		//		Char 10 bits 3-5, 11, 12, 13, 14, 15 bit 0 		
 
 		Conv = ((val[10] & 7) << 25) + (val[11] << 19) + (val[12] << 13) + (val[13] << 7) + (val[14] << 1) + (val[15] >>5); 
@@ -1548,7 +1548,7 @@ int DecodeVDM(char *msg)
 		V_Lon/= 600000;
 
 
-		//Latitude										27	Latitude in 1/10 000 min (±90°, North = positive (as per 2's complement), South = negative (as per 2's complement), 91° (3412140 hex) = not available = default)
+		//Latitude										27	Latitude in 1/10 000 min (ï¿½90ï¿½, North = positive (as per 2's complement), South = negative (as per 2's complement), 91ï¿½ (3412140 hex) = not available = default)
 		//		 Char 15 bits 1-5 16 17 18 19 bits 0-3
 
 		Conv = ((val[15] & 31) << 22) + (val[16]<< 16) + (val[17]<< 10) + (val[18]<< 4) + (val[19] >>2);
@@ -1561,7 +1561,7 @@ int DecodeVDM(char *msg)
 		V_Lat/= 600000;
 
 
-		//COG												12	Course over ground in 1/10° (0-3 599). 3 600 (E10h) = not available = default; 3 601-4 095 shall not be used
+		//COG												12	Course over ground in 1/10ï¿½ (0-3 599). 3 600 (E10h) = not available = default; 3 601-4 095 shall not be used
 		//		 Char 19 bits 4-5 20 21 bit 0-3
 
 		V_COG = ((val[19] & 3) << 10) + (val[20]<< 4) + (val[21] >>2);
@@ -1573,7 +1573,7 @@ int DecodeVDM(char *msg)
 
 		V_Heading = ((val[21] & 3) << 7) + (val[22]<< 1) + (val[23] >>5);
 
-		//Time stamp										6	UTC second when the report was generated by the EPFS (0-59); 60 if time stamp is not available, which shall also be the default value 61, 62 and 63 are not used by the Class B “CS” AIS
+		//Time stamp										6	UTC second when the report was generated by the EPFS (0-59); 60 if time stamp is not available, which shall also be the default value 61, 62 and 63 are not used by the Class B ï¿½CSï¿½ AIS
 		//		Char 23 bits 1-5, 24 bit 0
 
 
@@ -1598,14 +1598,14 @@ int DecodeVDM(char *msg)
 
 
 		//Type of ship and cargo type			8	0 = not available or no ship = default
-		//										1-99 = as defined in § 3.3.8.2.3.2
+		//										1-99 = as defined in ï¿½ 3.3.8.2.3.2
 		//										100-199 = preserved, for regional use
 		//										200-255 = preserved, for future use
 		//		44 bit 5 45 46 bit 0
 
 		V_Type=((val[44] & 1) << 5) + (val[45] << 1) + (val[46] >> 5);  
 
-		//Dimension of ship/reference for position	30	Dimensions of ship in metres and reference point for reported position (see Fig. 17 and § 3.3.8.2.3.3)
+		//Dimension of ship/reference for position	30	Dimensions of ship in metres and reference point for reported position (see Fig. 17 and ï¿½ 3.3.8.2.3.3)
 		//		46 bit 1-5 47 48 49 50 51 bit 0	
 		//		46 bit 1-5, 47 bits 0-3 - 47 bits 4,5 48, 49 bit bit 0 - 49 bits 1-5, 50 bit 0 - 50 1-5, 51 bit 0
 
@@ -1621,7 +1621,7 @@ int DecodeVDM(char *msg)
 		//RAIM-flag									1	RAIM flag of electronic position fixing device; 0 = RAIM not in use = default; 1 = RAIM in use
 		//		51 bit 5
 
-		//DTE											1	Data terminal ready (0 = available 1 = not available = default) (see § 3.3.8.2.3.1)
+		//DTE											1	Data terminal ready (0 = available 1 = not available = default) (see ï¿½ 3.3.8.2.3.1)
 		//		52 bit 0
 		//Spare										5	Not used. Should be set to zero 
 		//		52 bits 1-5
@@ -1643,11 +1643,11 @@ int DecodeVDM(char *msg)
 
 		//'Message ID             6       Char 1           Identifier for this message 21
 		//'Repeat Indicator       2   8   Char 2 bits 0-1 Used by the repeater to indicate how many times a message has been
-		//'                                             repeated. Refer to § 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
+		//'                                             repeated. Refer to ï¿½ 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
 		//'User ID                30  38  Char 2 bits 2-5, Chars 3 4 5 6  Char 7 bits 0-1 MMSI number
 
 
-		//'Type of Aids-to- Navigation   5 43      Char 7 bits 2-5   Char 8 bit 0  0 = not available = default; 1 – 15 = Fixed Aid-to-Navigation; 16 - 31 =
+		//'Type of Aids-to- Navigation   5 43      Char 7 bits 2-5   Char 8 bit 0  0 = not available = default; 1 ï¿½ 15 = Fixed Aid-to-Navigation; 16 - 31 =
 		//'                                               Floating Aid-to-Navigation; refer to appropriate definition set up by IALA;
 		//'                                                refer to Table 34bis.
 
@@ -1682,8 +1682,8 @@ int DecodeVDM(char *msg)
 
 
 		//'Long                               28  192     char 28 bits 2-5 char 29 30 31 32
-		//'Longitude 28 Longitude in 1/10 000 minute (±180 degrees, East = positive (as per 2´s
-		//'complement), West = negative(as per 2´s complement);
+		//'Longitude 28 Longitude in 1/10 000 minute (ï¿½180 degrees, East = positive (as per 2ï¿½s
+		//'complement), West = negative(as per 2ï¿½s complement);
 		//'181 degrees (6791AC0 hex) = not available = default)
 
 		Conv = ((val[28] & 15) << 24) + (val[29] << 18) + (val[30] << 12) + (val[31] << 6) + val[32]; 
@@ -1694,8 +1694,8 @@ int DecodeVDM(char *msg)
 		V_Lon = Conv;
 		V_Lon/= 600000;
 
-		//'Latitude 27 Latitude in 1/10 000 minute (±90 degrees, North = positive (as per 2´s
-		//'complement), South = negative (as per 2´s complement);
+		//'Latitude 27 Latitude in 1/10 000 minute (ï¿½90 degrees, North = positive (as per 2ï¿½s
+		//'complement), South = negative (as per 2ï¿½s complement);
 		//'91 degrees (3412140 hex) = not available = default)
 
 		//'Lat                27      219  Char 33 34 35 36 37 bits 0-2
@@ -1711,13 +1711,13 @@ int DecodeVDM(char *msg)
 
 
 		//'Dimension/Reference for Position    30 249   37 bits 3-5 38 39 40 41 42 bits  0-2   Reference point for reported position; also indicates the dimension of an
-		//'Aid-to-Navigation in metres (see Fig. 18 and § 3.3.8.2.3.3), if relevant. (1)
+		//'Aid-to-Navigation in metres (see Fig. 18 and ï¿½ 3.3.8.2.3.3), if relevant. (1)
 		//'Type of Electronic
 
-		//'A Bit 21 – Bit 29 0 – 511 9
-		//'B Bit 12 – Bit 20 0 – 511 9
-		//'C Bit 6 – Bit 11 0 - 63 ; 6
-		//'D Bit 0 – Bit 5 0 - 63 ;  6
+		//'A Bit 21 ï¿½ Bit 29 0 ï¿½ 511 9
+		//'B Bit 12 ï¿½ Bit 20 0 ï¿½ 511 9
+		//'C Bit 6 ï¿½ Bit 11 0 - 63 ; 6
+		//'D Bit 0 ï¿½ Bit 5 0 - 63 ;  6
 
 
 		V_LenA = ((val[37] & 7) << 3) + val[38];
@@ -1741,13 +1741,13 @@ int DecodeVDM(char *msg)
 		'7 = surveyed.For fixed AtoNs and virtual AtoNs, the surveyed position
 		'should be used. The accurate position enhances its function as a radar
 		'reference target.
-		'8 – 15 = not used.
+		'8 ï¿½ 15 = not used.
 
 		*/   
 		FixType = ((val[42] & 7) << 1) + (val[43] >> 5);
 
 		/*
-		'Time Stamp                 6  259  43 bit 1-5 44 bit 0    UTC second when the report was generated by the EPFS (0 –59,
+		'Time Stamp                 6  259  43 bit 1-5 44 bit 0    UTC second when the report was generated by the EPFS (0 ï¿½59,
 
 		'or 60 if time stamp is not available, which should also be the default value,
 		'or 61 if positioning system is in manual input mode,
@@ -1756,7 +1756,7 @@ int DecodeVDM(char *msg)
 
 
 		'Off-Position Indicator    1    260   44 bit 1  For floating Aids-to-Navigation, only: 0 = on position; 1 = off position;
-		'NOTE – This flag should only be considered valid by receiving station, if
+		'NOTE ï¿½ This flag should only be considered valid by receiving station, if
 		'the Aid -to-Navigation is a floating aid, and if Time Stamp is equal to or
 		'below 59. For floating AtoN the guard zone parameters should be set on installation.
 
@@ -1802,7 +1802,7 @@ int DecodeVDM(char *msg)
 		'Spare. Used only when parameter "Name of Aid-to-Navigation Extension"
 		'is used. Should be set to zero. The number of spare bits should be adjusted
 		'in order to observe byte boundaries.
-		'Number of bits 272 – 360
+		'Number of bits 272 ï¿½ 360
 		'Occupies two slots.
 		*/
 
@@ -1852,14 +1852,14 @@ int DecodeVDM(char *msg)
 		if (B_PartNo == 1)
 		{
 			//Type of ship and cargo type	8 0 = not available or no ship = default
-			//									1-99 = as defined in § 3.3.8.2.3.2 of Annex 2
+			//									1-99 = as defined in ï¿½ 3.3.8.2.3.2 of Annex 2
 			//									100-199 = preserved, for regional use
 			//									200-255 = preserved, for future use
 			//	char 7 bits 4-5, char 8
 
 			V_Type=((val[7] & 3) << 2) + val[8];  
 
-			//Vendor ID						42	Unique identification of the Unit by a number as defined by the manufacturer (option; “@@@@@@@“ = not available = default)//	char 9-15
+			//Vendor ID						42	Unique identification of the Unit by a number as defined by the manufacturer (option; ï¿½@@@@@@@ï¿½ = not available = default)//	char 9-15
 
 			for (i = 0; i <= 6; i++)
 			{
@@ -1871,7 +1871,7 @@ int DecodeVDM(char *msg)
 			}
 
 
-			//Call sign						42 Call sign of the MMSI-registered vessel. 7 X 6-bit ASCII characters, “@@@@@@@“ = not available = default
+			//Call sign						42 Call sign of the MMSI-registered vessel. 7 X 6-bit ASCII characters, ï¿½@@@@@@@ï¿½ = not available = default
 			//	char 16-22
 
 			for (i = 0; i <= 6; i++)
@@ -1884,7 +1884,7 @@ int DecodeVDM(char *msg)
 			}
 
 			//Dimension of ship/reference for position. Or, for unregistered daughter vessels, use the MMSI of the mother ship
-			//								30 Dimensions of ship in meters and reference point for reported position (see Annex 2 Fig. 17 and § 3.3.8.2.3.3). Or, for an unregistered daughter vessel, use the MMSI of the associated mother ship in this data field
+			//								30 Dimensions of ship in meters and reference point for reported position (see Annex 2 Fig. 17 and ï¿½ 3.3.8.2.3.3). Or, for an unregistered daughter vessel, use the MMSI of the associated mother ship in this data field
 			//	char 23-27
 
 			V_LenA = (val[23] << 3) + (val[24] >> 3);
@@ -1907,7 +1907,7 @@ int DecodeVDM(char *msg)
 	{
 		//	Msg_Type = val[1];
 		//Message ID 6 Identifier for message 9; always 9
-		//Repeat Indicator 2 Used by the repeater to indicate how many times a message has beenrepeated. Refer to § 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
+		//Repeat Indicator 2 Used by the repeater to indicate how many times a message has beenrepeated. Refer to ï¿½ 4.6.1; 0 - 3; default = 0; 3 = do not repeat any more.
 
 		//	char 2 bits 2-5, 3 4, 5, 6, 7 bits 0,1
 		//	UserID = ((val[2] & 15) << 26) + (val[3] << 20)+ (val[4] << 14)+ (val[5] << 8)+ (val[6] << 2) + (val[7] >>4); ;
@@ -1927,7 +1927,7 @@ int DecodeVDM(char *msg)
 		//Position accuracy 1 Char 11 bit 0 1 = high (< 10 m; Differential Mode of e.g. DGNSS receiver) 0 = low(> 10 m; Autonomous Mode of e.g. GNSS receiver or of other ElectronicPosition Fixing Device) ; default = 0
 
 
-		//Longitude										28	Longitude in 1/10 000 min (±180°, East = positive (as per 2's complement), West = negative (as per 2's complement), 181° (6791AC0 hex) = not available = default)
+		//Longitude										28	Longitude in 1/10 000 min (ï¿½180ï¿½, East = positive (as per 2's complement), West = negative (as per 2's complement), 181ï¿½ (6791AC0 hex) = not available = default)
 		//		Char 11 bits 1-5, 12, 13, 14, 15 0-4 		
 
 		Conv = ((val[11] & 31) << 23) + (val[12] << 17) + (val[13] << 11) + (val[14] << 5) + (val[15] >> 1);
@@ -1939,7 +1939,7 @@ int DecodeVDM(char *msg)
 		V_Lon/= 600000;
 
 
-		//Latitude										27	Latitude in 1/10 000 min (±90°, North = positive (as per 2's complement), South = negative (as per 2's complement), 91° (3412140 hex) = not available = default)
+		//Latitude										27	Latitude in 1/10 000 min (ï¿½90ï¿½, North = positive (as per 2's complement), South = negative (as per 2's complement), 91ï¿½ (3412140 hex) = not available = default)
 		//		 Char 15 bit 5 16 17 18 19 20 bits 0-1
 
 		Conv = ((val[15] & 1) << 26) + (val[16]<< 20) + (val[17]<< 14) + (val[18]<< 8) + (val[19]<< 2) + (val[20] >> 4);
@@ -1959,12 +1959,12 @@ int DecodeVDM(char *msg)
 
 		//Time stamp 6 UTC second when the report was generated by the EPFS (0-59,or 60 if time stamp is not available, which should also be the defaultvalue,or 62 if Electronic Position Fixing System operates in estimated (deadreckoning) mode,or 61 if positioning system is in manual input modeor 63 if the positioning system is inoperative)
 		//Reserved forregionalapplications 8 Reserved for definition by a competent regional authority. Should be setto zero, if not used for any regional application. Regional applicationsshould not use zero.
-		//DTE 1 Data terminal ready (0 = available 1 = not available = default) (refer to§ 3.3.8.2.3.1).
+		//DTE 1 Data terminal ready (0 = available 1 = not available = default) (refer toï¿½ 3.3.8.2.3.1).
 		//Spare 5 3 Not used. Should be set to zero
 		//Assigned ModeFlag1 0 = Station operating in autonomous and continous mode =default1 = Station operating in assigned mode
 		//RAIM-Flag 1 RAIM (Receiver Autonomous Integrity Monitoring) flag of ElectronicPosition Fixing Device; 0 = RAIM not in use = default; 1 = RAIM in use)Communication
 		//State SelectorFlag1 0 = SOTDMA Communication State follows;1 = ITDMA Communication State follows.
-		//Communication State 19 SOTDMA (refer to § 3.3.7.2.2).
+		//Communication State 19 SOTDMA (refer to ï¿½ 3.3.7.2.2).
 		//Total number of bits168
 
 		ProcessSARMessage();
@@ -1986,7 +1986,7 @@ int DecodeVDM(char *msg)
 	'H   8   0x08    00 1000 72  0x48    0100 1000   )   41  0x29    10 1001 41  0x29    0010 1001
 	'I   9   0x09    00 1001 73  0x49    0100 1001   *   42  0x2A    10 1010 42  0x2A    0010 1010
 	'J   10  0x0A    00 1010 74  0x4A    0100 1010   +   43  0x2B    10 1011 43  0x2B    0010 1011
-	'K   11  0x0B    00 1011 75  0x4B    0100 1011   ´   44  0x2C    10 1100 44  0x2C    0010 1100
+	'K   11  0x0B    00 1011 75  0x4B    0100 1011   ï¿½   44  0x2C    10 1100 44  0x2C    0010 1100
 	'L   12  0x0C    00 1100 76  0x4C    0100 1100   -   45  0x2D    10 1101 45  0x2D    0010 1101
 	'M   13  0x0D    00 1101 77  0x4D    0100 1101   ,   46  0x2E    10 1110 46  0x2E    0010 1110
 	'N   14  0x0E    00 1110 78  0x4E    0100 1110   /   47  0x2F    10 1111 47  0x2F    0010 1111

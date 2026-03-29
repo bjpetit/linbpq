@@ -719,7 +719,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (strlen(&buff->L2DATA[2]) > 9)
 				buff->L2DATA[11] = 0;
 
-			txlen = sprintf(Connect, "C %s\r", &buff->L2DATA[2]);
+			txlen = snprintf(Connect, sizeof(Connect), "C %s\r", &buff->L2DATA[2]);
 
 			HSMODEMChangeMYC(TNC, TNC->Streams[0].MyCall);
 
@@ -1448,13 +1448,13 @@ VOID HSMODEMProcessTNCMessage(struct TNCINFO * TNC, unsigned char * Msg, int Len
 		Bytes 8-10 ... unused
 		Bytes 11-229 ... 219 bytes payload		return;
 
-		1 … BER Test Pattern
-		2 … Image
-		3 … Ascii File
-		4 … HTML File
-		5 … Binary File
-		6 … Voice Audio (for Codec 2 or Opus)
-		7 … UserInfo
+		1 ï¿½ BER Test Pattern
+		2 ï¿½ Image
+		3 ï¿½ Ascii File
+		4 ï¿½ HTML File
+		5 ï¿½ Binary File
+		6 ï¿½ Voice Audio (for Codec 2 or Opus)
+		7 ï¿½ UserInfo
 		*/
 
 		Seq = Msg[2] << 8 | Msg[3];

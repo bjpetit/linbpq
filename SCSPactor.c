@@ -798,7 +798,7 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len)
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-	"<title>SCS Pactor Status</title><style>body { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; margin: 10px; } h3 { text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%; max-width: 600px; display: block; margin: 20px auto; }</style>"
+	"<title>SCS Pactor Status</title><style>body { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; margin: 10px; } h3 { text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%%; max-width: 600px; display: block; margin: 20px auto; }</style>"
 	"</head><body><h3>SCS Pactor Status</h3>");
 
 	Len += sprintf(&Buff[Len], "<table style=\"border-collapse: collapse; margin: 20px auto;\" border=1 cellpadding=2 cellspacing=0>");
@@ -2081,7 +2081,7 @@ VOID SCSPoll(int Port)
 			{
 				CheckMode(TNC);
 
-				buffptr->Len = sprintf(buffptr->Data, "%s\r", &TNC->RXBuffer[2]);		
+				buffptr->Len = snprintf((char*)buffptr->Data, 256, "%s\r", &TNC->RXBuffer[2]);		
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 				return;

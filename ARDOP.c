@@ -1637,7 +1637,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
-				char Connect[80];
+				char Connect[290];
 				char * ptr = strchr(&buff->L2DATA[2], 13);
 
 				if (ptr)
@@ -1650,7 +1650,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				if (Stream == 0)
 				{
-					sprintf(Connect, "ARQCALL %s %d", &buff->L2DATA[2], TNC->MaxConReq);
+					snprintf(Connect, sizeof(Connect), "ARQCALL %s %d", &buff->L2DATA[2], TNC->MaxConReq);
 
 					ARDOPChangeMYC(TNC, TNC->Streams[0].MyCall);
 
@@ -1690,7 +1690,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				{
 					// Packet Connect
 				
-					sprintf(Connect, "%cPKTCALL %s %s", Stream, &buff->L2DATA[2], STREAM->MyCall);
+					snprintf(Connect, sizeof(Connect), "%cPKTCALL %s %s", Stream, &buff->L2DATA[2], STREAM->MyCall);
 					ARDOPSendPktCommand(TNC, Stream, Connect);
 				}
 

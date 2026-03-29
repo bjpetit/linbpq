@@ -437,7 +437,7 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 	if (conn && conn->Callsign[0])
 	{
 		char call[20];
-		sprintf(call, "%s          ", conn->Callsign);
+		snprintf(call, sizeof(call), "%-10s", conn->Callsign);
 		fwrite(call, 1, 10, LogHandle[Flags]);
 	}
 	else
@@ -1630,9 +1630,9 @@ VOID SaveMessageDatabase()
 		
 		sprintf(Key, "R%d:\r\n", i);
 
-		n = sprintf(Cfg, "%c|%c|%d|%d|%lld|%s|%s|%s|%s|%s|%d|%lld|%lld|%s|%s|%s|%d|%s", Msg->type, Msg->status,
-		Msg->number, Msg->length, Msg->datereceived, &Msg->bbsfrom[0], &Msg->via[0], &Msg->from[0],
-		&Msg->to[0], &Msg->bid[0], Msg->B2Flags, Msg->datecreated, Msg->datechanged, HEXString1, HEXString2, 
+		n = sprintf(Cfg, "%c|%c|%d|%d|%ld|%s|%s|%s|%s|%s|%d|%ld|%ld|%s|%s|%s|%d|%s", Msg->type, Msg->status,
+		Msg->number, Msg->length, (long)Msg->datereceived, &Msg->bbsfrom[0], &Msg->via[0], &Msg->from[0],
+		&Msg->to[0], &Msg->bid[0], Msg->B2Flags, (long)Msg->datecreated, (long)Msg->datechanged, HEXString1, HEXString2, 
 		&Msg->emailfrom[0], Msg->UTF8, &Msg->title[0]);
 	}
 
@@ -10116,9 +10116,9 @@ VOID SaveConfig(char * ConfigName)
 
 //		SaveStringValue(group, "Last", stats2);
 
-		sprintf(Line,"%s^%s^%s^%s^%s^%s^%s^%d^%d^%d^%d^%d^%d^%lld^%s^%s",
-			user->Name, user->Address, user->HomeBBS, user->QRA, user->pass, user->ZIP, user->CMSPass,
-			user->lastmsg, user->flags, user->PageLen, user->BBSNumber, user->RMSSSIDBits, user->WebSeqNo,
+sprintf(Line,"%s^%s^%s^%s^%s^%s^%s^%d^%lu^%d^%d^%d^%d^%lld^%s^%s",
+				 user->Name, user->Address, user->HomeBBS, user->QRA, user->pass, user->ZIP, user->CMSPass,
+				 user->lastmsg, (unsigned long)user->flags, user->PageLen, user->BBSNumber, user->RMSSSIDBits, user->WebSeqNo,
 			user->TimeLastConnected, stats, stats2);
 
 		if (strlen(Line) < 10)
@@ -10181,9 +10181,9 @@ VOID SaveConfig(char * ConfigName)
 		
 		sprintf(Key, "R%d", Msg->number);
 
-		n = sprintf(Line, "%c|%c|%d|%lld|%s|%s|%s|%s|%s|%d|%lld|%lld|%s|%s|%s|%d|%s", Msg->type, Msg->status,
-		Msg->length, Msg->datereceived, &Msg->bbsfrom[0], &Msg->via[0], &Msg->from[0],
-		&Msg->to[0], &Msg->bid[0], Msg->B2Flags, Msg->datecreated, Msg->datechanged, HEXString1, HEXString2, 
+		n = sprintf(Line, "%c|%c|%d|%ld|%s|%s|%s|%s|%s|%d|%ld|%ld|%s|%s|%s|%d|%s", Msg->type, Msg->status,
+		Msg->length, (long)Msg->datereceived, &Msg->bbsfrom[0], &Msg->via[0], &Msg->from[0],
+		&Msg->to[0], &Msg->bid[0], Msg->B2Flags, (long)Msg->datecreated, (long)Msg->datechanged, HEXString1, HEXString2, 
 		&Msg->emailfrom[0], Msg->UTF8, &Msg->title[0]);
 
 		SaveStringValue(msgs, Key, Line);
@@ -10865,7 +10865,7 @@ int Connected(int Stream)
 							LongFreq = GetPortFrequency(port, FreqString);
 #endif
 					}
-					Length += sprintf(MailBuffer, "New User %s Connected to Mailbox on Port %d Freq %lld Mode %d\r\n", callsign, port, LongFreq, Mode);
+Length += sprintf(MailBuffer, "New User %s Connected to Mailbox on Port %d Freq %ld Mode %d\r\n", callsign, port, (long)LongFreq, Mode);
 
 					sprintf(Title, "New User %s", callsign);
 
@@ -10925,8 +10925,8 @@ int Connected(int Stream)
 			}
 
 			if (port)
-				n = sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s on Port %d Freq %lld Mode %s",
-					user->Call,  port, Freq, WL2KModes[Mode]);
+				n = sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s on Port %d Freq %ld Mode %s",
+					user->Call,  port, (long)Freq, WL2KModes[Mode]);
 			else
 				n = sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s", user->Call);
 			
@@ -12030,7 +12030,7 @@ int pindex = 0;
 
 void sigchild_handler(int sig , siginfo_t * siginfo, void * ucontext)
 {
-/* •  SIGCHLD fills in si_pid, si_uid, si_status, si_utime, and
+/* ï¿½  SIGCHLD fills in si_pid, si_uid, si_status, si_utime, and
           si_stime, providing information about the child.  The si_pid
           field is the process ID of the child; si_uid is the child's
           real user ID.  The si_status field contains the exit status of
@@ -12088,15 +12088,15 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 	char pg_dir[MAX_PATH];
 	char log_file[50] = "pg.log";
 	char call[10];
-	char data[80];
-	char line[80];
+	char data[120];
+	char line[270];
 	size_t bufsize = 80;
 
 	strcpy(pg_dir, BaseDir);
 	strcat(pg_dir, "/PG/");
 	sprintf(cmd, "./%s", SERVERLIST[user->Temp->PG_SERVER][1] );
 
-	sprintf(line, "%s%s", pg_dir, SERVERLIST[user->Temp->PG_SERVER][1]);
+	snprintf(line, sizeof(line), "%s%s", pg_dir, SERVERLIST[user->Temp->PG_SERVER][1]);
 //	printf("PG Prog %s%s\n", pg_dir, SERVERLIST[user->Temp->PG_SERVER][1]);
 
 	// check file exists and is executable
@@ -12119,14 +12119,14 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 	if (ptr)
 		*ptr = '\0';
 
-	sprintf(data, "%s %d 0 0 %s", call, index, user->Temp->RUNPGPARAMS->InputBuffer);
+	snprintf(data, sizeof(data), "%s %d 0 0 %s", call, index, user->Temp->RUNPGPARAMS->InputBuffer);
 //	printf("PG Params %s\n", data);
 
 	conn->InputBufferLen = 0;
 
-	char buf[256];
+	char buf[400];
 
-	sprintf (buf, "%s %s", line, data); // buf is command to exec
+	snprintf (buf, sizeof(buf), "%s %s", line, data); // buf is command to exec
 //	printf ("PG exec cmd %s\n", buf); 
 
 	// Create pipe for reading PG program STDOUT
@@ -13445,7 +13445,7 @@ int DeleteRedundantMessages()
     int n;
 	struct stat STAT;
 	int Msgno = 0, res;
-	char File[100];
+	char File[270];
      	
     n = scandir("Mail", &namelist, MsgFilter, alphasort);
 
@@ -13461,7 +13461,7 @@ int DeleteRedundantMessages()
 
 				if (MsgnotoMsg[Msgno] == 0)
 				{
-					sprintf(File, "Mail/%s", namelist[n]->d_name);
+					snprintf(File, sizeof(File), "Mail/%s", namelist[n]->d_name);
 					printf("Deleting %s\n", File);
 					unlink(File);
 				}
@@ -13687,7 +13687,7 @@ void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 	struct stat STAT;
 	time_t now = time(NULL);
 	int Age = 0, res;
-	char FN[256];
+	char FN[270];
      	
     n = scandir("Files", &namelist, NULL, alphasort);
 
@@ -13697,7 +13697,7 @@ void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 	{ 
 		for (i = 0; i < n; i++)
 		{
-			sprintf(FN, "Files/%s", namelist[i]->d_name);
+			snprintf(FN, sizeof(FN), "Files/%s", namelist[i]->d_name);
 
 			if (filename == NULL || stristr(namelist[i]->d_name, filename))
 				if (FN[6] != '.' && stat(FN, &STAT) == 0)
@@ -13888,10 +13888,10 @@ VOID CreateUserReport()
 	int i;
 	char Line[200];
 	int len;
-	char File[MAX_PATH];
+	char File[270];
 	FILE * hFile;
 
-	sprintf(File, "%s/UserList.csv", BaseDir);
+	snprintf(File, sizeof(File), "%s/UserList.csv", BaseDir);
 	
 	hFile = fopen(File, "wb");
 
@@ -13905,11 +13905,11 @@ VOID CreateUserReport()
 	{
 		User = UserRecPtr[i];
 
-		len = sprintf(Line, "%s,%d,%s,%x,%s,\"%s\",%x,%s,%s,%s\r\n",
+		len = sprintf(Line, "%s,%d,%s,%lx,%s,\"%s\",%x,%s,%s,%s\r\n",
 			User->Call,
 			User->lastmsg,
 			FormatDateAndTime((time_t)User->TimeLastConnected, FALSE),
-			User->flags,
+			(unsigned long)User->flags,
 			User->Name,
 			User->Address,
 			User->RMSSSIDBits,
@@ -13936,7 +13936,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 	int FileSize;
 	char MsgFile[MAX_PATH];
 	FILE * hFile;
-	char Mess[255];
+	char Mess[320];
 	int len;
 	char * FN = &Msg[2];
 
@@ -14008,7 +14008,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 		if (FileSize > MaxRXSize)
 		{
 			Mess[0] = NAK;
-			Mess[1] = sprintf(&Mess[2], "YAPP File %s size %d larger than limit %d\r", conn->ARQFilename, FileSize, MaxRXSize);
+			Mess[1] = snprintf(&Mess[2], sizeof(Mess)-2, "YAPP File %s size %d larger than limit %d\r", conn->ARQFilename, FileSize, MaxRXSize);
 			QueueMsg(conn, Mess, Mess[1] + 2);
 	
 			Flush(conn);
@@ -14034,7 +14034,7 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 		if (hFile)
 		{
 			Mess[0] = NAK;
-			Mess[1] = sprintf(&Mess[2], "YAPP File %s already exists\r", conn->ARQFilename);;
+			Mess[1] = snprintf(&Mess[2], sizeof(Mess)-2, "YAPP File %s already exists\r", conn->ARQFilename);
 			QueueMsg(conn, Mess, Mess[1] + 2);
 	
 			Flush(conn);
@@ -14180,15 +14180,15 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 					cant use DosDateTimeToFileTime on Linux
 		
 					Bits	Description
-					0-4	Day of the month (1–31)
+					0-4	Day of the month (1ï¿½31)
 					5-8	Month (1 = January, 2 = February, and so on)
 					9-15	Year offset from 1980 (add 1980 to get actual year)
 					wFatTime
 					The MS-DOS time. The time is a packed value with the following format.
 					Bits	Description
 					0-4	Second divided by 2
-					5-10	Minute (0–59)
-					11-15	Hour (0–23 on a 24-hour clock)
+					5-10	Minute (0ï¿½59)
+					11-15	Hour (0ï¿½23 on a 24-hour clock)
 */
 					memset(&TM, 0, sizeof(TM));
 
@@ -14231,15 +14231,15 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 					cant use DosDateTimeToFileTime on Linux
 		
 					Bits	Description
-					0-4	Day of the month (1–31)
+					0-4	Day of the month (1ï¿½31)
 					5-8	Month (1 = January, 2 = February, and so on)
 					9-15	Year offset from 1980 (add 1980 to get actual year)
 					wFatTime
 					The MS-DOS time. The time is a packed value with the following format.
 					Bits	Description
 					0-4	Second divided by 2
-					5-10	Minute (0–59)
-					11-15	Hour (0–23 on a 24-hour clock)
+					5-10	Minute (0ï¿½59)
+					11-15	Hour (0ï¿½23 on a 24-hour clock)
 */
 					memset(&TM, 0, sizeof(TM));
 
@@ -14645,7 +14645,7 @@ BOOL ProcessReqDir(struct MsgInfo * Msg)
     int n, i;
 	struct stat STAT;
 	int res;
-	char FN[256];
+	char FN[270];
      	
 #endif
 
@@ -14715,11 +14715,11 @@ BOOL ProcessReqDir(struct MsgInfo * Msg)
 	{ 
 		for (i = 0; i < n; i++)
 		{
-			sprintf(FN, "Files/%s", namelist[i]->d_name);
+			snprintf(FN, sizeof(FN), "Files/%s", namelist[i]->d_name);
 
 			if (filename == NULL || stristr(namelist[i]->d_name, filename))
 				if (FN[6] != '.' && stat(FN, &STAT) == 0)
-					Len += sprintf(&Buffer[Len], "%s %d\r", namelist[i]->d_name, STAT.st_size);
+Len += sprintf(&Buffer[Len], "%s %ld\r", namelist[i]->d_name, (long)STAT.st_size);
 			
 			free(namelist[i]);
 		}
@@ -15248,7 +15248,7 @@ void SendRequestSync(CIRCUIT * conn)
 
 	conn->SyncCompressedLen = Encode(Buffer, conn->SyncMessage, conn->SyncXMLLen, 0, 1);
 
-	sprintf(Buffer, "TR RequestSync_%s_%d %d %d 0 True\r",		// The True on end indicates compressed
+	sprintf(Buffer, "TR RequestSync_%d %d %d 0 True\r",		// The True on end indicates compressed
 				50, conn->SyncCompressedLen, conn->SyncXMLLen);
 
 	free(Buffer);
@@ -15526,8 +15526,7 @@ Loop:
 		// Date: Mon, 25 Oct 2021 10:22:00 -0000
 
 		sscanf(&ptr1[11], "%02d %s %04d %02d:%02d:%02d",
-			&rtime.tm_mday, &Mon, &rtime.tm_year, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec);
-
+			 &rtime.tm_mday, Mon, &rtime.tm_year, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec);
 		rtime.tm_year -= 1900;
 
 		for (i = 0; i < 12; i++)
@@ -15979,7 +15978,7 @@ int decode_quoted_printable(char *ptr, int len)
 
 VOID GetPGConfig()
 {
-	char FN[256];
+	char FN[270];
 	FILE *file;
 	char buf[256],errbuf[256];
 	char * p_prog, * p_name, * p_desc;

@@ -43,7 +43,7 @@ extern int chatPaclen;
 extern char NodeTail[];
 extern BOOL APRSApplConnected;
 
-extern char ChatConfigName[250];
+extern char ChatConfigName[290];
 
 extern char OtherNodesList[1000];
 

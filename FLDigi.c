@@ -1114,7 +1114,7 @@ static int RestartTNC(struct TNCINFO * TNC)
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<title>FLDigi Status</title><style>body { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; margin: 10px; } h2 { text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%; max-width: 600px; display: block; margin: 20px auto; }</style>"
+		"<title>FLDigi Status</title><style>body { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; margin: 10px; } h2 { text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } textarea { width: 100%%; max-width: 600px; display: block; margin: 20px auto; }</style>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
@@ -3196,11 +3196,11 @@ VOID FLReleaseTNC(struct TNCINFO * TNC)
 
 	if (TNC->FLInfo->DefaultMode[0])
 	{
-		char txbuff[80];
+		char txbuff[120];
 				
 		if (TNC->FLInfo->KISSMODE)
 		{
-			sprintf(txbuff, "WFF:%d MODEM:%s MODEM: WFF:", TNC->FLInfo->DefaultFreq, TNC->FLInfo->DefaultMode);
+			snprintf(txbuff, sizeof(txbuff), "WFF:%d MODEM:%s MODEM: WFF:", TNC->FLInfo->DefaultFreq, TNC->FLInfo->DefaultMode);
 			SendKISSCommand(TNC, txbuff);
 		}
 		else
@@ -3895,7 +3895,7 @@ VOID SendXMLCommand(struct TNCINFO * TNC, char * Command, char * Value, char Par
 		if (ParamType == 'S')
 			sprintf(ValueString, "<params><param><value><string>%s</string></value></param></params\r\n>", Value);
 		else
-			sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", Value);
+			sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", (int)(intptr_t)Value);
 
 	strcpy(FL->LastXML, Command);
 	Len = sprintf(ReqBuf, Req, FL->LastXML, ValueString);
@@ -3916,7 +3916,7 @@ VOID SendXMLCommandInt(struct TNCINFO * TNC, char * Command, int Value, char Par
 	if (!TNC->CONNECTED || TNC->FLInfo->KISSMODE)
 		return;
 
-	sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", Value);
+	sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", (int)(intptr_t)Value);
 
 	strcpy(FL->LastXML, Command);
 	Len = sprintf(ReqBuf, Req, FL->LastXML, ValueString);

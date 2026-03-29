@@ -984,7 +984,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				// Send FEC Data
 
 				buff->L2DATA[txlen] = 0;
-				len = sprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, &buff->L2DATA);
+len = sprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, buff->L2DATA);
 
 				send(TNC->TCPDataSock, Buffer, len, 0);
 
@@ -1010,7 +1010,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				char cmd[56];
 
 				strcpy(cmd, &buff->L2DATA[6]);
-				sprintf(&buff->L2DATA[0], "%d %s", TNC->Port, &cmd);
+sprintf(&buff->L2DATA[0], "%d %s", TNC->Port, cmd);
 
 	
 				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK, &buff->L2DATA[0]))

@@ -21,6 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "cheaders.h"
 #include "bpqmail.h"
+#include "common_web_components.h"
 
 #define MAIL
 #include "httpconnectioninfo.h"
@@ -114,14 +115,14 @@ struct HtmlFormDir
 
 char FormDirList[4][MAX_PATH] = {"Standard_Templates", "Standard Templates", "Local_Templates"};
 
-static char PassError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #fee; border: 1px solid #fcc; border-radius: 6px; color: #c33; text-align: center; font-weight: bold;\">Sorry, User or Password is invalid - please try again</div>";
-static char BusyError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #ffc; border: 1px solid #fa3; border-radius: 6px; color: #a60; text-align: center; font-weight: bold;\">Sorry, No sessions available - please try later</div>";
+static char PassError[] = "<div class='alert-error'>Sorry, User or Password is invalid - please try again</div>";
+static char BusyError[] = "<div class='alert-warn'>Sorry, No sessions available - please try later</div>";
 
 extern char MailSignon[];
 
-char WebMailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+char WebMailSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>BPQ32 WebMail Access</title>"
-	"<style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style>"
+	"<style>" COMMON_SIGNON_CSS "</style>"
 	"</head><body>"
 	"<h2>BPQ32 WebMail %s Access</h2>"
 	"<h3>Please enter Callsign and Password to access WebMail</h3>"
@@ -130,7 +131,7 @@ char WebMailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=devi
 	"<div class=\"form-row\"><label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required></div>"
 	"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/ /></div></form></div></body></html>";
 
-static char MsgInputPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
+static char MsgInputPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>Webmail Message Input</title><script src='/WebMail/webscript.js'></script>"
 	"<style>body { font-family: Arial, sans-serif; margin: 12px; background: #f5f7fa; color: #1f2937; } h3 { text-align: center; margin: 0 0 12px; } #myform { max-width: 980px; margin: 0 auto; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 14px; box-sizing: border-box; } .form-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; } .form-row label { flex: 0 0 88px; font-weight: 600; } .form-row input, .form-row select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; } #To, #Subj { font-size: 15px; padding-top: 9px; padding-bottom: 9px; } .form-row input[type=file] { padding: 6px 0; border: none; } .form-row textarea { flex: 1 1 auto; width: 100%%; min-height: 360px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; line-height: 1.4; resize: vertical; } .form-row.message-row { align-items: flex-start; } .form-row.message-row label { padding-top: 10px; } .form-row.meta-row label { flex: 0 0 88px; } .form-row.meta-row select { flex: 0 0 120px; max-width: 120px; } .form-row.meta-row input { flex: 0 1 260px; max-width: 260px; } .inline-action { white-space: nowrap; flex: 0 0 auto; margin-left: 10px; } .btn, .buttons input { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 14px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; color: #1f2937; cursor: pointer; text-decoration: none; font-size: 14px; box-sizing: border-box; } .btn:hover, .buttons input:hover { background: #eef2f7; } .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; } .buttons input[name=Send] { background: #2563eb; border-color: #2563eb; color: #fff; } .buttons input[name=Send]:hover { background: #1d4ed8; } @media (max-width: 768px) { body { margin: 10px; } #myform { padding: 12px; } .form-row { flex-direction: column; align-items: stretch; gap: 6px; margin: 6px 0; } .form-row label { flex: none; width: 100%%; } .form-row input, .form-row select { width: 100%%; } .form-row input, .form-row select, .buttons input, .btn { min-height: 44px; } .form-row input[type=file] { min-height: 0; } .form-row.message-row label { padding-top: 0; } .form-row.meta-row label { flex: none; width: 100%%; } .form-row.meta-row select, .form-row.meta-row input { flex: 1 1 auto; max-width: none; } .inline-action { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; width: 100%%; margin-left: 0; } .inline-action .btn { flex: 1 1 auto; min-width: 100px; } .buttons { justify-content: stretch; gap: 8px; } .buttons input { flex: 1 1 0; } }</style></head><body>"
 	"<h3>Webmail Interface - Message Input Form</h3>"
@@ -145,7 +146,7 @@ static char MsgInputPage[] = "<html><head><meta name=\"viewport\" content=\"widt
 	"<div class='form-row message-row'><label for='main'>Message:</label><textarea id='main' name=Msg style='overflow:auto;'>%s</textarea></div>"
 	"<div class=buttons><input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
-static char CheckFormMsgPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
+static char CheckFormMsgPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>Webmail Forms - Check Message</title><script src='/WebMail/webscript.js'></script>"
 	"<style>:root{--bg:#f5f7fa;--surface:#fff;--border:#cbd5e1;--text:#1f2937;}*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:max(12px,env(safe-area-inset-left));background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}h3{text-align:center;margin:0 0 12px;}#myform{max-width:980px;margin:0 auto;background:var(--surface);border:1px solid #d1d5db;border-radius:8px;padding:14px;display:flex;flex-direction:column;}@supports(padding:max(0px)){body{margin:clamp(10px,3vw,20px);margin-left:max(clamp(10px,3vw,20px),env(safe-area-inset-left));margin-right:max(clamp(10px,3vw,20px),env(safe-area-inset-right));}}.form-row{display:flex;align-items:center;gap:10px;margin:8px 0;}.form-row label{flex:0 0 clamp(70px,20%,100px);font-weight:600;font-size:14px;}.form-row input,.form-row select{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;touch-action:manipulation;}#To,#Subj{font-size:15px;padding:9px 10px;}.form-row textarea{flex:1 1 auto;width:100%%;min-height:360px;padding:10px;border:1px solid var(--border);border-radius:6px;line-height:1.4;resize:vertical;font-family:inherit;font-size:14px;touch-action:manipulation;}.form-row.message-row{align-items:flex-start;}.form-row.message-row label{padding-top:10px;}.form-row.meta-row label{flex:0 0 clamp(70px,20%,100px);}.form-row.meta-row select{flex:0 0 120px;max-width:120px;}.form-row.meta-row input{flex:0 1 260px;max-width:260px;}.btn,.buttons input{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 14px;border:1px solid #94a3b8;border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:14px;touch-action:manipulation;}.btn:hover,.buttons input:hover{background:#eef2f7;}.buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;position:sticky;bottom:0;background:var(--surface);padding:10px 0;border-top:1px solid #e5e7eb;z-index:10;}.buttons input[name=Send]{background:#2563eb;border-color:#2563eb;color:#fff;}.buttons input[name=Send]:hover{background:#1d4ed8;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}@media(max-width:480px){body{margin:clamp(8px,2vw,12px);margin-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));margin-right:max(clamp(8px,2vw,12px),env(safe-area-inset-right));}#myform{padding:12px;border-radius:6px;}.form-row{flex-direction:column;align-items:stretch;gap:6px;margin:6px 0;}.form-row label{flex:none;width:100%%;}.form-row input,.form-row select,.form-row textarea{width:100%%;min-height:48px;}.form-row.message-row{align-items:stretch;}.form-row.message-row label{padding-top:0;padding-bottom:4px;}.form-row.message-row textarea{min-height:300px;}.form-row.meta-row label{flex:none;width:100%%;}.form-row.meta-row select,.form-row.meta-row input{flex:1 1 auto;max-width:none;min-height:48px;}.buttons{justify-content:stretch;gap:8px;padding:12px 0;}.buttons input{flex:1 1 0;min-height:48px;padding:12px 10px;}}</style></head><body>"
 	"<h3>Webmail Forms Interface - Check Message</h3>"
@@ -702,14 +703,14 @@ VOID ProcessFormDir(char * FormSet, char * DirName, struct HtmlFormDir *** xxx, 
 	{
         if (entry->d_type == DT_DIR)
 		{
-			char Dir[MAX_PATH];
+			char Dir[520];
 
 			if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
 
 			// Recurse in subdir
 
-			sprintf(Dir, "%s/%s", DirName, entry->d_name);
+			snprintf(Dir, sizeof(Dir), "%s/%s", DirName, entry->d_name);
 
 			ProcessFormDir(FormSet, Dir, &FormDir->Dirs, &FormDir->DirCount);
 			continue;
@@ -785,9 +786,9 @@ int GetHTMLFormSet(char * FormSet)
 
 	DIR *dir;
 	struct dirent *entry;
-	char name[256];
+	char name[295];
 	
-   	sprintf(name, "%s/%s", BPQDirectory, FormSet);
+   	snprintf(name, sizeof(name), "%s/%s", BPQDirectory, FormSet);
 
 	if (!(dir = opendir(name)))
 	{
@@ -1949,43 +1950,54 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/> \r\n"
 			"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/> \r\n"
 			"<style type=\"text/css\">\r\n"
-			":root{--bg:#f6f7f8;--surface:#ffffff;--border:#cccccc;--text:#1f2937;--link:#1f2937;}\r\n"
+			":root{--bg:#f4f4f4;--surface:#fff;--border:#ccc;--border-light:#e2e8f0;--text:#1f2937;--link:#1f2937;}\r\n"
 			"*{box-sizing:border-box;}\r\n"
-			"body{margin:0;padding:12px;font-family:Verdana,Arial,sans-serif;background:var(--bg);color:var(--text);}\r\n"
+			"body{margin:0;padding:max(12px,env(safe-area-inset-left));font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}\r\n"
+			"@supports(padding:max(0px)){body{padding:clamp(10px,3vw,12px);padding-left:max(clamp(10px,3vw,12px),env(safe-area-inset-left));padding-right:max(clamp(10px,3vw,12px),env(safe-area-inset-right));}}\r\n"
 			".wm-shell{max-width:980px;margin:0 auto;}\r\n"
-			".wm-title{text-align:center;margin:6px 0 12px 0;font-size:clamp(18px,3.4vw,24px);}\r\n"
+			".wm-title{text-align:center;margin:0 0 12px 0;font-size:clamp(16px,4vw,24px);font-weight:500;}\r\n"
 			".menu-header{display:none;margin-bottom:10px;}\r\n"
-			".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:16px;color:#1f2937;}\r\n"
-			".wm-menu{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px;}\r\n"
-			".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:15px;cursor:pointer;}\r\n"
+			".menu-toggle{width:100%%;min-height:44px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);color:#1f2937;cursor:pointer;touch-action:manipulation;font-weight:500;}\r\n"
+			".menu-toggle:active{background:#e9ecef;}\r\n"
+			".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:10px;}\r\n"
+			".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid #94a3b8;border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;touch-action:manipulation;}\r\n"
 			".wm-menu a:hover{background:#e9ecef;}\r\n"
+			".wm-menu a:focus-visible{outline:2px solid #2563eb;outline-offset:2px;}\r\n"
 			".wm-menu a:active{background:black;color:white;}\r\n"
-			"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;min-height:calc(100dvh - 220px);overflow:auto;}\r\n"
-			".msg-table{width:100%%;border-collapse:collapse;font-size:clamp(11px,2.4vw,13px);}\r\n"
+			"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;min-height:calc(100dvh - 240px);overflow:auto;}\r\n"
+			".msg-table{width:100%%;border-collapse:collapse;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
 			".msg-table thead{background:#f1f5f9;border-bottom:2px solid var(--border);}\r\n"
-			".msg-table th{padding:8px 4px;text-align:left;font-weight:600;white-space:nowrap;}\r\n"
-			".msg-table td{padding:6px 4px;border-bottom:1px solid #e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}\r\n"
+			".msg-table th{padding:10px 6px;text-align:left;font-weight:600;white-space:nowrap;touch-action:manipulation;}\r\n"
+			".msg-table td{padding:8px 6px;border-bottom:1px solid #e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}\r\n"
+			".msg-table tr.msg-row{cursor:pointer;}\r\n"
 			".msg-table tr:hover{background:#f8fafc;}\r\n"
 			".msg-table a{color:var(--link);text-decoration:none;}\r\n"
 			".msg-table a:hover{text-decoration:underline;}\r\n"
-			".msg-num{text-align:right;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}\r\n"
-			".msg-date{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:100px;}\r\n"
-			".msg-type{text-align:center;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:24px;}\r\n"
-			".msg-len{text-align:right;font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:50px;}\r\n"
+			".msg-num{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}\r\n"
+			".msg-date{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;}\r\n"
+			".msg-type{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:24px;}\r\n"
+			".msg-len{font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace;min-width:50px;}\r\n"
 			".msg-to,.msg-via,.msg-from{max-width:80px;}\r\n"
-			".msg-subject{max-width:300px;}\r\n"
-			"@media (max-width:768px){\r\n"
-			"body{padding:8px;}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu a{width:100%;text-align:center;}#main{min-height:calc(100dvh - 280px);}\r\n"
-			".msg-table{font-size:11px;}\r\n"
-			".msg-table th,.msg-table td{padding:4px 2px;}\r\n"
-			".msg-date{min-width:85px;font-size:10px;}\r\n"
+			".msg-subject{max-width:380px;}\r\n"
+			"@media(min-width:1200px){.msg-subject{max-width:420px;}}\r\n"
+			"@media(max-width:768px){\r\n"
+			"body{padding:clamp(6px,2vw,10px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu a{width:100%%;text-align:center;min-height:48px;}#main{padding:8px;min-height:calc(100dvh - 280px);}\r\n"
+			".msg-table{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
+			".msg-table th,.msg-table td{padding:6px 4px;}\r\n"
+			".msg-date{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
 			".msg-to,.msg-via,.msg-from{max-width:60px;}\r\n"
-			".msg-subject{max-width:200px;}\r\n"
+			".msg-subject{max-width:180px;}\r\n"
 			"}\r\n"
-			"@media (max-width:520px){\r\n"
+			"@media(max-width:520px){\r\n"
 			".msg-len,.msg-via{display:none;}\r\n"
 			".msg-to,.msg-from{max-width:50px;}\r\n"
 			".msg-subject{max-width:120px;}\r\n"
+			"}\r\n"
+			"@media(max-width:380px){\r\n"
+			".msg-date,.msg-from{display:none;}\r\n"
+			".msg-len,.msg-via,.msg-type{display:none;}\r\n"
+			".msg-to{max-width:45px;}\r\n"
+			".msg-subject{max-width:100px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}\r\n"
 			"}\r\n"
 			"</style>\r\n"
 			"<script src=\"/WebMail/webscript.js\"></script>\r\n"
@@ -1996,11 +2008,9 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"{"
 			" if (\"WebSocket\" in window)"
 			" {"
-			"   // open a web socket. Get address from URL\r\n"
-			"	var text = window.location.href;"
-			"	var result = text.substring(7);"
-			"	var myArray = result.split('/', 1);"
-			"   ws = new WebSocket('ws://' + myArray[0] + '/WMRefresh&%s');\r\n"
+			"   // open a web socket\r\n"
+			"   var wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';"
+			"   ws = new WebSocket(wsProto + '//' + window.location.host + '/WMRefresh&%s');\r\n"
 
 			"   ws.onopen = function() {\r\n"
 
@@ -2281,7 +2291,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		// No More
 
-		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html></script></html>", Session->Key);
+		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html>", Session->Key);
 		return;
 
 	}
@@ -2341,7 +2351,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		// No More 
 
-		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html></script></html>", Session->Key);
+		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html>", Session->Key);
 		return;
 
 	}
@@ -2420,12 +2430,13 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		char popuphddr[] = 
 			
-			"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; } p { margin: 15px 0; }</style></head><body>"
+			"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; } p { margin: 15px 0; }</style>"
 			"<script>function myFunction() {var x = document.getElementById(\"mySelect\").value;"
 			"var Key = \"%s\";"
 			"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar,=scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 			"window.open(\"/WebMail/GetPage/\" + x + \"?\" + Key,\"_self\",param);"
 			"}</script>"
+			"</head><body>"
 			"<p>"
 			"Select Required Template from %s<br><br>"
 			"<select size=15 id=\"mySelect\" onclick=\"myFunction()\">"
@@ -2522,7 +2533,7 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 
 	char popuphddr[] = 
 			
-		"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } p { margin: 15px 0; }</style></head><body>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } table { border-collapse: collapse; margin: 20px auto; } th, td { padding: 8px; border: 1px solid #ccc; } p { margin: 15px 0; } th { background: #f0f0f0; }</style>"
 		"<script>"
 		"function myFunction(val) {var x = document.getElementById(val).value;"
 		"var Key = \"%s\";"
@@ -2530,17 +2541,18 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 		"window.open(\"/WebMail/GetList/\" + x + \"?\" + Key,\"_self\",param);"
 		"}"
 		"</script>"
+		"</head><body>"
 		"<p>"
 		" Select Required Template Folder from List<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"<table>"
 		"<tr>"
 		"<th>Standard Templates</th>"
 		"<th>Local Templates</th>"
 		"</tr>"
-		"<tr><td width=50%%><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
+		"<tr><td style=\"width:50%%;vertical-align:top\"><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
 
 	char NewGroup [] =
-		"</select></td><td width=50%% align=center>"
+		"</select></td><td style=\"width:50%%;vertical-align:top;text-align:center\">"
 		"<select size=15 id=Sel2 onclick=\"myFunction('Sel2')\">";
 
 	char popup[10000];
@@ -2624,7 +2636,7 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 			n++;
 		}
 	}
-	len += sprintf(&popup[len], "%</select></td></tr></table></p>");
+	len += sprintf(&popup[len], "%%</select></td></tr></table></p>");
 
 	*WebMail->RLen = sprintf(WebMail->Reply, "%s", popup);
 
@@ -2751,7 +2763,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	{
 		if (RefuseBulls)
 		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();script></html>");
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();</script></html>");
 			FreeWebMailFields(WebMail);		// We will reprocess message and attachments so reinitialise
 			return;
 		}
@@ -3757,14 +3769,14 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 				"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar=yes,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 				"window.open(\"/WebMail/Reply/\" + Num + \"?\" + Key,\"_self\",param);"
 				"}</script>"
-				"<h3 align=center> %s Webmail Interface - User %s - Message %d</h3>"
-				"<table align=center border=1 cellpadding=2 bgcolor=white><tr>"
-				"<td><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
-				"<td><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"
-				"<td><a href=/WebMail/DisplayText?%s&%d>Display as Text</a></td>"
-				"<td><a href=/WebMail/WMNext?%s>Next</a></td>"
-				"<td><a href=/WebMail/WMPrev?%s>Previous</a></td>"
-				"<td><a href=/WebMail/WMSame?%s>Back to List</a></td>"
+				"<h3 style=\"text-align:center\"> %s Webmail Interface - User %s - Message %d</h3>"
+				"<table style=\"margin:0 auto;border-collapse:collapse;\"><tr>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/DisplayText?%s&%d>Display as Text</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMNext?%s>Next</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMPrev?%s>Previous</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMSame?%s>Back to List</a></td>"
 				"</tr></table>", BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key,  Key, Msg->number, Key, Key, Key);
 
 			strcat(temp, ptr);
@@ -4075,7 +4087,7 @@ VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, cha
 	{
 		if (RefuseBulls)
 		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();script></html>");
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();</script></html>");
 			return;
 		}
 
@@ -5563,7 +5575,7 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 {
 	struct stat STAT;
 	FILE * hFile;
-	char MsgFile[MAX_PATH];
+	char MsgFile[295];
 	char * MsgBytes;
 	int ReadLen;
 	int FileSize;
@@ -5574,9 +5586,9 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 
 	DIR *dir;
 	struct dirent *entry;
-	char name[256];
+	char name[295];
 
-	sprintf(name, "%s/%s/%s", BPQDirectory, Dir->FormSet, Dir->DirName);
+	snprintf(name, sizeof(name), "%s/%s/%s", BPQDirectory, Dir->FormSet, Dir->DirName);
 
 	if (!(dir = opendir(name)))
 	{
@@ -5591,7 +5603,7 @@ char * CheckFile(struct HtmlFormDir * Dir, char * FN)
 	
 		if (stricmp(entry->d_name, FN) == 0)
 		{
-			sprintf(MsgFile, "%s/%s/%s/%s", GetBPQDirectory(), Dir->FormSet, Dir->DirName, entry->d_name);
+			snprintf(MsgFile, sizeof(MsgFile), "%s/%s/%s/%s", GetBPQDirectory(), Dir->FormSet, Dir->DirName, entry->d_name);
 			break;
 		}
 	}
@@ -5630,7 +5642,7 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 
 	char popuphddr[] = 
 			
-		"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } </style></head><body>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } </style>"
 		"<script>"
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
@@ -5638,8 +5650,9 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 		"window.open(\"/WebMail/DoSelect\" + '?' + Key + '&' + x,'_self');"
 		"}"
 		"</script>"
+		"</head><body>"
 		"<div>%s<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"<table>"
 		"<tr><td><select size=%d id='Sel' size=10 onclick=myFunction()>";
 	
 
@@ -5729,7 +5742,7 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 
 		len += sprintf(&popup[len], " <option value='%s'>%s", key, var[i]);
 	}
-	len += sprintf(&popup[len], "%s</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
+	len += sprintf(&popup[len], "</select></td></tr></table><br><input onclick=window.history.back() value=Back type=button class='btn'></div>");
 
 	*WebMail->RLen = sprintf(WebMail->Reply, "%s", popup);
 	free(SelCopy);
@@ -5834,7 +5847,7 @@ BOOL ParsetxtTemplate(struct HTTPConnectionInfo * Session, struct HtmlFormDir * 
 	char FormDir[MAX_PATH];
 	double Lat;
 	double Lon;
-	char LatString[32], LonString[32], GPSString[32];
+	char LatString[32], LonString[32], GPSString[70];
 	BOOL GPSOK;
 	
 	struct tm * tm;
@@ -5936,7 +5949,7 @@ BOOL ParsetxtTemplate(struct HTTPConnectionInfo * Session, struct HtmlFormDir * 
 	memmove(LonString, &LonString[1], 3);
 	LatString[2] = '-';
 	LonString[3] = '-';
-	sprintf(GPSString,"%s %s", LatString, LonString);
+	snprintf(GPSString, sizeof(GPSString), "%s %s", LatString, LonString);
 
 	txtKey->Key = _strdup("<GPS>");
 	if (GPSOK)
@@ -6273,7 +6286,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 {
 	char popuphddr[] = 
 			
-		"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; }</style></head><body>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; }</style>"
 		"<script>"
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
@@ -6281,8 +6294,9 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 		"window.open(\"/WebMail/GetDownLoad\" + '?' + Key + '&' + x,'_self', param);"
 		"}"
 		"</script>"
+		"</head><body>"
 		"<div>Note files over 100K long can't be downloaded<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"<table>"
 		"<tr><td><select size=%d id='Sel' size=10 onclick=myFunction()>";
 
 	char popup[10000];

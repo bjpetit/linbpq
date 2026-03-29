@@ -99,7 +99,7 @@ VOID NRRecordRoute(UCHAR * Buff, int Len)
 	if (ID == NRRSession->NRRID)
 			ptr1 += sprintf(ptr1, "NRR Response in %d Secs:", (int)(Now - NRRSession->NRRTime));
 		else
-			ptr1 += sprintf(ptr1, "NRR Response:", (int)(Now - NRRSession->NRRTime));
+			ptr1 += sprintf(ptr1, "NRR Response:");
 
 		Buff += 21 + MSGHDDRLEN;
 		Len -= (21 + MSGHDDRLEN);

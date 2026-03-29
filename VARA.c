@@ -747,7 +747,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (_memicmp(buff->L2DATA, "RADIO ", 6) == 0)
 			{
-				sprintf(buff->L2DATA, "%d %s", TNC->Port, &buff->L2DATA[6]);
+				{ char _tmp[290]; snprintf(_tmp, sizeof(_tmp), "%d %s", TNC->Port, &buff->L2DATA[6]); memcpy(buff->L2DATA, _tmp, sizeof(buff->L2DATA)); }
 
 				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK, buff->L2DATA))
 				{
@@ -823,7 +823,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 			{
-				char Connect[80];
+				char Connect[290];
 				char * ptr = strchr(&buff->L2DATA[2], 13);
 
 				if (ptr)
@@ -831,7 +831,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				_strupr(&buff->L2DATA[2]);
 
-				sprintf(Connect, "CONNECT %s %s\r", TNC->Streams[0].MyCall, &buff->L2DATA[2]);
+				snprintf(Connect, sizeof(Connect), "CONNECT %s %s\r", TNC->Streams[0].MyCall, &buff->L2DATA[2]);
 
 				// Need to set connecting here as if we delay for busy we may incorrectly process OK response
 

@@ -899,7 +899,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		if (toupper(buff->L2DATA[0]) == 'C' && buff->L2DATA[1] == ' ' && txlen > 2)	// Connect
 		{
-			char Connect[80];
+			char Connect[290];
 			char loppedCall[10];
 			
 			char * ptr = strchr(&buff->L2DATA[2], 13);
@@ -923,7 +923,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			// Messages are sent at TNC level to the tnc call, so we send our tnc call to the other end
 	
 
-			txlen = sprintf(Connect, "C %s %s %s ", &buff->L2DATA[2], STREAM->MyCall, TNC->FreeDataInfo->ourCall);
+			txlen = snprintf(Connect, sizeof(Connect), "C %s %s %s ", &buff->L2DATA[2], STREAM->MyCall, TNC->FreeDataInfo->ourCall);
 
 			// See if Busy
 /*

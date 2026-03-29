@@ -5641,7 +5641,7 @@ void SendDataToPktMapThread(void * Param)
 			}
 
 			ptr += sprintf(ptr, "{\"id\": \"%d\",\"linkType\": \"%s\","
-			"\"freq\": \"%lld\",\"mode\": \"%s\",\"modulation\": \"%s\","
+			"\"freq\": \"%lu\",\"mode\": \"%s\",\"modulation\": \"%s\","
 			"\"baud\": \"%d\",\"bitrate\": \"%d\",\"usage\": \"%s\",\"comment\": \"%s\"},\r\n",
 			PortNo, Type, 
 			Freq, Mode, Modulation,

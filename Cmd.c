@@ -3013,7 +3013,7 @@ noFlip:
 				if (memcmp(EXTPORT->PORT_DLL_NAME, "TELNET", 6) == 0 || memcmp(EXTPORT->PORT_DLL_NAME, "SCSPACTOR", 9) == 0)
 				{
 					NewSess->Secure_Session = Session->Secure_Session;
-					len = sprintf(Callstring,"C %s", cmdCopy);
+					len = snprintf(Callstring, sizeof(Callstring), "C %s", cmdCopy);
 				}
 				else
 				{

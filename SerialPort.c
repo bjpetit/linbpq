@@ -987,7 +987,7 @@ VOID SerialProcessTNCMessage(struct TNCINFO * TNC)
 		return;			// No buffers, so ignore
 	}
 	
-	buffptr->Len = sprintf((UCHAR *)&buffptr->Data[0], "%s", TNC->RXBuffer);
+	buffptr->Len = snprintf((char *)&buffptr->Data[0], sizeof(buffptr->Data), "%s", TNC->RXBuffer);
 
 	C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 

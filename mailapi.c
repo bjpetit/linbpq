@@ -272,8 +272,8 @@ int MailAPIProcessHTTPMessage(struct HTTPConnectionInfo * Session, char * respon
 
 		// Return Token
 
-		sprintf(response, "{\"access_token\":\"%s\", \"expires_at\":%d, \"scope\":\"create\"}\r\n",
-			Token->token, Token->expiration_time);
+sprintf(response, "{\"access_token\":\"%s\", \"expires_at\":%ld, \"scope\":\"create\"}\r\n",
+			 Token->token, (long)Token->expiration_time);
 
 		return strlen(response);
 	}
@@ -395,8 +395,8 @@ int WebMailAPIProcessHTTPMessage(char * response, char * Method, char * URL, cha
 
 			// Return Token
 
-			sprintf(response, "{\"access_token\":\"%s\", \"expires_in\":%d, \"scope\":\"create\"}\r\n",
-					Token->token, Token->expiration_time);
+			sprintf(response, "{\"access_token\":\"%s\", \"expires_in\":%ld, \"scope\":\"create\"}\r\n",
+					Token->token, (long)Token->expiration_time);
 
 			return strlen(response);
 
@@ -458,7 +458,7 @@ int sendMsgList(struct HTTPConnectionInfo * Session, char * response, char * Res
 
 			ptr += sprintf(ptr, "\"id\": \"%d\",\r\n", Msg->number);
 			ptr += sprintf(ptr, "\"mid\": \"%s\",\r\n", Msg->bid);
-			ptr += sprintf(ptr, "\"rcvd\": \"%d\",\r\n", Msg->datecreated);
+			ptr += sprintf(ptr, "\"rcvd\": \"%ld\",\r\n", Msg->datecreated);
 			ptr += sprintf(ptr, "\"type\": \"%c\",\r\n", Msg->type);
 			ptr += sprintf(ptr, "\"status\": \"%c\",\r\n", Msg->status);
 			ptr += sprintf(ptr, "\"to\": \"%s\",\r\n", Msg->to);
