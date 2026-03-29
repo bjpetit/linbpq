@@ -533,7 +533,7 @@ unsigned int aiswhite_png_len = 227;
 #define APRS_CSS \
 	":root{--bg:#f4f4f4;--surface:#fff;--primary:#007bff;--border:#ccc;--text:#1f2937;--link:#1f2937;}" \
 	"*{box-sizing:border-box;}" \
-	"body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);-webkit-font-smoothing:antialiased;}" \
+	"body{font-family:Arial,sans-serif;background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);-webkit-font-smoothing:antialiased;}" \
 	".aprs-page-shell{max-width:1100px;margin:0 auto;padding:0 10px;}" \
 	".aprs-info-content{max-width:80%;margin:0 auto;}" \
 	"h1,h2,h3{text-align:center;margin:0.5em 0;}" \
@@ -741,7 +741,7 @@ char * get_infowx_call()
 
 		"<h3>Weather Data</h3>\r\n"
 		APRS_WEATHER_TABLE_OPEN
-		"<tr><td><b>Measurement</b></td><td><b>Imperial</b></td></tr>\r\n"
+		"<tr><th scope=col>Measurement</th><th scope=col>Imperial</th></tr>\r\n"
 		"<tr><td>Wind speed</td><td>##WIND_SPEED_MPH## mph</td></tr>\r\n"
 		"<tr><td>Wind gust</td><td>##WIND_GUST_MPH## mph</td></tr>\r\n"
 		"<tr><td>Wind direction</td><td>##WIND_DIRECTION## deg</td></tr>\r\n"
@@ -2767,22 +2767,27 @@ char * get_portstats()
 {
 	char Msg[] =
 		"<!DOCTYPE html>\n"
-		"<html>\n"
-		"\n"
+		"<html lang=\"en\">\n"
 		"<head>\n"
-		"<script src=\"https://code.jquery.com/jquery-3.6.0.min.js\"> </script>\n"
+		"<meta charset=\"UTF-8\">\n"
+		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+		"<title>Port Statistics</title>\n"
+		"<style>" APRS_CSS ".portstats-wrap{max-width:1100px;margin:0 auto;}.portstats-chart{display:block;width:100%%;max-width:900px;height:auto;border:1px solid #d3d3d3;background:var(--surface);margin:10px auto;}.portstats-note{text-align:center;margin:8px 0 14px;}" "</style>\n"
+		"<script>" COMMON_MENU_JAVASCRIPT "</script>\n"
 		"</head>\n"
-		"\n"
-		"\n"
 		"<body>\n"
-		"<H2 id=\"h1\"> Last hour's stats for Port </h2>\n"
-		"<p>\n"
-		"<canvas id=\"myCanvas\" width=\"600\" height=\"250\" style=\"border:1px solid #d3d3d3;\">\n"
-		"Your browser does not support the HTML canvas tag.</canvas>\n"
-		"<br>\n"
-		"<canvas id=\"myCanvas2\" width=\"600\" height=\"250\" style=\"border:1px solid #d3d3d3;\">\n"
-		"Your browser does not support the HTML canvas tag.</canvas>\n"
-		"\n"
+		"<div class=\"aprs-page-shell\">\n"
+		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button></div>\n"
+		"<nav id=\"mainMenu\" class=\"menu\">\n"
+		"<a href=\"../index.html\">Home</a><a href=\"all.html?width=7\">All Stations</a><a href=\"allrf.html\">RF Stations</a><a href=\"wxall.html?width=7\">All WX Stations</a><a href=\"info.html\">Information</a><a href=\"../nodemenu.html\">Node Pages</a>\n"
+		"</nav>\n"
+		"<div class=\"portstats-wrap\">\n"
+		"<h2 id=\"h1\">Last hour's stats for Port</h2>\n"
+		"<p class=\"portstats-note\">Receive and transmit channel utilization over the last 60 minutes.</p>\n"
+		"<canvas id=\"myCanvas\" class=\"portstats-chart\" width=\"600\" height=\"250\">Your browser does not support the HTML canvas tag.</canvas>\n"
+		"<canvas id=\"myCanvas2\" class=\"portstats-chart\" width=\"600\" height=\"250\">Your browser does not support the HTML canvas tag.</canvas>\n"
+		"</div>\n"
+		"</div>\n"
 		"<script>\n"
 		"var c = document.getElementById(\"myCanvas\");\n"
 		"var ctx = c.getContext(\"2d\");\n"
@@ -2919,10 +2924,8 @@ char * get_portstats()
 		"}\n"
 		"\n"
 		"</script>\n"
-		"\n"
 		"</body>\n"
 		"</html>\n"
-		"\n"
 		"";
 
 	return _strdup(Msg);;

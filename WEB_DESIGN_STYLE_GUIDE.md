@@ -34,10 +34,38 @@
   - Inputs: flex: 2 1 100px-200px (proportionally larger)
   - Mobile: Stacks vertically (flex-direction: column) below 768px
 - **`.menu`**: Flex container for navigation/menu items
-  - Items: flex: 1 1 200px (minimum 200px width boxes)
-  - Cards: white background, padding: 15px, box-shadow: 0 0 5px rgba(0,0,0,0.1), border-radius: 8px
+  - Items: content-width by default (inline-flex), full-width only on mobile
+  - Items: min-height: 44px, padding: 10px 16px, border-radius: 6px, border: 1px solid #ccc
   - Mobile: Single column layout (flex-direction: column)
 - **`.buttons`**: Centered button container (text-align: center)
+
+## Node Pages (`/Nodes/`) Implementation Notes
+- **Menu max width**: 1100px (see `HTTPcode.c` `HTTP_NODE_MENU_CSS`)
+- **Routes page heading**: `Routes.html` uses shared heading macro with responsive clamp sizing (`HTTP_NODE_H2`)
+- **Routes table classing**:
+  - Uses `node-table node-table-stack routes-table`
+  - Wrapped in `.table-wrap` for horizontal scrolling on narrow screens
+  - Uses `data-label` attributes on all cells for mobile stacked cards
+- **Compact route density**:
+  - `.routes-table` uses compact monospace sizing (`COMMON_TABLE_FONT_SIZE_COMPACT`)
+  - Header/body cell padding is reduced (`5px 4px`) for dense route columns
+- **Node stats mobile behavior**:
+  - `stats-table` suppresses `data-label` pseudo-labels on mobile for cleaner two-column stat cards
+
+## Node Modernization Status
+- **Modernized (`/Nodes/`) pages**:
+  - `Routes.html`, `Nodes.html`, `Links.html`, `Users.html`, `NodeStats.html`, and port stats views use shared menu/table CSS patterns (`COMMON_MENU_CSS`, `COMMON_TABLE_CSS`) and responsive stacked table behavior.
+- **Legacy islands still present in Node code paths**:
+  - `HTTPcode.c` `Index[]` still uses legacy presentational markup (`<P align=center>`, table `cellpadding/cellspacing/bgcolor`).
+  - `HTTPcode.c` `Beacons[]` still uses nested layout tables and presentational attributes (`align=center`, `bgcolor=white`, `p align=center`).
+  - Terminal templates (`TermSignon[]`, `TermPage[]`, `TermOutput[]`) are responsive but remain standalone inline-style pages, not yet unified with `common_web_components.h`.
+  - A few deep status/diagnostic paths still emit inline table/style HTML directly.
+
+## Node Migration Priority (Guide)
+- **Priority 1**: Keep `Routes`/`Nodes`/`Links`/`Users`/`Stats` on shared table/menu macros and avoid introducing new presentational attributes.
+- **Priority 2**: Refactor `Beacons[]` to `.form-section` + `.form-row` patterns, removing table-based form layout.
+- **Priority 3**: Migrate terminal templates to shared tokens/components where practical (fonts, spacing, buttons, form controls).
+- **Priority 4**: Replace remaining direct `sprintf`-built inline table/style snippets in low-traffic status pages.
 
 ## Preferred Menu Design (Standard)
 - **Use this menu pattern on all pages**: Mail header pages, node menu pages, and main configuration pages
@@ -78,15 +106,15 @@
 - **Border Radius**: 4px for inputs/buttons, 8px for larger containers
 
 ## Table Layout
-- Mobile-First & Fluid: Set table { width: 100%; max-width: 100%; } so tables fill the container but do not overflow.
-- Horizontal Scrolling: For complex data, wrap the <table> in a <div> with overflow-x: auto. Ensure the table is still legible and consider adding a scroll prompt.
-- Stacked/Card Layout (Mobile): At smaller breakpoints, convert rows to block-level elements (td { display: block; }) and use data-attributes to add labels, turning each row into a distinct "card".
-- Fixed Table Layout: Use table-layout: fixed; to allow the browser to render the table faster and allow columns to size based on width attributes rather than content, improving Readability & Styling Best Practices
-- Zebra Striping: Use tbody tr:nth-child(even) { background-color: #f2f2f2; } to improve readability for large data sets.
-- Alignment: Align text to the left and numerical data to the right (left-to-right languages) to facilitate easier scanning.
-- Spacing/Padding: Ensure generous padding on td and th elements to reduce visual clutter.
-- Sticky Headers: Implement position: sticky on the <thead> or the first column to keep context while scrolling, improving the experience of long, narrow tables.
-- Accessibility: Use <th> elements for headers, apply scope attributes, and use <caption to describe the table.
+- Node tables use `width: max-content` and `table-layout: auto` within `.table-wrap` wrappers.
+- Horizontal Scrolling: Always wrap Node data tables in `.table-wrap` (`overflow-x: auto`) so wide tables (notably `Routes.html`) remain usable.
+- Stacked/Card Layout (Mobile): Under 768px, `.node-table-stack` hides `<thead>` and renders rows/cells as block cards using `data-label` pseudo-labels.
+- Compact variants:
+  - `.routes-table` and `.compact-table` use reduced font size and tighter cell padding.
+  - Use these classes for dense operational pages (`Routes`, `Links`, `Sessions`, `Stats`).
+- Zebra Striping: `tbody tr:nth-child(even)` uses `#f2f2f2` on desktop table view.
+- Alignment: Use `.text`, `.num`, and `.center` cell classes for semantic alignment.
+- Accessibility: Use `<th>` with `scope=col` for table headers.
 
 ## Accessibility & Best Practices
 - All form inputs have associated labels or clear labels within form-row divs
