@@ -534,6 +534,8 @@ unsigned int aiswhite_png_len = 227;
 	":root{--bg:#f4f4f4;--surface:#fff;--primary:#007bff;--border:#ccc;--text:#1f2937;--link:#1f2937;}" \
 	"*{box-sizing:border-box;}" \
 	"body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);-webkit-font-smoothing:antialiased;}" \
+	".aprs-page-shell{max-width:1100px;margin:0 auto;padding:0 10px;}" \
+	".aprs-info-content{max-width:80%;margin:0 auto;}" \
 	"h1,h2,h3{text-align:center;margin:0.5em 0;}" \
 	"@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}" \
 	".menu-header{display:none;max-width:980px;margin:0 auto 10px;}" \
@@ -565,6 +567,22 @@ unsigned int aiswhite_png_len = 227;
 	".aprs-detail{text-align:center;margin:8px 0;}" \
 	".aprs-lastposit{background:#f8f8f8;border:1px solid var(--border);border-radius:4px;padding:8px 12px;max-width:800px;margin:10px auto;word-break:break-word;}"
 
+#define APRS_MAP_CSS \
+	APRS_CSS \
+	"html,body{height:100%;width:100%;}" \
+	"body{display:flex;flex-direction:column;padding:0;min-height:100vh;}" \
+	".menu-wrapper{background:var(--bg);padding:10px 10px 0;}" \
+	".menu{max-width:1100px;margin:0 auto 10px;}" \
+	".menu a{font-size:16px;}" \
+	".aprs-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-width:1100px;margin:0 auto 10px;padding:10px 12px;}" \
+	".aprs-controls label{display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:15px;}" \
+	".aprs-controls input[type=checkbox]{width:18px;height:18px;margin:0;}" \
+	"#map{flex:1 1 auto;min-height:320px;width:100%;margin:0;}" \
+	"@media(max-width:768px){.aprs-controls{justify-content:flex-start;}}" \
+	".popup{border:1px solid black;margin:0;padding:0;font-size:12px;min-height:16px;box-shadow:none;}" \
+	".leaflet-tooltip-left.popup::before{border-left-color:transparent;}" \
+	".leaflet-tooltip-right.popup::before{border-right-color:transparent;}"
+
 #define APRS_PAGE_HEAD_REFRESH \
 	"<!DOCTYPE html>" \
 	"<html lang=\"en\">" \
@@ -580,7 +598,7 @@ unsigned int aiswhite_png_len = 227;
 	"<script>" COMMON_MENU_JAVASCRIPT "</script>" \
 	"</head>" \
 	"<body>" \
-	"<div style=\"max-width:1100px;margin:0 auto;padding:0 10px;\">"
+	"<div class=\"aprs-page-shell\">"
 
 #define APRS_PAGE_HEAD_STATIC \
 	"<!DOCTYPE html>" \
@@ -593,7 +611,7 @@ unsigned int aiswhite_png_len = 227;
 	"<script>" COMMON_MENU_JAVASCRIPT "</script>" \
 	"</head>" \
 	"<body>" \
-	"<div style=\"max-width:1100px;margin:0 auto;padding:0 10px;\">"
+	"<div class=\"aprs-page-shell\">"
 
 #define APRS_LEFT_MENU \
 	"<div class=\"menu-header\">" \
@@ -837,7 +855,7 @@ char * get_info()
 
 		"<h2>Information</h2>\r\n"
 
-		"<div style=\"max-width:80%;margin:0 auto\">\r\n"
+		"<div class=\"aprs-info-content\">\r\n"
 		"<p>BPQ-WebServer is a simple plug-in web server for BPQ32. It will dynamically serve a selection of pages created from the data in BPQ32. The pages currently available are -</p>\r\n"
 
 		"<ul>"
@@ -2930,16 +2948,8 @@ char * get_aprs()
 		"<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js\"></script>\n"
 		"<script src=\"leaflet.rotatedMarker.js\"></script>\n"
 		"\n"
-		"<style type=\"text/css\">\n"
-		"html, body {height: 100%; width: 100%; margin: 0;}\n"
-		"#map {position: absolute; top:40px; bottom: 0;width: 100%; margin: 0;}\n"
-		".topnav { overflow: hidden; height: 40px; background-color: white; margin: 0;}\n"
-		".topnav a {float: left; color: black; text-align: center; padding: 14px 16px; text-decoration: none; font-size: 17px;}\n"
-		".topnav form{float: left; color: black; text-align: center; padding: 14px 16px; text-decoration: none; font-size: 17px;}\n"
-		".popup {border: 1px solid black;margin: 0; padding: 0; font-size: 12px; min-height:16px; box-shadow: none;}\n"
-		".leaflet-tooltip-left.popup::before {border-left-color: transparent;}\n"
-		".leaflet-tooltip-right.popup::before {border-right-color: transparent;}\n"
-		"</style>\n"
+		"<style>" APRS_MAP_CSS "</style>\n"
+		"<script>" COMMON_MENU_JAVASCRIPT "</script>\n"
 		"  \n"
 		"<script>\n"
 		"var map;\n"
@@ -3224,21 +3234,23 @@ char * get_aprs()
 		"</script>\n"
 		"</head>\n"
 		"\n"
-		"<BODY onload=initialize() onresize='resize()'>\n"
-		"<div class=\"topnav\" id=menu>\n"
+		"<body onload=\"initialize()\" onresize=\"resize()\">\n"
+		"<div class=\"menu-wrapper\">\n"
+		"<div class=\"menu-header\">\n"
+		"<button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button>\n"
+		"</div>\n"
+		"<nav id=\"mainMenu\" class=\"menu\">\n"
 		"  <a href=\"/\">Home</a>\n"
 		"  <a href=\"/aprs\">APRS Pages</a>\n"
 		"  <a href=\"Node/NodeMenu.html\">Node Menu</a>\n"
-		"  <form>\n"
-		"  <input type=\"checkbox\" id= \"aprsid\" onchange='aprs=this.checked | 0;\tmyTimeout = setTimeout(Refresh, 500);'>\n"
-		"  <label for=\"vehicle1\"> APRS</label>\n"
-		"  <input type=\"checkbox\" id= \"aisid\" onchange='ais=this.checked | 0; myTimeout = setTimeout(Refresh, 500);'>\n"
-		"  <label for=\"vehicle2\"> AIS</label>\n"
-		"  <input type=\"checkbox\" id= \"adsbid\" onchange='adsb=this.checked | 0; myTimeout = setTimeout(Refresh, 500);'>\n"
-		"  <label for=\"vehicle3\"> ADSB</label>\n"
-		"</form>\n"
+		"</nav>\n"
+		"<div class=\"aprs-controls\">\n"
+		"  <label for=\"aprsid\"><input type=\"checkbox\" id=\"aprsid\" onchange=\"aprs=this.checked|0;myTimeout=setTimeout(Refresh,500);\"> APRS</label>\n"
+		"  <label for=\"aisid\"><input type=\"checkbox\" id=\"aisid\" onchange=\"ais=this.checked|0;myTimeout=setTimeout(Refresh,500);\"> AIS</label>\n"
+		"  <label for=\"adsbid\"><input type=\"checkbox\" id=\"adsbid\" onchange=\"adsb=this.checked|0;myTimeout=setTimeout(Refresh,500);\"> ADSB</label>\n"
 		"</div>\n"
-		"  <div id=\"map\"></div>\n"
+		"</div>\n"
+		"<div id=\"map\"></div>\n"
 		"</body>\n"
 		"</html>";
 
