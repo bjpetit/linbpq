@@ -55,17 +55,17 @@
 ## Node Modernization Status
 - **Modernized (`/Nodes/`) pages**:
   - `Routes.html`, `Nodes.html`, `Links.html`, `Users.html`, `NodeStats.html`, and port stats views use shared menu/table CSS patterns (`COMMON_MENU_CSS`, `COMMON_TABLE_CSS`) and responsive stacked table behavior.
+  - `Index[]` (root landing page) modernized: responsive flex card layout, DOCTYPE, viewport, no legacy table markup.
+  - `Beacons[]` modernized: `.form-section` + `.form-row` + `.buttons` pattern, no layout tables.
 - **Legacy islands still present in Node code paths**:
-  - `HTTPcode.c` `Index[]` still uses legacy presentational markup (`<P align=center>`, table `cellpadding/cellspacing/bgcolor`).
-  - `HTTPcode.c` `Beacons[]` still uses nested layout tables and presentational attributes (`align=center`, `bgcolor=white`, `p align=center`).
   - Terminal templates (`TermSignon[]`, `TermPage[]`, `TermOutput[]`) are responsive but remain standalone inline-style pages, not yet unified with `common_web_components.h`.
-  - A few deep status/diagnostic paths still emit inline table/style HTML directly.
+  - A few deep status/diagnostic paths still emit inline table/style HTML directly (`HTTPcode.c` ~lines 4477, 4913).
 
 ## Node Migration Priority (Guide)
-- **Priority 1**: Keep `Routes`/`Nodes`/`Links`/`Users`/`Stats` on shared table/menu macros and avoid introducing new presentational attributes.
-- **Priority 2**: Refactor `Beacons[]` to `.form-section` + `.form-row` patterns, removing table-based form layout.
+- **Priority 1 (done)**: Keep `Routes`/`Nodes`/`Links`/`Users`/`Stats` on shared table/menu macros and avoid introducing new presentational attributes.
+- **Priority 2 (done)**: `Beacons[]` refactored to `.form-section` + `.form-row` patterns. `Index[]` modernized to flex card layout.
 - **Priority 3**: Migrate terminal templates to shared tokens/components where practical (fonts, spacing, buttons, form controls).
-- **Priority 4**: Replace remaining direct `sprintf`-built inline table/style snippets in low-traffic status pages.
+- **Priority 4 (done)**: `StatusProc` (Stream Status page) and `BuildRigCtlPage` (Rig Control page) modernized: DOCTYPE, viewport, charset, `<style>` block replacing inline table attributes (`border`, `cellpadding`, `cellspacing`, inline `style=` on `<table>`), fixed invalid `<body height:580px>` syntax, removed `&nbsp;` padding from header cells, added missing `</body></html>` to `StatusProc`.
 
 ## Preferred Menu Design (Standard)
 - **Use this menu pattern on all pages**: Mail header pages, node menu pages, and main configuration pages
@@ -122,3 +122,86 @@
 - Full-width form elements at mobile breakpoint
 - Center-aligned main headings and page titles
 - Readonly text inputs styled consistently with regular inputs
+
+---
+
+## Shared CSS Macro Reference (`common_web_components.h`)
+
+All web-generating C files that produce HTML should `#include "common_web_components.h"` and use these macros instead of writing inline CSS blocks.
+
+### Base / Foundation
+| Macro | Purpose | Use in |
+|---|---|---|
+| `COMMON_CSS_ROOT` | `:root` color variables + `*{box-sizing:border-box}` | Foundation of every page `<style>` |
+| `COMMON_BODY_BASE_CSS` | `body` with safe-area padding, font, background, `@supports` | Every full-page template |
+| `COMMON_HEADING_CSS` | Centered `h3` with clamp sizing | Every full-page template |
+| `COMMON_REDUCED_MOTION_CSS` | `@media(prefers-reduced-motion)` zero-duration animations | Every full-page template |
+| `COMMON_CSS_VARIABLES` | Combines all four above — shorthand for full page base | **Preferred** for any new full-page template |
+
+### Navigation Menu
+| Macro | Purpose | Note |
+|---|---|---|
+| `COMMON_MENU_CSS` | Responsive collapsible menu CSS | For `sprintf`/`snprintf` contexts (`%%` safe) |
+| `COMMON_MENU_CSS_TEMPLATE(PCT)` | Parameterized version | Use `"%"` for raw string contexts, `"%%"` for printf contexts |
+| `COMMON_MENU_JAVASCRIPT` | Toggle/close/escape JS for the menu | Inject into `<script>` block |
+
+### Tables
+| Macro | Purpose |
+|---|---|
+| `COMMON_TABLE_CSS` | Responsive stacked-card table with `.node-table`, `.node-table-stack`, `.compact-table`, `.routes-table`, `.stats-table`, `.table-wrap` |
+| `COMMON_TABLE_FONT_SIZE` | `clamp()` string for normal table font |
+| `COMMON_TABLE_FONT_SIZE_COMPACT` | `clamp()` string for dense table font |
+
+### Forms & Inputs
+| Macro | Purpose |
+|---|---|
+| `COMMON_FORM_CSS` | `.form-section`, `.form-row`, label, input, textarea, checkbox, responsive stacking |
+| `COMMON_BUTTON_CSS` | `.buttons` sticky container with primary-color `input`/`button` |
+| `COMMON_UTILITY_CSS` | Lightweight helpers: `.text-center`, `.muted-note`, `.inline-label`, `.flex-2-200`, `.input-w-80/100` |
+
+### Signon / Login Pages
+| Macro | Purpose |
+|---|---|
+| `COMMON_SIGNON_CSS` | Full signon page CSS: body, h2/h3, `.form-container`, `.form-row`, label, inputs, `.btn`, `.btn:hover/active`, `.alert-error`, `.alert-warn`, `.msg-page` |
+
+Used by: `TermSignon`, `NodeSignon`, `MailSignon`, `ChatSignon`, `LostSession`, `NoSessions`, `MailLostSession` in `HTTPcode.c`.
+
+**For `PassError`/`BusyError` snippets** (injected into existing signon pages that already carry `COMMON_SIGNON_CSS`):
+```
+"<div class='alert-error'>..message..</div>"
+"<div class='alert-warn'>..message..</div>"
+```
+
+### APRS Pages
+All APRS CSS is defined by a family of parameterized templates, with convenience aliases:
+
+| Alias | Template | Use in |
+|---|---|---|
+| `COMMON_APRS_CONTENT_CSS` | `COMMON_APRS_CONTENT_CSS_TEMPLATE("%")` | Raw string contexts |
+| `COMMON_APRS_MAP_CSS` | `COMMON_APRS_MAP_CSS_TEMPLATE("%")` | Raw string contexts |
+| `COMMON_APRS_MESSAGE_PAGE_CSS` | `COMMON_APRS_MESSAGE_PAGE_CSS_TEMPLATE("%")` | Raw string contexts |
+| `COMMON_APRS_CONTENT_CSS_FMT` | `COMMON_APRS_CONTENT_CSS_TEMPLATE("%%")` | `sprintf`/`snprintf` contexts |
+| `COMMON_APRS_MAP_CSS_FMT` | `COMMON_APRS_MAP_CSS_TEMPLATE("%%")` | `sprintf`/`snprintf` contexts |
+| `COMMON_APRS_MESSAGE_PAGE_CSS_FMT` | `COMMON_APRS_MESSAGE_PAGE_CSS_TEMPLATE("%%")` | `sprintf`/`snprintf` contexts |
+
+**CSS hierarchy**: `BASE_TEMPLATE` → `CONTENT_TEMPLATE` (extends base) → `MAP_TEMPLATE` (extends content). `MESSAGE_PAGE_TEMPLATE` extends base independently.
+
+**Used in**: `APRSStdPages.c` (`APRS_CSS`, `APRS_MAP_CSS`), `APRSCode.c` (`APRS_MSG_PAGE_STYLE`).
+
+### Menus (App-Specific)
+| Macro | Usage |
+|---|---|
+| `COMMON_MAIL_MENU` | `sprintf(buf, COMMON_MAIL_MENU, key×9)` — inject after page `<body>` open in mail pages |
+| `COMMON_CHAT_MENU` | `sprintf(buf, COMMON_CHAT_MENU, key×2)` — inject after page `<body>` open in chat pages |
+
+### `%` vs `%%` Pattern
+This codebase has two distinct string contexts:
+- **Raw string templates** (e.g., static `char Foo[]` arrays used directly, not through `sprintf`): use single `%` in CSS (e.g., `100%`)
+- **printf-format templates** (passed to `sprintf`/`snprintf`): must use `%%` to produce a literal `%` in output
+
+When adding a new shared CSS macro that contains percentage values, use the `TEMPLATE(PCT)` pattern:
+```c
+#define MY_CSS_TEMPLATE(PCT) ".foo{width:100" PCT ";}"
+#define MY_CSS     MY_CSS_TEMPLATE("%")   // raw string alias
+#define MY_CSS_FMT MY_CSS_TEMPLATE("%%")  // printf-safe alias
+```

@@ -7238,27 +7238,7 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	free (SaveMsgBytes);
 }
 
-#define APRS_MSG_PAGE_STYLE \
-	COMMON_CSS_ROOT \
-	COMMON_REDUCED_MOTION_CSS \
-	COMMON_MENU_CSS \
-	"body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:clamp(12px,3vw,20px);color:#1f2937;}" \
-	"h2{text-align:center;margin:10px 0 14px;font-size:clamp(1.25rem,1rem + 1.2vw,1.75rem);}" \
-	".menu{max-width:1100px;margin:0 auto 14px;}" \
-	".menu-header{max-width:1100px;}" \
-	".aprs-msg-wrap{max-width:1100px;margin:0 auto;}" \
-	".aprs-msg-table-wrap{width:100%%;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
-	".aprs-msg-table{width:max-content;min-width:100%%;border-collapse:collapse;background:#fff;}" \
-	".aprs-msg-table th,.aprs-msg-table td{border:1px solid #ccc;padding:6px 8px;white-space:nowrap;}" \
-	".aprs-msg-table th{background:#f0f0f0;text-align:left;}" \
-	".aprs-msg-table tbody tr:nth-child(even){background:#f2f2f2;}" \
-	".aprs-msg-form{max-width:900px;margin:0 auto;background:#fff;border:1px solid #ccc;border-radius:8px;padding:14px;box-shadow:0 0 5px rgba(0,0,0,0.08);}" \
-	".aprs-msg-form table{width:100%%;border-collapse:collapse;}" \
-	".aprs-msg-form td{padding:6px;vertical-align:top;}" \
-	".aprs-msg-form input[type=text]{width:100%%;padding:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;}" \
-	".aprs-msg-actions{text-align:center;margin-top:10px;}" \
-	".aprs-msg-actions input[type=submit]{min-height:44px;padding:10px 16px;background:#fff;border:1px solid #ccc;border-radius:6px;cursor:pointer;margin:0 6px;}" \
-	".aprs-msg-actions input[type=submit]:hover{background:#e9ecef;}"
+#define APRS_MSG_PAGE_STYLE COMMON_APRS_MESSAGE_PAGE_CSS_FMT
 
 #define APRS_MSG_MENU \
 	"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button></div>" \

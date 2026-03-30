@@ -529,59 +529,9 @@ unsigned char aiswhite_png[] = {
 };
 unsigned int aiswhite_png_len = 227;
 
-// APRS page CSS - uses single % (not for printf/snprintf format strings)
-#define APRS_CSS \
-	":root{--bg:#f4f4f4;--surface:#fff;--primary:#007bff;--border:#ccc;--text:#1f2937;--link:#1f2937;}" \
-	"*{box-sizing:border-box;}" \
-	"body{font-family:Arial,sans-serif;background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);-webkit-font-smoothing:antialiased;}" \
-	".aprs-page-shell{max-width:1100px;margin:0 auto;padding:0 10px;}" \
-	".aprs-info-content{max-width:80%;margin:0 auto;}" \
-	"h1,h2,h3{text-align:center;margin:0.5em 0;}" \
-	"@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}" \
-	".menu-header{display:none;max-width:980px;margin:0 auto 10px;}" \
-	".menu-toggle{width:100%;min-height:44px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);color:var(--text);cursor:pointer;touch-action:manipulation;font-weight:500;}" \
-	".menu-toggle:active{background:#e9ecef;}" \
-	".menu{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;max-width:980px;margin:0 auto 16px;}" \
-	".menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);text-decoration:none;border-radius:6px;border:1px solid var(--border);color:var(--link);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;touch-action:manipulation;}" \
-	".menu a:hover{background:#e9ecef;}" \
-	".menu a:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}" \
-	".menu a:active{background:black;color:white;}" \
-	"@media(max-width:768px){" \
-	".menu-header{display:block;}" \
-	".menu{display:none;flex-direction:column;align-items:stretch;gap:8px;}" \
-	".menu.menu-open{display:flex;}" \
-	".menu a{width:100%;text-align:center;min-height:48px;}" \
-	"}" \
-	".table-wrap{width:100%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
-	".aprs-station-table{border-collapse:collapse;font-family:Arial,sans-serif;}" \
-	".aprs-station-table th,.aprs-station-table td{border:1px solid #888;padding:6px 8px;}" \
-	".aprs-station-table th{background:#f0e9d2;text-align:left;}" \
-	".aprs-station-table tbody tr{background:#FFFFCC;}" \
-	".aprs-station-table tbody tr:nth-child(even){background:#f0efbf;}" \
-	".aprs-weather-table{border-collapse:collapse;margin:0 auto 12px;}" \
-	".aprs-weather-table th,.aprs-weather-table td{border:1px solid var(--border);padding:6px 10px;}" \
-	".aprs-weather-table th{background:#f0f0f0;}" \
-	".aprs-map{width:100%;max-width:600px;height:500px;border:0;display:block;margin:10px auto;}" \
-	".aprs-note{text-align:center;font-style:italic;margin:8px 0;}" \
-	".aprs-station-title{text-align:center;font-size:1.2rem;margin:12px 0;}" \
-	".aprs-detail{text-align:center;margin:8px 0;}" \
-	".aprs-lastposit{background:#f8f8f8;border:1px solid var(--border);border-radius:4px;padding:8px 12px;max-width:800px;margin:10px auto;word-break:break-word;}"
+#define APRS_CSS COMMON_APRS_CONTENT_CSS
 
-#define APRS_MAP_CSS \
-	APRS_CSS \
-	"html,body{height:100%;width:100%;}" \
-	"body{display:flex;flex-direction:column;padding:0;min-height:100vh;}" \
-	".menu-wrapper{background:var(--bg);padding:10px 10px 0;}" \
-	".menu{max-width:1100px;margin:0 auto 10px;}" \
-	".menu a{font-size:16px;}" \
-	".aprs-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-width:1100px;margin:0 auto 10px;padding:10px 12px;}" \
-	".aprs-controls label{display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:15px;}" \
-	".aprs-controls input[type=checkbox]{width:18px;height:18px;margin:0;}" \
-	"#map{flex:1 1 auto;min-height:320px;width:100%;margin:0;}" \
-	"@media(max-width:768px){.aprs-controls{justify-content:flex-start;}}" \
-	".popup{border:1px solid black;margin:0;padding:0;font-size:12px;min-height:16px;box-shadow:none;}" \
-	".leaflet-tooltip-left.popup::before{border-left-color:transparent;}" \
-	".leaflet-tooltip-right.popup::before{border-right-color:transparent;}"
+#define APRS_MAP_CSS COMMON_APRS_MAP_CSS
 
 #define APRS_PAGE_HEAD_REFRESH \
 	"<!DOCTYPE html>" \

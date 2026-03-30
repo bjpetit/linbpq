@@ -130,9 +130,9 @@ char Sent[] = "#98FFA0";
 char ToSend[] = "#FFFF00";
 char NotThisOne[] = "#FFFFFF";
 
-static char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
+static char PassError[] = "<p style='text-align:center'>Sorry, User or Password is invalid - please try again</p>";
 
-static char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
+static char BusyError[] = "<p style='text-align:center'>Sorry, No sessions available - please try later</p>";
 
 extern char WebMailSignon[];
 
@@ -317,8 +317,9 @@ COMMON_BUTTON_CSS
 
 // Split MailDetailPage into smaller chunks to avoid ARM printf_positional limits with large format strings
 static char MailDetailCSS[] = 
-"<style>:root{--bg:#f4f4f4;--surface:#fff;--border:#ddd;--text:#1f2937;--primary:#007bff;--primary-dark:#0056b3;}*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:var(--bg);margin:0;padding:max(20px,env(safe-area-inset-left));color:var(--text);-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}"
-"h3{text-align:center;margin-bottom:20px;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}"
+"<style>"
+COMMON_CSS_VARIABLES
+"h3{text-align:center;margin-bottom:20px;}"
 ".form-section{background:var(--surface);padding:clamp(12px,4vw,20px);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:15px 0;}"
 ".form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 20px;margin:16px 0;}"
 ".form-field{display:flex;flex-direction:column;gap:6px;}"

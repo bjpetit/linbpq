@@ -130,10 +130,30 @@ char Mycall[10];
 char MAILPipeFileName[] = "\\\\.\\pipe\\BPQMAILWebPipe";
 char CHATPipeFileName[] = "\\\\.\\pipe\\BPQCHATWebPipe";
 
-char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P align=center>"
-"<table border=2 cellpadding=2 cellspacing=2 bgcolor=white>"
-"<tr><td align=center><a href=/Node/NodeMenu.html>Node Pages</a></td>"
-"<td align=center><a href=/aprs>APRS Pages</a></td></tr></table></body></html>";
+char Index[] =
+	"<!DOCTYPE html>"
+	"<html><head>"
+	"<meta charset=utf-8>"
+	"<meta name=viewport content=\"width=device-width,initial-scale=1.0\">"
+	"<title>%s's BPQ32 Node</title>"
+	"<style>"
+	"*{box-sizing:border-box;}"
+	"body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#f5f6f8;color:#1f2937;}"
+	"h1{text-align:center;font-size:clamp(1.375rem,1.1rem + 1vw,2rem);margin:30px 0 10px;}"
+	".links{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin:40px auto;max-width:600px;}"
+	".links a{display:flex;align-items:center;justify-content:center;min-height:60px;padding:16px 32px;"
+	"background:#fff;border:1px solid #ccc;border-radius:8px;text-decoration:none;color:#1f2937;"
+	"font-weight:bold;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);"
+	"box-shadow:0 2px 6px rgba(0,0,0,0.08);}"
+	".links a:hover{background:#e9ecef;}"
+	"@media(max-width:480px){.links{flex-direction:column;}.links a{width:100%;}}"
+	"</style>"
+	"</head><body>"
+	"<h1>%s's BPQ32 Node</h1>"
+	"<div class=links>"
+	"<a href=/Node/NodeMenu.html>Node Pages</a>"
+	"<a href=/aprs>APRS Pages</a>"
+	"</div>";
 
 char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
 "<html><head></head><body></body></html>";
@@ -166,6 +186,8 @@ char Tail[] = "</body></html>";
 	COMMON_REDUCED_MOTION_CSS \
 	COMMON_MENU_CSS \
 	COMMON_TABLE_CSS \
+	COMMON_FORM_CSS \
+	COMMON_BUTTON_CSS \
 	"body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); line-height: 1.5; margin: 0; padding: 12px; background: #f5f6f8; }" \
 	"h1 { text-align: center; margin: 10px 0 18px; font-size: clamp(1.375rem,1.1rem + 1vw,2rem); line-height: 1.25; }" \
 	".menu-header { max-width: 1100px; }" \
@@ -217,19 +239,20 @@ HTTP_NODE_TABLE_MID_STACK;
 char PortStatsLine[] = "<tr><td data-label='Statistic' class='text'>%s</td><td data-label='Value' class='num'>%d</td></tr>";
 
 
-char Beacons[] = HTTP_NODE_H2("Beacon Configuration for Port %d") HTTP_NODE_H3("You need to be signed in to save changes") "<table align=center border=2 cellpadding=2 bgcolor=white>"
-"<form method=post action=BeaconAction>"
-"<table align=center  bgcolor=white>"
-"<tr><td>Send Interval (Minutes)</td><td><input type=text name=Every tabindex=1 size=5 value=%d></td></tr>" 
-"<tr><td>To</td><td><input name=Dest style=\"text-transform:uppercase;\" tabindex=2 size=5 value=%s></td></tr>"  
-"<tr><td>Path</td><td><input type=text name=Path style=\"text-transform:uppercase;\" size=50 maxlength=50 value=%s></td></tr>"
-"<tr><td>Send From File</td><td><input type=text name=File size=50 maxlength=50  value=%s></td></tr>"
-"<tr><td>Text</td><td><textarea name=\"Text\" cols=40 rows=5>%s</textarea></td></tr>"
-"</table>" 
-"<input type=hidden name=Port value=%d>"
-
-"<p align=center><input type=submit class='btn' value=Save><input type=submit class='btn' value=Test name=Test>"
-"</form>";
+char Beacons[] =
+	"<div class='form-section'>"
+	HTTP_NODE_H2("Beacon Configuration for Port %d")
+	HTTP_NODE_H3("You need to be signed in to save changes")
+	"<form method=post action=BeaconAction>"
+	"<div class='form-row'><label for=Every>Send Interval (Minutes)</label><input type=text id=Every name=Every tabindex=1 value=%d></div>"
+	"<div class='form-row'><label for=Dest>To</label><input type=text id=Dest name=Dest style='text-transform:uppercase' tabindex=2 value=%s></div>"
+	"<div class='form-row'><label for=Path>Path</label><input type=text id=Path name=Path style='text-transform:uppercase' maxlength=50 value=%s></div>"
+	"<div class='form-row'><label for=File>Send From File</label><input type=text id=File name=File maxlength=50 value=%s></div>"
+	"<div class='form-row'><label for=Text>Text</label><textarea id=Text name=Text>%s</textarea></div>"
+	"<input type=hidden name=Port value=%d>"
+	"<div class='buttons'><input type=submit value=Save><input type=submit value=Test name=Test></div>"
+	"</form>"
+	"</div>";
 
 
 char LinkHddr[] = HTTP_NODE_H2("Links") HTTP_NODE_TABLE_OPEN_STACK_COMPACT
@@ -242,7 +265,7 @@ HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Circuit</th><th scope=col>Link</th><th
 
 char UserLine[] = "<tr><td data-label='Circuit' class='text'>%s</td><td data-label='Link' class='center'>%s</td><td data-label='Circuit' class='text'>%s</td></tr>";
 
-char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); } h3 { text-align: center; font-size: clamp(1.0625rem,0.95rem + 0.6vw,1.25rem); } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Node %s Terminal Access</h2>"
 "<h3>Please enter username and password to access the node</h3>"
 "<div class=\"form-container\"><form method=post action=TermSignon>"
@@ -252,12 +275,12 @@ char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-
 "<input type=hidden name=Appl value=\"%s\"  id=Pass></form></div></div>";
 
 
-char PassError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #fee; border: 1px solid #fcc; border-radius: 6px; color: #c33; text-align: center; font-weight: bold;\">Sorry, User or Password is invalid - please try again</div>";
+char PassError[] = "<div class='alert-error'>Sorry, User or Password is invalid - please try again</div>";
 
-char BusyError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #ffc; border: 1px solid #fa3; border-radius: 6px; color: #a60; text-align: center; font-weight: bold;\">Sorry, No sessions available - please try later</div>";
+char BusyError[] = "<div class='alert-warn'>Sorry, No sessions available - please try later</div>";
 
-char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; } h2 { font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); }</style></head><body><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
-char NoSessions[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; text-align: center; padding-top: 50px; } h2 { font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); }</style></head><body><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
+char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
+char NoSessions[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
 
 char TermPage[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
 "<title>BPQ32 Node %s</title><style>body { margin: 0; padding: 10px; font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: #f6f7f8; color: #1f2937; } h3 { text-align: center; margin: 10px 0; font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #output-frame { flex: 1; border: 2px solid #ccc; background: #fff; min-height: 200px; } #input-frame { height: 50px; border: 2px solid #ccc; background: #fff; flex-shrink: 0; } @media (max-width: 768px) { .term-actions .btn { width: 100%%; } .term-container { height: calc(100vh - 200px); } }</style>"
@@ -308,7 +331,7 @@ char InputLine[] = "<!DOCTYPE html><html><head><style>"
 "<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
 "<script>document.inputform.input.focus();</script></form></body></html>";
 
-static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); } h3 { text-align: center; font-size: clamp(1.0625rem,0.95rem + 0.6vw,1.25rem); } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Node %s SYSOP Access</h2>"
 "<h3>This page sets Cookies. Don't continue if you object to this</h3>"
 "<h3>Please enter Callsign and Password to access the Node</h3>"
@@ -318,7 +341,7 @@ static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Mail Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the BBS</h3>"
 "<div class=\"form-container\"><form method=post action=/Mail/Signon?Mail>"
@@ -326,7 +349,7 @@ static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
-static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } </style></head><body>"
+static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Chat Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the Chat Server</h3>"
 "<div class=\"form-container\"><form method=post action=/Chat/Signon?Chat>"
@@ -335,8 +358,8 @@ static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailLostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2 { text-align: center; } .form-container { max-width: 400px; margin: 50px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; text-align: center; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; margin: 10px 5px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style></head><body>"
-"<div class=\"form-container\"><h2>Sorry, Session had been lost</h2>"
+static char MailLostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body>"
+"<div class=\"form-container\" style=\"margin-top:50px;text-align:center\"><h2>Sorry, Session had been lost</h2>"
 "<form method=post action=/Mail/Lost?%s>"
 "<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel></form></div>";
 
@@ -4448,16 +4471,30 @@ int StatusProc(char * Buff)
 	int Flags;
 	int AppNumber;
 	int OneBits;
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<head><title>Stream Status</title></head><body>");
+	int Len = sprintf(Buff, "<!DOCTYPE html>"
+		"<html><head>"
+		"<meta charset=utf-8>"
+		"<meta name=viewport content=\"width=device-width,initial-scale=1.0\">"
+		"<meta http-equiv=expires content=0>"
+		"<meta http-equiv=refresh content=15>"
+		"<title>Stream Status</title>"
+		"<style>"
+		"body{font-family:'JetBrains Mono','Fira Code','Source Code Pro',Consolas,Monaco,'Courier New',monospace;font-size:13px;margin:10px;background:#f5f6f8;color:#1f2937;}"
+		"h3{text-align:center;margin:8px 0 12px;}"
+		"table{border-collapse:collapse;margin:10px 0;}"
+		"th,td{border:1px solid #ccc;padding:3px 7px;text-align:left;}"
+		"th{background:#f0f0f0;font-weight:bold;}"
+		"</style>"
+		"</head><body>"
+		"<h3>Stream Status</h3>");
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; align=center \" border=1 cellpadding=1 cellspacing=0>");
-	Len += sprintf(&Buff[Len], "<tr><th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th>");
-	Len += sprintf(&Buff[Len], "<th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
-	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th></tr><tr>");
+	Len += sprintf(&Buff[Len], "<table>");
+	Len += sprintf(&Buff[Len], "<tr><th>#</th><th>RX</th><th>TX</th>");
+	Len += sprintf(&Buff[Len], "<th>MON</th><th>App</th><th>Flg</th>");
+	Len += sprintf(&Buff[Len], "<th>Callsign</th><th>Program</th>");
+	Len += sprintf(&Buff[Len], "<th>#</th><th>RX</th><th>TX</th>");
+	Len += sprintf(&Buff[Len], "<th>MON</th><th>App</th><th>Flg</th>");
+	Len += sprintf(&Buff[Len], "<th>Callsign</th><th>Program</th></tr><tr>");
 
 	for (i=1; i <=BPQHOSTSTREAMS; i++)
 	{		
@@ -4504,7 +4541,7 @@ int StatusProc(char * Buff)
 
 	}
 
-	Len += sprintf(&Buff[Len], "</tr></table>");
+	Len += sprintf(&Buff[Len], "</tr></table></body></html>");
 	return Len;
 }
 
@@ -4884,18 +4921,31 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 	int p, i;
 
 	char Page[] =
-		"<html><meta http-equiv=expires content=0>\r\n"
-		//					"<meta http-equiv=refresh content=5>\r\n"
-		"<head><title>Rigcontrol</title></head>\r\n"
-		"<style type=text/css>form{margin:0px; padding:0px; display:inline;}</style>"
-		"<body height: 580px;><h3>Rigcontrol</h3>\r\n"
-		"<table style=\"text-align: left; width: 580px; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2><tr>\r\n"
-		"<th width=90px>Radio</th>\r\n"
-		"<th width=90px>Freq</th>\r\n"
-		"<th width=90px>Mode</th>\r\n"
+		"<!DOCTYPE html>"
+		"<html><head>"
+		"<meta charset=utf-8>"
+		"<meta name=viewport content=\"width=device-width,initial-scale=1.0\">"
+		"<meta http-equiv=expires content=0>\r\n"
+		"<title>Rig Control</title>\r\n"
+		"<style>"
+		"body{font-family:'JetBrains Mono','Fira Code','Source Code Pro',Consolas,Monaco,'Courier New',monospace;font-size:13px;margin:10px;background:#f5f6f8;color:#1f2937;}"
+		"h3{text-align:center;margin:8px 0 12px;}"
+		"form{margin:0;padding:0;display:inline;}"
+		"table{border-collapse:collapse;margin:10px 0;max-width:600px;}"
+		"th,td{border:1px solid #ccc;padding:5px 10px;text-align:left;}"
+		"th{background:#f0f0f0;font-weight:bold;}"
+		".btn{display:inline-block;padding:4px 10px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;}"
+		".btn:hover,.btn:focus{background:#0056b3;}"
+		"</style>"
+		"</head><body>"
+		"<h3>Rig Control</h3>\r\n"
+		"<table><tr>\r\n"
+		"<th>Radio</th>\r\n"
+		"<th>Freq</th>\r\n"
+		"<th>Mode</th>\r\n"
 		"<th>ST</th>\r\n"
 		"<th>Ports</th>\r\n"
-		"<th hidden width=10px>Action</th>\r\n"
+		"<th style=\"display:none\">Action</th>\r\n"
 		"</tr>";
 	char RigLine[] =
 		"<tr>\r\n"
@@ -4904,7 +4954,7 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"  <td>%s/1</td>\r\n"
 		"  <td>%c%c</td>\r\n"
 		"  <td>%s</td>\r\n"
-		"  <td hidden width=10px><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td>\r\n"
+		"  <td style=\"display:none\"><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td>\r\n"
 		"  </tr>\r\n";
 	char Tail[] =		
 		"</table>\r\n"
