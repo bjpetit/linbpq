@@ -2885,7 +2885,7 @@ char * get_aprs()
 {
 	char Msg[] =
 		"<!DOCTYPE html>\n"
-		"<html>\n"
+		"<html lang=\"en\">\n"
 		"<head>\n"
 		"<meta charset=\"utf-8\">\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\" />\n"

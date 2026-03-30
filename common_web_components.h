@@ -191,7 +191,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_TABLE_CSS \
 	".table-container{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
 	".table-wrap{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
-	".node-table{width:max-content;max-width:none;border-collapse:collapse;table-layout:auto;background:var(--surface);font-family:'JetBrains Mono',Consolas,Monaco,'Courier New',monospace;font-size:" COMMON_TABLE_FONT_SIZE ";}" \
+	".node-table{width:max-content;max-width:none;border-collapse:collapse;table-layout:auto;margin:0 auto;background:var(--surface);font-family:'JetBrains Mono',Consolas,Monaco,'Courier New',monospace;font-size:" COMMON_TABLE_FONT_SIZE ";}" \
 	".node-table caption{caption-side:top;text-align:left;font-family:Arial,sans-serif;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);font-weight:600;color:var(--text);padding:0 0 8px;}" \
 	".node-table th,.node-table td{border:1px solid var(--border);padding:8px;vertical-align:top;}" \
 	".node-table th,.node-table td{white-space:nowrap;}" \

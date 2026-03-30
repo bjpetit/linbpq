@@ -7251,7 +7251,7 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	"<a href=/Node/NodeMenu.html>Return to Node Pages</a>" \
 	"</nav>"
 
-char WebHeader[] = "<!DOCTYPE html><html><head>"
+char WebHeader[] = "<!DOCTYPE html><html lang=\"en\"><head>"
 	"<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<meta http-equiv=\"expires\" content=\"-1\"><meta http-equiv=\"pragma\" content=\"no-cache\">"
 	"<title>APRS Messaging</title><style>" APRS_MSG_PAGE_STYLE "</style>"
@@ -7261,7 +7261,7 @@ char WebHeader[] = "<!DOCTYPE html><html><head>"
 	"<tr><th scope=col>From</th><th scope=col>To</th><th scope=col>Seq</th><th scope=col>Time</th><th scope=col>&nbsp;</th><th scope=col>Message</th></tr>"
 	"</thead><tbody>";
 
-char WebTXHeader[] = "<!DOCTYPE html><html><head>"
+char WebTXHeader[] = "<!DOCTYPE html><html lang=\"en\"><head>"
 	"<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<meta http-equiv=\"expires\" content=\"-1\"><meta http-equiv=\"pragma\" content=\"no-cache\">"
 	"<title>APRS Messaging</title><style>" APRS_MSG_PAGE_STYLE "</style>"
@@ -7280,7 +7280,7 @@ char WebTXLine[] = "<tr>"
 
 char WebTrailer[] = "</tbody></table></div></main></body></html>";
 
-char SendMsgPage[] = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+char SendMsgPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>BPQ32 APRS Messaging</title>"
 	"<style>" APRS_MSG_PAGE_STYLE "</style><script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
 	APRS_MSG_MENU
@@ -7290,7 +7290,7 @@ char SendMsgPage[] = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
 	"<tr><td>Message</td><td><input type=text name=message tabindex=2 size=80 maxlength=100 /></td></tr></table>"
 	"<div class=\"aprs-msg-actions\"><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></div></form></main></body></html>";
 
-char APRSIndexPage[] = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+char APRSIndexPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>BPQ32 Web Server APRS Pages</title>"
 	"<style>" APRS_MSG_PAGE_STYLE "</style><script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
 	APRS_MSG_MENU
@@ -7347,7 +7347,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 						
 						// Return APRS Index Page
 
-						OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 align=center>Message Cancelled</h2>");
+						OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 style=\"text-align:center\">Message Cancelled</h2>");
 						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 						send(sockptr->sock, Header, HeaderLen, 0); 
 						send(sockptr->sock, OutBuffer, OutputLen, 0); 
@@ -7364,7 +7364,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 			if (strlen(To) < 2)
 			{
 				OutputLen = sprintf(OutBuffer, SendMsgPage, To);
-				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 align=center>Invalid Callsign</h2>");
+				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 style=\"text-align:center\">Invalid Callsign</h2>");
 				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 				send(sockptr->sock, Header, HeaderLen, 0); 
 				send(sockptr->sock, OutBuffer, OutputLen, 0); 
@@ -7375,7 +7375,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 			if (Msg[0] == 0)
 			{
 				OutputLen = sprintf(OutBuffer, SendMsgPage, To);
-				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 align=center>No Message</h2>");
+				OutputLen += sprintf(&OutBuffer[OutputLen], "<br><br><h2 style=\"text-align:center\">No Message</h2>");
 				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 				send(sockptr->sock, Header, HeaderLen, 0); 
 				send(sockptr->sock, OutBuffer, OutputLen, 0); 
@@ -7390,7 +7390,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 
 			InternalSendAPRSMessage(Msg, To);
 
-			OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 align=center>Message Sent</h2>");
+			OutputLen = sprintf(OutBuffer, APRSIndexPage, "<br><br><br><br><h2 style=\"text-align:center\">Message Sent</h2>");
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", OutputLen);
 			send(sockptr->sock, Header, HeaderLen, 0); 
 			send(sockptr->sock, OutBuffer, OutputLen, 0); 
