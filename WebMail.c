@@ -21,6 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "cheaders.h"
 #include "bpqmail.h"
+#include "common_web_components.h"
 
 #define MAIL
 #include "httpconnectioninfo.h"
@@ -114,14 +115,14 @@ struct HtmlFormDir
 
 char FormDirList[4][MAX_PATH] = {"Standard_Templates", "Standard Templates", "Local_Templates"};
 
-static char PassError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #fee; border: 1px solid #fcc; border-radius: 6px; color: #c33; text-align: center; font-weight: bold;\">Sorry, User or Password is invalid - please try again</div>";
-static char BusyError[] = "<div style=\"max-width: 400px; margin: 20px auto; padding: 15px; background: #ffc; border: 1px solid #fa3; border-radius: 6px; color: #a60; text-align: center; font-weight: bold;\">Sorry, No sessions available - please try later</div>";
+static char PassError[] = "<div class='alert-error'>Sorry, User or Password is invalid - please try again</div>";
+static char BusyError[] = "<div class='alert-warn'>Sorry, No sessions available - please try later</div>";
 
 extern char MailSignon[];
 
-char WebMailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+char WebMailSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>BPQ32 WebMail Access</title>"
-	"<style>body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7f8; color: #1f2937; } h2, h3 { text-align: center; } .form-container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 6px; background: #fff; } .form-row { margin: 15px 0; } label { display: block; margin-bottom: 5px; } input[type=text], input[type=password] { width: 100%%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: 15px; cursor: pointer; margin-right: 10px; margin-top: 10px; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style>"
+	"<style>" COMMON_SIGNON_CSS "</style>"
 	"</head><body>"
 	"<h2>BPQ32 WebMail %s Access</h2>"
 	"<h3>Please enter Callsign and Password to access WebMail</h3>"
@@ -130,7 +131,7 @@ char WebMailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=devi
 	"<div class=\"form-row\"><label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required></div>"
 	"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/ /></div></form></div></body></html>";
 
-static char MsgInputPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
+static char MsgInputPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>Webmail Message Input</title><script src='/WebMail/webscript.js'></script>"
 	"<style>body { font-family: Arial, sans-serif; margin: 12px; background: #f5f7fa; color: #1f2937; } h3 { text-align: center; margin: 0 0 12px; } #myform { max-width: 980px; margin: 0 auto; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 14px; box-sizing: border-box; } .form-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; } .form-row label { flex: 0 0 88px; font-weight: 600; } .form-row input, .form-row select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; } #To, #Subj { font-size: 15px; padding-top: 9px; padding-bottom: 9px; } .form-row input[type=file] { padding: 6px 0; border: none; } .form-row textarea { flex: 1 1 auto; width: 100%%; min-height: 360px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; line-height: 1.4; resize: vertical; } .form-row.message-row { align-items: flex-start; } .form-row.message-row label { padding-top: 10px; } .form-row.meta-row label { flex: 0 0 88px; } .form-row.meta-row select { flex: 0 0 120px; max-width: 120px; } .form-row.meta-row input { flex: 0 1 260px; max-width: 260px; } .inline-action { white-space: nowrap; flex: 0 0 auto; margin-left: 10px; } .btn, .buttons input { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 14px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; color: #1f2937; cursor: pointer; text-decoration: none; font-size: 14px; box-sizing: border-box; } .btn:hover, .buttons input:hover { background: #eef2f7; } .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; } .buttons input[name=Send] { background: #2563eb; border-color: #2563eb; color: #fff; } .buttons input[name=Send]:hover { background: #1d4ed8; } @media (max-width: 768px) { body { margin: 10px; } #myform { padding: 12px; } .form-row { flex-direction: column; align-items: stretch; gap: 6px; margin: 6px 0; } .form-row label { flex: none; width: 100%%; } .form-row input, .form-row select { width: 100%%; } .form-row input, .form-row select, .buttons input, .btn { min-height: 44px; } .form-row input[type=file] { min-height: 0; } .form-row.message-row label { padding-top: 0; } .form-row.meta-row label { flex: none; width: 100%%; } .form-row.meta-row select, .form-row.meta-row input { flex: 1 1 auto; max-width: none; } .inline-action { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; width: 100%%; margin-left: 0; } .inline-action .btn { flex: 1 1 auto; min-width: 100px; } .buttons { justify-content: stretch; gap: 8px; } .buttons input { flex: 1 1 0; } }</style></head><body>"
 	"<h3>Webmail Interface - Message Input Form</h3>"
@@ -145,7 +146,7 @@ static char MsgInputPage[] = "<html><head><meta name=\"viewport\" content=\"widt
 	"<div class='form-row message-row'><label for='main'>Message:</label><textarea id='main' name=Msg style='overflow:auto;'>%s</textarea></div>"
 	"<div class=buttons><input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
-static char CheckFormMsgPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">"
+static char CheckFormMsgPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>Webmail Forms - Check Message</title><script src='/WebMail/webscript.js'></script>"
 	"<style>:root{--bg:#f5f7fa;--surface:#fff;--border:#cbd5e1;--text:#1f2937;}*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;margin:max(12px,env(safe-area-inset-left));background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}h3{text-align:center;margin:0 0 12px;}#myform{max-width:980px;margin:0 auto;background:var(--surface);border:1px solid #d1d5db;border-radius:8px;padding:14px;display:flex;flex-direction:column;}@supports(padding:max(0px)){body{margin:clamp(10px,3vw,20px);margin-left:max(clamp(10px,3vw,20px),env(safe-area-inset-left));margin-right:max(clamp(10px,3vw,20px),env(safe-area-inset-right));}}.form-row{display:flex;align-items:center;gap:10px;margin:8px 0;}.form-row label{flex:0 0 clamp(70px,20%,100px);font-weight:600;font-size:14px;}.form-row input,.form-row select{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;touch-action:manipulation;}#To,#Subj{font-size:15px;padding:9px 10px;}.form-row textarea{flex:1 1 auto;width:100%%;min-height:360px;padding:10px;border:1px solid var(--border);border-radius:6px;line-height:1.4;resize:vertical;font-family:inherit;font-size:14px;touch-action:manipulation;}.form-row.message-row{align-items:flex-start;}.form-row.message-row label{padding-top:10px;}.form-row.meta-row label{flex:0 0 clamp(70px,20%,100px);}.form-row.meta-row select{flex:0 0 120px;max-width:120px;}.form-row.meta-row input{flex:0 1 260px;max-width:260px;}.btn,.buttons input{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 14px;border:1px solid #94a3b8;border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:14px;touch-action:manipulation;}.btn:hover,.buttons input:hover{background:#eef2f7;}.buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;position:sticky;bottom:0;background:var(--surface);padding:10px 0;border-top:1px solid #e5e7eb;z-index:10;}.buttons input[name=Send]{background:#2563eb;border-color:#2563eb;color:#fff;}.buttons input[name=Send]:hover{background:#1d4ed8;}@media(prefers-reduced-motion:reduce){*{animation-duration:0!important;transition-duration:0!important;}}@media(max-width:480px){body{margin:clamp(8px,2vw,12px);margin-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));margin-right:max(clamp(8px,2vw,12px),env(safe-area-inset-right));}#myform{padding:12px;border-radius:6px;}.form-row{flex-direction:column;align-items:stretch;gap:6px;margin:6px 0;}.form-row label{flex:none;width:100%%;}.form-row input,.form-row select,.form-row textarea{width:100%%;min-height:48px;}.form-row.message-row{align-items:stretch;}.form-row.message-row label{padding-top:0;padding-bottom:4px;}.form-row.message-row textarea{min-height:300px;}.form-row.meta-row label{flex:none;width:100%%;}.form-row.meta-row select,.form-row.meta-row input{flex:1 1 auto;max-width:none;min-height:48px;}.buttons{justify-content:stretch;gap:8px;padding:12px 0;}.buttons input{flex:1 1 0;min-height:48px;padding:12px 10px;}}</style></head><body>"
 	"<h3>Webmail Forms Interface - Check Message</h3>"
@@ -2281,7 +2282,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		// No More
 
-		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html></script></html>", Session->Key);
+		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html>", Session->Key);
 		return;
 
 	}
@@ -2341,7 +2342,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		// No More 
 
-		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html></script></html>", Session->Key);
+		*RLen = sprintf(Reply, "<html><script>alert(\"No More Messages\");window.location.href = '/Webmail/WebMail?%s';</script></html>", Session->Key);
 		return;
 
 	}
@@ -2420,12 +2421,13 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		char popuphddr[] = 
 			
-			"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; } p { margin: 15px 0; }</style></head><body>"
+			"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; } p { margin: 15px 0; }</style>"
 			"<script>function myFunction() {var x = document.getElementById(\"mySelect\").value;"
 			"var Key = \"%s\";"
 			"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar,=scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 			"window.open(\"/WebMail/GetPage/\" + x + \"?\" + Key,\"_self\",param);"
 			"}</script>"
+			"</head><body>"
 			"<p>"
 			"Select Required Template from %s<br><br>"
 			"<select size=15 id=\"mySelect\" onclick=\"myFunction()\">"
@@ -2522,7 +2524,7 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 
 	char popuphddr[] = 
 			
-		"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } p { margin: 15px 0; }</style></head><body>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } table { border-collapse: collapse; margin: 20px auto; } th, td { padding: 8px; border: 1px solid #ccc; } p { margin: 15px 0; } th { background: #f0f0f0; }</style>"
 		"<script>"
 		"function myFunction(val) {var x = document.getElementById(val).value;"
 		"var Key = \"%s\";"
@@ -2530,17 +2532,18 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 		"window.open(\"/WebMail/GetList/\" + x + \"?\" + Key,\"_self\",param);"
 		"}"
 		"</script>"
+		"</head><body>"
 		"<p>"
 		" Select Required Template Folder from List<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"<table>"
 		"<tr>"
 		"<th>Standard Templates</th>"
 		"<th>Local Templates</th>"
 		"</tr>"
-		"<tr><td width=50%%><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
+		"<tr><td style=\"width:50%%;vertical-align:top\"><select size=15 id=\"Sel1\" onclick=\"myFunction('Sel1')\">";
 
 	char NewGroup [] =
-		"</select></td><td width=50%% align=center>"
+		"</select></td><td style=\"width:50%%;vertical-align:top;text-align:center\">"
 		"<select size=15 id=Sel2 onclick=\"myFunction('Sel2')\">";
 
 	char popup[10000];
@@ -2751,7 +2754,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	{
 		if (RefuseBulls)
 		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();script></html>");
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();</script></html>");
 			FreeWebMailFields(WebMail);		// We will reprocess message and attachments so reinitialise
 			return;
 		}
@@ -3757,14 +3760,14 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 				"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar=yes,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 				"window.open(\"/WebMail/Reply/\" + Num + \"?\" + Key,\"_self\",param);"
 				"}</script>"
-				"<h3 align=center> %s Webmail Interface - User %s - Message %d</h3>"
-				"<table align=center border=1 cellpadding=2 bgcolor=white><tr>"
-				"<td><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
-				"<td><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"
-				"<td><a href=/WebMail/DisplayText?%s&%d>Display as Text</a></td>"
-				"<td><a href=/WebMail/WMNext?%s>Next</a></td>"
-				"<td><a href=/WebMail/WMPrev?%s>Previous</a></td>"
-				"<td><a href=/WebMail/WMSame?%s>Back to List</a></td>"
+				"<h3 style=\"text-align:center\"> %s Webmail Interface - User %s - Message %d</h3>"
+				"<table style=\"margin:0 auto;border-collapse:collapse;\"><tr>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/DisplayText?%s&%d>Display as Text</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMNext?%s>Next</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMPrev?%s>Previous</a></td>"
+				"<td style=\"padding:4px 8px;border:1px solid #ccc\"><a href=/WebMail/WMSame?%s>Back to List</a></td>"
 				"</tr></table>", BBSName, User->Call, Msg->number, Msg->number, Key, Msg->number, Key,  Key, Msg->number, Key, Key, Key);
 
 			strcat(temp, ptr);
@@ -4075,7 +4078,7 @@ VOID SaveTemplateMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, cha
 	{
 		if (RefuseBulls)
 		{
-			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();script></html>");
+			*RLen = sprintf(Reply, "%s", "<html><script>alert(\"This system doesn't allow sending Bulls\");window.history.back();</script></html>");
 			return;
 		}
 
@@ -5630,7 +5633,7 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 
 	char popuphddr[] = 
 			
-		"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } </style></head><body>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; } </style>"
 		"<script>"
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
@@ -5638,8 +5641,9 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 		"window.open(\"/WebMail/DoSelect\" + '?' + Key + '&' + x,'_self');"
 		"}"
 		"</script>"
+		"</head><body>"
 		"<div>%s<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"<table>"
 		"<tr><td><select size=%d id='Sel' size=10 onclick=myFunction()>";
 	
 
@@ -6273,7 +6277,7 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 {
 	char popuphddr[] = 
 			
-		"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; }</style></head><body>"
+		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; margin: 20px; text-align: center; } select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; } table { border-collapse: collapse; margin: 20px auto; } td { padding: 8px; border: 1px solid #ccc; }</style>"
 		"<script>"
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
@@ -6281,8 +6285,9 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 		"window.open(\"/WebMail/GetDownLoad\" + '?' + Key + '&' + x,'_self', param);"
 		"}"
 		"</script>"
+		"</head><body>"
 		"<div>Note files over 100K long can't be downloaded<br><br>"
-		"<table border=1 cellpadding=2 bgcolor=white>"
+		"<table>"
 		"<tr><td><select size=%d id='Sel' size=10 onclick=myFunction()>";
 
 	char popup[10000];
