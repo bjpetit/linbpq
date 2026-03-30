@@ -155,8 +155,7 @@ char Index[] =
 	"<a href=/aprs>APRS Pages</a>"
 	"</div>";
 
-char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
-"<html><head></head><body></body></html>";
+char IndexNoAPRS[] = "<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\"></head><body></body></html>";
 
 //char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
 
@@ -172,7 +171,7 @@ char Tail[] = "</body></html>";
 	"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">" \
 	"<input type=submit class='btn' name=t value=\"Nodes With Traffic\"></form></div>"
 
-#define HTTP_NODE_TABLE_OPEN_STACK_CLASS(CLASSLIST) "<div class='table-wrap'><table class='node-table node-table-stack " CLASSLIST "' align=center border=1 bgcolor=white><thead>"
+#define HTTP_NODE_TABLE_OPEN_STACK_CLASS(CLASSLIST) "<div class='table-wrap'><table class='node-table node-table-stack " CLASSLIST "'><thead>"
 #define HTTP_NODE_TABLE_OPEN_STACK HTTP_NODE_TABLE_OPEN_STACK_CLASS("")
 #define HTTP_NODE_TABLE_OPEN_STACK_COMPACT HTTP_NODE_TABLE_OPEN_STACK_CLASS("compact-table")
 #define HTTP_NODE_TABLE_OPEN_STACK_ROUTES HTTP_NODE_TABLE_OPEN_STACK_CLASS("routes-table")
@@ -265,7 +264,7 @@ HTTP_NODE_TABLE_HEADER_ROW "<th scope=col>Circuit</th><th scope=col>Link</th><th
 
 char UserLine[] = "<tr><td data-label='Circuit' class='text'>%s</td><td data-label='Link' class='center'>%s</td><td data-label='Circuit' class='text'>%s</td></tr>";
 
-char TermSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
+char TermSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node %s Terminal Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Node %s Terminal Access</h2>"
 "<h3>Please enter username and password to access the node</h3>"
 "<div class=\"form-container\"><form method=post action=TermSignon>"
@@ -279,8 +278,8 @@ char PassError[] = "<div class='alert-error'>Sorry, User or Password is invalid 
 
 char BusyError[] = "<div class='alert-warn'>Sorry, No sessions available - please try later</div>";
 
-char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
-char NoSessions[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
+char LostSession[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
+char NoSessions[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
 
 char TermPage[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
 "<title>BPQ32 Node %s</title><style>body { margin: 0; padding: 10px; font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: #f6f7f8; color: #1f2937; } h3 { text-align: center; margin: 10px 0; font-size: clamp(1.25rem,1rem + 1.5vw,1.75rem); } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #output-frame { flex: 1; border: 2px solid #ccc; background: #fff; min-height: 200px; } #input-frame { height: 50px; border: 2px solid #ccc; background: #fff; flex-shrink: 0; } @media (max-width: 768px) { .term-actions .btn { width: 100%%; } .term-container { height: calc(100vh - 200px); } }</style>"
@@ -331,7 +330,7 @@ char InputLine[] = "<!DOCTYPE html><html><head><style>"
 "<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
 "<script>document.inputform.input.focus();</script></form></body></html>";
 
-static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
+static char NodeSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Node SYSOP Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Node %s SYSOP Access</h2>"
 "<h3>This page sets Cookies. Don't continue if you object to this</h3>"
 "<h3>Please enter Callsign and Password to access the Node</h3>"
@@ -341,7 +340,7 @@ static char NodeSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
+static char MailSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Mail Server Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Mail Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the BBS</h3>"
 "<div class=\"form-container\"><form method=post action=/Mail/Signon?Mail>"
@@ -349,7 +348,7 @@ static char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"  
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
-static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
+static char ChatSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><title>BPQ32 Chat Server Access</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<h2>BPQ32 Chat Server %s Access</h2>"
 "<h3>Please enter Callsign and Password to access the Chat Server</h3>"
 "<div class=\"form-container\"><form method=post action=/Chat/Signon?Chat>"
@@ -358,13 +357,13 @@ static char ChatSignon[] = "<html><head><meta name=\"viewport\" content=\"width=
 "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>";
 
 
-static char MailLostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body>"
+static char MailLostSession[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><style>" COMMON_SIGNON_CSS "</style></head><body>"
 "<div class=\"form-container\" style=\"margin-top:50px;text-align:center\"><h2>Sorry, Session had been lost</h2>"
 "<form method=post action=/Mail/Lost?%s>"
 "<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel></form></div>";
 
 
-static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+static char ConfigEditPage[] = "<!DOCTYPE html><html><head><meta charset=utf-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 "<title>Edit Config</title><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 0; padding: 10px; background: #f6f7f8; color: #1f2937; } form { text-align: center; } textarea { width: min(100%%, 1100px); min-height: 60vh; box-sizing: border-box; font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); white-space: pre; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; margin: 10px 6px 0; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; }</style></head><body>"
 "<form method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
@@ -1372,7 +1371,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	int top = 0, left = 0;
 	char MgmtMenu[8192];
 
-	char NodeMenuHeader[] = "<html id=body><head><title>%s's BPQ32 Web Server</title>"
+	char NodeMenuHeader[] = "<!DOCTYPE html><html id=body><head><title>%s's BPQ32 Web Server</title>"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 	"<style type=\"text/css\">" HTTP_NODE_MENU_CSS "</style>"
 
@@ -3190,9 +3189,12 @@ doHeader:
 			else if (_stricmp(NodeURL, "/Node/RigControl.html") == 0)
 			{
 				char Test[] =
-					"<html><meta http-equiv=expires content=0>\r\n"
-					"<head><title>Rigcontrol</title></head>\r\n"
-					"<script type = \"text/javascript\">\r\n"
+					"<!DOCTYPE html><html><head>"
+					"<meta charset=utf-8>"
+					"<meta name=viewport content=\"width=device-width,initial-scale=1.0\">"
+					"<meta http-equiv=expires content=0>"
+					"<title>Rigcontrol</title>"
+					"<script type=\"text/javascript\">\r\n"
 					"var ws;"
 					"function WebSocketTest()"
 					"{"
@@ -3240,17 +3242,20 @@ doHeader:
 					"}" 
 					"</script>\r\n"
 					"</head>\r\n"
-					"<body height: 600px; onload=WebSocketTest()>\r\n"
-					"<div id = 'div'>Waiting for data...</div>\r\n"
+					"<body onload=WebSocketTest()>\r\n"
+					"<div id='div'>Waiting for data...</div>\r\n"
 					"</body></html>\r\n";
 
 		
 				char NoRigCtl[] =
-					"<html><meta http-equiv=expires content=0>\r\n"
-					"<head><title>Rigcontrol</title></head>\r\n"
+					"<!DOCTYPE html><html><head>"
+					"<meta charset=utf-8>"
+					"<meta name=viewport content=\"width=device-width,initial-scale=1.0\">"
+					"<meta http-equiv=expires content=0>"
+					"<title>Rigcontrol</title>"
 					"</head>\r\n"
-					"<body height: 600px>\r\n"
-					"<div id = 'div'>RigControl Not Configured...</div>\r\n"
+					"<body>"
+					"<div id='div'>RigControl Not Configured...</div>\r\n"
 					"</body></html>\r\n";
 
 				if (RigWebPage)
@@ -3262,14 +3267,16 @@ doHeader:
 			else if (_stricmp(NodeURL, "/Node/ShowLog.html") == 0)
 			{
 				char ShowLogPage[] =
-					"<html><script>"
+					"<!DOCTYPE html><html>"
+					"<head><meta charset=utf-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 4px; background: #f6f7f8; color: #1f2937; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #log { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); }</style>"
+					"<title>Log Display</title>"
+					"<script>"
 					"function myResize() {"
 					" var h = document.getElementById('outer').clientHeight;"
 					" var offsets = document.getElementById('log').getBoundingClientRect();"
 					" document.getElementById('log').style.height = h - offsets.top;}"
 					"</script>"
-					"<head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body { font-family: Arial, sans-serif; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 4px; background: #f6f7f8; color: #1f2937; } .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: #fff; text-decoration: none; border-radius: 6px; border: 1px solid #ccc; color: #1f2937; box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); cursor: pointer; } .btn:hover { background: #e9ecef; } .btn:active { background: black; color: white; } #log { font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', Consolas, Monaco, 'Courier New', monospace; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); }</style>"
-					"<title>Log Display</title></head>"
+					"</head>"
 					"<body onload='myResize()' onresize='myResize()'>"
 					"<div id=outer style=\"width: 100%%; height: 100%%;\">"
 					"<form id = form><input name=input value=Back type=submit class='btn'>"
