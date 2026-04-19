@@ -730,7 +730,7 @@ IdTag (random alphanumeric, 12 chars)
 	char Tag[32];
 
 	SOCKET sock;
-	char Response[1024];
+	char Response[1024] = "";
 	int Len;
 
 	// Only report if the CMSCall has a WL2KAccount
@@ -937,7 +937,7 @@ VOID SendHTTPReporttoWL2KThread(void * unused)
 
 	// Send all reports in list
 
-	char Response[1024];
+	char Response[1024] = "";
 
 	// Only report if the CMSCall has a WL2KAccount
 
