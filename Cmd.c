@@ -2564,16 +2564,16 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct C
 	int CONNECTPORT, Port;
 	BOOL CallEvenIfInNodes = FALSE;
 	char * ptr, *Context;
-	UCHAR axcalls[64];
+	UCHAR axcalls[64] = {0};
 	UCHAR ourcall[7];					// Call we are using (may have SSID bits inverted
 	int ret;
 	struct PORTCONTROL * PORT = PORTTABLE;
 	struct _LINKTABLE * LINK;
 	int CQFLAG = 0;			// NOT CQ CALL
-	BOOL Stay, Spy;
+	BOOL Stay = FALSE, Spy = FALSE;
 	int n;
-	char TextCall[10];
-	int TextCallLen;
+	char TextCall[10] = {0};
+	int TextCallLen = 0;
 	char PortString[10];
 	char cmdCopy[256];
 	struct _EXTPORTDATA * EXTPORT = (struct _EXTPORTDATA *)PORT;
