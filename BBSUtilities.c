@@ -634,6 +634,54 @@ int GetNetInt(char * Line)
 	}
 	return n;
 }
+VOID FreeForwardingStruct(struct UserInfo * user);
+
+static VOID FreeUserDatabaseRecords()
+{
+	struct UserInfo * user;
+	int i;
+
+	if (UserRecPtr == NULL)
+	{
+		NumberofUsers = 0;
+		BBSChain = NULL;
+		HighestBBSNumber = 0;
+		return;
+	}
+
+	for (i = 1; i <= NumberofUsers; i++)
+	{
+		user = UserRecPtr[i];
+
+		if (user == NULL)
+			continue;
+
+		if (user->ForwardingInfo)
+		{
+			FreeForwardingStruct(user);
+			free(user->ForwardingInfo);
+			user->ForwardingInfo = NULL;
+		}
+
+		if (user->Temp)
+		{
+			free(user->Temp);
+			user->Temp = NULL;
+		}
+
+		free(user);
+	}
+
+	if (UserRecPtr[0])
+		free(UserRecPtr[0]);
+
+	free(UserRecPtr);
+	UserRecPtr = NULL;
+
+	NumberofUsers = 0;
+	BBSChain = NULL;
+	HighestBBSNumber = 0;
+}
 
 VOID GetUserDatabase()
 {
@@ -646,6 +694,8 @@ VOID GetUserDatabase()
 	int i;
 
 	// See if user config is in main config
+
+	FreeUserDatabaseRecords();
 
 	group = config_lookup (&cfg, "BBSUsers");
 
