@@ -6203,6 +6203,23 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 		free(conn->CopyBuffer);
 		conn->CopyBuffer = NULL;
 	}
+
+	// Ensure body parsing always sees a terminated string at the current logical length.
+	if (conn->TempMsg->length >= conn->MailBufferSize)
+	{
+		conn->MailBuffer = realloc(conn->MailBuffer, conn->TempMsg->length + 1);
+
+		if (conn->MailBuffer == NULL)
+		{
+			nodeprintf(conn, "Failed to extend Message Buffer\r");
+			conn->Flags &= ~GETTINGMESSAGE;
+			return;
+		}
+
+		conn->MailBufferSize = conn->TempMsg->length + 1;
+	}
+
+	conn->MailBuffer[conn->TempMsg->length] = 0;
 	
 	// Allocate a message Record slot
 	
@@ -8810,7 +8827,7 @@ InBand:
 	// Not Success or Fail. If last line is still outstanding, wait fot Response
 	//		else look for SID or Prompt
 
-	if (conn->SkipPrompt && Buffer[len-2] == '>')
+	if (conn->SkipPrompt && len >= 2 && Buffer[len-2] == '>')
 	{
 		conn->SkipPrompt--;
 		return TRUE;
@@ -8927,7 +8944,7 @@ CheckForSID:
 	}
 */
 
-	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
+	if (len >= 4 && Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
 		// Update PACLEN
 
@@ -8955,7 +8972,7 @@ CheckForSID:
 		conn->BBSFlags |= MBLFORWARDING;
 	}
 
-	if (Buffer[len-2] == '>')
+	if (len >= 2 && Buffer[len-2] == '>')
 	{
 		if (conn->SkipPrompt)
 		{
@@ -11317,6 +11334,7 @@ int DoReceivedData(int Stream)
 				if (conn->BBSFlags & (MCASTRX | SYNCMODE))
 				{
 					//	MCAST and SYNCMODE deliver full packets
+					conn->InputBuffer[conn->InputLen] = 0;
 
 					if (conn->BBSFlags & RunningConnectScript)
 						ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
@@ -11364,6 +11382,7 @@ int DoReceivedData(int Stream)
 							Debugprintf("BPQMail split Line End Detected");
 						else
 						{
+							conn->InputBuffer[conn->InputLen] = 0;
 							if (conn->BBSFlags & RunningConnectScript)
 								ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
 							else
@@ -11380,6 +11399,7 @@ int DoReceivedData(int Stream)
 						Buffer = malloc(MsgLen + 100);
 
 						memcpy(Buffer, conn->InputBuffer, MsgLen);
+						Buffer[MsgLen] = 0;
 					
 						// if Length is 1 and Term is LF and normal line end is CR
 						// this is from a split CRLF - Ignore it
