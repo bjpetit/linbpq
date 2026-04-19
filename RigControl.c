@@ -2363,6 +2363,9 @@ DllExport BOOL APIENTRY Rig_Init()
 
 			RIG->WEB_PTT = ' ';
 			RIG->WEB_SCAN = ' ';
+
+			free(SaveRigConfig);
+			free(RigConfigMsg1);
 		}
 	}
 

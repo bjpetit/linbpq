@@ -490,8 +490,13 @@ VOID strnew(char ** new, char *f1)
 {
 	// seems to allocate a new string, and copy the old one to it
 	// how is this different to strdup??
+	if (*new)
+		free(*new);
 
-	*new = _strdup(f1);
+	if (f1)
+		*new = _strdup(f1);
+	else
+		*new = NULL;
 }
 
 #define sl_ins_hd(link, hd) \

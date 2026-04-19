@@ -966,7 +966,17 @@ void SendBBSDataToPktMapThread(void * Param)
 		// Get Routing
 
 		MsgBytes = ReadMessageFile(Msg->number);
+
+		if (MsgBytes == NULL)
+			continue;
+
 		RLines = malloc(Msg->length * 2);				// Very unlikely to need so much but better safe..
+
+		if (RLines == NULL)
+		{
+			free(MsgBytes);
+			continue;
+		}
 
 		strcpy(RLines, "[]");
 
@@ -994,6 +1004,10 @@ void SendBBSDataToPktMapThread(void * Param)
 			// Have R Lines
 
 			Rlineend = strstr(Rlineptr, "\r\n");
+
+			if (Rlineend == NULL)
+				break;
+
 			Rlineend[0] = 0;
 			ptr2 += sprintf(ptr2, "\"%s\",", Rlineptr);
 
@@ -1001,7 +1015,11 @@ void SendBBSDataToPktMapThread(void * Param)
 		}
 
 		if ((*ptr2) == ']')		// no entries
+		{
+			free(MsgBytes);
+			free(RLines);
 			continue;
+		}
 
 		ptr2--;				// over trailing comms
 		*(ptr2++) = ']';
