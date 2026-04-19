@@ -8202,6 +8202,12 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 		if (conn->Active == FALSE)
 		{
 			p = conn->BPQStream;
+			if (conn->InputBuffer)
+			{
+				free(conn->InputBuffer);
+				conn->InputBuffer = NULL;
+				conn->InputBufferLen = 0;
+			}
 			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->BPQStream = p;
 
@@ -10868,6 +10874,12 @@ int Connected(int Stream)
 			if (Freq < 0 || Freq > 11000000000)
 				Freq = 0;
 
+			if (conn->InputBuffer)
+			{
+				free(conn->InputBuffer);
+				conn->InputBuffer = NULL;
+				conn->InputBufferLen = 0;
+			}
 			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->Active = TRUE;
 			conn->BPQStream = Stream;
