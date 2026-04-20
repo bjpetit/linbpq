@@ -18,11 +18,18 @@ OBJS = pngwtran.o pngrtran.o pngset.o pngrio.o pngwio.o pngtrans.o pngrutil.o pn
 # Configuration:
 
 #Default to Linux
-	CC = gcc    
-	LDFLAGS = -Xlinker -Map=output.map -lrt 
+	CC ?= gcc    
+	LDFLAGS ?= -Xlinker -Map=output.map -lrt 
+	BASE_CFLAGS ?= -DLINBPQ -MMD -fcommon -fasynchronous-unwind-tables
+	DEBUG_FLAGS ?= -g
+	OPT_FLAGS ?=
+	WARN_FLAGS ?=
+	SAN_FLAGS ?=
 
-all: CFLAGS = -DLINBPQ  -MMD -g -fcommon -fasynchronous-unwind-tables $(EXTRA_CFLAGS)	
-all: LIBS = -lpaho-mqtt3a -ljansson -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                       
+.PHONY: all debug release sanitize strict help nomqtt noi2c setcap clean
+
+all: CFLAGS += $(BASE_CFLAGS) $(DEBUG_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(SAN_FLAGS) $(EXTRA_CFLAGS)	
+all: LDLIBS += -lpaho-mqtt3a -ljansson -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                       
 all: linbpq
 
 #other OS
@@ -33,8 +40,8 @@ ifeq ($(OS_NAME),NetBSD)
     EXTRA_CFLAGS = -DFREEBSD -DNOMQTT -I/usr/pkg/include 
     LDFLAGS =  -Xlinker -Map=output.map -Wl,-R/usr/pkg/lib -L/usr/pkg/lib -lrt -lutil -lexecinfo
 
-all: CFLAGS = -DLINBPQ  -MMD -g -fcommon -fasynchronous-unwind-tables $(EXTRA_CFLAGS)	
-all: LIBS = -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                    
+all: CFLAGS += $(BASE_CFLAGS) $(DEBUG_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(SAN_FLAGS) $(EXTRA_CFLAGS)	
+all: LDLIBS += -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                    
 all: linbpq
 
 
@@ -44,8 +51,8 @@ ifeq ($(OS_NAME),FreeBSD)
     EXTRA_CFLAGS = -DFREEBSD -DNOMQTT -I/usr/local/include
     LDFLAGS = -Xlinker -Map=output.map -L/usr/local/lib -lrt -liconv -lutil -lexecinfo
 
-all: CFLAGS = -DLINBPQ  -MMD -g -fcommon -fasynchronous-unwind-tables $(EXTRA_CFLAGS)	
-all: LIBS =  -lminiupnpc -lm -lz -lpthread -lconfig -lpcap	                       
+all: CFLAGS += $(BASE_CFLAGS) $(DEBUG_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(SAN_FLAGS) $(EXTRA_CFLAGS)	
+all: LDLIBS +=  -lminiupnpc -lm -lz -lpthread -lconfig -lpcap	                       
 all: linbpq
 
 endif
@@ -55,8 +62,8 @@ ifeq ($(OS_NAME),Darwin)
 	EXTRA_CFLAGS = -DMACBPQ -DNOMQTT 
 	LDFLAGS = -liconv
 
-all: CFLAGS = -DLINBPQ  -MMD -g -fcommon -fasynchronous-unwind-tables $(EXTRA_CFLAGS)	
-all: LIBS = -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                     
+all: CFLAGS += $(BASE_CFLAGS) $(DEBUG_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(SAN_FLAGS) $(EXTRA_CFLAGS)	
+all: LDLIBS += -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                     
 all: linbpq
 endif
 
@@ -64,22 +71,65 @@ $(info OS_NAME is $(OS_NAME))
 
 
 
-nomqtt: CFLAGS = -DLINBPQ -MMD -fcommon -g  -rdynamic -DNOMQTT -fasynchronous-unwind-tables
-nomqtt: LIBS = -lminiupnpc -lm -lz -lpthread -lconfig -lpcap   
+debug: DEBUG_FLAGS = -g3 -O0
+debug: OPT_FLAGS =
+debug: SAN_FLAGS =
+debug: all
+
+release: DEBUG_FLAGS =
+release: OPT_FLAGS = -O2 -DNDEBUG
+release: SAN_FLAGS =
+release: all
+
+sanitize: DEBUG_FLAGS = -g
+sanitize: OPT_FLAGS = -O1 -fno-omit-frame-pointer
+sanitize: SAN_FLAGS = -fsanitize=address,undefined
+sanitize: LDFLAGS += -fsanitize=address,undefined
+sanitize: all
+
+strict: WARN_FLAGS = -Wall -Wextra -Wformat=2 -Wshadow -Wpointer-arith -Wcast-qual -Wstrict-prototypes -Wmissing-prototypes -Werror
+strict: DEBUG_FLAGS = -g
+strict: OPT_FLAGS = -O1
+strict: SAN_FLAGS =
+strict: all
+
+nomqtt: CFLAGS += $(BASE_CFLAGS) $(DEBUG_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(SAN_FLAGS) $(EXTRA_CFLAGS) -rdynamic -DNOMQTT
+nomqtt: LDLIBS += -lminiupnpc -lm -lz -lpthread -lconfig -lpcap   
 nomqtt: linbpq
 
-noi2c: CFLAGS = -DLINBPQ -MMD -DNOI2C -g  -rdynamic -fcommon -fasynchronous-unwind-tables
-noi2c: LIBS = -lpaho-mqtt3a -ljansson -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                        
+noi2c: CFLAGS += $(BASE_CFLAGS) $(DEBUG_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(SAN_FLAGS) $(EXTRA_CFLAGS) -DNOI2C -rdynamic
+noi2c: LDLIBS += -lpaho-mqtt3a -ljansson -lminiupnpc -lm -lz -lpthread -lconfig -lpcap                        
 noi2c: linbpq
 
 
 linbpq: $(OBJS)
-	cc $(OBJS) $(CFLAGS) $(LDFLAGS) $(LIBS) -o linbpq
+	$(CC) $(OBJS) $(CFLAGS) $(LDFLAGS) $(LDLIBS) -o linbpq
+
+setcap: all
 	sudo setcap "CAP_NET_ADMIN=ep CAP_NET_RAW=ep CAP_NET_BIND_SERVICE=ep" linbpq		
 
--include *.d
+help:
+	@echo "LinBPQ build targets:"
+	@echo "  all       - default Linux/OS build flags"
+	@echo "  debug     - debug symbols, no optimization"
+	@echo "  release   - optimized build with -DNDEBUG"
+	@echo "  sanitize  - ASan+UBSan build"
+	@echo "  strict    - warnings-as-errors build profile"
+	@echo "  nomqtt    - build without MQTT"
+	@echo "  noi2c     - build without i2c support"
+	@echo "  setcap    - apply Linux capabilities to linbpq"
+	@echo "  clean     - remove binary, objects, dep files"
+	@echo "Options:"
+	@echo "  USE_DEPS=1   include generated .d files"
+	@echo "  CC=clang     use a different compiler"
+
+USE_DEPS ?= 0
+ifneq ($(USE_DEPS),0)
+DEPFILES = $(patsubst %.o,%.d,$(wildcard $(OBJS)))
+-include $(DEPFILES)
+endif
 
 clean :
-	rm *.d
-	rm linbpq $(OBJS)
+	rm -f *.d
+	rm -f linbpq $(OBJS)
 
