@@ -32,9 +32,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define MaxStreams 1	
 
 #include "cheaders.h"
+#include "common_web_components.h"
 #include "tncinfo.h"
-
-//#include "bpq32.h"
 
 static char ClassName[]="TRACKERSTATUS";
 static char WindowTitle[] = "SCS Tracker";
@@ -612,10 +611,10 @@ int TrkWebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 			TNC->WEB_CHANGED = 0;
 	}
 
-	Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=%d>"
-	"<head><title>SCSTracker Status</title></head><body><h2>SCSTracker Status</h2>", Interval);
+	Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta http-equiv=expires content=0><meta http-equiv=refresh content=%d>"
+	"<title>SCSTracker Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style></head><body><h2>SCSTracker Status</h2>", Interval);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=90px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);

@@ -24,6 +24,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "CHeaders.h"
+#include "common_web_components.h"
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
 int (WINAPI FAR *EnumProcessesPtr)();
@@ -1033,16 +1034,17 @@ static int RestartTNC(struct TNCINFO * TNC)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+		"<title>FLDigi Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>FLDigi Status</title></head><body id=Text onload=\"ScrollOutput()\">"
+		"</head><body id=Text onload=\"ScrollOutput()\">"
 		"<h2>FLDIGI Status</h2>");
 
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);

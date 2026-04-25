@@ -1048,6 +1048,7 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-eq
 		"</div></span>";
 */
 char WebProcTemplate[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0>"
+		"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
 		"<style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; margin: 10px; background: var(--bg); color: var(--text); } h2 { text-align: center; margin-bottom: 0.2em; } table { border-collapse: collapse; margin: 20px auto; width: 100%%; max-width: 700px; } td { padding: 8px; border: 1px solid var(--border); } textarea { width: 100%%; max-width: 600px; display: block; margin: 20px auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); } .dropdown { position: relative; display: inline-block; } .dropbtn { background-color: var(--primary); color: var(--on-primary); padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; } .dropdown-content { display: none; position: absolute; background-color: var(--surface); min-width: 160px; box-shadow: var(--shadow-overlay); padding: 12px 16px; z-index: 1; } .dropdown-content a { color: var(--text); padding: 8px 0; display: block; text-decoration: none; } .dropdown-content a:hover { background-color: var(--surface-hover); } .dropdown:hover .dropdown-content { display: block; }</style>"
 		"<link rel='stylesheet' href='webproc.css'>\r\n"
 		"<script type=\"text/javascript\">\r\n"
@@ -1098,7 +1099,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);

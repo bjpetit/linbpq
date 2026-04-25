@@ -41,14 +41,48 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_HTML_META_VIEWPORT "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 #define COMMON_HTML_META_VIEWPORT_COMPACT "<meta name=viewport content=\"width=device-width,initial-scale=1.0\">"
 #define COMMON_HTML_META_VIEWPORT_SELF_CLOSING "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
-#define COMMON_HTML_HEAD_COMMON COMMON_HTML_HEAD_OPEN_DOCTYPE COMMON_FONT_INTER_LINK
-#define COMMON_HTML_HEAD_COMMON_LANG_EN COMMON_HTML_HEAD_OPEN_DOCTYPE_LANG_EN COMMON_FONT_INTER_LINK
+#define COMMON_HTML_CANONICAL_LINK_ONLY "<link rel=\"canonical\" id=\"bpqCanonical\" href=\"/\"><script>(function(){var l=document.getElementById('bpqCanonical');if(l&&window.location){l.href=window.location.origin+window.location.pathname;}})();</script>"
+#define COMMON_HTML_CANONICAL_DYNAMIC COMMON_HTML_CANONICAL_LINK_ONLY "<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
+#define COMMON_HTML_HEAD_COMMON COMMON_HTML_HEAD_OPEN_DOCTYPE COMMON_FONT_INTER_LINK COMMON_HTML_CANONICAL_DYNAMIC
+#define COMMON_HTML_HEAD_COMMON_LANG_EN COMMON_HTML_HEAD_OPEN_DOCTYPE_LANG_EN COMMON_FONT_INTER_LINK COMMON_HTML_CANONICAL_DYNAMIC
 #define COMMON_HTML_HEAD_UTF8_VIEWPORT COMMON_HTML_HEAD_COMMON COMMON_HTML_META_UTF8 COMMON_HTML_META_VIEWPORT
 #define COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING COMMON_HTML_HEAD_COMMON COMMON_HTML_META_VIEWPORT_SELF_CLOSING
 #define COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT COMMON_HTML_HEAD_COMMON_LANG_EN COMMON_HTML_META_UTF8_QUOTED COMMON_HTML_META_VIEWPORT
 #define COMMON_HTML_HEAD_COMMON_STYLE_OPEN COMMON_HTML_HEAD_COMMON "<style>"
 #define COMMON_HTML_HEAD_UTF8_VIEWPORT_STYLE_OPEN COMMON_HTML_HEAD_UTF8_VIEWPORT "<style>"
 #define COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING "<style>"
+
+/*
+ * HTTP SECURITY RESPONSE HEADERS
+ *
+ * COMMON_HTTP_SECURITY_HEADERS must be inserted into every HTTP/1.1 200 OK
+ * response that returns text/html content, placed after the last fixed header
+ * and before the terminating blank line (\r\n).
+ *
+ * Usage in a sprintf format string:
+ *   "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+ *   COMMON_HTTP_SECURITY_HEADERS "\r\n"
+ *
+ * Header notes:
+ *   X-Content-Type-Options  - prevents MIME-sniffing attacks
+ *   X-Frame-Options         - prevents clickjacking via iframe embedding
+ *   Referrer-Policy         - limits referrer leakage across origins
+ *   Strict-Transport-Security - instructs browsers to use HTTPS only
+ *   Content-Security-Policy - restricts resource origins; 'unsafe-inline' is
+ *                             required because pages use inline <style>/<script>
+ *                             blocks; Google Fonts sources are whitelisted;
+ *                             img-src includes https: for APRS tile servers;
+ *                             script-src/style-src allow unpkg.com (Leaflet,
+ *                             maplibre-gl) and ajax.googleapis.com (jQuery);
+ *                             frame-src allows Google Maps embeds;
+ *                             worker-src blob: allows maplibre-gl web workers
+ */
+#define COMMON_HTTP_SECURITY_HEADERS \
+	"X-Content-Type-Options: nosniff\r\n" \
+	"X-Frame-Options: SAMEORIGIN\r\n" \
+	"Referrer-Policy: strict-origin-when-cross-origin\r\n" \
+	"Strict-Transport-Security: max-age=31536000\r\n" \
+	"Content-Security-Policy: default-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com data: blob:; script-src 'self' 'unsafe-inline' https://unpkg.com https://ajax.googleapis.com blob:; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; img-src 'self' data: blob: https:; frame-src 'self' https://maps.google.com https://www.google.com; worker-src blob:;\r\n"
 
 /*
  * COLOUR SCHEME
@@ -92,20 +126,21 @@ This consolidates responsive menu systems and base styles to reduce duplication.
  */
 #define COMMON_CSS_ROOT \
 	":root{" \
-	"--bg:#f4f4f4;" \
+	"--bg:#edf0f4;" \
 	"--surface:#fff;" \
 	"--primary:#0056b3;" \
 	"--primary-dark:#003d82;" \
 	"--on-primary:#ffffff;" \
-	"--border:#999999;" \
+	"--border:#767676;" \
 	"--border-light:#e2e8f0;" \
 	"--text:#1f2937;" \
-	"--link:#1f2937;" \
+	"--link:#0056b3;" \
+	"--muted:#6b7280;" \
 	"--surface-hover:#e9ecef;" \
 	"--surface-soft:#eef2f7;" \
 	"--focus-ring:#0056b3;" \
-	"--table-header:#f0f0f0;" \
-	"--table-stripe:#f2f2f2;" \
+	"--table-header:#e6e9ee;" \
+	"--table-stripe:#e8ebef;" \
 	"--table-selected:#dbeafe;" \
 	"--fwd-none:#ffffff;" \
 	"--fwd-queued:#fff59d;" \
@@ -115,27 +150,28 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"--alert-error-text:#cc3333;" \
 	"--alert-warn-bg:#ffffcc;" \
 	"--alert-warn-border:#ffaa33;" \
-	"--alert-warn-text:#aa6600;" \
-	"--border-card:#d1d5db;" \
-	"--shadow-card:0 1px 3px rgba(15,23,42,0.12);" \
-	"--shadow-overlay:0 8px 20px rgba(15,23,42,0.22);" \
+	"--alert-warn-text:#7c5100;" \
+	"--border-card:#bfc5d0;" \
+	"--shadow-card:0 2px 8px rgba(15,23,42,0.10),0 1px 2px rgba(15,23,42,0.06);" \
+	"--shadow-overlay:0 8px 24px rgba(15,23,42,0.20),0 2px 6px rgba(15,23,42,0.10);" \
 	"--overlay-hover:rgba(15,23,42,0.08);" \
 	"}" \
 	"@media(prefers-color-scheme:dark){:root{" \
 	"--bg:#111827;" \
-	"--surface:#1e2535;" \
-	"--primary:#3b82f6;" \
-	"--primary-dark:#2563eb;" \
+	"--surface:#202d42;" \
+	"--primary:#1d4ed8;" \
+	"--primary-dark:#1e40af;" \
 	"--on-primary:#ffffff;" \
 	"--border:#4b5563;" \
 	"--border-light:#374151;" \
 	"--text:#f9fafb;" \
 	"--link:#93c5fd;" \
+	"--muted:#9ca3af;" \
 	"--surface-hover:#2d3748;" \
-	"--surface-soft:#263044;" \
+	"--surface-soft:#2b3850;" \
 	"--focus-ring:#60a5fa;" \
 	"--table-header:#374151;" \
-	"--table-stripe:#253047;" \
+	"--table-stripe:#26334e;" \
 	"--table-selected:#1e3a5f;" \
 	"--fwd-none:#1e2535;" \
 	"--fwd-queued:#665c14;" \
@@ -147,10 +183,30 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"--alert-warn-border:#7c5e10;" \
 	"--alert-warn-text:#fde68a;" \
 	"--border-card:#374151;" \
-	"--shadow-card:0 1px 3px rgba(0,0,0,0.45);" \
-	"--shadow-overlay:0 10px 24px rgba(0,0,0,0.55);" \
+	"--shadow-card:0 2px 8px rgba(0,0,0,0.50),0 1px 2px rgba(0,0,0,0.30);" \
+	"--shadow-overlay:0 10px 28px rgba(0,0,0,0.60),0 2px 6px rgba(0,0,0,0.35);" \
 	"--overlay-hover:rgba(255,255,255,0.06);" \
 	"}}" \
+	"html[data-theme=\"dark\"]{color-scheme:dark;" \
+	"--bg:#111827;--surface:#202d42;--primary:#1d4ed8;--primary-dark:#1e40af;--on-primary:#ffffff;" \
+	"--border:#4b5563;--border-light:#374151;--text:#f9fafb;--link:#93c5fd;--muted:#9ca3af;" \
+	"--surface-hover:#2d3748;--surface-soft:#2b3850;--focus-ring:#60a5fa;" \
+	"--table-header:#374151;--table-stripe:#26334e;--table-selected:#1e3a5f;" \
+	"--fwd-none:#1e2535;--fwd-queued:#665c14;--fwd-sent:#1f4a2f;" \
+	"--alert-error-bg:#4a1f27;--alert-error-border:#7f1d2d;--alert-error-text:#fecaca;" \
+	"--alert-warn-bg:#4a3b13;--alert-warn-border:#7c5e10;--alert-warn-text:#fde68a;" \
+	"--border-card:#374151;--shadow-card:0 2px 8px rgba(0,0,0,0.50),0 1px 2px rgba(0,0,0,0.30);" \
+	"--shadow-overlay:0 10px 28px rgba(0,0,0,0.60),0 2px 6px rgba(0,0,0,0.35);--overlay-hover:rgba(255,255,255,0.06);}" \
+	"html[data-theme=\"light\"]{color-scheme:light;" \
+	"--bg:#edf0f4;--surface:#fff;--primary:#0056b3;--primary-dark:#003d82;--on-primary:#ffffff;" \
+	"--border:#767676;--border-light:#e2e8f0;--text:#1f2937;--link:#0056b3;--muted:#6b7280;" \
+	"--surface-hover:#e9ecef;--surface-soft:#eef2f7;--focus-ring:#0056b3;" \
+	"--table-header:#e6e9ee;--table-stripe:#e8ebef;--table-selected:#dbeafe;" \
+	"--fwd-none:#ffffff;--fwd-queued:#fff59d;--fwd-sent:#b7f7bf;" \
+	"--alert-error-bg:#ffeeee;--alert-error-border:#ffcccc;--alert-error-text:#cc3333;" \
+	"--alert-warn-bg:#ffffcc;--alert-warn-border:#ffaa33;--alert-warn-text:#7c5100;" \
+	"--border-card:#bfc5d0;--shadow-card:0 2px 8px rgba(15,23,42,0.10),0 1px 2px rgba(15,23,42,0.06);" \
+	"--shadow-overlay:0 8px 24px rgba(15,23,42,0.20),0 2px 6px rgba(15,23,42,0.10);--overlay-hover:rgba(15,23,42,0.08);}" \
 	"*{box-sizing:border-box;}"
 
 #define COMMON_BODY_BASE_CSS \
@@ -181,18 +237,25 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"*{animation-duration:0!important;transition-duration:0!important;}" \
 	"}"
 
+#define COMMON_LINK_CSS \
+	"a{color:var(--link);}" \
+	"a:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+
 #define COMMON_CSS_VARIABLES \
 	COMMON_CSS_ROOT \
 	COMMON_BODY_BASE_CSS \
 	COMMON_HEADING_CSS \
-	COMMON_REDUCED_MOTION_CSS
+	COMMON_REDUCED_MOTION_CSS \
+	COMMON_LINK_CSS \
+	"::selection{background:var(--primary);color:var(--on-primary);}" \
+	"::-moz-selection{background:var(--primary);color:var(--on-primary);}" 
 
 // Responsive Menu System CSS
 // Provides collapsible mobile menu with hamburger toggle.
 // Use COMMON_MENU_CSS for sprintf-based templates and COMMON_MENU_CSS_TEMPLATE("%")
 // for raw string templates that are not passed through printf/snprintf.
 #define COMMON_MENU_CSS_TEMPLATE(PCT) \
-	".menu-header{display:none;max-width:980px;margin:0 auto 10px;}" \
+	".menu-header{display:none;max-width:var(--menu-max-width,980px);margin:0 auto 10px;}" \
 	".menu-toggle{" \
 	"width:100" PCT ";" \
 	"min-height:48px;" \
@@ -214,10 +277,10 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"flex-wrap:wrap;" \
 	"justify-content:center;" \
 	"gap:10px;" \
-	"max-width:980px;" \
+	"max-width:var(--menu-max-width,980px);" \
 	"margin:0 auto;" \
 	"}" \
-	".menu a{" \
+	".menu a,.menu .btn{" \
 	"display:inline-flex;" \
 	"align-items:center;" \
 	"justify-content:center;" \
@@ -233,15 +296,16 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"font-family:" COMMON_FONT_TITLE ";" \
 	"cursor:pointer;" \
 	"touch-action:manipulation;" \
+	"transition:background 0.15s ease;" \
 	"}" \
-	".menu a:hover{background:var(--surface-hover);}" \
-	".menu a:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
-	".menu a:active{background:var(--primary-dark);color:var(--on-primary);}" \
+	".menu a:hover,.menu .btn:hover{background:var(--surface-hover);}" \
+	".menu a:focus-visible,.menu .btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	".menu a:active,.menu .btn:active{background:var(--primary-dark);color:var(--on-primary);}" \
 	"@media(max-width:768px){" \
 	".menu-header{display:block;}" \
 	".menu{display:none;flex-direction:column;align-items:stretch;gap:8px;}" \
 	".menu.menu-open{display:flex;}" \
-	".menu a{width:100" PCT ";text-align:center;min-height:48px;}" \
+	".menu a,.menu .btn{width:100" PCT ";text-align:center;min-height:48px;}" \
 	"}"
 
 // Max-width should be set per-application (980px for mail, 1100px for node)
@@ -361,7 +425,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Mail admin shared form/list snippets.
 // Keep these generic so page templates can layer their own layout specifics.
 #define COMMON_ADMIN_FIELD_THEME_CSS \
-	"input[type=text],input[type=number],input[type=password],input[type=input],select,textarea{background:var(--surface-soft);color:var(--text);}" \
+	"input[type=text],input[type=number],input[type=password],input[type=input],select,textarea{background:var(--surface-soft);color:var(--text);border:1px solid var(--border);}" \
 	"input[type=text]::placeholder,input[type=number]::placeholder,input[type=password]::placeholder,input[type=input]::placeholder,textarea::placeholder{color:var(--muted);}" \
 	"input[type=text]:focus-visible,input[type=number]:focus-visible,input[type=password]:focus-visible,input[type=input]:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
 
@@ -384,6 +448,16 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_NODE_MENU_MOBILE_CSS \
 	"@media (max-width: 768px) { .menu a, .menu .btn, .dropdown { width: 100%%; text-align: center; min-height: 48px; } .dropdown-content { position: static; transform: none; width: 100%%; margin-top: 8px; box-shadow: none; } }"
 
+#define COMMON_NODE_WEBPROC_DROPDOWN_CSS \
+	".dropbtn {position: relative; border: 1px solid var(--border);padding:1px;}\r\n" \
+	".dropdown {position: relative; display: inline-block;}\r\n" \
+	".dropdown-content {display: none; position: absolute;background-color: var(--surface); min-width: 160px; box-shadow: var(--shadow-overlay); z-index: 1;}\r\n" \
+	".dropdown-content a {color: var(--text); padding: 1px 1px;text-decoration:none;display:block;}" \
+	".dropdown-content a:hover {background-color: var(--surface-soft);}\r\n" \
+	".dropdown:hover .dropdown-content {display: block;}\r\n" \
+	".dropdown:hover .dropbtn {background-color: var(--surface-hover);}\r\n" \
+	COMMON_BTN_ACTIVE_DARK_CSS
+
 #define COMMON_NODE_TERM_MOBILE_CSS \
 	"@media (max-width: 768px) { .term-actions .btn { width: 100%%; } .term-container { height: calc(100vh - 200px); } }"
 
@@ -394,16 +468,35 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_NODE_TERM_IO_COLORS_CSS \
 	":root{--term-io-bg:var(--surface);--term-io-text:var(--text);}"
 
+#define COMMON_THEME_SELECTOR_CSS \
+	".theme-sel{position:fixed;top:10px;right:10px;display:flex;gap:4px;z-index:999;}" \
+	".tbtn{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:1rem;line-height:1;color:var(--text);min-width:34px;min-height:34px;display:inline-flex;align-items:center;justify-content:center;}" \
+	".tbtn.active{background:var(--primary);color:var(--on-primary);border-color:var(--primary);}" \
+	".tbtn:hover:not(.active){background:var(--surface-hover);}"
+
+#define COMMON_THEME_SELECTOR_HTML \
+	"<div class='theme-sel'>" \
+	"<button class='tbtn' data-tbtn='system' onclick='bpqSetThemeMode(\"system\")' title='System theme' aria-label='System theme'>&#9881;</button>" \
+	"<button class='tbtn' data-tbtn='light' onclick='bpqSetThemeMode(\"light\")' title='Light theme' aria-label='Light theme'>&#9728;</button>" \
+	"<button class='tbtn' data-tbtn='dark' onclick='bpqSetThemeMode(\"dark\")' title='Dark theme' aria-label='Dark theme'>&#9790;</button>" \
+	"</div>"
+
+#define COMMON_THEME_SELECTOR_INIT_JAVASCRIPT \
+	"function updateThemeBtns(t){var b=document.querySelectorAll('[data-tbtn]');for(var i=0;i<b.length;i++)b[i].classList.toggle('active',b[i].getAttribute('data-tbtn')===t);}" \
+	"window.addEventListener('DOMContentLoaded',function(){updateThemeBtns(bpqGetThemeMode());});"
+
 // APRS shared web styles.
 // RAW variants are for direct string templates; FMT variants are for sprintf/snprintf templates.
 #define COMMON_APRS_BASE_CSS_TEMPLATE(PCT) \
 	COMMON_CSS_ROOT \
-	"body{font-family:" COMMON_FONT_MONO ";background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);-webkit-font-smoothing:antialiased;}" \
+	COMMON_THEME_SELECTOR_CSS \
+	"body{font-family:" COMMON_FONT_MONO ";background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);color-scheme:light dark;-webkit-font-smoothing:antialiased;}" \
+	COMMON_LINK_CSS \
 	".aprs-page-shell{max-width:1100px;margin:0 auto;padding:0 10px;}" \
 	".aprs-info-content{max-width:80" PCT ";margin:0 auto;}" \
-	"h1{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.75rem,5vw,3rem);line-height:1.25;}" \
-	"h2{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.5rem,4vw,2.25rem);line-height:1.25;}" \
-	"h3{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);line-height:1.25;}" \
+	"h1{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);line-height:1.25;}" \
+	"h2{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.1rem,2.5vw,1.4rem);line-height:1.25;}" \
+	"h3{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1rem,2vw,1.2rem);line-height:1.25;}" \
 	COMMON_REDUCED_MOTION_CSS \
 	COMMON_MENU_CSS_TEMPLATE(PCT)
 
@@ -411,18 +504,25 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	COMMON_APRS_BASE_CSS_TEMPLATE(PCT) \
 	".table-wrap{width:100" PCT ";max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
 	".aprs-station-table{border-collapse:collapse;font-family:" COMMON_FONT_MONO ";}" \
-	".aprs-station-table th,.aprs-station-table td{border:1px solid var(--border);padding:6px 8px;}" \
+	".aprs-station-table th,.aprs-station-table td{border:1px solid var(--border);padding:8px;white-space:nowrap;}" \
 	".aprs-station-table th{background:var(--table-header);text-align:left;}" \
-	".aprs-station-table tbody tr{background:var(--surface);}" \
 	".aprs-station-table tbody tr:nth-child(even){background:var(--table-stripe);}" \
+	"@media(max-width:768px){" \
+	".aprs-station-table-stack,.aprs-station-table-stack tbody,.aprs-station-table-stack tr,.aprs-station-table-stack td{display:block;width:100" PCT ";}" \
+	".aprs-station-table-stack tr{margin:0 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:6px;}" \
+	".aprs-station-table-stack tbody tr:nth-child(even){background:var(--surface);}" \
+	".aprs-station-table-stack td{border:none;border-bottom:1px solid var(--border-light);padding:6px 4px;text-align:left;}" \
+	".aprs-station-table-stack td:last-child{border-bottom:none;}" \
+	"}" \
 	".aprs-weather-table{border-collapse:collapse;margin:0 auto 12px;}" \
-	".aprs-weather-table th,.aprs-weather-table td{border:1px solid var(--border);padding:6px 10px;}" \
+	".aprs-weather-table th,.aprs-weather-table td{border:1px solid var(--border);padding:8px;white-space:nowrap;}" \
 	".aprs-weather-table th{background:var(--table-header);}" \
 	".aprs-map{width:100" PCT ";max-width:600px;height:500px;border:0;display:block;margin:10px auto;}" \
 	".aprs-note{text-align:center;font-style:italic;margin:8px 0;}" \
 	".aprs-station-title{text-align:center;font-size:1.2rem;margin:12px 0;}" \
 	".aprs-detail{text-align:center;margin:8px 0;}" \
-	".aprs-lastposit{background:var(--surface-soft);border:1px solid var(--border);border-radius:4px;padding:8px 12px;max-width:800px;margin:10px auto;word-break:break-word;}"
+	".aprs-lastposit{background:var(--surface-soft);border:1px solid var(--border);border-radius:4px;padding:8px 12px;max-width:800px;margin:10px auto;word-break:break-word;}" \
+	COMMON_ITEM_GRID_CSS("aprs-station-grid", "14ch", PCT)
 
 #define COMMON_APRS_MAP_CSS_TEMPLATE(PCT) \
 	COMMON_APRS_CONTENT_CSS_TEMPLATE(PCT) \
@@ -442,22 +542,25 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 #define COMMON_APRS_MESSAGE_PAGE_CSS_TEMPLATE(PCT) \
 	COMMON_APRS_BASE_CSS_TEMPLATE(PCT) \
-	"h2{text-align:center;margin:10px 0 14px;font-size:clamp(1.5rem,4vw,2.25rem);}" \
+	"h2{text-align:center;margin:10px 0 14px;font-size:clamp(1.1rem,2.5vw,1.4rem);}" \
 	".menu{max-width:1100px;margin:0 auto 14px;}" \
 	".menu-header{max-width:1100px;}" \
 	".aprs-msg-wrap{max-width:1100px;margin:0 auto;}" \
 	".aprs-msg-table-wrap{width:100" PCT ";overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
 	".aprs-msg-table{width:max-content;min-width:100" PCT ";border-collapse:collapse;background:var(--surface);}" \
-	".aprs-msg-table th,.aprs-msg-table td{border:1px solid var(--border-card);padding:6px 8px;white-space:nowrap;}" \
+	".aprs-msg-table th,.aprs-msg-table td{border:1px solid var(--border);padding:8px;white-space:nowrap;}" \
 	".aprs-msg-table th{background:var(--table-header);text-align:left;}" \
 	".aprs-msg-table tbody tr:nth-child(even){background:var(--table-stripe);}" \
 	".aprs-msg-form{max-width:900px;margin:0 auto;background:var(--surface);border:1px solid var(--border-card);border-radius:8px;padding:14px;box-shadow:var(--shadow-card);}" \
 	".aprs-msg-form table{width:100" PCT ";border-collapse:collapse;}" \
-	".aprs-msg-form td{padding:6px;vertical-align:top;}" \
-	".aprs-msg-form input[type=text]{width:100" PCT ";padding:8px;border:1px solid var(--border-card);border-radius:4px;box-sizing:border-box;}" \
+	".aprs-msg-form td{padding:8px;vertical-align:top;}" \
+	".aprs-msg-form input[type=text]{width:100" PCT ";padding:8px;border:1px solid var(--border-card);border-radius:4px;box-sizing:border-box;background:var(--surface-soft);color:var(--text);font-family:inherit;}" \
+	".aprs-msg-form input[type=text]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
 	".aprs-msg-actions{text-align:center;margin-top:10px;}" \
-	".aprs-msg-actions input[type=submit]{min-height:44px;padding:10px 16px;background:var(--surface);border:1px solid var(--border-card);border-radius:6px;cursor:pointer;margin:0 6px;}" \
-	".aprs-msg-actions input[type=submit]:hover{background:var(--surface-hover);}"
+	".aprs-msg-actions input[type=submit]{min-height:44px;padding:10px 16px;background:var(--surface);border:1px solid var(--border-card);border-radius:6px;cursor:pointer;margin:0 6px;color:var(--text);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";}" \
+	".aprs-msg-actions input[type=submit]:hover{background:var(--surface-hover);}" \
+	".aprs-msg-actions input[type=submit]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	".aprs-msg-actions input[type=submit]:active{background:var(--primary-dark);color:var(--on-primary);}"
 
 #define COMMON_APRS_CONTENT_CSS COMMON_APRS_CONTENT_CSS_TEMPLATE("%")
 #define COMMON_APRS_MAP_CSS COMMON_APRS_MAP_CSS_TEMPLATE("%")
@@ -471,6 +574,13 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_TABLE_FONT_SIZE "clamp(0.75rem,0.65rem + 1vw,0.9375rem)"
 #define COMMON_TABLE_FONT_SIZE_COMPACT "clamp(0.6875rem,0.62rem + 0.45vw,0.8125rem)"
 
+// Shared item-grid CSS for auto-column call/node grids.
+// CLASSNAME: CSS class name string, MINWIDTH: minmax min e.g. "17ch", PCT: "%" or "%%"
+#define COMMON_ITEM_GRID_CSS(CLASSNAME, MINWIDTH, PCT) \
+	"." CLASSNAME "{display:grid;grid-template-columns:repeat(auto-fill,minmax(" MINWIDTH ",max-content));justify-content:center;gap:0;width:100" PCT ";padding:8px;box-sizing:border-box;font-family:" COMMON_FONT_MONO ";font-size:" COMMON_TABLE_FONT_SIZE_COMPACT ";}" \
+	"." CLASSNAME " a{color:var(--link);white-space:nowrap;padding:3px 10px 3px 6px;display:block;border:1px solid var(--border);}" \
+	"." CLASSNAME " a:hover{background:var(--overlay-hover);}"
+
 #define COMMON_TABLE_CSS \
 	".table-container{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
 	".table-wrap{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
@@ -480,7 +590,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".node-table th,.node-table td{white-space:nowrap;}" \
 	".node-table th{background:var(--table-header);text-align:left;}" \
 	".node-table tbody tr:nth-child(even){background-color:var(--table-stripe);}" \
-	".node-table td.num{text-align:right;}" \
+	".node-table tbody tr:hover{background:var(--surface-hover);}" \
+	".node-table td.num{text-align:center;}" \
 	".node-table td.text{text-align:left;}" \
 	".node-table td.center{text-align:center;}" \
 	".node-table.routes-table,.node-table.compact-table{font-size:" COMMON_TABLE_FONT_SIZE_COMPACT ";}" \
@@ -500,15 +611,50 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".node-table-stack td::before{content:attr(data-label);display:inline-block;min-width:130px;font-weight:700;color:var(--text);margin-right:8px;}" \
 	".node-table-stack.stats-table td::before{content:none;display:none;}" \
 	"}" \
-	".node-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(17ch,max-content));justify-content:center;gap:0;width:100%%;padding:8px;box-sizing:border-box;font-family:" COMMON_FONT_MONO ";font-size:" COMMON_TABLE_FONT_SIZE_COMPACT ";}" \
-	".node-grid a{color:var(--link);white-space:nowrap;padding:3px 10px 3px 6px;display:block;border:1px solid var(--border);}" \
-	".node-grid a:hover{background:var(--overlay-hover);}"
+	COMMON_ITEM_GRID_CSS("node-grid", "17ch", "%%")
+
+#define COMMON_COMPACT_PAGE_CSS \
+	"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}" \
+	"h3{text-align:center;margin:8px 0 12px;}"
+
+#define COMMON_COMPACT_TABLE_CSS \
+	"table{border-collapse:collapse;margin:10px 0;}" \
+	"th,td{border:1px solid var(--border);padding:3px 7px;text-align:left;}" \
+	"th{background:var(--table-header);font-weight:bold;}"
+
+#define COMMON_COMPACT_TABLE_PADDED_CSS \
+	"table{border-collapse:collapse;margin:10px 0;}" \
+	"th,td{border:1px solid var(--border);padding:5px 10px;text-align:left;}" \
+	"th{background:var(--table-header);font-weight:bold;}"
+
+#define COMMON_BTN_PRIMARY_COMPACT_CSS \
+	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;background:var(--primary);color:var(--on-primary);border:none;border-radius:4px;cursor:pointer;font-size:12px;box-sizing:border-box;}"
+
+#define COMMON_BTN_PRIMARY_COMPACT_INTERACTION_CSS \
+	".btn:hover,.btn:focus{background:var(--primary-dark);outline:2px solid var(--focus-ring);outline-offset:2px;}"
+
+#define COMMON_MONO_PAGE_CLAMP_MARGIN0_PAD10_CSS \
+	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 0; padding: 10px; background: var(--bg); color: var(--text); }"
+
+#define COMMON_MONO_PAGE_CLAMP_MARGIN4_CSS \
+	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 4px; background: var(--bg); color: var(--text); }"
+
+#define COMMON_MONO_COMPACT_TEXT_CSS \
+	"font-family: " COMMON_FONT_MONO "; font-size: " COMMON_TABLE_FONT_SIZE ";"
 
 // Responsive Menu JavaScript
 // Handles toggle, click-outside-to-close, and escape key
 // Expects menu element ID to be 'mainMenu' or 'mailMenu'
 // Expects toggle button ID to be 'menuToggle'
+#define COMMON_THEME_COOKIE_INIT_JAVASCRIPT \
+	"function bpqGetCookie(n){var p=n+'=';var c=document.cookie?document.cookie.split(';'):[];for(var i=0;i<c.length;i++){var x=c[i].trim();if(x.indexOf(p)===0)return decodeURIComponent(x.substring(p.length));}return '';}"\
+	"function bpqGetThemeMode(){var t=bpqGetCookie('bpq-theme');if(t==='dark'||t==='light'||t==='system')return t;return 'system';}"\
+	"function bpqApplyThemeMode(t){var h=document.documentElement;if(t==='dark')h.setAttribute('data-theme','dark');else if(t==='light')h.setAttribute('data-theme','light');else h.removeAttribute('data-theme');}"\
+	"function bpqSetThemeMode(t){var v=(t==='dark'||t==='light')?t:'system';document.cookie='bpq-theme='+encodeURIComponent(v)+'; Path=/; Max-Age=31536000; SameSite=Lax';bpqApplyThemeMode(v);if(typeof updateThemeBtns==='function')updateThemeBtns(v);}"\
+	"(function(){bpqApplyThemeMode(bpqGetThemeMode());})();"
+
 #define COMMON_MENU_JAVASCRIPT \
+	COMMON_THEME_COOKIE_INIT_JAVASCRIPT \
 	"function getMenu(){return document.getElementById('mainMenu')||document.getElementById('mailMenu')||document.getElementById('chatMenu');}"\
 	"function toggleMenu(event){" \
 	"if(event)event.preventDefault();" \

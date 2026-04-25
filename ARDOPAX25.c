@@ -39,6 +39,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 
 #include "CHeaders.h"
+#include "common_web_components.h"
 
 #ifdef WIN32
 #include <Psapi.h>
@@ -771,17 +772,18 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+		"<title>ARDOP Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
 		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>ARDOP Status</title></head><body id=Text onload=\"ScrollOutput()\">"
+		"</head><body id=Text onload=\"ScrollOutput()\">"
 		"<h2><form method=post action=ARDOPAbort?%d>ARDOP Status <input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
 		TNC->Port);
 
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
@@ -2058,9 +2060,9 @@ static VOID ARDOPProcessReceivedData(struct TNCINFO * TNC)
 
 	//	Commands start with c: and end with CR.
 	//	Data starts with d: and has a length field
-	//	“d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data, +2 Byte CRC”
+	//	ï¿½d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 ï¿½ FFFF), binary data, +2 Byte CRCï¿½
 
-	//	As far as I can see, shortest frame is “c:RDY<Cr> + 2 byte CRC” = 8 bytes
+	//	As far as I can see, shortest frame is ï¿½c:RDY<Cr> + 2 byte CRCï¿½ = 8 bytes
 
 	if (TNC->DataInputLen > 8000)	// Shouldnt have packets longer than this
 		TNC->DataInputLen=0;
@@ -2160,9 +2162,9 @@ static VOID ARDOPProcessReceivedControl(struct TNCINFO * TNC)
 
 	//	Commands start with c: and end with CR.
 	//	Data starts with d: and has a length field
-	//	“d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data, +2 Byte CRC”
+	//	ï¿½d:ARQ|FEC|ERR|, 2 byte count (Hex 0001 ï¿½ FFFF), binary data, +2 Byte CRCï¿½
 
-	//	As far as I can see, shortest frame is “c:RDY<Cr> + 2 byte CRC” = 8 bytes
+	//	As far as I can see, shortest frame is ï¿½c:RDY<Cr> + 2 byte CRCï¿½ = 8 bytes
 
 	if (TNC->InputLen > 8000)	// Shouldnt have packets longer than this
 		TNC->InputLen=0;

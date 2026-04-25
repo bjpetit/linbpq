@@ -136,18 +136,18 @@ static char BusyError[] = "<p style='text-align:center'>Sorry, No sessions avail
 
 extern char WebMailSignon[];
 
-char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+char MailSignon[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>BPQ32 Mail Server Access</title>"
-	"<style>" COMMON_SIGNON_CSS "</style></head><body>"
+	"<style>" COMMON_SIGNON_CSS "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body>"
 	"<h2 class=text-center>BPQ32 Mail Server %s Access</h2>"
 	"<h3 class=text-center>Please enter Callsign and Password</h3>"
 	"<div class=\"form-container\"><form method=post action=/Mail/Signon?Mail>"
 	"<div class=\"form-row\"><label for=user>User</label><input type=text id=user name=user tabindex=1 maxlength=50 required></div>"
 	"<div class=\"form-row\"><label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required></div>"
-	"<div class=\"form-row\"><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div></body></html>";
+	"<div class=\"form-row\"><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html /></div></form></div></body></html>";
 
 
-char MailPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+char MailPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>%s's BBS Web Server</title>"
 	"<style type=\"text/css\">"
 	COMMON_CSS_VARIABLES
@@ -160,7 +160,7 @@ char MailPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-wi
 	"<body><h2>BPQ32 BBS %s</h2>"
 	COMMON_MAIL_MENU;
 
-char RefreshMainPage[] = "<html><head>"
+char RefreshMainPage[] = "<!DOCTYPE html><html lang=\"en\"><head>"
 	"<meta http-equiv=refresh content=10>"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<style type=\"text/css\">"
@@ -175,24 +175,13 @@ char RefreshMainPage[] = "<html><head>"
 	COMMON_MAIL_MENU;
 
 char StatusPage [] = 
-"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 COMMON_CSS_VARIABLES
 COMMON_TABLE_CSS
 COMMON_FORM_CSS
 COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
-".status-grid{width:100%%;border-collapse:collapse;font-family: " COMMON_FONT_MONO ";white-space:nowrap;}"
-".status-grid{font-size:clamp(0.75rem,0.65rem + 1vw,0.9375rem);}"
-".status-grid{background:var(--surface);color:var(--text);}"
-".status-grid thead tr{background:var(--table-header);}"
-".status-grid th,.status-grid td{padding:10px;border:1px solid var(--border);color:var(--text);}"
-".status-grid th{background:var(--table-header);font-weight:bold;}"
-".status-grid td{background:var(--surface);}"
-".status-grid tbody tr:nth-child(even){background:var(--table-stripe);}"
-".status-grid tbody tr:hover{background:var(--surface-soft);}"
-".status-grid th{text-align:left;}"
-".status-grid td{text-align:left;}"
-".status-grid th.num,.status-grid td.num{text-align:center;}"
+".status-grid{width:100%%;}"
 ".status-actions input{min-width:160px;}"
 ".stats-section{max-width:560px;margin:16px auto 0;padding:clamp(12px,2vw,18px);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-card);}"
 ".stat-row{display:flex;align-items:center;gap:12px;margin:8px 0;}"
@@ -200,9 +189,9 @@ COMMON_BUTTON_CSS
 ".stat-row input{flex:0 0 130px;max-width:130px;padding:clamp(10px,1vw,14px) clamp(12px,1.5vw,16px);line-height:1.5;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;background:var(--surface-soft);color:var(--text);font-family:" COMMON_FONT_MONO ";font-size:clamp(0.875rem,2vw,1rem);font-variant-numeric:tabular-nums;text-align:right;min-height:44px;}"
 ".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
 "@media(max-width:768px){.status-grid th,.status-grid td{padding:8px 6px;}.stats-section{margin-top:12px;padding:12px;}.stat-row{flex-direction:column;align-items:stretch;gap:6px;}.stat-row label{flex:none;width:100%%;}.stat-row input{flex:1 1 auto;max-width:none;width:100%%;min-height:48px;text-align:left;}}"
-"</style></head><body><div class=section-title>Active Sessions</div>"
+"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><div class=section-title>Active Sessions</div>"
 "<form method=post action=/Mail/DisSession?%s>"
-"<div class=table-container><table class=status-grid>"
+"<div class=table-container><table class=\"node-table status-grid\">"
 "<thead><tr><th scope=col class=num>Select</th><th scope=col>User</th><th scope=col>Callsign</th><th scope=col class=num>Stream</th><th scope=col class=num>Queue</th><th scope=col class=num>Sent</th><th scope=col class=num>Rxed</th></tr></thead><tbody>";
 
 char StreamEnd[] = 
@@ -235,11 +224,11 @@ char UILine[] = "<div class=port-row><input %s name=En%d type=checkbox><span cla
 char UITail[] = "</div><div class=buttons><input name=Update value=Update type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
 char FWDSelectHddr[] = 
-	"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+	"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 	COMMON_CSS_VARIABLES
 	COMMON_FORM_CSS
 	COMMON_BUTTON_CSS
-	"</style></head><body><h3>Forwarding Selection</h3>"
+	"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><h3>Forwarding Selection</h3>"
 	"<form method=post action=/Mail/FWDSel?%s>"
 	"<div class=form-section>"
 	"<div class=form-row><label>Max Size to Send</label><input type=number value=%d name=MaxTX></div>"
@@ -255,11 +244,11 @@ char FWDSelectTail[] =
 	"</select></div></div><div class=buttons><input name=Save value=Save type=submit> <input name=Cancel value=Cancel type=submit> <input name=Select value=Select type=submit></div></form></body></html>";
 
 char UserSelectHddr[] = 
-	"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+	"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 	COMMON_CSS_VARIABLES
 	COMMON_FORM_CSS
 	COMMON_BUTTON_CSS
-	"</style></head><body><h3>Please Select User</h3><form method=post action=/Mail/Users?%s><select name=call>";
+	"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><h3>Please Select User</h3><form method=post action=/Mail/Users?%s><select name=call>";
 
 char UserSelectLine[] = "<option value=%s>%s</option>";
 
@@ -268,11 +257,11 @@ char StatusLine[] = "<option value=%d>%s</option>";
 char UserSelectTail[] = "</select><div class=form-row><input size=6 value=\"\" name=NewCall><input type=submit value=\"Add User\" name=Adduser></div><div class=buttons><input type=submit value=Select> <input type=submit value=Cancel name=Cancel></div></form></body></html>";
 
 char UserUpdateHddr[] =
-	"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+	"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 	COMMON_CSS_VARIABLES
 	COMMON_FORM_CSS
 	COMMON_BUTTON_CSS
-	"</style></head><body><h3>Update User %s</h3>"
+	"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><h3>Update User %s</h3>"
 	"<form method=post action=/Mail/Users?%s>";
 
 char UserUpdateLine[] = "<option value=%s>%s</option>";
@@ -282,12 +271,12 @@ char UserUpdateLine[] = "<option value=%s>%s</option>";
 
 
 char FWDUpdate[] = 
-"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 COMMON_CSS_VARIABLES
 COMMON_FORM_CSS
 COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
-"</style></head><body><h3>Update Forwarding for BBS %s</h3>"
+"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><h3>Update Forwarding for BBS %s</h3>"
 "<form method=post action=/Mail/FWD?%s name=Test>"
 "<div class=textarea-section><h4>Forwarding Addresses & Schedule</h4><div class=textarea-grid>"
 "<div class=textarea-group><label>TO</label><textarea name=TO>%s</textarea></div>"
@@ -412,7 +401,7 @@ static char WPDetailCSS[] =
 ".wp-btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
 "</style>";
 
-char Welcome[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+char Welcome[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 "<style>"
 COMMON_CSS_VARIABLES
 "h3{text-align:center;color:var(--text);}"
@@ -420,7 +409,7 @@ COMMON_CSS_VARIABLES
 ".form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:var(--text);}.form-row textarea{width:100%%;padding:8px;border:1px solid var(--border);border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:clamp(14px,2vw,16px);line-height:1.4;}p{font-size:13px;color:var(--text);line-height:1.5;}"
 SUBMIT_BUTTON_CSS
 "input[type=submit]{font-size:clamp(14px,1.5vw,16px);}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%%-5px);min-height:48px;}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
-"</style></head><body>"
+"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body>"
 "<div class=section-title>Welcome Messages and Prompts</div>"
 "<form method=post action=/Mail/Welcome?%s>"
 "<div class=form-row><label>Normal User Welcome</label><textarea rows=3 name=NUWelcome>%s</textarea></div>"
@@ -506,7 +495,7 @@ static char WPDetailButtons[] =
 "<input name=Cancel value=Cancel class=wp-btn type=submit></div></form>";
 
 
-static char LostSession[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+static char LostSession[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 COMMON_CSS_VARIABLES
 "body{text-align:center;}"
 SUBMIT_BUTTON_CSS
@@ -514,7 +503,7 @@ SUBMIT_BUTTON_CSS
 "</style></head><body>"
 "<form method=post action=/Mail/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form></body></html>";
+"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html><br></form></body></html>";
 
 
 char * MsgEditTemplate = NULL;

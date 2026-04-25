@@ -537,6 +537,7 @@ unsigned int aiswhite_png_len = 227;
 	"<!DOCTYPE html>" \
 	"<html lang=\"en\">" \
 	"<head>" \
+	COMMON_FONT_INTER_LINK \
 	"<meta charset=\"UTF-8\">" \
 	"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">" \
 	"<meta http-equiv=\"cache-control\" content=\"no-cache\">" \
@@ -545,7 +546,7 @@ unsigned int aiswhite_png_len = 227;
 	"<meta http-equiv=\"refresh\" content=\"300\">" \
 	"<title>##MY_CALLSIGN##'s BPQ32 APRS Web Server</title>" \
 	"<style>" APRS_CSS "</style>" \
-	"<script>" COMMON_MENU_JAVASCRIPT "</script>" \
+	"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>" \
 	"</head>" \
 	"<body>" \
 	"<div class=\"aprs-page-shell\">"
@@ -554,11 +555,12 @@ unsigned int aiswhite_png_len = 227;
 	"<!DOCTYPE html>" \
 	"<html lang=\"en\">" \
 	"<head>" \
+	COMMON_FONT_INTER_LINK \
 	"<meta charset=\"UTF-8\">" \
 	"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">" \
 	"<title>##MY_CALLSIGN##'s BPQ32 APRS Web Server</title>" \
 	"<style>" APRS_CSS "</style>" \
-	"<script>" COMMON_MENU_JAVASCRIPT "</script>" \
+	"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>" \
 	"</head>" \
 	"<body>" \
 	"<div class=\"aprs-page-shell\">"
@@ -568,7 +570,8 @@ unsigned int aiswhite_png_len = 227;
 	"<button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button>" \
 	"</div>" \
 	"<nav id=\"mainMenu\" class=\"menu\">" \
-	"<a href=\"../index.html\">Home</a>" \
+	"<a href=\"/\">Home</a>" \
+	"<a href=\"/aprs\">APRS</a>" \
 	"<a href=\"all.html?width=7\">All Stations</a>" \
 	"<a href=\"allrf.html\">RF Stations</a>" \
 	"<a href=\"wxall.html?width=7\">All WX Stations</a>" \
@@ -578,16 +581,16 @@ unsigned int aiswhite_png_len = 227;
 	"<a href=\"obj.html?width=7\">All Objects</a>" \
 	"<a href=\"objrf.html\">RF Objects</a>" \
 	"<a href=\"info.html\">Information</a>" \
-	"<a href=\"../nodemenu.html\">Node Pages</a>" \
 	"</nav>"
 
 #define APRS_CONTENT_OPEN \
+	COMMON_THEME_SELECTOR_HTML \
 	"<h1>##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>"
 
-#define APRS_PAGE_OPEN_REFRESH APRS_PAGE_HEAD_REFRESH APRS_LEFT_MENU APRS_CONTENT_OPEN
-#define APRS_PAGE_OPEN_STATIC APRS_PAGE_HEAD_STATIC APRS_LEFT_MENU APRS_CONTENT_OPEN
+#define APRS_PAGE_OPEN_REFRESH APRS_PAGE_HEAD_REFRESH APRS_CONTENT_OPEN APRS_LEFT_MENU
+#define APRS_PAGE_OPEN_STATIC APRS_PAGE_HEAD_STATIC APRS_CONTENT_OPEN APRS_LEFT_MENU
 
-#define APRS_STATION_TABLE_OPEN "<div class=\"table-wrap\"><table class=\"aprs-station-table\">"
+#define APRS_STATION_TABLE_OPEN "<div class=\"table-wrap\"><div class=\"aprs-station-grid\">"
 #define APRS_STATION_TABLE_OPEN_NL "<div class=\"table-wrap\"><table class=\"aprs-station-table\">\r\n"
 #define APRS_WEATHER_TABLE_OPEN "<div class=\"table-wrap\"><table class=\"aprs-weather-table\">\r\n"
 
@@ -724,7 +727,7 @@ char * get_all()
 		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
 		APRS_STATION_TABLE_OPEN
-		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"##STATION_TABLE##</div></div>\r\n"
 		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
@@ -743,7 +746,7 @@ char * get_mobileall()
 		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
 		APRS_STATION_TABLE_OPEN
-		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"##STATION_TABLE##</div></div>\r\n"
 		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
@@ -762,7 +765,7 @@ char * get_obj()
 		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
 		APRS_STATION_TABLE_OPEN
-		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"##STATION_TABLE##</div></div>\r\n"
 		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
@@ -792,7 +795,7 @@ char * get_wxall()
 		"<p>There are ##TABLE_COUNT## callsigns in the list,<br>click a callsign to get an information page for that station.</p>"
 
 		APRS_STATION_TABLE_OPEN
-		"<tr>##STATION_TABLE##</tr></table></div>\r\n"
+		"##STATION_TABLE##</div></div>\r\n"
 		"</div></body></html>\r\n";
 
 	return _strdup(Msg);;
@@ -2723,13 +2726,15 @@ char * get_portstats()
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
 		"<title>Port Statistics</title>\n"
 		"<style>" APRS_CSS ".portstats-wrap{max-width:1100px;margin:0 auto;}.portstats-chart{display:block;width:100%%;max-width:900px;height:auto;border:1px solid #d3d3d3;background:var(--surface);margin:10px auto;}.portstats-note{text-align:center;margin:8px 0 14px;}" "</style>\n"
-		"<script>" COMMON_MENU_JAVASCRIPT "</script>\n"
+		"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>\n"
 		"</head>\n"
 		"<body>\n"
+		COMMON_THEME_SELECTOR_HTML
 		"<div class=\"aprs-page-shell\">\n"
+		"<h1>##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\n"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button></div>\n"
 		"<nav id=\"mainMenu\" class=\"menu\">\n"
-		"<a href=\"../index.html\">Home</a><a href=\"all.html?width=7\">All Stations</a><a href=\"allrf.html\">RF Stations</a><a href=\"wxall.html?width=7\">All WX Stations</a><a href=\"info.html\">Information</a><a href=\"../nodemenu.html\">Node Pages</a>\n"
+		"<a href=\"/\">Home</a><a href=\"/aprs\">APRS</a><a href=\"all.html?width=7\">All Stations</a><a href=\"allrf.html\">RF Stations</a><a href=\"wxall.html?width=7\">All WX Stations</a><a href=\"info.html\">Information</a>\n"
 		"</nav>\n"
 		"<div class=\"portstats-wrap\">\n"
 		"<h2 id=\"h1\">Last hour's stats for Port</h2>\n"
@@ -2890,7 +2895,7 @@ char * get_aprs()
 		"<meta charset=\"utf-8\">\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\" />\n"
 		"\n"
-		"<title>G8BPQ APRS Display</title>\n"
+		"<title>BPQ32 APRS Map</title>\n"
 		"\n"
 		"<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.7.1/dist/leaflet.css\" integrity=\"sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==\" crossorigin=\"\" />\n"
 		"<script src=\"https://unpkg.com/leaflet@1.7.1/dist/leaflet.js\" integrity=\"sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==\" crossorigin=\"\"></script>\n"
@@ -2902,7 +2907,7 @@ char * get_aprs()
 		"<script src=\"leaflet.rotatedMarker.js\"></script>\n"
 		"\n"
 		"<style>" APRS_MAP_CSS "</style>\n"
-		"<script>" COMMON_MENU_JAVASCRIPT "</script>\n"
+		"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>\n"
 		"  \n"
 		"<script>\n"
 		"var map;\n"
@@ -2916,6 +2921,9 @@ char * get_aprs()
 		"var sarIcon;\n"
 		"var planeIcon;\n"
 		"var greenplaneIcon;\n"
+		"var lightLayer;\n"
+		"var darkLayer;\n"
+		"var currentBaseLayer;\n"
 		"var lat = 0; \n"
 		"var lon = 0;\n"
 		"var zoom = 2;\n"
@@ -2925,6 +2933,46 @@ char * get_aprs()
 		"var homeLat = 0;var homeLon = 0;var homePoint;\n"
 		"\n"
 		"var myTimeout;\n"
+		"\n"
+		"function isDarkMode()\n"
+		"{\n"
+		" var m='';\n"
+		" if(document.cookie){\n"
+		"  var c=document.cookie.split(';');\n"
+		"  for(var i=0;i<c.length;i++){\n"
+		"   var x=c[i].trim();\n"
+		"   if(x.indexOf('bpq-theme=')===0){m=decodeURIComponent(x.substring(10));break;}\n"
+		"  }\n"
+		" }\n"
+		" var t=m;\n"
+		" if(t==='dark') return true;\n"
+		" if(t==='light') return false;\n"
+		" if (!window.matchMedia)\n"
+		"  return false;\n"
+		" return window.matchMedia('(prefers-color-scheme: dark)').matches;\n"
+		"}\n"
+		"\n"
+		"function setMapTheme()\n"
+		"{\n"
+		" var wantedLayer = isDarkMode() ? darkLayer : lightLayer;\n"
+		" if (currentBaseLayer === wantedLayer)\n"
+		"  return;\n"
+		" if (currentBaseLayer)\n"
+		"  map.removeLayer(currentBaseLayer);\n"
+		" wantedLayer.addTo(map);\n"
+		" currentBaseLayer = wantedLayer;\n"
+		"}\n"
+		"\n"
+		"function watchThemeChanges()\n"
+		"{\n"
+		" if (!window.matchMedia)\n"
+		"  return;\n"
+		" var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');\n"
+		" if (darkQuery.addEventListener)\n"
+		"  darkQuery.addEventListener('change', setMapTheme);\n"
+		" else if (darkQuery.addListener)\n"
+		"  darkQuery.addListener(setMapTheme);\n"
+		"}\n"
 		"\n"
 
 //https://tile.openstreetmap.org/{zoom}/{x}/{y}.png
@@ -2938,7 +2986,8 @@ char * get_aprs()
 		"function getMap(p)\n"
 		"{\n"
 
-	"	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors'}).addTo(p);\r\n"
+		" lightLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors'});\n"
+		" darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {subdomains: 'abcd', maxZoom: 20, attribution: '&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors &copy; <a href=\"https://carto.com/attributions\">CARTO</a>'});\n"
 
 	//	"  var gl = L.maplibreGL({style: server1 + '/styles/G8BPQ/style.json'});\n"
 	//	"  gl.addTo(p);\n"
@@ -2960,7 +3009,9 @@ char * get_aprs()
 	//	"    });\n"
 	//	"\n"
 	//	"	p.attributionControl.addAttribution('Map data from <a  href=https://www.openstreetmap.org/copyright>OpenStreetMap</a><a href=https://github.com/maplibre/maplibre-gl-leaflet> using maplibre-gl</a> <a href=https://github.com/mapbox/mapbox-gl-styles>Styles based on Mapbox gl');\n"
-		"	L.control.scale().addTo(p);\n"
+		" setMapTheme();\n"
+		" watchThemeChanges();\n"
+		" L.control.scale().addTo(p);\n"
 		"}\n"
 		"\n"
 		"\n"
@@ -3004,6 +3055,7 @@ char * get_aprs()
 		"  \n"
 		" getMap(map)\n"
 		" layergroup = L.layerGroup().addTo(map);\n" 
+		" Refresh();\n"
 		"}\n"
 
 		"\n"
@@ -3188,15 +3240,17 @@ char * get_aprs()
 		"</head>\n"
 		"\n"
 		"<body onload=\"initialize()\" onresize=\"resize()\">\n"
+		COMMON_THEME_SELECTOR_HTML
 		"<div class=\"menu-wrapper\">\n"
+		"<h1>##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\n"
 		"<div class=\"menu-header\">\n"
 		"<button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button>\n"
 		"</div>\n"
 		"<nav id=\"mainMenu\" class=\"menu\">\n"
 		"  <a href=\"/\">Home</a>\n"
-		"  <a href=\"/aprs\">APRS Pages</a>\n"
-		"  <a href=\"Node/NodeMenu.html\">Node Menu</a>\n"
+		"  <a href=\"/aprs\">APRS</a>\n"
 		"</nav>\n"
+		"<h2>Live APRS Map</h2>\n"
 		"<div class=\"aprs-controls\">\n"
 		"  <label for=\"aprsid\"><input type=\"checkbox\" id=\"aprsid\" onchange=\"aprs=this.checked|0;myTimeout=setTimeout(Refresh,500);\"> APRS</label>\n"
 		"  <label for=\"aisid\"><input type=\"checkbox\" id=\"aisid\" onchange=\"ais=this.checked|0;myTimeout=setTimeout(Refresh,500);\"> AIS</label>\n"
