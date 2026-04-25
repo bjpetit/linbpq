@@ -26,6 +26,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "cheaders.h"
 #include <stdlib.h>
+#ifndef WIN32
+#include <limits.h>
+#endif
 
 #include "tncinfo.h"
 #include "time.h"
@@ -130,33 +133,6 @@ char Mycall[10];
 char MAILPipeFileName[] = "\\\\.\\pipe\\BPQMAILWebPipe";
 char CHATPipeFileName[] = "\\\\.\\pipe\\BPQCHATWebPipe";
 
-char Index[] =
-	COMMON_HTML_HEAD_COMMON
-	COMMON_HTML_META_UTF8
-	COMMON_HTML_META_VIEWPORT_COMPACT
-	"<title>%s's BPQ32 Node</title>"
-	"<style>"
-	COMMON_CSS_VARIABLES
-	"*{box-sizing:border-box;}"
-	"body{margin:0;padding:20px;font-family:" COMMON_FONT_MONO ";background:var(--bg);color:var(--text);}"
-	"h1{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.75rem,5vw,3rem);margin:30px 0 10px;}"
-	".links{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin:40px auto;max-width:600px;}"
-	".links a{display:flex;align-items:center;justify-content:center;min-height:60px;padding:16px 32px;"
-	"background:var(--surface);border:1px solid var(--border-card);border-radius:8px;text-decoration:none;color:var(--text);"
-	"font-weight:bold;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);"
-	"box-shadow:var(--shadow-card);}"
-	".links a:hover{background:var(--surface-hover);}"
-	"@media(max-width:480px){.links{flex-direction:column;}.links a{width:100%;}}"
-	"</style>"
-	"</head><body>"
-	"<h1>%s's BPQ32 Node</h1>"
-	"<div class=links>"
-	"<a href=/Node/NodeMenu.html>Node Pages</a>"
-	"<a href=/aprs>APRS Pages</a>"
-	"</div>";
-
-char IndexNoAPRS[] = COMMON_HTML_HEAD_OPEN_DOCTYPE COMMON_FONT_INTER_LINK "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\"></head><body></body></html>";
-
 //char APRSBit[] = "<td><a href=../aprs>APRS Pages</a></td>";
 
 //char MailBit[] = "<td><a href=../Mail/Header>Mail Mgmt</a></td>"
@@ -166,10 +142,10 @@ char IndexNoAPRS[] = COMMON_HTML_HEAD_OPEN_DOCTYPE COMMON_FONT_INTER_LINK "<meta
 char Tail[] = "</body></html>";
 
 #define HTTP_NODE_TABLE_HEADER_ROW "<tr>"
-#define HTTP_NODE_SORT_CONTROLS "<div class='text-center my-20'><form method=get action=/Node/Nodes.html class='flex-center-wrap-gap-10'>" \
-	"<input type=submit class='btn' name=a value=\"Nodes Sorted by Alias\">" \
-	"<input type=submit class='btn' name=c value=\"Nodes Sorted by Call\">" \
-	"<input type=submit class='btn' name=t value=\"Nodes With Traffic\"></form></div>"
+#define HTTP_NODE_SORT_CONTROLS "<div class='text-center my-20'><form method='get' action='/Node/Nodes.html' class='flex-center-wrap-gap-10'>" \
+	"<input type='submit' class='btn' name='a' value='Nodes Sorted by Alias'>" \
+	"<input type='submit' class='btn' name='c' value='Nodes Sorted by Call'>" \
+	"<input type='submit' class='btn' name='t' value='Nodes With Traffic'></form></div>"
 
 #define HTTP_NODE_TABLE_OPEN_STACK_CLASS(CLASSLIST) "<div class='table-wrap'><table class='node-table node-table-stack " CLASSLIST "'><thead>"
 #define HTTP_NODE_TABLE_OPEN_STACK HTTP_NODE_TABLE_OPEN_STACK_CLASS("")
@@ -197,15 +173,12 @@ char Tail[] = "</body></html>";
 	COMMON_FORM_CSS \
 	COMMON_BUTTON_CSS \
 	COMMON_UTILITY_CSS \
+	":root{--menu-max-width:1100px;}" \
 	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); line-height: 1.5; margin: 0; padding: 12px; background: var(--bg); color: var(--text); }" \
 	"h1 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0 18px; font-size: clamp(1.25rem,3vw,1.75rem); line-height: 1.25; }" \
-	".node-h2 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1.5rem,4vw,2.25rem); }" \
-	".node-h3 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1.25rem,3vw,1.75rem); }" \
-	".menu-header { max-width: 1100px; }" \
-	".menu { margin: 20px auto; max-width: 1100px; }" \
-	".menu a, .menu .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; background: var(--surface); text-decoration: none; border-radius: 6px; border: 1px solid var(--border); color: var(--link); box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); font-family: " COMMON_FONT_TITLE "; margin: 0; -webkit-appearance: none; appearance: none; line-height: 1.2; }" \
-	".menu a:hover, .menu .btn:hover { background: var(--surface-hover); }" \
-	".menu a:focus-visible, .menu .btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }" \
+	".node-h2 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1.1rem,2.5vw,1.4rem); }" \
+	".node-h3 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1rem,2vw,1.2rem); }" \
+	".menu { margin: 20px auto; }" \
 	".dropdown { position: relative; display: inline-block; }" \
 	".dropdown-content { display: none; position: absolute; left: 50%%; transform: translateX(-50%%); background-color: var(--surface); min-width: 220px; border: 1px solid var(--border); border-radius: 6px; padding: 8px; z-index: 10; box-shadow: var(--shadow-overlay); font-family: " COMMON_FONT_TITLE "; }" \
 	".dropdown-content a, .dropdown-content .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; width: 100%%; margin-top: 6px; padding: 10px 16px; background: var(--surface); text-decoration: none; border-radius: 6px; border: 1px solid var(--border); color: var(--link); box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); font-family: " COMMON_FONT_TITLE "; line-height: 1.2; }" \
@@ -218,8 +191,8 @@ char Tail[] = "</body></html>";
 	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid var(--border-light); padding-top: 6px; }" \
 	".mgmt-section.show { display: block; }" \
 	".show { display: block; }" \
-	".menu a:active, .menu .btn:active { background: var(--primary-dark); color: var(--on-primary); }" \
 	"input.btn:active { background: var(--primary-dark); color: var(--on-primary); }" \
+	COMMON_THEME_SELECTOR_CSS \
 	COMMON_NODE_MENU_MOBILE_CSS
 
 char RouteHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Routes", "routes-table", HTTP_NODE_COLS_ROUTES);
@@ -235,7 +208,7 @@ HTTP_NODE_H2("Nodes %s");
 
 char NodeHeaderTraffic[] = HTTP_NODE_TABLE_HEADER_WITH_COLS("compact-table", HTTP_NODE_COLS_TRAFFIC);
 
-char NodeLine[] = "<a href=NodeDetail?%s>%s:%s</a>";
+char NodeLine[] = "<a href='NodeDetail?%s'>%s:%s</a>";
 char NodeTrafficLine[] = "<tr><td data-label='Call' class='text'><a href=NodeDetail?%s>%s:%s</a></td><td data-label='Frames' class='num'>%d</td><td data-label='RTT' class='num'>%d</td><td data-label='BPQ?' class='center'>%c</td><td data-label='Hops' class='num'>%.0d</td></tr>";
 
 
@@ -272,11 +245,11 @@ char UserHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Sessions", "compact-table", HT
 
 char UserLine[] = "<tr><td data-label='Circuit' class='text'>%s</td><td data-label='Link' class='center'>%s</td><td data-label='Circuit' class='text'>%s</td></tr>";
 
-#define HTTP_SIGNON_HEAD(TITLE) COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING "<title>" TITLE "</title><style>" COMMON_SIGNON_CSS "</style></head><body>"
+#define HTTP_SIGNON_HEAD(TITLE) COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING "<title>" TITLE "</title><style>" COMMON_SIGNON_CSS "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body>"
 #define HTTP_SIGNON_FORM_OPEN(ACTION) "<div class=\"form-container\"><form method=post action=" ACTION ">"
 #define HTTP_SIGNON_USER_ROW "<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>"
 #define HTTP_SIGNON_PASS_ROW "<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"
-#define HTTP_SIGNON_SUBMIT_CANCEL_ROW "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div>"
+#define HTTP_SIGNON_SUBMIT_CANCEL_ROW "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html /></div></form></div>"
 
 char TermSignon[] = HTTP_SIGNON_HEAD("BPQ32 Node %s Terminal Access")
 "<h2>BPQ32 Node %s Terminal Access</h2>"
@@ -284,7 +257,7 @@ char TermSignon[] = HTTP_SIGNON_HEAD("BPQ32 Node %s Terminal Access")
 HTTP_SIGNON_FORM_OPEN("TermSignon")
 HTTP_SIGNON_USER_ROW
 HTTP_SIGNON_PASS_ROW
-"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel />"
+"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html />"
 "<input type=hidden name=Appl value=\"%s\"  id=Pass></form></div></div>";
 
 
@@ -292,12 +265,14 @@ char PassError[] = "<div class='alert-error'>Sorry, User or Password is invalid 
 
 char BusyError[] = "<div class='alert-warn'>Sorry, No sessions available - please try later</div>";
 
-char LostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
-char NoSessions[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style></head><body class='msg-page'><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
+char LostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body class='msg-page'><h1>BPQ32 Node Terminal</h1><h2>Sorry, Session had been lost - refresh page to sign in again</h2></body></html>";
+char NoSessions[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body class='msg-page'><h1>BPQ32 Node Terminal</h1><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
 
 char TermPage[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_VIEWPORT "<meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
-"<title>BPQ32 Node %s</title><style>" COMMON_CSS_VARIABLES COMMON_NODE_TERM_IO_COLORS_CSS "body { margin: 0; padding: 10px; font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: var(--bg); color: var(--text); } h3 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0; font-size: clamp(1.25rem,3vw,1.75rem); } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; }" COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#output-frame { flex: 1; border: 2px solid var(--border-card); background: var(--term-io-bg); min-height: 200px; } #input-frame { height: 50px; border: 2px solid var(--border-card); background: var(--term-io-bg); flex-shrink: 0; }" COMMON_NODE_TERM_MOBILE_CSS "</style>"
+"<title>BPQ32 Node %s</title><style>" COMMON_CSS_VARIABLES COMMON_NODE_TERM_IO_COLORS_CSS COMMON_THEME_SELECTOR_CSS "body { margin: 0; padding: 10px; font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: var(--bg); color: var(--text); } h3 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0; font-size: clamp(1.25rem,3vw,1.75rem); } .term-container { display: flex; flex-direction: column; height: calc(100vh - 180px); gap: 10px; } .term-actions { text-align: center; margin: 10px 0; }" COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#output-frame { flex: 1; border: 2px solid var(--border-card); background: var(--term-io-bg); min-height: 200px; } #input-frame { height: 50px; border: 2px solid var(--border-card); background: var(--term-io-bg); flex-shrink: 0; }" COMMON_NODE_TERM_MOBILE_CSS "</style>"
+"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>"
 "</head><body>"
+COMMON_THEME_SELECTOR_HTML
 "<h3>BPQ32 Node %s</h3>"
 "<form method=post action=/Node/TermClose?%s class='term-actions'>"
 "<input type=submit class='btn' value='Close and return to Node Page' /></form>"
@@ -307,11 +282,13 @@ char TermPage[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_VIEWPORT "<meta http-
 "</div></body>";
 
 char TermOutput[] = COMMON_HTML_HEAD_OPEN_DOCTYPE
+COMMON_HTML_META_UTF8
 COMMON_FONT_INTER_LINK
 "<meta http-equiv=cache-control content=no-cache>"
 "<meta http-equiv=pragma content=no-cache>"
 "<meta http-equiv=expires content=0>" 
 "<meta http-equiv=refresh content=2>"
+"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
 "<style>" COMMON_CSS_VARIABLES COMMON_NODE_TERM_IO_COLORS_CSS "body { margin: 0; padding: 8px; background: var(--term-io-bg); font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); color: var(--term-io-text); } #Text div { white-space: nowrap; %s }</style>"
 "<script type=\"text/javascript\">\r\n"
 "function ScrollOutput()\r\n"
@@ -335,7 +312,7 @@ char InputLine[] = "<html><head></head><body onload='resize()' onresize='resize(
 "inp.style.width =  x + 'px';}</script>"
 "<input id=inp type=text width=100%% name=input /></form>";
 */
-char InputLine[] = COMMON_HTML_HEAD_COMMON_STYLE_OPEN COMMON_CSS_VARIABLES
+char InputLine[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_UTF8 "<style>" COMMON_CSS_VARIABLES
 "* { margin: 0; padding: 0; box-sizing: border-box; } "
 COMMON_NODE_TERM_IO_COLORS_CSS
 "body { background: var(--term-io-bg); color: var(--term-io-text); font-family: " COMMON_FONT_MONO "; padding: 5px; height: 100%%; display: flex; align-items: center; } "
@@ -373,14 +350,14 @@ HTTP_SIGNON_PASS_ROW
 HTTP_SIGNON_SUBMIT_CANCEL_ROW;
 
 
-static char MailLostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style></head><body>"
-"<div class=\"form-container\" style=\"margin-top:50px;text-align:center\"><h2>Sorry, Session had been lost</h2>"
+static char MailLostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body>"
+"<div class=\"form-container\" style=\"margin-top:50px;text-align:center\"><h1>BPQ32 Mail Server</h1><h2>Sorry, Session had been lost</h2>"
 "<form method=post action=/Mail/Lost?%s>"
-"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel></form></div>";
+"<input name=Submit value=Restart type=submit class='btn'> <input type=submit class='btn' value=Exit name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html></form></div>";
 
 
 static char ConfigEditPage[] = COMMON_HTML_HEAD_UTF8_VIEWPORT
-"<title>Edit Config</title><style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 0; padding: 10px; background: var(--bg); color: var(--text); } form { text-align: center; } textarea { width: min(100%%, 1100px); min-height: 60vh; box-sizing: border-box; font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); white-space: pre; }" COMMON_BTN_PANEL_BASE_CSS ".btn{margin:10px 6px 0;}" COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "</style></head><body>"
+"<title>Edit Config</title><style>" COMMON_CSS_VARIABLES COMMON_MONO_PAGE_CLAMP_MARGIN0_PAD10_CSS " form { text-align: center; } textarea { width: min(100%%, 1100px); min-height: 60vh; box-sizing: border-box; " COMMON_MONO_COMPACT_TEXT_CSS " white-space: pre; }" COMMON_BTN_PANEL_BASE_CSS ".btn{margin:10px 6px 0;}" COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "</style></head><body>"
 "<form method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
@@ -661,7 +638,7 @@ VOID HTTPTimer()
 				SOCKET sock = Session->sock;
 				char _REPLYBUFFER[100000];
 				int ReplyLen;
-				char Header[256];
+				char Header[1024];
 				int HeaderLen;
 				int Last = Session->LastLine;
 				int n;
@@ -691,7 +668,7 @@ VOID HTTPTimer()
 				ReplyLen = (int)strlen(_REPLYBUFFER);
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", TermOutputTail);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen);
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
 
@@ -759,9 +736,9 @@ struct HTTPConnectionInfo * FindSession(char * Key)
 
 void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
-	char _REPLYBUFFER[sizeof(InputLine) + 1024];
+	char _REPLYBUFFER[8192];
 	int ReplyLen;
-	char Header[256];
+	char Header[1024];
 	int HeaderLen;
 	int State;
 	struct HTTPConnectionInfo * Session = FindSession(Key);
@@ -865,7 +842,7 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 				//No L4 sessions free
 
 				ReplyLen = sprintf(_REPLYBUFFER, "%s", NoSessions);
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);                                                                                                                                                                                                                                        				
 				send(sock, Tail, (int)strlen(Tail), 0);
@@ -885,7 +862,7 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 		Session->KillTimer = 0;
 	}
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, (int)strlen(Tail), 0);
@@ -896,7 +873,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 {
 	char _REPLYBUFFER[250000];
 	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, "");
-	char Header[256];
+	char Header[1024];
 	int HeaderLen;
 	struct HTTPConnectionInfo * Session = FindSession(Key);
 
@@ -907,8 +884,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 
 	ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
-		"\r\n", ReplyLen + (int)strlen(Tail));
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, (int)strlen(Tail), 0);
@@ -918,7 +894,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 {
 	char _REPLYBUFFER[250000];
 	int ReplyLen;
-	char Header[256];
+	char Header[1024];
 	int HeaderLen;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 	char * user, * password, * Context, * Appl;
@@ -934,7 +910,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
+			ReplyLen = sprintf(_REPLYBUFFER, "<!DOCTYPE html><html><head><title>Node Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 			goto Sendit;
 		}
 		user = strtok_s(&input[9], "&", &Context);
@@ -1003,7 +979,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 Sendit:
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, (int)strlen(Tail), 0);
@@ -1140,7 +1116,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 	BOOL Special = FALSE;
 	int Len;
 	int HeaderLen;
-	char Header[256];
+	char Header[1024];
 	char TimeString[64];
 	char FileTimeString[64];
 	struct stat STAT;
@@ -1179,6 +1155,28 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 		else
 			sprintf(MsgFile, "%s/HTML%s", BPQDirectory, FN);
 
+#ifndef WIN32
+		{
+			char Resolved[PATH_MAX];
+			char ExpectedRoot[512];
+			snprintf(ExpectedRoot, sizeof(ExpectedRoot), "%s/HTML", BPQDirectory);
+
+			if (realpath(MsgFile, Resolved) != NULL)
+			{
+				size_t rootLen = strlen(ExpectedRoot);
+				if (strncmp(Resolved, ExpectedRoot, rootLen) != 0 ||
+					(Resolved[rootLen] != '/' && Resolved[rootLen] != '\0'))
+				{
+					Debugprintf("HTTP Path traversal blocked: %s -> %s", MsgFile, Resolved);
+					if (OnlyifExists)
+						return -1;
+					Len = sprintf(Header, "HTTP/1.1 403 Forbidden\r\nContent-Length: 10\r\n\r\nForbidden\n");
+					send(sock, Header, Len, 0);
+					return 0;
+				}
+			}
+		}
+#endif
 
 		// First see if file exists so we can override standard ones in code
 
@@ -1269,7 +1267,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 				"Date: %s\r\n"
 				"Last-Modified: %s\r\n"
 				"%s%s"
-				"\r\n", FileSize, TimeString, FileTimeString, Type, Encoding);
+				COMMON_HTTP_SECURITY_HEADERS "\r\n", FileSize, TimeString, FileTimeString, Type, Encoding);
 	
 		send(sock, Header, HeaderLen, 0);
 
@@ -1340,7 +1338,7 @@ VOID sendandcheck(SOCKET sock, const char * Buffer, int Len)
 int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
 {
 	int HeaderLen, ReplyLen;
-	char Header[256];
+	char Header[1024];
 
 	PollSession(Session);			// See if anything received 
 
@@ -1370,7 +1368,7 @@ int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session,
 		ReplyLen = (int)strlen(_REPLYBUFFER);
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", TermOutputTail);
 
-		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen);
 		sendandcheck(Session->sock, Header, HeaderLen);
 		sendandcheck(Session->sock, _REPLYBUFFER, ReplyLen);
 
@@ -1387,7 +1385,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	int top = 0, left = 0;
 	char MgmtMenu[8192];
 
-	char NodeMenuHeader[] = "<!DOCTYPE html><html id=body><head>" COMMON_FONT_INTER_LINK "<title>%s's BPQ32 Web Server</title>"
+	char NodeMenuHeader[] = "<!DOCTYPE html><html lang=\"en\"><head>" COMMON_HTML_META_UTF8_QUOTED COMMON_FONT_INTER_LINK COMMON_HTML_CANONICAL_LINK_ONLY "<title>%s's BPQ32 Web Server</title>"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 	"<style type=\"text/css\">" HTTP_NODE_MENU_CSS "</style>"
 
@@ -1475,6 +1473,8 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 //	" if (event.target.matches('.HTMLBodyElement'))"
 //	"{document.getElementById('myDropdown').classList.remove('show');}}"
 
+	"function updateThemeBtns(t){var b=document.querySelectorAll('[data-tbtn]');for(var i=0;i<b.length;i++)b[i].classList.toggle('active',b[i].getAttribute('data-tbtn')===t);}\r\n"
+	"window.addEventListener('DOMContentLoaded',function(){updateThemeBtns(bpqGetThemeMode());});\r\n"
 
 	"function dev_win(URL,w,h,top,left){"
 		"var ww = \"width=\" + w;"
@@ -1491,55 +1491,62 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	char NodeMenuLine[] = "dev_win(\"/Node/Port?%d\",%d,%d,%d,%d);";
 
 	char NodeMenuRest[] = "}</script></head>"
-		"<body id=body><h1>BPQ32 Node %s</h1>"
+		"<body>"
+		"<div class='theme-sel'>"
+		"<button class='tbtn' data-tbtn='system' onclick='bpqSetThemeMode(\"system\")' title='System theme' aria-label='System theme'>&#9881;</button>"
+		"<button class='tbtn' data-tbtn='light' onclick='bpqSetThemeMode(\"light\")' title='Light theme' aria-label='Light theme'>&#9728;</button>"
+		"<button class='tbtn' data-tbtn='dark' onclick='bpqSetThemeMode(\"dark\")' title='Dark theme' aria-label='Dark theme'>&#9790;</button>"
+		"</div>"
+		"<h1>BPQ32 Node %s</h1>"
 		"<div class='menu-header'><button id='menuToggle' class='menu-toggle' type='button' aria-expanded='false' aria-controls='mainMenu' onclick='toggleMenu(event)'>Menu</button></div>"
 		"<div id='mainMenu' class=\"menu\">"
-		"<a href=/Node/Routes.html>Routes</a>"
-		"<a href=/Node/Nodes.html>Nodes</a>"
-		"<a href=/Node/Ports.html>Ports</a>"
-		"<a href=/Node/Links.html>Links</a>"
-		"<a href=/Node/Users.html>Users</a>"
-		"<a href=/Node/Stats.html>Stats</a>"
-		"<a href=/Node/Terminal.html>Terminal</a>%s%s%s%s";
+		"<a href='/'>Home</a>"
+		"<a href='/Node/Routes.html'>Routes</a>"
+		"<a href='/Node/Nodes.html'>Nodes</a>"
+		"<a href='/Node/Ports.html'>Ports</a>"
+		"<a href='/Node/Links.html'>Links</a>"
+		"<a href='/Node/Users.html'>Users</a>"
+		"<a href='/Node/Stats.html'>Stats</a>"
+		"<a href='/Node/Terminal.html'>Terminal</a>%s%s%s%s";
 
 	char DriverBit[] = "<a href=\"javascript:open_win();\">Driver Windows</a>"
-		"<a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a>";
+		"<a href=\"javascript:dev_win('/Node/Streams',820,700,200,200);\">Stream Status</a>";
 
-	char APRSBit[] = "<a href=../aprs>APRS Pages</a>";
+	char APRSBit[] = "<a href='../aprs'>APRS</a>";
 
-	char WebMailBit[] = "<a href=/Webmail>WebMail</a>";
+	char WebMailBit[] = "<a href='/Webmail'>WebMail</a>";
 
-	char MailBit[] = "<a href=../Mail/Header>Mail Mgmt</a>";
+	char MailBit[] = "<a href='../Mail/Header'>Mail Mgmt</a>";
 
-	char ChatBit[] = "<a href=../Chat/Header>Chat Mgmt</a>";
-	char SigninBit[] = "<a href=/Node/Signon.html>Sysop Signin</a>";
+	char ChatBit[] = "<a href='../Chat/Header'>Chat Mgmt</a>";
+	char SigninBit[] = "<a href='/Node/Signon.html'>Sysop Signin</a>";
 
 	char MgmtBit[] =
 		"<div class='dropdown'>"
-		"<a id='mgmtButton' href='#' onclick='toggleMgmt(event)'>Mgmt</a>"
+		"<button id='mgmtButton' class='btn' type='button' onclick='toggleMgmt(event)'>Mgmt</button>"
 		"<div id='mgmtDropdown' class='dropdown-content'>"
 		"%s%s%s"
 		"<a href=\"javascript:open_win();\">Driver Windows</a>"
-		"<a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a>"
-		"<a href=/Node/EditCfg.html>Edit Config</a>"
+		"<a href=\"javascript:dev_win('/Node/Streams',820,700,200,200);\">Stream Status</a>"
+		"<a href='/Node/EditCfg.html'>Edit Config</a>"
 		"<button id='mgmtLogsToggle' class='btn mgmt-toggle' data-label='Logs' type='button' onclick='toggleMgmtSection(event,\"mgmtLogs\",\"mgmtLogsToggle\")'>Logs +</button>"
 		"<div id='mgmtLogs' class='mgmt-section'>"
-		"<form id=doDate action='/node/ShowLog.html'><label>"
-		"Select Date: <input type='date' name='date' id=e>"
+		"<form id='doDate' action='/node/ShowLog.html'><label>"
+		"Select Date: <input type='date' name='date' id='e'>"
 		"<script>"
 		"document.getElementById('e').value = new Date().toISOString().substring(0, 10);"
 		"</script></label>"
-		"<input type=submit class='btn' name='BBS' value='BBS Log'>"
-		"<input type=submit class='btn' name='Debug' value='BBS Debug Log'>"
-		"<input type=submit class='btn' name='Telnet' value='Telnet Log'>"
-		"<input type=submit class='btn' name='CMS' value='CMS Log'>"
-		"<input type=submit class='btn' name='Chat' value='Chat Log'>"
+		"<input type='submit' class='btn' name='BBS' value='BBS Log'>"
+		"<input type='submit' class='btn' name='Debug' value='BBS Debug Log'>"
+		"<input type='submit' class='btn' name='Telnet' value='Telnet Log'>"
+		"<input type='submit' class='btn' name='CMS' value='CMS Log'>"
+		"<input type='submit' class='btn' name='Chat' value='Chat Log'>"
 		"</form></div>"
 		"</div>"
 		"</div>";
 
-	char NodeTail[] = 
-		"</div></body></html>";
+	char NodeTail[] =
+		"</div>";
 
 
 	int n;
@@ -1614,6 +1621,80 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	return Len;
 }
 
+int BuildNodeIndexPage(char * Buff, size_t BuffSize, int LOCAL)
+{
+	char InsertFile[512];
+	char * InsertBytes = NULL;
+	char * InsertPoint;
+	FILE * hInsert;
+	struct stat InsertSTAT;
+	int InsertLen;
+	int ReplyLen = SetupNodeMenu(Buff, BuffSize, LOCAL);
+	int TailLen = (int)strlen(Tail);
+
+	if (ReplyLen <= 0)
+		return ReplyLen;
+
+	// SetupNodeMenu leaves the document open; append custom content immediately
+	// after the menu markup so it stays outside the menu container.
+	InsertPoint = Buff + ReplyLen;
+
+	snprintf(InsertFile, sizeof(InsertFile), "%s/HTML/index_insert.html", BPQDirectory);
+
+	if (stat(InsertFile, &InsertSTAT) != 0)
+	{
+		if ((size_t)(ReplyLen + TailLen) >= BuffSize)
+			return ReplyLen;
+
+		memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+		return ReplyLen + TailLen;
+	}
+
+	hInsert = fopen(InsertFile, "rb");
+
+	if (hInsert == NULL)
+	{
+		if ((size_t)(ReplyLen + TailLen) >= BuffSize)
+			return ReplyLen;
+
+		memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+		return ReplyLen + TailLen;
+	}
+
+	InsertBytes = zalloc(InsertSTAT.st_size + 4096 + 1);
+	InsertLen = (int)fread(InsertBytes, 1, InsertSTAT.st_size, hInsert);
+	fclose(hInsert);
+
+	if (InsertLen <= 0)
+	{
+		free(InsertBytes);
+
+		if ((size_t)(ReplyLen + TailLen) >= BuffSize)
+			return ReplyLen;
+
+		memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+		return ReplyLen + TailLen;
+	}
+
+	if (strstr(InsertBytes, "##"))
+		InsertLen = ProcessSpecialPage(InsertBytes, InsertLen);
+
+	if ((size_t)(ReplyLen + InsertLen + TailLen) >= BuffSize)
+	{
+		free(InsertBytes);
+		return ReplyLen;
+	}
+
+	memmove(InsertPoint + InsertLen, InsertPoint, 1);
+	memcpy(InsertPoint, InsertBytes, InsertLen);
+	free(InsertBytes);
+
+	ReplyLen += InsertLen;
+	memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+
+	return ReplyLen + TailLen;
+}
+
 VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 {
 	int ReplyLen = 0;
@@ -1622,7 +1703,7 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 	int MsgLen, WriteLen = 0;
 	char inputname[250]="bpq32.cfg";
 	FILE *fp1;
-	char Header[256];
+	char Header[1024];
 	int HeaderLen;
 	char Reply[250000];
 	char Mess[256];
@@ -1638,7 +1719,7 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 		{
 			ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 			//			ReplyLen = sprintf(Reply, "%s", "<html><script>window.close();</script></html>");
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 			send(sock, Header, HeaderLen, 0);
 			send(sock, Reply, ReplyLen, 0);
 			send(sock, Tail, (int)strlen(Tail), 0);
@@ -1740,8 +1821,8 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 				STAT.st_size, MsgLen);
 		}
 
-		ReplyLen = sprintf(Reply, "<html><script>alert(\"%s\");window.close();</script></html>", Mess);
-		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
+		ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Config Save Status</title></head><body><script>alert(\"%s\");window.close();</script></body></html>", Mess);
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen);
 		send(sock, Header, HeaderLen, 0);
 		send(sock, Reply, ReplyLen, 0);
 	}
@@ -1805,7 +1886,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char Reply[250000];
 
 	int ReplyLen = 0;
-	char Header[256];
+	char Header[1024];
 	int HeaderLen;
 	char TimeString[64];
 	BOOL LOCAL = FALSE;
@@ -2133,7 +2214,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
+					ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Mail Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -2254,7 +2335,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 				if (input && strstr(input, "Cancel=Exit"))
 				{
-					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
+					ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Chat Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 					RLen = ReplyLen;
 					goto Returnit;
 				}
@@ -2347,7 +2428,7 @@ Returnit:
 				if (NodeURL && _memicmp(NodeURL, "/mail/api/", 10) == 0)
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: application/json\r\nConnection: close\r\n%s\r\n", ReplyLen, Encoding);
 				else
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n%s\r\n", ReplyLen, Encoding);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "%s\r\n", ReplyLen, Encoding);
 				
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, Compressed, ReplyLen);
@@ -2486,7 +2567,7 @@ doHeader:
 			else
 				Compressed = Reply;
 
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n%s\r\n", ReplyLen, Encoding);
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "%s\r\n", ReplyLen, Encoding);
 			sendandcheck(sock, Header, HeaderLen);
 			sendandcheck(sock, Compressed, ReplyLen);
 
@@ -2498,7 +2579,7 @@ doHeader:
 
 /*
 
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 			send(sock, Header, HeaderLen, 0);
 
 			// Send may block
@@ -2535,7 +2616,7 @@ doHeader:
 
 			ProcessChatHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
 
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 			send(sock, Header, HeaderLen, 0);
 			send(sock, _REPLYBUFFER, ReplyLen, 0);
 			send(sock, Tail, (int)strlen(Tail), 0);
@@ -2761,7 +2842,7 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/BeaconAction") == 0)
 			{
-				char Header[256];
+				char Header[1024];
 				int HeaderLen;
 				char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 				int Port;
@@ -2781,7 +2862,7 @@ doHeader:
 
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
@@ -2792,7 +2873,7 @@ doHeader:
 				if (strstr(input, "Cancel=Cancel"))
 				{
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
@@ -2863,7 +2944,7 @@ doHeader:
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, Port,		
 					Interval[Slot], &UIUIDEST[Slot][0], &UIUIDigi[Slot][0], &FN[Slot][0], &Message[Slot][0], Port);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
 				send(sock, Tail, (int)strlen(Tail), 0);
@@ -2882,7 +2963,7 @@ doHeader:
 			if (_stricmp(NodeURL, "/Node/LogAction") == 0)
 			{
 				ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
 				send(sock, Tail, (int)strlen(Tail), 0);
@@ -2907,15 +2988,15 @@ doHeader:
 						ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
 
 
-					ReplyLen = sprintf(Reply, "<html><script>alert(\"%s\");window.close();</script></html>", "Ok");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Operation Complete</title></head><body><script>alert(\"%s\");window.close();</script>", "Ok");
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
 
 					//				goto SendResp;
 
-					//				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+					//				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + strlen(Tail));
 					//				send(sock, Header, HeaderLen, 0);
 					//				send(sock, _REPLYBUFFER, ReplyLen, 0);
 					//				send(sock, Tail, strlen(Tail), 0);
@@ -2929,25 +3010,27 @@ doHeader:
 			return 0;
 		}
 
-		if (_stricmp(NodeURL, "/") == 0 || _stricmp(NodeURL, "/Index.html") == 0)
+		if (_stricmp(NodeURL, "/") == 0 || _stricmp(NodeURL, "/Index.html") == 0 || _stricmp(NodeURL, "/Node/NodeIndex.html") == 0)
 		{		
-			// Send if present, else use default
+			char * IndexURL = NodeURL;
+			char RootURL[] = "/";
 
-			Bufferlen = SendMessageFile(sock, NodeURL, TRUE, allowDeflate);		// return -1 if not found
+			if (_stricmp(NodeURL, "/Node/NodeIndex.html") == 0)
+				IndexURL = RootURL;
+
+			// Send if present, else use default custom NodeIndex page
+
+			Bufferlen = SendMessageFile(sock, IndexURL, TRUE, allowDeflate);		// return -1 if not found
 
 			if (Bufferlen != -1)
 				return 0;						// We've sent it
 			else
-			{	
-				if (APRSApplConnected)
-					ReplyLen = sprintf(_REPLYBUFFER, Index, Mycall, Mycall);
-				else
-					ReplyLen = sprintf(_REPLYBUFFER, IndexNoAPRS, Mycall, Mycall);
+			{
+				ReplyLen = BuildNodeIndexPage(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen);
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
-				send(sock, Tail, (int)strlen(Tail), 0);
 
 				return 0;
 			}
@@ -3117,16 +3200,7 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/webproc.css") == 0)
 			{
-				char WebprocCSS[] =
-					".dropbtn {position: relative; border: 1px solid var(--border);padding:1px;}\r\n"
-					".dropdown {position: relative; display: inline-block;}\r\n"
-					".dropdown-content {display: none; position: absolute;background-color: var(--surface); "
-					"min-width: 160px; box-shadow: var(--shadow-overlay); z-index: 1;}\r\n"
-					".dropdown-content a {color: var(--text); padding: 1px 1px;text-decoration:none;display:block;}"
-					".dropdown-content a:hover {background-color: var(--surface-soft);}\r\n"
-					".dropdown:hover .dropdown-content {display: block;}\r\n"
-					".dropdown:hover .dropbtn {background-color: var(--surface-hover);}\r\n"
-					COMMON_BTN_ACTIVE_DARK_CSS;
+				char WebprocCSS[] = COMMON_NODE_WEBPROC_DROPDOWN_CSS;
 				ReplyLen = sprintf(_REPLYBUFFER, "%s", WebprocCSS);
 			}
 
@@ -3287,7 +3361,7 @@ doHeader:
 			else if (_stricmp(NodeURL, "/Node/ShowLog.html") == 0)
 			{
 				char ShowLogPage[] =
-					COMMON_HTML_HEAD_UTF8_VIEWPORT_STYLE_OPEN COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 4px; background: var(--bg); color: var(--text); }" COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#log { font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); }</style>"
+					COMMON_HTML_HEAD_UTF8_VIEWPORT_STYLE_OPEN COMMON_CSS_VARIABLES COMMON_MONO_PAGE_CLAMP_MARGIN4_CSS COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#log { " COMMON_MONO_COMPACT_TEXT_CSS " }</style>"
 					"<title>Log Display</title>"
 					"<script>"
 					"function myResize() {"
@@ -3306,7 +3380,7 @@ doHeader:
 
 				char * _REPLYBUFFER;
 				int ReplyLen;
-				char Header[256];
+				char Header[1024];
 				int HeaderLen;
 				char * CfgBytes;
 				int CfgLen;
@@ -3328,7 +3402,7 @@ doHeader:
 					char _REPLYBUFFER[250000];	
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
@@ -3351,7 +3425,7 @@ doHeader:
 				if (strcmp(Context, "input=Back") == 0)
 				{
 					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
@@ -3429,7 +3503,7 @@ doHeader:
 				ReplyLen = sprintf(_REPLYBUFFER, ShowLogPage, CfgBytes);
 				free (CfgBytes);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
 				sendandcheck(sock, Tail, (int)strlen(Tail));
@@ -3442,7 +3516,7 @@ doHeader:
 			{
 				char * _REPLYBUFFER;
 				int ReplyLen;
-				char Header[256];
+				char Header[1024];
 				int HeaderLen;
 				char * CfgBytes;
 				int CfgLen;
@@ -3458,7 +3532,7 @@ doHeader:
 					char _REPLYBUFFER[250000];	
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
@@ -3508,7 +3582,7 @@ doHeader:
 				ReplyLen = sprintf(_REPLYBUFFER, ConfigEditPage, Key, CfgBytes);
 				free (CfgBytes);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
 				sendandcheck(sock, Tail, (int)strlen(Tail));
@@ -4446,7 +4520,7 @@ SendResp:
 			}
 
 			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
-				"Date: %s\r\n%s\r\n", ReplyLen, TimeString, Encoding);
+				COMMON_HTTP_SECURITY_HEADERS "Date: %s\r\n%s\r\n", ReplyLen, TimeString, Encoding);
 			sendandcheck(sock, Header, HeaderLen);
 			sendandcheck(sock, Compressed, ReplyLen);
 
@@ -4505,11 +4579,8 @@ int StatusProc(char * Buff)
 		"<title>Stream Status</title>"
 		"<style>"
 		COMMON_CSS_VARIABLES
-		"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}"
-		"h3{text-align:center;margin:8px 0 12px;}"
-		"table{border-collapse:collapse;margin:10px 0;}"
-		"th,td{border:1px solid var(--border);padding:3px 7px;text-align:left;}"
-		"th{background:var(--table-header);font-weight:bold;}"
+		COMMON_COMPACT_PAGE_CSS
+		COMMON_COMPACT_TABLE_CSS
 		"</style>"
 		"</head><body>"
 		"<h3>Stream Status</h3>");
@@ -4576,7 +4647,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 	char * user, * password, * Key;
-	char Header[256];
+	char Header[1024];
 	int HeaderLen;
 	struct HTTPConnectionInfo *Sess;
 
@@ -4590,10 +4661,9 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
+			ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Node Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
-				"\r\n", (int)(ReplyLen + strlen(Tail)));	
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(Tail)));	
 			send(sock, Header, HeaderLen, 0);
 			send(sock, Reply, ReplyLen, 0);
 			send(sock, Tail, (int)strlen(Tail), 0);
@@ -4620,7 +4690,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 						ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 
-						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", (int)(ReplyLen + strlen(Tail)));
+						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(Tail)));
 						send(sock, Header, HeaderLen, 0);
 						send(sock, Reply, ReplyLen, 0);
 						send(sock, Tail, (int)strlen(Tail), 0);
@@ -4631,8 +4701,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 					ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
-						"Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
@@ -4646,7 +4715,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 	ReplyLen = sprintf(Reply, NodeSignon, Mycall, Mycall);
 	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", (int)(ReplyLen + strlen(Tail)));	
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(Tail)));	
 	send(sock, Header, HeaderLen, 0);
 	send(sock, Reply, ReplyLen, 0);
 	send(sock, Tail, (int)strlen(Tail), 0);
@@ -4744,7 +4813,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
+			ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Mail Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 			return ReplyLen;
 		}
 		user = strtok_s(&input[9], "&", &Key);
@@ -4804,7 +4873,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
+			ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Chat Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 			return ReplyLen;
 		}
 
@@ -4954,14 +5023,12 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"<title>Rig Control</title>\r\n"
 		"<style>"
 		COMMON_CSS_VARIABLES
-		"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}"
-		"h3{text-align:center;margin:8px 0 12px;}"
+		COMMON_COMPACT_PAGE_CSS
 		"form{margin:0;padding:0;display:inline;}"
-		"table{border-collapse:collapse;margin:10px 0;max-width:600px;}"
-		"th,td{border:1px solid var(--border);padding:5px 10px;text-align:left;}"
-		"th{background:var(--table-header);font-weight:bold;}"
-		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;background:var(--primary);color:var(--on-primary);border:none;border-radius:4px;cursor:pointer;font-size:12px;box-sizing:border-box;}"
-		".btn:hover,.btn:focus{background:var(--primary-dark);outline:2px solid var(--focus-ring);outline-offset:2px;}"
+		COMMON_COMPACT_TABLE_PADDED_CSS
+		"table{max-width:600px;}"
+		COMMON_BTN_PRIMARY_COMPACT_CSS
+		COMMON_BTN_PRIMARY_COMPACT_INTERACTION_CSS
 		"</style>"
 		"</head><body>"
 		"<h3>Rig Control</h3>\r\n"

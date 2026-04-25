@@ -46,6 +46,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #endif
 
 #include "cheaders.h"
+#include "common_web_components.h"
 
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
@@ -1941,7 +1942,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 500px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 	Len += sprintf(&Buff[Len], "<tr><td width=110px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
@@ -3650,7 +3651,7 @@ static VOID ARDOPProcessReceivedData(struct TNCINFO * TNC)
 	// May get message split over packets
 
 	//	Data  has a length field
-	//	ARQ|FEC|ERR|, 2 byte count (Hex 0001 – FFFF), binary data”
+	//	ARQ|FEC|ERR|, 2 byte count (Hex 0001 ï¿½ FFFF), binary dataï¿½
 	//	New standard doesnt have d:
 
 	if (TNC->DataInputLen > 16000)	// Shouldnt have packets longer than this
@@ -5718,7 +5719,7 @@ VOID ARDOPSCSPoll(struct TNCINFO * TNC)
 		}
 	}
 
-//0x04421CB0  aa aa 21 00 07 00 06 48 65 6c 6c 6f 0d c8 3e 38 42 50 51 2d 32 20 35 0d 4a 8a 4d 38 42 50 51  ªª!....Hello.È>8BPQ-2 5.JŠM8BPQ
+//0x04421CB0  aa aa 21 00 07 00 06 48 65 6c 6c 6f 0d c8 3e 38 42 50 51 2d 32 20 35 0d 4a 8a 4d 38 42 50 51  ï¿½ï¿½!....Hello.ï¿½>8BPQ-2 5.Jï¿½M8BPQ
 //0x04421CCF  2d 31 30 2c 47 4d 38 42 50 51 2d 35 2c 47 4d 38 42 50 51 2c 47 4d 38 42 50 51 2d 31 35 0d 00  -10,GM8BPQ-5,GM8BPQ,GM8BPQ-15..
 //0x04421CEE  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ...............................
 

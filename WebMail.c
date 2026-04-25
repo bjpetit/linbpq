@@ -144,9 +144,10 @@ VOID GetReplyAddress(struct MsgInfo * Msg, char * ReplyAddr)
 
 extern char MailSignon[];
 
-char WebMailSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+char WebMailSignon[] = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	COMMON_FONT_INTER_LINK
 	"<title>BPQ32 WebMail Access</title>"
+	COMMON_HTML_CANONICAL_DYNAMIC
 	"<style>" COMMON_SIGNON_CSS "</style>"
 	"</head><body>"
 	"<h2>BPQ32 WebMail %s Access</h2>"
@@ -154,11 +155,13 @@ char WebMailSignon[] = "<!DOCTYPE html><html><head><meta name=\"viewport\" conte
 	"<div class=\"form-container\"><form method=post action=/WebMail/Signon>"
 	"<div class=\"form-row\"><label for=user>User</label><input type=text id=user name=user tabindex=1 maxlength=50 required></div>"
 	"<div class=\"form-row\"><label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required></div>"
-	"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/ /></div></form></div></body></html>";
+	"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html /></div></form></div></body></html>";
 
-static char MsgInputPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+static char MsgInputPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>Webmail Message Input</title><script src='/WebMail/webscript.js'></script>"
+	COMMON_HTML_CANONICAL_DYNAMIC
 	"<style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; margin: 12px; background: var(--bg); color: var(--text); } h2 { text-align: center; font-family: " COMMON_FONT_TITLE "; font-size: clamp(1.25rem,3vw,1.75rem); margin: 0 0 12px; } #myform { max-width: 980px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; box-sizing: border-box; } .form-row label { flex: 0 0 88px; font-weight: 600; } .form-row input, .form-row select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: clamp(14px,2vw,16px); } #To, #Subj { font-size: 15px; padding-top: 9px; padding-bottom: 9px; } .form-row input[type=file] { padding: 6px 0; border: none; } .form-row textarea { flex: 1 1 auto; width: 100%%; min-height: 360px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; line-height: 1.4; resize: vertical; font-family: " COMMON_FONT_MONO "; } .form-row.meta-row label { flex: 0 0 88px; } " COMMON_WEBMAIL_FORM_LAYOUT_CORE_CSS " .inline-action { white-space: nowrap; flex: 0 0 auto; margin-left: 10px; } .btn, .buttons input { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; text-decoration: none; font-size: clamp(14px,1.5vw,16px); box-sizing: border-box; } " COMMON_WEBMAIL_FORM_BUTTON_INTERACTION_CSS " " COMMON_WEBMAIL_FORM_BUTTON_ROW_BASE_CSS " @media (max-width: 768px) { body { margin: 10px; } #myform { padding: 12px; } " COMMON_WEBMAIL_FORM_MOBILE_STACK_BASE_CSS " .form-row input, .form-row select { width: 100%%; } .form-row input, .form-row select, .buttons input, .btn { min-height: 48px; } .form-row input[type=file] { min-height: 0; } .form-row.message-row label { padding-top: 0; } .inline-action { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; width: 100%%; margin-left: 0; } .inline-action .btn { flex: 1 1 auto; min-width: 100px; } .buttons { justify-content: stretch; gap: 8px; } .buttons input { flex: 1 1 0; } }</style></head><body>"
+	"<h1>Webmail Message Input</h1>"
 	"<h2>Webmail Interface - Message Input Form</h2>"
 	"<form id=myform method=post action=/WebMail/EMSave\?%s enctype=multipart/form-data>"
 	"<div class=form-row><label for='To'>To:</label><input id='To' size=60 name='To' value='%s'><span class=inline-action>%s</span></div>"
@@ -171,9 +174,11 @@ static char MsgInputPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><me
 	"<div class='form-row message-row'><label for='main'>Message:</label><textarea id='main' name=Msg style='overflow:auto;'>%s</textarea></div>"
 	"<div class=buttons><input name=Send value=Send type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
-static char CheckFormMsgPage[] = "<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+static char CheckFormMsgPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 	"<title>Webmail Forms - Check Message</title><script src='/WebMail/webscript.js'></script>"
+	COMMON_HTML_CANONICAL_DYNAMIC
 	"<style>" COMMON_CSS_VARIABLES "*{box-sizing:border-box;}body{font-family:" COMMON_FONT_MONO ";margin:max(12px,env(safe-area-inset-left));background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}h2{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);margin:0 0 12px;}#myform{max-width:980px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;flex-direction:column;}@supports(padding:max(0px)){body{margin:clamp(10px,3vw,20px);margin-left:max(clamp(10px,3vw,20px),env(safe-area-inset-left));margin-right:max(clamp(10px,3vw,20px),env(safe-area-inset-right));}}.form-row label{flex:0 0 clamp(70px,20%,100px);font-weight:600;font-size:14px;}.form-row input,.form-row select{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;touch-action:manipulation;}#To,#Subj{font-size:15px;padding:9px 10px;}.form-row textarea{flex:1 1 auto;width:100%%;min-height:360px;padding:10px;border:1px solid var(--border);border-radius:6px;line-height:1.4;resize:vertical;font-family:" COMMON_FONT_MONO ";font-size:14px;touch-action:manipulation;}.form-row.meta-row label{flex:0 0 clamp(70px,20%,100px);}" COMMON_WEBMAIL_FORM_LAYOUT_CORE_CSS ".btn,.buttons input{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:clamp(14px,1.5vw,16px);touch-action:manipulation;}" COMMON_WEBMAIL_FORM_BUTTON_INTERACTION_CSS "" COMMON_WEBMAIL_FORM_BUTTON_ROW_BASE_CSS ".buttons{position:sticky;bottom:0;background:var(--surface);padding:10px 0;border-top:1px solid var(--border-light);z-index:10;}" COMMON_REDUCED_MOTION_CSS "@media(max-width:480px){body{margin:clamp(8px,2vw,12px);margin-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));margin-right:max(clamp(8px,2vw,12px),env(safe-area-inset-right));}#myform{padding:12px;border-radius:6px;}" COMMON_WEBMAIL_FORM_MOBILE_STACK_BASE_CSS ".form-row input,.form-row select,.form-row textarea{width:100%%;min-height:48px;}.form-row.message-row{align-items:stretch;}.form-row.message-row label{padding-top:0;padding-bottom:4px;}.form-row.message-row textarea{min-height:300px;}.form-row.meta-row select,.form-row.meta-row input{min-height:48px;}.buttons{justify-content:stretch;gap:8px;padding:12px 0;}.buttons input{flex:1 1 0;min-height:48px;padding:12px 10px;}}</style></head><body>"
+	"<h1>Webmail Check Message</h1>"
 	"<h2>Webmail Forms Interface - Check Message</h2>"
 	"<form id=myform method=post action=/WebMail/FormMsgSave\?%s>"
 	"<div class=form-row><label for='To'>To:</label><input id='To' size=60 name='To' value='%s'></div>"
@@ -1693,7 +1698,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 				if (strstr(msg, "Cancel=Cancel"))
 				{
-					*RLen = sprintf(Reply, "<html><script>window.location.href = '/';</script>");
+					*RLen = sprintf(Reply, "<html><script>window.location.href = '/Node/NodeIndex.html';</script>");
 					return;
 				}
 				// Webmail Gets Here with a dummy Session
@@ -2073,11 +2078,13 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			"window.addEventListener('DOMContentLoaded',function(){var menu=document.getElementById('mainMenu');if(!menu)return;menu.addEventListener('click',function(event){var target=event.target;if(target&&target.tagName==='A')closeMenuOnMobile();});});"
 
 			"</script>\r\n"
-			"<title>WebMail</title> \r\n"
+			"<title>BPQ32 WebMail Message List</title> \r\n"
+			COMMON_HTML_CANONICAL_DYNAMIC "\r\n"
 			"</head>\r\n"
 
 			"<body onload=Init() onresize=initialize(120)>\r\n"
 			"<div class=\"wm-shell\">\r\n"
+			"<h1 class=\"wm-title\">Webmail Interface</h1>\r\n"
 			"<h2 class=\"wm-title\"> %s Webmail Interface - User %s - Message List</h2>\r\n"
 			"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mainMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>\r\n"
 			"<nav id=\"mainMenu\" class=\"wm-menu\">\r\n"
@@ -2456,13 +2463,13 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		char popuphddr[] = 
 			
-			"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+			"<!DOCTYPE html><html lang=\"en\"><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 			COMMON_CSS_VARIABLES
 			COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
 			COMMON_WEBMAIL_POPUP_SELECT_CSS
 			COMMON_WEBMAIL_POPUP_P_CSS
 			"</style>"
-			"<script>function myFunction() {var x = document.getElementById(\"mySelect\").value;"
+			"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "function myFunction() {var x = document.getElementById(\"mySelect\").value;"
 			"var Key = \"%s\";"
 			"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar,=scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 			"window.open(\"/WebMail/GetPage/\" + x + \"?\" + Key,\"_self\",param);"
@@ -2564,7 +2571,7 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 
 	char popuphddr[] = 
 			
-		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 		COMMON_CSS_VARIABLES
 		COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
 		COMMON_WEBMAIL_POPUP_TABLE_CSS
@@ -2572,7 +2579,7 @@ VOID SendTemplateSelectScreen(struct HTTPConnectionInfo * Session, char *Params,
 		COMMON_WEBMAIL_POPUP_P_CSS
 		COMMON_WEBMAIL_POPUP_TH_CSS
 		"</style>"
-		"<script>"
+		"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT
 		"function myFunction(val) {var x = document.getElementById(val).value;"
 		"var Key = \"%s\";"
 		"var param = \"toolbar=yes,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
@@ -3807,6 +3814,7 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 				"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar=yes,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 				"window.open(\"/WebMail/Reply/\" + Num + \"?\" + Key,\"_self\",param);"
 				"}</script>"
+				"<h1 style=\"text-align:center;line-height:1.25;margin:0 0 12px;\">Webmail Message</h1>"
 				"<h2 style=\"text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);margin:0 0 12px;line-height:1.25;\"> %s Webmail Interface - User %s - Message %d</h2>"
 				"<table style=\"margin:0 auto;border-collapse:collapse;\"><tr>"
 				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
@@ -5677,14 +5685,14 @@ BOOL DoSelectPrompt(struct HTTPConnectionInfo * Session, char * Select)
 
 	char popuphddr[] = 
 			
-		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 		COMMON_CSS_VARIABLES
 		COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
 		COMMON_WEBMAIL_POPUP_SELECT_CSS
 		COMMON_WEBMAIL_POPUP_TABLE_CSS
 		COMMON_WEBMAIL_POPUP_TD_CSS
 		"</style>"
-		"<script>"
+		"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
 		"var param = \"toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=no,resizable=no,titlebar=no,toobar=no\";"
@@ -6327,14 +6335,14 @@ VOID getAttachmentList(struct HTTPConnectionInfo * Session, char * Reply, int * 
 {
 	char popuphddr[] = 
 			
-		"<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=UTF-8><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
 		COMMON_CSS_VARIABLES
 		COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS
 		COMMON_WEBMAIL_POPUP_SELECT_CSS
 		COMMON_WEBMAIL_POPUP_TABLE_CSS
 		COMMON_WEBMAIL_POPUP_TD_CSS
 		"</style>"
-		"<script>"
+		"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT
 		"function myFunction() {var x = document.getElementById('Sel').value;"
 		"var Key = \"%s\";"
 		"var param = \"toolbar=yes,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"

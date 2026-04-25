@@ -39,6 +39,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define IDM_LOGGING				2100
 
 #include "cheaders.h"
+#include "common_web_components.h"
 #include "tncinfo.h"
 
 #ifdef WIN32
@@ -1312,10 +1313,10 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 			strcpy(CMSStatus, "No CMS");
 	}
 
-	Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-	"<head><title>Telnet Status</title></head><body><b>Telnet Status &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%s</b>", CMSStatus);
+	Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	"<title>Telnet Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style></head><body><b>Telnet Status &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%s</b>", CMSStatus);
 
-	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 250px; font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', 'Roboto Mono', 'Courier New', monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
 
 	Len += sprintf(&Buff[Len], "<tr><th>User</th><th>Callsign</th><th>Queue</th></tr>");
