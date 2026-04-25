@@ -144,7 +144,7 @@ char MailSignon[] = "<html><head><meta name=\"viewport\" content=\"width=device-
 	"<div class=\"form-container\"><form method=post action=/Mail/Signon?Mail>"
 	"<div class=\"form-row\"><label for=user>User</label><input type=text id=user name=user tabindex=1 maxlength=50 required></div>"
 	"<div class=\"form-row\"><label for=password>Password</label><input type=password id=password name=password tabindex=2 maxlength=50 required></div>"
-	"<div class=\"form-row\"><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></div></form></div></body></html>";
+	"<div class=\"form-row\"><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html /></div></form></div></body></html>";
 
 
 char MailPage[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
@@ -181,18 +181,7 @@ COMMON_TABLE_CSS
 COMMON_FORM_CSS
 COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
-".status-grid{width:100%%;border-collapse:collapse;font-family: " COMMON_FONT_MONO ";white-space:nowrap;}"
-".status-grid{font-size:clamp(0.75rem,0.65rem + 1vw,0.9375rem);}"
-".status-grid{background:var(--surface);color:var(--text);}"
-".status-grid thead tr{background:var(--table-header);}"
-".status-grid th,.status-grid td{padding:10px;border:1px solid var(--border);color:var(--text);}"
-".status-grid th{background:var(--table-header);font-weight:bold;}"
-".status-grid td{background:var(--surface);}"
-".status-grid tbody tr:nth-child(even){background:var(--table-stripe);}"
-".status-grid tbody tr:hover{background:var(--surface-soft);}"
-".status-grid th{text-align:left;}"
-".status-grid td{text-align:left;}"
-".status-grid th.num,.status-grid td.num{text-align:center;}"
+".status-grid{width:100%%;}"
 ".status-actions input{min-width:160px;}"
 ".stats-section{max-width:560px;margin:16px auto 0;padding:clamp(12px,2vw,18px);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-card);}"
 ".stat-row{display:flex;align-items:center;gap:12px;margin:8px 0;}"
@@ -202,7 +191,7 @@ COMMON_BUTTON_CSS
 "@media(max-width:768px){.status-grid th,.status-grid td{padding:8px 6px;}.stats-section{margin-top:12px;padding:12px;}.stat-row{flex-direction:column;align-items:stretch;gap:6px;}.stat-row label{flex:none;width:100%%;}.stat-row input{flex:1 1 auto;max-width:none;width:100%%;min-height:48px;text-align:left;}}"
 "</style></head><body><div class=section-title>Active Sessions</div>"
 "<form method=post action=/Mail/DisSession?%s>"
-"<div class=table-container><table class=status-grid>"
+"<div class=table-container><table class=\"node-table status-grid\">"
 "<thead><tr><th scope=col class=num>Select</th><th scope=col>User</th><th scope=col>Callsign</th><th scope=col class=num>Stream</th><th scope=col class=num>Queue</th><th scope=col class=num>Sent</th><th scope=col class=num>Rxed</th></tr></thead><tbody>";
 
 char StreamEnd[] = 
@@ -514,7 +503,7 @@ SUBMIT_BUTTON_CSS
 "</style></head><body>"
 "<form method=post action=/Mail/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form></body></html>";
+"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html><br></form></body></html>";
 
 
 char * MsgEditTemplate = NULL;

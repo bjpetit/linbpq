@@ -1,0 +1,175 @@
+<!--
+  index_insert.html — Custom home page content for LinBPQ.
+
+  This file is inserted into the node home page automatically when present.
+  Edit it freely to describe your own station. The sections below demonstrate
+  all the layout elements available: headings, key substitution, wrapping
+  tables, ports tables, schedule blocks, and contact sections.
+
+  KEYS: Use ##KEY## anywhere in this file to insert live node data.
+  Supported keys:
+    ##MY_CALLSIGN##   The node callsign (e.g. G8BPQ)
+
+  STYLES: This file is injected after the page <style> block, so all CSS
+  variables (--surface, --link, --border-card, etc.) and utility classes
+  (node-h2, node-table, node-table-stack, table-wrap) are available.
+  Add a <style> block at the top of this file for any additional rules.
+-->
+
+<style>
+/* Outer card — scoped so these rules don't affect the rest of the page. */
+.insert-card { max-width:900px; margin:24px auto; padding:20px 24px; background:var(--surface); border:1px solid var(--border-card); border-radius:8px; box-shadow:var(--shadow-card); }
+.insert-card section { margin-bottom:20px; }
+
+/* Allow a specific table column to wrap (override the global nowrap rule). */
+.insert-card td.col-wrap { white-space:normal; }
+
+/* Make tables inside the card fill the full card width. */
+.insert-card .node-table { width:100%; }
+
+/* Links inherit the site's standard colour tokens. */
+.insert-card a { color:var(--link); }
+.insert-card a:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
+
+/* Schedule / note box with a tinted background. */
+.insert-card .schedule { margin-top:14px; padding:10px 14px; background:var(--surface-soft); border:1px solid var(--border-light); border-radius:6px; }
+
+/* Sysop sign-off line. */
+.insert-card .sysop-info { margin-top:10px; font-style:italic; color:var(--text); }
+</style>
+
+<section class="insert-card">
+
+<!-- ================================================================
+     SECTION 1: Node Information
+     Simple key/value paragraphs. Replace with your own station details.
+     ##MY_CALLSIGN## is substituted with the live node callsign.
+     ================================================================ -->
+<section>
+    <h2 class="node-h2">Node Information</h2>
+    <p><strong>Node Callsign:</strong> ##MY_CALLSIGN##</p>
+    <p><strong>Alias:</strong> MYNODE</p>
+    <p><strong>Location:</strong> Your City, State (Grid: XX00xx)</p>
+    <p><strong>Operating Hours:</strong> 24/7</p>
+    <p><strong>Access:</strong> Open to all licensed amateur radio operators</p>
+</section>
+
+<!-- ================================================================
+     SECTION 2: Services — three-column table
+     Use class="col-wrap" on the Description cell to allow it to wrap
+     naturally on desktop while the other columns stay on one line.
+     On mobile the table stacks into labelled card rows automatically.
+     ================================================================ -->
+<section>
+    <h2 class="node-h2">Services Offered</h2>
+    <div class="table-wrap">
+    <table class="node-table node-table-stack">
+        <thead>
+            <tr>
+                <th scope="col">Callsign / Alias</th>
+                <th scope="col">Service</th>
+                <th scope="col">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td data-label="Callsign / Alias">MYCALL-1 / MYALIAS</td>
+                <td data-label="Service">Bulletin Board System</td>
+                <td data-label="Description" class="col-wrap">Personal messaging and bulletins for local amateurs.</td>
+            </tr>
+            <tr>
+                <td data-label="Callsign / Alias">MYCALL-10 / MYRMS</td>
+                <td data-label="Service">Winlink Gateway</td>
+                <td data-label="Description" class="col-wrap">VHF and HF Winlink access via RMS.</td>
+            </tr>
+            <tr>
+                <td data-label="Callsign / Alias">MYCALL-11 / MYCHT</td>
+                <td data-label="Service">BPQ Chat Server</td>
+                <td data-label="Description" class="col-wrap">Chat service connecting multiple nodes.</td>
+            </tr>
+        </tbody>
+    </table>
+    </div>
+</section>
+
+<!-- ================================================================
+     SECTION 3: Station Ports table
+     Add or remove rows to match your actual port configuration.
+     The schedule box below the table uses the .schedule class for
+     a tinted background.
+     ================================================================ -->
+<section>
+    <h2 class="node-h2">Station Ports</h2>
+    <div class="table-wrap">
+    <table class="node-table node-table-stack">
+        <thead>
+            <tr>
+                <th scope="col">Port</th>
+                <th scope="col">Frequency</th>
+                <th scope="col">Mode / Modem</th>
+                <th scope="col">Speed / Protocol</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td data-label="Port">1</td>
+                <td data-label="Frequency">144.390 MHz</td>
+                <td data-label="Mode / Modem">AX.25 (Direwolf)</td>
+                <td data-label="Speed / Protocol">1200bps</td>
+            </tr>
+            <tr>
+                <td data-label="Port">2</td>
+                <td data-label="Frequency">14.105 MHz USB</td>
+                <td data-label="Mode / Modem">AX.25 (Direwolf)</td>
+                <td data-label="Speed / Protocol">300bps</td>
+            </tr>
+            <tr>
+                <td data-label="Port">10</td>
+                <td data-label="Frequency">Network</td>
+                <td data-label="Mode / Modem">AXIP</td>
+                <td data-label="Speed / Protocol">—</td>
+            </tr>
+        </tbody>
+    </table>
+    </div>
+
+    <!-- Optional: use the .schedule box for any supplementary notes. -->
+    <div class="schedule">
+        <strong>HF Band Schedule (Auto-Switching):</strong>
+        <ul>
+            <li><strong>20m (14 MHz):</strong> 12:00 – 00:00 UTC</li>
+            <li><strong>40m (7 MHz):</strong> 00:00 – 12:00 UTC</li>
+        </ul>
+    </div>
+</section>
+
+<!-- ================================================================
+     SECTION 4: Connectivity & Contact
+     Plain prose and a sysop sign-off. The .sysop-info class renders
+     the sign-off in italics.
+     ================================================================ -->
+<section>
+    <h2 class="node-h2">Connectivity &amp; Contact</h2>
+    <p>##MY_CALLSIGN## provides VHF, HF, and IP access to regional packet nodes.
+    Sysops interested in linking or message forwarding are welcome to get in touch.</p>
+    <p><strong>Contact:</strong> Email via <a href="https://qrz.com">QRZ</a>, Winlink, or Packet.</p>
+    <div class="sysop-info">
+        73, Your Name, ##MY_CALLSIGN## SYSOP
+    </div>
+</section>
+
+<!-- ================================================================
+     SECTION 5: Hardware & Software
+     A simple bullet list. Add your own hardware details here.
+     ================================================================ -->
+<section>
+    <h2 class="node-h2">Hardware &amp; Software</h2>
+    <ul>
+        <li><strong>Software:</strong> <a href="https://www.cantab.net/users/john.wiseman/Documents/BPQ32.html">LinBPQ</a> on a Raspberry Pi.</li>
+        <li><strong>Modem:</strong> <a href="https://github.com/wb2osz/direwolf">Direwolf</a> software TNC.</li>
+        <li><strong>Rig:</strong> Your Radio Model.</li>
+        <li><strong>Antenna:</strong> Your Antenna Description.</li>
+    </ul>
+</section>
+
+</section>

@@ -131,7 +131,7 @@ char ChatSignon[] = "<html><head><meta charset='UTF-8'><meta name='viewport' con
 	"<div class=\"form-container\"><form method=post action=/Chat/Signon?Chat>"
 	"<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>"
 	"<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"
-	"<div class=\"form-row\"><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel /></div>"
+	"<div class=\"form-row\"><input type=submit class='btn' value=Submit /><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html /></div>"
 	"</form></div>"
 	"</body></html>";
 
@@ -158,7 +158,7 @@ char ChatPage[] = "<html><head><meta charset='UTF-8'><meta name='viewport' conte
 static char LostSession[] = "<html><body>"
 "<form class=text-center style=\"font-family: " COMMON_FONT_MONO ";\" method=post action=/Chat/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
-"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
+"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html><br></form>";
 
 char * ChatConfigTemplate = NULL;
 char * ChatStatusTemplate = NULL;
@@ -652,15 +652,7 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		".chat-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-card);padding:10px;min-width:0;}"
 		".chat-section h4{margin:4px 0 10px 0;font-size:clamp(14px,2vw,16px);text-align:center;}"
 		".chat-section-wide{grid-column:1 / -1;}"
-		".chat-grid{width:100%%;border-collapse:collapse;font-family: " COMMON_FONT_MONO ";white-space:nowrap;}"
-		".chat-grid{background:var(--surface);color:var(--text);}"
-		".chat-grid thead tr{background:var(--table-header);}"
-		".chat-grid th,.chat-grid td{padding:8px;border:1px solid var(--border);text-align:left;color:var(--text);}"
-		".chat-grid th{background:var(--table-header);font-weight:bold;}"
-		".chat-grid td{background:var(--surface);}"
-		".chat-grid tbody tr:nth-child(even){background:var(--table-stripe);}"
-		".chat-grid tbody tr:hover{background:var(--surface-soft);}"
-		".chat-grid th.num,.chat-grid td.num{text-align:center;}"
+		".chat-grid{width:100%%;}"
 		".chat-grid tr.selectable{cursor:pointer;}"
 		".chat-grid tr.selected td{background:var(--table-selected);}"
 		".chat-status-form{margin:0;}"
@@ -690,15 +682,15 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		"<div class=chat-layout>"
 		"<div class=chat-section><h4>Streams</h4>"
 		"<form class=chat-status-form method=post action=\"/Chat/ChatDisSession?%s\">"
-		"<div class=table-container><table class=chat-grid><thead><tr><th>User</th><th>Callsign</th><th class=num>Stream</th><th>Topic</th><th class=num>Queue</th></tr></thead><tbody>%s</tbody></table></div>"
+		"<div class=table-container><table class=\"node-table chat-grid\"><thead><tr><th>User</th><th>Callsign</th><th class=num>Stream</th><th>Topic</th><th class=num>Queue</th></tr></thead><tbody>%s</tbody></table></div>"
 		"<input type=hidden name=Stream value=99 id=inpval>"
 		"<div class=\"buttons chat-actions\"><input value=Disconnect type=submit></div>"
 		"</form></div>"
 		"<div class=chat-section><h4>Links</h4>"
-		"<div class=table-container><table class=chat-grid><thead><tr><th>Callsign</th><th>State</th></tr></thead><tbody>%s</tbody></table></div>"
+		"<div class=table-container><table class=\"node-table chat-grid\"><thead><tr><th>Callsign</th><th>State</th></tr></thead><tbody>%s</tbody></table></div>"
 		"</div>"
 		"<div class=\"chat-section chat-section-wide\"><h4>Users</h4>"
-		"<div class=table-container><table class=chat-grid><thead><tr><th>Callsign</th><th>Node</th><th>Name</th><th>Topic</th><th class=num>Idle</th><th>QTH</th></tr></thead><tbody>%s</tbody></table></div>"
+		"<div class=table-container><table class=\"node-table chat-grid\"><thead><tr><th>Callsign</th><th>Node</th><th>Name</th><th>Topic</th><th class=num>Idle</th><th>QTH</th></tr></thead><tbody>%s</tbody></table></div>"
 		"</div>"
 		"</div></div></body></html>",
 		OurNode, OurNode, Key, Key, Key, Streams, Links, Users);
