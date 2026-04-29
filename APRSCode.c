@@ -7123,11 +7123,17 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 		else
 			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/%s%s", BPQDirectory,APRSDir, HTDocs, &FN[5]);
 	
-		// My standard page set is now hard coded
+		// My standard page set is now hard coded.
+		// /aprs/* handlers pass names after "/aprs/", while /bpq/* needs the full
+		// logical asset path ("bpq/..."), as used by GetStandardPage routes.
+		{
+			char * StdPageName = &FN[6];
 
+			if (_memicmp(FN, "/bpq/", 5) == 0)
+				StdPageName = &FN[1];
 
-
-		MsgBytes = SaveMsgBytes = GetStandardPage(&FN[6], &FileSize);
+			MsgBytes = SaveMsgBytes = GetStandardPage(StdPageName, &FileSize);
+		}
 
 		if (MsgBytes)
 		{
@@ -7203,6 +7209,10 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 
 	if (_stricmp(ptr, "jpg") == 0 || _stricmp(ptr, "jpeg") == 0 || _stricmp(ptr, "png") == 0 || _stricmp(ptr, "gif") == 0 || _stricmp(ptr, "ico") == 0)
 		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: image\r\n\r\n", FileSize);
+	else if (_stricmp(ptr, "css") == 0)
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/css\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", FileSize);
+	else if (_stricmp(ptr, "js") == 0)
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: application/javascript\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", FileSize);
 	else
 		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", FileSize);
 	
@@ -7242,8 +7252,8 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 
 char WebHeader[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT
 	"<meta http-equiv=\"expires\" content=\"-1\"><meta http-equiv=\"pragma\" content=\"no-cache\">"
-	"<title>APRS Inbox Messages</title><style>" APRS_MSG_PAGE_STYLE "</style>"
-	"<script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	"<title>APRS Inbox Messages</title>" COMMON_BPQ_CSS_LINK "<style>" APRS_MSG_PAGE_STYLE "</style>"
+	 COMMON_BPQ_JS_SCRIPT "</head><body>"
 	"<h1>BPQ32 APRS Web Server</h1>"
 	APRS_MSG_MENU
 	"<main class=\"aprs-msg-wrap\"><h2>%s's Messages</h2><div class=\"aprs-msg-table-wrap\"><table class=\"aprs-msg-table\"><thead>"
@@ -7252,8 +7262,8 @@ char WebHeader[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT
 
 char WebTXHeader[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT
 	"<meta http-equiv=\"expires\" content=\"-1\"><meta http-equiv=\"pragma\" content=\"no-cache\">"
-	"<title>APRS Sent Messages</title><style>" APRS_MSG_PAGE_STYLE "</style>"
-	"<script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	"<title>APRS Sent Messages</title>" COMMON_BPQ_CSS_LINK "<style>" APRS_MSG_PAGE_STYLE "</style>"
+	 COMMON_BPQ_JS_SCRIPT "</head><body>"
 	"<h1>BPQ32 APRS Web Server</h1>"
 	APRS_MSG_MENU
 	"<main class=\"aprs-msg-wrap\"><h2>Message Sent by %s</h2><div class=\"aprs-msg-table-wrap\"><table class=\"aprs-msg-table\"><thead>"
@@ -7270,7 +7280,7 @@ char WebTXLine[] = "<tr>"
 char WebTrailer[] = "</tbody></table></div></main></body></html>";
 
 char SendMsgPage[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT "<title>APRS Message Input</title>"
-	"<style>" APRS_MSG_PAGE_STYLE "</style><script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	 COMMON_BPQ_CSS_LINK "<style>" APRS_MSG_PAGE_STYLE "</style>" COMMON_BPQ_JS_SCRIPT "</head><body>"
 	"<h1>BPQ32 APRS Web Server</h1>"
 	APRS_MSG_MENU
 	"<main class=\"aprs-msg-wrap\"><h2>APRS Message Input</h2>"
@@ -7280,7 +7290,7 @@ char SendMsgPage[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT "<title>APRS Messag
 	"<div class=\"aprs-msg-actions\"><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></div></form></main></body></html>";
 
 char APRSIndexPage[] = COMMON_HTML_HEAD_LANG_EN_UTF8Q_VIEWPORT "<title>BPQ32 APRS Pages</title>"
-	"<style>" APRS_MSG_PAGE_STYLE "</style><script>" COMMON_MENU_JAVASCRIPT "</script></head><body>"
+	 COMMON_BPQ_CSS_LINK "<style>" APRS_MSG_PAGE_STYLE "</style>" COMMON_BPQ_JS_SCRIPT "</head><body>"
 	"<h1>BPQ32 APRS Web Server</h1>"
 	APRS_MSG_MENU
 	"<main class=\"aprs-msg-wrap\"><h2>BPQ32 APRS Server</h2>%s</main></body></html>";
