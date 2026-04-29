@@ -166,9 +166,6 @@ char Tail[] = "</body></html>";
 #define HTTP_NODE_COLS_PORTS "<th scope=col>Port</th><th scope=col>Driver</th><th scope=col>ID</th><th scope=col>Beacons</th><th scope=col>Driver Window</th><th scope=col>Stats Graph</th>"
 
 #define HTTP_NODE_MENU_CSS \
-	COMMON_CSS_ROOT \
-	COMMON_REDUCED_MOTION_CSS \
-	COMMON_MENU_CSS \
 	COMMON_TABLE_CSS \
 	COMMON_FORM_CSS \
 	COMMON_BUTTON_CSS \
@@ -176,8 +173,6 @@ char Tail[] = "</body></html>";
 	":root{--menu-max-width:1100px;}" \
 	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); line-height: 1.5; margin: 0; padding: 12px; background: var(--bg); color: var(--text); }" \
 	"h1 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0 18px; font-size: clamp(1.25rem,3vw,1.75rem); line-height: 1.25; }" \
-	".node-h2 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1.1rem,2.5vw,1.4rem); }" \
-	".node-h3 { text-align:center; font-family:" COMMON_FONT_TITLE "; font-size:clamp(1rem,2vw,1.2rem); }" \
 	".menu { margin: 20px auto; }" \
 	".dropdown { position: relative; display: inline-block; }" \
 	".dropdown-content { display: none; position: absolute; left: 50%%; transform: translateX(-50%%); background-color: var(--surface); min-width: 220px; border: 1px solid var(--border); border-radius: 6px; padding: 8px; z-index: 10; box-shadow: var(--shadow-overlay); font-family: " COMMON_FONT_TITLE "; }" \
@@ -192,7 +187,6 @@ char Tail[] = "</body></html>";
 	".mgmt-section.show { display: block; }" \
 	".show { display: block; }" \
 	"input.btn:active { background: var(--primary-dark); color: var(--on-primary); }" \
-	COMMON_THEME_SELECTOR_CSS \
 	COMMON_NODE_MENU_MOBILE_CSS
 
 char RouteHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Routes", "routes-table", HTTP_NODE_COLS_ROUTES);
@@ -357,7 +351,7 @@ static char MailLostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPE
 
 
 static char ConfigEditPage[] = COMMON_HTML_HEAD_UTF8_VIEWPORT
-"<title>Edit Config</title><style>" COMMON_CSS_VARIABLES COMMON_MONO_PAGE_CLAMP_MARGIN0_PAD10_CSS " form { text-align: center; } textarea { width: min(100%%, 1100px); min-height: 60vh; box-sizing: border-box; " COMMON_MONO_COMPACT_TEXT_CSS " white-space: pre; }" COMMON_BTN_PANEL_BASE_CSS ".btn{margin:10px 6px 0;}" COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "</style></head><body>"
+"<title>Edit Config</title>" COMMON_BPQ_CSS_LINK "<style>" COMMON_MONO_PAGE_CLAMP_MARGIN0_PAD10_CSS " form { text-align: center; } textarea { width: min(100%%, 1100px); min-height: 60vh; box-sizing: border-box; " COMMON_MONO_COMPACT_TEXT_CSS " white-space: pre; }" COMMON_BTN_PANEL_BASE_CSS ".btn{margin:10px 6px 0;}</style></head><body>"
 "<form method=post action=CFGSave?%s>"
 "<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
 "<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
@@ -1249,6 +1243,11 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 		if (_stricmp(ptr, "pdf") == 0)
 			strcpy(Type, "Content-Type: application/pdf\r\n");
 
+		// Static assets (.js, .css) get a 1-day cache lifetime to reduce repeat requests
+		char CacheControl[48] = "";
+		if (_stricmp(ptr, "js") == 0 || _stricmp(ptr, "css") == 0)
+			strcpy(CacheControl, "Cache-Control: max-age=86400\r\n");
+
 		if (allowDeflate)
 		{
 			Compressed = Compressit(MsgBytes, FileSize, &FileSize);
@@ -1266,8 +1265,8 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 		HeaderLen = snprintf(Header, sizeof(Header), "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
 				"Date: %s\r\n"
 				"Last-Modified: %s\r\n"
-				"%s%s"
-				COMMON_HTTP_SECURITY_HEADERS "\r\n", FileSize, TimeString, FileTimeString, Type, Encoding);
+				"%s%s%s"
+				COMMON_HTTP_SECURITY_HEADERS "\r\n", FileSize, TimeString, FileTimeString, Type, Encoding, CacheControl);
 	
 		send(sock, Header, HeaderLen, 0);
 
@@ -1385,96 +1384,13 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	int top = 0, left = 0;
 	char MgmtMenu[8192];
 
-	char NodeMenuHeader[] = "<!DOCTYPE html><html lang=\"en\"><head>" COMMON_HTML_META_UTF8_QUOTED COMMON_FONT_INTER_LINK COMMON_HTML_CANONICAL_LINK_ONLY "<title>%s's BPQ32 Web Server</title>"
+	char NodeMenuHeader[] = "<!DOCTYPE html><html lang=\"en\"><head>" COMMON_HTML_META_UTF8_QUOTED COMMON_FONT_INTER_LINK COMMON_HTML_CANONICAL_LINK_ONLY COMMON_BPQ_CSS_LINK "<title>%s's BPQ32 Web Server</title>"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 	"<style type=\"text/css\">" HTTP_NODE_MENU_CSS "</style>"
-
+	"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
+	COMMON_BPQ_JS_SCRIPT
 	"<script>\r\n"
-	COMMON_MENU_JAVASCRIPT
-
-
-// Close the dropdown menu if the user clicks outside of it
-	"function getMgmtDom() {"
-	" return {"
-	"  dropdown: document.getElementById('mgmtDropdown'),"
-	"  button: document.getElementById('mgmtButton'),"
-	"  sections: document.querySelectorAll('#mgmtDropdown .mgmt-section'),"
-	"  toggles: document.querySelectorAll('#mgmtDropdown .mgmt-toggle')"
-	" };"
-	"}"
-	"function resetMgmtSections(parts) {"
-	" var i;"
-	" for (i = 0; i < parts.sections.length; i++) parts.sections[i].classList.remove('show');"
-	" for (i = 0; i < parts.toggles.length; i++) parts.toggles[i].textContent = parts.toggles[i].getAttribute('data-label') + ' +';"
-	"}"
-	"function setMgmtOpen(parts, open) {"
-	" if (!parts.dropdown) return;"
-	" if (open) parts.dropdown.classList.add('show');"
-	" else parts.dropdown.classList.remove('show');"
-	"}"
-	"window.addEventListener('click', function(event) {"
-	" var parts = getMgmtDom();"
-	" if (parts.dropdown && parts.button && !parts.dropdown.contains(event.target) && !parts.button.contains(event.target)) {"
-	"  setMgmtOpen(parts, false);"
-	"  resetMgmtSections(parts);"
-	" }"
-	"});\r\n"
-	"function closeMgmtSections() {"
-	" resetMgmtSections(getMgmtDom());"
-	"}"
-
-	"function toggleMgmt(event) {"
-	" if (event) { event.preventDefault(); event.stopPropagation(); }"
-	" var parts = getMgmtDom();"
-	" if (!parts.dropdown) return;"
-	" if (parts.dropdown.classList.contains('show')) {"
-	"  setMgmtOpen(parts, false);"
-	"  resetMgmtSections(parts);"
-	" } else {"
-	"  setMgmtOpen(parts, true);"
-	" }"
-	"}"
-	"function toggleMgmtSection(event, sectionId, toggleId) {"
-	" if (event) { event.preventDefault(); event.stopPropagation(); }"
-	" var parts = getMgmtDom();"
-	" var section = document.getElementById(sectionId);"
-	" var toggle = document.getElementById(toggleId);"
-	" if (!section || !toggle) return;"
-	" var openNow = section.classList.contains('show');"
-	" resetMgmtSections(parts);"
-	" if (!openNow) {"
-	"  section.classList.add('show');"
-	"  toggle.textContent = toggle.getAttribute('data-label') + ' -';"
-	" }"
-	"}"
-	"function closeMenuOnMobile() {"
-	" var menu = document.getElementById('mainMenu');"
-	" var toggle = document.getElementById('menuToggle');"
-	" var parts = getMgmtDom();"
-	" if (!menu || !toggle) return;"
-	" if (window.matchMedia('(max-width: 768px)').matches) {"
-	"  menu.classList.remove('menu-open');"
-	"  toggle.textContent = 'Menu';"
-	"  setMgmtOpen(parts, false);"
-	"  resetMgmtSections(parts);"
-	" }"
-	"}"
-	"window.addEventListener('DOMContentLoaded', function() {"
-	" var menu = document.getElementById('mainMenu');"
-	" if (!menu) return;"
-	" menu.addEventListener('click', function(event) {"
-	"  var target = event.target;"
-	"  if (!target) return;"
-	"  if (target.tagName === 'A') closeMenuOnMobile();"
-	"  if (target.tagName === 'INPUT' && target.type === 'submit') closeMenuOnMobile();"
-	" });"
-	"});"
-//	"function myHide() {"
-//	" if (event.target.matches('.HTMLBodyElement'))"
-//	"{document.getElementById('myDropdown').classList.remove('show');}}"
-
-	"function updateThemeBtns(t){var b=document.querySelectorAll('[data-tbtn]');for(var i=0;i<b.length;i++)b[i].classList.toggle('active',b[i].getAttribute('data-tbtn')===t);}\r\n"
-	"window.addEventListener('DOMContentLoaded',function(){updateThemeBtns(bpqGetThemeMode());});\r\n"
+	COMMON_NODE_MGMT_JAVASCRIPT
 
 	"function dev_win(URL,w,h,top,left){"
 		"var ww = \"width=\" + w;"
@@ -2156,9 +2072,10 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		}
 
 
-		// APRS process internally
+		// APRS process internally, including shared /bpq static assets
 
-		if (_memicmp(Context, "/APRS/", 6) == 0 || _stricmp(Context, "/APRS") == 0)
+		if (_memicmp(Context, "/APRS/", 6) == 0 || _stricmp(Context, "/APRS") == 0 ||
+			_memicmp(Context, "/bpq/", 5) == 0 || _stricmp(Context, "/bpq") == 0)
 		{
 			APRSProcessHTTPMessage(sock, MsgPtr, LOCAL, COOKIE);
 			return 0;
@@ -3361,7 +3278,7 @@ doHeader:
 			else if (_stricmp(NodeURL, "/Node/ShowLog.html") == 0)
 			{
 				char ShowLogPage[] =
-					COMMON_HTML_HEAD_UTF8_VIEWPORT_STYLE_OPEN COMMON_CSS_VARIABLES COMMON_MONO_PAGE_CLAMP_MARGIN4_CSS COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#log { " COMMON_MONO_COMPACT_TEXT_CSS " }</style>"
+					COMMON_HTML_HEAD_UTF8_VIEWPORT COMMON_BPQ_CSS_LINK "<style>" COMMON_MONO_PAGE_CLAMP_MARGIN4_CSS COMMON_BTN_PANEL_BASE_CSS "#log { " COMMON_MONO_COMPACT_TEXT_CSS " }</style>"
 					"<title>Log Display</title>"
 					"<script>"
 					"function myResize() {"
@@ -4577,11 +4494,8 @@ int StatusProc(char * Buff)
 		"<meta http-equiv=expires content=0>"
 		"<meta http-equiv=refresh content=15>"
 		"<title>Stream Status</title>"
-		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_COMPACT_PAGE_CSS
-		COMMON_COMPACT_TABLE_CSS
-		"</style>"
+		COMMON_BPQ_CSS_LINK
+		COMMON_NODE_CSS_LINK
 		"</head><body>"
 		"<h3>Stream Status</h3>");
 
@@ -5021,15 +4935,9 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		COMMON_HTML_META_VIEWPORT_COMPACT
 		"<meta http-equiv=expires content=0>\r\n"
 		"<title>Rig Control</title>\r\n"
-		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_COMPACT_PAGE_CSS
-		"form{margin:0;padding:0;display:inline;}"
-		COMMON_COMPACT_TABLE_PADDED_CSS
-		"table{max-width:600px;}"
-		COMMON_BTN_PRIMARY_COMPACT_CSS
-		COMMON_BTN_PRIMARY_COMPACT_INTERACTION_CSS
-		"</style>"
+		COMMON_BPQ_CSS_LINK
+		COMMON_NODE_CSS_LINK
+		"<style>form{margin:0;padding:0;display:inline;}table{max-width:600px;}</style>"
 		"</head><body>"
 		"<h3>Rig Control</h3>\r\n"
 		"<table><tr>\r\n"

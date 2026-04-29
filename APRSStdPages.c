@@ -545,8 +545,9 @@ unsigned int aiswhite_png_len = 227;
 	"<meta http-equiv=\"expires\" content=\"0\">" \
 	"<meta http-equiv=\"refresh\" content=\"300\">" \
 	"<title>##MY_CALLSIGN##'s BPQ32 APRS Web Server</title>" \
+	 COMMON_BPQ_CSS_LINK \
 	"<style>" APRS_CSS "</style>" \
-	"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>" \
+	 COMMON_BPQ_JS_SCRIPT \
 	"</head>" \
 	"<body>" \
 	"<div class=\"aprs-page-shell\">"
@@ -559,8 +560,9 @@ unsigned int aiswhite_png_len = 227;
 	"<meta charset=\"UTF-8\">" \
 	"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">" \
 	"<title>##MY_CALLSIGN##'s BPQ32 APRS Web Server</title>" \
+	 COMMON_BPQ_CSS_LINK \
 	"<style>" APRS_CSS "</style>" \
-	"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>" \
+	 COMMON_BPQ_JS_SCRIPT \
 	"</head>" \
 	"<body>" \
 	"<div class=\"aprs-page-shell\">"
@@ -2725,8 +2727,9 @@ char * get_portstats()
 		"<meta charset=\"UTF-8\">\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
 		"<title>Port Statistics</title>\n"
-		"<style>" APRS_CSS ".portstats-wrap{max-width:1100px;margin:0 auto;}.portstats-chart{display:block;width:100%%;max-width:900px;height:auto;border:1px solid #d3d3d3;background:var(--surface);margin:10px auto;}.portstats-note{text-align:center;margin:8px 0 14px;}" "</style>\n"
-		"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>\n"
+		 COMMON_BPQ_CSS_LINK "\n"
+		"<style>" APRS_CSS "</style>\n"
+		 COMMON_BPQ_JS_SCRIPT "\n"
 		"</head>\n"
 		"<body>\n"
 		COMMON_THEME_SELECTOR_HTML
@@ -2906,8 +2909,9 @@ char * get_aprs()
 		"<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js\"></script>\n"
 		"<script src=\"leaflet.rotatedMarker.js\"></script>\n"
 		"\n"
+		 COMMON_BPQ_CSS_LINK "\n"
 		"<style>" APRS_MAP_CSS "</style>\n"
-		"<script>" COMMON_MENU_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>\n"
+		 COMMON_BPQ_JS_SCRIPT "\n"
 		"  \n"
 		"<script>\n"
 		"var map;\n"
@@ -3423,6 +3427,26 @@ char * GetStandardPage(char * FN, int * Len)
 	if (_stricmp(FN, "helicopter.png") == 0)
 		return get_helicopter(Len);
 
+	// Universal built-in static assets served with Cache-Control: max-age=86400
+	// See common_web_components.h for macro definitions.
+	if (_stricmp(FN, "bpq/bpq.css") == 0)
+	{
+		static const char Content[] = COMMON_BPQ_CSS_CONTENT;
+		return _strdup(Content);
+	}
+
+	if (_stricmp(FN, "bpq/bpq.js") == 0)
+	{
+		static const char Content[] = COMMON_BPQ_JS_CONTENT;
+		return _strdup(Content);
+	}
+	if (_stricmp(FN, "bpq/node.css") == 0)
+	{
+		static const char Content[] = COMMON_NODE_CSS_CONTENT;
+		return _strdup(Content);
+	}
+
 	return 0;
+
 }
 

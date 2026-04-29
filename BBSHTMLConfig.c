@@ -148,14 +148,12 @@ char MailSignon[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewpor
 
 
 char MailPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+	COMMON_BPQ_CSS_LINK
 	"<title>%s's BBS Web Server</title>"
 	"<style type=\"text/css\">"
-	COMMON_CSS_VARIABLES
-	COMMON_MENU_CSS
+	COMMON_PAGE_BASE_CSS
 	"</style>"
-	"<script>"
-	COMMON_MENU_JAVASCRIPT
-	"</script>"
+	COMMON_BPQ_JS_SCRIPT
 	"</head>"
 	"<body><h2>BPQ32 BBS %s</h2>"
 	COMMON_MAIL_MENU;
@@ -163,13 +161,11 @@ char MailPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\
 char RefreshMainPage[] = "<!DOCTYPE html><html lang=\"en\"><head>"
 	"<meta http-equiv=refresh content=10>"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+	COMMON_BPQ_CSS_LINK
 	"<style type=\"text/css\">"
-	COMMON_CSS_VARIABLES
-	COMMON_MENU_CSS
+	COMMON_PAGE_BASE_CSS
 	"</style>"
-	"<script>"
-	COMMON_MENU_JAVASCRIPT
-	"</script>"
+	COMMON_BPQ_JS_SCRIPT
 	"<title>%s's BBS Web Server</title></head>"
 	"<body><h2>BPQ32 BBS %s</h2>"
 	COMMON_MAIL_MENU;
@@ -187,7 +183,7 @@ COMMON_BUTTON_CSS
 ".stat-row{display:flex;align-items:center;gap:12px;margin:8px 0;}"
 ".stat-row label{flex:1 1 220px;font-weight:600;font-size:clamp(0.8125rem,1.5vw,0.9375rem);line-height:1.3;}"
 ".stat-row input{flex:0 0 130px;max-width:130px;padding:clamp(10px,1vw,14px) clamp(12px,1.5vw,16px);line-height:1.5;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;background:var(--surface-soft);color:var(--text);font-family:" COMMON_FONT_MONO ";font-size:clamp(0.875rem,2vw,1rem);font-variant-numeric:tabular-nums;text-align:right;min-height:44px;}"
-".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
+COMMON_SECTION_TITLE_CSS
 "@media(max-width:768px){.status-grid th,.status-grid td{padding:8px 6px;}.stats-section{margin-top:12px;padding:12px;}.stat-row{flex-direction:column;align-items:stretch;gap:6px;}.stat-row label{flex:none;width:100%%;}.stat-row input{flex:1 1 auto;max-width:none;width:100%%;min-height:48px;text-align:left;}}"
 "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><div class=section-title>Active Sessions</div>"
 "<form method=post action=/Mail/DisSession?%s>"
@@ -405,7 +401,7 @@ char Welcome[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\"
 "<style>"
 COMMON_CSS_VARIABLES
 "h3{text-align:center;color:var(--text);}"
-".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;color:var(--text);}"
+COMMON_SECTION_TITLE_TEXT_CSS
 ".form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:var(--text);}.form-row textarea{width:100%%;padding:8px;border:1px solid var(--border);border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:clamp(14px,2vw,16px);line-height:1.4;}p{font-size:13px;color:var(--text);line-height:1.5;}"
 SUBMIT_BUTTON_CSS
 "input[type=submit]{font-size:clamp(14px,1.5vw,16px);}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%%-5px);min-height:48px;}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"

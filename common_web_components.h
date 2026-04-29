@@ -250,6 +250,16 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"::selection{background:var(--primary);color:var(--on-primary);}" \
 	"::-moz-selection{background:var(--primary);color:var(--on-primary);}" 
 
+// Slim page base CSS for pages that already link bpq.css.
+// bpq.css includes COMMON_CSS_ROOT, COMMON_REDUCED_MOTION_CSS, and COMMON_LINK_CSS,
+// so those do not need to be repeated inline. Use this instead of COMMON_CSS_VARIABLES
+// on any page that has COMMON_BPQ_CSS_LINK in its <head>.
+#define COMMON_PAGE_BASE_CSS \
+	COMMON_BODY_BASE_CSS \
+	COMMON_HEADING_CSS \
+	"::selection{background:var(--primary);color:var(--on-primary);}" \
+	"::-moz-selection{background:var(--primary);color:var(--on-primary);}"
+
 // Responsive Menu System CSS
 // Provides collapsible mobile menu with hamburger toggle.
 // Use COMMON_MENU_CSS for sprintf-based templates and COMMON_MENU_CSS_TEMPLATE("%")
@@ -372,6 +382,25 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".form-row.meta-row label{flex:none;width:100%%;}" \
 	".form-row.meta-row select,.form-row.meta-row input{flex:1 1 auto;max-width:none;}"
 
+// Reused WebMail/admin shell and title snippets.
+#define COMMON_WEBMAIL_SHELL_CSS_TEMPLATE(MAX_WIDTH) \
+	".wm-shell{max-width:" MAX_WIDTH ";margin:0 auto;}"
+
+#define COMMON_WEBMAIL_SHELL_980_CSS COMMON_WEBMAIL_SHELL_CSS_TEMPLATE("980px")
+#define COMMON_WEBMAIL_SHELL_1100_CSS COMMON_WEBMAIL_SHELL_CSS_TEMPLATE("1100px")
+
+#define COMMON_WEBMAIL_TITLE_STANDARD_CSS \
+	".wm-title{text-align:center;margin:0 0 12px 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:500;}"
+
+#define COMMON_WEBMAIL_TITLE_STRONG_CSS \
+	".wm-title{text-align:center;margin:0 0 16px;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:600;color:var(--text);}"
+
+#define COMMON_SECTION_TITLE_CSS \
+	".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
+
+#define COMMON_SECTION_TITLE_TEXT_CSS \
+	".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;color:var(--text);}"
+
 // WebMail utility popup shared CSS fragments.
 #define COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS \
 	"body{font-family:" COMMON_FONT_MONO ";margin:20px;text-align:center;background:var(--bg);color:var(--text);}"
@@ -422,12 +451,31 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_BTN_PANEL_BASE_CSS \
 	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;background:var(--surface);text-decoration:none;border-radius:6px;border:1px solid var(--border-card);color:var(--text);box-sizing:border-box;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;}"
 
+// Reusable panel/card chrome fragments for page-specific containers.
+#define COMMON_PANEL_CHROME_CSS \
+	"border:1px solid var(--border);border-radius:8px;background:var(--surface);"
+
+#define COMMON_CARD_CHROME_CSS \
+	COMMON_PANEL_CHROME_CSS \
+	"box-shadow:var(--shadow-card);"
+
 // Mail admin shared form/list snippets.
 // Keep these generic so page templates can layer their own layout specifics.
 #define COMMON_ADMIN_FIELD_THEME_CSS \
 	"input[type=text],input[type=number],input[type=password],input[type=input],select,textarea{background:var(--surface-soft);color:var(--text);border:1px solid var(--border);}" \
 	"input[type=text]::placeholder,input[type=number]::placeholder,input[type=password]::placeholder,input[type=input]::placeholder,textarea::placeholder{color:var(--muted);}" \
 	"input[type=text]:focus-visible,input[type=number]:focus-visible,input[type=password]:focus-visible,input[type=input]:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+
+// Admin button base. Normalizes .btn across all admin/config pages that link bpq.css.
+// Included in COMMON_BPQ_CSS_CONTENT; pages with bpq.css do not need to redeclare .btn inline.
+#define COMMON_ADMIN_BTN_BASE_CSS \
+	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;box-sizing:border-box;font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);font-weight:500;}"
+
+// Node page shared heading classes. Safe (no %%) — included in COMMON_BPQ_CSS_CONTENT
+// so the Node Menu page (which links bpq.css) gets them without a second request.
+#define COMMON_NODE_H2_H3_CSS \
+	".node-h2{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.1rem,2.5vw,1.4rem);}" \
+	".node-h3{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1rem,2vw,1.2rem);}"
 
 #define COMMON_ADMIN_LIST_TOGGLE_CSS_TEMPLATE(SELECTOR) \
 	SELECTOR "{display:none;width:100%%;min-height:44px;padding:10px 12px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;flex-shrink:0;}" \
@@ -488,17 +536,12 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // APRS shared web styles.
 // RAW variants are for direct string templates; FMT variants are for sprintf/snprintf templates.
 #define COMMON_APRS_BASE_CSS_TEMPLATE(PCT) \
-	COMMON_CSS_ROOT \
-	COMMON_THEME_SELECTOR_CSS \
 	"body{font-family:" COMMON_FONT_MONO ";background:var(--bg);margin:0;padding:clamp(15px,4vw,20px);color:var(--text);color-scheme:light dark;-webkit-font-smoothing:antialiased;}" \
-	COMMON_LINK_CSS \
 	".aprs-page-shell{max-width:1100px;margin:0 auto;padding:0 10px;}" \
 	".aprs-info-content{max-width:80" PCT ";margin:0 auto;}" \
 	"h1{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);line-height:1.25;}" \
 	"h2{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.1rem,2.5vw,1.4rem);line-height:1.25;}" \
-	"h3{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1rem,2vw,1.2rem);line-height:1.25;}" \
-	COMMON_REDUCED_MOTION_CSS \
-	COMMON_MENU_CSS_TEMPLATE(PCT)
+	"h3{text-align:center;margin:0.5em 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1rem,2vw,1.2rem);line-height:1.25;}"
 
 #define COMMON_APRS_CONTENT_CSS_TEMPLATE(PCT) \
 	COMMON_APRS_BASE_CSS_TEMPLATE(PCT) \
@@ -568,6 +611,12 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_APRS_CONTENT_CSS_FMT COMMON_APRS_CONTENT_CSS_TEMPLATE("%%")
 #define COMMON_APRS_MAP_CSS_FMT COMMON_APRS_MAP_CSS_TEMPLATE("%%")
 #define COMMON_APRS_MESSAGE_PAGE_CSS_FMT COMMON_APRS_MESSAGE_PAGE_CSS_TEMPLATE("%%")
+
+// Port statistics page chrome. Namespaced under .portstats-* selectors; safe to include globally.
+#define COMMON_APRS_PORTSTATS_CHROME_CSS \
+	".portstats-wrap{max-width:1100px;margin:0 auto;}" \
+	".portstats-chart{display:block;width:100%;max-width:900px;height:auto;border:1px solid #d3d3d3;background:var(--surface);margin:10px auto;}" \
+	".portstats-note{text-align:center;margin:8px 0 14px;}"
 
 // Common responsive table styles
 // Use classes: table-wrap, node-table, node-table-stack, num/text/center
@@ -693,6 +742,25 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"if(t){t.textContent='Menu';t.setAttribute('aria-expanded','false');t.focus();}" \
 	"}" \
 	"}" \
+	"});" \
+	"function closeMenuOnMobile(){" \
+	"var menu=getMenu();" \
+	"var t=document.getElementById('menuToggle');" \
+	"if(!menu||!t)return;" \
+	"if(window.matchMedia('(max-width:768px)').matches){" \
+	"menu.classList.remove('menu-open');" \
+	"t.textContent='Menu';" \
+	"t.setAttribute('aria-expanded','false');" \
+	"}" \
+	"}" \
+	"window.addEventListener('DOMContentLoaded',function(){" \
+	"var menu=getMenu();" \
+	"if(!menu)return;" \
+	"menu.addEventListener('click',function(event){" \
+	"var target=event.target;" \
+	"if(target&&target.tagName==='A')closeMenuOnMobile();" \
+	"if(target&&target.tagName==='INPUT'&&target.type==='submit')closeMenuOnMobile();" \
+	"});" \
 	"});"
 
 // Common Form Styles
@@ -883,5 +951,141 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"<a href=\"/Chat/ChatConf?%s\">Configuration</a>" \
 	"<a href=\"/\">Node Menu</a>" \
 	"</div>"
+
+/*
+ * EXTERNAL STATIC ASSET ROUTES
+ *
+ * /bpq/bpq.css  — universal CSS (colour tokens, reduced-motion, box-sizing).
+ *                 Replaces inline COMMON_CSS_ROOT + COMMON_REDUCED_MOTION_CSS
+ *                 on full-page templates.  Served with Cache-Control: max-age=86400.
+ *
+ * /bpq/bpq.js   — universal JavaScript (theme cookie, menu toggle, theme selector,
+ *                 and closeMenuOnMobile / DOMContentLoaded handlers).
+ *                 Replaces the inline COMMON_MENU_JAVASCRIPT block.
+ *                 Served with Cache-Control: max-age=86400.
+ *
+ * Use COMMON_BPQ_CSS_LINK and COMMON_BPQ_JS_SCRIPT in <head> sections.
+ * Keep COMMON_THEME_COOKIE_INIT_JAVASCRIPT inline for FOUC prevention on pages
+ * that need it (signon, terminal, simple admin pages without the full menu).
+ */
+#define COMMON_BPQ_CSS_CONTENT \
+	COMMON_CSS_ROOT \
+	COMMON_REDUCED_MOTION_CSS \
+	COMMON_LINK_CSS \
+	COMMON_THEME_SELECTOR_CSS \
+	COMMON_MENU_CSS_TEMPLATE("%") \
+	COMMON_ADMIN_BTN_BASE_CSS \
+	COMMON_BTN_HOVER_NEUTRAL_CSS \
+	COMMON_BTN_FOCUS_RING_CSS \
+	COMMON_BTN_ACTIVE_DARK_CSS \
+	COMMON_APRS_PORTSTATS_CHROME_CSS \
+	COMMON_NODE_H2_H3_CSS
+
+// Static CSS served at /bpq/node.css — compact admin/status page styles shared
+// across Node compact pages (StreamStatus, RigControl). Includes compact-page body
+// and table styles, plus primary-colour compact buttons. Does not include
+// .node-h2/.node-h3 (those are in bpq.css) or large table/form CSS that uses %%.
+#define COMMON_NODE_CSS_CONTENT \
+	COMMON_COMPACT_PAGE_CSS \
+	COMMON_COMPACT_TABLE_CSS \
+	COMMON_COMPACT_TABLE_PADDED_CSS \
+	COMMON_BTN_PRIMARY_COMPACT_CSS \
+	COMMON_BTN_PRIMARY_COMPACT_INTERACTION_CSS
+
+#define COMMON_NODE_CSS_LINK \
+	"<link rel='stylesheet' href='/bpq/node.css'>"
+
+#define COMMON_BPQ_JS_CONTENT \
+	COMMON_MENU_JAVASCRIPT \
+	COMMON_THEME_SELECTOR_INIT_JAVASCRIPT
+
+#define COMMON_BPQ_CSS_LINK \
+	"<link rel='stylesheet' href='/bpq/bpq.css'>"
+
+#define COMMON_BPQ_JS_SCRIPT \
+	"<script src='/bpq/bpq.js'></script>"
+
+/*
+ * NODE MANAGEMENT DROPDOWN JAVASCRIPT
+ *
+ * Extracted from NodeMenuHeader so the block has a single named home and can be
+ * referenced in the external-asset plan.  Only needed on Node pages that render
+ * the Mgmt dropdown.
+ */
+#define COMMON_NODE_MGMT_JAVASCRIPT \
+	"function getMgmtDom(){" \
+	"return{" \
+	"dropdown:document.getElementById('mgmtDropdown')," \
+	"button:document.getElementById('mgmtButton')," \
+	"sections:document.querySelectorAll('#mgmtDropdown .mgmt-section')," \
+	"toggles:document.querySelectorAll('#mgmtDropdown .mgmt-toggle')" \
+	"};" \
+	"}" \
+	"function resetMgmtSections(parts){" \
+	"var i;" \
+	"for(i=0;i<parts.sections.length;i++)parts.sections[i].classList.remove('show');" \
+	"for(i=0;i<parts.toggles.length;i++)parts.toggles[i].textContent=parts.toggles[i].getAttribute('data-label')+' +';" \
+	"}" \
+	"function setMgmtOpen(parts,open){" \
+	"if(!parts.dropdown)return;" \
+	"if(open)parts.dropdown.classList.add('show');" \
+	"else parts.dropdown.classList.remove('show');" \
+	"}" \
+	"window.addEventListener('click',function(event){" \
+	"var parts=getMgmtDom();" \
+	"if(parts.dropdown&&parts.button&&!parts.dropdown.contains(event.target)&&!parts.button.contains(event.target)){" \
+	"setMgmtOpen(parts,false);" \
+	"resetMgmtSections(parts);" \
+	"}" \
+	"});" \
+	"function closeMgmtSections(){" \
+	"resetMgmtSections(getMgmtDom());" \
+	"}" \
+	"function toggleMgmt(event){" \
+	"if(event){event.preventDefault();event.stopPropagation();}" \
+	"var parts=getMgmtDom();" \
+	"if(!parts.dropdown)return;" \
+	"if(parts.dropdown.classList.contains('show')){" \
+	"setMgmtOpen(parts,false);" \
+	"resetMgmtSections(parts);" \
+	"}else{" \
+	"setMgmtOpen(parts,true);" \
+	"}" \
+	"}" \
+	"function toggleMgmtSection(event,sectionId,toggleId){" \
+	"if(event){event.preventDefault();event.stopPropagation();}" \
+	"var parts=getMgmtDom();" \
+	"var section=document.getElementById(sectionId);" \
+	"var toggle=document.getElementById(toggleId);" \
+	"if(!section||!toggle)return;" \
+	"var openNow=section.classList.contains('show');" \
+	"resetMgmtSections(parts);" \
+	"if(!openNow){" \
+	"section.classList.add('show');" \
+	"toggle.textContent=toggle.getAttribute('data-label')+' -';" \
+	"}" \
+	"}" \
+	"function closeMenuOnMobile(){" \
+	"var menu=document.getElementById('mainMenu');" \
+	"var toggle=document.getElementById('menuToggle');" \
+	"var parts=getMgmtDom();" \
+	"if(!menu||!toggle)return;" \
+	"if(window.matchMedia('(max-width:768px)').matches){" \
+	"menu.classList.remove('menu-open');" \
+	"toggle.textContent='Menu';" \
+	"setMgmtOpen(parts,false);" \
+	"resetMgmtSections(parts);" \
+	"}" \
+	"}" \
+	"window.addEventListener('DOMContentLoaded',function(){" \
+	"var menu=document.getElementById('mainMenu');" \
+	"if(!menu)return;" \
+	"menu.addEventListener('click',function(event){" \
+	"var target=event.target;" \
+	"if(!target)return;" \
+	"if(target.tagName==='A')closeMenuOnMobile();" \
+	"if(target.tagName==='INPUT'&&target.type==='submit')closeMenuOnMobile();" \
+	"});" \
+	"});"
 
 #endif // COMMON_WEB_COMPONENTS_H

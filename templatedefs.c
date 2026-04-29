@@ -17,18 +17,15 @@ char * WebMailMsgtxt()
 		"<head> "
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/>"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
+		COMMON_BPQ_CSS_LINK
 		"<style type=\"text/css\">"
-		COMMON_CSS_ROOT
-		COMMON_REDUCED_MOTION_CSS
-		"*{box-sizing:border-box;}"
 		"body{margin:0;padding:12px;font-family:" COMMON_FONT_MONO ";background:var(--bg);color:var(--text);min-height:100dvh;}"
 		".wm-shell{max-width:980px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 24px);}"
 		".wm-title{text-align:center;margin:0 0 12px 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);}"
-		COMMON_WEBMAIL_MENU_BTN_BASE_CSS
 		"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;}"
 		"textarea#txt{display:block;width:100%%;height:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family: " COMMON_FONT_MONO ";font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);line-height:1.45;overflow:auto;resize:vertical;background:var(--surface);color:var(--text);flex:1 1 auto;}"
 		"div#txt{display:block;width:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family: " COMMON_FONT_MONO ";font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;flex:1 1 auto;}"
-		"@media (max-width:768px){body{padding:8px;}.wm-shell{min-height:calc(100dvh - 16px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu .wm-btn{width:100%%;text-align:center;}#main{padding:10px;}textarea#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}div#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}}"
+		"@media (max-width:768px){body{padding:8px;}.wm-shell{min-height:calc(100dvh - 16px);}#main{padding:10px;}textarea#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}div#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}}"
 		"</style>\r\n"
 		"<script>"
 		"function Reply(Num, Key)"
@@ -36,22 +33,21 @@ char * WebMailMsgtxt()
 		"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar=yes,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 		"window.open(\"/WebMail/Reply/\" + Num + \"?\" + Key,\"_self\",param);"
 		"}\r\n"
-		COMMON_MENU_JAVASCRIPT
-
 		"</script>\r\n"
+		COMMON_BPQ_JS_SCRIPT
 		"<title>WebMail</title> "
 		"</head>\r\n"
 		"<body>"
 		"<div class=\"wm-shell\">"
 		"<h2 class=\"wm-title\"> %s Webmail Interface - User %s - Message %d</h2>"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded='false' aria-controls='mainMenu' onclick=\"toggleMenu(event)\">Menu</button></div>"
-		"<nav id=\"mainMenu\" class=\"wm-menu\">"
-		"<a class=\"wm-btn\" href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a>"
-		"<a class=\"wm-btn\" href=/WebMail/WMDel/%d?%s>Kill Message</a>"
+		"<nav id=\"mainMenu\" class=\"menu\">"
+		"<a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a>"
+		"<a href=/WebMail/WMDel/%d?%s>Kill Message</a>"
 		"%s"
-		"<a class=\"wm-btn\" href=/WebMail/WMPrev?%s>Previous</a>"
-		"<a class=\"wm-btn\" href=/WebMail/WMNext?%s>Next</a>"
-		"<a class=\"wm-btn\" href=/WebMail/WMSame?%s>Back to List</a>"
+		"<a href=/WebMail/WMPrev?%s>Previous</a>"
+		"<a href=/WebMail/WMNext?%s>Next</a>"
+		"<a href=/WebMail/WMSame?%s>Back to List</a>"
 		"</nav>"
 		"<div id=\"main\">"
 		"<%s id=\"txt\">%s</%s>"
@@ -71,15 +67,13 @@ char * FwdPagetxt()
 		"<html lang=\"en\"><head>"
 		"<meta charset=\"UTF-8\">"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+		COMMON_BPQ_CSS_LINK
 		"<style type=\"text/css\"> "
-		COMMON_CSS_ROOT
-		COMMON_REDUCED_MOTION_CSS
 		COMMON_ADMIN_FIELD_THEME_CSS
 		"body { font-family: " COMMON_FONT_MONO "; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }"
 		"h3 { text-align: center; margin: 0 0 20px; font-family: " COMMON_FONT_TITLE "; font-size: clamp(1.25rem,3vw,1.75rem); }"
-		".wm-title{text-align:center;margin:0 0 16px;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:600;color:var(--text);}"
-		".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
-		COMMON_BTN_ACTIVE_DARK_CSS
+		COMMON_WEBMAIL_TITLE_STRONG_CSS
+		COMMON_SECTION_TITLE_CSS
 		".fwd-container { max-width: 980px; margin: 0 auto; }"
 		".fwd-layout { display: flex; gap: 20px; flex-wrap: wrap; align-items: start; }"
 		".fwd-sidebar { flex: 0 0 280px; min-width: 0; display: flex; flex-direction: column; max-height: calc(100vh - 180px); }"
@@ -106,7 +100,6 @@ char * FwdPagetxt()
 		".fwd-common input[type=submit] { background: var(--primary); color: var(--on-primary); padding: clamp(10px,1.5vw,16px) clamp(16px,2vw,28px); border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; width: 100%%; min-height: 44px; font-size: clamp(0.875rem,1.5vw,1rem); }"
 		".fwd-common input[type=submit]:hover { background: var(--primary-dark); }"
 		".fwd-common input[type=submit]:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }"
-		COMMON_MENU_CSS
 		"@media (max-width:768px) {"
 		"body { padding: 10px; }"
 		".fwd-layout { flex-direction: column; align-items: stretch; }"
@@ -126,7 +119,9 @@ char * FwdPagetxt()
 		"var CurrentFwd = \"\";"
 		"var FwdListCollapsed = false;"
 		"var Key = \"%s\"\r\n"
-		COMMON_MENU_JAVASCRIPT
+		"</script>"
+		COMMON_BPQ_JS_SCRIPT
+		"<script>"
 		"function isMobile(){return window.matchMedia('(max-width: 768px)').matches;}"
 		"function applyFwdListState(){var listWrapper=document.querySelector('#sidebar .fwd-list');if(!listWrapper)return;if(isMobile()&&FwdListCollapsed){listWrapper.classList.add('collapsed');}else{listWrapper.classList.remove('collapsed');}}"
 		"function toggleFwdList(){if(!isMobile())return;FwdListCollapsed=!FwdListCollapsed;applyFwdListState();}"
@@ -370,15 +365,12 @@ char * WebMailPagetxt()
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/> \r\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 		"<meta http-equiv=refresh content=300>"
+		COMMON_BPQ_CSS_LINK
 		"<style type=\"text/css\">\r\n"
-		COMMON_CSS_ROOT
-		COMMON_REDUCED_MOTION_CSS
-		COMMON_THEME_SELECTOR_CSS
 		"body{margin:0;padding:max(12px,env(safe-area-inset-left));font-family:" COMMON_FONT_MONO ";background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}"
 		"@supports(padding:max(0px)){body{padding:clamp(10px,3vw,12px);padding-left:max(clamp(10px,3vw,12px),env(safe-area-inset-left));padding-right:max(clamp(10px,3vw,12px),env(safe-area-inset-right));}}"
-		".wm-shell{max-width:980px;margin:0 auto;}"
-		".wm-title{text-align:center;margin:0 0 12px 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:500;}"
-		COMMON_WEBMAIL_MENU_LINK_TOUCH_BASE_CSS
+		COMMON_WEBMAIL_SHELL_980_CSS
+		COMMON_WEBMAIL_TITLE_STANDARD_CSS
 		"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;min-height:calc(100dvh - 240px);overflow:auto;}"
 		".msg-table{width:100%%;border-collapse:collapse;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		".msg-table thead{background:var(--table-header);border-bottom:2px solid var(--border);}"
@@ -396,7 +388,7 @@ char * WebMailPagetxt()
 		".msg-subject{max-width:380px;}"
 		"@media(min-width:1200px){.msg-subject{max-width:420px;}}"
 		"@media(max-width:768px){"
-		"body{padding:clamp(6px,2vw,10px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu a{width:100%%;text-align:center;min-height:48px;}#main{padding:8px;min-height:calc(100dvh - 280px);}"
+		"body{padding:clamp(6px,2vw,10px);}#main{padding:8px;min-height:calc(100dvh - 280px);}"
 		".msg-table{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		".msg-table th,.msg-table td{padding:6px 4px;}"
 		".msg-date{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
@@ -416,7 +408,7 @@ char * WebMailPagetxt()
 		"}"
 		"</style>\r\n"
 		"<script src=\"/WebMail/webscript.js\"></script>\r\n"
-		"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "function toggleMenu(event){if(event)event.preventDefault();var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');if(!menu||!toggle)return;if(menu.classList.contains('menu-open')){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}else{menu.classList.add('menu-open');toggle.textContent='Close';toggle.setAttribute('aria-expanded','true');}}function closeMenuOnMobile(){var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');if(!menu||!toggle)return;if(window.matchMedia('(max-width: 768px)').matches){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}}window.addEventListener('click',function(event){var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');var header=document.querySelector('.menu-header');if(menu&&toggle&&window.matchMedia('(max-width: 768px)').matches){var inMenu=menu.contains(event.target);var inHeader=header&&header.contains(event.target);if(!inMenu&&!inHeader){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}}});window.addEventListener('keydown',function(event){if(event.key==='Escape'){var menu=document.getElementById('mainMenu');if(menu&&menu.classList.contains('menu-open')){menu.classList.remove('menu-open');document.getElementById('menuToggle').textContent='Menu';document.getElementById('menuToggle').setAttribute('aria-expanded','false');}}});window.addEventListener('DOMContentLoaded',function(){var menu=document.getElementById('mainMenu');if(!menu)return;menu.addEventListener('click',function(event){var target=event.target;if(target&&target.tagName==='A')closeMenuOnMobile();});});</script>"
+		COMMON_BPQ_JS_SCRIPT
 		"<title>WebMail</title> \r\n"
 		"\r\n"
 		"</head>\r\n"
@@ -425,7 +417,7 @@ char * WebMailPagetxt()
 		"<div class=\"wm-shell\">"
 		"<h2 class=\"wm-title\"> %s Webmail Interface - User %s - Message List</h2>\r\n"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mainMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>"
-		"<nav id=\"mainMenu\" class=\"wm-menu\">"
+		"<nav id=\"mainMenu\" class=\"menu\">"
 		"<a href=/WebMail/WMB?%s>Bulls</a>\r\n"
 		"<a href=/WebMail/WMP?%s>Personal</a>\r\n"
 		"<a href=/WebMail/WMT?%s>NTS</a>\r\n"
@@ -459,14 +451,14 @@ char * MainConfigtxt()
 		"<html lang=\"en\"><head>"
 		"<meta charset=\"UTF-8\">"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+		COMMON_BPQ_CSS_LINK
 		"<title>Main Configuration</title>\r\n"
 		"\r\n"
 		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_MENU_CSS
+		COMMON_PAGE_BASE_CSS
 		COMMON_ADMIN_FIELD_THEME_CSS
 		"table,th,td{border:1px solid var(--border);border-collapse:collapse;}"
-		"#main{border:1px solid var(--border);border-radius:8px;background:var(--surface);box-sizing:border-box;max-width:980px;margin:0 auto;padding:20px;}"
+		"#main{" COMMON_PANEL_CHROME_CSS "box-sizing:border-box;max-width:980px;margin:0 auto;padding:20px;}"
 		"#main form{font-family:" COMMON_FONT_MONO ";}"
 		".page-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
 		".section-title{margin:20px 0 12px 0;padding:8px 0;border-bottom:1px solid var(--border-light);font-weight:bold;text-align:left;}"
@@ -487,10 +479,6 @@ char * MainConfigtxt()
 		".textarea-col textarea{width:100%%;box-sizing:border-box;}"
 		".filter-table-wrap{overflow:auto;max-width:100%%;margin-top:8px;}"
 		".buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}"
-		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);font-weight:500;}"
-		COMMON_BTN_HOVER_SOFT_CSS
-		COMMON_BTN_FOCUS_RING_CSS
-		"input[type=submit].btn:active{background:var(--primary-dark);color:var(--on-primary);}"
 		"@media (max-width:768px){"
 		"#main{padding:12px;}"
 		".form-row{flex-direction:column;align-items:flex-start;gap:4px;}"
@@ -507,9 +495,7 @@ char * MainConfigtxt()
 		".buttons .btn{flex:1 1 0;width:100%%;min-height:48px;}"
 		"}"
 		"</style>"
-		"<script>"
-		COMMON_MENU_JAVASCRIPT
-		"</script>\r\n"
+		COMMON_BPQ_JS_SCRIPT
 		"</head><body>\r\n"
 		"<h2>BPQ32 BBS %s</h2>\r\n"
 		"<div class=menu-header><button id=menuToggle class=menu-toggle type=button aria-expanded=\"false\" aria-controls=\"mailMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>"
@@ -733,17 +719,17 @@ char * MsgPagetxt()
 		"<head> \r\n"
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/> \r\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
+		COMMON_BPQ_CSS_LINK
 		"<style>"
-		COMMON_CSS_VARIABLES
+		COMMON_PAGE_BASE_CSS
 		COMMON_ADMIN_FIELD_THEME_CSS
-		".wm-shell{max-width:1100px;margin:0 auto;}"
-		".wm-title{text-align:center;margin:0 0 16px;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:600;color:var(--text);}"
-		".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;color:var(--text);}"
-		COMMON_WEBMAIL_MENU_LINK_TRANSITION_BASE_CSS
+		COMMON_WEBMAIL_SHELL_1100_CSS
+		COMMON_WEBMAIL_TITLE_STRONG_CSS
+		COMMON_SECTION_TITLE_TEXT_CSS
 		"#outer{display:grid;grid-template-columns:200px minmax(0,1fr);grid-template-rows:auto 1fr;gap:16px;min-height:%dpx;font-family: " COMMON_FONT_MONO ";align-items:start;}"
-		"#main{grid-column:2;grid-row:1 / span 2;min-height:%dpx;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:20px;overflow:auto;box-shadow:var(--shadow-card);}"
-		"#sidebar{grid-column:1;grid-row:2;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;display:flex;flex-direction:column;padding:0;max-height:calc(100vh - 280px);box-shadow:var(--shadow-card);}"
-		"#sel{grid-column:1;grid-row:1;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-family: " COMMON_FONT_MONO ";padding:16px;box-shadow:var(--shadow-card);}"
+		"#main{grid-column:2;grid-row:1 / span 2;min-height:%dpx;" COMMON_CARD_CHROME_CSS "padding:20px;overflow:auto;}"
+		"#sidebar{grid-column:1;grid-row:2;" COMMON_CARD_CHROME_CSS "overflow:hidden;display:flex;flex-direction:column;padding:0;max-height:calc(100vh - 280px);}"
+		"#sel{grid-column:1;grid-row:1;" COMMON_CARD_CHROME_CSS "font-family: " COMMON_FONT_MONO ";padding:16px;}"
 		"#sel .filter-title{text-align:center;font-weight:700;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);margin-bottom:12px;color:var(--text);text-transform:uppercase;letter-spacing:0.5px;}"
 		"#sel .filter-row{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:0 0 12px 0;}"
 		"#sel .filter-row label{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);font-weight:600;text-align:left;color:var(--text);text-transform:uppercase;letter-spacing:0.3px;}"
@@ -754,7 +740,6 @@ char * MsgPagetxt()
 		"#sidebar a:hover{background:var(--surface-soft);}"
 		"#sidebar a:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
 		"input[type=text],input[type=input]{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family: " COMMON_FONT_MONO ";font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);}"
-		COMMON_BTN_ACTIVE_DARK_CSS
 		".msg-list{display:flex;flex-direction:column;height:100%%;min-height:0;font-family: " COMMON_FONT_MONO ";}"
 		".msg-list a{font-family: " COMMON_FONT_TITLE ";}"
 		".msg-list a.active{background:var(--surface-soft);border-left:3px solid var(--primary);}"
@@ -764,10 +749,6 @@ char * MsgPagetxt()
 		".msg-list table tr:nth-child(even){background:var(--table-stripe);}"
 		".msg-list table tr:hover{background:var(--surface-soft);}"
 		"@media (max-width:768px){"
-		".menu-header{display:block;}"
-		".wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}"
-		".wm-menu.menu-open{display:flex;}"
-		".wm-menu a{width:100%%;text-align:center;min-height:48px;}"
 		"#outer{display:grid;grid-template-columns:1fr;grid-template-rows:auto auto auto;min-height:0;gap:12px;}"
 		"#main{grid-column:1;grid-row:3;min-height:320px;padding:16px;}"
 		"#sel{grid-column:1;grid-row:1;padding:12px;}"
@@ -781,9 +762,7 @@ char * MsgPagetxt()
 		"</style>\r\n"
 		"\r\n"
 		"<title>Edit Messages</title> \r\n"
-		"<script>"
-		COMMON_MENU_JAVASCRIPT
-		"</script>"
+		COMMON_BPQ_JS_SCRIPT
 		"<script type=\"text/javascript\"> \r\n"
 		" \r\n"
 		"var Details\r\n"
@@ -888,7 +867,7 @@ char * MsgPagetxt()
 		"<div class=\"wm-shell\">"
 		"<h2 class=\"wm-title\">BPQ32 BBS %s</h2>\r\n"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mainMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>"
-		"<nav id=\"mainMenu\" class=\"wm-menu\">"
+		"<nav id=\"mainMenu\" class=\"menu\">"
 		"<a href=\"/Mail/Status?%s\">Status</a>\r\n"
 		"<a href=\"/Mail/Conf?%s\">Configuration</a>\r\n"
 		"<a href=\"/Mail/Users?%s\">Users</a>\r\n"
@@ -1047,13 +1026,13 @@ char * UserPagetxt()
 		"<head> \r\n"
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/> \r\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
+		COMMON_BPQ_CSS_LINK
 		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_MENU_CSS
+		COMMON_PAGE_BASE_CSS
 		COMMON_ADMIN_FIELD_THEME_CSS
-		".wm-shell{max-width:980px;margin:0 auto;}"
-		".wm-title{text-align:center;margin:0 0 16px;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:600;color:var(--text);}"
-		".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
+		COMMON_WEBMAIL_SHELL_980_CSS
+		COMMON_WEBMAIL_TITLE_STRONG_CSS
+		COMMON_SECTION_TITLE_CSS
 		"#outer{display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-areas:'sidebar main';gap:12px;width:100%%;margin-top:12px;align-items:start;}"
 		"#sidebar{grid-area:sidebar;display:flex;flex-direction:column;overflow:hidden;max-height:calc(100vh - 260px);}"
 		"#main{grid-area:main;overflow:auto;}"
@@ -1085,16 +1064,11 @@ char * UserPagetxt()
 		"#main .actions .newcall{width:90px;text-transform:uppercase;}"
 		"#main input[type=text],#main input[type=password],#main input:not([type]){border:1px solid var(--border);border-radius:6px;padding:8px 10px;max-width:100%%;}"
 		"#main input[type=checkbox]{transform:translateY(1px);}"
-		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;}"
-		COMMON_BTN_HOVER_SOFT_CSS
-		"input.btn:active{background:var(--primary-dark);color:var(--on-primary);}"
 		"@media (max-width:768px){#outer{grid-template-columns:1fr;grid-template-areas:'sidebar' 'main';align-items:stretch;}#sidebar,#main{min-height:0;}#sidebar{max-height:none;}" COMMON_ADMIN_COLLAPSIBLE_LIST_MOBILE_CSS_TEMPLATE(".user-list", ".user-list-body", ".user-list-toggle", "#sidebar.collapsed .user-list-body") "#main .detail-grid{grid-template-columns:1fr;}#main .form-row{flex-direction:column;align-items:stretch;}#main .form-row label{flex:none;}#main .actions{justify-content:stretch;}#main .actions .btn,#main .actions .newcall{width:100%%;}#main input[type=text],#main input[type=password],#main input:not([type]),.btn{min-height:44px;width:100%%;}#main td{display:block;padding:3px 0;}#main table,#main tbody,#main tr{display:block;width:100%%;}}"
 		"</style>\r\n"
 		"\r\n"
 		"<title>Edit Users</title> \r\n"
-		"<script>"
-		COMMON_MENU_JAVASCRIPT
-		"</script>"
+		COMMON_BPQ_JS_SCRIPT
 		"<script type=\"text/javascript\"> \r\n"
 		"var Details\r\n"
 		"var Sidebar\r\n"
@@ -1274,9 +1248,9 @@ char * Housekeepingtxt()
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
 		"<meta charset=\"UTF-8\">\r\n"
 		"<title>Housekeeping</title>\r\n"
+		COMMON_BPQ_CSS_LINK
 		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_BTN_ACTIVE_DARK_CSS
+		COMMON_PAGE_BASE_CSS
 		COMMON_ADMIN_FIELD_THEME_CSS
 		".hk-container{max-width:980px;margin:0 auto;}"
 		".hk-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;color:var(--text);}"
@@ -1395,11 +1369,10 @@ char * WPtxt()
 		"<html lang=\"en\"><head>\r\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
 		"<meta charset=\"UTF-8\">\r\n"
+		COMMON_BPQ_CSS_LINK
 		"<title>Edit WP</title>\r\n"
 		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_MENU_CSS
-		COMMON_BTN_ACTIVE_DARK_CSS
+		COMMON_PAGE_BASE_CSS
 		COMMON_ADMIN_LIST_TOGGLE_CSS_TEMPLATE(".wp-list-toggle")
 		COMMON_ADMIN_LIST_BODY_CSS_TEMPLATE(".wp-list-body")
 		".wp-container{max-width:980px;margin:0 auto;}"
@@ -1424,9 +1397,7 @@ char * WPtxt()
 		"}"
 		"</style>\r\n"
 		"\r\n"
-		"<script>"
-		COMMON_MENU_JAVASCRIPT
-		"</script>"
+		COMMON_BPQ_JS_SCRIPT
 		"<script type=\"text/javascript\">\r\n"
 		"var Details;\r\n"
 		"var Sidebar;\r\n"
@@ -1555,12 +1526,12 @@ char * ChatConfigtxt()
 		"<html lang=\"en\"><head>\r\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
 		"<meta charset=\"UTF-8\">\r\n"
+		COMMON_BPQ_CSS_LINK
 		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_MENU_CSS
+		COMMON_PAGE_BASE_CSS
 		"body{margin:0;padding:12px;background-image:url(/background.jpg);box-sizing:border-box;}"
 		"h3{margin:0 0 10px;text-align:center;}"
-		"#main{border:1px solid var(--border);border-radius:8px;background:var(--surface);box-shadow:var(--shadow-card);overflow:auto;text-align:center;position:relative;min-height:650px;width:min(960px,100%%);margin:10px auto 0;padding:14px;box-sizing:border-box;}"
+		"#main{" COMMON_CARD_CHROME_CSS "overflow:auto;text-align:center;position:relative;min-height:650px;width:min(960px,100%%);margin:10px auto 0;padding:14px;box-sizing:border-box;}"
 		"#main form{font-family: " COMMON_FONT_MONO ";text-align:left;}"
 		"#main input[type=text],#main input[type=number],#main input:not([type]),#main textarea{border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family: " COMMON_FONT_MONO ";}"
 		"#main input[type=text],#main input:not([type]){max-width:100%%;}"
@@ -1576,15 +1547,10 @@ char * ChatConfigtxt()
 		".chatcfg-block label{display:block;font-weight:600;margin-bottom:6px;}"
 		".chatcfg-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}"
 		".chatcfg-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:14px;}"
-		COMMON_BTN_ACTIVE_DARK_CSS
-		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 14px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;}"
-		COMMON_BTN_HOVER_NEUTRAL_CSS
 		"@media (max-width:768px){body{padding:8px;}#main{min-height:0;padding:10px;}.chatcfg-formrow{flex-direction:column;align-items:stretch;}.chatcfg-formrow .num{width:100%%;}#main input[type=text],#main input[type=number],#main input:not([type]),#main textarea,.btn{width:100%%;min-height:44px;}.chatcfg-inline{justify-content:flex-start;}.chatcfg-actions{justify-content:stretch;}}"
 		"</style>"
 		"<title>Chat Configuration</title>\r\n"
-		"<script>"
-		COMMON_MENU_JAVASCRIPT
-		"</script>"
+		COMMON_BPQ_JS_SCRIPT
 		"<script type=\"text/javascript\">\r\n"
 		"var Main;\r\n"
 		"var Pos;\r\n"
@@ -1655,26 +1621,21 @@ char * ChatStatustxt()
 		"<!-- Version 2 3/9/2026 Refactored -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_MENU_CSS
-		COMMON_BTN_ACTIVE_DARK_CSS
-		".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;}"
-		COMMON_BTN_HOVER_NEUTRAL_CSS
+		COMMON_PAGE_BASE_CSS
 		"@media (max-width:768px){}"
 		"</style>"
 		"<html lang=\"en\"><head>\r\n"
 		"<meta charset=\"UTF-8\">\r\n"
+		COMMON_BPQ_CSS_LINK
 		"<style>"
 		"#outer{width:720px;height:700px;position:absolute;border:0px solid;font-family: " COMMON_FONT_MONO ";}"
-		"#streams{width:360px;position:absolute;height:300px;left:2px;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:auto}"
-		"#users{position:absolute;top:307px;left:2px;width:710px;height:350px;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:auto;}"
-		"#links{position:absolute;left:370px;width:341px;height:300px;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:auto;}"
+		"#streams{width:360px;position:absolute;height:300px;left:2px;" COMMON_PANEL_CHROME_CSS "overflow:auto}"
+		"#users{position:absolute;top:307px;left:2px;width:710px;height:350px;" COMMON_PANEL_CHROME_CSS "overflow:auto;}"
+		"#links{position:absolute;left:370px;width:341px;height:300px;" COMMON_PANEL_CHROME_CSS "overflow:auto;}"
 		"</style>\r\n"
 		"<title>%s's Chat Server</title>\r\n"
 		"  \r\n"
-		"<script>"
-		COMMON_MENU_JAVASCRIPT
-		"</script>"
+		COMMON_BPQ_JS_SCRIPT
 		"<script type=\"text/javascript\">\r\n"
 		"\r\n"
 		"var Outer;\r\n"

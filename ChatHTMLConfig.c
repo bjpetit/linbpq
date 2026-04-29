@@ -137,16 +137,15 @@ char ChatSignon[] = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>
 	"</body></html>";
 
 
-char ChatPage[] = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>%s's Chat Server</title>"
+char ChatPage[] = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
+	COMMON_BPQ_CSS_LINK
+	"<title>%s's Chat Server</title>"
 	"<style>"
-	COMMON_CSS_VARIABLES
+	COMMON_PAGE_BASE_CSS
 	COMMON_UTILITY_CSS
 	".container{max-width:900px;margin:0 auto;background:var(--surface);padding:20px;border-radius:8px;box-shadow:var(--shadow-card);}"
-	COMMON_MENU_CSS
 	"</style>"
-	"<script>"
-	COMMON_MENU_JAVASCRIPT
-	"</script>"
+	COMMON_BPQ_JS_SCRIPT
 	"</head><body>"
 	"<div class='container'>"
 	"<h2>BPQ32 Chat Node %s</h2>"
@@ -639,11 +638,12 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		"<!DOCTYPE html>"
 		"<html lang=\"en\"><head>"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+		COMMON_BPQ_CSS_LINK
 		"<title>%s's Chat Server</title>"
 		"<style>"
-		COMMON_CSS_VARIABLES
-		COMMON_MENU_CSS
+		COMMON_PAGE_BASE_CSS
 		COMMON_TABLE_CSS
+				COMMON_TABLE_CSS
 		COMMON_FORM_CSS
 		COMMON_UTILITY_CSS
 		COMMON_BUTTON_CSS
@@ -661,8 +661,8 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		"@media (max-width:900px){.chat-layout{grid-template-columns:1fr;}.chat-section-wide{grid-column:auto;}}"
 		"@media (max-width:768px){body{padding:10px;}.chat-grid{font-size:13px;}.chat-grid th,.chat-grid td{padding:7px 6px;}}"
 		"</style>"
+		COMMON_BPQ_JS_SCRIPT
 		"<script>"
-		COMMON_MENU_JAVASCRIPT
 		"var Selected;"
 		"var Inpval;"
 		"var SelectedStream = 0;"
