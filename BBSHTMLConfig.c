@@ -177,17 +177,10 @@ COMMON_TABLE_CSS
 COMMON_FORM_CSS
 COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
-".status-grid{width:100%%;}"
-".status-actions input{min-width:160px;}"
-".stats-section{max-width:560px;margin:16px auto 0;padding:clamp(12px,2vw,18px);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-card);}"
-".stat-row{display:flex;align-items:center;gap:12px;margin:8px 0;}"
-".stat-row label{flex:1 1 220px;font-weight:600;font-size:clamp(0.8125rem,1.5vw,0.9375rem);line-height:1.3;}"
-".stat-row input{flex:0 0 130px;max-width:130px;padding:clamp(10px,1vw,14px) clamp(12px,1.5vw,16px);line-height:1.5;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;background:var(--surface-soft);color:var(--text);font-family:" COMMON_FONT_MONO ";font-size:clamp(0.875rem,2vw,1rem);font-variant-numeric:tabular-nums;text-align:right;min-height:44px;}"
 COMMON_SECTION_TITLE_CSS
-"@media(max-width:768px){.status-grid th,.status-grid td{padding:8px 6px;}.stats-section{margin-top:12px;padding:12px;}.stat-row{flex-direction:column;align-items:stretch;gap:6px;}.stat-row label{flex:none;width:100%%;}.stat-row input{flex:1 1 auto;max-width:none;width:100%%;min-height:48px;text-align:left;}}"
 "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><div class=section-title>Active Sessions</div>"
 "<form method=post action=/Mail/DisSession?%s>"
-"<div class=table-container><table class=\"node-table status-grid\">"
+"<div class=table-wrap><table class=\"node-table status-grid\">"
 "<thead><tr><th scope=col class=num>Select</th><th scope=col>User</th><th scope=col>Callsign</th><th scope=col class=num>Stream</th><th scope=col class=num>Queue</th><th scope=col class=num>Sent</th><th scope=col class=num>Rxed</th></tr></thead><tbody>";
 
 char StreamEnd[] = 
@@ -200,7 +193,7 @@ char StatusTail[] =
 "<div class=stat-row><label>Held Messages</label><input readonly=readonly value=%d></div>"
 "<div class=stat-row><label>SMTP Messages</label><input readonly=readonly value=%d></div>"
 "</div>"
-"<div class=\"buttons status-actions\"><input name=Disconnect value=Disconnect type=submit></div>"
+"<div class='sticky-buttons status-actions'><input name=Disconnect value=Disconnect type=submit></div>"
 "</form></body></html>";
 
 
@@ -217,7 +210,7 @@ char UIHddr [] = "<h3>User Interface Configuration</h3>"
 
 char UILine[] = "<div class=port-row><input %s name=En%d type=checkbox><span class=port-row-label>%s</span><input type=text value=\"%s\" name=Path%d><input %s name=SndMF%d type=checkbox><input %s name=SndHDDR%d type=checkbox><input %s name=SndNull%d type=checkbox></div>";
 
-char UITail[] = "</div><div class=buttons><input name=Update value=Update type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
+char UITail[] = "</div><div class='sticky-buttons'><input name=Update value=Update type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
 char FWDSelectHddr[] = 
 	"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
@@ -237,7 +230,7 @@ char FWDSelectHddr[] =
 	"<div class=form-row><label>Select BBS</label><select name=call>";
 
 char FWDSelectTail[] =
-	"</select></div></div><div class=buttons><input name=Save value=Save type=submit> <input name=Cancel value=Cancel type=submit> <input name=Select value=Select type=submit></div></form></body></html>";
+	"</select></div></div><div class='sticky-buttons'><input name=Save value=Save type=submit> <input name=Cancel value=Cancel type=submit> <input name=Select value=Select type=submit></div></form></body></html>";
 
 char UserSelectHddr[] = 
 	"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
@@ -250,7 +243,7 @@ char UserSelectLine[] = "<option value=%s>%s</option>";
 
 char StatusLine[] = "<option value=%d>%s</option>";
 
-char UserSelectTail[] = "</select><div class=form-row><input size=6 value=\"\" name=NewCall><input type=submit value=\"Add User\" name=Adduser></div><div class=buttons><input type=submit value=Select> <input type=submit value=Cancel name=Cancel></div></form></body></html>";
+char UserSelectTail[] = "</select><div class=form-row><input size=6 value=\"\" name=NewCall><input type=submit value=\"Add User\" name=Adduser></div><div class='sticky-buttons'><input type=submit value=Select> <input type=submit value=Cancel name=Cancel></div></form></body></html>";
 
 char UserUpdateHddr[] =
 	"<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>"
@@ -295,55 +288,12 @@ COMMON_BUTTON_CSS
 "<div><input %s name=B1 type=checkbox><span class=font-normal>Use B1 Protocol</span></div>"
 "<div><input %s name=B2 type=checkbox><span class=font-normal>Use B2 Protocol</span></div>"
 "</div></div>"
-"<div class=buttons><input name=Submit value=Update type=submit> <input name=Fwd value=\"Start Forwarding\" type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
+"<div class='sticky-buttons'><input name=Submit value=Update type=submit> <input name=Fwd value=\"Start Forwarding\" type=submit> <input name=Cancel value=Cancel type=submit></div></form></body></html>";
 
 // Split MailDetailPage into smaller chunks to avoid ARM printf_positional limits with large format strings
-static char MailDetailCSS[] = 
-"<style>"
-COMMON_CSS_VARIABLES
-"h3{text-align:center;margin-bottom:20px;}"
-".form-section{background:var(--surface);padding:clamp(12px,4vw,20px);border-radius:8px;box-shadow:var(--shadow-card);margin:15px 0;}"
-".form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 20px;margin:16px 0;}"
-".form-field{display:flex;flex-direction:column;gap:6px;}"
-".form-field label{font-weight:600;font-size:clamp(13px,1.5vw,15px);color:var(--text);text-transform:uppercase;letter-spacing:0.3px;}"
-".form-field input,.form-field select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:clamp(14px,2vw,16px);transition:border-color 0.15s ease,box-shadow 0.15s ease;min-height:44px;font-family: " COMMON_FONT_MONO ";}"
-".form-field input:focus-visible,.form-field select:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
-".form-row-full{grid-column:1/-1;}"
-"input[readonly]{background:var(--surface-soft);color:var(--text);cursor:not-allowed;}"
-"input.uppercase{text-transform:uppercase;}"
-".table-container{background:var(--surface);border-radius:8px;box-shadow:var(--shadow-card);overflow-x:auto;margin:15px 0;}"
-"table{width:100%%;border-collapse:collapse;table-layout:fixed;}"
-"th,td{padding:12px 14px;border:1px solid var(--border);text-align:center;font-size:14px;width:12.5%%;}"
-"th{background:var(--table-header);font-weight:600;text-align:left;}"
-"th[colspan]{text-align:center;width:100%%;}"
-"td{cursor:pointer;transition:opacity 0.15s ease;}"
-"td:hover:not(:empty){opacity:0.8;}"
-".fwd-none{background-color:var(--fwd-none);}"
-".fwd-queued{background-color:var(--fwd-queued);}"
-".fwd-sent{background-color:var(--fwd-sent);}"
-"tbody tr:nth-child(even){background:var(--table-stripe);}"
-"tbody tr:hover{background:var(--surface-soft);transition:background 0.15s ease;}"
-".status-legend{background:var(--surface);padding:16px;border-radius:8px;box-shadow:var(--shadow-card);margin:15px 0;font-size:14px;color:var(--text);line-height:1.6;}"
-".status-legend strong{color:var(--text);display:block;margin-bottom:8px;}"
-".buttons{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0;}"
-".buttons input,.buttons button,.buttons a button{flex:1 1 auto;min-width:140px;background:var(--primary);color:var(--on-primary);padding:12px 20px;border:none;border-radius:6px;cursor:pointer;font-size:clamp(14px,1.5vw,16px);font-weight:500;transition:background 0.15s ease;min-height:44px;}"
-".buttons input:hover,.buttons button:hover,.buttons a button:hover{background:var(--primary-dark);}"
-".buttons input:focus-visible,.buttons button:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
-".buttons a{text-decoration:none;}"
-"@media(max-width:768px){.form-grid{grid-template-columns:1fr;gap:12px;}"
-".form-row-full{grid-column:1;}"
-".form-field label{font-size:13px;margin-bottom:4px;}"
-".form-field input,.form-field select{min-height:44px;font-size:16px;}"
-"table{font-size:13px;}"
-"th,td{padding:10px 8px;}"
-".buttons{flex-direction:column;gap:8px;}"
-".buttons input,.buttons button,.buttons a button{width:100%;min-width:0;min-height:48px;}"
-"}"
-"@media(max-width:480px){body{padding:clamp(8px,2vw,12px);padding-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));}"
-".form-section{padding:12px;margin:8px 0;}"
-"table{font-size:12px;}"
-"th,td{padding:8px 6px;}"
-"}}</style>";
+// MailDetailCSS is served via bpq.css (COMMON_MAIL_DETAIL_CSS). The parent page
+// loads bpq.css, so no inline <style> is needed for AJAX-injected mail detail content.
+static char MailDetailCSS[] = "";
 
 static char MailDetailHeader[] = "<h3>Message %d</h3><form method=post action=/Mail/Msg?%s name=Msgs>";
 
@@ -375,27 +325,16 @@ static char MailDetailButtons[] =
 "</div>"
 "<div class=status-legend><strong>Message Status Legend:</strong> Green = Sent to BBS, Yellow = Queued for sending</div>"
 "</div>"
-"<div class=table-container><table><thead><tr><th colspan=8>BBS Forwarding Status</th></tr></thead><tbody>";
+"<div class=table-wrap><table><thead><tr><th colspan=8>BBS Forwarding Status</th></tr></thead><tbody>";
 
 char MailDetailTail[] = "</tbody></table></div></form></body></html>";
 
 // Local CSS de-dup fragments used by multiple templates in this file.
 #define SUBMIT_BUTTON_CSS "input[type=submit]{background:var(--primary);color:var(--on-primary);padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}input[type=submit]:hover{background:var(--primary-dark);}input[type=submit]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
 
-static char WPDetailCSS[] =
-"<style>"
-".wp-form{margin:0;}"
-".wp-box{background:var(--surface);padding:15px;border-radius:4px;margin:15px 0;box-shadow:var(--shadow-card);}"
-".wp-row{display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;}"
-".wp-label{flex:1 1 100px;font-weight:bold;padding-top:2px;}"
-".wp-input-text{flex:2 1 200px;padding:8px;border:1px solid var(--border);border-radius:4px;}"
-".wp-input-small{flex:none;width:100px;padding:8px;border:1px solid var(--border);border-radius:4px;}"
-".wp-input-readonly{background:var(--surface-soft);color:var(--text);}"
-".wp-actions{text-align:center;margin:20px 0;position:sticky;bottom:0;background:var(--surface);padding:12px;border-top:1px solid var(--border-light);z-index:10;}"
-".wp-btn{background:var(--primary);color:var(--on-primary);padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}"
-".wp-btn:hover{background:var(--primary-dark);}"
-".wp-btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
-"</style>";
+// WP detail CSS is served via bpq.css (COMMON_WP_DETAIL_CSS). The parent page
+// loads bpq.css, so no inline <style> is needed for AJAX-injected WP content.
+static char WPDetailCSS[] = "";
 
 char Welcome[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 "<style>"
@@ -1929,9 +1868,11 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		GetParam(input, "BBSCall=", BBSName);
 		_strupr(BBSName);
 		strlop(BBSName, '-');
+		BBSName[16] = 0;
 		GetParam(input, "SYSOPCall=", SYSOPCall);
 		_strupr(SYSOPCall);
 		strlop(SYSOPCall, '-');
+		SYSOPCall[16] = 0;
 		GetParam(input, "HRoute=", HRoute);
 		_strupr(HRoute);
 		GetParam(input, "ApplNum=", Temp);
@@ -1960,12 +1901,18 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 
 		GetParam(input, "POP3Port=", Temp);
 		POP3InPort = atoi(Temp);
+		if (POP3InPort < 0) POP3InPort = 0;
+		if (POP3InPort > 65535) POP3InPort = 65535;
 
 		GetParam(input, "SMTPPort=", Temp);
 		SMTPInPort = atoi(Temp);
+		if (SMTPInPort < 0) SMTPInPort = 0;
+		if (SMTPInPort > 65535) SMTPInPort = 65535;
 
 		GetParam(input, "NNTPPort=", Temp);
 		NNTPInPort = atoi(Temp);
+		if (NNTPInPort < 0) NNTPInPort = 0;
+		if (NNTPInPort > 65535) NNTPInPort = 65535;
 
 		GetCheckBox(input, "EnRemote=", &RemoteEmail);
 
@@ -1980,11 +1927,15 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 			
 		GetParam(input, "ISPSMTPPort=", Temp);
 		ISPSMTPPort = atoi(Temp);
+		if (ISPSMTPPort < 0) ISPSMTPPort = 0;
+		if (ISPSMTPPort > 65535) ISPSMTPPort = 65535;
 	
 		GetParam(input, "POP3Server=", ISPPOP3Name);
 
 		GetParam(input, "ISPPOP3Port=", Temp);	
 		ISPPOP3Port = atoi(Temp);
+		if (ISPPOP3Port < 0) ISPPOP3Port = 0;
+		if (ISPPOP3Port > 65535) ISPPOP3Port = 65535;
 	
 		GetParam(input, "ISPAccount=", ISPAccountName);
 	
@@ -1993,6 +1944,8 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		
 		GetParam(input, "PollInterval=", Temp);
 		ISPPOP3Interval = atoi(Temp);
+		if (ISPPOP3Interval < 0) ISPPOP3Interval = 0;
+		if (ISPPOP3Interval > 9999) ISPPOP3Interval = 9999;
 
 		GetCheckBox(input, "ISPAuth=", &SMTPAuthNeeded);
 
@@ -2893,7 +2846,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	// set up FBB style filters
 	
 	ptr += sprintf(ptr, 
-		"<div class=table-container><table><thead><tr><th>Action</th><th>Type</th><th>From</th><th>To</th><th>@BBS</th><th>Bid</th><th>Max Size</th></tr></thead><tbody>");
+		"<div class=table-wrap><table class=\"node-table\"><thead><tr><th>Action</th><th>Type</th><th>From</th><th>To</th><th>@BBS</th><th>Bid</th><th>Max Size</th></tr></thead><tbody>");
 
 	while(Filter)
 	{

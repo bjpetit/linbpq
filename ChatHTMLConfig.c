@@ -142,7 +142,6 @@ char ChatPage[] = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><m
 	"<title>%s's Chat Server</title>"
 	"<style>"
 	COMMON_PAGE_BASE_CSS
-	COMMON_UTILITY_CSS
 	".container{max-width:900px;margin:0 auto;background:var(--surface);padding:20px;border-radius:8px;box-shadow:var(--shadow-card);}"
 	"</style>"
 	COMMON_BPQ_JS_SCRIPT
@@ -642,34 +641,12 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		"<title>%s's Chat Server</title>"
 		"<style>"
 		COMMON_PAGE_BASE_CSS
-		COMMON_TABLE_CSS
-				COMMON_TABLE_CSS
-		COMMON_FORM_CSS
-		COMMON_UTILITY_CSS
-		COMMON_BUTTON_CSS
 		"body{margin:0;padding:12px;background:var(--bg);}"
-		".chat-shell{max-width:1100px;margin:0 auto;}"
-		".chat-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}"
-		".chat-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-card);padding:10px;min-width:0;}"
-		".chat-section h4{margin:4px 0 10px 0;font-size:clamp(14px,2vw,16px);text-align:center;}"
-		".chat-section-wide{grid-column:1 / -1;}"
-		".chat-grid{width:100%%;}"
-		".chat-grid tr.selectable{cursor:pointer;}"
-		".chat-grid tr.selected td{background:var(--table-selected);}"
-		".chat-status-form{margin:0;}"
-		".chat-actions input{min-width:170px;}"
-		"@media (max-width:900px){.chat-layout{grid-template-columns:1fr;}.chat-section-wide{grid-column:auto;}}"
-		"@media (max-width:768px){body{padding:10px;}.chat-grid{font-size:13px;}.chat-grid th,.chat-grid td{padding:7px 6px;}}"
+		COMMON_CHAT_STATUS_PAGE_CSS_FMT
 		"</style>"
 		COMMON_BPQ_JS_SCRIPT
 		"<script>"
-		"var Selected;"
-		"var Inpval;"
-		"var SelectedStream = 0;"
-		"function initialize(){Inpval=document.getElementById('inpval');}"
-		"function SelectRow(newRow){var cell=document.getElementById('cell_'+newRow);var Last=Selected;var row=cell?cell.parentNode:null;if(!row)return;Selected=row;SelectedStream=newRow;row.classList.add('selected');if(Last){Last.classList.remove('selected');}if(row==Last){SelectedStream=0;row.classList.remove('selected');}Inpval.value=SelectedStream;}"
-		"function condRefresh(){if(SelectedStream==0){location.reload(true);}}"
-		"window.setInterval(condRefresh,10000);"
+		COMMON_CHAT_STATUS_JAVASCRIPT
 		"</script>"
 		"</head><body onload=initialize()>"
 		"<div class=chat-shell>"
@@ -683,15 +660,15 @@ VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
 		"<div class=chat-layout>"
 		"<div class=chat-section><h4>Streams</h4>"
 		"<form class=chat-status-form method=post action=\"/Chat/ChatDisSession?%s\">"
-		"<div class=table-container><table class=\"node-table chat-grid\"><thead><tr><th>User</th><th>Callsign</th><th class=num>Stream</th><th>Topic</th><th class=num>Queue</th></tr></thead><tbody>%s</tbody></table></div>"
+		"<div class=table-wrap><table class=\"node-table chat-grid\"><thead><tr><th>User</th><th>Callsign</th><th class=num>Stream</th><th>Topic</th><th class=num>Queue</th></tr></thead><tbody>%s</tbody></table></div>"
 		"<input type=hidden name=Stream value=99 id=inpval>"
-		"<div class=\"buttons chat-actions\"><input value=Disconnect type=submit></div>"
+		"<div class=\"sticky-buttons chat-actions\"><input value=Disconnect type=submit></div>"
 		"</form></div>"
 		"<div class=chat-section><h4>Links</h4>"
-		"<div class=table-container><table class=\"node-table chat-grid\"><thead><tr><th>Callsign</th><th>State</th></tr></thead><tbody>%s</tbody></table></div>"
+		"<div class=table-wrap><table class=\"node-table chat-grid\"><thead><tr><th>Callsign</th><th>State</th></tr></thead><tbody>%s</tbody></table></div>"
 		"</div>"
 		"<div class=\"chat-section chat-section-wide\"><h4>Users</h4>"
-		"<div class=table-container><table class=\"node-table chat-grid\"><thead><tr><th>Callsign</th><th>Node</th><th>Name</th><th>Topic</th><th class=num>Idle</th><th>QTH</th></tr></thead><tbody>%s</tbody></table></div>"
+		"<div class=table-wrap><table class=\"node-table chat-grid\"><thead><tr><th>Callsign</th><th>Node</th><th>Name</th><th>Topic</th><th class=num>Idle</th><th>QTH</th></tr></thead><tbody>%s</tbody></table></div>"
 		"</div>"
 		"</div></div></body></html>",
 		OurNode, OurNode, Key, Key, Key, Streams, Links, Users);

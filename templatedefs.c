@@ -17,15 +17,18 @@ char * WebMailMsgtxt()
 		"<head> "
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/>"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
-		COMMON_BPQ_CSS_LINK
 		"<style type=\"text/css\">"
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
+		"*{box-sizing:border-box;}"
 		"body{margin:0;padding:12px;font-family:" COMMON_FONT_MONO ";background:var(--bg);color:var(--text);min-height:100dvh;}"
 		".wm-shell{max-width:980px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 24px);}"
 		".wm-title{text-align:center;margin:0 0 12px 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);}"
+		COMMON_WEBMAIL_MENU_BTN_BASE_CSS
 		"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;}"
 		"textarea#txt{display:block;width:100%%;height:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family: " COMMON_FONT_MONO ";font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);line-height:1.45;overflow:auto;resize:vertical;background:var(--surface);color:var(--text);flex:1 1 auto;}"
 		"div#txt{display:block;width:100%%;min-height:320px;border:0;margin:0;padding:8px;font-family: " COMMON_FONT_MONO ";font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;flex:1 1 auto;}"
-		"@media (max-width:768px){body{padding:8px;}.wm-shell{min-height:calc(100dvh - 16px);}#main{padding:10px;}textarea#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}div#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}}"
+		"@media (max-width:768px){body{padding:8px;}.wm-shell{min-height:calc(100dvh - 16px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu .wm-btn{width:100%%;text-align:center;}#main{padding:10px;}textarea#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}div#txt{min-height:240px;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}}"
 		"</style>\r\n"
 		"<script>"
 		"function Reply(Num, Key)"
@@ -33,21 +36,21 @@ char * WebMailMsgtxt()
 		"var param = \"toolbar=yes,location=yes,directories=yes,status=yes,menubar=yes,scrollbars=yes,resizable=yes,titlebar=yes,toobar=yes\";"
 		"window.open(\"/WebMail/Reply/\" + Num + \"?\" + Key,\"_self\",param);"
 		"}\r\n"
+		COMMON_MENU_JAVASCRIPT
 		"</script>\r\n"
-		COMMON_BPQ_JS_SCRIPT
 		"<title>WebMail</title> "
 		"</head>\r\n"
 		"<body>"
 		"<div class=\"wm-shell\">"
 		"<h2 class=\"wm-title\"> %s Webmail Interface - User %s - Message %d</h2>"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded='false' aria-controls='mainMenu' onclick=\"toggleMenu(event)\">Menu</button></div>"
-		"<nav id=\"mainMenu\" class=\"menu\">"
-		"<a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a>"
-		"<a href=/WebMail/WMDel/%d?%s>Kill Message</a>"
+		"<nav id=\"mainMenu\" class=\"wm-menu\">"
+		"<a class=\"wm-btn\" href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a>"
+		"<a class=\"wm-btn\" href=/WebMail/WMDel/%d?%s>Kill Message</a>"
 		"%s"
-		"<a href=/WebMail/WMPrev?%s>Previous</a>"
-		"<a href=/WebMail/WMNext?%s>Next</a>"
-		"<a href=/WebMail/WMSame?%s>Back to List</a>"
+		"<a class=\"wm-btn\" href=/WebMail/WMPrev?%s>Previous</a>"
+		"<a class=\"wm-btn\" href=/WebMail/WMNext?%s>Next</a>"
+		"<a class=\"wm-btn\" href=/WebMail/WMSame?%s>Back to List</a>"
 		"</nav>"
 		"<div id=\"main\">"
 		"<%s id=\"txt\">%s</%s>"
@@ -69,7 +72,6 @@ char * FwdPagetxt()
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 		COMMON_BPQ_CSS_LINK
 		"<style type=\"text/css\"> "
-		COMMON_ADMIN_FIELD_THEME_CSS
 		"body { font-family: " COMMON_FONT_MONO "; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }"
 		"h3 { text-align: center; margin: 0 0 20px; font-family: " COMMON_FONT_TITLE "; font-size: clamp(1.25rem,3vw,1.75rem); }"
 		COMMON_WEBMAIL_TITLE_STRONG_CSS
@@ -250,35 +252,6 @@ char * FwdDetailtxt()
 	static const char Msg[] =
 
 		"<!-- Version 4 3/8/2026 Responsive -->\r\n"
-		"<style>"
-		COMMON_ADMIN_FIELD_THEME_CSS
-		".fwd-detail-form { max-width: 100%%; }"
-		".fwd-detail-form h3 { text-align: center; margin-bottom: 20px; }"
-		".fwd-textarea-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 15px 0; }"
-		".fwd-textarea-grid label { display: block; font-weight: 600; margin-bottom: 5px; font-size: clamp(0.8125rem,1.5vw,0.9375rem); text-align: center; }"
-		".fwd-textarea-grid textarea { width: 100%%; min-height: 120px; padding: clamp(10px,1vw,14px) clamp(12px,1.5vw,16px); line-height: 1.6; box-sizing: border-box; border: 1px solid var(--border); border-radius: 4px; font-family: " COMMON_FONT_MONO "; font-size: clamp(0.875rem,2vw,1rem); resize: vertical; }"
-		".fwd-textarea-wide { grid-column: span 2; }"
-		".fwd-detail-row { display: flex; flex-wrap: wrap; margin: 10px 0; gap: 10px; align-items: center; }"
-		".fwd-detail-row label { font-weight: 600; font-size: clamp(0.8125rem,1.5vw,0.9375rem); }"
-		".fwd-secondary-label { margin-left: 15px; }"
-		".fwd-detail-row input[type=text], .fwd-detail-row input[type=number] { padding: clamp(10px,1vw,14px) clamp(12px,1.5vw,16px); line-height: 1.5; box-sizing: border-box; border: 1px solid var(--border); border-radius: 4px; min-height: 44px; font-size: clamp(0.875rem,2vw,1rem); }"
-		".fwd-detail-row input[type=checkbox] { margin: 0 5px; width: 18px; height: 18px; }"
-		".fwd-bbsha { flex: 1 1 320px; max-width: 400px; }"
-		".fwd-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }"
-		".fwd-buttons input { background: var(--primary); color: var(--on-primary); padding: clamp(10px,1.5vw,16px) clamp(16px,2vw,28px); border: none; border-radius: 4px; cursor: pointer; min-height: 44px; font-size: clamp(0.875rem,1.5vw,1rem); }"
-		".fwd-buttons input:hover { background: var(--primary-dark); }"
-		".fwd-buttons input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }"
-		".fwd-buttons input.fwd-copy-call { background: var(--surface-soft); color: var(--text); border: 1px solid var(--border); max-width: 120px; }"
-		"@media (max-width: 768px) { "
-		".fwd-textarea-grid { grid-template-columns: 1fr; }"
-		".fwd-textarea-wide { grid-column: span 1; }"
-		".fwd-detail-row { flex-direction: column; align-items: flex-start; }"
-		".fwd-detail-row input[type=text], .fwd-detail-row input[type=number], .fwd-textarea-grid textarea { width: 100%%; min-height: 48px; }"
-		".fwd-bbsha { max-width: none; }"
-		".fwd-buttons { flex-direction: column; }"
-		".fwd-buttons input { width: 100%%; min-height: 48px; }"
-		"}"
-		"</style>"
 		"<div class=\"fwd-detail-form\"><h3>Forwarding Config for %s - %d Messages Queued</h3><form method=post action=/Mail/FWD?%s>\r\n"
 		"<div class=\"fwd-textarea-grid\">\r\n"
 		"<div><label>TO</label><textarea name=TO>%s</textarea></div>\r\n"
@@ -365,12 +338,15 @@ char * WebMailPagetxt()
 		"<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"/> \r\n"
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 		"<meta http-equiv=refresh content=300>"
-		COMMON_BPQ_CSS_LINK
 		"<style type=\"text/css\">\r\n"
+		COMMON_CSS_ROOT
+		COMMON_REDUCED_MOTION_CSS
+		COMMON_THEME_SELECTOR_CSS
 		"body{margin:0;padding:max(12px,env(safe-area-inset-left));font-family:" COMMON_FONT_MONO ";background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}"
 		"@supports(padding:max(0px)){body{padding:clamp(10px,3vw,12px);padding-left:max(clamp(10px,3vw,12px),env(safe-area-inset-left));padding-right:max(clamp(10px,3vw,12px),env(safe-area-inset-right));}}"
-		COMMON_WEBMAIL_SHELL_980_CSS
-		COMMON_WEBMAIL_TITLE_STANDARD_CSS
+		".wm-shell{max-width:980px;margin:0 auto;}"
+		".wm-title{text-align:center;margin:0 0 12px 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:500;}"
+		COMMON_WEBMAIL_MENU_LINK_TOUCH_BASE_CSS
 		"#main{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;min-height:calc(100dvh - 240px);overflow:auto;}"
 		".msg-table{width:100%%;border-collapse:collapse;font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		".msg-table thead{background:var(--table-header);border-bottom:2px solid var(--border);}"
@@ -388,7 +364,7 @@ char * WebMailPagetxt()
 		".msg-subject{max-width:380px;}"
 		"@media(min-width:1200px){.msg-subject{max-width:420px;}}"
 		"@media(max-width:768px){"
-		"body{padding:clamp(6px,2vw,10px);}#main{padding:8px;min-height:calc(100dvh - 280px);}"
+		"body{padding:clamp(6px,2vw,10px);}.menu-header{display:block;}.wm-menu{display:none;flex-direction:column;align-items:stretch;margin-top:0;}.wm-menu.menu-open{display:flex;}.wm-menu a{width:100%%;text-align:center;min-height:48px;}#main{padding:8px;min-height:calc(100dvh - 280px);}"
 		".msg-table{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
 		".msg-table th,.msg-table td{padding:6px 4px;}"
 		".msg-date{font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);}"
@@ -408,7 +384,7 @@ char * WebMailPagetxt()
 		"}"
 		"</style>\r\n"
 		"<script src=\"/WebMail/webscript.js\"></script>\r\n"
-		COMMON_BPQ_JS_SCRIPT
+		"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "function toggleMenu(event){if(event)event.preventDefault();var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');if(!menu||!toggle)return;if(menu.classList.contains('menu-open')){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}else{menu.classList.add('menu-open');toggle.textContent='Close';toggle.setAttribute('aria-expanded','true');}}function closeMenuOnMobile(){var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');if(!menu||!toggle)return;if(window.matchMedia('(max-width: 768px)').matches){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}}window.addEventListener('click',function(event){var menu=document.getElementById('mainMenu');var toggle=document.getElementById('menuToggle');var header=document.querySelector('.menu-header');if(menu&&toggle&&window.matchMedia('(max-width: 768px)').matches){var inMenu=menu.contains(event.target);var inHeader=header&&header.contains(event.target);if(!inMenu&&!inHeader){menu.classList.remove('menu-open');toggle.textContent='Menu';toggle.setAttribute('aria-expanded','false');}}});window.addEventListener('keydown',function(event){if(event.key==='Escape'){var menu=document.getElementById('mainMenu');if(menu&&menu.classList.contains('menu-open')){menu.classList.remove('menu-open');document.getElementById('menuToggle').textContent='Menu';document.getElementById('menuToggle').setAttribute('aria-expanded','false');}}});window.addEventListener('DOMContentLoaded',function(){var menu=document.getElementById('mainMenu');if(!menu)return;menu.addEventListener('click',function(event){var target=event.target;if(target&&target.tagName==='A')closeMenuOnMobile();});});</script>"
 		"<title>WebMail</title> \r\n"
 		"\r\n"
 		"</head>\r\n"
@@ -417,7 +393,7 @@ char * WebMailPagetxt()
 		"<div class=\"wm-shell\">"
 		"<h2 class=\"wm-title\"> %s Webmail Interface - User %s - Message List</h2>\r\n"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mainMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>"
-		"<nav id=\"mainMenu\" class=\"menu\">"
+		"<nav id=\"mainMenu\" class=\"wm-menu\">"
 		"<a href=/WebMail/WMB?%s>Bulls</a>\r\n"
 		"<a href=/WebMail/WMP?%s>Personal</a>\r\n"
 		"<a href=/WebMail/WMT?%s>NTS</a>\r\n"
@@ -446,7 +422,7 @@ char * WebMailPagetxt()
 char * MainConfigtxt()
 {
 	static const char Msg[] =
-		"<!-- Version 9 3/9/2026 Mobile Responsive Layout -->\r\n"
+		"<!-- Version 11 5/1/2026 Layout and port limits -->\r\n"
 		"<!DOCTYPE html>\r\n"
 		"<html lang=\"en\"><head>"
 		"<meta charset=\"UTF-8\">"
@@ -456,36 +432,51 @@ char * MainConfigtxt()
 		"\r\n"
 		"<style>"
 		COMMON_PAGE_BASE_CSS
-		COMMON_ADMIN_FIELD_THEME_CSS
+		COMMON_WEBMAIL_SHELL_980_CSS
+		COMMON_WEBMAIL_TITLE_STRONG_CSS
+		COMMON_SECTION_TITLE_TEXT_CSS
 		"table,th,td{border:1px solid var(--border);border-collapse:collapse;}"
-		"#main{" COMMON_PANEL_CHROME_CSS "box-sizing:border-box;max-width:980px;margin:0 auto;padding:20px;}"
-		"#main form{font-family:" COMMON_FONT_MONO ";}"
-		".page-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
-		".section-title{margin:20px 0 12px 0;padding:8px 0;border-bottom:1px solid var(--border-light);font-weight:bold;text-align:left;}"
-		".form-row{display:flex;align-items:center;gap:12px;margin:10px 0;flex-wrap:wrap;}"
-		".form-row label{min-width:120px;text-align:left;flex-shrink:0;}"
-		".form-row.checkbox-row label{display:flex;align-items:center;gap:6px;margin:0;min-width:auto;}"
+		"#main{" COMMON_CARD_CHROME_CSS "box-sizing:border-box;max-width:980px;margin:12px auto 0;padding:clamp(14px,2vw,22px);}"
+		"#main form{font-family:" COMMON_FONT_MONO ";display:flex;flex-direction:column;}"
+		".page-title{margin:10px 0 0;}"
+		".section-title{margin:18px 0 10px 0;padding:8px 0;border-bottom:1px solid var(--border-light);font-weight:700;text-align:left;letter-spacing:0.2px;}"
+		".section-title:first-of-type{margin-top:4px;}"
+		".form-row{display:flex;align-items:flex-start;gap:12px;margin:10px 0;flex-wrap:wrap;}"
+		".form-row label{flex:none;min-width:120px;text-align:left;line-height:1.35;padding-top:7px;}"
+		".form-row.checkbox-row{margin:8px 0;}"
+		".form-row.checkbox-row label{display:inline-flex;align-items:flex-start;gap:8px;margin:0;min-width:auto;line-height:1.35;padding-top:0;}"
 		".form-row.checkbox-row input[type=checkbox]{width:18px;height:18px;margin:0;flex-shrink:0;}"
-		".form-row input[type=text]{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family: " COMMON_FONT_MONO ";flex:1 1 180px;min-width:100px;}"
-		".form-row input[type=number]{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family: " COMMON_FONT_MONO ";width:80px;}"
+		".form-row input[type=text]{border:1px solid var(--border);background:var(--surface-soft);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family:" COMMON_FONT_MONO ";flex:none;width:220px;}"
+		".form-row input[type=number]{flex:none;border:1px solid var(--border);background:var(--surface-soft);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family:" COMMON_FONT_MONO ";width:96px;max-width:100%%;}"
 		".form-row input[type=radio]{margin:0 4px 0 0;}"
-		".form-row textarea{border:1px solid var(--border);border-radius:6px;padding:6px 8px;box-sizing:border-box;font-family: " COMMON_FONT_MONO ";flex:1 1 300px;min-width:150px;}"
+		".form-row textarea{border:1px solid var(--border);background:var(--surface-soft);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family:" COMMON_FONT_MONO ";flex:1 1 300px;min-width:150px;}"
+		".form-row .btn{margin-left:auto;}"
 		".text-area-row{display:flex;flex-direction:column;align-items:flex-start;margin:10px 0;}"
 		".text-area-row label{text-align:left;margin-bottom:4px;font-weight:500;}"
 		".text-area-row textarea{width:100%%;}"
 		".textarea-group{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0;}"
 		".textarea-col{flex:1 1 150px;display:flex;flex-direction:column;}"
 		".textarea-col label{text-align:left;margin-bottom:4px;font-weight:500;font-size:0.9em;}"
-		".textarea-col textarea{width:100%%;box-sizing:border-box;}"
-		".filter-table-wrap{overflow:auto;max-width:100%%;margin-top:8px;}"
+		".textarea-col textarea{width:100%%;box-sizing:border-box;min-height:120px;}"
+		".filter-table-wrap{overflow-x:auto;max-width:100%%;margin-top:8px;-webkit-overflow-scrolling:touch;}"
+		".filter-table-wrap table{width:max-content;min-width:100%%;}"
+		".filter-table-wrap th{background:var(--table-header);font-family:" COMMON_FONT_TITLE ";font-weight:600;}"
+		".filter-table-wrap td{background:var(--surface);}"
+		".filter-table-wrap tbody tr:nth-child(even) td{background:var(--table-stripe);}"
+		".filter-table-wrap th,.filter-table-wrap td{white-space:nowrap;}"
+		".filter-table-wrap td input{width:100%%;min-width:72px;box-sizing:border-box;}"
 		".buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}"
+		".buttons input[name=Save]{background:var(--primary);border-color:var(--primary);color:var(--on-primary);}"
+		".buttons input[name=Save]:hover{background:var(--primary-dark);border-color:var(--primary-dark);}"
+		".buttons .btn{min-width:130px;}"
 		"@media (max-width:768px){"
 		"#main{padding:12px;}"
 		".form-row{flex-direction:column;align-items:flex-start;gap:4px;}"
-		".form-row label{min-width:100%%;text-align:left;margin-bottom:4px;font-weight:500;width:100%%;}"
-		".form-row.checkbox-row{flex-direction:row;align-items:center;}"
-		".form-row.checkbox-row label{min-width:auto;margin-bottom:0;}"
+		".form-row label{flex:none;min-width:100%%;text-align:left;margin-bottom:4px;font-weight:500;width:100%%;padding-top:0;}"
+		".form-row.checkbox-row{flex-direction:column;align-items:flex-start;}"
+		".form-row.checkbox-row label{width:100%%;min-width:0;margin-bottom:0;}"
 		".form-row input[type=text],.form-row input[type=number],.form-row textarea{width:100%%;flex:none;}"
+		".form-row .btn{margin-left:0;width:100%%;}"
 		".text-area-row{align-items:stretch;}"
 		".text-area-row textarea{width:100%%;}"
 		".textarea-group{flex-direction:column;}"
@@ -497,7 +488,8 @@ char * MainConfigtxt()
 		"</style>"
 		COMMON_BPQ_JS_SCRIPT
 		"</head><body>\r\n"
-		"<h2>BPQ32 BBS %s</h2>\r\n"
+		"<div class=\"wm-shell\">"
+		"<h2 class=\"wm-title\">BPQ32 BBS %s</h2>\r\n"
 		"<div class=menu-header><button id=menuToggle class=menu-toggle type=button aria-expanded=\"false\" aria-controls=\"mailMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>"
 		"<div id=mailMenu class=menu>"
 		"<a href=/Mail/Status?%s>Status</a>"
@@ -518,9 +510,9 @@ char * MainConfigtxt()
 		"<div class=\"section-title\">BBS Parameters</div>\r\n"
 		"<div class=\"form-row\">\r\n"
 		"  <label>BBS Call</label>\r\n"
-		"  <input type=\"text\" value=\"%s\" name=\"BBSCall\">\r\n"
-		"  <label style=\"min-width:80px;\">SYSOP Call</label>\r\n"
-		"  <input type=\"text\" value=\"%s\" name=\"SYSOPCall\">\r\n"
+		"  <input type=\"text\" value=\"%s\" name=\"BBSCall\" size=\"8\" maxlength=\"16\">\r\n"
+		"  <label>SYSOP Call</label>\r\n"
+		"  <input type=\"text\" value=\"%s\" name=\"SYSOPCall\" size=\"8\" maxlength=\"16\">\r\n"
 		"</div>\r\n"
 		"<div class=\"form-row\">\r\n"
 		"  <label>H Route</label>\r\n"
@@ -532,7 +524,7 @@ char * MainConfigtxt()
 		"<div class=\"form-row\">\r\n"
 		"  <label>BBS APPL No</label>\r\n"
 		"  <input type=\"number\" value=\"%d\" name=\"ApplNum\">\r\n"
-		"  <label style=\"min-width:80px;\">Streams</label>\r\n"
+		"  <label>Streams</label>\r\n"
 		"  <input type=\"number\" value=\"%d\" name=\"Streams\">\r\n"
 		"</div>\r\n"
 		"<div class=\"form-row checkbox-row\">\r\n"
@@ -579,11 +571,11 @@ char * MainConfigtxt()
 		"</div>\r\n"
 		"<div class=\"form-row\">\r\n"
 		"  <label>POP3 Port</label>\r\n"
-		"  <input type=\"number\" value=\"%d\" name=\"POP3Port\">\r\n"
-		"  <label style=\"min-width:100px;\">SMTP Port</label>\r\n"
-		"  <input type=\"number\" value=\"%d\" name=\"SMTPPort\">\r\n"
-		"  <label style=\"min-width:100px;\">NNTP Port</label>\r\n"
-		"  <input type=\"number\" value=\"%d\" name=\"NNTPPort\">\r\n"
+		"  <input type=\"number\" value=\"%d\" name=\"POP3Port\" min=\"0\" max=\"65535\" step=\"1\">\r\n"
+		"  <label>SMTP Port</label>\r\n"
+		"  <input type=\"number\" value=\"%d\" name=\"SMTPPort\" min=\"0\" max=\"65535\" step=\"1\">\r\n"
+		"  <label>NNTP Port</label>\r\n"
+		"  <input type=\"number\" value=\"%d\" name=\"NNTPPort\" min=\"0\" max=\"65535\" step=\"1\">\r\n"
 		"</div>\r\n"
 		"<div class=\"form-row checkbox-row\">\r\n"
 		"  <label><input %stype=\"checkbox\" name=\"EnRemote\"> Enable Remote Access</label>\r\n"
@@ -607,16 +599,18 @@ char * MainConfigtxt()
 		"<div class=\"form-row\">\r\n"
 		"  <label>SMTP Server</label>\r\n"
 		"  <input type=\"text\" value=\"%s\" name=\"SMTPServer\">\r\n"
-		"  <label style=\"min-width:60px;\">Port</label>\r\n"
-		"  <input type=\"number\" value=\"%d\" name=\"ISPSMTPPort\" style=\"width:80px;\">\r\n"
-		"  <label style=\"min-width:120px;\">SMTP Domain</label>\r\n"
+		"  <label>Port</label>\r\n"
+		"  <input type=\"number\" value=\"%d\" name=\"ISPSMTPPort\" min=\"0\" max=\"65535\" step=\"1\" style=\"width:80px;\">\r\n"
+		"</div>\r\n"
+		"<div class=\"form-row\">\r\n"
+		"  <label>SMTP Domain</label>\r\n"
 		"  <input type=\"text\" value=\"%s\" name=\"ISPEHLOName\">\r\n"
 		"</div>\r\n"
 		"<div class=\"form-row\">\r\n"
 		"  <label>POP3 Server</label>\r\n"
 		"  <input type=\"text\" value=\"%s\" name=\"POP3Server\">\r\n"
-		"  <label style=\"min-width:60px;\">Port</label>\r\n"
-		"  <input type=\"number\" value=\"%d\" name=\"ISPPOP3Port\" style=\"width:80px;\">\r\n"
+		"  <label>Port</label>\r\n"
+		"  <input type=\"number\" value=\"%d\" name=\"ISPPOP3Port\" min=\"0\" max=\"65535\" step=\"1\" style=\"width:80px;\">\r\n"
 		"</div>\r\n"
 		"<div class=\"form-row\">\r\n"
 		"  <label>Account Name</label>\r\n"
@@ -628,7 +622,7 @@ char * MainConfigtxt()
 		"</div>\r\n"
 		"<div class=\"form-row\">\r\n"
 		"  <label>POP3 Poll Interval</label>\r\n"
-		"  <input type=\"number\" value=\"%d\" name=\"PollInterval\" style=\"width:80px;\">\r\n"
+		"  <input type=\"number\" value=\"%d\" name=\"PollInterval\" min=\"0\" max=\"9999\" step=\"1\" style=\"width:80px;\">\r\n"
 		"  <span style=\"white-space:nowrap;\">Minutes</span>\r\n"
 		"</div>\r\n"
 		"<div class=\"form-row checkbox-row\">\r\n"
@@ -702,7 +696,9 @@ char * MainConfigtxt()
 		"  <input class='btn' name=\"Cancel\" value=\"Cancel\" type=\"submit\">\r\n"
 		"</div>\r\n"
 		"</form>\r\n"
-		"</div>\r\n";
+		"</div>\r\n"
+		"</div>\r\n"
+		"</body></html>\r\n";
 
 	return _strdup(Msg);
 }
@@ -722,7 +718,6 @@ char * MsgPagetxt()
 		COMMON_BPQ_CSS_LINK
 		"<style>"
 		COMMON_PAGE_BASE_CSS
-		COMMON_ADMIN_FIELD_THEME_CSS
 		COMMON_WEBMAIL_SHELL_1100_CSS
 		COMMON_WEBMAIL_TITLE_STRONG_CSS
 		COMMON_SECTION_TITLE_TEXT_CSS
@@ -1029,7 +1024,6 @@ char * UserPagetxt()
 		COMMON_BPQ_CSS_LINK
 		"<style>"
 		COMMON_PAGE_BASE_CSS
-		COMMON_ADMIN_FIELD_THEME_CSS
 		COMMON_WEBMAIL_SHELL_980_CSS
 		COMMON_WEBMAIL_TITLE_STRONG_CSS
 		COMMON_SECTION_TITLE_CSS
@@ -1251,7 +1245,6 @@ char * Housekeepingtxt()
 		COMMON_BPQ_CSS_LINK
 		"<style>"
 		COMMON_PAGE_BASE_CSS
-		COMMON_ADMIN_FIELD_THEME_CSS
 		".hk-container{max-width:980px;margin:0 auto;}"
 		".hk-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;color:var(--text);}"
 		".hk-layout{display:flex;gap:20px;flex-wrap:wrap;}"
