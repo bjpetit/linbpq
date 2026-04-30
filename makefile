@@ -75,7 +75,12 @@ noi2c: linbpq
 
 linbpq: $(OBJS)
 	cc $(OBJS) $(CFLAGS) $(LDFLAGS) $(LIBS) -o linbpq
-	sudo setcap "CAP_NET_ADMIN=ep CAP_NET_RAW=ep CAP_NET_BIND_SERVICE=ep" linbpq		
+	@if command -v setcap >/dev/null 2>&1; then \
+		sudo setcap "CAP_NET_ADMIN=ep CAP_NET_RAW=ep CAP_NET_BIND_SERVICE=ep" linbpq || \
+		echo "Warning: setcap failed; continuing without capabilities"; \
+	else \
+		echo "Warning: setcap not found; continuing without capabilities"; \
+	fi
 
 -include *.d
 

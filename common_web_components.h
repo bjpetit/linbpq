@@ -125,7 +125,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
  *   --overlay-hover     Semi-transparent overlay tint on hover
  */
 #define COMMON_CSS_ROOT \
-	":root{" \
+	":root,html[data-theme=\"light\"]{color-scheme:light;" \
 	"--bg:#edf0f4;" \
 	"--surface:#fff;" \
 	"--primary:#0056b3;" \
@@ -197,16 +197,6 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"--alert-warn-bg:#4a3b13;--alert-warn-border:#7c5e10;--alert-warn-text:#fde68a;" \
 	"--border-card:#374151;--shadow-card:0 2px 8px rgba(0,0,0,0.50),0 1px 2px rgba(0,0,0,0.30);" \
 	"--shadow-overlay:0 10px 28px rgba(0,0,0,0.60),0 2px 6px rgba(0,0,0,0.35);--overlay-hover:rgba(255,255,255,0.06);}" \
-	"html[data-theme=\"light\"]{color-scheme:light;" \
-	"--bg:#edf0f4;--surface:#fff;--primary:#0056b3;--primary-dark:#003d82;--on-primary:#ffffff;" \
-	"--border:#767676;--border-light:#e2e8f0;--text:#1f2937;--link:#0056b3;--muted:#6b7280;" \
-	"--surface-hover:#e9ecef;--surface-soft:#eef2f7;--focus-ring:#0056b3;" \
-	"--table-header:#e6e9ee;--table-stripe:#e8ebef;--table-selected:#dbeafe;" \
-	"--fwd-none:#ffffff;--fwd-queued:#fff59d;--fwd-sent:#b7f7bf;" \
-	"--alert-error-bg:#ffeeee;--alert-error-border:#ffcccc;--alert-error-text:#cc3333;" \
-	"--alert-warn-bg:#ffffcc;--alert-warn-border:#ffaa33;--alert-warn-text:#7c5100;" \
-	"--border-card:#bfc5d0;--shadow-card:0 2px 8px rgba(15,23,42,0.10),0 1px 2px rgba(15,23,42,0.06);" \
-	"--shadow-overlay:0 8px 24px rgba(15,23,42,0.20),0 2px 6px rgba(15,23,42,0.10);--overlay-hover:rgba(15,23,42,0.08);}" \
 	"*{box-sizing:border-box;}"
 
 #define COMMON_BODY_BASE_CSS \
@@ -446,10 +436,41 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 #define COMMON_BTN_ACTIVE_DARK_CSS \
 	"input.btn:active{background:var(--primary-dark);color:var(--on-primary);}" \
-	"submit.btn:active{background:var(--primary-dark);color:var(--on-primary);}"
+	"button[type=submit].btn:active{background:var(--primary-dark);color:var(--on-primary);}"
 
 #define COMMON_BTN_PANEL_BASE_CSS \
 	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;background:var(--surface);text-decoration:none;border-radius:6px;border:1px solid var(--border-card);color:var(--text);box-sizing:border-box;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;}"
+
+#define COMMON_CHAT_STATUS_PAGE_CSS_TEMPLATE(PCT) \
+	".chat-shell{max-width:1100px;margin:0 auto;}" \
+	".chat-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}" \
+	".chat-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-card);padding:10px;min-width:0;}" \
+	".chat-section h4{margin:4px 0 10px 0;font-size:clamp(14px,2vw,16px);text-align:center;}" \
+	".chat-section-wide{grid-column:1 / -1;}" \
+	".chat-grid{width:100" PCT ";}" \
+	".chat-grid tr.selectable{cursor:pointer;}" \
+	".chat-grid tr.selected td{background:var(--table-selected);}" \
+	".chat-status-form{margin:0;}" \
+	".chat-actions input{min-width:170px;}" \
+	"@media (max-width:900px){.chat-layout{grid-template-columns:1fr;}.chat-section-wide{grid-column:auto;}}" \
+	"@media (max-width:768px){body{padding:10px;}.chat-grid{font-size:13px;}.chat-grid th,.chat-grid td{padding:7px 6px;}}"
+
+#define COMMON_CHAT_STATUS_PAGE_CSS COMMON_CHAT_STATUS_PAGE_CSS_TEMPLATE("%")
+#define COMMON_CHAT_STATUS_PAGE_CSS_FMT COMMON_CHAT_STATUS_PAGE_CSS_TEMPLATE("%%")
+
+#define COMMON_SCROLL_OUTPUT_JAVASCRIPT \
+	"function ScrollOutput()" \
+	"{var textarea = document.getElementById('textarea');" \
+	"if(textarea)textarea.scrollTop = textarea.scrollHeight;}"
+
+#define COMMON_CHAT_STATUS_JAVASCRIPT \
+	"var Selected;" \
+	"var Inpval;" \
+	"var SelectedStream = 0;" \
+	"window.__bpqChatStatusRefreshTimer = window.__bpqChatStatusRefreshTimer || 0;" \
+	"function initialize(){Inpval=document.getElementById('inpval');if(!window.__bpqChatStatusRefreshTimer){window.__bpqChatStatusRefreshTimer=window.setInterval(condRefresh,10000);}}" \
+	"function SelectRow(newRow){var cell=document.getElementById('cell_'+newRow);var Last=Selected;var row=cell?cell.parentNode:null;if(!row)return;Selected=row;SelectedStream=newRow;row.classList.add('selected');if(Last){Last.classList.remove('selected');}if(row==Last){SelectedStream=0;row.classList.remove('selected');}Inpval.value=SelectedStream;}" \
+	"function condRefresh(){if(SelectedStream==0){location.reload(true);}}"
 
 // Reusable panel/card chrome fragments for page-specific containers.
 #define COMMON_PANEL_CHROME_CSS \
@@ -476,6 +497,109 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_NODE_H2_H3_CSS \
 	".node-h2{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.1rem,2.5vw,1.4rem);}" \
 	".node-h3{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1rem,2vw,1.2rem);}"
+
+// Mail BBS status page layout — served via bpq.css so StatusPage only needs content markup.
+// Uses single % (not %%) — included in COMMON_BPQ_CSS_CONTENT, not used as sprintf format.
+#define COMMON_MAIL_STATUS_CSS \
+	".status-grid{width:100%;}" \
+	".status-actions input{min-width:160px;}" \
+	".stats-section{max-width:560px;margin:16px auto 0;padding:clamp(12px,2vw,18px);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-card);}" \
+	".stat-row{display:flex;align-items:center;gap:12px;margin:8px 0;}" \
+	".stat-row label{flex:1 1 220px;font-weight:600;font-size:clamp(0.8125rem,1.5vw,0.9375rem);line-height:1.3;}" \
+	".stat-row input{flex:0 0 130px;max-width:130px;padding:clamp(10px,1vw,14px) clamp(12px,1.5vw,16px);line-height:1.5;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;background:var(--surface-soft);color:var(--text);font-family:" COMMON_FONT_MONO ";font-size:clamp(0.875rem,2vw,1rem);font-variant-numeric:tabular-nums;text-align:right;min-height:44px;}" \
+	"@media(max-width:768px){.status-grid th,.status-grid td{padding:8px 6px;}.stats-section{margin-top:12px;padding:12px;}.stat-row{flex-direction:column;align-items:stretch;gap:6px;}.stat-row label{flex:none;width:100%;}.stat-row input{flex:1 1 auto;max-width:none;width:100%;min-height:48px;text-align:left;}}"
+
+// White Pages detail form — AJAX-injected into mail pages that already load bpq.css.
+// No %% patterns; safe to include in COMMON_BPQ_CSS_CONTENT.
+#define COMMON_WP_DETAIL_CSS \
+	".wp-form{margin:0;}" \
+	".wp-box{background:var(--surface);padding:15px;border-radius:4px;margin:15px 0;box-shadow:var(--shadow-card);}" \
+	".wp-row{display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;}" \
+	".wp-label{flex:1 1 100px;font-weight:bold;padding-top:2px;}" \
+	".wp-input-text{flex:2 1 200px;padding:8px;border:1px solid var(--border);border-radius:4px;}" \
+	".wp-input-small{flex:none;width:100px;padding:8px;border:1px solid var(--border);border-radius:4px;}" \
+	".wp-input-readonly{background:var(--surface-soft);color:var(--text);}" \
+	".wp-actions{text-align:center;margin:20px 0;position:sticky;bottom:0;background:var(--surface);padding:12px;border-top:1px solid var(--border-light);z-index:10;}" \
+	".wp-btn{background:var(--primary);color:var(--on-primary);padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}" \
+	".wp-btn:hover{background:var(--primary-dark);}" \
+	".wp-btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+
+// Mail message detail form — AJAX-injected into mail pages that already load bpq.css.
+// Uses single % for CSS (corrects the latent %% bug from when this was a sprintf format).
+#define COMMON_MAIL_DETAIL_CSS \
+	"h3{text-align:center;margin-bottom:20px;}" \
+	".form-section{background:var(--surface);padding:clamp(12px,4vw,20px);border-radius:8px;box-shadow:var(--shadow-card);margin:15px 0;}" \
+	".form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 20px;margin:16px 0;}" \
+	".form-field{display:flex;flex-direction:column;gap:6px;}" \
+	".form-field label{font-weight:600;font-size:clamp(13px,1.5vw,15px);color:var(--text);text-transform:uppercase;letter-spacing:0.3px;}" \
+	".form-field input,.form-field select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:clamp(14px,2vw,16px);transition:border-color 0.15s ease,box-shadow 0.15s ease;min-height:44px;font-family:" COMMON_FONT_MONO ";}" \
+	".form-field input:focus-visible,.form-field select:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	".form-row-full{grid-column:1/-1;}" \
+	"input[readonly]{background:var(--surface-soft);color:var(--text);cursor:not-allowed;}" \
+	"input.uppercase{text-transform:uppercase;}" \
+	".table-container{background:var(--surface);border-radius:8px;box-shadow:var(--shadow-card);overflow-x:auto;margin:15px 0;}" \
+	"table{width:100%;border-collapse:collapse;table-layout:fixed;}" \
+	"th,td{padding:12px 14px;border:1px solid var(--border);text-align:center;font-size:14px;width:12.5%;}" \
+	"th{background:var(--table-header);font-weight:600;text-align:left;}" \
+	"th[colspan]{text-align:center;width:100%;}" \
+	"td{cursor:pointer;transition:opacity 0.15s ease;}" \
+	"td:hover:not(:empty){opacity:0.8;}" \
+	".fwd-none{background-color:var(--fwd-none);}" \
+	".fwd-queued{background-color:var(--fwd-queued);}" \
+	".fwd-sent{background-color:var(--fwd-sent);}" \
+	"tbody tr:nth-child(even){background:var(--table-stripe);}" \
+	"tbody tr:hover{background:var(--surface-soft);transition:background 0.15s ease;}" \
+	".status-legend{background:var(--surface);padding:16px;border-radius:8px;box-shadow:var(--shadow-card);margin:15px 0;font-size:14px;color:var(--text);line-height:1.6;}" \
+	".status-legend strong{color:var(--text);display:block;margin-bottom:8px;}" \
+	".buttons{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0;}" \
+	".buttons input,.buttons button,.buttons a button{flex:1 1 auto;min-width:140px;background:var(--primary);color:var(--on-primary);padding:12px 20px;border:none;border-radius:6px;cursor:pointer;font-size:clamp(14px,1.5vw,16px);font-weight:500;transition:background 0.15s ease;min-height:44px;}" \
+	".buttons input:hover,.buttons button:hover,.buttons a button:hover{background:var(--primary-dark);}" \
+	".buttons input:focus-visible,.buttons button:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	".buttons a{text-decoration:none;}" \
+	"@media(max-width:768px){.form-grid{grid-template-columns:1fr;gap:12px;}" \
+	".form-row-full{grid-column:1;}" \
+	".form-field label{font-size:13px;margin-bottom:4px;}" \
+	".form-field input,.form-field select{min-height:44px;font-size:16px;}" \
+	"table{font-size:13px;}" \
+	"th,td{padding:10px 8px;}" \
+	".buttons{flex-direction:column;gap:8px;}" \
+	".buttons input,.buttons button,.buttons a button{width:100%;min-width:0;min-height:48px;}" \
+	"}" \
+	"@media(max-width:480px){body{padding:clamp(8px,2vw,12px);padding-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));}" \
+	".form-section{padding:12px;margin:8px 0;}" \
+	"table{font-size:12px;}" \
+	"th,td{padding:8px 6px;}" \
+	"}"
+
+// Forwarding detail form — AJAX-injected into FwdPage which already loads bpq.css and
+// provides COMMON_ADMIN_FIELD_THEME_CSS via its own inline <style>. No %% patterns needed.
+#define COMMON_FWD_DETAIL_CSS \
+	".fwd-detail-form{max-width:100%;}" \
+	".fwd-detail-form h3{text-align:center;margin-bottom:20px;}" \
+	".fwd-textarea-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:15px 0;}" \
+	".fwd-textarea-grid label{display:block;font-weight:600;margin-bottom:5px;font-size:clamp(0.8125rem,1.5vw,0.9375rem);text-align:center;}" \
+	".fwd-textarea-grid textarea{width:100%;min-height:120px;padding:clamp(10px,1vw,14px) clamp(12px,1.5vw,16px);line-height:1.6;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;font-family:" COMMON_FONT_MONO ";font-size:clamp(0.875rem,2vw,1rem);resize:vertical;}" \
+	".fwd-textarea-wide{grid-column:span 2;}" \
+	".fwd-detail-row{display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:center;}" \
+	".fwd-detail-row label{font-weight:600;font-size:clamp(0.8125rem,1.5vw,0.9375rem);}" \
+	".fwd-secondary-label{margin-left:15px;}" \
+	".fwd-detail-row input[type=text],.fwd-detail-row input[type=number]{padding:clamp(10px,1vw,14px) clamp(12px,1.5vw,16px);line-height:1.5;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;min-height:44px;font-size:clamp(0.875rem,2vw,1rem);}" \
+	".fwd-detail-row input[type=checkbox]{margin:0 5px;width:18px;height:18px;}" \
+	".fwd-bbsha{flex:1 1 320px;max-width:400px;}" \
+	".fwd-buttons{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap;}" \
+	".fwd-buttons input{background:var(--primary);color:var(--on-primary);padding:clamp(10px,1.5vw,16px) clamp(16px,2vw,28px);border:none;border-radius:4px;cursor:pointer;min-height:44px;font-size:clamp(0.875rem,1.5vw,1rem);}" \
+	".fwd-buttons input:hover{background:var(--primary-dark);}" \
+	".fwd-buttons input:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	".fwd-buttons input.fwd-copy-call{background:var(--surface-soft);color:var(--text);border:1px solid var(--border);max-width:120px;}" \
+	"@media(max-width:768px){" \
+	".fwd-textarea-grid{grid-template-columns:1fr;}" \
+	".fwd-textarea-wide{grid-column:span 1;}" \
+	".fwd-detail-row{flex-direction:column;align-items:flex-start;}" \
+	".fwd-detail-row input[type=text],.fwd-detail-row input[type=number],.fwd-textarea-grid textarea{width:100%;min-height:48px;}" \
+	".fwd-bbsha{max-width:none;}" \
+	".fwd-buttons{flex-direction:column;}" \
+	".fwd-buttons input{width:100%;min-height:48px;}" \
+	"}"
 
 #define COMMON_ADMIN_LIST_TOGGLE_CSS_TEMPLATE(SELECTOR) \
 	SELECTOR "{display:none;width:100%%;min-height:44px;padding:10px 12px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;flex-shrink:0;}" \
@@ -630,13 +754,12 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"." CLASSNAME " a{color:var(--link);white-space:nowrap;padding:3px 10px 3px 6px;display:block;border:1px solid var(--border);}" \
 	"." CLASSNAME " a:hover{background:var(--overlay-hover);}"
 
-#define COMMON_TABLE_CSS \
-	".table-container{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
-	".table-wrap{width:100%%;max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
+// PCT parameter should be "%%" when used in sprintf format strings, "%" for static bpq.css content.
+#define COMMON_TABLE_CSS_TEMPLATE(PCT) \
+	".table-wrap{width:100" PCT ";max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
 	".node-table{width:max-content;max-width:none;border-collapse:collapse;table-layout:auto;margin:0 auto;background:var(--surface);font-family:" COMMON_FONT_MONO ";font-size:" COMMON_TABLE_FONT_SIZE ";}" \
 	".node-table caption{caption-side:top;text-align:left;font-family:" COMMON_FONT_TITLE ";font-size:clamp(0.9375rem,0.9rem + 0.2vw,1rem);font-weight:600;color:var(--text);padding:0 0 8px;}" \
-	".node-table th,.node-table td{border:1px solid var(--border);padding:8px;vertical-align:top;}" \
-	".node-table th,.node-table td{white-space:nowrap;}" \
+	".node-table th,.node-table td{border:1px solid var(--border);padding:8px;vertical-align:top;white-space:nowrap;}" \
 	".node-table th{background:var(--table-header);text-align:left;}" \
 	".node-table tbody tr:nth-child(even){background-color:var(--table-stripe);}" \
 	".node-table tbody tr:hover{background:var(--surface-hover);}" \
@@ -651,7 +774,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".node-table-stack thead{display:none;}" \
 	".node-table-stack thead th{display:none;}" \
 	".node-table-stack th{display:none;}" \
-	".node-table-stack,.node-table-stack tbody,.node-table-stack tr,.node-table-stack td{display:block;width:100%%;}" \
+	".node-table-stack,.node-table-stack tbody,.node-table-stack tr,.node-table-stack td{display:block;width:100" PCT ";}" \
 	".node-table-stack tr{margin:0 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:6px;}" \
 	".node-table-stack tbody tr:nth-child(even){background:var(--surface);}" \
 	".node-table-stack td{border:none;border-bottom:1px solid var(--border-light);text-align:left;padding:6px 4px;}" \
@@ -660,7 +783,9 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".node-table-stack td::before{content:attr(data-label);display:inline-block;min-width:130px;font-weight:700;color:var(--text);margin-right:8px;}" \
 	".node-table-stack.stats-table td::before{content:none;display:none;}" \
 	"}" \
-	COMMON_ITEM_GRID_CSS("node-grid", "17ch", "%%")
+	COMMON_ITEM_GRID_CSS("node-grid", "17ch", PCT)
+// Backward-compat alias for sprintf format string contexts (uses %% for literal %)
+#define COMMON_TABLE_CSS COMMON_TABLE_CSS_TEMPLATE("%%")
 
 #define COMMON_COMPACT_PAGE_CSS \
 	"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}" \
@@ -690,6 +815,17 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 #define COMMON_MONO_COMPACT_TEXT_CSS \
 	"font-family: " COMMON_FONT_MONO "; font-size: " COMMON_TABLE_FONT_SIZE ";"
+
+// Minimal FOUC-prevention script for pages that also load bpq.js.
+// Contains only the three functions needed before first paint plus the IIFE.
+// Does NOT include bpqSetThemeMode — that is provided by bpq.js.
+// Use COMMON_THEME_COOKIE_INIT_JAVASCRIPT for pages that do NOT load bpq.js
+// (signon, terminal, simple admin pages).
+#define COMMON_THEME_FOUC_JAVASCRIPT \
+	"function bpqGetCookie(n){var p=n+'=';var c=document.cookie?document.cookie.split(';'):[];for(var i=0;i<c.length;i++){var x=c[i].trim();if(x.indexOf(p)===0)return decodeURIComponent(x.substring(p.length));}return '';}" \
+	"function bpqGetThemeMode(){var t=bpqGetCookie('bpq-theme');if(t==='dark'||t==='light'||t==='system')return t;return 'system';}" \
+	"function bpqApplyThemeMode(t){var h=document.documentElement;if(t==='dark')h.setAttribute('data-theme','dark');else if(t==='light')h.setAttribute('data-theme','light');else h.removeAttribute('data-theme');}" \
+	"(function(){bpqApplyThemeMode(bpqGetThemeMode());})()"
 
 // Responsive Menu JavaScript
 // Handles toggle, click-outside-to-close, and escape key
@@ -765,11 +901,12 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 // Common Form Styles
 // Provides responsive form-row pattern used throughout the application
-#define COMMON_FORM_CSS \
+// PCT parameter should be "%%" when used in sprintf format strings, "%" for static bpq.css content.
+#define COMMON_FORM_CSS_TEMPLATE(PCT) \
 	".form-section{" \
 	"background:var(--surface);" \
 	"padding:clamp(12px,4vw,20px);" \
-	"border-radius:4px;" \
+	"border-radius:8px;" \
 	"box-shadow:var(--shadow-card);" \
 	"margin:15px 0;" \
 	"}" \
@@ -781,7 +918,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"align-items:flex-start;" \
 	"}" \
 	".form-row label{" \
-	"flex:1 1 clamp(100px,25%%,150px);" \
+	"flex:1 1 clamp(100px,25" PCT ",150px);" \
 	"font-weight:bold;" \
 	"font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);" \
 	"padding-top:2px;" \
@@ -805,7 +942,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"cursor:pointer;" \
 	"}" \
 	".form-row textarea{" \
-	"width:100%%;" \
+	"width:100" PCT ";" \
 	"padding:8px;" \
 	"border:1px solid var(--border);" \
 	"border-radius:4px;" \
@@ -828,12 +965,12 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}" \
 	".form-row label{" \
 	"flex:none;" \
-	"width:100%%;" \
+	"width:100" PCT ";" \
 	"padding-top:0;" \
 	"margin-bottom:4px;" \
 	"}" \
 	".form-row input[type=text],.form-row input[type=number],.form-row input[type=password],.form-row select{" \
-	"width:100%%;" \
+	"width:100" PCT ";" \
 	"min-height:48px;" \
 	"}" \
 	".checkbox-group{" \
@@ -841,6 +978,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"align-items:flex-start;" \
 	"}" \
 	"}"
+// Backward-compat alias for sprintf format string contexts (uses %% for literal %)
+#define COMMON_FORM_CSS COMMON_FORM_CSS_TEMPLATE("%%")
 
 // Common Utility Styles
 // Lightweight helper classes to replace one-off inline style attributes
@@ -857,9 +996,12 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".form-row input.input-w-100{flex:none;width:100px;}"
 
 // Common Button Styles
-// Provides consistent button appearance with proper touch targets
-#define COMMON_BUTTON_CSS \
-	".buttons{" \
+// Provides sticky form-action button bar for Node config pages.
+// Named .sticky-buttons to avoid conflict with .buttons in COMMON_MAIL_DETAIL_CSS
+// (which is a flex row, not a sticky footer).
+// PCT parameter should be "%%" when used in sprintf format strings, "%" for static bpq.css content.
+#define COMMON_BUTTON_CSS_TEMPLATE(PCT) \
+	".sticky-buttons{" \
 	"text-align:center;" \
 	"margin:20px 0;" \
 	"position:sticky;" \
@@ -869,7 +1011,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"border-top:1px solid var(--border-light);" \
 	"z-index:10;" \
 	"}" \
-	".buttons input,.buttons button{" \
+	".sticky-buttons input,.sticky-buttons button{" \
 	"background:var(--primary);" \
 	"color:var(--on-primary);" \
 	"padding:10px 20px;" \
@@ -880,29 +1022,31 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"touch-action:manipulation;" \
 	"min-height:44px;" \
 	"}" \
-	".buttons input:hover,.buttons button:hover{" \
+	".sticky-buttons input:hover,.sticky-buttons button:hover{" \
 	"background:var(--primary-dark);" \
 	"}" \
-	".buttons input:focus-visible,.buttons button:focus-visible{" \
+	".sticky-buttons input:focus-visible,.sticky-buttons button:focus-visible{" \
 	"outline:3px solid var(--focus-ring);outline-offset:2px;" \
 	"}" \
 	"@media(max-width:768px){" \
-	".buttons{" \
+	".sticky-buttons{" \
 	"padding:10px;" \
 	"margin:0 -20px -20px;" \
 	"border-radius:0;" \
 	"}" \
-	".buttons input,.buttons button{" \
-	"width:calc(50%%-6px);" \
+	".sticky-buttons input,.sticky-buttons button{" \
+	"width:calc(50" PCT "-6px);" \
 	"}" \
 	"}" \
 	"@media(max-width:480px){" \
-	".buttons input,.buttons button{" \
-	"width:100%%;" \
+	".sticky-buttons input,.sticky-buttons button{" \
+	"width:100" PCT ";" \
 	"min-height:48px;" \
 	"margin:4px 0;" \
 	"}" \
 	"}"
+// Backward-compat alias for sprintf format string contexts (uses %% for literal %)
+#define COMMON_BUTTON_CSS COMMON_BUTTON_CSS_TEMPLATE("%%")
 
 // Common Signon/Login Page Styles
 // Used by TermSignon, NodeSignon, MailSignon, ChatSignon in HTTPcode.c
@@ -974,12 +1118,22 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	COMMON_LINK_CSS \
 	COMMON_THEME_SELECTOR_CSS \
 	COMMON_MENU_CSS_TEMPLATE("%") \
+	COMMON_CHAT_STATUS_PAGE_CSS \
+	COMMON_ADMIN_FIELD_THEME_CSS \
 	COMMON_ADMIN_BTN_BASE_CSS \
 	COMMON_BTN_HOVER_NEUTRAL_CSS \
 	COMMON_BTN_FOCUS_RING_CSS \
 	COMMON_BTN_ACTIVE_DARK_CSS \
 	COMMON_APRS_PORTSTATS_CHROME_CSS \
-	COMMON_NODE_H2_H3_CSS
+	COMMON_MAIL_STATUS_CSS \
+	COMMON_WP_DETAIL_CSS \
+	COMMON_MAIL_DETAIL_CSS \
+	COMMON_FWD_DETAIL_CSS \
+	COMMON_NODE_H2_H3_CSS \
+	COMMON_TABLE_CSS_TEMPLATE("%") \
+	COMMON_FORM_CSS_TEMPLATE("%") \
+	COMMON_BUTTON_CSS_TEMPLATE("%") \
+	COMMON_UTILITY_CSS
 
 // Static CSS served at /bpq/node.css — compact admin/status page styles shared
 // across Node compact pages (StreamStatus, RigControl). Includes compact-page body

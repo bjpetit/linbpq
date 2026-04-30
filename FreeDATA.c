@@ -1101,9 +1101,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
+		COMMON_SCROLL_OUTPUT_JAVASCRIPT
+		"</script>"
 		"</head><title>FreDATA Status</title></head><body id=Text onload=\"ScrollOutput()\">"
 		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
 		"'width=440,height=150');\" action=ARDOPAbort?%d>FreeData Status"

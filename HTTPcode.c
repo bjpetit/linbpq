@@ -159,22 +159,20 @@ char Tail[] = "</body></html>";
 #define HTTP_NODE_H2(TEXT) "<h2 class='node-h2'>" TEXT "</h2>"
 #define HTTP_NODE_H3(TEXT) "<h3 class='node-h3'>" TEXT "</h3>"
 
-#define HTTP_NODE_COLS_ROUTES "<th scope=col>Port</th><th scope=col>Call</th><th scope=col>Quality</th><th scope=col>Node Count</th><th scope=col>Frame Count</th><th scope=col>Retries</th><th scope=col>Percent</th><th scope=col>Maxframe</th><th scope=col>Frack</th><th scope=col>Last Heard</th><th scope=col>Queued</th><th scope=col>Rem Qual</th><th scope=col>SRTT</th><th scope=col>Rem SRTT</th>"
-#define HTTP_NODE_COLS_TRAFFIC "<th scope=col>Call</th><th scope=col>Frames</th><th scope=col>RTT</th><th scope=col>BPQ?</th><th scope=col>Hops</th>"
-#define HTTP_NODE_COLS_LINKS "<th scope=col>Far Call</th><th scope=col>Our Call</th><th scope=col>Port</th><th scope=col>ax.25 state</th><th scope=col>Link Type</th><th scope=col>ax.25 Version</th>"
-#define HTTP_NODE_COLS_USERS "<th scope=col>Circuit</th><th scope=col>Link</th><th scope=col>Circuit</th>"
-#define HTTP_NODE_COLS_PORTS "<th scope=col>Port</th><th scope=col>Driver</th><th scope=col>ID</th><th scope=col>Beacons</th><th scope=col>Driver Window</th><th scope=col>Stats Graph</th>"
+#define HTTP_NODE_COLS_ROUTES "<th scope=\"col\">Port</th><th scope=\"col\">Call</th><th scope=\"col\">Quality</th><th scope=\"col\">Node Count</th><th scope=\"col\">Frame Count</th><th scope=\"col\">Retries</th><th scope=\"col\">Percent</th><th scope=\"col\">Maxframe</th><th scope=\"col\">Frack</th><th scope=\"col\">Last Heard</th><th scope=\"col\">Queued</th><th scope=\"col\">Rem Qual</th><th scope=\"col\">SRTT</th><th scope=\"col\">Rem SRTT</th>"
+#define HTTP_NODE_COLS_TRAFFIC "<th scope=\"col\">Call</th><th scope=\"col\">Frames</th><th scope=\"col\">RTT</th><th scope=\"col\">BPQ?</th><th scope=\"col\">Hops</th>"
+#define HTTP_NODE_COLS_LINKS "<th scope=\"col\">Far Call</th><th scope=\"col\">Our Call</th><th scope=\"col\">Port</th><th scope=\"col\">ax.25 state</th><th scope=\"col\">Link Type</th><th scope=\"col\">ax.25 Version</th>"
+#define HTTP_NODE_COLS_USERS "<th scope=\"col\">Circuit</th><th scope=\"col\">Link</th><th scope=\"col\">Circuit</th>"
+#define HTTP_NODE_COLS_PORTS "<th scope=\"col\">Port</th><th scope=\"col\">Driver</th><th scope=\"col\">ID</th><th scope=\"col\">Beacons</th><th scope=\"col\">Driver Window</th><th scope=\"col\">Stats Graph</th>"
 
 #define HTTP_NODE_MENU_CSS \
-	COMMON_TABLE_CSS \
-	COMMON_FORM_CSS \
-	COMMON_BUTTON_CSS \
-	COMMON_UTILITY_CSS \
 	":root{--menu-max-width:1100px;}" \
 	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); line-height: 1.5; margin: 0; padding: 12px; background: var(--bg); color: var(--text); }" \
 	"h1 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0 18px; font-size: clamp(1.25rem,3vw,1.75rem); line-height: 1.25; }" \
 	".menu { margin: 20px auto; }" \
-	".dropdown { position: relative; display: inline-block; }" \
+	".menu > a, .menu > .dropdown { min-width: 10ch; }" \
+	".dropdown { position: relative; display: inline-flex; }" \
+	".menu > .dropdown > .btn { width: 100%%; }" \
 	".dropdown-content { display: none; position: absolute; left: 50%%; transform: translateX(-50%%); background-color: var(--surface); min-width: 220px; border: 1px solid var(--border); border-radius: 6px; padding: 8px; z-index: 10; box-shadow: var(--shadow-overlay); font-family: " COMMON_FONT_TITLE "; }" \
 	".dropdown-content a, .dropdown-content .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; width: 100%%; margin-top: 6px; padding: 10px 16px; background: var(--surface); text-decoration: none; border-radius: 6px; border: 1px solid var(--border); color: var(--link); box-sizing: border-box; font-size: clamp(1rem,0.94rem + 0.25vw,1.125rem); font-family: " COMMON_FONT_TITLE "; line-height: 1.2; }" \
 	".dropdown-content a:hover, .dropdown-content .btn:hover { background: var(--surface-hover); }" \
@@ -226,7 +224,7 @@ char Beacons[] =
 	"<div class='form-row'><label for=File>Send From File</label><input type=text id=File name=File maxlength=50 value=%s></div>"
 	"<div class='form-row'><label for=Text>Text</label><textarea id=Text name=Text>%s</textarea></div>"
 	"<input type=hidden name=Port value=%d>"
-	"<div class='buttons'><input type=submit value=Save><input type=submit value=Test name=Test></div>"
+	"<div class='sticky-buttons'><input type=submit value=Save><input type=submit value=Test name=Test></div>"
 	"</form>"
 	"</div>";
 
@@ -1387,7 +1385,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	char NodeMenuHeader[] = "<!DOCTYPE html><html lang=\"en\"><head>" COMMON_HTML_META_UTF8_QUOTED COMMON_FONT_INTER_LINK COMMON_HTML_CANONICAL_LINK_ONLY COMMON_BPQ_CSS_LINK "<title>%s's BPQ32 Web Server</title>"
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>"
 	"<style type=\"text/css\">" HTTP_NODE_MENU_CSS "</style>"
-	"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
+	"<script>" COMMON_THEME_FOUC_JAVASCRIPT "</script>"
 	COMMON_BPQ_JS_SCRIPT
 	"<script>\r\n"
 	COMMON_NODE_MGMT_JAVASCRIPT

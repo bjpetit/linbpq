@@ -391,9 +391,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	int Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<title>FLDIGI Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style>"
 		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
+		COMMON_SCROLL_OUTPUT_JAVASCRIPT
+		"</script>"
 		"</head><body id=Text onload=\"ScrollOutput()\">"
 		"<h2>FLDIGI Status</h2>");
 

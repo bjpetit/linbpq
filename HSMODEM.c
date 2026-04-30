@@ -881,9 +881,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
+		COMMON_SCROLL_OUTPUT_JAVASCRIPT
+		"</script>"
 		"</head><title>VARA Status</title></head><body id=Text onload=\"ScrollOutput()\">"
 		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
 		"'width=440,height=150');\" action=ARDOPAbort?%d>HSMODEM Status"
@@ -1449,13 +1448,13 @@ VOID HSMODEMProcessTNCMessage(struct TNCINFO * TNC, unsigned char * Msg, int Len
 		Bytes 8-10 ... unused
 		Bytes 11-229 ... 219 bytes payload		return;
 
-		1 … BER Test Pattern
-		2 … Image
-		3 … Ascii File
-		4 … HTML File
-		5 … Binary File
-		6 … Voice Audio (for Codec 2 or Opus)
-		7 … UserInfo
+		1 ï¿½ BER Test Pattern
+		2 ï¿½ Image
+		3 ï¿½ Ascii File
+		4 ï¿½ HTML File
+		5 ï¿½ Binary File
+		6 ï¿½ Voice Audio (for Codec 2 or Opus)
+		7 ï¿½ UserInfo
 		*/
 
 		Seq = Msg[2] << 8 | Msg[3];
