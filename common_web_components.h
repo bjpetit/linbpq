@@ -535,7 +535,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".form-field input,.form-field select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:clamp(14px,2vw,16px);transition:border-color 0.15s ease,box-shadow 0.15s ease;min-height:44px;font-family:" COMMON_FONT_MONO ";}" \
 	".form-field input:focus-visible,.form-field select:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
 	".form-row-full{grid-column:1/-1;}" \
-	"input[readonly]{background:var(--surface-soft);color:var(--text);cursor:not-allowed;}" \
+	"input{background:var(--surface-soft);color:var(--text);}" \
+	"input[readonly]{cursor:not-allowed;}" \
 	"input.uppercase{text-transform:uppercase;}" \
 	".table-container{background:var(--surface);border-radius:8px;box-shadow:var(--shadow-card);overflow-x:auto;margin:15px 0;}" \
 	"table{width:100%;border-collapse:collapse;table-layout:fixed;}" \
@@ -1052,6 +1053,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Used by TermSignon, NodeSignon, MailSignon, ChatSignon in HTTPcode.c
 #define COMMON_SIGNON_CSS \
 	COMMON_CSS_VARIABLES \
+	COMMON_AUTOFILL_FORMAT_OVERRIDE \
 	"body{font-family:" COMMON_FONT_TITLE ";font-size:clamp(1rem,0.96rem + 0.22vw,1.125rem);margin:20px;background:var(--bg);color:var(--text);}" \
 	"h2,h3{text-align:center;font-family:" COMMON_FONT_TITLE ";}" \
 	"h2{font-size:clamp(1.5rem,4vw,2.25rem);}" \
@@ -1241,5 +1243,22 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"if(target.tagName==='INPUT'&&target.type==='submit')closeMenuOnMobile();" \
 	"});" \
 	"});"
+
+// Override Autocomplete styles in Chrome
+#define COMMON_AUTOFILL_FORMAT_OVERRIDE \
+	"input:-webkit-autofill," \
+	"input:-webkit-autofill:hover," \
+	"input:-webkit-autofill:focus," \
+	"textarea:-webkit-autofill," \
+	"textarea:-webkit-autofill:hover," \
+	"textarea:-webkit-autofill:focus," \
+	"select:-webkit-autofill," \
+	"select:-webkit-autofill:hover," \
+	"select:-webkit-autofill:focus {" \
+	"  -webkit-text-fill-color: var(--text);" \
+	"  -webkit-box-shadow: var(--bg);" \
+	"  -webkit-font-size: inherit;" \
+	"  transition: background-color 5000s ease-in-out 0s;" \
+	"}"
 
 #endif // COMMON_WEB_COMPONENTS_H

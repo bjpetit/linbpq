@@ -162,7 +162,7 @@ static char MsgInputPage[] = "<!DOCTYPE html><html lang=\"en\"><head><meta chars
 	COMMON_HTML_CANONICAL_DYNAMIC
 	"<style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; margin: 12px; background: var(--bg); color: var(--text); } h2 { text-align: center; font-family: " COMMON_FONT_TITLE "; font-size: clamp(1.25rem,3vw,1.75rem); margin: 0 0 12px; } #myform { max-width: 980px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; box-sizing: border-box; } .form-row label { flex: 0 0 88px; font-weight: 600; } .form-row input, .form-row select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: clamp(14px,2vw,16px); } #To, #Subj { font-size: 15px; padding-top: 9px; padding-bottom: 9px; } .form-row input[type=file] { padding: 6px 0; border: none; } .form-row textarea { flex: 1 1 auto; width: 100%%; min-height: 360px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; line-height: 1.4; resize: vertical; font-family: " COMMON_FONT_MONO "; } .form-row.meta-row label { flex: 0 0 88px; } " COMMON_WEBMAIL_FORM_LAYOUT_CORE_CSS " .inline-action { white-space: nowrap; flex: 0 0 auto; margin-left: 10px; } .btn, .buttons input { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; text-decoration: none; font-size: clamp(14px,1.5vw,16px); box-sizing: border-box; } " COMMON_WEBMAIL_FORM_BUTTON_INTERACTION_CSS " " COMMON_WEBMAIL_FORM_BUTTON_ROW_BASE_CSS " @media (max-width: 768px) { body { margin: 10px; } #myform { padding: 12px; } " COMMON_WEBMAIL_FORM_MOBILE_STACK_BASE_CSS " .form-row input, .form-row select { width: 100%%; } .form-row input, .form-row select, .buttons input, .btn { min-height: 48px; } .form-row input[type=file] { min-height: 0; } .form-row.message-row label { padding-top: 0; } .inline-action { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; width: 100%%; margin-left: 0; } .inline-action .btn { flex: 1 1 auto; min-width: 100px; } .buttons { justify-content: stretch; gap: 8px; } .buttons input { flex: 1 1 0; } }</style></head><body>"
 	"<h1>Webmail Message Input</h1>"
-	"<h2>Webmail Interface - Message Input Form</h2>"
+	"<h2>Webmail - Message Input</h2>"
 	"<form id=myform method=post action=/WebMail/EMSave\?%s enctype=multipart/form-data>"
 	"<div class=form-row><label for='To'>To:</label><input id='To' size=60 name='To' value='%s'><span class=inline-action>%s</span></div>"
 	"<div class=form-row><label for='Subj'>Subject:</label><input id='Subj' size=60 name='Subj' value=\"%s\"></div>"
@@ -2084,8 +2084,8 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 			"<body onload=Init() onresize=initialize(120)>\r\n"
 			"<div class=\"wm-shell\">\r\n"
-			"<h1 class=\"wm-title\">Webmail Interface</h1>\r\n"
-			"<h2 class=\"wm-title\"> %s Webmail Interface - User %s - Message List</h2>\r\n"
+			"<h1 class=\"wm-title\">Webmail</h1>\r\n"
+			"<h2 class=\"wm-title\"> %s Webmail - User %s - Messages</h2>\r\n"
 			"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mainMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>\r\n"
 			"<nav id=\"mainMenu\" class=\"wm-menu\">\r\n"
 			"<a href=/WebMail/WMB?%s>Bulls</a>\r\n"
@@ -3815,7 +3815,7 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 				"window.open(\"/WebMail/Reply/\" + Num + \"?\" + Key,\"_self\",param);"
 				"}</script>"
 				"<h1 style=\"text-align:center;line-height:1.25;margin:0 0 12px;\">Webmail Message</h1>"
-				"<h2 style=\"text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);margin:0 0 12px;line-height:1.25;\"> %s Webmail Interface - User %s - Message %d</h2>"
+				"<h2 style=\"text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);margin:0 0 12px;line-height:1.25;\"> %s Webmail - User %s - Message %d</h2>"
 				"<table style=\"margin:0 auto;border-collapse:collapse;\"><tr>"
 				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=\"#\" onclick=\"Reply('%d' ,'%s'); return false;\">Reply</a></td>"
 				"<td style=\"padding:4px 8px;border:1px solid var(--border)\"><a href=/WebMail/WMDel/%d?%s>Kill Message</a></td>"

@@ -330,7 +330,7 @@ static char MailDetailButtons[] =
 char MailDetailTail[] = "</tbody></table></div></form></body></html>";
 
 // Local CSS de-dup fragments used by multiple templates in this file.
-#define SUBMIT_BUTTON_CSS "input[type=submit]{background:var(--primary);color:var(--on-primary);padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}input[type=submit]:hover{background:var(--primary-dark);}input[type=submit]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+#define SUBMIT_BUTTON_CSS "input[type=submit]{background:var(--surface);color:var(--text);padding:10px 20px;border:1px solid var(--border);border-radius:6px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}input[type=submit]:hover{background:var(--surface-hover);}input[type=submit]:active{background:var(--primary-dark);color:var(--on-primary);}input[type=submit]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
 
 // WP detail CSS is served via bpq.css (COMMON_WP_DETAIL_CSS). The parent page
 // loads bpq.css, so no inline <style> is needed for AJAX-injected WP content.
@@ -341,7 +341,7 @@ char Welcome[] = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\"
 COMMON_CSS_VARIABLES
 "h3{text-align:center;color:var(--text);}"
 COMMON_SECTION_TITLE_TEXT_CSS
-".form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:var(--text);}.form-row textarea{width:100%%;padding:8px;border:1px solid var(--border);border-radius:4px;touch-action:manipulation;font-family:inherit;font-size:clamp(14px,2vw,16px);line-height:1.4;}p{font-size:13px;color:var(--text);line-height:1.5;}"
+".form-row{display:block;margin:clamp(8px,2vw,15px) 0;}.form-row label{display:block;margin-bottom:6px;font-weight:bold;font-size:14px;color:var(--text);}.form-row textarea{width:100%%;padding:8px;border:1px solid var(--border);background:var(--surface-soft);color:var(--text);border-radius:6px;touch-action:manipulation;font-family:inherit;font-size:clamp(14px,2vw,16px);line-height:1.4;}p{font-size:13px;color:var(--text);line-height:1.5;}"
 SUBMIT_BUTTON_CSS
 "input[type=submit]{font-size:clamp(14px,1.5vw,16px);}@media(max-width:768px){body{padding:clamp(10px,2vw,15px);}.form-row textarea{min-height:100px;}input[type=submit]{width:calc(50%%-5px);min-height:48px;}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
 "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body>"
@@ -361,7 +361,7 @@ SUBMIT_BUTTON_CSS
 static char MsgEditPage[] = "<style>"
 COMMON_CSS_VARIABLES
 "h3{text-align:center;margin-bottom:30px;}"
-"textarea{width:100%%;padding:8px;border:1px solid var(--border);border-radius:4px;touch-action:manipulation;font-family: " COMMON_FONT_MONO ";font-size:12px;line-height:1.4;resize:vertical;}"
+"textarea{width:100%%;padding:8px;border:1px solid var(--border);background:var(--surface-soft);color:var(--text);border-radius:6px;touch-action:manipulation;font-family: " COMMON_FONT_MONO ";font-size:12px;line-height:1.4;resize:vertical;}"
 SUBMIT_BUTTON_CSS
 "@media(max-width:768px){textarea{font-size:13px;min-height:200px;}input[type=submit]{width:calc(50%-5px);}}@media(max-width:480px){input[type=submit]{width:100%;margin:8px 0;}}"
 "</style><h3>Edit Message</h3>"
@@ -3021,11 +3021,12 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 		COMMON_FORM_CSS
 		COMMON_UTILITY_CSS
 		COMMON_BUTTON_CSS
-		".port-row{display:flex;flex-wrap:wrap;margin:15px 0;gap:10px;padding:15px;background:var(--surface-soft);border:1px solid var(--border);border-radius:4px;align-items:center;}"
+		".port-row{display:flex;flex-wrap:wrap;margin:15px 0;gap:10px;padding:15px;background:var(--surface-soft);border:1px solid var(--border);border-radius:6px;align-items:center;}"
 		".port-row-header{display:flex;flex-wrap:wrap;margin:10px 0;gap:15px;font-weight:bold;font-size:0.9em;}"
 		".port-row-label{flex:0 1 120px;}"
 		".port-row input[type=checkbox]{margin:0;}"
-		".port-row input[type=text]{flex:2 1 200px;padding:8px;border:1px solid var(--border);border-radius:4px;}"
+		".port-row input[type=text]{flex:2 1 200px;padding:8px;border:1px solid var(--border);background:var(--surface-soft);color:var(--text);border-radius:6px;font-family:" COMMON_FONT_MONO ";}"
+		".port-row input[type=text]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
 		".port-row span{flex:1 1 120px;}"
 		"@media(max-width:768px){.port-row{flex-direction:column;align-items:flex-start;}.port-row input[type=text]{width:100%%;flex:none;}.port-row-header{flex-direction:column;align-items:flex-start;}}"
 		"</style>");
