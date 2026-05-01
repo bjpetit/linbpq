@@ -728,7 +728,7 @@ struct HTTPConnectionInfo * FindSession(char * Key)
 
 void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
-	char _REPLYBUFFER[8192];
+	char _REPLYBUFFER[9000];
 	int ReplyLen;
 	char Header[1024];
 	int HeaderLen;
