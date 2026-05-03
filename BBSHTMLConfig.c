@@ -178,7 +178,8 @@ COMMON_FORM_CSS
 COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
 COMMON_SECTION_TITLE_CSS
-"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body><div class=section-title>Active Sessions</div>"
+"</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
+"</head><body><div class=section-title>Active Sessions</div><br>"
 "<form method=post action=/Mail/DisSession?%s>"
 "<div class=table-wrap><table class=\"node-table status-grid\">"
 "<thead><tr><th scope=col class=num>Select</th><th scope=col>User</th><th scope=col>Callsign</th><th scope=col class=num>Stream</th><th scope=col class=num>Queue</th><th scope=col class=num>Sent</th><th scope=col class=num>Rxed</th></tr></thead><tbody>";
