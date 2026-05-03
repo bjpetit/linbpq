@@ -4933,11 +4933,11 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		COMMON_HTML_HEAD_COMMON
 		COMMON_HTML_META_UTF8
 		COMMON_HTML_META_VIEWPORT_COMPACT
-		"<meta http-equiv=expires content=0>\r\n"
+		"<meta http-equiv=expires content=10>\r\n"
 		"<title>Rig Control</title>\r\n"
 		COMMON_BPQ_CSS_LINK
 		COMMON_NODE_CSS_LINK
-		"<style>form{margin:0;padding:0;display:inline;}table{max-width:600px;}</style>"
+		"<style>form{margin:0;padding:0;display:inline;}td{white-space:nowrap;padding:4px 8px;}</style>"
 		"</head><body>"
 		"<h3>Rig Control</h3>\r\n"
 		"<table><tr>\r\n"
@@ -4949,14 +4949,9 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"<th style=\"display:none\">Action</th>\r\n"
 		"</tr>";
 	char RigLine[] =
-		"<tr>\r\n"
-		"  <td>%s</td>\r\n"
-		"  <td>%s</td>\r\n"
-		"  <td>%s/1</td>\r\n"
-		"  <td>%c%c</td>\r\n"
-		"  <td>%s</td>\r\n"
-		"  <td style=\"display:none\"><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td>\r\n"
-		"  </tr>\r\n";
+		"<tr><td data-label='Radio' class='text'>%s</td><td data-label='Freq' class='text'>%s</td><td data-label='Mode' class='text'>%s/1</td>"
+		"<td data-label='ST' class='text'>%c%c</td><td data-label='Ports' class='text'>%s</td>"
+		"<td style=\"display:none\"><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td></tr>";
 	char Tail[] =		
 		"</table>\r\n"
 		"</body></html>\r\n";

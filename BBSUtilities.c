@@ -5059,20 +5059,18 @@ char * ReadInfoFile(char * File)
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
 {
 	struct tm *tm;
-	static char Date[]="xx-xxx hh:mmZ";
+	static char Date[30];
 
 	tm = gmtime(&Datim);
-	
-	if (tm)
-		sprintf_s(Date, sizeof(Date), "%02d-%3s %02d:%02dZ",
-					tm->tm_mday, month[tm->tm_mon], tm->tm_hour, tm->tm_min);
 
-	if (DateOnly)
-	{
-		Date[6]=0;
+	if (DateOnly) {
+		if (strftime(Date, sizeof(Date), "%e-%b-%Y", tm) == 0)
+			Date[0] = '?';
 		return Date;
 	}
-	
+
+	if (strftime(Date, sizeof(Date), "%e-%b-%Y %H:%M%Z", tm) == 0)
+		Date[0] = '?';
 	return Date;
 }
 
@@ -12030,7 +12028,7 @@ int pindex = 0;
 
 void sigchild_handler(int sig , siginfo_t * siginfo, void * ucontext)
 {
-/* •  SIGCHLD fills in si_pid, si_uid, si_status, si_utime, and
+/* ï¿½  SIGCHLD fills in si_pid, si_uid, si_status, si_utime, and
           si_stime, providing information about the child.  The si_pid
           field is the process ID of the child; si_uid is the child's
           real user ID.  The si_status field contains the exit status of
@@ -14180,15 +14178,15 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 					cant use DosDateTimeToFileTime on Linux
 		
 					Bits	Description
-					0-4	Day of the month (1–31)
+					0-4	Day of the month (1ï¿½31)
 					5-8	Month (1 = January, 2 = February, and so on)
 					9-15	Year offset from 1980 (add 1980 to get actual year)
 					wFatTime
 					The MS-DOS time. The time is a packed value with the following format.
 					Bits	Description
 					0-4	Second divided by 2
-					5-10	Minute (0–59)
-					11-15	Hour (0–23 on a 24-hour clock)
+					5-10	Minute (0ï¿½59)
+					11-15	Hour (0ï¿½23 on a 24-hour clock)
 */
 					memset(&TM, 0, sizeof(TM));
 
@@ -14231,15 +14229,15 @@ BOOL ProcessYAPPMessage(CIRCUIT * conn)
 					cant use DosDateTimeToFileTime on Linux
 		
 					Bits	Description
-					0-4	Day of the month (1–31)
+					0-4	Day of the month (1ï¿½31)
 					5-8	Month (1 = January, 2 = February, and so on)
 					9-15	Year offset from 1980 (add 1980 to get actual year)
 					wFatTime
 					The MS-DOS time. The time is a packed value with the following format.
 					Bits	Description
 					0-4	Second divided by 2
-					5-10	Minute (0–59)
-					11-15	Hour (0–23 on a 24-hour clock)
+					5-10	Minute (0ï¿½59)
+					11-15	Hour (0ï¿½23 on a 24-hour clock)
 */
 					memset(&TM, 0, sizeof(TM));
 

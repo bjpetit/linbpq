@@ -179,7 +179,7 @@ COMMON_UTILITY_CSS
 COMMON_BUTTON_CSS
 COMMON_SECTION_TITLE_CSS
 "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
-"</head><body><div class=section-title>Active Sessions</div><br>"
+"</head><body><div class=section-title>Active Sessions (Max %d)</div><br>"
 "<form method=post action=/Mail/DisSession?%s>"
 "<div class=table-wrap><table class=\"node-table status-grid\">"
 "<thead><tr><th scope=col class=num>Select</th><th scope=col>User</th><th scope=col>Callsign</th><th scope=col class=num>Stream</th><th scope=col class=num>Queue</th><th scope=col class=num>Sent</th><th scope=col class=num>Rxed</th></tr></thead><tbody>";
@@ -3095,23 +3095,21 @@ VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 	CIRCUIT * conn;
 	int i,n, SYSOPMsgs = 0, HeldMsgs = 0; 
 	char Name[80];
+	int active_sessions = 0;
 
 	SMTPMsgs = 0;
 
 	Len = sprintf(Reply, RefreshMainPage, BBSName, BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
 
-	Len += sprintf(&Reply[Len], StatusPage, Key);
+	Len += sprintf(&Reply[Len], StatusPage, NumberofStreams, Key);
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
 		conn=&Connections[n];
 
-		if (!conn->Active)
+		if (conn->Active)
 		{
-			Len += sprintf(&Reply[Len], "<tr><td class=num></td><td>Idle</td><td></td><td class=num></td><td class=num></td><td class=num></td><td class=num></td></tr>");
-		}
-		else
-		{
+			active_sessions++;
 			{
 				if (conn->UserPointer == 0)
 				{
@@ -3127,6 +3125,10 @@ VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 				}
 			}
 		}
+	}
+	if (active_sessions == 0)
+	{
+		Len += sprintf(&Reply[Len], "<tr><td colspan=7>No active sessions</td></tr>");
 	}
 
 	n = 0;
