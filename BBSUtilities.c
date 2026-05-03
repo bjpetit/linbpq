@@ -5059,20 +5059,18 @@ char * ReadInfoFile(char * File)
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
 {
 	struct tm *tm;
-	static char Date[]="xx-xxx hh:mmZ";
+	static char Date[30];
 
 	tm = gmtime(&Datim);
-	
-	if (tm)
-		sprintf_s(Date, sizeof(Date), "%02d-%3s %02d:%02dZ",
-					tm->tm_mday, month[tm->tm_mon], tm->tm_hour, tm->tm_min);
 
-	if (DateOnly)
-	{
-		Date[6]=0;
+	if (DateOnly) {
+		if (strftime(Date, sizeof(Date), "%e-%b-%Y", tm) == 0)
+			Date[0] = '?';
 		return Date;
 	}
-	
+
+	if (strftime(Date, sizeof(Date), "%e-%b-%Y %H:%M%Z", tm) == 0)
+		Date[0] = '?';
 	return Date;
 }
 
