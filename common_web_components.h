@@ -227,9 +227,20 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"*{animation-duration:0!important;transition-duration:0!important;}" \
 	"}"
 
+/* FOCUS RING STYLING - Consolidated
+ * COMMON_FOCUS_RING_STYLE - Core style properties for keyboard focus states
+ * Use with selectors: "selector{" COMMON_FOCUS_RING_STYLE "}"
+ * Or with pseudo-selector: "selector" COMMON_FOCUS_RING_STATE
+ */
+#define COMMON_FOCUS_RING_STYLE \
+	"outline:3px solid var(--focus-ring);outline-offset:2px;"
+
+#define COMMON_FOCUS_RING_STATE \
+	":focus-visible{" COMMON_FOCUS_RING_STYLE "}"
+
 #define COMMON_LINK_CSS \
 	"a{color:var(--link);}" \
-	"a:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+	"a" COMMON_FOCUS_RING_STATE
 
 #define COMMON_CSS_VARIABLES \
 	COMMON_CSS_ROOT \
@@ -299,7 +310,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"transition:background 0.15s ease;" \
 	"}" \
 	".menu a:hover,.menu .btn:hover{background:var(--surface-hover);}" \
-	".menu a:focus-visible,.menu .btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	".menu a" COMMON_FOCUS_RING_STATE \
+	".menu .btn" COMMON_FOCUS_RING_STATE \
 	".menu a:active,.menu .btn:active{background:var(--primary-dark);color:var(--on-primary);}" \
 	"@media(max-width:768px){" \
 	".menu-header{display:block;}" \
@@ -311,38 +323,34 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Max-width should be set per-application (980px for mail, 1100px for node)
 #define COMMON_MENU_CSS COMMON_MENU_CSS_TEMPLATE("%%")
 
-// WebMail menu base CSS variants.
-// These keep existing page-specific behavior while reducing duplicated rule blocks.
+/* CONSOLIDATED WEBMAIL MENU CSS
+ * Unified base styling with three specialized variants.
+ * All variants share common structure: toggle button + flex menu container with items.
+ * Differences parameterized: link selector, toggle behavior, item effects, container spacing.
+ */
+
+#define COMMON_WEBMAIL_MENU_BASE_CSS_TEMPLATE(PCT, LINK_SEL, TOGGLE_EXTRA, ITEM_EXTRA, MARGIN) \
+	".menu-header{display:none;margin-bottom:" MARGIN ";}" \
+	".menu-toggle{width:100" PCT ";min-height:48px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";color:var(--link);" TOGGLE_EXTRA "}" \
+	".menu-toggle" COMMON_FOCUS_RING_STATE \
+	".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:" MARGIN ";}" \
+	 LINK_SEL "{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";cursor:pointer;" ITEM_EXTRA "}" \
+	 LINK_SEL ":hover{background:var(--surface-hover);}" \
+	 LINK_SEL COMMON_FOCUS_RING_STATE \
+	 LINK_SEL ":active{background:var(--primary-dark);color:var(--on-primary);}"
+
+/* Variant 1: Button-based menu items (no special effects) */
 #define COMMON_WEBMAIL_MENU_BTN_BASE_CSS_TEMPLATE(PCT) \
-	".menu-header{display:none;margin-bottom:10px;}" \
-	".menu-toggle{width:100" PCT ";min-height:48px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";color:var(--link);}" \
-	".menu-toggle:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
-	".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:10px;}" \
-	".wm-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";cursor:pointer;}" \
-	".wm-btn:hover{background:var(--surface-hover);}" \
-	".wm-btn:active{background:var(--primary-dark);color:var(--on-primary);}" \
-	".wm-btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+	COMMON_WEBMAIL_MENU_BASE_CSS_TEMPLATE(PCT, ".wm-btn", "", "", "10px")
 
+/* Variant 2: Link-based menu with touch interaction on toggle and items */
 #define COMMON_WEBMAIL_MENU_LINK_TOUCH_BASE_CSS_TEMPLATE(PCT) \
-	".menu-header{display:none;margin-bottom:10px;}" \
-	".menu-toggle{width:100" PCT ";min-height:48px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";color:var(--link);cursor:pointer;touch-action:manipulation;font-weight:500;}" \
-	".menu-toggle:active{background:var(--surface-hover);}" \
-	".menu-toggle:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
-	".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:10px;}" \
-	".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";cursor:pointer;touch-action:manipulation;}" \
-	".wm-menu a:hover{background:var(--surface-hover);}" \
-	".wm-menu a:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
-	".wm-menu a:active{background:var(--primary-dark);color:var(--on-primary);}"
+	COMMON_WEBMAIL_MENU_BASE_CSS_TEMPLATE(PCT, ".wm-menu a", "cursor:pointer;touch-action:manipulation;font-weight:500;", "touch-action:manipulation;", "10px") \
+	".menu-toggle:active{background:var(--surface-hover);}"
 
+/* Variant 3: Link-based menu with smooth transition effect */
 #define COMMON_WEBMAIL_MENU_LINK_TRANSITION_BASE_CSS_TEMPLATE(PCT) \
-	".menu-header{display:none;margin-bottom:10px;}" \
-	".menu-toggle{width:100" PCT ";min-height:48px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";color:var(--link);}" \
-	".menu-toggle:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
-	".wm-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:16px;}" \
-	".wm-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--link);text-decoration:none;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";cursor:pointer;transition:background 0.15s ease;}" \
-	".wm-menu a:hover{background:var(--surface-hover);}" \
-	".wm-menu a:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
-	".wm-menu a:active{background:var(--primary-dark);color:var(--on-primary);}"
+	COMMON_WEBMAIL_MENU_BASE_CSS_TEMPLATE(PCT, ".wm-menu a", "", "transition:background 0.15s ease;", "16px")
 
 #define COMMON_WEBMAIL_MENU_BTN_BASE_CSS COMMON_WEBMAIL_MENU_BTN_BASE_CSS_TEMPLATE("%%")
 #define COMMON_WEBMAIL_MENU_LINK_TOUCH_BASE_CSS COMMON_WEBMAIL_MENU_LINK_TOUCH_BASE_CSS_TEMPLATE("%%")
@@ -379,17 +387,13 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_WEBMAIL_SHELL_980_CSS COMMON_WEBMAIL_SHELL_CSS_TEMPLATE("980px")
 #define COMMON_WEBMAIL_SHELL_1100_CSS COMMON_WEBMAIL_SHELL_CSS_TEMPLATE("1100px")
 
-#define COMMON_WEBMAIL_TITLE_STANDARD_CSS \
-	".wm-title{text-align:center;margin:0 0 12px 0;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:500;}"
-
 #define COMMON_WEBMAIL_TITLE_STRONG_CSS \
 	".wm-title{text-align:center;margin:0 0 16px;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,3vw,1.75rem);font-weight:600;color:var(--text);}"
 
-#define COMMON_SECTION_TITLE_CSS \
-	".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;}"
-
 #define COMMON_SECTION_TITLE_TEXT_CSS \
 	".section-title{text-align:center;font-family:" COMMON_FONT_TITLE ";font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;color:var(--text);}"
+
+#define COMMON_SECTION_TITLE_CSS COMMON_SECTION_TITLE_TEXT_CSS
 
 // WebMail utility popup shared CSS fragments.
 #define COMMON_WEBMAIL_POPUP_BODY_CENTER_CSS \
@@ -419,35 +423,92 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"body{font-family:" COMMON_FONT_MONO ";margin:10px;background:var(--bg);color:var(--text);}" \
 	"h2,h3{text-align:center;}" \
 	"table{border-collapse:collapse;margin:20px auto;}" \
-	"td{padding:8px;border:1px solid var(--border);}" \
+	"th,td{border:1px solid var(--border);padding:8px;}" \
+	"th{background:var(--table-header);font-weight:600;}" \
+	"tbody tr:nth-child(even){background:var(--table-stripe);}" \
 	"textarea{width:100%%;max-width:600px;display:block;margin:20px auto;background:var(--surface);color:var(--text);border:1px solid var(--border);}" 
 
 #define COMMON_MODEM_STATUS_TABLE_OPEN_HTML \
 	"<table style=\"border-collapse: collapse; margin: 20px auto;\" border=1 cellpadding=2 cellspacing=0>"
 
-#define COMMON_BTN_HOVER_NEUTRAL_CSS \
-	".btn:hover{background:var(--surface-hover);}"
+/* CONSOLIDATED BUTTON STYLES
+ * All .btn elements share this base styling and interaction states.
+ * This replaces the previous fragmented COMMON_BTN_* macros.
+ */
+#define COMMON_BTN_BASE_COMPLETE_CSS \
+	".btn{" \
+	"display:inline-flex;align-items:center;justify-content:center;" \
+	"min-height:44px;padding:10px 16px;" \
+	"background:var(--surface);border:1px solid var(--border-card);" \
+	"text-decoration:none;border-radius:6px;" \
+	"color:var(--text);box-sizing:border-box;" \
+	"font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);" \
+	"cursor:pointer;touch-action:manipulation;" \
+	"}" \
+	".btn:hover{background:var(--surface-hover);}" \
+	".btn" COMMON_FOCUS_RING_STATE \
+	"input.btn:active,button[type=submit].btn:active{background:var(--primary-dark);color:var(--on-primary);}"
 
-#define COMMON_BTN_HOVER_SOFT_CSS \
-	".btn:hover{background:var(--surface-soft);}"
+/* Backward-compatibility aliases for existing code */
+#define COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_BASE_COMPLETE_CSS
+#define COMMON_BTN_HOVER_NEUTRAL_CSS ""
+#define COMMON_BTN_ACTIVE_DARK_CSS ""
 
-#define COMMON_BTN_FOCUS_RING_CSS \
-	".btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+/* CONSOLIDATED INPUT STYLING
+ * All text inputs share this base styling and focus states.
+ * COMMON_INPUT_BASE_COMPLETE_CSS: Core styling for all input types (text, email, password, number, date, search, tel, url, select, textarea)
+ * COMMON_INPUT_FOCUS_CSS: Focus-visible state — alias for COMMON_FOCUS_RING_STATE
+ */
+#define COMMON_INPUT_FOCUS_CSS COMMON_FOCUS_RING_STATE
 
-#define COMMON_BTN_ACTIVE_DARK_CSS \
-	"input.btn:active{background:var(--primary-dark);color:var(--on-primary);}" \
-	"button[type=submit].btn:active{background:var(--primary-dark);color:var(--on-primary);}"
+#define COMMON_INPUT_BASE_COMPLETE_CSS \
+	"input[type=text],input[type=email],input[type=password],input[type=number],input[type=date]," \
+	"input[type=search],input[type=tel],input[type=url],select,textarea{" \
+	"padding:10px 12px;line-height:1.5;border:1px solid var(--border);border-radius:6px;" \
+	"background:var(--surface-soft);color:var(--text);box-sizing:border-box;min-height:44px;" \
+	"}" \
+	"input[type=text]::placeholder,input[type=email]::placeholder,input[type=password]::placeholder,input[type=number]::placeholder," \
+	"input[type=date]::placeholder,input[type=search]::placeholder,input[type=tel]::placeholder,input[type=url]::placeholder," \
+	"textarea::placeholder{color:var(--muted);}" \
+	"input[type=text]" COMMON_INPUT_FOCUS_CSS \
+	"input[type=email]" COMMON_INPUT_FOCUS_CSS \
+	"input[type=password]" COMMON_INPUT_FOCUS_CSS \
+	"input[type=number]" COMMON_INPUT_FOCUS_CSS \
+	"input[type=date]" COMMON_INPUT_FOCUS_CSS \
+	"input[type=search]" COMMON_INPUT_FOCUS_CSS \
+	"input[type=tel]" COMMON_INPUT_FOCUS_CSS \
+	"input[type=url]" COMMON_INPUT_FOCUS_CSS \
+	"select" COMMON_INPUT_FOCUS_CSS \
+	"textarea" COMMON_INPUT_FOCUS_CSS
 
-#define COMMON_BTN_PANEL_BASE_CSS \
-	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;background:var(--surface);text-decoration:none;border-radius:6px;border:1px solid var(--border-card);color:var(--text);box-sizing:border-box;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;}"
+/* Backward-compatibility alias for base padding/sizing only */
+#define COMMON_INPUT_BASE_CSS \
+	"padding:10px 12px;line-height:1.5;border:1px solid var(--border);border-radius:6px;" \
+	"background:var(--surface-soft);color:var(--text);box-sizing:border-box;min-height:44px;"
+
+/* COMMON_FORM_ROW_INPUT_CSS - Standardized styling for .form-row containers with inputs.
+ * Combines layout, width constraints, and responsive behavior for form fields.
+ */
+#define COMMON_FORM_ROW_INPUT_CSS \
+	".form-row input[type=text],.form-row input[type=email],.form-row input[type=password],.form-row input[type=number],.form-row input[type=date]," \
+	".form-row input[type=search],.form-row input[type=tel],.form-row input[type=url]," \
+	".form-row select{" COMMON_INPUT_BASE_CSS "font-family:" COMMON_FONT_MONO ";flex:1 1 auto;min-width:0;}" \
+	".form-row input[type=text]{flex:none;width:220px;}" \
+	".form-row input[type=number]{flex:none;width:96px;max-width:100%;}" \
+	".form-row input:focus-visible,.form-row select:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	"@media (max-width:768px){.form-row input[type=text],.form-row input[type=number]{width:100%;flex:1 1 auto;}}"
 
 #define COMMON_CHAT_STATUS_PAGE_CSS_TEMPLATE(PCT) \
 	".chat-shell{max-width:1100px;margin:0 auto;}" \
 	".chat-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}" \
-	".chat-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-card);padding:10px;min-width:0;}" \
+	".chat-section{padding:10px;min-width:0;" COMMON_CARD_CHROME_CSS "}" \
 	".chat-section h4{margin:4px 0 10px 0;font-size:clamp(14px,2vw,16px);text-align:center;}" \
 	".chat-section-wide{grid-column:1 / -1;}" \
-	".chat-grid{width:100" PCT ";}" \
+	".chat-grid{width:100" PCT ";border-collapse:collapse;}" \
+	".chat-grid th,​.chat-grid td{border:1px solid var(--border);padding:8px;}" \
+	".chat-grid th{background:var(--table-header);font-weight:600;}" \
+	".chat-grid tbody tr:nth-child(even){background:var(--table-stripe);}" \
+	".chat-grid tbody tr:hover{background:var(--surface-hover);}" \
 	".chat-grid tr.selectable{cursor:pointer;}" \
 	".chat-grid tr.selected td{background:var(--table-selected);}" \
 	".chat-status-form{margin:0;}" \
@@ -480,17 +541,18 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	COMMON_PANEL_CHROME_CSS \
 	"box-shadow:var(--shadow-card);"
 
-// Mail admin shared form/list snippets.
-// Keep these generic so page templates can layer their own layout specifics.
-#define COMMON_ADMIN_FIELD_THEME_CSS \
-	"input[type=text],input[type=number],input[type=password],input[type=input],select,textarea{background:var(--surface-soft);color:var(--text);border:1px solid var(--border);}" \
-	"input[type=text]::placeholder,input[type=number]::placeholder,input[type=password]::placeholder,input[type=input]::placeholder,textarea::placeholder{color:var(--muted);}" \
-	"input[type=text]:focus-visible,input[type=number]:focus-visible,input[type=password]:focus-visible,input[type=input]:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
+// Compact variants with 6px border-radius
+#define COMMON_PANEL_CHROME_CSS_6PX \
+	"border:1px solid var(--border);border-radius:6px;background:var(--surface);"
 
-// Admin button base. Normalizes .btn across all admin/config pages that link bpq.css.
-// Included in COMMON_BPQ_CSS_CONTENT; pages with bpq.css do not need to redeclare .btn inline.
-#define COMMON_ADMIN_BTN_BASE_CSS \
-	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;box-sizing:border-box;font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);font-weight:500;}"
+#define COMMON_CARD_CHROME_CSS_6PX \
+	COMMON_PANEL_CHROME_CSS_6PX \
+	"box-shadow:var(--shadow-card);"
+
+// Mail admin shared form/list snippets.
+// Now uses consolidated COMMON_INPUT_BASE_COMPLETE_CSS for standardized input styling.
+#define COMMON_ADMIN_FIELD_THEME_CSS \
+	COMMON_INPUT_BASE_COMPLETE_CSS
 
 // Node page shared heading classes. Safe (no %%) — included in COMMON_BPQ_CSS_CONTENT
 // so the Node Menu page (which links bpq.css) gets them without a second request.
@@ -503,10 +565,10 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_MAIL_STATUS_CSS \
 	".status-grid{width:100%;}" \
 	".status-actions input{min-width:160px;}" \
-	".stats-section{max-width:560px;margin:16px auto 0;padding:clamp(12px,2vw,18px);background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-card);}" \
+	".stats-section{max-width:560px;margin:16px auto 0;padding:clamp(12px,2vw,18px);" COMMON_CARD_CHROME_CSS_6PX "}" \
 	".stat-row{display:flex;align-items:center;gap:12px;margin:8px 0;}" \
 	".stat-row label{flex:1 1 220px;font-weight:600;font-size:clamp(0.8125rem,1.5vw,0.9375rem);line-height:1.3;}" \
-	".stat-row input{flex:0 0 130px;max-width:130px;padding:clamp(10px,1vw,14px) clamp(12px,1.5vw,16px);line-height:1.5;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;background:var(--surface-soft);color:var(--text);font-family:" COMMON_FONT_MONO ";font-size:clamp(0.875rem,2vw,1rem);font-variant-numeric:tabular-nums;text-align:right;min-height:44px;}" \
+	".stat-row input{flex:0 0 130px;max-width:130px;" COMMON_INPUT_BASE_CSS "font-family:" COMMON_FONT_MONO ";font-size:clamp(0.875rem,2vw,1rem);font-variant-numeric:tabular-nums;text-align:right;}" \
 	"@media(max-width:768px){.status-grid th,.status-grid td{padding:8px 6px;}.stats-section{margin-top:12px;padding:12px;}.stat-row{flex-direction:column;align-items:stretch;gap:6px;}.stat-row label{flex:none;width:100%;}.stat-row input{flex:1 1 auto;max-width:none;width:100%;min-height:48px;text-align:left;}}"
 
 // White Pages detail form — AJAX-injected into mail pages that already load bpq.css.
@@ -516,8 +578,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".wp-box{background:var(--surface);padding:15px;border-radius:4px;margin:15px 0;box-shadow:var(--shadow-card);}" \
 	".wp-row{display:flex;flex-wrap:wrap;margin:10px 0;gap:10px;align-items:flex-start;}" \
 	".wp-label{flex:1 1 100px;font-weight:bold;padding-top:2px;}" \
-	".wp-input-text{flex:2 1 200px;padding:8px;border:1px solid var(--border);border-radius:4px;}" \
-	".wp-input-small{flex:none;width:100px;padding:8px;border:1px solid var(--border);border-radius:4px;}" \
+	".wp-input-text{flex:2 1 200px;" COMMON_INPUT_BASE_CSS "}" \
+	".wp-input-small{flex:none;width:100px;" COMMON_INPUT_BASE_CSS "}" \
 	".wp-input-readonly{background:var(--surface-soft);color:var(--text);}" \
 	".wp-actions{text-align:center;margin:20px 0;position:sticky;bottom:0;background:var(--surface);padding:12px;border-top:1px solid var(--border-light);z-index:10;}" \
 	".wp-btn{background:var(--primary);color:var(--on-primary);padding:10px 20px;border:none;border-radius:4px;cursor:pointer;margin:5px;touch-action:manipulation;min-height:44px;}" \
@@ -528,12 +590,13 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Uses single % for CSS (corrects the latent %% bug from when this was a sprintf format).
 #define COMMON_MAIL_DETAIL_CSS \
 	"h3{text-align:center;margin-bottom:20px;}" \
-	".form-section{background:var(--surface);padding:clamp(12px,4vw,20px);border-radius:8px;box-shadow:var(--shadow-card);margin:15px 0;}" \
+	".form-section{padding:clamp(12px,4vw,20px);margin:15px 0;" COMMON_CARD_CHROME_CSS "}" \
 	".form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 20px;margin:16px 0;}" \
 	".form-field{display:flex;flex-direction:column;gap:6px;}" \
 	".form-field label{font-weight:600;font-size:clamp(13px,1.5vw,15px);color:var(--text);text-transform:uppercase;letter-spacing:0.3px;}" \
-	".form-field input,.form-field select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:clamp(14px,2vw,16px);transition:border-color 0.15s ease,box-shadow 0.15s ease;min-height:44px;font-family:" COMMON_FONT_MONO ";}" \
-	".form-field input:focus-visible,.form-field select:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	".form-field input,.form-field select{" COMMON_INPUT_BASE_CSS "font-family:" COMMON_FONT_MONO ";font-size:clamp(14px,2vw,16px);transition:border-color 0.15s ease,box-shadow 0.15s ease;}" \
+	".form-field input" COMMON_INPUT_FOCUS_CSS \
+	".form-field select" COMMON_INPUT_FOCUS_CSS \
 	".form-row-full{grid-column:1/-1;}" \
 	"input{background:var(--surface-soft);color:var(--text);}" \
 	"input[readonly]{cursor:not-allowed;}" \
@@ -673,8 +736,9 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".table-wrap{width:100" PCT ";max-width:1100px;margin:0 auto 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
 	".aprs-station-table{border-collapse:collapse;font-family:" COMMON_FONT_MONO ";}" \
 	".aprs-station-table th,.aprs-station-table td{border:1px solid var(--border);padding:8px;white-space:nowrap;}" \
-	".aprs-station-table th{background:var(--table-header);text-align:left;}" \
+	".aprs-station-table th{background:var(--table-header);text-align:left;font-weight:600;}" \
 	".aprs-station-table tbody tr:nth-child(even){background:var(--table-stripe);}" \
+	".aprs-station-table tbody tr:hover{background:var(--surface-hover);}" \
 	"@media(max-width:768px){" \
 	".aprs-station-table-stack,.aprs-station-table-stack tbody,.aprs-station-table-stack tr,.aprs-station-table-stack td{display:block;width:100" PCT ";}" \
 	".aprs-station-table-stack tr{margin:0 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:6px;}" \
@@ -684,7 +748,9 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}" \
 	".aprs-weather-table{border-collapse:collapse;margin:0 auto 12px;}" \
 	".aprs-weather-table th,.aprs-weather-table td{border:1px solid var(--border);padding:8px;white-space:nowrap;}" \
-	".aprs-weather-table th{background:var(--table-header);}" \
+	".aprs-weather-table th{background:var(--table-header);font-weight:600;}" \
+	".aprs-weather-table tbody tr:nth-child(even){background:var(--table-stripe);}" \
+	".aprs-weather-table tbody tr:hover{background:var(--surface-hover);}" \
 	".aprs-map{width:100" PCT ";max-width:600px;height:500px;border:0;display:block;margin:10px auto;}" \
 	".aprs-note{text-align:center;font-style:italic;margin:8px 0;}" \
 	".aprs-station-title{text-align:center;font-size:1.2rem;margin:12px 0;}" \
@@ -699,7 +765,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".menu-wrapper{background:var(--bg);padding:10px 10px 0;}" \
 	".menu{max-width:1100px;margin:0 auto 10px;}" \
 	".menu a{font-size:16px;}" \
-	".aprs-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-width:1100px;margin:0 auto 10px;padding:10px 12px;}" \
+	".aprs-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;max-width:1100px;margin:0 auto 10px;padding:10px 12px;" COMMON_CARD_CHROME_CSS_6PX "}" \
 	".aprs-controls label{display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:15px;}" \
 	".aprs-controls input[type=checkbox]{width:18px;height:18px;margin:0;}" \
 	"#map{flex:1 1 auto;min-height:320px;width:100" PCT ";margin:0;}" \
@@ -717,12 +783,13 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".aprs-msg-table-wrap{width:100" PCT ";overflow-x:auto;-webkit-overflow-scrolling:touch;}" \
 	".aprs-msg-table{width:max-content;min-width:100" PCT ";border-collapse:collapse;background:var(--surface);}" \
 	".aprs-msg-table th,.aprs-msg-table td{border:1px solid var(--border);padding:8px;white-space:nowrap;}" \
-	".aprs-msg-table th{background:var(--table-header);text-align:left;}" \
+	".aprs-msg-table th{background:var(--table-header);text-align:left;font-weight:600;}" \
 	".aprs-msg-table tbody tr:nth-child(even){background:var(--table-stripe);}" \
+	".aprs-msg-table tbody tr:hover{background:var(--surface-hover);}" \
 	".aprs-msg-form{max-width:900px;margin:0 auto;background:var(--surface);border:1px solid var(--border-card);border-radius:8px;padding:14px;box-shadow:var(--shadow-card);}" \
 	".aprs-msg-form table{width:100" PCT ";border-collapse:collapse;}" \
 	".aprs-msg-form td{padding:8px;vertical-align:top;}" \
-	".aprs-msg-form input[type=text]{width:100" PCT ";padding:8px;border:1px solid var(--border-card);border-radius:4px;box-sizing:border-box;background:var(--surface-soft);color:var(--text);font-family:inherit;}" \
+	".aprs-msg-form input[type=text]{width:100" PCT ";" COMMON_INPUT_BASE_CSS "border:1px solid var(--border-card);font-family:inherit;}" \
 	".aprs-msg-form input[type=text]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
 	".aprs-msg-actions{text-align:center;margin-top:10px;}" \
 	".aprs-msg-actions input[type=submit]{min-height:44px;padding:10px 16px;background:var(--surface);border:1px solid var(--border-card);border-radius:6px;cursor:pointer;margin:0 6px;color:var(--text);font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);font-family:" COMMON_FONT_TITLE ";}" \
@@ -743,8 +810,9 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".portstats-chart{display:block;width:100%;max-width:900px;height:auto;border:1px solid #d3d3d3;background:var(--surface);margin:10px auto;}" \
 	".portstats-note{text-align:center;margin:8px 0 14px;}"
 
-// Common responsive table styles
+// Common Responsive table styles
 // Use classes: table-wrap, node-table, node-table-stack, num/text/center
+// Core table styling shared across all table variants
 #define COMMON_TABLE_FONT_SIZE "clamp(0.75rem,0.65rem + 1vw,0.9375rem)"
 #define COMMON_TABLE_FONT_SIZE_COMPACT "clamp(0.6875rem,0.62rem + 0.45vw,0.8125rem)"
 
@@ -792,15 +860,14 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}" \
 	"h3{text-align:center;margin:8px 0 12px;}"
 
-#define COMMON_COMPACT_TABLE_CSS \
+#define COMMON_COMPACT_TABLE_CSS_TEMPLATE(PADDING) \
 	"table{border-collapse:collapse;margin:10px 0;}" \
-	"th,td{border:1px solid var(--border);padding:3px 7px;text-align:left;}" \
+	"th,td{border:1px solid var(--border);padding:" PADDING ";text-align:left;}" \
 	"th{background:var(--table-header);font-weight:bold;}"
 
-#define COMMON_COMPACT_TABLE_PADDED_CSS \
-	"table{border-collapse:collapse;margin:10px 0;}" \
-	"th,td{border:1px solid var(--border);padding:5px 10px;text-align:left;}" \
-	"th{background:var(--table-header);font-weight:bold;}"
+// Compact (tight) and padded (comfortable) table variants
+#define COMMON_COMPACT_TABLE_CSS        COMMON_COMPACT_TABLE_CSS_TEMPLATE("3px 7px")
+#define COMMON_COMPACT_TABLE_PADDED_CSS COMMON_COMPACT_TABLE_CSS_TEMPLATE("5px 10px")
 
 #define COMMON_BTN_PRIMARY_COMPACT_CSS \
 	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;background:var(--primary);color:var(--on-primary);border:none;border-radius:4px;cursor:pointer;font-size:12px;box-sizing:border-box;}"
@@ -808,11 +875,13 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_BTN_PRIMARY_COMPACT_INTERACTION_CSS \
 	".btn:hover,.btn:focus{background:var(--primary-dark);outline:2px solid var(--focus-ring);outline-offset:2px;}"
 
-#define COMMON_MONO_PAGE_CLAMP_MARGIN0_PAD10_CSS \
-	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 0; padding: 10px; background: var(--bg); color: var(--text); }"
+// MARGIN: e.g. "0" or "4px"; PADDING: e.g. "10px" or "0"
+#define COMMON_MONO_PAGE_CLAMP_CSS_TEMPLATE(MARGIN, PADDING) \
+	"body{font-family:" COMMON_FONT_MONO ";font-size:clamp(1rem,0.96rem + 0.22vw,1.125rem);margin:" MARGIN ";padding:" PADDING ";background:var(--bg);color:var(--text);}"
 
-#define COMMON_MONO_PAGE_CLAMP_MARGIN4_CSS \
-	"body { font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); margin: 4px; background: var(--bg); color: var(--text); }"
+// Backward-compat aliases
+#define COMMON_MONO_PAGE_CLAMP_MARGIN0_PAD10_CSS COMMON_MONO_PAGE_CLAMP_CSS_TEMPLATE("0", "10px")
+#define COMMON_MONO_PAGE_CLAMP_MARGIN4_CSS       COMMON_MONO_PAGE_CLAMP_CSS_TEMPLATE("4px", "0")
 
 #define COMMON_MONO_COMPACT_TEXT_CSS \
 	"font-family: " COMMON_FONT_MONO "; font-size: " COMMON_TABLE_FONT_SIZE ";"
@@ -926,7 +995,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}" \
 	".form-row input[type=text],.form-row input[type=number],.form-row input[type=password],.form-row select{" \
 	"flex:2 1 200px;" \
-	"padding:8px;" \
+	"padding:10px 12px;" \
+	"line-height:1.5;" \
 	"border:1px solid var(--border);" \
 	"border-radius:4px;" \
 	"font-size:clamp(1rem,0.95rem + 0.2vw,1.0625rem);" \
@@ -1058,11 +1128,11 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"h2,h3{text-align:center;font-family:" COMMON_FONT_TITLE ";}" \
 	"h2{font-size:clamp(1.5rem,4vw,2.25rem);}" \
 	"h3{font-size:clamp(1.25rem,3vw,1.75rem);}" \
-	".form-container{max-width:400px;margin:20px auto;padding:20px;border:1px solid var(--border);border-radius:6px;background:var(--surface);}" \
+	".form-container{max-width:400px;margin:20px auto;padding:20px;" COMMON_CARD_CHROME_CSS_6PX "}" \
 	".form-row{margin:15px 0;}" \
 	"label{display:block;margin-bottom:5px;}" \
-	"input[type=text],input[type=password]{width:100%%;padding:8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;min-height:44px;font-size:clamp(1rem,2vw,1rem);font-family:" COMMON_FONT_TITLE ";background:var(--surface);color:var(--text);}" \
-	"input[type=text]:focus-visible,input[type=password]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	"input[type=text],input[type=password]{width:100%%;font-size:clamp(1rem,2vw,1rem);font-family:" COMMON_FONT_TITLE ";background:var(--surface);}" \
+	COMMON_INPUT_BASE_COMPLETE_CSS \
 	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;background:var(--surface);text-decoration:none;border-radius:6px;border:1px solid var(--border);color:var(--text);box-sizing:border-box;font-size:clamp(1rem,0.94rem + 0.25vw,1.125rem);cursor:pointer;margin-right:10px;margin-top:10px;}" \
 	".btn:hover{background:var(--surface-hover);}" \
 	".btn:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}" \
@@ -1122,10 +1192,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	COMMON_MENU_CSS_TEMPLATE("%") \
 	COMMON_CHAT_STATUS_PAGE_CSS \
 	COMMON_ADMIN_FIELD_THEME_CSS \
-	COMMON_ADMIN_BTN_BASE_CSS \
-	COMMON_BTN_HOVER_NEUTRAL_CSS \
-	COMMON_BTN_FOCUS_RING_CSS \
-	COMMON_BTN_ACTIVE_DARK_CSS \
+	COMMON_BTN_BASE_COMPLETE_CSS \
 	COMMON_APRS_PORTSTATS_CHROME_CSS \
 	COMMON_MAIL_STATUS_CSS \
 	COMMON_WP_DETAIL_CSS \
@@ -1141,9 +1208,11 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // across Node compact pages (StreamStatus, RigControl). Includes compact-page body
 // and table styles, plus primary-colour compact buttons. Does not include
 // .node-h2/.node-h3 (those are in bpq.css) or large table/form CSS that uses %%.
+// Only the padded variant is included — both CSS variants share the same
+// unscoped selectors (table/th/td), so including both would have the second
+// override the first; PADDED (5px 10px) is the intentional final value.
 #define COMMON_NODE_CSS_CONTENT \
 	COMMON_COMPACT_PAGE_CSS \
-	COMMON_COMPACT_TABLE_CSS \
 	COMMON_COMPACT_TABLE_PADDED_CSS \
 	COMMON_BTN_PRIMARY_COMPACT_CSS \
 	COMMON_BTN_PRIMARY_COMPACT_INTERACTION_CSS
