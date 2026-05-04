@@ -3026,7 +3026,7 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 		".port-row-header{display:flex;flex-wrap:wrap;margin:10px 0;gap:15px;font-weight:bold;font-size:0.9em;}"
 		".port-row-label{flex:0 1 120px;}"
 		".port-row input[type=checkbox]{margin:0;}"
-		".port-row input[type=text]{flex:2 1 200px;padding:8px;border:1px solid var(--border);background:var(--surface-soft);color:var(--text);border-radius:6px;font-family:" COMMON_FONT_MONO ";}"
+		".port-row input[type=text]{flex:2 1 200px;" COMMON_INPUT_BASE_CSS "font-family:" COMMON_FONT_MONO ";}"
 		".port-row input[type=text]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}"
 		".port-row span{flex:1 1 120px;}"
 		"@media(max-width:768px){.port-row{flex-direction:column;align-items:flex-start;}.port-row input[type=text]{width:100%%;flex:none;}.port-row-header{flex-direction:column;align-items:flex-start;}}"

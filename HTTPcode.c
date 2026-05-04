@@ -179,7 +179,7 @@ char Tail[] = "</body></html>";
 	".dropdown-content a:focus-visible, .dropdown-content .btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }" \
 	".dropdown-content form { margin: 0; }" \
 	".dropdown-content label { display: block; margin-bottom: 8px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); font-family: " COMMON_FONT_TITLE "; }" \
-	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); min-height: 44px; font-family: " COMMON_FONT_TITLE "; }" \
+	".dropdown-content input[type='date'] { width: 100%%; margin-top: 4px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); " COMMON_INPUT_BASE_CSS " font-family: " COMMON_FONT_TITLE "; }" \
 	".dropdown-content input[type='submit'] { width: 100%%; margin-top: 6px; font-family: " COMMON_FONT_TITLE "; }" \
 	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid var(--border-light); padding-top: 6px; }" \
 	".mgmt-section.show { display: block; }" \
@@ -309,7 +309,7 @@ char InputLine[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_UTF8 "<style>" COMMO
 COMMON_NODE_TERM_IO_COLORS_CSS
 "body { background: var(--term-io-bg); color: var(--term-io-text); font-family: " COMMON_FONT_MONO "; padding: 5px; height: 100%%; display: flex; align-items: center; } "
 "form { width: 100%%; margin: 0; } "
-"#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid var(--border-card); border-radius: 6px; box-sizing: border-box; font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); background: var(--term-io-bg); color: var(--term-io-text); overflow: hidden; white-space: nowrap; }"
+"#inp { width: 100%%; " COMMON_INPUT_BASE_CSS " border: 1px solid var(--border-card); font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); background: var(--term-io-bg); color: var(--term-io-text); overflow: hidden; white-space: nowrap; }"
 "</style></head><body>"
 "<form name=inputform method=post action=/TermInput?%s>"
 "<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
@@ -728,7 +728,7 @@ struct HTTPConnectionInfo * FindSession(char * Key)
 
 void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
-	char _REPLYBUFFER[9000];
+	char _REPLYBUFFER[10000];
 	int ReplyLen;
 	char Header[1024];
 	int HeaderLen;
