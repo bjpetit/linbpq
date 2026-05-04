@@ -12114,7 +12114,7 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 	char log_file[50] = "pg.log";
 	char call[10];
 	char data[256];
-	char line[270];
+	char line[256];
 	size_t bufsize = 80;
 
 	strcpy(pg_dir, BaseDir);
@@ -12149,7 +12149,7 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 
 	conn->InputBufferLen = 0;
 
-	char buf[400];
+	char buf[512];
 
 	snprintf (buf, sizeof(buf), "%s %s", line, data); // buf is command to exec
 //	printf ("PG exec cmd %s\n", buf); 

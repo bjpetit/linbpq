@@ -115,6 +115,19 @@ int CompareNode(const void *a, const void *b);
 int CompareAlias(const void *a, const void *b);
 int CompareRoutes(const void * a, const void * b);
 
+static int SendSharedAsset(SOCKET sock, const char * ContentType, const char * Content, int ContentLen)
+{
+	char Header[1024];
+	int HeaderLen = sprintf(Header,
+		"HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: %s\r\nCache-Control: max-age=86400\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n",
+		ContentLen, ContentType);
+
+	sendandcheck(sock, Header, HeaderLen);
+	sendandcheck(sock, Content, ContentLen);
+
+	return 0;
+}
+
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen, char * Token);
 void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
@@ -179,7 +192,7 @@ char Tail[] = "</body></html>";
 	".dropdown-content a:focus-visible, .dropdown-content .btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }" \
 	".dropdown-content form { margin: 0; }" \
 	".dropdown-content label { display: block; margin-bottom: 8px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); font-family: " COMMON_FONT_TITLE "; }" \
-	".dropdown-content input[type='date'] { width: 100%%; box-sizing: border-box; margin-top: 4px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); min-height: 44px; font-family: " COMMON_FONT_TITLE "; }" \
+	".dropdown-content input[type='date'] { width: 100%%; margin-top: 4px; font-size: clamp(1rem,0.95rem + 0.2vw,1.0625rem); " COMMON_INPUT_BASE_CSS " font-family: " COMMON_FONT_TITLE "; }" \
 	".dropdown-content input[type='submit'] { width: 100%%; margin-top: 6px; font-family: " COMMON_FONT_TITLE "; }" \
 	".mgmt-section { display: none; margin-top: 6px; border-top: 1px solid var(--border-light); padding-top: 6px; }" \
 	".mgmt-section.show { display: block; }" \
@@ -309,7 +322,7 @@ char InputLine[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_UTF8 "<style>" COMMO
 COMMON_NODE_TERM_IO_COLORS_CSS
 "body { background: var(--term-io-bg); color: var(--term-io-text); font-family: " COMMON_FONT_MONO "; padding: 5px; height: 100%%; display: flex; align-items: center; } "
 "form { width: 100%%; margin: 0; } "
-"#inp { width: 100%%; height: 40px; padding: 8px; border: 1px solid var(--border-card); border-radius: 6px; box-sizing: border-box; font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); background: var(--term-io-bg); color: var(--term-io-text); overflow: hidden; white-space: nowrap; }"
+"#inp { width: 100%%; " COMMON_INPUT_BASE_CSS " border: 1px solid var(--border-card); font-family: " COMMON_FONT_MONO "; font-size: clamp(0.75rem,0.65rem + 1vw,0.9375rem); background: var(--term-io-bg); color: var(--term-io-text); overflow: hidden; white-space: nowrap; }"
 "</style></head><body>"
 "<form name=inputform method=post action=/TermInput?%s>"
 "<input id=inp type=text name=input autocomplete=off style=\"%s\" />"
@@ -728,7 +741,7 @@ struct HTTPConnectionInfo * FindSession(char * Key)
 
 void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
-	char _REPLYBUFFER[9000];
+	char _REPLYBUFFER[10000];
 	int ReplyLen;
 	char Header[1024];
 	int HeaderLen;
@@ -2035,6 +2048,29 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			}
 		}
 
+
+		if (_stricmp(Context, "/bpq/bpq.css") == 0 || _stricmp(Context, "bpq/bpq.css") == 0 ||
+			_stricmp(Context, "/bpq.css") == 0 || _stricmp(Context, "bpq.css") == 0 ||
+			_stricmp(Context, "/Node/bpq.css") == 0 || _stricmp(Context, "Node/bpq.css") == 0)
+		{
+			static const char Content[] = COMMON_BPQ_CSS_CONTENT;
+			return SendSharedAsset(sock, "text/css", Content, (int)strlen(Content));
+		}
+
+		if (_stricmp(Context, "/bpq/bpq.js") == 0 || _stricmp(Context, "bpq/bpq.js") == 0 ||
+			_stricmp(Context, "/bpq.js") == 0 || _stricmp(Context, "bpq.js") == 0 ||
+			_stricmp(Context, "/Node/bpq.js") == 0 || _stricmp(Context, "Node/bpq.js") == 0)
+		{
+			static const char Content[] = COMMON_BPQ_JS_CONTENT;
+			return SendSharedAsset(sock, "application/javascript", Content, (int)strlen(Content));
+		}
+
+		if (_stricmp(Context, "/bpq/node.css") == 0 || _stricmp(Context, "bpq/node.css") == 0)
+		{
+			static const char Content[] = COMMON_NODE_CSS_CONTENT;
+			return SendSharedAsset(sock, "text/css", Content, (int)strlen(Content));
+		}
+
 		// APRS process internally, including shared /bpq static assets
 
 		if (_memicmp(Context, "/APRS/", 6) == 0 || _stricmp(Context, "/APRS") == 0 ||
@@ -2818,7 +2854,7 @@ doHeader:
 				else
 				{
 					char _REPLYBUFFER[4096];	
-					ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorizedxx - please sign in</B>");
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
 					send(sock, Header, HeaderLen, 0);
