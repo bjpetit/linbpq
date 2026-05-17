@@ -5624,6 +5624,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		RIG = &PORT->Rigs[0];
 		RIG->RIGOK = TRUE;
 		RIG->PORT = PORT;
+		RIG->RIG_DEBUG = RIG_DEBUG;
 
 		strcpy(PORT->IOBASE, ptr);
 		strcpy(RIG->RigName, "FLRIG");
@@ -5657,6 +5658,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		RIG = &PORT->Rigs[0];
 		RIG->RIGOK = TRUE;
 		RIG->PORT = PORT;
+		RIG->RIG_DEBUG = RIG_DEBUG;
 
 		strcpy(PORT->IOBASE, ptr);
 		strcpy(RIG->RigName, "HAMLIB");
@@ -5690,6 +5692,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		RIG = &PORT->Rigs[0];
 		RIG->RIGOK = TRUE;
 		RIG->PORT = PORT;
+		RIG->RIG_DEBUG = RIG_DEBUG;
 
 		strcpy(PORT->IOBASE, ptr);
 		strcpy(RIG->RigName, "RTLUDP");
@@ -5765,7 +5768,7 @@ AngelRigFound:
 		RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
 		RIG->RIGOK = TRUE;
 		RIG->PORT = PORT;
-		RIG->RigAddr = device;
+		RIG->RIG_DEBUG = RIG_DEBUG;
 		RIG->Channel = channel;
 
 		strcpy(RIG->RigName, Name);

@@ -16,6 +16,7 @@ struct MsgInfo * GetMsgFromNumber(int msgno);
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP);
 char * doXMLTransparency(char * string);
 
+extern BOOL M0LTEMap;
 
 // Constants
 #define TOKEN_SIZE 32 // Length of the authentication token
@@ -856,6 +857,10 @@ void SendBBSDataToPktMapThread(void * Param);
 
 void SendBBSDataToPktMap()
 {
+#ifdef LINBPQ
+	if (M0LTEMap == 0)
+		return;
+#endif
 	_beginthread(SendBBSDataToPktMapThread, 0, 0);
 }
 
@@ -994,6 +999,10 @@ void SendBBSDataToPktMapThread(void * Param)
 			// Have R Lines
 
 			Rlineend = strstr(Rlineptr, "\r\n");
+	
+			if (Rlineend == 0)
+				break;
+
 			Rlineend[0] = 0;
 			ptr2 += sprintf(ptr2, "\"%s\",", Rlineptr);
 

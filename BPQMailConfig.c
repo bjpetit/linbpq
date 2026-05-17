@@ -1917,6 +1917,15 @@ VOID SaveFWDConfig(HWND hDlg)
 		ForwardingInfo->MaxFBBBlockSize = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
 		ForwardingInfo->ConTimeout = GetDlgItemInt(hDlg, IDC_CONTIMEOUT,&OK , FALSE);
 
+		// Don't allow blocked uncompressed
+
+		if (ForwardingInfo->AllowBlocked)
+			ForwardingInfo->AllowCompressed = 1;
+
+		if (ForwardingInfo->AllowCompressed)
+			ForwardingInfo->AllowBlocked = 1;
+
+
 		GetDlgItemText(hDlg, IDC_BBSHA, BBSHA, 50);
 		if (ForwardingInfo->BBSHA)
 			free(ForwardingInfo->BBSHA);

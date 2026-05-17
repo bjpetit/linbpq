@@ -1314,7 +1314,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix handling of disconnects when using RHP (17) 
 //	Fix propagating unreachable in INP3 (18)
 //	Add STOPROUTE and STARTROUTE commands (21)
-
+//	Fix resolver loop if no Internet (24)
+//	Support SSID -L for Winlink local messages (25)
+//	Fix crash when APRS pages requested when APRS isn't configured (26)
+//	Add setting  modem params to QTSM command (28)
+//	Security fixes (28)
 
 
 #define CKernel

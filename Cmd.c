@@ -161,6 +161,9 @@ extern int RigReconfigFlag;
 extern int DEBUGINP3;
 extern int PREFERINP3ROUTES;
 
+extern char FX25Modes[8][8];
+extern char IL2PModes[8][10];
+
 
 struct CMDX COMMANDS[];
 
@@ -168,6 +171,7 @@ int CMDXLEN	= sizeof (struct CMDX);
 
 VOID SENDNODESMSG(int Portnum);
 VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD);
+VOID LORACMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD);
 VOID STOPCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD);
 VOID STARTCMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD);
 VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD);
@@ -2581,7 +2585,6 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct C
 	int haveService = 0;
 	int i = 0;
 
-
 #ifdef EXCLUDEBITS
 
 	if (CheckExcludeList(Session->L4USER) == FALSE)
@@ -4700,6 +4703,7 @@ struct CMDX COMMANDS[] =
 
 	"FINDBUFFS   ",4,FINDBUFFS,0,
 	"KISS        ",4,KISSCMD,0,
+	"LORA        ",4,LORACMD,0,
 	"GETPORTCTEXT",9,GetPortCTEXT, 0,
 
 
@@ -6186,14 +6190,17 @@ VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 
 			KISS = (struct KISSINFO *) PORT;
 
-			// Send Command
+			// Set Channel bits
 
-			KissLen = KissEncode(KissString, ENCBUFF, KissLen);
+			KissString[0] |= KISS->OURCTRL;
+
+			// Send Command
 
 			PORT->Session = Session;
 			PORT->LastKISSCmdTime = time(NULL);
 
 			PORT = (struct PORTCONTROL *)KISS->FIRSTPORT;			// ALL FRAMES GO ON SAME Q
+			KissLen = KissEncode(KissString, ENCBUFF, KissLen);
 			ASYSEND(PORT, ENCBUFF, KissLen);
 
 			Bufferptr = Cmdprintf(Session, Bufferptr, "Command Sent\r");
@@ -6211,6 +6218,79 @@ VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
 }
+
+VOID LORACMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD)
+{
+	char _REPLYBUFFER[1000] = "";
+	char * ptr, * Context;
+
+	int portno = 0;
+	struct PORTCONTROL * PORT = PORTTABLE;
+	int n = NUMBEROFPORTS;
+	UCHAR KissString[128];
+	UCHAR ENCBUFF[256];
+	int KissLen = 0;
+	unsigned char * Kissptr = KissString;
+	int Param[4];
+	int i = 0;
+
+	// Send CONFIG Command to LORA TNC
+
+	// Get port number
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+	{
+		portno = atoi(ptr);
+		ptr = strtok_s(NULL, " ", &Context);
+
+		while (ptr && ptr[0] && KissLen < 120)
+		{
+			Param[i++] = atoi(ptr);
+			ptr = strtok_s(NULL, " ", &Context);
+		}
+	}
+
+	if (portno == 0 || i != 4)
+	{
+		char ErrMsg[] = "Invalid params - format is LORA port freq bandwidth  spreading factor coding rate";
+		strcpy(Bufferptr, ErrMsg);
+		Bufferptr += (int)strlen(ErrMsg);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+
+	while (n--)
+	{
+		if (PORT->PORTNUMBER == portno)
+		{
+			KissLen = sprintf(KissString, "%cLORA=%d, %d, %d, %d", 6, Param[0], Param[1], Param[2], Param[3]);
+			KissLen = KissEncode(KissString, ENCBUFF, KissLen);
+
+			PORT->Session = Session;
+			PORT->LastKISSCmdTime = time(NULL);
+
+			ASYSEND(PORT, ENCBUFF, KissLen);
+
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Command Sent\r");
+			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+			return;
+		}
+
+		PORT = PORT->PORTPOINTER;
+	}
+
+	// Bad port
+
+	strcpy(Bufferptr, BADPORT);
+	Bufferptr += (int)strlen(BADPORT);
+	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+	return;
+
+}
+
 
 
 VOID FINDBUFFS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD)
@@ -6400,6 +6480,13 @@ VOID UZ7HOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct
 	Cmd = strlop(CmdTail, ' ');
 	port = atoi(CmdTail);
 
+	if (Cmd == 0)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Missing params - usage is UZ7HO port Command\r", port);
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
 	// remove trailing spaces 
 
 	while(strlen(Cmd) && Cmd[strlen(Cmd) - 1] == ' ')
@@ -6457,15 +6544,45 @@ VOID UZ7HOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct
 	return;
 }
 
+#define QTSMKISSCMD 7
+#define MODEMREPORT 1		// QTSM Modem Info subcommand
+#define SETMODEMPARAMS 2	// QtSM Moden change settings
+
+
 VOID QTSMCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD)
 {
 	int port;
 	struct PORTCONTROL * PORT;
 	struct KISSINFO * KISS;
+	NPASYINFO Port;
+	char * ptr, * context;
+	UCHAR KissString[128] = "";
+	UCHAR ENCBUFF[256];
+	int KissLen = 0;
+	unsigned char * Data = KissString;
+	int fx25_mode = 0;
+	int il2p_mode = 0;
+	int il2p_crc = 0;
+	int i;
+
 
 	CmdTail = CmdTail + (OrigCmdBuffer - COMMANDBUFFER); // Replace with original case version
 
-	port = atoi(CmdTail);
+	ptr = strtok_s(CmdTail, " ,\r", &context);
+
+	if (_stricmp(ptr, "HELP") == 0)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "QTSM portno displays QTSM configuration info (if avaliable)\r", ptr);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Modem, Centre Freq, fx25 flags and il2p flags can be changed if you have sysop access. All prameters are optional.\r", ptr);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "The Modem name (if used) must come first. Others can be entered in any order. Values should be comma separated.\r", ptr);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "For example QTSM 1 AFSK AX.25 1200bd, 1700, fx25 none, il2p only\r", ptr);
+		Bufferptr = Cmdprintf(Session, Bufferptr, "            QTSM 1 il2p rx+tx\r", ptr);
+
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	port = atoi(ptr);
 
 	PORT = GetPortTableEntryFromPortNum(port);
 
@@ -6475,22 +6592,193 @@ VOID QTSMCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
-	
+
 	KISS = (struct KISSINFO *)PORT;
 
-	if (KISS->QtSMModem == 0)
+	Port = KISSInfo[PORT->PORTNUMBER];
+
+	if (Port)
 	{
-		Bufferptr = Cmdprintf(Session, Bufferptr, "Error - Port %d has no QtSM information\r", port);
+		// Check if connected
+
+		if (PORT->KISSTCP)
+		{
+			if (Port->Connected == 0)
+			{
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Error - QTSM not connected\r", port);
+				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+				return;
+			}
+		}		
+	}
+
+	if (context == 0 || context[0] == 0)
+	{
+		// Display 
+
+		if (PORT->QtSMFreq)
+		{
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Modem %s Centre frequency %d fx25 %s il2p %s %s\r",
+				(PORT->QtSMModem[0]) ? PORT->QtSMModem : "Not Available", PORT->QtSMFreq, 
+				FX25Modes[PORT->fx25Flags], IL2PModes[PORT->il2pFlags], PORT->il2pcrc?"CRC":"");
+
+			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));	
+			return;
+		}
+
+		if (KISS->QtSMModem == 0)
+		{
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Error - Port %d has no QtSM information\r", port);
+			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+			return;
+		}
+
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Modem %s Centre frequency %d\r", 
+			(KISS->QtSMModem) ? KISS->QtSMModem : "Not Available", KISS->QtSMFreq);
+
 		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 		return;
 	}
 
-	Bufferptr = Cmdprintf(Session, Bufferptr, "Modem %s Centre frequency %d\r", 
-		(KISS->QtSMModem) ? KISS->QtSMModem : "Not Available", KISS->QtSMFreq);
-		
+	// Set params. Layout is
+
+	/*
+	0  QTSMKISSCMD
+	1  SETMODEMPARAMS
+	2  Freq
+	4  Modem
+	24 Reserved
+	29 set flags indicator (2)
+	30 fx25
+	31 il2p
+	32 crc
+	*/
+
+	if (Session->PASSWORD  != 0xFFFF)
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Update requires SYSOP status - enter password\r");
+		SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+		return;
+	}
+
+	if (_memicmp(context, "fx25", 4) == 0 || _memicmp(context, "il2p", 4) == 0)   // These have space separated params
+		ptr = strtok_s(NULL, " ,\r", &context);
+	else
+		ptr = strtok_s(NULL, ",\r", &context);
+
+	Data[0] = QTSMKISSCMD;
+	Data[1] = SETMODEMPARAMS;
+
+
+	while (ptr && ptr[0])
+	{
+		uint16_t freq = atoi(ptr);
+
+		if (freq)
+			memcpy(&Data[2], &freq, 2);
+
+
+		else if (strlen(ptr) > 8)
+			strcpy(&Data[4], ptr);
+
+		else if (_stricmp(ptr, "fx25") == 0)
+		{
+			ptr = strtok_s(NULL, " ,\r", &context);
+			i = 4;
+
+			if (ptr && ptr[0])
+			{
+				for (i = 0; i < 4; i++)
+				{
+					if (_stricmp(FX25Modes[i], ptr) == 0)
+					{
+						fx25_mode = i;
+						Data[29] = 2;
+						break;
+					}
+				}
+			}
+
+			if (i == 4)
+			{
+				Bufferptr = Cmdprintf(Session, Bufferptr, "QTSM} Failed - fx25 flags invalid\r");
+				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+				return;
+			}
+		}
+		else if (_stricmp(ptr, "il2p") == 0)
+		{
+			ptr = strtok_s(NULL, " ,\r", &context);
+			i = 4;
+
+			if (ptr && ptr[0])
+			{
+				for (i = 0; i < 4; i++)
+				{
+					if (_stricmp(IL2PModes[i], ptr) == 0)
+					{
+						il2p_mode = i;
+						Data[29] = 2;
+						break;
+					}
+				}
+			}
+
+			if (i == 4)
+			{
+				Bufferptr = Cmdprintf(Session, Bufferptr, "QTSM} Failed - il2p flags invalid\r");
+				SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+				return;
+
+			}
+		}
+		else if (_stricmp(ptr, "crc") == 0)
+		{
+			il2p_crc = 1;
+			Data[29] = 2;
+		}
+		else if (_stricmp(ptr, "nocrc") == 0)
+		{
+			il2p_crc = 0;
+			Data[29] = 2;
+		}
+		else
+		{
+			Bufferptr = Cmdprintf(Session, Bufferptr, "QTSM} Failed - invalid param %s. Enter QTSM HELP for more info\r", ptr);
+			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+			return;
+		}
+
+		ptr = strtok_s(NULL, " ,\r", &context);
+	}
+
+	Data[30] = fx25_mode;
+	Data[31] = il2p_mode;
+	Data[32] = il2p_crc;
+	
+	KissLen = 33;
+
+	// Send Command
+
+	PORT->Session = Session;
+	PORT->LastKISSCmdTime = time(NULL);
+	KissString[0] |= KISS->OURCTRL;
+
+	PORT = (struct PORTCONTROL *)KISS->FIRSTPORT;			// ALL FRAMES GO ON SAME Q
+
+	KissLen = KissEncode(KissString, ENCBUFF, KissLen);
+	ASYSEND(PORT, ENCBUFF, KissLen);
+
+	//			Bufferptr = Cmdprintf(Session, Bufferptr, "Command Sent\r");
+	//			SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
+
+
+	Bufferptr = Cmdprintf(Session, Bufferptr, "OK\r");
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 	return;
+
 }
+
 
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 DllExport int APIENTRY GetStreamPID(int Stream);

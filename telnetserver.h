@@ -42,7 +42,7 @@ struct ConnectionInfo
 	BOOL TriMode;				// Trimode emulation
 	BOOL TriModeConnected;		// Set when remote session is connected - now send data to DataSock
 	SOCKET TriModeDataSock;		// Data Socket
-	BOOL Auth;					// Set if User is flagged as a Secure User
+	BOOL LOCALAuth;				// Set if connection from localhost or a secure subnet
 	BOOL BPQTermMode;			// Set if connected to BPQTermTCP
 	BOOL ClientSession;			// Set if acting as a client (ie Linux HOST Mode)
 	BOOL MonitorNODES;			// Monitor Control Flags

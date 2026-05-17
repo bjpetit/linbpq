@@ -1393,7 +1393,13 @@ int ProcessAGWCommand(struct AGWSocketConnectionInfo * sockptr)
         if (sockptr->AGWRXHeader.DataKind == 'V')	// Unproto with VIA string
 		{        
             Digis = sockptr->MsgData[0];                 // Number of digis
-                    
+            
+			if (Digis > 7)
+			{
+				AGWDataSocket_Disconnect(sockptr);
+				return 0;
+			}
+
 			for (j = 1; j<= Digis; j++)
 			{
 				ConvToAX25(&sockptr->MsgData[(j - 1) * 10 + 1],&TXMessage[7+(j*7)]);      // No "last" bit

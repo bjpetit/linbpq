@@ -400,6 +400,9 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	UINT Stamp, HH, MM;
 	char Normcall[10];
 
+	if (Route == 0 || Route->NEIGHBOUR_LINK == 0 || Route->NEIGHBOUR_LINK->LINKCALL == 0)
+		return;
+
 	Normcall[ConvFromAX25(Route->NEIGHBOUR_LINK->LINKCALL, Normcall)] = 0;
 	if (DEBUGINP3) Debugprintf("Processing RIF from %s INP3Node %d Route SRTT %d", Normcall, Route->INP3Node, Route->SRTT);
 
@@ -1711,7 +1714,7 @@ VOID SendNewInfo()
 		if (Dest->INP3FLAGS & NewNode)
 		{
 			char call[10];
-			ConvFromAX25(Dest->DEST_CALL, call);
+			call[ConvFromAX25(Dest->DEST_CALL, call)] = 0;
 			if (DEBUGINP3) Debugprintf("INP3 Sending New Node %s", call);
 			Dest->INP3FLAGS &= ~NewNode;
 			

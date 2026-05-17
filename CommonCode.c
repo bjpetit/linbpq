@@ -3244,6 +3244,13 @@ DllExport BOOL ConvToAX25Ex(unsigned char * callsign, unsigned char * ax25call)
 				ax25call[6]=0x44;
 				return TRUE;
 			}
+
+			if (callsign[i+1] == 'L')
+			{
+				ax25call[6]=0x46;
+				return TRUE;
+			}
+
 			i = atoi(&callsign[i+1]);
 
 			if (i < 16)
@@ -3345,6 +3352,13 @@ DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall)
 	{
 		outcall[out++]='-';
 		outcall[out++]='R';
+		return out;
+	}
+
+	if (chr == 0x46)
+	{
+		outcall[out++]='-';
+		outcall[out++]='L';
 		return out;
 	}
 
@@ -3798,6 +3812,10 @@ VOID ResolveUpdateThread(void * Unused)
 			Sleep(1000 * 60 * 15);	
 			continue;
 		}
+
+		// Resolve failed - try again in 5 mins
+
+		Sleep(1000 * 60 * 5);	
 	}
 }
 
@@ -4968,11 +4986,16 @@ void GetPortCTEXT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, st
 // 
 // For now at least will report dial freq if using RIGCONTROL
 
+extern struct RIGPORTINFO * PORTInfo[MAXBPQPORTS + 2];		// Records are Malloc'd
+extern int NumberofPorts;
+
 DllExport uint64_t APIENTRY GetPortFrequency(int PortNo, char * FreqString)
 {
 	struct PORTCONTROL * PORT = GetPortTableEntryFromPortNum(PortNo);
 	double freq = 0.0;
 	uint64_t freqint = 0;
+	struct RIGPORTINFO * RIGPORT;
+	int i, p;
 
 	char * ptr;
 	int  n = 3;
@@ -4991,7 +5014,6 @@ DllExport uint64_t APIENTRY GetPortFrequency(int PortNo, char * FreqString)
 	{
 		// Try rigcontrol
 
-
 		struct TNCINFO * TNC;
 		struct RIGINFO * RIG = 0;
 
@@ -5000,9 +5022,43 @@ DllExport uint64_t APIENTRY GetPortFrequency(int PortNo, char * FreqString)
 		else
 			TNC = TNCInfo[PortNo];
 
-		if (TNC)
-			RIG = TNC->RIG;
-		
+		if (TNC == 0)
+		{
+			// No associated TNC but could have an interlock group from which we can get RIG record
+
+			if (PORT->PORTINTERLOCK == 0)
+				return 0;
+
+			for (p = 0; p < NumberofPorts; p++)
+			{
+				RIGPORT = PORTInfo[p];
+
+				for (i=0; i< RIGPORT->ConfiguredRigs; i++)
+				{
+					RIG = &RIGPORT->Rigs[i];
+
+					if (RIG->Interlock == PORT->PORTINTERLOCK)
+					{
+						if (RIG->Valchar[0] == 0)
+							return 0;
+
+						freq = atof(RIG->Valchar);
+
+						// if port has QtSM modem centre add that 
+
+						if (PORT->QtSMFreq)
+							freq += (PORT->QtSMFreq * 1.0) / 1000000.0;
+
+						freqint = (int64_t)(freq * 1000000.0);
+						goto returnFreq;
+					}
+				}
+			}
+			return 0;
+		}
+
+		RIG = TNC->RIG;
+
 		if (RIG == 0)
 			return 0;
 
@@ -5011,9 +5067,17 @@ DllExport uint64_t APIENTRY GetPortFrequency(int PortNo, char * FreqString)
 		if (RIG->Valchar[0] == 0)
 			return 0;
 
-		freq = atof(TNC->RIG->Valchar);
+		freq = atof(RIG->Valchar);
+
+		// if port has QtSM modem centre add that 
+
+		if (PORT->QtSMFreq)
+			freq += (PORT->QtSMFreq * 1.0) / 1000000.0;
+
 		freqint = (int64_t)(freq * 1000000.0);
 	}
+
+returnFreq:
 
 	sprintf(FreqString, "%.6f", freq);
 

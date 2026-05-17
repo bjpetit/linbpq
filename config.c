@@ -256,6 +256,7 @@ int do_kiss(char *value,char *rec);
 int decode_ded_rec(char *rec);
 int simple(int i);
 int64_t int64_value(int64_t * val, char value[], char rec[]);
+int32_t int32_value(int32_t * val, char value[], char rec[]);
 
 
 int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
@@ -384,7 +385,7 @@ static char *pkeywords[] =
 "UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE",
 "IGNOREUNLOCKEDROUTES", "INP3ONLY", "TCPPORT", "RIGPORT", "PERMITTEDAPPLS", "HIDE",
 "SMARTID", "KISSCOMMAND", "SendtoM0LTEMap", "PortFreq", "M0LTEMapInfo", "QTSMPort", 
-"ALLOWINP3", "ENABLEINP3", "isRF"};         /* parameter keywords */
+"ALLOWINP3", "ENABLEINP3", "isRF", "FREQ", "BW", "SF", "CR"};         /* parameter keywords */
 
 static void * poffset[] =
 {
@@ -399,7 +400,7 @@ static void * poffset[] =
 &xxp.IOADDR, &xxp.IPADDR, &xxp.INTLEVEL, &xxp.IOADDR, &xxp.IOADDR, &xxp.ListenPort, &xxp.NoNormalize,
 &xxp.IGNOREUNLOCKED, &xxp.INP3ONLY, &xxp.TCPPORT, &xxp.RIGPORT, &xxp.PERMITTEDAPPLS, &xxp.Hide,
 &xxp.SmartID, &xxp.KissParams, &xxp.SendtoM0LTEMap, &xxp.PortFreq, &xxp.M0LTEMapInfo, &xxp.QtSMPort, 
-&xxp.AllowINP3, &xxp.EnableINP3, &xxp.isRF};	/* offset for corresponding data in config file */
+&xxp.AllowINP3, &xxp.EnableINP3, &xxp.isRF, &xxp.FREQ, &xxp.BW, &xxp.SF, &xxp.CR};	/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -414,7 +415,7 @@ static int proutine[] =
 1, 17, 1, 1, 1, 1, 2,
 2, 2, 1, 1, 19, 2,
 1, 20, 1, 21, 22, 1, 
-1, 1, 1};							/* routine to process parameter */
+1, 1, 1, 23, 23, 23, 23};							/* routine to process parameter */
 
 int PPARAMLIM = sizeof(proutine)/sizeof(int);
 
@@ -433,7 +434,7 @@ static int routeindex = 0;
 /* Global variables							*/
 /************************************************************************/
 
-int paramok[100] = {0};		/* PARAMETER OK FLAG  */
+int paramok[120] = {0};		/* PARAMETER OK FLAG  */
 
 FILE *fp1;			/* TEXT INPUT FILE    */
 
@@ -642,6 +643,10 @@ BOOL ProcessConfig()
 	paramok[96]=1;			// EnableOARCAPI
 	paramok[97]=1;			// MONTOFILE
 	paramok[98]=1;			// RIFInterval
+	paramok[99]=1;			// Freq
+	paramok[100]=1;			// BW
+	paramok[101]=1;			// SF
+	paramok[102]=1;			// CR
 
 
 	for (i=0; i < PARAMLIM; i++)
@@ -1378,6 +1383,23 @@ int callsign(char * ptr, char * value, char * rec)
 /************************************************************************/
 
 int int_value(short * val, char value[], char rec[])
+{
+	int j,k;
+	
+	k = sscanf(value," %d",&j);
+
+	if (k != 1)
+	{
+	   Consoleprintf("Invalid numerical value ");
+	   Consoleprintf("%s\r\n",rec);
+	   return(0);
+	}
+
+	val[0] = j;
+	return(1);
+}
+
+int int32_value(int32_t * val, char value[], char rec[])
 {
 	int j,k;
 	
@@ -2424,7 +2446,7 @@ int decode_port_rec(char * rec)
 			break;
 
 		case 20:
-            cn = doKissCommand(i, value, rec);              // Permitted Apps
+            cn = doKissCommand(i, value, rec);
 			break;
 
 		case 21:
@@ -2434,6 +2456,10 @@ int decode_port_rec(char * rec)
 		case 22:
 			xxp.M0LTEMapInfo = _strdup(value);
 			cn = 1;
+			break;
+
+		case 23:
+			cn = int32_value(poffset[i], value, rec);	     /* INTEGER VALUES */
 			break;
 
 		case 9:

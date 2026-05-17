@@ -88,6 +88,8 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO);
 #define TFEND 0xDC
 #define TFESC 0xDD
 #define QTSMKISSCMD 7
+#define MODEMREPORT 1	// QTSM Modem Info subcommand
+#define SETPARAMS 2		// QtSM Moden change settings
 
 #define STX	2			// NETROM CONTROL CODES
 #define ETX	3
@@ -118,10 +120,14 @@ VOID CloseKISSPort(struct PORTCONTROL * PortVector);
 int ReadCOMBlockEx(HANDLE fd, char * Block, int MaxLength, BOOL * Error);
 void processDRATSFrame(unsigned char * Message, int Len, void * sockptr);
 VOID ConnecttoQtSM(struct PORTCONTROL * PORT);
+int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
 extern struct PORTCONTROL * PORTTABLE;
 extern int	NUMBEROFPORTS;
 extern void * TRACE_Q;
+
+extern char FX25Modes[8][8];
+extern char IL2PModes[8][10];
 
 #define TICKS 10	// Ticks per sec
 
@@ -500,6 +506,18 @@ HANDLE OpenConnection(struct PORTCONTROL * PortVector)
 	if (KISS && KISS->KISSCMD && KISS->KISSCMDLEN)
 		ASYSEND(PortVector, KISS->KISSCMD, KISS->KISSCMDLEN);
 
+	if (PortVector->FREQ)		// Lora params
+	{
+		UCHAR KissString[128];
+		UCHAR ENCBUFF[256];
+		int KissLen = 0;
+		unsigned char * Kissptr = KissString;
+		
+		KissLen = sprintf(KissString, "%cLORA=%d, %d, %d, %d", 6, PortVector->FREQ, PortVector->BW, PortVector->SF, PortVector->CR);
+		KissLen = KissEncode(KissString, ENCBUFF, KissLen);
+
+		ASYSEND(PortVector, ENCBUFF, KissLen);
+	}
 
 	return ComDev;
 }
@@ -1560,15 +1578,60 @@ SeeifMore:
 	
 			//	ok, KISS now points to our port
 
-	//		Debugprintf("%d %x %s", PORT->PORTNUMBER, Port->RXMSG[0], Msg);
-	
-			if (memcmp(Msg, "STATS ", 6) == 0)
+			if (Msg[0] == MODEMREPORT)
+			{
+				int Freq = Msg[1] | (Msg[2] <<8);
+				KISS->PORT.QtSMFreq = Freq;
+				strcpy(KISS->PORT.QtSMModem, &Msg[3]);
+
+				if (len >= 32)
+				{
+					PORT->fx25Flags = Msg[29];
+					PORT->il2pFlags = Msg[30];
+					PORT->il2pcrc = Msg[31]; 
+				}
+
+				// If a response to a qtsm command display it
+
+				if (PORT->Session && (time(NULL) - PORT->LastKISSCmdTime < 10))
+				{
+					PDATAMESSAGE Buffer;
+					BPQVECSTRUC * VEC;
+					unsigned char * Msg = &Port->RXMSG[1];
+					len--;
+
+					Msg[len] = 0;
+
+					Buffer = GetBuff();
+					if (Buffer)
+					{
+						Buffer->PID = 0xf0;
+						Buffer->LENGTH = MSGHDDRLEN + 1; // Includes PID
+
+
+						Buffer->LENGTH += sprintf(Buffer->L2DATA, "Modem %s Centre frequency %d fx25 %s il2p %s %s\r",
+							(PORT->QtSMModem[0]) ? PORT->QtSMModem : "Not Available", PORT->QtSMFreq, 
+							FX25Modes[PORT->fx25Flags], IL2PModes[PORT->il2pFlags], PORT->il2pcrc?"CRC":"");
+
+
+						VEC = PORT->Session->L4TARGET.HOST;
+						C_Q_ADD(&PORT->Session->L4TX_Q, (UINT *)Buffer);
+#ifdef BPQ32
+						if (VEC)
+							PostMessage(VEC->HOSTHANDLE, BPQMsg, VEC->HOSTSTREAM, 2);  
+#endif
+					}
+					PORT->Session = 0;
+				}
+			}
+
+			else if (memcmp(Msg, "STATS ", 6) == 0)
 			{
 				// Save busy 
 
 				int TX, DCD;
 				char * Msg1 = strlop(&Msg[6], ' ');
-				
+
 				TX = atoi(&Msg[6]);
 				if (Msg1)
 				{
@@ -1926,6 +1989,7 @@ VOID ConnecttoTCPThread(void * Param)
 	SOCKADDR_IN sinx; 
 	int addrlen=sizeof(sinx);
 	struct KISSINFO * KISS = (struct KISSINFO *) ASY->Portvector;
+	struct KISSINFO * NEXT;
 
 	sinx.sin_family = AF_INET;
 	sinx.sin_addr.s_addr = INADDR_ANY;
@@ -1984,8 +2048,32 @@ VOID ConnecttoTCPThread(void * Param)
 
 				ioctlsocket (sock, FIONBIO, &param);
 
-				if (KISS && KISS->KISSCMD && KISS->KISSCMDLEN)
-					send(sock, KISS->KISSCMD, KISS->KISSCMDLEN, 0);
+				// Send KISSCMD to all channels on this port
+
+				NEXT = KISS;
+
+				while (NEXT)
+				{
+					if (NEXT && NEXT->KISSCMD && NEXT->KISSCMDLEN)
+					{
+						NEXT->KISSCMD[1] |= NEXT->OURCTRL;
+						send(sock, NEXT->KISSCMD, NEXT->KISSCMDLEN, 0);
+					}
+					NEXT = NEXT->SUBCHAIN;
+				}
+
+				if (KISS->PORT.FREQ)		// Lora params
+				{
+					UCHAR KissString[128];
+					UCHAR ENCBUFF[256];
+					int KissLen = 0;
+					unsigned char * Kissptr = KissString;
+
+					KissLen = sprintf(KissString, "%cLORA=%d, %d, %d, %d", 6, KISS->PORT.FREQ, KISS->PORT.BW, KISS->PORT.SF, KISS->PORT.CR);
+					KissLen = KissEncode(KissString, ENCBUFF, KissLen);
+
+					send(sock, ENCBUFF, KissLen, 0);
+				}
 
 				// Try to open Mgmt Port
 

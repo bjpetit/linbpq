@@ -4726,9 +4726,15 @@ int seeifInterlockneeded(struct PORTCONTROL * PORT)
 	int i;
 	int Interlock = PORT->PORTINTERLOCK;
 	struct TNCINFO * TNC;
+	char Cmd[64];
 
 	if (Interlock == 0)
 		return 0;				// No locking
+
+	// I think we need to stop scanning here
+
+	sprintf(Cmd, "%d SCANSTOP", PORT->PORTNUMBER);
+	Rig_Command( (TRANSPORTENTRY *) -1, Cmd);
 
 	for (i = 1; i <= MAXBPQPORTS; i++)
 	{
@@ -4753,6 +4759,7 @@ int seeifUnlockneeded(struct _LINKTABLE * LINK)
 	int Interlock;
 	struct TNCINFO * TNC;
 	struct PORTCONTROL * PORT = LINK->LINKPORT;
+	char Cmd[64];
 
 	if (PORT == NULL)
 		return 0;
@@ -4794,6 +4801,14 @@ int seeifUnlockneeded(struct _LINKTABLE * LINK)
 				if (TNC->ReleasePortProc &&	TNC->PortRecord->PORTCONTROL.PortSuspended == TRUE)
 					TNC->ReleasePortProc(TNC);
 	}
+
+	if (Interlock == 0)
+		return 0;				// No locking
+
+	// I think we need to start scanning here
+
+	sprintf(Cmd, "%d SCANSTART 15", LINK->LINKPORT->PORTNUMBER);
+	Rig_Command((TRANSPORTENTRY *)-1, Cmd);
 
 	return 0;
 }

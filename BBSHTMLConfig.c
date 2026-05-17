@@ -506,9 +506,6 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 	if (URL[0] == 0 || Method == NULL)
 		return;
 
-	if (strstr(input, "Host: 127.0.0.1"))
-		LOCAL = TRUE;
-
 	if (Session->TNC == (void *)1)					// Re-using an address as a flag
 		LOCAL = TRUE;
 
@@ -2314,6 +2311,15 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		if (strcmp(ptr1, "true") == 0) FWDInfo->SendCTRLZ = TRUE; else FWDInfo->SendCTRLZ = FALSE;
 		ptr1 = GetNextParam(&ptr2);		// Connect Timeout
 		FWDInfo->ConTimeout = atoi(ptr1);
+
+		// Don't allow blocked uncompressed
+
+		if (FWDInfo->AllowBlocked)
+			FWDInfo->AllowCompressed = 1;
+
+		if (FWDInfo->AllowCompressed)
+			FWDInfo->AllowBlocked = 1;
+
 
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);

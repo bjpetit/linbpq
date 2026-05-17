@@ -84,6 +84,11 @@ struct PORTCONFIG
 	int AllowINP3;
 	int EnableINP3;
 	short isRF;
+	int FREQ;
+	int BW;
+	int SF;
+	int CR;
+
 };
 
 struct ROUTECONFIG

@@ -28,6 +28,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #ifdef WIN32
 //#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
+#define realpath(N,R) _fullpath((R),(N),_MAX_PATH)
 #else
 #include <iconv.h>
 #include <dirent.h>
@@ -1505,6 +1506,15 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 		char Type[64] = "Content-Type: text/html\r\n";
 
 		UndoTransparency(FN);
+
+		// protect against malicious access
+
+		if (strstr(FN, ".."))
+		{
+			*RLen = sprintf(Reply, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+			return;
+		}
+
 		ext = strchr(FN, '.');
 
 		sprintf(MsgFile, "%s/%s", BPQDirectory, FN);
@@ -1518,6 +1528,14 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			return;
 		}
 
+		FileSize = STAT.st_size;
+
+		if (FileSize > 200000)
+		{
+			*RLen = sprintf(Reply, "HTTP/1.1 400 File Too Large\r\nContent-Length: 15\r\n\r\nFile too large\r\n");
+			return;
+		}
+
 		hFile = fopen(MsgFile, "rb");
 	
 		if (hFile == 0)
@@ -1526,7 +1544,6 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			return;
 		}
 
-		FileSize = STAT.st_size;
 		MsgBytes = malloc(FileSize + 1);
 		ReadLen = fread(MsgBytes, 1, FileSize, hFile); 
 
@@ -1583,6 +1600,22 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 
 		UndoTransparency(FN);
+
+		// protect against malicious access
+		if (strstr(FN, ".."))
+		{
+			*RLen = sprintf(Reply, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+			return;
+		}
+
+		// I'm pretty sure this should only be used for form sets, so name should start Standard of Local
+
+		if (_memicmp(FN, "Local", 5) != 0 && (_memicmp(FN, "Standard", 9) != 0))
+		{
+			*RLen = sprintf(Reply, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+			return;
+		}
+
 		ext = strchr(FN, '.');
 
 		sprintf(MsgFile, "%s/%s", BPQDirectory, FN);
@@ -1596,6 +1629,14 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			return;
 		}
 
+		FileSize = STAT.st_size;
+
+		if (FileSize > 200000)
+		{
+			*RLen = sprintf(Reply, "HTTP/1.1 400 File Too Large\r\nContent-Length: 15\r\n\r\nFile too large\r\n");
+			return;
+		}
+
 		hFile = fopen(MsgFile, "rb");
 	
 		if (hFile == 0)
@@ -1604,7 +1645,6 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			return;
 		}
 
-		FileSize = STAT.st_size;
 		MsgBytes = malloc(FileSize + 1);
 		ReadLen = fread(MsgBytes, 1, FileSize, hFile); 
 
@@ -3566,8 +3606,6 @@ int DisplayWebForm(struct HTTPConnectionInfo * Session, struct MsgInfo * Msg, ch
 	Form = GetHTMLViewerTemplate(FN, &Dir);
 
 	sprintf(FormDir, "WMFile/%s/%s/", Dir->FormSet, Dir->DirName);
-
-
 
 	if (Form == NULL)
 	{
@@ -6566,7 +6604,4 @@ int ProcessWebmailWebSock(char * MsgPtr, char * OutBuffer)
 		return Len + 10;
 	}
 }
-
-
-
 

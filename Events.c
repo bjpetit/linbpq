@@ -971,7 +971,7 @@ void APIL2Trace(struct _MESSAGE * Message, char * Dirn)
 
 	UDPMsg[udplen++] = '}';
 	UDPMsg[udplen] = 0;
-	Debugprintf(UDPMsg);
+//	Debugprintf(UDPMsg);
 	sendto(NodeAPISocket, UDPMsg, udplen, 0, (struct sockaddr *)&UDPreportdest, sizeof(UDPreportdest));
 }
 

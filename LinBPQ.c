@@ -864,6 +864,8 @@ int main(int argc, char * argv[])
 	 printf("G8BPQ AX25 Packet Switch System Version %s %s\n", TextVerstring, Datestring);
 	 printf("%s\n", VerCopyright);
 
+	 printf("%d", sizeof(struct DEST_LIST));
+
 	 srand(time(NULL));
 
 	 // look for optarg format parameters

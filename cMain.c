@@ -301,9 +301,11 @@ char BridgeMap[MaxBPQPortNo + 1][MaxBPQPortNo + 1] = {0};
 
 // Keep Buffers at end
 	
-#define DATABYTES 600000	// WAS 320000
+#define DATABYTES 800000	// WAS 320000
 
-UCHAR DATAAREA[DATABYTES] = "";
+UCHAR XXXXXXXX[DATABYTES] = "";
+
+UCHAR * DATAAREA = &XXXXXXXX[0];
 
 void ** Bufferlist[1000] = {0};
 
@@ -1032,6 +1034,10 @@ BOOL Start()
 		PORT->ALLOWINP3 = PortRec->AllowINP3;
 		PORT->ENABLEINP3 = PortRec->EnableINP3;
 		PORT->isRF = PortRec->isRF;
+		PORT->FREQ = PortRec->FREQ;
+		PORT->BW = PortRec->BW;
+		PORT->SF = PortRec->SF;
+		PORT->CR = PortRec->CR;
 
 		PORT->PORTWINDOW = (UCHAR)PortRec->MAXFRAME;
 
@@ -2996,6 +3002,10 @@ VOID FindLostBuffers()
 				break;
 			}
 		}
+	
+		if (Buff == *Buff)
+			break;
+
 		Buff = *Buff;
 	}
 	n = NUMBEROFBUFFERS;

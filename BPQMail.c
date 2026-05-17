@@ -1160,6 +1160,10 @@
 // 6.0.26.x
 
 //	Fix forwarding to/from AEA TNC mailbox (22)
+//	Fix possible crash in SendBBSDataToPktMap
+//	Remove Uncompressed Blocked forwarding (27)
+//	Fix mail api returning garbage when deflate isn't requested (27)
+
 
 #include "bpqmail.h"
 #include "winstdint.h"

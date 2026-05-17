@@ -7366,6 +7366,14 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			ForwardingInfo->AllowB2 = GetIntValue(group, "UseB2Protocol");
 			ForwardingInfo->SendCTRLZ = GetIntValue(group, "SendCTRLZ");
 
+			// Don't allow blocked uncompressed
+
+			if (ForwardingInfo->AllowBlocked)
+				ForwardingInfo->AllowCompressed = 1;
+
+			if (ForwardingInfo->AllowCompressed)
+				ForwardingInfo->AllowBlocked = 1;
+
 			if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
 				ForwardingInfo->AllowCompressed = TRUE;
 
@@ -9344,14 +9352,18 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 		}
 	}
 
-	// Only allow blocked non-binary to other BPQ Nodes
+	// No longer Only  blocked non-binary to other BPQ Nodes
 
 	if ((conn->BBSFlags & FBBForwarding) && ((conn->BBSFlags & FBBCompressed) == 0) && (conn->BPQBBS == 0))
 	{
-		// Switch back to MBL
+		// Disconnect user
+		
+		Logprintf(LOG_BBS, conn, '?', "Uncompressed Blocked Forwarding is no longer supported - reconfgure BBS for MBL forwarding");
 
-		conn->BBSFlags |= MBLFORWARDING;
-		conn->BBSFlags &= ~FBBForwarding;	// Turn off FBB Blocked
+		conn->BBSFlags &= ~RunningConnectScript;	// so it doesn't get reentered
+		Disconnect(conn->BPQStream);
+		return ;
+
 	}
 
 	return;
@@ -12046,6 +12058,7 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 	FILE *iop;
 	int argc, pdes[2];
 	pid_t pid;
+	int i;
 
 	pgret = 9999;
 
@@ -12055,6 +12068,20 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 
 	conn->InputBuffer[conn->InputLen] = 0;
 	strlop(conn->InputBuffer, 13);
+
+	// validate command is alphanumberic
+
+	for (i = 0; i < conn->InputLen; i++)
+	{
+		if (isalnum(conn->InputBuffer[i]) == 0 && conn->InputBuffer[i] != ' ')
+		{
+			BBSputs(conn, "PG commnand string invalid\r");
+			conn->InputMode=0;
+			SendPrompt(conn, user);
+			return;
+		}
+	}
+
 	conn->InputLen = 0;
 
 	if (!user->Temp->RUNPGPARAMS)
@@ -12086,7 +12113,7 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 	char pg_dir[MAX_PATH];
 	char log_file[50] = "pg.log";
 	char call[10];
-	char data[120];
+	char data[256];
 	char line[270];
 	size_t bufsize = 80;
 
@@ -12305,6 +12332,7 @@ void run_pg( CIRCUIT * conn, struct UserInfo * user )
 	CHAR chBuf[BUFSIZE]; 
 	int index = 0;
 	int ret = 0;
+	int i;
 
 	// if first entry allocate RUNPGPARAMS
 	if (!user->Temp->RUNPGPARAMS)
@@ -12320,6 +12348,20 @@ void run_pg( CIRCUIT * conn, struct UserInfo * user )
 
 	conn->InputBuffer[conn->InputLen] = 0;
 	strlop(conn->InputBuffer, 13);
+
+	// validate command is alphanumberic
+
+	for (i = 0; i < strlen(conn->InputBuffer); i++)
+	{
+		if (isalnum(conn->InputBuffer[i]) == 0 && conn->InputBuffer[i] != ' ')
+		{
+			BBSputs(conn, "PG commnand string invalid\r");
+			conn->InputMode=0;
+			SendPrompt(conn, user);
+			return;
+		}
+	}
+
 	conn->InputLen = 0;
 
 	// Build command line. Parmas are:

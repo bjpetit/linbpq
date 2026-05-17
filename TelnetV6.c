@@ -3286,6 +3286,7 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	HMENU hDisMenu = TCP->hDisMenu;
 	u_long param=1;
+	int LOCAL = 0;
 
 	// if for TriModeData Session, use the TriMode Control connection entry 
 
@@ -3357,11 +3358,36 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 				WriteLog (logmsg);
 			}
 
-
-				
+	
 //			Debugprintf("BPQ32 Telnet accept() Sock %d", sock);
 
 			ioctl(sock, FIONBIO, &param);
+
+			// See if localhost or a secure subnet
+
+			if (sockptr->sin.sin_family != AF_INET6)
+			{
+				if (sockptr->sin.sin_addr.s_addr == htonl(INADDR_LOOPBACK))		// 127.0.0.1?
+					LOCAL = TRUE;
+				else
+				{
+					char Hostname[32]= "";
+					struct LOCALNET * LocalNet = TNC->TCPInfo->LocalNets;
+
+					while(LocalNet)
+					{
+						uint32_t MaskedHost = sockptr->sin.sin_addr.s_addr & LocalNet->Mask;
+						if (MaskedHost == LocalNet->Network)
+						{				
+							LOCAL = TRUE;
+							break;
+						}
+						LocalNet = LocalNet->Next;
+					}
+				}
+			}
+
+			sockptr->LOCALAuth = LOCAL;
 
 			sockptr->socket = sock;
 			sockptr->SocketActive = TRUE;
@@ -3994,7 +4020,7 @@ MsgLoop:
 			if (USER == NULL)
 				continue;
 
-			if (_stricmp(USER->UserName, "ANON") == 0)
+			if (_stricmp(USER->UserName, "ANON") == 0 && strlen(MsgPtr) < 10)
 			{
 				// Anon Login - Callsign is supplied as user
 
@@ -5156,6 +5182,18 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 		Mask = MsgPtr[1] >> 7;
 		Len = MsgPtr[1] & 127;
 
+		// We don't support 64 bit payload length, so if Len = 127 disconnect session
+
+		if (Len == 127)
+		{
+			Debugprintf("WebSock 64 bit length not supported");
+			closesocket(sockptr->socket);
+			sockptr->SocketActive = FALSE;
+			ShowConnections(TNC);
+			sockptr->InputLen = 0;
+			return 0;
+		}
+
 		if (Len == 126)		// Two Byte Len
 		{
 			Len = (MsgPtr[2] << 8) + MsgPtr[3];
@@ -5188,10 +5226,13 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 			{
 				// PTT Message
 
-				char RigCMD[64];
+				if (strlen(Payload) < 6 && sockptr->WebSecure)	// check for user generated input
+				{
+					char RigCMD[64];
 				
-				sprintf(RigCMD, "%s PTT", Payload);
-				Rig_Command( (TRANSPORTENTRY *) -1, RigCMD);
+					sprintf(RigCMD, "%s PTT", Payload);
+					Rig_Command( (TRANSPORTENTRY *) -1, RigCMD);
+				}
 			}
 			else if (memcmp(sockptr->WebURL, "WMRefresh", 9) == 0)
 			{
@@ -5263,8 +5304,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 
 	if(strstr(MsgPtr, "Upgrade: websocket"))
 	{
-		int LOCAL = 0, COOKIE = 0;
-		char * HostPtr;
+		int LOCAL = sockptr->LOCALAuth, COOKIE = 0;
 		char * ptr;
 
 		sockptr->WebSocks = 1;
@@ -5275,44 +5315,12 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 		if (RigWebPage)
 			RigWebPage[0] = 0;
 
-		HostPtr = strstr(MsgPtr, "Host: ");
+		ptr = strstr(MsgPtr, "BPQSessionCookie=N");
 
-		if (HostPtr)
-		{
-			uint32_t Host;
-			char Hostname[32]= "";
-			struct LOCALNET * LocalNet = sockptr->TNC->TCPInfo->LocalNets;
+		if (ptr)
+			COOKIE = TRUE;
 
-			HostPtr += 6;
-			memcpy(Hostname, HostPtr, 31);
-			strlop(Hostname, ':');
-			Host = inet_addr(Hostname);
-
-			if (strcmp(Hostname, "127.0.0.1") == 0)
-				LOCAL = TRUE;
-			else
-			{
-				if (sockptr->sin.sin_family != AF_INET6)
-				{
-					while(LocalNet)
-					{
-						uint32_t MaskedHost = sockptr->sin.sin_addr.s_addr & LocalNet->Mask;
-						if (MaskedHost == LocalNet->Network)
-						{				
-							LOCAL = 1;
-							break;
-						}
-						LocalNet = LocalNet->Next;
-					}
-				}
-
-				ptr = strstr(MsgPtr, "BPQSessionCookie=N");
-
-				if (ptr)
-					COOKIE = TRUE;
-			}
-			sockptr->WebSecure = LOCAL | COOKIE;
-		}
+		sockptr->WebSecure = LOCAL | COOKIE;
 	}
 
 

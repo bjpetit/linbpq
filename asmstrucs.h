@@ -640,10 +640,10 @@ typedef struct PORTCONTROL
 	UCHAR AVSENDING;			// LAST MINUTE
 	UCHAR AVACTIVE;
 
-	char PktFlags[64];			// Decode stts rom QtSM
+	char PktFlags[64];			// Decode stats from QtSM
 
 	char PORTTYPE;	// H/W TYPE
-					// 0 = ASYNC, 2 = PC120, 4 = DRSI
+					// 0 = ASYNC, 2 = LORA, 4 = DRSI
 					// 6 = TOSH, 8 = QUAD, 10 = RLC100
 					// 12 = RLC400 14 = INTERNAL 16 = EXTERNAL
 
@@ -740,12 +740,24 @@ typedef struct PORTCONTROL
 	int QtSMPort;
 	BOOL QtSMConnected;
 
+	int QtSMFreq;				// From KISS reporting of QtSM info
+	char QtSMModem[21];	
+	unsigned char Version[4];
+	unsigned char fx25Flags;
+	unsigned char il2pFlags;
+	unsigned char il2pcrc;
+
 	int StatsPointer;
 	UCHAR * TX;					// % Sending
 	UCHAR * BUSY;				// % Active (Normally DCD active or TX)
 
 	int Hardware;				// TNC H_TYPE. Copied here for access from application context
 	int isRF;					// For API reporting. -1  is unspecified
+
+	int FREQ;					// Lora config
+	int BW;
+	int SF;
+	int CR;
 	int SENDRIFTIMER;
 	time_t LastRIFTime;
 

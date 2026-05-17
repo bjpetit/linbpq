@@ -93,7 +93,7 @@ static char WindowTitle[] = "UZ7HO";
 static int RigControlRow = 165;
 
 char FX25Modes[8][8] = {"None", "RxOnly", "RX+TX"};
-char IL2PModes[8][10] = {"None", "RxOnly", "RX+TX", "il2pOnly"};
+char IL2PModes[8][10] = {"None", "RxOnly", "RX+TX", "Only"};
 
 
 //LOGFONT LFTTYFONT ;

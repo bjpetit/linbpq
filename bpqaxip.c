@@ -626,7 +626,7 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 
 		// if digis are present, scan down list for first non-used call
 
-		if  (buff->ORIGIN[6] == 0)
+		if  ((buff->ORIGIN[6] & 0x01) == 0)
 		{
 			// end of addr bit not set, so scan digis
 

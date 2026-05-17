@@ -1,4 +1,9 @@
 
+// Apr 26
+
+// Fix for 64 ports
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <stdio.h>
@@ -113,7 +118,7 @@ struct ModeItem
 
 struct ModeEntries
 {
-	struct ModeItem * Mode[32];		// One per port
+	struct ModeItem * Mode[64];		// One per port
 };
 
 struct FreqItem
@@ -125,7 +130,7 @@ struct FreqItem
 
 struct FreqEntries
 {
-	struct FreqItem * Freq[32];		// One per interlock group
+	struct FreqItem * Freq[64];		// One per interlock group
 };
 
 struct ChatNodeData ** ChatNodes = NULL;
@@ -620,6 +625,10 @@ int main(int argc, char * argv[])
 				pFlags = strlop(pFreq, ',');
 				pHeardTime = strlop(pFlags, ',');
 
+
+				if (pHeardTime == 0)
+					break;
+					
 				if (pFlags && strlen(pFlags) > 14)
 					break;
 
@@ -749,7 +758,7 @@ int main(int argc, char * argv[])
 				{
 					int Port = atoi(pPort);
 
-					if (Port < 32)
+					if (Port < 64)
 					{
 						Modes = Node->Modes;
 
@@ -986,7 +995,7 @@ int main(int argc, char * argv[])
 	{
 		int ret = 0;
 
-		if (time(NULL) > restartTime)
+		if (restartTime && time(NULL) > restartTime)
 			return 0;
 
 		FD_ZERO(&readfd);
@@ -1033,7 +1042,7 @@ int main(int argc, char * argv[])
 		if (nLength == 0)
 			continue;
 
-		//	ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr2, sizeof(txaddr));
+		ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr, sizeof(txaddr));
 
 		if (ret == -1)
 			perror("sendto 1");
@@ -1048,15 +1057,15 @@ int main(int argc, char * argv[])
 				*ptr = '/';
 		}
 
-		if (memcmp(&RXBUFFER[16], "LINK ", 5) != 0)
-		{
-			if (HostEnt1)
-			{
-				ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr, sizeof(txaddr));
-				if (ret == -1)
-					perror("sendto 1");
-			}
-		}
+//		if (memcmp(&RXBUFFER[16], "LINK ", 5) != 0)
+//		{
+//			if (HostEnt1)
+//			{
+//				ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr, sizeof(txaddr));
+//				if (ret == -1)
+//					perror("sendto 1");
+//			}
+//		}
 
 #ifdef WIN32
 		Sleep(10);
@@ -1252,10 +1261,10 @@ void ProcessNodeUpdate(char * From, char * Msg)
 			if (Port == 0)
 				return;
 
-			if (pFreq)
-				printf("%s %d %s %d %s\n", From, Port, ModeNames[Type], Interlock, pFreq);
-			else
-				printf("%s %d %s %d\n", From, Port, ModeNames[Type], Interlock);
+//			if (pFreq)
+//				printf("%s %d %s %d %s\n", From, Port, ModeNames[Type], Interlock, pFreq);
+//			else
+//				printf("%s %d %s %d\n", From, Port, ModeNames[Type], Interlock);
 
 			Port--;				// Index from zero
 
@@ -1295,7 +1304,7 @@ void ProcessNodeUpdate(char * From, char * Msg)
 		int lineLen = 0;
 		char freqString[256];
 
-		printf("%s %s\r\n", From, Msg);
+//		printf("%s %s\r\n", From, Msg);
 
 		if (strcmp("GM8BPQ-2", From) == 0)
 			n = 0;
@@ -1343,7 +1352,7 @@ void ProcessNodeUpdate(char * From, char * Msg)
 
 			// Do we have a record for this group?
 
-			for (n = 0; n < 32; n++)
+			for (n = 0; n < 64; n++)
 			{
 				FreqItem = Node->Freqs->Freq[n];
 
@@ -1771,7 +1780,7 @@ void GenerateOutputFiles(time_t Now)
 		{
 			struct ModeEntries * Modes = Node->Modes;
 
-			for (j = 0; j < 32; j++)
+			for (j = 0; j < 64; j++)
 			{
 				if (Modes->Mode[j])
 				{
@@ -1803,7 +1812,7 @@ void GenerateOutputFiles(time_t Now)
 		FreqsString[0] = 0;
 		FreqsLen = 0;
 
-		for (j = 0; j < 32; j++)
+		for (j = 0; j < 64; j++)
 		{
 			if (Node->Freqs)
 			{
@@ -2094,7 +2103,7 @@ void GenerateOutputFiles(time_t Now)
 
 			// Do Modes
 	
-			for (j = 0; j < 32; j++)
+			for (j = 0; j < 64; j++)
 			{
 				if (Node->Modes)
 				{
@@ -2123,7 +2132,7 @@ void GenerateOutputFiles(time_t Now)
 			{
 				struct FreqEntries * Freqs = Node->Freqs;
 		
-				for (j = 0; j < 32; j++)
+				for (j = 0; j < 64; j++)
 				{
 					struct FreqItem * Freq = Freqs->Freq[j];
 
