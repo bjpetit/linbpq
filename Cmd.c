@@ -6570,7 +6570,7 @@ VOID QTSMCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 
 	ptr = strtok_s(CmdTail, " ,\r", &context);
 
-	if (_stricmp(ptr, "HELP") == 0)
+	if (!ptr || _stricmp(ptr, "HELP") == 0)
 	{
 		Bufferptr = Cmdprintf(Session, Bufferptr, "QTSM portno displays QTSM configuration info (if avaliable)\r", ptr);
 		Bufferptr = Cmdprintf(Session, Bufferptr, "Modem, Centre Freq, fx25 flags and il2p flags can be changed if you have sysop access. All prameters are optional.\r", ptr);

@@ -243,6 +243,8 @@ typedef struct ROUTE
 	int SRTT;				// Smoothed RTT
 	int NeighbourSRTT;		// Other End SRTT
 	int RTTIncrement;		// Average of Ours and Neighbours SRTT in 10 ms - smoothed neighbor transport time (SNTT) in spec
+	int TXRTTIncrement;		// RTT to add before sending RIF. Zero if latest code, RTTIncrenent if older
+	int STTAtLastChange;	// Last value used to update Node TTs
 	int BCTimer;			// Time to next L3RTT Broadcast
 	int Timeout;			// Lost Response Timer
 	int Retries;			// Lost Response Count
@@ -517,8 +519,8 @@ typedef struct DEST_LIST
 
 	int DEST_RTT;				// SMOOTHED ROUND TRIP TIMER
 	int DEST_COUNT;				// FRAMES SENT
+	USHORT LastTT;				// Last INP3 Value sent. This is our value, which we now send
 
-	uint16_t * RouteLastTT;		// Last time sent should be saved for each neighbour. Area is mallod'ed as needed
 
 } dest_list;
 

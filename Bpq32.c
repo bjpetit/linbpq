@@ -1319,6 +1319,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix crash when APRS pages requested when APRS isn't configured (26)
 //	Add setting  modem params to QTSM command (28)
 //	Security fixes (28)
+//	Change INP3 to XR 'standard' (29)
+//	Swap L4INDEX and L4ID in Packet Trace API (30)
+//	More INP3 fixes (30)
 
 
 #define CKernel
@@ -3911,9 +3914,6 @@ BOOL UpdateNodesForApp(int Appl)
 
 		NUMBEROFNODES++;
 		APPL->NODEPOINTER = DEST;
-
-		if (DEST->RouteLastTT == 0)
-			DEST->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
 
 		memmove (DEST->DEST_CALL,APPL->APPLCALL,13);
 

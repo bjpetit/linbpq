@@ -403,8 +403,6 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 		memset(DEST, 0, sizeof(struct DEST_LIST));
 
 		memcpy(DEST->DEST_CALL, Msg->ORIGIN, 7);
-		if (DEST->RouteLastTT == 0)
-			DEST->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
 
 		NUMBEROFNODES++;
 	}
@@ -584,8 +582,6 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 			memset(DEST, 0, sizeof(struct DEST_LIST));
 			memcpy(DEST->DEST_CALL, ptr1, 7);
-			if (DEST->RouteLastTT == 0)
-				DEST->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
 
 			NUMBEROFNODES++;
 		}
@@ -1375,9 +1371,6 @@ VOID REMOVENODE(dest_list * DEST)
 		L4++;
 	}
 	
-	if (DEST->RouteLastTT)
-		free(DEST->RouteLastTT);
-
 	memset(DEST, 0, sizeof(struct DEST_LIST));	
 	NUMBEROFNODES--;
 }
@@ -1425,7 +1418,7 @@ VOID L3TRYNEXTDEST(struct ROUTE * ROUTE)
 		
 		if (ActiveRoute)
 		{
-			ActiveRoute --;			// Routes numbered 1 - 6, index from 0
+			ActiveRoute--;			// Routes numbered 1 - 6, index from 0
 			
 			if (DEST->NRROUTE[ActiveRoute].ROUT_NEIGHBOUR == ROUTE)
 			{
@@ -1457,7 +1450,7 @@ VOID L3TRYNEXTDEST(struct ROUTE * ROUTE)
 
 				DEST->DEST_ROUTE++;			// TO NEXT
 				
-				if (DEST->DEST_ROUTE = 7)
+				if (DEST->DEST_ROUTE == 7)
 					DEST->DEST_ROUTE = 1;	// TRY TO ACTIVATE FIRST
 			}
 		}
@@ -1532,9 +1525,6 @@ struct DEST_LIST * CHECKL3TABLES(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * Msg
 #endif
 
 	memcpy(DEST->DEST_CALL, Msg->L3SRCE, 7);
-
-	if (DEST->RouteLastTT == 0)
-		DEST->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
 
 	NUMBEROFNODES++;
 
