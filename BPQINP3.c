@@ -50,6 +50,8 @@ VOID SortRoutes(struct DEST_LIST * Dest);
 VOID SendRTTMsg(struct ROUTE * Route);
 VOID TCPNETROMSend(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Frame);
 void NETROMCloseTCP(struct ROUTE * Route);
+VOID UpdateTTforRoute(struct ROUTE * Route, int TTChange);
+
 
 static VOID SendNetFrame(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Frame)
 {
@@ -134,7 +136,7 @@ VOID InitialiseRTT()
 	memset(&RTTMsg, ' ', sizeof(struct _RTTMSG));
 	memcpy(RTTMsg.ID, "L3RTT: ", 7);
 	memcpy(RTTMsg.VERSION, "LEVEL3_V2.1 ", 12);
-	memcpy(RTTMsg.SWVERSION, "BPQ32002 ", 9);
+	memcpy(RTTMsg.SWVERSION, "BPQ32003 ", 9);				// Follows XR by not adding route time before sending RIF
 	_snprintf(temp, sizeof(temp), "$M%d $N $H%d            ", MAXRTT, MaxHops); // trailing spaces extend to ensure padding if the length of characters for MAXRTT changes.
 	memcpy(RTTMsg.FLAGS, temp, 20);                 // But still limit the actual characters copied.
 	memcpy(RTTMsg.ALIAS, &MYALIASTEXT, 6);
@@ -143,7 +145,7 @@ VOID InitialiseRTT()
 
 VOID TellINP3LinkGone(struct ROUTE * Route)
 {
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 	char call[11]="";
 
 	ConvFromAX25(Route->NEIGHBOUR_CALL, call);
@@ -163,7 +165,7 @@ VOID TellINP3LinkGone(struct ROUTE * Route)
 VOID DeleteINP3Routes(struct ROUTE * Route)
 {
 	int i;
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 	char Call1[10];
 	char Call2[10];
 
@@ -246,7 +248,7 @@ VOID DeleteINP3Routes(struct ROUTE * Route)
 VOID DecayNETROMRoutes(struct ROUTE * Route)
 {
 	int i;
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 
 	Dest--;
 
@@ -348,6 +350,7 @@ VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff)
 {
 	uint32_t RTT;
 	uint32_t OrigTime;
+	int32_t TTChange;		// Old SRTT
 
 	char Normcall[10];
 
@@ -356,9 +359,9 @@ VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff)
 	Route->Timeout = 0;			// Got Response
 	
 	sscanf(&Buff->L4DATA[6], "%u", &OrigTime);
-	RTT = GetTickCountINP3() - OrigTime;		// We work internally in mS
+	RTT = GetTickCountINP3() - OrigTime;
 
-	if (RTT > 60000 || RTT < 0)
+	if (RTT > 60000)
 		return;					// Ignore if more than 60 secs (why ??)
 
 	if (RTT == 0)
@@ -378,15 +381,34 @@ VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff)
 	if (Route->RTTIncrement == 0)
 		Route->RTTIncrement = 1;
 
+	if (Route->OldBPQ)
+		Route->TXRTTIncrement = Route->RTTIncrement;
+	else
+		Route->TXRTTIncrement = 0;
+
+
 	if ((Route->Status & GotRTTResponse) == 0)
 	{
 		// Link is just starting
 
-		if (DEBUGINP3) Debugprintf("INP3 got first RTT reply from %s - Link is (Re)staring", Normcall);
+		if (DEBUGINP3) Debugprintf("INP3 got first RTT reply from %s - Link is (Re)starting", Normcall);
 
 		Route->Status |= GotRTTResponse;
+		Route->STTAtLastChange = Route->RTTIncrement;
 	}
+	else
+	{
+		// if significant change update dests via this route
 
+		TTChange = Route->RTTIncrement - Route->STTAtLastChange;	// Change since last reported in 10mS units
+
+		if (TTChange > 10 || TTChange < - 10)
+		{
+			if (DEBUGINP3) Debugprintf("INP3 Significant change to RTT by %s %d - updating routes", Normcall, TTChange);
+			UpdateTTforRoute(Route, TTChange);
+			Route->STTAtLastChange = Route->RTTIncrement;
+		}
+	}
 }
 
 VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
@@ -453,10 +475,11 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 
 		// if other end is old bpq then value is mS otherwise 10 mS unita
 
-		if (Route->OldBPQ)
+		if (Route->OldBPQ == 1)
 			rtt /= 10;
 
-//		rtt += Route->SRTT;		// Don't do this - other end has added linkrtt
+		if (Route->OldBPQ == 0)
+			rtt += Route->RTTIncrement;		// Don't do this if OldBPQ set - other end has added it
 
 		msglen -= 10;
 
@@ -507,11 +530,17 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 
 //	SEE IF any of OUR CALLs - DONT WANT TO PUT IT IN LIST!
 
-	if (CompareCalls(axcall, NETROMCALL))
+	if (CompareCalls(axcall, MYCALL))
 	{
-		if (DEBUGINP3) Debugprintf("INP3 for our Nodecall - discarding");
+		if (DEBUGINP3) Debugprintf("INP3 RIF for our Nodecall - discarding");
 		return;
 	}
+	if (CompareCalls(axcall, NETROMCALL))
+	{
+		if (DEBUGINP3) Debugprintf("INP3 RIF for our NETROMCALL - discarding");
+		return;
+	}
+
 
 	if (CheckExcludeList(axcall) == 0)
 	{
@@ -525,7 +554,7 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 
 		if (CompareCalls(axcall, APPL->APPLCALL))
 		{
-			if (DEBUGINP3) Debugprintf("INP3 for an APPLCALL - discarding");
+			if (DEBUGINP3) Debugprintf("INP3 RIF for an APPLCALL - discarding");
 			return;
 		}
 	}
@@ -599,21 +628,15 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 	
 	// Adding New Node
 
-	if (Dest->RouteLastTT)
-		free(Dest->RouteLastTT);
-
 	memset(Dest, 0, sizeof(struct DEST_LIST));
-
 
 	memcpy(Dest->DEST_CALL, axcall, 7);
 	memcpy(Dest->DEST_ALIAS, alias, 6);
 
 //	Set up First Route
 
-	Dest->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
 	Dest->INP3ROUTE[0].Hops = hops;
 	Dest->INP3ROUTE[0].STT = rtt;
-	Dest->RouteLastTT[Route->recNum] = 0; 
 
 	Dest->INP3FLAGS = NewNode;
 
@@ -685,11 +708,10 @@ Found:
 			if (DEBUGINP3) Debugprintf("INP3 adding as route[%d]", i);
 			AddHere(ROUTEPTR, Route, hops, rtt);
 			if (i == 0)
-				Dest->RouteLastTT[Route->recNum] = 0;
+				Dest->LastTT = 0;
 			SortRoutes(Dest);
 			return;
 		}
-		ROUTEPTR++;
 	}
 
 	if (DEBUGINP3) Debugprintf("INP3 All entries in use - see if this is better than existing");
@@ -863,6 +885,33 @@ VOID SortRoutes(struct DEST_LIST * Dest)
 
 }
 
+VOID UpdateTTforRoute(struct ROUTE * Route, int TTChange)
+{
+	// Look for any Nodes with INP3 routes via Route and adjust STT. Called when an RTT messages detects a change in RTT to Route
+
+	struct DEST_LIST * Dest = DESTS;
+	int i, n;
+
+	for (i = 0; i < MAXDESTS; i++)
+	{
+		for (n = 0; n < 3; n++)
+		{
+			if (Dest->INP3ROUTE[n].ROUT_NEIGHBOUR == Route)
+			{
+				int newTT = Dest->INP3ROUTE[n].STT +TTChange;
+
+				if (newTT > 0)
+				{
+					Dest->INP3ROUTE[n].STT = newTT; 
+					SortRoutes(Dest);
+				}
+				break;
+			}
+		}
+		Dest++;
+	}
+}
+
 
 
 VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt)
@@ -951,6 +1000,8 @@ VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff, int Len
 
 		if (memcmp(RTTMsg->SWVERSION, "BPQ32001 ", 9) == 0)
 			Route->OldBPQ = 1;
+		else if (memcmp(RTTMsg->SWVERSION, "BPQ32002 ", 9) == 0)
+			Route->OldBPQ = 2;		// XR mode
 		else
 			Route->OldBPQ = 0;
 
@@ -1050,12 +1101,12 @@ VOID SendRTTMsg(struct ROUTE * Route)
 	SendNetFrame(Route, Msg);
 
 	if (Route->Status & SentRTTRequest)
+	{
+		if (DEBUGINP3) Debugprintf("INP3 Sending first RTT Msg to %s", Normcall);
 		return;	
+	}
 
 	Route->Status |= SentRTTRequest;	
-
-	if (DEBUGINP3) Debugprintf("INP3 Sending first RTT Msg to %s", Normcall);
-
 }
 
 VOID SendKeepAlive(struct ROUTE * Route)
@@ -1137,14 +1188,17 @@ VOID SendOurRIF(struct ROUTE * Route)
 	int totLen = 1;
 	int App;
 	APPLCALLS * APPL;
-	int sendTT = Route->RTTIncrement;
+	int sendTT = Route->TXRTTIncrement;
 	char Normcall[10];
+
+	if (sendTT == 0)
+		sendTT = 1;//  For no logical reason XR sends our routes at 10mS
 
 	Normcall[ConvFromAX25(Route->NEIGHBOUR_CALL, Normcall)] = 0;
 
 	if (DEBUGINP3) Debugprintf("INP3 Sending Our Call and Applcalls to %s ", Normcall);
 
-	if (Route->OldBPQ)	// old bpq bug - send mS not 10 mS units
+	if (Route->OldBPQ == 1)	// old bpq bug - send mS not 10 mS units
 		sendTT *= 10;
 
 	Msg = GetBuff();
@@ -1346,6 +1400,12 @@ int SendRIPTimer()
 				{
 					Route->BCTimer = RTTInterval + rand() % 4;
 					Route->Retries = RTTRetries;
+					
+					if (DEBUGINP3)
+					{
+						Normcall[ConvFromAX25(Route->NEIGHBOUR_CALL, Normcall)] = 0;
+						Debugprintf("INP3 Sending RTT Msg to %s BCTimer = %d", Normcall, Route->BCTimer);
+					}
 					SendRTTMsg(Route);
 				}
 			}
@@ -1406,15 +1466,13 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 	{
 		if (Routes->INP3Node && Routes->Status && Routes != Entry->ROUT_NEIGHBOUR)
 		{	
-			// as the value sent will be different for each link, we need to check if change is enough here
-
 			sendHops = Entry->Hops + 1;
 			if (Entry->STT < 60000)
-				sendTT = Entry->STT + Routes->RTTIncrement;
+				sendTT = Entry->STT + Routes->TXRTTIncrement;
 			else
 				sendTT = 60000;
 
-			lastTT = Dest->RouteLastTT[Routes->recNum];
+			lastTT = Dest->LastTT;
 
 			destCall[ConvFromAX25(Routes->NEIGHBOUR_CALL, destCall)] = 0;
 
@@ -1450,7 +1508,7 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 			if (memcmp(Routes->NEIGHBOUR_CALL, axcall, 7) == 0)
 			{
 				if (DEBUGINP3) Debugprintf("INP3 SendRIFToOtherNeighbours Don't send %s to itself", NodeCall);
-				Dest->RouteLastTT[Routes->recNum] = sendTT;		// But update or we will keep re-entering
+				Dest->LastTT = sendTT;		// But update or we will keep re-entering
 				Routes+=1;
 				continue;
 			}
@@ -1464,7 +1522,7 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 			if (portNum)
 				Routes->Status &= ~SentOurRIF;
 
-			Dest->RouteLastTT[Routes->recNum] = sendTT;
+			Dest->LastTT = sendTT;
 
 			// send, but only if within their constraints
 
@@ -1495,7 +1553,7 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 
 				if (Msg)
 				{
-					if (Routes->OldBPQ)	// old bpq bug - send mS not 10 mS units
+					if (Routes->OldBPQ == 1)	// old bpq bug - send mS not 10 mS units
 						sendTT *= 10;
 
 					Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], axcall, alias, sendHops, sendTT, destCall);
@@ -1515,7 +1573,7 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 VOID SendRIFToNewNeighbour(struct ROUTE * Route)
 {
 	int i;
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 	struct INP3_DEST_ROUTE_ENTRY * Entry;
 	struct _L3MESSAGEBUFFER * Msg;
 	int sendHops, sendTT;
@@ -1543,8 +1601,8 @@ VOID SendRIFToNewNeighbour(struct ROUTE * Route)
 
 			sendHops = Entry->Hops + 1;
 
-			sendTT = Entry->STT + Entry->ROUT_NEIGHBOUR->RTTIncrement;
-			Dest->RouteLastTT[Entry->ROUT_NEIGHBOUR->recNum] = sendTT;
+			sendTT = Entry->STT + Entry->ROUT_NEIGHBOUR->TXRTTIncrement;
+			Dest->LastTT = sendTT;
 
 			if ((Route->RemoteMAXHOPS == 0 || Route->RemoteMAXHOPS >= Entry->Hops || Entry->Hops > 30) && 
 				(Route->RemoteMAXRTT == 0 || Route->RemoteMAXRTT >= Entry->STT || Entry->STT == 60000))
@@ -1557,7 +1615,7 @@ VOID SendRIFToNewNeighbour(struct ROUTE * Route)
 				if (Msg == NULL) 
 					return;
 
-				if (Route->OldBPQ)	// old bpq bug - send mS not 10 mS units
+				if (Route->OldBPQ == 1)	// old bpq bug - send mS not 10 mS units
 					sendTT *= 10;
 
 				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], Dest->DEST_CALL, Dest->DEST_ALIAS, sendHops, sendTT, Normcall);
@@ -1609,7 +1667,7 @@ VOID FlushRIFs()
 VOID SendNegativeInfo()
 {
 	int i;
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 	struct INP3_DEST_ROUTE_ENTRY * Entry;
 	char call[11]="";
 
@@ -1652,7 +1710,6 @@ VOID SendNegativeInfo()
 			}
 			else
 			{
-				memset(Dest->RouteLastTT, 0, MAXNEIGHBOURS * sizeof(uint16_t));	// So next scan will check if rtt has increaced enough to need a RIF
 				memcpy(&Dest->INP3ROUTE[0], &Dest->INP3ROUTE[1], sizeof(struct INP3_DEST_ROUTE_ENTRY));
 				memcpy(&Dest->INP3ROUTE[1], &Dest->INP3ROUTE[2], sizeof(struct INP3_DEST_ROUTE_ENTRY));
 				memset(&Dest->INP3ROUTE[2], 0, sizeof(struct INP3_DEST_ROUTE_ENTRY));
@@ -1676,7 +1733,7 @@ VOID SendNegativeInfo()
 VOID SendPositiveInfo()
 {
 	int i;
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 	struct INP3_DEST_ROUTE_ENTRY * Entry;
 
 	Dest--;
@@ -1700,7 +1757,7 @@ VOID SendPositiveInfo()
 VOID SendNewInfo()
 {
 	int i;
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 	struct INP3_DEST_ROUTE_ENTRY * Entry;
 
 	Dest--;
@@ -1733,7 +1790,7 @@ struct ROUTE * Route = NULL;
 VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 {
 	char Call[10];
-	struct DEST_LIST * Dest =  DESTS;
+	struct DEST_LIST * Dest = DESTS;
 	struct INP3_DEST_ROUTE_ENTRY * Entry;
 
 	int i;
@@ -1756,10 +1813,12 @@ VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 	if (Msg == 0)
 		return;
 				
-	if (Route->OldBPQ)
-		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, Route->RTTIncrement * 10, Call);
+	if (Route->OldBPQ == 1)
+		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, Route->TXRTTIncrement * 10, Call);
+	else if (Route->OldBPQ == 2)
+		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, Route->TXRTTIncrement, Call);
 	else
-		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, Route->RTTIncrement, Call);
+		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, 1, Call);
 
 	for (App = 0; App < NumberofAppls; App++)
 	{
@@ -1767,11 +1826,12 @@ VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 
 		if (APPL->APPLQUAL > 0)
 		{
-			if (Route->OldBPQ)
-				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, Route->RTTIncrement * 10, Call);
+			if (Route->OldBPQ == 1)
+				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, Route->TXRTTIncrement * 10, Call);
+			else if (Route->OldBPQ == 2)
+				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, Route->TXRTTIncrement, Call);
 			else
-				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, Route->RTTIncrement, Call);
-			
+				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, 1, Call);
 		}
 	}
 
@@ -1797,15 +1857,14 @@ VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 			if (memcmp(Route->NEIGHBOUR_CALL, Dest->DEST_CALL, 7) == 0)
 			{
 				if (DEBUGINP3) Debugprintf("INP3 Timer RIF Don't send %s to itself", Call);
-				Route++;
 				continue;
 			}
 
 			sendHops = Entry->Hops + 1;
-			sendTT = Entry->STT + Entry->ROUT_NEIGHBOUR->RTTIncrement;
-			lastTT = Dest->RouteLastTT[Entry->ROUT_NEIGHBOUR->recNum];
+			sendTT = Entry->STT + Entry->ROUT_NEIGHBOUR->TXRTTIncrement;
+			lastTT = Dest->LastTT;
 
-			Dest->RouteLastTT[Entry->ROUT_NEIGHBOUR->recNum] = sendTT;
+			Dest->LastTT = sendTT;
 
 			// send, but only if within their constraints
 
@@ -1818,7 +1877,7 @@ VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 
 				if (Msg)
 				{
-					if (Route->OldBPQ)
+					if (Route->OldBPQ == 1)
 						sendTT *= 10;
 					
 					Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], Dest->DEST_CALL, Dest->DEST_ALIAS, sendHops, sendTT, Call);
@@ -1963,7 +2022,7 @@ UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
 		{
 			if (!isupper(call[i]) && !isdigit(call[i]) && call[i] != '-')
 			{
-				ptr2+=sprintf(ptr2, " Corrupt RIF\r");
+				ptr2+=sprintf(ptr2, " Corrupt RIF Call\r");
 				return ptr2;
 			}
 		}
@@ -1988,7 +2047,7 @@ UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
 
 			if (len < 2 || len > msglen)
 			{
-				ptr2+=sprintf(ptr2, " Corrupt RIF\r");
+				ptr2+=sprintf(ptr2, " Corrupt RIF Opcode %d Len %d MsgLen %d \r", opcode, len, msglen);
 				return ptr2;
 			}
 			if (opcode == 0 && len < 9)

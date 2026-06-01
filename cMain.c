@@ -1571,8 +1571,6 @@ BOOL Start()
 		DEST->DEST_STATE = 0x80;	// SPECIAL ENTRY
 		DEST->NRROUTE[0].ROUT_QUALITY = 255;
 		DEST->NRROUTE[0].ROUT_OBSCOUNT = 255;
-		if (DEST->RouteLastTT == 0)
-			DEST->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
 
 		DEST++;
 		NUMBEROFNODES++;
@@ -1594,9 +1592,6 @@ BOOL Start()
 				DEST->NRROUTE[0].ROUT_QUALITY = (UCHAR)APPL->APPLQUAL;
 				DEST->NRROUTE[0].ROUT_OBSCOUNT = 255;
 				APPL->NODEPOINTER = DEST;
-				if (DEST->RouteLastTT == 0)
-					DEST->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
-
 
 				DEST++;
 
@@ -2132,9 +2127,6 @@ VOID ReadNodes()
 
 			memcpy(DEST->DEST_CALL, axcall, 7);
 			memcpy(DEST->DEST_ALIAS, FULLALIAS, 6);
-			if (DEST->RouteLastTT == 0)
-				DEST->RouteLastTT = (uint16_t *)zalloc(MAXNEIGHBOURS * sizeof(uint16_t));
-
 
 			NUMBEROFNODES++;
 RouteLoop:

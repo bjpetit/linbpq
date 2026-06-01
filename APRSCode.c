@@ -7316,7 +7316,7 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr,	BOOL LOCAL, BOOL COOKIE)
 
 	if (memcmp(MsgPtr, "POST" , 3) == 0)
 	{
-		char * To;
+		char * To = "";
 		char * Msg = "";
 
 		URL = &MsgPtr[5];

@@ -1146,10 +1146,10 @@ int decodeNETROMIFrame(unsigned char * Msg, int iLen, char * Buffer, int BufferL
 
 		if (netromx)
 			Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"CONN REQX\", \"fromCct\": %d, \"srcUser\": \"%s\", \"srcNode\": \"%s\", \"window\": %d, \"service\": %d",
-				(L3MSG->L4INDEX << 8) | L3MSG->L4ID, srcUser, srcNode, L3MSG->L4DATA[0], service);
+				(L3MSG->L4ID << 8) | L3MSG->L4INDEX, srcUser, srcNode, L3MSG->L4DATA[0], service);
 		else
 			Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"CONN REQ\", \"fromCct\": %d, \"srcUser\": \"%s\", \"srcNode\": \"%s\", \"window\": %d",
-				(L3MSG->L4INDEX << 8) | L3MSG->L4ID, srcUser, srcNode, L3MSG->L4DATA[0]);
+				(L3MSG->L4ID << 8) | L3MSG->L4INDEX, srcUser, srcNode, L3MSG->L4DATA[0]);
 
 		return Len;
 
@@ -1159,10 +1159,10 @@ int decodeNETROMIFrame(unsigned char * Msg, int iLen, char * Buffer, int BufferL
 
 		if (L3MSG->L4FLAGS & L4BUSY)	
 			Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"CONN NAK\", \"toCct\": %d",
-				(L3MSG->L4INDEX << 8) | L3MSG->L4ID);
+				(L3MSG->L4ID << 8) | L3MSG->L4INDEX);
 		else
 			Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"CONN ACK\", \"toCct\": %d, \"fromCct\": %d, \"accWin\": %d",
-				(L3MSG->L4INDEX << 8) | L3MSG->L4ID, (L3MSG->L4TXNO << 8) | L3MSG->L4RXNO, L3MSG->L4DATA[0]);
+				(L3MSG->L4ID << 8) | L3MSG->L4INDEX, (L3MSG->L4TXNO << 8) | L3MSG->L4RXNO, L3MSG->L4DATA[0]);
 
 		return Len;
 
@@ -1170,31 +1170,31 @@ int decodeNETROMIFrame(unsigned char * Msg, int iLen, char * Buffer, int BufferL
 	case L4INFO:
 
 		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"INFO\", \"toCct\": %d, \"txSeq\": %d, \"rxSeq\": %d, \"paylen\": %d",
-			(L3MSG->L4INDEX << 8) | L3MSG->L4ID, L3MSG->L4TXNO, L3MSG->L4RXNO, iLen - 20);
+			(L3MSG->L4ID << 8) | L3MSG->L4INDEX, L3MSG->L4TXNO, L3MSG->L4RXNO, iLen - 20);
 
 		return Len;
 
 	case L4IACK:
 
 		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"INFO ACK\", \"toCct\": %d,  \"rxSeq\": %d",
-			(L3MSG->L4INDEX << 8) | L3MSG->L4ID, L3MSG->L4RXNO);
+			(L3MSG->L4ID << 8) | L3MSG->L4INDEX, L3MSG->L4RXNO);
 
 		return Len;
 
 		
 	case L4DREQ:
 
-		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"DISC REQ\", \"toCct\": %d", (L3MSG->L4INDEX << 8) | L3MSG->L4ID);
+		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"DISC REQ\", \"toCct\": %d", (L3MSG->L4ID << 8) | L3MSG->L4INDEX);
 		return Len;
 
 	case L4DACK:
 
-		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"DISC ACK\", \"toCct\": %d", (L3MSG->L4INDEX << 8) | L3MSG->L4ID);
+		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"DISC ACK\", \"toCct\": %d", (L3MSG->L4ID << 8) | L3MSG->L4INDEX);
 		return Len;
 
 	case L4RESET:
 
-		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"RSET\", \"fromCct\": %d", (L3MSG->L4INDEX << 8) | L3MSG->L4ID);
+		Len += snprintf(&Buffer[Len], BufferLen - Len, ", \"l4Type\": \"RSET\", \"fromCct\": %d", (L3MSG->L4ID << 8) | L3MSG->L4INDEX);
 		return Len;
 
 		
