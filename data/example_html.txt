@@ -1,0 +1,211 @@
+
+<!-- Version 10 5/1/2026 Layout refresh -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel='stylesheet' href='/bpq/bpq.css'><title>Main Configuration</title>
+
+<style>body{font-family:"IBM Plex Mono",ui-monospace,"Cascadia Code","Segoe UI Mono","SF Mono","Roboto Mono","Courier New",monospace;background:var(--bg);color-scheme:light dark;margin:0;padding:max(20px,env(safe-area-inset-left));color:var(--text);-webkit-font-smoothing:antialiased;}@supports(padding:max(0px)){body{padding:clamp(15px,4vw,20px);padding-left:max(clamp(15px,4vw,20px),env(safe-area-inset-left));padding-right:max(clamp(15px,4vw,20px),env(safe-area-inset-right));}}h1{text-align:center;margin:0 0 15px;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:clamp(1.75rem,5vw,3rem);line-height:1.25;}h2{text-align:center;margin:0 0 15px;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:clamp(1.5rem,4vw,2.25rem);line-height:1.25;}h3{text-align:center;margin:0 0 15px;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:clamp(1.25rem,3vw,1.75rem);line-height:1.25;}::selection{background:var(--primary);color:var(--on-primary);}::-moz-selection{background:var(--primary);color:var(--on-primary);}.wm-shell{max-width:980px;margin:0 auto;}.wm-title{text-align:center;margin:0 0 16px;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:clamp(1.25rem,3vw,1.75rem);font-weight:600;color:var(--text);}.section-title{text-align:center;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:clamp(1.25rem,1.05rem + 0.9vw,1.75rem);font-weight:700;margin:12px 0 0;color:var(--text);}table,th,td{border:1px solid var(--border);border-collapse:collapse;}#main{border:1px solid var(--border);border-radius:8px;background:var(--surface);box-shadow:var(--shadow-card);box-sizing:border-box;max-width:980px;margin:12px auto 0;padding:clamp(14px,2vw,22px);}#main form{font-family:"IBM Plex Mono",ui-monospace,"Cascadia Code","Segoe UI Mono","SF Mono","Roboto Mono","Courier New",monospace;display:flex;flex-direction:column;}.page-title{margin:10px 0 0;}.section-title{margin:18px 0 10px 0;padding:8px 0;border-bottom:1px solid var(--border-light);font-weight:700;text-align:left;letter-spacing:0.2px;}.section-title:first-of-type{margin-top:4px;}.form-row{display:flex;align-items:flex-start;gap:12px;margin:10px 0;flex-wrap:wrap;}.form-row label{min-width:120px;text-align:left;flex-shrink:0;line-height:1.35;padding-top:7px;}.form-row.checkbox-row{margin:8px 0;}.form-row.checkbox-row label{display:inline-flex;align-items:flex-start;gap:8px;margin:0;min-width:auto;line-height:1.35;padding-top:0;}.form-row.checkbox-row input[type=checkbox]{width:18px;height:18px;margin:0;flex-shrink:0;}.form-row input[type=text]{border:1px solid var(--border);background:var(--surface-soft);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family:"IBM Plex Mono",ui-monospace,"Cascadia Code","Segoe UI Mono","SF Mono","Roboto Mono","Courier New",monospace;flex:none;width:220px;}.form-row input[type=number]{border:1px solid var(--border);background:var(--surface-soft);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family:"IBM Plex Mono",ui-monospace,"Cascadia Code","Segoe UI Mono","SF Mono","Roboto Mono","Courier New",monospace;width:96px;max-width:100%;}.form-row input[type=radio]{margin:0 4px 0 0;}.form-row textarea{border:1px solid var(--border);background:var(--surface-soft);border-radius:6px;padding:8px 10px;box-sizing:border-box;font-family:"IBM Plex Mono",ui-monospace,"Cascadia Code","Segoe UI Mono","SF Mono","Roboto Mono","Courier New",monospace;flex:1 1 300px;min-width:150px;}.form-row .btn{margin-left:auto;}.text-area-row{display:flex;flex-direction:column;align-items:flex-start;margin:10px 0;}.text-area-row label{text-align:left;margin-bottom:4px;font-weight:500;}.text-area-row textarea{width:100%;}.textarea-group{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0;}.textarea-col{flex:1 1 150px;display:flex;flex-direction:column;}.textarea-col label{text-align:left;margin-bottom:4px;font-weight:500;font-size:0.9em;}.textarea-col textarea{width:100%;box-sizing:border-box;min-height:120px;}.filter-table-wrap{overflow-x:auto;max-width:100%;margin-top:8px;-webkit-overflow-scrolling:touch;}.filter-table-wrap table{width:max-content;min-width:100%;}.filter-table-wrap th{background:var(--table-header);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:600;}.filter-table-wrap td{background:var(--surface);}.filter-table-wrap tbody tr:nth-child(even) td{background:var(--table-stripe);}.filter-table-wrap th,.filter-table-wrap td{white-space:nowrap;}.filter-table-wrap td input{width:100%;min-width:72px;box-sizing:border-box;}.buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}.buttons input[name=Save]{background:var(--primary);border-color:var(--primary);color:var(--on-primary);}.buttons input[name=Save]:hover{background:var(--primary-dark);border-color:var(--primary-dark);}.buttons .btn{min-width:130px;}@media (max-width:768px){#main{padding:12px;}.form-row{flex-direction:column;align-items:flex-start;gap:4px;}.form-row label{min-width:100%;text-align:left;margin-bottom:4px;font-weight:500;width:100%;padding-top:0;}.form-row.checkbox-row{flex-direction:column;align-items:flex-start;}.form-row.checkbox-row label{width:100%;min-width:0;margin-bottom:0;}.form-row input[type=text],.form-row input[type=number],.form-row textarea{width:100%;flex:none;}.form-row .btn{margin-left:0;width:100%;}.text-area-row{align-items:stretch;}.text-area-row textarea{width:100%;}.textarea-group{flex-direction:column;}.textarea-col{flex:none;width:100%;}.textarea-col textarea{width:100%;}.buttons{flex-direction:column;justify-content:stretch;gap:8px;}.buttons .btn{flex:1 1 0;width:100%;min-height:48px;}}</style><script src='/bpq/bpq.js'></script></head><body>
+<div class="wm-shell"><h2 class="wm-title">BPQ32 BBS WG0A</h2>
+<div class=menu-header><button id=menuToggle class=menu-toggle type=button aria-expanded="false" aria-controls="mailMenu" onclick="toggleMenu(event)">Menu</button></div><div id=mailMenu class=menu><a href=/Mail/Status?M0000DE6E6080>Status</a><a href=/Mail/Conf?M0000DE6E6080>Configuration</a><a href=/Mail/Users?M0000DE6E6080>Users</a><a href=/Mail/Msgs?M0000DE6E6080>Messages</a><a href=/Mail/FWD?M0000DE6E6080>Forwarding</a><a href=/Mail/Wel?M0000DE6E6080>Welcome Msgs &amp; Prompts</a><a href=/Mail/HK?M0000DE6E6080>Housekeeping</a><a href=/Mail/WP?M0000DE6E6080>WP Update</a><a href=/Webmail>WebMail</a><a href=/>Node Menu</a></div><div class="page-title">Configuration</div>
+<div id="main">
+<form method="post" action="/Mail/Config?M0000DE6E6080">
+<div class="section-title">BBS Parameters</div>
+<div class="form-row">
+  <label>BBS Call</label>
+  <input type="text" value="WG0A" name="BBSCall">
+  <label>SYSOP Call</label>
+  <input type="text" value="WG0A" name="SYSOPCall">
+</div>
+<div class="form-row">
+  <label>H Route</label>
+  <input type="text" value="#MSP.MN.USA.NOAM" name="HRoute">
+</div>
+<div class="form-row checkbox-row">
+  <label><input checked=checked type="checkbox" name="BBSToSYSOP"> Redirect msgs to BBS Call to SYSOP Call</label>
+</div>
+<div class="form-row">
+  <label>BBS APPL No</label>
+  <input type="number" value="2" name="ApplNum">
+  <label>Streams</label>
+  <input type="number" value="16" name="Streams">
+</div>
+<div class="form-row checkbox-row">
+  <label><input checked=checked type="checkbox" name="SysToSYSOP"> Send System Msgs to SYSOP Call</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="RefuseBulls"> Refuse Bulls</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input checked=checked type="checkbox" name="EnUI"> Enable FBB UI System</label>
+</div>
+<div class="form-row">
+  <label>Send Mail For Beacons every</label>
+  <input type="number" value="21" name="UIInterval" style="width:80px;">
+  <span style="white-space:nowrap;">Minutes</span>
+  <input name="ConfigUI" value="Config UI" type="submit" class="btn">
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="DontHold"> Don't Hold Messages From New Users</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="DefaultNoWinlink"> Set Don't add WINLINK.ORG flag on new users</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="DontNeedName"> Don't Request Name</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="DontNeedHomeBBS"> Don't Request Home BBS</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="DontCheckFromCall"> Don't Check From Call</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="UserCantKillT"> Allow users to kill T messages</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="FWDtoMe"> Forward Messages to BBS Call</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="OnlyKnown"> Don't allow unknown users</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input checked=checked type="checkbox" name="Events"> Enable Event Reporting</label>
+</div>
+<div class="form-row">
+  <label>POP3 Port</label>
+  <input type="number" value="8110" name="POP3Port">
+  <label>SMTP Port</label>
+  <input type="number" value="8025" name="SMTPPort">
+  <label>NNTP Port</label>
+  <input type="number" value="8119" name="NNTPPort">
+</div>
+<div class="form-row checkbox-row">
+  <label><input checked=checked type="checkbox" name="EnRemote"> Enable Remote Access</label>
+</div>
+<div class="form-row">
+  <label>AMPR Domain</label>
+  <input type="text" value="" name="AMPRDomain">
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="SendAMPR"> Send AMPR Mail to AMPR host</label>
+</div>
+
+<div class="section-title">ISP Parameters</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="EnISP"> Enable ISP Interface</label>
+</div>
+<div class="form-row">
+  <label>My Domain</label>
+  <input type="text" value="" name="ISPDomain">
+</div>
+<div class="form-row">
+  <label>SMTP Server</label>
+  <input type="text" value="" name="SMTPServer">
+  <label>Port</label>
+  <input type="number" value="0" name="ISPSMTPPort" style="width:80px;">
+</div>
+<div class="form-row">
+  <label>SMTP Domain</label>
+  <input type="text" value="" name="ISPEHLOName">
+</div>
+<div class="form-row">
+  <label>POP3 Server</label>
+  <input type="text" value="" name="POP3Server">
+  <label>Port</label>
+  <input type="number" value="0" name="ISPPOP3Port" style="width:80px;">
+</div>
+<div class="form-row">
+  <label>Account Name</label>
+  <input type="text" value="" name="ISPAccount">
+</div>
+<div class="form-row">
+  <label>Password</label>
+  <input type="text" value="" name="ISPPassword">
+</div>
+<div class="form-row">
+  <label>POP3 Poll Interval</label>
+  <input type="number" value="0" name="PollInterval" style="width:80px;">
+  <span style="white-space:nowrap;">Minutes</span>
+</div>
+<div class="form-row checkbox-row">
+  <label><input type="checkbox" name="ISPAuth"> SMTP Server Requires Authentication</label>
+</div>
+
+<div class="section-title">WP Parameters</div>
+<div class="form-row checkbox-row">
+  <label><input checked=checked type="checkbox" name="EnWP"> Send WP Updates</label>
+</div>
+<div class="form-row checkbox-row">
+  <label><input checked=checked type="checkbox" name="RejWFBulls"> Reject WP Bulls</label>
+</div>
+<div class="form-row">
+  <label>Type</label>
+  <label><input type="radio" name="Type" value="TypeB"> Type B</label>
+  <label><input checked=checked type="radio" name="Type" value="TypeP"> Type P</label>
+</div>
+<div class="text-area-row">
+  <label>WP Destinations</label>
+  <textarea cols="40" rows="4" name="WPTO">WP@W9GM.#SWWI.WI.USA.NOAM
+WP@W0NE.#SEMN.MN.USA.NOAM
+WP@VE3CGR.#SCON.ON.CAN.NOAM
+WP@N4QMI.#SWTN.TN.USA.NOAM
+</textarea>
+</div>
+
+<div class="section-title">Message Filters</div>
+<div style="text-align:left;margin:10px 0;font-size:0.9em;">
+  <strong>Reject and Hold Filters:</strong> Define addresses to reject or hold messages
+</div>
+<div class="textarea-group">
+  <div class="textarea-col">
+    <label>Reject From</label>
+    <textarea cols="8" rows="5" name="Rfrom">NOCALL
+N0CALL
+</textarea>
+  </div>
+  <div class="textarea-col">
+    <label>Reject To</label>
+    <textarea cols="8" rows="5" name="Rto"></textarea>
+  </div>
+  <div class="textarea-col">
+    <label>Reject At</label>
+    <textarea cols="8" rows="5" name="Rat">NOCALL
+N0CALL
+</textarea>
+  </div>
+  <div class="textarea-col">
+    <label>Reject BID</label>
+    <textarea cols="8" rows="5" name="RBID"></textarea>
+  </div>
+  <div class="textarea-col">
+    <label>Hold From</label>
+    <textarea cols="8" rows="5" name="Hfrom"></textarea>
+  </div>
+  <div class="textarea-col">
+    <label>Hold To</label>
+    <textarea cols="8" rows="5" name="Hto"></textarea>
+  </div>
+  <div class="textarea-col">
+    <label>Hold At</label>
+    <textarea cols="8" rows="5" name="Hat"></textarea>
+  </div>
+  <div class="textarea-col">
+    <label>Hold BID</label>
+    <textarea cols="8" rows="5" name="HBID"></textarea>
+  </div>
+</div>
+
+<div style="text-align:left;margin:15px 0 5px 0;font-size:0.9em;">
+  <strong>FBB Reject.sys Type Filters:</strong><br>
+  All fields must match. Wildcards allowed. 'A' action accepts message if all fields match.
+</div>
+<div class='filter-table-wrap'><div class=table-wrap><table class="node-table"><thead><tr><th>Action</th><th>Type</th><th>From</th><th>To</th><th>@BBS</th><th>Bid</th><th>Max Size</th></tr></thead><tbody><tr><td><input type=text class=uppercase name=Action maxlength=2 value=" "></td><td><input type=text class=uppercase name=Type maxlength=2 value=" "></td><td><input type=text class=uppercase name=From maxlength=7 value=""></td><td><input type=text class=uppercase name=TO maxlength=7 value=""></td><td><input type=text class=uppercase name=AT maxlength=7 value=""></td><td><input type=text class=uppercase name=BID maxlength=13 value=""></td><td><input type=text name=MaxLen maxlength=6 value="0"></td></tr><tr><td><input type=text class=uppercase name=Action maxlength=2 value=" "></td><td><input type=text class=uppercase name=Type maxlength=2 value=" "></td><td><input type=text class=uppercase name=From maxlength=7 value=""></td><td><input type=text class=uppercase name=TO maxlength=7 value=""></td><td><input type=text class=uppercase name=AT maxlength=7 value=""></td><td><input type=text class=uppercase name=BID maxlength=13 value=""></td><td><input type=text name=MaxLen maxlength=6 value="0"></td></tr><tr><td><input type=text class=uppercase name=Action maxlength=2 value=" "></td><td><input type=text class=uppercase name=Type maxlength=2 value=" "></td><td><input type=text class=uppercase name=From maxlength=7 value=""></td><td><input type=text class=uppercase name=TO maxlength=7 value=""></td><td><input type=text class=uppercase name=AT maxlength=7 value=""></td><td><input type=text class=uppercase name=BID maxlength=13 value=""></td><td><input type=text name=MaxLen maxlength=6 value="0"></td></tr><tr><td><input type=text class=uppercase name=Action maxlength=2 value=" "></td><td><input type=text class=uppercase name=Type maxlength=2 value=" "></td><td><input type=text class=uppercase name=From maxlength=7 value=""></td><td><input type=text class=uppercase name=TO maxlength=7 value=""></td><td><input type=text class=uppercase name=AT maxlength=7 value=""></td><td><input type=text class=uppercase name=BID maxlength=13 value=""></td><td><input type=text name=MaxLen maxlength=6 value="0"></td></tr><tr><td><input type=text class=uppercase name=Action maxlength=2 value=" "></td><td><input type=text class=uppercase name=Type maxlength=2 value=" "></td><td><input type=text class=uppercase name=From maxlength=7 value=""></td><td><input type=text class=uppercase name=TO maxlength=7 value=""></td><td><input type=text class=uppercase name=AT maxlength=7 value=""></td><td><input type=text class=uppercase name=BID maxlength=13 value=""></td><td><input type=text name=MaxLen maxlength=6 value="0"></td></tr></tbody></table></div></div>
+
+<div class='buttons'>
+  <input class='btn' name="Save" value="Save" type="submit">
+  <input class='btn' name="Cancel" value="Cancel" type="submit">
+</div>
+</form>
+</div>
+</div>
+</body></html>
+</body></html>

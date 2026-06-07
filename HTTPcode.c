@@ -115,6 +115,19 @@ int CompareNode(const void *a, const void *b);
 int CompareAlias(const void *a, const void *b);
 int CompareRoutes(const void * a, const void * b);
 
+static int SendSharedAsset(SOCKET sock, const char * ContentType, const char * Content, int ContentLen)
+{
+	char Header[1024];
+	int HeaderLen = sprintf(Header,
+		"HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: %s\r\nCache-Control: max-age=86400\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n",
+		ContentLen, ContentType);
+
+	sendandcheck(sock, Header, HeaderLen);
+	sendandcheck(sock, Content, ContentLen);
+
+	return 0;
+}
+
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen, int InputLen, char * Token);
 void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
@@ -2077,6 +2090,20 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		{
 			APRSProcessHTTPMessage(sock, MsgPtr, LOCAL, COOKIE);
 			return 0;
+		}
+
+		if (_stricmp(Context, "/bpq.css") == 0 || _stricmp(Context, "bpq.css") == 0 ||
+			_stricmp(Context, "/Node/bpq.css") == 0 || _stricmp(Context, "Node/bpq.css") == 0)
+		{
+			static const char Content[] = COMMON_BPQ_CSS_CONTENT;
+			return SendSharedAsset(sock, "text/css", Content, (int)strlen(Content));
+		}
+
+		if (_stricmp(Context, "/bpq.js") == 0 || _stricmp(Context, "bpq.js") == 0 ||
+			_stricmp(Context, "/Node/bpq.js") == 0 || _stricmp(Context, "Node/bpq.js") == 0)
+		{
+			static const char Content[] = COMMON_BPQ_JS_CONTENT;
+			return SendSharedAsset(sock, "application/javascript", Content, (int)strlen(Content));
 		}
 
 
