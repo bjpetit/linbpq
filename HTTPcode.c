@@ -2083,6 +2083,28 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		}
 
 
+		if (_stricmp(Context, "/bpq/bpq.css") == 0 || _stricmp(Context, "bpq/bpq.css") == 0 ||
+			_stricmp(Context, "/bpq.css") == 0 || _stricmp(Context, "bpq.css") == 0 ||
+			_stricmp(Context, "/Node/bpq.css") == 0 || _stricmp(Context, "Node/bpq.css") == 0)
+		{
+			static const char Content[] = COMMON_BPQ_CSS_CONTENT;
+			return SendSharedAsset(sock, "text/css", Content, (int)strlen(Content));
+		}
+
+		if (_stricmp(Context, "/bpq/bpq.js") == 0 || _stricmp(Context, "bpq/bpq.js") == 0 ||
+			_stricmp(Context, "/bpq.js") == 0 || _stricmp(Context, "bpq.js") == 0 ||
+			_stricmp(Context, "/Node/bpq.js") == 0 || _stricmp(Context, "Node/bpq.js") == 0)
+		{
+			static const char Content[] = COMMON_BPQ_JS_CONTENT;
+			return SendSharedAsset(sock, "application/javascript", Content, (int)strlen(Content));
+		}
+
+		if (_stricmp(Context, "/bpq/node.css") == 0 || _stricmp(Context, "bpq/node.css") == 0)
+		{
+			static const char Content[] = COMMON_NODE_CSS_CONTENT;
+			return SendSharedAsset(sock, "text/css", Content, (int)strlen(Content));
+		}
+
 		// APRS process internally, including shared /bpq static assets
 
 		if (_memicmp(Context, "/APRS/", 6) == 0 || _stricmp(Context, "/APRS") == 0 ||
@@ -2090,20 +2112,6 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		{
 			APRSProcessHTTPMessage(sock, MsgPtr, LOCAL, COOKIE);
 			return 0;
-		}
-
-		if (_stricmp(Context, "/bpq.css") == 0 || _stricmp(Context, "bpq.css") == 0 ||
-			_stricmp(Context, "/Node/bpq.css") == 0 || _stricmp(Context, "Node/bpq.css") == 0)
-		{
-			static const char Content[] = COMMON_BPQ_CSS_CONTENT;
-			return SendSharedAsset(sock, "text/css", Content, (int)strlen(Content));
-		}
-
-		if (_stricmp(Context, "/bpq.js") == 0 || _stricmp(Context, "bpq.js") == 0 ||
-			_stricmp(Context, "/Node/bpq.js") == 0 || _stricmp(Context, "Node/bpq.js") == 0)
-		{
-			static const char Content[] = COMMON_BPQ_JS_CONTENT;
-			return SendSharedAsset(sock, "application/javascript", Content, (int)strlen(Content));
 		}
 
 
