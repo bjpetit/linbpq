@@ -752,7 +752,7 @@ void APIL2Trace(struct _MESSAGE * Message, char * Dirn)
 	int NR;
 	struct PORTCONTROL * PORT = GetPortTableEntryFromPortNum(Message->PORT);
 	time_t Now = time(NULL);
-#ifdef LINBPQ
+#ifndef WIN32
 	struct timespec ts;
 #else
 	FILETIME SystemTimeAsFileTime;
@@ -782,7 +782,7 @@ void APIL2Trace(struct _MESSAGE * Message, char * Dirn)
 	if ((Message->ORIGIN[6] & 1) == 0)	// Digis - ignore for now
 		return;
 
-#ifdef LINBPQ
+#ifndef WIN32
 
 	if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
 		NowMs = Now;

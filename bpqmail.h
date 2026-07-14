@@ -883,7 +883,6 @@ struct MSESSION
 	int Index;				// Line in Display
 };
 
-VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...);
 char * strlop(char * buf, char delim);
 int rt_cmd(CIRCUIT *circuit, char * Buffer);
 CIRCUIT *circuit_new(CIRCUIT *circuit, int flags);

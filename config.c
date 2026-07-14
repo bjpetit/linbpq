@@ -192,6 +192,8 @@ VOID Consoleprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
+	va_end(arglist);
+
 	strcat(Mess, "\n");
 	WritetoConsoleLocal(Mess);
 

@@ -116,6 +116,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
+	va_end(arglist);
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
 	return;

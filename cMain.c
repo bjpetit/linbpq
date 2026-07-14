@@ -900,7 +900,8 @@ BOOL Start()
 
 	MONTOFILEFLAG = cfg->C_MONTOFILE;
 
-	RIFInterval = cfg->C_RIFInterval;
+	if (cfg->C_RIFInterval)
+		RIFInterval = cfg->C_RIFInterval;
 
 	if (cfg->C_OnlyVer2point0)
 		SUPPORT2point2 = 0;

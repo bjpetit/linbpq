@@ -965,7 +965,7 @@ int main(int argc, char * argv[])
 		restartTime = time(NULL) + 120;		// Restart in 2 mins
 	}
 
-	HostEnt2 = gethostbyname ("10.8.0.38");
+	HostEnt2 = gethostbyname ("192.168.193.142");
 
 	if (HostEnt2)
 		memcpy(&txaddr2.sin_addr.s_addr,HostEnt2->h_addr,4);
@@ -1043,6 +1043,8 @@ int main(int argc, char * argv[])
 			continue;
 
 		ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr, sizeof(txaddr));
+		
+//		ret = sendto(sock, RXBUFFER, nLength, 0, (struct sockaddr *)&txaddr2, sizeof(txaddr2));
 
 		if (ret == -1)
 			perror("sendto 1");
@@ -1718,7 +1720,7 @@ void GenerateOutputFiles(time_t Now)
 			if (Node->Lat != 0.0 && Node->Lon != 0.0 && Node->LastHeard == 0) 
 				Colour = 'B';
 			else
-				Colour ='0';
+				continue; //Colour ='0';
 		}
 
 		HeardString[0] = 0;

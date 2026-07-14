@@ -73,6 +73,7 @@ void SendVARANetromNodes(struct TNCINFO * TNC, MESSAGE *Buffer);
 VOID DoNetromConnect(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * Dest, BOOL Spy, int Service);
 VOID sendAlltoOneNeigbour(struct ROUTE * Route);
 VOID CMDSTREAMS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMDX * CMD);
+char * FormatIP(uint32_t Addr);
 
 extern VOID KISSTX(struct KISSINFO * KISS, PMESSAGE Buffer);
 
@@ -263,8 +264,8 @@ char * __cdecl Cmdprintf(TRANSPORTENTRY * Session, char * Bufferptr, const char 
 		Paclen = 255;
 
 	va_start(arglist, format);
-
 	MsgLen = vsprintf(Mess, format, arglist);
+	va_end(arglist);
 
 	OldLen = (int)(Bufferptr - (char *)REPLYBUFFER->L2DATA);
 
@@ -849,10 +850,10 @@ BOOL cATTACHTOBBS(TRANSPORTENTRY * Session, UINT Mask, int Paclen, int * AnySess
 
 				ApplNum = 1;
 
-				while  (APPLMASK && (APPLMASK & 1) == 0)
+				while  (Mask && (Mask & 1) == 0)
 				{
 					ApplNum++;
-					APPLMASK >>= 1;
+					Mask >>= 1;
 				}
 
 				HOSTSESS->HOSTAPPLNUM = ApplNum;
@@ -3292,6 +3293,17 @@ VOID LINKCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 	SendCommandReply(Session, REPLYBUFFER, (int)(Bufferptr - (char *)REPLYBUFFER));
 }
 
+const char SwVers[12][23] = {
+	"Unknown", "BPQ16 (DOS)", "XRouter16 (DOS)", "XServ16 (DOS)", 
+	"XRouter32 (Win GUI)",
+	"XR32 (Win TUI)",
+	"XS32 (Win TUI BBS)", "XRLin (Linux x86)",
+	"XRouter (Raspberry Pi)",
+	"BPQ32 (Windows)",	"BPQ32 (Linux)"
+};
+
+
+
 char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * Dest)
 {
 	char Normcall[10];
@@ -3300,6 +3312,8 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 	struct INP3_DEST_ROUTE_ENTRY * Route;
 	struct ROUTE * Neighbour;
 	int i, Active, len;
+	time_t Now = time(NULL);
+	struct tm * TM;
 
 	Alias[6] = 0;
 
@@ -3308,15 +3322,67 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 
 	Normcall[ConvFromAX25(Dest->DEST_CALL, Normcall)] = 0;
 
-	Bufferptr = Cmdprintf(Session, Bufferptr, "Routes to: %s:%s", Alias, Normcall);
+	if (Dest->XROptions)
+	{
+		XROptions * Options = Dest->XROptions;
 
-	if (Dest->DEST_COUNT)
-		Bufferptr = Cmdprintf(Session, Bufferptr, " RTT=%4.2f FR=%d %c %.1d\r",
-			Dest->DEST_RTT /1000.0, Dest->DEST_COUNT, 
-			(Dest->DEST_STATE & 0x40)? 'B':' ', (Dest->DEST_STATE & 63));
-	else
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Nodes:\rInfo for: %s:%s [%s] ", Alias, Normcall, SwVers[Options->SWType]);
+		if (Options->Ver)
+			Bufferptr = Cmdprintf(Session, Bufferptr, "v%s ", Options->Ver);
+
+		if (Dest->DEST_COUNT)
+			Bufferptr = Cmdprintf(Session, Bufferptr, " RTT=%4.2f FR=%d %c %.1d",
+				Dest->DEST_RTT /1000.0, Dest->DEST_COUNT, (Dest->DEST_STATE & 0x40)? 'B':' ', (Dest->DEST_STATE & 63));
+
 		Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
+		
+		if (Options->Lat)
+		{
+			if (Options->Lat > 0)
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Pos=%3.4fN  ",   Options->Lat);
+			else
+				Bufferptr = Cmdprintf(Session, Bufferptr, "Pos=%3.4fS  ",   -Options->Lat);
 
+			if (Options->Lon > 0)
+				Bufferptr = Cmdprintf(Session, Bufferptr, "%3.4fE  ",   Options->Lon);
+			else
+				Bufferptr = Cmdprintf(Session, Bufferptr, "%3.4fW  ",   -Options->Lon);
+		}
+
+		if (Options->LOC)
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Loc=%s ", Options->LOC);
+
+		if (Options->QTH)
+			Bufferptr = Cmdprintf(Session, Bufferptr, "Qth=%s", Options->QTH);
+
+		if (Options->IPADDR)
+			Bufferptr = Cmdprintf(Session, Bufferptr, "\rIP=%s/%d", FormatIP(Options->IPADDR), Options->Mask);
+
+		Bufferptr = Cmdprintf(Session, Bufferptr, "\r\rRoutes:\r");
+
+
+
+/*
+G7TAJ-1:TANK2} Nodes:
+Info for: XRLN64:G8PZT-1  (HOST) [XRLin]
+  Pos=50.1458N   5.1250W  Loc=IO70KD  Qth=LAMANVA
+  IP=44.135.49.90/32  v505i  OFF
+  Supports: INP3 L3ROUT NRR NCMP L4X NDP
+  BBS XRCHAT
+  Updated: 09/07 06:07
+*/
+	}
+	else
+	{
+		Bufferptr = Cmdprintf(Session, Bufferptr, "Routes to: %s:%s", Alias, Normcall);
+
+		if (Dest->DEST_COUNT)
+			Bufferptr = Cmdprintf(Session, Bufferptr, " RTT=%4.2f FR=%d %c %.1d\r",
+				Dest->DEST_RTT /1000.0, Dest->DEST_COUNT, 
+				(Dest->DEST_STATE & 0x40)? 'B':' ', (Dest->DEST_STATE & 63));
+		else
+			Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
+	}
 	NRRoute = &Dest->NRROUTE[0];
 
 	Active = Dest->DEST_ROUTE;
@@ -3349,12 +3415,18 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 		if (Neighbour)
 		{
 			double srtt = Route->STT/100.0;
+			TM = gmtime(&Route->LastRefreshed);
+
+
+//			TM->tm_yday, , TM->tm_sec, MH->MHFreq, LOC);
+
+
 
 			len = ConvFromAX25(Neighbour->NEIGHBOUR_CALL, Normcall);
 			Normcall[len] = 0;
 
-			Bufferptr = Cmdprintf(Session, Bufferptr, "%c %d %4.2fs %d %s\r",
-				(Active == i + 3)?'>':' ',Route->Hops, srtt, Neighbour->NEIGHBOUR_PORT, Normcall);
+			Bufferptr = Cmdprintf(Session, Bufferptr, "%c %d %4.2fs %d %s %02d:%02d\r",
+				(Active == i + 3)?'>':' ',Route->Hops, srtt, Neighbour->NEIGHBOUR_PORT, Normcall, TM->tm_hour, TM->tm_min);
 		}
 		Route++;
 	}

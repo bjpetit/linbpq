@@ -237,7 +237,9 @@ typedef struct ROUTE
 	int ConnectionAttempts;
 
 	int Status;			//
-	int OldBPQ;				// Set if other end is BPQ sending RIF in mS
+	int mSRIF;				// Set if other end is BPQ sending RIF in mS (Ver < 2)
+	int senderaddsRTT;		// Set if link RTT added before sending (Ver = 1)
+	int timeoutRoutes;		// Set if other end always sends timed RIF updates (Hourly)
 	int LastRTT;			// Last Value Reported
 	int RTT;				// Current	
 	int SRTT;				// Smoothed RTT
@@ -481,21 +483,45 @@ typedef struct _APPLCALLS
 
 // We treat the Routes as an array of 6. First 3 are NODES routes, next 3 are INP3 Routes. This works, but maybe is not ideal
 
-typedef struct NR_DEST_ROUTE_ENTRY
+struct NR_DEST_ROUTE_ENTRY
 {
 	struct ROUTE * ROUT_NEIGHBOUR;	// POINTER TO NEXT NODE IN PATH
-	UCHAR ROUT_QUALITY;				// QUALITY
-	UCHAR ROUT_OBSCOUNT;
-	UCHAR ROUT_LOCKED;
-} *PNR_DEST_ROUTE_ENTRY;
+	time_t padding;					// 
+	uint8_t ROUT_QUALITY;				// QUALITY
+	uint8_t ROUT_OBSCOUNT;
+	uint8_t ROUT_LOCKED;
+};
 
-typedef struct INP3_DEST_ROUTE_ENTRY
+struct INP3_DEST_ROUTE_ENTRY
 {
 	struct ROUTE * ROUT_NEIGHBOUR;	// POINTER TO NEXT NODE IN PATH
-	USHORT STT;						// Current time to dest	from here (was called RTT but is one way not round trip.
+	time_t LastRefreshed;
+	uint16_t STT;					// Current time to dest	from here (was called RTT but is one way not round trip.
 									// Is actually a smoothed value as is calculated from smoothed link times)
-	UCHAR Hops;
-} *PDEST_ROUTE_ENTRY;
+	uint8_t Hops;
+};
+
+// Extended XR options for XROUTER
+
+typedef struct
+{
+	uint32_t IPADDR;
+	uint8_t Mask;
+	double Lat;
+	double Lon;
+	time_t Time;
+	uint16_t Port;
+	int16_t TZOffset;
+	char * LOC;
+	char * QTH;
+	char * Ver;
+	uint8_t SWType;
+	uint8_t NetworkFlags;
+	uint8_t ApplFlags;
+	uint8_t * Optionslist;		// raw options as last received for relay
+} XROptions;
+
+
 
 typedef struct DEST_LIST
 {
@@ -520,6 +546,7 @@ typedef struct DEST_LIST
 	int DEST_RTT;				// SMOOTHED ROUND TRIP TIMER
 	int DEST_COUNT;				// FRAMES SENT
 	USHORT LastTT;				// Last INP3 Value sent. This is our value, which we now send
+	XROptions * XROptions;		
 
 
 } dest_list;

@@ -283,6 +283,8 @@ VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
 		}
 	}
 
+
+
 	BPQTRACE(Buffer, TRUE);				// TRACE - RX frames to APRS
 
 	if (PORT->PORTMHEARD)
@@ -292,6 +294,14 @@ VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer)
 	/// TAJ added 07/12/2020 for 'all RX traffic as IfinOctects
 
 	InOctets[PORT->PORTNUMBER] += Buffer->LENGTH - MSGHDDRLEN;
+
+	// Check Exclude List
+
+	if (CheckExcludeList(Buffer->ORIGIN) == 0)
+	{
+		ReleaseBuffer(Buffer);
+		return;
+	}
 
 	//	CHECK THAT ALL DIGIS HAVE BEEN ACTIONED,
 	//  AND ADJUST FOR DIGIPEATERS IF PRESENT

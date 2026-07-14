@@ -452,7 +452,7 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 
 	// Don't close/reopen logs every time
 
-//	if ((LT - LastLogTime[Flags]) > 60)
+	if ((LT - LastLogTime[Flags]) > 30)
 	{
 		LastLogTime[Flags] = LT;
 		fclose(LogHandle[Flags]);
@@ -501,6 +501,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf(Mess, format, arglist);
+	va_end(arglist);
 #ifndef LINBPQ
 	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG_X);
 #endif
@@ -519,6 +520,7 @@ VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * form
 
 	va_start(arglist, format);
 	Len = vsprintf(Mess, format, arglist);
+	va_end(arglist);
 	WriteLogLine(conn, InOut, Mess, Len, LogMode);
 
 	return;
@@ -2444,6 +2446,7 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 	
 	va_start(arglist, format);
 	len = vsprintf(Mess, format, arglist);
+	va_end(arglist);
 
 	QueueMsg(conn, Mess, len);
 
@@ -2463,6 +2466,7 @@ VOID __cdecl nodeprintfEx(ConnectionInfo * conn, const char * format, ...)
 	
 	va_start(arglist, format);
 	len = vsprintf(Mess, format, arglist);
+	va_end(arglist);
 
 	QueueMsg(conn, Mess, len);
 
@@ -10895,6 +10899,8 @@ Length += sprintf(MailBuffer, "New User %s Connected to Mailbox on Port %d Freq 
 				user->flags |= F_Temp_B2_BBS;
 
 				conn->NewUser = TRUE;
+
+				user->lastmsg = LatestMsg - 20;		// Limit L command for new users
 			}
 
 			user->TimeLastConnected = time(NULL);
@@ -12066,6 +12072,8 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 
 	iop = NULL;
 
+	printf("Len %d %x %x %x\n", conn->InputLen, conn->InputBuffer[0], conn->InputBuffer[1], conn->InputBuffer[2]); 
+
 	conn->InputBuffer[conn->InputLen] = 0;
 	strlop(conn->InputBuffer, 13);
 
@@ -12075,7 +12083,7 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 	{
 		if (isalnum(conn->InputBuffer[i]) == 0 && conn->InputBuffer[i] != ' ')
 		{
-			BBSputs(conn, "PG commnand string invalid\r");
+			BBSputs(conn, "PG command string invalid\r");
 			conn->InputMode=0;
 			SendPrompt(conn, user);
 			return;
@@ -12090,7 +12098,7 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 	user->Temp->RUNPGPARAMS->user = user;
 	user->Temp->RUNPGPARAMS->conn = conn;
 	strncpy(user->Temp->RUNPGPARAMS->InputBuffer, conn->InputBuffer, 80); // needs to be length of actual input!
-	user->Temp->RUNPGPARAMS->Len = conn->InputLen;
+	user->Temp->RUNPGPARAMS->Len = strlen(conn->InputBuffer);
 
 	if (conn == 0 || user == 0)
 	{
@@ -12343,7 +12351,7 @@ void run_pg( CIRCUIT * conn, struct UserInfo * user )
 	user->Temp->RUNPGPARAMS->user = user;
 	user->Temp->RUNPGPARAMS->conn = conn;
 	strncpy(user->Temp->RUNPGPARAMS->InputBuffer, conn->InputBuffer, 80); // needs to be length of actual input!
-	user->Temp->RUNPGPARAMS->Len = conn->InputLen;
+	user->Temp->RUNPGPARAMS->Len = strlen(conn->InputBuffer);
 	index = user->Temp->PG_INDEX;
 
 	conn->InputBuffer[conn->InputLen] = 0;
@@ -12355,7 +12363,7 @@ void run_pg( CIRCUIT * conn, struct UserInfo * user )
 	{
 		if (isalnum(conn->InputBuffer[i]) == 0 && conn->InputBuffer[i] != ' ')
 		{
-			BBSputs(conn, "PG commnand string invalid\r");
+			BBSputs(conn, "PG command string invalid\r");
 			conn->InputMode=0;
 			SendPrompt(conn, user);
 			return;
@@ -13408,6 +13416,7 @@ VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...)
 	
 	va_start(arglist, format);
 	vsprintf(buff, format, arglist);
+	va_end(arglist);
 
 	BBSputs(conn, buff);
 }

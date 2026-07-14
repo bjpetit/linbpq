@@ -70,11 +70,15 @@
 //	Allow /History to be shortened to /Hi (45)
 //	Fix extra r charater in Chat Config Web Page
 
-//.25
+//.24
 
 //  Increase size of status display buffers (7)
 //	Allow sending BEL (CTRL/G) (79)
 //	Fix sending BEL (CTRL/G) (81)
+
+// .25
+
+//	Only flush logs every 30 secs (25.31)
 
 
 #include "BPQChat.h"

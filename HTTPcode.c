@@ -527,7 +527,7 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 					// Make sure line isn't too long
 					// but beware of spaces expanded to &nbsp; - count chars in line
 
-					if ((realLen) > 100)
+					if ((realLen) > 250)
 					{
 						strcpy(ptr2, "<br>\r\n");
 
@@ -748,7 +748,7 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 	int State;
 	struct HTTPConnectionInfo * Session = FindSession(Key);
 	int Stream;
-	int maxlen = 1000;
+	int maxlen = 2000;
 
 
 	if (Session == NULL)
@@ -2000,7 +2000,9 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 					"Content-Type: application/json\r\n"
 					"Connection: close\r\n"
 					"Access-Control-Allow-Origin: *\r\n"
+					"Cache-Control: no-cache\r\n"
 					"%s\r\n", ReplyLen, Encoding);
+
 
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, Compressed, ReplyLen);
@@ -2849,7 +2851,7 @@ doHeader:
 			{
 				//	Save Config File
 
-				if (conn->LOCALAuth)
+				if (conn->LOCALAuth || COOKIE)
 					SaveConfigFile(sock, MsgPtr, Key, LOCAL);
 				else
 				{

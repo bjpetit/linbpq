@@ -105,6 +105,7 @@ void GetSavedAPRSMessages();
 static VOID GPSDConnect(void * unused);
 int CanPortDigi(int Port);
 int FromLOC(char * Locator, double * pLat, double * pLon);
+BOOL CheckExcludeList(UCHAR * Call);
 
 extern int SemHeldByAPI;
 extern int APRSMONDECODE();
@@ -1109,6 +1110,14 @@ Dll VOID APIENTRY Poll_APRS()
 
 		monchars = (UCHAR *)monbuff;
 		AdjBuff = Orig = (MESSAGE *)monchars;	// Adjusted for digis
+
+		// Check Exclude List
+
+		if (CheckExcludeList(Orig->ORIGIN) == 0)
+		{
+			ReleaseBuffer(monbuff);
+			continue;
+		}
 
 		Port = Orig->PORT;
 		
@@ -3306,6 +3315,19 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		return;
 
 	*(Dest++) = 0;				// Termainate Source
+
+	if (ExcludeList[0])
+	{
+		// Check if excluded. Need to convert to ax.25
+
+		UCHAR AXCall[7];
+
+		ConvToAX25(Source, AXCall);
+
+		if (CheckExcludeList == 0)
+			return;
+	}
+
 	ptr = strchr(Dest, ',');
 
 	if (ptr)

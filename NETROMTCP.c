@@ -66,8 +66,8 @@ extern SOCKET NodeAPISocket;
 
 struct NRTCPMsg
 {
-	short Length;
-	char Call[10];
+	short Length;				// Including header
+	char Call[10];				// of sending Node
 	unsigned char PID;
 	char Packet[1024];
 };

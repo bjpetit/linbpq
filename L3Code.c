@@ -1370,6 +1370,27 @@ VOID REMOVENODE(dest_list * DEST)
 		}
 		L4++;
 	}
+
+	if (DEST->XROptions)
+	{
+		XROptions * Options = DEST->XROptions;
+
+		if (Options->LOC)
+			free(Options->LOC);
+
+		if (Options->QTH)
+			free(Options->QTH);
+
+		if (Options->Ver)
+			free(Options->Ver);
+
+		if (Options->Optionslist)
+			free(Options->Optionslist);
+
+
+		free(DEST->XROptions);
+	}
+
 	
 	memset(DEST, 0, sizeof(struct DEST_LIST));	
 	NUMBEROFNODES--;
