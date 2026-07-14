@@ -125,6 +125,10 @@ time_t RunningConnectScript = 0;
 struct HistoryRec * History = NULL;
 int HistoryCount = 0;
 
+static FILE * LogHandle[4] = {NULL, NULL, NULL, NULL};
+
+static time_t LastLogTime[4] = {0, 0, 0, 0};
+
 
 typedef int (WINAPI FAR *FARPROCX)();
 extern FARPROCX pRunEventProgram;
@@ -299,6 +303,7 @@ VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...)
 	
 	va_start(arglist, format);
 	vsnprintf(buff, sizeof(buff), format, arglist);
+	va_end(arglist);
 
 	nputs(conn, buff);
 }
@@ -332,8 +337,9 @@ int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len)
 		conn->u.link->lastMsgReceived = time(NULL);
 
 	//	UCHAR * OutputQueue;		// Messages to user
-	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
-	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Queue Length all is sent - free the buffer and start again.
+	//	int OutputQueueSize;		// Total Malloc'ed size
+	//	int OutputQueueLength;		// Bytes queued. Also Put Pointer for next Message
+	//	int OutputGetPointer;		// Next byte to send. When Getpointer = QueueLength all is sent - free the buffer and start again.
 
 	// Create or extend buffer
 
@@ -819,7 +825,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 		
 			while (ptr)
 			{
-				nprintf(conn, ptr->Message);
+				nputs(conn, ptr->Message);
 				ptr = ptr->next;
 			}
 				
@@ -3290,6 +3296,7 @@ VOID ChatTimer()
 
 	int	i = 0;
 	ChatCIRCUIT *c;
+	int n;
 
 #ifndef LINBPQ
 	int	len;
@@ -3475,6 +3482,22 @@ VOID ChatTimer()
 	{
 		ChatTmr = 1;
 		node_keepalive();
+	}
+
+	// Flush logs
+
+	for (n = 0; n < 4; n++)
+	{
+		if (LogHandle[n])
+		{
+			time_t LT = time(NULL);
+			if ((LT - LastLogTime[n]) > 30)
+			{
+				LastLogTime[n] = LT;
+				fclose(LogHandle[n]);
+				LogHandle[n] = NULL;
+			}
+		}
 	}
 
 	FreeSemaphore(&ChatSemaphore);
@@ -4430,15 +4453,6 @@ VOID SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen)
 
 #endif
 
-
-#ifndef WIN32
-#define INVALID_HANDLE_VALUE (void *)-1
-#endif
-
-static FILE * LogHandle[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
-
-static time_t LastLogTime[4] = {0, 0, 0, 0};
-
 static char FilesNames[4][100] = {"", "", "", ""};
 
 static char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
@@ -4479,7 +4493,7 @@ void ChatWriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int 
 	char CRLF[2] = {0x0d,0x0a};
 	struct tm * tm;
 	char Stamp[20];
-	time_t T;
+	time_t LT;
 		
 #ifndef LINBPQ
 
@@ -4516,12 +4530,12 @@ void ChatWriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int 
 	if (Flags == LOG_CHAT && !LogCHAT)
 		return;
 
-	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) ChatOpenLogfile(Flags);
+	if (LogHandle[Flags] == NULL) ChatOpenLogfile(Flags);
 
-	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) return;
+	if (LogHandle[Flags] == NULL) return;
 	
-	T = time(NULL);
-	tm = gmtime(&T);	
+	LT = time(NULL);
+	tm = gmtime(&LT);	
 	
 	sprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d %c",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, Flag);
@@ -4544,8 +4558,14 @@ void ChatWriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int 
 	else
 		fwrite(CRLF, 1, 2, LogHandle[Flags]);
 
-	fclose(LogHandle[Flags]);
-	LogHandle[Flags] = INVALID_HANDLE_VALUE;
+	// Don't close/reopen logs every time
+
+	if ((LT - LastLogTime[Flags]) > 30)
+	{
+		LastLogTime[Flags] = LT;
+		fclose(LogHandle[Flags]);
+		LogHandle[Flags] = NULL;
+	}
 }
 
 

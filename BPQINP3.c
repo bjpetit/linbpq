@@ -43,7 +43,7 @@ int NegativeDelay = 10;				// Seconds between checks for negative info - should 
 int PositiveDelay = 300;
 
 time_t SENDRIFTIME = 0;
-int RIFInterval = 60;
+int RIFInterval = 3600;
 
 VOID SendNegativeInfo();
 VOID SortRoutes(struct DEST_LIST * Dest);
@@ -97,10 +97,10 @@ VOID __cdecl Debugprintf(const char * format, ...);
 
 VOID SendINP3RIF(struct ROUTE * Route, UCHAR * Call, UCHAR * Alias, int Hops, int RTT);
 VOID SendOurRIF(struct ROUTE * Route);
-VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt);
-VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt);
+VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, int  hops, int rtt, time_t Now, unsigned char * Options);
+VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt, time_t Now);
 VOID KillRoute(struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR);
-VOID AddHere(struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt);
+VOID AddHere(struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt, time_t Now);
 VOID SendRIFToNewNeighbour(struct ROUTE * Route);
 VOID DecayNETROMRoutes(struct ROUTE * Route);
 VOID DeleteINP3Routes(struct ROUTE * Route);
@@ -112,7 +112,7 @@ struct _RTTMSG RTTMsg = {""};
 
 //struct ROUTE DummyRoute = {"","",""};
 
-int RIPTimerCount = 0;				// 1 sec to 10 sec counter
+int RIPTimerCount = 10;				// 1 sec to 10 sec counter
 int PosTimerCount = 0;
 int NegTimerCount = 0;
 
@@ -127,6 +127,13 @@ int RTTTimeout = 6;				// 1 Min (Horizon is 1 min)
 
 uint32_t RTTID = 1;
 
+// BPQ32001 - Original. Sends RIF in mS and adds link rtt before sending
+// BPQ32002 - Sends RIF in 10mS and adds link rtt before sending
+// BPQ32003 - Original. RIF in 10mS and doesn't add link rtt before sending (XR compatiblity)
+// BPQ32004 - Original. RIF in 10mS ,doesn't add link rtt before sending and sends full routing table every hour
+
+
+
 VOID InitialiseRTT()
 {
 	UCHAR temp[256] = "";
@@ -136,7 +143,7 @@ VOID InitialiseRTT()
 	memset(&RTTMsg, ' ', sizeof(struct _RTTMSG));
 	memcpy(RTTMsg.ID, "L3RTT: ", 7);
 	memcpy(RTTMsg.VERSION, "LEVEL3_V2.1 ", 12);
-	memcpy(RTTMsg.SWVERSION, "BPQ32003 ", 9);				// Follows XR by not adding route time before sending RIF
+	memcpy(RTTMsg.SWVERSION, "BPQ32004 ", 9);				// Follows XR by not adding route time before sending RIF, send Hourly RIF refresh and time out routes
 	_snprintf(temp, sizeof(temp), "$M%d $N $H%d            ", MAXRTT, MaxHops); // trailing spaces extend to ensure padding if the length of characters for MAXRTT changes.
 	memcpy(RTTMsg.FLAGS, temp, 20);                 // But still limit the actual characters copied.
 	memcpy(RTTMsg.ALIAS, &MYALIASTEXT, 6);
@@ -381,7 +388,7 @@ VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff)
 	if (Route->RTTIncrement == 0)
 		Route->RTTIncrement = 1;
 
-	if (Route->OldBPQ)
+	if (Route->senderaddsRTT)
 		Route->TXRTTIncrement = Route->RTTIncrement;
 	else
 		Route->TXRTTIncrement = 0;
@@ -411,16 +418,21 @@ VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff)
 	}
 }
 
+UCHAR * SkipOptions(UCHAR * ptr1, int msglen);
+void DecodeRIFOptions(struct DEST_LIST * Dest, UCHAR * Options);
+
 VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 {
 	unsigned char axcall[7];
 	int hops;
 	unsigned short rtt;
-	int len;
-	int opcode;
 	char alias[6];
 	UINT Stamp, HH, MM;
 	char Normcall[10];
+	time_t Now = time(NULL);
+	unsigned char * Options;
+	int i;
+	UCHAR * oldptr1;
 
 	if (Route == 0 || Route->NEIGHBOUR_LINK == 0 || Route->NEIGHBOUR_LINK->LINKCALL == 0)
 		return;
@@ -443,7 +455,7 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 
 	// Update Timestamp on Route
 
-	Stamp = time(NULL) % 86400;		// Secs into day
+	Stamp = Now % 86400;		// Secs into day
 	HH = Stamp / 3600;
 
 	Stamp -= HH * 3600;
@@ -462,9 +474,12 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 		memset(alias, ' ', 6);	
 		memcpy(axcall, ptr1, 7);
 
-		if (axcall[0] < 0x60 || (axcall[0] & 1))		// Not valid ax25 callsign
+		for (i = 0; i < 6; i++)
+		{
+			if (axcall[i] < 0x40 || (axcall[i] & 1))		// Not valid ax25 callsign
 			return;					// Corrupt RIF
-	
+		}
+
 		ptr1+=7;
 
 		hops = *ptr1++;
@@ -475,40 +490,30 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 
 		// if other end is old bpq then value is mS otherwise 10 mS unita
 
-		if (Route->OldBPQ == 1)
+		if (Route->mSRIF == 1)
 			rtt /= 10;
 
-		if (Route->OldBPQ == 0)
-			rtt += Route->RTTIncrement;		// Don't do this if OldBPQ set - other end has added it
+		if (Route->senderaddsRTT == 0)
+			rtt += Route->RTTIncrement;
 
 		msglen -= 10;
 
-		while (*ptr1 && msglen > 0)
-		{
-			len = *ptr1;
-			opcode = *(ptr1+1);
+		Options = ptr1;
 
-			if (len < 2 || len > msglen)
-				return;				// Duff RIF
+		oldptr1 = ptr1;
+		
+		ptr1 = SkipOptions(ptr1, msglen);	// We now extact options here and decode them once we have a Node record
 
-			if (opcode == 0)
-			{
-				if (len > 1 && len < 9)
-					memcpy(alias, ptr1+2, len-2);
-				else
-				{
-					if (DEBUGINP3) Debugprintf("Corrupt INP3 Message");
-					return;
-				}
-			}
-			ptr1+=len;
-			msglen -=len;
-		}
+		if (ptr1 == 0)
+			return;					// Corrupt RIF
+
+		msglen -= (ptr1 - oldptr1);	// options len
 
 		ptr1++;
 		msglen--;		// EOP
 
-		UpdateNode(Route, axcall, alias, hops, rtt);
+		UpdateNode(Route, axcall, hops, rtt, Now, Options);
+
 	}
 
 	return;
@@ -519,7 +524,7 @@ VOID KillRoute(struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR)
 }
 
 
-VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt)
+VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, int  hops, int rtt, time_t Now, unsigned char * Options)
 {
 	struct DEST_LIST * Dest;
 	struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR;
@@ -527,6 +532,9 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 	char call[11]="";
 	APPLCALLS * APPL;
 	int App;
+	XROptions noOptions;
+	int n = sizeof(noOptions);
+
 
 //	SEE IF any of OUR CALLs - DONT WANT TO PUT IT IN LIST!
 
@@ -616,6 +624,7 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 		return;
 	}
 
+	memset(&noOptions, 0, sizeof(noOptions));
 
 	if (FindDestination(axcall, &Dest))
 		goto Found;
@@ -631,12 +640,12 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 	memset(Dest, 0, sizeof(struct DEST_LIST));
 
 	memcpy(Dest->DEST_CALL, axcall, 7);
-	memcpy(Dest->DEST_ALIAS, alias, 6);
 
 //	Set up First Route
 
 	Dest->INP3ROUTE[0].Hops = hops;
 	Dest->INP3ROUTE[0].STT = rtt;
+	Dest->INP3ROUTE[0].LastRefreshed = Now;
 
 	Dest->INP3FLAGS = NewNode;
 
@@ -646,6 +655,15 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 
 	ConvFromAX25(Dest->DEST_CALL, call);
 	if (DEBUGINP3) Debugprintf("INP3 Adding New Node %s Hops %d RTT %d", call, hops, rtt);
+
+	DecodeRIFOptions(Dest, Options);
+
+//	if (memcmp(Options, &noOptions, sizeof(noOptions)) != 0)
+//	{
+//		Dest->XROptions = malloc(sizeof(noOptions));
+//		memcpy(Dest->XROptions, Options, sizeof(noOptions));
+//		Options->LOC = Options->QTH = Options->Ver = 0;			// So not freed later
+//	}
 
 	return;
 
@@ -662,8 +680,7 @@ Found:
 	ConvFromAX25(Dest->DEST_CALL, call);
 	if (DEBUGINP3) Debugprintf("INP3 Updating Node %s Hops %d TT %d", call, hops, rtt);
 
-	if (alias[0] > ' ')
-		memcpy(Dest->DEST_ALIAS, alias, 6);
+	DecodeRIFOptions(Dest, Options);
 
 	// See if we are known to it, it not add
 
@@ -672,7 +689,7 @@ Found:
 	if (ROUTEPTR->ROUT_NEIGHBOUR == Route)
 	{
 		if (DEBUGINP3) Debugprintf("INP3 Already have as route[0] - TT was %d updating to %d", ROUTEPTR->STT, rtt);
-		UpdateRoute(Dest, ROUTEPTR, hops, rtt);
+		UpdateRoute(Dest, ROUTEPTR, hops, rtt, Now);
 		return;
 	}
 
@@ -681,7 +698,7 @@ Found:
 	if (ROUTEPTR->ROUT_NEIGHBOUR == Route)
 	{
 		if (DEBUGINP3) Debugprintf("INP3 Already have as route[1] - TT was %d updating to %d", ROUTEPTR->STT, rtt);
-		UpdateRoute(Dest, ROUTEPTR, hops, rtt);
+		UpdateRoute(Dest, ROUTEPTR, hops, rtt, Now);
 		return;
 	}
 
@@ -690,7 +707,7 @@ Found:
 	if (ROUTEPTR->ROUT_NEIGHBOUR == Route)
 	{
 		if (DEBUGINP3) Debugprintf("INP3 Already have as route[2] - TT was %d updating to %d", ROUTEPTR->STT, rtt);
-		UpdateRoute(Dest, ROUTEPTR, hops, rtt);
+		UpdateRoute(Dest, ROUTEPTR, hops, rtt, Now);
 		return;
 	}
 
@@ -706,7 +723,7 @@ Found:
 			// Add here
 
 			if (DEBUGINP3) Debugprintf("INP3 adding as route[%d]", i);
-			AddHere(ROUTEPTR, Route, hops, rtt);
+			AddHere(ROUTEPTR, Route, hops, rtt, Now);
 			if (i == 0)
 				Dest->LastTT = 0;
 			SortRoutes(Dest);
@@ -728,7 +745,7 @@ Found:
 
 		memcpy(&Dest->INP3ROUTE[2], &Dest->INP3ROUTE[1], sizeof(struct INP3_DEST_ROUTE_ENTRY));
 		memcpy(&Dest->INP3ROUTE[1], &Dest->INP3ROUTE[0], sizeof(struct INP3_DEST_ROUTE_ENTRY));
-		AddHere(&Dest->INP3ROUTE[0], Route, hops, rtt);
+		AddHere(&Dest->INP3ROUTE[0], Route, hops, rtt, Now);
 		return;
 	}
 
@@ -738,7 +755,7 @@ Found:
 
 		if (DEBUGINP3) Debugprintf("INP3 Replacing route 1");
 		memcpy(&Dest->INP3ROUTE[2], &Dest->INP3ROUTE[1], sizeof(struct INP3_DEST_ROUTE_ENTRY));
-		AddHere(&Dest->INP3ROUTE[1], Route, hops, rtt);
+		AddHere(&Dest->INP3ROUTE[1], Route, hops, rtt, Now);
 		return;
 	}
 
@@ -747,7 +764,7 @@ Found:
 		// We are better. Add here
 
 		if (DEBUGINP3) Debugprintf("INP3 Replacing route 2");
-		AddHere(&Dest->INP3ROUTE[2], Route, hops, rtt);
+		AddHere(&Dest->INP3ROUTE[2], Route, hops, rtt, Now);
 		return;
 	}
 
@@ -759,12 +776,12 @@ Found:
 
 }
 
-VOID AddHere(struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt)
+VOID AddHere(struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt, time_t Now)
 {
 	ROUTEPTR->Hops = hops;
 	ROUTEPTR->STT = rtt;
 	ROUTEPTR->ROUT_NEIGHBOUR = Route;
-
+	ROUTEPTR->LastRefreshed = Now;
 	return;
 }
 
@@ -914,7 +931,7 @@ VOID UpdateTTforRoute(struct ROUTE * Route, int TTChange)
 
 
 
-VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt)
+VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt, time_t Now)
 {
 	if (ROUTEPTR->Hops == 0)
 	{
@@ -922,6 +939,7 @@ VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPT
 
 		ROUTEPTR->Hops = hops;
 		ROUTEPTR->STT = rtt;
+		ROUTEPTR->LastRefreshed = Now;
 
 		SortRoutes(Dest);
 		return;
@@ -931,6 +949,7 @@ VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPT
 	{
 		ROUTEPTR->STT = rtt;
 		ROUTEPTR->Hops = hops;
+		ROUTEPTR->LastRefreshed = Now;
 
 		SortRoutes(Dest);
 		return;
@@ -939,6 +958,7 @@ VOID UpdateRoute(struct DEST_LIST * Dest, struct INP3_DEST_ROUTE_ENTRY * ROUTEPT
 
 	ROUTEPTR->STT = rtt;
 	ROUTEPTR->Hops = hops;
+	ROUTEPTR->LastRefreshed = Now;
 	
 	SortRoutes(Dest);
 	return;
@@ -996,14 +1016,49 @@ VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff, int Len
 	{
 		// Extract other end's SRTT
 
-		// Get SWVERSION to see if other end is old (Buggy) BPQ
+		// Get SWVERSION to see if other end is old (Buggy) BPQ (000) or not updating RIF before sending (001)
 
-		if (memcmp(RTTMsg->SWVERSION, "BPQ32001 ", 9) == 0)
-			Route->OldBPQ = 1;
-		else if (memcmp(RTTMsg->SWVERSION, "BPQ32002 ", 9) == 0)
-			Route->OldBPQ = 2;		// XR mode
+		int inpVer = 0;			// Not BPQ
+		
+		if (memcmp(RTTMsg->SWVERSION, "BPQ32", 5) == 0)
+		{
+			inpVer = atoi(&RTTMsg->SWVERSION[5]);
+		
+			if (inpVer == 1)
+			{	
+				Route->mSRIF = 1;				// Set if other end is BPQ sending RIF in mS (Ver < 2)
+				Route->senderaddsRTT = 1;		// Set if link RTT added before sending (Ver = 1)
+				Route->timeoutRoutes = 0;		// Set if other end always sends timed RIF updates (Hourly)
+			}
+			else if (inpVer == 2)
+			{	
+				Route->mSRIF = 0;				// Set if other end is BPQ sending RIF in mS (Ver < 2)
+				Route->senderaddsRTT = 1;		// Set if link RTT added before sending (Ver = 1)
+				Route->timeoutRoutes = 0;		// Set if other end always sends timed RIF updates (Hourly)
+			}
+			else if (inpVer == 3)
+			{	
+				Route->mSRIF = 0;				// Set if other end is BPQ sending RIF in mS (Ver < 2)
+				Route->senderaddsRTT = 0;		// Set if link RTT added before sending (Ver = 1)
+				Route->timeoutRoutes = 0;		// Set if other end always sends timed RIF updates (Hourly)
+			}
+			else if (inpVer >= 4)
+			{	
+				Route->mSRIF = 0;				// Set if other end is BPQ sending RIF in mS (Ver < 2)
+				Route->senderaddsRTT = 0;		// Set if link RTT added before sending (Ver = 1)
+				Route->timeoutRoutes = 1;		// Set if other end always sends timed RIF updates (Hourly)
+			}
+		}
 		else
-			Route->OldBPQ = 0;
+		{
+			// XR or others
+
+			Route->mSRIF = 0;				// Set if other end is BPQ sending RIF in mS (Ver < 2)
+			Route->senderaddsRTT = 0;		// Set if link RTT added before sending (Ver = 1)
+			Route->timeoutRoutes = 1;		// Set if other end always sends timed RIF updates (Hourly)
+
+			Debugprintf(RTTMsg->SWVERSION);
+		}
 
 		sscanf(&Buff->L4DATA[6], "%u %u", &Dummy, &OtherRTT);
 
@@ -1092,6 +1147,13 @@ VOID SendRTTMsg(struct ROUTE * Route)
 	sprintf(temp, "$M%d $N $H%d            ", MAXRTT, MaxHops); // trailing spaces extend to ensure padding if the length of characters for MAXRTT changes.
 	memcpy(RTTMsg.FLAGS, temp, 20);                 // But still limit the actual characters copied.
 
+	// Normally we use Version BPQ32004 but if not using the new standard rif timer refresh (Hourly) switch to BPQ32003 which disables node timeout at other end
+
+	if (RIFInterval == 3600)
+		memcpy(RTTMsg.SWVERSION, "BPQ32004 ", 9);
+	else
+		memcpy(RTTMsg.SWVERSION, "BPQ32003 ", 9);
+
 	memcpy(Msg->L4DATA, &RTTMsg, 236);
 
 	Msg->LENGTH = 256 + 1 + MSGHDDRLEN;
@@ -1134,7 +1196,7 @@ VOID SendKeepAlive(struct ROUTE * Route)
 	SendNetFrame(Route, Msg);
 }
 
-int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT, char * Dest)
+int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT, char * Dest, XROptions * Options)
 {
 	int AliasLen;
 	int RIFLen;
@@ -1151,6 +1213,18 @@ int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT, char *
 	RIF[8] = RTT >> 8;
 	RIF[9] = RTT & 0xff;
 
+	if (Options && Options->Optionslist)
+	{
+		// Will include alias
+
+		int optlen = Options->Optionslist[0];		// includes terminalting null
+		memcpy(&RIF[10], &Options->Optionslist[1], optlen);
+		RIFLen = 10 + optlen;
+	
+		if (DEBUGINP3) Debugprintf("INP3 sending RIF Entry %s:%s %d %d to %s", AliasCopy, Normcall, Hops, RTT, Dest);
+		return RIFLen;
+	}
+
 	if (Alias)
 	{
 		// Need to null-terminate Alias
@@ -1166,18 +1240,17 @@ int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT, char *
 		RIF[10] = AliasLen+2;
 		RIF[11] = 0;
 		memcpy(&RIF[12], Alias, AliasLen);
-		RIF[12+AliasLen] = 0;
 
+		RIF[12+AliasLen] = 0;
 		RIFLen = 13 + AliasLen;
-		if (DEBUGINP3) Debugprintf("INP3 sending RIF Entry %s:%s %d %d to %s", AliasCopy, Normcall, Hops, RTT, Dest);
+
+		if (DEBUGINP3) Debugprintf("INP3 sending RIF Entry %s %d %d to %s", Normcall, Hops, RTT, Dest);
+
 		return RIFLen;
 	}
-
-	RIF[10] = 0;
-
-	if (DEBUGINP3) Debugprintf("INP3 sending RIF Entry %s %d %d to %s", Normcall, Hops, RTT, Dest);
 	
-	return (11);
+	RIF[10] = 0;
+	return 11;
 }
 
 
@@ -1198,7 +1271,7 @@ VOID SendOurRIF(struct ROUTE * Route)
 
 	if (DEBUGINP3) Debugprintf("INP3 Sending Our Call and Applcalls to %s ", Normcall);
 
-	if (Route->OldBPQ == 1)	// old bpq bug - send mS not 10 mS units
+	if (Route->mSRIF == 1)	// old bpq bug - send mS not 10 mS units
 		sendTT *= 10;
 
 	Msg = GetBuff();
@@ -1209,7 +1282,7 @@ VOID SendOurRIF(struct ROUTE * Route)
 
 	// send a RIF for our Node and all our APPLCalls
 
-	RIFLen = BuildRIF(&Msg->L3SRCE[totLen], MYCALL, MYALIASTEXT, 1, sendTT, Normcall);
+	RIFLen = BuildRIF(&Msg->L3SRCE[totLen], MYCALL, MYALIASTEXT, 1, sendTT, Normcall, 0);
 	totLen += RIFLen;
 
 	for (App = 0; App < NumberofAppls; App++)
@@ -1218,7 +1291,7 @@ VOID SendOurRIF(struct ROUTE * Route)
 
 		if (APPL->APPLQUAL > 0)
 		{
-			RIFLen = BuildRIF(&Msg->L3SRCE[totLen], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, sendTT, Normcall);
+			RIFLen = BuildRIF(&Msg->L3SRCE[totLen], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, sendTT, Normcall, 0);
 			totLen += RIFLen;
 		}
 	}
@@ -1447,7 +1520,7 @@ VOID SendRIF(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Msg)
 	SendNetFrame(Route, Msg);
 }
 
-VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP3_DEST_ROUTE_ENTRY * Entry, int Negative, int portNum)
+VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP3_DEST_ROUTE_ENTRY * Entry, int Negative, int portNum, int includeOptions)
 {
 	UCHAR * axcall = Dest->DEST_CALL;
 	struct ROUTE * Routes = NEIGHBOURS;
@@ -1455,7 +1528,8 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 	int count, MaxRoutes = MAXNEIGHBOURS;
 	char NodeCall[10];
 	char destCall[10];
-
+	int rifLen;
+	unsigned char rif[256];
 	int sendHops, sendTT, lastTT;
 
 	// if portNum is set sending a periodic refresh. Just sent to this port
@@ -1553,16 +1627,22 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 
 				if (Msg)
 				{
-					if (Routes->OldBPQ == 1)	// old bpq bug - send mS not 10 mS units
+					if (Routes->mSRIF == 1)	// old bpq bug - send mS not 10 mS units
 						sendTT *= 10;
 
-					Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], axcall, alias, sendHops, sendTT, destCall);
+					if (includeOptions)
+						rifLen = BuildRIF(rif, axcall, alias, sendHops, sendTT, destCall, Dest->XROptions);
+					else
+						rifLen = BuildRIF(rif, axcall, alias, sendHops, sendTT, destCall, 0);
 
-					if (Msg->LENGTH > 250 - 15)
+					if (Msg->LENGTH + rifLen > 250)
 					{
 						SendRIF(Routes, Msg);
-						Routes->Msg = NULL;
+						Msg = Routes->Msg = CreateRIFHeader(Routes);
 					}
+
+					memcpy(&Msg->L3SRCE[Msg->LENGTH], rif, rifLen);
+					Msg->LENGTH += rifLen;
 				}
 			}
 		}
@@ -1578,6 +1658,8 @@ VOID SendRIFToNewNeighbour(struct ROUTE * Route)
 	struct _L3MESSAGEBUFFER * Msg;
 	int sendHops, sendTT;
 	char Normcall[10];
+	int rifLen;
+	unsigned char rif[256];
 
 	if (Route->NEIGHBOUR_LINK == 0)		// shouldn't happen but to be safe..
 		return;
@@ -1615,16 +1697,18 @@ VOID SendRIFToNewNeighbour(struct ROUTE * Route)
 				if (Msg == NULL) 
 					return;
 
-				if (Route->OldBPQ == 1)	// old bpq bug - send mS not 10 mS units
+				if (Route->mSRIF == 1)	// old bpq bug - send mS not 10 mS units
 					sendTT *= 10;
 
-				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], Dest->DEST_CALL, Dest->DEST_ALIAS, sendHops, sendTT, Normcall);
-
-				if (Msg->LENGTH > 250 - 15)
+				rifLen = BuildRIF(rif, Dest->DEST_CALL, Dest->DEST_ALIAS, sendHops, sendTT, Normcall, Dest->XROptions);
+		
+				if (Msg->LENGTH + rifLen > 250)
 				{
 					SendRIF(Route, Msg);
-					Route->Msg = NULL;
+					Msg = Route->Msg = CreateRIFHeader(Route);
 				}
+				memcpy(&Msg->L3SRCE[Msg->LENGTH], rif, rifLen);
+				Msg->LENGTH += rifLen;
 			}
 		}
 	}
@@ -1693,7 +1777,7 @@ VOID SendNegativeInfo()
 		if (Entry->ROUT_NEIGHBOUR == 0)
 			continue;
 
-		SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, TRUE, FALSE);
+		SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, TRUE, FALSE, FALSE);
 			
 		if (Entry->STT >= 60000)
 		{
@@ -1750,7 +1834,7 @@ VOID SendPositiveInfo()
 		Entry = &Dest->INP3ROUTE[0];
 
 		if (Entry->ROUT_NEIGHBOUR)
-			SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, FALSE, FALSE);
+			SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, FALSE, FALSE, FALSE);
 	}
 }
 
@@ -1777,7 +1861,7 @@ VOID SendNewInfo()
 			
 			Entry = &Dest->INP3ROUTE[0];
 
-			SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, TRUE, FALSE);	// Send as negative so will always be worse than zero
+			SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, TRUE, FALSE, TRUE);	// Send as negative so will always be worse than zero
 		}
 	}
 }
@@ -1813,12 +1897,10 @@ VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 	if (Msg == 0)
 		return;
 				
-	if (Route->OldBPQ == 1)
-		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, Route->TXRTTIncrement * 10, Call);
-	else if (Route->OldBPQ == 2)
-		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, Route->TXRTTIncrement, Call);
+	if (Route->mSRIF == 1)
+		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, Route->TXRTTIncrement * 10, Call, 0);
 	else
-		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, 1, Call);
+		Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], MYCALL, MYALIASTEXT, 1, 1, Call, 0);
 
 	for (App = 0; App < NumberofAppls; App++)
 	{
@@ -1826,12 +1908,10 @@ VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 
 		if (APPL->APPLQUAL > 0)
 		{
-			if (Route->OldBPQ == 1)
-				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, Route->TXRTTIncrement * 10, Call);
-			else if (Route->OldBPQ == 2)
-				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, Route->TXRTTIncrement, Call);
+			if (Route->mSRIF == 1)
+				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, Route->TXRTTIncrement * 10, Call, 0);
 			else
-				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, 1, Call);
+				Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], APPL->APPLCALL, APPL->APPLALIAS_TEXT, 1, 1, Call, 0);
 		}
 	}
 
@@ -1877,10 +1957,10 @@ VOID sendAlltoOneNeigbour(struct ROUTE * Route)
 
 				if (Msg)
 				{
-					if (Route->OldBPQ == 1)
+					if (Route->mSRIF == 1)
 						sendTT *= 10;
 					
-					Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], Dest->DEST_CALL, Dest->DEST_ALIAS, sendHops, sendTT, Call);
+					Msg->LENGTH += BuildRIF(&Msg->L3SRCE[Msg->LENGTH], Dest->DEST_CALL, Dest->DEST_ALIAS, sendHops, sendTT, Call, 0);
 
 					if (Msg->LENGTH > 250 - 15)
 					{
@@ -1943,6 +2023,74 @@ VOID SendAllInfo()
 	}
 }
 
+int INP3NodeTimeout = 3600 *3;			// 3 Hours
+
+void DecayINP3Routes()
+{
+	// Runs every 10 secs
+
+	// Invalidate routes that haven't been refreshed for a while (if neighbour is sending periodic refresh)
+
+	struct DEST_LIST * Dest = DESTS;
+	struct INP3_DEST_ROUTE_ENTRY * Entry;
+	time_t Now = time(NULL);
+	int i, n;
+	time_t xx;
+
+	for (i=0; i < MAXDESTS; i++)
+	{
+		if (Dest->DEST_CALL == 0)
+		{
+			Dest++;
+			continue;
+		}
+
+		for (n = 0; n < 3; n++)
+		{
+			Entry = &Dest->INP3ROUTE[n];
+
+			if (Entry->ROUT_NEIGHBOUR == 0)			// Stop on first unused entry
+				break;
+
+			xx = Now - Entry->LastRefreshed;
+
+			if (Entry->ROUT_NEIGHBOUR->timeoutRoutes && Entry->LastRefreshed && (Entry->LastRefreshed + INP3NodeTimeout) < Now)
+			{
+				char Call1[10];
+				char Call2[10];
+				Call1[ConvFromAX25(Dest->DEST_CALL, Call1)] = 0;
+				Call2[ConvFromAX25(Entry->ROUT_NEIGHBOUR->NEIGHBOUR_CALL, Call2)] = 0;
+
+				if (DEBUGINP3) Debugprintf("Timer Deleting INP3 Route %d to %s via %s", n + 1, Call1, Call2);
+
+				if (n == 0)
+				{
+					// if removing best we need to tell others
+					
+					Entry->STT = 60000;		// leave hops so we can check if we need to send
+
+					if (Dest->DEST_ROUTE == 4)			// we were using it
+						Dest->DEST_ROUTE = 0;
+
+				}
+				else
+				{
+					// If we aren't removing the best, we don't need to tell anyone.
+
+					if (n == 1)		// 2nd
+					{
+						memcpy(&Dest->INP3ROUTE[1], &Dest->INP3ROUTE[2], sizeof(struct INP3_DEST_ROUTE_ENTRY));
+						memset(&Dest->INP3ROUTE[2], 0, sizeof(struct INP3_DEST_ROUTE_ENTRY));
+					}
+					else
+						memset(&Dest->INP3ROUTE[2], 0, sizeof(struct INP3_DEST_ROUTE_ENTRY));
+				}
+			}
+		}
+		Dest++;
+	}
+}
+
 VOID INP3TIMER()
 {
 	if (RTTMsg.ID[0] == 0)
@@ -1980,6 +2128,7 @@ VOID INP3TIMER()
 
 		SendRIPTimer();
 		SendAllInfo();					// Timer Driven refresh
+		DecayINP3Routes();
 	}
 	else
 		RIPTimerCount--;
@@ -2040,6 +2189,7 @@ UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
 
 		// Process optional fields
 
+
 		while (*ptr1 && msglen > 0)			//  Have an option
 		{
 			len = *ptr1;
@@ -2091,4 +2241,371 @@ int inp3_tt2qual (int tt, int hops)
 	
 	return(qual); 
 } 
+
+
+/*
+
+5.2 XRouter Extensions
+
+The following identifiers are used in XRouter:
+
+Type 0x01: AMPRNet IP Routing Data
+Value: Exactly 7 bytes total length (Option Length = 0x07).
+Contains a 4-byte IPv4 address within the 44.0.0.0/8 amateur
+network (in network byte order) followed by a 1-byte packed
+hostmask prefix length (e.g., 0x18 for a /24).
+
+Type 0x10: Geographic Position
+Value: Exactly 10 bytes total length. Contains two 32-bit signed
+Big-Endian integers: Latitude followed by Longitude, expressed in
+hundredths of a minute of arc.
+
+Type 0x12: Metadata Timestamp
+Value: Exactly 6 bytes total length. Contains a 32-bit unsigned
+integer tracking standard Unix epoch time.
+
+Type 0x13: TCP Service Port
+Value: Exactly 4 bytes total length. A 16-bit unsigned integer
+defining the active TCP port for user terminal access. Used in
+conjunction with a Type 0x01 option.
+
+Type 0x14: Timezone Offset
+Value: Exactly 4 bytes total length. A 16-bit signed integer
+defining the local timezone offset relative to GMT, measured in
+minutes (e.g., -60).
+
+Type 0x15: Maidenhead Locator
+Value: A variable-length ASCII string representing the station
+locator (e.g., IO83VK) with no null termination.
+
+Type 0x16: QTH (Location Description)
+Value: A variable-length plain ASCII string describing the
+station's physical location (e.g., Niagara Park) with no null
+termination.
+
+Type 0x17: Software Version String
+Value: A variable-length ASCII string representing the node
+application's compile version (e.g., 501w) with no null
+termination.
+
+5.3 Detailed Flags Specification (Option 0x11)
+
+Following the length byte (0x05) and type byte (0x11), this option
+contains three sequential 1-byte fields:
+
++------------+------------+---------+---------+---------+
+| len=0x05 | typ=0x11 | swtype | flags1 | flags_2 |
++------------+------------+---------+---------+---------+
+Figure 4: Structure of the Option 0x11 Payload
+
+5.3.1 Software Type (sw_type)
+
+A 1-byte integer identifying the node software:
+
+0 = Unknown, 1 = BPQ16 (DOS), 2 = XRouter16 (DOS),
+3 = XServ16 (DOS), 4 = XRouter32 (Win GUI), 5 = XR32 (Win TUI),
+6 = XS32 (Win TUI BBS), 7 = XRLin (Linux x86),
+8 = XRouter (Raspberry Pi), 9 = BPQ32 (Windows),
+10 = BPQ32 (Linux).
+
+5.3.2 Capability Flags 1 (flags_1)
+
+A 1-byte bitmask detailing supported network layer features:
+
+0x01 = INP3 Capable
+0x02 = NetRom L3 routing enabled
+0x04 = Capable of Netrom Record Route
+0x08 = Capable of Netrom Control Message Protocol
+0x10 = Capable of NetRomX (CREQX)
+0x20 = Supports NDP (Netrom Datagram Protocol)
+0x40 = Node is a GlobalNet router/host
+0x80 = Supports IP over NetRom
+5.3.3 Capability Flags 2 (flags_2)
+
+A 1-byte bitmask detailing hosted application services:
+
+0x01 = Has general purpose L7 command line
+0x02 = Is/Has PMS (Mailbox)
+0x04 = Is/Has XR Chat
+0x08 = Is/Has BPQ/Roundtable chat
+0x10 = Is/Has BBS
+0x20 = Is/Has DX Cluster
+0x40 = Is/Has RMS gateway
+0x80 = Reserved (extension bit)
+
+G8PZT-1:XRLN64} Knoten:
+Info for: KIDDER:G8PZT  (HOST) [XRPi]  FR=13203  RTT=0.17  Hop=1 XR {PEER}
+  Pos=52.4000N   2.2500W  Loc=IO82VJ  Qth=KIDDERMINSTER, UK
+  IP=44.136.16.50/32  TCP=23  v505G  OFF
+  Supports: INP3 L3ROUT NRR NCMP L4X NDP
+  BBS XRCHAT RTCHAT
+  Updated: 02/07 13:40  Confirmed: 01/07 14:49
+
+*/
+
+UCHAR * SkipOptions(UCHAR * ptr1, int msglen)
+{
+	int len, opcode;
+
+	// Skip options and return pointer to next entry
+
+	while (*ptr1 && msglen > 0)
+	{
+		len = *ptr1;
+		opcode = *(ptr1+1);
+
+		if (len < 2 || len > msglen)
+			return 0;				// Duff RIF
+
+		ptr1+=len;
+		msglen -=len;
+	}
+
+	return ptr1;
+}
+
+/*
+// See if any XR options to add
+
+	if (memcmp(Options, &noOptions, sizeof(noOptions)) != 0)
+	{
+		if (Dest->XROptions == 0)		// None yet
+			Dest->XROptions = zalloc(sizeof(noOptions));
+
+		// Have options so copy across any new ones
+
+		if (Options->IPADDR)
+		{
+			Dest->XROptions->IPADDR = Options->IPADDR;
+			Dest->XROptions->Mask = Options->Mask;			// Always come togther
+		}
+		if (Options->Lat)
+			Dest->XROptions->Lat = Options->Lat;
+
+		if (Options->Lon)
+			Dest->XROptions->Lon = Options->Lon;
+
+		if (Options->Port)
+			Dest->XROptions->Port = Options->Port;
+
+		if (Options->Time)
+			Dest->XROptions->Time = Options->Time;
+
+		if (Options->TZOffset)
+			Dest->XROptions->TZOffset = Options->TZOffset;
+
+		if (Options->LOC)
+		{
+			if (Dest->XROptions->LOC)
+				free(Dest->XROptions->LOC);
+
+			Dest->XROptions->LOC = _strdup(Options->LOC);
+		}
+
+		if (Options->QTH)
+		{
+			if (Dest->XROptions->QTH)
+				free(Dest->XROptions->QTH);
+
+			Dest->XROptions->QTH = _strdup(Options->QTH);
+		}
+
+		if (Options->Ver)
+		{
+			if (Dest->XROptions->Ver)
+				free(Dest->XROptions->Ver);
+
+			Dest->XROptions->Ver = _strdup(Options->Ver);
+		}
+
+		if (Options->SWType | Options->NetworkFlags | Options->ApplFlags)		// All come together
+		{
+			Dest->XROptions->SWType = Options->SWType;
+			Dest->XROptions->NetworkFlags = Options->NetworkFlags;
+			Dest->XROptions->ApplFlags = Options->ApplFlags;
+		}
+	}
+*/
+
+
+
+void DecodeRIFOptions(struct DEST_LIST * Dest, UCHAR * ptr1)
+{
+	int len, opcode;
+
+	// Options should be saved and sent out as received, including any unrecongnised ones
+	// Do we need to worry about getting different subsets of values at different times,
+	// so we need to combine new nodes with any existing ones??
+
+	// We treat alias separately as that is sent by all software
+
+	unsigned char rawoptions[256];			// can't exceed packet size
+	int rawoptionslen = 0;
+	unsigned char * startoptions = ptr1;
+	int gotOptions = 0;
+	XROptions * Options = Dest->XROptions;
+
+
+	while (*ptr1)					// Format already checked above
+	{
+		len = *ptr1;
+		opcode = *(ptr1+1);
+
+		if (len < 2)
+			return;					// Duff RIF
+
+		if (opcode)
+		{
+			// Not alias so we need extended options field
+
+			gotOptions = 1;
+			
+			if (Options == 0)
+			{
+				Options = Dest->XROptions = zalloc(sizeof(XROptions));
+			}
+		}
+
+		switch (opcode)
+		{
+		case 0:			// Alias
+
+			memset(Dest->DEST_ALIAS, ' ', 6);
+			
+			if (len > 1 && len < 9)
+				memcpy(Dest->DEST_ALIAS, ptr1+2, len-2);
+			break;
+		
+		case 1:			// IP Address and Mask
+
+			if (len == 7)
+			{
+				memcpy(&Options->IPADDR, ptr1+2, 4);
+				Options->Mask = (uint8_t)ptr1[6];
+			}
+			break;
+
+		case 0x10:		// Geographic Position
+
+			if (len == 10)
+			{
+				uint32_t w1;
+				int32_t w2;
+
+				memcpy(&w1, ptr1+2, 4); 
+				w2 = htonl(w1);
+
+				Options->Lat = w2 / 6000.0;				// 1/100th minute to degrees
+
+				memcpy(&w1, ptr1+6, 4); 
+				w2 = htonl(w1);
+
+				Options->Lon = w2 / 6000.0;
+				break;
+			}
+		
+
+		case 0x11:		// Various flags
+
+			if (len == 5)
+			{
+				Options->SWType = ptr1[2];
+				Options->NetworkFlags = ptr1[3];
+				Options->ApplFlags = ptr1[4];
+				break;
+			}
+		
+		case 0x12:		// Metadata Timestamp
+
+			if (len == 6)
+			{
+				uint32_t w1;
+
+				memcpy(&w1, ptr1+2, 4); 
+				Options->Time = htonl(w1);
+			}
+			
+			break;
+		
+		case 0x13:		// TCP Service Port
+
+			if (len == 4)
+			{
+				uint16_t w1;
+
+				memcpy(&w1, ptr1+2, 2); 
+				Options->Port = htons(w1);
+			}
+
+		case 0x14:		// Timezone Offset
+
+			if (len == 4)
+			{
+				uint16_t w1;
+
+				memcpy(&w1, ptr1+2, 2); 
+				Options->TZOffset = htons(w1);
+			}
+			
+			break;
+
+		case 0x15:		// Maidenhead Locator
+			
+			if (Options->LOC)
+				free (Options->LOC);
+
+			Options->LOC = zalloc(len);
+			memcpy(Options->LOC, ptr1+2, len-2);
+			
+			break;
+
+		case 0x16:		// QTH (Location Description)
+
+			if (Options->QTH)
+				free (Options->QTH);
+
+			Options->QTH = zalloc(len);
+			memcpy(Options->QTH, ptr1+2, len-2);
+
+		case 0x17:		//  Software Version String
+
+			if (Options->Ver)
+				free (Options->Ver);
+			
+			Options->Ver = zalloc(len);
+			memcpy(Options->Ver, ptr1+2, len-2);
+
+		}
+
+		ptr1+=len;
+	}
+
+	// ptr1 points to byte beyond end of options. Save the options string. Put length byte on front
+
+
+	if (gotOptions == 0)		// Empty
+		return;
+
+	if (Options)			// Have other than alias
+	{
+		rawoptionslen = (ptr1 - startoptions) + 1;		// include terminating null
+
+		if (Options->Optionslist)
+		{
+			// see if changed (not much use if options include timestamp)
+
+			if (Options->Optionslist[0] == rawoptionslen && memcmp(&Options->Optionslist[1], startoptions, rawoptionslen) == 0)
+				return;
+
+			free(Options->Optionslist);
+		}
+
+		Options->Optionslist = malloc(rawoptionslen + 1);
+		Options->Optionslist[0] = rawoptionslen;
+		memcpy(&Options->Optionslist[1], startoptions, rawoptionslen);
+	}
+
+	return;
+
+}
 

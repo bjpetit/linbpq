@@ -550,16 +550,20 @@ int AGWConnected(struct BPQConnectionInfo * Con, int Stream)
 		if (ApplCall[i]==32)
 			ApplCall[i]=0;
 
-//   See if incomming connection
+//   See if incoming connection
 
 	if (Con->Listening)
 	{    
 		//	Allocate Session and send "c" Message
 		//
 		//	Find an AGW session
+
+		Debugprintf("Incoming AGW Call for ApplCall %s", ApplCall);
                           
 		for (sockptr=&Sockets[1]; sockptr <= &Sockets[CurrentSockets]; sockptr++)
 		{
+			Debugprintf("Trying Socket %d, Calls %s %s", i, sockptr->CallSign1, sockptr->CallSign2);
+
 			if (sockptr->SocketActive &&
 				(memcmp(sockptr->CallSign1, ApplCall, 10) == 0) || (memcmp(sockptr->CallSign2, ApplCall, 10) == 0))
 			{
@@ -572,6 +576,7 @@ int AGWConnected(struct BPQConnectionInfo * Con, int Stream)
 				int maxframe;
 				int l4window;
 
+				Debugprintf("Connection Found, Checking for duplicate calls");
            
 				keyptr=(byte *)&Con->CallKey;
 
@@ -594,13 +599,13 @@ int AGWConnected(struct BPQConnectionInfo * Con, int Stream)
 
 				for (i = 0; i < CurrentConnections; i++)
 				{
-					if (Con->BPQStream == Stream)
+					if (AGWConnections[i].BPQStream == Stream)
 						continue;		// Dont Check ourself!
 
 					if (AGWConnections[i].SocketIndex == sockptr &&
 							memcmp(&Con->CallKey, &AGWConnections[i].CallKey,21) == 0)
 					{
-						SendMsg(Stream, "AGWtoBPQ - Callsign is already connected\r", 43);
+						SendMsg(Stream, "AGWAPI - Callsign is already connected\r", 43);
 						Sleep (500);
 						Disconnect(Stream);
 						Con->CallKey[0]=0;

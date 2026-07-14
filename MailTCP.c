@@ -161,6 +161,7 @@ VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...)
 	
 	va_start(arglist, format);
 	vsprintf(buff, format, arglist);
+	va_end(arglist);
 
 	SendSock(sockptr, buff);
 }

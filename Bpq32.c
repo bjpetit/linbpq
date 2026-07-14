@@ -1322,7 +1322,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Change INP3 to XR 'standard' (29)
 //	Swap L4INDEX and L4ID in Packet Trace API (30)
 //	More INP3 fixes (30)
-
+//	Starting NCMP implementation
+//	Fix AGWAPI inbound connect for APPL Numbers above 1 (31)
+//	More INP3 changes (enforce RIF refresh at hourly intervals and time out nodes (31)
+//	Save, forward and display XR extended INP3 Options (31)
+//	Check packets from APRS-IS against Exclude list (32)
+//	Fix authorisation of Web Save Config File (32)
+//	Add missing calls to va_end() (32)
+//	Apply EXCLUDE to APRS and Digi (32)
 
 #define CKernel
 
@@ -5829,6 +5836,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
+	va_end(arglist);
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
 

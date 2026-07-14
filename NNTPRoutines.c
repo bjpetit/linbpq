@@ -122,6 +122,7 @@ VOID __cdecl NNTPsockprintf(SocketConn * sockptr, const char * format, ...)
 	
 	va_start(arglist, format);
 	vsprintf(buff, format, arglist);
+	va_end(arglist);
 
 	NNTPSendSock(sockptr, buff);
 }

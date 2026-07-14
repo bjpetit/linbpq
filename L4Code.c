@@ -74,6 +74,7 @@ void IncomingL4ConnectionEvent(TRANSPORTENTRY * L4);
 void L4DisconnectEvent(TRANSPORTENTRY * L4, char * Direction, char * Reason);
 VOID TCPNETROMSend(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Frame);
 void L4StatusSeport(TRANSPORTENTRY * L4);
+void ProcessNCMPMsg(L3MESSAGEBUFFER * L3MSG);
 
 static UINT APPLMASK;
 
@@ -2172,6 +2173,12 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask,
 			return;
 		}
 
+		if (L3MSG->L4ID == 0x00 && L3MSG->L4INDEX == 0x0f)			// Paula's NCMP
+		{
+			ProcessNCMPMsg(L3MSG);
+			return;
+		}
+
 		ReleaseBuffer(L3MSG);
 		return;
 
@@ -2820,3 +2827,46 @@ int CloseAllSessions()
 	}
 	return Closed;
 }
+
+// NCMP Code
+
+/*
+|<--------------- NCMP Header ------------->
+| --------------------------------------------------------------
+| L3hdr | Fam | Prot | Type | Code | 00 | (options) | (Payload) 
+|--------------------------------------------------------------
+Field  Bytes  Description-------------------------------------------------------
+L3hdr    15   NET/ROM Layer 3 Header 
+Fam       1   Protocol Family = NET/ROM = 0x0f 
+Prot      1   Protocol = NCMP = 0x00 
+Type      1   Type of NCMP packet (see below) 
+Code      1   Usage depends on "type". 
+Options  var  Additional fields present in some types only 
+Payload  var  Optional payload present in some types only 
+
+The upper 4 bits of the TYPE are reserved for future expansion, and 
+are set to zero in this version. The lower 4 bits are the packet type
+as follows: 
+Type  Purpose
+-----------------------------------
+0    Probe Request 
+1    Probe Reply 
+2    Echo Request 
+3    Echo Reply 
+4    Routing Information Unicast 
+5    Destination Unreachable
+
+*/
+
+void ProcessNCMPMsg(L3MESSAGEBUFFER * L3MSG)
+{
+	switch(L3MSG->L4TXNO & 15)
+	{
+	case 0:
+		break;
+	}
+
+	ReleaseBuffer(L3MSG);
+	return;
+}
+

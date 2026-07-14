@@ -1163,6 +1163,8 @@
 //	Fix possible crash in SendBBSDataToPktMap
 //	Remove Uncompressed Blocked forwarding (27)
 //	Fix mail api returning garbage when deflate isn't requested (27)
+//	Fix PG command processing on 64 bit Linux (31)
+//	Limit L command output for new users (32)
 
 
 #include "bpqmail.h"

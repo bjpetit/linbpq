@@ -971,6 +971,10 @@ void SendBBSDataToPktMapThread(void * Param)
 		// Get Routing
 
 		MsgBytes = ReadMessageFile(Msg->number);
+
+		if (MsgBytes == NULL)
+			continue;
+
 		RLines = malloc(Msg->length * 2);				// Very unlikely to need so much but better safe..
 
 		strcpy(RLines, "[]");
