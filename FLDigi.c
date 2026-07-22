@@ -1172,7 +1172,7 @@ VOID * FLDigiExtInit(EXTPORTDATA * PortEntry)
 	//	The Socket to connect to is in IOBASE
 	//
 
-	srand((unsigned int)time(NULL));
+	srand((unsigned int)NOW);
 
 	port = PortEntry->PORTCONTROL.PORTNUMBER;
 
@@ -1566,7 +1566,7 @@ VOID ConnecttoFLDigiThread(void * portptr)
 			WritetoConsole(Msg);
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 			TNC->Alerted = TRUE;
 		}
 		
@@ -2539,7 +2539,7 @@ VOID ProcessFLDigiData(struct TNCINFO * TNC, UCHAR * Input, int Len, char Channe
 		SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
 
 		strcpy(STREAM->MyCall, call2);
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = STREAM->BytesResent = 0;
 		
 		if (TNC->RIG && TNC->RIG != &TNC->DummyRig && strcmp(TNC->RIG->RigName, "PTT"))
@@ -2698,7 +2698,7 @@ AckConnectRequest:
 		if (STREAM->Connected)
 			goto SendKReply;		// Repeated ACK
 
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = STREAM->BytesResent = 0;
 		STREAM->Connected = TRUE;
 
@@ -3683,15 +3683,17 @@ VOID FLSlowTimer(struct TNCINFO * TNC)
 	if (FL->KISSMODE)
 	{
 		if (FL->Responding)
+		{
 			FL->Responding--;
 
-		if (FL->Responding == 0)
-		{
-			TNC->TNCOK = FALSE;
-			TNC->CONNECTED = FALSE;
+			if (FL->Responding == 0)
+			{
+				TNC->TNCOK = FALSE;
+				TNC->CONNECTED = FALSE;
 
-			sprintf(TNC->WEB_COMMSSTATE, "Connection to FLDIGI lost");
-			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				sprintf(TNC->WEB_COMMSSTATE, "Connection to FLDIGI lost");
+				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			}
 
 			// Set basic params till it responds
 		}
@@ -3839,7 +3841,7 @@ static int ProcessXMLData(int port)
 		SetWindowText(TNC->xIDC_CHANSTATE, "Busy");
 		strcpy(TNC->WEB_CHANSTATE, "Busy");
 
-		TNC->WinmorRestartCodecTimer = time(NULL);
+		TNC->WinmorRestartCodecTimer = NOW;
 */
 			return 0;
 	}
@@ -3853,7 +3855,7 @@ static int ProcessXMLData(int port)
 			strcpy(TNC->WEB_CHANSTATE, "Clear");
 
 		SetWindowText(TNC->xIDC_CHANSTATE, TNC->WEB_CHANSTATE);
-		TNC->WinmorRestartCodecTimer = time(NULL);
+		TNC->WinmorRestartCodecTimer = NOW;
 		return;
 	}
 */

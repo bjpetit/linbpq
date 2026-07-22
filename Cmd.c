@@ -1619,7 +1619,7 @@ VOID CMDL00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct C
 				{
 					// Dump Link State
 
-					int secs = time(NULL) - LINK->LASTFRAMESENT;
+					int secs = NOW - LINK->LASTFRAMESENT;
 						
 					Bufferptr = Cmdprintf(Session, Bufferptr, "  Debug Info: LINK->LINKNS %d LINK->LINKOWS %d SDTSLOT %d LINKWINDOW %d L2FLAGS %d\r", LINK->LINKNS, LINK->LINKOWS, LINK->SDTSLOT, LINK->LINKWINDOW, LINK->L2FLAGS);
 					Bufferptr = Cmdprintf(Session, Bufferptr, "  Debug Info: Slots %x %x %x %x %x %x %x %x\r", LINK->FRAMES[0], LINK->FRAMES[1], LINK->FRAMES[2], LINK->FRAMES[3],
@@ -3312,7 +3312,6 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 	struct INP3_DEST_ROUTE_ENTRY * Route;
 	struct ROUTE * Neighbour;
 	int i, Active, len;
-	time_t Now = time(NULL);
 	struct tm * TM;
 
 	Alias[6] = 0;
@@ -6269,7 +6268,7 @@ VOID KISSCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 			// Send Command
 
 			PORT->Session = Session;
-			PORT->LastKISSCmdTime = time(NULL);
+			PORT->LastKISSCmdTime = NOW;
 
 			PORT = (struct PORTCONTROL *)KISS->FIRSTPORT;			// ALL FRAMES GO ON SAME Q
 			KissLen = KissEncode(KissString, ENCBUFF, KissLen);
@@ -6342,7 +6341,7 @@ VOID LORACMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 			KissLen = KissEncode(KissString, ENCBUFF, KissLen);
 
 			PORT->Session = Session;
-			PORT->LastKISSCmdTime = time(NULL);
+			PORT->LastKISSCmdTime = NOW;
 
 			ASYSEND(PORT, ENCBUFF, KissLen);
 
@@ -6833,7 +6832,7 @@ VOID QTSMCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct 
 	// Send Command
 
 	PORT->Session = Session;
-	PORT->LastKISSCmdTime = time(NULL);
+	PORT->LastKISSCmdTime = NOW;
 	KissString[0] |= KISS->OURCTRL;
 
 	PORT = (struct PORTCONTROL *)KISS->FIRSTPORT;			// ALL FRAMES GO ON SAME Q

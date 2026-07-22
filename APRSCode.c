@@ -206,7 +206,7 @@ BOOL PosnSet = FALSE;
 /*
 The null position should be include the \. symbol (unknown/indeterminate
 position). For example, a Position Report for a station with unknown position
-will contain the coordinates …0000.00N\00000.00W.…
+will contain the coordinates ï¿½0000.00N\00000.00W.ï¿½
 */
 char * FloodCalls = 0;			// Calls to relay using N-n without tracing
 char * TraceCalls = 0;			// Calls to relay using N-n with tracing
@@ -459,7 +459,7 @@ int APRSWriteLog(char * msg)
 	if (strchr(msg, '\n') == 0)
 		strcat(msg, "\r\n");
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);
 
 	if (GetLogDirectory()[0] == 0)
@@ -971,11 +971,9 @@ time_t lastSecTimer = 0;
 
 Dll VOID APIENTRY Poll_APRS()
 {
-	time_t Now = time(NULL);
-
-	if (lastSecTimer != Now)
+	if (lastSecTimer != NOW)
 	{
-		lastSecTimer = Now;
+		lastSecTimer = NOW;
 
 		DoSecTimer();
 
@@ -1221,7 +1219,7 @@ Dll VOID APIENTRY Poll_APRS()
 						{
 							// Using Smart ID, but none scheduled
 
-							PORT->SmartIDNeeded = time(NULL) + PORT->SmartIDInterval;
+							PORT->SmartIDNeeded = NOW + PORT->SmartIDInterval;
 						}
 						PUT_ON_PORT_Q(PORT, Buffer);
 					}
@@ -1395,7 +1393,7 @@ Dll VOID APIENTRY Poll_APRS()
 				ISDELAY * SatISEntry = malloc(sizeof(ISDELAY));
 				SatISEntry->Next =	NULL;
 				SatISEntry->ISMSG = _strdup(ISMsg);
-				SatISEntry->SendTIme = time(NULL) + 10;	// Delay 10 seconds
+				SatISEntry->SendTIme = NOW + 10;	// Delay 10 seconds
 
 				if (SatISQueue)
 					SatISEntry->Next = SatISQueue;		// Chain
@@ -2655,7 +2653,7 @@ void SendBeaconThread(void * Param)
 //	Station->LastPort = Port;
 
 	DecodeAPRSPayload(Msg.L2DATA, Station);
-	Station->TimeLastUpdated = time(NULL);
+	Station->TimeLastUpdated = NOW;
 
 	if (toPort)
 	{
@@ -2829,7 +2827,6 @@ VOID DoSecTimer()
 
 	if (SatISQueue)
 	{
-		time_t NOW = time(NULL);
 		ISDELAY * SatISEntry = SatISQueue;
 		ISDELAY * Prev = NULL;
 
@@ -3108,7 +3105,7 @@ VOID APRSISThread(void * Report)
 		//
 
 #ifndef LINBPQ
-		MySetWindowText(GetDlgItem(hConsWnd, IGATESTATE), "IGate State: Connect Failed");
+		MySetWindowText(0, GetDlgItem(hConsWnd, IGATESTATE), "IGate State: Connect Failed");
 #else
 		printf("APRS Igate connect failed\n");
 #endif
@@ -3125,7 +3122,7 @@ VOID APRSISThread(void * Report)
 	APRSISOpen = TRUE;
 
 #ifndef LINBPQ
-	MySetWindowText(GetDlgItem(hConsWnd, IGATESTATE), "IGate State: Connected");
+	MySetWindowText(0, GetDlgItem(hConsWnd, IGATESTATE), "IGate State: Connected");
 #endif
 
 	InputLen=recv(sock, Buffer, 500, 0);
@@ -3238,7 +3235,6 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	char * ptr;
 	char Message[255];
 	PAPRSHEARDRECORD MH;
-	time_t NOW = time(NULL);
 	char ISCopy[1024];
 	struct STATIONRECORD * Station = NULL;
 #ifdef WIN32
@@ -3467,7 +3463,6 @@ APRSHEARDRECORD * UpdateHeard(UCHAR * Call, int Port)
 	APRSHEARDRECORD * MH = MHDATA;
 	APRSHEARDRECORD * MHBASE = MH;
 	int i;
-	time_t NOW = time(NULL);
 	time_t OLDEST = NOW - MAXAGE;
 	char CallPadded[10] = "         ";
 	BOOL SaveIGate = FALSE;
@@ -3558,8 +3553,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 {
 	// Primitive duplicate suppression - see if same call and text reeived in last few seconds
 	
-	time_t Now = time(NULL);
-	time_t DupCheck = Now - DUPSECONDS;
+	time_t DupCheck = NOW - DUPSECONDS;
 	int i, saveindex = -1;
 	char * ptr1;
 
@@ -3602,7 +3596,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 	if (saveindex == -1)  // List is full
 		saveindex = MAXDUPS - 1;	// Stick on end	
 
-	DupInfo[saveindex].DupTime = Now;
+	DupInfo[saveindex].DupTime = NOW;
 	memcpy(DupInfo[saveindex].DupUser, Call, 7);
 
 	if (Len > 99) Len = 99;
@@ -3621,7 +3615,7 @@ char * FormatAPRSMH(APRSHEARDRECORD * MH)
 	static char MHLine[50];
 	time_t szClock = MH->MHTIME;
 
-	szClock = (time(NULL) - szClock);
+	szClock = (NOW - szClock);
 	TM = gmtime(&szClock);
 
 	sprintf(MHLine, "%-10s %d %.2d:%.2d:%.2d:%.2d %s\r",
@@ -3927,8 +3921,6 @@ void DecodeRMC(char * msg, size_t len)
 	{
 		if (MobileBeaconInterval)
 		{
-			time_t NOW = time(NULL);
-
 			if ((NOW - LastMobileBeacon) > MobileBeaconInterval)
 			{
 				LastMobileBeacon = NOW;
@@ -4750,7 +4742,7 @@ struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 		//	Debugprintf("APRS Add Stn %s Station Count = %d", Call, StationCount);
        
 		strcpy(ptr->Callsign, Call);
-		ptr->TimeLastUpdated = ptr->TimeAdded = time(NULL);
+		ptr->TimeLastUpdated = ptr->TimeAdded = NOW;
 		ptr->Index = i;
 		ptr->NoTracks = DefaultNoTracks;
 
@@ -4844,7 +4836,7 @@ struct STATIONRECORD * ProcessRFFrame(char * Msg, int len, int * ourMessage)
 	Station->LastPort = Port;
 
 	*ourMessage = DecodeAPRSPayload(Payload, Station);
-	Station->TimeLastUpdated = time(NULL);
+	Station->TimeLastUpdated = NOW;
 
 	return Station;
 }
@@ -4906,7 +4898,7 @@ struct STATIONRECORD * DecodeAPRSISMsg(char * Msg)
 	Station->LastPort = 0;
 
 	DecodeAPRSPayload(Payload, Station);
-	Station->TimeLastUpdated = time(NULL);
+	Station->TimeLastUpdated = NOW;
 
 	return Station;
 }
@@ -5033,7 +5025,6 @@ BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
 
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
-		time_t NOW = time(NULL);
 		time_t Age = NOW - Station->TimeLastTracked;
 
 		if (Age > 15)				// Don't update too often
@@ -5140,7 +5131,7 @@ int DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		if (ObjState != '_')		// Deleted Objects may have odd positions
 			DecodeLocationString(ptr, Object);
 
-		Object->TimeLastUpdated = time(NULL);
+		Object->TimeLastUpdated = NOW;
 		Station->Object = Object;
 		return 0;
 
@@ -5174,7 +5165,7 @@ int DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		if (ObjState != '_')		// Deleted Objects may have odd positions
 			DecodeLocationString(Payload + 18, Object);
 		
-		Object->TimeLastUpdated = time(NULL);
+		Object->TimeLastUpdated = NOW;
 		Object->LastPort = Station->LastPort;
 		Station->Object = Object;
 		return 0;
@@ -5243,7 +5234,7 @@ int DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		TPStation->LastPort = 0;					// Heard on RF, but info is from IS
 
 		DecodeAPRSPayload(Payload, TPStation);
-		TPStation->TimeLastUpdated = time(NULL);
+		TPStation->TimeLastUpdated = NOW;
 
 		return 0;
 
@@ -5362,10 +5353,10 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 	To decode the longitude degrees value:
 1. subtract 28 from the d+28 value to obtain d.
 2. if the longitude offset is +100 degrees, add 100 to d.
-3. subtract 80 if 180 ˜ d ˜ 189
-(i.e. the longitude is in the range 100–109 degrees).
-4. or, subtract 190 if 190 ˜ d ˜ 199.
-(i.e. the longitude is in the range 0–9 degrees).
+3. subtract 80 if 180 ï¿½ d ï¿½ 189
+(i.e. the longitude is in the range 100ï¿½109 degrees).
+4. or, subtract 190 if 190 ï¿½ d ï¿½ 199.
+(i.e. the longitude is in the range 0ï¿½9 degrees).
 */
 
 	n = Payload[2] - 28;			// Lon Mins
@@ -5378,8 +5369,8 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 	n = Payload[3] - 28;			// Lon Mins/100;
 
 //1. subtract 28 from the m+28 value to obtain m.
-//2. subtract 60 if m ™ 60.
-//(i.e. the longitude minutes is in the range 0–9).
+//2. subtract 60 if m ï¿½ 60.
+//(i.e. the longitude minutes is in the range 0ï¿½9).
 
 
 	memcpy(LatDeg, Lat, 2);
@@ -5442,7 +5433,6 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
-		time_t NOW = time(NULL);
 		time_t Age = NOW - Station->TimeLastUpdated;
 
 		if (Age > 15)				// Don't update too often
@@ -5935,8 +5925,6 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 
 	strcpy(Message->Text, TextPtr);
 		
-	NOW = time(NULL);
-
 	if (DefaultLocalTime)
 		TM = localtime(&NOW);
 	else
@@ -6215,7 +6203,6 @@ VOID SendWeatherBeacon()
 	char * WXptr;
 	char * WXend;
 	time_t WXTime;
-	time_t now = time(NULL);
 	FILE * hFile;
 	struct tm * TM;
 	struct stat STAT;
@@ -6235,7 +6222,7 @@ VOID SendWeatherBeacon()
 		return;
 	}
 
-	WXTime = (now - STAT.st_mtime) /60;			// Minutes
+	WXTime = (NOW - STAT.st_mtime) /60;			// Minutes
 
 	if (WXTime > (3 * WXInterval))
 	{
@@ -6375,7 +6362,7 @@ Jan 22 2012 14:10
 < previous
 
 @221452z3844.42N/08628.33W_203/006g007t032r000P000p000h00b10171
-Complete Weather Report Format — with Lat/Long position, no Timestamp
+Complete Weather Report Format ï¿½ with Lat/Long position, no Timestamp
 ! or = Lat   Sym Table ID   Long   Symbol Code _  Wind Directn/ Speed Weather Data APRS Software   WX Unit uuuu
  1      8          1         9          1                 7                 n            1              2-4
 Examples
@@ -6802,7 +6789,7 @@ char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key, BOOL KM)
 	{
 		char Time[80];
 		struct tm * TM;
-		time_t Age = time(NULL) - stn->TimeLastUpdated;
+		time_t Age = NOW - stn->TimeLastUpdated;
 
 		TM = gmtime(&Age);
 
@@ -7738,7 +7725,6 @@ int ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 	int n = 0;
 	char FromCall[10] = "         ";
 	struct tm * TM;
-	time_t NOW;
 	char noSeq[] = "";
 	int ourMessage = 0;
 
@@ -7868,8 +7854,6 @@ int ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 
 	strcpy(Message->Text, TextPtr);
 		
-	NOW = time(NULL);
-
 	if (DefaultLocalTime)
 		TM = localtime(&NOW);
 	else
@@ -7933,7 +7917,6 @@ BOOL InternalSendAPRSMessage(char * Text, char * Call)
 	size_t len = strlen(Call);
 	APRSHEARDRECORD * STN;
 	struct tm * TM;
-	time_t NOW;
 	
 	struct APRSMESSAGE * Message;
 	struct APRSMESSAGE * ptr = SMEM->OutstandingMsgs;
@@ -7973,8 +7956,6 @@ BOOL InternalSendAPRSMessage(char * Text, char * Call)
 	Message->Retries = RetryCount;
 	Message->RetryTimer = RetryTimer;
 
-	NOW = time(NULL);
-
 	if (DefaultLocalTime)
 		TM = localtime(&NOW);
 	else
@@ -8008,7 +7989,7 @@ BOOL InternalSendAPRSMessage(char * Text, char * Call)
 
 	STN = FindStationInMH(Message->ToCall);
 
-	if (STN && STN->MHTIME > (time(NULL) - 900))	// Heard in last 15 mins
+	if (STN && STN->MHTIME > (NOW - 900))	// Heard in last 15 mins
 		SendAPRSMessage(Msg, STN->rfPort);
 	else
 	{
@@ -8646,7 +8627,6 @@ int GetAPRSPageInfo(char * Buffer, double N, double S, double W, double E, int a
 	struct STATIONRECORD * ptr = *StationRecords;
 	int n = 0, Len = 0;
 	struct tm * TM;
-	time_t NOW = time(NULL);
 	char popup[65536] = "";
 	char Msg[2048];
 	int LocalTime = 0;
@@ -9031,7 +9011,7 @@ void SaveAPRSMessage(struct APRSMESSAGE * ptr)
 	if ((file = fopen(FN, "a")) == NULL)
 		return ;
 
-	fprintf(file, "%ld %s,%s,%s,%s,%s\n", (long)time(NULL), ptr->FromCall, ptr->ToCall, ptr->Seq, ptr->Time, ptr->Text);
+	fprintf(file, "%ld %s,%s,%s,%s,%s\n", NOW, ptr->FromCall, ptr->ToCall, ptr->Seq, ptr->Time, ptr->Text);
 
 	fclose(file);
 }

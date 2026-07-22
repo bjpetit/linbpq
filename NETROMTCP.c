@@ -109,7 +109,7 @@ struct ConnectionInfo * AllocateNRTCPRec()
 		if (sockptr->SocketActive == FALSE)
 		{
 			sockptr->SocketActive = TRUE;
-			sockptr->ConnectTime = sockptr->LastSendTime = time(NULL);
+			sockptr->ConnectTime = sockptr->LastSendTime = NOW;
 
 			Debugprintf("NRTCP Allocated %d", i);
 			return sockptr;
@@ -125,7 +125,7 @@ void checkNRTCPSockets(int portNo)
 	SOCKET maxsock;
 	int retval;
 	int i;
-	time_t Now = time(NULL);
+	time_t Now = NOW;
 
 	struct timeval timeout;
 	fd_set readfd, writefd, exceptfd;
@@ -345,7 +345,7 @@ int NETROMTCPConnect(struct ROUTE * Route, struct ConnectionInfo * sockptr)
 		//
 		
 		sockptr->Connected = TRUE;
-		sockptr->LastReceiveTime = time(NULL);
+		sockptr->LastReceiveTime = NOW;
 		return TRUE;
 	}
 	else
@@ -397,7 +397,7 @@ void NETROMConnectionAccepted(struct ConnectionInfo * sockptr)
 	Debugprintf("INP3 Accept() Local port %d", htons(sockptr->sin.sin_port));
 
 	sockptr->Connected = TRUE;
-	sockptr->LastReceiveTime = time(NULL);
+	sockptr->LastReceiveTime = NOW;
 //	Debugprintf("NRTCP Connection Accepted");
 }
 
@@ -411,7 +411,7 @@ void NETROMConnected(struct ConnectionInfo * sockptr, SOCKET sock, struct NRTCPS
 
 	sockptr->Connecting = FALSE;
 	sockptr->Connected = TRUE;
-	sockptr->LastReceiveTime = time(NULL);
+	sockptr->LastReceiveTime = NOW;
 
 	Info->LINK->L2STATE = 5;
 
@@ -444,7 +444,7 @@ int DataSocket_ReadNETROM(struct ConnectionInfo * sockptr, SOCKET sock, struct N
 		return 0;
 	}
 
-	sockptr->LastReceiveTime = time(NULL);
+	sockptr->LastReceiveTime = NOW;
 
 	sockptr->InputLen += len;
 

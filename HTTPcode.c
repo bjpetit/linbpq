@@ -76,6 +76,7 @@ char * byte_base64_encode(char *str, int len);
 int APIProcessHTTPMessage(char * response, char * Method, char * URL, char * request,	BOOL LOCAL, BOOL COOKIE);
 int RHPProcessHTTPMessage(struct ConnectionInfo * conn, char * response, char * Method, char * URL, char * request, BOOL LOCAL, BOOL COOKIE);
 int doinflate(unsigned char * source, unsigned char * dest, int Len, int destlen, int * outLen);
+void SendDeviceWebPage(int Port);
 
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
@@ -368,7 +369,6 @@ static char ConfigEditPage[] = COMMON_HTML_HEAD_UTF8_VIEWPORT
 "<input name=Save value=Save type=submit class='btn'><input name=Cancel value=Cancel type=submit class='btn'><br></form>";
 
 static char EXCEPTMSG[80] = "";
-
 
 void UndoTransparency(char * input)
 {
@@ -712,7 +712,7 @@ struct HTTPConnectionInfo * AllocateSession(SOCKET sock, char Mode)
 		SessionControl(Session->Stream, 1, 0);
 	}
 
-	KeyVal = (int)sock * time(NULL);
+	KeyVal = (int)sock * NOW;
 
 	sprintf(Session->Key, "%c%012X", Mode, (int)KeyVal);
 
@@ -1231,11 +1231,11 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 		if ((strcmp(FN, "/") == 0 || strstr(FN, "htm" ) || strstr(FN, "HTM")) &&  strstr(MsgBytes, "##" ))
 		{
 			FileSize = ProcessSpecialPage(MsgBytes, FileSize); 
-			FormatTime3(FileTimeString, time(NULL));
+			FormatTime3(FileTimeString, NOW);
 
 		}
 
-		FormatTime3(TimeString, time(NULL));
+		FormatTime3(TimeString, NOW);
 
 		ptr = FN;
 
@@ -2663,7 +2663,7 @@ doHeader:
 					TNC->TXOffset = atoi(input);
 #ifdef WIN32
 					sprintf(value, "%d", TNC->TXOffset);
-					MySetWindowText(TNC->xIDC_TXTUNEVAL, value);
+					MySetWindowText(TNC, TNC->xIDC_TXTUNEVAL, value);
 					SendMessage(TNC->xIDC_TXTUNE, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) TNC->TXOffset);  // min. & max. positions
 
 #endif
@@ -3274,6 +3274,77 @@ doHeader:
 					ReplyLen = sprintf(_REPLYBUFFER, "%s", NoRigCtl);
 			}
 
+			else if (_stricmp(NodeURL, "/Node/DevicePage") == 0)
+			{
+				char Part1[] =
+					"<html><meta http-equiv=expires content=0>\r\n"
+					"<head><title>Device</title></head>\r\n"
+					"<script type = \"text/javascript\">\r\n"
+					"var ws;"
+
+					"function Action(data){\r\n"
+					"req = new XMLHttpRequest();\r\n"
+					"req.open('POST', 'PortAction?%d', true);\r\n"
+					"req.send(data);alert(data + ' Sent');}\r\n"
+	
+					"function freqOffset(data){\r\n"
+					"req = new XMLHttpRequest();\r\n"
+					"req.open('POST', 'freqOffset?%d', true);\r\n"
+					"req.send(data);}\r\n"
+	
+					"function OpenWebSocket()"
+					"{"
+					" if (\"WebSocket\" in window)"
+					" {"
+					"   // open a web socket. Get address from URL\r\n"
+					"	var text = window.location.href;"
+					"	var result = text.substring(7);"
+					"	var myArray = result.split('/', 1);"
+					"   ws = new WebSocket('ws://' + myArray[0] + '/DEVICE%d');\r\n"
+					"   ws.onopen = function() {\r\n"
+			
+					"   // Web Socket is connected\r\n"
+
+					"	const div = document.getElementById('div');\r\n"
+					"	div.innerHTML = 'Websock Connected'\r\n};\r\n"
+					
+					"ws.onmessage = function (evt)"
+					"{"
+					" var received_msg = evt.data;\r\n"
+					" const div = document.getElementById('div');\r\n"
+					" div.innerHTML = received_msg\r\n"
+					" const text = document.getElementById('textarea');\r\n"
+					" text.scrollTop = text.scrollHeight;\r\n"
+					" };\r\n"
+
+					"   ws.onclose = function()"
+					"   {"
+
+					"    // websocket is closed.\r\n"
+					"	 const div = document.getElementById('div');\r\n"
+					"	 div.innerHTML = 'Websock Connection Lost'\r\n"
+					"    };"
+					" }"
+					" else"
+					" {"
+					"  // The browser doesn't support WebSocket\r\n"
+					"	const div = document.getElementById('div');\r\n"
+					"	div.innerHTML = 'WebSocket not supported by your Browser - Device Page not availible'\r\n"
+					" }"
+					"}"
+					"</script>\r\n"
+					"</head>\r\n"
+					"<body height: 600px; onload=OpenWebSocket()>\r\n"
+					"<div id = 'div'>Waiting for data...</div>\r\n"
+					"</body></html>\r\n";
+
+				int Port = atoi(Context);
+				int xxx;
+
+				ReplyLen = sprintf(_REPLYBUFFER, Part1, Port, Port, Port);
+				xxx = ReplyLen;
+			}
+
 			else if (_stricmp(NodeURL, "/Node/ShowLog.html") == 0)
 			{
 				char ShowLogPage[] =
@@ -3308,7 +3379,7 @@ doHeader:
 				struct tm * tm;
 				char Name[64] = "";
 
-				T = time(NULL);
+				T = NOW;
 				tm = gmtime(&T);
 
 				if (LOCAL == FALSE && COOKIE == FALSE)
@@ -3991,7 +4062,6 @@ doHeader:
 				struct AXIPPORTINFO * AXPORT = Portlist[0];
 				struct PORTCONTROL * PORT = PORTTABLE;
 				struct arp_table_entry * arp;
-				time_t NOW = time(NULL);
 				
 				char AXIPHeader[] =
 					HTTP_NODE_H2("AXIP Partners")
@@ -4419,7 +4489,7 @@ CMDS60:
 
 SendResp:
 
-			FormatTime3(TimeString, time(NULL));
+			FormatTime3(TimeString, NOW);
 
 			strcpy(&_REPLYBUFFER[ReplyLen], Tail);
 			ReplyLen += (int)strlen(Tail);
@@ -4973,6 +5043,27 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 }
 
 
+void BuildDevicePage(struct TNCINFO * TNC)
+{
+	int Len;
+	char Page[65536];
+
+	Len = TNC->WebWindowProc(TNC, Page, 1);
+
+	if (TNC->WebPage)
+	{
+		if (strcmp(TNC->WebPage, Page) == 0)
+			return;				// No change
+		else
+			free(TNC->WebPage);
+	}
+
+	TNC->WebPage = _strdup(Page);
+
+	SendDeviceWebPage(TNC->Port);
+
+}
+
 void SendRigWebPage()
 {
 	int i, n;
@@ -5024,6 +5115,68 @@ void SendRigWebPage()
 		}
 	}
 }
+
+void SendDeviceWebPage(int Port)
+{
+	int i, n;
+	struct ConnectionInfo * sockptr;
+	struct TNCINFO * TNC = TNCInfo[Port];
+	struct TCPINFO * TCP;
+	char DevString[16];
+
+	char Msg[65536];
+	int MsgLen;
+
+	if (TNC->WebPage == 0)
+		return;
+
+	strcpy(&Msg[4], TNC->WebPage);
+	MsgLen = strlen(&TNC->WebPage[4]);
+	
+	sprintf(DevString, "DEVICE%d", Port);
+
+	for (i = 0; i < 33; i++)
+	{
+		TNC = TNCInfo[i];
+
+		if (TNC && TNC->Hardware == H_TELNET)
+		{
+			TCP = TNC->TCPInfo;
+
+			if (TCP)
+			{
+				for (n = 0; n <= TCP->MaxSessions; n++)
+				{
+					sockptr = TNC->Streams[n].ConnectionInfo;
+
+					if (sockptr->SocketActive)
+					{
+						if (sockptr->HTTPMode && sockptr->WebSocks  && strcmp(sockptr->WebURL, DevString) == 0)
+						{
+							char* ptr;
+
+							Msg[0] = 0x81;		// Fin, Data
+							Msg[1] = 126;		// Unmasked, Extended Len
+							Msg[2] = MsgLen >> 8;
+							Msg[3] = MsgLen & 0xff;
+
+							// If secure session enable PTT button
+
+							if (sockptr->WebSecure)
+							{
+								while (ptr = strstr(&Msg[4], "hidden"))
+									memcpy(ptr, "      ", 6);
+							}
+
+							send(sockptr->socket, Msg, MsgLen + 4, 0);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 
 // Webmail web socket code
 

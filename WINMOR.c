@@ -152,6 +152,8 @@ VOID WritetoTraceSupport(struct TNCINFO * TNC, char * Msg, int Len)
 	if (Len < 0)
 		return;
 
+	TNC->PageChanged = TNC->WebSockUsed;
+
 	Save = Msg[Len];
 	Msg[Len] = 0;
 
@@ -216,7 +218,7 @@ lineloop:
 #endif
 			// Write to Web Buffer
 
-			T = time(NULL);
+			T = NOW;
 			tm = gmtime(&T);
 	
 			sprintf_s(Time, sizeof(Time),"%02d:%02d ", tm->tm_hour, tm->tm_min);
@@ -264,7 +266,7 @@ lineloop:
 #else
 			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) ptr1 );
 #endif
-			T = time(NULL);
+			T = NOW;
 			tm = gmtime(&T);
 	
 			sprintf_s(Time, sizeof(Time),"%02d:%02d ", tm->tm_hour, tm->tm_min);
@@ -315,24 +317,28 @@ int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
 
 struct SEM SetWindTextSem = {0, 0, 0, 0};
 
-VOID MySetWindowText(HWND hWnd, char * Msg)
+VOID MySetWindowText(struct TNCINFO * TNC, HWND hWnd, char * Msg)
 {
+	if (TNC)
+		TNC->PageChanged = TNC->WebSockUsed;
+
 #ifndef LINBPQ
-
-	PMSGWITHLEN buffptr;
-
-	GetSemaphore(&SetWindTextSem, 61);
-	buffptr = zalloc(400);
-
-	if (buffptr)
 	{
-		buffptr->Len= (UINT)hWnd;
-		memcpy(&buffptr->Data[0], Msg, strlen(Msg) + 1);
-	
-		C_Q_ADD_NP(&SetWindowTextQ, buffptr);
-	}
+		PMSGWITHLEN buffptr;
 
-	FreeSemaphore(&SetWindTextSem);
+		GetSemaphore(&SetWindTextSem, 61);
+		buffptr = zalloc(400);
+
+		if (buffptr)
+		{
+			buffptr->Len= (UINT)hWnd;
+			memcpy(&buffptr->Data[0], Msg, strlen(Msg) + 1);
+
+			C_Q_ADD_NP(&SetWindowTextQ, buffptr);
+		}
+
+		FreeSemaphore(&SetWindTextSem);
+	}
 #endif
 }
 
@@ -599,7 +605,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		if ((STREAM->Connecting || STREAM->Connected) && !STREAM->Disconnecting)
 		{
-			if (TNC->SessionTimeLimit && STREAM->ConnectTime && time(NULL) > (TNC->SessionTimeLimit + STREAM->ConnectTime))
+			if (TNC->SessionTimeLimit && STREAM->ConnectTime && NOW > (TNC->SessionTimeLimit + STREAM->ConnectTime))
 			{
 				send(TNC->TCPSock,"DISCONNECT\r\n", 12, 0);
 				STREAM->Disconnecting = TRUE;
@@ -681,7 +687,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			{
 				char wtext[100];
 				sprintf (wtext, "WINMOR Sound Card TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-				MySetWindowText(TNC->hWnd, wtext);
+				MySetWindowText(TNC, TNC->hWnd, wtext);
 			}
 
 			TNC->HeartBeat = 0;
@@ -694,7 +700,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					send(TNC->TCPSock, "MODE\r\n", 6, 0);
 				else
 				{
-					if (time(NULL) - TNC->WinmorRestartCodecTimer > 900)	// 15 mins
+					if (NOW - TNC->WinmorRestartCodecTimer > 900)	// 15 mins
 					{
 						send(TNC->TCPSock, "CODEC FALSE\r\n", 13, 0);
 						send(TNC->TCPSock, "CODEC TRUE\r\n", 12, 0);
@@ -769,7 +775,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					char Time[80];
 				
 					TNC->Restarts++;
-					TNC->LastRestart = time(NULL);
+					TNC->LastRestart = NOW;
 
 					tm = gmtime(&TNC->LastRestart);	
 				
@@ -1337,12 +1343,12 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 		send(TNC->TCPSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	if (TNC->hWnd)
 	{
 		sprintf (wtext, "WINMOR Sound Card TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-		MySetWindowText(TNC->hWnd, wtext);
+		MySetWindowText(TNC, TNC->hWnd, wtext);
 	}
 
 	//	Start Scanner
@@ -1417,7 +1423,7 @@ VOID WinmorSuspendPort(struct TNCINFO * TNC, struct TNCINFO * ThisTNC)
 	if (TNC->Busy)
 	{
 		TNC->Busy = FALSE;		// Can't clear detector if CODEC off.
-		MySetWindowText(TNC->xIDC_CHANSTATE, "Clear");
+		MySetWindowText(TNC, TNC->xIDC_CHANSTATE, "Clear");
 		strcpy(TNC->WEB_CHANSTATE, "Clear");
 	}
 }
@@ -1430,10 +1436,14 @@ VOID WinmorReleasePort(struct TNCINFO * TNC)
 
 extern char WebProcTemplate[];
 extern char sliderBit[];
+extern char Menubit[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, TNC->Port, "WINMOR Status", "WINMOR Status");
+	int Len = sprintf(Buff, WebProcTemplate, "WINMOR Status");
+
+	if (LOCAL)
+		Len += sprintf(&Buff[Len], Menubit);
 
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
@@ -1802,7 +1812,7 @@ VOID WINMORThread(void * portptr)
    			i=sprintf(Msg, "Connect Failed for WINMOR socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 			TNC->Alerted = TRUE;
 		}
 		
@@ -1868,7 +1878,7 @@ VOID WINMORThread(void * portptr)
 			sprintf(TNC->WEB_COMMSSTATE, "Connected to WINMOR TNC");
 		
 		GetSemaphore(&Semaphore, 40);
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 		FreeSemaphore(&Semaphore);
 
 	}
@@ -1926,7 +1936,7 @@ Lost:
 				
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
 				GetSemaphore(&Semaphore, 40);
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 				FreeSemaphore(&Semaphore);
 			
 				TNC->CONNECTED = FALSE;
@@ -1956,7 +1966,7 @@ Lost:
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
 			GetSemaphore(&Semaphore, 40);
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 			FreeSemaphore(&Semaphore);
 	
 			TNC->CONNECTED = FALSE;
@@ -2083,7 +2093,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		SetWindowText(TNC->xIDC_CHANSTATE, "Busy");
 		strcpy(TNC->WEB_CHANSTATE, "Busy");
 
-		TNC->WinmorRestartCodecTimer = time(NULL);
+		TNC->WinmorRestartCodecTimer = NOW;
 		return;
 	}
 
@@ -2096,7 +2106,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			strcpy(TNC->WEB_CHANSTATE, "Clear");
 
 		SetWindowText(TNC->xIDC_CHANSTATE, TNC->WEB_CHANSTATE);
-		TNC->WinmorRestartCodecTimer = time(NULL);
+		TNC->WinmorRestartCodecTimer = NOW;
 		return;
 	}
 
@@ -2133,7 +2143,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 		FreeSemaphore(&Semaphore);
 
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->PacketsSent = 0;
 
 		if (TNC->StartInRobust)
@@ -2484,7 +2494,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		strcpy(TNC->WEB_MODE, &Buffer[5]);
 		GetSemaphore(&Semaphore, 50);
-		MySetWindowText(TNC->xIDC_MODE, &Buffer[5]);
+		MySetWindowText(TNC, TNC->xIDC_MODE, &Buffer[5]);
 		FreeSemaphore(&Semaphore);
 		return;
 	}
@@ -2500,7 +2510,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
 	{
-		TNC->WinmorRestartCodecTimer = time(NULL);
+		TNC->WinmorRestartCodecTimer = NOW;
 
 		SetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[9]);
@@ -2711,7 +2721,7 @@ loop:
 		// Does this mean closed?
 		
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;

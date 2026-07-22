@@ -322,7 +322,7 @@ BOOL UZ7HOStopPort(struct PORTCONTROL * PORT)
 	KillTNC(TNC);
 
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Stopped");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -336,10 +336,10 @@ BOOL UZ7HOStartPort(struct PORTCONTROL * PORT)
 	struct TNCINFO * TNC = PORT->TNC;
 
 	ConnecttoUZ7HO(TNC->Port);
-	TNC->lasttime = time(NULL);;
+	TNC->lasttime = NOW;;
 
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Restarted");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -357,7 +357,7 @@ VOID UZ7HOSuspendPort(struct TNCINFO * TNC, struct TNCINFO * ThisTNC)
 
 	TNC->PortRecord->PORTCONTROL.PortSuspended = TRUE;
 	strcpy(TNC->WEB_TNCSTATE, "Interlocked");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 	RegisterAPPLCalls(TNC, TRUE);
 }
 
@@ -365,7 +365,7 @@ VOID UZ7HOReleasePort(struct TNCINFO * TNC)
 {
 	TNC->PortRecord->PORTCONTROL.PortSuspended = FALSE;
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	RegisterAPPLCalls(TNC, FALSE);
 }
@@ -764,7 +764,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						TNC->CONNECTING = FALSE;
 
 						sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");
-						MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+						MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 						// If required, send signon
 
@@ -1284,7 +1284,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		TNC->Alerted = FALSE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		if (TNC->WeStartedTNC)
 		{
@@ -1317,24 +1317,7 @@ extern char WebProcTemplate[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-/*
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}"
-		"myInt = setInterval('Refresh()', 15000 );\n"
-		"function Refresh( )\n"
-		"{location.reload()}\n"
-		"</script>"
-		"</head><title>UZ7HO Status</title></head><body id=Text onload=\"ScrollOutput()\">"
-		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
-		"'width=440,height=150');\" action=ARDOPAbort?%d>UZ7HO Status"
-		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 10;top:10;\"></form></h2>",
-		TNC->Port);
-*/
-	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, TNC->Port, "UZ7HO Status", "UZ7HO Status");
-
+	int Len = sprintf(Buff, WebProcTemplate, "UZ7HO Status");
 
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
@@ -1507,7 +1490,7 @@ void * UZ7HOExtInit(EXTPORTDATA * PortEntry)
 		// Slave Port
 
 		sprintf(TNC->WEB_COMMSSTATE, "Slave to Port %d", MasterPort[port] );		
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	}
 
 	time(&lasttime[port]);			// Get initial time value
@@ -1933,7 +1916,7 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 		TNC->CONNECTED = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");		
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		ioctl(TNC->TCPSock, FIONBIO, &param);
 	}
@@ -1948,7 +1931,7 @@ VOID ConnecttoUZ7HOThread(void * portptr)
 			WritetoConsole(Msg);
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");		
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 			TNC->Alerted = TRUE;
 		}
 		
@@ -1994,7 +1977,7 @@ static int ProcessReceivedData(int port)
 		TNC->Alerted = FALSE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 
 		return (0);
@@ -2011,7 +1994,7 @@ static int ProcessReceivedData(int port)
 		TNC->Alerted = FALSE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 
 		closesocket(TNC->TCPSock);
@@ -2042,7 +2025,7 @@ static int ProcessReceivedData(int port)
 			TNC->Alerted = FALSE;
 
 			sprintf(TNC->WEB_COMMSSTATE, "Disconnected from TNC");		
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 			return 0;
 		}
@@ -2389,7 +2372,7 @@ GotStream:
 			STREAM = &TNC->Streams[Stream];
 			memcpy(STREAM->AGWKey, Key, 21);
 			STREAM->Connected = TRUE;
-			STREAM->ConnectTime = time(NULL); 
+			STREAM->ConnectTime = NOW; 
 			STREAM->bytesRXed = STREAM->bytesTXed = 0;
 
 			SuspendOtherPorts(TNC);
@@ -2550,7 +2533,7 @@ GotStream:
 
 					STREAM->Connected = TRUE;
 					STREAM->Connecting = FALSE;
-					STREAM->ConnectTime = time(NULL); 
+					STREAM->ConnectTime = NOW; 
 					STREAM->bytesRXed = STREAM->bytesTXed = 0;
 
 					buffptr = GetBuff();

@@ -137,7 +137,7 @@ BOOL VARAStopPort(struct PORTCONTROL * PORT)
 	KillTNC(TNC);
 
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Stopped");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -151,10 +151,10 @@ BOOL VARAStartPort(struct PORTCONTROL * PORT)
 	struct TNCINFO * TNC = PORT->TNC;
 
 	ConnecttoVARA(TNC->Port);
-	TNC->lasttime = time(NULL);;
+	TNC->lasttime = NOW;;
 
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Restarted");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -365,6 +365,8 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 	{
 	case 8:
 
+		// 60 sec timer
+		
 		return 0;
 
 	case 7:
@@ -391,7 +393,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		if ((STREAM->Connecting || STREAM->Connected) && !STREAM->Disconnecting)
 		{
-			if (TNC->SessionTimeLimit && STREAM->ConnectTime && time(NULL) > (TNC->SessionTimeLimit + STREAM->ConnectTime))
+			if (TNC->SessionTimeLimit && STREAM->ConnectTime && NOW > (TNC->SessionTimeLimit + STREAM->ConnectTime))
 			{
 				VARASendCommand(TNC, "CLEANTXBUFFER\r", TRUE);
 				VARASendCommand(TNC, "DISCONNECT\r", TRUE);
@@ -404,7 +406,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		if (STREAM->Attached)
 		{
-			if (STREAM->AttachTime && TNC->AttachTimeLimit && time(NULL) > (TNC->AttachTimeLimit + STREAM->AttachTime))
+			if (STREAM->AttachTime && TNC->AttachTimeLimit && NOW > (TNC->AttachTimeLimit + STREAM->AttachTime))
 			{
 				STREAM->ReportDISC = 1;
 				STREAM->AttachTime = 0;
@@ -440,7 +442,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				VARASendCommand(TNC, TNC->ConnectCmd, TRUE);
 				TNC->Streams[0].Connecting = TRUE;
-				TNC->Streams[0].ConnectTime = time(NULL); 
+				TNC->Streams[0].ConnectTime = NOW; 
 
 				memset(TNC->Streams[0].RemoteCall, 0, 10);
 				memcpy(TNC->Streams[0].RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
@@ -464,7 +466,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					PMSGWITHLEN buffptr = GetBuff();
 
 					TNC->Streams[0].Connecting = FALSE;
-					TNC->Streams[0].ConnectTime = time(NULL); 
+					TNC->Streams[0].ConnectTime = NOW; 
 
 					if (buffptr == 0) return (0);			// No buffers, so ignore
 
@@ -479,6 +481,12 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				}
 			}
+		}
+
+		if (TNC->PageChanged)
+		{
+			BuildDevicePage(TNC);
+			TNC->PageChanged = FALSE;
 		}
 
 		return 0;
@@ -503,18 +511,18 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					char Time[80];
 				
 					TNC->Restarts++;
-					TNC->LastRestart = time(NULL);
+					TNC->LastRestart = NOW;
 
 					tm = gmtime(&TNC->LastRestart);	
 				
 					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
 						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
-					MySetWindowText(TNC->xIDC_RESTARTTIME, Time);
+					MySetWindowText(TNC, TNC->xIDC_RESTARTTIME, Time);
 					strcpy(TNC->WEB_RESTARTTIME, Time);
 
 					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-					MySetWindowText(TNC->xIDC_RESTARTS, Time);
+					MySetWindowText(TNC, TNC->xIDC_RESTARTS, Time);
 					strcpy(TNC->WEB_RESTARTS, Time);
 */	
 
@@ -537,14 +545,14 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
 
 			TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit;		// Reset Limit
-			STREAM->AttachTime = time(NULL);
+			STREAM->AttachTime = NOW;
 
 			// Stop other ports in same group
 
 			SuspendOtherPorts(TNC);
 
 			sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			// Stop Scanning
 
@@ -851,7 +859,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						// Save Command, and wait up to 10 secs
 
 						sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
-						MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 						TNC->ConnectCmd = _strdup(Connect);
 						TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
@@ -862,14 +870,14 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				TNC->OverrideBusy = FALSE;
 
 				VARASendCommand(TNC, Connect, TRUE);
-				TNC->Streams[0].ConnectTime = time(NULL); 
+				TNC->Streams[0].ConnectTime = NOW; 
 
 
 				memset(TNC->Streams[0].RemoteCall, 0, 10);
 				strcpy(TNC->Streams[0].RemoteCall, &buff->L2DATA[2]);
 
 				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			}
 			else
 			{
@@ -1012,18 +1020,18 @@ void CountRestarts(struct TNCINFO * TNC)
 	char Time[80];
 
 	TNC->Restarts++;
-	TNC->LastRestart = time(NULL);
+	TNC->LastRestart = NOW;
 
 	tm = gmtime(&TNC->LastRestart);	
 
 	sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
 		tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
-	//MySetWindowText(TNC->xIDC_RESTARTTIME, Time);
+	//MySetWindowText(TNC, TNC->xIDC_RESTARTTIME, Time);
 	//strcpy(TNC->WEB_RESTARTTIME, Time);
 
 	sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-	MySetWindowText(TNC->xIDC_RESTARTS, Time);
+	MySetWindowText(TNC, TNC->xIDC_RESTARTS, Time);
 	strcpy(TNC->WEB_RESTARTS, Time);
 }
 /*
@@ -1068,12 +1076,12 @@ char WebProcTemplate[] = "<html><head><meta name=\"viewport\" content=\"width=de
 		"</head><body id=Text onload=\"ScrollOutput()\">\r\n"
 		"<h2>%s</h2>";
 
-char Menubit[] = "<span class='dropdown' style=\"position: absolute; left: 10;top: 12;\">"
-		"<button class='dropbtn'>Actions</button>\r\n"
+char Menubit[] = "<span hidden class='dropdown' style=\"position: absolute; left: 10;top: 12;\">"
+		"<button hidden class='dropbtn'>Actions</button>\r\n"
 		"<span class='dropdown-content'>"
-		"<a href='javascript:xxx(\"Abort\");'>Abort Session</a>"
-		"<a href='javascript:xxx(\"Kill\");'>Kill TNC</a>"
-		"<a href='javascript:xxx(\"KillRestart\");'>Kill and Restart TNC</a>"
+		"<a href='javascript:Action(\"Abort\");'>Abort Session</a>"
+		"<a href='javascript:Action(\"Kill\");'>Kill TNC</a>"
+		"<a href='javascript:Action(\"KillRestart\");'>Kill and Restart TNC</a>"
 		"</span></span>";
 
 char sliderBit[] = "<span style=\"position: absolute; left: 380;top: 2;\"> TX Offset <span id='val'>%d</span></span>"
@@ -1083,16 +1091,16 @@ char sliderBit[] = "<span style=\"position: absolute; left: 380;top: 2;\"> TX Of
 		"var output = document.getElementById('val');"
 		"slider.oninput = function() {output.innerHTML = this.value;}\r\n"
 		"slider.onmouseout = function() {myInt = setInterval('Refresh()', 15000 );"
-		"output.innerHTML = this.value;yyy(this.value);}\r\n"
+		"output.innerHTML = this.value;freqOffset(this.value);}\r\n"
 		"slider.onmouseover = function() {clearInterval(myInt)};"
 		"</script>\r\n";
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, WebProcTemplate, TNC->Port, TNC->Port, "VARA Status", "VARA Status");
+	int Len = sprintf(Buff, WebProcTemplate, "VARA Status");
 
 	if (LOCAL)
-		Len += sprintf(&Buff[Len], Menubit, TNC->TXOffset, TNC->TXOffset);
+		Len += sprintf(&Buff[Len], Menubit);
 
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
@@ -1119,7 +1127,7 @@ VOID VARASuspendPort(struct TNCINFO * TNC, struct TNCINFO * ThisTNC)
 	TNC->PortRecord->PORTCONTROL.PortSuspended = TRUE;
 	VARASendCommand(TNC, "LISTEN OFF\r", TRUE);
 	strcpy(TNC->WEB_TNCSTATE, "Interlocked");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 }
 
@@ -1128,7 +1136,7 @@ VOID VARAReleasePort(struct TNCINFO * TNC)
 	TNC->PortRecord->PORTCONTROL.PortSuspended = FALSE;
 	VARASendCommand(TNC, "LISTEN ON\r", TRUE);
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 }
 
 
@@ -1509,7 +1517,7 @@ TNCRunning:
 	if (TNC->Alerted == FALSE)
 	{
 		sprintf(TNC->WEB_COMMSSTATE, "Connecting to TNC");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	}
 
 	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
@@ -1584,7 +1592,7 @@ TNCRunning:
 		TNC->Alerted = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	}
 
 //	printf("VARA Connect failed\n");
@@ -1614,7 +1622,7 @@ VConnected:
    			i=sprintf(Msg, "Connect Failed for VARA Data socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 			TNC->Alerted = TRUE;
 		}
 		
@@ -1677,7 +1685,7 @@ VConnected:
 	TNC->Alerted = TRUE;
 
 	sprintf(TNC->WEB_COMMSSTATE, "Connected to VARA TNC");		
-	MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	FreeSemaphore(&Semaphore);
 
@@ -1743,7 +1751,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -1767,7 +1775,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -1796,7 +1804,7 @@ Lost:
 
 //			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
 //			GetSemaphore(&Semaphore, 52);
-//			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+//			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 //			FreeSemaphore(&Semaphore);
 	
 
@@ -1901,7 +1909,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "SN ", 3) == 0)
 	{
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[3]);
-		MySetWindowText(TNC->xIDC_PROTOSTATE, TNC->WEB_PROTOSTATE);
+		MySetWindowText(TNC, TNC->xIDC_PROTOSTATE, TNC->WEB_PROTOSTATE);
 
 		TNC->SNR = atof(&Buffer[3]);
 		return;
@@ -1914,10 +1922,10 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		TNC->BusyonTime = GetTickCount();
 
-		MySetWindowText(TNC->xIDC_CHANSTATE, "Busy");
+		MySetWindowText(TNC, TNC->xIDC_CHANSTATE, "Busy");
 		strcpy(TNC->WEB_CHANSTATE, "Busy");
 
-		TNC->WinmorRestartCodecTimer = time(NULL);
+		TNC->WinmorRestartCodecTimer = NOW;
 		return;
 	}
 
@@ -1936,8 +1944,8 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		}
 
 
-		MySetWindowText(TNC->xIDC_CHANSTATE, TNC->WEB_CHANSTATE);
-		TNC->WinmorRestartCodecTimer = time(NULL);
+		MySetWindowText(TNC, TNC->xIDC_CHANSTATE, TNC->WEB_CHANSTATE);
+		TNC->WinmorRestartCodecTimer = NOW;
 		return;
 	}
 
@@ -2018,7 +2026,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %s",
 			STREAM->bytesTXed, STREAM->bytesRXed, &Buffer[7]);
-		MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+		MySetWindowText(TNC, TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 
 		return;
 	}
@@ -2078,7 +2086,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			strcpy(TNC->WEB_MODE, "2750");
 		}
 
-		MySetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
+		MySetWindowText(TNC, TNC->xIDC_MODE, TNC->WEB_MODE);
 		memcpy(Call, &Buffer[10], 10);
 
 		ptr = strchr(Call, ' ');	
@@ -2106,7 +2114,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			memset(STREAM, 0, sizeof(struct STREAMINFO));
 
-			STREAM->ConnectTime = time(NULL); 
+			STREAM->ConnectTime = NOW; 
 	
 			SuspendOtherPorts(TNC);
 						
@@ -2147,7 +2155,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			if (WL2K)
 				strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			
 			// Check for ExcludeList
 
@@ -2298,7 +2306,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			char Reply[80];
 			int ReplyLen;
 			
-			STREAM->ConnectTime = time(NULL); 
+			STREAM->ConnectTime = NOW; 
 
 			if (TNC->NetRomMode)
 			{
@@ -2343,7 +2351,7 @@ VOID VARAProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			else
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 			
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			UpdateMH(TNC, TNC->TargetCall, '+', 'O');
 			return;
@@ -2500,7 +2508,7 @@ VOID VARAProcessReceivedData(struct TNCINFO * TNC)
 //		closesocket(TNC->TCPSock);
 	
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		TNC->CONNECTED = FALSE;
 		TNC->Alerted = FALSE;
@@ -2702,7 +2710,7 @@ VOID VARAProcessReceivedControl(struct TNCINFO * TNC)
 		TNC->Streams[0].Disconnecting = FALSE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -2774,7 +2782,7 @@ VOID VARAProcessDataPacket(struct TNCINFO * TNC, UCHAR * Data, int Length)
 
 	sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %d",
 			STREAM->bytesTXed, STREAM->bytesRXed,STREAM->BytesOutstanding);
-	MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+	MySetWindowText(TNC, TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 
 	// if VARAAC Mode, remove byte count from front and add cr
 	// could possibly be longer than buffer size
@@ -2971,7 +2979,7 @@ VOID VARAReleaseTNC(struct TNCINFO * TNC)
 	VARASendCommand(TNC, "LISTEN ON\r", TRUE);
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	//	Start Scanner
 
@@ -3048,7 +3056,7 @@ void SendVARANetrom(struct TNCINFO * TNC, unsigned char * Data, int Len)
 				// Save Command, and wait up to 10 secs
 				
 				sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				TNC->ConnectCmd = _strdup(Connect);
 				TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
@@ -3058,13 +3066,13 @@ void SendVARANetrom(struct TNCINFO * TNC, unsigned char * Data, int Len)
 		TNC->OverrideBusy = FALSE;
 
 		VARASendCommand(TNC, Connect, TRUE);
-		TNC->Streams[0].ConnectTime = time(NULL); 
+		TNC->Streams[0].ConnectTime = NOW; 
 
 		memset(TNC->Streams[0].RemoteCall, 0, 10);
 		strcpy(TNC->Streams[0].RemoteCall, MYNETROMCALL);
 
 		sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 	}
 }
 

@@ -202,7 +202,7 @@ int DeleteLogFile(char * Log, int KeepDays)
 	HANDLE hFind = INVALID_HANDLE_VALUE;
 	DWORD dwError=0;
 	LARGE_INTEGER ft;
-	time_t now = time(NULL);
+	time_t now = NOW;
 	int Age;
 
 
@@ -262,7 +262,7 @@ int DeleteLogFile(char * Log, int KeepDays)
 	struct dirent **namelist;
 	int n;
 	struct stat STAT;
-	time_t now = time(NULL);
+	time_t now = NOW;
 	int Age = 0, res;
 	char FN[270];
 
@@ -958,7 +958,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				{
 					if (sockptr->WebSocks == 0)
 					{
-						if (sockptr->LastSendTime && (time(NULL) - sockptr->LastSendTime) > 150)	// ~ 2.5 mins
+						if (sockptr->LastSendTime && (NOW - sockptr->LastSendTime) > 150)	// ~ 2.5 mins
 						{
 							closesocket(sockptr->socket);
 							sockptr->SocketActive = FALSE;
@@ -971,7 +971,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						// Normally keepalives are sent each way around every 9 mins
 						// Keepalives aren't sent when connecting so may need a bit longer
 						
-						if (sockptr->LastSendTime && (time(NULL) - sockptr->LastSendTime) > 20 * 60)	// 20mins
+						if (sockptr->LastSendTime && (NOW - sockptr->LastSendTime) > 20 * 60)	// 20mins
 						{
 							ProcessRHPWebSockClosed(sockptr->socket);
 							closesocket(sockptr->socket);
@@ -984,7 +984,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				{
 					// Time out Login
 
-					if (sockptr->LoginState < 2 && (time(NULL) - sockptr->ConnectTime) > 30)
+					if (sockptr->LoginState < 2 && (NOW - sockptr->ConnectTime) > 30)
 					{
 						closesocket(sockptr->socket);
 						sockptr->SocketActive = FALSE;
@@ -993,8 +993,11 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				}	
 			}
 		}
-
-
+		if (TNC->PageChanged)
+		{
+			BuildDevicePage(TNC);
+			TNC->PageChanged = FALSE;
+		}
 
 		return 0;
 
@@ -1338,9 +1341,9 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 					char Addr[100];
 					Tel_Format_Addr(sockptr, Addr);
 					if (sockptr->WebSocks)
-						sprintf(msg,"<tr><td>Websock<%s</td><td>&nbsp;</td><td>&nbsp;</td></tr>", Addr);
+						sprintf(msg,"<tr><td>Websock&lt;%s</td><td>&nbsp;</td><td>&nbsp;</td></tr>", Addr);
 					else
-						sprintf(msg,"<tr><td>HTTP<%s</td><td>&nbsp;</td><td>&nbsp;</td></tr>", Addr);
+						sprintf(msg,"<tr><td>HTTP&lt;%s</td><td>&nbsp;</td><td>&nbsp;</td></tr>", Addr);
 				}
 				else if (sockptr->DRATSMode)
 				{
@@ -2471,7 +2474,7 @@ nosocks:
 					{
 						char logmsg[120];
 						sprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d Time %d Seconds\r\n",
-							sockptr->Number, STREAM->bytesTXed, STREAM->bytesRXed, (int)(time(NULL) - sockptr->ConnectTime));
+							sockptr->Number, STREAM->bytesTXed, STREAM->bytesRXed, (int)(NOW - sockptr->ConnectTime));
 
 						WriteCMSLog (logmsg);
 					}
@@ -2532,11 +2535,11 @@ nosocks:
 
 		if (sockptr->SocketActive && sockptr->Keepalive && L4LIMIT)
 		{
-			if ((time(NULL) - sockptr->LastSendTime) > (L4LIMIT - 60))	// PC Ticks are about 10% slow
+			if ((NOW - sockptr->LastSendTime) > (L4LIMIT - 60))	// PC Ticks are about 10% slow
 			{
 				// Send Keepalive
 
-				sockptr->LastSendTime = time(NULL);
+				sockptr->LastSendTime = NOW;
 				BuffertoNode(sockptr, "Keepalive\r", 10);
 			}
 		}
@@ -2666,7 +2669,7 @@ nosocks:
 						if (P3[0] == 'K' || P4[0] == 'K' || P5[0] == 'K' || P6[0] == 'K')
 						{
 							sockptr->Keepalive = TRUE;
-							sockptr->LastSendTime = time(NULL);
+							sockptr->LastSendTime = NOW;
 						}
 
 						if (P3[0] == 'S' || P4[0] == 'S' || P5[0] == 'S' || P6[0] == 'S')
@@ -2858,7 +2861,7 @@ nosocks:
 
 		Msglen = sockptr->FromHostBuffPutptr - sockptr->FromHostBuffGetptr;
 
-		if (Msglen)
+		if (Msglen > 0)
 		{
 			int Paclen = 0;
 			int Queued = 0;
@@ -2888,7 +2891,7 @@ nosocks:
 			if (Paclen == 0)
 				Paclen = 256;
 
-			ShowConnections(TNC);
+//			ShowConnections(TNC);
 
 			if (Msglen > Paclen)
 				Msglen = Paclen;
@@ -2898,7 +2901,7 @@ nosocks:
 
 			SendtoNode(TNC, Stream, &sockptr->FromHostBuffer[sockptr->FromHostBuffGetptr], Msglen);
 			sockptr->FromHostBuffGetptr += Msglen;
-			sockptr->LastSendTime = time(NULL);
+			sockptr->LastSendTime = NOW;
 		}
 	}
 }
@@ -3397,7 +3400,7 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 			sockptr->UserPointer = 0;
 			sockptr->DoEcho = FALSE;
 			sockptr->BPQTermMode = FALSE;
-			sockptr->ConnectTime = time(NULL);
+			sockptr->ConnectTime = NOW;
 			sockptr->Keepalive = FALSE;
 			sockptr->UTF8 = 0;
 
@@ -5091,6 +5094,8 @@ MsgLoop:
 
 extern char * RigWebPage;
 
+
+
 struct RHPParamBlock
 {
 	unsigned char * Msg;
@@ -5238,7 +5243,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 			{
 				sockcopy = malloc(sizeof(struct ConnectionInfo));
 				sockptr->TNC = TNC;
-				sockptr->LastSendTime = time(NULL);
+				sockptr->LastSendTime = NOW;
 
 				memcpy(sockcopy, sockptr, sizeof(struct ConnectionInfo));
 
@@ -5256,7 +5261,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 				ParamBlock->Len = Len;
 				ParamBlock->Msg = malloc(Len + 10);
 				memcpy(ParamBlock->Msg, Payload, Len);
-				sockptr->LastSendTime = time(NULL);
+				sockptr->LastSendTime = NOW;
 
 				_beginthread(RHPThread, 0, (VOID *)ParamBlock);	
 	
@@ -5298,7 +5303,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 
 	sockcopy = malloc(sizeof(struct ConnectionInfo));
 	sockptr->TNC = TNC;
-	sockptr->LastSendTime = time(NULL);
+	sockptr->LastSendTime = NOW;
 
 	memcpy(sockcopy, sockptr, sizeof(struct ConnectionInfo));
 
@@ -5312,8 +5317,30 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 
 		memcpy(sockptr->WebURL, &MsgPtr[5], 31);
 		strlop(sockptr->WebURL, ' ');
-		if (RigWebPage)
-			RigWebPage[0] = 0;
+
+		if (strcmp(sockptr->WebURL, "RIGCTL") == 0)
+		{
+			if (RigWebPage)
+				RigWebPage[0] = 0;
+		}
+		else if (memcmp(sockptr->WebURL, "DEVICE", 6) == 0)
+		{
+			int Port = atoi(&sockptr->WebURL[6]);
+
+			if (Port > 0 && Port <= MaxBPQPortNo)
+			{
+				struct TNCINFO * PTNC = TNCInfo[Port];
+
+				if (PTNC)
+				{
+					if (PTNC->WebPage)
+						PTNC->WebPage[0] = 0;
+					
+					PTNC->WebSockUsed = 1;
+					PTNC->PageChanged = 1;
+				}
+			}
+		}
 
 		ptr = strstr(MsgPtr, "BPQSessionCookie=N");
 
@@ -5427,6 +5454,8 @@ int ShowConnections(struct TNCINFO * TNC)
 		SendMessage(TNC->hMonitor, LB_ADDSTRING ,0, (LPARAM)msg);
 	}
 #endif
+
+	TNC->PageChanged = TNC->WebSockUsed;
 	return 0;
 }
 byte * EncodeCall(byte * Call)
@@ -5546,7 +5575,7 @@ int WriteLog(char * msg)
 	time_t T;
 	struct tm * tm;
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);
 
 	if (LogDirectory[0] == 0)
@@ -5601,7 +5630,7 @@ VOID WriteCMSLog(char * msg)
 	if (CMSLogEnabled == FALSE)
 		 return;
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);
 
 	if (LogDirectory[0] == 0)
@@ -5792,7 +5821,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	sockptr->InputLen = 0;
 //	sockptr->Number = Stream;
 	sockptr->RelayMode = FALSE;
-	sockptr->ConnectTime = time(NULL);
+	sockptr->ConnectTime = NOW;
 	TNC->Streams[Stream].Connecting = FALSE;
 	TNC->Streams[Stream].Connected = TRUE;
 
@@ -6032,9 +6061,9 @@ CheckServers:
 	
 #ifndef LINBPQ
 	if (TCP->CMSOK)
-		MySetWindowText(TCP->hCMSWnd, "CMS OK"); 
+		MySetWindowText(TNC, TCP->hCMSWnd, "CMS OK"); 
 	else
-		MySetWindowText(TCP->hCMSWnd, "NO CMS"); 
+		MySetWindowText(TNC, TCP->hCMSWnd, "NO CMS"); 
 #endif
 	return;
 }
@@ -6361,7 +6390,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 
 	memcpy(work, &TCP->CMSAddr[CMSNo].s_addr, 4);
 
-	sprintf(Info,"%s %d %d.%d.%d.%d\n", TCP->CMSName[CMSNo], (int)time(NULL),
+	sprintf(Info,"%s %d %d.%d.%d.%d\n", TCP->CMSName[CMSNo], (int)NOW,
 					work[0], work[1], work[2], work[3]);
 
 
@@ -6400,7 +6429,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
                         n = sscanf(buf, "%s %ld %s", addr, &t, ip);
 		if (n == 3)
 		{
-			time_t age = time(NULL) - t;
+			time_t age = NOW - t;
 
 			// if not current server and not too old, copy across
 
@@ -7283,7 +7312,7 @@ int DoRefreshWebMailIndex()
 						{
 							sockcopy = malloc(sizeof(struct ConnectionInfo));
 							sockptr->TNC = TNC;
-							sockptr->LastSendTime = time(NULL);
+							sockptr->LastSendTime = NOW;
 
 							memcpy(sockcopy, sockptr, sizeof(struct ConnectionInfo));
 

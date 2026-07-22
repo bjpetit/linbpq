@@ -31,7 +31,7 @@ void MQTTSendStatus()
 	strcpy(payload,"{\"status\":\"online\"}");
 
 	MQTTSend(topic, payload, strlen(payload));
-	MQTTLastStatus = time(NULL);
+	MQTTLastStatus = NOW;
 }
 
 void MQTTTimer()
@@ -39,7 +39,7 @@ void MQTTTimer()
 	if (MQTT_Connecting == 0 && MQTT_Connected == 0)
 		MQTTConnect(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS);
 
-	if ((time(NULL) - MQTTLastStatus) > 1800)
+	if ((NOW - MQTTLastStatus) > 1800)
 		MQTTSendStatus();
 
 }

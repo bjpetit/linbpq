@@ -75,6 +75,9 @@
 #include "bpq32.h"	// BPQ32 API Defines
 #define BPQTermMDI
 
+extern time_t NOW;		// From time()
+
+
 #ifndef MDIKERNEL
 
 #include "Versions.h"
@@ -350,7 +353,6 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 
 	int Len;
 	struct tm * TM;
-	time_t NOW;
 
 	if (MonWindow.hConsole == NULL || MonitorAPRS == 0)
 		return;
@@ -358,7 +360,6 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 	if (MsgLen > 250)
 		return;
 
-	NOW = _time32(NULL);
 	TM = gmtime(&NOW);
 
 	// Mustn't change Msg

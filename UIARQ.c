@@ -422,7 +422,7 @@ UINT UIARQExtInit(EXTPORTDATA * PortEntry)
 	struct PORTCONTROL * PORT;
 	struct STREAMINFO * STREAM;
 
-	srand((unsigned int)time(NULL));
+	srand((unsigned int)NOW);
 
 	port = PortEntry->PORTCONTROL.PORTNUMBER;
 
@@ -854,7 +854,7 @@ static VOID ProcessFLDigiData(struct TNCINFO * TNC, UCHAR * Input, int Len, int 
 		SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
 
 		strcpy(STREAM->MyCall, call2);
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = STREAM->BytesResent = 0;
 		
 		if (WL2K)
@@ -1006,7 +1006,7 @@ AckConnectRequest:
 		if (STREAM->Connected)
 			goto SendKReply;		// Repeated ACK
 
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = STREAM->BytesResent = 0;
 		STREAM->Connected = TRUE;
 

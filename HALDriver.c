@@ -83,6 +83,7 @@ VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 
 BOOL HALConnected(struct TNCINFO * TNC, char * Call);
 VOID HALDisconnected(struct TNCINFO * TNC);
+VOID halSetWindowText(struct TNCINFO * TNC, char * Msg);
 
 static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 VOID SendCmd(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
@@ -114,7 +115,7 @@ UCHAR FN[MAX_PATH];
 	time_t T;
 	struct tm * tm;
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);	
 
 	sprintf(FN,"%s\\HALLog_%02d%02d%02d_%s.bin", BaseDir, tm->tm_mday, tm->tm_hour, tm->tm_min, Logs[Flags]);
@@ -719,7 +720,7 @@ VOID HALPoll(int Port)
 		TNC->HostMode = 0;
 				
 		sprintf(TNC->WEB_COMMSSTATE,"%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		//for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
@@ -759,7 +760,7 @@ VOID HALPoll(int Port)
 		SendCmd(TNC, TXMsg, datalen + 1);			// Send the NULL
 
 		sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		// Stop Scanning
 
@@ -912,7 +913,7 @@ VOID HALPoll(int Port)
 					buffptr->Len = sprintf((UCHAR *)buffptr->Data,"HAL} Ok\r");
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 			
-					MySetWindowText(TNC->xIDC_MODE, "Clover");
+					MySetWindowText(TNC, TNC->xIDC_MODE, "Clover");
 					strcpy(TNC->WEB_MODE, "Clover");
 
 					SendCmd(TNC, "\x80", 1);		// Clover
@@ -973,7 +974,7 @@ VOID HALPoll(int Port)
 						break;			
 					}
 					
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 					SendCmd(TNC, TXMsg, datalen + 1);	// Include NULL
 
 					ReleaseBuffer(buffptr);
@@ -993,7 +994,7 @@ VOID HALPoll(int Port)
 					
 					sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s - CLOVER",
 					STREAM->MyCall, STREAM->RemoteCall);
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					ReleaseBuffer(buffptr);
 
@@ -1254,9 +1255,9 @@ NotData:
 		ProcessHALCmd(TNC);
 }
 
-VOID mySetWindowText(struct TNCINFO * TNC, char * Msg)
+VOID halSetWindowText(struct TNCINFO * TNC, char * Msg)
 {
-	MySetWindowText(TNC->xIDC_STATE, Msg);
+	MySetWindowText(TNC, TNC->xIDC_STATE, Msg);		
 	strcpy(TNC->WEB_STATE, Msg);
 }
 
@@ -1283,7 +1284,7 @@ CmdLoop:
 	TNC->Timeout = 0;
 
 	sprintf(TNC->WEB_COMMSSTATE,"%s TNC link OK", TNC->PortRecord->PORTCONTROL.SerialPortName);
-	MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	// We may have more than one response in the buffer, and only each cmd/response decoder knows how many it needs
 
@@ -1320,7 +1321,7 @@ CmdLoop:
 
 			// Diaplay Linke Status
 
-			MySetWindowText(TNC->xIDC_MODE, status[StatusByte]);
+			MySetWindowText(TNC, TNC->xIDC_MODE, status[StatusByte]);
 			strcpy(TNC->WEB_MODE, status[StatusByte]);
 
 			break;
@@ -1330,7 +1331,7 @@ CmdLoop:
 
 			// if we were connecting, this means connect failed.
 
-			MySetWindowText(TNC->xIDC_MODE, status[StatusByte]);
+			MySetWindowText(TNC, TNC->xIDC_MODE, status[StatusByte]);
 			strcpy(TNC->WEB_MODE, status[StatusByte]);
 
 			if (STREAM->Connecting)
@@ -1340,14 +1341,14 @@ CmdLoop:
 
 			case 0x0E:		// ISS (AMTOR/P-MODE)
 
-				MySetWindowText(TNC->xIDC_TXRX,"ISS");
+				MySetWindowText(TNC, TNC->xIDC_TXRX,"ISS");
 				strcpy(TNC->WEB_TXRX, "ISS");
 				TNC->TXRXState = 'S';
 				break;
 
 			case 0x0F:		// IRS (AMTOR/P-MODE)
 
-				MySetWindowText(TNC->xIDC_TXRX,"IRS");
+				MySetWindowText(TNC, TNC->xIDC_TXRX,"IRS");
 				strcpy(TNC->WEB_TXRX, "IRS");
 				TNC->TXRXState = 'R';
 				break;
@@ -1359,7 +1360,7 @@ CmdLoop:
 			case 0x04:		//  PHS (AMTOR/P-MODE)
 			case 0x05:		//  OVER (AMTOR/P-MODE) (not implemented)
 
-				MySetWindowText(TNC->xIDC_STATE, status[StatusByte]);
+				MySetWindowText(TNC, TNC->xIDC_STATE, status[StatusByte]);
 				strcpy(TNC->WEB_MODE, status[StatusByte]);
 
 
@@ -1390,7 +1391,7 @@ CmdLoop:
 			(Leds & 0x01)? 'X' : ' ');
 
 //		STBY CALL LINK ERROR TX RX
-		MySetWindowText(TNC->xIDC_LEDS, TNC->WEB_LEDS);
+		MySetWindowText(TNC, TNC->xIDC_LEDS, TNC->WEB_LEDS);
 
 		Used = 2;
 		break;
@@ -1526,25 +1527,25 @@ CmdLoop:
 
 		switch (StatusByte)
 		{
-		case 0x00:		mySetWindowText(TNC, "Channel idle"); break;
-		case 0x01:		mySetWindowText(TNC, "Channel occupied with non-Clover signal"); break;
-		case 0x42:		mySetWindowText(TNC, "Linked stations monitored"); break;
-		case 0x64:		mySetWindowText(TNC, "Attempting normal link"); break;
-		case 0x65:		mySetWindowText(TNC, "Attempting robust link"); break;
-		case 0x66:		mySetWindowText(TNC, "Calling ARQ CQ"); break;
-		case 0x78:		mySetWindowText(TNC, "Clover Control Block (CCB) send retry"); break;
-		case 0x79:		mySetWindowText(TNC, "Clover Control Block (CCB) receive retry"); break;
-		case 0x7D:		mySetWindowText(TNC, "Clover Control Block (CCB) received successfully"); break;
-		case 0x8A:		mySetWindowText(TNC, "TX data block sent"); break;
-		case 0x8B:		mySetWindowText(TNC, "RX data block received ok (precedes data block)"); break;
-		case 0x8C:		mySetWindowText(TNC, "TX data block re-sent"); break;
-		case 0x8D:		mySetWindowText(TNC, "RX data block decode failed (precedes data block)"); break;
-		case 0x8E:		mySetWindowText(TNC, "TX idle"); break;
-		case 0x8F:		mySetWindowText(TNC, "RX idle"); break;
-		case 0x9C:		mySetWindowText(TNC, "Link failed: CCB send retries exceeded"); break;
-		case 0x9D:		mySetWindowText(TNC, "Link failed: CCB receive retries exceeded"); break;
-		case 0x9E:		mySetWindowText(TNC, "Link failed: protocol error"); break;
-		case 0xA0:		mySetWindowText(TNC, "Receiving FEC SYNC sequence"); break;
+		case 0x00:		halSetWindowText(TNC, "Channel idle"); break;
+		case 0x01:		halSetWindowText(TNC, "Channel occupied with non-Clover signal"); break;
+		case 0x42:		halSetWindowText(TNC, "Linked stations monitored"); break;
+		case 0x64:		halSetWindowText(TNC, "Attempting normal link"); break;
+		case 0x65:		halSetWindowText(TNC, "Attempting robust link"); break;
+		case 0x66:		halSetWindowText(TNC, "Calling ARQ CQ"); break;
+		case 0x78:		halSetWindowText(TNC, "Clover Control Block (CCB) send retry"); break;
+		case 0x79:		halSetWindowText(TNC, "Clover Control Block (CCB) receive retry"); break;
+		case 0x7D:		halSetWindowText(TNC, "Clover Control Block (CCB) received successfully"); break;
+		case 0x8A:		halSetWindowText(TNC, "TX data block sent"); break;
+		case 0x8B:		halSetWindowText(TNC, "RX data block received ok (precedes data block)"); break;
+		case 0x8C:		halSetWindowText(TNC, "TX data block re-sent"); break;
+		case 0x8D:		halSetWindowText(TNC, "RX data block decode failed (precedes data block)"); break;
+		case 0x8E:		halSetWindowText(TNC, "TX idle"); break;
+		case 0x8F:		halSetWindowText(TNC, "RX idle"); break;
+		case 0x9C:		halSetWindowText(TNC, "Link failed: CCB send retries exceeded"); break;
+		case 0x9D:		halSetWindowText(TNC, "Link failed: CCB receive retries exceeded"); break;
+		case 0x9E:		halSetWindowText(TNC, "Link failed: protocol error"); break;
+		case 0xA0:		halSetWindowText(TNC, "Receiving FEC SYNC sequence"); break;
 		}
 
 		Used = 2;
@@ -1726,7 +1727,7 @@ VOID HALDisconnected(struct TNCINFO * TNC)
 		STREAM->FramesQueued = 0;
 
 		sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		return;
 	}
@@ -1758,7 +1759,7 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	strcat(CallCopy, "          ");			// Some routines expect 10 char calls
 
 	STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = 0;
-	STREAM->ConnectTime = time(NULL); 
+	STREAM->ConnectTime = NOW; 
 
 	// Stop Scanner
 
@@ -1781,7 +1782,7 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 		ProcessIncommingConnect(TNC, CallCopy, 0, TRUE);
 					
 		sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		if (TNC->CurrentMode != Clover)
 			SendCmd(TNC, "\x87", 1);		// Changeover to ISS 
@@ -1823,7 +1824,7 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	STREAM->Connected = TRUE;			// Subsequent data to data channel
 
 	sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", TNC->NodeCall, STREAM->RemoteCall);
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	UpdateMH(TNC, CallCopy, '+', 'O');
 

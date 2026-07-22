@@ -1057,7 +1057,7 @@ void WritePacketLogThread(void * param)
 
 		// Open log file and write decoded packets
 
-		T = time(NULL);
+		T = NOW;
 		tm = gmtime(&T);
 
 		if (LogDirectory[0] == 0)

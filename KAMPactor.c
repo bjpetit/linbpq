@@ -103,7 +103,7 @@ BOOL KAMStopPort(struct PORTCONTROL * PORT)
 	TNC->HostMode = FALSE;
 
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Stopped");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -118,7 +118,7 @@ BOOL KAMStartPort(struct PORTCONTROL * PORT)
 	TNC->ReinitState = 0;
 		
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Restarted");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -143,7 +143,7 @@ static BOOL OpenLogFile(int Flags)
 		time_t T;
 		struct tm * tm;
 
-		T = time(NULL);
+		T = NOW;
 		tm = gmtime(&T);	
 
 		sprintf(FN,"%s/logs/KAMLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
@@ -525,7 +525,7 @@ VOID KAMSuspendPort(struct TNCINFO * TNC, struct TNCINFO * ThisTNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	strcpy(TNC->WEB_TNCSTATE, "Interlocked");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 //	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
 //	sprintf(STREAM->CmdSet, "I%s\r", "SCSPTC");		// Should prevent connects
@@ -537,7 +537,7 @@ VOID KAMReleasePort(struct TNCINFO * TNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 }
 
@@ -1941,7 +1941,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			}
 
 			STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = 0;
-			STREAM->ConnectTime = time(NULL); 
+			STREAM->ConnectTime = NOW; 
 
 			if (Stream == 0)
 			{

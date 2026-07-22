@@ -254,15 +254,13 @@ void * TRACE_Q	= NULL;				// TRANSMITTED FRAMES TO BE TRACED
 int RANDOM = 0;						// 'RANDOM' NUMBER FOR PERSISTENCE CALCS
  
 int L2TIMERFLAG = 0;				// INCREMENTED AT 18HZ BY TIMER INTERRUPT
-int L3TIMERFLAG = 0;				// DITTO
-int L4TIMERFLAG = 0;				// DITTO
 
 char HEADERCHAR	= '}';				// CHAR FOR _NODE HEADER MSGS
 
 VOID * LASTPOINTER = NULL;			// PERVIOUS _NODE DURING CHAINING
 
-int REALTIMETICKS = 0;
-int BGTIMER = 0;					// TO CONTROL BG SCANS
+int REALTIMETICKS = 0;				// Count of 100 ms intervals since load
+				
 
 VOID * CONFIGPTR = NULL;			// Internal Config Get Offset
 
@@ -451,6 +449,9 @@ VOID EXTTX(PEXTPORTDATA PORTVEC, MESSAGE * Buffer)
 
 }	
 
+VOID * GetBuffQuick();
+UINT ReleaseBufferQuick(VOID *pBUFF);
+
 VOID EXTRX(PEXTPORTDATA PORTVEC)
 {
 	struct _MESSAGE * Message;
@@ -462,16 +463,16 @@ Loop:
 	if (QCOUNT < 10)
 		return;
 
-	Message = GetBuff();
-
+	Message = GetBuffQuick();
+	
 	if (Message == NULL)
 		return;
 
 	Len = (size_t)PORTVEC->PORT_EXT_ADDR(1, PORT->PORTNUMBER, (PDATAMESSAGE)Message);
-	
+
 	if (Len == 0)
 	{
-		ReleaseBuffer((UINT *)Message);
+		ReleaseBufferQuick((UINT *)Message);
 		return;
 	}
 
@@ -484,7 +485,7 @@ Loop:
 			int Sessno = Message->PORT;
 			TRANSPORTENTRY * Session;
 	
-			ReleaseBuffer((UINT *)Message);
+			ReleaseBufferQuick((UINT *)Message);
 		
 			// GET RID OF ANY SESSION ENTRIES
 	
@@ -533,7 +534,11 @@ Loop:
 
 VOID EXTTIMER(PEXTPORTDATA PORTVEC)
 {
+	// Called every 100 mS
+	
 	//	USED TO SEND A RE-INIT IN THE CORRECT PROCESS
+
+	struct TNCINFO * TNC = TNCInfo[PORTVEC->PORTCONTROL.PORTNUMBER];
 
 	if (PORTVEC->EXTRESTART)
 	{
@@ -542,10 +547,19 @@ VOID EXTTIMER(PEXTPORTDATA PORTVEC)
 	}
 
 	PORTVEC->PORT_EXT_ADDR(7, PORTVEC->PORTCONTROL.PORTNUMBER, 0);		// Timer Routine
+
+	if (TNC && TNC->PageChanged)
+	{
+		BuildDevicePage(TNC);
+		TNC->PageChanged = FALSE;
+	}
+
 }
 
 VOID EXTSLOWTIMER(PEXTPORTDATA PORTVEC)
 {
+	// Called every minute 60 secs
+
 	PORTVEC->PORT_EXT_ADDR(8, PORTVEC->PORTCONTROL.PORTNUMBER, 0);		// Timer Routine
 }
 
@@ -655,9 +669,9 @@ VOID * TXCHECKCODE[12] = {KISSTXCHECK, HDLCTXCHECK, HDLCTXCHECK, HDLCTXCHECK, KI
 
 extern int BACKGROUND();
 extern int L2TimerProc();
-extern int L3TimerProc();
-extern int L4TimerProc();
-extern int L3FastTimer();
+extern int L3MinuteTimerProc();
+extern int L4SecTimer();
+extern int L3SecTimer();
 extern int StatsTimer();
 extern int COMMANDHANDLER();
 VOID SDETX(struct _LINKTABLE * LINK);
@@ -711,7 +725,7 @@ BOOL Start()
 	if (cfg->C_NODEALIAS[0] == 0)
 		memset(cfg->C_NODEALIAS, ' ', 10);
 
-	TimeLoaded = time(NULL);
+	TimeLoaded = NOW;
 
 	AUTOSAVE = cfg->C_AUTOSAVE;
 	
@@ -1056,8 +1070,8 @@ BOOL Start()
 		PORT->FULLDUPLEX = (UCHAR)PortRec->FULLDUP;
 
 		PORT->SOFTDCDFLAG = (UCHAR)PortRec->SOFTDCD;
-		PORT->PORTT1 = PortRec->FRACK / 333;
-		PORT->PORTT2 = PortRec->RESPTIME /333;
+		PORT->PORTT1 = PortRec->FRACK / 100;
+		PORT->PORTT2 = PortRec->RESPTIME /100;
 		PORT->PORTN2 = (UCHAR)PortRec->RETRIES;
 
 		PORT->PORTPACLEN = (UCHAR)PortRec->PACLEN;
@@ -1432,7 +1446,7 @@ BOOL Start()
 		ROUTE->NBOUR_MAXFRAME = Rcfg->pwind & 0x3f;
 
 		FRACK = Rcfg->pfrack;
-		ROUTE->NBOUR_FRACK = FRACK / 333; 
+		ROUTE->NBOUR_FRACK = FRACK / 100; 
 		ROUTE->NBOUR_PACLEN = Rcfg->ppacl;
 		ROUTE->OtherendsRouteQual = ROUTE->OtherendLocked = Rcfg->farQual;
 
@@ -1446,6 +1460,8 @@ BOOL Start()
 			ROUTE->TCPAddress = (struct addrinfo *)zalloc(sizeof(struct addrinfo));
 			ROUTE->TCPAddress->ai_addr = (struct sockaddr *) zalloc(sizeof(struct sockaddr));
 		}
+
+		ROUTE->NPR = Rcfg->NPR;
 
 		ROUTE->recNum = index++;
 		
@@ -1636,7 +1652,11 @@ BOOL Start()
 	
 	_beginthread(WritePacketLogThread, 0, NULL);
 
-	lastSaveSecs = CurrentSecs = lastSlowSecs = time(NULL);
+	// Initialise interval timers
+
+	lastMinuteSecs = lastHourSecs = lastTenSecSecs = NOW = time(NULL);
+
+	last100mSTickCount = lastSecTickCount = GetTickCount();
 
 	// if EnableOARCAPI set try to resolve host here so we can send Node up event before anything else
 
@@ -1655,7 +1675,7 @@ BOOL Start()
 
 			hookNodeStarted();
 			nodeStartedSent = 1;
-			LastNodeStatus = time(NULL);
+			LastNodeStatus = NOW;
 		}
 	}
 
@@ -2175,9 +2195,13 @@ int DelayBuffers = 0;
 void sendModeReport();
 void sendFreqReport();
 
-VOID TIMERINTERRUPT()
+int TIMERINTERRUPT()
 {
-	// Main Processing loop - CALLED EVERY 100 MS
+	// Main Processing - Called rapidly (maybe 1 mS)
+
+	// Returns 1 if 100mS has passed since last call
+
+	int retval = 0;
 
 	int i;
 	struct PORTCONTROL * PORT = PORTTABLE;
@@ -2186,41 +2210,44 @@ VOID TIMERINTERRUPT()
 	struct _MESSAGE * Message;
 	int toPort;
 
-	CurrentSecs =  time(NULL);
+	if (GetTickCount() - last100mSTickCount > 100)
+	{
+		retval = 1;
+		
+		last100mSTickCount = GetTickCount();
+		REALTIMETICKS++;
 
-	BGTIMER++;
-	REALTIMETICKS++;
-	L2TIMERFLAG++;		// INCREMENT FLAG FOR BG
-	L3TIMERFLAG++;		// INCREMENT FLAG FOR BG
-	L4TIMERFLAG++;		// INCREMENT FLAG FOR BG
+		//	CALL PORT TIMER 100 mS ROUTINES
 
-//	CALL PORT TIMER ROUTINES
+		for (i = 0; i < NUMBEROFPORTS; i++)
+		{	
+			PORT->PORTTIMERCODE(PORT);
 
-	for (i = 0; i < NUMBEROFPORTS; i++)
-	{	
-		PORT->PORTTIMERCODE(PORT);
+			// Check Smart ID timer
 
-		// Check Smart ID timer
+			if (PORT->SmartIDNeeded && PORT->SmartIDNeeded < NOW)
+				SendSmartID(PORT);
 
-		if (PORT->SmartIDNeeded && PORT->SmartIDNeeded < time(NULL))
-			SendSmartID(PORT);
+			PORT = PORT->PORTPOINTER;
+		}
 
-		PORT = PORT->PORTPOINTER;
+
+		if (last100mSTickCount - lastSecTickCount > 1000)
+		{
+			lastSecTickCount = last100mSTickCount;
+
+			L3SecTimer();
+			L4SecTimer();
+		}
+
+		L2TimerProc();					// Now 100 mS
 	}
 
-	//	CHECK FOR TIMER ACTIVITY
-
-	if (L2TIMERFLAG >= 3)
+	if (NOW - lastMinuteSecs >= 60)		// 1 PER MIN
 	{
-		L2TIMERFLAG -= 3;
-		L2TimerProc();					// 300 mS
-	}
+		lastMinuteSecs = NOW;
 
-	if (CurrentSecs - lastSlowSecs >= 60)		// 1 PER MIN
-	{
-		lastSlowSecs = CurrentSecs;
-
-		L3TimerProc();
+		L3MinuteTimerProc();
 
 		if (needAIS)
 			AISTimer();
@@ -2258,9 +2285,9 @@ VOID TIMERINTERRUPT()
 		if (MQTT)
 			MQTTTimer();
 
-		if (LastNodeStatus && (time(NULL) - LastNodeStatus) > nodeStatusTimer)
+		if (LastNodeStatus && (NOW - LastNodeStatus) > nodeStatusTimer)
 		{
-			LastNodeStatus = time(NULL);
+			LastNodeStatus = NOW;
 			hookNodeRunning();
 		}
 
@@ -2282,9 +2309,9 @@ VOID TIMERINTERRUPT()
 
 	// Check Autosave Nodes and MH timer
 
-	if (CurrentSecs - lastSaveSecs >= 3600)		// 1 per hour
+	if (NOW - lastHourSecs >= 3600)		// 1 per hour
 	{
-		lastSaveSecs = CurrentSecs;
+		lastHourSecs = NOW;
 
 		if (AUTOSAVE == 1)
 			SaveNodes();
@@ -2292,15 +2319,9 @@ VOID TIMERINTERRUPT()
 			SaveMH();
 	}
 
-	if (L4TIMERFLAG >= 10)				// 1 PER SEC
-	{
-		L4TIMERFLAG -= 10;
-
-		L3FastTimer();
-		L4TimerProc();
-	}
-
 	// SEE IF ANY FRAMES TO TRACE
+
+	// The rest runs on every call
 
 	Buffer = Q_REM(&TRACE_Q);
 
@@ -2347,8 +2368,6 @@ VOID TIMERINTERRUPT()
 		while (Buffer)
 		{
 			Message = (struct _MESSAGE *) Buffer;
-			if (CURRENTPORT == 30)
-				Sent = Sent;
 
 			if (PORT->PROTOCOL == 10)
 			{
@@ -2428,7 +2447,7 @@ VOID TIMERINTERRUPT()
 L2Packet:
 			//	TIME STAMP IT
 	
-			time(&Message->Timestamp);
+			Message->Timestamp = NOW;
 
 			Message->PORT = CURRENTPORT;
 
@@ -2459,7 +2478,7 @@ L2Packet:
 							{
 								// Using Smart ID, but none scheduled
 
-								BPORT->SmartIDNeeded = time(NULL) + BPORT->SmartIDInterval;
+								BPORT->SmartIDNeeded = NOW + BPORT->SmartIDInterval;
 							}
 							PUT_ON_PORT_Q(BPORT, BBuffer);
 						}
@@ -2626,7 +2645,7 @@ ENDOFLIST:
 				{
 					// Stuck link debug check
 
-					if (LINK->LINKWINDOW == 0 || LINK->LASTFRAMESENT == 0 || (time(NULL) - LINK->LASTFRAMESENT) > 60)			// No send for 60 secs
+					if (LINK->LINKWINDOW == 0 || LINK->LASTFRAMESENT == 0 || (NOW - LINK->LASTFRAMESENT) > 60)			// No send for 60 secs
 					{
 						if (COUNT_AT_L2(LINK) > 16 || LINK->LINKWINDOW == 0)
 						{
@@ -2636,7 +2655,7 @@ ENDOFLIST:
 							char Normcall2[11] = "";
 
 							int Count = COUNT_AT_L2(LINK);
-							int secs = time(NULL) - LINK->LASTFRAMESENT;
+							int secs = NOW - LINK->LASTFRAMESENT;
 
 
 							ConvFromAX25(LINK->LINKCALL, Normcall);
@@ -2657,12 +2676,10 @@ ENDOFLIST:
 
 							L2SENDCOMMAND(LINK, DISC | PFBIT);
 
-							return;
+							return retval;				// why??
 						}
 					}
-
 				}
-
 			}
 		}
 		LINK++;
@@ -2671,6 +2688,10 @@ ENDOFLIST:
 	L4BG();					// DO LEVEL 4 PROCESSING
 	L3BG();
 	TNCTimerProc();
+
+	return retval;
+
+
 }
 
 VOID DoListenMonitor(TRANSPORTENTRY * L4, MESSAGE * Msg)
@@ -3060,7 +3081,7 @@ void WriteConnectLog(char * fromCall, char * toCall, UCHAR * Mode)
 	char LogMsg[256];	
 	int MsgLen;
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);	
 
 	snprintf((char*)FN, sizeof(FN), "%s/logs/ConnectLog_%02d%02d%02d.log", LogDirectory, tm->tm_year - 100, tm->tm_mon + 1, tm->tm_mday);

@@ -703,7 +703,7 @@ BOOL ProcessConfig()
 /*
 	// Dump to file for debugging
 	
-	sprintf_s(inputname, sizeof(inputname), "CFG%d", time(NULL));
+	sprintf_s(inputname, sizeof(inputname), "CFG%d", NOW);
 	
 	fp1 = fopen(inputname, "wb");
 
@@ -1702,6 +1702,13 @@ int routes(int i)
 						Route->inp3 = atoi(val);
 				}
 
+				else if (strcmp(ptr, "NPR") == 0)
+				{
+					char * val = strtok_s(NULL, " ,=", &context);
+
+					if (val)
+						Route->NPR = atoi(val);
+				}
 				else if (strcmp(ptr, "NOKEEPALIVES") == 0)
 				{
 					char * val = strtok_s(NULL, " ,=", &context);

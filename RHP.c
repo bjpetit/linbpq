@@ -681,7 +681,7 @@ void RHPPoll()
 
 				Buffer[pktlen] = 0;
 
-				RHPSession->sockptr->LastSendTime = time(NULL);
+				RHPSession->sockptr->LastSendTime = NOW;
 
 
 				// Message is JSON so Convert CR to \r, \ to \\ " to \"

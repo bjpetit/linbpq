@@ -154,7 +154,7 @@ void hookL2SessionAccepted(int Port, char * remotecall, char * ourcall, struct _
 	L2CONNECTSIN++;
 	LINK->apiSeq = linkSeq++;
 
-	LINK->lastStatusSentTime = LINK->ConnectTime = time(NULL);
+	LINK->lastStatusSentTime = LINK->ConnectTime = NOW;
 	LINK->bytesTXed = LINK->bytesRXed = LINK->framesResent = LINK->framesRXed = LINK->framesTXed = 0;
 	LINK->LastStatusbytesTXed = LINK->LastStatusbytesRXed = 0;
 	strcpy(LINK->callingCall, remotecall);
@@ -163,7 +163,7 @@ void hookL2SessionAccepted(int Port, char * remotecall, char * ourcall, struct _
 
 	if (NodeAPISocket)
 	{
-		LINK->lastStatusSentTime = time(NULL);
+		LINK->lastStatusSentTime = NOW;
 
 		udplen = sprintf(UDPMsg, "{\"@type\":\"LinkUpEvent\", \"node\": \"%s\", \"id\": %d, \"direction\": \"incoming\", \"port\": \"%d\", \"remote\": \"%s\", \"local\": \"%s\", \"isRF\": %s}",
 			NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall, (LINK->LINKPORT->isRF)?"true":"false");
@@ -190,11 +190,10 @@ void hookL2SessionDeleted(struct _LINKTABLE * LINK)
 		{
 			char Msg[1024];
 			char timestamp[64];
-			time_t sessionTime = time(NULL) - LINK->ConnectTime;
+			time_t sessionTime = NOW - LINK->ConnectTime;
 			double avBytesSent = LINK->bytesTXed / (sessionTime / 60.0);
 			double avBytesRXed = LINK->bytesRXed / (sessionTime / 60.0);
-			time_t Now = time(NULL);
-			struct tm * TM = localtime(&Now);
+			struct tm * TM = localtime(&NOW);
 
 			sprintf(timestamp, "%02d:%02d:%02d", TM->tm_hour, TM->tm_min, TM->tm_sec);
 
@@ -226,7 +225,7 @@ void hookL2SessionDeleted(struct _LINKTABLE * LINK)
 
 void hookL2SessionAttempt(int Port, char * ourcall, char * remotecall, struct _LINKTABLE * LINK)
 {
-	LINK->lastStatusSentTime = LINK->ConnectTime = time(NULL);
+	LINK->lastStatusSentTime = LINK->ConnectTime = NOW;
 	LINK->bytesTXed = LINK->bytesRXed = LINK->framesResent = LINK->framesRXed = LINK->framesTXed = 0;
 	LINK->LastStatusbytesTXed = LINK->LastStatusbytesRXed = 0;
 	strcpy(LINK->callingCall, ourcall);
@@ -246,7 +245,7 @@ void hookL2SessionConnected(struct _LINKTABLE * LINK)
 
 	if (NodeAPISocket)
 	{
-		LINK->lastStatusSentTime = time(NULL);
+		LINK->lastStatusSentTime = NOW;
 
 		udplen = sprintf(UDPMsg, "{\"@type\":\"LinkUpEvent\", \"node\": \"%s\", \"id\": %d, \"direction\": \"outgoing\", \"port\": \"%d\", \"remote\": \"%s\", \"local\": \"%s\", \"isRF\": %s}",
 			NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall, (LINK->LINKPORT->isRF)?"true":"false");
@@ -263,7 +262,6 @@ void hookL2SessionClosed(struct _LINKTABLE * LINK, char * Reason, char * Directi
 
 	char UDPMsg[1024];	
 	int udplen;
-	time_t Now = time(NULL);
 
 	if (NodeAPISocket)
 	{
@@ -276,14 +274,14 @@ void hookL2SessionClosed(struct _LINKTABLE * LINK, char * Reason, char * Directi
 			" \"time\": %d, \"upForSecs\": %d, \"frmsQdPeak\": %d, \"isRF\": %s}",
 			NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->receivingCall, LINK->callingCall,
 			LINK->bytesTXed , LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, COUNT_AT_L2(LINK), LINK->framesResent, Reason,
-			(int)Now, (int)(Now - LINK->ConnectTime), LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
+			(int)NOW, (int)(NOW - LINK->ConnectTime), LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
 		else
 			udplen = sprintf(UDPMsg, "{\"@type\":\"LinkDownEvent\", \"node\": \"%s\", \"id\": %d, \"direction\": \"incoming\", \"port\": \"%d\", \"remote\": \"%s\", \"local\": \"%s\","
 			"\"bytesSent\": %d, \"bytesRcvd\": %d, \"frmsSent\": %d, \"frmsRcvd\": %d, \"frmsQueued\": %d, \"frmsResent\": %d, \"reason\": \"%s\","
 			" \"time\": %d, \"upForSecs\": %d, \"frmsQdPeak\": %d, \"isRF\": %s}",
 			NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall,
 			LINK->bytesTXed , LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, COUNT_AT_L2(LINK), LINK->framesResent, Reason,
-			(int)Now, (int)(Now - LINK->ConnectTime), LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
+			(int)NOW, (int)(NOW - LINK->ConnectTime), LINK->maxQueued, (LINK->LINKPORT->isRF)?"true":"false");
 
 //		Debugprintf(UDPMsg);
 
@@ -297,16 +295,15 @@ void hookL2SessionStatus(struct _LINKTABLE * LINK)
 
 	char UDPMsg[1024];	
 	int udplen;
-	time_t Now = time(NULL);
 	int bpsTx, bpsRx, interval;
 
 	if (NodeAPISocket)
 	{
-		interval = Now - (int)LINK->lastStatusSentTime;
+		interval = NOW - (int)LINK->lastStatusSentTime;
 		bpsTx = (LINK->bytesTXed - LINK->LastStatusbytesTXed) / interval; 
 		bpsRx = (LINK->bytesRXed - LINK->LastStatusbytesRXed) / interval; 
 		
-		LINK->lastStatusSentTime = Now;
+		LINK->lastStatusSentTime = NOW;
 		LINK->LastStatusbytesTXed = LINK->bytesTXed;
 		LINK->LastStatusbytesRXed = LINK->bytesRXed;
 
@@ -316,14 +313,14 @@ void hookL2SessionStatus(struct _LINKTABLE * LINK)
 				"\"upForSecs\": %d, \"frmsQdPeak\": %d, \"bpsTxMean\": %d, \"bpsRxMean\": %d, \"frmQMax\": %d, \"l2rttMs\": %d, \"isRF\": %s}",
 				NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->receivingCall, LINK->callingCall,
 				LINK->bytesTXed, LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, 0, LINK->framesResent,
-				(int)(Now - LINK->ConnectTime), LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
+				(int)(NOW - LINK->ConnectTime), LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
 		else
 			udplen = sprintf(UDPMsg, "{\"@type\":\"LinkStatus\", \"node\": \"%s\", \"id\": %d, \"direction\": \"incoming\", \"port\": \"%d\", \"remote\": \"%s\", \"local\": \"%s\","
 				"\"bytesSent\": %d, \"bytesRcvd\": %d, \"frmsSent\": %d, \"frmsRcvd\": %d, \"frmsQueued\": %d, \"frmsResent\": %d,"
 				"\"upForSecs\": %d, \"frmsQdPeak\": %d, \"bpsTxMean\": %d, \"bpsRxMean\": %d, \"frmQMax\": %d, \"l2rttMs\": %d, \"isRF\": %s}",
 				NODECALLLOPPED, LINK->apiSeq, LINK->LINKPORT->PORTNUMBER, LINK->callingCall, LINK->receivingCall,
 				LINK->bytesTXed, LINK->bytesRXed, LINK->framesTXed, LINK->framesRXed, 0, LINK->framesResent,
-				(int)(Now - LINK->ConnectTime), LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
+				(int)(NOW - LINK->ConnectTime), LINK->maxQueued, bpsTx, bpsRx, LINK->intervalMaxQueued, LINK->RTT, (LINK->LINKPORT->isRF)?"true":"false");
 
 		LINK->intervalMaxQueued = 0;
 
@@ -339,7 +336,7 @@ void hookL4SessionAttempt(struct STREAMINFO * STREAM, char * remotecall, char * 
 {
 	// Outgoing Connect
 
-	STREAM->ConnectTime = time(NULL);
+	STREAM->ConnectTime = NOW;
 	STREAM->bytesTXed = STREAM->bytesRXed = 0;
 
 	strcpy(STREAM->callingCall, ourcall);
@@ -351,7 +348,7 @@ void hookL4SessionAccepted(struct STREAMINFO * STREAM, char * remotecall, char *
 {
 	// Incoming Connect
 
-	STREAM->ConnectTime = time(NULL);
+	STREAM->ConnectTime = NOW;
 	STREAM->bytesTXed = STREAM->bytesRXed = 0;
 
 	strcpy(STREAM->callingCall, remotecall);
@@ -381,11 +378,10 @@ void hookL4SessionDeleted(struct TNCINFO * TNC, struct STREAMINFO * STREAM)
 
 	if (STREAM->ConnectTime)
 	{
-		time_t sessionTime = time(NULL) - STREAM->ConnectTime;
+		time_t sessionTime = NOW - STREAM->ConnectTime;
 		double avBytesRXed = STREAM->bytesRXed / (sessionTime / 60.0);
 		double avBytesSent = STREAM->bytesTXed / (sessionTime / 60.0);
-		time_t Now = time(NULL);
-		struct tm * TM = localtime(&Now);
+		struct tm * TM = localtime(&NOW);
 		sprintf(timestamp, "%02d:%02d:%02d", TM->tm_hour, TM->tm_min, TM->tm_sec);
 
 		if (sessionTime == 0)
@@ -444,7 +440,7 @@ void hookNodeClosing(char * Reason)
 	{
 		udplen = sprintf(UDPMsg, "{\"@type\": \"NodeDownEvent\", \"nodeCall\": \"%s\", \"nodeAlias\": \"%s\", \"reason\": \"%s\", \"uptimeSecs\": %d,"
 			"\"linksIn\": %d, \"linksOut\": %d, \"cctsIn\": %d, \"cctsOut\": %d, \"l3Relayed\": %d}",
-			NODECALLLOPPED, MYALIASLOPPED, Reason, (int)(time(NULL) - TimeLoaded), L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
+			NODECALLLOPPED, MYALIASLOPPED, Reason, (NOW - TimeLoaded), L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
    
 //		Debugprintf(UDPMsg);
 
@@ -471,7 +467,7 @@ void hookNodeRunning()
 		udplen = sprintf(UDPMsg, "{\"@type\": \"NodeStatus\", \"nodeCall\": \"%s\", \"nodeAlias\": \"%s\", \"locator\": \"%s\","
 			"\"latitude\": %f, \"longitude\": %f, \"software\": \"%s\", \"version\": \"%s\", \"uptimeSecs\": %d,"
 			"\"linksIn\": %d, \"linksOut\": %d, \"cctsIn\": %d, \"cctsOut\": %d, \"l3Relayed\": %d}",
-			NODECALLLOPPED, MYALIASLOPPED, LOC, LatFromLOC, LonFromLOC, Software, VersionString, (int)(time(NULL) - TimeLoaded),
+			NODECALLLOPPED, MYALIASLOPPED, LOC, LatFromLOC, LonFromLOC, Software, VersionString, (NOW - TimeLoaded),
 			L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
 
 //		Debugprintf(UDPMsg);
@@ -497,7 +493,7 @@ void IncomingL4ConnectionEvent(TRANSPORTENTRY * L4)
 
 	if (NodeAPISocket)
 	{
-		L4->lastStatusSentTime = time(NULL);
+		L4->lastStatusSentTime = NOW;
 
 		remotecall[ConvFromAX25(L4->L4TARGET.DEST->DEST_CALL, remotecall)] = 0;
 	//	remotecall[ConvFromAX25(L4->L4USER, remotecall)] = 0;
@@ -542,7 +538,7 @@ void OutgoingL4ConnectionEvent(TRANSPORTENTRY * L4)
 
 	if (NodeAPISocket)
 	{
-		L4->lastStatusSentTime = time(NULL);
+		L4->lastStatusSentTime = NOW;
 
 		remotecall[ConvFromAX25(L4->L4TARGET.DEST->DEST_CALL, remotecall)] = 0;
 	//	remotecall[ConvFromAX25(L4->L4USER, remotecall)] = 0;
@@ -635,7 +631,6 @@ void L4StatusSeport(TRANSPORTENTRY * L4)
 	char nodecall[16];
 	char circuitinfo[32];
 	int Count;
-	time_t Now = time(NULL);
 	int Service = L4->Service;
 
 
@@ -644,7 +639,7 @@ void L4StatusSeport(TRANSPORTENTRY * L4)
 
 	if (NodeAPISocket)
 	{
-		L4->lastStatusSentTime = Now;
+		L4->lastStatusSentTime = NOW;
 		nodecall[ConvFromAX25(L4->L4TARGET.DEST->DEST_CALL, nodecall)] = 0;
 		remotecall[ConvFromAX25(L4->L4USER, remotecall)] = 0;
 		ourcall[ConvFromAX25(L4->L4MYCALL, ourcall)] = 0;
@@ -664,11 +659,11 @@ void L4StatusSeport(TRANSPORTENTRY * L4)
 		if (Service == -1)
 			udplen = sprintf(UDPMsg, "{\"@type\": \"CircuitStatus\", \"node\": \"%s\", \"id\": %d, \"direction\": \"%s\","
 			"\"upForSecs\": %d,\"remote\": \"%s\", \"local\": \"%s\", \"segsSent\": %d, \"segsRcvd\": %d, \"segsResent\": %d, \"segsQueued\": %d}",
-			NODECALLLOPPED, L4->apiSeq, L4->Direction, (int)(Now - L4->ConnectTime), remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
+			NODECALLLOPPED, L4->apiSeq, L4->Direction, (int)(NOW - L4->ConnectTime), remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
 		else
 			udplen = sprintf(UDPMsg, "{\"@type\": \"CircuitStatus\", \"node\": \"%s\", \"id\": %d, \"direction\": \"%s\","
 			"\"upForSecs\": %d, \"service\": %d, \"remote\": \"%s\", \"local\": \"%s\", \"segsSent\": %d, \"segsRcvd\": %d, \"segsResent\": %d, \"segsQueued\": %d}",
-			NODECALLLOPPED, L4->apiSeq, L4->Direction, (int)(Now - L4->ConnectTime), Service, remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
+			NODECALLLOPPED, L4->apiSeq, L4->Direction, (int)(NOW - L4->ConnectTime), Service, remotecall, ourcall,L4->segsSent, L4->segsRcvd, L4->segsResent, Count);
 
 //		Debugprintf(UDPMsg);
 		sendto(NodeAPISocket, UDPMsg, udplen, 0, (struct sockaddr *)&UDPreportdest, sizeof(UDPreportdest));
@@ -751,7 +746,6 @@ void APIL2Trace(struct _MESSAGE * Message, char * Dirn)
 	int NS;
 	int NR;
 	struct PORTCONTROL * PORT = GetPortTableEntryFromPortNum(Message->PORT);
-	time_t Now = time(NULL);
 #ifndef WIN32
 	struct timespec ts;
 #else
@@ -785,7 +779,7 @@ void APIL2Trace(struct _MESSAGE * Message, char * Dirn)
 #ifndef WIN32
 
 	if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
-		NowMs = Now;
+		NowMs = NOW;
 	else
 		NowMs = ts.tv_sec + ts.tv_nsec / 1000000000.0;
 #else
@@ -982,14 +976,13 @@ void NetromTCPTrace(struct _MESSAGE * Message, char * Dirn)
 {
 	char UDPMsg[2048];	
 	int udplen;
-	time_t Now = time(NULL);
 	int iLen = Message->LENGTH - (15 + MSGHDDRLEN);
 	int isRF = 0;
 
 
 	udplen = snprintf(UDPMsg, 2048, 
 		"{\"@type\": \"L3Trace\", \"serial\": %d, \"time\": %d, \"dirn\": \"%s\", \"isRF\": %s, \"reportFrom\": \"%s\", \"port\": %d",
-		UDPSeq++, (int)Now, Dirn, (isRF)?"true":"false", NODECALLLOPPED, Message->PORT);
+		UDPSeq++, (int)NOW, Dirn, (isRF)?"true":"false", NODECALLLOPPED, Message->PORT);
 
 
 	udplen += snprintf(&UDPMsg[udplen], 2048 - udplen,

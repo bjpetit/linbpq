@@ -719,33 +719,9 @@ ok:
 
 int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Interval = 15;
 	int Len;
 
-	if (LOCAL)
-	{
-		if (TNC->WEB_CHANGED)
-			Interval = 1;
-		else
-			Interval = 4;
-	}
-	else
-	{
-		if (TNC->WEB_CHANGED)
-			Interval = 4;
-		else
-			Interval = 15;
-	}
-
-	if (TNC->WEB_CHANGED)
-	{
-		TNC->WEB_CHANGED -= Interval;
-		if (TNC->WEB_CHANGED < 0)
-			TNC->WEB_CHANGED = 0;
-	}
-
-	Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta http-equiv=expires content=0><meta http-equiv=refresh content=%d>"
-	"<title>WinRPR Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style></head><body><h2>WinRPR Status</h2>", Interval);
+	Len = sprintf(Buff, "<h2>WinRPR Status</h2>");
 
 	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
@@ -1178,7 +1154,7 @@ VOID WinRPRProcessReceivedPacket(struct TNCINFO * TNC)
 		TNC->Streams[0].ReportDISC = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -1534,10 +1510,11 @@ TNCRunning:
 //	sinx.sin_addr.s_addr = INADDR_ANY;
 //	sinx.sin_port = 0;
 
-	sprintf(TNC->WEB_COMMSSTATE, "Connecting to TNC");
-	MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
-
-
+	if (!TNC->Alerted)
+	{
+		sprintf(TNC->WEB_COMMSSTATE, "Connecting to TNC");
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	}
 
 	if (connect(TNC->TCPSock,(LPSOCKADDR) &TNC->destaddr,sizeof(TNC->destaddr)) == 0)
 	{
@@ -1559,7 +1536,7 @@ TNCRunning:
 	
 			WritetoConsoleLocal(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 			TNC->Alerted = TRUE;
 		}
@@ -1615,7 +1592,7 @@ TNCRunning:
 	TNC->Alerted = TRUE;
 
 	sprintf(TNC->WEB_COMMSSTATE, "Connected to WinRPR TNC");		
-	MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	FreeSemaphore(&Semaphore);
 
@@ -1667,7 +1644,7 @@ Lost:
 				WritetoConsoleLocal(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;

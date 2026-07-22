@@ -1593,7 +1593,7 @@ SeeifMore:
 
 				// If a response to a qtsm command display it
 
-				if (PORT->Session && (time(NULL) - PORT->LastKISSCmdTime < 10))
+				if (PORT->Session && (NOW - PORT->LastKISSCmdTime < 10))
 				{
 					PDATAMESSAGE Buffer;
 					BPQVECSTRUC * VEC;
@@ -1666,7 +1666,7 @@ SeeifMore:
 		// If a reply to a manual KISS command(Session set and time not too long ago)
 		// send reponse to terminal
 
-		if (PORT->Session && (time(NULL) - PORT->LastKISSCmdTime < 10))
+		if (PORT->Session && (NOW - PORT->LastKISSCmdTime < 10))
 		{
 			PDATAMESSAGE Buffer;
 			BPQVECSTRUC * VEC;
@@ -2198,16 +2198,24 @@ int KISSGetTCPMessage(NPASYINFO ASY)
 		{
 			//	Bind Failed
 
-			int err = WSAGetLastError();
-			Consoleprintf("Bind Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+			if (ASY->Alerted == FALSE)
+			{
+				int err = WSAGetLastError();
+				Consoleprintf("Bind Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+				ASY->Alerted = TRUE;
+			}
 			closesocket(sock);
 		}
 		else
 		{
 			if (listen(sock, 1) < 0)
 			{
-				int err = WSAGetLastError();
-				Consoleprintf("Listen Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+				if (ASY->Alerted == FALSE)
+				{
+					int err = WSAGetLastError();
+					Consoleprintf("Listen Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+					ASY->Alerted = TRUE;
+				}
 				closesocket(sock);
 			}
 			else

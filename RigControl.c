@@ -222,13 +222,13 @@ struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
 struct ScanEntry ** CheckTimeBands(struct RIGINFO * RIG)
 {
 	int i = 0;
-	time_t NOW = time(NULL) % 86400;
+	time_t Now = NOW % 86400;
 				
 	// Find TimeBand
 
 	while (i < RIG->NumberofBands)
 	{
-		if (RIG->TimeBands[i + 1]->Start > NOW)
+		if (RIG->TimeBands[i + 1]->Start > Now)
 		{
 			break;
 		}
@@ -275,7 +275,7 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 
 	if (PTTState)
 	{
-		MySetWindowText(RIG->hPTT, "T");
+		MySetWindowText(TNC, RIG->hPTT, "T");
 		RIG->WEB_PTT = 'T';
 		RIG->PTTTimer = PTTLimit;
 		RIG->repeatPTTOFFTimer = 0;				// Cancel repeated off command
@@ -420,7 +420,7 @@ VOID Rig_PTTEx(struct RIGINFO * RIG, BOOL PTTState, struct TNCINFO * TNC)
 	{
 		// Drop PTT
 
-		MySetWindowText(RIG->hPTT, " ");
+		MySetWindowText(TNC, RIG->hPTT, " ");
 		RIG->WEB_PTT = ' ';
 		RIG->PTTTimer = 0;
 		if (PORT->PortType == ICOM)
@@ -684,13 +684,13 @@ void saveNewFreq(struct RIGINFO * RIG, double Freq, char * Mode)
 	{
 		_gcvt((Freq + RIG->rxOffset) / 1000000.0, 9, RIG->Valchar);
 		strcpy(RIG->WEB_FREQ, RIG->Valchar);
-		MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+		MySetWindowText(0, RIG->hFREQ, RIG->WEB_FREQ);
 	}
 
 	if (Mode[0])
 	{
 		strcpy(RIG->ModeString, Mode);
-		MySetWindowText(RIG->hMODE, Mode);
+		MySetWindowText(0, RIG->hMODE, Mode);
 	}
 
 }
@@ -905,7 +905,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, TRANSPORTENTR
 		PORT->Closed = 1;
 		RigCloseConnection(PORT);
 
-		MySetWindowText(RIG->hSCAN, "C");
+		MySetWindowText(0, RIG->hSCAN, "C");
 		RIG->WEB_SCAN = 'C';
 
 		sprintf(Command, "Ok\r");
@@ -917,7 +917,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, TRANSPORTENTR
 		PORT->ReopenDelay = 300;
 		PORT->Closed = 0;
 		
-		MySetWindowText(RIG->hSCAN, "");
+		MySetWindowText(0, RIG->hSCAN, "");
 		RIG->WEB_SCAN = ' ';
 
 		sprintf(Command, "Ok\r");
@@ -965,7 +965,7 @@ int Rig_CommandEx(struct RIGPORTINFO * PORT, struct RIGINFO * RIG, TRANSPORTENTR
 			if (Session != (TRANSPORTENTRY *) -1)				// Used for internal Stop/Start
 				RIG->ScanStopped |= 1;		// Set Manual Stopped Bit
 
-			MySetWindowText(RIG->hSCAN, "");
+			MySetWindowText(0, RIG->hSCAN, "");
 			RIG->WEB_SCAN = ' ';
 
 			sprintf(Command, "Ok\r");
@@ -3309,7 +3309,7 @@ CheckOtherPorts:
 						PortRecord->PORT_DLL_NAME, PORT->FreqPtr->Dwell); 
 
 			RIG->WaitingForPermission = FALSE;
-			MySetWindowText(RIG->hSCAN, "-");
+			MySetWindowText(0, RIG->hSCAN, "-");
 			RIG->WEB_SCAN = '-';
 
 			if (PORT->FreqPtr)
@@ -3364,7 +3364,7 @@ CheckOtherPorts:
 	if (RIG->ScanCounter == 0)		// ? After manual change
 		RIG->ScanCounter = 150;
 	
-	MySetWindowText(RIG->hSCAN, "S");
+	MySetWindowText(0, RIG->hSCAN, "S");
 	RIG->WEB_SCAN = 'S';
 
 	// Do Bandwidth and antenna switches (if needed)
@@ -7992,7 +7992,7 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 					else
 						sprintf(RIG->WEB_MODE, "%s/%d", RIG->ModeString, b1);
 
-					MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
+					MySetWindowText(0, RIG->hMODE, RIG->WEB_MODE);
 				}
 			}
 			else
@@ -8011,7 +8011,7 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 					_gcvt(RIG->RigFreq, 9, RIG->Valchar);
 
 					sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
-					MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+					MySetWindowText(0, RIG->hFREQ, RIG->WEB_FREQ);
 
 					// Read Mode
 
@@ -8036,7 +8036,7 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 						else
 							SetWindowText(RIG->hMODE, RIG->WEB_MODE);
 
-						MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
+						MySetWindowText(0, RIG->hMODE, RIG->WEB_MODE);
 
 						Len = sprintf(ReqBuf, Req, "rig.get_bw", "");
 						Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
@@ -8106,7 +8106,7 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 			_gcvt(RIG->RigFreq, 9, RIG->Valchar);
 
 			sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
-			MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+			MySetWindowText(TNC, RIG->hFREQ, RIG->WEB_FREQ);
 
 			strcpy(PORT->TXBuffer, "rig.get_mode"); 
 			Len = sprintf(ReqBuf, Req, "rig.get_mode", "");
@@ -8123,7 +8123,7 @@ void ProcessFLRIGFrame(struct RIGPORTINFO * PORT)
 			{
 			strlop(val, '<');
 			sprintf(RIG->WEB_MODE, "%s", val);
-			MySetWindowText(RIG->hMODE, RIG->WEB_MODE);
+			MySetWindowText(TNC, RIG->hMODE, RIG->WEB_MODE);
 			}
 			}
 
@@ -8843,7 +8843,7 @@ VOID FLRIGPoll(struct RIGPORTINFO * PORT)
 					_gcvt(RIG->RigFreq, 9, RIG->Valchar);
 
 					sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
-					MySetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+					MySetWindowText(0, RIG->hFREQ, RIG->WEB_FREQ);
 				}
 
 

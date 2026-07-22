@@ -939,7 +939,7 @@ VOID ConnecttoMPSKThread(void * portptr)
 			err=WSAGetLastError();
    			i=sprintf(Msg, "Connect Failed for MPSK socket - error code = %d\n", err);
 			WritetoConsole(Msg);
-			MySetWindowText(TNC->xIDC_COMMSSTATE, "Connection to TNC failed");
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, "Connection to TNC failed");
 
 			TNC->Alerted = TRUE;
 		}
@@ -950,7 +950,7 @@ VOID ConnecttoMPSKThread(void * portptr)
 
 	TNC->LastFreq = 0;			//	so V4 display will be updated
 
-	MySetWindowText(TNC->xIDC_COMMSSTATE, "Connected to MPSK TNC");
+	MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, "Connected to MPSK TNC");
 
 	return;
 
@@ -1386,7 +1386,7 @@ DataLoop:
 
 				STREAM->Connected = TRUE;
 				STREAM->Connecting = FALSE;
-				STREAM->ConnectTime = time(NULL); 
+				STREAM->ConnectTime = NOW; 
 				STREAM->bytesRXed = STREAM->bytesTXed = 0;
 
 				buffptr = GetBuff();
@@ -1401,7 +1401,7 @@ DataLoop:
 					// Incoming. Look for a free Stream
 
 					STREAM->Connected = TRUE;
-					STREAM->ConnectTime = time(NULL); 
+					STREAM->ConnectTime = NOW; 
 					STREAM->bytesRXed = STREAM->bytesTXed = 0;
 
 					UpdateMH(TNC, CallFrom, '+', 'I');
