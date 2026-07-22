@@ -101,6 +101,7 @@ struct ROUTECONFIG
 	int ppacl;
 	int farQual;
 	int inp3;
+	int NPR;
 	int nokeepalives;
 	int noV2point2;
 	char * tcphost;

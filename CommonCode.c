@@ -395,6 +395,23 @@ BOK1:
 	return 0;
 }
 
+UINT ReleaseBufferQuick(VOID *pBUFF)
+{
+	void ** pointer, ** BUFF = pBUFF;
+
+	if (Semaphore.Flag == 0)
+		Debugprintf("ReleaseBufferQuick called without semaphore");
+
+	pointer = FREE_Q;
+
+	*BUFF = pointer;
+
+	FREE_Q = BUFF;
+
+	QCOUNT++;
+	return 0;
+}
+
 
 void CheckFreeQueue(char * File, int Line)
 {
@@ -570,7 +587,7 @@ VOID * _GetBuff(char * File, int Line)
 	char * fptr = 0;
 	unsigned char * byteaddr;
 
-	CheckFreeQueue(File, Line);
+//	CheckFreeQueue(File, Line);
 
 	Temp = Q_REM(&FREE_Q);
 
@@ -620,6 +637,46 @@ VOID * _GetBuff(char * File, int Line)
 
 	return Temp;
 }
+
+VOID * GetBuffQuick()
+{
+	UINT * Temp;
+	MESSAGE * Msg;
+	char * fptr = 0;
+
+	Temp = Q_REM(&FREE_Q);
+
+	if (Semaphore.Flag == 0)
+		Debugprintf("GetBuff called without semaphore");
+
+	if (Temp)
+	{
+		QCOUNT--;
+
+		if (QCOUNT < MINBUFFCOUNT)
+			MINBUFFCOUNT = QCOUNT;
+
+		Msg = (MESSAGE *)Temp;
+
+		Msg->Process = (short)GetCurrentProcessId();
+		Msg->Linkptr = NULL;
+		Msg->Padding[0] = 0;		// Used for modem status info 
+	}
+	else if (QCOUNT != 0)
+	{
+		// Queue must be corrupt
+
+		Debugprintf("Fatal - Getbuff returned NULL and Q not empty - exit");
+		FindLostBuffers();
+		WriteMiniDump();
+		Restart();
+	}
+	else
+		Debugprintf("Warning - Getbuff returned NULL");
+
+	return Temp;
+}
+
 
 void * zalloc(int len)
 {
@@ -3135,7 +3192,7 @@ char * FormatMH(PMHSTRUC MH, char Format)
 	if (Format == 'U' || Format =='L')
 		szClock = MH->MHTIME;
 	else
-		szClock = time(NULL) - MH->MHTIME;
+		szClock = NOW - MH->MHTIME;
 
 	if (Format == 'L')
 		TM = localtime(&szClock);
@@ -3159,7 +3216,6 @@ Dll VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int T
 	// Create a time dependent One Time Password from the KeyPhrase
 	// TimeOffset is used when checking to allow for slight variation in clocks
 
-	time_t NOW = time(NULL);
 	UCHAR Hash[16];
 	char Key[1000];
 	int i, chr;
@@ -3505,7 +3561,6 @@ VOID SendNETROMRoute(struct PORTCONTROL * PORT, unsigned char * axcall)
 	int Len;
 	char Call[10];
 	char Report[16];
-	time_t Now = time(NULL);
 	int NeedSend = FALSE;
 
 
@@ -3516,7 +3571,7 @@ VOID SendNETROMRoute(struct PORTCONTROL * PORT, unsigned char * axcall)
 
 	sprintf(Report, "%s,%d,", Call, PORT->PORTTYPE);
 
-	if (Now - TimeLastNRRouteSent > 60)
+	if (NOW - TimeLastNRRouteSent > 60)
 		NeedSend = TRUE;
 	
 	if (strstr(NRRouteMessage, Report) == 0)	//  reported recently
@@ -3540,7 +3595,7 @@ VOID SendNETROMRoute(struct PORTCONTROL * PORT, unsigned char * axcall)
 
 		SendReportMsg((char *)&AXMSG.DEST, Len + 16) ;
 
-		TimeLastNRRouteSent = Now;
+		TimeLastNRRouteSent = NOW;
 		NRRouteMessage[0] = 0;
 	}
 
@@ -3801,7 +3856,7 @@ VOID ResolveUpdateThread(void * Unused)
 			{
 				hookNodeStarted();
 				nodeStartedSent = 1;
-				LastNodeStatus = time(NULL);
+				LastNodeStatus = NOW;
 			}
 		}
 
@@ -3880,17 +3935,16 @@ VOID WriteMiniDumpThread()
 	BOOL ret;
 	char FN[256];
 	struct tm * TM;
-	time_t Now = time(NULL);
 
-	if (lastMiniDump == Now)		// Not more than one per second
+	if (lastMiniDump == NOW)		// Not more than one per second
 	{
 		Debugprintf("minidump suppressed");
 		return;
 	}
 
-	lastMiniDump = Now;
+	lastMiniDump = NOW;
 
-	TM = gmtime(&Now);
+	TM = gmtime(&NOW);
 
 	sprintf(FN, "%s/Logs/MiniDump%d%02d%02d%02d%02d%02d.dmp", BPQDirectory,
 		TM->tm_year + 1900, TM->tm_mon +1, TM->tm_mday, TM->tm_hour, TM->tm_min, TM->tm_sec);

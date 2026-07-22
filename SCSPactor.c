@@ -158,7 +158,7 @@ BOOL SCSStopPort(struct PORTCONTROL * PORT)
 	TNC->HostMode = FALSE;
 
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Stopped");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -172,7 +172,7 @@ BOOL SCSStartPort(struct PORTCONTROL * PORT)
 	TNC->ReopenTimer = 999;				// Reopen immediately
 		
 	sprintf(PORT->TNC->WEB_COMMSSTATE, "%s", "Port Restarted");
-	MySetWindowText(PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, PORT->TNC->xIDC_COMMSSTATE, PORT->TNC->WEB_COMMSSTATE);
 
 	return TRUE;
 }
@@ -197,7 +197,7 @@ static BOOL OpenLogFile(int Flags)
 		time_t T;
 		struct tm * tm;
 
-		T = time(NULL);
+		T = NOW;
 		tm = gmtime(&T);	
 
 		sprintf(FN,"%s/logs/SCSLog_%02d%02d_%d.txt", LogDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
@@ -327,7 +327,7 @@ ConfigLine:
 			time_t T;
 			struct tm * tm;
 
-			T = time(NULL);
+			T = NOW;
 			tm = gmtime(&T);	
 
 			sprintf(Cmd,"DATE %02d%02d%02d\r",  tm->tm_mday, tm->tm_mon + 1, tm->tm_year - 100);
@@ -340,7 +340,7 @@ ConfigLine:
 			time_t T;
 			struct tm * tm;
 
-			T = time(NULL);
+			T = NOW;
 			tm = gmtime(&T);	
 
 			sprintf(Cmd,"TIME %02d%02d%02d\r",  tm->tm_hour, tm->tm_min, tm->tm_sec);
@@ -487,7 +487,7 @@ ok:
 
 		if ((STREAM->Connecting || STREAM->Connected) && !STREAM->Disconnecting)
 		{
-			if (TNC->SessionTimeLimit && STREAM->ConnectTime && time(NULL) > (TNC->SessionTimeLimit + STREAM->ConnectTime))
+			if (TNC->SessionTimeLimit && STREAM->ConnectTime && NOW > (TNC->SessionTimeLimit + STREAM->ConnectTime))
 			{
 				STREAM->CmdSet = STREAM->CmdSave = malloc(100);
 				sprintf(STREAM->CmdSet, "D\r");	
@@ -658,7 +658,7 @@ ok:
 				{
 					if (TNC->PTCStatus == 6)	// Sync
 					{
-						int insync = (int)(time(NULL) - TNC->TimeEnteredSYNCMode);
+						int insync = (int)(NOW - TNC->TimeEnteredSYNCMode);
 						if (insync > 4)
 						{
 							Debugprintf("SCS Scan - in SYNC for %d Secs - allow change regardless", insync);
@@ -667,7 +667,7 @@ ok:
 					}
 					else if (TNC->TimeScanLocked)
 					{
-						time_t timeLocked = time(NULL) - TNC->TimeScanLocked;
+						time_t timeLocked = NOW - TNC->TimeScanLocked;
 						if (timeLocked > 4)
 						{
 							Debugprintf("SCS Scan - Scan Locked for %d Secs - allow change regardless", timeLocked);
@@ -695,7 +695,7 @@ ok:
 			{
 				TNC->DontReleasePermission = FALSE;
 				if (TNC->SyncSupported == FALSE)
-					TNC->TimeScanLocked = time(NULL) + 100;	// Make sure doesnt time out
+					TNC->TimeScanLocked = NOW + 100;	// Make sure doesnt time out
 				return 0;
 			}
 
@@ -797,8 +797,7 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-	"<head><title>SCS Pactor Status</title></head><body><h3>SCS Pactor Status</h3>");
+	int Len = sprintf(Buff, "<h3>SCS Pactor Status</h3>");
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -1523,7 +1522,7 @@ VOID SCSPoll(int Port)
 
 			TNC->Streams[0].CmdSet = TNC->ConnectCmd;
 			TNC->Streams[0].Connecting = TRUE;
-			TNC->Streams[0].ConnectTime = time(NULL);
+			TNC->Streams[0].ConnectTime = NOW;
 
 			sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
@@ -3419,7 +3418,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						{
 							TNC->OKToChangeFreq = -1;
 							if (TNC->SyncSupported == FALSE && TNC->UseAPPLCallsforPactor && TNC->TimeScanLocked == 0)	
-								TNC->TimeScanLocked = time(NULL);
+								TNC->TimeScanLocked = NOW;
 
 							if (TNC->RIG->RIG_DEBUG)
 								Debugprintf("Scan Debug SCS Pactor TNC refused permission");
@@ -3499,7 +3498,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 				STREAM->Connected = TRUE;			// Subsequent data to data channel
 				STREAM->Connecting = FALSE;
-				STREAM->ConnectTime = time(NULL); 
+				STREAM->ConnectTime = NOW; 
 				STREAM->bytesRXed = STREAM->bytesTXed = 0;
 
 				//	Stop Scanner
@@ -3790,7 +3789,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					if (TNC->RIG->RIG_DEBUG)
 						Debugprintf("SCS New SYNC Detected");
 	
-					TNC->TimeEnteredSYNCMode = time(NULL);
+					TNC->TimeEnteredSYNCMode = NOW;
 					TNC->SyncSupported = TRUE;
 				}
 				else
@@ -4297,7 +4296,7 @@ VOID PTCSuspendPort(struct TNCINFO * TNC, struct TNCINFO * ThisTNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	strcpy(TNC->WEB_TNCSTATE, "Interlocked");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
 	sprintf(STREAM->CmdSet, "I%s\r", "SCSPTC");		// Should prevent connects
@@ -4310,7 +4309,7 @@ VOID PTCReleasePort(struct TNCINFO * TNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
 

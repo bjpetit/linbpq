@@ -575,7 +575,7 @@ DoMove:
 
 	memcpy (MHBASE->MHCALL, Buffer->ORIGIN, 7 * 9);		// Save Digis
 	MHBASE->MHDIGI = DIGI;
-	MHBASE->MHTIME = time(NULL);
+	MHBASE->MHTIME = NOW;
 	MHBASE->MHCOUNT = ++OldCount;
 	strcpy(MHBASE->MHFreq, Freq);
 	MHBASE->MHLocator[0] = 0;
@@ -3157,7 +3157,7 @@ VOID SDETX(struct _LINKTABLE * LINK)
 	
 	// **** Debug code **** look for stuck links
 
-	if (LINK->LINKWINDOW == 0 || LINK->LASTFRAMESENT == 0 || (time(NULL) - LINK->LASTFRAMESENT) > 60)			// No send for 60 secs
+	if (LINK->LINKWINDOW == 0 || LINK->LASTFRAMESENT == 0 || (NOW - LINK->LASTFRAMESENT) > 60)			// No send for 60 secs
 	{
 		if (COUNT_AT_L2(LINK) > 16 || LINK->LINKWINDOW == 0)
 		{
@@ -3167,7 +3167,7 @@ VOID SDETX(struct _LINKTABLE * LINK)
 			char Normcall2[11] = "";
 
 			int Count = COUNT_AT_L2(LINK);
-			int secs = time(NULL) - LINK->LASTFRAMESENT;
+			int secs = NOW - LINK->LASTFRAMESENT;
 				
 			ConvFromAX25(LINK->LINKCALL, Normcall);
 			ConvFromAX25(LINK->OURCALL, Normcall2);
@@ -3209,7 +3209,7 @@ VOID SDETX(struct _LINKTABLE * LINK)
 		Msg = Q_REM(&LINK->TX_Q);
 		Msg->CHAIN = NULL;
 
-		LINK->LASTFRAMESENT = time(NULL);
+		LINK->LASTFRAMESENT = NOW;
 		LINK->LASTSENTQCOUNT = COUNT_AT_L2(LINK);
 
 		if (LINK->LASTSENTQCOUNT > LINK->maxQueued)
@@ -3461,7 +3461,7 @@ VOID L2TimerProc()
 	int i = MAXLINKS;
 	struct _LINKTABLE * LINK = LINKS;
 	struct PORTCONTROL * PORT = PORTTABLE;
-	time_t Now = time(NULL);
+	time_t Now = NOW;
 
 	while (i--)
 	{

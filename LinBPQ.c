@@ -273,7 +273,7 @@ BOOL CLOSING = FALSE;
 int ProgramErrors;
 int Slowtimer = 0;
 
-#define REPORTINTERVAL 15 * 549;	// Magic Ticks Per Minute for PC's nominal 100 ms timer
+#define REPORTINTERVAL 15 * 600;	// 15 mins
 int ReportTimer = 0;
 
 // Console Terminal Support
@@ -543,7 +543,7 @@ VOID MonitorThread(void * x)
 
 
 
-VOID TIMERINTERRUPT();
+int TIMERINTERRUPT();
 
 BOOL Start();
 VOID INITIALISEPORTS();
@@ -809,6 +809,183 @@ static void abrthandler(int sig);
 
 void GetRestartData();
 
+void Main100msCode()
+{
+	// code that doesn't need to run every tick - run every 100 mS
+
+	// Runs under semaphore
+
+	if (IPActive) Poll_IP();
+	if (RigActive) Rig_Poll();
+	if (APRSActive) Poll_APRS();
+	CheckWL2KReportTimer();
+
+	if (QCOUNT < 10)
+	{
+		if (CLOSING == FALSE)
+			FindLostBuffers();
+		CLOSING = TRUE;
+	}
+
+	if (CLOSING)
+	{
+		if (RunChat)
+		{
+			CloseChat();
+			RunChat = FALSE;
+		}
+
+		if (RunMail)
+		{
+			int BPQStream, n;
+
+			RunMail = FALSE;
+
+			for (n = 0; n < NumberofStreams; n++)
+			{
+				BPQStream = Connections[n].BPQStream;
+
+				if (BPQStream)
+				{
+					SetAppl(BPQStream, 0, 0);
+					Disconnect(BPQStream);
+					DeallocateStream(BPQStream);
+				}
+			}
+
+			//				SaveUserDatabase();
+			SaveMessageDatabase();
+			SaveBIDDatabase();
+			SaveConfig(ConfigName);
+			SaveRestartData();
+		}
+
+		KEEPGOING--;					// Give time for links to close
+		setbuf(stdout, NULL);
+		printf("Closing... %d  \r", KEEPGOING);
+	}
+
+
+	if (RigReconfigFlag)
+	{
+		RigReconfigFlag = FALSE;
+		Rig_Close();
+		Sleep(2000);				// Allow CATPTT threads to close
+		RigActive = Rig_Init();
+
+		Consoleprintf("Rigcontrol Reconfiguration Complete");	
+	}
+
+	if (APRSReconfigFlag)
+	{
+		APRSReconfigFlag = FALSE;
+		APRSClose();				
+		APRSActive = Init_APRS();
+
+		Consoleprintf("APRS Reconfiguration Complete");	
+	}
+
+	if (ReconfigFlag)
+	{
+		int i;
+		BPQVECSTRUC * HOSTVEC;
+		PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
+
+		ReconfigFlag = FALSE;
+
+		//			SetupBPQDirectory();
+
+		WritetoConsoleLocal("Reconfiguring ...\n\n");
+		OutputDebugString("BPQ32 Reconfiguring ...\n");
+
+
+		for (i=0;i<NUMBEROFPORTS;i++)
+		{
+			if (PORTVEC->PORTCONTROL.PORTTYPE == 0x10)			// External
+			{
+				if (PORTVEC->PORT_EXT_ADDR)
+				{
+					//						SaveWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+					//						SaveAXIPWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+					//						CloseDriverWindow(PORTVEC->PORTCONTROL.PORTNUMBER);
+					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);	// Close External Ports
+				}
+			}
+			PORTVEC->PORTCONTROL.PORTCLOSECODE(&PORTVEC->PORTCONTROL);
+			PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
+		}
+
+		IPClose();
+		APRSClose();
+		Rig_Close();
+		CloseTNCEmulator();
+
+		if (AGWActive)
+			AGWAPITerminate();
+
+		WL2KReports = NULL;
+
+		//			Sleep(2000);
+
+		Consoleprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
+		Consoleprintf(VerCopyright);
+
+		Start();
+
+		NETROMTCPResolve();
+
+		INITIALISEPORTS();
+
+		SetApplPorts();
+
+		GetUIConfig();
+
+		FreeConfig();
+
+		for (i=1; i<68; i++)			// Include Telnet, APRS, IP Vec
+		{
+			HOSTVEC=&BPQHOSTVECTOR[i-1];
+
+			HOSTVEC->HOSTTRACEQ=0;
+
+			if (HOSTVEC->HOSTSESSION !=0)
+			{
+				// Had a connection
+
+				HOSTVEC->HOSTSESSION=0;
+				HOSTVEC->HOSTFLAGS |=3;	// Disconnected
+
+				//					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
+			}
+		}
+
+		OpenReportingSockets();
+
+		WritetoConsoleLocal("\n\nReconfiguration Complete\n");
+
+		if (IPRequired)	IPActive = Init_IP();
+
+		APRSActive = Init_APRS();
+
+		if (ISPort == 0)
+			IGateEnabled = 0;
+
+		RigActive = Rig_Init();
+
+		if (NUMBEROFTNCPORTS)
+		{
+			FreeSemaphore(&Semaphore);
+			InitializeTNCEmulator();
+			GetSemaphore(&Semaphore, 2);
+		}
+
+		FreeSemaphore(&Semaphore);
+		AGWActive = AGWAPIInit();
+		GetSemaphore(&Semaphore, 2);
+
+		OutputDebugString("BPQ32 Reconfiguration Complete\n");
+	}
+}
 
 int main(int argc, char * argv[])
 {
@@ -866,7 +1043,8 @@ int main(int argc, char * argv[])
 
 	 printf("%d", sizeof(struct DEST_LIST));
 
-	 srand(time(NULL));
+	 NOW = time(NULL);
+	 srand(NOW);
 
 	 // look for optarg format parameters
 
@@ -1432,270 +1610,108 @@ int main(int argc, char * argv[])
 
 	while (KEEPGOING)
 	{
-		Sleep(100);
+		Sleep(10);
+
+		NOW = time(NULL);
+
 		GetSemaphore(&Semaphore, 2);
 
-		if (QCOUNT < 10)
+		if (TIMERINTERRUPT())			// Run background code
 		{
-			if (CLOSING == FALSE)
-				FindLostBuffers();
-			CLOSING = TRUE;
-		}
+			// 100mS has elapsed
 
-		if (CLOSING)
-		{
+			Main100msCode();
+			Slowtimer++;
+	
+			FreeSemaphore(&Semaphore);
+
+			if (Redirected == 0)
+				ConTermPoll();
+
+			if (NUMBEROFTNCPORTS)
+				TNCTimer();
+
+			if (AGWActive)
+				Poll_AGW();
+
+			DRATSPoll();
+			RHPPoll();
+
+			if (ReportTimer)
+			{
+				ReportTimer--;
+	
+				if (ReportTimer == 0)
+				{
+					ReportTimer = REPORTINTERVAL;
+					SendLocation();
+				}
+			}
+
+			HTTPTimer();
+
 			if (RunChat)
 			{
-				CloseChat();
-				RunChat = FALSE;
+				ChatPollStreams();
+				ChatTrytoSend();
+
+				if (Slowtimer > 100)		// 10 secs
+				{
+					ChatTimer();
+				}
 			}
 
 			if (RunMail)
 			{
-				int BPQStream, n;
+				PollStreams();
 
-				RunMail = FALSE;
+				if ((Slowtimer % 20) == 0)
+					FWDTimerProc();
 
-				for (n = 0; n < NumberofStreams; n++)
+				if (Slowtimer > 100)		// 10 secs
 				{
-					BPQStream = Connections[n].BPQStream;
+					struct tm * tm;
 
-					if (BPQStream)
+					TCPTimer();
+					BBSSlowTimer();
+
+					if (MaintClock < NOW)
 					{
-						SetAppl(BPQStream, 0, 0);
-						Disconnect(BPQStream);
-						DeallocateStream(BPQStream);
+						while (MaintClock < NOW)		// in case large time step
+							MaintClock += MaintInterval * 3600;
+
+						Debugprintf("|Enter HouseKeeping");
+						DoHouseKeeping(FALSE);
+					}
+
+					if (APIClock < NOW)
+					{
+						SendBBSDataToPktMap();
+						APIClock = NOW + 7200;			// Every 2 hours
+					}
+
+
+					tm = gmtime(&NOW);
+
+					if (tm->tm_wday == 0)		// Sunday
+					{
+						if (GenerateTrafficReport && (LastTrafficTime + 86400) < NOW)
+						{
+							CreateBBSTrafficReport();
+							LastTrafficTime = NOW;
+						}
 					}
 				}
 
-//				SaveUserDatabase();
-				SaveMessageDatabase();
-				SaveBIDDatabase();
-				SaveConfig(ConfigName);
-				SaveRestartData();
+				TCPFastTimer();
+				TrytoSend();
 			}
-
-			KEEPGOING--;					// Give time for links to close
-			setbuf(stdout, NULL);
-			printf("Closing... %d  \r", KEEPGOING);
+			if (Slowtimer > 100)
+				Slowtimer = 0;
 		}
-
-
-		if (RigReconfigFlag)
-		{
-			RigReconfigFlag = FALSE;
-			Rig_Close();
-			Sleep(2000);				// Allow CATPTT threads to close
-			RigActive = Rig_Init();
-
-			Consoleprintf("Rigcontrol Reconfiguration Complete");	
-		}
-
-		if (APRSReconfigFlag)
-		{
-			APRSReconfigFlag = FALSE;
-			APRSClose();				
-			APRSActive = Init_APRS();
-
-			Consoleprintf("APRS Reconfiguration Complete");	
-		}
-
-		if (ReconfigFlag)
-		{
-			int i;
-			BPQVECSTRUC * HOSTVEC;
-			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
-
-			ReconfigFlag = FALSE;
-
-//			SetupBPQDirectory();
-
-			WritetoConsoleLocal("Reconfiguring ...\n\n");
-			OutputDebugString("BPQ32 Reconfiguring ...\n");
-
-
-			for (i=0;i<NUMBEROFPORTS;i++)
-			{
-				if (PORTVEC->PORTCONTROL.PORTTYPE == 0x10)			// External
-				{
-					if (PORTVEC->PORT_EXT_ADDR)
-					{
-//						SaveWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
-//						SaveAXIPWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
-//						CloseDriverWindow(PORTVEC->PORTCONTROL.PORTNUMBER);
-						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);	// Close External Ports
-					}
-				}
-				PORTVEC->PORTCONTROL.PORTCLOSECODE(&PORTVEC->PORTCONTROL);
-				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
-			}
-
-			IPClose();
-			APRSClose();
-			Rig_Close();
-			CloseTNCEmulator();
-
-			if (AGWActive)
-				AGWAPITerminate();
-
-			WL2KReports = NULL;
-
-//			Sleep(2000);
-
-			Consoleprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
-			Consoleprintf(VerCopyright);
-
-			Start();
-			
-			NETROMTCPResolve();
-
-			INITIALISEPORTS();
-
-			SetApplPorts();
-
-			GetUIConfig();
-
-			FreeConfig();
-
-			for (i=1; i<68; i++)			// Include Telnet, APRS, IP Vec
-			{
-				HOSTVEC=&BPQHOSTVECTOR[i-1];
-
-				HOSTVEC->HOSTTRACEQ=0;
-
-				if (HOSTVEC->HOSTSESSION !=0)
-				{
-					// Had a connection
-
-					HOSTVEC->HOSTSESSION=0;
-					HOSTVEC->HOSTFLAGS |=3;	// Disconnected
-
-//					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
-				}
-			}
-
-			OpenReportingSockets();
-
-			WritetoConsoleLocal("\n\nReconfiguration Complete\n");
-
-			if (IPRequired)	IPActive = Init_IP();
-
-			APRSActive = Init_APRS();
-
-			if (ISPort == 0)
-				IGateEnabled = 0;
-
-			RigActive = Rig_Init();
-
-			if (NUMBEROFTNCPORTS)
-			{
-				FreeSemaphore(&Semaphore);
-				InitializeTNCEmulator();
-				GetSemaphore(&Semaphore, 2);
-			}
-
+		else
 			FreeSemaphore(&Semaphore);
-			AGWActive = AGWAPIInit();
-			GetSemaphore(&Semaphore, 2);
 
-			OutputDebugString("BPQ32 Reconfiguration Complete\n");
-		}
-
-		if (IPActive) Poll_IP();
-		if (RigActive) Rig_Poll();
-		if (APRSActive) Poll_APRS();
-		CheckWL2KReportTimer();
-
-		TIMERINTERRUPT();
-
-		FreeSemaphore(&Semaphore);
-
-		if (Redirected == 0)
-			ConTermPoll();
-
-		if (NUMBEROFTNCPORTS)
-			TNCTimer();
-
-		if (AGWActive)
-			Poll_AGW();
-
-		DRATSPoll();
-		RHPPoll();
-
-		HTTPTimer();
-
-		if (ReportTimer)
-		{
-			ReportTimer--;
-
-			if (ReportTimer == 0)
-			{
-				ReportTimer = REPORTINTERVAL;
-				SendLocation();
-			}
-		}
-
-		Slowtimer++;
-
-		if (RunChat)
-		{
-			ChatPollStreams();
-			ChatTrytoSend();
-
-			if (Slowtimer > 100)		// 10 secs
-			{
-				ChatTimer();
-			}
-		}
-
-		if (RunMail)
-		{
-			PollStreams();
-
-			if ((Slowtimer % 20) == 0)
-				FWDTimerProc();
-
-			if (Slowtimer > 100)		// 10 secs
-			{
-				time_t NOW = time(NULL);
-				struct tm * tm;
-
-				TCPTimer();
-				BBSSlowTimer();
-
-				if (MaintClock < NOW)
-				{
-					while (MaintClock < NOW)		// in case large time step
-						MaintClock += MaintInterval * 3600;
-
-					Debugprintf("|Enter HouseKeeping");
-					DoHouseKeeping(FALSE);
-				}
-
-				if (APIClock < NOW)
-				{
-					SendBBSDataToPktMap();
-					APIClock = NOW + 7200;			// Every 2 hours
-				}
-
-
-				tm = gmtime(&NOW);
-
-				if (tm->tm_wday == 0)		// Sunday
-				{
-					if (GenerateTrafficReport && (LastTrafficTime + 86400) < NOW)
-					{
-						CreateBBSTrafficReport();
-						LastTrafficTime = NOW;
-					}
-				}
-			}
-			TCPFastTimer();
-			TrytoSend();
-		}
-
-		if (Slowtimer > 100)
-			Slowtimer = 0;
 	}
 
 	hookNodeClosing("Shutdown");

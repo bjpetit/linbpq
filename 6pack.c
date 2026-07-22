@@ -274,7 +274,7 @@ VOID SixPackProcessReceivedPacket(struct TNCINFO * TNC)
 		TNC->Streams[0].ReportDISC = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -948,7 +948,7 @@ ok:
 				SuspendOtherPorts(TNC);
 
 				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				// Stop Scanning
 
@@ -1328,7 +1328,7 @@ VOID SIXPACKReleaseTNC(struct TNCINFO * TNC)
 	Rig_Command( (TRANSPORTENTRY *) -1, TXMsg);
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	ReleaseOtherPorts(TNC);
 }
@@ -1343,7 +1343,7 @@ VOID SIXPACKReleasePort(struct TNCINFO * TNC)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
@@ -1659,7 +1659,7 @@ VOID SIXPACKProcessReceivedPacket(struct TNCINFO * TNC)
 		TNC->Streams[0].ReportDISC = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -1802,7 +1802,7 @@ void AttachSIXPACK(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 		if (WL2K)
 			strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 	}
 }
 
@@ -1877,7 +1877,7 @@ void SIXPACKConnected(struct PORTCONTROL * PORT, struct _LINKTABLE * LINK)
 		if (WL2K)
 			strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 	}
 }
 
@@ -2019,7 +2019,7 @@ VOID x6PackThead(void * portptr)
    			i=sprintf(Msg, "Connect Failed for 6Pack socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 			TNC->Alerted = TRUE;
 		}
@@ -2042,7 +2042,7 @@ VOID x6PackThead(void * portptr)
 	TNC->Alerted = TRUE;
 
 	sprintf(TNC->WEB_COMMSSTATE, "Connected to TNC");		
-	MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	FreeSemaphore(&Semaphore);
 
@@ -2085,7 +2085,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;

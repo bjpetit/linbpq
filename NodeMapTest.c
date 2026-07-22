@@ -1711,9 +1711,11 @@ void GenerateOutputFiles(time_t Now)
 
 		// We need unheard nodes in the file for the MH list. Display on main map in blue
 
-		if (Age < 3600) 
+		if (Age < 3600 * 6) 
 			Colour = 'G';
 		else if (Age < 86400)
+			Colour ='Y';
+		else if (Age < 2 * 86400)
 			Colour ='R';
 		else
 		{

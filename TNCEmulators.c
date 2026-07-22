@@ -1776,7 +1776,7 @@ VOID TNCTimer()
 
 	while (TNC)
 	{
-		if (TNC->LastDEDPollTime && (time(NULL) > TNC->LastDEDPollTime + 30))		// No polls for 30 secs
+		if (TNC->LastDEDPollTime && (NOW > TNC->LastDEDPollTime + 30))		// No polls for 30 secs
 		{
 			int Len = 0;
 			int Count;
@@ -3529,7 +3529,7 @@ NOTDATA:
 		{
 			//SEE IF MONITORED FRAMES AVAILABLE
 
-			TNC->LastDEDPollTime = time(NULL);
+			TNC->LastDEDPollTime = NOW;
 
 			if (MONCount(TNC->Channels[0]->BPQStream))
 				Work = 0x31;

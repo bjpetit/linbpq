@@ -2472,7 +2472,7 @@ VOID ProcessRIP44Message(PIPMSG IPptr)
 
 	SaveIPRoutes();
 	qsort(RouteRecords, NumberofRoutes, sizeof(void *), CompareMasks);
-	LastRIP44Msg = time(NULL);
+	LastRIP44Msg = NOW;
 }
 
 
@@ -3639,7 +3639,6 @@ VOID DoRouteTimer()
 {
 	int i;
 	PROUTEENTRY Route;
-	time_t NOW = time(NULL);
 
 	for (i=0; i < NumberofRoutes; i++)
 	{
@@ -4746,7 +4745,6 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, struct CMD
 	UCHAR Msg[120] = "";
 	PIPMSG IPptr = (PIPMSG)&Msg[40];		// Space for frame header (not used)
 	PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
-	time_t NOW = time(NULL);
 
 	Bufferptr = Cmdprintf(Session, Bufferptr, "\r");
 
@@ -5362,7 +5360,7 @@ int ProcessSNMPPayload(UCHAR * Msg, int Len, UCHAR * Reply, int * OffPtr)
 		else if (memcmp(OID, sysUpTime, sysUpTimeLen) == 0)
 		{
 			int ValOffset = 10;
-			ValLen = ASNPutInt(Value, ValOffset, (int)((time(NULL) - TimeLoaded) * 100), TimeTicks);
+			ValLen = ASNPutInt(Value, ValOffset, (int)((NOW - TimeLoaded) * 100), TimeTicks);
 			ValOffset -= ValLen;
 
 			PDULen = BuildReply(Reply, Offset, sysUpTime, sysUpTimeLen, &Value[ValOffset], ReqID);

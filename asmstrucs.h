@@ -139,7 +139,7 @@ typedef struct _TRANSPORTENTRY
 	UCHAR	SPYFLAG;			// SPY - CONNECT TO NODE VIA BBS CALLSIGN
 		
 	UCHAR	RTT_SEQ;			// SEQUENCE NUMBER BEING TIMED
-	uint32_t	RTT_TIMER;			// TIME ABOVE SEQUENCE WAS SENT
+	uint64_t	RTT_TIMER;			// TIME ABOVE SEQUENCE WAS SENT
 
 	USHORT	PASSWORD;			// AUTHORISATION CODE FOR REMOTE SYSOP
 
@@ -182,7 +182,7 @@ typedef struct _TRANSPORTENTRY
 	int segsResent;
 
 	int NRRID;
-	time_t NRRTime;
+	uint64_t NRRTicks;
 
 	time_t ConnectTime;
 	char Direction[16];		// In or Out
@@ -266,6 +266,7 @@ typedef struct ROUTE
 	int recNum;				// This entry's index it Routes table
 	int noV2point2;			// Set to force V2.0 connect. Can be set in config or dynamically learned
 	int Stopped;			// Set by STOPROUTE command 
+	int NPR;				// NPR Link
 
 } *PROUTE;
 
@@ -690,8 +691,8 @@ typedef struct PORTCONTROL
 	UCHAR SOFTDCDFLAG;	// IF SET USE 'SOFT DCD' - IF MODEM CANT GIVE A REAL ONE
 	UCHAR PORTSLOTTIME;	// SLOT TIME
 	UCHAR PORTTAILTIME;	// TAIL TIME
-	UCHAR PORTT1;		// L2 TIMEOUT
-	UCHAR PORTT2;		// L2 DELAYED ACK TIMER
+	UCHAR PORTT1;		// L2 TIMEOUT (100 ms intervals)
+	UCHAR PORTT2;		// L2 DELAYED ACK TIMER (100 ms intervals)
 	UCHAR PORTN2;		// RETRIES
 	UCHAR PORTPACLEN;	// DEFAULT PACLEN FOR INCOMING SESSIONS
 

@@ -1028,7 +1028,7 @@ VOID CLEARACTIVEROUTE(struct ROUTE * ROUTE, int Reason)
 }
 
 
-VOID L3TimerProc()
+VOID L3MinuteTimerProc()
 {
 	int i;
 	struct PORTCONTROL * PORT = PORTTABLE;
@@ -1127,7 +1127,7 @@ VOID L3TimerProc()
 	}
 }
 
-VOID L3FastTimer()
+VOID L3SecTimer()
 {
 	//	CALLED ONCE PER SECOND - USED ONLY TO SEND NEXT PART OF A NODES OR
 	//	ID MESSAGE SEQUENCE

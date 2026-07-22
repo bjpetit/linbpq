@@ -391,7 +391,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				if (TNC->CONNECTED == 0)
 				{
 					sprintf(TNC->WEB_COMMSSTATE, "Connection to HSMODEM lost");		
-					MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+					MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 				}
 			}
 
@@ -526,7 +526,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				SuspendOtherPorts(TNC);
 	
 				//sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-				//MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				//MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					// Stop Scanning
 
@@ -734,7 +734,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					// Save Command, and wait up to 10 secs
 						
 					sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					TNC->ConnectCmd = _strdup(Connect);
 					TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
@@ -749,7 +749,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", STREAM->MyCall, STREAM->RemoteCall);
 			HSMODEMSendCommand(TNC, Connect);
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 				
 			STREAM->Connecting = TRUE;
 			return 0;
@@ -878,7 +878,7 @@ VOID HSMODEMReleasePort(struct TNCINFO * TNC)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
@@ -1420,7 +1420,7 @@ VOID HSMODEMProcessTNCMessage(struct TNCINFO * TNC, unsigned char * Msg, int Len
 		// Just come up
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connected to HSMODEM");		
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 		SendMode(TNC);
 	}
 
@@ -1507,7 +1507,7 @@ VOID HSMODEMProcessTNCMessage(struct TNCINFO * TNC, unsigned char * Msg, int Len
 
 				Info->lastBlock = 0;
 				Info->lostBlocks = 0;
-				Info->LastRX = time(NULL);
+				Info->LastRX = NOW;
 				
 				Debugprintf("%d %d %04X %02x %s %d %s", Msg[1], Seq, FH->CRC, Msg[4],
 					FH->filename, fileLen, FH->Data);

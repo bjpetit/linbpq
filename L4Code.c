@@ -59,7 +59,7 @@ int CHECKIFBUSYL4(TRANSPORTENTRY * L4);
 VOID AUTOTIMER(TRANSPORTENTRY * L4);
 VOID NRRecordRoute(UCHAR * Buff, int Len);
 VOID REFRESHROUTE(TRANSPORTENTRY * Session);
-VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR);
+VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR, int UPDATERTT);
 VOID SENDL4IACK(TRANSPORTENTRY * Session);
 VOID CHECKNEIGHBOUR(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * Msg);
 VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port);
@@ -1124,7 +1124,7 @@ VOID CLOSECURRENTSESSION(TRANSPORTENTRY * Session)
 
 }
 
-VOID L4TimerProc()
+VOID L4SecTimer()
 {
 	//	CHECK FOR TIMER EXPIRY
 
@@ -1132,7 +1132,7 @@ VOID L4TimerProc()
 	TRANSPORTENTRY * L4 = L4TABLE;
 	TRANSPORTENTRY * Partner;
 	int MaxLinks = MAXLINKS;
-	time_t Now = time(NULL);
+	time_t Now = NOW;
 
 	while (n--)
 	{
@@ -1577,7 +1577,7 @@ void WriteL4LogLine(UCHAR * mycall, UCHAR * call, UCHAR * node)
 	Call3[ConvFromAX25(node, Call3)] = 0;
 
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);	
 
 	sprintf(FN,"%s/L4Log_%02d%02d.txt", BPQDirectory, tm->tm_mon + 1, tm->tm_mday);
@@ -2389,7 +2389,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask,
 		}
 		*/
 
-		ACKFRAMES(L3MSG, L4, L3MSG->L4RXNO);
+		ACKFRAMES(L3MSG, L4, L3MSG->L4RXNO, 1);
 
 		//	If DISCPENDING or STATE IS 4, THEN SESSION IS CLOSING - IGNORE ANY I FRAMES
 
@@ -2627,7 +2627,7 @@ checkReseq:
 
 	case L4IACK:
 
-		ACKFRAMES(L3MSG, L4, L3MSG->L4RXNO);
+		ACKFRAMES(L3MSG, L4, L3MSG->L4RXNO, 0);
 		REFRESHROUTE(L4);
 
 		ReleaseBuffer(L3MSG);
@@ -2642,7 +2642,7 @@ checkReseq:
 }
 
 
-VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR)
+VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR, int UPDATERTT)
 {
 	//	SEE HOW MANY FRAMES ARE ACKED - IF NEGATIVE, THAN THIS MUST BE A
 	//	DELAYED REPEAT OF AN ACK ALREADY PROCESSED
@@ -2682,18 +2682,21 @@ VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR)
 		{
 			if (L4->RTT_TIMER)
 			{
-				//	FRAME BEING TIMED HAS BEEN ACKED - UPDATE DEST RTT TIMER
+				//	FRAME BEING TIMED HAS BEEN ACKED - UPDATE DEST RTT TIMER unless INFO ACK
 
-				DEST = L4->L4TARGET.DEST;
-
-				RTT = GetTickCount() - L4->RTT_TIMER;
-
-				if (RTT < 180000)				// Sanity Check
+				if (UPDATERTT)
 				{
-					if (DEST->DEST_RTT == 0)
-						DEST->DEST_RTT = RTT;
-					else
-						DEST->DEST_RTT = ((DEST->DEST_RTT * 9) + RTT) /10;	// 90% Old + New
+					DEST = L4->L4TARGET.DEST;
+
+					RTT = GetTickCount() - L4->RTT_TIMER;
+
+					if (RTT < 180000)				// Sanity Check
+					{
+						if (DEST->DEST_RTT == 0)
+							DEST->DEST_RTT = RTT;
+						else
+							DEST->DEST_RTT = ((DEST->DEST_RTT * 9) + RTT) /10;	// 90% Old + New
+					}
 				}
 				L4->RTT_TIMER = 0;
 			}

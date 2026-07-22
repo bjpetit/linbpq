@@ -17,6 +17,10 @@ extern HANDLE hInstance;
 extern HMENU hMainFrameMenu;
 extern HMENU hWndMenu;
 
+
+void BuildDevicePage(struct TNCINFO * TNC);
+
+
 /*
 struct WL2KInfo
 {
@@ -812,7 +816,13 @@ typedef struct TNCINFO
 	char * WEB_RESTARTS;
 	char * WEB_PACTORLEVEL;
 	char * WEB_LEVELS;
-	int WEB_CHANGED;				// Used to speed up refresh when active
+	char WEB_CHANGED;				// Used to speed up refresh when active
+	char WebSockUsed;				// If not set don't build page
+	char PageChanged;				// Set when page could have changed
+
+	char * WebPage;					// Device Web Page. Used for Websocks refresh
+	int WebPageLen;
+
 
 	HMENU hMenu;
 	HMENU hWndMenu;
@@ -863,9 +873,9 @@ typedef struct TNCINFO
 	int NRCloseTimer;
 	struct _LINKTABLE * DummyLink;	// Simulated link to simplify interface to ax,25 netrom code
 	struct sixPackPortInfo * sixPack;
-	int VaraACAllowed;				// Set by config
-	int VaraACMode;					// Set by first message received
-	int VaraModeSet;				// Have decicded if VarAC mode or not
+	char VaraACAllowed;				// Set by config
+	char VaraACMode;					// Set by first message received
+	char VaraModeSet;				// Have decicded if VarAC mode or not
 	char * VARACMsg;				// to build message from packets
 	int VarACTimer;					// delayed send timer
 	size_t VARACSize;					// malloc'ed size

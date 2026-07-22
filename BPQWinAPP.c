@@ -21,9 +21,10 @@
 #include <memory.h>
 #include <time.h>
 #include "DbgHelp.h"
+#include "winstdint.h"
 
 //#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
-#include "..\Include\bpq32.h"
+#include "bpq32.h"
 
 VOID APIENTRY SetFrameWnd(HWND hWnd);
 
@@ -102,7 +103,7 @@ VOID WriteMiniDump()
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	MSG msg;
-	BOOL bRet;
+	int Running = 1;
 	struct _EXCEPTION_POINTERS exinfo;
 
 	Debugprintf("BPQ32.exe %s Entered", lpCmdLine);
@@ -115,25 +116,27 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	if (!InitInstance(hInstance, nCmdShow))
 		return (FALSE);
 
+	RunBPQ32Background();
+
 	// Main message loop:
 
 	__try 
 	{
-
-	while( (bRet = GetMessage( &msg, NULL, 0, 0 )) != 0)
-	{ 
-		if (bRet == -1)
+		while(Running)
 		{
-		    Debugprintf("GetMessage Returned -1 %d", GetLastError());
-			break;
+			Sleep(10);
+
+			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+			{
+				TranslateMessage(&msg); 
+			    DispatchMessage(&msg); 
+
+				if (msg.message == WM_QUIT)
+					Running = 0;
+			}
+
+			RunBPQ32Background();
 		}
-	    else
-		{
-			TranslateMessage(&msg); 
-	        DispatchMessage(&msg); 
-	    }
-	}
-
 	}
 	
 	#define EXCEPTMSG "BPQ32.exe Main Loop"

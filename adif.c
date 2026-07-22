@@ -143,7 +143,7 @@ BOOL UpdateADIFRecord(ADIF * ADIF, char * Msg, char Dirn)
 
 	if (ADIF->StartTime == 0)
 	{
-		ADIF->StartTime = time(NULL);
+		ADIF->StartTime = NOW;
 //		ADIF->Mode = 49;				// Unused value (unforunately 0 = PKT1200)
 	}
 
@@ -393,7 +393,7 @@ BOOL WriteADIFRecord(ADIF * ADIF)
 	if (ADIF == NULL)
 		return TRUE;
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);
 
 	memcpy(&endtm, tm, sizeof(endtm)); 

@@ -78,8 +78,8 @@ VOID NRRecordRoute(UCHAR * Buff, int Len)
 		UCHAR * BUFFER = GetBuff();
 		UCHAR * ptr1;
 		struct _MESSAGE * Msg1;
-		time_t Now = time(NULL);
 		int ID = (Msg->L4TXNO << 8) | Msg->L4RXNO;
+		int RTT = (int)GetTickCount() - NRRSession->NRRTicks;
 
 		if (BUFFER == NULL)
 			return;
@@ -96,10 +96,13 @@ VOID NRRecordRoute(UCHAR * Buff, int Len)
 		
 		*ptr1++ = 0xf0;			// PID
 
-	if (ID == NRRSession->NRRID)
-			ptr1 += sprintf(ptr1, "NRR Response in %d Secs:", (int)(Now - NRRSession->NRRTime));
+		if (ID == NRRSession->NRRID)
+			if (RTT < 1000)
+				ptr1 += sprintf(ptr1, "NRR Response in %dmS:", RTT);
+			else
+				ptr1 += sprintf(ptr1, "NRR Response in %2.2fs:", RTT / 1000.0f);
 		else
-			ptr1 += sprintf(ptr1, "NRR Response:", (int)(Now - NRRSession->NRRTime));
+			ptr1 += sprintf(ptr1, "NRR Response:");
 
 		Buff += 21 + MSGHDDRLEN;
 		Len -= (21 + MSGHDDRLEN);
@@ -206,7 +209,7 @@ VOID SendNRRecordRoute(struct DEST_LIST * DEST, TRANSPORTENTRY * Session)
 		
 	Msg->LENGTH = 8 + 21 + MSGHDDRLEN;
 
-	Session->NRRTime = time(NULL);
+	Session->NRRTicks = GetTickCount();
 	Session->NRRID = NRRID++;
 
 	C_Q_ADD(&DEST->DEST_Q, Msg);

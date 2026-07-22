@@ -320,7 +320,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			TNC->TXOffset = SendMessage(TNC->xIDC_TXTUNE, TBM_GETPOS, 0, 0); 
 			sprintf(value, "%d", TNC->TXOffset);
-			MySetWindowText(TNC->xIDC_TXTUNEVAL, value);
+			MySetWindowText(TNC, TNC->xIDC_TXTUNEVAL, value);
 
             break;
 		}
@@ -644,7 +644,7 @@ VOID SendWL2KRegisterHybrid(struct TNCINFO * TNC)
 	strcpy(Call, TCP->GatewayCall);
 	strlop(Call, '-');
 
-	T = time(NULL);
+	T = NOW;
 	tm = gmtime(&T);
 
 	//2021-10-31-14=35=29
@@ -771,7 +771,7 @@ IdTag (random alphanumeric, 12 chars)
 	if (ADIF->StartTime == 0 || ADIF->ServerSID[0] == 0 || ADIF->CMSCall[0] == 0)
 		return TRUE;
 
-	T = time(NULL);
+	T = NOW;
 
 	// Extract Info we need
 
@@ -1506,7 +1506,7 @@ DoMove:
 //	memcpy (MHBASE->MHCALL, Buffer->ORIGIN, 7 * 9);	
 	memcpy (MHBASE->MHCALL, AXCall, 7 * 9);	// Save Digis
 	MHBASE->MHDIGI = Mode;
-	MHBASE->MHTIME = time(NULL);
+	MHBASE->MHTIME = NOW;
 	MHBASE->MHCOUNT = ++OldCount;
 
 	memcpy(MHBASE->MHLocator, LOC, 6);
@@ -2032,10 +2032,10 @@ void sendModeReport()
 	char Msg[300] = "MODE ";
 	int i, Len = 5;
 
-	if ((CurrentSecs - LastModeReportTime) < 900)	// Every 15 Mins
+	if ((NOW - LastModeReportTime) < 900)	// Every 15 Mins
 		return;
 
-	LastModeReportTime = CurrentSecs;
+	LastModeReportTime = NOW;
 
 	for (i = 0; i < NUMBEROFPORTS; i++)
 	{	
@@ -2099,10 +2099,10 @@ void sendFreqReport(char * From)
 	struct PORTCONTROL * PORT = PORTTABLE;
 	struct TNCINFO * TNC;
 
-	if ((CurrentSecs - LastFreqReportTime) < 7200)	// Every 2 Hours
+	if ((NOW - LastFreqReportTime) < 7200)	// Every 2 Hours
 		return;
 
-	LastFreqReportTime = CurrentSecs;
+	LastFreqReportTime = NOW;
 
 	for (p = 0; p < NumberofPorts; p++)
 	{

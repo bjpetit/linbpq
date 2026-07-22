@@ -557,7 +557,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 					FreeDataDisconnect(TNC);
 					strcpy(TNC->WEB_TNCSTATE, "Disconnecting");
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				}
 			}
@@ -587,7 +587,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				TNC->SessionTimeLimit = TNC->DefaultSessionTimeLimit;		// Reset Limit
 
 				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					// Stop Scanning
 
@@ -936,7 +936,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					// Save Command, and wait up to 10 secs
 						
 					sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					TNC->ConnectCmd = _strdup(Connect);
 					TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
@@ -948,11 +948,11 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 			memset(STREAM->RemoteCall, 0, 10);
 			strcpy(STREAM->RemoteCall, &buff->L2DATA[2]);
-			STREAM->ConnectTime = time(NULL); 
+			STREAM->ConnectTime = NOW; 
 			STREAM->bytesRXed = STREAM->bytesTXed = STREAM->PacketsSent = 0;
 
 			sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", STREAM->MyCall, STREAM->RemoteCall);
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 				
 //			FreeDataSendCommand(TNC, Connect);
 			FreeDataConnect(TNC, STREAM->RemoteCall);
@@ -1098,12 +1098,7 @@ VOID FreeDataReleasePort(struct TNCINFO * TNC)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-		"<script type=\"text/javascript\">\r\n"
-		"function ScrollOutput()\r\n"
-		"{var textarea = document.getElementById('textarea');"
-		"textarea.scrollTop = textarea.scrollHeight;}</script>"
-		"</head><title>FreDATA Status</title></head><body id=Text onload=\"ScrollOutput()\">"
+	int Len = sprintf(Buff, 
 		"<h2><form method=post target=\"POPUPW\" onsubmit=\"POPUPW = window.open('about:blank','POPUPW',"
 		"'width=440,height=150');\" action=ARDOPAbort?%d>FreeData Status"
 		"<input name=Save value=\"Abort Session\" type=submit style=\"position: absolute; right: 20;\"></form></h2>",
@@ -1364,7 +1359,7 @@ VOID * FreeDataExtInit(EXTPORTDATA * PortEntry)
 	int i;
 	int n = 0;
 
-	srand(time(NULL));
+	srand(NOW);
 	
 	port = PortEntry->PORTCONTROL.PORTNUMBER;
 
@@ -1925,9 +1920,9 @@ VOID FreeDataProcessTNCMessage(struct TNCINFO * TNC, char * Call, unsigned char 
 		if (WL2K)
 			strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->PacketsSent = 0;
 		STREAM->Connected = TRUE;
 
@@ -1941,7 +1936,7 @@ VOID FreeDataProcessTNCMessage(struct TNCINFO * TNC, char * Call, unsigned char 
 		// Connect ACK
 
 		sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s", STREAM->MyCall, STREAM->RemoteCall);
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 		STREAM->Connected = TRUE;
 		STREAM->Connecting = FALSE;
 
@@ -1974,7 +1969,7 @@ VOID FreeDataProcessTNCMessage(struct TNCINFO * TNC, char * Call, unsigned char 
 			// Connection Refused - If there is a message, pass to appl
 
 			sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			
 			STREAM->Connecting = FALSE;
 			buffptr = (PMSGWITHLEN)GetBuff();
@@ -2005,7 +2000,7 @@ VOID FreeDataProcessTNCMessage(struct TNCINFO * TNC, char * Call, unsigned char 
 		STREAM->Disconnecting = FALSE;
 
 		strcpy(TNC->WEB_TNCSTATE, "Free");
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		return;
 
@@ -2039,7 +2034,7 @@ VOID FreeDataProcessTNCMessage(struct TNCINFO * TNC, char * Call, unsigned char 
 		STREAM->bytesRXed += Len;
 		sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %d",
 				STREAM->bytesTXed - TNC->FreeDataInfo->toSendCount, STREAM->bytesRXed, TNC->FreeDataInfo->toSendCount);
-		MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+		MySetWindowText(TNC, TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 
 		return;
 
@@ -2288,9 +2283,9 @@ VOID FreeDataProcessNewConnect(struct TNCINFO * TNC, char * fromCall, char * toC
 	if (WL2K)
 		strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
-	STREAM->ConnectTime = time(NULL); 
+	STREAM->ConnectTime = NOW; 
 	STREAM->bytesRXed = STREAM->bytesTXed = STREAM->PacketsSent = 0;
 	STREAM->Connected = TRUE;
 
@@ -2305,7 +2300,7 @@ VOID FreeDataProcessConnectAck(struct TNCINFO * TNC, char * Call, unsigned char 
 	struct FreeDataINFO * Modem = TNC->FreeDataInfo;
 
 	sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s", STREAM->MyCall, STREAM->RemoteCall);
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 	STREAM->Connected = TRUE;
 	STREAM->Connecting = FALSE;
 
@@ -2392,7 +2387,7 @@ void FlushData(struct TNCINFO * TNC)
 
 	sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %d",
 			STREAM->bytesTXed - TNC->FreeDataInfo->toSendCount, STREAM->bytesRXed, TNC->FreeDataInfo->toSendCount);
-	MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+	MySetWindowText(TNC, TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 
 }
 
@@ -2418,7 +2413,7 @@ static int SendAsFile(struct TNCINFO * TNC, char * Call, char * Msg, int Len)
 
 	sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %d",
 			STREAM->bytesTXed - TNC->FreeDataInfo->toSendCount, STREAM->bytesRXed, TNC->FreeDataInfo->toSendCount);
-	MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+	MySetWindowText(TNC, TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 
 	return Len;
 }
@@ -2443,7 +2438,7 @@ static void SendPing(struct TNCINFO * TNC, char * Call)
 	char Message[256];
 	int Len, ret;
 
-	Len = sprintf(Message, Ping, Call, time(NULL));
+	Len = sprintf(Message, Ping, Call, NOW);
 	ret = send(TNC->TCPDataSock, (char *)&Message, Len, 0);
 }
 
@@ -2698,7 +2693,7 @@ void ProcessMessageObject(struct TNCINFO * TNC, char * This)
 
 			sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %d",
 				STREAM->bytesTXed - TNC->FreeDataInfo->toSendCount, STREAM->bytesRXed, TNC->FreeDataInfo->toSendCount);
-			MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+			MySetWindowText(TNC, TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 		}
 		return;
 	}
@@ -2792,7 +2787,7 @@ void ProcessMessageObject(struct TNCINFO * TNC, char * This)
 				
 				sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %d",
 					STREAM->bytesTXed - TNC->FreeDataInfo->toSendCount, STREAM->bytesRXed, TNC->FreeDataInfo->toSendCount);
-				MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+				MySetWindowText(TNC, TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 			}
 		}
 		else
@@ -2958,7 +2953,7 @@ void processJSONINFO(struct TNCINFO * TNC, char * Info, char * Call, double snr)
 			if (STREAM->Connecting)
 			{
 				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			
 				STREAM->Connecting = FALSE;
 				buffptr = (PMSGWITHLEN)GetBuff();
@@ -3131,7 +3126,7 @@ void ProcessTNCJSON(struct TNCINFO * TNC, char * Msg, int Len)
 						STREAM->Disconnecting = FALSE;
 
 						strcpy(TNC->WEB_TNCSTATE, "Free");
-						MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 					}
 				}
 				else if (memcmp(ptr, "connecting", 10) == 0)
@@ -3186,7 +3181,7 @@ void ProcessTNCJSON(struct TNCINFO * TNC, char * Msg, int Len)
 					if (STREAM->Connecting)
 					{
 						sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
-						MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 						STREAM->Connecting = FALSE;
 						buffptr = (PMSGWITHLEN)GetBuff();
@@ -3309,7 +3304,7 @@ void ProcessTNCJSON(struct TNCINFO * TNC, char * Msg, int Len)
 					STREAM->Disconnecting = FALSE;
 
 					strcpy(TNC->WEB_TNCSTATE, "Free");
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 				}
 			}
 			else if (memcmp(ptr, "connecting", 10) == 0)
@@ -3364,7 +3359,7 @@ void ProcessTNCJSON(struct TNCINFO * TNC, char * Msg, int Len)
 				if (STREAM->Connecting)
 				{
 					sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			
 					STREAM->Connecting = FALSE;
 					buffptr = (PMSGWITHLEN)GetBuff();
@@ -3725,10 +3720,10 @@ void FreeDataProcessTNCMsg(struct TNCINFO * TNC)
 		STREAM->Disconnecting = FALSE;
 
 		strcpy(TNC->WEB_TNCSTATE, "Free");
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -3895,7 +3890,7 @@ TNCRunning:
 	if (TNC->Alerted == FALSE)
 	{
 		sprintf(TNC->WEB_COMMSSTATE, "Connecting to TNC");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	}
 
 	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->HostName);
@@ -3947,7 +3942,7 @@ TNCRunning:
    			i=sprintf(Msg, "Connect Failed for FreeData TNC socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 			TNC->Alerted = TRUE;
 		}
 		
@@ -3971,7 +3966,7 @@ TNCRunning:
 	TNC->Alerted = TRUE;
 
 	sprintf(TNC->WEB_COMMSSTATE, "Connected to FreeData TNC");		
-	MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	sprintf(Msg, "Connected to FreeData TNC Port %d\r\n", TNC->Port);
 	WritetoConsole(Msg);
@@ -4027,7 +4022,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->TNCCONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -4056,7 +4051,7 @@ closeThread:
 	}
 
 	sprintf(Msg, "FreeData Thread Terminated Port %d\r\n", TNC->Port);
-	TNC->lasttime = time(NULL);				// Prevent immediate restart
+	TNC->lasttime = NOW;				// Prevent immediate restart
 
 	WritetoConsole(Msg);
 }
@@ -4088,7 +4083,7 @@ void ConnectTNCPort(struct TNCINFO * TNC)
 		//	Connected successful
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connected to FreeData TNC");		
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 		TNC->TNCCONNECTING = FALSE;
 		TNC->TNCCONNECTED = TRUE;
 		TNC->Alerted = FALSE;
@@ -4106,7 +4101,7 @@ void ConnectTNCPort(struct TNCINFO * TNC)
 		TNC->TNCCONNECTING = FALSE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	}
 
 	closesocket(TNC->TCPDataSock);

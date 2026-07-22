@@ -253,8 +253,6 @@ HANDLE TrackHandle;
 HANDLE hTrack;
 UINT LastTrackFileTime;
 
-UINT NOW;
-
 char Stack[500];
 
 BOOL Stacked=FALSE;
@@ -898,8 +896,6 @@ int ProcessAISMessage(char * msg, int len)
 	char X1[10], X2[10], X3[10], X4[10];
 	char Data[256];
 	float alt=0.0;
-
-	NOW = time(NULL);
 
 	ptr1 = &msg[7];
 
@@ -2472,8 +2468,6 @@ void AISTimer()
 {
 	// Entered every minute
 
-	NOW = time(NULL);
-
 	CheckAgeofTargets(MaxAge);
 
 	if (VessselDBChanged)
@@ -2493,7 +2487,6 @@ void ADSBTimer()
 {
 	// Entered every minute
 
-	NOW = time(NULL);
 	CheckAgeofPlanes(300);
 	ProcessADSBJSON(ADSBFN);
 
@@ -2566,8 +2559,6 @@ int GetAISPageInfo(char * Buffer, int ais, int adsb)
 	char TimeHeard[50];
 	char * p;
 	char DestBuffer[128] = "";
-
-	NOW = time(NULL);
 
 	if (adsb)
 		ProcessADSBJSON(ADSBFN);

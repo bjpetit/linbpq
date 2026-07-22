@@ -336,7 +336,7 @@ ok:
 				SuspendOtherPorts(TNC);
 
 				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				// Stop Scanning
 
@@ -725,7 +725,7 @@ VOID KISSHFReleaseTNC(struct TNCINFO * TNC)
 	Rig_Command( (TRANSPORTENTRY *) -1, TXMsg);
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	ReleaseOtherPorts(TNC);
 }
@@ -734,19 +734,19 @@ VOID KISSHFSuspendPort(struct TNCINFO * TNC, struct TNCINFO * THISTNC)
 {
 	TNC->PortRecord->PORTCONTROL.PortSuspended = 1;
 	strcpy(TNC->WEB_TNCSTATE, "Interlocked");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 }
 
 VOID KISSHFReleasePort(struct TNCINFO * TNC)
 {
 	TNC->PortRecord->PORTCONTROL.PortSuspended = 0;
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 }
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
@@ -1099,7 +1099,7 @@ VOID KISSThread(void * portptr)
    			i=sprintf(Msg, "Connect Failed for KISSHF socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 			TNC->Alerted = TRUE;
 		}
@@ -1160,7 +1160,7 @@ VOID KISSThread(void * portptr)
 	TNC->Alerted = TRUE;
 
 	sprintf(TNC->WEB_COMMSSTATE, "Connected to KISS TNC");		
-	MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+	MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	FreeSemaphore(&Semaphore);
 
@@ -1212,7 +1212,7 @@ Lost:
 				WritetoConsole(Msg);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -1352,7 +1352,7 @@ VOID KISSHFProcessReceivedPacket(struct TNCINFO * TNC, int Channel)
 		TNC->Streams[0].ReportDISC = TRUE;
 
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		return;					
 	}
@@ -1529,7 +1529,7 @@ void AttachKISSHF(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 		if (WL2K)
 			strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 	}
 }
 
@@ -1604,7 +1604,7 @@ void KISSHFConnected(struct PORTCONTROL * PORT, struct _LINKTABLE * LINK)
 		if (WL2K)
 			strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-		MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+		MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 	}
 }
 

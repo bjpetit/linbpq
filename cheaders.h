@@ -161,7 +161,7 @@ struct SEM;
 void _GetSemaphore(struct SEM * Semaphore, int ID, char * File, int Line);
 void FreeSemaphore(struct SEM * Semaphore);
 
-void MySetWindowText(HWND hWnd, char * Msg);
+void MySetWindowText(struct TNCINFO * TNC, HWND hWnd, char * Msg);
 
 Dll int APIENTRY SessionControl(int stream, int command, int Mask);
 
@@ -396,9 +396,14 @@ extern UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure
 
 extern int REALTIMETICKS;
 
-extern time_t CurrentSecs;
-extern time_t lastSlowSecs;
-extern time_t lastSaveSecs;
+extern time_t NOW;		// From time()
+extern time_t lastMinuteSecs;	// Time minute process last run
+extern time_t lastHourSecs;		// Time hour process last run
+extern time_t lastTenSecSecs;
+
+extern uint64_t last100mSTickCount;
+extern uint64_t lastSecTickCount;
+
 
 // SNMP Variables
 
@@ -438,6 +443,7 @@ extern char MQTT_PASS[80];
 
 extern int SUPPORT2point2;
 
+extern char * DevWebPage[MaxBPQPortNo];
 
 DllExport uint64_t APIENTRY GetPortFrequency(int PortNo, char * FreqStringMhz);
 

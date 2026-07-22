@@ -1545,7 +1545,7 @@ int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line);
 VOID SetWindowTextSupport();
 int WritetoConsoleSupport(char * buff);
 VOID PMClose();
-VOID MySetWindowText(HWND hWnd, char * Msg);
+VOID MySetWindowText(struct TNCINFO * TNC, HWND hWnd, char * Msg);
 BOOL CreateMonitorWindow(char * MonSize);
 VOID FormatTime3(char * Time, time_t cTime);
 void * zalloc(int len);
@@ -1819,6 +1819,9 @@ BOOL needAIS = FALSE;
 int needADSB = 0;
 
 extern int AGWPort;
+
+extern time_t NOW;		// From time()
+
 
 Tell_Sessions();
 
@@ -2148,6 +2151,8 @@ VOID TimerProcX()
 
 	interval = (int)(currentTime.QuadPart - lastRunTime.QuadPart) / ticksPerMillisec;
 	lastRunTime.QuadPart = currentTime.QuadPart;
+
+	NOW = time(NULL);
 
 	//Debugprintf("%d", interval);
 
@@ -3281,6 +3286,11 @@ SkipInit:
 	}
 	return 1;
 }
+DllExport int APIENTRY RunBPQ32Background()
+{
+
+	return 1;
+}
 
 DllExport int APIENTRY CloseBPQ32()	
 {
@@ -3513,7 +3523,7 @@ if (_winver < 0x0600)
 	sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionString, DLLName, pgm);
 	WritetoConsole(msg);
 	OutputDebugString(msg);
-	FormatTime3(Time, time(NULL));
+	FormatTime3(Time, NOW);
 	sprintf(msg,"Loaded %s\n", Time);
 	WritetoConsole(msg);
 	OutputDebugString(msg);
@@ -4659,7 +4669,7 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 				}
 
 				wsprintf(Title,"BPQ32 Beacon Configuration");
-				MySetWindowText(UIhWnd, Title);
+				MySetWindowText(0, UIhWnd, Title);
 				ShowWindow(UIhWnd, SW_NORMAL);
 	
 				OnTabbedDialogInit(UIhWnd);			// Set up pages
@@ -5354,7 +5364,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 
 				wsprintf(Title,"BPQ32 Beacon Utility Version");
-				MySetWindowText(UIhWnd, Title);
+				MySetWindowText(0, UIhWnd, Title);
 				return 0;
 			}
 

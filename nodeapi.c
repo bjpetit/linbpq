@@ -246,7 +246,7 @@ Token * generate_token()
 		token->token[i] = 'A' + rand() % 26; // Random uppercase alphabet character
 	}
 	token->token[TOKEN_SIZE] = '\0'; // Null-terminate the token
-	token->expiration_time = time(NULL) + TOKEN_EXPIRATION; // Set token expiration time
+	token->expiration_time = NOW + TOKEN_EXPIRATION; // Set token expiration time
 	add_token_to_list(token);
 	return token;
 }
@@ -280,7 +280,7 @@ int verify_token(const char* token)
 	if (existing_token != NULL)
 	{
 		// Check if the token has expired
-		time_t current_time = time(NULL);
+		time_t current_time = NOW;
 		if (current_time > existing_token->expiration_time)
 		{
 			// Token has expired, remove it from the token list
@@ -297,7 +297,7 @@ int verify_token(const char* token)
 
 void remove_expired_tokens()
 {
-	time_t current_time = time(NULL);
+	time_t current_time = NOW;
 	Token* current_token = token_list;
 	Token* prev_token = NULL;
 	Token* next_token;

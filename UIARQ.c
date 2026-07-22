@@ -387,7 +387,7 @@ static VOID UpdateStatsLine(struct TNCINFO * TNC, struct STREAMINFO * STREAM)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
@@ -421,7 +421,7 @@ UINT UIARQExtInit(EXTPORTDATA * PortEntry)
 	struct PORTCONTROL * PORT;
 	struct STREAMINFO * STREAM;
 
-	srand((unsigned int)time(NULL));
+	srand((unsigned int)NOW);
 
 	port = PortEntry->PORTCONTROL.PORTNUMBER;
 
@@ -853,7 +853,7 @@ static VOID ProcessFLDigiData(struct TNCINFO * TNC, UCHAR * Input, int Len, int 
 		SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
 
 		strcpy(STREAM->MyCall, call2);
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = STREAM->BytesResent = 0;
 		
 		if (WL2K)
@@ -1005,7 +1005,7 @@ AckConnectRequest:
 		if (STREAM->Connected)
 			goto SendKReply;		// Repeated ACK
 
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 		STREAM->bytesRXed = STREAM->bytesTXed = STREAM->BytesAcked = STREAM->BytesResent = 0;
 		STREAM->Connected = TRUE;
 

@@ -109,7 +109,7 @@ VOID TRKSuspendPort(struct TNCINFO * TNC, struct TNCINFO * ThisTNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	strcpy(TNC->WEB_TNCSTATE, "Interlocked");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
 	sprintf(STREAM->CmdSet, "\1\1\1IDSPTNC");
@@ -120,7 +120,7 @@ VOID TRKReleasePort(struct TNCINFO * TNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
-	MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
 	sprintf(STREAM->CmdSet, "\1\1\1I%s", TNC->NodeCall);
@@ -147,7 +147,7 @@ BOOL OpenDebugLogFile(int Port)
 	if (LogHandle[Port])
 		return TRUE;				// already open
 
-	T = LogTime[Port] = time(NULL);
+	T = LogTime[Port] = NOW;
 	tm = gmtime(&T);	
 
 	sprintf(FN,"%s/logs/Port%02dDebugLog_%02d%02d.txt", LogDirectory, Port, tm->tm_mon + 1, tm->tm_mday);
@@ -172,7 +172,7 @@ void WriteDebugLogLine(int Port, char Dirn, char * Msg, int MsgLen)
 		UCHAR c;
 		char textbit[33] = "                                ";
 		int i;
-		T = time(NULL);
+		T = NOW;
 		tm = gmtime(&T);	
 			
 		len = sprintf(hddr,"%02d:%02d:%02d %c Len %3d ", tm->tm_hour, tm->tm_min, tm->tm_sec, Dirn, MsgLen);
@@ -590,30 +590,7 @@ int TrkWebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	int Interval = 15;
 	int Len;
 
-	if (LOCAL)
-	{
-		if (TNC->WEB_CHANGED)
-			Interval = 1;
-		else
-			Interval = 4;
-	}
-	else
-	{
-		if (TNC->WEB_CHANGED)
-			Interval = 4;
-		else
-			Interval = 15;
-	}
-
-	if (TNC->WEB_CHANGED)
-	{
-		TNC->WEB_CHANGED -= Interval;
-		if (TNC->WEB_CHANGED < 0)
-			TNC->WEB_CHANGED = 0;
-	}
-
-	Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=%d>"
-	"<head><title>SCSTracker Status</title></head><body><h2>SCSTracker Status</h2>", Interval);
+	Len = sprintf(Buff, "<h2>SCSTracker Status</h2>");
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -2024,7 +2001,7 @@ VOID TrkProcessDEDFrame(struct TNCINFO * TNC)
 
 				STREAM->Connected = TRUE;			// Subsequent data to data channel
 				STREAM->Connecting = FALSE;
-				STREAM->ConnectTime = time(NULL); 
+				STREAM->ConnectTime = NOW; 
 				STREAM->bytesRXed = STREAM->bytesTXed = 0;
 
 				if (TNC->SlowTimer)

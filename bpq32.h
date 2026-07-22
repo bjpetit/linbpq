@@ -13,7 +13,7 @@ make the code use GetProcAddress rather than LoadLibrary. Without this the refer
 count on BPQ32.dll gets messed up, and the code will not unload cleanly.
 
 */
-
+#include "winstdint.h"
 
 #ifndef DYNLOADBPQ
 
@@ -264,9 +264,11 @@ VOID APIENTRY SendChatReport(UINT_PTR ChatReportSocket, char * buff, int txlen);
 
 int APIENTRY CountFramesQueuedOnStream(int Stream);
 
+int APIENTRY RunBPQ32Background();
+
 char * APIENTRY GetLOC();
 
-DllExport uint64_t APIENTRY GetPortFrequency(int PortNo, char * FreqString);
+uint64_t APIENTRY GetPortFrequency(int PortNo, char * FreqString);
 
 #else
 

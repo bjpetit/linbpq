@@ -376,7 +376,7 @@ ok:
 				SuspendOtherPorts(TNC);
 	
 				//sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-				//MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				//MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					// Stop Scanning
 
@@ -574,7 +574,7 @@ ok:
 					// Save Command, and wait up to 10 secs
 						
 					sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					TNC->ConnectCmd = _strdup(Connect);
 					TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
@@ -589,7 +589,7 @@ ok:
 
 			sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", STREAM->MyCall, STREAM->RemoteCall);
 			SerialSendCommand(TNC, Connect);
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 				
 			STREAM->Connecting = TRUE;
 			return 0;

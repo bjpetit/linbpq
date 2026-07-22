@@ -281,7 +281,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				memcpy(TNC->Streams[0].RemoteCall, &TNC->ConnectCmd[11], strlen(TNC->ConnectCmd)-13);
 
 				sprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, Status);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, Status);
 				strcpy(TNC->WEB_TNCSTATE, Status);
 
 				free(TNC->ConnectCmd);
@@ -411,18 +411,18 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					char Time[80];
 				
 					TNC->Restarts++;
-					TNC->LastRestart = time(NULL);
+					TNC->LastRestart = NOW;
 
 					tm = gmtime(&TNC->LastRestart);	
 				
 					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
 						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
-					MySetWindowText(TNC->xIDC_RESTARTTIME, Time);
+					MySetWindowText(TNC, TNC->xIDC_RESTARTTIME, Time);
 					strcpy(TNC->WEB_RESTARTTIME, Time);
 
 					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-					MySetWindowText(TNC->xIDC_RESTARTS, Time);
+					MySetWindowText(TNC, TNC->xIDC_RESTARTS, Time);
 					strcpy(TNC->WEB_RESTARTS, Time);
 
 					KillTNC(TNC);
@@ -456,7 +456,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			SuspendOtherPorts(TNC);
 
 			sprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
-			MySetWindowText(TNC->xIDC_TNCSTATE, Status);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, Status);
 			strcpy(TNC->WEB_TNCSTATE, Status);
 
 			// Stop Scanning
@@ -657,7 +657,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				TNC->FECIDTimer = 0;
 				send(TNC->TCPSock,"MODE FEC\r\n", 10, 0);
 				strcpy(TNC->WEB_MODE, "FEC");
-				MySetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
+				MySetWindowText(TNC, TNC->xIDC_MODE, TNC->WEB_MODE);
 
 				return 0;
 			}
@@ -700,7 +700,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				memcpy(TNC->Streams[0].RemoteCall, &Connect[11], txlen-13);
 
 				sprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, Status);
+				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, Status);
 				strcpy(TNC->WEB_TNCSTATE, Status);
 
 			}
@@ -836,7 +836,7 @@ loop:
 		// Does this mean closed?
 		
 		strcpy(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	
 		TNC->CONNECTING = FALSE;
@@ -910,7 +910,7 @@ static VOID ReleaseTNC(struct TNCINFO * TNC)
 
 //	send(TNC->TCPSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
 
-	MySetWindowText(TNC->xIDC_TNCSTATE, "Free");
+	MySetWindowText(TNC, TNC->xIDC_TNCSTATE, "Free");
 	strcpy(TNC->WEB_TNCSTATE, "Free");
 	
 	//	Start Scanner
@@ -921,7 +921,7 @@ static VOID ReleaseTNC(struct TNCINFO * TNC)
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	int Len = sprintf(Buff, "<html>"
 		"<script type=\"text/javascript\">\r\n"
 		"function ScrollOutput()\r\n"
 		"{var textarea = document.getElementById('textarea');"
@@ -1115,7 +1115,7 @@ void * V4ExtInit(EXTPORTDATA * PortEntry)
 	WritetoConsole(Msg);
 
 	strcpy(TNC->WEB_MODE, "ARQ");
-	MySetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
+	MySetWindowText(TNC, TNC->xIDC_MODE, TNC->WEB_MODE);
 	ConnecttoWINMOR(port);
 
 	time(&TNC->lasttime);			// Get initial time value
@@ -1147,7 +1147,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 			 // Our Process
 
 			sprintf (wtext, "V4 Sound Card TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-			MySetWindowText(hwnd, wtext);
+			MySetWindowText(TNC, hwnd, wtext);
 	//		return FALSE;
 		}
 	}
@@ -1197,7 +1197,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
 	{	
 		TNC->Busy |= CDBusy;
-		MySetWindowText(TNC->xIDC_CHANSTATE, "Busy");
+		MySetWindowText(TNC, TNC->xIDC_CHANSTATE, "Busy");
 		strcpy(TNC->WEB_CHANSTATE, "Busy");
 
 		return;
@@ -1206,7 +1206,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "BUSY FALSE", 10) == 0)
 	{
 		TNC->Busy &= ~CDBusy;
-		MySetWindowText(TNC->xIDC_CHANSTATE, "Clear");
+		MySetWindowText(TNC, TNC->xIDC_CHANSTATE, "Clear");
 		strcpy(TNC->WEB_CHANSTATE, "Clear");
 		return;
 	}
@@ -1229,7 +1229,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
-		STREAM->ConnectTime = time(NULL); 
+		STREAM->ConnectTime = NOW; 
 
 		memcpy(Call, &Buffer[10], 10);
 
@@ -1254,7 +1254,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			else
 				sprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->TargetCall);
 
-			MySetWindowText(TNC->xIDC_TNCSTATE, Status);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, Status);
 			strcpy(TNC->WEB_TNCSTATE, Status);
 
 			// See which application the connect is for
@@ -1343,7 +1343,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			else
 				sprintf(Status, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 
-			MySetWindowText(TNC->xIDC_TNCSTATE, Status);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, Status);
 			strcpy(TNC->WEB_TNCSTATE, Status);
 
 			UpdateMH(TNC, Call, '+', 'O');
@@ -1377,7 +1377,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
 			sprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
-			MySetWindowText(TNC->xIDC_TNCSTATE, Status);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, Status);
 			strcpy(TNC->WEB_TNCSTATE, Status);
 
 			return;
@@ -1463,7 +1463,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			}
 		}
 
-		MySetWindowText(TNC->xIDC_TRAFFIC, &Buffer[7]);
+		MySetWindowText(TNC, TNC->xIDC_TRAFFIC, &Buffer[7]);
 		strcpy(TNC->WEB_TRAFFIC, &Buffer[7]);
 
 		return;
@@ -1760,6 +1760,6 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		TNC->FECMode = FALSE;
 		send(TNC->TCPSock,"MODE ARQ\r\n", 10, 0);
 		strcpy(TNC->WEB_MODE, "ARQ");
-		MySetWindowText(TNC->xIDC_MODE, TNC->WEB_MODE);
+		MySetWindowText(TNC, TNC->xIDC_MODE, TNC->WEB_MODE);
 	}
 }
