@@ -54,9 +54,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define	RNRSENT	0x10	// WE HAVE SEND RNR
 #define	POLLSENT 0x20	// POLL BIT OUTSTANDING
 
-#define	ONEMINUTE 60*3		
-#define	TENSECS	10*3
-#define	THREESECS 3*3
+#define	ONEMINUTE 60*10		
+#define	TENSECS	10*10
+#define	THREESECS 3*10
 
 
 VOID L2Routine(struct PORTCONTROL * PORT, PMESSAGE Buffer);
@@ -965,7 +965,7 @@ VOID ProcessXIDCommand(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESS
 
 		LINK->LINKPORT = PORT;
 
-		LINK->KILLTIMER = L2KILLTIME - 60*3;		// Time out after 60 secs if SABM not received
+		LINK->KILLTIMER = L2KILLTIME - 60*10;		// Time out after 60 secs if SABM not received
 
 		// save calls so we can match up SABM when it comes
 
@@ -3463,6 +3463,8 @@ VOID L2TimerProc()
 	struct PORTCONTROL * PORT = PORTTABLE;
 	time_t Now = NOW;
 
+	// Now 100 mS
+
 	while (i--)
 	{
 		if (LINK->LINKCALL[0] == 0)
@@ -3939,7 +3941,7 @@ VOID L2SENDXID(struct _LINKTABLE * LINK)
 	{
 		// NO BUFFERS - SET TIMER TO FORCE RETRY
 
-		LINK->L2TIMER = 10*3;		// SET TIMER
+		LINK->L2TIMER = 10*10;		// SET TIMER
 		return;
 	}
 
@@ -4039,7 +4041,7 @@ VOID L2SENDCOMMAND(struct _LINKTABLE * LINK, int CMD)
 		// NO BUFFERS - SET TIMER TO FORCE RETRY
 
 		if (CMD & PFBIT)				// RESPONSE EXPECTED?
-			LINK->L2TIMER = 10*3;		// SET TIMER
+			LINK->L2TIMER = 10*10;		// SET TIMER
 
 		return;
 	}
@@ -4088,7 +4090,7 @@ VOID L2SENDRESPONSE(struct _LINKTABLE * LINK, int CMD)
 		// NO BUFFERS - SET TIMER TO FORCE RETRY
 
 		if (CMD & PFBIT)				// RESPONSE EXPECTED?
-			LINK->L2TIMER = 10*3;		// SET TIMER
+			LINK->L2TIMER = 10*10;		// SET TIMER
 
 		return;
 	}

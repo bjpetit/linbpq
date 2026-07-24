@@ -1330,6 +1330,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix authorisation of Web Save Config File (32)
 //	Add missing calls to va_end() (32)
 //	Apply EXCLUDE to APRS and Digi (32)
+//	Move background processing on Linux from the 100mS timer loop and run more frequently (33)
+//	Fix sorting INP3 routes when TT is the same and hops differ (34)
+//	Fix flawed calculation of inp3 TT percentage change on very low values to fix repeated sending of unchanged routes (34)
+//	Change Web Driver windows to use Winsocks to give quicker refresh when changed (35)
+//	Fix timer problem introduced in v33 (36)
+//	Add LOCALNOTSECURE config param to require signin for web access from 127.0.0.1 (36)
 
 #define CKernel
 
@@ -1708,8 +1714,6 @@ VOID * _Q_REM(VOID *Q, char * File, int Line);
 UINT ReleaseBuffer(UINT *BUFF);
 
 
-VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT idEvent,DWORD dwTime );
-
 DllExport int APIENTRY DeallocateStream(int stream);
 
 int VECTORLENGTH = sizeof (struct _BPQVECSTRUC);
@@ -1782,8 +1786,6 @@ int interval;
 
 VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dwTime);
 
-
-TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
 TIMERPROC lpSetupTermSessions = (TIMERPROC) SetupTermSessions;
 
 
@@ -2123,40 +2125,20 @@ VOID MonitorTimerThread(int x)
 
 VOID WritetoTraceSupport(struct TNCINFO * TNC, char * Msg, int Len);
 
-VOID TimerProcX();
-
-VOID CALLBACK TimerProc(
-	HWND  hwnd,	// handle of window for timer messages 
-    UINT  uMsg,	// WM_TIMER message
-    UINT  idEvent,	// timer identifier
-    DWORD  dwTime)	// current system time	
+void Semaphored100msCode()
 {
- 	KillTimer(NULL,TimerHandle);
-	TimerProcX();
-	TimerHandle = SetTimer(NULL,0,100,lpTimerFunc);
-}
-VOID TimerProcX()
-{
-	struct _EXCEPTION_POINTERS exinfo;
+	// code that doesn't need to run every tick - run every 100 mS
+	// Runs under semaphore
 
-	//
-	//	Get semaphore before proceeeding
-	//
+	if (IPActive) Poll_IP();
+	if (PMActive) Poll_PM();
+	if (RigActive) Rig_Poll();
+	if (APRSActive)Poll_APRS();
 
-	GetSemaphore(&Semaphore, 2);
+	if (NeedWebMailRefresh)
+		DoRefreshWebMailIndex();
 
-	// Get time since last run
-
-	QueryPerformanceCounter(&currentTime);
-
-	interval = (int)(currentTime.QuadPart - lastRunTime.QuadPart) / ticksPerMillisec;
-	lastRunTime.QuadPart = currentTime.QuadPart;
-
-	NOW = time(NULL);
-
-	//Debugprintf("%d", interval);
-
-	// Process WINMORTraceQ
+	CheckWL2KReportTimer();
 
 	while (WINMORTraceQ)
 	{
@@ -2179,10 +2161,6 @@ VOID TimerProcX()
 		RelBuff(Buffer);
 	}
 
-	strcpy(EXCEPTMSG, "Timer ReconfigProcessing");
-	
-	__try 
-	{
 
 	if (trayMenu == NULL)
 		SetupTrayIcon();
@@ -2252,7 +2230,7 @@ VOID TimerProcX()
 
 			Consoleprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
 			Consoleprintf(VerCopyright);
-	
+
 			Start();
 
 			NETROMTCPResolve();
@@ -2272,10 +2250,10 @@ VOID TimerProcX()
 				if (HOSTVEC->HOSTSESSION !=0)
 				{
 					// Had a connection
-					
+
 					HOSTVEC->HOSTSESSION=0;
 					HOSTVEC->HOSTFLAGS |=3;	// Disconnected
-					
+
 					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
 				}
 			}
@@ -2285,7 +2263,7 @@ VOID TimerProcX()
 			APPL_Q = 0;
 
 			OpenReportingSockets();
-		
+
 			WritetoConsole("\n\nReconfiguration Complete\n");
 
 			if (IPRequired)	IPActive = Init_IP();
@@ -2310,7 +2288,7 @@ VOID TimerProcX()
 			InvalidateRect(hConsWnd, NULL, TRUE);
 
 			RigActive = Rig_Init();
-			
+
 			if (NUMBEROFTNCPORTS)
 			{
 				FreeSemaphore(&Semaphore);
@@ -2321,7 +2299,7 @@ VOID TimerProcX()
 			FreeSemaphore(&Semaphore);
 			AGWActive = AGWAPIInit();
 			GetSemaphore(&Semaphore, 0);
-		
+
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
 	}
@@ -2338,7 +2316,7 @@ VOID TimerProcX()
 			Rig_Close();
 			Sleep(6000);		// Allow any CATPTT, HAMLIB and FLRIG threads to close
 			RigActive = Rig_Init();
-			
+
 			WritetoConsole("Rigcontrol Reconfiguration Complete\n");	
 		}
 	}
@@ -2352,87 +2330,49 @@ VOID TimerProcX()
 			APRSReconfigFlag = FALSE;
 			APRSClose();				
 			APRSActive = Init_APRS();
-			
+
 			WritetoConsole("APRS Reconfiguration Complete\n");	
 		}
 	}
+}
 
-	}
-	#include "StdExcept.c"
 
-	if (Semaphore.Flag && Semaphore.SemProcessID == GetCurrentProcessId())
-		FreeSemaphore(&Semaphore);
 
-	}
 
-	strcpy(EXCEPTMSG, "Timer Processing");
+VOID UnSemaphored100msCode()
+{
+	// code that doesn't need to run every tick - run every 100 mS
+	// Runs without semaphore
 
-	__try 
-	{
-		if (IPActive) Poll_IP();
-		if (PMActive) Poll_PM();
-		if (RigActive) Rig_Poll();
+	if (NUMBEROFTNCPORTS)
+		TNCTimer();
 
-		if (NeedWebMailRefresh)
-			DoRefreshWebMailIndex();
+	if (AGWActive)
+		Poll_AGW();
 
-		CheckGuardZone();
-
-		if (APRSActive)
-		{
-			Poll_APRS();
-			CheckGuardZone();
-		}
-
-	 	CheckWL2KReportTimer();
-
-		CheckGuardZone();
-		
-		TIMERINTERRUPT();
-
-		CheckGuardZone();
-
-		FreeSemaphore(&Semaphore);			// SendLocation needs to get the semaphore
-
-		if (NUMBEROFTNCPORTS)
-			TNCTimer();
-
-		if (AGWActive)
-			Poll_AGW();
-
-		DRATSPoll();
-		RHPPoll();
-
-		CheckGuardZone();
-
-		strcpy(EXCEPTMSG, "HTTP Timer Processing");
-
-		HTTPTimer();
-
-		CheckGuardZone();
-
-		strcpy(EXCEPTMSG, "WL2K Report Timer Processing");
-
-		if (ReportTimer)
-		{		
-			ReportTimer--;
-	
-			if (ReportTimer == 0)
-			{
-				ReportTimer = REPORTINTERVAL;
-				SendLocation();
-			}
-		}
-	}
-	
-	#include "StdExcept.c"
-
-	if (Semaphore.Flag && Semaphore.SemProcessID == GetCurrentProcessId())
-		FreeSemaphore(&Semaphore);
-
-	}
+	DRATSPoll();
+	RHPPoll();
 
 	CheckGuardZone();
+
+	strcpy(EXCEPTMSG, "HTTP Timer Processing");
+
+	HTTPTimer();
+
+	CheckGuardZone();
+
+	strcpy(EXCEPTMSG, "WL2K Report Timer Processing");
+
+	if (ReportTimer)
+	{		
+		ReportTimer--;
+
+		if (ReportTimer == 0)
+		{
+			ReportTimer = REPORTINTERVAL;
+			SendLocation();
+		}
+	}
 
 	if (CloseAllTimer == 50)			// First entry
 	{
@@ -2447,7 +2387,7 @@ VOID TimerProcX()
 
 	if (CloseAllTimer == 40)			// First entry
 		CloseAllLinks();				// No sessions closed so close links now
-	
+
 	if (CloseAllTimer)
 	{
 		// See if any links left
@@ -2480,8 +2420,8 @@ VOID TimerProcX()
 		if(CloseAllTimer == 0)
 			RealCloseAllPrograms();	
 	}
-	return;
 }
+
 
 HANDLE NPHandle;
 
@@ -2569,7 +2509,7 @@ FirstInit()
 
 	_beginthread(MonitorThread,0,0);
 	
-	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
+//	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 	TimerInst=GetCurrentProcessId();
 	SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
 
@@ -2591,6 +2531,30 @@ FirstInit()
 
 int Check_Timer()
 {
+	if (FirstInitDone == 0)
+	{
+		GetSemaphore(&Semaphore, 3);
+
+		if (_stricmp(pgm, "bpq32.exe") == 0)
+		{
+			FirstInit();
+			FreeSemaphore(&Semaphore);
+			if (NUMBEROFTNCPORTS)
+				InitializeTNCEmulator();
+
+			AGWActive = AGWAPIInit();
+			FirstInitDone=1;					// Only init in BPQ32.exe
+			return 0;
+		}
+		else
+		{
+			FreeSemaphore(&Semaphore);
+			return 0;
+		}
+	}
+
+	return 0;
+
 	if (Closing)
 		return 0;
 
@@ -2752,7 +2716,6 @@ int Check_Timer()
 		else
 			ShowWindow(FrameWnd, SW_RESTORE);
 
-		TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 		TimerInst=GetCurrentProcessId();
 		SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
 
@@ -3288,6 +3251,31 @@ SkipInit:
 }
 DllExport int APIENTRY RunBPQ32Background()
 {
+	// Called every 10 Ms or so from BPQ32.EXE
+
+		// Get time since last run
+
+	QueryPerformanceCounter(&currentTime);
+
+	interval = (int)(currentTime.QuadPart - lastRunTime.QuadPart) / ticksPerMillisec;
+	lastRunTime.QuadPart = currentTime.QuadPart;
+
+
+	GetSemaphore(&Semaphore, 2);
+
+	if (TIMERINTERRUPT())						// Calls BG code and slower timer routines
+	{
+		// 100 mS has elapsed
+
+		NOW = time(NULL);
+
+		Semaphored100msCode();	
+		FreeSemaphore(&Semaphore);
+		UnSemaphored100msCode();
+	}
+	else
+		FreeSemaphore(&Semaphore);
+
 
 	return 1;
 }

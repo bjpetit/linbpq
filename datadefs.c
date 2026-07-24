@@ -39,6 +39,8 @@ int DEBUGINP3 = 0;
 
 int EnableOARCAPI = 0;
 
+int LOCALNOTSECURE = 0;		// Dont treat 127.0.0.1 as secure (For Proxies)
+
 int RTTInterval = 30;		// 10 second increments - 5 Minutes
 
 BOOL IPRequired = FALSE;

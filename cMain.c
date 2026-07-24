@@ -73,6 +73,7 @@ extern SOCKADDR_IN UDPreportdest;
 extern char NodeAPIServer[80];
 extern int NodeAPIPort;
 extern int RIFInterval;
+extern int LOCALNOTSECURE;
 
 time_t LastNodeStatus = 0;
 
@@ -150,9 +151,9 @@ int PACLEN = 100;				//MAX PACKET SIZE
 
 //	L2 SYSTEM TIMER RUNS AT 3 HZ
 
-int T3 = 3*61*3;				// LINK VALIDATION TIMER (3 MINS) (+ a bit to reduce RR collisions)
+int T3 = 3*61*10;				// LINK VALIDATION TIMER (3 MINS) (+ a bit to reduce RR collisions)
 
-int L2KILLTIME = 16*60*3;		// IDLE LINK TIMER (16 MINS)	
+int L2KILLTIME = 16*60*10;		// IDLE LINK TIMER (16 MINS)	
 int L3LIVES = 15;				// MAX L3 HOPS
 int L4N2 =  3;					// LEVEL 4 RETRY COUNT
 int L4LIMIT = 60*15;			// IDLE SESSION LIMIT - 15 MINS
@@ -854,11 +855,13 @@ BOOL Start()
 //	MOV	NUMBEROFBUFFERS,AX
 
 	PACLEN = cfg->C_PACLEN;
-	T3 = cfg->C_T3 * 3;
+	T3 = cfg->C_T3 * 10;
 	L4LIMIT = cfg->C_IDLETIME;
+
 	if (L4LIMIT && L4LIMIT < 120)
 		L4LIMIT = 120;					// Don't allow stupidly low
-	L2KILLTIME = L4LIMIT * 3;
+
+	L2KILLTIME = L4LIMIT * 10;
 	L4DELAY = cfg->C_L4DELAY;
 	BBS = cfg->C_BBS;
 	NODE = cfg->C_NODE;
@@ -912,6 +915,7 @@ BOOL Start()
 
 	EnableOARCAPI = cfg->C_OARCAPI;
 
+	LOCALNOTSECURE = cfg->C_LOCALNOTSECURE;
 	MONTOFILEFLAG = cfg->C_MONTOFILE;
 
 	if (cfg->C_RIFInterval)
@@ -2210,7 +2214,7 @@ int TIMERINTERRUPT()
 	struct _MESSAGE * Message;
 	int toPort;
 
-	if (GetTickCount() - last100mSTickCount > 100)
+	if (GetTickCount() - last100mSTickCount >= 100)
 	{
 		retval = 1;
 		
@@ -2232,7 +2236,7 @@ int TIMERINTERRUPT()
 		}
 
 
-		if (last100mSTickCount - lastSecTickCount > 1000)
+		if (last100mSTickCount - lastSecTickCount >= 1000)
 		{
 			lastSecTickCount = last100mSTickCount;
 

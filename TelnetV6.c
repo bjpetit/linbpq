@@ -57,6 +57,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 extern UCHAR LogDirectory[];
 
 extern int MONTOFILEFLAG;
+
+extern int LOCALNOTSECURE;
  
 static char ClassName[]="TELNETSERVER";
 static char WindowTitle[] = "Telnet Server";
@@ -3368,7 +3370,7 @@ int Socket_Accept(struct TNCINFO * TNC, SOCKET SocketId, int Port)
 
 			if (sockptr->sin.sin_family != AF_INET6)
 			{
-				if (sockptr->sin.sin_addr.s_addr == htonl(INADDR_LOOPBACK))		// 127.0.0.1?
+				if (!LOCALNOTSECURE && sockptr->sin.sin_addr.s_addr == htonl(INADDR_LOOPBACK))		// 127.0.0.1?
 					LOCAL = TRUE;
 				else
 				{

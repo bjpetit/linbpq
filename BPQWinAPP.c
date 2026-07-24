@@ -11,6 +11,11 @@
 
 //		Add try/except round main loop
 
+// Version 2.0.1.2 July 2026
+
+//		Call RunBPQ32Background() every 10mS
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
