@@ -809,7 +809,7 @@ static void abrthandler(int sig);
 
 void GetRestartData();
 
-void Main100msCode()
+void Semaphored100msCode()
 {
 	// code that doesn't need to run every tick - run every 100 mS
 
@@ -986,6 +986,95 @@ void Main100msCode()
 		OutputDebugString("BPQ32 Reconfiguration Complete\n");
 	}
 }
+
+void UnSemaphored100msCode()
+{
+
+	if (Redirected == 0)
+		ConTermPoll();
+
+	if (NUMBEROFTNCPORTS)
+		TNCTimer();
+
+	if (AGWActive)
+		Poll_AGW();
+
+	DRATSPoll();
+	RHPPoll();
+
+	if (ReportTimer)
+	{
+		ReportTimer--;
+
+		if (ReportTimer == 0)
+		{
+			ReportTimer = REPORTINTERVAL;
+			SendLocation();
+		}
+	}
+
+	HTTPTimer();
+
+	if (RunChat)
+	{
+		ChatPollStreams();
+		ChatTrytoSend();
+
+		if (Slowtimer > 100)		// 10 secs
+		{
+			ChatTimer();
+		}
+	}
+
+	if (RunMail)
+	{
+		PollStreams();
+
+		if ((Slowtimer % 20) == 0)
+			FWDTimerProc();
+
+		if (Slowtimer > 100)		// 10 secs
+		{
+			struct tm * tm;
+
+			TCPTimer();
+			BBSSlowTimer();
+
+			if (MaintClock < NOW)
+			{
+				while (MaintClock < NOW)		// in case large time step
+					MaintClock += MaintInterval * 3600;
+
+				Debugprintf("|Enter HouseKeeping");
+				DoHouseKeeping(FALSE);
+			}
+
+			if (APIClock < NOW)
+			{
+				SendBBSDataToPktMap();
+				APIClock = NOW + 7200;			// Every 2 hours
+			}
+
+
+			tm = gmtime(&NOW);
+
+			if (tm->tm_wday == 0)		// Sunday
+			{
+				if (GenerateTrafficReport && (LastTrafficTime + 86400) < NOW)
+				{
+					CreateBBSTrafficReport();
+					LastTrafficTime = NOW;
+				}
+			}
+		}
+
+		TCPFastTimer();
+		TrytoSend();
+	}
+	if (Slowtimer > 100)
+		Slowtimer = 0;
+}
+
 
 int main(int argc, char * argv[])
 {
@@ -1620,98 +1709,15 @@ int main(int argc, char * argv[])
 		{
 			// 100mS has elapsed
 
-			Main100msCode();
+			Semaphored100msCode();
 			Slowtimer++;
 	
 			FreeSemaphore(&Semaphore);
 
-			if (Redirected == 0)
-				ConTermPoll();
-
-			if (NUMBEROFTNCPORTS)
-				TNCTimer();
-
-			if (AGWActive)
-				Poll_AGW();
-
-			DRATSPoll();
-			RHPPoll();
-
-			if (ReportTimer)
-			{
-				ReportTimer--;
-	
-				if (ReportTimer == 0)
-				{
-					ReportTimer = REPORTINTERVAL;
-					SendLocation();
-				}
-			}
-
-			HTTPTimer();
-
-			if (RunChat)
-			{
-				ChatPollStreams();
-				ChatTrytoSend();
-
-				if (Slowtimer > 100)		// 10 secs
-				{
-					ChatTimer();
-				}
-			}
-
-			if (RunMail)
-			{
-				PollStreams();
-
-				if ((Slowtimer % 20) == 0)
-					FWDTimerProc();
-
-				if (Slowtimer > 100)		// 10 secs
-				{
-					struct tm * tm;
-
-					TCPTimer();
-					BBSSlowTimer();
-
-					if (MaintClock < NOW)
-					{
-						while (MaintClock < NOW)		// in case large time step
-							MaintClock += MaintInterval * 3600;
-
-						Debugprintf("|Enter HouseKeeping");
-						DoHouseKeeping(FALSE);
-					}
-
-					if (APIClock < NOW)
-					{
-						SendBBSDataToPktMap();
-						APIClock = NOW + 7200;			// Every 2 hours
-					}
-
-
-					tm = gmtime(&NOW);
-
-					if (tm->tm_wday == 0)		// Sunday
-					{
-						if (GenerateTrafficReport && (LastTrafficTime + 86400) < NOW)
-						{
-							CreateBBSTrafficReport();
-							LastTrafficTime = NOW;
-						}
-					}
-				}
-
-				TCPFastTimer();
-				TrytoSend();
-			}
-			if (Slowtimer > 100)
-				Slowtimer = 0;
+			UnSemaphored100msCode();
 		}
 		else
 			FreeSemaphore(&Semaphore);
-
 	}
 
 	hookNodeClosing("Shutdown");

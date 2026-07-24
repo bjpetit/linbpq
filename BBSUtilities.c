@@ -10899,7 +10899,6 @@ Length += sprintf(MailBuffer, "New User %s Connected to Mailbox on Port %d Freq 
 				user->flags |= F_Temp_B2_BBS;
 
 				conn->NewUser = TRUE;
-
 				user->lastmsg = LatestMsg - 20;		// Limit L command for new users
 			}
 

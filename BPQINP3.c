@@ -1415,7 +1415,7 @@ int SendRIPTimer()
 				continue;
 			}
 
-			if (Route->NEIGHBOUR_LINK->KILLTIMER > ((L4LIMIT - 60) * 3))	// IDLETIME - 1 Minute
+			if (Route->NEIGHBOUR_LINK->KILLTIMER > ((L4LIMIT - 60) * 10))	// IDLETIME - 1 Minute
 			{
 				SendKeepAlive(Route);
 				Route->NEIGHBOUR_LINK->KILLTIMER = 0;		// Keep Open
@@ -2062,7 +2062,7 @@ VOID SendAllInfo()
 	}
 }
 
-int INP3NodeTimeout = 3600 *3;			// 3 Hours
+int INP3NodeTimeout = 3600 * 3;			// 3 Hours
 
 void DecayINP3Routes()
 {

@@ -1263,7 +1263,7 @@ static int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len)
 
 #define ACKMODE	4				// CAN USE ACK REQURED FRAMES
 #define MSGHDDRLEN (USHORT)(sizeof(VOID *) + sizeof(UCHAR) + sizeof(USHORT))
-#define	ONEMINUTE 60*3
+#define	ONEMINUTE 60*10
 
 static int	KissEncode(struct TNCINFO * TNC, UCHAR * inbuff, UCHAR * outbuff, int len, int Channel)
 {

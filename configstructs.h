@@ -196,7 +196,7 @@ struct CONFIGTABLE
 	int C_OARCAPI;
 	int C_MONTOFILE;
 	int C_RIFInterval;
-
+	int C_LOCALNOTSECURE;
 
 
 //#define ApplOffset 80000			// Applications offset in config buffer

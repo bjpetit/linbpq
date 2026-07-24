@@ -257,7 +257,7 @@ int tnctypes(int i,char *value,char *rec);
 int do_kiss(char *value,char *rec);
 int decode_ded_rec(char *rec);
 int simple(int i);
-int64_t int64_value(int64_t * val, char value[], char rec[]);
+int int64_value(int64_t * val, char value[], char rec[]);
 int32_t int32_value(int32_t * val, char value[], char rec[]);
 
 
@@ -314,7 +314,7 @@ static char *keywords[] =
 "EnableM0LTEMap", "MQTT", "MQTT_HOST", "MQTT_PORT", "MQTT_USER", "MQTT_PASS",
 "L4Compress", "L4CompMaxframe", "L4CompPaclen", "L2Compress", "L2CompMaxframe",
 "L2CompPaclen", "PREFERINP3ROUTES", "OnlyVer2point0", "DEBUGINP3", "ENABLEOARCAPI", "MONTOFILE",
-"RIFInterval"
+"RIFInterval", "LOCALNOTSECURE"
 
 };           /* parameter keywords */
 
@@ -340,7 +340,8 @@ static void * offset[] =
 &xxcfg.C_M0LTEMap, &xxcfg.C_MQTT, &xxcfg.C_MQTT_HOST, &xxcfg.C_MQTT_PORT, &xxcfg.C_MQTT_USER, &xxcfg.C_MQTT_PASS,
 &xxcfg.C_L4Compress, &xxcfg.C_L4CompMaxframe, &xxcfg.C_L4CompPaclen, &xxcfg.C_L2Compress, &xxcfg.C_L2CompMaxframe, 
 &xxcfg.C_L2CompPaclen, &xxcfg.C_PREFERINP3ROUTES, &xxcfg.C_OnlyVer2point0,  &xxcfg.C_DEBUGINP3, &xxcfg.C_OARCAPI, &xxcfg.C_MONTOFILE,
-&xxcfg.C_RIFInterval};		/* offset for corresponding data in config file */
+&xxcfg.C_RIFInterval, &xxcfg.C_LOCALNOTSECURE		/* offset for corresponding data in config file */
+};
 
 static int routine[] = 
 {
@@ -364,7 +365,7 @@ static int routine[] =
 2, 2, 0, 1, 20, 20,
 1, 1, 1, 1, 1, 
 1, 1, 1, 1, 1, 1,
-1};			// Routine to process param
+1, 1};			// Routine to process param
 
 int PARAMLIM = sizeof(routine)/sizeof(int);
 //int NUMBEROFKEYWORDS = sizeof(routine)/sizeof(int);
@@ -649,6 +650,7 @@ BOOL ProcessConfig()
 	paramok[100]=1;			// BW
 	paramok[101]=1;			// SF
 	paramok[102]=1;			// CR
+	paramok[103]=1;			// LOCALNOTSECURE
 
 
 	for (i=0; i < PARAMLIM; i++)
@@ -1418,7 +1420,7 @@ int int32_value(int32_t * val, char value[], char rec[])
 	return(1);
 }
 
-int64_t int64_value(int64_t * val, char value[], char rec[])
+int int64_value(int64_t * val, char value[], char rec[])
 {
 	*val = strtoll(value, NULL, 10);
 	return(1);
