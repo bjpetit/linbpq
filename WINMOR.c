@@ -598,7 +598,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 	switch (fn)
 	{
-	case 1:				// poll
+	case 7:				// poll
 
 		// Check session limit timer
 
@@ -765,19 +765,19 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		if (TNC->TimeSinceLast++ > 800)			// Allow 10 secs for Keepalive
 		{
 			// Restart TNC
-		
+
 			if (TNC->ProgramPath && TNC->CONNECTED)
 			{
 				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
 				{
 					struct tm * tm;
 					char Time[80];
-				
+
 					TNC->Restarts++;
 					TNC->LastRestart = NOW;
 
 					tm = gmtime(&TNC->LastRestart);	
-				
+
 					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
 						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
@@ -787,7 +787,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
 					SetWindowText(TNC->xIDC_RESTARTS, Time);
 					strcpy(TNC->WEB_RESTARTS, Time);
-	
+
 					KillTNC(TNC);
 					RestartTNC(TNC);
 
@@ -825,7 +825,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			// Stop Scanning
 
 			sprintf(Msg, "%d SCANSTOP", TNC->Port);
-	
+
 			Rig_Command( (TRANSPORTENTRY *) -1, Msg);
 
 		}
@@ -833,71 +833,75 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		if (TNC->Streams[0].Attached)
 			CheckForDetach(TNC, 0, &TNC->Streams[0], TidyClose, ForcedClose, CloseComplete);
 
+
+
+		if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
+		{
+			//	See if time to reconnect
+
+			time(&ltime);
+			if (ltime - TNC->lasttime > 9 )
+			{
+				ConnecttoWINMOR(port);
+				TNC->lasttime = ltime;
+			}
+		}
+
+		FD_ZERO(&readfs);
+
+		if (TNC->CONNECTED) FD_SET(TNC->TCPDataSock,&readfs);
+
+		FD_ZERO(&writefs);
+
+		if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPDataSock,&writefs);	// Need notification of busy clearing
+
+		FD_ZERO(&errorfs);
+
+		if (TNC->CONNECTING || TNC->CONNECTED) FD_SET(TNC->TCPDataSock,&errorfs);
+
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 0;				// poll
+
+		if (select((int)TNC->TCPDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(TNC->TCPDataSock, &readfs))
+				ProcessDataSocketData(port);			
+
+			if (FD_ISSET(TNC->TCPDataSock, &writefs))
+			{
+				// Write block has cleared. Send rest of packet
+
+				buffptr=Q_REM(&TNC->BPQtoWINMOR_Q);
+				txlen = buffptr->Len;
+				memcpy(txbuff,buffptr->Data,txlen);
+				bytes=send(TNC->TCPSock, (const char FAR *)&txbuff, (int)txlen, 0);
+				ReleaseBuffer(buffptr);
+			}
+
+			if (FD_ISSET(TNC->TCPDataSock, &errorfs))
+			{
+				i=sprintf(ErrMsg, "WINMOR Data Connection lost for BPQ Port %d\r\n", port);
+				WritetoConsole(ErrMsg);
+				TNC->CONNECTING = FALSE;
+				TNC->CONNECTED = FALSE;
+				TNC->Streams[0].ReportDISC = TRUE;
+			}
+		}
+
+		return 0;
+
+	case 1:
+
+		// See if any frames for this port
+
 		if (TNC->Streams[0].ReportDISC)
 		{
 			TNC->Streams[0].ReportDISC = FALSE;
 			buff->PORT = 0;
 			return -1;
 		}
-
-	
-
-			if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
-			{
-				//	See if time to reconnect
-		
-				time(&ltime);
-				if (ltime - TNC->lasttime > 9 )
-				{
-					ConnecttoWINMOR(port);
-					TNC->lasttime = ltime;
-				}
-			}
-		
-			FD_ZERO(&readfs);
-			
-			if (TNC->CONNECTED) FD_SET(TNC->TCPDataSock,&readfs);
-			
-			FD_ZERO(&writefs);
-
-			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPDataSock,&writefs);	// Need notification of busy clearing
-
-			FD_ZERO(&errorfs);
-		
-			if (TNC->CONNECTING || TNC->CONNECTED) FD_SET(TNC->TCPDataSock,&errorfs);
-
-			timeout.tv_sec = 0;
-			timeout.tv_usec = 0;				// poll
-
-			if (select((int)TNC->TCPDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
-			{
-				//	See what happened
-
-				if (FD_ISSET(TNC->TCPDataSock, &readfs))
-					ProcessDataSocketData(port);			
-				
-				if (FD_ISSET(TNC->TCPDataSock, &writefs))
-				{
-					// Write block has cleared. Send rest of packet
-
-					buffptr=Q_REM(&TNC->BPQtoWINMOR_Q);
-					txlen = buffptr->Len;
-					memcpy(txbuff,buffptr->Data,txlen);
-					bytes=send(TNC->TCPSock, (const char FAR *)&txbuff, (int)txlen, 0);
-					ReleaseBuffer(buffptr);
-				}
-					
-				if (FD_ISSET(TNC->TCPDataSock, &errorfs))
-				{
-					i=sprintf(ErrMsg, "WINMOR Data Connection lost for BPQ Port %d\r\n", port);
-					WritetoConsole(ErrMsg);
-					TNC->CONNECTING = FALSE;
-					TNC->CONNECTED = FALSE;
-					TNC->Streams[0].ReportDISC = TRUE;
-				}
-			}
-		
-		// See if any frames for this port
 
 		if (TNC->WINMORtoBPQ_Q != 0)
 		{

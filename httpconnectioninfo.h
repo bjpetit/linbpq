@@ -21,7 +21,11 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	int KillTimer;				// Clean up timer (no activity timeout)
 	int Stream;					// BPQ Stream Number
 	char Key[20];				// Session Key
-	BOOL Connected;
+	uint8_t WebsockTerm;		// Set if Term Session is using Websocks
+	uint8_t Spare1;
+	uint8_t Spare2;
+	uint8_t Spare3;
+
 	// Use by Mail Module
 #ifdef MAIL
 	struct UserInfo * User;		// Selected User
@@ -41,5 +45,6 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	BOOL WebMailMyTX;			// List all meessage from me
 	BOOL WebMailMyRX;			// List all meessage to me
 	time_t WebMailLastUsed;
+	struct ConnectionInfo * sockptr;
 	struct TNCINFO * TNC;		// Session -> TNC link
 };

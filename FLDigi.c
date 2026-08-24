@@ -224,7 +224,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		// 100 mS Timer. 
 
 		// G7TAJ's code to record activity for stats display
-			
+
 		if ( TNC->BusyFlags && CDBusy )
 			TNC->PortRecord->PORTCONTROL.ACTIVE += 2;
 
@@ -246,7 +246,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				char Reply[80];
 
 				SendLen = sprintf(Reply, "c%s:42 %s:24 %c 7 T60R5W10",
-				STREAM->MyCall, STREAM->RemoteCall, ARQ->OurStream); 
+					STREAM->MyCall, STREAM->RemoteCall, ARQ->OurStream); 
 
 				strcpy(TNC->WEB_PROTOSTATE, "Connecting");
 				SetWindowText(TNC->xIDC_PROTOSTATE, TNC->WEB_PROTOSTATE);
@@ -317,155 +317,100 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			TNC->SlowTimer = 100;
 			FLSlowTimer(TNC);			// 10 Secs
 		}
-	
+
 		return 0;
 
-	case 1:				// poll
-
-			if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE && TNC->FLInfo->KISSMODE == FALSE)
-			{
-				//	See if time to reconnect
-		
-				time( &ltime );
-				if (ltime-lasttime[port] >9 )
-				{
-					ConnecttoFLDigi(port);
-					lasttime[port]=ltime;
-				}
-			}
-pollloop:	
-			FD_ZERO(&readfs);
-			
-			if (TNC->CONNECTED)
-				if (TNC->TCPSock)
-					FD_SET(TNC->TCPSock,&readfs);
-
-			if (TNC->CONNECTED || TNC->FLInfo->KISSMODE)
-				FD_SET(TNC->TCPDataSock,&readfs);
-			
-			
-//			FD_ZERO(&writefs);
-
-//			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPDataSock,&writefs);	// Need notification of busy clearing
-
-			FD_ZERO(&errorfs);
-		
-			if (TNC->CONNECTED)
-				if (TNC->TCPSock)
-					FD_SET(TNC->TCPSock,&errorfs);
-	
-			if (TNC->CONNECTED || TNC->FLInfo->KISSMODE)
-				FD_SET(TNC->TCPDataSock,&errorfs);
-			
-
-			if (select((int)TNC->TCPDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
-			{
-				//	See what happened
-
-				if (FD_ISSET(TNC->TCPDataSock,&readfs))
-				{
-					// data available
-			
-					ProcessReceivedData(port);	
-					goto pollloop;
-				}
-
-				if (FD_ISSET(TNC->TCPSock,&readfs))
-				{
-					// data available
-			
-					ProcessXMLData(port);			
-				}
-
-
-				if (FD_ISSET(TNC->TCPDataSock,&writefs))
-				{
-					//	Connect success
-
-					TNC->CONNECTED = TRUE;
-					TNC->CONNECTING = FALSE;
-
-					sprintf(TNC->WEB_COMMSSTATE, "Connected to FLDIGI");
-					SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
-
-					// If required, send signon
-				
-//					SendPacket(TNC->TCPDataSock,"\x1a", 1, 0);
-//					SendPacket(TNC->TCPDataSock,"DIGITAL MODE ?", 14, 0);
-//					SendPacket(TNC->TCPDataSock,"\x1b", 1, 0);
-
-//					EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
-				}
-					
-				if (FD_ISSET(TNC->TCPDataSock,&errorfs) || FD_ISSET(TNC->TCPSock,&errorfs))
-				{
-					//	if connecting, then failed, if connected then has just disconnected
-
-//					if (CONNECTED[port])
-//					if (!CONNECTING[port])
-//					{
-//						i=sprintf(ErrMsg, "MPSK Connection lost for BPQ Port %d\r\n", port);
-//						WritetoConsole(ErrMsg);
-//					}
-
-					CONNECTING[port]=FALSE;
-					CONNECTED[port]=FALSE;
-				
-				}
-
-			}
-
-
-
-		// See if any frames for this port
-
-		for (Stream = 0; Stream <= 1; Stream++)
+		if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE && TNC->FLInfo->KISSMODE == FALSE)
 		{
-			STREAM = &TNC->Streams[Stream];
+			//	See if time to reconnect
 
-			
-			if (STREAM->Attached)
-				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
-
-			if (STREAM->ReportDISC)
+			time( &ltime );
+			if (ltime-lasttime[port] >9 )
 			{
-				STREAM->ReportDISC = FALSE;
-				buff->PORT = Stream;
+				ConnecttoFLDigi(port);
+				lasttime[port]=ltime;
+			}
+		}
+pollloop:	
+		FD_ZERO(&readfs);
 
-				return -1;
+		if (TNC->CONNECTED)
+			if (TNC->TCPSock)
+				FD_SET(TNC->TCPSock,&readfs);
+
+		if (TNC->CONNECTED || TNC->FLInfo->KISSMODE)
+			FD_SET(TNC->TCPDataSock,&readfs);
+
+
+		//			FD_ZERO(&writefs);
+
+		//			if (TNC->BPQtoWINMOR_Q) FD_SET(TNC->TCPDataSock,&writefs);	// Need notification of busy clearing
+
+		FD_ZERO(&errorfs);
+
+		if (TNC->CONNECTED)
+			if (TNC->TCPSock)
+				FD_SET(TNC->TCPSock,&errorfs);
+
+		if (TNC->CONNECTED || TNC->FLInfo->KISSMODE)
+			FD_SET(TNC->TCPDataSock,&errorfs);
+
+
+		if (select((int)TNC->TCPDataSock + 1, &readfs, &writefs, &errorfs, &timeout) > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(TNC->TCPDataSock,&readfs))
+			{
+				// data available
+
+				ProcessReceivedData(port);	
+				goto pollloop;
 			}
 
-			// if Busy, send buffer status poll
-	
-			if (STREAM->PACTORtoBPQ_Q == 0)
+			if (FD_ISSET(TNC->TCPSock,&readfs))
 			{
-				if (STREAM->DiscWhenAllSent)
-				{
-					STREAM->DiscWhenAllSent--;
-					if (STREAM->DiscWhenAllSent == 0)
-						STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
-				}
+				// data available
+
+				ProcessXMLData(port);			
 			}
-			else
+
+
+			if (FD_ISSET(TNC->TCPDataSock,&writefs))
 			{
-				int datalen;
-			
-				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
+				//	Connect success
 
-				datalen = (int)buffptr->Len;
+				TNC->CONNECTED = TRUE;
+				TNC->CONNECTING = FALSE;
 
-				buff->PORT = Stream;						// Compatibility with Kam Driver
-				buff->PID = 0xf0;
-				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
-				datalen += (MSGHDDRLEN + 1);
+				sprintf(TNC->WEB_COMMSSTATE, "Connected to FLDIGI");
+				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
-				PutLengthinBuffer(buff, datalen);
+				// If required, send signon
 
-				WritetoTrace(TNC, &buffptr->Data[0], datalen - (MSGHDDRLEN + 1));
-				ReleaseBuffer(buffptr);
-	
-				return (1);
+				//					SendPacket(TNC->TCPDataSock,"\x1a", 1, 0);
+				//					SendPacket(TNC->TCPDataSock,"DIGITAL MODE ?", 14, 0);
+				//					SendPacket(TNC->TCPDataSock,"\x1b", 1, 0);
+
+				//					EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 			}
+
+			if (FD_ISSET(TNC->TCPDataSock,&errorfs) || FD_ISSET(TNC->TCPSock,&errorfs))
+			{
+				//	if connecting, then failed, if connected then has just disconnected
+
+				//					if (CONNECTED[port])
+				//					if (!CONNECTING[port])
+				//					{
+				//						i=sprintf(ErrMsg, "MPSK Connection lost for BPQ Port %d\r\n", port);
+				//						WritetoConsole(ErrMsg);
+				//					}
+
+				CONNECTING[port]=FALSE;
+				CONNECTED[port]=FALSE;
+
+			}
+
 		}
 
 		if (TNC->PortRecord->UI_Q)
@@ -492,8 +437,67 @@ pollloop:
 			}
 			ReleaseBuffer(buffptr);
 		}
+
 			
-		return (0);
+		if (STREAM->PACTORtoBPQ_Q == 0)
+		{
+			if (STREAM->DiscWhenAllSent)
+			{
+				STREAM->DiscWhenAllSent--;
+				if (STREAM->DiscWhenAllSent == 0)
+					STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
+			}
+		}
+
+		return 0;
+
+
+	case 1:				// poll
+
+		// See if any frames for this port
+
+		for (Stream = 0; Stream <= 1; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
+
+			
+			if (STREAM->Attached)
+				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
+
+			if (STREAM->ReportDISC)
+			{
+				STREAM->ReportDISC = FALSE;
+				buff->PORT = Stream;
+
+				return -1;
+			}
+
+			// if Busy, send buffer status poll
+	
+			if (STREAM->PACTORtoBPQ_Q)
+			{
+				int datalen;
+			
+				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
+
+				datalen = (int)buffptr->Len;
+
+				buff->PORT = Stream;						// Compatibility with Kam Driver
+				buff->PID = 0xf0;
+				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+				datalen += (MSGHDDRLEN + 1);
+
+				PutLengthinBuffer(buff, datalen);
+
+				WritetoTrace(TNC, &buffptr->Data[0], datalen - (MSGHDDRLEN + 1));
+				ReleaseBuffer(buffptr);
+	
+				return 1;
+			}
+		}
+
+		return  0;
+
 
 	case 2:				// send
 

@@ -907,105 +907,107 @@ ok:
 
 	switch (fn)
 	{
-		case 7:			
+	case 1:			
 
-		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
+		// 10 mS CheckRX and fast poll
+
+		// See if any frames for this port
+
+		STREAM = &TNC->Streams[0];
+
+		if (STREAM->BPQtoPACTOR_Q)
+		{
+			PMSGWITHLEN buffptr = (PMSGWITHLEN)Q_REM(&STREAM->BPQtoPACTOR_Q);
+			UCHAR * data = &buffptr->Data[0];
+			STREAM->FramesQueued--;
+			txlen = (int)buffptr->Len;
+			STREAM->bytesTXed += txlen;
+
+			bytes=SerialSendData(TNC, data, txlen);
+			WritetoTrace(TNC, data, txlen);
+		}
+
+		if (STREAM->PACTORtoBPQ_Q != 0)
+		{
+			buffptr = (PMSGWITHLEN)Q_REM(&STREAM->PACTORtoBPQ_Q);
+
+			datalen = (int)buffptr->Len;
+
+			buff->PORT = Stream;						// Compatibility with Kam Driver
+			buff->PID = 0xf0;
+			memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
+			datalen += sizeof(void *) + 4;
+
+			PutLengthinBuffer(buff, datalen);
+
+			ReleaseBuffer(buffptr);
+
+			return (1);
+		}
+
+		if (STREAM->ReportDISC)		// May need a delay so treat as a counter
+		{
+			STREAM->ReportDISC--;
+
+			if (STREAM->ReportDISC == 0)
+			{
+				buff->PORT = Stream;
+				return -1;
+			}
+		}
+
+		return (0);
+
+
+	case 7:				// poll
 
 		SerialCheckRX(TNC);
+
+		STREAM = &TNC->Streams[0];
+
+		if (STREAM->NeedDisc)
+		{
+			STREAM->NeedDisc--;
+
+			if (STREAM->NeedDisc == 0)
+			{
+				// Send the DISCONNECT
+
+				SerialSendCommand(TNC, "DISCONNECT\r");
+			}
+		}
+
+		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && STREAM->Attached == 0)
+		{
+			// New Attach
+
+			int calllen;
+			char Msg[80];
+
+			STREAM->Attached = TRUE;
+
+			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
+			TNC->Streams[Stream].MyCall[calllen] = 0;
+
+
+			// Stop other ports in same group
+
+			SuspendOtherPorts(TNC);
+
+			sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
+			MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
+			// Stop Scanning
+
+			sprintf(Msg, "%d SCANSTOP", TNC->Port);
+
+			Rig_Command( (TRANSPORTENTRY *) -1, Msg);
+		}
+
+		if (STREAM->Attached)
+			CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
+
 		return 0;
-
-		case 1:				// poll
-
-			STREAM = &TNC->Streams[0];
-
-			if (STREAM->NeedDisc)
-			{
-				STREAM->NeedDisc--;
-
-				if (STREAM->NeedDisc == 0)
-				{
-					// Send the DISCONNECT
-
-					SerialSendCommand(TNC, "DISCONNECT\r");
-				}
-			}
-
-			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && STREAM->Attached == 0)
-			{
-				// New Attach
-
-				int calllen;
-				char Msg[80];
-
-				STREAM->Attached = TRUE;
-
-				calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
-				TNC->Streams[Stream].MyCall[calllen] = 0;
-
-
-				// Stop other ports in same group
-
-				SuspendOtherPorts(TNC);
-
-				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-				MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
-
-				// Stop Scanning
-
-				sprintf(Msg, "%d SCANSTOP", TNC->Port);
-
-				Rig_Command( (TRANSPORTENTRY *) -1, Msg);
-			}
-
-			if (STREAM->Attached)
-				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
-
-			// See if any frames for this port
-
-			STREAM = &TNC->Streams[0];
-
-			if (STREAM->BPQtoPACTOR_Q)
-			{
-				PMSGWITHLEN buffptr = (PMSGWITHLEN)Q_REM(&STREAM->BPQtoPACTOR_Q);
-				UCHAR * data = &buffptr->Data[0];
-				STREAM->FramesQueued--;
-				txlen = (int)buffptr->Len;
-				STREAM->bytesTXed += txlen;
-
-				bytes=SerialSendData(TNC, data, txlen);
-				WritetoTrace(TNC, data, txlen);
-			}
-
-			if (STREAM->PACTORtoBPQ_Q != 0)
-			{
-				buffptr = (PMSGWITHLEN)Q_REM(&STREAM->PACTORtoBPQ_Q);
-
-				datalen = (int)buffptr->Len;
-
-				buff->PORT = Stream;						// Compatibility with Kam Driver
-				buff->PID = 0xf0;
-				memcpy(&buff->L2DATA, &buffptr->Data[0], datalen);		// Data goes to + 7, but we have an extra byte
-				datalen += sizeof(void *) + 4;
-
-				PutLengthinBuffer(buff, datalen);
-
-				ReleaseBuffer(buffptr);
-
-				return (1);
-			}
-
-			if (STREAM->ReportDISC)		// May need a delay so treat as a counter
-			{
-				STREAM->ReportDISC--;
-
-				if (STREAM->ReportDISC == 0)
-				{
-					buff->PORT = Stream;
-					return -1;
-				}
-			}
-
-			return (0);
 
 	case 2:				// send
 

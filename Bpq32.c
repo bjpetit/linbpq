@@ -1336,6 +1336,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Change Web Driver windows to use Winsocks to give quicker refresh when changed (35)
 //	Fix timer problem introduced in v33 (36)
 //	Add LOCALNOTSECURE config param to require signin for web access from 127.0.0.1 (36)
+//	Convert Web Terminal to winsocks (37)
+//	More fixes for timer problem introduced in v33 (38)
+//	Changes to INP3 poison reverse and alias reporting (39)
+//	L4 Connect Ack now sent via routing table (39)
 
 #define CKernel
 

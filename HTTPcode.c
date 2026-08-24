@@ -74,6 +74,9 @@ int RHPProcessHTTPMessage(struct ConnectionInfo * conn, char * response, char * 
 unsigned char * Compressit(unsigned char * In, int Len, int * OutLen);
 int doinflate(unsigned char * source, unsigned char * dest, int Len, int destlen, int * outLen);
 void SendDeviceWebPage(int Port);
+int SendMsgNoSem(int stream, char * msg, int len);
+int SessionStateNoSem(int stream, int * state, int * change);
+int DoWebSockTerm(struct HTTPConnectionInfo * Session, struct ConnectionInfo * conn, char * _REPLYBUFFER, int LOCAL, int COOKIE, char * Context, SOCKET sock);
 
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
@@ -108,7 +111,7 @@ extern UCHAR ConfigDirectory[260];
 
 extern struct AXIPPORTINFO * Portlist[];
 
-VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
+int sendandcheck(SOCKET sock, const char * Buffer, int Len);
 int CompareNode(const void *a, const void *b);
 int CompareAlias(const void *a, const void *b);
 int CompareRoutes(const void * a, const void * b);
@@ -122,7 +125,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 int ProcessMailAPISignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail, int LOCAL);
 int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, int LOCAL);
 VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr, BOOL LOCAL, BOOL COOKIE);
-
+int FindFreeStreamNoSem();
 
 static struct HTTPConnectionInfo * SessionList;	// active term mode sessions
 
@@ -213,7 +216,7 @@ char TermSignon[] = "<html><head><title>BPQ32 Node %s Terminal Access</title></h
 "<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 "<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
 "<p align=center><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel>"
-"<input type=hidden name=Appl value=\"%s\"  id=Pass></form>";
+"<input type=hidden name=Appl value=\"%s\"  id=Appl><input type=hidden name=Flag value=\"%s\"  id=flag></form>";
 
 
 char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
@@ -538,14 +541,192 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 }
 
 
+
+
+
+VOID PollWebSockSession(struct HTTPConnectionInfo * Session, char * Formatted)
+{
+	int state, change;
+	int count, len;
+	char Line[8192];
+	char Msg[400];
+	char * ptr1, * ptr2;
+	byte c;
+	int totalLen = 0;
+	int needSpan = 0;
+	int realLen = 0;
+	int LineLen;
+
+	Formatted[0] = 0;
+
+	// Poll Node
+
+	SessionState(Session->Stream, &state, &change);
+
+	if (change == 1)
+	{
+		if (state == 1)		// Connected
+			strcpy(Formatted, "*** Connected\r\n");
+		else
+			strcpy(Formatted, "*** Disconnected\r\n");
+
+		Session->Changed = TRUE;
+	}
+
+	if (RXCount(Session->Stream) > 0)
+	{
+
+		char * lasteol = 0;
+
+		do
+		{
+			GetMsg(Session->Stream, &Msg[0], &len, &count);
+
+			// replace cr with <br> and space with &nbsp;
+
+			ptr1 = Msg;
+			ptr2 = Line;
+			*(ptr2) = 0;
+
+			Msg[len] = 0;
+	
+/*			if (Session->PartLine)
+			{
+				// Last line was incomplete - append to it
+
+				realLen = Session->PartLine;
+
+				strcpy(Line, Session->ScreenLines[0]);
+				ptr2 += strlen(Line);
+
+				Session->PartLine = FALSE;
+			}
+*/
+			while (len--)
+			{
+				c = *(ptr1++);
+				realLen++;
+
+				if (c == 13 || c == 10)
+				{
+					
+
+					// Write to screen
+
+					lasteol = ptr2;
+
+					*ptr2 = 0;
+					LineLen = (int)strlen(Line);
+					totalLen += LineLen;
+					
+					strcat(Formatted, Line);
+						
+					strcat(Formatted, "\r\n");
+
+					if (*ptr1 == 10)
+						ptr1++;
+	
+					ptr2 = Line;
+					realLen = 0;
+
+					continue;
+
+				}
+
+				if (c == 0x1b && len > 2)
+				{
+					// colour code, process it
+
+					// Now we are using textContent text isn't formatted so just ignore colour escapes
+
+/*
+					int ColourCode = Line[1] - 10;
+					COLORREF Colour = Colours[ColourCode];
+
+					// Send in a <span> so we can apply formatting
+
+					ptr2 += sprintf(ptr2, "<span><font color=#%02X%02X%02X>",  GetRValue(Colour), GetGValue(Colour), GetBValue(Colour));
+					needSpan = 1;
+*/					
+					len --;
+					ptr1++;
+
+					continue;
+				}
+
+				if (c != 9 && c < 32)
+					c = '.';
+
+	/*			if (c == 255)
+				{
+					memcpy(ptr2, "&nbsp;", 6);
+					ptr2 += 6;
+				}
+				else if (c == '>')
+				{
+					memcpy(ptr2, "&gt;", 4);
+					ptr2 += 4;
+				}
+				else if (c == '<')
+				{
+					memcpy(ptr2, "&lt;", 4);
+					ptr2 += 4;
+				}
+	*/			else
+					*(ptr2++) = c;
+	
+				// Make sure line isn't too long
+				// but beware of spaces expanded to &nbsp; - count chars in line
+				// Ideally we should look for multichar sequences
+
+				if ((realLen) > 120)
+				{
+					strcpy(ptr2, "\r\n");
+
+					strcat(Formatted, Line);
+
+					ptr2 = Line;
+					realLen = 0;
+				}
+
+			}
+
+			*(ptr2) = 0;
+
+			if (realLen)
+			{
+				// Incomplete line Add to output
+
+				// Save to screen
+
+////				if (Session->ScreenLines[0])
+//					free(Session->ScreenLines[0]);
+
+//				Session->ScreenLines[0] = _strdup(Line);
+//				Session->PartLine = realLen;
+
+				LineLen = (int)strlen(Line);
+				totalLen += LineLen;	
+				strcat(Formatted, Line);
+			}
+
+			Session->Changed = TRUE;
+
+			if (totalLen > 2000)
+				return;
+
+		} while (count > 0);
+	}
+}
+
+
+
 VOID HTTPTimer()
 {
 	// Run every tick. Check for status change and data available
 
 	struct HTTPConnectionInfo * Session = SessionList;	// active term mode sessions
 	struct HTTPConnectionInfo * PreviousSession = NULL;
-
-//	inf();
 
 	while (Session)
 	{
@@ -558,85 +739,232 @@ VOID HTTPTimer()
 			continue;
 		}
 
-		if (Session->KillTimer > 3000)		// Around 5 mins
+		if (Session->KillTimer > 864000 || Session->KillTimer < 0)		// Day or corrupt
+		{
+			if (Session->Stream == 0)
+			{
+				if (PreviousSession)
+					PreviousSession->Next = Session->Next;		// Remove from chain
+				else
+					SessionList = Session->Next;
+			
+				free(Session);
+			}
+			continue;
+		}
+
+		if (Session->KillTimer > 9000)		// Around 15 mins
 		{
 			int i;
 			int Stream = Session->Stream;
 
-			for (i = 0; i < 100; i++)
+
+			if (!Session->WebsockTerm)
 			{
-				free(Session->ScreenLines[i]);
+				for (i = 0; i < 100; i++)
+				{
+					free(Session->ScreenLines[i]);
+				}
 			}
 
 			SessionControl(Stream, 2, 0);
 			SessionState(Stream, &i, &i);
 			DeallocateStream(Stream);
+			Session->Stream = 0;
 
-			if (PreviousSession)
-				PreviousSession->Next = Session->Next;		// Remove from chain
+
+			if (Session->WebsockTerm && Session->sockptr)
+			{
+				char Msg[256];
+				char Text[] = "Session Timeout";
+		
+				Msg[0] = 0x88;		// Fin, Close
+				Msg[1] = strlen(Text);
+				strcpy(&Msg[2], Text);
+	
+				if (send(Session->sockptr->socket, Msg, Msg[1] + 2, 0) == -1)
+				{
+					// Send has failed - ? socket error
+
+					if (PreviousSession)
+						PreviousSession->Next = Session->Next;		// Remove from chain
+					else
+						SessionList = Session->Next;
+
+					free(Session);
+				}
+
+
+			}
+
 			else
-				SessionList = Session->Next;
+			{
+				if (PreviousSession)
+					PreviousSession->Next = Session->Next;		// Remove from chain
+				else
+					SessionList = Session->Next;
 
-			free(Session);
-
+				free(Session);
+			}
 			break;
 		}
 
-		PollSession(Session);
-
-		//		if (Session->ResponseTimer == 0 && Session->Changed)
-		//			Debugprintf("Data to send but no outstanding GET");
-
-		if (Session->ResponseTimer)
+		if (Session->WebsockTerm)
 		{
-			Session->ResponseTimer--;
+			char Formatted[8192];
 
-			if (Session->ResponseTimer == 0 || Session->Changed)
+			if (Session->sockptr == 0)		// Websock not connected - wait
 			{
-				SOCKET sock = Session->sock;
-				char _REPLYBUFFER[100000];
-				int ReplyLen;
-				char Header[256];
-				int HeaderLen;
-				int Last = Session->LastLine;
-				int n;
-				struct TNCINFO * TNC = Session->TNC;
-				struct TCPINFO * TCP = 0;
-				
-				if (TNC)
-					TCP = TNC->TCPInfo;
-
-				if (TCP && TCP->WebTermCSS)	
-					sprintf(_REPLYBUFFER, TermOutput, TCP->WebTermCSS);
-				else
-					sprintf(_REPLYBUFFER, TermOutput, "");
-
-				for (n = Last;;)
-				{
-					if ((strlen(Session->ScreenLines[n]) + strlen(_REPLYBUFFER)) < 99999)
-						strcat(_REPLYBUFFER, Session->ScreenLines[n]);
-
-					if (n == 99)
-						n = -1;
-
-					if (++n == Last)
-						break;
-				}
-
-				ReplyLen = (int)strlen(_REPLYBUFFER);
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", TermOutputTail);
-
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
-				sendandcheck(sock, Header, HeaderLen);
-				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
-
-				Session->ResponseTimer = Session->Changed = 0;
+				PreviousSession = Session;
+				Session = Session->Next;
+				continue;
 			}
+
+			PollWebSockSession(Session, Formatted);
+
+			if (Session->Changed)
+			{
+				struct ConnectionInfo * sock = Session->sockptr;
+
+				int Last = Session->LastLine;
+
+				// Make sure still websocks
+
+				if (sock->HTTPMode && sock->WebSocks && strcmp(sock->WebURL, "WEBTERM") == 0)
+				{
+					char Msg[65536];
+					int MsgLen = strlen(Formatted);
+					char * ptr;
+					char * OutBuffer;
+					int TxLen;
+
+					// Websocks must be UTF8 
+
+					if (IsUTF8(Formatted, MsgLen) == FALSE)
+					{
+						unsigned char UTF[16384];
+						int code;
+
+						// Try to guess encoding
+
+						code = TrytoGuessCode(Formatted, MsgLen);
+
+						if (code == 437)
+							MsgLen = Convert437toUTF8(Formatted, MsgLen, UTF);
+						else if (code == 1251)
+							MsgLen = Convert1251toUTF8(Formatted, MsgLen, UTF);
+						else
+							MsgLen = Convert1252toUTF8(Formatted, MsgLen, UTF);
+
+						UTF[MsgLen] = 0;
+
+						strcpy(Formatted, UTF);
+					}
+
+					strcpy(&Msg[4], Formatted);
+
+					// WebSock Encode. Buffer has 4 bytes on front for header but header len depends on Msg len
+
+					if (MsgLen < 126)
+					{
+						// Two Byte Header
+
+						Msg[2] = 0x81;		// Fin, Data
+						Msg[3] = MsgLen;
+
+						TxLen = MsgLen + 2;
+						OutBuffer = &Msg[2];
+					}
+					else				// We don't allow more than65535  if (Len < 65536)
+					{
+						Msg[0] = 0x81;		// Fin, Data
+						Msg[1] = 126;		// Unmasked, Extended Len
+						Msg[2] = MsgLen >> 8;
+						Msg[3] = MsgLen & 0xff;
+						TxLen = MsgLen + 4;
+						OutBuffer = &Msg[0];
+					}
+
+					// If secure session enable an hidden controls
+
+					if (sock->WebSecure)
+					{
+						while (ptr = strstr(&Msg[4], "hidden"))
+							memcpy(ptr, "      ", 6);
+					}
+
+					sendandcheck(sock->socket, OutBuffer, TxLen);
+					Session->ResponseTimer = Session->Changed = 0;
+					Session->KillTimer = 0;
+
+				}
+				else
+				{
+					// Session messaed up??
+				}
+			}
+			PreviousSession = Session;
+			Session = Session->Next;
 		}
-		PreviousSession = Session;
-		Session = Session->Next;
+		else
+		{
+			PollSession(Session);
+
+			//		if (Session->ResponseTimer == 0 && Session->Changed)
+			//			Debugprintf("Data to send but no outstanding GET");
+
+			if (Session->ResponseTimer)
+			{
+				Session->ResponseTimer--;
+
+				if (Session->ResponseTimer == 0 || Session->Changed)
+				{
+					SOCKET sock = Session->sock;
+					char _REPLYBUFFER[100000];
+					int ReplyLen;
+					char Header[256];
+					int HeaderLen;
+					int Last = Session->LastLine;
+					int n;
+					struct TNCINFO * TNC = Session->TNC;
+					struct TCPINFO * TCP = 0;
+
+					if (TNC)
+						TCP = TNC->TCPInfo;
+
+					if (TCP && TCP->WebTermCSS)	
+						sprintf(_REPLYBUFFER, TermOutput, TCP->WebTermCSS);
+					else
+						sprintf(_REPLYBUFFER, TermOutput, "");
+
+					for (n = Last;;)
+					{
+						if ((strlen(Session->ScreenLines[n]) + strlen(_REPLYBUFFER)) < 99999)
+							strcat(_REPLYBUFFER, Session->ScreenLines[n]);
+
+						if (n == 99)
+							n = -1;
+
+						if (++n == Last)
+							break;
+					}
+
+					ReplyLen = (int)strlen(_REPLYBUFFER);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", TermOutputTail);
+
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
+					sendandcheck(sock, Header, HeaderLen);
+					sendandcheck(sock, _REPLYBUFFER, ReplyLen);
+
+					Session->ResponseTimer = Session->Changed = 0;
+				}
+			}
+			PreviousSession = Session;
+			Session = Session->Next;
+		}
 	}
 }
+
 
 struct HTTPConnectionInfo * AllocateSession(SOCKET sock, char Mode)
 {
@@ -657,7 +985,7 @@ struct HTTPConnectionInfo * AllocateSession(SOCKET sock, char Mode)
 		for (i = 20; i < 100; i++)
 			Session->ScreenLines[i] = _strdup("<br>\r\n");
 
-		Session->Stream = FindFreeStream();
+		Session->Stream = FindFreeStreamNoSem();
 
 		if (Session->Stream == 0)
 			return NULL;
@@ -779,12 +1107,15 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 		strcat(input, "<br>\r\n");
 
-		free(Session->ScreenLines[Line]);
+		
+		if (!Session->WebsockTerm)
+		{
+			free(Session->ScreenLines[Line]);
+			Session->ScreenLines[Line] = _strdup(input);
 
-		Session->ScreenLines[Line] = _strdup(input);
-
-		if (Line == 99)
-			Session->LastLine = 0;
+			if (Line == 99)
+				Session->LastLine = 0;
+		}
 
 		*end++ = 13;
 		*end = 0;
@@ -849,15 +1180,18 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 	send(sock, Tail, (int)strlen(Tail), 0);
 }
 
-int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen,  int LOCAL)
+struct HTTPConnectionInfo * ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen,  int LOCAL)
 {
 	char _REPLYBUFFER[8192];
-	int ReplyLen;
+	int ReplyLen = 0;
 	char Header[256];
 	int HeaderLen;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 	char * user, * password, * Context, * Appl;
 	char NoApp[] = "";
+	char Flag[16] = "";
+	int Websocks = 0;
+
 	struct TCPINFO * TCP = TNC->TCPInfo;
 
 	if (input)
@@ -872,6 +1206,12 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 			ReplyLen = SetupNodeMenu(_REPLYBUFFER, LOCAL);	
 			goto Sendit;
 		}
+
+		if (strstr(input, "Flag=Websocks"))
+		{
+			Websocks = 1;
+			strcpy(Flag, "Websocks");
+		}
 		user = strtok_s(&input[9], "&", &Context);
 		password = strtok_s(NULL, "=", &Context);
 		password = strtok_s(NULL, "&", &Context);
@@ -884,7 +1224,7 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 		if (password == NULL)
 		{
-			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Appl);
+			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Appl, Flag);
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", PassError);
 			goto Sendit;
 		}
@@ -903,7 +1243,6 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 				if (Session)
 				{
 					char AXCall[10];
-					ReplyLen = sprintf(_REPLYBUFFER, TermPage, Mycall, Mycall, Session->Key, Session->Key, Session->Key);
 					if (_stricmp(USER->UserName, "ANON") == 0)
 						strcpy(Session->HTTPCall, _strupr(user));
 					else
@@ -915,6 +1254,14 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 
 					if (USER->Appl[0])
 						SendMsg(Session->Stream, USER->Appl, (int)strlen(USER->Appl));
+
+					if (Websocks)
+						return Session;
+
+					// Old Style Terminal
+					
+					ReplyLen = sprintf(_REPLYBUFFER, TermPage, Mycall, Mycall, Session->Key, Session->Key, Session->Key);
+
 				}
 				else
 				{
@@ -930,10 +1277,9 @@ int ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgL
 		{
 			//   Not found
 
-			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Appl);
+			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Appl, Flag);
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", PassError);
 		}
-
 	}
 
 Sendit:
@@ -943,7 +1289,7 @@ Sendit:
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, (int)strlen(Tail), 0);
 
-	return 1;
+	return 0;
 }
 
 char * LookupKey(char * Key)
@@ -1240,11 +1586,14 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists, int allowDeflate)
 return 0;
 }
 
-VOID sendandcheck(SOCKET sock, const char * Buffer, int Len)
+int sendandcheck(SOCKET sock, const char * Buffer, int Len)
 {
 	int Loops = 0;
 	int Sent = send(sock, Buffer, Len, 0);
 	char * Copy = NULL;
+
+	if (Sent == -1)
+		return 0;
 
 	while (Sent != Len && Loops++ < 300)					// 10 secs max
 	{	
@@ -1269,7 +1618,7 @@ VOID sendandcheck(SOCKET sock, const char * Buffer, int Len)
 	if (Copy)
 		free(Copy);
 
-	return;
+	return 1;
 }
 
 int RefreshTermWindow(struct TCPINFO * TCP, struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
@@ -1382,7 +1731,7 @@ int SetupNodeMenu(char * Buff, int LOCAL)
 		"<td><a href=/Node/Links.html>Links</a></td>"
 		"<td><a href=/Node/Users.html>Users</a></td>"
 		"<td><a href=/Node/Stats.html>Stats</a></td>"
-		"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s%s";
+		"<td><a href=javascript:dev_win(\"/Node/WebSockTerm.html\",800,600,200,200)>Terminal</a></td>%s%s%s%s%s%s";
 
 	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
 		"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700,200,200);>Stream Status</a></td>";
@@ -2512,9 +2861,50 @@ doHeader:
 				return 0;
 			}
 
+
+			else if (_stricmp(NodeURL, "/Node/TermAction") == 0)
+			{
+				char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+
+				if (input == 0)
+					return 1;
+
+				input += 4;
+
+				Session = FindSession(Context);
+
+				if (strcmp(input, "Disconnect") == 0)
+				{
+					if (Session && Session->Stream)
+					{
+						SessionControl(Session->Stream, 2, 0);
+					}
+				}
+				return 1;
+			}
+
 			if (_stricmp(NodeURL, "/Node/TermSignon") == 0)
 			{
-				ProcessTermSignon(conn->TNC, sock, MsgPtr, MsgLen, LOCAL);
+				Session = ProcessTermSignon(conn->TNC, sock, MsgPtr, MsgLen, LOCAL);
+	
+				if (Session)
+				{
+					char Header[256];
+					int HeaderLen;
+					int ReplyLen;
+
+					ReplyLen = DoWebSockTerm(Session, conn, _REPLYBUFFER, LOCAL, COOKIE, Context, sock);
+
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+						"\r\n", (int)(ReplyLen + strlen(Tail)));	
+				
+					send(sock, Header, HeaderLen, 0);
+					sendandcheck(sock, _REPLYBUFFER, ReplyLen);
+					send(sock, Tail, (int)strlen(Tail), 0);
+
+
+					return 0;
+				}
 			}
 
 			if (_stricmp(NodeURL, "/Node/Signon") == 0)
@@ -3007,10 +3397,9 @@ doHeader:
 					" if (\"WebSocket\" in window)"
 					" {"
 					"   // Let us open a web socket. Get address from URL\r\n"
-					"	var text = window.location.href;"
-					"	var result = text.substring(7);"
-					"	var myArray = result.split('/', 1);"
-					"   ws = new WebSocket('ws://' + myArray[0] + '/RIGCTL');\r\n"
+	
+					"  var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';\r\n"
+					"  ws = new WebSocket(proto + window.location.host + '/RIGCTL');\r\n"
 					
 					"   ws.onopen = function() {\r\n"
 			
@@ -3090,10 +3479,9 @@ doHeader:
 					" if (\"WebSocket\" in window)"
 					" {"
 					"   // open a web socket. Get address from URL\r\n"
-					"	var text = window.location.href;"
-					"	var result = text.substring(7);"
-					"	var myArray = result.split('/', 1);"
-					"   ws = new WebSocket('ws://' + myArray[0] + '/DEVICE%d');\r\n"
+	
+					"   var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';\r\n"
+					"   ws = new WebSocket(proto + window.location.host + '/DEVICE%d');\r\n"
 					"   ws.onopen = function() {\r\n"
 			
 					"   // Web Socket is connected\r\n"
@@ -3101,22 +3489,22 @@ doHeader:
 					"	const div = document.getElementById('div');\r\n"
 					"	div.innerHTML = 'Websock Connected'\r\n};\r\n"
 					
-					"ws.onmessage = function (evt)"
-					"{"
-					" var received_msg = evt.data;\r\n"
-					" const div = document.getElementById('div');\r\n"
-					" div.innerHTML = received_msg\r\n"
-					" const text = document.getElementById('textarea');\r\n"
-					" text.scrollTop = text.scrollHeight;\r\n"
+					" ws.onmessage = function (evt)"
+					" {"
+					"  var received_msg = evt.data;\r\n"
+					"  const div = document.getElementById('div');\r\n"
+					"  div.innerHTML = received_msg\r\n"
+					"  const text = document.getElementById('textarea');\r\n"
+					"  text.scrollTop = text.scrollHeight;\r\n"
 					" };\r\n"
 
-					"   ws.onclose = function()"
-					"   {"
+					" ws.onclose = function()"
+					" {"
 
-					"    // websocket is closed.\r\n"
-					"	 const div = document.getElementById('div');\r\n"
-					"	 div.innerHTML = 'Websock Connection Lost'\r\n"
-					"    };"
+					"  // websocket is closed.\r\n"
+					"  const div = document.getElementById('div');\r\n"
+					"  div.innerHTML = 'Websock Connection Lost'\r\n"
+					"  };"
 					" }"
 					" else"
 					" {"
@@ -4204,7 +4592,12 @@ CMDS60:
 					}
 				}
 				else
-					ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Context);
+					ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Context, "");
+			}
+
+			else if (_stricmp(NodeURL, "/Node/WebSockTerm.html") == 0)
+			{
+				ReplyLen = DoWebSockTerm(Session, conn, _REPLYBUFFER, LOCAL, COOKIE, Context, sock);
 			}
 
 			else if (_stricmp(NodeURL, "/Node/Signon.html") == 0)
@@ -5420,6 +5813,477 @@ void SHA1PadMessage(SHA1Context *context)
     context->Message_Block[63] = (context->Length_Low) & 0xFF;
 
     SHA1ProcessMessageBlock(context);
+}
+
+struct UserRec SYSOPUSER = {"", "", "", "", 1};		// Set Secure Flag
+
+int ProcessNewTermWebSock(struct ConnectionInfo * sockptr, char * Key)
+{
+	char * User = strlop(Key, '&');
+	char * Pass = strlop(User, '&');
+	char * Secure = strlop(Pass, '&'); 
+	struct UserRec * USER = 0;
+	int i;
+
+	char Msg[256];
+	char AXCall[10];
+
+	struct HTTPConnectionInfo * Session = SessionList;
+
+	USER = sockptr->USER;
+
+	while (Session)
+	{
+		if (strcmp(Session->Key, Key) == 0)
+		{
+			USER = sockptr->USER = Session->USER;
+			break;
+		}
+
+		Session = Session->Next;
+	}
+
+	if (USER == 0)
+	{
+		// Look for record in TelnetServere
+
+		for (i = 0; i < sockptr->TNC->TCPInfo->NumberofUsers; i++)
+		{
+			USER = sockptr->TNC->TCPInfo->UserRecPtr[i];
+			if ((_stricmp(User, USER->Callsign) == 0 ) && (strcmp(Pass, USER->Password) == 0))	
+				break;
+		}
+
+		if (i == sockptr->TNC->TCPInfo->NumberofUsers)
+		{
+			// Not Found
+
+			if (sockptr->LOCALAuth)
+			{
+				// Sign in as sysop
+				
+				USER = &SYSOPUSER;
+				USER->Callsign = MYNODECALL;
+			}
+		}
+
+		if (USER == 0)
+			return 0;
+
+		sockptr->USER = USER;
+	}
+
+	if (Session == 0)
+		Session = AllocateSession(sockptr->socket, 'T');
+
+	if (Session == 0)
+	{
+		Msg[0] = 0x81;		// Fin, Data
+		strcpy(&Msg[2], "No Session. Reload Page to reconnect<br>");
+		Msg[1] = strlen(&Msg[2]);
+		send(sockptr->socket, Msg, Msg[1] + 2, 0);
+
+		Msg[0] = 0x88;		// Fin, Close
+		send(sockptr->socket, Msg, Msg[1] + 2, 0);
+		return 1;
+	}
+
+	Session->USER = USER;
+	strcpy(Session->HTTPCall, USER->Callsign);
+		
+	ConvToAX25(Session->HTTPCall, AXCall);
+	ChangeSessionCallsign(Session->Stream, AXCall);
+
+	BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = USER->Secure;
+
+	Session->TNC = sockptr->TNC;
+	Session->sockptr = sockptr;
+	Session->WebsockTerm = 1;
+	return 0;
+}
+
+void ProcessWebTermInput(struct ConnectionInfo * sockptr, char * Payload)
+{
+	struct HTTPConnectionInfo * Session = SessionList;
+	char Msg[256];
+	char AXCall[10];
+
+	// Echo CRLF
+
+	Msg[0] = 0x81;		// Fin, Data
+	strcpy(&Msg[2], "\r\n");
+	Msg[1] = 2;
+	send(sockptr->socket, Msg, 4, 0);
+
+	while (Session)
+	{
+		if (Session->sockptr == sockptr)
+		{
+			int Stream = Session->Stream;
+			char InputMsg[512];
+			char c, hex;
+			char * ptr1, * ptr2;
+			int State;
+
+			if (Stream == 0)
+			{
+				Session->Stream = FindFreeStreamNoSem();
+
+				if (Stream == 0)
+					continue;
+			}
+
+
+			//		if (MsgLen > maxlen)
+			//		{
+			//			Session->KillTimer = 99999; // close session
+			//		return;
+			//		}
+
+
+			ptr1 = Payload;
+			ptr2 = InputMsg;
+
+			// Convert any %xx constructs
+
+			while (1)
+			{
+				c = *(ptr1++);
+
+				if (c == 0)
+					break;
+
+				if (c == '%')
+				{
+					c = *(ptr1++);
+					if(isdigit(c))
+						hex = (c - '0') << 4;
+					else
+						hex = (tolower(c) - 'a' + 10) << 4;
+
+					c = *(ptr1++);
+					if(isdigit(c))
+						hex += (c - '0');
+					else
+						hex += (tolower(c) - 'a' + 10);
+
+					*(ptr2++) = hex;
+				}
+				else if (c == '+')
+					*(ptr2++) = 32;
+				else
+					*(ptr2++) = c;
+			}
+
+			*ptr2 = 0;
+
+			SessionStateNoAck(Stream, &State);
+
+			if (State == 0)
+			{
+				char AXCall[10];
+				int SaveAuthProg = AuthorisedProgram;
+	
+				AuthorisedProgram = 0;
+				SessionControl(Stream, 1, 0);
+				AuthorisedProgram = SaveAuthProg;
+
+				if (BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION == NULL)
+				{
+					//No L4 sessions free
+
+					char Msg[256];
+						
+					Msg[0] = 0x81;		// Fin, Data
+					strcpy(&Msg[2], "No Free Host Sessions\r\n");
+					Msg[1] = strlen(&Msg[2]);
+	
+					send(sockptr->socket, Msg, Msg[2] + 2, 0);
+					return;
+				}
+
+				ConvToAX25(Session->HTTPCall, AXCall);
+				ChangeSessionCallsign(Stream, AXCall);
+				if (Session->USER)
+					BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = Session->USER->Secure;
+				else
+					Debugprintf("HTTP Term Session->USER is NULL");
+
+			}
+
+			SendMsgNoSem(Stream, InputMsg, strlen(InputMsg));
+			Session->Changed = TRUE;
+			Session->KillTimer = 0;
+
+			return;
+		}
+
+		Session = Session->Next;
+	}
+
+	// Input with no session create another
+
+	Session = AllocateSession(sockptr->socket, 'T');
+
+	if (Session == 0)
+	{
+		Msg[0] = 0x81;		// Fin, Data
+		strcpy(&Msg[2], "No Session. Reload Page to reconnect\r\n");
+		Msg[1] = strlen(&Msg[2]);
+		send(sockptr->socket, Msg, Msg[1] + 2, 0);
+
+		Msg[0] = 0x88;		// Fin, Close
+		send(sockptr->socket, Msg, Msg[1] + 2, 0);
+		return;
+	}
+
+	if (sockptr->USER)
+	{
+		Session->USER = sockptr->USER;
+		strcpy(Session->HTTPCall, sockptr->USER->Callsign);
+		
+		ConvToAX25(Session->HTTPCall, AXCall);
+		ChangeSessionCallsign(Session->Stream, AXCall);
+
+		BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = Session->USER->Secure;
+	}
+
+	Session->TNC = sockptr->TNC;
+	Session->sockptr = sockptr;
+	Session->WebsockTerm = 1;
+
+	ProcessWebTermInput(sockptr, Payload);				// Reenter
+}
+
+void ProcessWebTermClosed(struct ConnectionInfo * sockptr)
+{
+	struct HTTPConnectionInfo * Session = SessionList;
+	struct HTTPConnectionInfo * PreviousSession = NULL;
+	int i;
+
+	while (Session)
+	{
+		if (Session->sockptr == sockptr)
+		{
+			int Stream = Session->Stream;
+
+			SessionControl(Stream, 2, 0);
+			SessionStateNoSem(Stream, &i, &i);
+			DeallocateStream(Stream);
+			Session->Stream = 0;
+
+/*
+			if (PreviousSession)
+				PreviousSession->Next = Session->Next;		// Remove from chain
+			else
+				SessionList = Session->Next;
+
+			free(Session);
+*/
+			return;
+
+		}
+		Session = Session->Next;
+	}
+}
+
+		//var text = window.location.href;"
+		//var result = text.substring(7);"
+		//var myArray = result.split('/', 1);"
+		//ws = new WebSocket('ws://' + myArray[0] + '/WEBTERM?%s&%s&%s&%d');\r\n"
+
+
+
+int DoWebSockTerm(struct HTTPConnectionInfo * Session, struct ConnectionInfo * conn, char * _REPLYBUFFER, int LOCAL, int COOKIE, char * Context, SOCKET sock)
+{
+	char TermPage[] =
+		"<html><meta http-equiv=expires content=0>\r\n"
+		"<head><title>Web Terminal</title></head>\r\n"
+		"<link rel='stylesheet' href='webproc.css'>\r\n"
+		"<script type = \"text/javascript\">\r\n"
+
+		"var div, recon, ws;\r\n"
+		"var CRLF = \"\\r\\n\";"
+
+
+		"function doWindowSize()\r\n"
+		"{\r\n"
+		" div = document.getElementById('div');\r\n"
+		" div.style.height = window.innerHeight - 125;"
+		"}\r\n"
+		"window.onresize = doWindowSize;\r\n"
+	//	"window.onunload = function(){ws.close()};"
+
+		"function Action(data){\r\n"
+		"req = new XMLHttpRequest();\r\n"
+		"req.open('POST', 'TermAction?%s', true);\r\n"
+		"req.send(data);"
+//		"alert(data + ' Sent');"
+		"}\r\n"
+
+		"function doWindowClose(){window.close();}"
+
+		"function onLoad()"
+		"{"
+		" doWindowSize();"
+		" recon = document.getElementById('recon');\r\n"
+
+		" OpenWebSocket();"
+		" history.pushState({}, '', '/Node/WebSockTerm.html');"
+		"}"
+
+		"function OpenWebSocket()"
+		"{"
+		" if (\"WebSocket\" in window)"
+		" {"
+		"  // open a web socket. Get address from URL - changes to allow for https\r\n"
+		
+		"  var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';\r\n"
+		"  ws = new WebSocket(proto + window.location.host + '/WEBTERM?%s&%s&%s&%d');\r\n"
+
+		"  ws.onopen = function()  // Web Socket is connected\r\n"
+		"  {\r\n"
+		"   const div = document.getElementById('div');\r\n"
+		"   div.textContent += 'Websock Connected' + CRLF\r\n"
+		"   recon.style.display = 'none';"
+		"   div.scrollTop = div.scrollHeight;\r\n"
+		"  };\r\n"
+
+		"  ws.onmessage = function (evt)"
+		"  {"
+		"   var received_msg = evt.data;\r\n"
+		"   const div = document.getElementById('div');\r\n"
+		"   div.textContent += received_msg\r\n"
+		"   div.scrollTop = div.scrollHeight;\r\n"
+		"  };\r\n"
+
+		"  ws.onclose = function()  // websocket is closed.\r\n"
+		"  {"  
+		"	 const div = document.getElementById('div');\r\n"
+		"	 div.textContent += 'Websock Connection Lost' + CRLF;\r\n"
+		"    div.scrollTop = div.scrollHeight;\r\n"
+		"    recon.style.display = 'inline';"
+		"  };"
+
+		"  const form = document.getElementById('form');\r\n"
+		"  const input = document.getElementById('input');\r\n"
+		"  form.addEventListener('submit', function (e)\r\n"
+		"  {\r\n"
+		"   e.preventDefault(); // Stop normal HTTP submit\r\n"
+		"   var inp = input.value + '\\r'\r\n;"
+		"   input.value = ''; // Clear the input\r\n"
+		"	ws.send(inp);\r\n"
+		"	div.textContent += inp;\r\n"
+		"   div.scrollTop = div.scrollHeight;\r\n"
+		"  })\r\n"
+		" }\r\n"
+		" else\r\n"
+		" {\r\n"
+		"  // The browser doesn't support WebSocket\r\n"
+		"  const div = document.getElementById('div');\r\n"
+		"  div.textContent  = 'WebSocket not supported by your Browser - Websock Terminal not availible'\r\n"
+		" }"
+		"}"
+		"</script>\r\n"
+		"</head>\r\n"
+		"<body height: 600px; onload=onLoad()>\r\n"
+		"<h3 align=center>BPQ32 Node %s</h3>"
+		"<p align=center><input type=submit class='btn' value='Close Window' onclick='doWindowClose()'> "
+		"<input id=recon type=submit class='btn' value='Reconnect'  onclick='OpenWebSocket()'> "
+		
+		"<span class='dropdown'>"
+		"<button class='dropbtn'>Actions</button>\r\n"
+		"<span class='dropdown-content'>"
+//		"<a href='/Node/Disconnect?%s'>Disconnect from Node</a>"
+		"<a href='javascript:Action(\"Disconnect\");'>Disconnect from Node</a>"
+//		"<a href='javascript:Action(\"KillRestart\");'>Kill and Restart TNC</a>"
+		"</span></span>"		
+		
+		"<div id='div' style=\"%s;overflow:auto; white-space: pre-wrap; border: 1px solid\">Waiting for connection...<br>\r\n"
+		"</div>\r\n"
+
+		"<div style='width:100%%; height: 25px;'>"
+		"<form id='form' style=\"width: 100%%;\"><input autofocus type='text' style=\"%s ;width: 100%%;\" id='input'></form>\r\n"
+		"</div>\r\n";
+
+	struct TNCINFO * TNC = conn->TNC;
+	struct TCPINFO * TCP = 0;
+	struct HTTPConnectionInfo * NewSession;
+	int ReplyLen;
+	char Key = 0;
+	struct UserRec * USER;
+
+	if (Session)
+		Key = Session->Key[0];
+
+	if (TNC)
+		TCP = TNC->TCPInfo;
+
+	// See if we need to send login page
+
+	if (LOCAL == 0 && Key != 'T' && Key != 'N')
+	{
+		// Not signed in as Term or Node and not local connection - send login page
+
+		return sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Context, "Websocks");
+	}
+
+	if (Key != 'T')
+	{
+		// Either logged into node or Local Session - Create Sessiob 
+
+		char AXCall[10];
+
+		NewSession = AllocateSession(sock, 'T');
+
+		if (NewSession == 0)			// No Memory - Give up!
+			return 0;
+
+		if (Key == 'N' && Session->USER)
+		{
+			// signed into node - use call from signin
+
+			strcpy(NewSession->HTTPCall, Session->USER->Callsign);
+			NewSession->USER = Session->USER;
+		}
+		else
+		{
+			strcpy(NewSession->HTTPCall, MYNODECALL);
+			USER = NewSession->USER = &SYSOPUSER;
+			USER->Callsign = MYNODECALL;
+		}
+
+		ConvToAX25(NewSession->HTTPCall, AXCall);
+		ChangeSessionCallsign(NewSession->Stream, AXCall);
+
+		BPQHOSTVECTOR[NewSession->Stream -1].HOSTSESSION->Secure_Session = NewSession->USER->Secure;
+	}
+	else
+	{
+		// Already have session from 
+		NewSession = Session;
+	}
+
+	NewSession->TNC = conn->TNC;
+	NewSession->sockptr = 0;
+	NewSession->WebsockTerm = 1;
+
+	USER = NewSession->USER;
+
+	if (TCP && TCP->WebTermCSS)	
+		ReplyLen = sprintf(_REPLYBUFFER, TermPage,NewSession->Key,  NewSession->Key, USER->Callsign, USER->Password, USER->Secure, NewSession->HTTPCall,
+			TCP->WebTermCSS, TCP->WebTermCSS);
+	else
+		ReplyLen = sprintf(_REPLYBUFFER, TermPage, NewSession->Key, NewSession->Key, USER->Callsign, USER->Password, USER->Secure, NewSession->HTTPCall,
+			 "font-family:monospace", "font-family:monospace");
+
+		//			if (Appl[0])
+		//			{
+		//				strcat(Appl, "\r");
+		//				SendMsg(Session->Stream, Appl, strlen(Appl));
+		//			}
+
+	return ReplyLen;
 }
 
 

@@ -203,18 +203,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 ok:
 	switch (fn)
 	{
-	case 1:				// poll
-
-		for (Stream = 0; Stream <= MaxStreams; Stream++)
-		{
-			if (TNC->Streams[Stream].ReportDISC)
-			{
-				TNC->Streams[Stream].ReportDISC = FALSE;
-				buff->PORT = Stream;
-
-				return -1;
-			}
-		}
+	case 7:				// poll
 
 		DEDCheckRX(TNC);
 		DEDPoll(port);
@@ -233,7 +222,27 @@ ok:
 						STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
 				}
 			}
-			else
+	
+	
+		}
+
+		return 0;
+
+	case 1:
+
+		for (Stream = 0; Stream <= MaxStreams; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
+			
+			if (STREAM->ReportDISC)
+			{
+				STREAM->ReportDISC = FALSE;
+				buff->PORT = Stream;
+
+				return -1;
+			}
+
+			if (STREAM->PACTORtoBPQ_Q)
 			{
 				int datalen;
 			

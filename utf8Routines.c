@@ -537,15 +537,13 @@ int TrytoGuessCode(unsigned char * Char, int Len)
 			if (Char[n] > 127)
 			{
 				Above127++;
-				if (Char[n] > 178 && Char[n] < 219)
-				{
+				if (Char[n] > 175 && Char[n] < 224)
 					LineDraw++;
-				}
 			}
 		}
 	}
 
-	if (Above127 == 0)			// DOesn't really matter!
+	if (Above127 == 0)			// Doesn't really matter!
 		return 1252;
 
 	if (LineDraw > ((Above127 * 9) / 10))

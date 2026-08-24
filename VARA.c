@@ -412,6 +412,18 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			}
 		}
 
+		if (STREAM->NeedDisc)
+		{
+			STREAM->NeedDisc--;
+
+			if (STREAM->NeedDisc == 0)
+			{
+				// Send the DISCONNECT
+
+				VARASendCommand(TNC, "DISCONNECT\r", TRUE);
+			}
+		}
+
 
 		while (TNC->PortRecord->UI_Q)
 		{
@@ -488,42 +500,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			TNC->PageChanged = FALSE;
 		}
 
-		return 0;
-
-	case 1:				// poll
-
-		if (STREAM->NeedDisc)
-		{
-			STREAM->NeedDisc--;
-
-			if (STREAM->NeedDisc == 0)
-			{
-				// Send the DISCONNECT
-
-				VARASendCommand(TNC, "DISCONNECT\r", TRUE);
-			}
-		}
-
-	/*
-	{
-					struct tm * tm;
-					char Time[80];
-				
-					TNC->Restarts++;
-					TNC->LastRestart = NOW;
-
-					tm = gmtime(&TNC->LastRestart);	
-				
-					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
-						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
-
-					MySetWindowText(TNC, TNC->xIDC_RESTARTTIME, Time);
-					strcpy(TNC->WEB_RESTARTTIME, Time);
-
-					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-					MySetWindowText(TNC, TNC->xIDC_RESTARTS, Time);
-					strcpy(TNC->WEB_RESTARTS, Time);
-*/	
 
 		if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Streams[0].Attached == 0)
 		{
@@ -560,16 +536,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			Rig_Command( (TRANSPORTENTRY *) -1, Msg);
 		}
 
-		if (TNC->Streams[0].Attached)
-			CheckForDetach(TNC, 0, &TNC->Streams[0], TidyClose, ForcedClose, CloseComplete);
-
-		if (TNC->Streams[0].ReportDISC)
-		{
-			TNC->Streams[0].ReportDISC = FALSE;
-			buff->PORT = 0;
-			return -1;
-		}
-
 		if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
 		{
 			//	See if time to reconnect
@@ -582,6 +548,20 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			}
 		}
 		
+		if (TNC->Streams[0].Attached)
+			CheckForDetach(TNC, 0, &TNC->Streams[0], TidyClose, ForcedClose, CloseComplete);
+
+		return 0;
+
+	case 1:				// poll
+
+		if (TNC->Streams[0].ReportDISC)
+		{
+			TNC->Streams[0].ReportDISC = FALSE;
+			buff->PORT = 0;
+			return -1;
+		}
+
 		// See if any frames for this port
 
 		if (TNC->Streams[0].BPQtoPACTOR_Q)		//Used for CTEXT

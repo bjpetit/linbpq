@@ -372,6 +372,10 @@ ok:
 
 		// 100 mS Timer. 
 
+		DEDCheckRX(TNC);
+		DEDPoll(port);
+		DEDCheckRX(TNC);
+
 		// G7TAJ's code to record activity for stats display
 			
 		if ( TNC->BusyFlags && CDBusy )
@@ -408,9 +412,6 @@ ok:
 			}
 		}
 
-		DEDCheckRX(TNC);
-		DEDPoll(port);
-		DEDCheckRX(TNC);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{

@@ -1431,7 +1431,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
-		if(memcmp(Buffer, ".\r\n", 3) == 0)
+		if (_memicmp(Buffer, ".\r\n", 3) == 0)
 		{
 			char * ptr1, * ptr2;
 			int linelen, MsgLen;
@@ -1782,14 +1782,14 @@ ZvVx9G1hcg==
 */
 
 
-	if(memcmp(Buffer, "AUTH LOGIN", 10) == 0)
+	if (_memicmp(Buffer, "AUTH LOGIN", 10) == 0)
 	{
 		sockptr->State = GettingUser;
 		SendSock(sockptr, "334 VXNlcm5hbWU6");
 		return;
 	}
 
-	if(memcmp(Buffer, "EHLO",4) == 0)
+	if (_memicmp(Buffer, "EHLO",4) == 0)
 	{
 		SendSock(sockptr, "250-BPQ Mail Server");
 		SendSock(sockptr, "250 AUTH LOGIN");
@@ -1799,7 +1799,7 @@ ZvVx9G1hcg==
 		return;
 	}
 
-	if(memcmp(Buffer, "AUTH LOGIN", 10) == 0)
+	if (_memicmp(Buffer, "AUTH LOGIN", 10) == 0)
 	{
 		sockptr->State = GettingUser;
 		SendSock(sockptr, "334 VXNlcm5hbWU6");
@@ -1807,7 +1807,7 @@ ZvVx9G1hcg==
 	}
 
 
-	if(memcmp(Buffer, "HELO",4) == 0)
+	if (_memicmp(Buffer, "HELO",4) == 0)
 	{
 		SendSock(sockptr, "250 Ok");
 		return;
@@ -1866,7 +1866,7 @@ ZvVx9G1hcg==
 		return;
 	}
 
-	if(memcmp(Buffer, "DATA\r\n", 6) == 0)
+	if (_memicmp(Buffer, "DATA\r\n", 6) == 0)
 	{
 		sockptr->MailBuffer=malloc(10000);
 		sockptr->MailBufferSize=10000;
@@ -1886,7 +1886,7 @@ ZvVx9G1hcg==
 		return;
 	}
 
-	if(memcmp(Buffer, "QUIT\r\n", 6) == 0)
+	if (_memicmp(Buffer, "QUIT\r\n", 6) == 0)
 	{
 		SendSock(sockptr, "221 OK");
 		Sleep(500);
@@ -1894,7 +1894,7 @@ ZvVx9G1hcg==
 		return;
 	}
 
-	if(memcmp(Buffer, "RSET\r\n", 6) == 0)
+	if (_memicmp(Buffer, "RSET\r\n", 6) == 0)
 	{
 		SendSock(sockptr, "250 Ok");
 
@@ -2071,7 +2071,7 @@ int CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date,
 
 	// If NTS message (TO is numeric and AT is NTSxx or NTSxx.NTS - Outlook won't accept x@y)
 
-	if (isdigits(Msg->to) && memcmp(Msg->via, "NTS", 3) == 0)
+	if (isdigits(Msg->to) && _memicmp(Msg->via, "NTS", 3) == 0)
 	{
 		if (Msg->via[5] == 0 || strcmp(&Msg->via[5], ".NTS") == 0)
 		{
@@ -2321,7 +2321,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	WriteLogLine(NULL, '<',Buffer, Len-2, LOG_TCP);
 
-	if(memcmp(Buffer, "CAPA",4) == 0)
+	if (_memicmp(Buffer, "CAPA",4) == 0)
 	{
 		SendSock(sockptr, "+OK Capability list follows");
 		SendSock(sockptr, "UIDL");
@@ -2331,7 +2331,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}  
 
-	if(memcmp(Buffer, "AUTH",4) == 0)
+	if (_memicmp(Buffer, "AUTH",4) == 0)
 	{
 		SendSock(sockptr, "-ERR");
 		return;
@@ -2399,7 +2399,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "QUIT",4) == 0)
+	if (_memicmp(Buffer, "QUIT",4) == 0)
 	{
 		SendSock(sockptr, "+OK Finished");
 
@@ -2409,13 +2409,13 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "NOOP",4) == 0)
+	if (_memicmp(Buffer, "NOOP",4) == 0)
 	{
 		SendSock(sockptr, "+OK ");
 		return;
 	}
 
-//	if (memcmp(Buffer, "LAST",4) == 0)
+//	if (_memicmp(Buffer, "LAST",4) == 0)
 //	{
 //		SendSock(sockptr, "+OK 0");
 //		return;
@@ -2428,7 +2428,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "STAT",4) == 0)
+	if (_memicmp(Buffer, "STAT",4) == 0)
 	{
 		char reply[40];
 		int i, size=0;
@@ -2444,7 +2444,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "UIDL",4) == 0)
+	if (_memicmp(Buffer, "UIDL",4) == 0)
 	{
 		char reply[40];
 		int i, count=0, size=0;
@@ -2462,7 +2462,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "LIST", 4) == 0)
+	if (_memicmp(Buffer, "LIST", 4) == 0)
 	{
 		char reply[40];
 		int i, count=0, size=0;
@@ -2496,7 +2496,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "RETR", 4) == 0 || memcmp(Buffer, "TOP", 3) == 0)
+	if (_memicmp(Buffer, "RETR", 4) == 0 || memcmp(Buffer, "TOP", 3) == 0)
 	{
 		char * ptr;		
 		char Header[120];
@@ -2510,7 +2510,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		BOOL TOP = FALSE;
 		int Len;
 
-		if (memcmp(Buffer, "TOP", 3) == 0)
+		if (_memicmp(Buffer, "TOP", 3) == 0)
 			TOP = TRUE;
 
 		ptr=strlop(Buffer, ' ');			// Get Number
@@ -2695,7 +2695,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	}
 
 
-	if (memcmp(Buffer, "DELE",4) == 0)
+	if (_memicmp(Buffer, "DELE",4) == 0)
 	{
 		char * ptr;		
 		int i;
@@ -2720,7 +2720,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	}
 
 
-	if (memcmp(Buffer, "QUIT",4) == 0)
+	if (_memicmp(Buffer, "QUIT",4) == 0)
 	{
 		SendSock(sockptr, "+OK Finished");
 
@@ -2962,7 +2962,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForGreeting)
 	{
-		if (memcmp(Buffer, "220 ",4) == 0)
+		if (_memicmp(Buffer, "220 ",4) == 0)
 		{
 			TryHELO = 0;
 
@@ -2987,7 +2987,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	if (sockptr->State == WaitingForHELOResponse)
 	{
 /*
-	if (memcmp(Buffer, "500 ",4) == 0 && TryHELO == 0)
+	if (_memicmp(Buffer, "500 ",4) == 0 && TryHELO == 0)
 		{
 			TryHELO = 1;
 
@@ -3001,10 +3001,10 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			return;
 		}
 */
-		if (memcmp(Buffer, "250-",4) == 0)
+		if (_memicmp(Buffer, "250-",4) == 0)
 			return;
 
-		if (memcmp(Buffer, "250 ",4) == 0)
+		if (_memicmp(Buffer, "250 ",4) == 0)
 		{
 			if (SMTPAuthNeeded && sockptr->AMPR == FALSE)
 			{
@@ -3030,21 +3030,21 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForAUTHResponse)
 	{
-		if (memcmp(Buffer, "334 VXN", 7) == 0)
+		if (_memicmp(Buffer, "334 VXN", 7) == 0)
 		{
 			char * Msg = str_base64_encode(ISPAccountName);
 			SendSock(sockptr, Msg);
 			free(Msg);
 			return;
 		}
-		else if (memcmp(Buffer, "334 UGF", 7) == 0)
+		else if (_memicmp(Buffer, "334 UGF", 7) == 0)
 		{
 			char * Msg = str_base64_encode(ISPAccountPass);
 			SendSock(sockptr, Msg);
 			free(Msg);
 			return;
 		}
-		else if (memcmp(Buffer, "235 ", 4) == 0)
+		else if (_memicmp(Buffer, "235 ", 4) == 0)
 		{
 			sockprintf(sockptr, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, sockptr->FromDomain);
 //			sockprintf(sockptr, "MAIL FROM: <%s@%s.%s>", sockptr->SMTPMsg->from, BBSName, HRoute);
@@ -3065,7 +3065,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForFROMResponse)
 	{
-		if (memcmp(Buffer, "250 ",4) == 0)
+		if (_memicmp(Buffer, "250 ",4) == 0)
 		{
 			sockprintf(sockptr, "RCPT TO: <%s>", sockptr->SMTPMsg->via);
 			sockptr->State = WaitingForTOResponse;
@@ -3083,7 +3083,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForTOResponse)
 	{
-		if (memcmp(Buffer, "250 ",4) == 0)
+		if (_memicmp(Buffer, "250 ",4) == 0)
 		{
 			SendSock(sockptr, "DATA");
 			sockptr->State = WaitingForDATAResponse;
@@ -3104,13 +3104,13 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		int Len;
 		UCHAR * UTF;
 		
-		if (memcmp(Buffer, "354 ",4) == 0)
+		if (_memicmp(Buffer, "354 ",4) == 0)
 		{
 			sockprintf(sockptr, "To: %s", sockptr->SMTPMsg->via);
 			sockprintf(sockptr, "From: %s <%s@%s>", sockptr->SMTPMsg->from, sockptr->SMTPMsg->from, sockptr->FromDomain);
 			sockprintf(sockptr, "Sender: %s@%s", sockptr->SMTPMsg->from, sockptr->FromDomain);
 			if (GMailMode && sockptr->AMPR == FALSE)
-				sockprintf(sockptr, "Reply-To: %s+%s@%s", GMailName, sockptr->SMTPMsg->from, sockptr->FromDomain);
+				sockprintf(sockptr, "Reply-To: %s+%s@gmail.com", GMailName, sockptr->SMTPMsg->from);
 			else
 				sockprintf(sockptr, "Reply-To: %s@%s", sockptr->SMTPMsg->from, sockptr->FromDomain);
 
@@ -3187,7 +3187,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		struct MsgInfo * Msg = sockptr->SMTPMsg;
 
-		if (memcmp(Buffer, "250 ",  4) == 0)
+		if (_memicmp(Buffer, "250 ",  4) == 0)
 		{
 			// if AMPR, clear forwarding bitmap
 
@@ -3453,7 +3453,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
-		if(memcmp(Buffer, ".\r\n", 3) == 0)
+		if (_memicmp(Buffer, ".\r\n", 3) == 0)
 		{
 			// File Message
 
@@ -3625,7 +3625,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForGreeting)
 	{
-		if (memcmp(Buffer, "+OK", 3) == 0)
+		if (_memicmp(Buffer, "+OK", 3) == 0)
 		{
 			sockprintf(sockptr, "USER %s", ISPAccountName);
 			sockptr->State = WaitingForUSERResponse;
@@ -3641,7 +3641,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForUSERResponse)
 	{
-		if (memcmp(Buffer, "+OK", 3) == 0)
+		if (_memicmp(Buffer, "+OK", 3) == 0)
 		{
 			sockprintf(sockptr, "PASS %s", ISPAccountPass);
 			sockptr->State = WaitingForPASSResponse;
@@ -3657,7 +3657,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForPASSResponse)
 	{
-		if (memcmp(Buffer, "+OK", 3) == 0)
+		if (_memicmp(Buffer, "+OK", 3) == 0)
 		{
 			SendSock(sockptr, "STAT");
 			sockptr->State = WaitingForSTATResponse;
@@ -3673,7 +3673,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForSTATResponse)
 	{
-		if (memcmp(Buffer, "+OK", 3) == 0)
+		if (_memicmp(Buffer, "+OK", 3) == 0)
 		{
 			int Msgs = atoi(&Buffer[3]);
 			
@@ -3703,7 +3703,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForRETRResponse)
 	{
-		if (memcmp(Buffer, "+OK", 3) == 0)
+		if (_memicmp(Buffer, "+OK", 3) == 0)
 		{
 			sockptr->MailBuffer=malloc(10000);
 			sockptr->MailBufferSize=10000;
@@ -3731,7 +3731,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	}
 	if (sockptr->State == WaitingForDELEResponse)
 	{
-		if (memcmp(Buffer, "+OK", 3) == 0)
+		if (_memicmp(Buffer, "+OK", 3) == 0)
 		{
 			if (sockptr->POP3MsgCount > sockptr->POP3MsgNum++)
 			{

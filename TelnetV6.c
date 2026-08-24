@@ -94,6 +94,9 @@ void ProcessRHPWebSockClosed(SOCKET socket);
 int ProcessSNMPPayload(UCHAR * Msg, int Len, UCHAR * Reply, int * OffPtr);
 int RHPProcessHTTPMessage(struct ConnectionInfo * conn, char * response, char * Method, char * URL, char * request, BOOL LOCAL, BOOL COOKIE);
 void checkNRTCPSockets(int portNo);
+int ProcessNewTermWebSock(struct ConnectionInfo * sockptr, char * Key);
+void ProcessWebTermInput(struct ConnectionInfo * sockptr, char * Payload);
+void ProcessWebTermClosed(struct ConnectionInfo * sockptr);
 
 #ifndef LINBPQ
 extern HKEY REGTREE;
@@ -1000,10 +1003,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			TNC->PageChanged = FALSE;
 		}
 
-		return 0;
-
-	case 1:				// poll
-
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{	
 			TRANSPORTENTRY * SESS;
@@ -1039,7 +1038,17 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 					STREAM->ReportDISC = TRUE;
 				}
 			}
+		}
 
+		return 0;
+
+	case 1:
+
+		TelnetPoll(port);
+
+		for (Stream = 0; Stream <= MaxStreams; Stream++)
+		{	
+			STREAM = &TNC->Streams[Stream];
 			if (STREAM->ReportDISC)
 			{
 				STREAM->ReportDISC = FALSE;
@@ -1047,13 +1056,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				return -1;
 			}
-		}
-
-		TelnetPoll(port);
-
-		for (Stream = 0; Stream <= MaxStreams; Stream++)
-		{
-			STREAM = &TNC->Streams[Stream];
 
 			if (STREAM->PACTORtoBPQ_Q !=0)
 			{
@@ -5223,11 +5225,28 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 
 		if (Opcode == 8)
 		{
-			Debugprintf("WebSock Close");
+			char Msg[256];
+		
+			if (strcmp(sockptr->WebURL, "WEBTERM") == 0)
+			{
+				ProcessWebTermClosed(sockptr);
+			}
+
+	//		Msg[0] = 0x88;		// Fin, Close
+	//		Msg[1] = 9;
+	//		strcpy(&Msg[2], "Close ACK");
+	
+	//		send(sockptr->socket, Msg, 11, 0);
 		}
 		else if (Opcode == 1)
 		{
-			if (strcmp(sockptr->WebURL, "RIGCTL") == 0)
+			if (strcmp(sockptr->WebURL, "WEBTERM") == 0)
+			{
+				Payload[Len] = 0;
+				ProcessWebTermInput(sockptr, Payload);
+			}
+					
+			else if (strcmp(sockptr->WebURL, "RIGCTL") == 0)
 			{
 				// PTT Message
 
@@ -5316,6 +5335,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 		ShowConnections(TNC);
 
 		memcpy(sockptr->WebURL, &MsgPtr[5], 31);
+		strlop(sockptr->WebURL, '?');
 		strlop(sockptr->WebURL, ' ');
 
 		if (strcmp(sockptr->WebURL, "RIGCTL") == 0)
@@ -5341,6 +5361,15 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 				}
 			}
 		}
+		else if (memcmp(sockptr->WebURL, "WEBTERM", 7) == 0)
+		{
+			// We have to hook this socket to the Terminal Session 
+			char * Key = strlop(&MsgPtr[5], '?');
+
+			strlop(Key, ' ');
+			ProcessNewTermWebSock(sockptr, Key);
+		}
+
 
 		ptr = strstr(MsgPtr, "BPQSessionCookie=N");
 

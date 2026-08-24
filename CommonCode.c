@@ -1565,6 +1565,42 @@ DllExport int APIENTRY SessionState(int stream, int * state, int * change)
 	return 0;
 }
 
+int SessionStateNoSem(int stream, int * state, int * change)
+{
+	//	Get current Session State. Any state changed is ACK'ed
+	//	automatically. See BPQHOST functions 4 and 5.
+
+	BPQVECSTRUC * HOST = &BPQHOSTVECTOR[stream -1];		// API counts from 1
+
+	Check_Timer();				// In case Appl doesnt call it often ehough
+
+	//	CX = 0 if stream disconnected or CX = 1 if stream connected
+	//	DX = 0 if no change of state since last read, or DX = 1 if
+	//	       the connected/disconnected state has changed since
+	//	       last read (ie. delta-stream status).
+
+	//	HOSTFLAGS = Bit 80 = Allocated
+	//		  Bit 40 = Disc Request
+	//		  Bit 20 = Stay Flag
+	//		  Bit 02 and 01 State Change Bits
+
+	if ((HOST->HOSTFLAGS & 3) == 0)
+		// No Chaange
+		*change = 0;
+	else
+		*change = 1;
+
+	if (HOST->HOSTSESSION)			// LOCAL SESSION
+		// Connected
+		*state = 1;
+	else
+		*state = 0;
+
+	HOST->HOSTFLAGS &= 0xFC;		// Clear Change Bitd
+	return 0;
+}
+
+
 DllExport int APIENTRY SessionStateNoAck(int stream, int * state)
 {
 	//	Get current Session State. Dont ACK any change

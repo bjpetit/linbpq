@@ -1995,10 +1995,10 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 			" if (\"WebSocket\" in window)"
 			" {"
 			"   // open a web socket. Get address from URL\r\n"
-			"	var text = window.location.href;"
-			"	var result = text.substring(7);"
-			"	var myArray = result.split('/', 1);"
-			"   ws = new WebSocket('ws://' + myArray[0] + '/WMRefresh&%s');\r\n"
+
+			"   var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';\r\n"
+			"   ws = new WebSocket(proto + window.location.host + '/WMRefresh&%s');\r\n"
+
 
 			"   ws.onopen = function() {\r\n"
 
@@ -2191,7 +2191,7 @@ void ProcessWebMailMessage(struct HTTPConnectionInfo * Session, char * Key, BOOL
 
 		EncodedTitle = doXMLTransparency(Msg->title);
 
-		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, Temp, EncodedTitle , "");
+		*RLen = sprintf(Reply, MsgInputPage, Key, ReplyAddr, Temp, EncodedTitle , "");
 
 		free(EncodedTitle);
 		return;

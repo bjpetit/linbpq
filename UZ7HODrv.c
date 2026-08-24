@@ -673,7 +673,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 	switch (fn)
 	{
-	case 1:				// poll
+	case 7:				// poll
 
 		if (MasterPort[port] == port)
 		{
@@ -856,8 +856,6 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 		}
 
-		// See if any frames for this port
-
 		for (Stream = 0; Stream <= TNC->AGWInfo->MaxSessions; Stream++)
 		{
 			STREAM = &TNC->Streams[Stream];
@@ -892,16 +890,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			if (STREAM->Attached)
 				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
 
-			if (STREAM->ReportDISC)
-			{
-				hookL4SessionDeleted(TNC, STREAM);
-				STREAM->ReportDISC = FALSE;
-				buff->PORT = Stream;
-
-				return -1;
-			}
-
-			// if Busy, send buffer status poll
+				// if Busy, send buffer status poll
 
 			if (STREAM->Connected && STREAM->FramesOutstanding)
 			{
@@ -934,7 +923,26 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 						STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
 				}
 			}
-			else
+		}
+
+		return 0;
+
+	case 1:
+			
+		for (Stream = 0; Stream <= TNC->AGWInfo->MaxSessions; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
+	
+			if (STREAM->ReportDISC)
+			{
+				hookL4SessionDeleted(TNC, STREAM);
+				STREAM->ReportDISC = FALSE;
+				buff->PORT = Stream;
+
+				return -1;
+			}
+
+			if (STREAM->PACTORtoBPQ_Q)
 			{
 				int datalen;
 

@@ -418,32 +418,28 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 	switch (fn)
 	{
-		case 7:			
+	case 7:			
 
 		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
 
 		// G7TAJ's code to record activity for stats display
-			
+
 		if ( TNC->BusyFlags && CDBusy )
 			TNC->PortRecord->PORTCONTROL.ACTIVE += 2;
 
 		if ( TNC->PTTState )
 			TNC->PortRecord->PORTCONTROL.SENDING += 2;
-		
+
 		SendPoll(TNC);
 
-			// Check for buffered data to send
+		// Check for buffered data to send
 
-			if (TNC->FreeDataInfo->toSendTimeout)
-			{
-				TNC->FreeDataInfo->toSendTimeout--;
-				if (TNC->FreeDataInfo->toSendTimeout <= 0)
-					FlushData(TNC);
-			}
-
-			return 0;
-
-		case 1:				// poll
+		if (TNC->FreeDataInfo->toSendTimeout)
+		{
+			TNC->FreeDataInfo->toSendTimeout--;
+			if (TNC->FreeDataInfo->toSendTimeout <= 0)
+				FlushData(TNC);
+		}
 
 //		FreeDataCheckRX(TNC);
 
@@ -600,7 +596,12 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
 
 		}
-				
+
+		return 0;
+
+	case 1:				// poll
+
+		
 		// See if any frames for this port
 
 		for (Stream = 0; Stream <= 2; Stream++)
@@ -632,7 +633,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 		
 				ReleaseBuffer(buffptr);
 
-				return (1);
+				return 1;
 			}
 
 			if (STREAM->ReportDISC)		// May need a delay so treat as a counter
@@ -647,7 +648,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 				}
 			}
 		}
-		return (0);
+		return 0;
 
 	case 2:				// send
 

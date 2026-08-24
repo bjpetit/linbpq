@@ -1758,8 +1758,6 @@ VOID SendConACK(struct _LINKTABLE * LINK, TRANSPORTENTRY * L4, L3MESSAGEBUFFER *
 {
 	//	SEND CONNECT ACK	
 
-	struct TNCINFO * TNC;
-
 	L4CONNECTSIN++;
 	
 	L3MSG->L4TXNO = L4->CIRCUITINDEX;
@@ -1785,6 +1783,39 @@ VOID SendConACK(struct _LINKTABLE * LINK, TRANSPORTENTRY * L4, L3MESSAGEBUFFER *
 		WriteConnectLog(From, toCall, "NETROM");
 	}
 
+	L3SWAPADDRESSES(L3MSG);
+	
+	L3MSG->L3TTL = L3LIVES;
+
+	L3MSG->LENGTH = MSGHDDRLEN + 22;		// CTL 20 BYTE Header Window
+
+	if (BPQNODE)
+	{
+		L3MSG->L4DATA[1] = L3LIVES;		// Our TTL
+		if (L4->AllowCompress)
+			L3MSG->L4DATA[1] |= 0x80;
+
+		L3MSG->LENGTH++;
+	}
+
+	C_Q_ADD(&L4->L4TARGET.DEST->DEST_Q, (UINT *)L3MSG);
+
+/*
+
+	// This sends to neighbour. Now we queue to normal L4 Q
+
+	TNC = LINK->LINKPORT->TNC;
+
+	if (LINK->NEIGHBOUR && LINK->NEIGHBOUR->TCPPort)
+	{
+		TCPNETROMSend(LINK->NEIGHBOUR, L3MSG);
+		ReleaseBuffer(L3MSG);
+	}
+	else if (TNC && TNC->NetRomMode)
+		SendVARANetromMsg(TNC, L3MSG);
+	else
+		C_Q_ADD(&LINK->TX_Q, L3MSG);
+*/
 
 	if (CTEXTLEN && Applmask == 0)	// Connects to Node (not application)
 	{
@@ -1817,33 +1848,6 @@ VOID SendConACK(struct _LINKTABLE * LINK, TRANSPORTENTRY * L4, L3MESSAGEBUFFER *
 			Totallen -= Paclen;
 		}
 	}
-
-	L3SWAPADDRESSES(L3MSG);
-	
-	L3MSG->L3TTL = L3LIVES;
-
-	L3MSG->LENGTH = MSGHDDRLEN + 22;		// CTL 20 BYTE Header Window
-
-	if (BPQNODE)
-	{
-		L3MSG->L4DATA[1] = L3LIVES;		// Our TTL
-		if (L4->AllowCompress)
-			L3MSG->L4DATA[1] |= 0x80;
-
-		L3MSG->LENGTH++;
-	}
-
-	TNC = LINK->LINKPORT->TNC;
-
-	if (LINK->NEIGHBOUR && LINK->NEIGHBOUR->TCPPort)
-	{
-		TCPNETROMSend(LINK->NEIGHBOUR, L3MSG);
-		ReleaseBuffer(L3MSG);
-	}
-	else if (TNC && TNC->NetRomMode)
-		SendVARANetromMsg(TNC, L3MSG);
-	else
-		C_Q_ADD(&LINK->TX_Q, L3MSG);
 
 	IncomingL4ConnectionEvent(L4);
 }
