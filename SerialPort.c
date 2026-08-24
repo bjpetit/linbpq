@@ -308,10 +308,6 @@ ok:
 
 		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
 
-		SerialCheckRX(TNC);
-		return 0;
-
-	case 1:				// poll
 
 		while (TNC->PortRecord->UI_Q)
 		{
@@ -353,6 +349,17 @@ ok:
 					SerialSendCommand(TNC, "DISCONNECT\r");
 				}
 			}
+		}
+
+		return 0;
+
+	case 1:				// poll
+
+		SerialCheckRX(TNC);
+
+		for (Stream = 0; Stream <= 2; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
 
 			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && STREAM->Attached == 0)
 			{

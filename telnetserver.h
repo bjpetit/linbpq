@@ -78,6 +78,8 @@ struct ConnectionInfo
 
 	int Connecting;				// For outward connect
 	int Connected;
+
+	struct UserRec * USER;		// Telnet Server USER record - Used for Webterm
 };
 
 

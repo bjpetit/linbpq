@@ -373,12 +373,12 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 	switch (fn)
 	{
-		case 7:			
+	case 7:			
 
-			// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
+		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
 
 		// G7TAJ's code to record activity for stats display
-			
+
 		if ( TNC->BusyFlags && CDBusy )
 			TNC->PortRecord->PORTCONTROL.ACTIVE += 2;
 
@@ -386,28 +386,109 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			TNC->PortRecord->PORTCONTROL.SENDING += 2;
 
 		if (TNC->CONNECTED)
-			{
-				TNC->CONNECTED--;
+		{
+			TNC->CONNECTED--;
 
-				if (TNC->CONNECTED == 0)
+			if (TNC->CONNECTED == 0)
+			{
+				sprintf(TNC->WEB_COMMSSTATE, "Connection to HSMODEM lost");		
+				MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			}
+		}
+
+		TNC->PollDelay++;
+
+		if (TNC->PollDelay > 20)
+		{
+			TNC->PollDelay = 0;
+
+			SendPoll(TNC);
+		}
+
+		if (TNC->DiscPending)
+		{
+			TNC->DiscPending--;
+
+			if (TNC->DiscPending == 0)
+			{
+				// Too long in Disc Pending - Kill and Restart TNC
+			}
+		}
+	
+		for (Stream = 0; Stream <= 2; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
+
+			if (STREAM->NeedDisc)
+			{
+				STREAM->NeedDisc--;
+
+				if (STREAM->NeedDisc == 0)
 				{
-					sprintf(TNC->WEB_COMMSSTATE, "Connection to HSMODEM lost");		
-					MySetWindowText(TNC, TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+					// Send the DISCONNECT
+
+					HSMODEMSendCommand(TNC, "DISCONNECT\r");
+				}
+			}
+		}
+
+		for (Stream = 0; Stream <= 2; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
+
+			if (STREAM->NeedDisc)
+			{
+				STREAM->NeedDisc--;
+
+				if (STREAM->NeedDisc == 0)
+				{
+					// Send the DISCONNECT
+
+					HSMODEMSendCommand(TNC, "DISCONNECT\r");
 				}
 			}
 
-			TNC->PollDelay++;
-
-			if (TNC->PollDelay > 20)
+			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && STREAM->Attached == 0)
 			{
-				TNC->PollDelay = 0;
-	
-				SendPoll(TNC);
-			}
-		
-			return 0;
+				// New Attach
 
-		case 1:				// poll
+				int calllen;
+				char Msg[80];
+
+				Debugprintf("HSMODEM New Attach Stream %d", Stream);
+			
+				STREAM->Attached = TRUE;
+			
+				calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
+				TNC->Streams[Stream].MyCall[calllen] = 0;
+			
+	
+				HSMODEMChangeMYC(TNC, TNC->Streams[0].MyCall);
+		
+				// Stop other ports in same group
+
+				SuspendOtherPorts(TNC);
+	
+				//sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
+				//MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
+					// Stop Scanning
+
+				sprintf(Msg, "%d SCANSTOP", TNC->Port);
+	
+				Rig_Command( (TRANSPORTENTRY *) -1, Msg);
+			}
+				
+			if (STREAM->Attached)
+				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
+
+		}
+
+
+
+		return 0;
+
+	case 1:				// poll
 
 		HSMODEMCheckRX(TNC);
 
@@ -477,69 +558,7 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			ReleaseBuffer(buffptr);
 		}
 	
-	
-		if (TNC->DiscPending)
-		{
-			TNC->DiscPending--;
 
-			if (TNC->DiscPending == 0)
-			{
-				// Too long in Disc Pending - Kill and Restart TNC
-			}
-		}
-
-
-		for (Stream = 0; Stream <= 2; Stream++)
-		{
-			STREAM = &TNC->Streams[Stream];
-
-			if (STREAM->NeedDisc)
-			{
-				STREAM->NeedDisc--;
-
-				if (STREAM->NeedDisc == 0)
-				{
-					// Send the DISCONNECT
-
-					HSMODEMSendCommand(TNC, "DISCONNECT\r");
-				}
-			}
-
-			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && STREAM->Attached == 0)
-			{
-				// New Attach
-
-				int calllen;
-				char Msg[80];
-
-				Debugprintf("HSMODEM New Attach Stream %d", Stream);
-			
-				STREAM->Attached = TRUE;
-			
-				calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
-				TNC->Streams[Stream].MyCall[calllen] = 0;
-			
-	
-				HSMODEMChangeMYC(TNC, TNC->Streams[0].MyCall);
-		
-				// Stop other ports in same group
-
-				SuspendOtherPorts(TNC);
-	
-				//sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-				//MySetWindowText(TNC, TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
-
-					// Stop Scanning
-
-				sprintf(Msg, "%d SCANSTOP", TNC->Port);
-	
-				Rig_Command( (TRANSPORTENTRY *) -1, Msg);
-			}
-				
-			if (STREAM->Attached)
-				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
-
-		}
 				
 		// See if any frames for this port
 

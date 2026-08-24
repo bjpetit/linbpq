@@ -915,127 +915,24 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 			}
 		}
 
+		if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
+		{
+			//	See if time to reconnect
+		
+			time(&ltime);
+			if (ltime - TNC->lasttime > 9 )
+			{
+				if (TNC->ARDOPCommsMode == 'T' && TNC->PortRecord->PORTCONTROL.PortStopped == 0)
+					ConnecttoARDOP(TNC);
+				TNC->lasttime = ltime;
+			}
+		}
+
+
 		if (TNC->ARDOPCommsMode != 'T') // S I or E
 		{
 			ARDOPSCSCheckRX(TNC);
 			ARDOPSCSPoll(TNC);
-		}
-
-
-		return 0;
-
-	case 1:				// poll
-
-		// If not using serial interface, Rig Contol Frames are sent as 
-		// ARDOP Command Frames. These are hex encoded
-
-		if (TNC->ARDOPCommsMode == 'T' && TNC->BPQtoRadio_Q)
-		{
-			PMSGWITHLEN buffptr;
-			
-			buffptr = (PMSGWITHLEN)Q_REM(&TNC->BPQtoRadio_Q);
-		
-			if (TNC->CONNECTED)
-			{
-				int len = (int)buffptr->Len;
-				UCHAR * ptr = &buffptr->Data[0];
-				char RigCommand[256] = "RADIOHEX ";
-				char * ptr2 = &RigCommand[9] ;
-				int i, j;
-
-				if (len < 120)
-				{
-					while (len--)
-					{
-						i = *(ptr++);
-						j = i >>4;
-						j += '0';		// ascii
-						if (j > '9')
-							j += 7;
-						*(ptr2++) = j;
-
-						j = i & 0xf;
-						j += '0';		// ascii
-						if (j > '9')
-							j += 7;
-						*(ptr2++) = j;
-					}
-					ARDOPSendCommand(TNC, RigCommand, FALSE);
-				}
-			}
-			ReleaseBuffer(buffptr);	
-
-		}
-
-		while (TNC->PortRecord->UI_Q)
-		{
-			int datalen;
-			char * Buffer;
-			char FECMsg[512];
-			char Call[12] = "           ";		
-			struct _MESSAGE * buffptr;
-			int CallLen;
-			char * ptr = FECMsg;
-
-			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
-
-			if (TNC->CONNECTED == 0 ||
-				TNC->Streams[0].Connecting ||
-				TNC->Streams[0].Connected)
-			{
-				// discard if TNC not connected or session active
-
-				ReleaseBuffer(buffptr);
-				continue;
-			}
-	
-			datalen = buffptr->LENGTH - MSGHDDRLEN;
-			Buffer = &buffptr->DEST[0];		// Raw Frame
-			Buffer[datalen] = 0;
-
-			*ptr++ = '^';		// delimit frame with ^
-
-			// Frame has ax.25 format header. Convert to Text
-
-			CallLen = ConvFromAX25(Buffer + 7, Call);		// Origin
-			memcpy(ptr, Call, CallLen);
-			ptr += CallLen;
-
-			*ptr++ = '>';
-
-			CallLen = ConvFromAX25(Buffer, Call);			// Dest
-			memcpy(ptr, Call, CallLen);
-			ptr += CallLen;
-
-			Buffer += 14;						// TO Digis
-			datalen -= 14;
-
-			while ((Buffer[-1] & 1) == 0)
-			{
-				*ptr++ = ',';
-				CallLen = ConvFromAX25(Buffer,  Call);
-				memcpy(ptr, Call, CallLen);
-				ptr += CallLen;
-				Buffer += 7;	// End of addr
-				datalen -= 7;
-			}
-
-			*ptr++ = '|';		// delimit calls
-
-			if (Buffer[0] == 3)				// UI
-			{
-				Buffer += 2;
-				datalen -= 2;
-			}
-
-			memcpy(ptr, Buffer, datalen);
-			ptr += datalen;
-			*ptr++ = '^';		// delimit frame with ^
-
-			ARDOPSendData(TNC, FECMsg, (int)(ptr - FECMsg));
-			TNC->FECPending = 1;
-		
-			ReleaseBuffer((UINT *)buffptr);
 		}
 
 		if (TNC->Busy)							//  Count down to clear
@@ -1265,26 +1162,129 @@ static size_t ExtProc(int fn, int port, PDATAMESSAGE buff)
 
 				}
 			}
-		
-				
+			
 			if (STREAM->Attached)
 				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
 
 		}
 		
-		if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
+		
+		return 0;
+
+	case 1:				// poll. Called around every 10 mS
+
+		// If not using serial interface, Rig Contol Frames are sent as 
+		// ARDOP Command Frames. These are hex encoded
+
+		if (TNC->ARDOPCommsMode == 'T' && TNC->BPQtoRadio_Q)
 		{
-			//	See if time to reconnect
+			PMSGWITHLEN buffptr;
+			
+			buffptr = (PMSGWITHLEN)Q_REM(&TNC->BPQtoRadio_Q);
 		
-			time(&ltime);
-			if (ltime - TNC->lasttime > 9 )
+			if (TNC->CONNECTED)
 			{
-				if (TNC->ARDOPCommsMode == 'T' && TNC->PortRecord->PORTCONTROL.PortStopped == 0)
-					ConnecttoARDOP(TNC);
-				TNC->lasttime = ltime;
+				int len = (int)buffptr->Len;
+				UCHAR * ptr = &buffptr->Data[0];
+				char RigCommand[256] = "RADIOHEX ";
+				char * ptr2 = &RigCommand[9] ;
+				int i, j;
+
+				if (len < 120)
+				{
+					while (len--)
+					{
+						i = *(ptr++);
+						j = i >>4;
+						j += '0';		// ascii
+						if (j > '9')
+							j += 7;
+						*(ptr2++) = j;
+
+						j = i & 0xf;
+						j += '0';		// ascii
+						if (j > '9')
+							j += 7;
+						*(ptr2++) = j;
+					}
+					ARDOPSendCommand(TNC, RigCommand, FALSE);
+				}
 			}
+			ReleaseBuffer(buffptr);	
+
 		}
+
+		while (TNC->PortRecord->UI_Q)
+		{
+			int datalen;
+			char * Buffer;
+			char FECMsg[512];
+			char Call[12] = "           ";		
+			struct _MESSAGE * buffptr;
+			int CallLen;
+			char * ptr = FECMsg;
+
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+
+			if (TNC->CONNECTED == 0 ||
+				TNC->Streams[0].Connecting ||
+				TNC->Streams[0].Connected)
+			{
+				// discard if TNC not connected or session active
+
+				ReleaseBuffer(buffptr);
+				continue;
+			}
+	
+			datalen = buffptr->LENGTH - MSGHDDRLEN;
+			Buffer = &buffptr->DEST[0];		// Raw Frame
+			Buffer[datalen] = 0;
+
+			*ptr++ = '^';		// delimit frame with ^
+
+			// Frame has ax.25 format header. Convert to Text
+
+			CallLen = ConvFromAX25(Buffer + 7, Call);		// Origin
+			memcpy(ptr, Call, CallLen);
+			ptr += CallLen;
+
+			*ptr++ = '>';
+
+			CallLen = ConvFromAX25(Buffer, Call);			// Dest
+			memcpy(ptr, Call, CallLen);
+			ptr += CallLen;
+
+			Buffer += 14;						// TO Digis
+			datalen -= 14;
+
+			while ((Buffer[-1] & 1) == 0)
+			{
+				*ptr++ = ',';
+				CallLen = ConvFromAX25(Buffer,  Call);
+				memcpy(ptr, Call, CallLen);
+				ptr += CallLen;
+				Buffer += 7;	// End of addr
+				datalen -= 7;
+			}
+
+			*ptr++ = '|';		// delimit calls
+
+			if (Buffer[0] == 3)				// UI
+			{
+				Buffer += 2;
+				datalen -= 2;
+			}
+
+			memcpy(ptr, Buffer, datalen);
+			ptr += datalen;
+			*ptr++ = '^';		// delimit frame with ^
+
+			ARDOPSendData(TNC, FECMsg, (int)(ptr - FECMsg));
+			TNC->FECPending = 1;
 		
+			ReleaseBuffer((UINT *)buffptr);
+		}
+
 		// See if any frames for this port
 
 		for (Stream = 0; Stream <= APMaxStreams; Stream++)

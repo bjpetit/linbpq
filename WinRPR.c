@@ -512,6 +512,10 @@ ok:
 			}
 		}				
 
+		DEDCheckRX(TNC);
+		DEDPoll(port);
+		DEDCheckRX(TNC);
+
 		return 0;
 
 	case 1:				// poll
@@ -526,9 +530,6 @@ ok:
 			}
 		}
 
-		DEDCheckRX(TNC);
-		DEDPoll(port);
-		DEDCheckRX(TNC);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{

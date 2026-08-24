@@ -1165,6 +1165,9 @@
 //	Fix mail api returning garbage when deflate isn't requested (27)
 //	Fix PG command processing on 64 bit Linux (31)
 //	Limit L command output for new users (32)
+//	Allow lower case SMTP/POP3 commands (39)
+//	Fix Webmail Send Reply with SMTP server messages (39)
+//	Fix paging in PG server (39)
 
 
 #include "bpqmail.h"

@@ -153,7 +153,30 @@ static size_t ExtProc(int fn, int port, PMESSAGE buff)
 	}
 	switch (fn)
 	{
+	case 7:
+
+	if (PCAP->adhandle == 0)
+	{
+		// No handle. 
+		
+		if (PCAP->Adapter[0])	
+		{
+			// Try reopening periodically
+			
+			PCAP->pcap_reopen_delay --;
+			
+			if (PCAP->pcap_reopen_delay < 0)
+				if (OpenPCAP(PCAP) == FALSE)
+					PCAP->pcap_reopen_delay = 300;	// Retry every 30 seconds
+		}
+	}
+
+	return 0;
+
 	case 1:				// poll
+
+		if (PCAP->adhandle == 0)
+			return 0;
 
 		res = pcap_next_exx(PCAP->adhandle, &header, &pkt_data);
 

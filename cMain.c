@@ -2216,6 +2216,8 @@ int TIMERINTERRUPT()
 
 	if (GetTickCount() - last100mSTickCount >= 100)
 	{
+		// 100mS has elaped
+		
 		retval = 1;
 		
 		last100mSTickCount = GetTickCount();

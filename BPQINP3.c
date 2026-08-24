@@ -45,7 +45,7 @@ int PositiveDelay = 300;
 time_t SENDRIFTIME = 0;
 int RIFInterval = 3600;
 
-VOID SendNegativeInfo();
+VOID SendNegativeInfo(int sendAlways);
 VOID SortRoutes(struct DEST_LIST * Dest);
 VOID SendRTTMsg(struct ROUTE * Route);
 VOID TCPNETROMSend(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Frame);
@@ -175,6 +175,8 @@ VOID DeleteINP3Routes(struct ROUTE * Route)
 	struct DEST_LIST * Dest = DESTS;
 	char Call1[10];
 	char Call2[10];
+	int deletingFirstRoute = 0;
+
 
 	Call1[ConvFromAX25(Route->NEIGHBOUR_CALL, Call1)] = 0;
 
@@ -217,10 +219,26 @@ VOID DeleteINP3Routes(struct ROUTE * Route)
 
 			if (DEBUGINP3) Debugprintf("Deleting First INP3 Route to %s", Call2);
 
-			Dest->INP3ROUTE[0].STT = 60000;		// leave hops so we can check if we need to send
+			// Need to make sure it is sent by setting by sendnegative info by setting sendAlways below
 
-			if (DEBUGINP3) Debugprintf("Was the only INP3 route");
+			deletingFirstRoute = 1;
 
+			// I don't think this is right. If it is the only route send 60000 to other neighbours but if there are more
+			// promote them and send the new best, making sure it is sent even if a small change.
+
+
+			if (Dest->INP3ROUTE[1].ROUT_NEIGHBOUR == 0)			// No other INP3 routes
+			{	
+				if (DEBUGINP3) Debugprintf("Was the only INP3 route");
+				Dest->INP3ROUTE[0].STT = 60000;		// leave hops so we can check if we need to send
+			}
+			else
+			{
+				memcpy(&Dest->INP3ROUTE[0], &Dest->INP3ROUTE[1], sizeof(struct INP3_DEST_ROUTE_ENTRY));
+				memcpy(&Dest->INP3ROUTE[1], &Dest->INP3ROUTE[2], sizeof(struct INP3_DEST_ROUTE_ENTRY));
+				memset(&Dest->INP3ROUTE[2], 0, sizeof(struct INP3_DEST_ROUTE_ENTRY));
+			}
+		
 			if (Dest->DEST_ROUTE == 4)			// we were using it
 				Dest->DEST_ROUTE = 0;
 
@@ -248,8 +266,11 @@ VOID DeleteINP3Routes(struct ROUTE * Route)
 
 	// I think we should send Negative info immediately
 
-	NegTimerCount = NegativeDelay;
-	SendNegativeInfo();
+	if (deletingFirstRoute)
+	{
+		NegTimerCount = NegativeDelay;
+		SendNegativeInfo(TRUE);					// TRUE means always send even if little change
+	}
 }
 
 VOID DecayNETROMRoutes(struct ROUTE * Route)
@@ -1541,7 +1562,7 @@ VOID SendRIF(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Msg)
 	SendNetFrame(Route, Msg);
 }
 
-VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP3_DEST_ROUTE_ENTRY * Entry, int Negative, int portNum, int includeOptions)
+VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP3_DEST_ROUTE_ENTRY * Entry, int Negative, int portNum, int includeOptions, int sendAlways)
 {
 	UCHAR * axcall = Dest->DEST_CALL;
 	struct ROUTE * Routes = NEIGHBOURS;
@@ -1575,35 +1596,40 @@ VOID SendRIFToOtherNeighbours(struct DEST_LIST * Dest, UCHAR * alias, struct INP
 			{ 
 				// as we can now get very short times need to enforce absolute change as well as percentage
 				
-				diff = sendTT - lastTT;
-
-				if (diff < 0)
-					diff = -diff;
-
-				if (diff < 3)			// need more than 20 ms change
+				if (sendAlways == FALSE)
 				{
-					Routes+=1;
-					continue;
-				}		
+					// Send if sufficient change
 
-				if (Negative)
-				{
-					// only send if significantly worse
+					diff = sendTT - lastTT;
 
-					if (sendTT < (lastTT * NegativePercent) / 100)
+					if (diff < 0)
+						diff = -diff;
+
+					if (diff < 3)			// need more than 20 ms change
 					{
 						Routes+=1;
 						continue;
+					}		
+
+					if (Negative)
+					{
+						// only send if significantly worse
+
+						if (sendTT < (lastTT * NegativePercent) / 100)
+						{
+							Routes+=1;
+							continue;
+						}
 					}
-				}
-				else
-				{
-					// Send if significantly better
-
-					if (sendTT > (lastTT * PositivePercent) / 100)
+					else
 					{
-						Routes+=1;
-						continue;
+						// Send if significantly better
+
+						if (sendTT > (lastTT * PositivePercent) / 100)
+						{
+							Routes+=1;
+							continue;
+						}
 					}
 				}
 
@@ -1789,7 +1815,7 @@ VOID FlushRIFs()
 	}
 }
 
-VOID SendNegativeInfo()
+VOID SendNegativeInfo(int sendAlways)
 {
 	int i;
 	struct DEST_LIST * Dest = DESTS;
@@ -1818,7 +1844,7 @@ VOID SendNegativeInfo()
 		if (Entry->ROUT_NEIGHBOUR == 0)
 			continue;
 
-		SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, TRUE, FALSE, FALSE);
+		SendRIFToOtherNeighbours(Dest, 0, Entry, TRUE, FALSE, FALSE, sendAlways);
 			
 		if (Entry->STT >= 60000)
 		{
@@ -1827,6 +1853,9 @@ VOID SendNegativeInfo()
 			// Wrong. We may have other INP3 routes. Move them up. This will delete first if only one
 
 			// I think I need to set lastTT on all routes.
+
+			// This should now only happen if there are no more routes but leave oode here in case needed again
+
 
 			if (Dest->INP3ROUTE[1].ROUT_NEIGHBOUR == 0)			// No other INP3 routes
 			{	
@@ -1875,7 +1904,7 @@ VOID SendPositiveInfo()
 		Entry = &Dest->INP3ROUTE[0];
 
 		if (Entry->ROUT_NEIGHBOUR)
-			SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, FALSE, FALSE, FALSE);
+			SendRIFToOtherNeighbours(Dest, 0, Entry, FALSE, FALSE, FALSE, FALSE);
 	}
 }
 
@@ -1902,7 +1931,7 @@ VOID SendNewInfo()
 			
 			Entry = &Dest->INP3ROUTE[0];
 
-			SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, TRUE, FALSE, TRUE);	// Send as negative so will always be worse than zero
+			SendRIFToOtherNeighbours(Dest, Dest->DEST_ALIAS, Entry, TRUE, FALSE, TRUE, TRUE);	// Send as negative with sendAlways set so will always be sent
 		}
 	}
 }
@@ -2155,7 +2184,7 @@ VOID INP3TIMER()
 	if (NegTimerCount == 0)
 	{
 		NegTimerCount = NegativeDelay;
-		SendNegativeInfo();
+		SendNegativeInfo(FALSE);			// only if significant change
 	}
 	else
 		NegTimerCount--;

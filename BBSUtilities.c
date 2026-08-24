@@ -1761,6 +1761,12 @@ VOID SaveBIDDatabase()
 
 	Handle = fopen(BIDDatabasePath, "wb");
 
+	if (Handle == NULL)
+	{
+		Debugprintf("BPQMAIL can't open BID database (WFBID.SYS) for write");
+		return;
+	}
+
 	BIDRecPtr[0]->u.msgno = NumberofBIDs;			// First Record has file size
 
 	for (i=0; i <= NumberofBIDs; i++)
@@ -11270,6 +11276,32 @@ int DoReceivedData(int Stream)
 				if (conn->InputMode == 'P')			// Inside PG Server
 				{
 					user = conn->UserPointer;
+
+					// check for paging
+
+					if (conn->Paging && (conn->LinesSent >= conn->PageLen))
+					{
+						// Waiting for paging prompt
+
+						if (conn->InputLen > 1)
+						{
+							if (_memicmp(conn->InputBuffer, "Abort", 1) == 0)
+							{
+								ClearQueue(conn);
+								conn->LinesSent = 0;
+
+								nodeprintf(conn, AbortedMsg);
+								conn->InputMode = 0;
+								conn->InputLen = 0;
+								SendPrompt(conn, user);
+								return 0;
+							}
+						}
+
+						conn->InputLen = 0;
+						conn->LinesSent = 0;
+						return 0;
+					}
 					run_pg(conn, user);
 					return 0;
 				}
@@ -12071,14 +12103,12 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 
 	iop = NULL;
 
-	printf("Len %d %x %x %x\n", conn->InputLen, conn->InputBuffer[0], conn->InputBuffer[1], conn->InputBuffer[2]); 
-
 	conn->InputBuffer[conn->InputLen] = 0;
 	strlop(conn->InputBuffer, 13);
 
 	// validate command is alphanumberic
 
-	for (i = 0; i < conn->InputLen; i++)
+	for (i = 0; i < strlen(conn->InputBuffer); i++)
 	{
 		if (isalnum(conn->InputBuffer[i]) == 0 && conn->InputBuffer[i] != ' ')
 		{

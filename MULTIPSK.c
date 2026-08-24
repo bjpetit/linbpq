@@ -195,7 +195,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 
 	switch (fn)
 	{
-	case 1:				// poll
+	case 7:				// poll
 
 		if (MasterPort[port] == port)
 		{
@@ -204,7 +204,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 			if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
 			{
 				//	See if time to reconnect
-		
+
 				time( &ltime );
 				if (ltime-lasttime[port] >9 )
 				{
@@ -212,12 +212,12 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 					lasttime[port]=ltime;
 				}
 			}
-		
+
 			FD_ZERO(&readfs);
-			
+
 			if (TNC->CONNECTED) FD_SET(TNC->TCPSock,&readfs);
 
-			
+
 			FD_ZERO(&writefs);
 
 			if (TNC->CONNECTING) FD_SET(TNC->TCPSock,&writefs);	// Need notification of Connect
@@ -227,7 +227,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 
 
 			FD_ZERO(&errorfs);
-		
+
 			if (TNC->CONNECTING ||TNC->CONNECTED) FD_SET(TNC->TCPSock,&errorfs);
 
 			if (select((int)TNC->TCPSock+ 1, &readfs, &writefs, &errorfs, &timeout) > 0)
@@ -237,7 +237,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 				if (FD_ISSET(TNC->TCPSock,&readfs))
 				{
 					// data available
-			
+
 					ProcessReceivedData(port);			
 				}
 
@@ -249,47 +249,55 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 					TNC->CONNECTING = FALSE;
 
 					// If required, send signon
-				
+
 					send(TNC->TCPSock,"\x1a", 1, 0);
 					send(TNC->TCPSock,"DIGITAL MODE ?", 14, 0);
 					send(TNC->TCPSock,"\x1b", 1, 0);
 
-//					EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
+					//					EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 				}
-								
+
 				if (FD_ISSET(TNC->TCPSock,&errorfs))
 				{
 
 					//	if connecting, then failed, if connected then has just disconnected
 
-//					if (CONNECTED[port])
-//					if (!CONNECTING[port])
-//					{
-//						i=sprintf(ErrMsg, "MPSK Connection lost for BPQ Port %d\r\n", port);
-//						WritetoConsole(ErrMsg);
-//					}
+					//					if (CONNECTED[port])
+					//					if (!CONNECTING[port])
+					//					{
+					//						i=sprintf(ErrMsg, "MPSK Connection lost for BPQ Port %d\r\n", port);
+					//						WritetoConsole(ErrMsg);
+					//					}
 
 					CONNECTING[port]=FALSE;
 					CONNECTED[port]=FALSE;
-				
+
 				}
 
 			}
 
 		}
 
-		// See if any frames for this port
 
 		for (Stream = 0; Stream <= TNC->MPSKInfo->MaxSessions; Stream++)
 		{
 			STREAM = &TNC->Streams[Stream];
 
-			// Have to time out connects, as TNC doesn't report failure
+			if (STREAM->PACTORtoBPQ_Q == 0)
+			{
+				if (STREAM->DiscWhenAllSent)
+				{
+					STREAM->DiscWhenAllSent--;
+					if (STREAM->DiscWhenAllSent == 0)
+					STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
+				}
+			}
+				// Have to time out connects, as TNC doesn't report failure
 
 			if (STREAM->Connecting)
 			{
 				STREAM->Connecting--;
-			
+
 				if (STREAM->Connecting == 0)
 				{
 					// Report Connect Failed, and drop back to command mode
@@ -301,7 +309,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 						buffptr->Len = sprintf(buffptr->Data, "MPSK} Failure with %s\r", STREAM->RemoteCall);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
-	
+
 					STREAM->Connected = FALSE;		// Back to Command Mode
 					STREAM->DiscWhenAllSent = 10;
 
@@ -310,9 +318,18 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 					TidyClose(TNC, Stream);
 				}
 			}
-			
+
 			if (STREAM->Attached)
 				CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
+		}
+
+		return 0;
+
+	case 1:
+
+		for (Stream = 0; Stream <= TNC->MPSKInfo->MaxSessions; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
 
 			if (STREAM->ReportDISC)
 			{
@@ -322,21 +339,10 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 				return -1;
 			}
 
-			// if Busy, send buffer status poll
-	
-			if (STREAM->PACTORtoBPQ_Q == 0)
-			{
-				if (STREAM->DiscWhenAllSent)
-				{
-					STREAM->DiscWhenAllSent--;
-					if (STREAM->DiscWhenAllSent == 0)
-						STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
-				}
-			}
-			else
+			if (STREAM->PACTORtoBPQ_Q)
 			{
 				int datalen;
-			
+
 				buffptr = Q_REM(&STREAM->PACTORtoBPQ_Q);
 
 				datalen = (int)buffptr->Len;
@@ -348,7 +354,7 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 
 				PutLengthinBuffer(buff, datalen);		
 				ReleaseBuffer(buffptr);
-	
+
 				return (1);
 			}
 		}
@@ -361,13 +367,11 @@ static size_t ExtProc(int fn, int port,  PDATAMESSAGE buff)
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 
 			Sock = TNCInfo[MasterPort[port]]->TCPSock;
-	
+
 			ReleaseBuffer((UINT *)buffptr);
 		}
-			
-	
+		
 		return (0);
-
 
 
 	case 2:				// send

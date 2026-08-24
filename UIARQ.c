@@ -159,6 +159,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					TidyClose(TNC, Stream);
 				}
 			}
+		
+			if (STREAM->PACTORtoBPQ_Q == 0)
+			{
+				if (STREAM->DiscWhenAllSent)
+				{
+					STREAM->DiscWhenAllSent--;
+					if (STREAM->DiscWhenAllSent == 0)
+						STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
+				}
+			}
+	
 		}
 	
 		ARQTimer(TNC);
@@ -184,16 +195,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return -1;
 			}
 	
-			if (STREAM->PACTORtoBPQ_Q == 0)
-			{
-				if (STREAM->DiscWhenAllSent)
-				{
-					STREAM->DiscWhenAllSent--;
-					if (STREAM->DiscWhenAllSent == 0)
-						STREAM->ReportDISC = TRUE;				// Dont want to leave session attached. Causes too much confusion
-				}
-			}
-			else
+			if (STREAM->PACTORtoBPQ_Q)
 			{
 				int datalen;
 			
