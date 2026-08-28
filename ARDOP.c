@@ -1939,8 +1939,8 @@ extern char Menubit[];
 extern char sliderBit[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
-{		
-	int Len = sprintf(Buff, WebProcTemplate, "ARDOP Status");
+{       
+	int Len = sprintf(Buff, WebProcTemplate, TNC->PortRecord->PORTCONTROL.PORTNUMBER, TNC->PortRecord->PORTCONTROL.PORTNUMBER, "ARDOP Status");
 
 	if (LOCAL)
 		Len += sprintf(&Buff[Len], "%s", Menubit);

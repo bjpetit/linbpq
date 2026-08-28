@@ -1325,7 +1325,7 @@ extern char WebProcTemplate[];
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, WebProcTemplate, "UZ7HO Status");
+	int Len = sprintf(Buff, WebProcTemplate, TNC->PortRecord->PORTCONTROL.PORTNUMBER, TNC->PortRecord->PORTCONTROL.PORTNUMBER, "UZ7HO Status");
 
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);

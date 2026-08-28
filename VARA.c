@@ -1077,7 +1077,7 @@ char sliderBit[] = "<span style=\"position: absolute; left: 380;top: 2;\"> TX Of
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, WebProcTemplate, "VARA Status");
+	int Len = sprintf(Buff, WebProcTemplate, TNC->PortRecord->PORTCONTROL.PORTNUMBER, TNC->PortRecord->PORTCONTROL.PORTNUMBER, "VARA Status");
 
 	if (LOCAL)
 		Len += sprintf(&Buff[Len], "%s", Menubit);
