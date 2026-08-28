@@ -440,7 +440,7 @@ void hookNodeClosing(char * Reason)
 	{
 		udplen = sprintf(UDPMsg, "{\"@type\": \"NodeDownEvent\", \"nodeCall\": \"%s\", \"nodeAlias\": \"%s\", \"reason\": \"%s\", \"uptimeSecs\": %d,"
 			"\"linksIn\": %d, \"linksOut\": %d, \"cctsIn\": %d, \"cctsOut\": %d, \"l3Relayed\": %d}",
-			NODECALLLOPPED, MYALIASLOPPED, Reason, (NOW - TimeLoaded), L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
+			NODECALLLOPPED, MYALIASLOPPED, Reason, (int)(NOW - TimeLoaded), L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
    
 //		Debugprintf(UDPMsg);
 
@@ -467,7 +467,7 @@ void hookNodeRunning()
 		udplen = sprintf(UDPMsg, "{\"@type\": \"NodeStatus\", \"nodeCall\": \"%s\", \"nodeAlias\": \"%s\", \"locator\": \"%s\","
 			"\"latitude\": %f, \"longitude\": %f, \"software\": \"%s\", \"version\": \"%s\", \"uptimeSecs\": %d,"
 			"\"linksIn\": %d, \"linksOut\": %d, \"cctsIn\": %d, \"cctsOut\": %d, \"l3Relayed\": %d}",
-			NODECALLLOPPED, MYALIASLOPPED, LOC, LatFromLOC, LonFromLOC, Software, VersionString, (NOW - TimeLoaded),
+			NODECALLLOPPED, MYALIASLOPPED, LOC, LatFromLOC, LonFromLOC, Software, VersionString, (int)(NOW - TimeLoaded),
 			L2CONNECTSIN, L2CONNECTSOUT, L4CONNECTSIN, L4CONNECTSOUT, L3FRAMES);
 
 //		Debugprintf(UDPMsg);

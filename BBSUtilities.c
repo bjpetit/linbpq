@@ -12186,7 +12186,7 @@ void run_pg(CIRCUIT * conn, struct UserInfo * user)
 
 	conn->InputBufferLen = 0;
 
-	char buf[400];
+	char buf[600];
 
 	snprintf (buf, sizeof(buf), "%s %s", line, data); // buf is command to exec
 //	printf ("PG exec cmd %s\n", buf); 

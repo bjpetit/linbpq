@@ -1447,7 +1447,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	int Len = sprintf(Buff, WebProcTemplate, "WINMOR Status");
 
 	if (LOCAL)
-		Len += sprintf(&Buff[Len], Menubit);
+		Len += sprintf(&Buff[Len], "%s", Menubit);
 
 	if (TNC->TXFreq)
 		Len += sprintf(&Buff[Len], sliderBit, TNC->TXOffset, TNC->TXOffset);
