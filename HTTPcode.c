@@ -1790,8 +1790,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 		"var xx = \",height=\" + h;"
 		"var yy = \",top=\" + top;"
 		"var zz = \",left=\" + left;"
-		"var param = \"toolbar=no, location=no, directories=no, status=no, "
-		"menubar=no, scrollbars=no, resizable=no, titlebar=no, toobar=no, \" + ww + xx + yy + zz;"
+		"var param = \"toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=yes, resizable=yes, titlebar=no, toobar=no, \" + ww + xx + yy + zz;"
 		"window.open(URL,\"_blank\",param);"
 		"}\r\n"
 	

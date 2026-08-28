@@ -1320,8 +1320,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 			strcpy(CMSStatus, "No CMS");
 	}
 
-	Len = sprintf(Buff, "<html><head>" COMMON_FONT_INTER_LINK "<meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-	"<title>Telnet Status</title><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style></head><body><b>Telnet Status &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%s</b>", CMSStatus);
+	Len = sprintf(Buff, COMMON_HTML_HEAD_OPEN_DOCTYPE_LANG_EN COMMON_FONT_INTER_LINK COMMON_HTML_META_UTF8_QUOTED COMMON_HTML_META_VIEWPORT_SELF_CLOSING "<meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	"<title>Telnet Status</title><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script><style>" COMMON_MODEM_STATUS_PAGE_CSS_FMT "</style></head><body><b>Telnet Status &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%s</b>", CMSStatus);
 
 	Len += sprintf(&Buff[Len], COMMON_MODEM_STATUS_TABLE_OPEN_HTML);
 
@@ -1511,8 +1511,8 @@ void * TelnetExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->PORTCONTROL.Hardware = TNC->Hardware;
 
 	TNC->WebWindowProc = WebProc;
-	TNC->WebWinX = 260;
-	TNC->WebWinY = 325;
+	TNC->WebWinX = 520;
+	TNC->WebWinY = 500;
 
 #ifndef LINBPQ
 
