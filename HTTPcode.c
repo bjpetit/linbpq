@@ -266,7 +266,7 @@ char TermSignon[] = HTTP_SIGNON_HEAD("BPQ32 Node %s Terminal Access")
 HTTP_SIGNON_FORM_OPEN("TermSignon")
 HTTP_SIGNON_USER_ROW
 HTTP_SIGNON_PASS_ROW
-"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html />"
+"<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=button class='btn' value=Cancel onclick='window.close()' />"
 "<input type=hidden name=Appl value=\"%s\"  id=Pass></form></div></div>";
 
 
@@ -284,7 +284,7 @@ char TermPage[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_VIEWPORT "<meta http-
 COMMON_THEME_SELECTOR_HTML
 "<h3>BPQ32 Node %s</h3>"
 "<form method=post action=/Node/TermClose?%s class='term-actions'>"
-"<input type=submit class='btn' value='Close and return to Node Page' /></form>"
+"<input type=submit class='btn' value='Close Window' /></form>"
 "<div class=\"term-container\">"
 "<iframe id=output-frame frameborder=0 marginwidth=0 marginheight=0 src=OutputScreen.html?%s></iframe>"
 "<iframe id=input-frame frameborder=0 marginwidth=0 marginheight=0 src=InputLine.html?%s></iframe>"
@@ -1242,8 +1242,9 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LOCAL)
 {
-	char _REPLYBUFFER[250000];
-	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, "");
+	char _REPLYBUFFER[1024];
+	int ReplyLen = sprintf(_REPLYBUFFER,
+		"<!DOCTYPE html><html><head><title>Closing</title></head><body><script>window.close();</script></body></html>");
 	char Header[1024];
 	int HeaderLen;
 	struct HTTPConnectionInfo * Session = FindSession(Key);
@@ -1253,12 +1254,9 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key, int LO
 		Session->KillTimer = 99999;
 	}
 
-	ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
-
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen);
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
-	send(sock, Tail, (int)strlen(Tail), 0);
 }
 
 struct HTTPConnectionInfo * ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen,  int LOCAL)
@@ -1818,7 +1816,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 		"<a href='/Node/Links.html'>Links</a>"
 		"<a href='/Node/Users.html'>Users</a>"
 		"<a href='/Node/Stats.html'>Stats</a>"
-		"<a href=javascript:dev_win(\"/Node/Terminal.html\",800,600,200,200);'>Terminal</a>%s%s%s%s";
+		"<a href=\"javascript:dev_win('/Node/Terminal.html',800,600,200,200);\">Terminal</a>%s%s%s%s";
 
 	char DriverBit[] = "<a href=\"javascript:open_win();\">Driver Windows</a>"
 		"<a href=\"javascript:dev_win('/Node/Streams',820,700,200,200);\">Stream Status</a>";
