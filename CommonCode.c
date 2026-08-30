@@ -84,6 +84,7 @@ extern BOOL M0LTEMap;
 char * stristr (char *ch1, char *ch2);
 
 extern VOID * ENDBUFFERPOOL;
+extern VOID * BUFFERPOOL;
 
 extern int PoolBuilt;
 
@@ -153,6 +154,16 @@ VOID * _Q_REM(VOID **PQ, char * File, int Line)
 
 	if (first == 0)
 		return (0);			// Empty
+
+	if ((uintptr_t)first < (uintptr_t)BUFFERPOOL || (uintptr_t)first > (uintptr_t)ENDBUFFERPOOL)
+	{
+		// Chain corrupt - can't safely dereference first, so drop the queue
+
+		Debugprintf("Q_REM %p NOT IN POOL Called from %s Line %d", first, File, Line);
+		printStack();
+		Q[0] = 0;
+		return (0);
+	}
 
 	next = first[0];			// Address of next buffer
 
@@ -322,7 +333,9 @@ BOK1:
 
 		Test = (PMESSAGE)pointer;
 
-		if (Test->GuardZone || (uintptr_t)pointer < (uintptr_t)BUFFERPOOL || (uintptr_t)pointer > (uintptr_t)ENDBUFFERPOOL)
+		// Check pointer is in range before dereferencing it (GuardZone) - order matters as || short-circuits
+
+		if ((uintptr_t)pointer < (uintptr_t)BUFFERPOOL || (uintptr_t)pointer > (uintptr_t)ENDBUFFERPOOL || Test->GuardZone)
 		{
 			// Not pointing to a buffer . debug points to the buffer that this is chained from
 
@@ -351,6 +364,13 @@ BOK1:
 			if (debug[400])
 				Debugprintf("         %s", &debug[400]);
 
+			// Sever chain here so this corrupt pointer isn't repeatedly rediscovered.
+			// n is the count of good buffers already confirmed, so QCOUNT must match that,
+			// otherwise GetBuff will see QCOUNT > 0 with an empty reachable chain and abort.
+
+			debug[0] = 0;
+			QCOUNT = n;
+			break;
 		}
 
 		// See if already on free Queue
@@ -429,11 +449,21 @@ void CheckFreeQueue(char * File, int Line)
 
 		Test = (PMESSAGE)pointer;
 
-		if (Test->GuardZone || (uintptr_t)pointer < (uintptr_t)BUFFERPOOL || (uintptr_t)pointer > (uintptr_t)ENDBUFFERPOOL)
+		// Check pointer is in range before dereferencing it (GuardZone) - order matters as || short-circuits
+
+		if ((uintptr_t)pointer < (uintptr_t)BUFFERPOOL || (uintptr_t)pointer > (uintptr_t)ENDBUFFERPOOL || Test->GuardZone)
 		{
 			// Not pointing to a buffer . debug points to the buffer that this is chained from
 
 			Debugprintf("CheckFree Queue Pool Corruption n = %d, ptr %p prev %p from %s Line %d", n, pointer, debug, File, Line);
+
+			// Sever chain here so this corrupt pointer isn't repeatedly rediscovered.
+			// n is the count of good buffers already confirmed, so QCOUNT must match that,
+			// otherwise GetBuff will see QCOUNT > 0 with an empty reachable chain and abort.
+
+			debug[0] = 0;
+			QCOUNT = n;
+			break;
 		}
 
 		debug = pointer;
@@ -605,9 +635,10 @@ VOID * _GetBuff(char * File, int Line)
 
 		Msg = (MESSAGE *)Temp;
 		fptr = File + (int)strlen(File);
-		while (*fptr != '\\' && *fptr != '/')
+		while (fptr > File && *fptr != '\\' && *fptr != '/')
 			fptr--;
-		fptr++;
+		if (*fptr == '\\' || *fptr == '/')
+			fptr++;
 
 		// Buffer Length is BUFFLEN, but buffers are allocated 512
 		// So add file info in gap between
