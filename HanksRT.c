@@ -1849,7 +1849,7 @@ static void cn_dec(ChatCIRCUIT *circuit, CHATNODE *node)
 	if (c == NULL)
 	{
 		CN * cn;
-		int len;
+		int len = 0;
 		char line[1000]="";
 	
 		// not found??
