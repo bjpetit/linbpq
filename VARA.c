@@ -1035,7 +1035,7 @@ char WebProcTemplate[] = "<html><meta http-equiv=expires content=0><meta http-eq
 		"<a href='javascript:xxx(\"KillRestart\");'>Kill and Restart TNC</a>"
 		"</div></span>";
 */
-char WebProcTemplate[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0>"
+char WebProcTemplate[] = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script>"
 		"<style>" COMMON_CSS_VARIABLES "body { font-family: " COMMON_FONT_MONO "; margin: 10px; background: var(--bg); color: var(--text); } h2 { text-align: center; margin-bottom: 0.2em; } table { border-collapse: collapse; margin: 20px auto; width: 100%%; max-width: 700px; } td { padding: 8px; border: 1px solid var(--border); } textarea { width: 100%%; max-width: 600px; display: block; margin: 20px auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); } .dropdown { position: relative; display: inline-block; } .dropbtn { background-color: var(--primary); color: var(--on-primary); padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; } .dropdown-content { display: none; position: absolute; background-color: var(--surface); min-width: 160px; box-shadow: var(--shadow-overlay); padding: 12px 16px; z-index: 1; } .dropdown-content a { color: var(--text); padding: 8px 0; display: block; text-decoration: none; } .dropdown-content a:hover { background-color: var(--surface-hover); } .dropdown:hover .dropdown-content { display: block; }</style>"
 		"<link rel='stylesheet' href='webproc.css'>\r\n"
