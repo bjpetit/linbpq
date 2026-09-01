@@ -770,7 +770,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 //	Len += sprintf(&Buff[Len], "<tr><td>TNC Restarts</td><td></td></tr>", TNC->WEB_RESTARTS);
 	Len += sprintf(&Buff[Len], "</table>");
 
-	Len += sprintf(&Buff[Len], "<textarea rows=2 style=\"width:500px; height:50px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
+	if (LOCAL)
+		Len += sprintf(&Buff[Len], "<textarea rows=2 style=\"width:500px; height:50px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
 	Len = DoScanLine(TNC, Buff, Len);
 
 	return Len;

@@ -3315,7 +3315,7 @@ doHeader:
 
 
 					if (TNC && TNC->WebWindowProc)
-						ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
+						ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL || COOKIE);
 
 
 					ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Operation Complete</title></head><body><script>alert(\"%s\");window.close();</script>", "Ok");
@@ -3553,7 +3553,7 @@ doHeader:
 					RestartTNC(TNC);
 
 					if (TNC && TNC->WebWindowProc)
-						ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
+						ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL || COOKIE);
 
 				}
 			}
@@ -3567,7 +3567,7 @@ doHeader:
 					struct TNCINFO * TNC = TNCInfo[port];
 
 					if (TNC && TNC->WebWindowProc)
-						ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
+						ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL || COOKIE);
 				}
 
 			}
