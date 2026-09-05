@@ -188,6 +188,7 @@ int DeleteLogFile(char * Log, int KeepDays);
 
 void DeleteLogFiles(int Age)
 {
+	DeleteLogFile("NodeDebug", Age);
 	DeleteLogFile("Telnet", Age);
 	DeleteLogFile("CMSAccess_", Age);
 	DeleteLogFile("ConnectLog_",Age);
@@ -207,7 +208,7 @@ int DeleteLogFile(char * Log, int KeepDays)
 	HANDLE hFind = INVALID_HANDLE_VALUE;
 	DWORD dwError=0;
 	LARGE_INTEGER ft;
-	time_t now = NOW;
+	time_t now = time(NULL);
 	int Age;
 
 
@@ -227,7 +228,6 @@ int DeleteLogFile(char * Log, int KeepDays)
 	{
 		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 		{
-			OutputDebugString(ffd.cFileName);
 		}
 		else
 		{
