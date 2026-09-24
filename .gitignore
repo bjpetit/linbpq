@@ -4,3 +4,7 @@
 *.user
 .svn/*
 .vs/*
+*.o
+*.d
+linbpq
+output.map
