@@ -5490,7 +5490,7 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"<title>Rig Control</title>\r\n"
 		COMMON_BPQ_CSS_LINK
 		COMMON_NODE_CSS_LINK
-		"<style>form{margin:0;padding:0;display:inline;}td{white-space:nowrap;padding:4px 8px;}</style>"
+		"<style>form{margin:0;padding:0;display:inline;}td{white-space:nowrap;padding:4px 8px;}td.mode{white-space:normal;overflow-wrap:anywhere;width:7em;}</style>"
 		"</head><body>"
 		"<h3>Rig Control</h3>\r\n"
 		"<table><tr>\r\n"
@@ -5502,7 +5502,7 @@ int BuildRigCtlPage(char * _REPLYBUFFER)
 		"<th style=\"display:none\">Action</th>\r\n"
 		"</tr>";
 	char RigLine[] =
-		"<tr><td data-label='Radio' class='text'>%s</td><td data-label='Freq' class='text'>%s</td><td data-label='Mode' class='text'>%s/1</td>"
+		"<tr><td data-label='Radio' class='text'>%s</td><td data-label='Freq' class='text'>%s</td><td data-label='Mode' class='text mode'>%s</td>"
 		"<td data-label='ST' class='text'>%c%c</td><td data-label='Ports' class='text'>%s</td>"
 		"<td style=\"display:none\"><input onclick=PTT('R%d') type=submit class='btn' value='PTT'></td></tr>";
 	char Tail[] =		
