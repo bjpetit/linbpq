@@ -2278,22 +2278,13 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		{
 			COOKIE = TRUE;
 			Key = ptr + 17;
-			ptr = strchr(Key, ',');
+			ptr = strpbrk(Key, ",;\r\n");
 			if (ptr)
 			{
+				char CookieDelimiter = *ptr;
 				*ptr = 0;
 				Session = FindSession(Key);
-				*ptr = ',';
-			}
-			else
-			{
-				ptr = strchr(Key, 13);
-				if (ptr)
-				{
-					*ptr = 0;
-					Session = FindSession(Key);
-					*ptr = 13;
-				}
+				*ptr = CookieDelimiter;
 			}
 		}
 
