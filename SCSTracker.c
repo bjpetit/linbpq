@@ -625,7 +625,7 @@ int TrkWebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "</table>");
 
 	if (LOCAL)
-		Len += sprintf(&Buff[Len], "<textarea rows=10 style=\"width:480px; height:250px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
+		Len += sprintf(&Buff[Len], "<textarea rows=10 style=\"height:250px;\" id=textarea >%s</textarea>", TNC->WebBuffer);
 	Len = DoScanLine(TNC, Buff, Len);
 
 	return Len;
