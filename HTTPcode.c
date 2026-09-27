@@ -180,7 +180,7 @@ char Tail[] = "</body></html>";
 #define HTTP_NODE_COLS_TRAFFIC "<th scope=\"col\">Call</th><th scope=\"col\">Frames</th><th scope=\"col\">RTT</th><th scope=\"col\">BPQ?</th><th scope=\"col\">Hops</th>"
 #define HTTP_NODE_COLS_LINKS "<th scope=\"col\">Far Call</th><th scope=\"col\">Our Call</th><th scope=\"col\">Port</th><th scope=\"col\">ax.25 state</th><th scope=\"col\">Link Type</th><th scope=\"col\">ax.25 Version</th>"
 #define HTTP_NODE_COLS_USERS "<th scope=\"col\">Circuit</th><th scope=\"col\">Link</th><th scope=\"col\">Circuit</th>"
-#define HTTP_NODE_COLS_PORTS "<th scope=\"col\">Port</th><th scope=\"col\">Driver</th><th scope=\"col\">ID</th><th scope=\"col\">Beacons</th><th scope=\"col\">Driver Window</th><th scope=\"col\">Stats Graph</th>"
+#define HTTP_NODE_COLS_PORTS "<th scope=\"col\">Port</th><th scope=\"col\">Driver</th><th scope=\"col\">ID</th><th scope=\"col\">MHeard 24h</th><th scope=\"col\">Beacons</th><th scope=\"col\">Driver Window</th><th scope=\"col\">Stats Graph</th>"
 
 #define HTTP_NODE_MENU_CSS \
 	":root{--menu-max-width:1100px;}" \
@@ -235,7 +235,7 @@ char Beacons[] =
 	HTTP_NODE_H2("Beacon Configuration for Port %d")
 	HTTP_NODE_H3("You need to be signed in to save changes")
 	"<form method=post action=BeaconAction>"
-	"<div class='form-row'><label for=Every>Send Interval (Minutes)</label><input type=text id=Every name=Every tabindex=1 value=%d></div>"
+	"<div class='form-row'><label for=Every>Send Interval (Minutes)</label><input type=number id=Every name=Every class=input-w-100 tabindex=1 value=%d></div>"
 	"<div class='form-row'><label for=Dest>To</label><input type=text id=Dest name=Dest class='text-uppercase' tabindex=2 value=%s></div>"
 	"<div class='form-row'><label for=Path>Path</label><input type=text id=Path name=Path class='text-uppercase' maxlength=50 value=%s></div>"
 	"<div class='form-row'><label for=File>Send From File</label><input type=text id=File name=File maxlength=50 value=%s></div>"
@@ -2170,6 +2170,27 @@ unsigned char * Compressit(unsigned char * In, int Len, int * OutLen)
 }
 
 
+static int CountMHeard24Hours(struct PORTCONTROL * Port)
+{
+	MHSTRUC * MH;
+	time_t Cutoff = NOW - (24 * 60 * 60);
+	int Count = 0;
+	int i;
+
+	if (Port == NULL || Port->PORTMHEARD == NULL)
+		return 0;
+
+	MH = Port->PORTMHEARD;
+
+	for (i = 0; i < MHENTRIES && MH->MHCALL[0] != 0; i++, MH++)
+	{
+		if (MH->MHTIME >= Cutoff && MH->MHTIME <= NOW)
+			Count++;
+	}
+
+	return Count;
+}
+
 int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 {
 	struct TCPINFO * TCP = conn->TNC->TCPInfo;
@@ -2199,28 +2220,30 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	char TimeString[64];
 	BOOL LOCAL = conn->LOCALAuth;
 	BOOL COOKIE = FALSE;
+	BOOL SYSOPAuth = FALSE;
 	int Len;
 	char * WebSock = 0;
+	char BeaconLink[80];
 
 	char PortsHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Ports", "compact-table", HTTP_NODE_COLS_PORTS);
 
 //	char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
 
 	char PortLineWithBeacon[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'><a href=PortStats?%d&%s>%s</a></td><td data-label='ID' class='text'>%s</td>"
-		"<td data-label='Beacons' class='text'><a href=PortBeacons?%d>Beacons</a></td><td data-label='Driver Window' class='text'>-</td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
+		"<td data-label='MHeard 24h' class='text'>%d</td><td data-label='Beacons' class='text'>%s</td><td data-label='Driver Window' class='text'>-</td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char SessionPortLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+	char SessionPortLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='MHeard 24h' class='text'>%d</td><td data-label='Beacons' class='text'>-</td>"
 		"<td data-label='Driver Window' class='text'>-</td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char PortLineWithDriver[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+	char PortLineWithDriver[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='MHeard 24h' class='text'>%d</td><td data-label='Beacons' class='text'>-</td>"
 		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
 
 	char PortLineWithBeaconAndDriver[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td>"
-		"<td data-label='Beacons' class='text'><a href=PortBeacons?%d>Beacons</a></td>"
+		"<td data-label='MHeard 24h' class='text'>%d</td><td data-label='Beacons' class='text'>%s</td>"
 		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/Port?%d',%d,%d,%d,%d);\">Driver Window</a></td><td data-label='Stats Graph' class='text'>%s</td></tr>\r\n";
 
-	char RigControlLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='Beacons' class='text'>-</td>"
+	char RigControlLine[] = "<tr><td data-label='Port' class='num'>%d</td><td data-label='Driver' class='text'>%s</td><td data-label='ID' class='text'>%s</td><td data-label='MHeard 24h' class='text'>-</td><td data-label='Beacons' class='text'>-</td>"
 		"<td data-label='Driver Window' class='text'><a href=\"javascript:dev_win('/Node/RigControl.html',%d,%d,%d,%d);\">Rig Control</a></td><td data-label='Stats Graph' class='text'>-</td></tr>\r\n";
 
 
@@ -2273,6 +2296,8 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 				}
 			}
 		}
+
+		SYSOPAuth = COOKIE && Session && Session->USER && Session->USER->Secure;
 
 		if (WebSock)
 		{
@@ -3174,7 +3199,7 @@ doHeader:
 				int Slot = 0;
 
 
-				if (LOCAL == FALSE && COOKIE == FALSE)
+				if (SYSOPAuth == FALSE)
 				{
 					//	Send Not Authorized
 
@@ -4027,6 +4052,17 @@ doHeader:
 
 			if (_stricmp(NodeURL, "/Node/PortBeacons") == 0)
 			{
+				if (SYSOPAuth == FALSE)
+				{
+					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
+					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in as sysop</B>");
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					send(sock, Header, HeaderLen, 0);
+					send(sock, _REPLYBUFFER, ReplyLen, 0);
+					send(sock, Tail, (int)strlen(Tail), 0);
+					return 1;
+				}
+
 				char * PortChar = strtok_s(NULL, "&", &Context);
 				int PortNo = atoi(PortChar);
 				struct PORTCONTROL * PORT;
@@ -4120,6 +4156,7 @@ doHeader:
 				int count;
 				char DLL[20];
 				char StatsURL[64];
+				int MHeard24Hours;
 
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", PortsHddr);
 
@@ -4127,6 +4164,7 @@ doHeader:
 				{
 					Port = GetPortTableEntryFromSlot(count);
 					ExtPort = (struct _EXTPORTDATA *)Port;
+					MHeard24Hours = CountMHeard24Hours(Port);
 
 					// see if has a stats page
 
@@ -4134,6 +4172,11 @@ doHeader:
 						sprintf(StatsURL, "<a href=/PortStats.html?%d>&nbsp;Stats Graph</a>", Port->PORTNUMBER);
 					else
 						StatsURL[0] = 0;
+
+					if (SYSOPAuth)
+						sprintf(BeaconLink, "<a href=PortBeacons?%d>Beacons</a>", Port->PORTNUMBER);
+					else
+						strcpy(BeaconLink, "-");
 
 					if (Port->PORTTYPE == 0x10)
 					{	
@@ -4157,20 +4200,20 @@ doHeader:
 					{
 						if (Port->UICAPABLE)
 							ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithBeaconAndDriver, Port->PORTNUMBER, DLL,
-							Port->PORTDESCRIPTION, Port->PORTNUMBER, Port->PORTNUMBER, Port->TNC->WebWinX, Port->TNC->WebWinY, 200, 200, StatsURL);
+							Port->PORTDESCRIPTION, MHeard24Hours, BeaconLink, Port->PORTNUMBER, Port->TNC->WebWinX, Port->TNC->WebWinY, 200, 200, StatsURL);
 						else
 							ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithDriver, Port->PORTNUMBER, DLL,
-							Port->PORTDESCRIPTION, Port->PORTNUMBER, Port->TNC->WebWinX, Port->TNC->WebWinY, 200, 200, StatsURL);
+							Port->PORTDESCRIPTION, MHeard24Hours, Port->PORTNUMBER, Port->TNC->WebWinX, Port->TNC->WebWinY, 200, 200, StatsURL);
 
 						continue;
 					}
 
 					if (Port->PORTTYPE == 16 && Port->PROTOCOL == 10 && Port->UICAPABLE == 0)		// EXTERNAL, Pactor/WINMO
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], SessionPortLine, Port->PORTNUMBER, DLL,
-						Port->PORTDESCRIPTION, Port->PORTNUMBER, StatsURL);
+						Port->PORTDESCRIPTION, MHeard24Hours, StatsURL);
 					else
 						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithBeacon, Port->PORTNUMBER, Port->PORTNUMBER,
-						DLL, DLL, Port->PORTDESCRIPTION, Port->PORTNUMBER, StatsURL);
+						DLL, DLL, Port->PORTDESCRIPTION, MHeard24Hours, BeaconLink, StatsURL);
 				}
 
 				if (RigActive)
