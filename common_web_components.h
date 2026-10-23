@@ -266,8 +266,8 @@ This consolidates responsive menu systems and base styles to reduce duplication.
  * COMMON_MAIN_OPEN     - opens the <main> landmark that the skip link targets.
  *                        Pages that use it must close it with </main> (see MainTail
  *                        in HTTPcode.c, chosen automatically by TailFor()).
- * COMMON_CONTENT_ANCHOR - skip target for pages whose closing markup is spread
- *                        across many templates, so a <main> wrapper is not used.
+ * COMMON_CONTENT_ANCHOR - skip target for the chat pages, whose container div is
+ *                        closed before the content, so <main> cannot wrap it.
  * CSS lives in COMMON_MENU_CSS_TEMPLATE below.
  */
 #define COMMON_SKIP_LINK "<a class=\"skip-link\" href=\"#bpq-content\">Skip to main content</a>"
@@ -1172,7 +1172,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"<a href=\"/Webmail\">WebMail</a>" \
 	"<a href=\"/\">Node Menu</a>" \
 	"</nav>" \
-	COMMON_CONTENT_ANCHOR
+	COMMON_MAIN_OPEN
 
 // Helper: Build chat menu HTML
 // Usage: sprintf(buffer, COMMON_CHAT_MENU, key, key);
