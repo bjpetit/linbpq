@@ -8318,7 +8318,7 @@ void HLSetPTT(SOCKET Sock, struct RIGINFO * RIG, unsigned char * Msg, char sep)
 	else
 		ptt = atoi(&Msg[1]);
 
-	printf("%s %d %d\n", Msg, strlen(Msg), ptt);
+	printf("%s %d %d\n", Msg, (int)strlen(Msg), ptt);
 
 	if (ptt)
 		Rig_PTTEx(RIG, 1, NULL);
