@@ -71,6 +71,7 @@ static BOOL OpenSockets6(struct TNCINFO * TNC);
 void ProcessHTTPMessage(void * conn);
 static VOID SetupListenSet(struct TNCINFO * TNC);
 int WritetoConsoleLocal(char * buff);
+char * FindSessionCookie(char * Msg);
 BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, PMSGWITHLEN buffptr, struct ADIF * ADIF);
 int GetCMSHash(char * Challenge, char * Password);
 int IsUTF8(unsigned char *cpt, int len);
@@ -5378,9 +5379,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 		}
 
 
-		ptr = strstr(MsgPtr, "BPQSessionCookie=N");
-
-		if (ptr)
+		if (FindSessionCookie((char *)MsgPtr))
 			COOKIE = TRUE;
 
 		sockptr->WebSecure = LOCAL | COOKIE;

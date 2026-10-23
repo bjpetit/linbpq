@@ -69,6 +69,7 @@ int GetAISPageInfo(char * Buffer, int ais, int adsb);
 int GetAPRSPageInfo(char * Buffer, double N, double S, double W, double E, int aprs, int ais, int adsb);
 unsigned char * Compressit(unsigned char * In, int Len, int * OutLen);
 char * stristr (char *ch1, char *ch2);
+char * FindSessionCookie(char * Msg);
 int GetAPRSIcon(unsigned char * _REPLYBUFFER, char * NodeURL);
 char * GetStandardPage(char * FN, int * Len);
 BOOL SHA1PasswordHash(char * String, char * Hash);
@@ -1085,6 +1086,79 @@ struct HTTPConnectionInfo * AllocateSession(SOCKET sock, char Mode)
 	SessionList = Session;
 
 	return Session;
+}
+
+// Find the session key in the Cookie: request header only (not the body or other headers).
+// Returns a pointer to the key ("N...") inside Msg, or NULL.
+
+char * FindSessionCookie(char * Msg)
+{
+	static const char Name[] = "BPQSessionCookie=";
+	char * Line = Msg;
+
+	while (Line && *Line && Line[0] != '\r' && Line[0] != '\n')
+	{
+		if (_memicmp(Line, "Cookie:", 7) == 0)
+		{
+			char * p = Line + 7;
+			char * End = strpbrk(Line, "\r\n");
+
+			while (p && (!End || p < End))
+			{
+				while (*p == ' ' || *p == ';' || *p == '\t')
+					p++;
+
+				if (strncmp(p, Name, sizeof(Name) - 1) == 0 && p[sizeof(Name) - 1] == 'N')
+					return p + sizeof(Name) - 1;
+
+				p = strchr(p, ';');
+			}
+		}
+		Line = strchr(Line, '\n');
+		if (Line)
+			Line++;
+	}
+	return NULL;
+}
+
+// Parse a sign-on form body of the form user=<name>&password=<password>[&...]
+// Modifies the buffer in place. Returns 0 if the body is malformed.
+
+static int ParseSignonBody(char * Body, char ** User, char ** Password)
+{
+	char * p;
+
+	if (strncmp(Body, "user=", 5) != 0)
+		return 0;
+
+	*User = Body + 5;
+	p = strstr(*User, "&password=");
+
+	if (p == NULL)
+		return 0;
+
+	*p = 0;
+	*Password = p + 10;
+
+	p = strchr(*Password, '&');
+
+	if (p)
+		*p = 0;
+
+	return 1;
+}
+
+// Compare two strings without leaking the position of the first difference
+
+static int ConstantTimeEquals(const char * a, const char * b)
+{
+	size_t la = strlen(a), lb = strlen(b), i;
+	unsigned char diff = (la != lb);
+
+	for (i = 0; i < la; i++)
+		diff |= (unsigned char)(a[i] ^ b[i % (lb ? lb : 1)]);
+
+	return diff == 0;
 }
 
 struct HTTPConnectionInfo * FindSession(char * Key)
@@ -2272,12 +2346,11 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 		else
 			Encoding[0] = 0;
 
-		ptr = stristr(MsgPtr, "BPQSessionCookie=N");
+		Key = FindSessionCookie(MsgPtr);
 
-		if (ptr)
+		if (Key)
 		{
 			COOKIE = TRUE;
-			Key = ptr + 17;
 			ptr = strpbrk(Key, ",;\r\n");
 			if (ptr)
 			{
@@ -2318,9 +2391,15 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 				while (*ptr == ' ')
 					ptr++;
 
-				memcpy(KeyMsg, ptr, 40);
-				strlop(KeyMsg, 13);
-				strlop(KeyMsg, ' ');
+				{
+					size_t KeyLen = strcspn(ptr, "\r\n ");
+
+					if (KeyLen > 64)
+						KeyLen = 64;
+
+					memcpy(KeyMsg, ptr, KeyLen);
+					KeyMsg[KeyLen] = 0;
+				}
 				strcat(KeyMsg, Webx);
 
 				SHA1PasswordHash(KeyMsg, Hash);
@@ -5113,7 +5192,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-	char * user, * password, * Key;
+	char * user, * password;
 	char Header[1024];
 	int HeaderLen;
 	struct HTTPConnectionInfo *Sess;
@@ -5136,9 +5215,8 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 			send(sock, Tail, (int)strlen(Tail), 0);
 			return ReplyLen;
 		}
-		user = strtok_s(&input[9], "&", &Key);
-		password = strtok_s(NULL, "=", &Key);
-		password = Key;
+		if (!ParseSignonBody(input + 4, &user, &password))
+			goto SignonFailed;
 
 		for (i = 0; i < TCP->NumberofUsers; i++)
 		{
@@ -5146,7 +5224,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 			if (user && _stricmp(user, USER->UserName) == 0)
 			{
-				if (strcmp(password, USER->Password) == 0 && USER->Secure)
+				if (ConstantTimeEquals(password, USER->Password) && USER->Secure)
 				{
 					// ok
 
@@ -5168,7 +5246,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 					ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "Set-Cookie: BPQSessionCookie=%s; Path=/; HttpOnly; SameSite=Lax\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
 					send(sock, Tail, (int)strlen(Tail), 0);
@@ -5179,6 +5257,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 		}
 	}	
 
+SignonFailed:
 	ReplyLen = sprintf(Reply, NodeSignon, Mycall, Mycall);
 	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 
@@ -5268,7 +5347,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-	char * user, * password, * Key;
+	char * user, * password;
 	struct HTTPConnectionInfo * NewSession;
 
 	if (input)
@@ -5283,9 +5362,8 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 			ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Mail Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 			return ReplyLen;
 		}
-		user = strtok_s(&input[9], "&", &Key);
-		password = strtok_s(NULL, "=", &Key);
-		password = Key;
+		if (!ParseSignonBody(input + 4, &user, &password))
+			goto SignonFailed;
 
 		for (i = 0; i < TCP->NumberofUsers; i++)
 		{
@@ -5293,7 +5371,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 			if (user && _stricmp(user, USER->UserName) == 0)
 			{
-				if (strcmp(password, USER->Password) == 0 && (USER->Secure || WebMail))
+				if (ConstantTimeEquals(password, USER->Password) && (USER->Secure || WebMail))
 				{
 					// ok
 
@@ -5318,6 +5396,7 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 		}
 	}	
 
+SignonFailed:
 	ReplyLen = sprintf(Reply, MailSignon, Mycall, Mycall);
 	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 
@@ -5329,7 +5408,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-	char * user, * password, * Key;
+	char * user, * password;
 
 	if (input)
 	{
@@ -5344,9 +5423,8 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 			return ReplyLen;
 		}
 
-		user = strtok_s(&input[9], "&", &Key);
-		password = strtok_s(NULL, "=", &Key);
-		password = Key;
+		if (!ParseSignonBody(input + 4, &user, &password))
+			goto SignonFailed;
 
 
 		for (i = 0; i < TCP->NumberofUsers; i++)
@@ -5355,7 +5433,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 			if (user && _stricmp(user, USER->UserName) == 0)
 			{
-				if (strcmp(password, USER->Password) == 0 && USER->Secure)
+				if (ConstantTimeEquals(password, USER->Password) && USER->Secure)
 				{
 					// ok
 
@@ -5376,6 +5454,7 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 		}
 	}	
 
+SignonFailed:
 	ReplyLen = sprintf(Reply, ChatSignon, Mycall, Mycall);
 	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 

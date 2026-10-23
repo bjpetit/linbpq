@@ -224,7 +224,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 #define COMMON_REDUCED_MOTION_CSS \
 	"@media(prefers-reduced-motion:reduce){" \
-	"*{animation-duration:0!important;transition-duration:0!important;}" \
+	"*{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important;}" \
 	"}"
 
 /* FOCUS RING STYLING - Consolidated
@@ -400,7 +400,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"body{font-family:" COMMON_FONT_MONO ";margin:20px;text-align:center;background:var(--bg);color:var(--text);}"
 
 #define COMMON_WEBMAIL_POPUP_SELECT_CSS \
-	"select{padding:8px;border:1px solid var(--border);border-radius:4px;font-size:14px;}"
+	"select{padding:8px;border:1px solid var(--border);border-radius:4px;font-size:0.875rem;}"
 
 #define COMMON_WEBMAIL_POPUP_TABLE_CSS \
 	"table{border-collapse:collapse;margin:20px auto;}"
@@ -514,7 +514,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".chat-status-form{margin:0;}" \
 	".chat-actions input{min-width:170px;}" \
 	"@media (max-width:900px){.chat-layout{grid-template-columns:1fr;}.chat-section-wide{grid-column:auto;}}" \
-	"@media (max-width:768px){body{padding:10px;}.chat-grid{font-size:13px;}.chat-grid th,.chat-grid td{padding:7px 6px;}}"
+	"@media (max-width:768px){body{padding:10px;}.chat-grid{font-size:0.8125rem;}.chat-grid th,.chat-grid td{padding:7px 6px;}}"
 
 #define COMMON_CHAT_STATUS_PAGE_CSS COMMON_CHAT_STATUS_PAGE_CSS_TEMPLATE("%")
 #define COMMON_CHAT_STATUS_PAGE_CSS_FMT COMMON_CHAT_STATUS_PAGE_CSS_TEMPLATE("%%")
@@ -603,7 +603,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"input.uppercase{text-transform:uppercase;}" \
 	".table-container{background:var(--surface);border-radius:8px;box-shadow:var(--shadow-card);overflow-x:auto;margin:15px 0;}" \
 	"table{width:100%;border-collapse:collapse;table-layout:fixed;}" \
-	"th,td{padding:12px 14px;border:1px solid var(--border);text-align:center;font-size:14px;width:12.5%;}" \
+	"th,td{padding:12px 14px;border:1px solid var(--border);text-align:center;font-size:0.875rem;width:12.5%;}" \
 	"th{background:var(--table-header);font-weight:600;text-align:left;}" \
 	"th[colspan]{text-align:center;width:100%;}" \
 	"td{cursor:pointer;transition:opacity 0.15s ease;}" \
@@ -613,7 +613,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".fwd-sent{background-color:var(--fwd-sent);}" \
 	"tbody tr:nth-child(even){background:var(--table-stripe);}" \
 	"tbody tr:hover{background:var(--surface-soft);transition:background 0.15s ease;}" \
-	".status-legend{background:var(--surface);padding:16px;border-radius:8px;box-shadow:var(--shadow-card);margin:15px 0;font-size:14px;color:var(--text);line-height:1.6;}" \
+	".status-legend{background:var(--surface);padding:16px;border-radius:8px;box-shadow:var(--shadow-card);margin:15px 0;font-size:0.875rem;color:var(--text);line-height:1.6;}" \
 	".status-legend strong{color:var(--text);display:block;margin-bottom:8px;}" \
 	".buttons{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0;}" \
 	".buttons input,.buttons button,.buttons a button{flex:1 1 auto;min-width:140px;background:var(--primary);color:var(--on-primary);padding:12px 20px;border:none;border-radius:6px;cursor:pointer;font-size:clamp(14px,1.5vw,16px);font-weight:500;transition:background 0.15s ease;min-height:44px;}" \
@@ -622,16 +622,16 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	".buttons a{text-decoration:none;}" \
 	"@media(max-width:768px){.form-grid{grid-template-columns:1fr;gap:12px;}" \
 	".form-row-full{grid-column:1;}" \
-	".form-field label{font-size:13px;margin-bottom:4px;}" \
-	".form-field input,.form-field select{min-height:44px;font-size:16px;}" \
-	"table{font-size:13px;}" \
+	".form-field label{font-size:0.8125rem;margin-bottom:4px;}" \
+	".form-field input,.form-field select{min-height:44px;font-size:1rem;}" \
+	"table{font-size:0.8125rem;}" \
 	"th,td{padding:10px 8px;}" \
 	".buttons{flex-direction:column;gap:8px;}" \
 	".buttons input,.buttons button,.buttons a button{width:100%;min-width:0;min-height:48px;}" \
 	"}" \
 	"@media(max-width:480px){body{padding:clamp(8px,2vw,12px);padding-left:max(clamp(8px,2vw,12px),env(safe-area-inset-left));}" \
 	".form-section{padding:12px;margin:8px 0;}" \
-	"table{font-size:12px;}" \
+	"table{font-size:0.75rem;}" \
 	"th,td{padding:8px 6px;}" \
 	"}"
 
@@ -764,13 +764,13 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"body{display:flex;flex-direction:column;padding:0;min-height:100vh;}" \
 	".menu-wrapper{background:var(--bg);padding:10px 10px 0;}" \
 	".menu{max-width:1100px;margin:0 auto 10px;}" \
-	".menu a{font-size:16px;}" \
+	".menu a{font-size:1rem;}" \
 	".aprs-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;max-width:1100px;margin:0 auto 10px;padding:10px 12px;" COMMON_CARD_CHROME_CSS_6PX "}" \
-	".aprs-controls label{display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:15px;}" \
+	".aprs-controls label{display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:0.9375rem;}" \
 	".aprs-controls input[type=checkbox]{width:18px;height:18px;margin:0;}" \
 	"#map{flex:1 1 auto;min-height:320px;width:100" PCT ";margin:0;}" \
 	"@media(max-width:768px){.aprs-controls{justify-content:flex-start;}}" \
-	".popup{border:1px solid var(--border);margin:0;padding:0;font-size:12px;min-height:16px;box-shadow:none;}" \
+	".popup{border:1px solid var(--border);margin:0;padding:0;font-size:0.75rem;min-height:16px;box-shadow:none;}" \
 	".leaflet-tooltip-left.popup::before{border-left-color:transparent;}" \
 	".leaflet-tooltip-right.popup::before{border-right-color:transparent;}"
 
@@ -857,7 +857,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_TABLE_CSS COMMON_TABLE_CSS_TEMPLATE("%%")
 
 #define COMMON_COMPACT_PAGE_CSS \
-	"body{font-family:" COMMON_FONT_MONO ";font-size:13px;margin:10px;background:var(--bg);color:var(--text);}" \
+	"body{font-family:" COMMON_FONT_MONO ";font-size:0.8125rem;margin:10px;background:var(--bg);color:var(--text);}" \
 	"h3{text-align:center;margin:8px 0 12px;}"
 
 #define COMMON_COMPACT_TABLE_CSS_TEMPLATE(PADDING) \
@@ -870,7 +870,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 #define COMMON_COMPACT_TABLE_PADDED_CSS COMMON_COMPACT_TABLE_CSS_TEMPLATE("5px 10px")
 
 #define COMMON_BTN_PRIMARY_COMPACT_CSS \
-	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;background:var(--primary);color:var(--on-primary);border:none;border-radius:4px;cursor:pointer;font-size:12px;box-sizing:border-box;}"
+	".btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;background:var(--primary);color:var(--on-primary);border:none;border-radius:4px;cursor:pointer;font-size:0.75rem;box-sizing:border-box;}"
 
 #define COMMON_BTN_PRIMARY_COMPACT_INTERACTION_CSS \
 	".btn:hover,.btn:focus{background:var(--primary-dark);outline:2px solid var(--focus-ring);outline-offset:2px;}"
