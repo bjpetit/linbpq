@@ -180,7 +180,7 @@ char Tail[] = "</body></html>";
 #define HTTP_NODE_COLS_ROUTES "<th scope=\"col\">Port</th><th scope=\"col\">Call</th><th scope=\"col\">Quality</th><th scope=\"col\">Node Count</th><th scope=\"col\">Frame Count</th><th scope=\"col\">Retries</th><th scope=\"col\">Percent</th><th scope=\"col\">Maxframe</th><th scope=\"col\">Frack</th><th scope=\"col\">Last Heard</th><th scope=\"col\">Queued</th><th scope=\"col\">Rem Qual</th><th scope=\"col\">SRTT</th><th scope=\"col\">Rem SRTT</th>"
 #define HTTP_NODE_COLS_TRAFFIC "<th scope=\"col\">Call</th><th scope=\"col\">Frames</th><th scope=\"col\">RTT</th><th scope=\"col\">BPQ?</th><th scope=\"col\">Hops</th>"
 #define HTTP_NODE_COLS_LINKS "<th scope=\"col\">Far Call</th><th scope=\"col\">Our Call</th><th scope=\"col\">Port</th><th scope=\"col\">ax.25 state</th><th scope=\"col\">Link Type</th><th scope=\"col\">ax.25 Version</th>"
-#define HTTP_NODE_COLS_USERS "<th scope=\"col\">Circuit</th><th scope=\"col\">Link</th><th scope=\"col\">Circuit</th>"
+#define HTTP_NODE_COLS_USERS "<th scope=\"col\">From circuit</th><th scope=\"col\">Link</th><th scope=\"col\">To circuit</th>"
 #define HTTP_NODE_COLS_PORTS "<th scope=\"col\">Port</th><th scope=\"col\">Driver</th><th scope=\"col\">ID</th><th scope=\"col\">MHeard 24h</th><th scope=\"col\">Beacons</th><th scope=\"col\">Driver Window</th><th scope=\"col\">Stats Graph</th>"
 
 #define HTTP_NODE_MENU_CSS \
@@ -253,12 +253,12 @@ char LinkLine[] = "<tr><td data-label='Far Call' class='text'>%s</td><td data-la
 
 char UserHddr[] = HTTP_NODE_SECTION_TABLE_HEADER("Sessions", "compact-table", HTTP_NODE_COLS_USERS);
 
-char UserLine[] = "<tr><td data-label='Circuit' class='text'>%s</td><td data-label='Link' class='center'>%s</td><td data-label='Circuit' class='text'>%s</td></tr>";
+char UserLine[] = "<tr><td data-label='From circuit' class='text'>%s</td><td data-label='Link' class='center'>%s</td><td data-label='To circuit' class='text'>%s</td></tr>";
 
 #define HTTP_SIGNON_HEAD(TITLE) COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING "<title>" TITLE "</title><style>" COMMON_SIGNON_CSS "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body>"
 #define HTTP_SIGNON_FORM_OPEN(ACTION) "<div class=\"form-container\"><form method=post action=" ACTION ">"
-#define HTTP_SIGNON_USER_ROW "<div class=\"form-row\"><label>User</label><input type=text name=user tabindex=1 size=20 maxlength=50 /></div>"
-#define HTTP_SIGNON_PASS_ROW "<div class=\"form-row\"><label>Password</label><input type=password name=password tabindex=2 size=20 maxlength=50 /></div>"
+#define HTTP_SIGNON_USER_ROW "<div class=\"form-row\"><label for=user>User</label><input type=text id=user name=user autocomplete=username autocapitalize=off spellcheck=false required size=20 maxlength=50 /></div>"
+#define HTTP_SIGNON_PASS_ROW "<div class=\"form-row\"><label for=password>Password</label><input type=password id=password name=password autocomplete=current-password required size=20 maxlength=50 /></div>"
 #define HTTP_SIGNON_SUBMIT_CANCEL_ROW "<div class=\"form-row\"><input type=submit class='btn' value=Submit><input type=submit class='btn' value=Cancel name=Cancel formnovalidate formmethod=get formaction=/Node/NodeIndex.html /></div></form></div>"
 
 char TermSignon[] = HTTP_SIGNON_HEAD("BPQ32 Node %s Terminal Access")
@@ -1875,13 +1875,13 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 	char NodeMenuRest[] = "}</script></head>"
 		"<body>"
 		"<div class='theme-sel'>"
-		"<button class='tbtn' data-tbtn='system' onclick='bpqSetThemeMode(\"system\")' title='System theme' aria-label='System theme'>&#9881;</button>"
-		"<button class='tbtn' data-tbtn='light' onclick='bpqSetThemeMode(\"light\")' title='Light theme' aria-label='Light theme'>&#9728;</button>"
-		"<button class='tbtn' data-tbtn='dark' onclick='bpqSetThemeMode(\"dark\")' title='Dark theme' aria-label='Dark theme'>&#9790;</button>"
+		"<button class='tbtn' data-tbtn='system' aria-pressed='false' onclick='bpqSetThemeMode(\"system\")' title='System theme' aria-label='System theme'>&#9881;</button>"
+		"<button class='tbtn' data-tbtn='light' aria-pressed='false' onclick='bpqSetThemeMode(\"light\")' title='Light theme' aria-label='Light theme'>&#9728;</button>"
+		"<button class='tbtn' data-tbtn='dark' aria-pressed='false' onclick='bpqSetThemeMode(\"dark\")' title='Dark theme' aria-label='Dark theme'>&#9790;</button>"
 		"</div>"
 		"<h1>BPQ32 Node %s</h1>"
 		"<div class='menu-header'><button id='menuToggle' class='menu-toggle' type='button' aria-expanded='false' aria-controls='mainMenu' onclick='toggleMenu(event)'>Menu</button></div>"
-		"<div id='mainMenu' class=\"menu\">"
+		"<nav id='mainMenu' class=\"menu\" aria-label=\"Main\">"
 		"<a href='/'>Home</a>"
 		"<a href='/Node/Routes.html'>Routes</a>"
 		"<a href='/Node/Nodes.html'>Nodes</a>"
@@ -1929,7 +1929,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 		"</div>";
 
 	char NodeTail[] =
-		"</div>";
+		"</nav>";
 
 
 	int n;

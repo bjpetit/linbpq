@@ -135,7 +135,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"--border-light:#e2e8f0;" \
 	"--text:#1f2937;" \
 	"--link:#0056b3;" \
-	"--muted:#6b7280;" \
+	"--muted:#5b6472;" \
 	"--surface-hover:#e9ecef;" \
 	"--surface-soft:#eef2f7;" \
 	"--focus-ring:#0056b3;" \
@@ -166,7 +166,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"--border-light:#374151;" \
 	"--text:#f9fafb;" \
 	"--link:#93c5fd;" \
-	"--muted:#9ca3af;" \
+	"--muted:#aab2bf;" \
 	"--surface-hover:#2d3748;" \
 	"--surface-soft:#2b3850;" \
 	"--focus-ring:#60a5fa;" \
@@ -189,7 +189,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"}}" \
 	"html[data-theme=\"dark\"]{color-scheme:dark;" \
 	"--bg:#111827;--surface:#202d42;--primary:#1d4ed8;--primary-dark:#1e40af;--on-primary:#ffffff;" \
-	"--border:#4b5563;--border-light:#374151;--text:#f9fafb;--link:#93c5fd;--muted:#9ca3af;" \
+	"--border:#4b5563;--border-light:#374151;--text:#f9fafb;--link:#93c5fd;--muted:#aab2bf;" \
 	"--surface-hover:#2d3748;--surface-soft:#2b3850;--focus-ring:#60a5fa;" \
 	"--table-header:#374151;--table-stripe:#26334e;--table-selected:#1e3a5f;" \
 	"--fwd-none:#1e2535;--fwd-queued:#665c14;--fwd-sent:#1f4a2f;" \
@@ -712,13 +712,13 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 
 #define COMMON_THEME_SELECTOR_HTML \
 	"<div class='theme-sel'>" \
-	"<button class='tbtn' data-tbtn='system' onclick='bpqSetThemeMode(\"system\")' title='System theme' aria-label='System theme'>&#9881;</button>" \
-	"<button class='tbtn' data-tbtn='light' onclick='bpqSetThemeMode(\"light\")' title='Light theme' aria-label='Light theme'>&#9728;</button>" \
-	"<button class='tbtn' data-tbtn='dark' onclick='bpqSetThemeMode(\"dark\")' title='Dark theme' aria-label='Dark theme'>&#9790;</button>" \
+	"<button class='tbtn' data-tbtn='system' aria-pressed='false' onclick='bpqSetThemeMode(\"system\")' title='System theme' aria-label='System theme'>&#9881;</button>" \
+	"<button class='tbtn' data-tbtn='light' aria-pressed='false' onclick='bpqSetThemeMode(\"light\")' title='Light theme' aria-label='Light theme'>&#9728;</button>" \
+	"<button class='tbtn' data-tbtn='dark' aria-pressed='false' onclick='bpqSetThemeMode(\"dark\")' title='Dark theme' aria-label='Dark theme'>&#9790;</button>" \
 	"</div>"
 
 #define COMMON_THEME_SELECTOR_INIT_JAVASCRIPT \
-	"function updateThemeBtns(t){var b=document.querySelectorAll('[data-tbtn]');for(var i=0;i<b.length;i++)b[i].classList.toggle('active',b[i].getAttribute('data-tbtn')===t);}" \
+	"function updateThemeBtns(t){var b=document.querySelectorAll('[data-tbtn]');for(var i=0;i<b.length;i++){var on=b[i].getAttribute('data-tbtn')===t;b[i].classList.toggle('active',on);b[i].setAttribute('aria-pressed',on?'true':'false');}}" \
 	"window.addEventListener('DOMContentLoaded',function(){updateThemeBtns(bpqGetThemeMode());});"
 
 // APRS shared web styles.
@@ -918,11 +918,9 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"if(!menu||!toggle)return;" \
 	"if(menu.classList.contains('menu-open')){" \
 	"menu.classList.remove('menu-open');" \
-	"toggle.textContent='Menu';" \
 	"toggle.setAttribute('aria-expanded','false');" \
 	"}else{" \
 	"menu.classList.add('menu-open');" \
-	"toggle.textContent='Close';" \
 	"toggle.setAttribute('aria-expanded','true');" \
 	"}" \
 	"}" \
@@ -935,7 +933,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"var inHeader=header&&header.contains(event.target);" \
 	"if(!inMenu&&!inHeader){" \
 	"menu.classList.remove('menu-open');" \
-	"toggle.textContent='Menu';" \
+	"toggle.setAttribute('aria-expanded','false');" \
 	"}" \
 	"}" \
 	"});" \
@@ -945,7 +943,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"if(menu&&menu.classList.contains('menu-open')){" \
 	"var t=document.getElementById('menuToggle');" \
 	"menu.classList.remove('menu-open');" \
-	"if(t){t.textContent='Menu';t.setAttribute('aria-expanded','false');t.focus();}" \
+	"if(t){t.setAttribute('aria-expanded','false');t.focus();}" \
 	"}" \
 	"}" \
 	"});" \
@@ -955,7 +953,6 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"if(!menu||!t)return;" \
 	"if(window.matchMedia('(max-width:768px)').matches){" \
 	"menu.classList.remove('menu-open');" \
-	"t.textContent='Menu';" \
 	"t.setAttribute('aria-expanded','false');" \
 	"}" \
 	"}" \
@@ -1145,7 +1142,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Usage: sprintf(buffer, COMMON_MAIL_MENU, key, key, key, ..., key);
 #define COMMON_MAIL_MENU \
 	"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mailMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>" \
-	"<div id=\"mailMenu\" class=\"menu\">" \
+	"<nav id=\"mailMenu\" class=\"menu\" aria-label=\"Mail\">" \
 	"<a href=\"/Mail/Status?%s\">Status</a>" \
 	"<a href=\"/Mail/Conf?%s\">Configuration</a>" \
 	"<a href=\"/Mail/Users?%s\">Users</a>" \
@@ -1156,17 +1153,17 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"<a href=\"/Mail/WP?%s\">WP Update</a>" \
 	"<a href=\"/Webmail\">WebMail</a>" \
 	"<a href=\"/\">Node Menu</a>" \
-	"</div>"
+	"</nav>"
 
 // Helper: Build chat menu HTML
 // Usage: sprintf(buffer, COMMON_CHAT_MENU, key, key);
 #define COMMON_CHAT_MENU \
 	"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"chatMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>" \
-	"<div id=\"chatMenu\" class=\"menu\">" \
+	"<nav id=\"chatMenu\" class=\"menu\" aria-label=\"Chat\">" \
 	"<a href=\"/Chat/ChatStatus?%s\">Status</a>" \
 	"<a href=\"/Chat/ChatConf?%s\">Configuration</a>" \
 	"<a href=\"/\">Node Menu</a>" \
-	"</div>"
+	"</nav>"
 
 /*
  * EXTERNAL STATIC ASSET ROUTES
@@ -1297,7 +1294,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"if(!menu||!toggle)return;" \
 	"if(window.matchMedia('(max-width:768px)').matches){" \
 	"menu.classList.remove('menu-open');" \
-	"toggle.textContent='Menu';" \
+	"toggle.setAttribute('aria-expanded','false');" \
 	"setMgmtOpen(parts,false);" \
 	"resetMgmtSections(parts);" \
 	"}" \
