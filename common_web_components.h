@@ -261,11 +261,28 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"::selection{background:var(--primary);color:var(--on-primary);}" \
 	"::-moz-selection{background:var(--primary);color:var(--on-primary);}"
 
+/* SKIP LINK AND MAIN LANDMARK
+ * COMMON_SKIP_LINK     - first focusable element; visible only while focused.
+ * COMMON_MAIN_OPEN     - opens the <main> landmark that the skip link targets.
+ *                        Pages that use it must close it with </main> (see MainTail
+ *                        in HTTPcode.c, chosen automatically by TailFor()).
+ * COMMON_CONTENT_ANCHOR - skip target for pages whose closing markup is spread
+ *                        across many templates, so a <main> wrapper is not used.
+ * CSS lives in COMMON_MENU_CSS_TEMPLATE below.
+ */
+#define COMMON_SKIP_LINK "<a class=\"skip-link\" href=\"#bpq-content\">Skip to main content</a>"
+#define COMMON_MAIN_OPEN_MARKER "<main id=\"bpq-content\""
+#define COMMON_MAIN_OPEN COMMON_MAIN_OPEN_MARKER " tabindex=\"-1\">"
+#define COMMON_CONTENT_ANCHOR "<div id=\"bpq-content\" tabindex=\"-1\"></div>"
+
 // Responsive Menu System CSS
 // Provides collapsible mobile menu with hamburger toggle.
 // Use COMMON_MENU_CSS for sprintf-based templates and COMMON_MENU_CSS_TEMPLATE("%")
 // for raw string templates that are not passed through printf/snprintf.
 #define COMMON_MENU_CSS_TEMPLATE(PCT) \
+	".skip-link{position:fixed;top:8px;left:8px;z-index:1000;padding:10px 16px;background:var(--primary);color:var(--on-primary);border-radius:6px;text-decoration:none;transform:translateY(-200%);}" \
+	".skip-link:focus,.skip-link:focus-visible{transform:translateY(0);outline:3px solid var(--focus-ring);outline-offset:2px;}" \
+	"#bpq-content:focus{outline:none;}" \
 	".menu-header{display:none;max-width:var(--menu-max-width,980px);margin:0 auto 10px;}" \
 	".menu-toggle{" \
 	"width:100" PCT ";" \
@@ -1141,6 +1158,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 // Helper: Build mail menu HTML
 // Usage: sprintf(buffer, COMMON_MAIL_MENU, key, key, key, ..., key);
 #define COMMON_MAIL_MENU \
+	COMMON_SKIP_LINK \
 	"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"mailMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>" \
 	"<nav id=\"mailMenu\" class=\"menu\" aria-label=\"Mail\">" \
 	"<a href=\"/Mail/Status?%s\">Status</a>" \
@@ -1153,17 +1171,20 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	"<a href=\"/Mail/WP?%s\">WP Update</a>" \
 	"<a href=\"/Webmail\">WebMail</a>" \
 	"<a href=\"/\">Node Menu</a>" \
-	"</nav>"
+	"</nav>" \
+	COMMON_CONTENT_ANCHOR
 
 // Helper: Build chat menu HTML
 // Usage: sprintf(buffer, COMMON_CHAT_MENU, key, key);
 #define COMMON_CHAT_MENU \
+	COMMON_SKIP_LINK \
 	"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"chatMenu\" onclick=\"toggleMenu(event)\">Menu</button></div>" \
 	"<nav id=\"chatMenu\" class=\"menu\" aria-label=\"Chat\">" \
 	"<a href=\"/Chat/ChatStatus?%s\">Status</a>" \
 	"<a href=\"/Chat/ChatConf?%s\">Configuration</a>" \
 	"<a href=\"/\">Node Menu</a>" \
-	"</nav>"
+	"</nav>" \
+	COMMON_CONTENT_ANCHOR
 
 /*
  * EXTERNAL STATIC ASSET ROUTES

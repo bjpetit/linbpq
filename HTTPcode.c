@@ -159,6 +159,24 @@ char CHATPipeFileName[] = "\\\\.\\pipe\\BPQCHATWebPipe";
 
 char Tail[] = "</body></html>";
 
+// Pages built from SetupNodeMenu open a <main> landmark that needs closing
+
+static char MainTail[] = "</main></body></html>";
+
+static const char * TailFor(const char * Body, int Len)
+{
+	const char Marker[] = COMMON_MAIN_OPEN_MARKER;
+	size_t MarkerLen = sizeof(Marker) - 1;
+	int i;
+
+	for (i = 0; Body && i + (int)MarkerLen <= Len; i++)
+	{
+		if (Body[i] == '<' && memcmp(&Body[i], Marker, MarkerLen) == 0)
+			return MainTail;
+	}
+	return Tail;
+}
+
 #define HTTP_NODE_TABLE_HEADER_ROW "<tr>"
 #define HTTP_NODE_SORT_CONTROLS "<div class='text-center my-20'><form method='get' action='/Node/Nodes.html' class='flex-center-wrap-gap-10'>" \
 	"<input type='submit' class='btn' name='a' value='Nodes Sorted by Alias'>" \
@@ -1287,10 +1305,11 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 				//No L4 sessions free
 
 				ReplyLen = sprintf(_REPLYBUFFER, "%s", NoSessions);
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+				{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);                                                                                                                                                                                                                                        				
-				send(sock, Tail, (int)strlen(Tail), 0);
+				send(sock, T, (int)strlen(T), 0); }
 				return;
 			}
 
@@ -1307,10 +1326,11 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 		Session->KillTimer = 0;
 	}
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+	{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
-	send(sock, Tail, (int)strlen(Tail), 0);
+	send(sock, T, (int)strlen(T), 0); }
 }
 
 
@@ -1437,10 +1457,11 @@ struct HTTPConnectionInfo * ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock,
 
 Sendit:
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+	{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
-	send(sock, Tail, (int)strlen(Tail), 0);
+	send(sock, T, (int)strlen(T), 0); }
 
 	return 0;
 }
@@ -1874,6 +1895,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 
 	char NodeMenuRest[] = "}</script></head>"
 		"<body>"
+		COMMON_SKIP_LINK
 		"<div class='theme-sel'>"
 		"<button class='tbtn' data-tbtn='system' aria-pressed='false' onclick='bpqSetThemeMode(\"system\")' title='System theme' aria-label='System theme'>&#9881;</button>"
 		"<button class='tbtn' data-tbtn='light' aria-pressed='false' onclick='bpqSetThemeMode(\"light\")' title='Light theme' aria-label='Light theme'>&#9728;</button>"
@@ -1929,7 +1951,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 		"</div>";
 
 	char NodeTail[] =
-		"</nav>";
+		"</nav>" COMMON_MAIN_OPEN;
 
 
 	int n;
@@ -2013,7 +2035,7 @@ int BuildNodeIndexPage(char * Buff, size_t BuffSize, int LOCAL)
 	struct stat InsertSTAT;
 	int InsertLen;
 	int ReplyLen = SetupNodeMenu(Buff, BuffSize, LOCAL);
-	int TailLen = (int)strlen(Tail);
+	int TailLen = (int)strlen(MainTail);
 
 	if (ReplyLen <= 0)
 		return ReplyLen;
@@ -2029,7 +2051,7 @@ int BuildNodeIndexPage(char * Buff, size_t BuffSize, int LOCAL)
 		if ((size_t)(ReplyLen + TailLen) >= BuffSize)
 			return ReplyLen;
 
-		memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+		memcpy(Buff + ReplyLen, MainTail, TailLen + 1);
 		return ReplyLen + TailLen;
 	}
 
@@ -2040,7 +2062,7 @@ int BuildNodeIndexPage(char * Buff, size_t BuffSize, int LOCAL)
 		if ((size_t)(ReplyLen + TailLen) >= BuffSize)
 			return ReplyLen;
 
-		memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+		memcpy(Buff + ReplyLen, MainTail, TailLen + 1);
 		return ReplyLen + TailLen;
 	}
 
@@ -2055,7 +2077,7 @@ int BuildNodeIndexPage(char * Buff, size_t BuffSize, int LOCAL)
 		if ((size_t)(ReplyLen + TailLen) >= BuffSize)
 			return ReplyLen;
 
-		memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+		memcpy(Buff + ReplyLen, MainTail, TailLen + 1);
 		return ReplyLen + TailLen;
 	}
 
@@ -2073,7 +2095,7 @@ int BuildNodeIndexPage(char * Buff, size_t BuffSize, int LOCAL)
 	free(InsertBytes);
 
 	ReplyLen += InsertLen;
-	memcpy(Buff + ReplyLen, Tail, TailLen + 1);
+	memcpy(Buff + ReplyLen, MainTail, TailLen + 1);
 
 	return ReplyLen + TailLen;
 }
@@ -2102,10 +2124,11 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest, int LOCAL)
 		{
 			ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
 			//			ReplyLen = sprintf(Reply, "%s", "<html><script>window.close();</script></html>");
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+			{ const char * T = TailFor(Reply, ReplyLen);
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 			send(sock, Header, HeaderLen, 0);
 			send(sock, Reply, ReplyLen, 0);
-			send(sock, Tail, (int)strlen(Tail), 0);
+			send(sock, T, (int)strlen(T), 0); }
 			return;
 		}
 
@@ -2783,8 +2806,10 @@ Returnit:
 				{
 					// Add tail
 
-					strcpy(&Reply[ReplyLen], Tail);
-					ReplyLen += strlen(Tail);
+					const char * T = TailFor(Reply, ReplyLen);
+
+					strcpy(&Reply[ReplyLen], T);
+					ReplyLen += (int)strlen(T);
 				}
 
 				// compress if allowed
@@ -2924,8 +2949,12 @@ doHeader:
 
 			// Add tail
 
-			strcpy(&_REPLYBUFFER[ReplyLen], Tail);
-			ReplyLen += strlen(Tail);
+			{
+				const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+
+				strcpy(&_REPLYBUFFER[ReplyLen], T);
+				ReplyLen += (int)strlen(T);
+			}
 
 			}
 
@@ -2985,10 +3014,11 @@ doHeader:
 
 			ProcessChatHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
 
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+			{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 			send(sock, Header, HeaderLen, 0);
 			send(sock, _REPLYBUFFER, ReplyLen, 0);
-			send(sock, Tail, (int)strlen(Tail), 0);
+			send(sock, T, (int)strlen(T), 0); }
 
 			return 0;
 
@@ -3229,12 +3259,14 @@ doHeader:
 
 					ReplyLen = DoWebSockTerm(Session, conn, _REPLYBUFFER, LOCAL, COOKIE, Context, sock);
 
+					{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+
 					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
-						"\r\n", (int)(ReplyLen + strlen(Tail)));	
+						"\r\n", (int)(ReplyLen + strlen(T)));	
 				
 					send(sock, Header, HeaderLen, 0);
 					sendandcheck(sock, _REPLYBUFFER, ReplyLen);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 
 
 					return 0;
@@ -3275,10 +3307,11 @@ doHeader:
 
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 
 					return 1;
 				}
@@ -3286,10 +3319,11 @@ doHeader:
 				if (strstr(input, "Cancel=Cancel"))
 				{
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 
 					return 1;
 				}
@@ -3357,10 +3391,11 @@ doHeader:
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, Port,		
 					Interval[Slot], &UIUIDEST[Slot][0], &UIUIDigi[Slot][0], &FN[Slot][0], &Message[Slot][0], Port);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+				{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
-				send(sock, Tail, (int)strlen(Tail), 0);
+				send(sock, T, (int)strlen(T), 0); }
 
 				return 1;
 			}
@@ -3376,10 +3411,11 @@ doHeader:
 					char _REPLYBUFFER[4096];	
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorizedxx - please sign in</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 					return 1;
 				}
 
@@ -3389,10 +3425,11 @@ doHeader:
 			if (_stricmp(NodeURL, "/Node/LogAction") == 0)
 			{
 				ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+				{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
-				send(sock, Tail, (int)strlen(Tail), 0);
+				send(sock, T, (int)strlen(T), 0); }
 
 				return 1;
 			}
@@ -3415,10 +3452,11 @@ doHeader:
 
 
 					ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Operation Complete</title></head><body><script>alert(\"%s\");window.close();</script>", "Ok");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(Reply, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 
 					//				goto SendResp;
 
@@ -3921,10 +3959,11 @@ doHeader:
 					char _REPLYBUFFER[250000];	
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 					return 1;
 				}
 
@@ -3944,10 +3983,11 @@ doHeader:
 				if (strcmp(Context, "input=Back") == 0)
 				{
 					ReplyLen = SetupNodeMenu(Reply, sizeof(Reply), LOCAL);
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(Reply, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 					return 1;
 				}
 
@@ -4030,10 +4070,11 @@ doHeader:
 				ReplyLen = sprintf(_REPLYBUFFER, ShowLogPage, CfgBytes);
 				free (CfgBytes);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+				{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
-				sendandcheck(sock, Tail, (int)strlen(Tail));
+				sendandcheck(sock, T, (int)strlen(T)); }
 				free (_REPLYBUFFER);
 
 				return 1;
@@ -4059,10 +4100,11 @@ doHeader:
 					char _REPLYBUFFER[250000];	
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);	
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 					return 1;
 				}
 
@@ -4109,10 +4151,11 @@ doHeader:
 				ReplyLen = sprintf(_REPLYBUFFER, ConfigEditPage, Key, CfgBytes);
 				free (CfgBytes);
 
-				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+				{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
-				sendandcheck(sock, Tail, (int)strlen(Tail));
+				sendandcheck(sock, T, (int)strlen(T)); }
 				free (_REPLYBUFFER);
 
 				return 1;
@@ -4126,10 +4169,11 @@ doHeader:
 				{
 					ReplyLen = SetupNodeMenu(_REPLYBUFFER, sizeof(_REPLYBUFFER), LOCAL);
 					ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in as sysop</B>");
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(Tail));
+					{ const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", ReplyLen + (int)strlen(T));
 					send(sock, Header, HeaderLen, 0);
 					send(sock, _REPLYBUFFER, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 					return 1;
 				}
 
@@ -5054,8 +5098,12 @@ SendResp:
 
 			FormatTime3(TimeString, NOW);
 
-			strcpy(&_REPLYBUFFER[ReplyLen], Tail);
-			ReplyLen += (int)strlen(Tail);
+			{
+				const char * T = TailFor(_REPLYBUFFER, ReplyLen);
+
+				strcpy(&_REPLYBUFFER[ReplyLen], T);
+				ReplyLen += (int)strlen(T);
+			}
 
 
 			if (allowDeflate)
@@ -5209,10 +5257,11 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 		{
 			ReplyLen = sprintf(Reply, "<!DOCTYPE html><html><head><title>Node Redirect</title></head><body><script>window.location.href='/Node/NodeIndex.html';</script>");
 
-			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(Tail)));	
+			{ const char * T = TailFor(Reply, ReplyLen);
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(T)));	
 			send(sock, Header, HeaderLen, 0);
 			send(sock, Reply, ReplyLen, 0);
-			send(sock, Tail, (int)strlen(Tail), 0);
+			send(sock, T, (int)strlen(T), 0); }
 			return ReplyLen;
 		}
 		if (!ParseSignonBody(input + 4, &user, &password))
@@ -5235,10 +5284,11 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 						ReplyLen = SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
 
-						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(Tail)));
+						{ const char * T = TailFor(Reply, ReplyLen);
+						HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(T)));
 						send(sock, Header, HeaderLen, 0);
 						send(sock, Reply, ReplyLen, 0);
-						send(sock, Tail, (int)strlen(Tail), 0);
+						send(sock, T, (int)strlen(T), 0); }
 						return ReplyLen;
 					}
 
@@ -5246,10 +5296,11 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 					ReplyLen =  SetupNodeMenu(Reply, ReplyBufferSize, LOCAL);
 
-					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "Set-Cookie: BPQSessionCookie=%s; Path=/; HttpOnly; SameSite=Lax\r\n\r\n", (int)(ReplyLen + strlen(Tail)), Sess->Key);	
+					{ const char * T = TailFor(Reply, ReplyLen);
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "Set-Cookie: BPQSessionCookie=%s; Path=/; HttpOnly; SameSite=Lax\r\n\r\n", (int)(ReplyLen + strlen(T)), Sess->Key);	
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
-					send(sock, Tail, (int)strlen(Tail), 0);
+					send(sock, T, (int)strlen(T), 0); }
 
 					return ReplyLen;
 				}
@@ -5261,10 +5312,11 @@ SignonFailed:
 	ReplyLen = sprintf(Reply, NodeSignon, Mycall, Mycall);
 	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 
-	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(Tail)));	
+	{ const char * T = TailFor(Reply, ReplyLen);
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n" COMMON_HTTP_SECURITY_HEADERS "\r\n", (int)(ReplyLen + strlen(T)));	
 	send(sock, Header, HeaderLen, 0);
 	send(sock, Reply, ReplyLen, 0);
-	send(sock, Tail, (int)strlen(Tail), 0);
+	send(sock, T, (int)strlen(T), 0); }
 
 	return 0;
 }
