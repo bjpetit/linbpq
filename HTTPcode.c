@@ -297,7 +297,7 @@ char LostSession[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SI
 char NoSessions[] = COMMON_HTML_HEAD_VIEWPORT_SELF_CLOSING_STYLE_OPEN COMMON_SIGNON_CSS "</style><script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT "</script></head><body class='msg-page'><h1>BPQ32 Node Terminal</h1><h2>Sorry, No Sessions available - refresh page to try again</h2></body></html>";
 
 char TermPage[] = COMMON_HTML_HEAD_COMMON COMMON_HTML_META_VIEWPORT "<meta http-equiv=Content-Type content='text/html; charset=UTF-8' />"
-"<title>BPQ32 Node %s</title><style>" COMMON_CSS_VARIABLES COMMON_NODE_TERM_IO_COLORS_CSS COMMON_THEME_SELECTOR_CSS "body { margin: 0; padding: 10px; font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: var(--bg); color: var(--text); } h3 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 10px 0; font-size: clamp(1.25rem,3vw,1.75rem); } .term-container { display: flex; flex-direction: column; gap: 6px; font-family: " COMMON_FONT_MONO "; font-size: 15px; width: calc(80ch + 40px); max-width: 100%%; margin: 0 auto; } .term-actions { text-align: center; margin: 10px 0; }" COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#output-frame { width: 100%%; height: calc(25 * 1.25em + 20px); box-sizing: content-box; border: 2px solid var(--border-card); background: var(--term-io-bg); } #input-frame { width: 100%%; height: 36px; box-sizing: content-box; border: 2px solid var(--border-card); background: var(--term-io-bg); flex-shrink: 0; }" COMMON_NODE_TERM_MOBILE_CSS "</style>"
+"<title>BPQ32 Node %s</title><style>" COMMON_CSS_VARIABLES COMMON_NODE_TERM_IO_COLORS_CSS COMMON_THEME_SELECTOR_CSS "body { margin: 0; padding: 8px 10px; font-family: " COMMON_FONT_MONO "; font-size: clamp(1rem,0.96rem + 0.22vw,1.125rem); background: var(--bg); color: var(--text); } h3 { text-align: center; font-family: " COMMON_FONT_TITLE "; margin: 0 0 6px; font-size: 1.25rem; } .term-container { display: flex; flex-direction: column; gap: 6px; font-family: " COMMON_FONT_MONO "; font-size: 15px; width: calc(80ch + 40px); max-width: 100%%; margin: 0 auto; } .term-actions { text-align: center; margin: 0 0 8px; }" COMMON_BTN_PANEL_BASE_CSS COMMON_BTN_HOVER_NEUTRAL_CSS COMMON_BTN_ACTIVE_DARK_CSS "#output-frame { width: 100%%; height: calc(25 * 1.25em + 20px); box-sizing: content-box; border: 2px solid var(--border-card); background: var(--term-io-bg); } #input-frame { width: 100%%; height: 36px; box-sizing: content-box; border: 2px solid var(--border-card); background: var(--term-io-bg); flex-shrink: 0; }" COMMON_NODE_TERM_MOBILE_CSS "</style>"
 "<script>" COMMON_THEME_COOKIE_INIT_JAVASCRIPT COMMON_THEME_SELECTOR_INIT_JAVASCRIPT "</script>"
 "<script>if('scrollRestoration' in history)history.scrollRestoration='manual';function top0(){window.scrollTo(0,0)}window.addEventListener('load',function(){top0();setTimeout(top0,200);setTimeout(top0,800)})</script>"
 "</head><body>"
@@ -1912,7 +1912,7 @@ int SetupNodeMenu(char * Buff, size_t BuffSize, int LOCAL)
 		"<a href='/Node/Links.html'>Links</a>"
 		"<a href='/Node/Users.html'>Users</a>"
 		"<a href='/Node/Stats.html'>Stats</a>"
-		"<a href=\"javascript:dev_win('/Node/Terminal.html',800,600,200,200);\">Terminal</a>%s%s%s%s";
+		"<a href=\"javascript:dev_win('/Node/Terminal.html',820,700,100,200);\">Terminal</a>%s%s%s%s";
 
 	char DriverBit[] = "<a href=\"javascript:open_win();\">Driver Windows</a>"
 		"<a href=\"javascript:dev_win('/Node/Streams',820,700,200,200);\">Stream Status</a>";
