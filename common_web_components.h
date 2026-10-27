@@ -712,7 +712,7 @@ This consolidates responsive menu systems and base styles to reduce duplication.
 	COMMON_BTN_ACTIVE_DARK_CSS
 
 #define COMMON_NODE_TERM_MOBILE_CSS \
-	"@media (max-width: 768px) { .term-actions .btn { width: 100%%; } .term-container { height: calc(100vh - 200px); } }"
+	"@media (max-width: 768px) { .term-actions .btn { width: 100%%; } }"
 
 // Node web terminal I/O shared colors.
 // Keep input and output panes in sync while leaving global theme variables untouched.

@@ -2734,10 +2734,10 @@ char * get_portstats()
 		"<body>\n"
 		COMMON_THEME_SELECTOR_HTML
 		"<div class=\"aprs-page-shell\">\n"
-		"<h1>##MY_CALLSIGN##'s BPQ32 APRS Web Server</h1>\n"
+		"<h1>##MY_CALLSIGN##'s BPQ32 Node</h1>\n"
 		"<div class=\"menu-header\"><button id=\"menuToggle\" class=\"menu-toggle\" onclick=\"toggleMenu(event)\">Menu</button></div>\n"
 		"<nav id=\"mainMenu\" class=\"menu\">\n"
-		"<a href=\"/\">Home</a><a href=\"/aprs\">APRS</a><a href=\"all.html?width=7\">All Stations</a><a href=\"allrf.html\">RF Stations</a><a href=\"wxall.html?width=7\">All WX Stations</a><a href=\"info.html\">Information</a>\n"
+		"<a href=\"/\">Home</a><a href=\"/Node/Ports.html\">Ports</a>\n"
 		"</nav>\n"
 		"<div class=\"portstats-wrap\">\n"
 		"<h2 id=\"h1\">Last hour's stats for Port</h2>\n"
